@@ -45,11 +45,20 @@ N, Q, K = 4, 2, 1
 #: (`second_stage.replay_links`) name.
 BOUNDARY = BX, BOUT = tuple(f"{codec.descriptor_id(BLOCK)}/{p}" for p in ("x", "o0"))
 INTERIOR = ("x", "out")
-PUBLIC = (S.Public("population", "structure", "N, the sample's range"),
-          S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
-          *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k} (step 0)") for v in BOUNDARY + INTERIOR
-            for k in ("leaves", "domain")))
-VALUES = (*(S.Value(v, SCHEMA, "serve") for v in BOUNDARY), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR))
+
+
+def _public(boundary: tuple[str, ...]) -> tuple[S.Public, ...]:
+    return (S.Public("population", "structure", "N, the sample's range"),
+            S.Public("window", "structure", "provenance: served, on test prompts (step 0)"),
+            *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k} (step 0)") for v in boundary + INTERIOR
+              for k in ("leaves", "domain")))
+
+
+def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:
+    return (*(S.Value(v, SCHEMA, "serve") for v in boundary), *(S.Value(v, SCHEMA, "interior") for v in INTERIOR))
+
+
+PUBLIC, VALUES = _public(BOUNDARY), _values(BOUNDARY)
 RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
 TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
 
@@ -120,12 +129,12 @@ def _stages(stream: S.Stream, row=0) -> tuple[S.Draw, S.Draw]:
 
 
 def _reads_of(statements) -> dict | None:
-    """What a verifier of record reports the sessions read (`{port: {"value", "root"}}`): the statements' registered
-    reads, None when none reads any."""
+    """What a verifier of record reports the sessions read (`{<template>/<port>: {"value", "root"}}`): the statements'
+    registered reads, None when none reads any."""
     out = {}
     for s in statements if isinstance(statements, list) else ():
         ports = s.get("registered", {}).get("ports") if isinstance(s, dict) and isinstance(s.get("registered"), dict) else None
-        out |= {p: {"value": e["value"], "root": e["root"]} for p, e in (ports or {}).items()}
+        out |= {f"{s.get('template')}/{p}": {"value": e["value"], "root": e["root"]} for p, e in (ports or {}).items()}
     return out or None
 
 
@@ -473,17 +482,27 @@ MIXED = bind(CompositeDefinition("TwoStageTestMixed", 0, (),
 WINDOW = (PAIR, TRIPLE)
 WINDOW_QUERY = P.template_instances_query(WINDOW)
 MIXED_GRAIN = P.template_instance_query(MIXED)
+#: MIXED's boundary ports, its `x` and `y` and its two outputs named by its template: PAIR's `x` and `o0` are its `x`
+#: and `o0`, TRIPLE's its `y` and `o1` (`second_stage.replay_links`).
+MIXED_BOUNDARY = tuple(f"{codec.descriptor_id(MIXED)}/{p}" for p in ("x", "y", "o0", "o1"))
 
 
 def _window_spec(k=K, query=WINDOW_QUERY, window=WINDOW) -> S.Spec:
-    return S.Spec(VALUES, S.TwoStage(MIXED_GRAIN, f"subset:{Q}", k),
-                  S.Check(tuple(P.program_digest(Program(t)) for t in window), query, proof_deadline=60.0), PUBLIC,
-                  b"two-stage-window-test")
+    return S.Spec(_values(MIXED_BOUNDARY), S.TwoStage(MIXED_GRAIN, f"subset:{Q}", k),
+                  S.Check(tuple(P.program_digest(Program(t)) for t in window), query, proof_deadline=60.0),
+                  _public(MIXED_BOUNDARY), b"two-stage-window-test")
 
 
 def _window_stream(spec=None, window=WINDOW, replay=MIXED) -> S.Stream:
     return FC.Stream(spec or _window_spec(), window, replay=replay, budget=2, delta=DELTA, challenger="challenger-test",
                      clock=Clock())
+
+
+def _window_boundary(stream: S.Stream) -> S.WindowCommitmentRecord:
+    boundary = P.population_program(MIXED, N)
+    return stream.register(_record(boundary, MIXED_GRAIN, MIXED_BOUNDARY, N, {"law": "subset", "k": Q},
+                                   {"kind": "served", "run": RUN, "row": 0}, None),
+                           _ports(boundary, MIXED_GRAIN, MIXED_BOUNDARY, N))
 
 
 def _window_interior(program: Program, previous: str) -> tuple[dict, dict]:
@@ -493,18 +512,28 @@ def _window_interior(program: Program, previous: str) -> tuple[dict, dict]:
             _ports(program, WINDOW_QUERY, INTERIOR, n))
 
 
+def _window_stages(stream: S.Stream) -> S.Draw:
+    """The window's two stages on `stream`: MIXED's boundary registration, its replay sample, the interior registration
+    over the sample's proof blocks template-major, and the second stage, delivered."""
+    reg = _window_boundary(stream)
+    first = stream.select(reg)
+    ireg = stream.register_interiors(first, *_window_interior(stream.interior_program(Q), reg.digest))
+    second = stream.select(ireg)
+    assert stream.deliver(second, [SESSION]) is None
+    return second
+
+
 def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     """A replay block of PAIR x 2 and TRIPLE x 1: the boundary registration over N of them, the interior over the
     sample's Q·3 proof blocks template-major (PAIR's Q·2, then TRIPLE's Q), the second stage one stratum per cell, k of
-    each PAIR cell and TRIPLE's one-unit cells whole, and an outcome whose whole run is the Lean verifier's, refused by
-    round 2 (its replay block returns two templates' outputs, which round 2 links to no boundary port: `second-links`);
-    its profile is `Subset(min k_t)` over T·n_max proof blocks a replay block, which bounds the cells' escape."""
+    each PAIR cell and TRIPLE's one-unit cells whole, and an outcome whose whole run is the Lean verifier's. Round 2
+    links each template's `x` and output to the boundary ports of the parameter it reads and the field it returns
+    (PAIR's MIXED's `x` and `o0`, TRIPLE's its `y` and `o1`), and passes the sessions reading them there, refused only
+    on the form; its profile is `Subset(min k_t)` over T·n_max proof blocks a replay block, which bounds the cells'
+    escape."""
     stream = _window_stream()
     assert stream.cells == (2, 1) and stream.counts == (1, 1) and stream.n_rho == 3
-    boundary = P.population_program(MIXED, N)
-    reg = stream.register(_record(boundary, MIXED_GRAIN, BOUNDARY, N, {"law": "subset", "k": Q},
-                                  {"kind": "served", "run": RUN, "row": 0}, None),
-                          _ports(boundary, MIXED_GRAIN, BOUNDARY, N))
+    reg = _window_boundary(stream)
     first = stream.select(reg)
     interior = P.mixed_population_program([(PAIR, 2 * Q), (TRIPLE, Q)])
     assert stream.interior_program(Q).root.id == interior.root.id
@@ -514,9 +543,16 @@ def test_a_replay_block_of_two_templates_runs_with_a_template_major_interior():
     assert [s["units"] for s in second.law["strata"]] == [[[0, 2]], [[2, 4]], [[4, 5]], [[5, 6]]]
     assert sorted(u // 2 for u in second.units if u < 4) == [0, 1] and {4, 5} <= set(second.units)
     assert stream.deliver(second, [SESSION]) is None
-    out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)})
+    (pair, triple), (x, y, o0, o1) = (codec.descriptor_id(t) for t in WINDOW), MIXED_BOUNDARY
+    assert SS.replay_links(P.population_program(MIXED, N), codec.descriptor_id(MIXED), reg.record) == (
+        SS.Link(pair, "x", x), SS.Link(triple, "x", y), SS.Link(pair, "o0", o0), SS.Link(triple, "o0", o1))
+    statements = stream.statements(second)
+    assert [(s["template"], {p: e["value"] for p, e in s["registered"]["ports"].items()}) for s in statements] == [
+        (pair, {"x": x, "o0": o0}), (triple, {"x": y, "o0": o1})]
+    out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+                         session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements)
     checks = stream.records[0]["audit"]["checks"]
-    assert not out.accepted and checks["statements"]["codes"] == ["second-links"] and "run" not in checks, checks
+    assert not out.accepted and checks["statements"]["codes"] == ["two-stage-form"] and "run" not in checks, checks
     p = stream._footprint(stream._entries[reg.order])
     assert p.sizes == (N, 4) and p.draws["unit"] == Subset(1) and dict(p.drawn) == {S.REPLAY: Q, "unit": Q * 2}
     for w in ((0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)):
@@ -546,10 +582,7 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     with pytest.raises(ValueError, match="doesn't apply to the replay block"):
         S.replay_cells(Program(BLOCK), WINDOW_QUERY)
     stream = _window_stream()
-    boundary = P.population_program(MIXED, N)
-    reg = stream.register(_record(boundary, MIXED_GRAIN, BOUNDARY, N, {"law": "subset", "k": Q},
-                                  {"kind": "served", "run": RUN, "row": 0}, None),
-                          _ports(boundary, MIXED_GRAIN, BOUNDARY, N))
+    reg = _window_boundary(stream)
     first = stream.select(reg)
     blocks = P.mixed_population_program([(PAIR, 2), (TRIPLE, 1)] * Q)
     assert "R2-program" in _refused(lambda: stream.register_interiors(first, *_window_interior(blocks, reg.digest)))
@@ -601,18 +634,14 @@ def test_an_outcome_carries_the_params_to_the_run_of_record(monkeypatch):
     for tamper in (False, True):
         monkeypatch.setattr(V, "lean", lambda piece, args, tamper=tamper: spy(piece, args, tamper))
         stream = _window_stream()
-        boundary = P.population_program(MIXED, N)
-        reg = stream.register(_record(boundary, MIXED_GRAIN, BOUNDARY, N, {"law": "subset", "k": Q},
-                                      {"kind": "served", "run": RUN, "row": 0}, None),
-                              _ports(boundary, MIXED_GRAIN, BOUNDARY, N))
-        ireg = stream.register_interiors(stream.select(reg), *_window_interior(stream.interior_program(Q), reg.digest))
-        second = stream.select(ireg)
-        assert stream.deliver(second, [SESSION]) is None
+        second = _window_stages(stream)
         assert _refused(lambda: stream.outcome(second, _lean(), {"statement": "stub"}, proofs=tampered)) == ("proofs",)
         assert _refused(lambda: stream.outcome(second, _lean(), {"statement": "stub"}, proofs={})) == ("proofs",)
         assert not runs
-        out = stream.outcome(second, _lean(), {"statement": "stub"},
-                             session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, proofs=_circuits())
+        statements = stream.statements(second)
+        out = stream.outcome(second, _lean(reads=_reads_of(statements)), {"statement": "stub"},
+                             session_roots={**_roots(MIXED_BOUNDARY), **_roots(INTERIOR)}, statements=statements,
+                             proofs=_circuits())
         assert runs.pop()["interior"]["params"]["proofs"] == (tampered if tamper else _circuits()) and not runs
         assert not out.accepted and ("run" in stream.records[0]["audit"]["checks"]) is tamper
     stream = FC.Stream(S.Spec(VALUES[:2], S.Law("subset:2"), S.Check(P.program_digest(Program(BLOCK)), GRAIN,

@@ -29,7 +29,8 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     registration registers; each at its root, domain and leaves. Or a port a link names is not read.
 * **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
   supplied (`replayLinks`): a template its body calls once that reads one of its parameters alone reads that boundary
-  port, and one whose output it returns alone writes its output's.
+  port, and one whose output it returns alone writes its output's, or, where it returns several fields, each one
+  template's whole output, its field's (`o<j>` for field `j`).
 * **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
   replay block's Definition makes no links (`linksOf`) or one names a template of no part, `second-statements` when no
   statements are given, `second-cover` for each part the second draw samples that no statement is for, and
@@ -75,7 +76,7 @@ def REPORTED_WHY : String :=
 
 def LINKS_WHY : String :=
   "the replay block's Definition reads a parameter, or returns, other than through templates of the interior's " ++
-  "parts, each called once and reading one parameter alone or returned alone"
+  "parts, each called once and reading one parameter alone, returned alone, or returned whole as one field each"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -165,6 +166,12 @@ def outputs : Flock.Program.Ty → Nat
   | .record fs => fs.size
   | _ => 1
 
+/-- The fields of a circuit returning `t`, one per output port (`outputs`): a tuple's or a record's, else `t`. -/
+def fields : Flock.Program.Ty → Array Flock.Program.Ty
+  | .tuple fs => fs
+  | .record fs => fs.map (·.2)
+  | t => #[t]
+
 /-- What part `q` of a body's reference reads: parameters (`true`) and nodes (`false`), by index. -/
 def partSources : Flock.Program.Part → List (Bool × Nat)
   | .affine p i _ _ => [(p, i)]
@@ -201,17 +208,39 @@ def nodeLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (x : Fl
       let (name, _) ← D.params[i]?
       pure (some ⟨c.key, port, name⟩)
 
-/-- The link replay block `D`'s return makes: when it returns node `x`'s output alone, `x` a template's (`template?`)
-of one output and `D` of one, that template's `o0` is `D`'s; none when it returns anything else. -/
+/-- The link field `j` of replay block `D`'s return, of type `f`, makes when it is part `r` of the return: when `r` is
+node `k`'s whole output, `k` a template's (`template?`) of one output, that template's `o0` is `D`'s `o<j>`; with it,
+`k`. None when it is anything else. -/
+def fieldLink (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (j : Nat) (f : Flock.Program.Ty) :
+    Flock.Program.Part → Option (Nat × Link)
+  | .affine false k 0 c => do
+    let x ← D.body.nodes[k]?
+    guard (c == f.leaves && c == x.out.leaves)
+    let t ← template? defs x
+    guard (outputs t.ret == 1)
+    pure (k, ⟨t.key, "o0", "o" ++ toString j⟩)
+  | _ => none
+
+/-- The links replay block `D`'s return makes: when it returns node `x`'s output alone, `x` a template's (`template?`)
+of one output and `D` of one, that template's `o0` is `D`'s; when `D` returns several fields, each part of its return
+one field, each one node's whole output and no node's twice (`fieldLink`), each one's template's `o0` is its field's.
+None when it returns anything else. -/
 def returnLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) : Option (List Link) :=
   match sources D.body.ret with
   | [] => some []
-  | (p, k) :: rest => do
-    guard (!p && rest.all (· == (false, k)) && outputs D.ret == 1)
-    let x ← D.body.nodes[k]?
-    let c ← template? defs x
-    guard (outputs c.ret == 1)
-    pure [⟨c.key, "o0", "o0"⟩]
+  | (p, k) :: rest =>
+    if outputs D.ret == 1 then do
+      guard (!p && rest.all (· == (false, k)))
+      let x ← D.body.nodes[k]?
+      let c ← template? defs x
+      guard (outputs c.ret == 1)
+      pure [⟨c.key, "o0", "o0"⟩]
+    else do
+      let fs := fields D.ret
+      guard (D.body.ret.parts.size == fs.size)
+      let ls ← (List.range fs.size).mapM fun j => do fieldLink defs D j (← fs[j]?) (← D.body.ret.parts[j]?)
+      guard (ls.all fun (k, _) => (ls.map (·.1)).count k == 1)
+      pure (ls.map (·.2))
 
 /-- **The design's links**, from replay block `defs[d]`'s registered Definition, its parameters and its body: those its
 nodes make (`nodeLinks`) and its return (`returnLinks`), each value its own port's name. None when its body reads a
@@ -609,6 +638,21 @@ private def exParts (parts : Array Flock.Program.Part) : Flock.Program.Arg :=
 #guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1] (.tuple #[.value 8, .value 8])) 1 ==
   none
 #guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1]) 2 == none
+
+/-- `exDefs` with a second template (3), the replay block calling `Pair_v0` on `x` and it on `w`, returning `ret` of
+type `rty`. -/
+private def exTwo (ret : Array Flock.Program.Part) (rty : Flock.Program.Ty) : Array Flock.Program.Defn :=
+  (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 3 #[exArg true 1]] ret rty).push
+    (exDefn "Triple_v0" false #["x"] #[exNode .prim 2 #[exArg true 0]] #[.affine false 0 0 1])
+
+#guard linksOf (exTwo #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .value 8])) 1 ==
+  some #[⟨"Pair_v0", "x", "x"⟩, ⟨"Triple_v0", "x", "w"⟩, ⟨"Pair_v0", "o0", "o0"⟩, ⟨"Triple_v0", "o0", "o1"⟩]
+#guard linksOf (exTwo #[.affine false 1 0 1, .affine false 0 0 1] (.record #[("a", .value 8), ("b", .value 8)])) 1 ==
+  some #[⟨"Pair_v0", "x", "x"⟩, ⟨"Triple_v0", "x", "w"⟩, ⟨"Triple_v0", "o0", "o0"⟩, ⟨"Pair_v0", "o0", "o1"⟩]
+#guard linksOf (exTwo #[.affine false 0 0 1, .affine false 0 0 1] (.tuple #[.value 8, .value 8])) 1 == none
+#guard linksOf (exTwo #[.affine false 0 0 1, .affine true 1 0 1] (.tuple #[.value 8, .value 8])) 1 == none
+#guard linksOf (exTwo #[.affine false 0 0 1, .affine false 1 0 1] (.tuple #[.value 8, .array 2 (.value 8)])) 1 == none
+#guard linksOf (exTwo #[.affine false 0 0 1] (.tuple #[.value 8, .value 8])) 1 == none
 
 private def exProg : Flock.Program.Prog :=
   { defs := exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1], root := 1, programFn := "Block_v0",

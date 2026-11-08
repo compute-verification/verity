@@ -22,7 +22,7 @@ from typing import Any
 
 from verity.ml.circuits.codec import canonical_json, definitions, descriptor_id
 from verity.ml.circuits.defs import PrimitiveDefinition
-from verity.ml.circuits.refs import Concat, Explicit
+from verity.ml.circuits.refs import Affine, Concat, Explicit
 from verity.ml.circuits.types import RecordType, Tuple
 
 from .one_stage.verdict import Verdict, _Collect
@@ -36,7 +36,8 @@ STATEMENTS_WHY = ("a two-stage outcome names its second-stage sessions' statemen
 REPORTED_WHY = ("the registered reads the verifiers of record report are not the statements' registered reads, value by "
                 "value")
 LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other than through templates of the "
-             "interior's parts, each called once and reading one parameter alone or returned alone")
+             "interior's parts, each called once and reading one parameter alone, returned alone, or returned whole as "
+             "one field each")
 STMT_KEYS = ["draw", "header", "registered", "template"]
 
 
@@ -159,6 +160,19 @@ def _outputs(t: Any) -> int:
     return len(t.fields) if isinstance(t, (Tuple, RecordType)) else 1
 
 
+def _fields(t: Any) -> list[Any]:
+    """`SecondStage.fields`: the fields of a circuit returning `t`, one per output port: a tuple's or a record's, else
+    `t`."""
+    if isinstance(t, Tuple):
+        return list(t.fields)
+    return [f for _name, f in t.fields] if isinstance(t, RecordType) else [t]
+
+
+def _parts(r: Any) -> list[Any]:
+    """A body reference's parts, its concatenations spliced in, as the descriptor's ``Seq`` holds them."""
+    return [x for q in r.parts for x in _parts(q)] if isinstance(r, Concat) else [r]
+
+
 def _sources(r: Any) -> list[tuple[bool, int]]:
     """`SecondStage.sources`: what a body's reference `r` reads, parameters (True) and nodes (False), by index."""
     out: list[tuple[bool, int]] = []
@@ -208,17 +222,39 @@ def _node_links(callers: Mapping[str, int], fn: Any, node: Any) -> list[Link] | 
     return out
 
 
+def _field_link(callers: Mapping[str, int], fn: Any, j: int, f: Any, r: Any) -> tuple[int, Link] | None:
+    """`SecondStage.fieldLink`: the link field `j` of replay block `fn`'s return, of type `f`, makes when it is part `r`
+    of the return: when `r` is a node's whole output, the node a template's of one output, that template's ``o0`` is
+    `fn`'s ``o<j>``; with it, the node's index. None when it is anything else."""
+    nodes = fn.body.nodes
+    if not (isinstance(r, Affine) and r.space == "n" and r.base == 0 and r.idx < len(nodes)):
+        return None
+    c = _template(callers, nodes[r.idx])
+    if r.count != f.leaves or r.count != nodes[r.idx].out.leaves or c is None or _outputs(c.signature()[1]) != 1:
+        return None
+    return r.idx, Link(descriptor_id(c), "o0", f"o{j}")
+
+
 def _return_links(callers: Mapping[str, int], fn: Any) -> list[Link] | None:
     """`SecondStage.returnLinks`: when replay block `fn` returns one node's output alone, that node a template's of one
-    output and `fn` of one, that template's ``o0`` is `fn`'s; None when it returns anything else."""
-    src, nodes = _sources(fn.body.ret), fn.body.nodes
+    output and `fn` of one, that template's ``o0`` is `fn`'s; when `fn` returns several fields, each part of its return
+    one field, each one node's whole output and no node's twice (`_field_link`), each one's template's ``o0`` is its
+    field's. None when it returns anything else."""
+    src, nodes, ret = _sources(fn.body.ret), fn.body.nodes, fn.signature()[1]
     if not src:
         return []
-    p, k = src[0]
-    if p or any(x != (False, k) for x in src) or _outputs(fn.signature()[1]) != 1 or k >= len(nodes):
+    if _outputs(ret) == 1:
+        p, k = src[0]
+        if p or any(x != (False, k) for x in src) or k >= len(nodes):
+            return None
+        c = _template(callers, nodes[k])
+        return None if c is None or _outputs(c.signature()[1]) != 1 else [Link(descriptor_id(c), "o0", "o0")]
+    fs, parts = _fields(ret), _parts(fn.body.ret)
+    got = [_field_link(callers, fn, j, f, r) for j, (f, r) in enumerate(zip(fs, parts))]
+    links = [x for x in got if x is not None]
+    if len(parts) != len(fs) or len(links) != len(got) or len({k for k, _ in links}) != len(links):
         return None
-    c = _template(callers, nodes[k])
-    return None if c is None or _outputs(c.signature()[1]) != 1 else [Link(descriptor_id(c), "o0", "o0")]
+    return [x for _, x in links]
 
 
 def links_of(defs: Mapping[str, Any], key: str) -> tuple[Link, ...] | None:

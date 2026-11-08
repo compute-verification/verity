@@ -67,7 +67,7 @@ from verity.core.protocols.spot.one_stage.proofs import order_why
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program, input_id, is_input
-from verity.ml.circuits.refs import tuple_of
+from verity.ml.circuits.refs import record_of, tuple_of
 from verity.ml.circuits.types import Array, RecordType, Tuple, Value
 
 from test_challenger_difftest import DEPLOYED, DRAW_MUTATIONS, ORDERS, Ch, Drawn, _flip, _mutated, lms_verify
@@ -3805,7 +3805,8 @@ ID8 = bind(CompositeDefinition("CoreSpotId8", 0, (), lambda S: ((("y", Value(8))
                                lambda B, S, y: B.call(XOR8, y, y), register=False))
 #: Replay blocks to derive round 2's links from (`second_stage.links_of`): `BLOCK`; PAIR over the first parameter then
 #: `ID8` over PAIR's output, the second parameter unread; PAIR twice; a primitive over the parameter; two templates'
-#: outputs returned.
+#: outputs returned as a tuple, the other way round, and as a record; and two fields returned, not each one template's
+#: whole output: a parameter beside PAIR's, PAIR's twice about TRIPLE's, and one of a PAIR batch's two beside TRIPLE's.
 REPLAYS = [BLOCK] + [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), sig, body, register=False))
                      for name, sig, body in (
     ("Chain", lambda S: ((("x", Array(2, Value(8))), ("w", Value(8))), Value(8)),
@@ -3814,7 +3815,17 @@ REPLAYS = [BLOCK] + [bind(CompositeDefinition(f"CoreSpotReplay{name}", 0, (), si
      lambda B, S, x: B.call(XOR8, B.call(PAIR, x[0]), B.call(PAIR, x[1]))),
     ("Bare", lambda S: ((("x", Array(2, Value(8))),), Value(8)), lambda B, S, x: B.call(XOR8, x[0], x[1])),
     ("Two", lambda S: ((("x", Array(2, Value(8))), ("z", Array(3, Value(8)))), Tuple(Value(8), Value(8))),
-     lambda B, S, x, z: tuple_of(B.call(PAIR, x), B.call(TRIPLE, z))))]
+     lambda B, S, x, z: tuple_of(B.call(PAIR, x), B.call(TRIPLE, z))),
+    ("Swapped", lambda S: ((("x", Array(2, Value(8))), ("z", Array(3, Value(8)))), Tuple(Value(8), Value(8))),
+     lambda B, S, x, z: tuple_of(*reversed((B.call(PAIR, x), B.call(TRIPLE, z))))),
+    ("Named", lambda S: ((("x", Array(2, Value(8))), ("z", Array(3, Value(8)))), RecordType(a=Value(8), b=Value(8))),
+     lambda B, S, x, z: record_of(a=B.call(PAIR, x), b=B.call(TRIPLE, z))),
+    ("Kept", lambda S: ((("x", Array(2, Value(8))), ("w", Value(8))), Tuple(Value(8), Value(8))),
+     lambda B, S, x, w: tuple_of(B.call(PAIR, x), w)),
+    ("Again", lambda S: ((("x", Array(2, Value(8))), ("z", Array(3, Value(8)))), Tuple(Value(8), Value(8), Value(8))),
+     lambda B, S, x, z: (lambda p: tuple_of(p, B.call(TRIPLE, z), p))(B.call(PAIR, x))),
+    ("Split", lambda S: ((("x", Array(2, Array(2, Value(8)))), ("z", Array(3, Value(8)))), Tuple(Value(8), Value(8))),
+     lambda B, S, x, z: tuple_of(B.batch(PAIR, x, axes=(0,))[0], B.call(TRIPLE, z))))]
 #: A boundary program of each of `REPLAYS`, with its replay block's descriptor id, and `BLOCK`'s beside PAIR's, which
 #: then calls PAIR twice.
 REPLAY_PROGRAMS = [(P.population_program(r, 2), codec.descriptor_id(r)) for r in REPLAYS] + [
@@ -4924,19 +4935,29 @@ def test_round_two_derives_its_links_from_the_replay_block(pieces):
     """The design's links, Lean's the Python's whole, derived from the registered replay block's Definition alone:
     `BLOCK`'s PAIR batch reads its `x` and it returns PAIR's output, so PAIR's `x` and `o0` are the boundary's ports
     (named by template where the record names its ports so, else plainly); the chain's PAIR reads its `x` and it returns
-    ID8's output; and none where the block calls a template twice, a primitive reads its parameter, it returns two
-    outputs, the program calls PAIR elsewhere too, or the key names a template or no Definition."""
+    ID8's output; a block returning PAIR's and TRIPLE's outputs as two fields, a tuple's either way round or a record's,
+    links each one's `o0` to its field's port (`o<j>`); and none where the block calls a template twice, a primitive
+    reads its parameter, a field is a parameter, a template's output twice or part of one, the program calls PAIR
+    elsewhere too, or the key names a template or no Definition."""
     def case(i, key=None, rec=None):
         prog, k = REPLAY_PROGRAMS[i]
         return {"program": _json(codec.encode_program(prog)), "replay": key or k, "boundary": rec}
     chain, pair, id8 = codec.descriptor_id(REPLAYS[1]), codec.descriptor_id(PAIR), codec.descriptor_id(ID8)
+    triple = codec.descriptor_id(TRIPLE)
+    both = [{"port": "x", "template": pair, "value": "x"}, {"port": "x", "template": triple, "value": "z"}]
+
+    def outs(*ts):
+        return [{"port": "o0", "template": t, "value": f"o{j}"} for j, t in enumerate(ts)]
     cases = [
         (case(0, rec=SECOND_BOUNDARY), [{"port": "x", "template": pair, "value": BX},
                                         {"port": "o0", "template": pair, "value": BOUT}]),
         (case(0), [{"port": "x", "template": pair, "value": "x"}, {"port": "o0", "template": pair, "value": "o0"}]),
         (case(1, rec={"roots": [{"port": f"{chain}/x"}]}), [{"port": "x", "template": pair, "value": f"{chain}/x"},
                                                            {"port": "o0", "template": id8, "value": f"{chain}/o0"}]),
-        *((case(i), None) for i in (2, 3, 4, 5)),
+        (case(4), both + outs(pair, triple)),
+        (case(5), both + outs(triple, pair)),
+        (case(6), both + outs(pair, triple)),
+        *((case(i), None) for i in (2, 3, 7, 8, 9, 10)),
         (case(0, key=pair), None),
         (case(0, key="Other_v0"), None),
     ]
