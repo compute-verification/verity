@@ -307,8 +307,8 @@ def hash (msg : ByteArray) : Digest := Id.run do
   -- the state's eight words, big-endian: 64 bytes whatever the loops computed (`Sha512.hash_size`)
   return ⟨Array.ofFn (n := 64) fun i => (h[i.val / 8]! >>> (8 * (7 - i.val % 8)).toUInt64).toUInt8⟩
 
-/-- `compress` on the block whose sixteen words are `w0` to `w15` (`compress_eq_W`). -/
-def compressW (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) : Array UInt64 :=
+/-- FIPS 180-4's schedule and 80 rounds from the registers `s0` on the block whose sixteen words are `w0` to `w15`. -/
+@[inline] def rounds (s0 : Regs) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) : Regs :=
   let w16 := sched w0 w1 w9 w14
   let w17 := sched w1 w2 w10 w15
   let w18 := sched w2 w3 w11 w16
@@ -373,7 +373,6 @@ def compressW (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 
   let w77 := sched w61 w62 w70 w75
   let w78 := sched w62 w63 w71 w76
   let w79 := sched w63 w64 w72 w77
-  let s0 : Regs := (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
   let s1 := round s0 0 w0
   let s2 := round s1 1 w1
   let s3 := round s2 2 w2
@@ -454,6 +453,12 @@ def compressW (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 
   let s78 := round s77 77 w77
   let s79 := round s78 78 w78
   let s80 := round s79 79 w79
+  s80
+
+/-- `compress` on the block whose sixteen words are `w0` to `w15` (`compress_eq_W`). -/
+def compressW (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) : Array UInt64 :=
+  let s80 := rounds (h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!)
+    w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15
   #[h[0]! + s80.1, h[1]! + s80.2.1, h[2]! + s80.2.2.1, h[3]! + s80.2.2.2.1, h[4]! + s80.2.2.2.2.1,
     h[5]! + s80.2.2.2.2.2.1, h[6]! + s80.2.2.2.2.2.2.1, h[7]! + s80.2.2.2.2.2.2.2]
 
@@ -465,7 +470,7 @@ theorem compress_eq_W (h : Array UInt64) (data : ByteArray) (off : Nat) :
       (word data (off + 8 * 9)) (word data (off + 8 * 10)) (word data (off + 8 * 11))
       (word data (off + 8 * 12)) (word data (off + 8 * 13)) (word data (off + 8 * 14))
       (word data (off + 8 * 15)) := by
-  unfold compress compressW
+  unfold compress compressW rounds
   rfl
 
 theorem toNat_add_ofNat (o : USize) (j : Nat) (h : o.toNat + j < USize.size) :
@@ -679,13 +684,122 @@ theorem size_padOnto (d : ByteArray) (len : Nat) : (padOnto d len).size % 128 = 
     List.length_range']
   omega
 
+/-- The intermediate hash value's eight words (FIPS 180-4's `H⁽ⁱ⁾`) in one object, as `blocksS` carries it from block to
+block, where an `Array UInt64` boxes each word. -/
+structure HashValue where
+  a : UInt64
+  b : UInt64
+  c : UInt64
+  d : UInt64
+  e : UInt64
+  f : UInt64
+  g : UInt64
+  h : UInt64
+
+/-- The hash value whose words are `h`'s. -/
+def HashValue.ofArr (h : Array UInt64) : HashValue := ⟨h[0]!, h[1]!, h[2]!, h[3]!, h[4]!, h[5]!, h[6]!, h[7]!⟩
+
+/-- The hash value `s` as `compress` holds it. -/
+def HashValue.toArr (s : HashValue) : Array UInt64 := #[s.a, s.b, s.c, s.d, s.e, s.f, s.g, s.h]
+
+theorem HashValue.ofArr_toArr (s : HashValue) : HashValue.ofArr s.toArr = s := rfl
+
+theorem HashValue.toArr_ofArr (h : Array UInt64) (hs : h.size = 8) : (HashValue.ofArr h).toArr = h := by
+  apply Array.ext
+  · simp [HashValue.toArr, hs]
+  · intro i h1 _
+    have hi : i < 8 := by simpa [HashValue.toArr] using h1
+    simp only [HashValue.toArr, HashValue.ofArr, List.getElem_toArray]
+    match i, hi with
+    | 0, _ => exact getElem!_pos h 0 (by omega)
+    | 1, _ => exact getElem!_pos h 1 (by omega)
+    | 2, _ => exact getElem!_pos h 2 (by omega)
+    | 3, _ => exact getElem!_pos h 3 (by omega)
+    | 4, _ => exact getElem!_pos h 4 (by omega)
+    | 5, _ => exact getElem!_pos h 5 (by omega)
+    | 6, _ => exact getElem!_pos h 6 (by omega)
+    | 7, _ => exact getElem!_pos h 7 (by omega)
+
+/-- `compressW` on the hash value `st` (`compressW_eq_S`). -/
+def compressS (st : HashValue) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) : HashValue :=
+  let s80 := rounds (st.a, st.b, st.c, st.d, st.e, st.f, st.g, st.h)
+    w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15
+  ⟨st.a + s80.1, st.b + s80.2.1, st.c + s80.2.2.1, st.d + s80.2.2.2.1, st.e + s80.2.2.2.2.1,
+    st.f + s80.2.2.2.2.2.1, st.g + s80.2.2.2.2.2.2.1, st.h + s80.2.2.2.2.2.2.2⟩
+
+set_option maxRecDepth 20000 in
+theorem compressW_eq_S (h : Array UInt64) (w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 : UInt64) :
+    compressW h w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15 =
+      (compressS (HashValue.ofArr h) w0 w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14 w15).toArr := by
+  unfold compressW compressS HashValue.toArr
+  dsimp only [HashValue.ofArr]
+
+/-- `blocks` on the hash value `st`, each block's words read with `uget` when it lies in `data` and its offsets fit a
+`USize` (`blocks_eq_S`). -/
+def blocksS (st : HashValue) (data : ByteArray) (off : Nat) : Nat → HashValue
+  | 0 => st
+  | n + 1 =>
+    let o := off.toUSize
+    if hb : o.toNat = off ∧ off + 128 ≤ data.size ∧ (off + 128).toUSize.toNat = off + 128 then
+      have := USize.toNat_lt_size (off + 128).toUSize
+      blocksS (compressS st
+        (wordU data o (8 * 0) (by omega) (by omega))
+        (wordU data o (8 * 1) (by omega) (by omega))
+        (wordU data o (8 * 2) (by omega) (by omega))
+        (wordU data o (8 * 3) (by omega) (by omega))
+        (wordU data o (8 * 4) (by omega) (by omega))
+        (wordU data o (8 * 5) (by omega) (by omega))
+        (wordU data o (8 * 6) (by omega) (by omega))
+        (wordU data o (8 * 7) (by omega) (by omega))
+        (wordU data o (8 * 8) (by omega) (by omega))
+        (wordU data o (8 * 9) (by omega) (by omega))
+        (wordU data o (8 * 10) (by omega) (by omega))
+        (wordU data o (8 * 11) (by omega) (by omega))
+        (wordU data o (8 * 12) (by omega) (by omega))
+        (wordU data o (8 * 13) (by omega) (by omega))
+        (wordU data o (8 * 14) (by omega) (by omega))
+        (wordU data o (8 * 15) (by omega) (by omega))) data (off + 128) n
+    else
+      blocksS (compressS st
+        (word data (off + 8 * 0)) (word data (off + 8 * 1)) (word data (off + 8 * 2)) (word data (off + 8 * 3))
+        (word data (off + 8 * 4)) (word data (off + 8 * 5)) (word data (off + 8 * 6)) (word data (off + 8 * 7))
+        (word data (off + 8 * 8)) (word data (off + 8 * 9)) (word data (off + 8 * 10)) (word data (off + 8 * 11))
+        (word data (off + 8 * 12)) (word data (off + 8 * 13)) (word data (off + 8 * 14)) (word data (off + 8 * 15)))
+        data (off + 128) n
+
+theorem blocks_eq_S (data : ByteArray) : ∀ (n : Nat) (st : HashValue) (off : Nat),
+    blocks st.toArr data off n = (blocksS st data off n).toArr
+  | 0, _, _ => rfl
+  | n + 1, st, off => by
+    rw [blocks, blocksS, compress_eq_W, compressW_eq_S, HashValue.ofArr_toArr]
+    dsimp only
+    split
+    · rename_i hb
+      simp only [wordU_eq, hb.1]
+      exact blocks_eq_S data n _ _
+    · exact blocks_eq_S data n _ _
+
+/-- `blocks`, carrying the hash value as a `HashValue` from block to block when it has its eight words. -/
+def blocksFast (h : Array UInt64) (data : ByteArray) (off n : Nat) : Array UInt64 :=
+  if h.size = 8 then (blocksS (HashValue.ofArr h) data off n).toArr else blocks h data off n
+
+/-- Compiled code runs `blocksFast`; the kernel and every proof see `blocks`. `@[csimp]` rewrites only code compiled
+after it, so it stays above `hashFrom`. -/
+@[csimp] theorem blocks_eq_fast : @blocks = @blocksFast := by
+  funext h data off n
+  unfold blocksFast
+  split
+  · rename_i hs
+    rw [← blocks_eq_S, HashValue.toArr_ofArr h hs]
+  · rfl
+
 /-- `hash`, reading `msg`'s whole blocks where they lie: only its last, partial block is copied, to be padded. -/
 def hashFrom (msg : ByteArray) : Digest :=
   let m := msg.size / 128
   let t := padOnto (msg.extract (128 * m) msg.size) msg.size
   digestOf (blocks (blocks iv msg 0 m) t 0 (t.size / 128))
 
-/-- Compiled code runs `hashFrom`, which runs `compressFast`; the kernel and every proof see `hash`. -/
+/-- Compiled code runs `hashFrom`, whose blocks run as `blocksFast`; the kernel and every proof see `hash`. -/
 @[csimp] theorem hash_eq_from : @hash = @hashFrom := by
   funext msg
   rw [hash_eq_blocks]
