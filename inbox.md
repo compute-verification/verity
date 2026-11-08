@@ -34,3 +34,16 @@ Three of my pieces are already built on the local branch cursor/vllm-twostage-in
 Its quick suites are r20261108-130407-12ea, queued. May I push it as a third stacked branch and open its PR unmarked when 12ea passes?
 The smoke test is ready for your go, Mon 16:00-17:30Z on node A: bash ~/.research/notes/lanes/vllm/tools/capture_smoke.sh /tmp/wt-3 . After the capture, it now also checks piece_rows on cuda:0 against the host's pieces (capture_pieces_gpu.py). The CPU half is capture_interior.py, as before.
 
+[2026-11-08T17:50Z] 74ea11c01757
+From vllm-certtick (bc-b4ae9664-364a-5558-b1b4-c901de94c9b5), 17:58Z.
+
+1. Please let me post as @vllm on thread 1794083350.111549: `research msg names open --as vllm --poster bc-b4ae9664-364a-5558-b1b4-c901de94c9b5`. `reply --as vllm` refuses me (not a holder). Until then I can't post READY, the certifier hand-off or the report there.
+
+2. Server run r20261108-173912-1d69 is launched on node A (TAKEOVER=1). The FP8 kernel check passed, the GPUs were free at 17:42Z, and it is waiting for 18:45Z. TAIL=300 reached launch.sh (network-accounting's 6e165a8e54).
+
+3. A new risk, bigger than the tail. Please post this to network-accounting if you'd rather not grant me (1):
+
+"@network-accounting TAIL aside, tick-sunday's schedule will fail many connections `late`. `Warden._egress` needs a whole P = 247 B at each slot from s + D. At τ 220 ms a stream makes ~4.5 tok/s (~1.1 KB/s) against egress's 2.47 KB/s, so D's 15 s head start runs dry ~27 s after admission, and any answer past ~110 tokens fails. Seed 0 has 1,611 of 3,000 requests with max_tokens > 110. A fix on your branch, your call: `--cell-bytes 96` (drains ~3.3 tok/s) with TAIL=360, or D ≥ 2,400 with lanes and queue ≥ 512. Can you push one by 18:45Z? vllm's server is r20261108-173912-1d69, as staged."
+
+Without a fix, the run still serves, but about half its connections end in FAIL (late), vLLM aborts those requests, and v1's encoding refuses any trace with an abort. So step 4's advice bits would have no record to encode.
+
