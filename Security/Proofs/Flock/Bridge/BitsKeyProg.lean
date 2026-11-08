@@ -54,7 +54,7 @@ theorem uniform_op_input (n : ℕ) (g : Fin (Placed.gates k R n)) (hg : g.val < 
     (Placed.uniform k R ins one hone n).op g = .input := by
   have h := ((Placed.uniform k R ins one hone n).input_iff g).1 (Layout.unit_uniform_input n g hg)
   revert h
-  cases (Placed.uniform k R ins one hone n).op g <;> simp [Audit.Op.isInput]
+  cases (Placed.uniform k R ins one hone n).op g <;> simp [Verity.Boolean.Op.isInput]
 
 private theorem lt_gates_of_lt {n u : ℕ} (hun : u < n) (i : Fin R.nComp) :
     Placed.gates k R u + i.val < Placed.gates k R n := by
@@ -90,7 +90,7 @@ theorem uniform_op_row : ∀ (n u : ℕ), u < n → ∀ (i : Fin R.nComp) (g : F
       refine ⟨A.map (Fin.castAdd R.nComp), B.map (Fin.castAdd R.nComp), ?_, (map_val_map _ A).trans hA,
         (map_val_map _ B).trans hB⟩
       change (Prog.snoc (Placed.uniform k R ins one hone n) R _ _ _).op g = _
-      simp only [Prog.op, hlt, ↓reduceDIte, hop, Audit.Op.lift]
+      simp only [Prog.op, hlt, ↓reduceDIte, hop, Verity.Boolean.Op.lift]
       rfl
     · obtain rfl : u = n := by omega
       have hi : g.val - Placed.gates k R u < R.nComp := by have := g.isLt; omega

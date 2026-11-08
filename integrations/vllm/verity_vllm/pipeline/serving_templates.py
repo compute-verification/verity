@@ -36,12 +36,13 @@ COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1":
 #: (i_0, i_1, ..), its leading dimensions being the axes in order (the ``slice`` layout).  Per family: its axes, and per parameter
 #: its dimension of each axis (None: it doesn't carry it).  The GEMMs of one token row into W's rows (vLLM's router GEMM, the LM
 #: head, cuBLAS's split-K), torch.bmm into each member's coordinates, DSA's logits into keys, the vocabulary shard's embedding
-#: into columns (every unit reads the token and gathers its column) and the all-gather into its ranks' shards; cuBLAS's split-K
-#: at an f32 output too (the MoE router gate)
+#: into columns (every unit reads the token and gathers its column) and the all-gather into its ranks' shards; cuBLAS's GEMMs
+#: at an f32 output too, split-K or not (the MoE router gate)
 SLICES = {"LlBf16DotprodGemm_v1": (("N",), ((None,), (0,))), "Gemm_v2": (("N",), ((None,), (0,))),
           "CublasSplitKGemm_v1": (("N",), ((None,), (0,))), "BatchedGemm_v1": (("B", "N"), ((0, None), (0, 1))),
           "DsaMqaLogits_v3": (("N",), ((None,), (None,), (0,), (0,))), "EmbeddingShard_v1": (("H",), ((None,), (1,))),
-          "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,)))}
+          "AllGather_v1": (("WORLD",), ((0,),)), "CublasSplitKGemmF32Out_v1": (("N",), ((None,), (0,))),
+          "GemmF32Out_v1": (("N",), ((None,), (0,)))}
 #: the row Definitions whose Calls are split into parts, each a Definition of its own at the row's statics it names: per part, its
 #: family, what it reads in order (``("arg", g)`` the row's argument group g, ``("out", j)`` the row's committed output member j,
 #: ``("mid", name)`` the row's intermediate) and what it returns (``j`` the row's committed output member j, ``name`` an
