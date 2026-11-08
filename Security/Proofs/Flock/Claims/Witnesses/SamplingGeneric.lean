@@ -70,7 +70,7 @@ The network certifier's leak guarantees fail at two more compiled verifiers that
 
 * `leakL`: `sksL` at a statement whose program negates its input (`notStmt`, its partition `notPart` one proof block
   `{0, 1}`, sampled `all`);
-* `tapL`: `leakL` under `trueCm`.
+* `certL`: `leakL` under `trueCm`.
 -/
 
 @[expose] public section
@@ -648,7 +648,7 @@ noncomputable def leakL (Coin : Type) : Compiled Coin (toyA Coin) :=
   { sksL Coin with parse := fun _ => some notStmt, partition := fun _ => some notPart }
 
 /-- `leakL` under `trueCm`: the verifier accepts, the openings of `true` pass, and no unit has a session. -/
-noncomputable def tapL (Coin : Type) : Compiled Coin (toyA Coin) :=
+noncomputable def certL (Coin : Type) : Compiled Coin (toyA Coin) :=
   { leakL Coin with commit := trueCm }
 
 end Claims.Witness.SamplingGeneric

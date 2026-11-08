@@ -71,10 +71,10 @@ accepts everything. Each builds its instance and takes no hypothesis.
   `RelS`; the leak bounds at `leakL`, `sksL` at a statement whose program negates its input. There, with nothing
   opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the trace
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
-  `PeriodLeakAccepted`'s at `tapL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
-  certifier's openings (`tapOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
+  `PeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
+  certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
   witness is in `RLeakTap`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`, `leakL`,
-  `tapL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`, `tapOps`), and
+  `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`, `certOps`), and
   no definition of this module: a statement the lock lists reads no proof-only definition outside the excepted toys.
 * `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
@@ -90,7 +90,7 @@ namespace NetTiming.Witness
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
 open Claims.SamplingGeneric (Compiled)
 open Claims.Witness.SamplingGeneric (toyA sksL trueCm sksL_scope sksL_κ sksL_bound_fails noHash_compiledE bext_pr
-  notProg notStmt notPart leakL tapL)
+  notProg notStmt notPart leakL certL)
 
 local notation "relD" => _root_.Flock.Readable.relation
 local notation "shaD" => FlockDeploy.sha512
@@ -206,7 +206,7 @@ theorem leakL_scopeAcc (x : Msg) : ScopeAcc (leakL Coin) (fun _ => notLay) (fun 
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem tapL_scopeAcc (x : Msg) : ScopeAcc (tapL Coin) (fun _ => notLay) (fun _ => 1) x :=
+theorem certL_scopeAcc (x : Msg) : ScopeAcc (certL Coin) (fun _ => notLay) (fun _ => 1) x :=
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -214,14 +214,14 @@ theorem leakL_κ (x : Msg) : (leakL Coin).κ 0 x < 1 / 3 :=
   sksL_κ (Coin := Coin) x
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem tapL_κ (x : Msg) : (tapL Coin).κ 0 x < 1 / 3 :=
+theorem certL_κ (x : Msg) : (certL Coin).κ 0 x < 1 / 3 :=
   sksL_κ (Coin := Coin) x
 
 theorem leakL_bext (H : Msg → Msg) (x : Msg) : (Bext H (leakL Coin).V (leakL Coin).E Unit silentP x).Pr H = 0 :=
   bext_pr H (leakL Coin) (fun _ _ _ => rfl) (fun _ => Nat.one_pos) Unit silentP x
 
-theorem tapL_bext (H : Msg → Msg) (x : Msg) : (Bext H (tapL Coin).V (tapL Coin).E Unit silentP x).Pr H = 0 :=
-  bext_pr H (tapL Coin) (fun _ _ _ => rfl) (fun _ => Nat.one_pos) Unit silentP x
+theorem certL_bext (H : Msg → Msg) (x : Msg) : (Bext H (certL Coin).V (certL Coin).E Unit silentP x).Pr H = 0 :=
+  bext_pr H (certL Coin) (fun _ _ _ => rfl) (fun _ => Nat.one_pos) Unit silentP x
 
 theorem leakL_breg (H : Msg → Msg) (x : Msg) :
     (Breg H (leakL Coin).V (leakL Coin).E (leakL Coin).commit (leakL Coin).parse (fun _ => []) Unit silentP x).Pr H =
@@ -232,13 +232,13 @@ theorem leakL_breg (H : Msg → Msg) (x : Msg) :
     simp [regLog, leakL, findColl])]
   exact Pr_false
 
-theorem tapL_btap (H : Msg → Msg) (x : Msg) :
-    (Btap H (tapL Coin).V (tapL Coin).E (tapL Coin).commit (tapL Coin).parse (fun _ => tapOps) Unit silentP x).Pr H =
-      0 := by
+theorem certL_btap (H : Msg → Msg) (x : Msg) :
+    (Btap H (certL Coin).V (certL Coin).E (certL Coin).commit (certL Coin).parse (fun _ => certOps) Unit silentP
+      x).Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Btap, ownLog_noHash _ _ _ (noHash_compiledE (tapL Coin) (fun _ _ _ => rfl) _ _ _)]
-    simp [tapLog, tapL, leakL, tapOps, trueCm, OC.eval, findColl])]
+    simp only [Btap, ownLog_noHash _ _ _ (noHash_compiledE (certL Coin) (fun _ _ _ => rfl) _ _ _)]
+    simp [tapLog, certL, leakL, certOps, trueCm, OC.eval, findColl])]
   exact Pr_false
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -294,31 +294,31 @@ theorem leakL_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   simp at h1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakTap`** at `tapL`, at one step at `δ = 0`, whatever the inputs `As` admits: the network
-certifier's openings (`tapOps`) register a frame at the input `true`, where the circuit, the negation of that ingress,
+/-- **No witness is in `RLeakTap`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the network
+certifier's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that ingress,
 holds none, and the only possible incorrect set is empty, since the one unit is sampled `all`. -/
-theorem tapL_noRLeakTap (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
+theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :
-    ¬ RLeakTap H (tapL Coin).commit (tapL Coin).parse (tapL Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As
-      1 (fun _ => tapOps) x w := by
+    ¬ RLeakTap H (certL Coin).commit (certL Coin).parse (certL Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As
+      1 (fun _ => certOps) x w := by
   rintro ⟨s, P, hs, hP, h⟩
-  simp only [tapL, leakL, Option.some.injEq] at hs hP
+  simp only [certL, leakL, Option.some.injEq] at hs hP
   subst hs hP
-  have hop : TapOpens H trueCm notLay 1 (fun _ _ => [true]) notStmt tapOps [obs1] := by
+  have hop : TapOpens H trueCm notLay 1 (fun _ _ => [true]) notStmt certOps [obs1] := by
     refine ⟨fun q hq => ?_, fun t ht => ?_⟩
-    · simp only [tapOps, List.mem_cons, List.not_mem_nil, or_false] at hq
+    · simp only [certOps, List.mem_cons, List.not_mem_nil, or_false] at hq
       rcases hq with rfl | rfl <;> rfl
     · obtain rfl : t = 0 := by omega
       refine ⟨fun ℓ σ g hg => ?_, fun g hg => ?_, Nat.one_pos, fun ℓ => ?_, ?_⟩
       · simp [notLay, slotGates] at hg
         subst hg
-        exact ⟨fun b hb => by simp [notStmt, notProg] at hb, ⟨1, true, []⟩, by simp [tapOps], rfl⟩
+        exact ⟨fun b hb => by simp [notStmt, notProg] at hb, ⟨1, true, []⟩, by simp [certOps], rfl⟩
       · simp [notLay] at hg
         subst hg
-        exact ⟨⟨0, true, []⟩, by simp [tapOps], rfl⟩
+        exact ⟨⟨0, true, []⟩, by simp [certOps], rfl⟩
       · funext σ
-        simp [obs1, rowOf, notLay, tapVal, tapOps]
-      · simp [notLay, tapVal, tapOps]
+        simp [obs1, rowOf, notLay, tapVal, certOps]
+      · simp [notLay, tapVal, certOps]
   have hcov : Covered 1 [obs1] := by
     intro t ht _ κ
     obtain rfl : t = 0 := by omega
@@ -379,19 +379,19 @@ theorem leakL_reg_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakL_bext, leakL_breg] at h
   linarith
 
-/-- `PeriodLeakAccepted`'s bound fails at `tapL`'s silent prover, at a relation with no witness at `x` and a bound
+/-- `PeriodLeakAccepted`'s bound fails at `certL`'s silent prover, at a relation with no witness at `x` and a bound
 `κ' < 1`. -/
-theorem tapL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w)
+theorem certL_bound_fails (H : Msg → Msg) (Rx : Rel Claims.Sampling.Wit) (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w)
     (hκ : κ' < 1) :
-    ¬ PrBad H (tapL Coin).V Rx (tapL Coin).E x silentP ≤
-      κ' + Real.sqrt ((tapL Coin).γ x * PrB H (tapL Coin).V silentP x) +
-        (Bext H (tapL Coin).V (tapL Coin).E Unit silentP x).Pr H +
-        (Btap H (tapL Coin).V (tapL Coin).E (tapL Coin).commit (tapL Coin).parse (fun _ => tapOps) Unit silentP
+    ¬ PrBad H (certL Coin).V Rx (certL Coin).E x silentP ≤
+      κ' + Real.sqrt ((certL Coin).γ x * PrB H (certL Coin).V silentP x) +
+        (Bext H (certL Coin).V (certL Coin).E Unit silentP x).Pr H +
+        (Btap H (certL Coin).V (certL Coin).E (certL Coin).commit (certL Coin).parse (fun _ => certOps) Unit silentP
           x).Pr H := by
   intro h
-  have hp : PrBad H (tapL Coin).V Rx (tapL Coin).E x silentP = 1 := prBad_accV H Rx _ x silentP hR
-  have hb : PrB H (tapL Coin).V silentP x = 0 := prB_accV H silentP x
-  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, tapL_bext, tapL_btap] at h
+  have hp : PrBad H (certL Coin).V Rx (certL Coin).E x silentP = 1 := prBad_accV H Rx _ x silentP hR
+  have hb : PrB H (certL Coin).V silentP x = 0 := prB_accV H silentP x
+  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, certL_bext, certL_btap] at h
   linarith
 
 end Toy
@@ -430,18 +430,18 @@ theorem SampledLeakRegistered_nontrivial :
           []).Pr shaD :=
   leakL_reg_bound_fails shaD _ _ [] (leakL_noRLeak shaD _ []) (by linarith [leakL_κ (Coin := Bool) []])
 
-/-- **`PeriodLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `tapL`, at one step at `δ = 0`,
-with no input registered: at the statement `[]`, its silent prover's bound fails (`tapL_noRLeakTap`). -/
+/-- **`PeriodLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `certL`, at one step at `δ = 0`,
+with no input registered: at the statement `[]`, its silent prover's bound fails (`certL_noWit`). -/
 theorem PeriodLeakAccepted_nontrivial :
-    ¬ PrBad shaD (tapL Bool).V
-        (RLeakTap shaD (tapL Bool).commit (tapL Bool).parse (tapL Bool).partition 1 1 1 (fun _ => notLay)
-          (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => tapOps))
-        (tapL Bool).E [] silentP ≤
-      (tapL Bool).κ 0 [] + Real.sqrt ((tapL Bool).γ [] * PrB shaD (tapL Bool).V silentP []) +
-        (Bext shaD (tapL Bool).V (tapL Bool).E Unit silentP []).Pr shaD +
-        (Btap shaD (tapL Bool).V (tapL Bool).E (tapL Bool).commit (tapL Bool).parse (fun _ => tapOps) Unit silentP
+    ¬ PrBad shaD (certL Bool).V
+        (RLeakTap shaD (certL Bool).commit (certL Bool).parse (certL Bool).partition 1 1 1 (fun _ => notLay)
+          (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => certOps))
+        (certL Bool).E [] silentP ≤
+      (certL Bool).κ 0 [] + Real.sqrt ((certL Bool).γ [] * PrB shaD (certL Bool).V silentP []) +
+        (Bext shaD (certL Bool).V (certL Bool).E Unit silentP []).Pr shaD +
+        (Btap shaD (certL Bool).V (certL Bool).E (certL Bool).commit (certL Bool).parse (fun _ => certOps) Unit silentP
           []).Pr shaD :=
-  tapL_bound_fails shaD _ _ [] (tapL_noRLeakTap shaD _ []) (by linarith [tapL_κ (Coin := Bool) []])
+  certL_bound_fails shaD _ _ [] (certL_noWit shaD _ []) (by linarith [certL_κ (Coin := Bool) []])
 
 /-! ## The monitoring period -/
 

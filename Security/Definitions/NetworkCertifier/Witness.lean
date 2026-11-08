@@ -12,7 +12,7 @@ at a compiled verifier that accepts everything, over these:
 * `trivLay`: one link of one slot with no gate, at which `SampledAuditAccepted`'s conclusion fails;
 * `notLay`: step `t`'s ingress is the input, and its egress slot's presence gate the input's negation, at which the
   leak bounds fail;
-* `tapOps`: the network certifier's openings, the input and its negation both `true`, at which `PeriodLeakAccepted`'s
+* `certOps`: the network certifier's openings, the input and its negation both `true`, at which `PeriodLeakAccepted`'s
   bound fails.
 -/
 
@@ -27,6 +27,6 @@ def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- The network certifier's openings: the input and its negation, both `true`. -/
-def tapOps : List (Claims.Sampling.Opening Bool) := [⟨0, true, []⟩, ⟨1, true, []⟩]
+def certOps : List (Claims.Sampling.Opening Bool) := [⟨0, true, []⟩, ⟨1, true, []⟩]
 
 end NetTiming.Witness
