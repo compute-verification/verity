@@ -701,6 +701,15 @@ class Dummies:
         self.pending.clear()
 
 
+def perturb_row(n: int, first: int, arrivals: list[dict]) -> dict[str, Any]:
+    """The perturbed control's one dummy row more than serving ran: ``n`` prompt tokens from the first step on, sampled
+    as the block's first arrival was and never stopping early, so that only the batch's shape changes (a greedy row
+    would take a batch of unseeded rows off FlashInfer's sampler)."""
+    sampling = dict(arrivals[0]["sampling"]) if arrivals else {}
+    return {"engine_id": "shape-perturb-0", "before_step": first, "prompt_ids": [0] * n, "max_tokens": 2048,
+            "sampling": sampling | {"ignore_eos": True}}
+
+
 def served_finish(st_requests: dict[str, int], outputs: dict[int, dict], steps: dict[int, dict]) -> dict[str, int]:
     """Each request the record finishes inside the block: its served output count (``st_requests``, the outputs it had
     at the start, plus every step's since)."""
@@ -1128,10 +1137,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted((r for r in w["arrive"] if r["before_step"] >= first), key=lambda r: r["before_step"])
     if shape and a.perturb:
-        # a control: one more dummy row than serving ran, from the first step on, so only the batch's shape changes
-        extra = {"engine_id": "shape-perturb-0", "before_step": first, "prompt_ids": [0] * a.perturb, "max_tokens": 2048,
-                 "sampling": {"temperature": 0.0, "ignore_eos": True}}
-        pending.insert(0, extra)
+        pending.insert(0, perturb_row(a.perturb, first, w["arrive"]))
 
     def add_due() -> None:
         while pending and pending[0]["before_step"] == trace.scheduled:
@@ -1382,9 +1388,7 @@ def run_tp(a: argparse.Namespace) -> dict[str, Any]:
         hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted(w["arrive"], key=lambda r: r["before_step"])
     if shape and a.perturb:
-        extra = {"engine_id": "shape-perturb-0", "before_step": first, "prompt_ids": [0] * a.perturb, "max_tokens": 2048,
-                 "sampling": {"temperature": 0.0, "ignore_eos": True}}
-        pending.insert(0, extra)
+        pending.insert(0, perturb_row(a.perturb, first, w["arrive"]))
 
     def add_due() -> None:
         while pending and pending[0]["before_step"] == trace.scheduled:

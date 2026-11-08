@@ -360,6 +360,15 @@ def test_served_pins_are_set_before_vllm_loads_and_refused_once_inductor_has_rea
         RB.served_pins(tmp_path)
 
 
+def test_the_perturbed_row_is_sampled_as_the_block_s_first_arrival_and_never_stops_early() -> None:
+    arrivals = [{"engine_id": "a", "sampling": {"top_p": 0.95, "max_tokens": 9}}, {"engine_id": "b", "sampling": {}}]
+    row = RB.perturb_row(64, 7, arrivals)
+    assert row["before_step"] == 7 and row["prompt_ids"] == [0] * 64
+    assert row["sampling"] == {"top_p": 0.95, "max_tokens": 9, "ignore_eos": True} and arrivals[0]["sampling"] == {
+        "top_p": 0.95, "max_tokens": 9}
+    assert RB.perturb_row(8, 0, [])["sampling"] == {"ignore_eos": True}
+
+
 def test_full_pages_are_the_blocks_a_request_s_computed_tokens_fill() -> None:
     assert RB.full_pages({"a": ([4, 5, 6], 9), "b": ([7], 3), "c": ([1, 2], 8)}, 4) == {"a": [4, 5], "b": [], "c": [1, 2]}
 
