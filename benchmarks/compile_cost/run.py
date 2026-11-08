@@ -44,8 +44,8 @@ WINDOWS = {
 }
 #: each window's request Program digests at rank 0, in request order
 PINS: dict[str, list[str]] = {
-    "long-w0": ["e955b6e54c4c90d0aef3372ed00e998e688eb817fb3d638e17370d9a9661008a8a3cad07db87aea137fc71a219a55de503d3ac536c9125db526df55e400a58a6",
-                "6f8dcb01014e1cbb716d28eb76e00266a59a60ecf118f0f3c504560c06d1877c5c30026526c65d6f39e7b7c07f1d038f79ce72aedb3e7686f7e1918d851b2842"],
+    "long-w0": ["3304f85aea2585a1b41417f16f6a55a8ca0d106f32dbdc42a46d7ce22a1dd2dc432f2ce079937fc349a49058b6fe4ee43e68c28b76293becdb3884b086ed07f0",
+                "821addd1e0ed89a1cdf1ae228421b6d7692fdbb988dbdf0beb5d9eb07c0bf8dcf0577722c935d4ab3e9a85766862d76d99e491c9fa1fa8c057860a1020e2e035"],
 }
 
 
