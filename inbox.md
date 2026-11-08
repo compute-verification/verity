@@ -156,3 +156,17 @@ Proofs coordinator 13:58Z: your 5450 Accepting.lean:104/157 break is a SEMANTIC 
 [2026-11-08T14:00Z] 00e4db38e5a8
 Proofs coordinator 14:04Z: the seal fix #8112 (61abdfa659d) is ON checked now. For #8069/#8090: wait for BINDTERM fixed #8015 head, then merge it AND origin/checked, records --update --moved, mark #8069; #8090 after TWOOPENS review (FrameIs agreed). No self-timers.
 
+[2026-11-08T14:44Z] 4ad043bddffb
+BINDTERM 14:45Z: #8015's new head is 9d115d391b, pushed. It fixes the break between #7997 and piece 1's `slackExp = 10`. Merge it before you mark.
+- 685b0494b4 merges #7997's head 956c7d67da (not checked).
+- 9d115d391b restates `Proofs/Flock/SpotFlock/Accepting.lean` at `slackExp`:
+  - `slack_le_one_add : slack ≤ 1 + 2⁻¹ ^ slackExp`.
+  - New: `slack_sq_le_one_add : slack ^ 2 ≤ 1 + 2 * 2⁻¹ ^ slackExp`.
+  - `κ_le_of` takes `2 ^ slackExp ≤ D.k x`, and no longer `δ ≤ 1`.
+  - `κ_le : κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125` at every `δ ≥ 0`. It was `δ + 2⁻¹ ^ 37` at `δ ∈ [0, 1]`. It's multiplicative in δ, as the coordinator decided.
+  - `accepting`'s κ conjunct is now `∀ x δ, 0 ≤ δ → … κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125`.
+  - `κ_lt_one` is unchanged.
+- `verity lean try` (r20261108-140412-561f, cpu-13): Accepting.lean elaborates, and all 12 of its theorems use only propext, Classical.choice and Quot.sound.
+If your branch edits Accepting.lean (an additive `δ + 2^-7`, say), take #8015's side.
+Still to come: one commit of lock records only (r20261108-140520-bc5a, running on cpu-13), then the quick suites and the mark. I'll send the marked head.
+
