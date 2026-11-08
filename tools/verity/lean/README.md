@@ -47,7 +47,7 @@ python tools/verity/lean/merge.py --install              once per clone: git mer
 The edit loop is `verity lean try FILE`: `lake env lean FILE` in the nearest Lake package above FILE, against its built
 imports, with its `[leanOptions]` as a build has them, exiting with lean's status, the axiom probe's line last. `--siblings` then imports FILE's build beside each built
 module of its package not importing it, failing on a name two declare (`siblings.py`). With `--on NODE`, through `research
-run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the tree
+run`, it runs `lean_changed.py --try FILE` on this checkout's working tree: in a node's `build` Lean slot, on the slot tree
 `--records` keeps warm, `lake build +MODULE:deps` and then `lake env lean FILE`. Neither runs this audit or writes a record
 (`lean_changed.py`'s docstring).
 
@@ -71,8 +71,7 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   the reason. The imported modules are the ones the `dependencies` record covers, and their sources are there once the
   package is built, so the scan builds nothing. The
   toolchain, which defines these options, is trusted, and a path dependency is a package of the repository, audited on
-  its own. Among the pinned dependencies only doc-gen4's loader names one, and no audited package
-  imports it;
+  its own;
 - no source file runs code while it compiles (`initialize`, `#eval`, `run_cmd`, `run_elab`, an `elab`, `macro` or `syntax`
   definition, an elaborator attribute), unless its module is listed under `compile_time` with a reason and the digest of
   its file as it was reviewed. No listed module may declare a guarantee or a definition a guarantee reads.
@@ -109,9 +108,9 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   deployed record or a field of it; not `True` or Init or Mathlib alone), is no reflexivity nor one of its hypotheses,
   and no hypothesis is `False` (`vacuous_meets`). A closed `def C : Prop` proved of every instance goes under
   `claims.generic` with its guarantee, which reads only the claims and Core and skips `shape` and the inline rule;
-- a guarantee of an acceptance or an exclusion has `honest` and `nontrivial` witnesses of the form `witness_failures`
-  states, or an `unwitnessed` entry, which only shrinks (`witness_failures`); `nontrivial` is one theorem or a list,
-  each past the first in the exclusion form and dropping a premise no earlier one drops;
+- a guarantee of an acceptance or an exclusion, unless it states `a = a` (`reflexive`), has `honest` and `nontrivial`
+  witnesses of the form `witness_failures` states, or an `unwitnessed` entry, which only shrinks; `nontrivial` is one
+  theorem or a list, each past the first in the exclusion form and dropping a premise no earlier one drops;
 - every definition a guarantee's statement reads is in the spec (below), or a pinned dependency's;
 - no dependency the `upstream` section scans proves, at the revision `lake-manifest.json` pins, a theorem about a watched
   statement that nobody has acknowledged (below);
@@ -139,7 +138,7 @@ passes, 1 when one fails, and 2 on a usage error or a refusal.
 
 A package that pins ArkLib (`Security/Proofs`, and `Security`, which audits it beside itself) is refused, exit 2, on a
 machine with less than `MEM_FLOOR_GIB` (24 GiB, memory and swap within the cgroup), by `check.py` and the fast path
-alike; the refusal prints the fast path's `research run --on auto …` line (`ON_NODE`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
+alike; the refusal prints the fast path's `research run --on auto …` line (`BELOW_FLOOR_RUN`). `VERITY_LEAN_MEM_FLOOR_GIB` sets
 another floor (0: none). Lake runs as many `lean` at once as `LEAN_NUM_THREADS`, so the build of a package that pins Mathlib
 or ArkLib runs at most one per `BUILD_GIB_PER_JOB` (8 GiB) of the memory its cgroup allows (`build_threads`, from the
 process's own cgroup, so a queued run's scope counts); a `LEAN_NUM_THREADS` already set wins. Its kernel
@@ -165,10 +164,8 @@ realize checked once each, a reused public part's axiom copy taken as Lean's imp
 quotient's own constants. A change to `Replay.lean` changes every key, so the next run is cold.
 The audit prints `closure: N modules checked, M reused` under each package's line. `check`'s lean-audit step runs
 `--closure` against the node's kept cache (`lean_audit.FLAGS`, `lean-replay/`), so a dependency module that skipped the
-kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. Cold, after a bump of the
-toolchain, Mathlib or ArkLib, or a change to `Replay.lean`, the first audit on each node checks the closure once; warm, the
-closure adds nothing to the kernel's work. `lean_audit.py --fresh` (the uncached nightly check) gives its packages one cache in
-its scratch tree, so `Security` reuses what `Security/Proofs` checked in the same run.
+kernel fails the merge check, and the `closure_dependency` control fails without `--fresh`. `lean_audit.py --fresh` (the
+uncached nightly check) gives its packages one cache in its scratch tree.
 
 `--fresh` also runs `leanchecker --fresh` on each root: the root's whole import closure, Mathlib and core included,
 through the kernel into an empty environment. It needs one module per root and a lot of memory, and checks the closure
@@ -340,9 +337,9 @@ failures those are, not text: each failure's code (`check.py`'s `Failure`) is in
 `--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
 drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
 
-**Bookkeeping warns after a landing.** Drive's lock run (`train.sh --deferred lean-audit --bookkeeping-warn`, reaching
-`check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping (`BOOKKEEPING`) on the lock `repaired`
-writes:
+**Bookkeeping warns after a landing.** Drive's lock run (the lean-audit step of the merge queue's check with
+`--bookkeeping-warn`, reaching `check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping
+(`BOOKKEEPING`) on the lock `repaired` writes:
 - an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
   none, which its warning asks the next PR for), due seven days from the run;
@@ -358,11 +355,10 @@ warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive com
 (`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
 Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
 
-When the change lands on `main` (`research merge --push`, or drive's landing), the landing DM lists each new, removed
-or changed guarantee and each changed definition (`research.spec_alert`); nobody approves it first. A guarantee whose
-statement is the same but prints differently (the same type hash and named assumptions, after a toolchain bump or a change
-of notation) gets one line, "printed differently", and is left out of the DM. Definitions are compared by name, so one
-read from another module with the same content is counted on one line.
+When the change lands on `main`, the landing DM (`research.spec_alert`) lists each new, removed or changed guarantee and
+each changed definition; nobody approves it first. A statement that only prints differently (the same type hash and named
+assumptions: a toolchain bump, notation) gets one line, "printed differently", and stays out of the DM; a definition read
+from another module with the same content is counted on one line.
 
 **A lift is not a change.** Lifting a guarantee into the spec, `theorem X (xs) : e` becoming `theorem X (xs) : G as` with
 `def G (ys) : Prop := e'` in a `Guarantees` module, changes its record's signature and type hash. `check.py --update`

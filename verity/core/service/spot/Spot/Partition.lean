@@ -199,23 +199,27 @@ def wordGates (P : Flock.Program.Prog) (k d : Nat) (c : Flock.Qword.DCut) : V (A
     | some s => pure s
     | none => throw s!"query-refused: a unit of {(P.defs[d]!).key} owns no gate"
 
-/-- `partition.unit_gates`: each unit's gates `[lo, hi)` in root gates, by unit: an instance's (`TemplateQuery.gates`),
-a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
-def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := do
+/-- `partition.unit_gates` with a template query's units laid out by `instances` (`TemplateQuery.unitGates` or
+`TemplateQuery.unitGatesRef`): each unit's gates `[lo, hi)` in root gates, by unit: an instance's
+(`TemplateQuery.gates`), a `Q_call` unit's interval of its Call, or the span of the gates a `Q_word` unit owns. -/
+def unitGatesBy (instances : Flock.TemplateQuery.Desc → Array TRange → Except Nat (Array (Nat × Nat))) (p : Program)
+    (query : Json) : V (Array (Nat × Nat)) := do
   let rs ← evaluate p query
   let q := getD (build (Flock.hexOf p.sha512) query) "query"
   let name := (q.getObjValAs? String "name").toOption.getD ""
   let version := (nat? (getD q "version")).getD 0
   let X := (nat? (getD (getD q "params") "X")).getD 0
   if (Flock.TemplateQuery.templatesOf name version (getD q "params")).isSome then
-    return ← (Array.range (Flock.TemplateQuery.population rs)).mapM fun u =>
-      match Flock.TemplateQuery.gates p.desc rs u with
-      | some g => pure g
-      | none => throw s!"unit {u} has no instance"
+    return ← match instances p.desc rs with
+      | .ok gs => pure gs
+      | .error u => throw s!"unit {u} has no instance"
   let root := (p.prog.defs[p.prog.root]!).body
   if name == "Q_word" then
     return ← (← wordCalls p.prog).foldlM (fun acc (k, d, c) => return acc ++ (← wordGates p.prog k d c)) #[]
   return (← Flock.Qcall.evaluate p.prog X).foldl (fun acc c =>
     acc ++ c.c.units.map fun u => (root.offsets[c.k]! + u.lo, root.offsets[c.k]! + u.hi)) #[]
+
+/-- `partition.unit_gates`, a template query's instances a range at a time (`TemplateQuery.unitGates`). -/
+def unitGates (p : Program) (query : Json) : V (Array (Nat × Nat)) := unitGatesBy Flock.TemplateQuery.unitGates p query
 
 end Spot.Partition
