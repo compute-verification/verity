@@ -31,7 +31,10 @@ theorem stampsAt_certified {Tok : Type} (rel : In → List (Release Tok)) (dec :
   intro x x' o o' b hx ho
   have hids : ∀ q, idsBefore dec o b q = idsBefore dec o' b q := fun q => by simp only [idsBefore, ho]
   have hrel : releasesBefore rel x b = releasesBefore rel x' b := by simp only [releasesBefore, hx]
-  simp only [stampsAt, continuationAt, hids, hrel]
+  have hcont : continuationAt dec o b = continuationAt dec o' b := by
+    funext r
+    simp only [continuationAt, hids]
+  simp only [stampsAt, hids, hrel, hcont]
 
 theorem length_contIngress (op : ℕ → List (Obs L K S) → In) (stamp : List In → List (Obs L K S) → ℕ → Out)
     (join : In → Out → In) (T : ℕ) (o : List (Obs L K S)) (t : ℕ) : (contIngress op stamp join T o t).length = t := by
@@ -66,7 +69,7 @@ theorem take_eq_contIngress {op : ℕ → List (Obs L K S) → In} {stamp : List
     have htl : t < x.length := by omega
     have hs : stamp x o t = stamp (x.take t) (o.take t) t :=
       hc _ _ _ _ _ (by simp [List.take_take]) (by simp [List.take_take])
-    rw [List.take_succ, List.getElem?_eq_getElem htl, Option.toList_some]
+    rw [List.take_add_one, List.getElem?_eq_getElem htl, Option.toList_some]
     simp only [contIngress]
     rw [← ih (by omega), hstep t htl, contStep, hs]
 
@@ -109,7 +112,7 @@ private theorem take_flatten_ofFn {m T : ℕ} (o : Fin m → List (Obs L K S)) (
   have hB : t ≤ (o i).length := by
     rw [hT i]
     exact ht.le
-  rw [hsplit, List.take_append_eq_append_take, List.take_of_length_le hA, length_flatten_take o hT i,
+  rw [hsplit, List.take_append, List.take_of_length_le hA, length_flatten_take o hT i,
     Nat.add_sub_cancel_left, List.take_append_of_le_length hB]
 
 theorem continuationIngress : Guarantees.ContinuationIngress := by
@@ -122,7 +125,7 @@ theorem continuationIngress : Guarantees.ContinuationIngress := by
   have hxs : x[i.val * T + t]? = some (contStep op stamp join T (List.ofFn o).flatten
       (contIngress op stamp join T (List.ofFn o).flatten (i.val * T + t)) (i.val * T + t)) := by
     rw [← List.getElem?_take_of_lt (Nat.lt_succ_self (i.val * T + t)), take_eq_contIngress hc hx hs1]
-    simp [contIngress, List.getElem?_append_right, length_contIngress]
+    simp [contIngress, length_contIngress]
   have hlen : (((List.ofFn o).take i).flatten ++ (o i).take t).length ≤ i.val * T + t := by
     apply Nat.le_of_eq
     rw [List.length_append, length_flatten_take o hT i, List.length_take, hT i, Nat.min_eq_left ht.le]
