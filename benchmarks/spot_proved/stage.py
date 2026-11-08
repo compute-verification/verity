@@ -160,15 +160,19 @@ class Capture:
             return self.param_view(r, ref)
         if "sha512" not in ref:
             raise LookupError(f"not recorded with its bytes: {ref}")
-        h = ref["sha512"]
-        p = self.d / f"rank{r}" / "blobs" / h[:2] / h
-        if not p.is_file():
+        if not self.kept(r, ref):
             raise LookupError(f"not kept: rank {r}'s {ref['dtype']} {ref['shape']} (over the capture's keep cap, outside the "
                               "opened layers)")
-        raw = p.read_bytes()
+        h = ref["sha512"]
+        raw = (self.d / f"rank{r}" / "blobs" / h[:2] / h).read_bytes()
         if hashlib.sha512(raw).hexdigest() != h:
             raise SystemExit(f"rank {r}: blob {h[:16]} is not its name")
         return np.frombuffer(raw, dtype=NP[ref["dtype"]]).reshape(ref["shape"])
+
+    def kept(self, r: int, ref: dict) -> bool:
+        """Whether a recorded tensor's bytes are in the capture."""
+        h = ref.get("sha512")
+        return h is not None and (self.d / f"rank{r}" / "blobs" / h[:2] / h).is_file()
 
     def param(self, r: int, name: str) -> np.ndarray:
         if (r, name) not in self._params:
@@ -975,12 +979,9 @@ class Wires:
         """The latest earlier output on rank ``r`` that ``ref`` is a strided view of, by its recorded strides, from the offset
         where every one of a few probed elements and then the whole view agree."""
         stride, shape = ref.get("stride"), ref.get("shape")
-        if "sha512" not in ref or not stride or not shape or min(stride) < 0 or not all(shape):
+        if not self.cap.kept(r, ref) or not stride or not shape or min(stride) < 0 or not all(shape):
             return None
-        try:
-            x = self.cap.tensor(r, ref)
-        except LookupError:
-            return None
+        x = self.cap.tensor(r, ref)
         flat = x.reshape(-1)
         reach = sum((d - 1) * s for d, s in zip(shape, stride))
         probes = np.unique(np.linspace(0, flat.size - 1, num=min(16, flat.size)).astype(np.int64))
@@ -989,15 +990,12 @@ class Wires:
         for s, o, out in reversed(self.outs.get(r, [])):
             if s >= seq or s in skip or out.get("dtype") != ref.get("dtype") or out["sha512"] == ref["sha512"]:
                 continue
-            if int(np.prod(out["shape"], dtype=np.int64)) <= reach:
+            if int(np.prod(out["shape"], dtype=np.int64)) <= reach or not self.cap.kept(r, out):
                 continue
             tried += 1
             if tried > VIEW_CANDIDATES:
                 break
-            try:
-                y = self.cap.tensor(r, out).reshape(-1)
-            except LookupError:
-                continue
+            y = self.cap.tensor(r, out).reshape(-1)
             offs = np.flatnonzero(y[:y.size - reach] == flat[0])
             for p, a in zip(probes[1:], at[1:]):
                 offs = offs[y[offs + a] == flat[p]]
