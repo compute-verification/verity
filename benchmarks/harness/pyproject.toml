@@ -87,7 +87,7 @@ inputs = [
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/screen_kernels.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pearl_c/whole.py",
-    "integrations/vllm/verity_vllm/protocols/sampled_proofs.py",
+    "integrations/vllm/verity_vllm/protocols/spot.py",
     "integrations/vllm/verity_vllm/protocols/pouw/pouw_cuda",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/kept.py",
     "integrations/vllm/verity_vllm/protocols/pouw/h1/live.py",
