@@ -17,9 +17,6 @@
 // the witness's scratch outside the arena (sha512 tapes, compression and unit rows) goes in batches of at most this many bytes:
 // it is held beside the arena while the next session's witness builds
 #define FC_WITNESS_BATCH (512LL << 20)
-// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most
-// FC_WITNESS_BATCH at a time), its inputs, and the first proof's cached type matrices
-#define FC_KEEP_MARGIN ((size_t)4 << 30)
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -69,9 +66,9 @@ typedef struct {
     const uint64_t* zk_pads; const uint64_t* zk_extra;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
-    // rep 1 from rep 0's witness and level-0 commitment (both reps bind one level-0 root): 1 keeps them for the next call with
-    // the same reuse_tag, which leaves the device arena open between the two calls; 2 takes them, or proves in full when
-    // nothing was kept (rep 0 had no room)
+    // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
+    // reuse_tag, which leaves the device arena open between the two calls; 2 takes it and builds the witness again, or proves
+    // in full when nothing was kept
     int rep_reuse;
     unsigned long long reuse_tag;
     // the compression slots' native witness (the SHA-512 build): per row of the sha512x3 circuit, its a and b sources (two u32:
@@ -214,14 +211,12 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
-// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
-// codeword, tree and cap, and under M1 level 0's pads and extra lanes (the session's, which rep 1's lane phase reads), live in
-// the device arena, which stays open until rep 1 releases them.
+// What rep 0 keeps for rep 1 (rep_reuse): its level-0 codeword, tree and cap, and under M1 level 0's pads and extra lanes (the
+// session's, which rep 1's lane phase reads), live in the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
     int m = 0, k_log = 0;
-    F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
     F128* d_cw0 = nullptr;
     uint8_t* d_tree0 = nullptr;
     long long l0_bl = 0;
@@ -230,34 +225,14 @@ struct FcKept {
     F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;
 };
 static FcKept g_fc_kept;
-// the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
-// below conservative, never optimistic)
-static size_t g_fc_arena = 0;
 
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0,
-                    (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
+    for (void* p : {(void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0, (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
         if (p) ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
-}
-
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 0: z, a and b held past the zerocheck and
-// Ligerito's copy of z fit in the arena's own peak, the zerocheck's buffers, which are freed by then; 3 counts them on top)
-static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 0L; }();
-    return (size_t)k * w;
-}
-
-// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
-static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
-    size_t free_b = 0, total_b = 0;
-    if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
-    const size_t want = arena + extra;
-    const size_t after = want <= g_fc_arena ? free_b : (free_b + g_fc_arena >= want ? free_b + g_fc_arena - want : 0);
-    return after >= margin;
 }
 
 // rep 1 opens rep 0's level-0 tree: with hm96 leaves its salts are level 0's (tree 0), and rep 1's own trees count from 1

@@ -1,7 +1,7 @@
 //! Flock-CUDA for `verity/flock-circuit` (feature `gpu`): `flock_cuda_prove_circuit` (verity/ml/flock/cuda/prove_circuit.cuh,
 //! installed by verity/ml/flock/cuda_circuit_patch.py). The honest witness is built on the device from the compressions'
 //! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
-//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's witness and level-0 commitment (`Reuse`).
+//! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
 use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
 
@@ -213,8 +213,8 @@ unsafe extern "C" {
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
 }
 
-/// Rep 1 proves from rep 0's witness and level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps them on the
-/// device for the session's tag, and rep 1 takes them. Where the device has no room to keep them, rep 1 proves in full.
+/// Rep 1 proves from rep 0's level-0 commitment, which both reps bind (one level-0 root): rep 0 keeps it on the device for the
+/// session's tag, and rep 1 takes it and builds its witness again. Where nothing was kept, rep 1 proves in full.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reuse {
     None,
@@ -222,7 +222,7 @@ pub enum Reuse {
     Take(u64),
 }
 
-/// Whether the device holds a rep 0's witness and level-0 commitment for `tag`.
+/// Whether the device holds a rep 0's level-0 commitment for `tag`.
 pub fn kept(tag: u64) -> bool {
     unsafe { flock_cuda_circuit_kept(tag) != 0 }
 }
@@ -796,8 +796,8 @@ pub fn host_slots(st: &Stmt, ni: usize, ins: &[Vec<F128>]) -> Vec<HostSlot> {
 /// setup: parameters and schedule; staging the witness's inputs and host slots; decoding the proof). Under M1 (`Live::Zk`) the proof is the
 /// unmasked one the CPU prover leaves before masking (with level 0's hiding messages and record, and lincheck's folded comb),
 /// and a round the handler refused (the masking's degenerate coins, a refused coin) is raised once the device returns. With
-/// `Reuse::Take` of a kept tag, `src` is not read: the witness and level-0 commitment are rep 0's (under M1 with level 0's pads
-/// and extra lanes, the session's, so `level0`'s are not read either).
+/// `Reuse::Take` of a kept tag, the level-0 commitment is rep 0's (under M1 with level 0's pads and extra lanes, the session's,
+/// so `level0`'s are not read), and the witness is built again from `src`.
 #[allow(clippy::too_many_arguments)]
 pub fn prove_circuit(
     st: &Stmt,
@@ -850,7 +850,6 @@ pub fn prove_circuit(
     let taken = matches!(reuse, Reuse::Take(tag) if kept(tag));
     let mut u_host = 0;
     match &src {
-        _ if taken => {}
         CircuitSrc::Host { z, a, b } => {
             assert_eq!(z.len(), 1 << (m - 7));
             (hz, ha, hb) = (z.as_ptr() as *const u64, a.as_ptr() as *const u64, b.as_ptr() as *const u64);
