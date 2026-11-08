@@ -161,8 +161,12 @@ def layout (V H : Nat) (defs : Array Tmpl.Def) : Layout :=
   let oStart := (base (nCalls V H) + span - 1) / span * span
   { inW, zero := zc, base, outAt := fun i k => base i + colsOf i - nOut V H i + k, outW, oStart, const := oStart + span }
 
-/-- The bits of `v`'s low `w` bits as references: the constant where set, the zero column where not. -/
-def constRefs (L : Layout) (v w : Nat) : List Nat := (List.range w).map fun j => if v.testBit j then L.const else L.zero
+/-- The bits of `v`'s low `w` bits as references: the constant where set, the zero column where not. The root reads
+the constant as every Definition does, one past its columns and inputs (`L.const + 1`), never as its own last column:
+`Tmpl.ordered` takes either, but the prover evaluates a template a Definition at a time, where every own column a row or
+call reads comes before it (`verity_flock.tmpl.evaluate`). -/
+def constRefs (L : Layout) (v w : Nat) : List Nat :=
+  (List.range w).map fun j => if v.testBit j then L.const + 1 else L.zero
 
 /-- Call `i`'s input references in the root. -/
 def inputs (V H : Nat) (L : Layout) (i : Nat) : List Nat :=
@@ -176,7 +180,7 @@ def inputs (V H : Nat) (L : Layout) (i : Nat) : List Nat :=
     let m := min (l - HmRow.ROW_SEG_BITS * i) HmRow.ROW_SEG_BITS
     let cv := Sha512.compress Sha512.iv (HmRow.segmentPrefix i s m) 0
     ((List.range 8).flatMap fun w => (List.range 64).map fun b =>
-        if cv[w]!.toBitVec.getLsbD b then L.const else L.zero) ++ at_ (ROW_AT + HmRow.ROW_SEG_BITS * i) m
+        if cv[w]!.toBitVec.getLsbD b then L.const + 1 else L.zero) ++ at_ (ROW_AT + HmRow.ROW_SEG_BITS * i) m
   else if i = s then (List.range s).flatMap fun j => outs j 512
   else if i = s + 1 then outs s 512 ++ at_ (saltAt H) 1536
   else if i = s + 2 then
@@ -196,8 +200,8 @@ def rootDef (V H : Nat) (defs : Array Tmpl.Def) : Tmpl.Def :=
   let N := 2592 + 16 * H + 512 * depth V
   let sel := segs H + 4 + depth V
   { cols := L.const + 1, ins := 0,
-    rows := ((List.range N).map (fun c => (c, #[c], #[c]))).toArray.push (L.zero, #[L.const], #[]) ++
-      ((List.range (16 * H + 1)).map fun k => (L.oStart + k, #[L.outAt sel k], #[L.const])).toArray,
+    rows := ((List.range N).map (fun c => (c, #[c], #[c]))).toArray.push (L.zero, #[L.const + 1], #[]) ++
+      ((List.range (16 * H + 1)).map fun k => (L.oStart + k, #[L.outAt sel k], #[L.const + 1])).toArray,
     calls := ((List.range (nCalls V H)).map fun i =>
       ({ def_ := partOf V H i, count := 1, base := L.base i, stride := (defs.getD (partOf V H i) default).cols,
          segs := ((inputs V H L i).map fun r => ({ len := 1, at_ := r, step := 0, reps := 1, rstride := 0 } : Tmpl.Seg)).toArray }

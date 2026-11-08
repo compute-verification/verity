@@ -78,6 +78,7 @@ def test_the_template_computes_the_read(built, V, H):
     out = read_tmpl(V, H)
     assert out.returncode == 0, out.stderr
     t = T.parse(out.stdout)
+    assert T.ordered(t)["ok"]
     cases = _cases(random.Random(f"read-tmpl-{V}-{H}"), V, H)
     bits = np.array([[b for arg in E.arguments(V, *c) for b in arg] for c in cases], np.uint8)
     got = T.unslice_lanes(T.evaluate(t, T.slice_lanes(bits)), len(cases))
