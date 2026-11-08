@@ -42,7 +42,7 @@ from verity.ml.windows import wiring as WI
 from verity_vllm.program.compact import runs_from_file_items
 
 from . import edge as E
-from .serving_templates import template
+from .serving_templates import template, unit_templates
 
 FILE, PRIVATE, HEADER = "edge.json", "edge-private.npz", "edge"
 SALT, BC = WI.SALT_BYTES, WI.BC_BYTES
@@ -158,14 +158,16 @@ def _domain(program: str, p: Port, window: str) -> Any:
 
 def _units(window: Any, rows: Sequence[Sequence[Any]]) -> dict[tuple[str, int], tuple[Any, int | None]]:
     """Each Program row of the window's members, by (request, row index): its member and global unit for a row template's
-    rows, else its member and None (its units are not one Program row each)."""
+    rows, one unit each of the row's own Definition, else its member and None (its units are not one Program row each)."""
     out: dict[tuple[str, int], tuple[Any, int | None]] = {}
     tmpls = list(dict.fromkeys(m.template for m in window.members))
     for t, rs in zip(tmpls, rows, strict=True):
         ms = [m for m in window.members if m.template == t]
-        whole = template(t).layout == "row" and len(ms) == 1 and not ms[0].schemas
+        whole = template(t).layout == "row" and len(ms) == 1 and not ms[0].schemas and ms[0].n == len(rs)
         for k, (rid, _pi, r, _d) in enumerate(rs):
-            out[(str(rid), int(r["i"]))] = (ms[0], ms[0].base + k if whole else None)
+            one = whole and (t, 1) in unit_templates(r["spec"])
+            if one or (str(rid), int(r["i"])) not in out:
+                out[(str(rid), int(r["i"]))] = (ms[0], ms[0].base + k if one else None)
     return out
 
 
@@ -202,8 +204,11 @@ def wiring(window: Any, rows: Sequence[Sequence[Any]], programs: Mapping[str, Ma
                 if kind == "p":
                     if names[a] != HISTORY[p]:
                         raise ValueError(f"{what}: row {len(srcs)} is a row of parameter {names[a]}, not of its history {HISTORY[p]}")
-                    ms = held[p]["members"] if p in held else ()
-                    base, n = next(((sum(int(x) for _r, x in ms[:k]), int(n)) for k, (r, n) in enumerate(ms) if r == rid), (0, 0))
+                    left = held[p]["members"] if p in held else ()
+                    if left and (int(held[p]["words"]), int(held[p]["word_bits"])) != (words, 16 * -(-bits // 16)):
+                        raise ValueError(f"{what}: the last window's rows are {held[p]['words']} leaves of {held[p]['word_bits']} bits, "
+                                         f"not {words} of {bits}")
+                    base, n = next(((sum(int(x) for _r, x in left[:k]), int(n)) for k, (r, n) in enumerate(left) if r == rid), (0, 0))
                     if hi > n * words:
                         raise ValueError(f"{what}: row {len(srcs)} reads history the last window did not leave it ({n} rows of {p})")
                     srcs.append((None, base + lo // words))

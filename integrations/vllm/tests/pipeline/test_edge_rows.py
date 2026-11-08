@@ -132,6 +132,8 @@ def test_a_held_row_is_the_requests_own_history_row_the_last_window_left(served:
     with pytest.raises(ValueError, match=rf"edge\.kv of request r0: row {SE.HISTORY} reads history the last window did not "
                                          rf"leave it \({SE.HISTORY} rows of edge\.kv\)"):
         _wired(C=SE.HISTORY + 1, before=before)
+    with pytest.raises(ValueError, match=rf"edge\.kv of request r0: the last window's rows are {SE.KW} leaves of 16 bits, not 32 of 16"):
+        _wired(C=SE.HISTORY, before=before, words={**SE.WORDS, "edge.kv": 32})
     inst, _ = SE.program(SE.HISTORY)
     weights = {**inst[ER.HEADER], "edge.kv": {"bits": 16, "runs": [["p", 2, 0, SE.KW]]}}
     with pytest.raises(ValueError, match=r"edge\.kv of request r0: row 0 is a row of parameter weights, not of its history prefix"):
