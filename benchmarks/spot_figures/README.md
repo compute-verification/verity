@@ -148,8 +148,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - The vertical line is the `proof_overhead` card's `model_overhead`, the marginal: a token's per-block proving
     seconds, statements' fixed costs excluded, over its MACs at the peak. The reference lines come from rho's reference
     (its reference model's, SparseLoCo's syncs scaled to the served model's parameters), the model's checkpoint and
-    every `references` card. A line at 0 is drawn along the axis's floor and named in the caption, lines that coincide are plotted once, and one far
-    above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
+    every `references` card. A line at 0 runs along the axis's floor and is named in the caption, lines that coincide
+    are plotted once, and one far above the headline curves is named at the axis's top. Each line's label wraps to stay inside its axis, beside its
     line where it overlaps the fewest others. A MAC's AND gates, read from the FP8 MoE coordinate's
     circuit-check pin, state each scope's compute and the skipped work in AND gates.
 - **Figure 2** (`figure2.py`): proof overhead per proof-block type, the `proof_overhead` card's blocks joined to the
@@ -167,18 +167,18 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   the β at which the bound reaches them) over the headline scope, along a path of levers from today's measured system.
   Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
   surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
-  modeled or assumed) and the surface case that prices it. A step no surface prices is drawn as pending. A lever off
-  the path (`off`) is drawn in grey with its owner. A term no step's total includes (`unpriced`) is drawn as a named
+  modeled or assumed) and the surface case that prices it. A step no surface prices is shown as pending. A lever off
+  the path (`off`) is plotted in grey with its owner. A term no step's total includes (`unpriced`) is shown as a named
   line or an arrow, and a `charged` one is stated in the caption as the condition every total holds under.
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;
   - (b) latency and throughput against the tick period, beside each load's no-tick point, from the sweep's
     `point.json` files, pending without them; a tick point named by `--old-rule` took τ_sat from the no-tick step at
-    its own load and is drawn hollow, off its load's line, with its queue growth in the caption;
+    its own load and is plotted hollow, off its load's line, with its queue growth in the caption;
   - (c) the advice's term, a machine window's bits times the scope's windows, with and without the tick, against the
     FP4 weights. It reads an advice file (`machine_windows`, and `arms` of `label`, `tick` and `bits`, with a
-    `pending` reason where the arm's figure isn't a result yet, drawn hatched).
+    `pending` reason where the arm's figure isn't a result yet, hatched).
 - The headline scope (`figure1.PRIMARY`, a world year) gets the bare file names. Its exfiltration panel also plots
   (A) over the secondary scope (`figure1.SECONDARY`, a datacenter year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
