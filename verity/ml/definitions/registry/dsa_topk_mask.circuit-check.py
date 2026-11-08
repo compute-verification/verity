@@ -11,8 +11,8 @@ from typing import Any, Callable
 #: Definitions: their Boolean Definitions' word views compare them, at the same spots (`boolean_dsa_topk_mask`'s sidecar).  The
 #: rows' read spans the row width too: at every W it is one network (`dsa_topk_mask.rows`, by N and K) of
 #: `DsaWaksmanSwap_v1{W,E}` and `DsaWaksmanPick_v1{W,E}`, so the spots check it at the latent rows' 576 words to 67,584 keys,
-#: past 6,144 of them read lazily (`circuit_check.targets.LAZY_OPERANDS`), and at one word to 131,072 (at 576 words a spot
-#: there takes about 12 h)
+#: past 6,144 of them read lazily (`circuit_check.targets.LAZY_OPERANDS`), and at one word to 131,072, since the network
+#: doesn't depend on W
 RANGES = {
     "DsaTopKMask_v1{N=4096..131072 step 2048,TOPK=2048}": (
         # the ends: the first class and the longest row at 128k context
