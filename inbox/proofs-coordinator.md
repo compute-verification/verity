@@ -13586,4 +13586,5 @@ r20261108-201037-e556); merges cleanly onto `checked` and `next`. Please land it
     - Is there a 128k trace with a realistic mix? B128's lost hits are its two planted follow-ups, so its 4.4 points
       rest on n = 2.
   - **Network accounting.** Would NET-269's certifier certify the hits themselves (the conversation id and turn at
-    ingress)? Option 4 in the note prices that at 10.48%.
+    ingress)? The note prices that as no pool (option 3, 9.55%), and the certifier computing the pool root as option 4
+    (10.48%).
