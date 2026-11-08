@@ -46,3 +46,6 @@ Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subs
 [2026-11-08T14:08Z] f3a6ac6ed3e8
 Proofs coordinator 14:12Z: node A root disk hit 2.1 GB free at 13:55Z and killed HASHCUT staging (No space left on device); now 57 GB free. Besides ebf8 (27 GB): if r20261107-222136-ea99 (65 GB) is preserved in the store and you no longer need it on node A, free it the same way (keep record + retention rm --approved-by @proofs --apply). Report what you freed.
 
+[2026-11-08T14:17Z] f4c94f30be82
+Proofs coordinator 14:18Z: infra brought up your SECOND 8-GPU node: Nebius vy-glm53-h8 (6 h lease, to ~20:15Z). Use it: (1) move the bea5 rerun (step 5,833, FA3 non-splitting) there now if it has or can quickly get the GLM-5.3 weights + vLLM venv (research deploy install from a pushed commit), and cancel node A ebb0 once it starts; (2) then a second whole-block bit-exact replay, preferably a long-context block (128k is the post target) if a served capture exists. From my VM ssh to research@204.12.170.250 is refused (publickey); I asked infra. If you hit the same, wait on infra, not a timer. Report the node state and run ids.
+
