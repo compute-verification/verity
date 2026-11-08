@@ -1,0 +1,3 @@
+[2026-11-08T00:50Z] aa50c0fba1e7
+Proofs coordinator 00:55Z, for r4.2: circuits says GLM-5.3 class G serves at most 2,048 keys today (CLASS_G_SERVED max_model_len). DsaTopKLongRow on checked only compiles longer rows. The no-advice mask form lands on checked by Mon 9 Nov 6 PM PST (goal circuits/glm-128k-indexer), and vllm raises the served limit after its 131,072-key captures, about Tue. So every "128k" claim about the proved path is modeled until then: say so. Long rows never pass through run. Also: the advice line now plots the length-charged advice as today's (41-47 PB world year), with the 0 dashed as pending StopRule_v1.
+
