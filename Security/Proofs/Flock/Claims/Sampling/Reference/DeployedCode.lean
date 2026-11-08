@@ -2,6 +2,7 @@ module
 
 public import SampledProofs.Registration
 public import Proofs.Flock.Claims.Sampling.Reference.Deployed
+public import Proofs.Flock.Claims.Sampling.Reg
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -83,31 +84,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Claims.Sampling.Reference Properties.SampledProofs
 open Lean (Json)
-
-/-- **A registration as the sample of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
-verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
-rule and the challenger's closure map. -/
-structure Reg where
-  verifier : SampledProofs.Registration.Verifier
-  rule : SampledProofs.Select.Rule
-  closure : Option (Array (Int × Array Int))
-
-def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
-
-def Reg.query (g : Reg) : Json := g.verifier.query
-
-def Reg.table (g : Reg) : Option Json := g.verifier.workTable
-
-/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
-def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
-  match SampledProofs.Slots.layout g.program g.query with
-  | .ok l => l
-  | .error _ => default
-
-/-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
-is refused (`drawChecked`). -/
-def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
-  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **The sampled verifier's code with its Lean sample**: `c` with `checked` the sample of record on the registration
 `reg x` over the bytes `bytes x` of the coins, and one session per registration, `sess`, on the rounds `sr`. -/

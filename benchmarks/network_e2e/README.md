@@ -66,7 +66,7 @@ verity bench network_e2e (--upstream URL | --endpoint-peer NAME:PORT) --traffic 
   (`chain.tie`) runs instead and is required (`chain.tie_gate`).
 
 The report's `stubbed` list says what each run still stands on that isn't the chain's own: the advice of another run, a
-given serving config, a prove path of a declared workload, pending negatives, the certifier off the gate.
+given serving config, a prove path of a registered circuit, pending negatives, the certifier off the gate.
 
 ## Inputs: rehearsals and gate runs
 

@@ -847,6 +847,10 @@ A_BODY = {"a": {**GREEDY, "prompt": [1, 2, 3]}}
 A_WHOLE = WA.Advice((A,), (_wrow(0, 3), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1))
 A_OUT = WA.Advice((A,), (_wrow(0, 3), _wrow(3, 1)), (0, 1))
 A_IN = WA.Advice((A,), (_wrow(4, 1), _wrow(5, 1)), (0, 1), (WA.Carried(0, 4, 2, ((0, 4),)),))
+#: A prefilled in chunks of 2 and 1, whole, and split inside its prompt: the first window leaves it at position 2, no output kept
+A_CHUNKED = WA.Advice((A,), (_wrow(0, 2), _wrow(2, 1), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1))
+A_MID_OUT = WA.Advice((A,), (_wrow(0, 2),), ())
+A_MID_IN = WA.Advice((A,), (_wrow(2, 1), _wrow(3, 1), _wrow(4, 1), _wrow(5, 1)), (0, 0, 1, 1), (WA.Carried(0, 2, 0, ((0, 2),)),))
 CACHE_ON = {"enable_prefix_caching": True}
 
 
@@ -873,8 +877,6 @@ def _past_its_outputs() -> tuple[WA.Advice, dict]:
      "step 0 runs 3 sequences, over the registered max_num_seqs 2"),
     (_session([(300, 1, {**GREEDY, "max_tokens": 1})], [[(0, 0, 300)]]), {},
      "request 0: step 0 runs 300 of its rows, over the registered long_prefill_token_threshold 256"),
-    ((WA.Advice((A,), (_wrow(0, 2),), ()), A_BODY), {},
-     "request 0: the window leaves it at position 2, inside its 3-token prompt, so its Program here would sample nothing"),
     (_past_its_outputs(), CACHE_ON, "request 1: its cache hit reads request 0's KV, which has no Program in the window (its rows here "
                                     "are past its last kept output)"),
 ])
@@ -898,13 +900,17 @@ def _hit_chunked() -> tuple[I1.Advice, dict]:
     (_hit_chunked(), [(24, 3, 0, 4, (), False, False, None, ()), (24, 1, 16, 2, (0,), False, False, {"rows": 16, "producers": [0]}, (4, 4))]),
     ((A_OUT, A_BODY), [(3, 1, 0, 2, (), False, True, None, ())]),
     ((A_IN, A_BODY), [(3, 3, 4, 2, (), True, False, {"rows": 4, "carried": True}, ())]),
+    ((A_MID_OUT, A_BODY), [(3, -1, 0, 0, (), False, True, None, ())]),
+    ((A_MID_IN, A_BODY), [(3, 3, 2, 4, (), True, False, {"rows": 2, "carried": True}, ())]),
 ])
 def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, tmp_path):
     """Class G with the prefix cache on: a request's unit is its rows in the window alone after its history C (`segment_of`), and so
     is the unit R2 plans it alone at (`batch._solo`). r1's hit of r0's first block has C 16, its prefill the 8 uncached rows and
     r0 the block's producer, and with those rows prefilled in two launches it is the chunked wrapper after that history; the
     window that leaves A after its prefill and first decode has A to position 3 (T 1, 2 samples); the next carries it in at C 4,
-    its rows and last token there its history, and holds its last 2 decodes."""
+    its rows and last token there its history, and holds its last 2 decodes. The window that leaves A inside its prompt, at
+    position 2, has A to there (T -1, no sample) and the next carries it in at C 2, its rows there its history, the rest of its
+    prefill and all 4 samples its own."""
     reg = _class_g(tmp_path, engine=CACHE_ON)
     advice, ingress = session
     plan = plan_steps(reg, advice, ingress)
@@ -914,7 +920,7 @@ def test_class_g_plans_a_request_from_its_history_in_the_window(session, units, 
         solo, bodies, k = B._solo(advice, ingress, r)
         a = plan_steps(reg, solo, bodies).requests[k]
         assert B._unit(a) == B._unit(u) and (a.carried_in, a.carried_out, a.prefix() is None) == (u.carried_in, u.carried_out, not u.C)
-    assert WA.follows(A_OUT, A_IN) == [(0, 0)]
+    assert WA.follows(A_OUT, A_IN) == [(0, 0)] and WA.follows(A_MID_OUT, A_MID_IN) == [(0, 0)]
 
 
 def _traced_form(reg: Registered, u) -> str:
@@ -966,27 +972,41 @@ def _history_params(p) -> list[tuple[str, int]]:
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("body", [GREEDY, {**STOCH, "max_tokens": 4, "seed": 5}])
-def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(body, tmp_path):
+@pytest.mark.parametrize("body,split", [(GREEDY, (A_WHOLE, A_OUT, A_IN)), ({**STOCH, "max_tokens": 4, "seed": 5}, (A_WHOLE, A_OUT, A_IN)),
+                                        (GREEDY, (A_CHUNKED, A_MID_OUT, A_MID_IN))], ids=["greedy", "seeded", "mid-prefill"])
+def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(body, split, tmp_path):
     """Class G on GLM-5.3's first four layers (three indexer layers and one sharing the last one's indices, as in the model): A whole
     in one window is, call for call in the registered compiler's form, its Program in the window that leaves it after two outputs,
     then its Program in the next, which carries it in at position 4 with its 4 rows of every layer (latent rows and indexer keys and
-    scales) and its last token as Inputs; each window's batch rules pass, R1 holding that history A's own. What no cheaper test
-    can: that carrying a request across a Commit window neither drops nor repeats a call, nor moves a sample's position. The seeded
-    case takes about two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler
-    state (the seed, each sample's position) across the window."""
+    scales) and its last token as Inputs; so is A prefilled in chunks of 2 and 1, split inside its prompt at position 2 (its 2 rows
+    its history, no last token). Each window's batch rules pass, R1 holding that history A's own, and its GP-01 carries the edge:
+    the window that leaves A returns its latent rows so far (and past its prompt its last sample) as out-ports after its samples,
+    and the next takes ports of those types as registered parameters, A's history reading them; the indexer's keys and scales,
+    which no row reads below INDEX_TOPK keys, stay A's own unread Inputs. What no cheaper test can: that carrying a request across
+    a Commit window neither drops nor repeats nor adds a call, nor moves a sample's position. The seeded case takes about
+    two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler state (the seed,
+    each sample's position) across the window."""
+    from verity.ml.circuits.types import field_types
     reg = _class_g(tmp_path, engine=CACHE_ON, layers=4)
     ingress = {"a": {**body, "prompt": [1, 2, 3]}}
-    calls_of, params = [], []
-    for advice in (A_WHOLE, A_OUT, A_IN):
+    calls_of, params, wls = [], [], []
+    for advice in split:
         c = compile_steps(reg, advice, ingress)
         (p,) = c.programs.values()
         assert c.batch_rule is None
         calls_of.append([n.fn.id for n in p.fn.body.nodes])
         params.append(_history_params(p))
+        wls.append(c.workload)
+    C = split[2].carried[0].computed
     own = [("prompt", 3)] + [("seed", 1)] * (body is not GREEDY)
-    assert params == [own, own, own + [("prefix", 4 * 4 * 576), ("prefix_ik", 3 * 4 * 128), ("prefix_iks", 3 * 4), ("last_token", 1)]]
+    assert params == [own, own, own + [("prefix", 4 * C * 576), ("prefix_ik", 3 * C * 128), ("prefix_iks", 3 * C)] + [("last_token", 1)] * (C >= 3)]
     assert calls_of[0] == calls_of[1] + calls_of[2]
+    sig = [w.fn.signature() for w in wls]
+    assert wls[0].edge is None and wls[1].edge.outs == wls[2].edge.ins and wls[2].ports == wls[2].registered[-len(wls[2].ports):]
+    assert [t for n, t in sig[2][0] if n in wls[2].ports] == list(field_types(sig[1][1])[1:])
+    assert wls[2].ports == ("edge.kv", "edge.last")[:1 + (C >= 3)]
+    assert [n for n, _ in sig[2][0] if n.startswith("request[") and ".peers_" not in n] == [
+        f"request[{wls[2].requests[0].request_id}].{g}" for g in [*(g for g, _ in own), "prefix_ik", "prefix_iks"]]
 
 
 @pytest.mark.slow
@@ -1021,7 +1041,8 @@ def test_a_class_g_long_prompt_compiles_as_its_chunks_each_at_its_launch(tmp_pat
     seen, tokens, keys = [], CM._Launch.tokens, CM._Launch.keys
     monkeypatch.setattr(CM._Launch, "tokens", lambda self, own, sampled=False: (
         seen.append((self.step, own, sampled)), tokens(self, own, sampled))[1])
-    monkeypatch.setattr(CM._Launch, "keys", lambda self, own: (seen.append((self.step, tuple(own), "keys")), keys(self, own))[1])
+    monkeypatch.setattr(CM._Launch, "keys", lambda self, own, without=(): (
+        seen.append((self.step, tuple(own), "keys")), keys(self, own, without))[1])
     c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
     u = c.requests[0]
     assert (u.chunks, u.T, sorted(c.refused), c.batch_rule) == ((8, 8, 4), 2, [1], None)
