@@ -33,11 +33,12 @@ from pathlib import Path
 from typing import Any, Callable
 
 AUTO_NODE, AUTO_PROJECT = "vy-nebius-2", "verity"
-#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5 and 6 are any lane's (slot_only.POOLS
-#: on cpu-1). cpu-2's shares the train slot's and proofs' cores, which sat at load 45 of 256 while the other pools had 180 runs
-#: waiting; cpu-4's cores are the train slot's, proofs' and soundness's.
+#: (machine, pool) where `--on auto` may spill: the `research` pools of cpu-1, 2, 3, 5, 6, 7, 8, 9 and 11 are any lane's
+#: (slot_only.POOLS on cpu-1). A pool left out sits idle while the listed ones queue: cpu-7, 8, 9 and 11 sat near load 0 while
+#: cpu-1, 5 and 6 queued 20 or more runs each. cpu-4's cores are the train slot's, proofs' and soundness's.
 SPILL = (("vy-nebius-cpu-1", "research"), ("vy-nebius-cpu-5", "research"), ("vy-nebius-cpu-3", "research"),
-         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"))
+         ("vy-nebius-cpu-2", "research"), ("vy-nebius-cpu-6", "research"), ("vy-nebius-cpu-7", "research"),
+         ("vy-nebius-cpu-8", "research"), ("vy-nebius-cpu-9", "research"), ("vy-nebius-cpu-11", "research"))
 DESCRIPTION = Path("infra/cluster/descriptions/nebius.toml")
 SLOT_PY = Path("tools/verity/check/slot.py")
 READ_TIMEOUT_S = 30
@@ -194,7 +195,10 @@ def _pool(doc: Any, cpus: int, mem_gb: float) -> tuple[int, int, int, str]:
     waiting = len(doc.get("waiters") or [])
     why = (f"slots {', '.join(s['name'] + (' free' if s in free else ' held' if s.get('holder') else ' blocked') for s in fit)}; "
            f"{waiting} waiting")
-    return len(open_), len(free), waiting, why
+    # the line drains through the slots that run: a slot blocked on memory or disk adds no throughput until it clears, and a
+    # pool whose idle slots all wait on memory reservations would otherwise rank as a short line
+    running = [s for s in open_ if s.get("holder") is not None or not s.get("blocked")]
+    return max(len(running), 1), len(free), waiting, why
 
 
 def choose(docs: dict[str, dict | str], cpus: int, mem_gb: float) -> tuple[tuple[str, str] | None, str]:
