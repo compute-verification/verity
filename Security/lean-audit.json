@@ -53313,8 +53313,9 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "b3feb2583eb137d45fc0575ad263ba89b6fc129b5a5bd28abd8d90faa1b9b566",
+   "digest": "a3e7c2be4136a06facc5bb2774683ed24d2bd6db91384ba4d0aac0864bc193e9",
    "definitions": {
+    "SampledProofs.Challenger.EXTRA_OPENING": "63641ef1b7831157804cf5d426e6dc54bca69556d77b67b980781dbcde21b59a",
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
@@ -53346,10 +53347,11 @@
     "SampledProofs.Challenger.linkLine": "1c43c5cbc5e0405b6043bcaafede1833bd144b901ff999faed53e217bd553195",
     "SampledProofs.Challenger.openLine": "09d16a5e50d4e79db09f5449eebeadc0d8508e5db08e042c085f41accbd32433",
     "SampledProofs.Challenger.recordCoins?": "e0b5d72ec7b5b6e2b4ac1cc5739121ba32d466004d30d0cc62210f159f0daed6",
+    "SampledProofs.Challenger.recordRounds": "4d1fb3f6172fdcfbb5bc140cb0eb67058cd83356ea2e7ec6dc69f4b2db24a327",
     "SampledProofs.Challenger.rootOf": "c4d3c8b6790f148c96e38fcab9c4397ca2a945003ebcdb5744c521e1b9deef5b",
     "SampledProofs.Challenger.sampleLinkFirst": "40656b6be631ea6f9a640acc31340a2ed42770721553ba22f105a015d7ad3c05",
     "SampledProofs.Challenger.sampleLinkFirstFrom": "255274d7cc03d77c7fe2588909d98e5a073fa55f7b294c7bcc504f3cb0f0bd6e",
-    "SampledProofs.Challenger.sessionTreeReason": "6be4668e903ca6cd80b2ad63566fa313a290f14ee1a2ad9e46eaec0f6dca610d",
+    "SampledProofs.Challenger.sessionTreeReason": "0c48477f66a9bb5173d400e135b4a2b9e778c1a631918a3156c76892f154c593",
     "SampledProofs.Challenger.sessionsTreeReason": "c3e4f69c083dcf5e29e5c718e8b9d559d668b72ad652c9bc28f6d3e5878967e1",
     "SampledProofs.Challenger.trustedTreesOf": "b68a1fcd5206defc96c6413db71389f77ec1703dfc3f204a85d564ed1148d794",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "2dcd137ccdf67fb110c9b12c5c48d9cb3d84a940e1316b7093818f79c566d4cc",
