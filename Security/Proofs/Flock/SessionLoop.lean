@@ -100,6 +100,7 @@ public import Proofs.Flock.SessionLoop.RoundsPassInner0
 public import Proofs.Flock.SessionLoop.RoundsPass
 public import Proofs.Flock.SessionLoop.SampledAudit
 public import Proofs.Flock.SessionLoop.SampledRelay
+public import Proofs.Flock.SessionLoop.AnyErrBound
 
 /-!
 # Proof of Flock's zero knowledge at the session loop's own frames
