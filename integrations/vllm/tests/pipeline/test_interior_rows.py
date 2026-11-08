@@ -105,6 +105,22 @@ def test_a_replay_names_what_it_cannot_give(world):
     assert w is None and "prompt ids [0, 3)" in why
 
 
+def test_a_port_map_says_which_committed_word_each_units_word_is(world):
+    """`port_map` reads off `read_all`, before any value, which committed element or registered weight each RoPE head's
+    port word is; gathered from what serving committed, it is each request's span word for word, from its committed
+    members and the rotary cache. A template whose read computes its words (a GEMM's shared rows) is refused by name."""
+    bmap, committed = world.bmap_and_reader(order=tuple(PROMPTS))
+    store = CommittedStore(bmap, committed)
+    for rid in PROMPTS:
+        pm = IR.port_map(world.inst, ROPE, rid)
+        data, _entries = _served(world, rid)
+        got, = IR.gather(pm, store, _weights(world))
+        assert {p: a.tolist() for p, a in got.items()} == {p: a.tolist() for k in ("rows", "outs") for p, a in data[k].items()}
+        assert {s[0] for s in pm["sources"]} == {"store", "weights"} and all(s[1] == rid for s in pm["sources"] if s[0] == "store")
+    with pytest.raises(ValueError, match="computed by its read, not moved"):
+        IR.port_map(world.inst, "GemmCoordinate_v1{K=64}", "r0")
+
+
 def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
     s = IR.span(world.inst, _replay(world, "r1"), ROPE)
     got = s.padded(UNITS + 3)
