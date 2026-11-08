@@ -51,8 +51,8 @@ from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as SCHEMA
 from verity.core.protocols.certifier import arith_encode as AE
 from verity.core.protocols.certifier.arith_encode import Carry, ChargeBook
 from verity.core.protocols.certifier.head_check import BIT, _part
-from verity.core.protocols.sampled_proofs.one_stage import produced
-from verity.core.protocols.sampled_proofs.one_stage import registered as G
+from verity.core.protocols.spot.one_stage import produced
+from verity.core.protocols.spot.one_stage import registered as G
 
 VALUE = "replay-charge"
 WORD_BITS = 16

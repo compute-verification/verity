@@ -450,7 +450,7 @@ def red_team(out: Path, pin: str, period: str, gate: Gate | None, peer: str, at:
     case("pins_cut", record_path, pn=[rt / "pins-cut.jsonl"])
     logged = [ln for ln in (g / "pins.jsonl").read_text().split("\n") if ln]
     if logged:
-        from verity.core.protocols.sampled_proofs import challenger as LC
+        from verity.core.protocols.spot import challenger as LC
         e = json.loads(logged[0])
         logged[0] = LC.pin_line(e["commit"], e["main"], "2000-01-01T00:00:00Z")
     (rt / "pins-rewritten.jsonl").write_text("".join(ln + "\n" for ln in logged))
@@ -622,7 +622,7 @@ def rehearse(a: argparse.Namespace) -> dict[str, Any]:
 
 def _main_of(a: argparse.Namespace) -> list[str] | None:
     """The verifier's own first-parent history of main at ``--main`` (`remote.main_lines`), or None without one."""
-    from verity.core.protocols.sampled_proofs import remote
+    from verity.core.protocols.spot import remote
     return None if a.main is None else remote.main_lines(a.main)
 
 

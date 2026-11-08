@@ -1649,7 +1649,7 @@ def main() -> int:
     import a11
     import a11_kinds as K
     from verity.ml.circuits.codec import canonical_json, encode_program
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_vllm import TargetProfile
 
     out = Path(a.out)
