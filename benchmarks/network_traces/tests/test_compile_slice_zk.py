@@ -1,11 +1,13 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
 received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
-exemption, each row shorter than the scan's 16-byte piece found whole, and what `prove` reads off its helpers exists.
-Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
+exemption, each row shorter than the scan's 16-byte piece found whole. What `prove` reads off its helpers exists, and
+`cost3` takes CompileSlice_v3's classes and fixtures. Nothing here lowers or proves (`compile_slice_zk.prove` and
+`cost3` do, on a node)."""
 
 from __future__ import annotations
 
 import importlib.util
+import json
 import re
 import sys
 from pathlib import Path
@@ -109,7 +111,7 @@ def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
 
 
 def test_what_prove_reads_off_its_helpers_is_there():
-    """`prove` and `rescan` run on a node only, and read the one-stage namespace (``M``, `warden_zk._one_stage`),
+    """`prove`, `rescan` and `cost3` run on a node only, and read the one-stage namespace (``M``, `warden_zk._one_stage`),
     its modules and `warden_zk` by attribute: each attribute the module reads off them exists, so a helper renamed under it
     fails here rather than on the node."""
     Z = _load()
@@ -120,3 +122,32 @@ def test_what_prove_reads_off_its_helpers_is_there():
     missing += [f"M.{k}.{j}" for k, j in set(re.findall(r"\bM\.(\w+)\.(\w+)", src))
                 if hasattr(M, k) and not hasattr(getattr(M, k), j)]
     assert not missing
+
+
+def test_cost3_takes_v3s_demo_class_dry(tmp_path):
+    """`cost3 --dry` on CompileSlice_v3's demonstration class: the reference's rows registered, the unit accepts."""
+    Z = _load()
+    assert Z.main(["cost3", "--class", "demo", "--dry", "--out", str(tmp_path)]) == 0
+    got = json.loads((tmp_path / "summary.json").read_text())
+    assert got["verdict"] == Z.V3.ACCEPT and got["unit"] == "CompileSlice_v3" and got["arms"] == ["fw"]
+    with pytest.raises(SystemExit, match="isn't fw, nofw or plain"):
+        Z.main(["cost3", "--class", "demo", "--dry", "--arms", "gpu", "--out", str(tmp_path)])
+
+
+def test_a_fixture_is_a_v3_class_with_its_pool_statics(tmp_path):
+    """A ``--fixture`` in the corpus fixture's layout, holding CD and SW, loads as its class and slice (here the demo's);
+    one without its pool statics is refused, naming them."""
+    from verity.ml.protocols.certifier import compile_slice_v2 as V2
+
+    Z = _load()
+    x = Z.load3("demo")
+    fx = {"engine": V2.DEMO_ENGINE, **{k: x.st[k] for k in ("R", "W", "A", "IW", "Q", "D", "P", "K", "CN", "CTW", "CU",
+                                                            "CD", "SW")},
+          "arrivals": x.sl.arrivals, "decisions": x.sl.decisions, "steps": x.sl.steps, "tokens": x.sl.tokens}
+    f = tmp_path / "fixture.json"
+    f.write_text(json.dumps(fx))
+    y = Z.load3("corpus", f)
+    assert (y.st, y.sl) == (x.st, x.sl) and y.name == str(f)
+    f.write_text(json.dumps({k: v for k, v in fx.items() if k not in ("CD", "SW")}))
+    with pytest.raises(SystemExit, match="holds no CD, SW"):
+        Z.load3("corpus", f)

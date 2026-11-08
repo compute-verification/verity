@@ -5,6 +5,8 @@ one-stage path (`warden_zk.py`: its namespace, the ZK server's environment and t
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
+    python benchmarks/network_traces/compile_slice_zk.py cost3 --bin flock-circuit --lean flock-verify --out DIR
+      [--class corpus|demo|demo_async | --fixture FIXTURE.json] [--arms fw,plain] [--points 1] [--dry]
 
 * **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice.demo`, 59,341 ANDs a
   unit), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven steps
@@ -63,6 +65,12 @@ one-stage path (`warden_zk.py`: its namespace, the ZK server's environment and t
   kept, the pieces recomputed from its slice, kinds and partition (a salt the run sampled isn't, so a found salt reads
   leaked).
 * **Cost** (``--points``): sessions whose verifier samples the first k units, behind the ZK server (`a8.cost`).
+* **cost3**: `compile_slice_v3.CompileSlice_v3`'s cost at a class: its honest units, the reference's rows registered
+  (`compile_slice_v3.arguments`), staged under derived salts, held to `ACCEPT` and proved in `a8.cost`'s sessions in each
+  of ``--arms`` (``fw``, ``--zk`` behind the ZK server; ``plain``, without ``--zk``). The class (``--class``):
+  ``corpus``, corpus-smallkv's first seven steps (`FIXTURE` at CD 1 and SW 12), one class of a captured trace's real
+  arrivals; ``demo`` and ``demo_async``, its demonstration classes; or ``--fixture``, a slice in `FIXTURE`'s layout that
+  holds its pool statics CD and SW too. No negatives, bindings or scan: those are `prove`'s, on CompileSlice_v1.
 """
 from __future__ import annotations
 
@@ -89,6 +97,7 @@ from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
+from verity.ml.protocols.certifier import compile_slice_v3 as V3  # noqa: E402
 
 FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
 FIXTURE = FIXTURES / "compile_slice_smallkv.json"
@@ -303,11 +312,12 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
     return out
 
 
-def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
-    """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
-    defn = CS.unit(**x.st)
-    bits = CS.row_bits(x.S)
-    rows = [(r, M.V2, bits[r], [r]) for r in CS.row_names(x.S)]
+def stager(M, x: SimpleNamespace, n: int, out: Path, defn=None, bits: dict[str, int] | None = None) -> SimpleNamespace:
+    """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder:
+    `defn` on input rows `bits` (by default CompileSlice_v1's at the slice's statics)."""
+    if defn is None:
+        defn, bits = CS.unit(**x.st), {r: CS.row_bits(x.S)[r] for r in CS.row_names(x.S)}
+    rows = [(r, M.V2, b, [r]) for r, b in bits.items()]
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
     part = M.P.partition(program, query)
@@ -356,7 +366,7 @@ def stage(M, sg: SimpleNamespace, units: list[SimpleNamespace], salt_key: bytes,
     nbl = max(3, (-(-n // st.meta["vus_per_block"]) - 1).bit_length())
     if not 25 <= k_log + nbl <= M.a7.M_MAX:
         raise SystemExit(f"m = {k_log} + {nbl} is outside 25 .. {M.a7.M_MAX} (--zk and flock-circuit's shape)")
-    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r in CS.row_names(sg.S)}
+    data = {r: M.np.asarray([u.words[r] for u in units], dtype=M.np.uint16) for r, *_ in sg.rows}
     set_name = f"{st.iset.name}-slice"
     got = st.stage(data, out, salt_key, salts=salts, indices=range(sg.base, sg.base + n), set_name=set_name)
     (out / "inst.bin").rename(out / f"inst-{n}.bin")
@@ -711,9 +721,80 @@ def rescan(a) -> int:
     return 0 if ok else 1
 
 
+V3_DEMOS = {"demo": V3.demo, "demo_async": V3.demo_async}
+#: the corpus class's pool statics, which `FIXTURE` doesn't hold (`compile_slice_v3`'s docstring)
+V3_CORPUS = {"CD": 1, "SW": 12}
+V3_KEYS = ("engine", "R", "W", "A", "IW", "Q", "D", "P", "K", "CN", "CTW", "CU", "CD", "SW", "arrivals", "decisions",
+           "steps", "tokens")
+
+
+def load3(name: str, fixture: Path | None = None) -> SimpleNamespace:
+    """CompileSlice_v3's class and slice: ``demo`` or ``demo_async``, its demonstration classes; ``corpus``, `FIXTURE`
+    at `V3_CORPUS`; or `fixture`, a fixture in `FIXTURE`'s layout that holds CD and SW too (DA, its decisions' count unless
+    it holds one)."""
+    if fixture is None and name in V3_DEMOS:
+        st, sl = V3_DEMOS[name]()
+        return SimpleNamespace(name=name, st=st, S=SimpleNamespace(**st), sl=sl)
+    fx = json.loads(fixture.read_text()) if fixture else {**json.loads(FIXTURE.read_text()), **V3_CORPUS}
+    if missing := [k for k in V3_KEYS if k not in fx]:
+        raise SystemExit(f"{fixture}: the fixture holds no {', '.join(missing)}")
+    st = V3.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], fx["Q"], fx["D"], fx["P"], fx["K"], fx["CN"],
+                    fx["CTW"], fx["CU"], CD=fx["CD"], SW=fx["SW"], DA=fx.get("DA", len(fx["decisions"])))
+    sl = CS.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx["tokens"])))
+    return SimpleNamespace(name=str(fixture) if fixture else name, st=st, S=SimpleNamespace(**st), sl=sl)
+
+
+def cost3(a) -> int:
+    """CompileSlice_v3's honest units at a class (the module's docstring), proved in `a8.cost`'s sessions."""
+    x, out = load3(a.cls, Path(a.fixture) if a.fixture else None), Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    args = V3.arguments(x.S, x.sl)
+    summary: dict = {"unit": "CompileSlice_v3", "class": x.name, "statics": x.st, "row_bits": V3.row_bits(x.S),
+                     "free_bits": V3.free_width(x.S), "arms": a.arms, "points": a.points}
+    if a.dry:
+        t = time.time()
+        summary["verdict"], = V3.run(x.st, [args])
+        summary["evaluate_s"] = round(time.time() - t, 1)
+        log(f"v3 {x.name}: verdict {hex(summary['verdict'])} (ACCEPT {hex(V3.ACCEPT)}), rows {summary['row_bits']}, free "
+            f"bits {summary['free_bits']}, evaluated in {summary['evaluate_s']} s")
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        return 0 if summary["verdict"] == V3.ACCEPT else 1
+    M = WZ._one_stage()
+    defn, bits = V3.unit(**x.st), V3.row_bits(x.S)
+    probe = stager(M, x, 1, out / "probe", defn, bits)
+    n = population(probe.st.meta, ("honest",))
+    log(f"probe: k_log {probe.st.meta['k_log']}, vus_per_block {probe.st.meta['vus_per_block']}, lowered in "
+        f"{probe.lower_s} s; {n} units")
+    sg = probe if n == 1 else stager(M, x, n, out / "stager", defn, bits)
+    summary["stager"] = {"lower_s": sg.lower_s, "k_log": sg.st.meta["k_log"], "vus_per_block": sg.st.meta["vus_per_block"],
+                         "pin": sg.st.pin, "n": n}
+    m = stage(M, sg, [SimpleNamespace(words={r: CS.words(args[r]) for r in V3.ROWS})] * n, os.urandom(32), {})
+    summary["staged"] = {k: m[k] for k in ("n", "ands", "unit_nnz", "stage_s")} | {"k_log": m["meta"]["k_log"]}
+    log(f"staged: {n} units, {m['ands']} ANDs a unit, k_log {m['meta']['k_log']}, {m['stage_s']} s")
+    if m["oks"] != [V3.ACCEPT] * n:
+        raise SystemExit(f"the staged verdict words {sorted(set(m['oks']))} aren't ACCEPT")
+    av = SimpleNamespace(bin=a.bin, lean=a.lean, lease=[], gpu=False, points=a.points, arms=a.arms, cold=1)
+    summary["cost"] = rows = M.a8.cost(av, m, out / "cost", a.port)
+    summary["ok"] = ok = bool(rows) and all(r["accepted"] and r.get("lean", {"accepted": True})["accepted"] for r in rows)
+    (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+    log("done: " + ("ok" if ok else "FAILED"))
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="compile_slice_zk.py", description=__doc__.splitlines()[0])
     sub = ap.add_subparsers(dest="command", required=True)
+    c = sub.add_parser("cost3", help="CompileSlice_v3's honest units at a class, proved in a8.cost's sessions")
+    c.add_argument("--bin")
+    c.add_argument("--lean")
+    c.add_argument("--out", required=True)
+    c.add_argument("--port", type=int, default=7781)
+    c.add_argument("--class", dest="cls", choices=("corpus", *V3_DEMOS), default="corpus")
+    c.add_argument("--fixture", help="a fixture in compile_slice_smallkv.json's layout holding CD and SW, in place of "
+                   "--class")
+    c.add_argument("--arms", default="fw", help="a8.cost's arms, comma-separated: fw (--zk behind the ZK server), plain")
+    c.add_argument("--points", default="1", help="the k proof blocks each cost session samples, comma-separated")
+    c.add_argument("--dry", action="store_true", help="the class's arguments and the unit's verdict only")
     r = sub.add_parser("rescan", help="a finished prove's scan taken again from its summary and verifier files")
     r.add_argument("--from", required=True, help="the prove's --out")
     r.add_argument("--out", required=True)
@@ -734,6 +815,13 @@ def main(argv=None) -> int:
     if a.command == "rescan":
         return rescan(a)
     a.points = [int(k) for k in a.points.split(",") if k]
+    if a.command == "cost3":
+        a.arms = [x for x in a.arms.split(",") if x]
+        if bad := set(a.arms) - {"fw", "nofw", "plain"}:
+            raise SystemExit(f"--arms: {', '.join(sorted(bad))} isn't fw, nofw or plain")
+        if not a.dry and not (a.bin and a.lean):
+            raise SystemExit("cost3 needs --bin and --lean, or --dry")
+        return cost3(a)
     kinds = tuple(REFUSED[a.slice])
     a.kinds = tuple(k for k in a.kinds.split(",") if k) or kinds
     if a.kinds[0] != "honest" or not set(a.kinds) <= set(kinds):
