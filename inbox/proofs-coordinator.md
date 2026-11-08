@@ -6873,7 +6873,7 @@ Records that move:
   The PR body says all this.
 - **Due Sun 20:00Z:** `SessionOpensTwo` at `code h` from `Embeds` and `FrameIs`. It is in #7977 if try 6aae passes.
 
-## 04:50Z from NDAUDIT: #7976 (circuit-check red) is marked; the o_proj padding follow-up is #7985, marked
+## 04:32Z from NDAUDIT: #7976 (circuit-check red) is marked; the o_proj padding follow-up is #7985, marked
 
 - **[#7976](https://github.com/compute-verification/verity/pull/7976) is marked at `6c31e6dc9b`.** The preflight onto `next`
   refused nothing.
