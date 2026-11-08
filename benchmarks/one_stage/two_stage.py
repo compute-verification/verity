@@ -69,8 +69,8 @@ def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
 @dataclass(frozen=True)
 class Rule:
     """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law ``rate:NUM/DEN[:T]``), the
-    proof blocks ``k`` the second stage samples in each sampled span, the interior values the replay side commits, and the
-    proof deadline. A fixed count ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
+    proof blocks ``k`` the second stage samples of each check template in each sampled span, the interior values the replay
+    side commits, and the proof deadline. A fixed count ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
 
     replay: str
     k: int
@@ -273,7 +273,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     f.add_argument("--boundary", nargs="+", required=True, help="each class's directory (w<window>/p<P>-o<O>/), one window's")
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
     f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
-    f.add_argument("--k", type=int, required=True, help="proof blocks the second stage samples in each sampled span")
+    f.add_argument("--k", type=int, required=True, help="proof blocks the second stage samples of each check template in each sampled span")
     f.add_argument("--interior", required=True, help="the interior values, a JSON list of [name, schema]")
     f.add_argument("--advice", help="the window's advice registration, whose binding the records' windows name")
     f.add_argument("--proof-deadline", type=float, default=PROOF_DEADLINE_S)
