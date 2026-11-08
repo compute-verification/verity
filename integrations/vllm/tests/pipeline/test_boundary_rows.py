@@ -12,7 +12,7 @@ from types import SimpleNamespace as NS
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V
+from verity.core.protocols.spot.one_stage import partition as P, registration as R, verifier as V
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.evaluation import evaluate
 from verity.ml.circuits.population import population

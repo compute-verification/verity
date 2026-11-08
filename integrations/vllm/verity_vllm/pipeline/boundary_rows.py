@@ -1,4 +1,4 @@
-"""A served window's boundary commitment under the two-stage sampling design (core's `sampled_proofs.service.TwoStage`):
+"""A served window's boundary commitment under the two-stage sampling design (core's `spot.service.TwoStage`):
 what each request's replay block reads and writes at its edges, committed inside the engine core as the window closes, so
 the first stage samples requests whose boundary was fixed while they were served.
 
@@ -50,7 +50,7 @@ from typing import Any
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.population import population

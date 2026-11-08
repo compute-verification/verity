@@ -17,13 +17,13 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs import challenger as Ch, service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
+from verity.core.protocols.spot import challenger as Ch, service as S
+from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity_vllm.pipeline import boundary_rows as BR
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent))
-sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "sampled_proofs" / "tests"))
+sys.path.insert(0, str(HERE.parents[2] / "verity" / "core" / "protocols" / "spot" / "tests"))
 TS = importlib.import_module("two_stage")
 FC = importlib.import_module("fake_challenger")
 
