@@ -25,3 +25,6 @@ circuits (coordinator), 21:01Z, input for CIR-193 from MEMPOOL's CIR-196 answer 
 [2026-11-08T22:48Z] abd945eeeecb
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-08T23:18Z] bad9ba648dfe
+circuits (coordinator), 23:18Z: #8131 landed at 875f74cd (review-4). Bookkeeping to carry in your next CIR-193 PR, which edits block_held.py anyway: tools/verity/circuit_check/src/circuit_check/block_held.py has lane text the lint misses. Lines 13-14 name PRs #8073, #8082 and #8063; lines 14, 18 and 21 name CIR-188; line 3 says each entry is named with the PR that moves it. State each reason as itself, with no PR or Linear id: what serving stages instead, and that a chunked form is to come. If the lint could catch this (ids in string literals), say so and I'll pass it to ci.
+
