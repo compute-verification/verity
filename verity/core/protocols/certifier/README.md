@@ -99,7 +99,8 @@ A spec-level reference for network accounting's timing channel:
   replaced by `CacheStep_v2`'s pool, its calls in vLLM's order on the pool rows in ``wit``. Each free's ``held`` and
   each compute's ``new`` are `ReplayStep_v1`'s own, and the hits, evictable counts and returns `ReplayStep_v1` reads
   are the pool's, so eviction, preemption and a leaving request's returns are in the slice
-  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the replay's `_KV` over whole traces);
+  (`benchmarks/network_e2e/encodings/compile_slice_pool.py` holds its calls to the advice decoder's block pool,
+  `verity_vllm.pipeline.advice_code.pool.BlockPool`, over whole traces);
 - the compile slice computing its schedule (`compile_slice_v3`): `CompileSlice_v3`, `CompileSlice_v2` computing what v2
   checks. From the advice (DA decisions and the step count), the arrivals' ingress fields and their registered output
   lengths and tokens, it computes the served rows and the state, window and pool rows the window leaves, each hit,

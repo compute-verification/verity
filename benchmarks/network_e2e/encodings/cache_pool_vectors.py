@@ -23,6 +23,8 @@ queue. Each eviction removes the blocks of the hashes vLLM evicts. Beside each h
 
     python3 cache_pool_vectors.py tests/fixtures/async-prefix-cache.jsonl tests/fixtures/async-crush.json.gz \\
         [--out ../../../verity/core/protocols/certifier/tests/fixtures/cache_step_v2_vectors.json]
+    python3 cache_pool_vectors.py LABEL=CORPUS_TRACE_DIR ... --slots 256 --copies 64 --stamp-width 40 --sparse \\
+        [--jobs N] [--json OUT]    # a served trace-corpus trace: R its max_num_seqs, SW its frees' clock
 """
 from __future__ import annotations
 
@@ -31,8 +33,10 @@ import bisect
 import gzip
 import json
 import sys
+import time
 from collections import Counter
-from contextlib import contextmanager
+from concurrent.futures import ProcessPoolExecutor
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -133,8 +137,9 @@ class Call:
 
 
 class _Driver:
-    def __init__(self, S, inp: Input, record: int | None) -> None:
-        self.S, self.inp, self.record = S, inp, record
+    def __init__(self, S, inp: Input, record: int | None, every: bool = True) -> None:
+        self.S, self.inp, self.record, self.every = S, inp, record, every
+        self.ncalls, self.seen = 0, None
         self.pool = C2.empty(S)
         self.slots: dict[int, int] = {}
         self.calls: list[Call] = []
@@ -168,6 +173,7 @@ class _Driver:
             self.counts[f"refused {what}"] += 1
         if self.record is None or len(self.calls) < self.record:
             self.calls.append(Call(kind, op, u0, known, refused))
+        self.ncalls += 1
         self.counts[kind] += 1
         self.pool = out.pool
         self.counts["entries_max"] = max(self.counts["entries_max"], sum(x is not None for x in out.pool.table))
@@ -189,6 +195,12 @@ class _Driver:
         if never > wh:
             refused.append(("the hit of a cache that never evicts", replace(op, wh=never)))
             self.counts["hits shortened by eviction"] += 1
+        if wh and self.counts["evicted"]:
+            self.counts["hits past the first eviction"] += 1
+        if wh == cap and (cap + 1) * S.U <= r.num_tokens and r.block_hashes[cap] in kv.by_hash:
+            self.counts["hits stopped a token short with the next block cached"] += 1
+        if any(len(kv.by_hash[h]) > 1 for h in r.block_hashes[:wh]):
+            self.counts["hits on a hash two blocks hold"] += 1
         self._call(kv, "take" if take else "lookup", op, 0, r.num_tokens, refused)
 
     def _free_slot(self) -> int:
@@ -215,6 +227,12 @@ class _Driver:
                     refused.append(("the threshold between two copies", replace(op, tau=tau + 1)))
             self.counts["evicting computes"] += 1
             self.counts["evicted"] += e
+            KU = C2.widths(S).KU
+            freed = Counter(s // KU for s in q[:e])
+            if max(freed.values()) > 1:
+                self.counts["evictions of blocks one free queued together"] += 1
+            if e < len(q) and q[e] // KU == tau // KU:
+                self.counts["evictions splitting one free's blocks"] += 1
         elif q:
             refused.append(("a made-up eviction", replace(op, tau=q[0] or 1)))
         hashes = self._hashes(kv, self.pool)
@@ -224,11 +242,14 @@ class _Driver:
         if gone != evicted:
             raise AssertionError(f"call {len(self.calls)}: the unit evicts {dict(gone)}, vLLM {dict(evicted)}")
 
-    def free(self, kv, r, held: int, ret: int) -> None:
+    def free(self, kv, r, held: int, ret: int, preempted: bool = False) -> None:
         if r.i not in self.slots:
             if held:
                 raise AssertionError(f"request {r.i} frees {held} blocks it never allocated")
             return
+        if preempted:
+            self.counts["preempted frees"] += 1
+            self.counts["preempted frees keeping shared blocks"] += ret < held
         op = C2.CallInputs(slot=self.slots[r.i], free=True, held=held, ret=ret)
         refused = [("the returns plus one", replace(op, ret=ret + 1))] + ([("the returns less one", replace(op, ret=ret - 1))]
                                                                         if ret else [])
@@ -254,6 +275,10 @@ class _Driver:
         return out
 
     def check(self, kv) -> None:
+        seen = (self.ncalls, len(kv.free), len(kv.by_hash), len(kv.req_blocks))
+        if not self.every and seen == self.seen:
+            return
+        self.seen = seen
         S, pool = self.S, self.pool
         hashes = self._hashes(kv, pool)
         holder: dict[int, set[int]] = {}
@@ -304,6 +329,7 @@ def _tapped(drv: _Driver):
         drv.alloc = {"new": 0, "evicted": Counter(), "cache": None, "popping": False}
         ok = orig["allocate_slots"](self, r, n, hit, **kw)
         a, drv.alloc = drv.alloc, None
+        drv.counts["allocations a full pool refuses"] += not ok
         if look:
             drv.lookup(self, r, len(hit), ev, ok)
         if ok:
@@ -331,7 +357,7 @@ def _tapped(drv: _Driver):
         bs = self.req_blocks.get(r.i, [])
         held, ret = len(bs), sum(1 for b in bs if self.ref[b] == 1)
         orig["free_request"](self, r)
-        drv.free(self, r, held, ret)
+        drv.free(self, r, held, ret, preempted=r.status == RP.RUNNING)
         drv.check(self)
 
     def _get_new_blocks(self, k):
@@ -363,11 +389,13 @@ def _tapped(drv: _Driver):
             setattr(K, n, orig[n])
 
 
-def drive(inp: Input, st: dict, *, record: int | None = None) -> _Driver:
+def drive(inp: Input, st: dict, *, record: int | None = None, every: bool = True) -> _Driver:
     """The unit over the whole trace, held to `BlockPool` (the module's docstring); the first `record` calls kept (all with
-    None). Raises AssertionError where the two disagree."""
+    None). Raises AssertionError where the two disagree. With `every` the pools are compared after each of `BlockPool`'s
+    operations; without it only after one that made a call or changed `BlockPool`'s counts (its free blocks, cached
+    hashes or holding requests), which a trace of thousands of blocks and steps needs."""
     S = SimpleNamespace(**st)
-    drv = _Driver(S, inp, record)
+    drv = _Driver(S, inp, record, every)
     parent: dict[int, int] = {}
 
     def descends(x: int, h: int) -> bool:
@@ -436,17 +464,48 @@ def ops_of(sl: dict[str, Any]) -> list[tuple[str, C2.CallInputs, list[tuple[str,
     return out
 
 
+def _drive_one(job: tuple[str, Path, dict[str, Any]]) -> dict[str, Any]:
+    label, p, o = job
+    t0 = time.perf_counter()
+    row: dict[str, Any] = {"trace": label}
+    try:
+        inp = replay_input(p)
+        e = inp.engine
+        R = max(o["slots"], e.max_num_seqs) if o["slots"] else 16
+        st = statics_for(inp, L=SLICES.get(p.name, {}).get("L"), R=R, D=o["copies"], SW=o["stamp_width"])
+        row |= {"requests": len(inp.requests), "num_gpu_blocks": e.num_gpu_blocks, "block_size": e.block_size,
+                "async": e.async_scheduling, "statics": st}
+        row["counts"] = dict(drive(inp, st, every=not o["sparse"]).counts)
+    except (AssertionError, ValueError, RuntimeError, OSError) as ex:  # a disagreement, or a trace the replay can't read
+        row["error"] = f"{type(ex).__name__}: {ex}"
+    row["seconds"] = round(time.perf_counter() - t0, 1)
+    return row
+
+
 def main(argv: Sequence[str] | None = None) -> None:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("traces", nargs="+", type=Path)
+    ap.add_argument("traces", nargs="+", help="step traces or trace-corpus trace dirs, each PATH or LABEL=PATH")
     ap.add_argument("--out", type=Path, help="write the certifier's vectors (the traces' SLICES) here")
+    ap.add_argument("--slots", type=int, help="R: at least the engine's max_num_seqs (default 16, the vectors')")
+    ap.add_argument("--copies", type=int, default=4, help="D, the copies an entry holds")
+    ap.add_argument("--stamp-width", type=int, default=16, help="SW: it must hold the clock, KU a free")
+    ap.add_argument("--sparse", action="store_true", help="compare the pools only where either changed (`drive`'s every)")
+    ap.add_argument("--jobs", type=int, default=1)
+    ap.add_argument("--json", type=Path, help="write each trace's counts, statics and seconds here")
     a = ap.parse_args(argv)
-    for p in a.traces:
-        inp = replay_input(p)
-        drv = drive(inp, statics_for(inp, L=SLICES.get(p.name, {}).get("L"), D=4))
-        print(p.name, json.dumps(dict(drv.counts), sort_keys=True))
+    o = {"slots": a.slots, "copies": a.copies, "stamp_width": a.stamp_width, "sparse": a.sparse}
+    jobs = [(t.split("=", 1)[0], Path(t.split("=", 1)[1]), o) if "=" in t else (Path(t).name, Path(t), o) for t in a.traces]
+    with ProcessPoolExecutor(a.jobs) if a.jobs > 1 else nullcontext() as ex:
+        rows = []
+        for row in (ex.map(_drive_one, jobs) if ex else map(_drive_one, jobs)):
+            print(row["trace"], f"{row['seconds']} s", row.get("error") or json.dumps(row["counts"], sort_keys=True), flush=True)
+            rows.append(row)
+    if a.json:
+        a.json.write_text(json.dumps({"kind": "cache_step_v2_drive", "rows": rows}, indent=1) + "\n")
+    if any("error" in r for r in rows):
+        raise SystemExit(1)
     if a.out:
-        doc = {"kind": "cache_step_v2_vectors", "slices": {p.name: slice_of(p.name, **SLICES[p.name]) for p in a.traces}}
+        doc = {"kind": "cache_step_v2_vectors", "slices": {p.name: slice_of(p.name, **SLICES[p.name]) for _, p, _ in jobs}}
         a.out.write_text(json.dumps(doc, separators=(",", ":")) + "\n")
 
 

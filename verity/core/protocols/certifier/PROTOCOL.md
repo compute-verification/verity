@@ -1451,7 +1451,7 @@ in `ReplayStep_v1`'s scheduling order:
   - The replay step (`ReplayStep_v1`'s "Walk entries"): the state gains `run_pfx R×EW` after `run_comp`, the step's one
     walk input is `row_pfx R×EW`, each row's entry after its last `CacheStep_v1` call, and it outputs
     `looked (W + A)×1` after `used`, the candidates whose lookup it read, which `replay_vectors --EW` holds to the
-    replay's `_KV.hit` calls.
+    replay's `BlockPool.hit` calls (`verity_vllm.pipeline.advice_code.pool`).
   - `replay_chain`'s state row gains `hh 1×HCW` after its heads' `steps`, and then one group in
     `CacheStep_v1`'s `_in_fields` order:
 
