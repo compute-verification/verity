@@ -15,8 +15,6 @@ benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
 benchmarks/one_stage/served_verdicts.sh -> tools/research/pyproject.toml
-integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm
-integrations/vllm/tests/engine/int8_attention_sass.py -> benchmarks/pouw/harness/sass_gate.py
 integrations/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
 integrations/vllm/tests/pipeline/test_serve_openai.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
