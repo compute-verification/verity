@@ -49,16 +49,26 @@ class _Blobs:
                 "stride": stride or [int(np.prod(a.shape[i + 1:])) for i in range(a.ndim)], "sha512": h}
 
 
-def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = None, req_ids: list | None = None) -> None:
+def _batch(req_ids: list, scheduled: dict) -> str:
+    return _sha(b"verity/spot/batch\0" + json.dumps({"req_ids": req_ids, "scheduled": scheduled}, sort_keys=True,
+                                                     separators=(",", ":")).encode())
+
+
+def _commit(d: Path, events: list[dict], params: dict, scheduled: dict | None = None, req_ids: list | None = None,
+            tamper: dict | None = None) -> None:
+    """The step committed as `capture.py` commits it: with ``req_ids``, the batch under the rank root too; ``tamper`` then
+    rewrites ``meta.json``'s fields after the commit."""
     sd = d / "rank0" / "step0"
     sd.mkdir(parents=True, exist_ok=True)
     ops = "".join(json.dumps(e, sort_keys=True) + "\n" for e in events).encode()
     pj = json.dumps(params).encode()
     (sd / "ops.jsonl").write_bytes(ops)
     (sd / "params.json").write_bytes(pj)
-    root = _sha(f"verity/spot/rank-root\0{_sha(ops)}\0{_sha(pj)}".encode())
-    (sd / "meta.json").write_text(json.dumps({"scheduled": scheduled or {"req": 4}, "ops_sha512": _sha(ops), "params_sha512": _sha(pj),
-                                              "rank_root": root, "check": {}, **({"req_ids": req_ids} if req_ids else {})}))
+    scheduled = scheduled or {"req": 4}
+    batch = {"req_ids": req_ids, "batch_sha512": _batch(req_ids, scheduled)} if req_ids is not None else {}
+    root = _sha("\0".join(["verity/spot/rank-root", _sha(ops), _sha(pj)] + ([batch["batch_sha512"]] if batch else [])).encode())
+    (sd / "meta.json").write_text(json.dumps({"scheduled": scheduled, "ops_sha512": _sha(ops), "params_sha512": _sha(pj),
+                                              "rank_root": root, "check": {}, **batch, **(tamper or {})}))
     (sd / "commit.json").write_text(json.dumps({"root": _sha(f"verity/spot/step-root\0{root}".encode()), "coins": "00" * 64,
                                                 "rank_roots": [root], "layers": {"dense": [0]}, "opened": {}}))
 
@@ -91,13 +101,13 @@ def step(tmp_path, monkeypatch):
         _ev(11, "aten::gelu", {"self": b.ref(short)}, {}),
     ]
     _commit(tmp_path, events, {"w": w})
-    cap = stage.Capture(tmp_path, 0)
-    return stage, cap, stage.Wires(cap)
+    rec = stage.Capture(tmp_path, 0)
+    return stage, rec, stage.Wires(rec)
 
 
 def test_an_input_is_wired_to_the_call_that_output_its_bytes_or_a_tensor_it_views(step) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     assert wires.source(0, ev[1]["in"]["self"]) == {"kind": "block", "rank": 0, "seq": 0, "op": "aten::mm", "out": "ret0",
                                                     "into": {"seq": 1, "op": "aten::gelu", "in": "self"}}
     assert wires.source(0, ev[2]["in"]["self"])["kind"] == "call", "aten::gelu is no population's: committed, not proved"
@@ -108,8 +118,8 @@ def test_an_input_is_wired_to_the_call_that_output_its_bytes_or_a_tensor_it_view
 
 
 def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_rows_cost_nothing(step) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     src = wires.source(0, ev[8]["in"]["input"])
     assert src == {"kind": "block", "rank": 0, "seq": 7, "op": "aten::bmm", "out": "out",
                    "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "offset": 0, "rows": 4}}
@@ -144,13 +154,13 @@ def mixed(tmp_path, monkeypatch):
         _ev(9, "aten::gelu", {"self": b.ref(u)}, {}),
     ]
     _commit(tmp_path, events, {})
-    cap = stage.Capture(tmp_path, 0)
-    return stage, cap, stage.Wires(cap)
+    rec = stage.Capture(tmp_path, 0)
+    return stage, rec, stage.Wires(rec)
 
 
 def test_a_buffer_several_calls_wrote_in_parts_is_wired_to_each_call_for_its_rows(mixed) -> None:
-    stage, cap, wires = mixed
-    ev = cap.events[0]
+    stage, rec, wires = mixed
+    ev = rec.events[0]
     into = {"seq": 3, "op": "vllm::linear", "in": "input"}
     assert wires.source(0, ev[3]["in"]["input"]) == [
         {"kind": "block", "rank": 0, "seq": 2, "op": "aten::bmm", "out": "out", "into": into,
@@ -164,21 +174,21 @@ def test_a_buffer_several_calls_wrote_in_parts_is_wired_to_each_call_for_its_row
 
 
 def test_a_call_that_passes_its_inputs_bytes_on_is_passed_over_and_dense_fa3_is_no_populations(mixed) -> None:
-    stage, cap, wires = mixed
-    ev = cap.events[0]
+    stage, rec, wires = mixed
+    ev = rec.events[0]
     sparse = wires.source(0, ev[6]["in"]["self"])
     assert (sparse["kind"], sparse["seq"], sparse["op"]) == ("block", 4, "_vllm_fa3_C::fwd"), "aten::to only passed it on"
     dense = wires.source(0, ev[7]["in"]["self"])
     assert (dense["kind"], dense["seq"]) == ("call", 0), "copy_ passed FA3's bytes on; dense FA3 is committed, not proved"
     only = wires.source(0, ev[9]["in"]["self"])
     assert (only["kind"], only["seq"], only["op"]) == ("call", 8, "aten::to"), "no earlier call output them"
-    gated, other, _ = stage.op_coverage(cap)
+    gated, other, _ = stage.op_coverage(rec)
     assert (gated.get("_vllm_fa3_C::fwd"), other.get("_vllm_fa3_C::fwd")) == (1, 1)
 
 
 def test_a_parameter_is_registered_and_a_gap_input_counted_at_its_width(step) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     assert wires.source(0, ev[0]["in"]["mat2"]) == {"kind": "registered", "rank": 0, "param": "w", "sha512": "ab" * 64}
     gap = wires.source(0, ev[4]["in"]["kv_gathered"])
     assert (gap["kind"], gap["bits"]) == ("gap", 2 * 6 * 4 * 16) and gap["why"] == stage.GAPS[("fa3_sparse_mla", "kv_gathered")]
@@ -186,8 +196,8 @@ def test_a_parameter_is_registered_and_a_gap_input_counted_at_its_width(step) ->
 
 
 def test_a_free_choice_is_charged_as_advice_and_a_gap_is_counted_apart_never_charged(step, monkeypatch) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     monkeypatch.setitem(stage.ADVICE, ("aten::add", "other"), "a choice nothing computes")
     adv, gap = wires.source(0, ev[2]["in"]["other"]), wires.source(0, ev[4]["in"]["kv_gathered"])
     assert (adv["kind"], adv["bits"], adv["why"]) == ("advice", 4 * 8 * 16, "a choice nothing computes")
@@ -196,8 +206,8 @@ def test_a_free_choice_is_charged_as_advice_and_a_gap_is_counted_apart_never_cha
 
 
 def test_an_input_no_earlier_call_output_is_unwired_with_the_fix_and_the_enclosing_calls_output_too(step) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     for _ in range(2):
         with pytest.raises(stage.Unwired, match=r"reads other, .*declare \('aten::add', 'other'\) in stage\.GAPS if the step "
                                                 r"computes it .* or in stage\.ADVICE if nothing does"):
@@ -207,12 +217,12 @@ def test_an_input_no_earlier_call_output_is_unwired_with_the_fix_and_the_enclosi
 
 
 def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_counts_a_gap_once(step) -> None:
-    stage, cap, wires = step
-    ev = cap.events[0]
+    stage, rec, wires = step
+    ev = rec.events[0]
     reads: list = []
-    args = stage.traced(cap, lambda: [cap.tensor(0, ev[1]["in"]["self"])[0], cap.tensor(0, ev[1]["in"]["self"])[1],
-                                      cap.tensor(0, ev[4]["in"]["kv_gathered"])[0]], reads)()
-    assert len(args) == 3 and len(reads) == 3 and cap.reads is None
+    args = stage.traced(rec, lambda: [rec.tensor(0, ev[1]["in"]["self"])[0], rec.tensor(0, ev[1]["in"]["self"])[1],
+                                      rec.tensor(0, ev[4]["in"]["kv_gathered"])[0]], reads)()
+    assert len(args) == 3 and len(reads) == 3 and rec.reads is None
     sources = wires.of(reads)
     assert [s["kind"] for s in sources] == ["block", "gap"]
     types = {"A": {"gate": [{"key": [0, 1, 0], "sources": sources}, {"key": [0, 1, 1], "sources": sources},
@@ -223,14 +233,14 @@ def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_counts_a_
 
 
 def test_a_gap_input_is_counted_at_the_union_of_the_parts_staged_instances_read(step) -> None:
-    stage, cap, wires = step
-    kv = cap.events[0][4]["in"]["kv_gathered"]
+    stage, rec, wires = step
+    kv = rec.events[0][4]["in"]["kv_gathered"]
     row = 4 * 16
 
     def read(*keys):
         reads: list = []
-        got = stage.traced(cap, lambda: [cap.part(0, kv, k) for k in keys], reads)()
-        assert all(np.array_equal(x, cap.tensor(0, kv)[k]) for x, k in zip(got, keys))
+        got = stage.traced(rec, lambda: [rec.part(0, kv, k) for k in keys], reads)()
+        assert all(np.array_equal(x, rec.tensor(0, kv)[k]) for x, k in zip(got, keys))
         return wires.of(reads)
 
     a, b, whole = read((0, slice(1, 4)), (0, slice(2, 5))), read((1, slice(0, 2))), read((1, slice(0, 2)), (0,))
@@ -244,7 +254,7 @@ def test_a_gap_input_is_counted_at_the_union_of_the_parts_staged_instances_read(
     assert counted(a, b, a) == 6 * row, "the union over instances, each row once: 6 of the 12 rows"
     assert counted(a, whole) == 8 * row, "a part over fewer axes takes the rest of them whole: all of token 0's rows"
     reads: list = []
-    stage.traced(cap, lambda: [cap.tensor(0, kv)[0, 1:4]], reads)()
+    stage.traced(rec, lambda: [rec.tensor(0, kv)[0, 1:4]], reads)()
     assert counted(a, wires.of(reads)) == 12 * row, "a read through `Capture.tensor` takes the input whole"
 
 
@@ -267,16 +277,19 @@ def gather(tmp_path, monkeypatch):
     bytes changed (``corrupt``: token 1's row 5, its own position), and the requests' scheduled counts. With ``convert`` the
     step records the call that converts the top-k to slots (`stage.CONVERT`), and these change what is served: a request's
     page-table blocks (``blocks``), a token's top-k (``picked``), the slot the write puts a token's row at (``moved``), an
-    entry of the slots the call outputs and the tap reads (``page``, which its inputs don't give) and the tap's valid counts
-    (``used``)."""
+    entry of the slots the call outputs and the tap reads (``page``, which its inputs don't give), the tap's valid counts
+    (``used``), and the request the call takes a token as, whose page table it then reads (``owner``). It commits the batch
+    (``req_ids`` in batch order, by default ``a``, ``b``, ``c``) under the rank root unless ``batch`` is False, and
+    ``tamper`` rewrites ``meta.json``'s fields after the commit."""
     stage = _stage(monkeypatch)
     monkeypatch.setattr(stage, "KV_BLOCK", 4)
     made = iter(range(100))
 
     def make(write=True, positions=True, corrupt=False, scheduled=None, convert=False, blocks=None, picked=None, moved=None,
-             page=None, used=None):
+             page=None, used=None, owner=None, req_ids=("a", "b", "c"), batch=True, tamper=None):
         d = tmp_path / f"s{next(made)}"
         blocks, picked = {**BLOCKS, **(blocks or {})}, {**PICKED, **(picked or {})}
+        owner = [{**dict(enumerate(q for q, _ in TOKENS)), **(owner or {})}[t] for t in range(len(TOKENS))]
         rng = np.random.default_rng(5)
         cache = {s: rng.integers(0, 2 ** 16, KV_W, dtype=np.uint16) for s in range(28)}
         kv_c, k_pe = (rng.integers(0, 2 ** 16, (len(TOKENS), w), dtype=np.uint16) for w in (4, 2))
@@ -288,7 +301,7 @@ def gather(tmp_path, monkeypatch):
                 cache[s] = np.concatenate([kv_c[t], k_pe[t]])
         table = np.full((len(TOKENS), TOPK), -1, np.int32)
         for t, ps in picked.items():
-            table[t, :len(ps)] = [blocks[TOKENS[t][0]][p // 4] * 4 + p % 4 for p in ps]
+            table[t, :len(ps)] = [(blocks[owner[t]] + [0] * 3)[p // 4] * 4 + p % 4 for p in ps]
         served = table.copy()
         for (t, j), s in (page or {}).items():
             served[t, j] = s
@@ -308,7 +321,7 @@ def gather(tmp_path, monkeypatch):
         counts = np.array([len(picked[t]) for t in range(len(TOKENS))], np.int32)
         if convert:
             reqs = list(blocks)
-            req = np.array([reqs.index(q) for q, _ in TOKENS], np.int32)
+            req = np.array([reqs.index(q) for q in owner], np.int32)
             bt = np.zeros((len(reqs), 3), np.int32)
             for k, q in enumerate(reqs):
                 bt[k, :len(blocks[q])] = blocks[q]
@@ -321,14 +334,14 @@ def gather(tmp_path, monkeypatch):
         tap = {"block_table": b.ref(served), "seqused_k": b.ref(counts if used is None else np.array(used, np.int32)),
                "kv_gathered": b.ref(kv), "kv_gathered_rows": kept, "kv_gathered_tokens": len(kept)}
         events.append(_ev(len(events) + int(not write), "fa3_sparse_mla", tap, {}))
-        _commit(d, events, {}, scheduled or {"a": 1, "b": 1, "c": 2}, ["req-a", "req-b", "req-c"] if convert else None)
-        cap = stage.Capture(d, 0)
-        wires = stage.Wires(cap)
-        kv_ref = cap.events[0][-1]["in"]["kv_gathered"]
+        _commit(d, events, {}, scheduled or {"a": 1, "b": 1, "c": 2}, list(req_ids) if convert and batch else None, tamper)
+        rec = stage.Capture(d, 0)
+        wires = stage.Wires(rec)
+        kv_ref = rec.events[0][-1]["in"]["kv_gathered"]
 
         def of(*keys):
             reads: list = []
-            stage.traced(cap, lambda: [cap.part(0, kv_ref, k) for k in keys], reads)()
+            stage.traced(rec, lambda: [rec.part(0, kv_ref, k) for k in keys], reads)()
             return wires.of(reads)
         return of
     return stage, make
@@ -394,7 +407,7 @@ def test_with_the_conversion_recorded_a_row_is_wired_by_request_and_position_and
     assert (write["seq"], write["out"]) == (1, "kv_c_out+k_pe_out")
     assert write["rows"] == [[0, 7, 0], [1, 5, 1], [2, 0, 2], [2, 1, 3]], "each decode's own position, and the prefill's two"
     assert (history["port"], history["parts"]) == (stage.HISTORY_PORT, [[[0, 1], [4, 7]], [[1, 2], [2, 5]]])
-    assert history["at"] == [[0, "req-a", [[5, 6], [7, 9]]], [1, "req-b", [[2, 5]]]], "each history row's request and position"
+    assert history["at"] == [[0, "a", [[5, 6], [7, 9]]], [1, "b", [[2, 5]]]], "each history row's request and position"
     assert pick["via"] == "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}" and pick["seq"] == 0
     w = stage.wiring({"S": {"gate": [{"key": [0, 3, 0], "sources": got}]}})
     from verity.ml.definitions.registry.dsa_topk import waksman_switches
@@ -427,3 +440,29 @@ def test_a_conversion_or_a_read_the_wiring_by_position_does_not_hold_is_unwired(
     stage, make = gather
     with pytest.raises(stage.Unwired, match=message):
         make(convert=True, **change)((0, slice(0, 8)), (1, slice(0, 6)))
+
+
+@pytest.mark.parametrize(("change", "message"), [
+    ({"owner": {0: "b", 1: "a"}}, r"takes token 0 as request 1, but the committed batch puts it at request 0 \(a\)"),
+    ({"req_ids": ("c", "a", "b")}, r"takes token 1 as request 1, but the committed batch puts it at request 0 \(c\)"),
+    ({"req_ids": ("a", "b")}, r"the committed batch's request ids aren't its scheduled requests, each once"),
+    ({"req_ids": ("a", "b", "b", "c")}, r"the committed batch's request ids aren't its scheduled requests, each once"),
+])
+def test_a_token_the_conversion_puts_in_another_request_than_the_committed_batch_does_is_unwired(gather, change, message) -> None:
+    """A swapped ``req_id`` whose slots its own page-table rows give, and a committed batch whose request ids put the tokens
+    elsewhere or aren't the scheduled requests."""
+    stage, make = gather
+    with pytest.raises(stage.Unwired, match=message):
+        make(convert=True, **change)((0, slice(0, 8)), (1, slice(0, 6)))
+
+
+def test_a_batch_changed_after_its_commit_is_refused_and_an_uncommitted_one_keeps_the_slot_path(gather) -> None:
+    stage, make = gather
+    swapped, sched = ["b", "a", "c"], {"a": 1, "b": 1, "c": 2}
+    for tamper in ({"req_ids": swapped}, {"scheduled": {"a": 2, "b": 1, "c": 1}}):
+        with pytest.raises(SystemExit, match="req_ids or scheduled counts are not the batch it committed"):
+            make(convert=True, tamper=tamper)
+    with pytest.raises(SystemExit, match=r"rank root \w+ is not SHA-512 of its files"):
+        make(convert=True, tamper={"req_ids": swapped, "batch_sha512": _batch(swapped, sched)})
+    got = make(convert=True, batch=False)((0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2)))
+    assert [s["kind"] for s in got] == ["call", "history", "gap", "selection"], "the page-table entries stay a gap"

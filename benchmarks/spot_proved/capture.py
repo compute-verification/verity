@@ -44,10 +44,11 @@ recorded and spools the rest; ``--keep none`` writes none (the step's commitment
 the disk would fall below ``--min-free-gib``, and an opened tensor that wasn't is counted in ``commit.json``'s ``missing``.
 ``DIR/rank<r>/step<s>/ops.jsonl`` lists the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph
 mode, the scheduled requests and their token counts, the batch's request ids in its order), the check, where the step's
-time and bytes went, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
+time and bytes went, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl``, of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes, hashed once per
-engine and again only if its storage, layout or version changes). Every recorded event names its blobs by SHA-512 and its
-decoder layer, so the root binds every recorded byte. With
+engine and again only if its storage, layout or version changes), and of the batch (``batch_sha512``: the request ids in
+order and their scheduled tokens). Every recorded event names its blobs by SHA-512 and its decoder layer, so the root
+binds every recorded byte. With
 ``--allreduce-tree``, ``step<s>/allreduce_tree.json`` beside it holds the node's multimem reduction tree and where it was
 read, for the node's registration to commit and the match gate to bind. Then
 `_commit_and_open`: the step's root over the ranks' roots, the coins rank 0 samples only after that, and the layers they
@@ -1082,6 +1083,13 @@ def _reset() -> None:
         S.hasher.peak = 0
 
 
+def _batch_sha512(req_ids: list[str], scheduled: dict[str, int]) -> str:
+    """SHA-512 over the step's batch, which the rank root commits: its request ids in batch order and each request's scheduled
+    tokens (`stage.batch_sha512` recomputes it)."""
+    doc = json.dumps({"req_ids": req_ids, "scheduled": scheduled}, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha512(f"verity/spot/batch\0{doc}".encode()).hexdigest()
+
+
 def _finish(runner: Any) -> None:
     t = time.time()
     _drain()
@@ -1101,14 +1109,15 @@ def _finish(runner: Any) -> None:
     if S.allreduce_tree is not None:
         (d / TREE_FILE).write_text(json.dumps(S.allreduce_tree, sort_keys=True))
     ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((d / "params.json").read_bytes()).hexdigest()
-    meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs,
-            "req_ids": [str(x) for x in getattr(S.input_batch, "req_ids", None) or []], "events": len(S.events),
+    ids = [str(x) for x in getattr(S.input_batch, "req_ids", None) or []]
+    batch_sha = _batch_sha512(ids, reqs)
+    meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "req_ids": ids, "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
             "keep": S.step_keep, "cache_hash": "device" if S.dev else "host",
             "time_s": {k: round(v, 3) for k, v in sorted(S.t.items())}, "bytes": dict(sorted(S.n.items())),
             "host": {**_host_memory(), "copies_peak": S.hasher.peak if S.hasher else 0},
-            "ops_sha512": ops_sha, "params_sha512": params_sha,
-            "rank_root": hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}".encode()).hexdigest()}
+            "ops_sha512": ops_sha, "params_sha512": params_sha, "batch_sha512": batch_sha,
+            "rank_root": hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}\0{batch_sha}".encode()).hexdigest()}
     (d / "meta.json").write_text(json.dumps(meta, indent=1, sort_keys=True))
     commit = _commit_and_open(runner, d, meta["rank_root"])
     print(f"[spot-capture] rank {S.rank} step {S.step}: {len(S.events)} events, {meta['seconds']} s, check {meta['check']}, "
