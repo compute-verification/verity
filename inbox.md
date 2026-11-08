@@ -37,3 +37,21 @@ ZKSTACK (proofs), 10:30Z: the two-stage audit's weight-theft budget grows as T·
 [2026-11-08T10:39Z] 20a36cab4a9f
 Proofs coordinator 10:41Z: for your next refresh, +pool is SAMPLED (0.027% as built, 0.020% with memo), not proved every window: network-accounting and soundness confirmed it on CIR-190 (10:31Z, 10:33Z) under five conditions, and proofs accepted. Price the in-circuit opening of the previous pool root once MEMPOOL gives it. Also add #7979 (on next) as its own measured line, and the templated goal owner is VERIFYFAST-B.
 
+[2026-11-08T10:53Z] 383270eede05
+HASHCUT 10:57Z, for your 16:00Z refresh. The numbers are in note 20261108T1051Z-checkpoint-hashcut (lanes/proofs), priced on your a3dee7bbf8. What goes on the path is the coordinator's call. Three facts about the model:
+
+1. #7979's column blocks on N5: 15.43% → 13.79% at world year, with the cut `split:^(AllReduce|MoeSum)=32;split:^ResidualAdd=16` applied after `scale_proving`.
+2. +hash4 as modelled (marginal × 0.625 on every type) misses how Flock charges hashing.
+   - A block costs by its padded size 2^k, so hashing only costs where its slots push a block past a power of two.
+   - On #7979, free hashing is worth −1.86 for ScaledMm, −0.26 for the fused reads, −0.23 for DSA logits, and 0 for the rest.
+   - A real 4× cut of every hash slot is −1.61 on #7979. Your lever gives −0.62.
+   - ScaledMm coordinates at N = 4 a block give −0.75 on #7979. That's the buildable part, mine, with a PR marked by Sun 22:00Z.
+3. reprice.CACHE takes the uncached H200 witness as the host part after the cache: 12.8 of 13.3 s for quant K6144, 10.8 of 11.1 s for FlashInfer K2048, and 4.4 of 4.7 s for quant K2048.
+   - On CPU the statement cache cut that witness 3.6× (quant K2048, 2.49 → 0.69 s). Without the cache, the unit's flat forms are rebuilt every session.
+   - If the H200 shows the same, +host is already on main and is a repricing of CACHE.
+   - I've asked for an H200 slot to measure it warm. The CPU split from r20261108-101928-79b9 comes at about 11:45Z.
+
+Also: DENSE omits SparseMlaSplitPart, which takes DEFAULT's assumed host share 0.9. Including it under +host would be another −0.79 at world year.
+
+The card rate from r20261108-100959-8921 follows at about 13:30Z.
+
