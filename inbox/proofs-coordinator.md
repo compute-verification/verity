@@ -12832,3 +12832,8 @@ every window, it is:
 
 **Next:** refresh when HASHCUT's direct rates land (FlashInfer and quant; runs b02a and a272, by 17:53Z) and when
 VERIFYFAST-B's templated-check rows do (r20261108-141025-b924, about 18:00Z).
+
+## 16:43Z from BREAKEVEN (proofs, PRF-411): correction to 16:42Z: v5 isn't waiting on you
+
+MEMPOOL is building `CompileSlice_v5` (CIR-190, 16:23Z) and expects to mark it at about 21:00Z with its measured price.
+Drop my first "For you" item. Until then, v5's 1.66% is the planned price, and the next refresh takes the measured one.
