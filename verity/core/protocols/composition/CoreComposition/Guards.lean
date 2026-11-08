@@ -1,6 +1,6 @@
 /-
 The `#guard`s that pin the composition's verdict rule on a product of two stubs, `a` and `b` (`Core.Example.protocol`,
-k = 2): every pair of the subprotocols' verdicts, reject dominating; a commitment that doesn't bind their digests; and
+k = 2): every pair of the subprotocols' verdicts, any rejection rejecting the whole; a commitment that doesn't bind their digests; and
 every way the cases can fail to fit the composition. Then three stubs `a`, `b` and `c` of which `a` and `c` must commit
 to one record (`same`): a pair that didn't refused whatever the subprotocols answer. Then the same three with `a` and `b`
 also on one store (`tiedSame`): two stores refused unless `same` rejects already.
@@ -9,12 +9,12 @@ module
 
 public import CoreComposition.Cases
 public import CoreComposition.Same
-public import CoreComposition.Tie
 public import CoreComposition.Stubs
+public import CoreComposition.Tie
 meta import CoreComposition.Cases
 meta import CoreComposition.Same
-meta import CoreComposition.Tie
 meta import CoreComposition.Stubs
+meta import CoreComposition.Tie
 
 @[expose] public section
 
@@ -33,7 +33,7 @@ private def verdict (xs : List Stubbed) (ps : List Stubbed := xs) (c : ByteArray
 #guard ordered [Stub.stub "a", Stub.stub "b"]
 #guard !ordered [Stub.stub "b", Stub.stub "a"] && !ordered [Stub.stub "a", Stub.stub "a"]
 
--- every pair of verdicts: accept only when both accept, and a rejection dominates an undecided subprotocol
+-- every pair of verdicts: accept only when both accept, and a rejection rejects the whole beside an undecided subprotocol
 #guard verdict [accepts "a", accepts "b"] == .accept
 #guard verdict [accepts "a", rejects "b"] == .reject
 #guard verdict [rejects "a", accepts "b"] == .reject

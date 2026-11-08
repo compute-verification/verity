@@ -1,7 +1,7 @@
 /-
-# The firewall's record (`firewall/v0`, live PROTOCOL.md §10.5)
+# The ZK server's record (`firewall/v0`, live PROTOCOL.md §10.5)
 
-`record.jsonl` in the firewall's state directory: its events in order, one line each, as Python's `json.dumps(ev,
+`record.jsonl` in the ZK server's state directory: its events in order, one line each, as Python's `json.dumps(ev,
 sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall` keeps it byte for byte
 (`live/src/firewall_record_vectors.json`); this is the same record in Lean, and the same rules over it:
 
@@ -12,20 +12,29 @@ sort_keys=True)` writes it, each with its `seq`. Python's `verity_flock.firewall
    next one to take the slot.
 3. A recursive session opened with a release schedule (`start_ms`, one window a statement) releases statement `j` at
    `start_ms + windows_ms[0] + ... + windows_ms[j]` (`releaseMs`); a missed time is a stop (`Firewall.Release`).
-4. A stream opened with a failure `budget` b stops at its b-th failure (`failures`): a recursive session's stop, or a
-   refusal of a recursive session that had neither stopped nor released its last statement, on a stream not yet stopped.
+4. A stream opened with a failure `budget` b stops at its b-th failure (`failures`): a recursive session's stop, a
+   registration it skipped (rule 5), or a refusal of a recursive session that had neither stopped nor released its last
+   statement, on a stream not yet stopped.
+5. The value service's registrations are numbered on the record (`register`: 0, 1, 2, … with no gap, `core-firewall
+   values`), and each is admitted once, oldest first: an outer session's statement admits, once it is itself admitted,
+   every registration its value commitments read that is not yet admitted (`admitReads`, `admit`), and skips every older
+   one none of them reads (`skip`), each skip a failure on the session's stream. A statement that reads a registration
+   once skipped, or whose value commitments no registration holds (`Flock.Firewall.Salts.readsOf`), is the recursive
+   session's stop; one that reads only registrations already admitted admits nothing. The number is public.
 
 The functions here are pure: each takes the events read so far and returns its result and the events after it, which only
-ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the firewall
-writes, with its `seq` its position, so a torn line (a writer killed inside its append), and any line the firewall would
-not have written, refuses every call. Python reads any JSON line and defaults what it can't find; Lean refuses it
-instead. Its other liberties Lean doesn't take either: a `\r` before a line's end, a budget or release time past 2^64, a
-statement name that isn't a string.
+ever extend them. `Record.read` reads the record whole and fails closed: every line must be exactly a line the ZK server
+writes, with its `seq` its position, every registration's number its place among the registrations, and every
+admission's and skip's its place among them, below the registrations before it, so a torn line (a writer killed inside
+its append), and any line the ZK server would not have written, refuses every call. Python reads any JSON line and
+defaults what it can't find; Lean refuses it instead. Its other liberties Lean doesn't take either: a `\r` before a
+line's end, a budget or release time past 2^64, a statement name that isn't a string.
 -/
 module
 
 public import Lean.Data.Json
 public import Flock.Canon
+public import Flock.Bytes
 public import Firewall.PyJson
 
 @[expose] public section
@@ -66,13 +75,15 @@ inductive Event where
   | refused (session part : String)
   | slot (session part : String)
   | wait (session part : String)
-  deriving Inhabited, Repr
+  /-- the value service's registration `n`, its record whole (`Flock.Firewall.Salts.recordOf`) -/
+  | register (n : Nat) (record : ByteArray)
+  /-- registration `n` admitted by the outer session of `session` at `part` -/
+  | admitted (session part : String) (n : Nat)
+  /-- registration `n` skipped by the outer session of `session` at `part`: never admitted, a failure of its stream -/
+  | skipped (session part : String) (n : Nat)
+  deriving Inhabited
 
 abbrev Events := Array Event
-
-def Event.session : Event → String
-  | .opened o => o.session
-  | .finish s | .stop s _ _ | .release s _ | .refused s _ | .slot s _ | .wait s _ => s
 
 /-! ## The record's lines -/
 
@@ -96,9 +107,16 @@ def Event.line (seq : Nat) : Event → String
   | .refused s p => tail "refused" s p []
   | .slot s p => tail "slot" s p []
   | .wait s p => tail "wait" s p []
+  | .register n r => obj [kv "event" (pyStr "register"), kv "n" (toString n), kv "record" (pyStr (Flock.hexOf r)),
+      kv "seq" (toString seq)]
+  | .admitted s p n => numbered "admit" s p n
+  | .skipped s p n => numbered "skip" s p n
 where
   tail (event s p : String) (rest : List String) : String :=
     obj ([kv "event" (pyStr event), kv "part" (pyStr p), kv "seq" (toString seq), kv "session" (pyStr s)] ++ rest)
+  numbered (event s p : String) (n : Nat) : String :=
+    obj [kv "event" (pyStr event), kv "n" (toString n), kv "part" (pyStr p), kv "seq" (toString seq),
+      kv "session" (pyStr s)]
 
 /-- The lines of `evs` from position `start` on, each with its newline: what appending them writes. -/
 def linesFrom (evs : Events) (start : Nat) : String :=
@@ -142,6 +160,8 @@ private def eventOf (j : Json) : V (Event × Nat) := do
   let ctx := "event"
   let kind ← Flock.J.str j "event" ctx
   let seq ← Flock.J.nat j "seq" ctx
+  if kind == "register" then
+    return (.register (← Flock.J.nat j "n" ctx) (← Flock.unhex (← Flock.J.str j "record" ctx)), seq)
   let session ← Flock.J.str j "session" ctx
   let part := Flock.J.str j "part" ctx
   let ev ← match kind with
@@ -158,20 +178,36 @@ private def eventOf (j : Json) : V (Event × Nat) := do
     | "refused" => pure (.refused session (← part))
     | "slot" => pure (.slot session (← part))
     | "wait" => pure (.wait session (← part))
+    | "admit" => pure (.admitted session (← part) (← Flock.J.nat j "n" ctx))
+    | "skip" => pure (.skipped session (← part) (← Flock.J.nat j "n" ctx))
     | k => throw s!"no event {k} in {KIND}"
   pure (ev, seq)
 
-/-- The firewall's state: the record's text and its events. -/
+/-- The number a registration's record begins with, its `be64 n`; none for a record shorter than it. -/
+def recordNumber (r : ByteArray) : Option Nat :=
+  if r.size < 8 then none else some ((List.range 8).foldl (fun acc i => 256 * acc + (r.get! i).toNat) 0)
+
+/-- The registrations on the record, in order: registration `n`'s record at `n`. -/
+def registrations (evs : Events) : Array ByteArray :=
+  evs.filterMap fun | .register _ r => some r | _ => none
+
+/-- How many registrations were admitted or skipped: the number of the next one to be. -/
+def frontier (evs : Events) : Nat :=
+  evs.foldl (fun k e => match e with | .admitted .. | .skipped .. => k + 1 | _ => k) 0
+
+/-- The ZK server's state: the record's text and its events. -/
 structure Record where
   text : String
   events : Events
   deriving Inhabited
 
-/-- The record whole, or why the firewall serves nothing (a line it can't read, or one it didn't write). Blank lines are
+/-- The record whole, or why the ZK server serves nothing (a line it can't read, or one it didn't write). Blank lines are
 skipped, as Python's reader skips them, and the last line needs no newline. -/
 def Record.read (text : String) : V Record := do
   let lines := (text.splitOn "\n").filter (!·.isEmpty)
   let mut evs : Events := #[]
+  let mut regs := 0
+  let mut next := 0
   for line in lines do
     let k := evs.size
     let ev ← match Json.parse line with
@@ -182,13 +218,23 @@ def Record.read (text : String) : V Record := do
         | .ok (ev, _) => pure ev
     if ev.line k != line then
       throw s!"the record's line {k + 1} is not the firewall's own (event {k} as the firewall writes it is {ev.line k})"
+    match ev with
+    | .register n r =>
+      if n != regs || recordNumber r != some n then
+        throw s!"the record's line {k + 1} is not the firewall's own (registration {n} where the next is {regs}, its record numbered {recordNumber r})"
+      regs := regs + 1
+    | .admitted _ _ n | .skipped _ _ n =>
+      if n != next || n ≥ regs then
+        throw s!"the record's line {k + 1} is not the firewall's own (registration {n} admitted or skipped where the next is {next} of {regs})"
+      next := next + 1
+    | _ => pure ()
     evs := evs.push ev
   return { text, events := evs }
 
 /-- The record after `evs`, which extend its events: its text with their lines appended. -/
 def Record.extend (r : Record) (evs : Events) : Record := { text := r.text ++ linesFrom evs r.events.size, events := evs }
 
-/-- One op as the firewall runs it on its file: read the record whole, act on its events, append the events the op adds.
+/-- One op as the ZK server runs it on its file: read the record whole, act on its events, append the events the op adds.
 Python reads the file again at every op, under its lock, so a record one op left unreadable (its line appended to a
 last line without a newline) is the next op's error. -/
 def Record.op {α : Type} (r : Record) (f : Events → α × Events) : V (α × Record) := do
@@ -231,6 +277,7 @@ def Tally.step (stream : String) (b : Option Nat) (t : Tally) : Event → Tally
   | .opened o => if o.stream == stream then { t with mine := (o.session, o.parts) :: t.mine } else t
   | .release s p => if (t.mine.lookup s).isSome then { t with released := (s, p) :: t.released } else t
   | .stop s _ _ => if (t.mine.lookup s).isSome then { t with stopped := s :: t.stopped, n := t.n + 1 } else t
+  | .skipped s _ _ => if (t.mine.lookup s).isSome then { t with n := t.n + 1 } else t
   | .refused s _ =>
     match t.mine.lookup s with
     | some ps =>
@@ -267,7 +314,7 @@ private def showBudget : Option Nat → String
   | none => "None"
 
 /-- `rec_live` opens a recursive session: why it may not (its statements, budget or schedule), its id, or why the
-firewall refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
+ZK server refuses it (the stream stopped at its budget). The first check needs no record: `openArgs`. -/
 inductive Opened where
   | ok (session : String)
   | refused (why : String)
@@ -313,7 +360,7 @@ def stop (evs : Events) (s part why : String) : Bool × Events :=
 /-- An outer proof of the recursive session was released (the challenger's verdict accepted it). -/
 def release (evs : Events) (s part : String) : Events := evs.push (.release s part)
 
-/-- The firewall's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
+/-- The ZK server's one outer slot, taken by a session that found it free: a `slot` whose session has no outcome after it
 is that session's stop, then `slot`. -/
 def slot (evs : Events) (s part : String) : Events :=
   let evs := match orphan evs with
@@ -361,5 +408,47 @@ where
         refuse s!"recursive session {s} stopped at {nxt}: {part} is not its next statement"
           (evs.push (.stop s nxt s!"never opened: {part} was asked in its place"))
       else (.ok { stream := o.stream, index := j, releaseMs := releaseMs o.release j }, evs)
+
+/-- **The value service's next registration** (rule 5), its record at each number `rec`: the number it takes, the next
+after the record's last, and its record, appended. -/
+def register (evs : Events) (rec : Nat → ByteArray) : (Nat × ByteArray) × Events :=
+  let n := (registrations evs).size
+  let r := rec n
+  ((n, r), evs.push (.register n r))
+
+/-- Whether registration `n` was skipped. -/
+def skippedAt (evs : Events) (n : Nat) : Bool :=
+  evs.any fun | .skipped _ _ k => k == n | _ => false
+
+/-- **Rule 5 at an outer session of `s` at `part`** that `admit` served: `reads` the registrations its statement's value
+commitments read, by number, or why they are none of the server's (`Flock.Firewall.Salts.readsOf`). Every registration
+from the next not yet admitted or skipped up to the last it reads is admitted, if it reads it, else skipped, in order,
+each skip a failure of the stream; if they bring the stream to its budget, the session is refused. A statement that reads
+a registration not on the record or one skipped before, or whose commitments are none of the server's, is the recursive
+session's stop at `part`, and refused. A refusal is recorded (`refused`). -/
+def admitReads (evs : Events) (s part : String) (reads : Except String (Array Nat)) : Except String Unit × Events :=
+  match reads with
+  | .error why => stopped why
+  | .ok reads =>
+    let u := frontier evs
+    match reads.find? (· ≥ (registrations evs).size), reads.find? fun k => k < u && skippedAt evs k with
+    | some k, _ => stopped s!"registration {k} is not on the ZK server's record"
+    | none, some k => stopped s!"registration {k} was skipped: one passed over is never admitted"
+    | none, none =>
+      let fresh := reads.filter (· ≥ u)
+      if fresh.isEmpty then (.ok (), evs)
+      else
+        let top := fresh.foldl max 0
+        let evs := (List.range (top + 1 - u)).foldl (fun e i =>
+          e.push (if fresh.contains (u + i) then .admitted s part (u + i) else .skipped s part (u + i))) evs
+        match (openOf evs s).bind fun o => (budgetOf evs o.stream).map (o.stream, ·) with
+        | some (stream, b) =>
+          let n := failures evs stream
+          if n ≥ b then refuse s!"stream {stream} stopped at its failure budget ({n} of {b})" evs else (.ok (), evs)
+        | none => (.ok (), evs)
+where
+  refuse (why : String) (evs : Events) : Except String Unit × Events := (.error why, evs.push (.refused s part))
+  stopped (why : String) : Except String Unit × Events :=
+    refuse s!"recursive session {s} stopped at {part}: {why}" (stop evs s part why).2
 
 end Core.Firewall

@@ -1,4 +1,4 @@
-"""Dither's harness's settings: every variable its benches, windows and gates read, declared once (`verity_config.settings`).
+"""Dither's harness's settings: every variable its benches, execution phases and gates read, declared once (`verity_config.settings`).
 
 It owns ``DITHER_``, ``SBENCH_`` and ``HB_``: a variable with one of them that nothing here declares is refused when the
 registry loads, which every module of this directory that reads one does (``of(__file__)``). The shell-only ones (sbench.sh's
@@ -25,7 +25,7 @@ SHELL = "sbench.sh's, read only by the shell"
 
 REGISTRY = Registry(
     __file__, ("DITHER_", "SBENCH_", "HB_"),
-    # the window: dither_one, dither_a, dither_so
+    # the execution phase: dither_one, dither_a, dither_so
     S("DITHER_H1C", str, None, WHERE, f"libh1c.so, the hiding tables' commit: {BUILD}"),
     S("DITHER_H1C_KC", str, None, WHERE, f"libh1c_kc.so, the dither-a-hbc arm's tables: {BUILD}"),
     S("DITHER_H1F", str, None, WHERE, f"libh1f.so, the fused window's units: {BUILD}"),
@@ -142,8 +142,6 @@ REGISTRY = Registry(
     S("VLLM_USE_FLASHINFER_SAMPLER", str, None, VALUE, "vLLM's sampler choice, which the native baseline records"),
     S("VLLM_ENABLE_V1_MULTIPROCESSING", str, None, WHERE, "0: vLLM's engine core in the bench's process, where its patches "
                                                           "reach it"),
-    S("S8_WGMMA_CUBIN", str, None, VALUE, "the s8 WGMMA cubin j10r90's units load (default the one it builds)"),
-    S("J10_CA_TREE", str, None, WHERE, f"J10-B's banded {TREE}"),
     S("BW_LIB", str, None, WHERE, "PoUB's prover library (dbw.py's side)"),
     S("BW_KV", str, None, WHERE, "PoUB's store (dbw.py's side)"),
     S("BW_PY", str, None, WHERE, "the Python the bandwidth side runs (default this one)"),

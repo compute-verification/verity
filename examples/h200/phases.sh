@@ -4,12 +4,12 @@
 # Demo A is not one command: it is eight runs, each phase's output the next one's input, the coin flipped only after the
 # registration is in the challenger's ledger. Each phase below starts its job by the run recorder (`research run`) on its
 # machine (or, for `register`, here on the CPU) with the variables it names; --dry-run prints the command and starts
-# nothing, and further FLAGs go to the recorder. Each phase's run of record is in example.toml's `runs`:
+# nothing, and further FLAGs go to the recorder. Each phase's run of record is in demo.toml's `runs`:
 #   commit    the step on the H200 under a fresh salt secret kept on the node: 32 steps at batch 512, every op's output
 #             committed, roots.json out (m3proper_job.sh PHASE=commit)
 #   weights   the registration of the 733 seeded INT8 weights under the served Program, its 0600 witness kept on the
 #             node (e2e_h200.weights_commit commit). PROGRAM: the Program digest (hex)
-#   register  the step registration, fixed before any coin: every step root, step 31's slot roots, the weights and the law
+#   register  the step registration, fixed before any coin: every step root, step 31's slot roots, the weights and the sampling design
 #             subset:8 over the step's 3,124,276,224 proof blocks (m3stepreg.py). ROOTS: commit's roots.json, WEIGHTS_REG:
 #             weights' registration.json, PROGRAM, COMMIT_RUN: commit's run id; then REG_OUT/step-registration.json
 #             goes to the evidence store (kind m3-step-registration/v1)
@@ -20,7 +20,7 @@
 #             accepted, a plain one and a prover that registers after seeing the root refused (m3withheld.py). REG
 #   open      every registered weight row a sampled proof block reads, opened from weights' witness (m3bundle.py weights). REG, DRAW:
 #             coin's draw.json, WEIGHTS_STATE: weights' state directory on WEIGHTS_NODE
-#   replay    the step again on the H200 under the salt secret, every root held to roots.json, the drawn slots' rows kept
+#   replay    the step again on the H200 under the salt secret, every root held to roots.json, the sampled slots' rows kept
 #             beside the secret (m3proper_job.sh PHASE=replay). ROOTS, REG, DRAW
 #   bundle    each sampled proof block's one-member window and replay bundle, checked against both registrations (m3proper_job.sh
 #             PHASE=build); then the tree goes to the evidence store (kind m3-drawn-blocks/v1). REG, DRAW,

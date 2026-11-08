@@ -1,18 +1,20 @@
 module
 
 public import Definitions.Flock.Session
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# Ligerito with C-Flock ZK's padded level 0, in the clear
+# Ligerito with Flock ZK's padded level 0, in the clear
 
-C-Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
+Flock ZK (`verity/ml/flock/live/PROTOCOL.md` §7) changes level 0 of each rep `r`:
 
 * **the committed lanes** are `2^k₀` witness lanes and `e` extra lanes per rep, rep `r`'s at
   `2^k₀ + e·r + i`. Every lane is a codeword of `RS[2^d, 2^cols + t]`: its message plus `c₀` times
   its `t` padding coefficients at `[0, t)`, and the padding at `[2^cols, 2^cols + t)`, in the novel
   basis at `d` bits;
 * **after the lane rounds**, which send no message after their last coin (`foldRoundsNL`), the
-  prover sends `e^r_i`, one value per extra lane, the verifier draws `ρ^r_1 … ρ^r_e`, and the prover
+  prover sends `e^r_i`, one value per extra lane, the verifier samples `ρ^r_1 … ρ^r_e`, and the prover
   sends `ybar^r`, `t` values over `K`. The claim restarts at `s + Σ_i ρ_i·e_i`, and the code-switch
   message and level 1 follow as before. An honest `e_i` is extra lane `i`'s value against the running
   claim's weight: `b(r̄, ·)` plus level 0's out-of-domain claim `β₀·eq(z₀, (r̄, ·))`;
@@ -89,7 +91,7 @@ def queryAndBatchV (A : Arith F K) (lv : Level) (v : ℕ → K) (start : ℕ) (s
 /-- Rep `r`'s extra lanes: `2^k₀ + e·r + i`. -/
 def extraLane (k0 e r : ℕ) (i : Fin e) : ℕ := 2 ^ k0 + e * r + i.val
 
-/-- **Ligerito with the padded level 0** (§13.3 with M1's §7), for rep `r` of `e` extra lanes
+/-- **Ligerito with the padded level 0** (`Flock.Ligerito` with M1's §7), for rep `r` of `e` extra lanes
 each, padding `t` and constant `c₀`: decides `Σ_y f(y)·b(y) = T` for the committed table `C₀`. -/
 def ligeritoPad (A : Arith F K) (sch : Schedule) (t : ℕ) (c₀ : F) (e r : ℕ) (T : F) (b : ℕ → F)
     (C₀ : Oracle F) : Game Bool := do

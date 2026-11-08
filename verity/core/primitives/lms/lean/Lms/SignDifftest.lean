@@ -1,7 +1,8 @@
 module
 
 public import Lms.Sign
-public import Lean.Data.Json
+public import Lean.Data.Json.FromToJson.Basic
+public import Lean.Data.Json.Parser
 
 /-!
 # The sign difftest: LMS keys and signing against `lms.py`, on generated seeds

@@ -1,13 +1,24 @@
 module
 
-public import Proofs.Flock.Soundness.ExecRows
 public import Flock.HmRow
+public import Aesop.BuiltinRules
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Simps
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Order.AbsoluteValue.Basic
+import Mathlib.Algebra.Order.Field.Basic
+import Mathlib.Data.Finset.Attr
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # The rows Δ writes (`HmRow.delta`)
 
-Δ is the list of `(row, column)` pairs the statement XORs into the level-0 matrices (PROTOCOL.md
-§16.1). `delta_rows`: every row it writes has one of six forms, one per loop of `HmRow.delta`:
+Δ is the list of `(row, column)` pairs the statement XORs into the level-0 matrices (`Flock.Statement`). `delta_rows`: every row it writes has one of six forms, one per loop of `HmRow.delta`:
 - a slot's constant, other than the pin (rewired to read the pin);
 - a bit of a row's chain (`ShaRowBit`): a `cv` or message bit of one of its `sha512x3` slots (its first `cv`, and its
   message's constant bits past the row's length);

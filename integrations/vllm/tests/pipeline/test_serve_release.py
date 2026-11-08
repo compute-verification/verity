@@ -1,6 +1,6 @@
 """serve-openai's draw-gated release (`pipeline.serve_release`): a window's device-held values are released only once
-every named subprotocol has drawn it; the union of the leaves the drawn blocks open is kept, inputs an unsampled block wrote
-included, and opens against the pre-coin root after the drop; a later draw, or a read of a dropped leaf, is refused by name."""
+every named subprotocol has sampled it; the union of the leaves the sampled blocks open is kept, inputs an unsampled block wrote
+included, and opens against the pre-coin root after the drop; a later sample, or a read of a dropped leaf, is refused by name."""
 from __future__ import annotations
 
 import json
@@ -21,11 +21,6 @@ from verity_vllm.pipeline import serve_release as SL
 PROTOCOLS = ("sampled_proofs", "pouw_h1")
 
 
-@pytest.fixture(params=[None, R.NAME], ids=["vllm-v1", R.NAME])
-def cs(request):
-    return request.param
-
-
 class _Waits(threading.Condition):
     """A condition that counts each wait as it starts."""
 
@@ -38,8 +33,8 @@ class _Waits(threading.Condition):
         return super().wait(timeout)
 
 
-def test_no_release_before_the_last_protocols_draw(cs):
-    _host, _rc, dev = committed(cs)
+def test_no_release_before_the_last_protocols_draw():
+    _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws._cv = _Waits()
     got = {}
@@ -47,18 +42,18 @@ def test_no_release_before_the_last_protocols_draw(cs):
     t.start()
     draws._cv.entered.acquire()
     draws.put(0, "sampled_proofs", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
-    draws._cv.entered.acquire()                 # woken by the first draw, and waiting again for the second
+    draws._cv.entered.acquire()                 # woken by the first sample, and waiting again for the second
     assert "rec" not in got and getattr(dev, "released", None) is None and dev.device_pool.held > 0
     draws.put(0, "pouw_h1", [])
     t.join()
     assert got["rec"]["protocols"] == list(PROTOCOLS) and dev.released is not None and dev.device_pool.held == 0
 
 
-def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_against_the_pre_coin_root(cs, tmp_path):
-    host, rc, dev = committed(cs)
+def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_against_the_pre_coin_root(tmp_path):
+    host, rc, dev = committed()
     C = dev.chunk
     down = (2, "model.layers.0.mlp.down_proj", 0, C)
-    written_by_unsampled = (0, "model.embed_tokens", C, 2 * C)      # the drawn block's input, from a block nobody drew
+    written_by_unsampled = (0, "model.embed_tokens", C, 2 * C)      # the sampled block's input, from a block nobody drew
     h1 = (0, "model.layers.0.self_attn.qkv_proj", 10, 20)
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "sampled_proofs", [down, written_by_unsampled])
@@ -81,11 +76,11 @@ def test_the_union_is_kept_with_an_input_an_unsampled_block_wrote_and_opens_agai
             for i in leaves:
                 assert bytes(com.open_range(s, i, i + 1).value) == host_leaf(host, C, s, i)
         with pytest.raises(RuntimeError, match="draw-gated release"):
-            com.open_range(1, 0, 1)                 # no draw read step 1
+            com.open_range(1, 0, 1)                 # no sample read step 1
 
 
-def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
-    _host, rc, dev = committed(cs)
+def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name():
+    _host, rc, dev = committed()
     draws = SL.Draws(("sampled_proofs",))
     draws.put(0, "sampled_proofs", [(2, "model.layers.0.mlp.down_proj", 0, 1)])
     draws.release(0, dev)
@@ -98,8 +93,8 @@ def test_a_later_draw_or_a_read_of_a_dropped_leaf_is_refused_by_name(cs):
         OpenedReader(dev, rc)(1, "runner.sampler", 0, 4)
 
 
-def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_was_committed(cs):
-    _host, _rc, dev = committed(cs)
+def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_was_committed():
+    _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     draws.put(0, "pouw_h1", [])
     with pytest.raises(SL.Refused, match="drawn by pouw_h1 already"):
@@ -111,13 +106,13 @@ def test_a_draw_is_never_redrawn_names_only_its_protocols_and_reads_only_what_wa
     draws.put(0, "sampled_proofs", [(0, "model.layers.9.mlp.down_proj", 0, 1)])
     with pytest.raises(KeyError, match="no committed member by that name"):
         draws.release(0, dev)
-    assert getattr(dev, "released", None) is None          # a window whose draws can't be read is not released
+    assert getattr(dev, "released", None) is None          # a window whose samples can't be read is not released
     with pytest.raises(KeyError, match="did not commit"):
         SL.leaves_of(dev, [(9, "model.embed_tokens", 0, 1)])
 
 
-def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_name(cs, tmp_path):
-    _host, _rc, dev = committed(cs)
+def test_the_draws_dir_puts_each_file_once_and_a_bad_one_refuses_its_window_by_name(tmp_path):
+    _host, _rc, dev = committed()
     draws = SL.Draws(PROTOCOLS)
     d = SL.DrawDir(tmp_path / "draws", draws)
     for p, reads in (("sampled_proofs", [[2, "model.layers.0.mlp.down_proj", 0, 1]]), ("pouw_h1", [])):

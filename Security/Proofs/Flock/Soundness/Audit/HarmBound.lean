@@ -2,18 +2,21 @@ module
 
 public import Proofs.Flock.Soundness.Audit.Work
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
 
 /-!
-# The stratified law's harm bound
+# The stratified sampling design's harm bound
 
-`IsHarmBound L h δ H` (`Audit/Harm.lean`) is `harm_bound`'s specification: every wrong-unit set that escapes with
-probability at least `δ` has harm at most `H`. This file proves it for the stratified law (and so the work law), at `H` in
-closed form. Stratum `s` has `n_s` units of which `k_s` are drawn uniformly without replacement, and a set `B` holds
+`IsHarmBound L h δ H` (`Audit/Harm.lean`) is `harm_bound`'s specification: every incorrect set that escapes with
+probability at least `δ` has harm at most `H`. This file proves it for the stratified sampling design (and so the work sampling design), at `H` in
+closed form. Stratum `s` has `n_s` units of which `k_s` are sampled uniformly without replacement, and a set `B` holds
 `c_s = |B ∩ stratum s|` of them.
 
 * `choose_div_le_exp`, `stratified_escape_le_exp`: **the closed form**. `B` escapes with probability at most
   `exp(−∑ s k_s c_s / n_s)`, since `C(n − c, k)/C(n, k) ≤ (1 − c/n)^k ≤ exp(−k c / n)`. `work_escape_le_exp` is the work
-  law's, whose `work_escape_le` bounds the same product through weighted AM-GM at the rule's sizes instead.
+  sampling design's, whose `work_escape_le` bounds the same product through weighted AM-GM at the rule's sizes instead.
 * `stratified_risk_le`: a set escaping with probability at least `δ > 0` has `c_s ≤ n_s − k_s` in every stratum and
   `∑ s k_s c_s / n_s ≤ ln(1/δ)`.
 * `stratified_isHarmBound_dual`, **the harm bound at a price**: with harm `g_s` per unit of stratum `s`, every `τ ≥ 0`
@@ -25,7 +28,7 @@ closed form. Stratum `s` has `n_s` units of which `k_s` are drawn uniformly with
   `g_s n_s / k_s` until the budget `ln(1/δ)` runs out, the last one fractionally, is separated by that last stratum's
   `g_s n_s / k_s`, or by `0` when the budget never runs out. This is `density_bound` in the sampling optimizer
   (`verity.core.protocols.sampled_proofs.optimize`).
-* `work_isHarmBound_fill`: the same under the work law with harm the credited work `w_s`, so its value bounds
+* `work_isHarmBound_fill`: the same under the work sampling design with harm the credited work `w_s`, so its value bounds
   `workOf σ w B`.
 * `IsHarmBound.natFloor`, `stratified_isHarmBound_bits`, `Partition.audit_exfiltration_stratified`: **the exfiltration
   form**. With harm a unit's output bits `b_s`, the floor of the fill's value is `audit_exfiltration`'s `H`.
@@ -189,9 +192,9 @@ theorem card_filter_le_stratum (σ : Fin n → Fin m) (s : Fin m) (B : Finset (F
   rw [filter_eq_inter_stratum]
   exact card_le_card inter_subset_right
 
-/-! ## The stratified law -/
+/-! ## The stratified sampling design -/
 
-/-- **The closed form**: drawing `k_s` of the `n_s` units of stratum `s` uniformly without replacement, a set with `c_s`
+/-- **The closed form**: sampling `k_s` of the `n_s` units of stratum `s` uniformly without replacement, a set with `c_s`
 units in stratum `s` escapes with probability at most `exp(−∑ s k_s c_s / n_s)`. -/
 theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (B : Finset (Fin n)) :
@@ -201,7 +204,7 @@ theorem stratified_escape_le_exp (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk 
   exact prod_choose_div_le_exp (fun s => (stratum σ s).card) (fun s => (B.filter (σ · = s)).card) k hk
     (fun s => card_filter_le_stratum σ s B)
 
-/-- **The work law in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
+/-- **The work sampling design in closed form**: a set with `c_s` units in stratum `s` escapes with probability at most
 `exp(−∑ s k_s c_s / n_s)`, `k_s = workK σ w f K s`, at any floors. -/
 theorem work_escape_le_exp (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (B : Finset (Fin n)) :
     (work σ w f K).escape B ≤
@@ -241,7 +244,7 @@ theorem stratified_isHarmBound_fill (σ : Fin n → Fin m) (k : Fin m → ℕ) (
   rw [fill_eq_dual (fun s => (stratum σ s).card) k g x hfull hempty hspent]
   exact stratified_isHarmBound_dual σ k hk g hδ hτ
 
-/-- **Free compute under the work law**: with harm a unit's credited work `w_s`, a separated fill's value
+/-- **Free compute under the work sampling design**: with harm a unit's credited work `w_s`, a separated fill's value
 `∑ s w_s x_s` bounds the work `workOf σ w B` of every set escaping with probability at least `δ > 0`. -/
 theorem work_isHarmBound_fill (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (x : Fin m → ℝ) {δ : ℝ≥0∞} (hδ : 0 < δ)
     {τ : ℝ} (hτ : 0 ≤ τ)
@@ -322,7 +325,7 @@ namespace Partition
 
 variable {C : Circuit} {n m : ℕ} (P : Partition C n)
 
-/-- **Exfiltration under the stratified law**: `audit_exfiltration` at the harm bound of a separated fill of the output
+/-- **Exfiltration under the stratified sampling design**: `audit_exfiltration` at the harm bound of a separated fill of the output
 bits `b_s` per unit of stratum `s`. A prover that picks its strategy from a uniform message and a receiver that sees only
 what is delivered on `D` succeed together with probability at most
 `2^⌊∑ s b_s x_s⌋ · ∑_{i ≤ j} C(n, i) / |M| + δ + ε_ks + δ_link + δ_in`, where `miss (j + 1) < δ`. -/

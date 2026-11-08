@@ -1,6 +1,7 @@
 module
 
 public import Properties.Pous.WipeSigned
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # What the challenger's record of a wipe keeps

@@ -1,8 +1,18 @@
 module
 
+public import Aesop.BuiltinRules
+public import Flock.Statement
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
 public import Proofs.Flock.Soundness.TmplUnit
 public import Proofs.Flock.Soundness.TmplUnrollAt
 import all Init.Util
+import Mathlib.Algebra.Order.BigOperators.Ring.Finset
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 
 /-!
 # The templated unit's share is the flat slot's

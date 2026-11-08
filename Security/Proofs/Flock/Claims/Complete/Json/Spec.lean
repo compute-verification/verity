@@ -1,14 +1,46 @@
 module
 
-public import Flock.Canon
-public import Std.Data.TreeMap.Raw.Lemmas
-public import Proofs.Flock.Claims.Complete.Json.Value
 public import Definitions.Claims
-public import Proofs.Flock.Claims.JsonEq
-public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Definitions.Core.Interaction
+public import Flock.Canon
 public import Proofs.Flock.Claims.Complete.Json.RoundTrip
-import all Lean.Data.Json.Basic
+public import Proofs.Flock.Claims.Complete.Json.Value
+public import Proofs.Flock.Claims.Complete.Prover.Print
+public import Proofs.Flock.Claims.JsonEq
+public import Std.Data.TreeMap.Raw.Lemmas
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # What the record's round trip needs from the JSON library
@@ -21,7 +53,7 @@ alike values (`Canon.lean`). The verifier reads no `Json` `==` (a `partial` defi
 flags by `matches`. Alike (`Same`), printable (`Good`) and well-formed (`Wf`) values are `Value.lean`'s. Here are the
 lemmas on alike values the proofs read: alike
 leaves are equal, and alike objects have alike values at each key (`Same.getObjVal`) and the same missing keys
-(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's draw check (`drawEq`)
+(`Same.getObjVal_none`), and alike values have one form (`Same.jsonEquiv`), so the verifier's sample check (`drawEq`)
 passes on them. The record's numbers are all `Lean.toJson` of naturals, so printable.
 -/
 

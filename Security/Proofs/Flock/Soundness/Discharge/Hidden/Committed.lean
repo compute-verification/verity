@@ -2,15 +2,36 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Hidden.Flat
 public import Proofs.Flock.Soundness.Discharge.Hidden.Public
-public import Proofs.Flock.Soundness.Discharge.Hm.Bc
 public import Proofs.Flock.Soundness.Discharge.Hm.Site
-public import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Hidden.Rows
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Hm.Bc
+import Proofs.Flock.Soundness.Discharge.Layout.Bytes
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.Region
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # An output row's registered `b ‖ c` (`OutputsCommitted`)
 
 In a satisfying witness of an untyped hidden-output statement, at block `o`, template instance `g` and output row `j`:
-* the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the drawn unit there: `HmOut.regions`' region
+* the 128 bytes at the row's `hm96` output are the population's `b ‖ c` of the sampled proof block there: `HmOut.regions`' region
   `p` pins them (`bc_pinned'`, `Layout.bc_pinned` at the region `regions_get` gives), and `HmOut.drawn` is `HmRow.drawn`
   on the circuit without output ports (`Layout.bcChunk_drawn`): `bc_drawnH`, at every row;
 * they are the commit string of the row prefix and the row's message bytes under its salt: the witness satisfies the flat
@@ -106,7 +127,7 @@ theorem bytesAt_bc {st : Stmt} (L : FlockSoundness.Layout st) (R : RowRanges st.
   rw [hin]
   exact (blockBit_of_lt _ z o hy).symm
 
-/-- **The `b ‖ c` a satisfying witness of a drawn hidden-output statement holds at a proved unit's `hm96` slot** is the
+/-- **The `b ‖ c` a satisfying witness of a sampled hidden-output statement holds at a proved unit's `hm96` slot** is the
 unit's `b ‖ c` in the registered population's public file, at every row `p`, input or output (`Layout.bc_drawn` at
 `Stmt.setupHidden`'s statement): region `p` of `HmOut.regions` pins it (`regions_get`, `bc_pinned'`), and
 `HmOut.drawn` is `HmRow.drawn` on the circuit without output ports. -/

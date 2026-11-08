@@ -1,10 +1,19 @@
 module
 
-public import Proofs.Flock.Soundness.RepSound
+public import Definitions.Flock.Accounting.Fast100
+public import Mathlib.CategoryTheory.Category.Basic
 public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.RepSound
+import Proofs.Flock.Soundness.Accounting.Fast100
+import Proofs.Flock.Soundness.Accounting.Numbers
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.ListSize
+import VCVio.Prelude.Core
 
 /-!
-# Soundness of Flock's interactive protocol, as PROTOCOL.md specifies it
+# Soundness of Flock's interactive protocol, as the Lean verifier (`verity/core/service/flock/`) runs it
 
 **`table_sound`.** For every prover strategy, the probability that the verifier accepts a table
 (both reps, on one committed root, with live coins) while no codeword within the level-0 radius
@@ -26,7 +35,7 @@ SHA-512's collision term for the compiled protocol (`table_sound_compiled`), und
 
 Both theorems assume the link points' layout (`Statement.LinkLayout`): each region's free bits
 are distinct and read link coordinates below `PT_LOCAL`, and the block coordinates `PT_LOCAL …`
-fit inside the point, as the statements of PROTOCOL.md §16 have them.
+fit inside the point, as the statements of `Flock.Statement` have them.
 -/
 
 @[expose] public section
@@ -37,7 +46,7 @@ open Game Model Accounting
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K]
 
-/-- **The link points** (§16.2): if the committed values do not satisfy the statement, the two
+/-- **The link points** (`Flock.Statement`): if the committed values do not satisfy the statement, the two
 link points leave some rep start undoomed with probability at most `linkError`: Schwartz–Zippel
 on a failing region's difference, at two independent points, for every codeword near the
 committed table (`LinkSound`, `link_sound_of_card`, with `closeMsgs_card_le`). -/

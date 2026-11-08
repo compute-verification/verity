@@ -1,17 +1,33 @@
 module
 
+public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
+public import Proofs.Flock.VBridge.Algebra.Schedule
 public import Proofs.Flock.VBridge.Family.Files
 public import Proofs.Flock.VBridge.Family.Rep
-public import Proofs.Flock.VBridge.Algebra.Schedule
-public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # The inner proof file's bytes: `encodeProof`, and `TableSrc.Encodes`
 
 `encodeProof sh p` is the file the prover writes for the proof `p` at shape `sh`: `bincode 1.3` of the commitment and
-`R1csProofLigerito` (PROTOCOL.md §8), each `Vec` as its `u64` length then its elements, each `F128` as
+`R1csProofLigerito` (`Flock.Proof`), each `Vec` as its `u64` length then its elements, each `F128` as
 `le64(lo) ‖ le64(hi)`, the vectors the verifier requires empty (`matrix_evals`, the grinding nonces but the query, claim
 and consistency nonces, `sumcheck_transcript`) empty, each ring switch's grinding nonce `0`, then the zk patch's
 `zk_level0 = None` tag, as every deployed prover writes it: the verifier's `Flock.Wire.proofFile`, the one file
@@ -27,7 +43,7 @@ with.
 * `TableSrc.encodes_of`: `TableSrc.Encodes` at `bytes r := encodeProof (shapeOf …) (proof r)`, from the setup
   (`SetupRealizes`), V*'s shape (`ShapeIs`, and its claims `2 + n`: `ClaimsAre`, from `HFit` and `ExtrasAre` by
   `claimsAre_of`), the shapes of the level-0 cap and the Ligerito openings the proof files carry (`CapShaped`,
-  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is ht's
+  `LigShaped`), and fewer than `2^48` regions (`RegionsFit`). `hEnc_of` is it at the family; `hdec_filesAt` is
   `hdec` at the table files.
 -/
 
@@ -439,7 +455,7 @@ theorem encodes_of {ptLocal mPts : ℕ} (hset : SetupRealizes s.st s.S s.sch ptL
     omega
   exact ⟨encodeProof _ (s.proof r), decodeProof_encodeProof _ _ ⟨by rw [hH]; omega, show 1 ≤ s.sch.levels.size - 1 by omega, hfit, hlen⟩⟩
 
-/-- **ht's `hdec`** at the table files: each rep's bytes decode to its proof file at the shape `verifyRep` decodes
+/-- **`hdec`** at the table files: each rep's bytes decode to its proof file at the shape `verifyRep` decodes
 with (Verify.lean:40-41), whenever the files have encodings (`Encodes`). -/
 theorem hdec_filesAt {cls : HClass} (pts : Fin 2 → Fin cls.mPts → FlockLevel3.GF128)
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (henc : s.Encodes) (r : ℕ) :
@@ -461,7 +477,7 @@ section claims
 
 variable {nT nR : ℕ} (T : Fin nT → Type) (CT : Fin nR → Type) {cls : HClass}
 
-/-- **`ClaimsAre` from `verifierRows` accepting rep 0's coins** (ha's `HFit`) and the reps' extra claims being the
+/-- **`ClaimsAre` from `verifierRows` accepting rep 0's coins** (`HFit`) and the reps' extra claims being the
 setup's at the inner transcript's link points (`ExtrasAre`). -/
 theorem TableSrc.claimsAre_of (s : TableSrc) (tr : List (List (SMsg T) × ((k : Fin nR) → CT k)))
     (hset : SetupRealizes s.st s.S s.sch cls.ptLocal cls.mPts) (hxs : s.ExtrasAre T CT cls tr)

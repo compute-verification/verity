@@ -2,6 +2,9 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkLink.BadZ
 public import Proofs.Flock.Soundness.Discharge.ZkLink.ChooseZ
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Lock
 
 /-!
 # A cap's openings on accepting runs

@@ -1,8 +1,10 @@
 module
 
 public import Proofs.Flock.Recursive.Target
-public import Proofs.Flock.Soundness.Discharge.Exec.Tables
-public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+public import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
 
 /-!
 # VBridge G: the compiled inner verifier accepts from both reps' accepting runs
@@ -253,7 +255,7 @@ theorem tableAfterL_last (A : Arith F K) (H : List UInt8 → D) (E : Merkle.Enc 
 variable {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)]
 
 omit [∀ k, Fintype (CT k)] [∀ k, Nonempty (CT k)] in
-/-- On a nonempty transcript of rounds `j, …` that all draw coins, the schedule's last step is a coin. -/
+/-- On a nonempty transcript of rounds `j, …` that all sampling coins, the schedule's last step is a coin. -/
 theorem schedSteps_last : ∀ (j : ℕ) (t : List (List (SMsg T) × ((k : Fin r) → CT k))), t ≠ [] →
     j + t.length ≤ r → ∃ l x, schedSteps T CT j t = l ++ [.inr x]
   | _, [], h, _ => absurd rfl h

@@ -1,17 +1,58 @@
 module
 
 public import Proofs.Flock.Claims.Complete.ZkTables.RingSwitch
-public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
-public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
-public import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
-public import Proofs.Flock.Claims.Complete.Json.Parse
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
+import Batteries.Tactic.OpenPrivate
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.Complete
+import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
+import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.JsonNorm
+import Proofs.Flock.Soundness.Discharge.FailClosed.PublicTies
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the masked record needs of the statement, at one table
 
-`stmt_of_one`: a masked statement in scope whose drawn setup has one table gives `StmtAt`'s facts from the setup
+`stmt_of_one`: a masked statement in scope whose sampled setup has one table gives `StmtAt`'s facts from the setup
 alone. So `StmtAt` holds at every good case of one table
 (`Case.stmtOne`), and with `Case.stmtAt` at every good case (`stmtAt_all`); `StmtOkZk` holds (`stmtOkZk`); and
 `completeRel`, `completeJRel` and `complete_zk_relation` hold without it (`completeRelS`, `completeJRelS`,
@@ -20,10 +61,10 @@ alone. So `StmtAt` holds at every good case of one table
 antecedent.
 
 * A setup of one table is `setupOne`'s (`setupTables_okAny`: one of several has more).
-* Its public header is the population's with the draw put in (`HmRow.drawn`), so its `unit_draw` is the statement's
-  draw (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`); its `Σ` is a SHA-512 digest
+* Its public header is the population's with the sample put in (`HmRow.drawn`), so its `unit_draw` is the statement's
+  sample (`unitDraw_of`), which decodes to the statement's instances (`PublicTies.instances`); its `Σ` is a SHA-512 digest
   and its `Hello` is `helloOf`'s (`setupOne_stmt`).
-* The setup checked the draw's law (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset draw. Either, when it
+* The setup checked the sample's law (`ProvedScope.drawLaw`), under `--zk` a stratified or a subset sample. Either, when it
   decodes, is an object of exactly the keys it reads, each a string, a natural number, an array of them, or strata that
   decode (`good_stratified`, `good_subset`), so it is printable.
 -/
@@ -95,7 +136,7 @@ private theorem isOk_ok {j : Json} {k : String} (h : (j.getObjVal? k).isOk = tru
 
 /-! ## What the setup of one table set up -/
 
-/-- A drawn session's setup checked its draw's law (`ProvedScope.drawLaw`). -/
+/-- A sampled session's setup checked its sample's law (`ProvedScope.drawLaw`). -/
 private theorem setup_drawLaw {s : Ins} {p : SessionSpec × Array Flock.Stmt} (h : s.setup = .ok p)
     (hd : s.read.draw.isSome = true) :
     ProvedScope.drawLaw s.read.zk s.read.tags false s.read.draw = .ok () := by
@@ -116,7 +157,7 @@ private theorem hmOut_loadPublic {tags : Tags} {c : Circuit} {f : ByteArray} {po
     assumption
 
 set_option maxHeartbeats 4000000 in
-/-- What `Stmt.setupH` set up: its public file loaded (at a draw, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
+/-- What `Stmt.setupH` set up: its public file loaded (at a sample, `HmRow.drawn` of it) and passed `HmRow.checkPublic`,
 its instances, `Σ` and its `Hello`. -/
 private theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
@@ -134,7 +175,7 @@ private theorem setupH_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
       rfl, by assumption⟩
 
 /-- **What a table's setup set up** (`setupOne`, either output mode): the public file a public-file load returned, at a
-draw that file's `HmRow.drawn`; the header's draw decodes to the statement's instances; a SHA-512 `Σ`; and the
+sample that file's `HmRow.drawn`; the header's sample decodes to the statement's instances; a SHA-512 `Σ`; and the
 `Hello`. -/
 private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Flock.Stmt}
@@ -158,7 +199,7 @@ private theorem setupOne_stmt {tags : Tags} {cf pf : ByteArray} {coins : Coins} 
     obtain ⟨u, hu, -, hn'⟩ := T.instances d hd'
     exact ⟨u, hu, by rw [hn, hn']⟩
 
-/-! ## The public header's draw -/
+/-! ## The public header's sample -/
 
 set_option maxHeartbeats 4000000 in
 /-- The public file's header is a rebuilt object (`Flock.norm` of what `JsonParse.parse` read). -/
@@ -177,7 +218,7 @@ private theorem loadPublic_header {tags : Tags} {c : Circuit} {f : ByteArray} {p
     exact ⟨⟨_, rfl⟩, obj_of_getObjVal (str_ok (k := "format") (by assumption))⟩
 
 set_option maxHeartbeats 4000000 in
-/-- `HmRow.drawn` puts the draw in the population's header. -/
+/-- `HmRow.drawn` puts the sample in the population's header. -/
 private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : Std.TreeMap.Raw String Json compare}
     (hm : m.WF) (hp : pub.header = .obj m) (h : HmRow.drawn c pub d = .ok pub') :
     pub'.header.getObjVal? "unit_draw" = .ok d := by
@@ -197,7 +238,7 @@ private theorem drawn_header {c : Circuit} {pub pub' : Public} {d : Json} {m : S
       Std.TreeMap.Raw.getElem?_insert hm]
     simp
 
-/-- **The statement's header names its draw**: a draw's statement over a loaded public file has that draw as its
+/-- **The statement's header names its sample**: a sample's statement over a loaded public file has that sample as its
 `unit_draw`. -/
 private theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pub : Public} {d : Json}
     (hl : HmRow.loadPublic tags c pf = .ok pop) (hd : HmRow.drawn c pop d = .ok pub) :
@@ -208,7 +249,7 @@ private theorem unitDraw_of {tags : Tags} {c : Circuit} {pf : ByteArray} {pop pu
   cases hw with
   | obj hwf _ => exact drawn_header hwf hm hd
 
-/-! ## A stratified draw that decodes is printable -/
+/-! ## A stratified sample that decodes is printable -/
 
 /-- A stratum's `[lo, hi)` range is a pair of natural numbers. -/
 private theorem good_range {p : Array Json} (hs : p.size = 2) {c₀ c₁ : String} {lo hi : ℕ}
@@ -263,7 +304,7 @@ private theorem good_stratum {j : Json} (hw : Wf j) {s : Draw.Stratum} (h : stra
       exact asNat_good hn
 
 set_option maxHeartbeats 4000000 in
-/-- **A stratified draw that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
+/-- **A stratified sample that decodes is printable**: an object of exactly `law`, `population`, `units`, `k` and
 `strata`, a string, natural numbers, an array of them, and strata that decode. -/
 private theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson j = .ok D)
     {K : ℕ} {strata : Array Draw.Stratum} (hl : D.law = .stratified K strata) : Good j := by
@@ -300,7 +341,7 @@ private theorem good_stratified {j : Json} (hw : Wf j) {D : Draw.UnitDraw} (h : 
       cases hw' with
       | arr ha => exact good_stratum (ha x hx) hy
 
-/-- Under `--zk` the setup admits a stratified or a subset draw. -/
+/-- Under `--zk` the setup admits a stratified or a subset sample. -/
 private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope.lawWhy true tags false D = none) :
     (∃ K strata, D.law = .stratified K strata) ∨ ∃ k, D.law = .subset k := by
   revert h
@@ -313,7 +354,7 @@ private theorem law_of_lawWhy {tags : Tags} {D : Draw.UnitDraw} (h : ProvedScope
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **A masked setup of one table** is `setupOne`'s, at the statement's tags, coins and draw. -/
+/-- **A masked setup of one table** is `setupOne`'s, at the statement's tags, coins and sample. -/
 theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts)) (h1 : sts.size = 1) :
     ∃ st, sts = #[st] ∧ spec = st.spec ∧
@@ -325,7 +366,7 @@ theorem setupOne_of {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array
   · omega
 
 /-- **What the masked record needs of the statement, at one table**, under the JSON library's specification: a masked
-statement in scope whose drawn setup has one table has a non-empty `Σ`, a printable draw that decodes to its instances
+statement in scope whose sampled setup has one table has a non-empty `Σ`, a printable sample that decodes to its instances
 and is the statement's, and a `Hello` that reads back with `coins` an object, printable with the prover's nonce. -/
 theorem stmt_of_one {x : Claims.Msg} {s : Ins} {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hsc : Claims.Flock.Scope (deployZk rel) x) (hs : setupOf true x = some (s, spec, sts))

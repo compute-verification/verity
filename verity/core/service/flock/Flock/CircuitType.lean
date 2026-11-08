@@ -11,11 +11,11 @@ bit inside a callee.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import Flock.Hash
 public import Flock.Library
 public import Flock.JsonParse
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

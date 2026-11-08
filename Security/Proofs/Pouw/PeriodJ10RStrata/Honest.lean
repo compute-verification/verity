@@ -1,7 +1,40 @@
 module
 
-public import Proofs.Pouw.PeriodJ10RStrata
 public import Proofs.Pouw.PeriodJ10R.Honest
+public import Properties.Pouw.PeriodJ10RStrata
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.TS.Keyed
+import Proofs.Pouw.PeriodJ10RStrata
 
 /-!
 # An honest J10-R period over several tile strata meets `H1J10RCheckedCreditPeriodStrata`'s premises, and the
@@ -10,17 +43,17 @@ conclusion fails at a verifier that accepts everything
 The twins of `Properties.Pouw.PeriodJ10RStrata.H1J10RCheckedCreditPeriodStrata`, as `HonestJ10R.j10r_meets` is of the
 one-stratum statement.
 
-*Honest* (`strata_meets_period`, `strata_meets_stratum`, `strata_credit`). Over any sampling block `σ` with draw `k` and
+*Honest* (`strata_meets_period`, `strata_meets_stratum`, `strata_credit`). Over any sampling block `σ` with sample `k` and
 any finite set `S` of its strata, `1 ≤ k s` at each `s ∈ S`, take a period of `n ≥ 1` windows whose registration is a
 function of the window's round coin (`regOf`) and the rest of whose inputs a function of its round coin and the block's
-draw (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement:
+sample (`evOf`). Given three facts of those inputs, the witness meets every premise of the statement:
 
 * `Credit.window` credits every window (`hacc`);
 * the registered salt, hex-decoded, is the round coin's bytes (`hsalt`);
-* the proof blocks `Credit.descriptorDrawn` draws are the union over `S` of the strata's coordinates of the block's draw
+* the proof blocks `Credit.descriptorDrawn` samples are the union over `S` of the strata's coordinates of the block's sample
   (`hdraw`), `StrataDrawIsCoin`'s body on every window.
 
-At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's draw as `Ξ`:
+At each stratum `s` the instance is `HonestJ10R`'s at `N_s = |stratum σ s|` with the rest of the block's sample as `Ξ`:
 `N_s` one-word proof blocks, one live round, `ρ = 1`, the twin's lucks, `δ_bind = δ_ks = 0`, `N_s` words fixed and folded a
 window. The accepted prefix is all `n` windows and stratum `s`'s live words are `N_s·n` (`stratumLive_all`), so
 `strata_credit` is the statement's bound at `∑_{s ∈ S} N_s·n` live words.
@@ -49,7 +82,7 @@ section Instance
 variable {nB mB : ℕ} (σ : Fin nB → Fin mB)
 
 /-- Stratum `s`'s view of a window's coins at the honest instance: `HonestJ10R`'s window coins with the rest of the
-block's draw. -/
+block's sample. -/
 abbrev View (s : Fin mB) : Type := Coin Bool (Rest σ s) (HonestJ10R.circuit (tileCount σ s)).rounds σ s
 
 /-- The honest circuit has one round a window, the statement's `hM`. -/
@@ -57,7 +90,7 @@ theorem rounds1 (N : ℕ) : (HonestJ10R.circuit N).rounds = 1 :=
   rfl
 
 /-- The period's windows as `Credit.window` reads them: window `w` registers `regOf` of its round coin, and the rest of
-its inputs are `evOf` of its round coin and the block's draw. -/
+its inputs are `evOf` of its round coin and the block's sample. -/
 def windows (regOf : Bool → PreDraw) (evOf : Bool → BlockDraw σ → Answered) (n : ℕ) :
     CreditWindows (StrataCoin Bool 1 σ) n where
   reg x w := regOf (coinAt (coinAt x w).1 ⟨0, Nat.one_pos⟩)
@@ -72,7 +105,7 @@ variable {nB mB : ℕ} (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s
   (enc : Bool → ByteArray)
 
 /-- **The period-wide premises**, and the accepted prefix is every window: the registration reads only the round coin,
-which the splice at window `w` after its one round keeps; the salt is the round coin's bytes; the draw is the strata's. -/
+which the splice at window `w` after its one round keeps; the salt is the round coin's bytes; the sample is the strata's. -/
 theorem strata_meets_period (hacc : ∀ c β, WindowAccepts (regOf c) (evOf c β))
     (hsalt : ∀ c, (PouwCheck.hex? (regOf c).salt).getD ByteArray.empty = enc c)
     (hdraw : ∀ c β, ∃ d : Array ℕ, creditDrawn (regOf c) (evOf c β) = .ok d ∧

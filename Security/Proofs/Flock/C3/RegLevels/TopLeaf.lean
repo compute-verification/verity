@@ -1,12 +1,24 @@
 module
 
-public import Proofs.Flock.C3.RegLevels.TopTie
+public import Proofs.Flock.C3.RegLevels.SharedRows
 public import Proofs.Flock.C3.RegLevels.TopRead
-public import Proofs.Flock.C3.RegLevels.AccReads
-public import Proofs.Flock.C3.PubRows.Check
+public import Proofs.Flock.C3.RegLevels.TopTie
 public import Proofs.Flock.C3.Reps.RoundLinks
-public import Proofs.Flock.Recursive.Registrants
 public import Proofs.Flock.Recursive.HPortTie
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
 # `hT_of_leaf`'s `hleaf` at R's levels' `out` reads, and two sessions' reads of one row
@@ -20,7 +32,7 @@ public import Proofs.Flock.Recursive.HPortTie
 * `digest_top`: the public file's row at such a read is the node's commit string (`HPubRows` at the verifier's hold,
   `hrow`);
 * `leaf_top`: so the read's leaf is `treeLeaf` of that string, or its two openings conflict (`leaf_of_accepts` at the
-  outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a drawn outcome, whose reads the session's
+  outcome, with `ReadsOwnAt`'s port); `leaf_drawn`: `leaf_of_accepts` at a sampled outcome, whose reads the session's
   `hown` gives.
 
 Two registrant records' reads at one root, leaf count, domain and leaf schema, at one position, have one row, or the
@@ -144,14 +156,14 @@ theorem read_of_topRead {qq H u x : ℕ} {pos : Array ℕ} {reads : Array (Optio
     exact ⟨hu, hx.symm⟩
   · simp [hu] at hx
 
-/-! ## At a drawn outcome -/
+/-! ## At a sampled outcome -/
 
 section Session
 
 variable {mPts nv J : ℕ} {Reg' : Type} {c : Flock.Circuit} {hU : Built c.unit} {hscope : Layout.scopeOk c = true}
   {Lv : Law nv} (zo : ZkOuter mPts nv J Reg' c hU hscope Lv)
 
-/-- **`leaf_of_accepts` at a drawn outcome**: the session's `hown` gives the drawn units' reads. -/
+/-- **`leaf_of_accepts` at a sampled outcome**: the session's `hown` gives the sampled proof blocks' reads. -/
 theorem leaf_drawn {ω : Lv.Ω} {R' : Reg'} {o}
     (hacc : ZkReg.LiveAcceptsZKR zo.I zo.own (R', Lv.draw ω, zo.wr (Lv.draw ω) R' o)) {u : Fin nv}
     (hu : u ∈ Lv.draw ω) {q : Fin c.ports.size} (hp : zo.rd.isRead (.inl (u, q))) :

@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceGamma
-public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
 public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.DeviceGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TileGamma
+import Proofs.Pouw.Prob
 
 /-!
 # rev1: it asserts less than the granted TT_OUT, and γ from it

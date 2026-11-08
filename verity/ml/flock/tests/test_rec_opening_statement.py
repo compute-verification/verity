@@ -1,5 +1,5 @@
 """`HmRow.parse` calls `RecOpening.check`: a statement's unit named `rec-opening/m<m>-c<claims>-p<j>` must be the net the
-verifier builds for that part of the opening's algebra (PROTOCOL.md §16.10). `flock-verify statement` accepts the files
+verifier builds for that part of the opening's algebra (`Flock.HmRow`). `flock-verify statement` accepts the files
 `rec_residuals.stage_opening` writes, and refuses them with one row of the unit changed and with the unit renamed out of
 the name's form."""
 from __future__ import annotations

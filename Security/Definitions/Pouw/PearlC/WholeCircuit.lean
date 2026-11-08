@@ -1,12 +1,11 @@
 module
 
 public import Definitions.Pouw.PearlC.RowCircuit
-public import Definitions.Core.Partition
 
 /-!
 # A whole Program's gate table from its units' tables (definitions only)
 
-A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof units' templates wired together: each row
+A tile-check Program (`verity.protocols.accounting.work.pouw.circuit.pc8`'s `Pc8Check`) is its proof blocks' templates wired together: each row
 unit reads the Program's input regions, and each tile unit reads its rows' outputs. Its table here is a `Whole`: the
 Program's input gates, then its units' computed gates, each unit an instance of a `Block`, a unit template's own table
 (`TileCircuit.Spec`, whose inputs are its first `nIn` gates) with the gate each instance's input reads (`port`). An
@@ -35,7 +34,7 @@ open Pouw.Fp8Atom Pouw.PearlC Pouw.PearlC.TileCircuit Pouw.PearlC.RowCircuit
 
 /-! ## Composed tables -/
 
-/-- One kind of proof unit of a composed table: the unit template's own table `S`, whose inputs are its first `nIn`
+/-- One kind of proof block of a composed table: the unit template's own table `S`, whose inputs are its first `nIn`
 gates, and its `cnt` instances, instance `q`'s input `a` reading the composed table's gate `port q a`. -/
 structure Block where
   S : Spec

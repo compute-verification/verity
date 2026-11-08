@@ -4,7 +4,7 @@ public import Definitions.Accounting.RateAuditSketchDeployed
 public import Definitions.Accounting.RateAuditDeployed
 public import Definitions.Accounting.Gates.Codec
 public import Definitions.Accounting.Requirement
-public import Mathlib.Data.ENat.Lattice
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Carriers: device memory whose post-seed contents are a circuit's values (trusted)
@@ -57,9 +57,9 @@ sectors in a set of tiles. The stacking premise charges carriers with the rebuil
 
 **The lifetime cap.** The remote audit refuses a plan holding a block of an append that joined a window `L` or more
 before (its `lifetime`; `Properties.RemoteAudit.LifetimeCapped`). An append joins the window being filled at the first
-pass after it, so its coin was drawn after every pass of the windows before. `LifetimeCapped layout joined L` is the
+pass after it, so its coin was flipped after every pass of the windows before. `LifetimeCapped layout joined L` is the
 game's form: at the session's coins, every pass whose layout holds a block of append `t` is in a window from `joined t`
-to `joined t + L − 1`. The game draws every append's coin with the codec, so `joined` is the game's only record of when.
+to `joined t + L − 1`. The game flips every append's coin with the codec, so `joined` is the game's only record of when.
 
 **A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
@@ -74,7 +74,7 @@ computes them, so that such a step exceeds every budget. The provenances' `gates
 
 **The append-coin rule.** The audit appends blocks during a session (a KV page), and remote_bandwidth's PROTOCOL.md
 (§3–§4) orders each append's choices before its encoding. The append's root commits its blocks' digests `d_j`, and only
-then does the verifier draw the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
+then does the verifier flip the append's coin `c_a`, once, which each block's key reads: `b_j(c_a) = H(seed ‖ j ‖ d_j ‖
 c_a)`. The registration is the first append, and its coin is the codec seed. So the writers' choices for an append
 (its payloads, their padding, the run inputs behind them, how many blocks, the schedule up to it) are a function of the
 codec and the coins of the appends before it, and the codec encodes its blocks from those choices and the coins
@@ -82,7 +82,7 @@ codec and the coins of the appends before it, and the codec encodes its blocks f
 memory map's schedule, which may depend on the session's coins before the pass.
 
 **A store per pass.** The store a pass certifies is the one resident going into the step the pass is bound to, and it
-may depend on the session's coins drawn before it. A pass's `SketchPrefix` is those coins: every earlier window's, its
+may depend on the session's coins flipped before it. A pass's `SketchPrefix` is those coins: every earlier window's, its
 own window's signs, and the window's earlier passes. Pass `j`'s store is the append-coin rule's at its prefix
 (`coinStore`, `programmed`), and a window's correct receipts and reads are counted pass by pass, each on its own store
 (`correctOn`, `readsOn`). With one store for every pass they are `correctAll` and `reads`. The audit rule behind the
@@ -98,7 +98,7 @@ namespace Accounting
 `T` appends in order, each of `M` block positions: the registration first, whose coin is the codec seed, then the
 appends of blocks written after it. Append `a`'s choices `choose ω a κ_<a` (its payloads, their padding, the run inputs
 behind them, how many blocks, the schedule up to it) read `ω` and the coins of the appends before it only, since its
-own coin `κ a` is drawn once its root has committed every digest. The codec `enc` encodes each of its blocks from those
+own coin `κ a` is sampled once its root has committed every digest. The codec `enc` encodes each of its blocks from those
 choices and the coins: a registered block under the seed's key, an appended one under `b_j(κ a)`. The pass reads the
 blocks at the distinct positions `slot`, which no encoding chooses: block `u` of the pass is position `(slot u).2` of
 append `(slot u).1`. -/
@@ -169,7 +169,7 @@ structure Carrier (N m : ℕ) where
   provenance : Provenance N m (carried → Sector)
   holds : ∀ E, provenance.run E = fun p => E p.1
 
-/-- The coins a session has drawn before pass `j` of window `w`: every earlier window's, window `w`'s signs, and its
+/-- The coins a session has sampled before pass `j` of window `w`: every earlier window's, window `w`'s signs, and its
 passes before `j`. -/
 structure SketchPrefix (n P N m ρ h ks G d : ℕ) where
   w : Fin n
@@ -185,8 +185,8 @@ def SketchPrefix.of {n P N m ρ h ks G d : ℕ} (x : Fin n → SketchWindowCoins
 
 /-- **A pass's store under the append-coin rule**, at the prefix `c` of the session's coins before it: the blocks at
 the layout `slot c` (`appendCoinBlocks`), the writers' choices `choose c` reading the prefix too, each tile's `m`
-sectors its block's. `y` is the codec and every append's coin. The append coins are drawn during the session, but
-independently of its coins, so they are drawn with the codec here; their order is `choose`'s, each append's choices
+sectors its block's. `y` is the codec and every append's coin. The append coins are flipped during the session, but
+independently of its coins, so they are sampled with the codec here; their order is `choose`'s, each append's choices
 reading only the coins before it. -/
 def coinStore {n P N m ρ h ks G d T M : ℕ} {Ω Ca Ch : Type}
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin m → Sector))
@@ -245,7 +245,7 @@ openings a window): the codec and every append's coin, then its `n` windows'. -/
 abbrev StackedCoins (Ω Ca : Type) (T n P N ρ G : ℕ) : Type :=
   (Ω × (Fin T → Ca)) × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773)
 
-/-- **The stores window `w`'s passes certify**: pass `j`'s is `view c ω` at the prefix `c` before it, `ω` drawn
+/-- **The stores window `w`'s passes certify**: pass `j`'s is `view c ω` at the prefix `c` before it, `ω` sampled
 independently of the session's coins (in the stacked guarantees, `coinStore` at the codec and the append coins). -/
 def programmed {n P N m ρ h ks G d : ℕ} {Ω : Type} (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
     (ω : Ω) (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
@@ -351,7 +351,7 @@ namespace Accounting
 
 /-- **The encode cost of `x` bits of a block's encoding**, in nonlinear units: `Gates.encodeCost` (the fewest nonlinear
 units, budgeted units and data products, of a restricted circuit with no run input, at most `B` operand bits a budgeted
-gate, that computes that many codec words over `F` at `k` rounds on more than `εnum/εden` of the draws, `⊤` when there
+gate, that computes that many codec words over `F` at `k` rounds on more than `εnum/εden` of the samples, `⊤` when there
 is none) of the `⌈x / (8·bytes)⌉` words that `x` bits fill. A function of a block's encoding is charged as the whole
 words its bits would fill; one a circuit gets without computing those words (a word's parity, the Legendre symbol of its
 last round's input, which is why the words' targets leave it out) enters a provenance as an input. -/

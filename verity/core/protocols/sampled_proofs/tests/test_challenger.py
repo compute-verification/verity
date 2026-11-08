@@ -15,10 +15,11 @@ import random
 import pytest
 
 from verity.core.protocols.sampled_proofs import challenger as C
+from verity.ml.commitments.merkle import merkle_depth
 from verity.ml.crypto import lms
 
 LABEL = "commit"
-HOST = "vy-nebius-cpu-1"
+HOST = "auditor-1"
 
 
 def entropy(seed: str):
@@ -205,6 +206,14 @@ def test_a_layout_is_checked(scheme, epoch, families, why):
             C.LiveChallenger(scheme, epoch, families, entropy("l"))
 
 
+def test_an_openings_path_is_its_layouts_depth_at_most_max_path():
+    """v2 refuses an opening's path past `MAX_PATH` digests (`coins.LIMITS`): a path is its layout's depth, and a layout
+    holds at most `MAX_COINS` coins (`layout_problem`), whose depth is `MAX_PATH`."""
+    assert merkle_depth(C.MAX_COINS) == C.MAX_PATH
+    ch = C.LiveChallenger("verity/test/coins/v1", 0, [("a", 5), ("b", 4)], entropy("p"))
+    assert {len(ch.open(label, 0, b"r" * 64).path) for label in ("a", "b")} == {merkle_depth(9)} == {4}
+
+
 def test_a_label_may_name_its_client():
     """A client names its coins in its own label space, as PoUW's round coins are ``pouw/round``."""
     ch = C.LiveChallenger("verity/test/coins/v1", 0, [("pouw/round", 2), ("vllm/positions", 1)], entropy("n"))
@@ -290,7 +299,7 @@ def test_a_commitment_the_prover_supplies_is_refused(tmp_path):
     assert forged.commitment == prover.commitment
     assert C.trusted_reason(key, forged.to_json(), prover.commitment, lms_verify) == unsigned
     assert C.trusted_reason(verifier_key(1), doc, ch.commitment, lms_verify) == unsigned
-    for bad in ({**doc, "host": "vy-nebius-2"}, {**doc, "signature": doc["signature"][:-2]},
+    for bad in ({**doc, "host": "auditor-2"}, {**doc, "signature": doc["signature"][:-2]},
                 {**doc, "commitment": {**doc["commitment"], "epoch": 8}}):
         assert C.record_reason(key, bad, lms_verify) == unsigned
     rewritten_path = tmp_path / "rewritten.json"

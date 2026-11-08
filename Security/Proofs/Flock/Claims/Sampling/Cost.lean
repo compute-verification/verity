@@ -1,7 +1,43 @@
 module
 
-public import Definitions.Claims.Sampling
 public import Proofs.Flock.Claims.Sampling.Extract
+public import Proofs.Flock.Claims.ERepCost
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ERep
+import Proofs.Flock.Claims.Prob
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # The sampling extractor's rerun programs: reruns, own calls, and what they return
@@ -13,7 +49,7 @@ The claims block's extractor `E` (`Definitions.Claims.Sampling`) is built of `of
   `ownLog_of_noHash`: their own `H` calls.
 * `eval_ofOC`, `flatMapRP_mem`, `checkRevealed_mem`: what they return. Each opening `checkRevealed` returns passes the
   commitment's check under its roots, and that check's calls are among its own.
-* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted draws, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
+* `waitAccC_sum`, `accExp_le`: the weights of a wait's accepted samples, `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`.
 -/
 
 @[expose] public section
@@ -119,13 +155,13 @@ theorem waitAccC_length_le {R : Type} (H : Msg → Msg) (run : R → Trace) (k :
         omega
       · exact h
 
-/-- The weights `g` of a wait's accepted draws among `rs`, from `a` accepted so far. -/
+/-- The weights `g` of a wait's accepted samples among `rs`, from `a` accepted so far. -/
 noncomputable def accSum {R : Type} (run : R → Trace) (k : ℕ) (g : R → ℝ) : List R → ℕ → ℝ
   | [], _ => 0
   | r :: rs, a =>
     if k ≤ a then 0 else if (run r).out = .acc then g r + accSum run k g rs (a + 1) else accSum run k g rs a
 
-/-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted draws `accSum` counts. -/
+/-- **The accepted reruns' weights**: those `waitAccC` keeps are the accepted samples `accSum` counts. -/
 theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (g : R → ℝ) :
     ∀ (rs : List R) (acc : List (R × Seen)),
       (((waitAccC k rs acc).eval H run).1.map fun p => g p.1).sum =
@@ -147,11 +183,11 @@ theorem waitAccC_sum {R : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) 
       · have hs : ¬ (run r).seen.out = .acc := ha
         simp only [hs, ha, ↓reduceIte]
 
-/-- `G(K, a)`: the accepted draws' weights over `K` uniform draws, from `a` accepted so far. -/
+/-- `G(K, a)`: the accepted samples' weights over `K` uniform samples, from `a` accepted so far. -/
 noncomputable def accExp {D : Type} [Fintype D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (K a : ℕ) : ℝ :=
   Ex fun σ : Fin K → D => accSum run k g ((List.finRange K).map σ) a
 
-/-- **The accepted draws' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted draws weigh at most
+/-- **The accepted samples' weights**: `ε · G(K, a) ≤ (k − a) · 𝔼[1[acc] · g]`, so the `k` accepted samples weigh at most
 `k · 𝔼[g | acc]` in expectation. -/
 theorem accExp_le {D : Type} [Fintype D] [Nonempty D] (run : D → Trace) (k : ℕ) (g : D → ℝ) (hg : ∀ d, 0 ≤ g d)
     (K : ℕ) : ∀ a, a ≤ k → Pr (fun d => (run d).out = .acc) * accExp run k g K a ≤

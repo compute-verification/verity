@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Pouw.Assumptions.Dimension.H100Measured
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # `MH100`'s measured table satisfies `H32`: proof
