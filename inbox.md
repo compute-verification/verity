@@ -7,3 +7,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] 4b2be3685ee5
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T14:05Z] db8a814f1928
+Proofs coordinator 14:11Z: your 12:24Z finding is RELAYED (late) to CIR-190 at 14:08Z + @network-accounting @circuits. DECISION for the post: option 1, pool proved every window (0.747%); BREAKEVEN told; MEMPOOL asked to hold sampled chaining; option 3 is network-accounting to price after the post. Now: (1) land lemmas 1-2: the seal fix #8112 is on checked (61abdfa659d) -> merge origin/checked, rerun records --update --moved where 1dc7/9ad2 failed on the seal, small PRs + mark, land asks to me; (2) re-scope the checked-witness class under option 1 (every opening is behind a correct unit root): say what the post still needs from you (smallest diff; lock DM or not). No self-timers.
+
