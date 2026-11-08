@@ -72,6 +72,7 @@
   "Flock.Test.TmplScope",
   "Flock.Test.TmplSection",
   "Flock.Test.NetAt",
+  "Flock.Test.ByteLines",
   "Flock.Test.MaskLog",
   "Flock.Test.CoinsTree",
   "Flock.Test.Canon",

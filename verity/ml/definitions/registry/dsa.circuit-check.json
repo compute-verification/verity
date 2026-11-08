@@ -12,5 +12,8 @@
    "and": 32,
    "type": "d2d30248bd53728668228432937e714c33cf4461a4132c235a12b0b293ffd889d104c8e2f1e473e82b2dd970e0a43c79807186bf6023662d49d87f3ad66a6448"
   }
+ },
+ "struct_max_gates": {
+  "DsaMqaLogits_v3": 417792
  }
 }

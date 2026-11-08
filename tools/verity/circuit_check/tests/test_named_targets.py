@@ -191,6 +191,24 @@ def test_a_warning_is_printed_unchecked_apart_from_the_passes_and_counted(runs, 
     assert [s.strip() for s in statuses] == ["unchecked", "ok", "FAIL"]
 
 
+def test_each_target_is_classed_by_its_vectors_and_the_classes_are_counted_before_the_last_line(runs, monkeypatch, capsys):
+    """Every target's result is classed as it is made (`cli._one`, `checks.classified`): one no realization compared on a random
+    vector carries a warning, and a line before the last counts the targets of each class."""
+    def corr(*recs):
+        return {"correspondence": {"realizations": list(recs)}}
+
+    r = cli._one("definition", "X", lambda: {"definition": "X", **corr({"lowered": False}), "failures": [], "warnings": []})
+    assert [w["name"].split(":")[0] for w in r["warnings"]] == ["vectors/none X"] and cli._status(r).strip() == "unchecked"
+    by = {"F32Add_v1": corr({"compared": 6, "random": 2}), "F32Mul_v1": corr({"compared": 4, "random": 0})}
+    monkeypatch.setattr(cli, "run", lambda specs, opts, **kw: CK.report(
+        [cli._one("definition", s, lambda s=s: {"definition": s, **by[s], "failures": [], "warnings": []}) for s in specs], opts))
+    assert cli.main(["F32Add_v1", "F32Mul_v1"]) == 0
+    out = capsys.readouterr().out.splitlines()
+    assert [s for s in out if s.startswith("unchecked ")] == ["unchecked vectors/edge-only: 1 over 1 target(s)"]
+    assert out[-2] == "circuit-check: vectors a realization compared with the reference on: 1 random, 1 edge-only, 0 none"
+    assert "1 unchecked (warnings, which never fail) on 1 Definition(s)" in out[-1]
+
+
 def test_a_sidecar_names_the_targets_its_bindings_reach_in_its_module():
     """``circuit-check path/to/<module>.circuit-check.py`` checks what that sidecar binds, not the catalog: the Definitions its
     root functions reach that its module defines, selected as the suite selects them, each with its binding unit, and the
