@@ -4811,10 +4811,6 @@
    "type_hash": "49bc1714ad2ff09df8968490d1fdbbb60cb38a219cc689e27206f0eac7c207e9",
    "unfolded_hash": "446955f639c687126a969411bb7ddce7b1d1a311a0e572b0516ce665d59d8e58"
   },
-  "Flock.SecurityProofs.ClaimsStated": {
-   "type_hash": "f6d2860cab7c3a1fa7ef9c5606fb73022c00cb5014777733e04e9bf2cad48007",
-   "unfolded_hash": "536b257c11a660f934db9f6204197d9dfdb0aaafbd24289256e419d83dae212b"
-  },
   "Flock.SecurityProofs.EndToEnd": {
    "type_hash": "98d68470d723d245aac78106ff238e8d7903feea054a6748e7afe2e5e24e1aff",
    "unfolded_hash": "378c714d12db23518e36be56c14b0ed3c3758b897bae41bd24f9ae96ce2d9014"
@@ -4932,10 +4928,6 @@
    "type_hash": "127843c8302e3bbea90f0839428dd250efab959ceaa293546d56ac1ebe9ddffa",
    "unfolded_hash": "595131c5d3aa7bf3186d3f1a9ebb363f9b64302fe85f916468f542bab7f7c851"
   },
-  "Flock.SecurityProofs.RecursionClaimsStated": {
-   "type_hash": "31aab8ba52132a459f17aa21b3302c05f74b988aeac456d7ceeb792514333067",
-   "unfolded_hash": "55eebdb38fc05afc376f5917387ea1e41d7cb013e90850d3b63398d6d574f876"
-  },
   "Flock.SecurityProofs.RecursiveAuditC3": {
    "type_hash": "9b73b88919bb15a1bcfcc8e00e9f5afd9440726ebdcdaa80b26e5136b59e456b",
    "unfolded_hash": "484f363edefa853f5395b0b806f374c028c4bf29d4b472120b88798aa9d165b9"
@@ -4954,10 +4946,6 @@
    "type_hash": "73bba6ca03a2bea3af5929f64cc490770d7705ec7e5b87dee4831fda9891a268",
    "unfolded_hash": "9a00287655c9f20c209be7839fc5681d5877f21a442fdca0f0e5aa35ab417187"
   },
-  "Flock.SecurityProofs.SampledKSLiveStated": {
-   "type_hash": "6eb82e74bf701806a374272925b7f3b54c52a8347a519872322043a05dcb8203",
-   "unfolded_hash": "73f7aec126919cc09431301d4776b19b2b3b8cf278ddf00f43b9f3cef398d25a"
-  },
   "Flock.SecurityProofs.SampledKSLiveV2": {
    "type_hash": "43e16e73206c75e215db6b95d1b2daba857ef90f89f56300e63260c0414d8aa5",
    "unfolded_hash": "3624a8d4239fd40a21a514dc22b303b37d1ecfb965dbc3c64e0d57b322f903a7"
@@ -4969,10 +4957,6 @@
   "Flock.SecurityProofs.SampledKSLiveV5": {
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
    "unfolded_hash": "642297bbe9b7705514d0cdf07dacfd16fad6dcdb44d2c4a23cece5f38b2866f3"
-  },
-  "Flock.SecurityProofs.SamplingClaimsStated": {
-   "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
-   "unfolded_hash": "3c7a3c9d0fdf15619397212469e31b384e7bb1af251f26dc5cdcb4a783a11023"
   },
   "Flock.SecurityProofs.ServedRowsLinked": "2cde2f3d97c487723b8f8899ebf241205f576cceca38ba6d92a6a1872108aba6",
   "Flock.SecurityProofs.SessionLoopZK": "a4028bdba4de3cb93455dbf5d27c01dc1e341693a308bf26b99de7a4451e2862",
