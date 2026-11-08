@@ -19,7 +19,8 @@ where it makes every check below.
 **The auditor's copies** (`Held`), fixed before the run and never the prover's: the descriptor's bytes; the templates'
 circuit files and units (`ms`), whose lowerings side by side are the statement's program (`bitsProgs`) and whose units
 are its proof blocks (`membersPart`); the statement's partition query; the two-stage registration the samples read
-(`RegTwo`), whose proof block `blockOf ρ t p` is request `ρ`'s unit `p` of template `t` (`filesBlockOf`); the second
+(`RegTwo`), whose proof block `blockOf ρ t p` the verifier checks is request `ρ`'s unit `p` of template `t`
+(`filesBlockOf`); the second
 stage's count per stratum; the registered reads the session must open against at a run's roots and interior roots
 (`registered`); the reference session statement (`xS₀`), in Flock's masked scope, which every session's statement is
 but for its sample and its registered reads; and the commitment's layout and the reference prover's framing (`frame`,
@@ -45,8 +46,8 @@ The design's replay partition is the members' (`filesReplay`: each request's uni
 it evaluates (`two`) only where the verifier decides the two-stage scope (`scopeOk`: the program ordered, the
 proof-block partition a partition of it, each proof block in one replay block and the design well formed) and that the
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
-and each member has room for its units); every check is a decision, so the verifier refuses every statement out of
-scope.
+each member has room for its units, and the registration's blocks are theirs); every check is a decision, so the
+verifier refuses every statement out of scope.
 
 So every checked unit has the one session (`sessions = 1`) on rounds 3 on (`session`), and at a run refused before them,
 the session is `xS₀`'s run of a prover whose first message Flock refuses (`refusedSeen`). The coins are the verifier's own
@@ -73,8 +74,8 @@ def zkOk (xS : Msg) : Bool :=
   | none => false
 
 /-- **A two-stage registration's copies, as the auditor holds them**: the descriptor (`desc`), the templates' circuit
-files and units (`ms`), the statement's partition query (`query`), the two-stage registration (`reg`), whose proof
-blocks are the members' (`blockOf_files`), the second stage's count per stratum (`k`), the registered reads a session
+files and units (`ms`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
+stage's count per stratum (`k`), the registered reads a session
 opens against at a run's roots and interior roots (`registered`), the reference session statement (`xS₀`) in Flock's
 masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing (`frame`). -/
 structure Held where
@@ -82,7 +83,6 @@ structure Held where
   ms : Spot.Bits.Members
   query : Query
   reg : RegTwo
-  blockOf_files : reg.blockOf = filesBlockOf ms reg.ns
   k : List ℕ
   registered : List Msg → List (ℕ × List Msg) → ByteArray
   xS₀ : Msg
@@ -174,8 +174,9 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
 /-- **The replay layout fits the members' files**, decided: the registration's templates are the members, each with
-the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, and each member `t` has room for its `n_t` units,
-`ρ·n_t` to `(ρ + 1)·n_t`. One check per slot and member, none per gate. -/
+the design's count `k`; each population slot `ρ` of `l` is unit `ρ`, each member `t` has room for its `n_t` units,
+`ρ·n_t` to `(ρ + 1)·n_t`, and the registration's block `blockOf ρ t p` is the members' (`filesBlockOf`). One check
+per slot and proof block, none per gate. -/
 def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : List ℕ) : Bool :=
   g.ns.size == ms.length && (List.range ms.length).all (fun t => k.getD t 0 == g.ks.getD t 0) &&
     (List.range l.blocks.size).all fun ρ =>
@@ -183,7 +184,8 @@ def filesOk (g : RegTwo) (ms : Spot.Bits.Members) (l : Spot.Slots.Layout) (k : L
       | some b =>
         match b.unit with
         | some u => u == ρ && (List.range ms.length).all fun t =>
-            decide ((ρ + 1) * g.ns.getD t 0 ≤ ((ms[t]?).map (·.2.size)).getD 0)
+            decide ((ρ + 1) * g.ns.getD t 0 ≤ ((ms[t]?).map (·.2.size)).getD 0) &&
+              (List.range (g.ns.getD t 0)).all fun p => g.blockOf ρ t p == filesBlockOf ms g.ns ρ t p
         | none => true
       | none => true
 

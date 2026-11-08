@@ -29,7 +29,7 @@ public import Proofs.Flock.Bridge.Members
 namespace SpotFlock
 
 open Claims Claims.Sampling SamplingDeploy Finset
-open Properties.Spot (slotPartition slotDesign bitsProgs membersPart filesReplay)
+open Properties.Spot (slotPartition slotDesign bitsProgs membersPart filesReplay filesBlockOf)
 
 /-- A run appends to its transcript: one more round puts the prover's message and the verifier's answer after `t`'s. -/
 theorem stepWith_succ_msgs {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vnext : List Msg → OC Out)
@@ -170,18 +170,23 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
 
 theorem filesOk_sound {g : RegTwo} {ms : Spot.Bits.Members} {l : Spot.Slots.Layout} {k : List ℕ}
     (hc : filesOk g ms l k = true) : g.ns.size = ms.length ∧ (∀ t < ms.length, k.getD t 0 = g.ks.getD t 0) ∧
-      Flock.Bridge.Members.FilesFit ms g.ns l := by
+      Flock.Bridge.Members.FilesFit ms g.ns l ∧ ∀ ρ b, l.blocks[ρ]? = some b → b.unit = some ρ →
+        ∀ t < ms.length, ∀ p < g.ns.getD t 0, g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
   unfold filesOk at hc
   rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.all_eq_true] at hc
   obtain ⟨⟨hT, hk⟩, hc⟩ := hc
-  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), ?_⟩
+  have hslot : ∀ ρ b, l.blocks[ρ]? = some b → ∀ u, b.unit = some u → u = ρ ∧ ∀ t, t < ms.length →
+      (ρ + 1) * g.ns.getD t 0 ≤ ((ms[t]?).map (·.2.size)).getD 0 ∧
+        ∀ p, p < g.ns.getD t 0 → g.blockOf ρ t p = filesBlockOf ms g.ns ρ t p := by
+    intro ρ b hb u hu
+    have h1 := hc ρ (List.mem_range.2 (Array.getElem?_eq_some_iff.1 hb).1)
+    simpa only [hb, hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] using h1
+  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), ?_,
+    fun ρ b hb hbu t ht p hp => ((hslot ρ b hb ρ hbu).2 t ht).2 p hp⟩
   intro ρ b hb u hu
-  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
-  have h1 := hc ρ (List.mem_range.2 hρ)
-  simp only [hb, hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at h1
-  obtain ⟨rfl, hroom⟩ := h1
-  refine ⟨rfl, fun t ht => ?_⟩
-  have := hroom t ht
+  have hu' := (hslot ρ b hb u hu).1
+  refine ⟨hu', fun t ht => ?_⟩
+  have := ((hslot ρ b hb u hu).2 t ht).1
   rwa [List.getElem?_eq_getElem ht, Option.map_some, Option.getD_some] at this
 
 theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧
@@ -336,7 +341,7 @@ theorem regMatchesTwo :
   have hdk : d.k = h.k := congrArg Design.Two.k hdeq
   have hlen : (membersPart h.ms).strata.length = h.ms.length := by
     simp [Flock.Bridge.Members.strata_membersPart]
-  obtain ⟨hT, hk, hfit⟩ := filesOk_sound hfo
+  obtain ⟨hT, hk, hfit, hblk⟩ := filesOk_sound hfo
   have hnd := hin.2.1.1
   have hne := hin.2.1.2.2.2.1
   refine ⟨h.reg, l, hreg, hl, by rw [hdpart]; exact Flock.Bridge.Members.shape_filesReplay h.ms h.reg.ns l,
@@ -345,11 +350,18 @@ theorem regMatchesTwo :
   · refine Or.inr ⟨rfl, fun t v hv => ?_⟩
     rw [hdpart, Flock.Bridge.Members.cell_filesReplay_input h.ms hnd hne hfit hb hbu] at hv
     simp at hv
-  · obtain ⟨rfl, -⟩ := hfit ρ b hb u hbu
-    refine Or.inl ⟨rfl, fun t ht => ?_⟩
-    rw [h.blockOf_files, hdpart]
-    exact ⟨fun _ _ _ _ he => Flock.Bridge.Members.injective_filesBlockOf h.ms h.reg.ns _ t he,
-      Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu (hlen ▸ ht)⟩
+  · have hu : u = ρ := (hfit ρ b hb u hbu).1
+    rw [hu] at hbu
+    refine Or.inl ⟨by rw [hu], fun t ht => ?_⟩
+    have ht' : t < h.ms.length := hlen ▸ ht
+    have heq : Set.EqOn (h.reg.blockOf ρ t) (filesBlockOf h.ms h.reg.ns ρ t) (Set.Iio (h.reg.ns.getD t 0)) :=
+      fun p hp => hblk ρ b hb hbu t ht' p hp
+    rw [hdpart]
+    refine ⟨fun a ha a' ha' he => Flock.Bridge.Members.injective_filesBlockOf h.ms h.reg.ns ρ t ?_, ?_⟩
+    · rw [← heq ha, ← heq ha']
+      exact he
+    · rw [Flock.Bridge.Members.cell_filesReplay h.ms hnd hne hfit hb hbu ht']
+      exact Finset.image_congr fun p hp => (heq (Finset.mem_range.1 (Finset.mem_coe.1 hp))).symm
 
 /-! ## The sessions are in scope -/
 
