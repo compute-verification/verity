@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
+public import Definitions.Pouw.Assumptions.GameStatements
 public import Definitions.Pouw.Basic.Prob
 public import Definitions.Pouw.Game.Defs
 public import Definitions.Pouw.Game.Params
@@ -11,7 +11,7 @@ public import Definitions.Pouw.Assumptions.Game
 
 Each guarantee is a `def G : Prop`, stated over `Definitions.Pouw`'s definitions with the named assumptions it rests on as
 hypotheses (`Pouw.Assumptions`). Its proof is the theorem `Pouw.SecurityProofs.G : Pouw.Guarantees.G`. (b), (c) and (d)
-of `Pouw.Assumptions.Pinned`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
+of `Definitions.Pouw.Assumptions.GameStatements`: Theorem 1, work-weighted sampling, and TT's resource exhaustion end to end. Each keeps the
 text, the docstring and the `open`s of the statement it was in its source module.
 -/
 
@@ -19,7 +19,7 @@ text, the docstring and the `open`s of the statement it was in its source module
 
 namespace Pouw.Guarantees
 
-open Pouw.Pinned Finset
+open Pouw.GameStatements Finset
 
 /-- **(d) End to end: TT gives resource exhaustion.** Under TT(g₀) and the `Ω_max` bound, for every in-domain
 workload, budget, oracle bound and adversary, the audit with `t` work-weighted samples satisfies
@@ -46,6 +46,6 @@ open Finset
 
 /-- **(a)** `G_g` from TT, with `g = 1 − (1 − g₀)/Ω_max` and `δ = ε_TT(q)`. -/
 def _root_.Pouw.Guarantees.GapFromTT : Prop :=
-  Pinned.GapFromTT
+  GameStatements.GapFromTT
 
 end Pouw.Proofs

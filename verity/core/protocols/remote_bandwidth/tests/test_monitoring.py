@@ -10,6 +10,7 @@ from fractions import Fraction
 
 import pytest
 
+from verity.core.protocols import reporting
 from verity.core.protocols.remote_bandwidth import codec, monitoring, pooled
 
 EPS = Fraction(2 ** 24 + 34, 2 ** 64)
@@ -44,7 +45,7 @@ def test_the_count_is_the_least_within_delta(t, p, delta):
 
 def test_one_short_session_is_ruled_out_exactly_when_the_union_is():
     for t in (1, 1008, 10 ** 9):
-        for delta in monitoring.DELTAS:
+        for delta in reporting.DELTAS:
             assert (monitoring.short_sessions(t, EPS, delta)[0] == 1) == (t * EPS <= delta)
 
 
@@ -74,7 +75,7 @@ def test_the_per_window_figure_is_the_openings_bound_at_delta_over_t():
     r = monitoring.table(a, 12_500, 600)
     for row in r["periods"].values():
         t = row["sessions"]
-        for d in monitoring.DELTAS:
+        for d in reporting.DELTAS:
             b = pooled.bound([tuple(w) for w in a["profile"]["windows"]], d / t)
             each = (200_000 - -(-b.wrong.numerator // b.wrong.denominator)) * codec.BLOCK_BYTES
             got = row[str(d)]["per_window"]

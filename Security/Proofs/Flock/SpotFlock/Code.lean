@@ -32,7 +32,8 @@ reference prover's framing (`frame`, a code whose verifier and samples are unrea
   (`Interiors.encode`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
 * round 2: the prover's message is the session's statement `xS`, which the verifier checks (`stmtOk`): the run's
   statement decodes and its partition and design evaluate, `xS` sets up as a masked Flock statement with `k₀` rounds,
-  in Flock's masked scope and with `xS₀`'s table shapes (`sessionOk`), its sample is the second stage's, its
+  in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and with `xS₀`'s table
+  shapes (`sessionOk`), its sample is the second stage's, its
   registered reads are the auditor's at the run's roots and the interior registration's, and it is `xS₀` in every other
   field (`pinOk`); it refuses `xS` otherwise;
 * rounds 3 on: Flock's masked verifier at `xS`, message for message, whose decision is the run's.
@@ -90,9 +91,11 @@ structure Roots where
 /-- The run's statement's format string, its first field. -/
 def FORMAT : String := "spot-flock-statement/v1"
 
+/-- **The run's statement's encoding**: its format string, then its roots, each as a byte string. -/
 def Roots.encode (st : Roots) : Msg :=
   FlockDeploy.encStr FORMAT ++ FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) st.roots
 
+/-- **The run's statement's reader**: the format string, failing at any other, then the roots, each a byte string. -/
 def Roots.read : FlockDeploy.Rd Roots := do
   if (← FlockDeploy.rdStr) ≠ FORMAT then failure
   let roots ← FlockDeploy.rdList FlockDeploy.rdBytes
@@ -108,10 +111,14 @@ def decode (x : Msg) : Option Roots :=
 structure Interiors where
   roots : List (ℕ × List Msg)
 
+/-- **The interior registration's encoding**: for each replay block, its number, then its interior roots, each as a
+byte string. -/
 def Interiors.encode (it : Interiors) : Msg :=
   FlockDeploy.encList (fun p => FlockDeploy.encNat p.1 ++
     FlockDeploy.encList (fun r => FlockDeploy.encBytes ⟨r.toArray⟩) p.2) it.roots
 
+/-- **The interior registration's reader**: for each replay block, its number, then its interior roots, each a byte
+string. -/
 def Interiors.read : FlockDeploy.Rd Interiors := do
   let roots ← FlockDeploy.rdList do
     let ρ ← FlockDeploy.rdNat
@@ -161,20 +168,20 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
-/-- **The replay layout's slots are the second stage's cells**, decided: each population slot `ρ` of `l` is unit `ρ`,
-whose `n` proof blocks `blockOf ρ` are distinct and are its one cell, in a stratum whose `k` is the registration's; every
-proof block of an input slot is always checked. -/
+/-- **The replay layout's slots are the second stage's cells**, decided: the registration's templates are `Pt`'s
+strata, each with the design's count; each population slot `ρ` of `l` is unit `ρ`, whose cell of each stratum `t` is
+the `n_t` proof blocks `blockOf ρ t`, distinct; every proof block of an input slot is always checked. -/
 def cellsOk (g : RegTwo) (Pt : Partition) (l : Spot.Slots.Layout) (d : Design.Two) : Bool :=
-  (List.range l.blocks.size).all fun ρ =>
-    match l.blocks[ρ]? with
-    | some b =>
-      match b.unit with
-      | some u => u == ρ && decide ((List.range g.n).map (g.blockOf ρ)).Nodup &&
-          (List.range Pt.strata.length).any fun t₀ => d.k.getD t₀ 0 == g.k &&
-            (List.range (Pt.strata.length + 1)).all fun t =>
-              decide (cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅)
-      | none => (List.range Pt.blocks.length).all fun v => replayOf Pt d.part v != some ρ || g.always v
-    | none => true
+  g.ns.size == Pt.strata.length && (List.range Pt.strata.length).all (fun t => d.k.getD t 0 == g.ks.getD t 0) &&
+    (List.range l.blocks.size).all fun ρ =>
+      match l.blocks[ρ]? with
+      | some b =>
+        match b.unit with
+        | some u => u == ρ && (List.range Pt.strata.length).all fun t =>
+            decide ((List.range (g.ns.getD t 0)).map (g.blockOf ρ t)).Nodup &&
+              decide (cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t))
+        | none => (List.range Pt.blocks.length).all fun v => replayOf Pt d.part v != some ρ || g.always v
+      | none => true
 
 /-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
 def shapeOf (xS : Msg) : List ℕ :=
@@ -186,8 +193,17 @@ def shapeOf (xS : Msg) : List ℕ :=
 
 variable (h : Held)
 
-/-- **The session's statement is in scope**: in Flock's masked scope, with the reference statement's table shapes. -/
-def sessionOk (xS : Msg) : Bool := zkOk xS && shapeOf xS == shapeOf h.xS₀
+/-- **The hidden-outputs tag of a session statement's reading**, `false` where it has none. -/
+def hiddenOf (xS : Msg) : Bool :=
+  match FlockDeploy.readOf true xS with
+  | some r => r.tags.hiddenOutputs
+  | none => false
+
+/-- **The session's statement is in scope**: in Flock's masked scope, with the reference statement's table shapes, in
+the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any other), and with
+hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
+def sessionOk (xS : Msg) : Bool :=
+  zkOk xS && shapeOf xS == shapeOf h.xS₀ && FlockDeploy.scopeCheck true xS && hiddenOf xS
 
 /-- **The first stage's design**: the one `Select.select` samples on the boundary registration (`slotDesign`). -/
 def replayDesign : Option Design :=
@@ -231,7 +247,7 @@ def src (c : FlockDeploy.Coin) : ByteArray := bytesOf (coinByte c)
 
 /-- **The second stage's sample** on the coins of rounds 0 and 1; none where either stage is refused. -/
 def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
-  match Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.n h.reg.k (src c₁) with
+  match Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (src c₁) with
   | .ok (draw, _) => some draw
   | .error _ => none
 

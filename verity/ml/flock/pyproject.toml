@@ -6,8 +6,8 @@ requires-python = ">=3.12"
 dependencies = ["verity", "verity-vllm", "numpy", "blake3>=1.0"]
 
 [project.optional-dependencies]
-# the numerical benchmarks' spine (templates, input sets, generator, lowerings), which its benchmark and statement-building
-# entry points and its tests import where they run
+# the numerical bench (its contract, cell, generator suites and frozen instance sets), which Flock's bench drivers,
+# `instances` and their tests import where they run
 bench = ["verity-numerical"]
 
 [build-system]
@@ -29,12 +29,14 @@ markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 [tool.verity.tests]
 # test files that start a program the read guard can't trace (git, lake, a compiler, a shell): keyed on the suite's whole tree
 untraced = [
+    "tests/test_arena_layout.py",
     "tests/test_challenger_audit.py",
     "tests/test_circuit.py",
     "tests/test_class_statement.py",
     "tests/test_class_statement_redteam_1178.py",
     "tests/test_flock_rows.py",
     "tests/test_flock_rows_vectors.py",
+    "tests/test_hm96_leaves.py",
     "tests/test_inner_registered.py",
     "tests/test_ir_lowering.py",
     "tests/test_ir_sampling.py",
@@ -55,15 +57,19 @@ untraced = [
     "tests/test_lean_typed_statement.py",
     "tests/test_lean_typed_template.py",
     "tests/test_lean_verifier.py",
+    "tests/test_lean_width_refusals.py",
     "tests/test_lean_zk.py",
     "tests/test_lean_zk_mask.py",
     "tests/test_pod_lean_verdicts.py",
     "tests/test_pouw_rows.py",
+    "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
+    "tests/test_ring_switch.py",
     "tests/test_sha512_leaves.py",
     "tests/test_stage_typed.py",
     "tests/test_typed_statement.py",
+    "tests/test_witness_host.py", "tests/test_zerocheck_fused.py",
 ]
 # Test-only. Of Security, only what the tests and their Lean read: Lake and `lean` run outside the read guard, so
 # tests/test_security_inputs.py holds this list to the import closure under Security of every module they build or import.
@@ -121,6 +127,10 @@ tests = ["tests/test_backend.py"]
 paths = ["verity/ml/flock/python/verity_flock"]
 
 [[tool.verity.tests.reads]]
+tests = ["tests/test_backend_bench.py"]
+paths = ["benchmarks/numerical/python/verity_numerical/bench", "verity/ml/flock/python/verity_flock"]
+
+[[tool.verity.tests.reads]]
 tests = ["tests/test_challenger_audit.py"]
 # `lake build sampled-proofs-difftest`: its package and those it requires by path
 paths = [
@@ -158,6 +168,7 @@ paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circui
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_class_statement_unit_stager.py",
+    "tests/test_lean_hello.py",
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
@@ -200,7 +211,15 @@ tests = [
 paths = ["tools/research/src/research"]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_lean_verifier.py"]
+tests = ["tests/test_ir_lowering_bench.py"]
+paths = [
+    "benchmarks/numerical/python/verity_numerical/bench",
+    "tools/research/src/research",
+    "verity/ml/flock/python/verity_flock/templates",
+]
+
+[[tool.verity.tests.reads]]
+tests = ["tests/test_lean_verifier.py", "tests/test_lean_width_refusals.py"]
 paths = ["verity/ml/circuits/tests", "verity/ml/flock/python/verity_flock/templates"]
 
 [[tool.verity.tests.reads]]

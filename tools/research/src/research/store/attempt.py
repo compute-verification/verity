@@ -10,8 +10,8 @@
 Steps: result.json (valid) -> artifact of kind `result.kind` (default bench-result/v1), meta = the document minus its path lists,
 refs.run_files -> the ONE `run-files/v1` tree made of every path in `artifacts` + `measurement_files`; `outputs.json`
 (schema research/outputs/v0.1, see `typed_outputs`) -> one named, typed artifact per entry; events.jsonl /
-resources.jsonl -> `telemetry/v1`; then `put_attempt` (write-once).  The local store is opened lazily (`research.store.local`,
-lane store-core); `store=` accepts any object with put_artifact / put_attempt / get_attempt.
+resources.jsonl -> `telemetry/v1`; then `put_attempt` (write-once).  The local store is opened lazily (`research.store.local`);
+`store=` accepts any object with put_artifact / put_attempt / get_attempt.
 """
 from __future__ import annotations
 
@@ -42,8 +42,8 @@ RESULT_FIELDS = "result-fields.json"
 
 def fit_meta(meta: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     """(``meta`` within a manifest's META_MAX_BYTES, the fields moved out of it): the largest fields go to the payload, largest first,
-    until the rest fits, and ``payload_fields`` names them. A result.json of 593 KB (r20261010-162750-3ea6's circuit-check) made
-    a 358 KB meta, so its attempt never published and custody retried it every round (INF-43)."""
+    until the rest fits, and ``payload_fields`` names them. A result.json of 593 KB (a circuit-check's) makes
+    a 358 KB meta, so without this its attempt would never publish and custody would retry it every round."""
     from .model import META_MAX_BYTES
 
     if len(canon.dumps(meta)) <= META_MAX_BYTES:
@@ -65,7 +65,7 @@ def store_root(explicit: str | os.PathLike[str] | None = None) -> Path:
 def open_store(store: Any = None, root: str | os.PathLike[str] | None = None) -> Any:
     if store is not None:
         return store
-    from .local import LocalStore  # lane store-core
+    from .local import LocalStore
 
     return LocalStore(store_root(root))
 

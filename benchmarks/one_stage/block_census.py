@@ -7,8 +7,11 @@ a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``SPLITS`` row's 
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
-row itself is taken when it fits, else each slot's coarsest fitting option; a row with a slot that has none is a gap, with
-its finest option's reason. A row whose Definition has no gate (a gather) or no input (a constant) is no proof block.
+row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
+split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
+width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
+with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
+input (a constant) is no proof block.
 
 Per proof block: its output bits (its returned fields') and size class, its input bits, its estimated ANDs (an upper
 bound, `m1_families.estimate`), its served MACs and the bytes of the rows it opens (a row per parameter and per returned
@@ -31,6 +34,13 @@ from verity_flock import ir_lower as IL
 from verity_vllm.pipeline import serving_rows as ST
 
 PHASES = ("prefill", "decode")
+#: the bits a sampled block's position adds to what its outputs reveal: the planner's location bits, log2(e R n) for R replay
+#: blocks of n units of a type (`optimize.two_stage_design`), at the scale of the world's compute
+LOCATION_BITS = 80
+#: a ``COLS`` row's column blocks and a ``WIDE_COORDS`` row's coordinates are no smaller than 2^WIDTH_FLOOR rows while a wider
+#: width fits: below it a block is mostly its rows' hashing slots (Flock's 2^18-row slots), so a narrower one proves about as
+#: much and adds a hiding leaf a row to every token's commitments
+WIDTH_FLOOR = 22
 
 
 def misfit(e: dict) -> str | None:
@@ -68,6 +78,27 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     return [[[u] for u in units]] if units else []
 
 
+def leak_cost(units: list[dict]) -> float:
+    """What the sampled-proofs planner pays to prove ``units`` (each taken ``n`` times), up to one factor: a type's samples
+    grow with its blocks' outputs at their size class plus `LOCATION_BITS`, and each sample's proving with its block's rows."""
+    return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
+
+
+def widths(spec: str) -> bool:
+    """Whether a row or unit of ``spec`` comes in widths `width_pick` chooses between: a ``COLS`` family's column blocks or a
+    ``WIDE_COORDS`` family's coordinates."""
+    return spec_base(spec) in ST.COLS or spec_base(spec) in ST.WIDE_COORDS
+
+
+def width_pick(opts: list[list[dict]]) -> list[dict] | None:
+    """A ``COLS`` or ``WIDE_COORDS`` slot's option (its widths coarse to fine): of the fitting ones no smaller than
+    2^`WIDTH_FLOOR` rows, the one of least `leak_cost`, the coarser on a tie; the coarsest fitting one when none is that large;
+    None when none fits."""
+    fit = [o for o in opts if all(misfit(u) is None for u in o)]
+    big = [o for o in fit if all(u["block"]["est_log"] >= WIDTH_FLOOR for u in o)]
+    return min(big, key=leak_cost) if big else next(iter(fit), None)
+
+
 def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     """Row family ``f``'s cut: ``row``, ``split``, ``gap`` (with why), ``no gates`` or ``const``, and its units, each taken
     ``n`` times a row."""
@@ -77,12 +108,16 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     if (f.get("ports") is not None and not f["ports"]["in"]) or ("block" in e and not sum(e["block"]["in_bits"])):
         return "const", [], None
     why = misfit(e)
-    if why is None:
-        return "row", [{**e, "spec": spec, "n": 1}], None
-    got = []
+    whole = [{**e, "spec": spec, "n": 1}]
     ss = slots(spec, e.get("units", []))
+    if widths(spec) and (pick := width_pick([whole, *(ss[0] if ss else [])])) is not None:
+        return ("row" if pick == whole else "split"), pick, None
+    if why is None:
+        return "row", whole, None
+    got = []
     for opts in ss:
-        pick = next((o for o in opts if all(misfit(u) is None for u in o)), None)
+        wide = all(widths(u["spec"]) for o in opts for u in o)
+        pick = width_pick(opts) if wide else next((o for o in opts if all(misfit(u) is None for u in o)), None)
         if pick is None:
             worst = next((u for u in (opts[-1] if opts else []) if misfit(u) is not None), None)
             return "gap", [], f"{why}; finest split {worst['spec']}: {misfit(worst)}" if worst else why
