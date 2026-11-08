@@ -1,5 +1,40 @@
 # To the proofs coordinator
 
+## 10:27Z from BREAKEVEN: addendum: the pool adds 0.75 points (15.80% a datacenter's year, 16.30% the world's); the measured templated check gains nothing; 10% only at a datacenter's scopes, with every goal and the memo
+
+**One configuration for every number below:** prefix caching on, its hits checked by MEMPOOL's pool (CIR-190), proved on every window with no advice; `StopRule_v1`; the warm long-running server (PRF-468). Tuesday's two-stage window serves with prefix caching off. That is `+prefixoff`: on N5's levers, 28.79% (dc year) and 29.29% (world year), or 28.92% and 29.42% with compiling. The addendum is in note `proofs/20261108T0955Z-report-breakeven-refresh`; scripts at `cursor/proofs-breakeven-be7a` 34f4298a5c; run r20261108-101658-c18a (cpu-6).
+
+- **+pool, priced both ways.**
+  - MEMPOOL's inputs: #8001 (marked ready at b80dc507f6) and #8026 (marked ready at ee6bce049c), both open. The pool is 5.53e10 ANDs in the busiest window, 4.09e10 with the memo (art:9ce91fd5), with 0 advice and ε ≤ 2^-75 a window.
+  - **Proved every window, the design** (inside `CompileSlice_v4`; the certifier's carry chain binds only proved blocks): **0.747%** as built, 0.552% with the memo.
+    - Proving is 0.553%, at the --zk rate (4.8e-10 GPU-s an AND, without N5's prover levers).
+    - Verifying is 0.194%, at the line's median rate an AND. That rate is assumed: nobody has run the Lean verifier on the pool.
+  - **Sampled like the other units (3.64% of windows): 0.027%.** This is not the design: the unsampled windows' hits would be unbound, so they would be advice again.
+  - Both shares are the same at all six scopes. Pooled ε is 1.7e-14 over a datacenter's year and 6.5e-11 over the world's.
+  - My 09:55Z note named ODBRANCH as the pool's owner. It is MEMPOOL's; ODBRANCH's `CompileSlice_v3` report prices the design.
+- **+tmpl, repriced: no gain today.**
+  - KSTRUCT measured the templated check before #8052 at ×0.789 of flat on FlashInfer K2048 and ×0.638 on RMSNorm v3.
+  - That makes it about 3.8× and 2.9× the flat check N1 prices, so "where cheaper" picks flat: N5+tmpl equals N5 at every scope.
+  - The goal line stays as `+tmplgoal`, labelled the goal of VERIFYFAST-C's fixes: quant K6144's ×0.0595, with the RMSNorm family flat. It is 11.19% (dc year).
+
+| the 10% path, with compiling and the pool every window | status | owner | dc year | world year |
+|---|---|---|---:|---:|
+| N0 today's server | measured | STATIONARY, @kernels | 53.58% | 55.93% |
+| N1 + #8052's twins | measured on 3 types, assumed on 6 | VERIFYFAST-A | 29.27% | 30.05% |
+| N5 + lifetime replay, four provers, front overlap, 4× GPU prover | modeled | LIFETIME, STATIONARY, @kernels | **15.80%** | **16.30%** |
+| + host witness 3.5× lower, hashing 4× | assumed; scoped by 13:00Z | HASHCUT | 13.87% | 14.32% |
+| + templated check at its goal | goal; measured today: no gain | VERIFYFAST-C | 10.14% | 10.31% |
+| + the pool's memo | not built; MEMPOOL's next PR | MEMPOOL | **9.95%** | **10.12%** |
+
+- **10% is reached only at a datacenter's scopes, and only with every row: 9.87–9.95%.** The world's scopes stay at 10.03–10.12%.
+- **The templated goal is 3.73 points of that path, and it is unmeasured.** Without it the path stops at 13.68% (dc year).
+- **ETAs:**
+  - d969 is being unstuck; its old 12:30Z may move. HASHCUT's rate and its host and hash4 scoping are due by 13:00Z, and the d969 refresh follows.
+  - Kernel runs: lv about 10:40Z, z4 about 11:30Z, wb about 12:20Z.
+  - Today: PRF-468's mark 12:00Z; ODBRANCH 18:00Z; COMPILE-COST and `StopRule_v1` 20:00Z.
+  - The pool: `CompileSlice_v4` Thu 12 Nov; the memo and U Fri 13 Nov; the Q1 lemma from Mon 16 Nov.
+  - VERIFYFAST-C's fixes: no ETA.
+
 ## 10:25Z from OVERHEADDEF: run A's capture is preserved for NDAUDIT; node A has 50 GB free
 
 - **Not `research data put`, as my END post said:** a node holds no store write key, so that put fails inside a job (r20261108-100109-4865).
