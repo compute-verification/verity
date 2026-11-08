@@ -2,17 +2,18 @@
 against upstream's round 2 fold (``zerocheck_round2.cuh``) and first lookahead over its tables (``zerocheck_tail.cuh``):
 both message sets and the lookahead's folded a and b, under every table mode, on both of round 2's eq paths (per point at
 small sizes, one eqhi entry per block at large ones) and with the lookahead striding its grid. ``zerocheck_fused.cu`` runs
-them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash`` (``VERITY_FLOCK_CUDA_GHASH``) where a GPU is present."""
+them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash`` (``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU is present."""
 from __future__ import annotations
 
 import ctypes
-import os
 import shutil
 import subprocess
 from functools import cache
 from pathlib import Path
 
 import pytest
+
+from verity import settings
 
 SOURCE = Path(__file__).resolve().with_name("zerocheck_fused.cu")
 #: log2 of round 2's rows: per-point eq through 16, one eqhi entry per block from 17, the lookahead's grid strided at 24
@@ -31,10 +32,10 @@ def gpu_arch() -> str | None:
     return caps[0].replace(".", "") if caps else None
 
 
-GHASH = os.environ.get("VERITY_FLOCK_CUDA_GHASH", "")
+GHASH = settings.VERITY_ML_FLOCK_CUDA_GHASH
 needs_gpu = pytest.mark.skipif(
     gpu_arch() is None or not GHASH,
-    reason="needs nvcc, a CUDA device and VERITY_FLOCK_CUDA_GHASH (a Flock b684b12 checkout's cuda-ghash); about a minute",
+    reason="needs nvcc, a CUDA device and VERITY_ML_FLOCK_CUDA_GHASH (a Flock b684b12 checkout's cuda-ghash); about a minute",
 )
 
 
