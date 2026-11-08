@@ -24,7 +24,7 @@ the code side's.
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
    262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its sample's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
@@ -197,16 +197,16 @@ def Partition.blocks (P : Partition) : List (List ℕ) := P.classes.flatten.flat
 def Partition.gates (P : Partition) : List ℕ := P.blocks.flatten
 
 /-- **The widest public size class** of a proof block's outputs, in bits: 262,144, provisional. Setting it to `16` makes
-`unitClasses` `[16]`, the former literal limit. -/
+`sizeClasses` `[16]`, the former literal limit. -/
 def unitClassMax : ℕ := 262144
 
 /-- **The public size classes** `w_c` of a proof block's outputs, in bits: the powers of two from `16` up to
 `unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
-def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
+def sizeClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
 /-- **A proof block's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
 function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
+def unitClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof blocks, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
@@ -403,7 +403,7 @@ proof blocks (sets of gates, constants and unread inputs in one or in none) whos
 classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+`w_{c(u)}` (`sizeClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
