@@ -5,7 +5,7 @@ description: >
   RTX PRO 6000 (sm_120), or any kernel whose output a verifier recomputes bit for bit. Covers checking what's been tried
   before starting, the evaluation ladder (CPU conformance, a one-GPU screen, the timed whole-node panel row, served vLLM),
   what a timed run must pass (the SASS gate, 0xA5 poisoning and a no-write control, the reference verifier on the run's
-  own transcript, interleaved cuBLASLt and CUTLASS baselines, γ at both FP32 prices), recording every attempt with its
+  own transcript, interleaved cuBLASLt and CUTLASS baselines, the gap at both FP32 prices), recording every attempt with its
   hypothesis and reason, hooking a variant into vLLM (KernelVariant, GateRecord), sharing node 2 (gpu-lease, the fill
   queue) with other kernel lanes, and leaving the tooling better. Use when writing or tuning a CUDA or PTX kernel, a
   mainloop, forming or an epilogue, running benchmarks/pouw/harness (bench.py, verify.py, sass_gate.py), adding a panel
@@ -25,7 +25,7 @@ check" marks a rule no code enforces yet.
   precision, timed in the same run on the same die, at prefill `m8192-n8192-k8192` and decode `m32-n8192-k8192` (tier 3
   adds the served model's (n, k)).
 - **The constraints:** bit-exact against the scheme's reference; the reference verifier accepts the run's own
-  transcript; γ ≤ 1% at both FP32 prices (a row over 1% is never plotted).
+  transcript; the gap ≤ 1% (ε ≤ 1/99) at both FP32 prices (a row over 1% is never plotted).
 - **The scorer is locked:** never change the harness, a gate, the verifier or a statement parameter (the promotion
   period G, the domain's constants, ρ, Lean's W1 prices, the credit formula) to make an arm pass. Harness changes go to
   its owner; a statement change is a proposal to the coordinator.
@@ -108,13 +108,13 @@ Every GPU tier holds to these:
   otherwise runs beside you (you are the check that a row's run held one). Every run goes through `research run` (the
   writing-runs skill); a fill chunk's outputs under `/workspace/pouw/fill-out/` reach the store only by `research data
   put --kind evidence/v1 --tree DIR --preserve` when the chunk ends, cited by its `art:` id.
-- **γ at both prices:** the cheapest bit-exact FADD (8.00 W1 per word) and the measured in-loop price (1047/125 =
+- **The gap at both prices:** the cheapest bit-exact FADD (8.00 W1 per word) and the measured in-loop price (1047/125 =
   8.376); publish the larger and say which won. Prices are the Lean guarantees' (`campaigns/pouw/price-twins-lean/`),
   never a device record or a diagnostic: the harness looks them up (`price_twins.json`); outside it `panel.py --gamma`
   is typed by hand (you are the check). Price the path you run, named from the kernel your forming step launches at the
   run's commit, not the one you plan to reach (64-bit stores at a 160-byte stride cost that cast's 8.72 per code; a
   block scale priced on `lut256`, 8.55, means forming runs `lut256`). Moving the priced path (cast, store width, scale
-  path) moves γ: re-derive it and say so in the row. Changing a price is a statement change.
+  path) moves the gap: re-derive it and say so in the row. Changing a price is a statement change.
 
 ### 3. Record it, whatever happened
 
