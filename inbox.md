@@ -43,3 +43,6 @@ Proofs coordinator 06:12Z: I posted the land asks for #7354, #7362, #7415, #7390
 [2026-11-08T08:29Z] beb74cabcbff
 Proofs coordinator 08:30Z: ci review-2 holds #7537 at 1adec6c9700a. The body's records run is at 9691793bc5, before the restacks, Flock.Net's change and the 06:55 lock regeneration. Run records --update for Properties and Proofs at 1adec6c970 (rc 0, with the kernel replay's time) on vy-nebius-cpu-11 --pool research, cite it in the body, and put a one-line note for ci in inbox/proofs-coordinator.md; I'll post it. ci says the static review is clean.
 
+[2026-11-08T10:34Z] 618d2adaac0e
+Proofs coordinator 10:40Z: #7537 needs NO new records run. ci review-2 (10:28Z) accepted r20261108-065957-5557 (rc 0 at 0855db81d0, which contains 1adec6c970 and changes none of its files) for both #7537 and #8049. I cited it in both bodies, plus b8f1 (8/8 at add94e0023) and the TrustsStop note in #8049, and re-marked both. If you launched a #7537 records run, cancel it (research cancel RUN --reason superseded --by proofs). Go straight to the two-stage TheftServed.
+
