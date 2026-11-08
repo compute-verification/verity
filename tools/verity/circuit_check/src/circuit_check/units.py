@@ -23,9 +23,9 @@ A record counts only when its every read is unchanged where it was (never throug
 looked for only by whether it is there, `_unchanged`) and the roots its binding made now are the ones it lists; else its
 binding is built as the catalog builds it and its record stored again.  The task list is then
 what `cli._tasks` would build: `targets.select` over what the roots reach in `targets.reachable`'s order, PoUW's roots whole,
-each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families, and the
-Boolean version of each suite Definition of one, made from its binding where no built binding holds it, `_materialize`) and
-its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
+each target's units (`targets.BINDINGS`), whether it is a Call (`targets.call_families`: the word Call families,
+`targets.CALLEE_CALLS`, and the Boolean version of each suite Definition of one, made from its binding where no built binding
+holds it, `_materialize`) and its key.  Two bindings can reach two Definitions of one id (`AttnDotStep_v1` with its DOT bound, from `boolean_version`, and
 unbound, from its sidecar): `targets.reachable` keeps the one it pops first, and so each id is taken from the record of the
 binding it is first reached through (`derive`).  A target that misses is made from that binding, along the path its record
 lists, and its descriptor computed again: one that differs from its record's is `Stale`, and the run builds the whole
@@ -350,10 +350,10 @@ def _materialize(entries: list[Entry], objects: dict[str, Any], fid: str, in_uni
 
 def call_families(entries: list[Entry], d: Derived, objects: dict[str, Any], in_unit: bool = True) -> set[str]:
     """The families of `targets.call_families` the suite's Definitions are of: the word Call families (`targets.
-    word_call_families`, which refuses a vocabulary kind that doesn't bind), the Boolean version of each one made on demand
-    (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one (`targets.boolean_family`)
-    that are of a suite family: each from its object, made (`_materialize`) only where it could be of a suite family no other
-    one gave (`targets.boolean_links`); and those an over-budget Call passes Call status to (`targets.CALLEE_CALLS`)."""
+    word_call_families`, which refuses a vocabulary kind that doesn't bind), `targets.CALLEE_CALLS`, the Boolean version of each
+    one made on demand (`targets.on_demand_boolean_families`) and of those Boolean versions of a suite Definition of one
+    (`targets.boolean_family`) that are of a suite family: each from its object, made (`_materialize`) only where it could be of
+    a suite family no other one gave (`targets.boolean_links`)."""
     words = TG.word_call_families()
     wordy = [fid for fid in d.ids if (n := d.nodes[fid])["f"] in words and n["k"] != "R" and not n["b"]]
     found = TG.on_demand_boolean_families(words)

@@ -845,8 +845,9 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
 
 def test_the_calls_from_records_are_the_catalogs_for_made_on_demand_and_unbound_kinds(monkeypatch):
     """`units.call_families` gives `targets.call_families`' Calls: a word Call family made on demand (`Const32[0x..]_v1`) has
-    its Boolean version among them though no record holds one, and a vocabulary kind that doesn't bind refuses them by name, as
-    `targets.word_call_families` does (left out, its family's partition would be judged as no Call's)."""
+    its Boolean version among them though no record holds one, `targets.CALLEE_CALLS`' families are among them, and a vocabulary
+    kind that doesn't bind refuses them by name, as `targets.word_call_families` does (left out, its family's partition would be
+    judged as no Call's)."""
     from circuit_check import targets as TG, units as UN
 
     nothing = UN.Derived([], {}, {})

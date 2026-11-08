@@ -45,9 +45,10 @@
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
-                     nor is one over ``partition_max_gates`` gates (each a warning, ``partition/unchecked``); but a Call
-                     over either whose callees are each a Call (`targets.CALLEE_CALLS`) is partitioned by its callees
-                     (`by_callees`): each callee's partition is checked there as a Call's and fails by its name
+                     nor is one over ``partition_max_gates`` gates not cut member by member (`uncut`); such a Call is
+                     partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
+                     Call's, failing by its name), and is otherwise a warning, ``partition/unchecked``, whose record names
+                     why its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget)
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -1074,11 +1075,7 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
-            whole = {u.id: u for u in uncut(fn, opts)} if applies else {}
-            if (got := by_callees(whole[d], opts, P, memo) if d in whole else None) is None:
-                P.warn("partition", "unchecked", d, 1, rec["reason"])
-            else:
-                rec.setdefault("by_callees", {}).update(got)
+            P.warn("partition", "unchecked", d, 1, rec["reason"])
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1140,89 +1137,111 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
             "recomputed_across": v.detail["recomputed_across"]["n"], "redundant_gates": v.detail["redundant_gates"], "codes": list(v.codes)}
 
 
-def over_leaves(t: Any, opts: Options) -> str | None:
-    """Why the partition can't take ``t`` (a primitive or composite) at all: its parameters' leaves over
-    ``partition_max_leaves``, which the word query and `Q_call` each resolve; None within it."""
-    leaves = sum(pt.leaves for pt in signature_of(t)[0])
-    if leaves <= opts.partition_max_leaves:
-        return None
-    return (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
-            "and Q_call resolve every leaf")
-
-
-def uncut(fn: Any, opts: Options) -> list[Any]:
-    """The Definitions `word.unit_rule` leaves whole in ``fn`` (its ``too-large`` violations): ``fn`` over
-    ``partition_max_gates`` unless it is cut member by member (`verity.ml.circuits.cut.separable`), else each member's, once."""
+def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
+    """Why `partition` can't check a Call of ``fn`` itself, or None: its parameters' leaves are over ``partition_max_leaves`` (the
+    word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
+    `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`)."""
     from verity.ml.circuits.cut import separable
     from verity.ml.definitions import word as W
 
-    if isinstance(fn, PrimitiveDefinition) or fn.gates <= W.gate_limit(fn, opts.partition_max_gates):
-        return []
-    if (sep := separable(fn)) is None:
-        return [fn]
-    return list({u.id: u for c, _m in sep for u in uncut(c, opts)}.values())
+    if isinstance(fn, ScalarReference):
+        return None
+    if (leaves := sum(pt.leaves for pt in signature_of(fn)[0])) > opts.partition_max_leaves:
+        return (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
+                "and Q_call resolve every leaf")
+    if not isinstance(fn, PrimitiveDefinition) and fn.gates > (limit := W.gate_limit(fn, opts.partition_max_gates)) \
+            and separable(fn) is None:
+        return f"{fn.gates} gates: over the partition budget {limit}"
+    return None
 
 
-def callees(fn: Any) -> list[Any]:
-    """The Definitions ``fn``'s body calls, once each, in body order."""
+def _callees(fn: Any) -> list[Any]:
     return list({n.fn.id: n.fn for n in fn.body.nodes}.values())
 
 
-def by_callees(fn: Any, opts: Options, F: Findings, memo: dict) -> dict[str, dict] | None:
-    """The partition of a Call the partition can't cut whole (`uncut`, `over_leaves`) as its callees': when
-    `circuit_check.targets.CALLEE_CALLS` holds every family its body calls (each a Call by it, in every process alike), each
-    callee's own partition as a Call (`call_partition`), by id, its failures by its name in ``F``; else None, and ``fn``'s
-    partition is unchecked."""
-    from .targets import CALLEE_CALLS, family
+def _decided_call(fn: Any) -> bool:
+    from .targets import Undecided, family, is_call
 
-    cs = callees(fn)
-    if not all(family(c) in CALLEE_CALLS for c in cs):
+    try:
+        return is_call(family(fn))
+    except Undecided:
+        return False
+
+
+def callee_gap(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> str | None:
+    """Why `by_callees` can't partition a Call of ``fn``, or None when it can: ``fn`` is a primitive, which has no callees; or a
+    callee is no Call (`targets.is_call`; one it can't decide without the catalog is not); or a callee is `uncut` itself and is
+    a primitive (over the leaf budget: nothing partitions it), or a composite with such a gap of its own."""
+    seen = {} if seen is None else seen
+    if fn.id not in seen:
+        seen[fn.id] = f"{fn.id} reaches itself"
+        seen[fn.id] = _gap(fn, opts, seen)
+    return seen[fn.id]
+
+
+def _gap(fn: Any, opts: Options, seen: dict[str, str | None]) -> str | None:
+    if isinstance(fn, PrimitiveDefinition) or not hasattr(fn, "body"):
+        return f"{fn.id} is a primitive, with no callees to partition it"
+    for c in _callees(fn):
+        if not _decided_call(c):
+            return f"{c.id} is no Call"
+        if (why := uncut(c, opts)) is not None:
+            if isinstance(c, PrimitiveDefinition):
+                return f"{c.id} is a primitive and {why}"
+            if (inner := callee_gap(c, opts, seen)) is not None:
+                return f"{c.id}: {inner}"
+    return None
+
+
+def callees_are_calls(fn: Any, opts: Options = DEFAULTS, seen: dict[str, str | None] | None = None) -> bool:
+    """Whether `by_callees` partitions a Call of ``fn``: `callee_gap` finds no gap."""
+    return callee_gap(fn, opts, seen) is None
+
+
+def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dict | None:
+    """The partition of a Call of ``fn`` that `partition` can't check itself (``why``, `uncut`), when every Definition its body
+    calls is a Call (`targets.is_call`; `targets.CALLEE_CALLS` lists the families that are one for this reason): each callee's
+    partition checked as a Call's (`partition`; `q_call` for a primitive; one `uncut` itself, by its callees in turn), whose
+    violations fail by the callee's name, so every gate of ``fn`` sits in a Call whose partition is checked; and, where ``fn``'s
+    body nodes read only its parameters (`cut.separable`), the values two of its members compute (`cross_call.members_check`:
+    each a failure under `Q_word` v1, counted under v2).  Values two callees compute in a body that isn't separable are not
+    compared, as between two Calls of a Program.  None, so the partition stays unchecked, where `callee_gap` finds a gap (its
+    record names it).  ``memo`` keeps each callee's record and findings across targets."""
+    from verity.ml.circuits import boolean as BL
+    from verity.ml.circuits.cut import separable
+
+    if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
-    return {c.id: call_partition(c, opts, F, memo) for c in cs}
-
-
-def call_partition(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
-    """``fn``'s partition record as a Call's: a primitive's single gate, a composite's `partition`, or over the leaf budget its
-    callees' (`by_callees`, else unchecked); computed once per ``memo`` (`word.unit_rule`'s), its findings added to ``F`` once."""
-    done = memo.setdefault("call_partitions", {})
-    if fn.id not in done:
-        P = Findings()
-        if isinstance(fn, PrimitiveDefinition):
-            rec = {"applies": True, "checked": True, "units_per_call": 1 if fn.params else 0, "q_call": q_call(fn, opts, P, memo)}
-        elif (why := over_leaves(fn, opts)) is not None:
-            rec = {"applies": True, "checked": False, "reason": why}
-            if (got := by_callees(fn, opts, P, memo)) is None:
-                P.warn("partition", "unchecked", fn.id, 1, why)
+    done = memo.setdefault("by_callees", {})
+    word = memo.setdefault("word", {})
+    out: dict[str, Any] = {}
+    for c in _callees(fn):
+        if c.id not in done:
+            G = Findings()
+            if isinstance(c, PrimitiveDefinition):
+                rec = {"checked": True, "q_call": q_call(c, opts, G, word)}
+            elif (inner := uncut(c, opts)) is not None:
+                rec = by_callees(c, opts, G, memo, inner)
             else:
-                rec["by_callees"] = got
-        else:
-            rec, _rule = partition(fn, opts, P, memo, q_word=2 if is_boolean(fn) else 1)
-            rec.pop("_graph", None)
-        done[fn.id] = (rec, P)
-    rec, P = done[fn.id]
-    F.failures += [f for f in P.failures if f not in F.failures]
-    F.warnings += [w for w in P.warnings if w not in F.warnings]
-    return rec
+                rec, _ = partition(c, opts, G, word, applies=True, q_word=2 if BL.is_boolean(c) else 1)
+                rec.pop("_graph", None)
+            done[c.id] = (rec, G)
+        rec, G = done[c.id]
+        F.extend(G)
+        out[c.id] = rec
+    v2 = BL.is_boolean(fn)
+    part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1, "by_callees": out}
+    if separable(fn) is not None:
+        from verity.ml.definitions.cross_call import members_check
 
-
-def callee_calls(calls: Iterable[Any], opts: Options) -> dict[str, str]:
-    """`circuit_check.targets.CALLEE_CALLS` as the Calls ``calls`` give it: each family `by_callees` asks of one the partition
-    can't cut whole (its body's over the leaf budget, else each `uncut` Definition's), with the least such Call's family that
-    passes it, and so on through those callees, each a Call; {} when each Call is cut whole."""
-    from .targets import family
-
-    out: dict[str, str] = {}
-    todo, seen = list(calls), set()
-    while todo:
-        fn = todo.pop()
-        if fn.id in seen or isinstance(fn, (PrimitiveDefinition, ScalarReference)):
-            continue
-        seen.add(fn.id)
-        for u in [fn] if over_leaves(fn, opts) is not None else uncut(fn, opts):
-            for c in callees(u):
-                out[family(c)] = min(out.get(family(c), family(fn)), family(fn))
-                todo.append(c)
-    return dict(sorted(out.items()))
+        with spent("partition-members"):
+            across = members_check(fn, word)
+        if v2:
+            part["recomputed_across"] = across["recomputed_gates"]
+        elif across["recomputes"]:
+            F.fail("partition", "gate-recomputed", fn.id, f"({across['recomputed_gates']} gate(s) between node members)",
+                   classes=across["recomputes"][:8])
+    return part
 
 
 # --- one Definition ---------------------------------------------------------------------------------------------------------
@@ -1296,14 +1315,18 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         ports = port_intervals(t, opts, F)
     if ports is not None:
         entry["ports"] = ports
-    if kind != "reference" and (why := over_leaves(t, opts)) is not None:
-        entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
+    why, part = uncut(t, opts), None
+    if as_call and kind == "composite" and why is not None:
         with spent("partition"):
-            got = by_callees(t, opts, F, memo.setdefault("word", {})) if as_call and kind == "composite" else None
-        if got is None:
-            F.warn("partition", "unchecked", t.id, 1, why)
-        else:
-            entry["partition"]["by_callees"] = got
+            part = by_callees(t, opts, F, memo, why)
+    if part is not None:
+        entry["partition"] = part
+        entry["redundant_gates"] = {"checked": False}
+        with spent("dead-gates"):
+            entry["dead_gates"] = dead_gates(t, opts, F)
+    elif kind != "reference" and sum(pt.leaves for pt in params) > opts.partition_max_leaves:
+        F.warn("partition", "unchecked", t.id, 1, why)
+        entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
         entry["redundant_gates"] = {"checked": False}
         with spent("dead-gates"):
             entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
@@ -1323,6 +1346,8 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
+    if as_call and why is not None and entry["partition"].get("checked") is False:
+        entry["partition"]["callee_gap"] = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
     if getattr(getattr(t, "defn", t), "gated", False) or t.id in pins.get("digests", {}):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
@@ -1627,9 +1652,9 @@ def summarize(entries: Iterable[dict]) -> dict:
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
     ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
-    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned
-    by its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those
-    whose correspondence read a table or an operand lazily (where kernels decline and no lowering runs)."""
+    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
+    its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
+    correspondence read a table or an operand lazily (where kernels decline and no lowering runs)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
@@ -1643,11 +1668,11 @@ def summarize(entries: Iterable[dict]) -> dict:
         k = f"{w['check']}/{w['code']}"
         by_check[k] += w["count"]
         by_def.setdefault(k, Counter())[w["definition"]] += w["count"]
-    across, refused, by_calls, split = {}, {}, {}, {}
+    across, refused, by_calls, by_callee = {}, {}, {}, {}
     for e in entries:
         p = e.get("partition") or {}
-        if p.get("by_callees"):
-            split[e.get("definition") or e.get("target")] = sorted(p["by_callees"])
+        if "by_callees" in p:
+            by_callee[e.get("definition") or e.get("target")] = sorted(p["by_callees"])
         if p.get("q_word") == 2 and p.get("recomputed_across"):
             across[e.get("definition") or e.get("target")] = p["recomputed_across"]
         if "inapplicable" in (p.get("q_call") or {}):
@@ -1664,7 +1689,7 @@ def summarize(entries: Iterable[dict]) -> dict:
                 classes["lazy"].append(name)
     return {"ok": not fails, "failures": len(fails), "failure_names": [f["name"] for f in fails],
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
-            "by_calls": dict(sorted(by_calls.items())), "by_callees": dict(sorted(split.items())),
+            "by_calls": dict(sorted(by_calls.items())), "by_callees": dict(sorted(by_callee.items())),
             "vectors": {c: {"count": len(v), "targets": sorted(v)} for c, v in classes.items()},
             "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
@@ -1680,8 +1705,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "VECTOR_CLASSES", "block_range", "by_callees", "call_partition",
-           "callee_calls", "callees", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of",
-           "correspondence", "dead_gates", "floored", "is_commit", "load_pins", "over_leaves", "partition", "redundant_ands",
-           "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering", "uncut", "unit_block",
-           "vector_class", "whole_lowering"]
+__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
+           "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "dead_gates",
+           "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
+           "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]

@@ -790,9 +790,8 @@ def test_a_value_computed_in_two_units_is_a_recompute_failure():
 
 
 def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
-    """Over ``partition_max_gates`` the partition is not run: where no Call status passes to its callees
-    (`targets.CALLEE_CALLS`), a ``partition/unchecked`` warning names the Definition and the summary counts it, so its entry
-    does not read as a pass."""
+    """Over ``partition_max_gates`` the partition is not run: a ``partition/unchecked`` warning names the Definition and the
+    summary counts it, so its entry does not read as a pass."""
     from verity.ml.circuits.types import Value
     from verity.ml.definitions.registry import prims as P
 
@@ -803,6 +802,84 @@ def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
     (w,) = [w for w in e["warnings"] if w["check"] == "partition"]
     assert w["code"] == "unchecked" and w["definition"] == fn.id and w["name"].endswith("over the partition budget 1")
     assert CK.summarize([e])["unchecked"] == {"items": len(e["warnings"]), "definitions": 1}
+
+
+def _two_callees():
+    """A Call over a budget of 2 gates whose body (not separable: its second node reads the first's output) calls a 2-gate
+    callee that computes one value twice, each copy returned by its own proof block, and a 1-gate one."""
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+    from verity.ml.definitions.registry import prims as P
+
+    twice = _composite("CircuitCheckTwice", (_f32x2(), Array(2, Value(32))),
+                       lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
+    mul = _composite("CircuitCheckMul", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
+    top = _composite("CircuitCheckByCallees", (_f32x2(), Value(32)), lambda B, S, x: B.call(mul, B.call(twice, x)))
+    return top, twice, mul, dataclasses.replace(OPTS, partition_max_gates=2)
+
+
+def test_a_call_over_the_budget_whose_callees_are_calls_is_partitioned_by_them(monkeypatch):
+    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.CALLEE_CALLS`) has
+    each callee's partition checked as a Call's: a violation fails by the callee's name, and no ``partition/unchecked`` warning
+    is left; the report's summary names the callees."""
+    top, twice, mul, opts = _two_callees()
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, twice, mul)})
+    assert CK.uncut(top, opts) == "3 gates: over the partition budget 2" and CK.uncut(twice, opts) is None
+    e = CK.check_definition(top, opts, memo={}, pins=PINS, as_call=True)
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [f"partition/gate-recomputed {twice.id} (1 gate(s))"]
+    assert not [w for w in e["warnings"] if w["check"] == "partition"]
+    p = e["partition"]
+    assert p["checked"] and p["reason"] == "3 gates: over the partition budget 2" and sorted(p["by_callees"]) == sorted([twice.id, mul.id])
+    assert p["by_callees"][mul.id]["checked"] and e["redundant_gates"] == {"checked": False}
+    assert CK.summarize([e])["by_callees"] == {top.id: sorted([twice.id, mul.id])}
+
+
+def test_a_call_over_the_budget_with_a_callee_that_is_no_call_stays_unchecked(monkeypatch):
+    """A callee that is no Call is partitioned inside the Call that contains it, which here is over the budget: the partition
+    stays a ``partition/unchecked`` warning."""
+    top, twice, mul, opts = _two_callees()
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, mul)})
+    e = CK.check_definition(top, opts, memo={}, pins=PINS, as_call=True)
+    assert e["partition"]["checked"] is False and "by_callees" not in e["partition"] and not e["failures"]
+    assert e["partition"]["callee_gap"] == f"{twice.id} is no Call" == CK.callee_gap(top, opts)
+    assert [w["name"] for w in e["warnings"] if w["check"] == "partition"] == [
+        f"partition/unchecked {top.id}: 1 3 gates: over the partition budget 2"]
+
+
+def test_a_call_over_the_budget_with_a_primitive_callee_over_it_too_stays_unchecked(monkeypatch):
+    """A primitive callee over ``partition_max_leaves`` has no callees to partition it, so it leaves its Call's partition
+    unchecked though it is a Call: `checks.callee_gap` names it, in the record and for the suite's walk, which fails on it."""
+    from verity.ml.circuits.types import Value
+    from verity.ml.definitions.registry import prims as P
+
+    top = _composite("CircuitCheckOverPrimitive", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, P.F32Mul)})
+    opts = dataclasses.replace(OPTS, partition_max_leaves=1)
+    assert CK.uncut(P.F32Mul, opts) is not None and not CK.callees_are_calls(top, opts)
+    e = CK.check_definition(top, opts, memo={}, pins=PINS, as_call=True)
+    assert e["partition"]["checked"] is False and "by_callees" not in e["partition"] and not e["failures"]
+    assert e["partition"]["callee_gap"].startswith(f"{P.F32Mul.id} is a primitive and its parameters' 2 leaves are over")
+    assert CK.callee_gap(P.F32Mul, opts) == f"{P.F32Mul.id} is a primitive, with no callees to partition it"
+    assert [w["check"] for w in e["warnings"]].count("partition") == 1
+
+
+def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_its_members(monkeypatch):
+    """Over ``partition_max_leaves`` a Call whose body nodes read only its parameters is partitioned by its callees too, and a
+    value two of its members compute fails under `Q_word` v1 by the Call's name (`cross_call.members_check`), as `word.unit_rule`
+    fails it for one cut member by member."""
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+
+    _top, _twice, mul, _opts = _two_callees()
+    pair = _composite("CircuitCheckPairByCallees", ((("x", Array(3, Value(32))),), Array(2, Value(32))),
+                      lambda B, S, x: array_of([B.call(mul, array_of([x[0], x[1]])), B.call(mul, array_of([x[0], x[1]]))]))
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (pair, mul)})
+    opts = dataclasses.replace(OPTS, partition_max_leaves=2)
+    e = CK.check_definition(pair, opts, memo={}, pins=PINS, as_call=True)
+    assert e["partition"]["reason"].startswith("its parameters' 3 leaves are over the partition's leaf budget 2")
+    assert list(e["partition"]["by_callees"]) == [mul.id] and not [w for w in e["warnings"] if w["check"] == "partition"]
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [
+        f"partition/gate-recomputed {pair.id} (1 gate(s) between node members)"]
 
 
 #: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
@@ -922,67 +999,116 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
+#: GLM-5.3 TP8's multimem reduction tree, one per owner, as `AllReduceMultimem_v1`'s id spells it
+_GLM53_TREES = "(" + ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * 8) + ")"
+_SERVED_ALLREDUCE = ("GLM-5.3 TP8's all-reduce at a served row count, kept in the suite by its digest pin (`tp_allreduce.circuit-check.py`'s "
+                     "`_glm53_served_roots`); its partition is checked at `_model_roots`' WORLD=8 bindings, and its cut at served size is pending")
+_SERVED_EXPERTS = ("GLM-5.3's MoE expert GEMM at served statics, kept in the suite by its digest pin (`fp8_moe_experts.circuit-check.py`); "
+                   "the word query and Q_call resolve every leaf of its expert stack, and its partition is checked at the sidecar's E=4 bindings")
+
+#: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
+#: is allowed: the suite's (two σ Definitions at their smallest bindings, `boolean_sigma.circuit-check.py`, whose split moves
+#: GLM-5.3's and DeepSeek-V4's word digests; GLM-5.3 TP8's served all-reduces over the gate budget: 36 gates an element
+#: two-shot MNNVL, past 22 rows of 6,144; 16 multimem, past 50 rows; multimem at 86 rows and more over the leaf budget too; and
+#: GLM-5.3's served expert GEMMs over the leaf budget, an E = 256 stack of FP8 weights: 805M leaves for w13, 403M for w2), and
+#: any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its callees
+#: (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
+OVER_PARTITION_BUDGET = {
+    "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
+    "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
+    **{f"AllReduceMnnvl_v1{{WORLD=8,N={rows * 6144},SHOT=2}}": _SERVED_ALLREDUCE for rows in range(23, 43)},
+    **{f"AllReduceMultimem_v1{{WORLD=8,SIZE={rows * 6144},TREES={_GLM53_TREES},FTZ=False}}": _SERVED_ALLREDUCE for rows in (85, 86, 256)},
+    **{f"MoeExpertFp8Gemm{w}_v1{{E=256,K={k},N={n},G=128,KB=128,SWAP={swap},DOT=HopperE4m3{dot}Dot32_v1}}": _SERVED_EXPERTS
+       for w, k, n in (("", 6144, 512), ("W", 256, 6144)) for swap in (False, True) for dot in ("MmaV2", "Qgmma")},
+}
+
+
+def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
+    """{the suite's Calls over `Options.partition_max_gates` or `Options.partition_max_leaves`: which}.  Gate counts are the
+    catalog's (`Catalog.reached`): a target made from its record has no body built, and building every Call's would take about
+    half an hour."""
+    from verity.ml.circuits.evaluation.reference import signature_of
+
+    suite, out = catalog.suite, {}
+    for k in suite:
+        if catalog.reached[k][0] in calls:
+            if (n := catalog.reached[k][1]) > OPTS.partition_max_gates:
+                out[k] = f"{n} gates"
+            elif (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves:
+                out[k] = f"{n} leaves"
+    return out
+
+
+_WALK: dict = {}
+
+
+def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str], dict[str, str]]:
+    """What `targets.CALLEE_CALLS` should be, the `OVER_PARTITION_BUDGET` ids reached, and each `checks.callee_gap` reached: from
+    the suite's Calls over the budget (`_over_budget`) and the range spots that are Calls (`circuit_check.ranges`), the families
+    of each `checks.uncut` Call's callees that are no Call otherwise, each with the families of the Calls that pass it, through
+    each callee `uncut` itself, primitives included; one `OVER_PARTITION_BUDGET` holds passes nothing."""
+    if not _WALK:
+        from circuit_check import ranges as RG
+
+        suite, calls = catalog.suite, TG.call_families()
+        own = calls - set(TG.CALLEE_CALLS)
+        stack = [suite[k] for k in _over_budget(catalog, calls)]
+        stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
+        want: dict[str, set[str]] = {}
+        held: set[str] = set()
+        gaps: dict[str, str] = {}
+        seen: set[str] = set()
+        while stack:
+            fn = stack.pop()
+            if fn.id in seen or CK.uncut(fn, OPTS) is None:
+                continue
+            seen.add(fn.id)
+            if fn.id in OVER_PARTITION_BUDGET:
+                held.add(fn.id)
+                continue
+            if (gap := CK.callee_gap(fn, OPTS)) is not None:
+                gaps[fn.id] = gap
+            for n in fn.body.nodes if hasattr(fn, "body") else ():
+                if (f := TG.family(n.fn)) not in own:
+                    want.setdefault(f, set()).add(TG.family(fn))
+                stack.append(n.fn)
+        _WALK.update(want=want, held=held, gaps=gaps)
+    return _WALK["want"], _WALK["held"], _WALK["gaps"]
+
+
 @pytest.mark.slow
 def test_every_call_the_suite_checks_is_partitioned(catalog):
-    """No Call passes with its partition unchecked: one the suite checks, or a RANGES spot (``--as-call --ranges``), over
-    `Options.partition_max_gates` (the Boolean attention Calls at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap;
-    DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their smallest whole blocks 4.1M to 4.6M) or
-    `Options.partition_max_leaves` is partitioned by its callees (`checks.by_callees`), each a Call by `targets.CALLEE_CALLS`,
-    which holds exactly what `checks.callee_calls` gives: so each callee's partition is checked as a Call's and fails by name.
-    Gate counts are the catalog's (`Catalog.reached`): a target made from its record has no body built, and building every
-    Call's would take about half an hour."""
-    from circuit_check import ranges as RG
-
-    suite = catalog.suite
-    calls = TG.call_families()
-    over = [suite[k] for k in suite if catalog.reached[k][0] in calls
-            and (catalog.reached[k][1] > OPTS.partition_max_gates or CK.over_leaves(suite[k], OPTS) is not None)]
-    got = CK.callee_calls(over + [TG.definition(s) for s in RG.spots()], OPTS)
-    add = {f: p for f, p in got.items() if TG.CALLEE_CALLS.get(f) != p}
-    drop = sorted(set(TG.CALLEE_CALLS) - set(got))
-    assert not add and not drop, (f"targets.CALLEE_CALLS: set {add}, remove {drop}: a Call over the partition's budget is "
-                                  "partitioned by its callees, each a Call")
-    for fn in over:
-        assert all(TG.family(c) in TG.CALLEE_CALLS for u in CK.uncut(fn, OPTS) for c in CK.callees(u)), fn.id
+    """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
+    at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, or is partitioned by its callees
+    (`checks.callee_gap` finds no gap), apart from `OVER_PARTITION_BUDGET`, which holds only Calls that are still neither."""
+    suite, calls = catalog.suite, TG.call_families()
+    over = _over_budget(catalog, calls)
+    gaps = {k: f"{why}; {gap}" for k, why in over.items()
+            if k not in OVER_PARTITION_BUDGET and (gap := CK.callee_gap(suite[k], OPTS)) is not None}
+    assert gaps == {}, ("a Call over the partition budget that its callees can't partition: list a callee that is no Call in "
+                        "targets.CALLEE_CALLS, cut an uncut primitive callee, or hold the Call here with why")
+    assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - _unchecked_walk(catalog)[1]) == [], \
+        "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
+    assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and CK.callees_are_calls(suite[k], OPTS)) == [], \
+        "partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
 
 
-def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_word(monkeypatch):
-    """A Call over the partition's budget passes Call status to the families its body calls (`targets.CALLEE_CALLS`): ``--all``
-    checks each callee's partition as a Call's inside the Call's check and fails by the callee's name, and the Call's record and
-    the summary read partitioned by its callees.  Without it the Call is an unchecked warning, which fails nothing, and its
-    callee, no Call, is cut alone: ``--all`` passes a value computed in two proof blocks."""
-    from circuit_check import cli
-    from verity.ml.circuits.refs import array_of
-    from verity.ml.circuits.types import Array, Value
-    from verity.ml.definitions.registry import prims as P
-
-    pair = (_f32x2(), Array(2, Value(32)))
-    twice = _composite("CircuitCheckTwice", pair, lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
-    outer = _composite("CircuitCheckOverCalls", pair, lambda B, S, x: B.call(twice, B.call(twice, x)))
-    opts = dataclasses.replace(OPTS, partition_max_gates=twice.gates)
-    monkeypatch.setattr(TG, "load_registries", lambda: None)
-    monkeypatch.setattr(TG, "suite", lambda: {outer.id: outer})
-    monkeypatch.setattr(TG, "templates", lambda: [])
-    monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(outer)})
-    monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())
-    monkeypatch.setattr(TG, "_CALLS", set())
-
-    def everything(callee_calls):
-        monkeypatch.setattr(TG, "CALLEE_CALLS", callee_calls)
-        TG._CALLS.clear()
-        return cli.run([], opts, everything=True, log=None, isolate=False)
-
-    (unchecked,) = everything({})["targets"]
-    assert unchecked["partition"]["checked"] is False and not unchecked["failures"]
-    assert [w["code"] for w in unchecked["warnings"] if w["check"] == "partition"] == ["unchecked"]
-    assert CK.callee_calls([outer], opts) == {TG.family(twice): TG.family(outer)}
-    rep = everything(CK.callee_calls([outer], opts))
-    (target,) = rep["targets"]
-    failed = [f["name"] for f in target["failures"] if f["check"] == "partition"]
-    assert failed == [f"partition/gate-recomputed {twice.id} (1 gate(s))"], failed
-    assert not [w for w in target["warnings"] if w["check"] == "partition"]
-    assert list(target["partition"]["by_callees"]) == [twice.id] and target["partition"]["checked"] is False
-    assert not rep["summary"]["ok"] and rep["summary"]["by_callees"] == {outer.id: [twice.id]}
+@pytest.mark.slow
+def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
+    """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
+    itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
+    (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
+    `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands.  Every other one the walk reaches,
+    primitives included, is partitioned by its callees: an uncut primitive callee has none, so it fails here by name rather
+    than leave its Call a ``partition/unchecked`` warning."""
+    want, _held, gaps = _unchecked_walk(catalog)
+    assert want == {f: set(by) for f, by in TG.CALLEE_CALLS.items()}, (
+        f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
+        "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
+    assert {f: by for f, by in TG.CALLEE_CALLS.items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
+    assert gaps == {}, ("Calls whose partition nothing checks (`checks.callee_gap`: a callee that is no Call, or a primitive "
+                        "over the budget): cut each, or hold it in OVER_PARTITION_BUDGET with why")
 
 
 @pytest.mark.slow
