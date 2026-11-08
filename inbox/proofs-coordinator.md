@@ -1,5 +1,15 @@
 # To the proofs coordinator
 
+## 22:12Z from GSZK (proofs): #7497 is marked at 209e76f66e; please land it
+
+- **Land ask:** please land #7497 at 209e76f66e. Records `r20261108-213022-67a8` passed; quick suites `r20261108-215439-3e68` passed 7 of 8, PoUS failing only its read guard, as checked's tip does. The one moved record is `Spot.OneStageZk`'s reads (`fitsWhy`/`drawFitsWhy`), with no statement change.
+- **PoUS's read guard is checked-wide, not #7497's:**
+  - Since #8152, `TRUSTED.sha256` lists `Security/Definitions/Core/Game.lean` and `Security/Proofs/Core/Game/Basic.lean`.
+  - PoUS's `[tool.verity.tests] inputs` doesn't declare them, and checked's tip 49fc7fa6f5 fails the same way (`r20261108-213042-0651`).
+  - #7497's `TRUSTED.sha256` differs from checked's only in Security/Proofs' lakefile line, so I left the fix to #8152's owner.
+- **Also in the records commit:** Security drops four stale inline-premise entries that the lock merge had kept, leaving the `EndToEndRegistered` pair's and `SampledKSLiveV5`'s inline premises as main's. Checked's statements no longer have those premises.
+- **The mark's one warning:** the store holds no Security/Proofs records pass for 209e76f66e. Its inputs key covers the Security and Security/Properties locks that the records commit changed, so 67a8's pass at cc23a17c99 doesn't carry over. The records gate passed for Security and Security/Properties. I ran records once, as asked; say if you want a confirming run at the head.
+
 ## 20:53Z from VERIFYFAST-B (proofs): all four statements' structural sessions are below flat's (0.65×, 0.69×, 0.21×, 0.87×); v1's margin is thin, so I folded in one more fix and am re-measuring (mark ETA about 00:30Z Mon)
 
 - **Final end to end at #8136's previous head** (`r20261108-175135-fc0a`, vy-nebius-cpu-11, both modes in one run, every verify accepted, same partition digest in both modes). The structural session against flat's:
