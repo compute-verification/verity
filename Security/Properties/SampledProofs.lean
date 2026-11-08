@@ -382,4 +382,27 @@ def BernoulliBounds : Prop :=
       ∀ (r : Core.Ratio) (l : Core.Level), l ∈ prof.levels → l.draw = some (.bernoulli r) →
         pub.bound = Bound.bernoulliBound l.size r p.delta
 
+/-! ## A commitment a check that accepts everything accepts, and `AcceptMeans` refuses -/
+
+/-- The verifier of the default program, holding no copies, at δ = 0 and with no challenger. -/
+def bareParams : Params :=
+  { verifier := { program := default, query := .null, law := .null, workTable := none, scheme := "", ports := #[],
+      leafLayer := none, anchors := #[], log := #[], partition := none },
+    delta := ⟨0, 1⟩ }
+
+/-- The commitment to the record `null`, which has no keys, so no registration keeps it (`R1`). -/
+def nullCommitment : Commitment := { record := .null, digest := .empty }
+
+/-- Evidence holding nothing. -/
+def bareEvidence : Evidence :=
+  { receipt := .null, draw := .null, provedUnits := #[], instances := 0, statement := .null, verdicts := #[],
+    sessions := #[], served := none, sessionRoots := none }
+
+/-- Public outputs of no units, with a bound of 0. -/
+def barePublic : Public := { drawn := #[], proved := #[], bound := 0, perTemplate := none }
+
+/-- The profile of no program and no level. -/
+def bareProfile : Core.Integrity :=
+  { programs := #[], prescribed := #[], linked := false, covered := #[], levels := #[], delta := ⟨0, 1⟩, drawn := #[] }
+
 end Properties.SampledProofs

@@ -1179,6 +1179,9 @@
   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
    "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest"],
    "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial"
+  },
+  "Properties.SampledProofs.acceptMeans": {
+   "nontrivial": "Properties.SampledProofs.acceptMeans_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1872,7 +1875,9 @@
   },
   "Properties.SampledProofs.acceptMeans": {
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
-   "unfolded_hash": "d2920dc362799180404279c190ed7ae2ed45329143563a90f869212d0fd58408"
+   "missing": "honest",
+   "why": "an honest instance is a whole accepted one-stage audit: a program and a registration record keeping R1–R7 against it (the law Draw.derive expands over it, its program's, partition's and query's SHA-512s, its roots), a sample of that law, a receipt naming the record's digest, verdicts that accept, and a window naming the seed salt a challenger's log released; accepting it in a proof evaluates those SHA-512s in the kernel, and no proof builds one yet. acceptMeans_complete proves every such instance is accepted",
+   "unfolded_hash": "266dc6ce5700156fd0f07b965bcc90ba683487b86430bfc7c3d0eaa6472601d7"
   },
   "Properties.SampledProofs.bernoulliBounds": {
    "type_hash": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b",
@@ -8825,6 +8830,9 @@
    },
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
    "unfolded_hash": "d2920dc362799180404279c190ed7ae2ed45329143563a90f869212d0fd58408"
+  },
+  "Properties.SampledProofs.acceptMeans_nontrivial": {
+   "owner": "@proofs"
   },
   "Properties.SampledProofs.bernoulliBounds": {
    "owner": "@proofs",
