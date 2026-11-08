@@ -148,8 +148,6 @@ def main() -> int:
     D = np.concatenate(direct_pos)
     KL = np.concatenate(kl_all)
     LPD = np.concatenate(lpd_all)
-    np.savez_compressed(a.out / "faults.npz", direct=D, kl=KL, lpd=LPD,
-                        **{k: np.array(v) for k, v in recs.items()})
     site_arr, layer_arr, mult_arr = np.array(recs["site"]), np.array(recs["layer"]), np.array(recs["mult"])
     groups = []
     for s, l in sites:
@@ -174,6 +172,8 @@ def main() -> int:
                "lp_tol": a.lp_tol, "precision": a.precision, "faults": len(recs["site"]),
                "seconds": time.time() - t_start, "groups": groups}
     (a.out / "summary.json").write_text(json.dumps(summary, indent=1))
+    np.savez_compressed(a.out / "faults.npz", direct_positions=D, kl=KL, lpd=LPD,
+                        **{f"fault_{k}": np.array(v) for k, v in recs.items()})
     print(json.dumps({k: v for k, v in summary.items() if k != "groups"}, indent=1))
     return 0
 
