@@ -100,6 +100,58 @@ def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat
       if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
       if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
 
+theorem forIn_append_yield {α : Type} (xs ys : List α) (f : α → PUnit → V (ForInStep PUnit))
+    (hf : ∀ a u, f a u ≠ .ok (.done u)) :
+    forIn (xs ++ ys) PUnit.unit f = (do forIn xs PUnit.unit f; forIn ys PUnit.unit f) := by
+  induction xs with
+  | nil => rfl
+  | cons x xs ih =>
+    simp only [List.cons_append, List.forIn_cons]
+    cases h : f x PUnit.unit with
+    | error e => rfl
+    | ok s =>
+      cases s with
+      | done u => exact absurd h (hf x _)
+      | yield u => exact ih
+
+/-- `checkOrder` as compiled code computes it (`checkOrder_eq_fast`): a row's A and B columns read where they are, not
+copied into one array, and whether a column is input padding read from a table of the input rows. -/
+def checkOrderFast (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat)) : V Unit := do
+  let pad := Array.ofFn (n := inCols) fun i => (ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty
+  let padding := fun (c : Nat) => pad.getD c false
+  for r in [inCols:constPos] do
+    for c in ra.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+    for c in rb.getD r #[] do
+      if c == constPos then continue
+      if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
+      if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
+
+theorem pad_getD (inCols : Nat) (ra rb : Array (Array Nat)) (c : Nat) :
+    (Array.ofFn (n := inCols) fun i => (ra.getD i #[]).isEmpty && (rb.getD i #[]).isEmpty).getD c false =
+      (decide (c < inCols) && (ra.getD c #[]).isEmpty && (rb.getD c #[]).isEmpty) := by
+  by_cases h : c < inCols
+  · simp [Array.getD, h]
+  · simp [Array.getD, h]
+
+/-- Compiled code runs `checkOrderFast`; the kernel and every proof see `checkOrder`. `@[csimp]` rewrites only code
+compiled after it, so it stays above `ofRows`. -/
+@[csimp] theorem checkOrder_eq_fast : @checkOrder = @checkOrderFast := by
+  funext name inCols constPos ra rb
+  unfold checkOrder checkOrderFast
+  simp only [pad_getD]
+  congr 1
+  congr 1
+  funext r u
+  rw [← Array.forIn_toList, Array.toList_append, forIn_append_yield, Array.forIn_toList, Array.forIn_toList]
+  · simp only [bind_assoc]
+  · intro c u
+    split
+    · simp [pure, Except.pure]
+    · split <;> split <;> simp [throw, throwThe, MonadExceptOf.throw, pure, Except.pure, bind, Except.bind]
+
 private def num (h : Array String) (i : Nat) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n

@@ -59,6 +59,45 @@ def pushLe32 (b : ByteArray) (x : Nat) : ByteArray := Id.run do
   for i in [0:4] do out := out.push ((x >>> (8 * i)) % 256).toUInt8
   return out
 
+theorem pushLe32_eq (b : ByteArray) (x : Nat) :
+    pushLe32 b x = (((b.push (x % 256).toUInt8).push ((x >>> 8) % 256).toUInt8).push ((x >>> 16) % 256).toUInt8).push
+      ((x >>> 24) % 256).toUInt8 := by
+  simp only [pushLe32, Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.size, List.range', Id.run]
+  rfl
+
+theorem toUInt8_shiftRight (x : Nat) (k : UInt32) (hx : x ≤ 4294967295) (hk : k.toNat < 32) :
+    (x.toUInt32 >>> k).toUInt8 = ((x >>> k.toNat) % 256).toUInt8 := by
+  apply UInt8.toNat_inj.mp
+  rw [UInt32.toNat_toUInt8, UInt32.toNat_shiftRight, Nat.mod_eq_of_lt hk]
+  have h1 : x.toUInt32.toNat = x := by
+    simp [Nat.toUInt32, UInt32.toNat_ofNat']
+    omega
+  rw [h1]
+  simp [Nat.toUInt8, UInt8.toNat_ofNat']
+
+/-- `pushLe32` as compiled code computes it (`pushLe32_eq_fast`): the bytes cut from a `UInt32` when `x` fits one. The
+bound is `≤ 4294967295`, not `< 2 ^ 32`: compiled code parses a literal past `UInt32` from its decimal string each call. -/
+def pushLe32Fast (b : ByteArray) (x : Nat) : ByteArray :=
+  if x ≤ 4294967295 then
+    let w := x.toUInt32
+    (((b.push w.toUInt8).push (w >>> 8).toUInt8).push (w >>> 16).toUInt8).push (w >>> 24).toUInt8
+  else pushLe32 b x
+
+/-- Compiled code runs `pushLe32Fast`; the kernel and every proof see `pushLe32`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `pushLe32`. -/
+@[csimp] theorem pushLe32_eq_fast : @pushLe32 = @pushLe32Fast := by
+  funext b x
+  unfold pushLe32Fast
+  split
+  · rename_i hx
+    have h0 := toUInt8_shiftRight x 0 hx (by decide)
+    rw [UInt32.shiftRight_zero] at h0
+    dsimp only
+    rw [pushLe32_eq, h0, toUInt8_shiftRight x 8 hx (by decide), toUInt8_shiftRight x 16 hx (by decide),
+      toUInt8_shiftRight x 24 hx (by decide)]
+    rfl
+  · rfl
+
 /-- A sparse F2 matrix with `rows` rows over `width` columns: row `i`'s columns are the le32 words
 `data[start[i] ..][0 .. len[i]]`. Rows past `rows` are empty. -/
 structure Sparse where
