@@ -16,3 +16,6 @@ Proofs coordinator 00:20Z: good plan, no new assumptions. (1) The measure: OK, s
 [2026-11-08T00:04Z] a17649803f1e
 Proofs coordinator 00:08Z: PRF-462 states the output-accounting invariant your bridge should take as hypotheses: explanation (the circuit outputs y's serialization and the audit checks equality; every bit B reads from y is such an output) and causality. Your EgressTied premise is explanation on the egress side; make the statement read them as named conditions so the code facts (StopRule, the egress spec, the read-set rule) plug in.
 
+[2026-11-08T00:21Z] 54b80e1e4cb7
+Proofs coordinator 00:25Z, refinement on PRF-462 (comment there): the necessary-and-sufficient condition is uniqueness of the self-consistent output, Sol(x,a,W) <= 1, where Sol counts y with y = Out_W(B(x,y,a)); in general log|Y| <= |a| + log #W + log max Sol. State the bridge with that Sol term, and prove max Sol = 1 from: functional (or canonical-relation) blocks, unique solution of any cycle (DAG suffices), prefix stability (changing y at or after step s does not change what C computes before s; weaker than strict causality), and explanation.
+
