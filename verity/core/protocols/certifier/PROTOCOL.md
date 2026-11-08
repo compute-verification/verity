@@ -9,7 +9,7 @@ order of every frame are fixed by the declared Program.
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
-  `verity/core/protocols/sampled_proofs/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
+  `verity/core/protocols/spot/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
@@ -169,7 +169,7 @@ on the signature's unforgeability, and on an honest certifier.
 ## Through the proof system (`service`)
 
 One execution phase's certificates are registered through the proof system
-(`verity.core.protocols.sampled_proofs.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
+(`verity.core.protocols.spot.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
   certificate), and their heads,
@@ -1672,7 +1672,7 @@ them.
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
-    `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
+    `spot.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also

@@ -849,7 +849,7 @@ def period_binding(answer: dict, case: dict, *, cert: dict, n2: dict[int, str], 
     audits must be this report's ``--audit`` registrations (``audits``). The case's parameters and evidence are outside
     that digest: its link, certifier session and key must be ``cert``'s, and `block_entry` re-decides the case. The
     rows form's link-windows are the scan's registrations, which no step here holds, so that form is refused."""
-    from verity.core.protocols.sampled_proofs.one_stage import registration as R
+    from verity.core.protocols.spot.one_stage import registration as R
     from verity.ml.commitments.identity import tagged_sha512
 
     try:

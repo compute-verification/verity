@@ -5,7 +5,7 @@ public import Definitions.Core
 public import Properties.Composition
 public import Properties.Nci.Desc
 public import Properties.Nci.Baseline
-public import Properties.SampledProofs
+public import Properties.Spot
 
 /-!
 # Remote's acceptance and the inference-only policy
@@ -14,7 +14,7 @@ public import Properties.SampledProofs
 their ids: the inference-only policy (`NciCheck.Protocol.protocol`), PoUW's period credit
 (`PouwCheck.Period.protocol`) and sampled proofs (`VStar.Recursive.Sampled.protocol`, `verity/sampled-proofs/v1`):
 one-stage v2's audit or the recursive audit, whichever form its params name. The policy's commitment and sampled
-proofs' (the one-stage registration record, `SampledProofs.OneStage.commitmentOf`, in both forms) are the run's
+proofs' (the one-stage registration record, `Spot.OneStage.commitmentOf`, in both forms) are the run's
 registration record, and the composite rejects unless both decode to one digest (`Core.Composition.strays` over
 `Core.Remote.tied`);
 the period's commitment is the auditor's ledger, and remote's tie (`Core.Remote.windows`) rejects unless every Commit
@@ -107,17 +107,17 @@ def CaseHeld (k : Case) : Prop :=
 
 /-- Sampled proofs' case `k` decodes under sampled proofs' own decoders (`VStar.Recursive.Sampled`, whose params name
 the form), and the record it decodes to names, by its SHA-512, the program the named form verifies the sessions against
-(`Properties.SampledProofs.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
-params, `SampledProofs.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
+(`Properties.Spot.R2`): in the one-stage form, the program of one-stage v2's own verifier (the v1 part of its
+params, `Spot.OneStageZk.Params.base`); in the recursive form, the program of the inner statement's verifier
 (`VStar.Recursive.Params.base`), the statement whose one verdict of record V*'s compiled check computes and whose
 soundness the recursive audit (`RecursiveAuditC3`) states. -/
 def StageHeld (k : Case) : Prop :=
-  (∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment),
+  (∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inl p) ∧
-    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record p.base.verifier) ∨
-  (∃ (q : VStar.Recursive.Params) (c : SampledProofs.OneStage.Commitment),
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record p.base.verifier) ∨
+  (∃ (q : VStar.Recursive.Params) (c : Spot.OneStage.Commitment),
     (canonicalJson k.params.toUTF8 >>= VStar.Recursive.Sampled.paramsOfJson) = .ok (.inr q) ∧
-    SampledProofs.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.SampledProofs.R2 c.record q.base.verifier)
+    Spot.OneStage.commitmentOf k.commitment = .ok c ∧ Properties.Spot.R2 c.record q.base.verifier)
 
 /-- What remote's acceptance establishes about its cases `ev`: they are the three subprotocols' cases in order, the
 policy's `kI`, PoUW's period's `kW` and sampled proofs' `kS`; the policy's and sampled proofs' commitments decode,
@@ -135,7 +135,7 @@ def InferenceOnlyHeld (ev : List Case) : Prop :=
   ∃ (kI kW kS : Case) (r : ByteArray), ev = [kI, kW, kS] ∧
     Properties.Composition.digestOf NciCheck.Protocol.protocol kI.commitment = some r ∧
     (∀ ds, Core.Remote.windowRecords kW = some ds → ∀ d ∈ ds, d = r) ∧
-    Properties.Composition.digestOf SampledProofs.OneStage.protocol kS.commitment = some r ∧
+    Properties.Composition.digestOf Spot.OneStage.protocol kS.commitment = some r ∧
     CaseHeld kI ∧ StageHeld kS
 
 /-- **Remote's acceptance gives the inference-only policy on the registered circuit.** On every input remote's check

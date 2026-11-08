@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.core.protocols.spot.one_stage`) end to end: serving's committed values through registration, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 

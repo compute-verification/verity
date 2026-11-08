@@ -858,7 +858,7 @@ def row_of(owner: str, a: Any, out: Path, run: str | None = None) -> dict[str, A
             "epsilon": epsilon(a) if accepted else None, "runs": [*([run] if run else []), *runs], "answer": a}
 
 
-def sampled_proofs_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
+def spot_row(audit_dir: Path, run: str | None = None) -> dict[str, Any]:
     """Sampled proofs' row from the records audit kept under ``audit_dir`` (module docstring)."""
     import served_integrity as SI
 
@@ -1211,7 +1211,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     run = os.environ.get("RESEARCH_RUN_ID")
     keys = [*PIECES, "wipe"]
     got = {k: piece(k, a.pieces, run) for k in keys}
-    rows = {"integrity": sampled_proofs_row(a.sampled_proofs, run), **{k: row for k, (row, _) in got.items()}}
+    rows = {"integrity": spot_row(a.spot, run), **{k: row for k, (row, _) in got.items()}}
     report, rec, line = record(rows, window=a.window, steps=(steps[0], steps[1]), node=a.node, run=run,
                                servers={k: at for k, (_, at) in got.items()}, product=a.product, deferred=a.deferred)
     a.out.mkdir(parents=True, exist_ok=True)

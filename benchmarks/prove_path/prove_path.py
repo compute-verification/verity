@@ -176,8 +176,8 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "one_stage"))
 
 from records_audit import PORTS, REFUSED, free_ports, pin_arg, pins_of, registration_roots  # noqa: E402, F401
-from verity.core.protocols.sampled_proofs.consumers import exfiltration_bound, location_bits  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot.consumers import exfiltration_bound, location_bits  # noqa: E402
+from verity.core.protocols.spot.one_stage import audit as AU, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json  # noqa: E402
 from verity.ml.windows import interface as IF  # noqa: E402
 from verity_vllm.pipeline import advice_windows as AW  # noqa: E402
@@ -1560,8 +1560,8 @@ def window_commit_of_advice(a: argparse.Namespace) -> dict[str, Any]:
     from verity_vllm.program.predict import window_weights as WW
     from verity_vllm.program.predict.build import Unexpressible
     from verity_vllm.program.predict.steps import compile_steps
-    from verity.core.protocols.sampled_proofs.one_stage import draw as DR
-    from verity.core.protocols.sampled_proofs.one_stage import registered as CR
+    from verity.core.protocols.spot.one_stage import draw as DR
+    from verity.core.protocols.spot.one_stage import registered as CR
 
     seconds: dict[str, float] = {}
     t = time.time()

@@ -168,8 +168,8 @@ session's two ends (§5). The live-coin design needs a trusted floor to be affor
 - **The prover** is the node. It registers a store and runs chained passes (inference reads every weight block and the
   live KV pages once a decode step, topped up with filler reads). It sends each pass's plan with the root of its
   receipts, and opens what the verifier samples.
-- **The challenger** is the proof system's one challenger (`sampled_proofs.challenger`, on the auditor's host through
-  `sampled_proofs.remote` when it is remote). It flips every coin of a session, commits to them before the session,
+- **The challenger** is the proof system's one challenger (`spot.challenger`, on the auditor's host through
+  `spot.remote` when it is remote). It flips every coin of a session, commits to them before the session,
   and releases each once, after the root the verifier recorded for it, in a release log it signs (`coins.SessionCoins`).
 - **The verifier** is remote. It holds a secret `source` (for the codec seed) and a clock, keeps the record, and checks.
   In the reference, `audit.AuditRun` is the verifier and drives the challenger.
@@ -350,7 +350,7 @@ process ends early, until `--close`. The registry's record holds digests and out
 ## 4. The coins and the chained passes
 
 Before a session the challenger flips its coins and commits to them, one epoch of the proof system's live coins
-(`coins.py`, `sampled_proofs.challenger`), and the verifier holds the commitment before the first coin. The prover
+(`coins.py`, `spot.challenger`), and the verifier holds the commitment before the first coin. The prover
 receives each coin's value as it is released and the commitment only once the session has its outcome:
 
 ~~~text

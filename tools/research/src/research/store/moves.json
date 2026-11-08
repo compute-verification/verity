@@ -1674,6 +1674,23 @@
         "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean",
         "Security/Properties/RemoteAudit/Subprotocol.lean": "Security/Properties/Accounting/Remote/Subprotocol.lean"
       }
+    },
+    {
+      "paths": {
+        "Security/Definitions/SampledProofs.lean": "Security/Definitions/Spot.lean",
+        "Security/Definitions/SampledProofs/": "Security/Definitions/Spot/",
+        "Security/Proofs/Properties/SampledProofs.lean": "Security/Proofs/Properties/Spot.lean",
+        "Security/Proofs/Properties/SampledProofs/": "Security/Proofs/Properties/Spot/",
+        "Security/Proofs/SampledProofs.lean": "Security/Proofs/Spot.lean",
+        "Security/Proofs/SampledProofs/": "Security/Proofs/Spot/",
+        "Security/Properties/SampledProofs.lean": "Security/Properties/Spot.lean",
+        "Security/Properties/SampledProofs/": "Security/Properties/Spot/",
+        "integrations/vllm/verity_vllm/protocols/sampled_proofs.py": "integrations/vllm/verity_vllm/protocols/spot.py",
+        "verity/core/protocols/sampled_proofs/": "verity/core/protocols/spot/",
+        "verity/core/service/sampled_proofs/": "verity/core/service/spot/",
+        "verity/core/service/sampled_proofs/SampledProofs.lean": "verity/core/service/spot/Spot.lean",
+        "verity/core/service/sampled_proofs/SampledProofs/": "verity/core/service/spot/Spot/"
+      }
     }
   ]
 }

@@ -1,0 +1,22 @@
+{
+ "format": 1,
+ "roots": ["Spot"],
+ "exempt": {
+  "Spot.Main": "the sampled-proofs-one-stage executable's entry point, one line; its command is Core.Protocol.main over Spot.OneStage.protocol, audited under Spot",
+  "Spot.DifftestMain": "the sampled-proofs-difftest executable's entry point, one line; it serves Spot.Pieces.table, audited under Spot",
+  "Spot.ZkMain": "the sampled-proofs-one-stage-zk executable's entry point, one line; its command is Spot.OneStageZk.main, audited under Spot",
+  "Spot.VerifierMain": "the sampled-proofs-verifier executable's entry point, one line; it serves Spot.Pieces.verifier, audited under Spot",
+  "Spot.SiteDifftestMain": "the site-difftest executable's entry point, one line; it serves Spot.SiteDifftest.table, audited under Spot"
+ },
+ "layers": {
+  "Spot": {
+   "imports": ["Lean", "Std.Data.HashMap", "Flock", "CoreProtocol", "Lms", "Spot"],
+   "except": [],
+   "why": "the port is code: Lean core, C-Flock's verifier library, the core protocol interface, the LMS verifier (the challenger's signed record) and Lean's hash map (R3's port index, `Registration.portIndex`), no Mathlib and nothing of Security (the layout rule: Lean code never requires Security)"
+  }
+ },
+ "guarantees": {},
+ "dependencies": {
+  "toolchain": "d5ca9d1164aa2cf25419881c4ec5c6a1486192af7c11e9d1704efd15e3fbd2fa"
+ }
+}

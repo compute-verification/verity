@@ -68,7 +68,7 @@ incorrect set of the trace the extractor recovers.
    SHA-512 collision, and ∞ where the finder or the forger breaks its premise.
    - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
      read in the error.
-   - Open: the targets (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
+   - Open: the targets (`SpotSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
      `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until its subprotocol's
      proof discharges it.
 
@@ -574,7 +574,7 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on
   (`trusted-host`); the verifier is the auditor's own check. Two premises about where the challenger runs are
-  onsite's (`verity/core/protocols/sampled_proofs/README.md`): `CoinsConfidential`, the named Prop
+  onsite's (`verity/core/protocols/spot/README.md`): `CoinsConfidential`, the named Prop
   `Pouw.Assumptions.CoinsConfidential` (`Definitions/Pouw/Assumptions/Dither.lean`, in the lock, taken by
   `Pouw.Guarantees.Dither.FleetSound`), and `OneClock`, prose only.
   Remote's coin path is three assumptions over the challenger's log (`Definitions/Core/Challenger.lean`), stated in
