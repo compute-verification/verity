@@ -1977,7 +1977,7 @@ theorem carrySet (c : Desc.Ctx) (sc : Flock.Program.Scope) (hd : sc.d = c.d)
       simp only [pure, Except.pure, Except.ok.injEq] at hy3
       subst hy3
       obtain ⟨t, ht1, ht2, rfl⟩ :=
-        hG _ (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (qsort_mem (fun x => x) _ hl)))
+        hG _ (Std.HashSet.mem_toArray.1 (Array.mem_toList_iff.1 (Verity.QSort.ByKey.qsort_mem (fun x => x) _ hl)))
       have hag1 := init_agree c sc hn hT (by omega)
         (fun j' h1 h2 => by rw [show j' = ch.at t by omega]; exact hGt t ht1 ht2) hv'
       have htT := (hup t ht2).1
