@@ -238,11 +238,11 @@ static void fc_kept_drop() {
     g_fc_kept = FcKept{};
 }
 
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 1: a and b held past the zerocheck and
-// Ligerito's copy of z, beside Ligerito's own buffers, exceed the arena as prove_chunk sizes it by less than one; 3 counts them
+// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 2: a and b held past the zerocheck and
+// Ligerito's copy of z, beside Ligerito's own buffers, exceed the arena as prove_chunk sizes it by less than two; 3 counts them
 // on top)
 static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 1L; }();
+    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 2L; }();
     return (size_t)k * w;
 }
 
@@ -490,7 +490,7 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
-                      F128* d_b, uint8_t* d_zlin) {
+                      F128* d_b) {
     const FlockChunkParams* C = &N->c;
     if (C->host_z) {
         CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
@@ -737,9 +737,6 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             N->witness_s[1] = std::chrono::duration<double>(t2 - t1).count();
         }
     }
-    const long long n_stripes = (1LL << (m - k_log)) / 8;
-    fc_zlin_transpose(df, k_log, n_stripes, d_zlin);
-    CK(cudaGetLastError());
     CK(cudaStreamSynchronize(0));
     return 0;
 }

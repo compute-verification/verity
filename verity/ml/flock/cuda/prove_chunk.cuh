@@ -699,26 +699,23 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     // level 0's commitment under M1 (fc_commit_l0_zk) holds, beside d_cw0 and its tree, its 4 extra lanes and the witness's and
     // extra lanes' codewords before it interleaves them into d_cw0: words
     const long long l0_l = len >> P->initial_k, l0_zk = (l0_l << P->log_inv_rates[0]) * ((1LL << P->initial_k) + 4) + 4 * l0_l;
-    // the arena's peak: 6.5 witness sizes (z, a and b, the lincheck's transpose, level 0's codeword and tree, all of which a kept
-    // rep 0 also holds through the lincheck) beside the largest of the zerocheck's two fold pairs, the lincheck's seven K-length
-    // vectors (2^k_log words each, which dominate at small m) and level 0's M1 lanes; half a witness size and 64 MiB over that
-    // hold the small buffers beside them
-    const size_t arena_bytes = packed_witness_bytes / 2 * 14 +
-                               std::max({2 * (size_t)(zc_first + zc_next), (size_t)7 << k_log, (size_t)l0_zk}) * sizeof(F128) +
-                               (64ull << 20);
+    // the arena's peak: 5.5 witness sizes (z, a and b, level 0's codeword and tree) beside the largest of the zerocheck's two fold
+    // pairs, level 0's M1 lanes, and the lincheck's seven K-length vectors (2^k_log words each, which dominate at small m) with
+    // z's transpose (a kept rep 0 holding a and b through it); half a witness size and 64 MiB over that hold the small buffers
+    // beside them
+    const size_t arena_bytes = packed_witness_bytes / 2 * 12 +
+                               std::max({2 * (size_t)(zc_first + zc_next) * sizeof(F128), (size_t)l0_zk * sizeof(F128),
+                                         packed_witness_bytes + ((size_t)7 << k_log) * sizeof(F128)}) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
     CK(ffi_malloc(&df, len * sizeof(F128)));
     CK(ffi_malloc(&d_a, len * sizeof(F128)));
     CK(ffi_malloc(&d_b, len * sizeof(F128)));
-    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
     if (pure && C->host_z) {
         CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
         CK(cudaMemcpy(d_a, C->host_a, len * sizeof(F128), cudaMemcpyHostToDevice));
         CK(cudaMemcpy(d_b, C->host_b, len * sizeof(F128), cudaMemcpyHostToDevice));
-        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
-        CK(cudaGetLastError());
         CK(cudaStreamSynchronize(0));
     } else {
         uint32_t *d_cv, *d_m, *d_blen, *d_flags; b3u64* d_ctr;
@@ -853,9 +850,6 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
                 ffi_free(d_pa); ffi_free(d_py);
             }
         }
-        const long long n_stripes = (1LL << (m - k_log)) / 8;
-        chunk_zlin_transpose<<<4096, 256>>>(df, k_log, n_stripes, d_zlin);
-        CK(cudaGetLastError());
         CK(cudaStreamSynchronize(0));
         ffi_free(d_cv); ffi_free(d_m); ffi_free(d_blen); ffi_free(d_flags); ffi_free(d_ctr);
     }
@@ -1071,6 +1065,10 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         ffi_free(d_part8); ffi_free(d_out8);
     }
     ffi_free(d_a); ffi_free(d_b);
+    // z's transpose for the lincheck, made once the zerocheck has freed its tables: nothing between the witness and here writes z
+    CK(ffi_malloc(&d_zlin, (size_t)len * 16));
+    chunk_zlin_transpose<<<4096, 256>>>(df, k_log, (1LL << (m - k_log)) / 8, d_zlin);
+    CK(cudaGetLastError());
     W.f128s(zc_r1ab); W.f128s(zc_r1c);
     W.u64(zc_m1s.size());
     for (size_t i = 0; i < zc_m1s.size(); i++) { W.f128(zc_m1s[i]); W.f128(zc_mis[i]); }
