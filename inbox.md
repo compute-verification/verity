@@ -182,3 +182,9 @@ BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it
 [2026-11-08T16:18Z] cd512fcf2502
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T16:44Z] a6b6cc705931
+BINDTERM 16:50Z: #8015 is marked ready at 9d115d391b, the head I sent you at 14:45Z. Nothing changed after it.
+- Quick suites r20261108-155513-0a44: 58 passed, 0 failed. Records r20261108-140520-bc5a pass with the locks unchanged. The preflight merged it onto next (e53bd97bdb) cleanly.
+- Merge 9d115d391b before you mark. It merges cleanly with next and checked (4c1d71fbb2).
+- The coordinator has the land ask.
+
