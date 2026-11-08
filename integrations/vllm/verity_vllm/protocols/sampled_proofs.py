@@ -31,7 +31,7 @@ def schemes() -> tuple[str, ...]:
 
 def refusals(scheme: str, ctx: Context) -> tuple[str, ...]:
     if ctx.stage != "commit":
-        return ("sampled proofs runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
+        return ("SPOT runs in the Commit stage of a row (`verity-vllm row`, declared by the target's `protocols`); "
                 "verity_vllm.LLM commits nothing",)
     if scheme == RECORDED:
         return (f"{RECORDED} (SHA-256, 32-byte roots) is kept only to read recorded runs: a Commit commits under "

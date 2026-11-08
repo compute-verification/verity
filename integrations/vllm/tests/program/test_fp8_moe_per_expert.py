@@ -11,14 +11,19 @@ A MoE layer's pair (t, k), for each projection (w13, and w2 with the routed weig
 A table is a registered parameter of its own (`interface.Table`): its row e is the block's rows of expert e as their e4m3 bytes
 in u16 words (a row's little-endian bytes, `interface.words`), or the scale row's f32 words. Its root and domain id are table
 reads, and its row, salt and path an opening at the hidden key ``tok``, which the verdict ``o1`` holds to the root. ``tok`` is
-the router's row ``o{TOPK + k}``, ``g`` its row ``o{k}``, and ``w`` and ``ws`` the reads' ``h``, each a wire.
+the router's row ``o{TOPK + k}``, ``g`` its row ``o{k}``, and ``w`` and ``ws`` the reads' ``h``, each a wire. Fused, the
+weight rows' read and its GEMM are one unit, `MoeExpertFp8ReadGemm(W)_v1{READ, K, N, G, KB, SWAP, DOT}` (tok, root, domain,
+row, salt, path, xq, sx, [g,] ws) -> (y, ok) with READ = EmbeddingRead_v1{V=E, H=N K / 2}, and its table declared on it, so
+no unit outputs a weight row.
 
 * the cut computes the gather form: the router's slots, the reads of the experts they name and the per-expert GEMMs over the
   rows read are `MoeExpertFp8Gemm(W)_v1` over the whole stack, at small statics; a row read at another expert does not open;
-* the window interface takes it at GLM-5.3's TP8 statics: each template is a proof block Flock composes
-  (`check_proof_block`), the wires and declarations check (`Circuit`), a window commits its tables, and with the tables'
-  parameters pinned the free input bits are the router's logits and bias and the GEMMs' activations alone, which the served
-  circuit wires from the blocks before; unpinned, the openings are free too.
+* a fused unit is its read then its GEMM, evaluated on its gates at small statics;
+* the window interface takes it at GLM-5.3's TP8 statics, read and GEMM apart or fused: each template is a proof block Flock
+  composes (`check_proof_block`), the wires and declarations check (`Circuit`), a window commits its tables, and with the
+  tables' parameters pinned the free input bits are the router's logits and bias and the GEMMs' activations alone, which the
+  served circuit wires from the blocks before; unpinned, the openings are free too. Fused, the weight rows are no unit's
+  output.
 """
 from __future__ import annotations
 
@@ -28,6 +33,7 @@ import pytest
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.ops.boolean import gemm as BG
 from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32 as MV
 from verity.ml.circuits.ops.prims import HopperE4m3QgmmaDot32 as HP
@@ -123,6 +129,42 @@ def test_the_cut_is_the_gather_form(routed: bool) -> None:
     assert len(seen) > 1
 
 
+def _bits(words, width: int) -> list[int]:
+    return [(int(w) >> j) & 1 for w in words for j in range(width)]
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("routed", [False, True], ids=["w13", "w2"])
+def test_a_fused_unit_is_its_read_then_its_gemm(routed: bool) -> None:
+    """Minutes, most of it tracing the read's SHA-512 parts: the only evaluation of the fused unit's wiring (the read's h into
+    its GEMM's w, byte for byte), at its sidecar's statics, two experts and w13's one 32-byte row or w2's two. Read at each
+    expert's key, y is the GEMM over that expert's rows and ok = 1; at the other expert's key, ok = 0; at a key past V, y is
+    the GEMM over the read's fill and ok = 1."""
+    rng = np.random.default_rng(0xC187 + routed)
+    V, K, G = 2, 32, 32
+    N, SWAP, DOT, WORD = (2, True, BG.HopperE4m3QgmmaDot32, HP) if routed else (1, False, BG.HopperE4m3MmaV2Dot32, MV)
+    fused = bind(BM.MoeExpertFp8ReadGemmWV1 if routed else BM.MoeExpertFp8ReadGemmV1, READ=EMB.read(V, N * K // 2), K=K, N=N, G=G,
+                 KB=G, SWAP=SWAP, DOT=DOT)
+    gemm = bind(FM.MoeExpertFp8BlockGemmWV3 if routed else FM.MoeExpertFp8BlockGemmV3, K=K, N=N, G=G, KB=G, SWAP=SWAP, DOT=WORD)
+    table = _Table(rng, WI.words(_e4m3(rng, V, N, K), 8, V, N * K // 2))
+    cases, want = [], []
+    for tok, at in ((0, 0), (1, 1), (1, 0), (V, 0)):
+        xq, sx, g, ws = _e4m3(rng, K), _f32(rng, 1e-3, 1e-1, K // G), _f32(rng, 0.1, 1.0, 1), _f32(rng, 1e-4, 1e-2, K // G)
+        p = table.tree.path(at)
+        read = EMB.arguments(V, tok, table.tree.root, table.dom.domain_id, table.rows[at].tolist(), table.salts[at],
+                             [p[k:k + 64] for k in range(0, len(p), 64)])
+        lead = (_bits(xq, 8), _bits(sx, 32)) + ((_bits(g, 32),) if routed else ())
+        cases.append((*read, *lead, _bits(ws, 32)))
+        h, ok = table.read(tok, at)
+        w = np.array(h, "<u2").view(np.uint8).tolist()
+        want.append((tuple(evaluate(gemm, xq.tolist(), sx.tolist(), *g.tolist()[:routed], w, ws.tolist())), ok))
+    got = evaluate_bits(fused, *[np.array([c[k] for c in cases], dtype=np.uint8) for k in range(len(cases[0]))])
+    got = got.reshape(len(cases), -1)
+    assert [(tuple(int(sum(int(b) << j for j, b in enumerate(r[16 * n:16 * n + 16]))) for n in range(N)), int(r[16 * N]))
+            for r in got] == want
+    assert [ok for _y, ok in want] == [1, 1, 0, 1]
+
+
 # --- the window interface takes it at GLM-5.3's statics --------------------------------------------------------------------------
 
 #: GLM-5.3 at TP8, a rank's expert shard: E experts, TOPK slots, w13's 512 rows over K = 6144 and w2's 6144 rows over K = 256
@@ -132,16 +174,21 @@ DOWN = {"K": 256, "R": 6144, "N": 32}
 ROUTER = bind(BMOE.MoeRouterSigmoidBiasSlots, E=E, TOPK=TOPK, SCALE=2.5, KERNEL="block")
 GEMMS = {"up": bind(BM.MoeExpertFp8BlockGemmV4, K=UP["K"], N=UP["N"], G=G, KB=G, SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32),
          "down": bind(BM.MoeExpertFp8BlockGemmWV4, K=DOWN["K"], N=DOWN["N"], G=G, KB=G, SWAP=True, DOT=BG.HopperE4m3QgmmaDot32)}
+#: each GEMM over the rows it reads itself, at its GEMM's statics
+FUSED = {p: bind(fused, READ=EMB.read(E, sh["N"] * sh["K"] // 2), **GEMMS[p].bindings)
+         for p, fused, sh in (("up", BM.MoeExpertFp8ReadGemmV1, UP), ("down", BM.MoeExpertFp8ReadGemmWV1, DOWN))}
 #: the ports the cut leaves to the circuit around it: the router's logits and bias, each GEMM's activation and its scales
 OPEN_PORTS = {"router": ("logits", "bias"), "up": ("xq", "sx"), "down": ("xq", "sx")}
 
 
-def _cut(layers: int, tokens: int) -> tuple[WI.Circuit, dict[str, int]]:
-    """``layers`` MoE layers of ``tokens`` tokens cut per expert, and each registered parameter's leaves.
+def _cut(layers: int, tokens: int, fused: bool = False) -> tuple[WI.Circuit, dict[str, int]]:
+    """``layers`` MoE layers of ``tokens`` tokens cut per expert, and each registered parameter's leaves; ``fused``, each
+    GEMM's weight rows read by the GEMM's own unit (`FUSED`), the tables and the scale reads as they are.
 
     A read template's units are table-major, ((l B + b) TOPK + k) T + t, so a table's opening and table reads are one
     declaration each and its tok wires one a slot; w13's GEMM units are its rows read's, w2's slot-major, ((l TOPK + k) B + b)
-    T + t, so its routed weight is one wire a slot."""
+    T + t, so its routed weight is one wire a slot. A fused unit is its table's reader, so table-major, its routed weight one
+    wire a slot as its tok is."""
     L, T = layers, tokens
     rid = descriptor_id(ROUTER)
     templates: list[tuple[object, int]] = [(ROUTER, L * T)]
@@ -149,8 +196,8 @@ def _cut(layers: int, tokens: int) -> tuple[WI.Circuit, dict[str, int]]:
     params: dict[str, int] = {}
     tables, roots, openings = [], [], []
 
-    def read(name: str, H: int, B: int) -> str:
-        fn = EMB.read(E, H)
+    def read(name: str, H: int, B: int, fn=None, routed: bool = False) -> str:
+        fn = fn or EMB.read(E, H)
         tid = descriptor_id(fn)
         templates.append((fn, L * B * TOPK * T))
         for l in range(L):
@@ -161,11 +208,18 @@ def _cut(layers: int, tokens: int) -> tuple[WI.Circuit, dict[str, int]]:
                 roots.extend(WI.TableRead(tid, p, param, p, at, TOPK * T) for p in ("root", "domain"))
                 openings.append(WI.Opening(tid, param, "tok", ("row", "salt", "path"), "o1", at, TOPK * T))
                 wires.extend(WI.Wire(tid, "tok", rid, f"o{TOPK + k}", at + k * T, (T,), l * T, (1,)) for k in range(TOPK))
+                if routed:
+                    wires.extend(WI.Wire(tid, "g", rid, f"o{k}", at + k * T, (T,), l * T, (1,)) for k in range(TOPK))
         return tid
 
     for proj, sh in (("up", UP), ("down", DOWN)):
         K, R, N = sh["K"], sh["R"], sh["N"]
         B, NBG, per = R // N, R // G, G // N
+        if fused:
+            scales = read(f"{proj}.ws", 2 * K // G, NBG)
+            fid = read(f"{proj}.w", N * K // 2, B, FUSED[proj], routed=proj == "down")
+            wires.append(WI.Wire(fid, "ws", scales, "o0", 0, (L, NBG, per, TOPK * T), 0, (NBG * TOPK * T, TOPK * T, 0, 1)))
+            continue
         rows, scales, gemm = read(f"{proj}.w", N * K // 2, B), read(f"{proj}.ws", 2 * K // G, NBG), GEMMS[proj]
         gid = descriptor_id(gemm)
         templates.append((gemm, L * B * TOPK * T))
@@ -181,16 +235,17 @@ def _cut(layers: int, tokens: int) -> tuple[WI.Circuit, dict[str, int]]:
     return WI.Circuit("glm53-moe-per-expert", tuple(templates), wires=tuple(WI.coalesce(wires)), registered=reg), params
 
 
-def test_the_cut_is_a_circuit_the_window_interface_takes() -> None:
+@pytest.mark.parametrize("fused", [False, True], ids=["read-then-gemm", "fused"])
+def test_the_cut_is_a_circuit_the_window_interface_takes(fused: bool) -> None:
     """Two layers of two tokens: the templates' proof blocks compose, the wires and declarations check, the tables commit, and
     the free input bits are the ports left open alone where the tables are pinned, those and the openings where they aren't."""
     L, T = 2, 2
-    circuit, params = _cut(L, T)
-    lays = circuit.layouts
+    circuit, params = _cut(L, T, fused)
+    lays, gemms = circuit.layouts, FUSED if fused else GEMMS
     for fn, _n in circuit.templates:
         WI.check_proof_block(fn)
     WI._committable(circuit.registered, (), circuit.name)
-    assert len(circuit.units) == 7 and circuit.units[descriptor_id(ROUTER)] == L * T
+    assert len(circuit.units) == (5 if fused else 7) and circuit.units[descriptor_id(ROUTER)] == L * T
     assert len(params) == L * (UP["R"] // UP["N"] + UP["R"] // G + DOWN["R"] // DOWN["N"] + DOWN["R"] // G)
 
     def bits(tid: str, ports) -> int:
@@ -198,7 +253,7 @@ def test_the_cut_is_a_circuit_the_window_interface_takes() -> None:
 
     opened = sum(bits(o.reader, o.ports) // lays[o.reader][1] * o.units for o in circuit.registered.openings)
     table_reads = sum(16 * dict(lays[r.reader][0].rows)[r.port] * r.units for r in circuit.registered.roots)
-    left = bits(descriptor_id(ROUTER), OPEN_PORTS["router"]) + sum(bits(descriptor_id(GEMMS[p]), OPEN_PORTS[p]) for p in GEMMS)
+    left = bits(descriptor_id(ROUTER), OPEN_PORTS["router"]) + sum(bits(descriptor_id(gemms[p]), OPEN_PORTS[p]) for p in gemms)
     pins = {p: f"{i:0128x}" for i, p in enumerate(sorted(params))}
     held = WI.input_count(circuit.description(), pins=pins, roots=pins)
     assert held["registered"] == opened + table_reads and held["ingress"] == 0
@@ -217,3 +272,29 @@ def test_a_read_is_a_wire_of_the_gemms_weight_and_scale_rows() -> None:
         assert dict(WI.layout(EMB.read(E, 2 * K // G)).outs)["o0"] == sizes[p]["ws"]
     outs, tok = dict(WI.layout(ROUTER).outs), dict(WI.layout(EMB.read(E, 4)).rows)["tok"]
     assert [outs[f"o{j}"] for j in range(2 * TOPK)] == [2] * 2 * TOPK == [sizes["down"]["g"]] * TOPK + [tok] * TOPK
+
+
+def test_a_fused_unit_has_its_reads_ports_and_outputs_then_its_gemms() -> None:
+    """A fused unit's rows are its read's (tok .. path) then its GEMM's without w, and its outputs the GEMM's y as o0 and the
+    read's verdict as o1, so a table's declarations on the read carry over to it unchanged; a READ of other than the block's
+    N K / 2 words, or not a read, is refused."""
+    for p, sh in (("up", UP), ("down", DOWN)):
+        read, gemm, fused = (WI.layout(fn) for fn in (EMB.read(E, sh["N"] * sh["K"] // 2), GEMMS[p], FUSED[p]))
+        assert fused.rows == read.rows + tuple(r for r in gemm.rows if r[0] != "w")
+        assert fused.outs == (("o0", dict(gemm.outs)["o0"]), ("o1", dict(read.outs)["o1"]))
+    for wrong in (EMB.read(E, 2 * UP["K"] // G), GEMMS["up"]):
+        with pytest.raises(ValueError, match="not a read of N K / 2 = 3072 u16 words"):
+            bind(BM.MoeExpertFp8ReadGemmV1, **{**FUSED["up"].bindings, "READ": wrong}).signature()
+
+
+def test_fusing_takes_the_weight_rows_out_of_the_outputs() -> None:
+    """The fused cut's units output every word the read-then-GEMM cut's do but the weight rows' reads' h: the H words of each
+    (token, slot, block) of either projection, most of what the cut outputs."""
+    L, T = 2, 2
+
+    def out_words(circuit: WI.Circuit) -> int:
+        return sum(sum(w for _o, w in lay.outs) * n for lay, n in circuit.layouts.values())
+
+    rows = sum(L * sh["R"] // sh["N"] * TOPK * T * sh["N"] * sh["K"] // 2 for sh in (UP, DOWN))
+    apart, fused = out_words(_cut(L, T)[0]), out_words(_cut(L, T, fused=True)[0])
+    assert apart - fused == rows and rows > 0.99 * apart

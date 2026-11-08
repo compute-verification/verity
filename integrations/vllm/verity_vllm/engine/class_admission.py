@@ -4,8 +4,9 @@
 `engine.hooks`): a request whose prompt is over the class's prompt limit (`profiles.engine_classes.prompt_limit`, its served
 `max_model_len`) is refused before the scheduler holds it; a longer prompt within it the class prefills in chunks, each a launch of
 the class's request Program.  The scheduler counts the prompt it was handed, so the count is the engine's whatever form the prompt
-came in.  `close_window` is a Commit window's close: it is refused while the scheduler holds a request, since that request's other
-launches would be the next window's advice.
+came in.  `close_window` is a Commit window's close: it is refused while the scheduler holds a request, since the next window
+compiles that request after its carried history (`predict.steps`), which reads the closing window's edge ports (`workload.Edge`),
+values the served Commit doesn't commit.
 
 A refusal is sticky: vLLM's frontend registers a request before its scheduler sees it, so once one is refused every later admission
 and close is refused with the same reason, and the window ends there.
@@ -52,7 +53,8 @@ class Admission:
         """A Commit window closes: refused while the scheduler holds a request (in flight across the close)."""
         held = list(self.sched.requests)
         self._refuse(f"{len(held)} requests in flight at a Commit window's close, {held[0]!r} first: a class-{self.name} window "
-                     f"closes with nothing in flight (a carried request's other launches are the next window's advice)"
+                     f"closes with nothing in flight (a carried request's history reads the window's edge ports, which the "
+                     f"served Commit doesn't commit)"
                      if held else None)
 
     def uninstall(self) -> None:

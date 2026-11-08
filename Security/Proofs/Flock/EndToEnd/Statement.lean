@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
 named assumptions it rests on as hypotheses. Its proof is `Flock.SecurityProofs.EndToEnd : Flock.Guarantees.EndToEnd`.
 
 Flock's definitions are still in its proofs package, so this module imports
-`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Models.lean`, which the `security` package builds without
+`Proofs.Flock.Soundness.Discharge.Composed.PublicJ`, and `Definitions.lean`, which the `security` package builds without
 `security_proofs`, does not import it: `Proofs.Flock.EndToEnd` does.
 -/
 
