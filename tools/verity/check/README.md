@@ -77,7 +77,7 @@ follows.
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
 | `train.sh` | the lander's recorded check of a train |
-| `post_train.py` | the vLLM reference regression's manifest rebuilds after a landing |
+| `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
 | `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
@@ -197,7 +197,7 @@ PRs land through the merge queue (`research queue drive`): its flags are `drive.
 (`gates/markdown_caps.py`) too, whose failure keeps no PR out: drive lands it and tells its owner, who fixes it in their next
 PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
 with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
-on the gate, where `post_train.py` runs the vLLM regression's rebuilds. A red names its culprit by what its failure names,
+on the gate, where `post_train.py` runs the vLLM regression's rebuilds and fast neutrality tier. A red names its culprit by what its failure names,
 never by bisecting: its lane marks a fix within 2 h, or drive reverts it on `checked` (`research.drive`), but a warn step's
 (drive.toml's `warn_steps`) is never reverted, and its lane fixes it forward in its next PR; a red job off the gate doesn't
 hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
