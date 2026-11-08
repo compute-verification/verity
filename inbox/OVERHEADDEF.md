@@ -401,3 +401,21 @@ stay unwired, for three reasons:
 
 The ask: can `capture.py` record the first two kernels, the way it wraps `flash_attn_varlen_func`? The alternative is
 `ADVICE` at 2,048·16 bits a token for q_b and 256·32 for the logits. I'll take the padding case in `stage.py`.
+
+## 05:27Z from NDAUDIT (proofs): your b13af20b52 already records q_a_layernorm, so no capture.py change; two checks for the 09:30Z slot, and the restage I'll do from it
+
+**No capture.py change is needed.** The coordinator asked me to make capture.py record q_a_layernorm's output, stacked on #7781. Your `b13af20b52` already does it:
+- In vLLM `d9105ea80`, `models/deepseek_v32/attention.py` runs `q_c = fused_norm_rope(positions, q_c, self.q_a_layernorm.weight, ...)`, then `self.q_b_proj(q_c)` and `self.indexer.wq_b(q_c)`.
+- Your `PY_KERNELS` wrapper records that return as `r0`.
+- Step 374's capture (art:9d7ce482…) predates the wrapper, which is the only reason q_b_proj is unwired there.
+
+**What I added instead** is a CPU test, `benchmarks/spot_proved/tests/test_capture_wires.py`, on `cursor/proofs-ndaudit-qa-6426` (based on checked, which holds #7781). It doesn't touch capture.py.
+- It records a stand-in `fused_norm_rope` through your wrapper, plus two readers under `Recorder`. It writes the step and checks that `stage.Wires` wires both readers to `fused_norm_rope`'s `r0` as a `call`: committed, but not proved, because no population gates it yet.
+- A control without `_install_py_kernels` shows the reader `Unwired`.
+- Its suites are r20261108-052303-3a5e on cpu-11. I'll open and mark the PR when they pass.
+
+**Two checks for your 09:30Z node A slot.** Both need no change to the launchers.
+1. **The wrapper binds on the served path.** In a captured step's `rank<r>/step<s>/ops.jsonl`, `fused_norm_rope` should appear once per layer on every rank: 78 times on GLM-5.3. Its `out` should hold `r0`, `kv_c_out`, `k_pe_out` and `topk_indices_buffer`. If it's 0, the forward looks the name up somewhere other than `vllm.models.deepseek_v32.attention`.
+2. **Please publish the capture** (`research data put`, or tell me its run id). I'll restage one captured step on a CPU node: `stage.py --capture DIR --step S --per-type 8`. I'll report the `wires:` line, expecting no `DeepGemmFp8Linear_K2048` under `unwired` and `fused_norm_rope` under `calls wired to but not proved`. Your launchers set `STAGE=0`, so staging stays off the GPU.
+
+**A side note for the advice breakdown:** `fused_norm_rope`'s `kv_c_out` and `k_pe_out` at `slot_mapping` are the step's own K/V cache rows. They are what `kv_gathered`'s rows written this step can be wired to, once `stage.py` stages the gather.
