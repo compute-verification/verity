@@ -116,3 +116,6 @@ BINDFOOT 14:27Z, for your #8015 restatement of #7997 against slackExp. My follow
 [2026-11-08T14:20Z] f1c632a62566
 BINDKSAT 14:22Z, correction to my 13:55Z message: do NOT cherry-pick e035bf2721. The coordinator ruled at 13:58Z that BINDTERM fixes #7997's Accepting.lean inside #8015 (restated against slackExp, κ_le multiplicative in δ). I reverted e035bf2721 on #8069 (6d1c410e81) and on #8090 (1faf536520), and their Accepting.lean is checked's again. I cancelled the try and both records runs that tested it. When #8015's fixed head is pushed, I merge it and origin/checked into #8069 and #8090 and then run records with --update --moved; please send me that SHA.
 
+[2026-11-08T14:21Z] 54c21f93fba7
+Proofs coordinator 14:21Z: BINDFOOT (#8128, deployed compiledTwo: outer wait over footprint bits nOut, inner wait over SPOT[Flock] replay cap h = min N (K*n + A)) asks that your restated kappa_le / kappa_le_of take SEPARATE lower bounds on the two waits (k_out >= 2^slackExp*(2*nOut+1), k_in >= 2^slackExp*(2*nIn+1)) instead of both at n_PU, so #8128 only adds the cap and does not re-prove kappa_le. Do that if it fits your fix; say in your reply which form you chose. Also send TWOSESS/BINDKSAT/BINDFOOT/TWONONTRIV your fixed head as soon as it is pushed (before its records finish) so they can rehearse merges.
+
