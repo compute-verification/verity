@@ -17,7 +17,10 @@ batch (`_sparse_indexer_and_attn`), and the logits', computed outside the graphs
 Vocabulary: EmbeddingShard and the embedding's all-reduce; RMSNorm (layer 0's input norm); per layer the block-FP8 linears (FlashInfer
 below 32 rows, else DeepGEMM), DsaRMSNorm of q_c and kv_c, the interleaved RoPE of k_pe and of each head's q_pe, the latent absorptions
 (BatchedGemm), SparseMlaSplit over the layer's latent history, and on an indexer layer the bf16 weights projection, DsaIndexerKRow,
-DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNVL kernel within its token
+DsaIndexerQ, DsaMqaLogits and DsaTopKShortRow; a step's prefills (more rows than the decode threshold) of at most INDEX_TOPK keys
+by dense MHA instead (`use_dense_mha`, `_Model._dense_prefill`): kv_b_proj, FA3's prefill heads (Attention_v4, AttentionSplit, and
+with the lse AttentionHeadLse and AttentionHeadSplitLse where the step has context) and MergeAttnStates, while longer prefills take
+the decode kernels; the all-reduce + residual + RMSNorm (FlashInfer's fused MNNVL kernel within its token
 budget, else the all-reduce and RMSNormFusedCuda); the SiLU MLP below FIRST_DENSE, and from it on the MoE block: the f32 router GEMM,
 the shared expert, MoeRouterSigmoidBias, Fp8GroupQuantUe8m0, the block-FP8 expert GEMMs per (token, slot) pair, MoeSum and the
 shared expert's add; then the last row's logits, their all-gather and the token select (greedy, or the seeded temperature + top-p
@@ -26,8 +29,8 @@ Waksman settings that route it are a field of the Program's `run` input (`run_fi
 the row indices through them, DsaTopKLongRow's bit that the order is the logits' top-TOPK set in ascending index order (the one
 order the logits fix, which `VERITY_DSA_TOPK=canonical` serves) is one of the Program's checks
 (`_Model.checks`), and both kinds of layer read the TOPK rows DsaWaksmanRows routes at those settings.  A fact outside it raises
-`Unexpressible`, φ's when the decoder is made and a launch's (a prefill past the decode threshold, a GEMM, all-reduce or MoE tile
-no record covers) when the launch is written.
+`Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
+chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
 
 from __future__ import annotations
@@ -36,7 +39,7 @@ import re
 from typing import Mapping, Sequence
 
 from verity.ml.circuits.defs import Builder
-from verity.ml.circuits.refs import Coll, PartLog, Refs, concat, strided_view
+from verity.ml.circuits.refs import Coll, Concat, PartLog, Refs, concat, strided_view
 from verity.ml.circuits.types import Array, Type, Value
 
 from .common import (Unexpressible, _arr, _arr_shape, _Launch, _Peers, _ptypes, _Stochastic, graph_capture_sizes, kind,
@@ -183,6 +186,12 @@ class Net:
         H = int(self.C["H"])
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
+    def edge_groups(self, keys: int) -> tuple[str, ...]:
+        """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
+        carries (`segment.edge_of`): the latent rows, and the indexer's keys and scales where a row reads past INDEX_TOPK (below, its
+        top-k selection keeps every key and reads no logit: `reads_run`)."""
+        return ("prefix", *(("prefix_ik", "prefix_iks") if self.reads_run(keys) else ()))
+
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
         """The Inputs a request's history of its first C positions opens with (`_Model.open_with`), as `vllm_dsa` keeps it: every
         layer's latent rows `prefix` (bf16 [NL, C, KV_LORA + QK_ROPE]: the normed kv_c, then the roped k_pe), and the indexer
@@ -235,6 +244,16 @@ class _Model:
             for j in range(C):
                 self.logs[L]["ik"].append(ik[n][j].refs)
                 self.logs[L]["iks"].append(iks[n][j].refs)
+
+    def edge_rows(self, groups: tuple[str, ...]) -> list[Coll]:
+        """Every layer's rows so far of each history group in `groups` (`Net.edge_groups`), its history's and its own, as
+        `Net.prefix_params` lays out a history of them: wires and no gates."""
+        E, net = len(self.logs[0]["latent"]), self.net
+        logs = {"prefix": [self.logs[L]["latent"] for L in range(net.NL)],
+                **{g: [self.logs[L][h] for L in sorted(net.indexers)] for g, h in (("prefix_ik", "ik"), ("prefix_iks", "iks"))}}
+        if any(len(log) != E for g in groups for log in logs[g]):
+            raise AssertionError(f"every layer's history holds the {E} rows of layer 0's")
+        return [Coll(t, concat([log.cut(E) for log in logs[g]])) for g, t in net.prefix_params(E) if g in groups]
 
     def forward(self, toks: list[Coll], pos0: int) -> list[Refs]:
         """Token rows (I32 values) at positions pos0.. -> the final-normed hidden rows."""
@@ -297,10 +316,11 @@ class _Model:
 
     # -- GEMMs
 
-    def fp8_linear(self, xs: list[Refs], w: Coll, ws: Coll) -> list[Refs]:
-        """vLLM's block-FP8 linear (`DynamicDeepGemmFp8LinearRule`): FlashInfer below 32 rows, else DeepGEMM (its output port 2)."""
+    def fp8_linear(self, xs: list[Refs], w: Coll, ws: Coll, rows: int | None = None) -> list[Refs]:
+        """vLLM's block-FP8 linear (`DynamicDeepGemmFp8LinearRule`): FlashInfer below 32 rows, else DeepGEMM (its output port 2).
+        The rows are the launch's, or `rows` for a call outside the graphs (kv_b_proj in the dense-MHA prefill)."""
         N, K = _arr_shape(w.type)
-        small = self.launch.tokens(len(xs)) < 32
+        small = (self.launch.tokens(len(xs)) if rows is None else int(rows)) < 32
         fn = self.k("flashinfer_fp8_linear" if small else "deepgemm_fp8_linear", K=K, N=N)
         outs = [self.call(fn, x, w.refs, ws.refs) for x in xs]
         return [(o if small else o[2]).refs for o in outs]
@@ -357,10 +377,8 @@ class _Model:
         IH, ID, TOPK = int(C["INDEX_HEADS"]), int(C["INDEX_HEAD_DIM"]), int(C["INDEX_TOPK"])
         D, indexer = NOPE + R, L in self.net.indexers
         w = lambda f: self.w[(L, f)]  # noqa: E731
-        limit = DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT)
-        if M > limit:
-            _refuse(f"a call of {M} query rows, a prefill (decode threshold {limit} at {NH} query heads per rank), which the dense-MHA "
-                    f"prefill backend serves")
+        prefills = self.launch.prefills((M, pos0), DECODE_THRESHOLD.get(NH, DECODE_THRESHOLD_DEFAULT))
+        dense = prefills if prefills and max(n + p for n, p in prefills) <= TOPK else []
         logs = self.logs.setdefault(L, {"latent": PartLog(), "ik": PartLog(), "iks": PartLog()})
         keys = [len(logs["latent"]) + i + 1 for i in range(M)]
         if keys[-1] > TOPK and self.run is None:
@@ -380,8 +398,11 @@ class _Model:
         iqb = self.fp8_linear(qc, w("wq_b_w"), w("wq_b_ws")) if indexer else None
         qr = self.k("dsa_q_rope", D=R)
         qpe = [concat([self.call(qr, q.slice(h * D + NOPE, (h + 1) * D), c).refs for h in range(NH)]) for q, c in zip(qb, cs)]
+        context = len(logs["latent"])
         for i in range(M):
             logs["latent"].append(concat([kvc[i], kpe[i]]))
+        own = (M, pos0) in dense
+        mqa = self.launch.keys([] if own else keys, without=dense)
         if indexer:
             fn = self.k("dsa_indexer_q", H=IH, D=ID, ROPE=R)
             iq = [self.call(fn, q, c, k.slice(ID, ID + IH)) for q, c, k in zip(iqb, cs, wkp)]
@@ -390,7 +411,7 @@ class _Model:
                 logs["iks"].append(s[1].refs)
             select = self.k("dsa_topk_short_row", TOPK=TOPK)
             self.topk = {}
-            for i, n in enumerate(keys):
+            for i, n in enumerate(keys if mqa else ()):
                 logits = self.call(self.k("dsa_mqa_logits", N=n, H=IH, D=ID), iq[i][0].refs, iq[i][1].refs, logs["ik"].cut(n),
                                    logs["iks"].cut(n))
                 if n <= TOPK:
@@ -404,8 +425,10 @@ class _Model:
                                     f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "
                                     f"settings route is the top-{TOPK} set of {n} logits in ascending index order (DsaTopKLongRow_v1)"))
                 self.topk[pos0 + i] = sw
+        if own:
+            return self.fp8_linear(self._dense_prefill(L, qb, qpe, kvc, kpe, context, pos0, dense), w("o_w"), w("o_ws"))
         G = FA3_SPARSE_GEOMETRY[(R, KVL)]
-        batch = [min(n, TOPK) for n in self.launch.keys(keys)]
+        batch = [min(n, TOPK) for n in mqa]
         by_keys = dict(zip(batch, launch_num_splits(batch, int(self.net.tp.num_sms), TOPK, 0)))
         att = []
         for i, n in enumerate(keys):
@@ -415,6 +438,108 @@ class _Model:
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))
+
+    def _dense_prefill(self, L: int, qb: list[Refs], qpe: list[Refs], kvc: list[Refs], kpe: list[Refs], context: int, pos0: int,
+                       dense: list[tuple[int, int]]) -> list[Refs]:
+        """The rows' attention by dense MHA (`MLACommonBaseImpl.forward_mha`, `FlashAttnPrefillBackend`), the step's prefills `dense`
+        (rows, start) all of at most TOPK keys (`use_dense_mha`), this request's `context` history rows before them -> rows [NH * VH].
+
+        kv_b_proj over the prefills' latent rows (eager, at their row count), then per row i and head h FA3's causal varlen self-attention
+        over the request's own rows 0..i (`run_prefill_new_tokens`), bound per head as `DsaDenseMhaRule` binds it, at the split count
+        `fa3_model.split_plan` gives the request among the prefills.  Where some prefill of the step has context (`has_context`), each
+        head returns its lse (`AttentionHeadLse_v1`, split `AttentionHeadSplitLse_v1`), the request's context partial is FA3's
+        non-causal attention over its gathered history (`_compute_prefill_context`: kv_b_proj over the context rows of the chunk, the
+        prefills with context, `run_prefill_context_chunk`) or, without context, the zero output with lse -inf vLLM neutralizes it to,
+        and `MergeAttnStates_v1` merges the two per token.  More context than one chunk is sure to hold is refused."""
+        import numpy as np
+        from verity.ml.definitions.numerics import fa3_model
+        from verity.ml.definitions.registry import fa3_split
+        from verity.ml.definitions.registry.merge_attn_states import NEG_INF
+        from verity_vllm.program.frontend import targets as TG
+        C, tp, M = self.C, self.net.tp, len(qb)
+        KVL, R, NOPE, VH, NH = (int(C[k]) for k in ("KV_LORA", "QK_ROPE", "QK_NOPE", "V_HEAD", "NH"))
+        D, KW = NOPE + R, NOPE + VH
+        w = lambda f: self.w[(L, f)]  # noqa: E731
+        if VH != D:
+            _refuse(f"a dense-MHA prefill at v head {VH} vs qk head {D}: Attention_v4 states one head dim for q, k and v")
+        if np.float32(C["ATTN_SCALE"]) != np.float32(D ** -0.5):
+            _refuse(f"a dense-MHA prefill at scale {C['ATTN_SCALE']!r}, not f32(D^-0.5) at D={D}, the word Attention_v4 folds in")
+        if not TG.fa3_check_inf(tp):
+            _refuse(f"a dense-MHA prefill on FA{tp.effective_flash_attn_version()} without FA3's check-inf-per-iteration construction")
+        if context != pos0:
+            _refuse(f"a dense-MHA prefill at position {pos0} over a layer history of {context} rows")
+        extends = [s for s in dense if s[1] > 0]
+        longest, held = max(n + p for n, p in dense), sum(p for _, p in extends)
+        if held > min(8 * longest, 65536):
+            _refuse(f"a dense-MHA step's context of {held} rows, past the {min(8 * longest, 65536)} rows of the smallest workspace "
+                    f"`plan_mla_context_chunks` may cut it at (several context chunks)")
+        max_q, rows, me = max(n for n, _ in dense), [n for n, _ in dense], dense.index((M, pos0))
+        try:
+            geom = TG.attention_geometry(tp, D, max_q, NH, NH)
+            BM = TG.fa3_tile_m(D, max_q, 1)
+        except TG.UnregisteredTarget as e:
+            _refuse(str(e))
+        BN, st = geom["BN"], {"BN": geom["BN"], "DOT": geom["DOT"], "INV": geom["INV"]}
+
+        def splits(keys=None, at=me, q=rows) -> int:
+            if tp.batch_invariant:
+                return 1
+            try:
+                static, dyn = fa3_model.split_plan(q, NH, NH, D, num_sms=int(tp.num_sms), Dv=D, seqlens_k=keys)
+                if dyn[at] > 1:
+                    fa3_split.check_combine_bound(static)
+            except ValueError as e:
+                _refuse(f"FA3's split count of a dense-MHA launch of {q} query rows over {keys or q} keys: {e}")
+            return dyn[at]
+
+        def head_logs(rows: list[Refs], pe: list[Refs]) -> tuple[list[tuple[PartLog, PartLog]], list[int]]:
+            """Per head the key rows [k_nope | k_pe] and the value rows, kv_b_proj's `rows` split per head ([k_nope | v] each), and
+            the key log's part count after each row."""
+            logs, ends = [(PartLog(), PartLog()) for _ in range(NH)], [0]
+            for r, p in zip(rows, pe):
+                for h, (klog, vlog) in enumerate(logs):
+                    for part in (r.slice(h * KW, h * KW + NOPE), p):
+                        for x in (part.parts if isinstance(part, Concat) else (part,)):
+                            klog.append(x)
+                    vlog.append(r.slice(h * KW + NOPE, (h + 1) * KW))
+                ends.append(len(logs[0][0]))
+            return logs, ends
+
+        def heads(fn, q: list[Refs], T: int, logs) -> list:
+            (pairs, ends) = logs
+            return [self.call(fn, q[h], klog.cut(ends[T]), vlog.cut(T)) for h, (klog, vlog) in enumerate(pairs)]
+
+        kvb = self.fp8_linear(kvc, w("kv_b_w"), w("kv_b_ws"), rows=sum(rows))
+        sfx, ns = head_logs(kvb, kpe), splits()
+        qs = [[concat([q.slice(h * D, h * D + NOPE), pe.slice(h * R, (h + 1) * R)]) for h in range(NH)] for q, pe in zip(qb, qpe)]
+        if not extends:
+            out = []
+            for i in range(M):
+                split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
+                fn = self.k("attention_dot", T=i + 1, NH=1, KVH=1, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i),
+                            **st, **split)
+                out.append(concat([o.refs for o in heads(fn, qs[i], i + 1, sfx)]))
+            return out
+        if context:
+            hist = self.logs[L]["latent"].parts[:context]
+            ckvb = self.fp8_linear([r.slice(0, KVL) for r in hist], w("kv_b_w"), w("kv_b_ws"), rows=held)
+            pre = head_logs(ckvb, [r.slice(KVL, KVL + R) for r in hist])
+            nc = splits([p for _, p in extends], extends.index((M, pos0)), [n for n, _ in extends])
+            nb = -(-context // BN)
+            cfn = self.k("attention_head_lse", T=context, D=D, MASKED_FROM=nb - 1, **st, **({} if nc == 1 else {"PER": -(-nb // nc)}))
+        else:
+            zero = self.call(self.k("const", W=16, BITS=0)).refs
+            ninf = self.call(self.k("const", W=32, BITS=NEG_INF)).refs
+            empty = (concat([zero] * (NH * D)), concat([ninf] * NH))
+        merge, out = self.k("merge_attn_states", NH=NH, D=D), []
+        for i in range(M):
+            split = {} if ns == 1 else {"PER": fa3_split.split_per(M, i, BM, BN, ns)}
+            fn = self.k("attention_head_lse", T=i + 1, D=D, MASKED_FROM=TG.fa3_masked_from(tp, i + 1, NH, NH, D, max_q, i), **st, **split)
+            s = heads(fn, qs[i], i + 1, sfx)
+            p = heads(cfn, qs[i], context, pre) if context else None
+            po, pl = (concat([o[0].refs for o in p]), concat([o[1].refs for o in p])) if p else empty
+            out.append(self.call(merge, po, pl, concat([o[0].refs for o in s]), concat([o[1].refs for o in s])).refs)
+        return out
 
     def mlp(self, L: int, x: list[Refs]) -> list[Refs]:
         w = lambda f: self.w[(L, f)]  # noqa: E731

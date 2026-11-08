@@ -35,6 +35,7 @@ pouw = [
     "verity/ml/protocols/pouw",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
+    "Security/Definitions/Assumptions/Pouw.lean",
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [

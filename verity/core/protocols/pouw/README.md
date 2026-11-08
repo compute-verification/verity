@@ -7,7 +7,7 @@ behind one interface (`protocol.PoUWScheme`, `schemes.get`). The proof system re
 its proof blocks with the challenger's coins, proves them in zero knowledge (Flock `--zk`) and verifies them; PoUW
 states what each execution phase commits, the Program each sampled proof block must pass, and what the outcome credits.
 It carries no policy parameter: it surfaces the ε at δ its sample established. A scheme must leave the useful work at
-least half of the honest prover's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
+least half of the honest developer's GPU effort (AGENTS.md, "PoUW is mostly useful work"): the trivial PoUW, which hashes
 every product, is a reference, not an answer.
 
 ## PoUW in the remote protocol
@@ -19,7 +19,7 @@ inference-only policy's check (`Core.Remote.components` in `verity/core/protocol
 subprotocols' commitments, the policy and the one-stage audit committed to one record, and every execution phase of the credit period
 names that record as its Commit record (`Core.Remote.windows`); any one's rejection rejects it
 (`Core.Composition.tiedSameB`, `verity/core/protocols/composition/README.md`). In the remote demo, the vLLM demo
-(`verity example vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
+(`verity demo vllm`), PoUW runs on the served model as H1, under the challenger's development key, so its verdict
 credits nothing, and an H1 commitment's served execution blocks aren't yet a `verity/pouw/period/v1` case. The remote
 protocol's front door is
 `verity/core/protocols/remote/`; PoUW is also a subprotocol of the onsite protocol (`verity/core/protocols/onsite`).
@@ -80,7 +80,7 @@ useful output; everything else (commitments, salt, sample, openings) is the prot
   tree hash goes unnamed. The others (h0, taken by name) keep Pearl's keyed-BLAKE3 seeds, lines and tickets, with
   TurboSHAKE128 leaves and SHA-256 trees.
 - **Pearl-C4** (`pearl-c-nvfp4-v0`, `verity/ml/protocols/pouw/schemes/pearl_c4.py`): Pearl-C with the FP8 product
-  replaced by sm_120's block-scaled FP4, NVFP4 only.
+  replaced by sm_120's FP4 with scale groups, NVFP4 only.
 - **NCP** (`ncp-v1`, `verity/ml/protocols/pouw/schemes/ncp.py`): noise-cancelling polarization over int7 activations, on
   SHA-256 trees (its `commitment_hash`: its tile digests are 32 bytes).
 - **Dither**, PoUW's no-fold design over the ACCEL model, is experimental, with its own spec, `dither/PROTOCOL.md`.

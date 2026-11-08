@@ -23,15 +23,15 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from verity.ml.circuits.codec import _spec_id, decode_program, encode_program, program_digest
 from verity.ml.circuits.defs import Body, CompositeDefinition, Node, SpecializedDefinition
 from verity.ml.circuits.constants import REGISTRATION
 from verity.ml.circuits.program import Program, is_input
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat, concat
-from verity.ml.circuits.types import Tuple as TupleT, Type
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Refs, Strided, coll_concat
+from verity.ml.circuits.types import Array, Tuple as TupleT, Type, Value, field_starts, field_types
 from verity_vllm.program.sampling_event import is_sampling_event
 
 SCHEMA = "verity/workload-program/v1"
@@ -339,9 +339,9 @@ class WorkloadRequest:
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` and `splits` are its request's own, like the prompt, and so are a warm request's cached `prefix` (on the
-# sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), a resumed request's `last_token`, a TP
-# rank Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the Waksman settings of its
-# rows past INDEX_TOPK, `predict.dsa.run_field`, whose checks fix them by its own logits)
+# sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), a resumed request's `last_token`, a TP rank
+# Program's `schedule` (its MoE align calls' keys, `CollectiveBus.schedule_key`) and its `run` (the Waksman settings of its rows past
+# INDEX_TOPK, `predict.dsa.run_field`, whose checks fix them by its own logits)
 _REQUEST_LOCAL_GROUPS = ("prompt", "seed", "splits", "prefix", "prefix_ik", "prefix_iks", "last_token", "schedule", "run")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
@@ -365,40 +365,130 @@ def _shared_positions(S) -> list[tuple[int, ...]]:
     return [tuple(int(j) for j in sh)] * len(S.requests)
 
 
+#: a Commit window's edge values (`Edge`) and the history group each holds, member by member: every layer's latent rows, the
+#: indexer layers' index-K slots and their scales (`predict.dsa.Net.prefix_params`), and the last kept token
+EDGE_PORTS = (("edge.kv", "prefix"), ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"), ("edge.last", "last_token"))
+_ROWS = ("prefix", "prefix_ik", "prefix_iks")   # an edge request Program's returns after its outputs (`build_program(edge=)`)
+
+
+@dataclass(frozen=True)
+class Edge:
+    """What a Commit window's edges carry (`predict.segment.edge_of`): `ins`, the requests the last window left with outputs to
+    keep, in its `close` order, and `outs`, the ones this window leaves so, in its `close` order; each member is (request index,
+    its groups), a group (name, leaves, width) in `EDGE_PORTS` order. GP-01 takes each in-port a member has a field in as a
+    registered parameter, which its history Inputs read; and returns each out-port after the requests' outputs: a member's rows
+    [0, LP + T) and last kept token (an edge request Program's, after its samples and any checks, its outputs), or an idle one's
+    in-port fields, passed through."""
+
+    ins: tuple = ()
+    outs: tuple = ()
+
+    def static(self) -> dict:
+        return {"in": [[int(i), [list(g) for g in gs]] for i, gs in self.ins], "out": [[int(i), [list(g) for g in gs]] for i, gs in self.outs]}
+
+
+def edge_ports(members) -> list[tuple[str, str, TupleT, list[int]]]:
+    """Each port of `EDGE_PORTS` some member has a field in: (port, group, its type, the members holding its fields, in order)."""
+    out = []
+    for port, g in EDGE_PORTS:
+        held = [(m, Array(int(n), Value(int(w)))) for m, (_, gs) in enumerate(members) for h, n, w in gs if h == g]
+        if held:
+            out.append((port, g, TupleT(*(t for _, t in held)), [m for m, _ in held]))
+    return out
+
+
+def _check_edge(edge: Edge, comps: dict[int, RequestComponent]) -> None:
+    """Refuse an edge whose groups aren't its members' Programs': an in-member's history Inputs, an out-member's returns after
+    its outputs (`_outputs`: `_ROWS`, then a last token it samples), or an idle out-member's in-port fields."""
+    ins = {int(i): tuple(map(tuple, gs)) for i, gs in edge.ins}
+    for side, members in (("in", edge.ins), ("out", edge.outs)):
+        for i, gs in members:
+            gs = tuple(map(tuple, gs))
+            if not gs or [g for g, _, _ in gs] != [g for _, g in EDGE_PORTS if g in {h for h, _, _ in gs}]:
+                raise ValueError(f"edge: request {i}'s {side}-port groups {gs} aren't some of {[g for _, g in EDGE_PORTS]}, in order")
+            types = {g: Array(int(n), Value(int(w))) for g, n, w in gs}
+            if i not in comps:
+                if side == "out" and ins.get(int(i)) != gs:
+                    raise ValueError(f"edge: request {i} leaves with {gs}, and it's no request of the workload nor came in so")
+            elif side == "in" and any(dict(comps[i].params).get(g) != t for g, t in types.items()):
+                raise ValueError(f"edge: request {i}'s history Inputs aren't its in-port fields {gs}")
+            elif side == "out":
+                ret = comps[i].fn.signature()[1]
+                rows = [g for g in types if g != "last_token"]
+                if (not isinstance(ret, TupleT) or rows != list(_ROWS[:len(rows)]) or _outputs(ret, gs)[0] not in (1, 2)
+                        or [t.leaves for t in field_types(ret)[_outputs(ret, gs)[0]:]] != [types[g].leaves for g in rows]
+                        or "last_token" in types and not field_types(ret)[0].leaves):
+                    raise ValueError(f"edge: request {i}'s Program doesn't return its samples (and checks), then its rows {gs}")
+
+
+def _outputs(ret: Type, gs) -> tuple[int, Type]:
+    """An edge request Program's outputs, before its rows of groups `gs`: how many of its return's fields they are (its samples,
+    then its checks where it makes any: `predict.common.with_checks`), and their type (the samples', or the tuple of both)."""
+    k = len(field_types(ret)) - sum(g != "last_token" for g, _, _ in gs)
+    return k, field_types(ret)[0] if k == 1 else TupleT(*field_types(ret)[:k])
+
+
+def _field(c: Coll, k: int) -> Coll:
+    t = field_types(c.type)[k]
+    return Coll(t, c.refs.slice(field_starts(c.type)[k], field_starts(c.type)[k] + t.leaves))
+
+
 def _workload_signature(S):
     """params = the shared group's Input batches ONCE (`shared.<name>`, from request 0 — all requests agree by construction),
-    then every request's non-shared batches (`request[<id>].<name>`), manifest order; ret = tuple of the requests' outputs."""
+    then the edge's in-ports (`Edge`), then every request's non-shared batches (`request[<id>].<name>`) but a carried request's
+    history, manifest order; ret = tuple of the requests' outputs (an edge request's samples), then the edge's out-ports."""
     reqs = S.requests
     pos = _shared_positions(S)
+    edge = getattr(S, "edge", None) or {"in": [], "out": []}
+    carried = {i: {g for g, _, _ in gs} for i, gs in edge["in"]}
     p0 = reqs[0]["fn"].signature()[0]
-    params = [(f"shared.{p0[j][0]}", p0[j][1]) for j in pos[0]]
-    rets = []
+    params = [(f"shared.{p0[j][0]}", p0[j][1]) for j in pos[0]] + [(port, t) for port, _, t, _ in edge_ports(edge["in"])]
+    rets, leaving = [], dict(map(tuple, edge["out"]))
     for r, sh in zip(reqs, pos):
         ps, ret = r["fn"].signature()
         shared = set(sh)
         for j, (pn, pt) in enumerate(ps):
-            if j not in shared:
+            if j not in shared and pn not in carried.get(r["index"], ()):
                 params.append((f"request[{r['request_id']}].{pn}", pt))
-        rets.append(ret)
-    return tuple(params), TupleT(rets)
+        rets.append(_outputs(ret, leaving[r["index"]])[1] if r["index"] in leaving else ret)
+    return tuple(params), TupleT(rets + [t for _, _, t, _ in edge_ports(edge["out"])])
 
 
 def _workload_body(B, S, *args):
     reqs = S.requests
     pos = _shared_positions(S)
-    k = len(pos[0])
-    outs = []
+    edge = getattr(S, "edge", None) or {"in": [], "out": []}
+    ins = edge_ports(edge["in"])
+    feed = {(edge["in"][m][0], g): _field(args[len(pos[0]) + p], f) for p, (_, g, _, ms) in enumerate(ins) for f, m in enumerate(ms)}
+    k = len(pos[0]) + len(ins)
+    outs, called, leaving = [], {}, dict(map(tuple, edge["out"]))
     for r, sh in zip(reqs, pos):
         ps, _ = r["fn"].signature()
         shared = {j: args[m] for m, j in enumerate(sh)}   # the m-th shared position of THIS request -> the m-th shared Input batch
         a = []
-        for j in range(len(ps)):
+        for j, (pn, _) in enumerate(ps):
             if j in shared:
                 a.append(shared[j])
+            elif (r["index"], pn) in feed:
+                a.append(feed[r["index"], pn])
             else:
                 a.append(args[k])
                 k += 1
-        outs.append(B.call(r["fn"], *a, name=f"request[{r['request_id']}]"))
+        called[r["index"]] = o = B.call(r["fn"], *a, name=f"request[{r['request_id']}]")
+        h = _outputs(o.type, leaving[r["index"]])[1] if r["index"] in leaving else None
+        outs.append(o if h is None else Coll(h, o.refs.slice(0, h.leaves)))
+    for _, g, t, ms in edge_ports(edge["out"]):
+        parts = []
+        for m, ft in zip(ms, field_types(t)):
+            i = edge["out"][m][0]
+            if i not in called:
+                parts.append(feed[i, g])
+            elif g == "last_token":
+                samples = _field(called[i], 0)
+                parts.append(Coll(ft, samples.refs.slice(samples.type.leaves - 1, samples.type.leaves)))
+            else:
+                parts.append(Coll(ft, _field(called[i], _outputs(called[i].type, leaving[i])[0] + _ROWS.index(g)).refs))
+        outs.append(coll_concat(t, parts))
     _, ret = _workload_signature(S)
     return coll_concat(ret, outs)
 
@@ -416,6 +506,10 @@ WORKLOAD = CompositeDefinition("Workload", 1, ("requests", "shared", "lag"), _wo
                                    "(request Programs as components, manifest order); output = tuple of the requests' bounded "
                                    "output interfaces; `lag` = the declared scheduler's post-EOS rows (R17-1: served output length "
                                    "a_r, executed prefix a_r + lag on an EOS stop before the cap)", conformance="exact-model-tested", register=False)
+WORKLOAD_EDGE = CompositeDefinition("Workload", 2, ("requests", "shared", "lag", "edge"), _workload_signature, _workload_body,
+                                    doc="Workload_v1 at a Commit window's edges (`Edge`): the last window's edge values as registered "
+                                        "parameters, its carried requests' history Inputs reading their fields, and this window's after "
+                                        "the requests' outputs", conformance="exact-model-tested", register=False)
 
 
 def served_lengths_rule(lag: int) -> dict:
@@ -453,10 +547,11 @@ def eos_lag_rows_declared(engine: dict | None) -> int | None:
 
 class WorkloadProgram:
     def __init__(self, requests: list[WorkloadRequest], shared: str = "weights", manifest_digest: str | None = None,
-                 ordering: str = "manifest", *, lag: int, theta_registered: bool = False) -> None:
+                 ordering: str = "manifest", *, lag: int, theta_registered: bool = False, edge: Edge | None = None) -> None:
         """`theta_registered`: bind the model's weights (`theta`) at registration, as `RegisteredInput<w>_v1`, whatever the
         components bind them as. The inference-only check reads only registered inputs as θ (nci-check's `theta-not-registered`). Off, the
-        weights are bound as the components bind them, so every workload digest built before it stands."""
+        weights are bound as the components bind them, so every workload digest built before it stands. `edge`: a Commit window's
+        (`Edge`), the Program then `WORKLOAD_EDGE`'s; None, `WORKLOAD`'s."""
         if not requests:
             raise ValueError("a workload needs at least one request")
         # LAG is REQUIRED (a keyword with no default: omitting it is a TypeError, never a silent 0 or 1) and in {0, 1}
@@ -490,12 +585,17 @@ class WorkloadProgram:
             if r.T is not None and r.T != r.cap - 1:
                 raise ValueError(f"request {r.request_id}: T={r.T} is not cap-1={r.cap - 1}: the Program must be built from the declared "
                                  "cap, never from a served length")
+        if edge is not None:
+            _check_edge(edge, {r.index: r.component for r in requests})
+        self.edge = edge
         self.requests = list(requests)
         self.shared_group = shared
         self.theta_registered = bool(theta_registered)
         self.registered = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
                                 if requests[0].component.groups[j] in reg[0]
                                 or self.theta_registered and requests[0].component.groups[j] == shared)   # the root parameters bound at registration
+        self.ports = tuple(p for p, _, _, _ in edge_ports(edge.static()["in"])) if edge is not None else ()
+        self.registered += self.ports
         self.theta = tuple(f"shared.{requests[0].component.params[j][0]}" for j in shared_idx
                            if requests[0].component.groups[j] == shared)        # the model's weights (`Program(theta=)`)
         self.shared = shared_idx                       # request 0's positions = the shared Input batches' order
@@ -507,7 +607,8 @@ class WorkloadProgram:
         # the static keeps the historical ONE-tuple form when uniform (every existing workload digest unchanged) and becomes one
         # tuple per request only when the positions differ (a distinct, self-describing encoding); `lag` is the third static:
         # every workload digest differs per declared value (and from the digest of every Program that declared no lag)
-        self.fn = WORKLOAD.bind(requests=tuple(r.static() for r in self.requests), shared=shared_idx if uniform else tuple(idx), lag=self.lag)
+        statics = {"requests": tuple(r.static() for r in self.requests), "shared": shared_idx if uniform else tuple(idx), "lag": self.lag}
+        self.fn = WORKLOAD.bind(**statics) if edge is None else WORKLOAD_EDGE.bind(**statics, edge=edge.static())
         self.program = Program(self.fn, annotations={"schema": SCHEMA, "manifest_digest": manifest_digest}, registered=self.registered,
                                theta=self.theta)
         self.descriptor = encode_program(self.program)  # encoded ONCE (every component definition is re-encoded: the dominant cost)
@@ -534,14 +635,16 @@ class WorkloadProgram:
         maps every request onto ONE interval (weights once), request-specific parameters onto their own interval."""
         body = self.program.root.body
         params, _ = self.fn.signature()
-        S = len(self.shared)
+        S, P = len(self.shared), len(self.ports)
         inputs = []
         for j in range(self._K):
-            owner = "shared" if j < S else params[j][0].split("].", 1)[0][len("request["):]
+            owner = "shared" if j < S else "edge" if j < S + P else params[j][0].split("].", 1)[0][len("request["):]
             inputs.append({"root_node": j, "param": params[j][0], "type": str(params[j][1]), "gates": [body.offsets[j], body.offsets[j + 1]], "owner": owner})
         shared_gates = [body.offsets[0], body.offsets[S]]
+        ins = edge_ports(self.edge.static()["in"]) if self.edge is not None else []
+        fed = {(self.edge.ins[m][0], g): (S + p, f, params[S + p][1]) for p, (_, g, _, ms) in enumerate(ins) for f, m in enumerate(ms)}
         reqs = []
-        pi = S
+        pi = S + P
         for r_i, r in enumerate(self.requests):
             k = self._K + r_i
             G = body.offsets[k]
@@ -552,6 +655,10 @@ class WorkloadProgram:
                 if j in sh_r:
                     s = sh_r.index(j)
                     local_inputs.append({"local_param": j, "name": pn, "global": params[s][0], "root_node": s, "gates": [body.offsets[s], body.offsets[s + 1]]})
+                elif (r.index, pn) in fed:
+                    s, f, t = fed[r.index, pn]
+                    lo = body.offsets[s] + field_starts(t)[f]
+                    local_inputs.append({"local_param": j, "name": pn, "global": f"{params[s][0]}[{f}]", "root_node": s, "gates": [lo, lo + pt.leaves]})
                 else:
                     local_inputs.append({"local_param": j, "name": pn, "global": params[pi][0], "root_node": pi, "gates": [body.offsets[pi], body.offsets[pi + 1]]})
                     pi += 1
@@ -687,4 +794,6 @@ class WorkloadProgram:
                                  "cross-request cache reuse is only the declared prefix-cache hits (`requests[].prefix`)",
                 "x09_inside": "each component is the X-09 request-wrapper Program (its digest is a static of the component); X-09 per-request "
                               "equality is evidence inside the global check, not a substitute for it",
+                **({"edge": {**self.edge.static(), "ports": {"in": list(self.ports), "out": [p for p, _, _, _ in edge_ports(self.edge.static()["out"])]}}}
+                   if self.edge is not None else {}),
                 "address_map": self.address_map(), "chronology": self.chronology()}
