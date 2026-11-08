@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pytest
-from circuit_check import structural as ST
 from verity.ml.circuits.boolean import forms as F
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.ops import prims as OP
@@ -137,16 +136,14 @@ def toy_reads(monkeypatch):
 
 def test_a_table_read_is_the_flat_layouts_rows_once_per_primitive(toy_reads):
     """The three reads that are not of a constant share one specialization, which lays its read out once, as
-    `ir_lower._Read` does: its constant bits are constant returns, and the template computes the flat lowering's outputs,
-    gate for gate (`circuit_check.structural`'s syntactic verdict, the read's rows compared as gates)."""
+    `ir_lower._Read` does: its constant bits are constant returns, and the template computes the flat lowering's outputs.
+    circuit-check's structural check holds such a template to the flat lowering gate for gate (its own tests)."""
     assert S.check(toy_reads)["mismatched_bits"] == 0
     tm, lw, top = S.lower(toy_reads)
     assert T.ordered(tm)["ok"]
     (read,) = [sp for k, sp in lw.specs.items() if k[0] == TOY_READ.id]
     assert read.reads == 1 and lw.total(top.key)["reads"] == 3
     assert (read.rets[6], read.rets[7]) == (("c", 0), ("c", 1))
-    r = ST.check(toy_reads, tm)
-    assert (r["structural"]["verdict"], r["structural"]["lowering"]["reads"], r["failures"]) == ("syntactic", 3, [])
 
 
 def test_an_assertion_is_refused_with_its_reason(monkeypatch):
