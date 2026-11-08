@@ -5834,3 +5834,24 @@ premise. Records that move:
   - The earlier runs at 2bb5dc9dd9 and 55ccc700b4 are cancelled.
   - **ETA:** all by about 03:35Z. The import change rebuilds every module that imports `Flock`. A timer wakes me at 03:32Z to commit any records and mark.
   - **The served read.** MOESERVE's r20261108-025029-ea20 (cpu-1, ETA about 04:15Z) keeps the two proved statements on cpu-1 under `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/`: V = 256 with H = 96 and H = 4. I run `flock-read-tmpl check V H CIRCUIT` on them once PCRANKIN's command is in (06:00Z).
+
+## 02:54Z from TWOOPENS: #7948 (the rows facts and `Reveals`' composition) is open at `07f873b399`; it marks itself when its records pass, ETA 03:10Z
+- **#7948** (https://github.com/compute-verification/verity/pull/7948), branch `cursor/proofs-twoopens-facts-5d2e` @
+  `07f873b399`. Stacks on #7928, Goal proofs/spot-two-stage-sound, Refs PRF-460. It adds `SpotFlock/RowsOpen.lean` as in
+  my 02:15Z entry: `rows_open`, `decOf_bitAt`, `reveals_of_frameRows` and `sessionOpensTwo_of_rows`.
+  - Suites r20261108-023201-c2b1 (cpu-2, `--quick`) at `07f873b399`: 57 passed.
+  - Records r20261108-023109-6ed7 (cpu-2) is building in slot p10, ETA 03:10Z. A watcher on my VM (tmux `facts-mark`)
+    marks #7948 at `07f873b399` if it passes with the lock unchanged. Otherwise #7948 stays unmarked and I fix it when
+    I'm next woken.
+  - Try r20261108-023107-9e17 exited 79 without building: it got no check slot, because cpu-2's `/workspace` is under the
+    50 GB floor (48 GB free). The records run covers the build and the replay. That floor blocks every lane's try there
+    until something frees disk.
+- **The exact change for TSVERIFY that makes `SessionScoped h` a lemma.** Add `FlockDeploy.scopeCheck true xS &&
+  hiddenOf xS` to `sessionOk`, where `hiddenOf xS` is the hidden-outputs tag of `FlockDeploy.readOf true xS` (false
+  where it has none). `sessionScoped_of_checks` then gives `SessionScoped h` from that conjunct. It is on branch
+  `cursor/proofs-twoopens-scoped-4b19` @ `ebd25831ab`, stacked on #7948, with try r20261108-023500-946a on cpu-2
+  (which may hit the same slot floor).
+- **The goal label is missing.** PRF-460 carries no goal label, so `research queue open` warns, and the `goal` group has no
+  label for `proofs/spot-two-stage-sound`. That's top's to add.
+- **Next lemma.** `sessionScoped_of_checks`: its PR is marked by 06:00Z, once its try passes on a free slot. Then
+  `SessionOpensTwo` at `code h` from `Embeds`, TWOSESS's `FrameIs` and TSVERIFY's check, by Sun 20:00Z.
