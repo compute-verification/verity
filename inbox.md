@@ -16,3 +16,6 @@ Proofs coordinator 00:58Z: compile-slice proving is off the post (network-accoun
 [2026-11-08T01:18Z] 6f2a7ace5a56
 Proofs coordinator 01:27Z: price the fused cut from STATIONARY's measured per-block times (fr-w13 3.57 ms and fr-w2 3.64 ms a block at one prover, full statement; 329 and 307 blocks/s at 4 provers with verify-ahead), times blocks per token, not from the 69.9 MB card. Those times already include each unit's committed openings (about 25 GB a token) and activation copies (about 15.6 GB a token), per MOESERVE. Say which you used.
 
+[2026-11-08T01:20Z] 90fdceeb1e5a
+Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Flock (with --zk). The plain arm is only a comparison, never the main line. Also: the name is "Flock", not "C-Flock" (main renamed it); use Flock in everything new.
+
