@@ -816,19 +816,14 @@ def _chunks_root(digests: bytes, nbytes: int, chunk: int) -> str:
 
 
 def _device_chunks() -> Any:
-    """`CHUNKS_CU` built for this process's device, once (torch's extension cache keeps it across engines), or None where it
-    can't be: then a whole cache is chunk-hashed on the host, under the same name."""
+    """`CHUNKS_CU` built for the visible devices, once (torch's extension cache keeps it across engines; its builder runs
+    ``ninja`` and ``nvcc`` from PATH and CUDA_HOME), or None where it can't be: then a whole cache is chunk-hashed on the
+    host, under the same name."""
     if S.dev is None:
         try:
-            import torch
             from torch.utils.cpp_extension import load_inline
             here = Path(__file__).resolve()
             hdr = next(p for p in (here.with_name("sha512.cuh"), here.parents[2] / "verity/ml/kernels/sha512.cuh") if p.is_file())
-            major, minor = torch.cuda.get_device_capability()
-            os.environ.setdefault("TORCH_CUDA_ARCH_LIST", f"{major}.{minor}")
-            import shutil
-            if shutil.which("ninja") is None:  # torch builds with ninja from PATH; a venv's sits beside its python
-                os.environ["PATH"] = f"{Path(sys.executable).parent}{os.pathsep}{os.environ.get('PATH', '')}"
             tag = hashlib.sha512(CHUNKS_CU.encode() + hdr.read_bytes()).hexdigest()[:16]
             t = time.time()
             S.dev = load_inline(f"spot_chunks_{tag}", cpp_sources="torch::Tensor chunks(torch::Tensor flat, int64_t chunk);",
@@ -1048,11 +1043,11 @@ def _check(mine: Any, out: Any, mode: str, batch_desc: Any) -> None:
 
 def _host_memory() -> dict:
     """This process's resident and peak resident host memory (``/proc/self/status``), in bytes."""
-    try:
-        got = dict(line.split(":", 1) for line in Path("/proc/self/status").read_text().splitlines() if ":" in line)
-        return {k: int(got[k].split()[0]) << 10 for k in ("VmRSS", "VmHWM") if k in got}
-    except OSError:
+    p = Path("/proc/self/status")
+    if not p.is_file():
         return {}
+    got = dict(line.split(":", 1) for line in p.read_text().splitlines() if ":" in line)
+    return {k: int(got[k].split()[0]) << 10 for k in ("VmRSS", "VmHWM") if k in got}
 
 
 def _drain() -> None:
