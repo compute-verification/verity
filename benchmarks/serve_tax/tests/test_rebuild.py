@@ -339,6 +339,27 @@ def test_rank_kv_groups_a_step_s_loads_by_dump_fills_the_rest_and_refills_a_dumm
     assert calls == [("block_roots", ({"a": [1, 2]},))] and kv.ranks_disagree == [{"requests": 1, "ranks": [2]}]
 
 
+def test_served_pins_are_set_before_vllm_loads_and_refused_once_inductor_has_read_its_own(tmp_path, monkeypatch) -> None:
+    import json
+    import os
+
+    pins = {"PYTHONHASHSEED": "0", "TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK": "0", "VLLM_USE_V2_MODEL_RUNNER": "1"}
+    (tmp_path / "meta.json").write_text(json.dumps({"pins": pins}))
+    for k in pins:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.delitem(sys.modules, "torch._inductor.config", raising=False)
+    monkeypatch.setattr(RB, "sys", NS(flags=NS(hash_randomization=0), modules=sys.modules))
+    assert RB.served_pins(tmp_path) == pins
+    assert os.environ["TORCHINDUCTOR_DYNAMIC_SCALE_RBLOCK"] == "0" and os.environ["VLLM_USE_V2_MODEL_RUNNER"] == "1"
+    assert "PYTHONHASHSEED" not in os.environ
+    monkeypatch.setitem(sys.modules, "torch._inductor.config", ModuleType("torch._inductor.config"))
+    with pytest.raises(SystemExit, match="Inductor"):
+        RB.served_pins(tmp_path)
+    (tmp_path / "meta.json").write_text(json.dumps({"pins": pins | {"PYTHONHASHSEED": "1"}}))
+    with pytest.raises(SystemExit, match="PYTHONHASHSEED=0"):
+        RB.served_pins(tmp_path)
+
+
 def test_full_pages_are_the_blocks_a_request_s_computed_tokens_fill() -> None:
     assert RB.full_pages({"a": ([4, 5, 6], 9), "b": ([7], 3), "c": ([1, 2], 8)}, 4) == {"a": [4, 5], "b": [], "c": [1, 2]}
 

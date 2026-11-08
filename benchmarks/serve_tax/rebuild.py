@@ -1286,6 +1286,18 @@ def served_tp(served: Path, a: int, b: int) -> dict[str, Any]:
             "rngs": {k: {r["rank"]: r["rng"] for r in recs[k]["ranks"]} for k in (a, b)}}
 
 
+def served_pins(served: Path) -> dict[str, str]:
+    """The pins the served engine ran under (its meta.json's), set in this process before anything loads vLLM: Inductor
+    reads its own once, when vLLM first imports it, and at one GPU the model runs here."""
+    pins = json.loads((served / "meta.json").read_text()).get("pins") or {}
+    if pins.get("PYTHONHASHSEED", "0") != "0" or sys.flags.hash_randomization:
+        raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
+    if "torch._inductor.config" in sys.modules:
+        raise SystemExit("Inductor's config was imported before the served pins were set: set them first (served_pins)")
+    os.environ.update({k: v for k, v in pins.items() if k != "PYTHONHASHSEED"})
+    return pins
+
+
 def tp_engine(meta: dict[str, Any], header: dict[str, Any], scratch: Path) -> tuple[Any, dict[str, Any]]:
     """The served engine built again in this process as `tp_restore.restore` builds it: from the served server's argv
     and block count, under its pins, with its FlashInfer autotune results; and how it was built."""
@@ -1489,6 +1501,8 @@ def main(argv: list[str] | None = None) -> int:
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
+    if a.served:
+        served_pins(a.served)
     a.out.mkdir(parents=True, exist_ok=True)
     if a.mirror_out:
         a.mirror_out.mkdir(parents=True, exist_ok=True)
