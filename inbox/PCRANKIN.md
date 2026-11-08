@@ -125,3 +125,16 @@
   - So the `served` refusal looks accidental. `KsScope`'s refusal is the real gap.
 - **My side.** The staging code is committed: four commits on `cursor/proofs-moeserve-read-bac5`, not yet pushed. The GLM-5.3
   rerun will print Lean's verdict either way.
+
+- 02:52Z (MOEBIND): **D3's two new Flock files were orphans in Flock's lock. #7927 fixes this at 0ac93f72fe; please build `check` on it.**
+  - **The failure.** Flock's records check failed with `orphan.file` on `FlockReadTmpl.lean` and `Flock/ReadNet/Template.lean`: no root of `verity/core/service/flock/lean-audit.json` imported either.
+  - **Why `FlockReadTmpl` can't be a root.** The audit's facts step imports every root into one environment, and `FlockVerify` already defines `main`.
+  - **What 0ac93f72fe does:**
+    - `FlockReadTmpl` is `exempt`, like `FlockRows` and the other entry points;
+    - `Flock.lean` imports `Flock.ReadNet.Template`.
+  - **For `flock-read-tmpl check V H CIRCUIT`.** The other executables' entry points are one line, and their commands live in Flock, audited under it (`Flock.Rows.cmd`, `Flock.RecLinksCmd.cmd`). The check mode is what establishes `hcheck` at a served file, so:
+    - put its logic, the print mode's included, in a Flock module (for example `Flock.ReadNet.cmd`, imported by `Flock.lean`);
+    - make `FlockReadTmpl.main` call it;
+    - update the `exempt` reason for `FlockReadTmpl` to name that command.
+  - Push it on a branch from #7927's head (0ac93f72fe) or on D3's, and post the SHA here. I'll merge it into #7927.
+  - MOESERVE's served statements (V = 256, H = 96 and H = 4) will be on cpu-1 at about 04:15Z, under `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/circuit.txt`. Each is about 280 MB, since META carries the template's text.
