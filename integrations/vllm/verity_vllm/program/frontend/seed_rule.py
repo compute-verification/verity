@@ -3,7 +3,8 @@
 
     ServedSeed_v1{COIN, RID}  (seeded: bit, seed: Word, coin: Array<COIN, u8>, user: Array<RID, u8>) -> Word
     SeedCheck_v1{COIN, RID}   (served: Word, seeded, seed, coin, user) -> bit
-    SeedCheck_v2{COIN, RID}   (served: i64, seeded, seed, coin, user) -> bit: SeedCheck_v1 of the sampler's seed word's bits
+    SeedCheck_v2{COIN, RID}   (served: i64, seeded, seed, coin, user) -> bit: SeedCheck_v1's Calls on the seed word's bits
+    SeedWord_v1               (served: i64) -> Word: the word's 64 bits
     SeedBlocks_v1{COIN, RID}  (coin, user) -> Array<8 + 16 n, Word>: SHA-512's IV, then the message's n padded blocks
     SeedSelect_v1             (seeded: bit, seed: Word, cv: Array<8, Word>, block: Array<16, Word>) -> Word: seed if seeded,
                               else bits 1-63 of the first word of cv's compression by block
@@ -22,7 +23,8 @@ coin is the window's. `SeedCheck_v1` is 1 exactly when ``served``, the seed the 
 Every stochastic request Program returns `SeedCheck_v2{COIN, RID}` as a check (`check`, `predict.common.with_checks` and
 `in_derive`), COIN the window's seed salt's 64 bytes and RID its id's length (`rid_of`), so serving's choice of seed is a witness
 the check holds to one value (`program.inputs`). Its sampler reads the seed as one i64 word, which a Program reads at that width
-alone, so `SeedCheck_v2` takes the word and splits it into its 64 bits by `BitAtx64_v1` at each position before `SeedCheck_v1`.
+alone, so `SeedCheck_v2` takes the word, splits it into its 64 bits (`SeedWord_v1`: `BitAtx64_v1` at each position) and checks
+them by `SeedCheck_v1`'s Calls, so it too is calls and wiring only.
 The rule's other inputs are the Program's certified parameters `PARAMS` (`params`), after its ``seed``: ``seeded``,
 ``body_seed`` and ``user`` are ingress schema v1's (`boolean_io_shell.IngressSampled_v1`'s outputs, of the same types), and
 ``seed_salt`` is the window's (``window.seed_salt``). An unseeded request's seed is derived (``seeded`` 0: `served_seed.derived`
@@ -48,8 +50,8 @@ from verity.ml.commitments.gates.lms import Sha512Compress
 from verity.ml.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
-__all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "ServedSeed", "blocks",
-           "check", "check_reference", "in_derive", "params", "reference", "rid_of", "values"]
+__all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
+           "blocks", "check", "check_reference", "in_derive", "params", "reference", "rid_of", "values"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)
@@ -137,20 +139,27 @@ SeedCheck = CompositeDefinition("SeedCheck", 1, STATICS, _check_sig, _check, ref
                                 doc="1 iff served, the seed a Program's sampler read, is ServedSeed_v1's of the certified inputs")
 
 
+def _bits(B: Any, S: Any, served: Coll) -> Coll:
+    at = [B.call(const(32, i)) for i in range(64)]
+    return B.batch(bit_at(64), served, Coll(Array(64, Value(32)), concat([c.refs for c in at])), axes=(None, 0))
+
+
+SeedWord = CompositeDefinition("SeedWord", 1, (), lambda S: ((("served", I64),), WORD), _bits, conformance=CONFORMANCE,
+                               doc="the i64 seed word's 64 bits, LSB first: BitAtx64_v1 at each position")
+
+
 def _word_sig(S: Any) -> tuple:
     params, ret = _check_sig(S)
     return (("served", I64), *params[1:]), ret
 
 
 def _word_check(B: Any, S: Any, served: Coll, *ins: Coll) -> Coll:
-    at = [B.call(const(32, i)) for i in range(64)]
-    bits = B.batch(bit_at(64), served, Coll(Array(64, Value(32)), concat([c.refs for c in at])), axes=(None, 0))
-    return B.call(bind(SeedCheck, COIN=S.COIN, RID=S.RID), bits, *ins)
+    return _check(B, S, B.call(SeedWord, served), *ins)
 
 
 SeedCheckWord = CompositeDefinition("SeedCheck", 2, STATICS, _word_sig, _word_check, refuse=_refuse, conformance=CONFORMANCE,
-                                    doc="SeedCheck_v1 of served, the i64 seed word a Program's sampler read, as its 64 bits "
-                                        "(BitAtx64_v1 at each position, LSB first)")
+                                    doc="1 iff served, the i64 seed word a Program's sampler read, is ServedSeed_v1's of the "
+                                        "certified inputs: SeedCheck_v1's Calls on its 64 bits (SeedWord_v1)")
 
 
 def rid_of(request_id: str) -> int:
