@@ -1444,12 +1444,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Claims.Sampling.KS": {
-   "owner": "@proofs",
-   "digest": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Claims.Sampling.PrivateCircuit.Fits": {
    "owner": "@proofs",
    "digest": "24112cd715fb564fa24e1e75189fddbcb14df7f2ba073735ddb87bbf657c5241",
@@ -3646,10 +3640,6 @@
     "fails": "Claims.Sampling.Binding_fails",
     "meets": ["Claims.Sampling.Binding_meets", "Claims.Sampling.Binding_meets_one"]
    },
-   "Claims.Sampling.Bits": {
-    "fails": "Claims.Sampling.Bits_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
-   },
    "Claims.Sampling.BitsLin": {
     "fails": "Claims.Sampling.BitsLin_fails",
     "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
@@ -3657,18 +3647,6 @@
    "Claims.Sampling.Complete": {
     "fails": "Claims.Sampling.Complete_fails",
     "meets": ["Claims.Sampling.scope_meets"]
-   },
-   "Claims.Sampling.Efficient": {
-    "fails": "Claims.Sampling.Efficient_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
-   },
-   "Claims.Sampling.KS": {
-    "fails": "Claims.Sampling.KS_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
-   },
-   "Claims.Sampling.KSCount": {
-    "fails": "Claims.Sampling.KSCount_fails",
-    "meets": ["Claims.Sampling.decoder_meets_plain", "Claims.Sampling.decoder_meets_zk"]
    },
    "Claims.Sampling.Nontrivial": {
     "fails": "Claims.Sampling.Nontrivial_fails",
@@ -11299,21 +11277,6 @@
    },
    "type_hash": "e47885553e8f5fb861ed3c170fa7009becd9e97691bf14e6e64a4ed8e488f828"
   },
-  "Claims.Sampling.Bits_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.Bits_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
-    "  Exists fun D => Not (Claims.Sampling.Bits H D)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Claims.ExpectedCR", "Claims.Flock.ListWithin", "Claims.Sampling.Scope", "Claims.StrictBirthday"],
-    "reads": []
-   },
-   "type_hash": "d088654d81287a19e9e0bee30810f5cbe1ffd5eb3d0dc5772070391cf73d65e2"
-  },
   "Claims.Sampling.Complete_fails": {
    "owner": "@proofs",
    "signature": ["Claims.Sampling.Complete_fails : Exists fun H => Exists fun D => Not (Claims.Sampling.Complete H D)"],
@@ -11325,36 +11288,6 @@
     "reads": []
    },
    "type_hash": "51f15575e138606bb751aa5659ed0f9d16761c596d011a5035a2df9bcf6d4be4"
-  },
-  "Claims.Sampling.Efficient_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.Efficient_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
-    "  (H : Claims.Msg → Claims.Msg) : Exists fun z => Exists fun D => Not (Claims.Sampling.Efficient H D 0)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": [],
-    "reads": []
-   },
-   "type_hash": "4198130083bf4a4c93fa88d9a4f9a93a5c3b3259d18d82ed0453302fa0f3e6f4"
-  },
-  "Claims.Sampling.KSCount_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.KSCount_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
-    "  (H : Claims.Msg → Claims.Msg) : Exists fun D => Not (Claims.Sampling.KSCount H D)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Claims.Flock.ListWithin", "Claims.Sampling.Scope"],
-    "reads": []
-   },
-   "type_hash": "00bed36c39eaf751988e2f5c811ddd0388920d22c4ec06ce5259e93d25247341"
   },
   "Claims.Sampling.KSLinOn_fails": {
    "owner": "@proofs",
@@ -11376,21 +11309,6 @@
     "reads": []
    },
    "type_hash": "abebd32213005259fa2754347dd54a59c26cf68bf16f917ef2ba76241d292710"
-  },
-  "Claims.Sampling.KS_fails": {
-   "owner": "@proofs",
-   "signature": [
-    "Claims.Sampling.KS_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Claims.Msg → Claims.Msg) :",
-    "  Exists fun D => Not (Claims.Sampling.KS H D)"
-   ],
-   "assumptions": [],
-   "premises": {
-    "assumptions": [],
-    "domain": [],
-    "open": ["Claims.Flock.ListWithin", "Claims.Sampling.Scope"],
-    "reads": []
-   },
-   "type_hash": "0c24d825666e50b5dfec654647c28f4cb69de8c85fda043d2c001ec550de95a1"
   },
   "Claims.Sampling.Nontrivial_fails": {
    "owner": "@proofs",
