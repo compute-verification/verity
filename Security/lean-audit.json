@@ -18552,21 +18552,26 @@
    "signature": [
     "NetTiming.Witness.SampledLeakChecked_nontrivial :",
     "  Not",
-    "    (Claims.Sampling.KSLinOn FlockDeploy.sha512 (NetTiming.Witness.leakD Bool).V",
+    "    (Claims.Sampling.KSLinOn FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).V",
     "      (fun x =>",
-    "        And (NetTiming.ScopeAcc (NetTiming.Witness.leakD Bool) (fun x => NetTiming.Witness.notLay) (fun x => 1) x)",
-    "          (NetTiming.CheckedWitness FlockDeploy.sha512 (NetTiming.Witness.leakD Bool)",
+    "        And",
+    "          (NetTiming.ScopeAcc (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))",
+    "            (fun x => NetTiming.Witness.notLay) (fun x => 1) x)",
+    "          (NetTiming.CheckedWitness FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))",
     "            (fun x => List.cons Unit.unit List.nil) (fun x x_1 => True) (fun x => 0) x))",
-    "      (NetTiming.RLeakChecked FlockDeploy.sha512 (NetTiming.Witness.leakD Bool).commit",
-    "        (NetTiming.Witness.leakD Bool).parse (NetTiming.Witness.leakD Bool).partition 1 1 1",
+    "      (NetTiming.RLeakChecked FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).commit",
+    "        (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).parse",
+    "        (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).partition 1 1 1",
     "        (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
     "        (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection)",
     "        (fun x x_1 => True) 1)",
-    "      (Claims.Sampling.E (NetTiming.Witness.leakD Bool) fun x => List.cons Unit.unit List.nil)",
-    "      (fun x => instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.leakD Bool) 0 x) 0)",
-    "      (Claims.Sampling.γ (NetTiming.Witness.leakD Bool)) (fun x => 1)",
-    "      (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.leakD Bool).V",
-    "        (Claims.Sampling.E (NetTiming.Witness.leakD Bool) fun x => List.cons Unit.unit List.nil)))"
+    "      (Claims.Sampling.E (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) fun x =>",
+    "        List.cons Unit.unit List.nil)",
+    "      (fun x => instHAdd.hAdd (Claims.Sampling.κ (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) 0 x) 0)",
+    "      (Claims.Sampling.γ (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool))) (fun x => 1)",
+    "      (Claims.Sampling.Bext FlockDeploy.sha512 (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)).V",
+    "        (Claims.Sampling.E (NetTiming.Witness.atNot (Claims.Witness.Sampling.sksD Bool)) fun x =>",
+    "          List.cons Unit.unit List.nil)))"
    ],
    "assumptions": [],
    "premises": {
@@ -18575,7 +18580,7 @@
     "open": ["NetTiming.ScopeAcc"],
     "reads": []
    },
-   "type_hash": "603a36fd3cf846b9986e495769f453a466bdb7f2ac08485a138ce532c4afe73c"
+   "type_hash": "ebc0c2fa40125981210510d6ef113c9732e42b40096fe298043c50d84f5a05ee"
   },
   "Pous.Claims.StreamedWipeMeetsDisk_fails": {
    "owner": "@memory-accounting",
@@ -35425,6 +35430,16 @@
     "NetTiming.streamCell": "5099c8817f9762186ef5b7b163aeb9d09fbbd6106b964dacc1f3d757cdfbdd21"
    }
   },
+  "Definitions.NetworkCertifier.Witness": {
+   "digest": "74b6f5494ec2d31c651e517fec556464924573fd95290c10c66a435dc2a7b62a",
+   "definitions": {
+    "NetTiming.Witness.atNot": "ecbf8db9c8161357cdf2cb684b5ece43d3639bdb6fdcb19c7e7491d836a98721",
+    "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
+    "NetTiming.Witness.notPart": "982b51f068c8755fb55e719a48e428a265169fb3aaf0143928d34950e4ba12a2",
+    "NetTiming.Witness.notProg": "fe3133aeacb056fe002e1a50989f037f9b0b15b21b06bcb7132e6f694890ea21",
+    "NetTiming.Witness.notStmt": "88ded853825518d668483f5ade769e3c2a72b2820e08a5d98283d44526f3d138"
+   }
+  },
   "Definitions.Pous.Accounting.GradedMeets": {
    "digest": "4af4e7e25629ec16f9bfab71b839349841691b42f7e8ac3a56849edb1457d745",
    "definitions": {
@@ -47436,10 +47451,11 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.Sampling": {
-   "digest": "7102f2e730a93a06be8a989489419e1df34d95ef269982e0190f873b773d7122",
+   "digest": "7a71a8bb907e2e5a411b464f05010563264440cbc7a04cddf3192a1a46a8128d",
    "definitions": {
     "Claims.Witness.Sampling.accCm": "566bdcfd90351b8d5cf1fb6e2ff58c0a1191ff0b85577f55b756e6d8b5b0e734",
     "Claims.Witness.Sampling.rejCm": "e66ac4a58a8d92c33a00de9599be1295dfe567b2de42eb54b561cc49b12f3370",
+    "Claims.Witness.Sampling.sksD": "569a3a08a553d2468102404c310c0d71d0741f02497221b1cbe2fb09a610865a",
     "Claims.Witness.Sampling.toyPart": "7497eaa324030418361914930e871aec6045305dc456582ac14396d36870c740",
     "Claims.Witness.Sampling.toyProg": "6409c862503069c2daab6caf4c7dbe2dfd2780cc8db6c21ddb6ea3ed56e5f04d",
     "Claims.Witness.Sampling.toyStmt": "3ebc9349f0a6866fa4fd1c0755867784a8d6c9750d421de191f689ec0f773ad9",
