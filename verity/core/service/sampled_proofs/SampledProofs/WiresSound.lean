@@ -1,6 +1,6 @@
 module
 
-public import SampledProofs.WiresSpan
+public import SampledProofs.WiresOrder
 
 /-! **`check` is sound against its unrolled reference.** Whenever `check` accepts a circuit's wires:
 
@@ -8,7 +8,9 @@ public import SampledProofs.WiresSpan
   writer each wire reads lies in its template, and no reader row is wired twice;
 * the writer `Summary.writerOf` gives a reader row by the wires alone is the one the expanded rows give it
   (`writerOf_eq`);
-* the wired rows and bits, multiplied through, are the expanded rows' counts (`wiredRows_eq`, `wiredBits_eq`).
+* the wired rows and bits, multiplied through, are the expanded rows' counts (`wiredRows_eq`, `wiredBits_eq`);
+* the dataflow between units the expanded rows give is acyclic: no unit reads itself through a chain of wires
+  (`check_acyclic`).
 
 The converse, that `check` accepts whatever `checkRef` accepts, is `check_complete`'s. -/
 
@@ -38,6 +40,22 @@ theorem firstWire_eq_none {c : Wiring} {f : Wire → Option Code} :
       simp [h w hw]
     rw [this]; rfl
 
+theorem orderCode_eq_none {c : Wiring} {f : List (String × Nat) → Wire → Bool} :
+    orderCode c f = none ↔ ∃ o, orderOf c = .ok o ∧ ∀ w ∈ c.wires, f o w = true := by
+  unfold orderCode
+  split
+  · rename_i r hr
+    simp [hr]
+  · rename_i o ho
+    rw [firstWire_eq_none]
+    constructor
+    · intro hall
+      exact ⟨o, ho, fun w hw => by have := hall w hw; split at this <;> simp_all⟩
+    · rintro ⟨o', ho', hall⟩ w hw
+      rw [ho] at ho'
+      cases ho'
+      simp [hall w hw]
+
 theorem shape_cut {c : Wiring} {w : Wire} {rt wt : Template} (h : shape c w = .ok (rt, wt)) :
     1 ≤ w.cuts ∧ w.units % w.cuts = 0 := by
   unfold shape at h
@@ -51,12 +69,6 @@ theorem shape_cut {c : Wiring} {w : Wire} {rt wt : Template} (h : shape c w = .o
         exact ⟨hc.1.1.1, hc.2⟩
     · cases h
   · cases h
-
-theorem readerUnit_lt {w : Wire} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0) {i : Nat} (hi : i < w.units) :
-    i / w.cuts < w.readerUnits := by
-  unfold Wire.readerUnits
-  have h2 : w.units / w.cuts * w.cuts = w.units := Nat.div_mul_cancel (Nat.dvd_of_mod_eq_zero hd)
-  exact (Nat.div_lt_iff_lt_mul (by omega)).2 (by rw [h2]; exact hi)
 
 theorem boundsRef_of {w : Wire} {rt wt : Template} (hc : 1 ≤ w.cuts) (hd : w.units % w.cuts = 0)
     (h : boundsOk w rt wt = true) : boundsRef w rt wt = true := by
@@ -162,16 +174,69 @@ theorem check_sound {c : Wiring} {S : Summary} (h : check c = .ok S) :
       split at h
       · cases h
       · rename_i hov
-        cases h
-        have hall := firstWire_eq_none.1 hf
-        have hw : ∀ w ∈ c.wires, 1 ≤ w.cuts ∧ w.units % w.cuts = 0 := fun w hw =>
-          ⟨(wireCodeRef_of (hall w hw)).1, (wireCodeRef_of (hall w hw)).2.1⟩
-        have hf' : firstWire c (wireCodeRef c) = none :=
-          firstWire_eq_none.2 fun w hw => (wireCodeRef_of (hall w hw)).2.2
-        have hd := distinctRows_of hw (by simpa using hov)
-        refine ⟨rfl, ?_⟩
-        unfold checkRef
-        simp [hcut, hf', hd]
+        split at h
+        · cases h
+        · rename_i hord
+          cases h
+          have hall := firstWire_eq_none.1 hf
+          have hw : ∀ w ∈ c.wires, 1 ≤ w.cuts ∧ w.units % w.cuts = 0 := fun w hw =>
+            ⟨(wireCodeRef_of (hall w hw)).1, (wireCodeRef_of (hall w hw)).2.1⟩
+          have hf' : firstWire c (wireCodeRef c) = none :=
+            firstWire_eq_none.2 fun w hw => (wireCodeRef_of (hall w hw)).2.2
+          have hd := distinctRows_of hw (by simpa using hov)
+          have hord' : orderCode c orderedWireRef = none := by
+            obtain ⟨o, ho, hin⟩ := orderCode_eq_none.1 hord
+            exact orderCode_eq_none.2 ⟨o, ho, fun w hw' => orderedWire_ref (hw w hw').1 (hw w hw').2 (hin w hw')⟩
+          refine ⟨rfl, ?_⟩
+          unfold checkRef
+          simp [hcut, hf', hd, hord']
+
+/-- The order `checkRef` accepts the wires in. -/
+theorem checkRef_order {c : Wiring} {es : List Entry} (h : checkRef c = .ok es) :
+    ∃ o, orderOf c = .ok o ∧ ∀ w ∈ c.wires, orderedWireRef o w = true := by
+  unfold checkRef at h
+  split at h
+  · cases h
+  · split at h
+    · cases h
+    · dsimp only at h
+      split at h
+      · cases h
+      · split at h
+        · cases h
+        · rename_i hord
+          exact orderCode_eq_none.1 hord
+
+/-- Writer unit `x` writes a row that reader unit `y` reads, through one of the wires: an edge of the dataflow between
+units the expanded rows give, each unit `(template, unit)`. -/
+def Wiring.Reads (c : Wiring) (x y : String × Int) : Prop :=
+  ∃ w ∈ c.wires, ∃ e ∈ w.entries, x = (e.2.1, e.2.2.1) ∧ y = (e.1.1, (e.1.2.1 : Int))
+
+/-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since along every wire the
+order's rank of the reader unit's block exceeds the writer's. -/
+theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
+    ¬ Relation.TransGen c.Reads x x := by
+  obtain ⟨o, -, ho⟩ := checkRef_order (check_sound h).2
+  let ρ : String × Int → Nat := fun x => (blockOf o x.1 x.2.toNat).getD 0
+  have step : ∀ x y, c.Reads x y → ρ x < ρ y := by
+    rintro x y ⟨w, hw, ⟨⟨r, u, p, q⟩, ⟨wr, v, out⟩⟩, he, rfl, rfl⟩
+    have hin := ho w hw
+    simp only [orderedWireRef, List.all_eq_true] at hin
+    have := hin _ he
+    dsimp only at this
+    split at this
+    · rename_i a a0 b h1 h2 h3
+      simp only [Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at this
+      simp only [ρ, Int.toNat_natCast, h1, h3, Option.getD_some]
+      exact this.2
+    · simp at this
+  have chain : ∀ a b, Relation.TransGen c.Reads a b → ρ a < ρ b := by
+    intro a b hab
+    induction hab with
+    | single h => exact step _ _ h
+    | tail _ h ih => exact Nat.lt_trans ih (step _ _ h)
+  intro hx
+  exact Nat.lt_irrefl _ (chain x x hx)
 
 /-! ## The lookup: `Summary.writerOf` is the reference's search -/
 
@@ -294,7 +359,9 @@ theorem check_summary {c : Wiring} {S : Summary} (h : check c = .ok S) : S = ⟨
     · cases h
     · split at h
       · cases h
-      · cases h; rfl
+      · split at h
+        · cases h
+        · cases h; rfl
 
 theorem entries_length (w : Wire) : w.entries.length = w.units := by simp [Wire.entries]
 

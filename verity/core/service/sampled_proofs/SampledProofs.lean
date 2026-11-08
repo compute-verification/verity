@@ -34,6 +34,7 @@ public import SampledProofs.ChallengerTrees
 public import SampledProofs.ChallengerInnerTrees
 public import SampledProofs.Wires
 public import SampledProofs.WiresSpan
+public import SampledProofs.WiresOrder
 public import SampledProofs.WiresSound
 public import SampledProofs.WiresComplete
 public import SampledProofs.WiresDrawn
