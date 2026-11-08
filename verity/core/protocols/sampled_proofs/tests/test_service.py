@@ -318,17 +318,23 @@ def test_one_stage_refusals_come_through_register():
     assert stream.register(_record(), _ports(6)).order == 0
 
 
-def test_a_law_whose_count_varies_is_refused_at_register():
-    """A Bernoulli sampling design at 0 < p < 1 samples a count that varies, so one registration's sessions would set up tables of
-    different shapes: `register` refuses it (`shapes`) after R1-R7, and logs nothing. At p = 0 or 1 it registers."""
-    for p in ("1/2", "2/3", "2/4"):
+def test_a_bernoulli_law_is_refused_at_register():
+    """A Bernoulli sampling design at any p is outside the sampled audit's soundness statement (at 0 < p < 1 its sampled
+    count varies; at p = 0 it samples nothing, so a stream would accept having verified nothing): `register` refuses it
+    (`bernoulli`, with `BERNOULLI`) after R1-R7, and logs nothing. Subset, stratified, work and All register."""
+    for p in ("0/1", "0/4", "1/1", "3/3", "1/2", "2/3", "2/4"):
         stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert _refused(lambda: stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))) == ("shapes",)
+        with pytest.raises(S.Refused) as e:
+            stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6))
+        assert e.value.verdict.codes == ("bernoulli",), p
+        assert e.value.verdict.detail["bernoulli"]["reason"] == S.BERNOULLI
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
-    for p in ("0/1", "1/1", "3/3"):
-        stream = _stream(_spec(S.Law(f"bernoulli:{p}")))
-        assert stream.register(_record(law={"law": "bernoulli", "p": p}), _ports(6)).order == 0
+    for selection, law, table in ((S.Law("subset:2"), {"law": "subset", "k": 2}, None),
+                                  (S.Law("stratified:2"), D.parse_law("stratified:2"), None),
+                                  (S.Law("work:2"), D.parse_law("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
+        stream = _stream(_spec(selection, public=(*RECORD_ITEMS, STRATUM)))
+        assert stream.register(_record(law=law, work_table=table), _ports(6), work_table=table).order == 0, law
 
 
 def test_a_rate_law_keeps_every_units_inclusion_at_its_rate_however_the_prover_pads_n():
@@ -703,7 +709,7 @@ def test_a_closure_map_is_refused_before_any_coin_is_read():
     assert stream.outcome(draw, _lean(), {}).accepted
 
 
-@pytest.mark.parametrize("text", ["subset:2", "bernoulli:3/3", "stratified:2", "work:2"])
+@pytest.mark.parametrize("text", ["subset:2", "stratified:2", "work:2"])
 def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     """The sample is Lean's `drawWith` on the coins (`coins.draw_first`), so `flock-verify draw` on the same bytes
     samples the same proof blocks."""

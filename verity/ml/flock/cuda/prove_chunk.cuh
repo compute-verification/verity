@@ -690,8 +690,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
                           : (C->comp_slots > 64 || (k_log != 20 && k_log != 21)))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
-    // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each)
-    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes + ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20);
+    // the zerocheck's second fold pair (d_amn, d_bmn) holds at most a quarter of round 2's tables, which the tail's first lookahead
+    // writes there, or half when the lookahead loop doesn't run and the fold after it writes there
+    const long long zc_out = 1LL << (m - 6), zc_next = (m - 7 >= 3 && zc_out / 16 > ZT_FINISH_OP) ? zc_out / 4 : zc_out / 2;
+    // + the lincheck's K-length vectors, which dominate at small m (k_log 21: 2^21 words each), less what the second fold pair
+    // doesn't take beside a copy of the first
+    const size_t arena_bytes = packed_witness_bytes / 2 * 29 + 2 * packed_witness_bytes - 2 * (size_t)(zc_out - zc_next) * sizeof(F128) +
+                               ((size_t)12 << k_log) * sizeof(F128) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
@@ -919,7 +924,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(ffi_malloc(&d_r1ab, 64 * sizeof(F128))); CK(ffi_malloc(&d_r1c, 64 * sizeof(F128)));
         CK(ffi_malloc(&d_ft, 8 * 256 * sizeof(F128)));
         CK(ffi_malloc(&d_am, n_out * sizeof(F128))); CK(ffi_malloc(&d_bm, n_out * sizeof(F128)));
-        CK(ffi_malloc(&d_amn, n_out * sizeof(F128))); CK(ffi_malloc(&d_bmn, n_out * sizeof(F128)));
+        CK(ffi_malloc(&d_amn, zc_next * sizeof(F128))); CK(ffi_malloc(&d_bmn, zc_next * sizeof(F128)));
         CK(ffi_malloc(&d_p1, ZT_MAX_BLOCKS * sizeof(F128))); CK(ffi_malloc(&d_pinf, ZT_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_m1d, sizeof(F128))); CK(ffi_malloc(&d_mid, sizeof(F128)));
         const int zt_dfull = m - 7, zt_lobits = zt_dfull > 7 ? zt_dfull - 7 : 0;

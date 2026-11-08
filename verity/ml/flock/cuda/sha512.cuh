@@ -123,8 +123,9 @@ __global__ void sha512_merkle_level(uint8_t* tree, long long read_start, long lo
 // ---- hm96-sha512/v1 leaves (verity.ml.commitments.hm96, PROTOCOL.md section 7) --------------------------------------------
 //   x = the SHA-512 leaf above; y = the leaf's 192-byte salt; c = SHA-512(salt_prefix || y); b = x XOR M(key) y;
 //   leaf = SHA-512(leaf_prefix || b || c). Salts are the host's (zk_hooks::LeafSalts, read from the OS): the tree callback hands
-//   tree k's salts (192 bytes per leaf, in host memory until the proof ends); the device reads them HM96_CHUNK leaves at a time
-//   where it finishes the leaves, and an opening's are copied from the host's.
+//   tree k's salts (192 bytes per leaf, in host memory until the proof ends); the device copies the whole tree's on a stream of
+//   its own beside the leaves' kernel (HM96_CHUNK leaves at a time where it has no room for them) and finishes the leaves, and
+//   an opening's are copied from the host's.
 
 typedef const uint8_t* (*Hm96TreeCb)(void* ctx, int tree, long long leaves);
 
@@ -138,6 +139,8 @@ struct Hm96Ctx {
     uint64_t* d_tables = nullptr;   // [192][256][8]: per salt byte and value, the XOR of its set bits' columns
     uint64_t* d_mid = nullptr;      // SHA-512 states after the salt prefix block, then after the leaf prefix block
     uint8_t* d_salts = nullptr;     // HM96_CHUNK leaves' salts, zeroed when the proof ends
+    cudaStream_t copy = nullptr;    // the salts' copies (non-blocking: beside the kernels on the default stream)
+    cudaEvent_t copied = nullptr;   // the last tree's salts are on the device
     std::map<const uint8_t*, std::pair<const uint8_t*, long long>> salts;   // device tree -> its host salts and leaves
 };
 static Hm96Ctx g_hm96;
@@ -244,6 +247,12 @@ struct Hm96Guard {
         mine = true;
         g_hm96.tree_cb = tree_cb; g_hm96.ctx = ctx; g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = level0_leaves;
         cudaMalloc(&g_hm96.d_salts, (size_t)HM96_CHUNK * 192);
+        if (cudaStreamCreateWithFlags(&g_hm96.copy, cudaStreamNonBlocking) != cudaSuccess
+            || cudaEventCreateWithFlags(&g_hm96.copied, cudaEventDisableTiming) != cudaSuccess) {
+            cudaGetLastError();
+            if (g_hm96.copy) cudaStreamDestroy(g_hm96.copy);
+            g_hm96.copy = nullptr; g_hm96.copied = nullptr;
+        }
         size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
         cudaMalloc(&g_hm96.d_tables, tb);
         cudaMemcpy(g_hm96.d_tables, tables, tb, cudaMemcpyHostToDevice);
@@ -260,7 +269,9 @@ struct Hm96Guard {
         if (g_hm96.d_tables) cudaFree(g_hm96.d_tables);
         if (g_hm96.d_mid) cudaFree(g_hm96.d_mid);
         if (g_hm96.d_salts) { cudaMemset(g_hm96.d_salts, 0, (size_t)HM96_CHUNK * 192); cudaFree(g_hm96.d_salts); }
+        if (g_hm96.copy) { cudaStreamSynchronize(g_hm96.copy); cudaStreamDestroy(g_hm96.copy); cudaEventDestroy(g_hm96.copied); }
         g_hm96.tree_cb = nullptr; g_hm96.ctx = nullptr; g_hm96.d_tables = nullptr; g_hm96.d_mid = nullptr; g_hm96.d_salts = nullptr;
+        g_hm96.copy = nullptr; g_hm96.copied = nullptr;
         g_hm96.trees = 0; g_hm96.salts.clear(); g_hm96.level0_leaves = 0;
     }
 };
@@ -278,8 +289,25 @@ inline void launch_merkle512(const uint8_t* d_data, uint8_t* d_tree, long long n
     }
     if (g_hm96.tree_cb) {
         const uint8_t* h = hm96_tree_salts(g_hm96.trees++, num_leaves);
+        const size_t bytes = (size_t)num_leaves * 192;
+        uint8_t* d_all = nullptr;
+        if (g_hm96.copy && cudaMallocAsync((void**)&d_all, bytes, g_hm96.copy) != cudaSuccess) { cudaGetLastError(); d_all = nullptr; }
+        if (d_all && cudaMemcpyAsync(d_all, h, bytes, cudaMemcpyHostToDevice, g_hm96.copy) != cudaSuccess) {
+            cudaGetLastError();
+            cudaFreeAsync(d_all, g_hm96.copy);
+            d_all = nullptr;
+        }
+        if (d_all) {
+            // the default stream's later work waits for the copy, and the salts are zeroed before their memory is released
+            cudaEventRecord(g_hm96.copied, g_hm96.copy);
+            cudaStreamWaitEvent(0, g_hm96.copied, 0);
+            hm96_finish_leaves<<<(unsigned)((num_leaves + tpb - 1) / tpb), tpb>>>(d_tree, (const uint32_t*)d_all, 0, num_leaves,
+                                                                                 g_hm96.d_tables, g_hm96.d_mid);
+            cudaMemsetAsync(d_all, 0, bytes, 0);
+            cudaFreeAsync(d_all, 0);
+        }
         // each piece's copy waits for the previous piece's kernel (one stream), so one device buffer serves the tree
-        for (long long at = 0; at < num_leaves; at += HM96_CHUNK) {
+        for (long long at = 0; !d_all && at < num_leaves; at += HM96_CHUNK) {
             const long long n = num_leaves - at < HM96_CHUNK ? num_leaves - at : HM96_CHUNK;
             cudaMemcpy(g_hm96.d_salts, h + 192 * at, (size_t)n * 192, cudaMemcpyHostToDevice);
             hm96_finish_leaves<<<(unsigned)((n + tpb - 1) / tpb), tpb>>>(d_tree, (const uint32_t*)g_hm96.d_salts, at, at + n,
