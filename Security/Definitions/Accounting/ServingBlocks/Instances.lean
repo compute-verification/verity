@@ -143,6 +143,7 @@ abbrev P : Partition d.D 2 := ⟨![none, some 0, some 1], by decide⟩
 
 abbrev S : Finset (Fin 2) := {0, 1}
 
+/-- Each serving block is its own one inference block. -/
 abbrev r : P.Refines P := refl P
 
 /-- Gate 2's operation, computed by gates 1 and 2 and so split across the wipe, of weight 1. -/
