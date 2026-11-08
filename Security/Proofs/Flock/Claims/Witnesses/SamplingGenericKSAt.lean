@@ -37,12 +37,12 @@ theorem sksL_ecrBound (H : Msg → Msg) (x : Msg) :
   have hk : 0 < (sksL Coin).V.k x := Nat.one_pos
   have hpr : (Claims.Sampling.BextAt H (sksL Coin).V (sksL Coin).E 0 Unit silentP x).Pr H = 0 := by
     unfold Claims.Sampling.BextAt
-    rw [dif_pos hk]
+    rw [dite_eq_left hk]
     exact finder_pr_none H _ fun s => by simp [hn, findColl]
   have hc : Ex (fun s => ((Claims.Sampling.BextAt H (sksL Coin).V (sksL Coin).E 0 Unit silentP x).cost s : ℝ)) =
       0 := by
     unfold Claims.Sampling.BextAt
-    rw [dif_pos hk]
+    rw [dite_eq_left hk]
     simp [hn, Ex]
   have hE : ExpectedCR H (Claims.Sampling.BextAt H (sksL Coin).V (sksL Coin).E 0 Unit silentP x) := by
     unfold ExpectedCR

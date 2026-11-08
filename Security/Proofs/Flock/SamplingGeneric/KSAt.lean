@@ -91,9 +91,9 @@ theorem ofReal_sqrt_prB_le_sbB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fint
     ENNReal.ofReal (Real.sqrt (PrB H V P x)) ≤ sbB H V P x q := by
   unfold PrB sbB
   by_cases hk : 0 < V.k x
-  · simp only [dif_pos hk]
+  · simp only [dite_eq_left hk]
     exact ofReal_sqrt_pr_le_sbBound H (BAt H V P x hk q) q
-  · simp only [dif_neg hk, Real.sqrt_zero, ENNReal.ofReal_zero, le_refl]
+  · simp only [dite_eq_right hk, Real.sqrt_zero, ENNReal.ofReal_zero, le_refl]
 
 end Claims
 
@@ -105,14 +105,15 @@ section KSAt
 
 variable {Coin W : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
+omit [Nonempty Coin] in
 /-- `B_ext` at a budget has `B_ext`'s coins and outcome, so its probability. -/
 theorem BextAt_pr (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (T : ℕ) (Ω : Type) [Fintype Ω]
     [Nonempty Ω] (P : Prover Ω) (x : Msg) : (BextAt H V E T Ω P x).Pr H = (Bext H V E Ω P x).Pr H := by
   unfold BextAt Bext
   by_cases hk : 0 < V.k x
-  · simp only [dif_pos hk]
+  · simp only [dite_eq_left hk]
     rfl
-  · simp only [dif_neg hk]
+  · simp only [dite_eq_right hk]
 
 /-- **`KSAt` from `KSLinOn` at `β = 1` and `B_ext`**, at every budget and whatever `κ`, `γ` and `work`: the birthday
 term's reading at `2T` bounds `√(γ·Pr[B])`, and the binding term's at any cost bound bounds `Pr[B_ext]`. -/
@@ -138,6 +139,7 @@ theorem KSAt_of_KSLinOn {H : Msg → Msg} {V : Verifier Coin} {Scope : Msg → P
         · exact ofReal_sqrt_prB_le_sbB H V P x (2 * T)
         · exact ofReal_pr_le_ecrBound H _ _
 
+omit [Nonempty Coin] in
 /-- A bound on an extractor's expected reruns is never negative. -/
 theorem runs_nonneg {H : Msg → Msg} {V : Verifier Coin} {E : Extractor Coin W V} {runs : Msg → ℝ}
     (hruns : ExtractRunsExpLe H E runs) (x : Msg) : 0 ≤ runs x := by
@@ -174,7 +176,7 @@ theorem BextAt_cost_le (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
       _ ≤ Ex (fun _ : Ω => runs x) := Ex_mono fun ω => hruns x Ω P ω
       _ = runs x := Ex_const _
   unfold BextAt
-  rw [dif_pos hk]
+  rw [dite_eq_left hk]
   show Ex (fun s : BCoins Ω Coin (V.k x) × E.C x × E.C x =>
     (((ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1)).length +
       (ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2)).length +
@@ -203,7 +205,7 @@ theorem BextAtCostLe_of {H : Msg → Msg} {V : Verifier Coin} {E : Extractor Coi
     nlinarith
   · have h0 : Ex (fun s => ((BextAt H V E T Ω P x).cost s : ℝ)) = 0 := by
       unfold BextAt
-      rw [dif_neg hk]
+      rw [dite_eq_right hk]
       show Ex (fun _ : Unit => ((0 : ℕ) : ℝ)) = 0
       rw [Nat.cast_zero, Ex_const]
     have : 0 ≤ work x := by linarith
