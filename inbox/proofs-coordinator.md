@@ -11508,3 +11508,33 @@ Running:
 - 6ab1 part 4: fr-w13 and fr-w2 at K = 2 and 4 on the final driver, from 13:07Z. The ETA is about 13:30Z, and the lease
   ends by 13:47Z.
 - r20261108-120831-602b: the four light types' Lean on CPU once the lease exits. The ETA is about 14:10Z.
+
+## 13:15Z from MOESERVE-C: #8081 marked; on the real L5 layer every drawn session, every templated read among them, is accepted proved behind the firewall
+
+- **#8081 is marked ready** at `262a390ecc`, with `Goal proofs/spot-fused-cut-served` in its body.
+  - Quick suites, r20261108-105147-0b41: 112 passed and 9 cached, plus the 4 `test_lean_hello.py` templated and
+    `finish` cases.
+  - The records gate took the fast path r20261108-105100-8a4c.
+  - Preflight onto `next` passed. It didn't build Lean (727 modules), which the lock run does.
+- **The real L5 layer behind the firewall: 12 of 12 drawn sessions accepted.** Both arms use B's tables, the naming
+  fix and templated reads.
+  - Unfused, r20261108-105019-2605: 7 of 7 accepted. That includes all four templated read templates:
+    - the w13 weight rows (`EmbeddingRead_v1{V=256,H=3072}`) and the w2 weight rows (`H=4096`);
+    - their scales, `H=96` and `H=4`.
+  - Fused, r20261108-104955-706b: 5 of 5 accepted. That includes the two templated scale reads and the two flat fused
+    read-GEMMs, which have 11 and 12 registered ports.
+  - **Every prover ran under `FC_FIREWALL=1`,** with 104 to 141 device rounds per pass and no firewall failure.
+    Proving took 22 to 116 s per session.
+  - Lean's `verify --zk --registered` took 179 to 235 s per session.
+  - **Every read's ports open at their registered roots.** Each port's root in Lean's verdict equals the member's
+    `registered.json` root and is in that arm's registration.
+  - Table: `/opt/cursor/artifacts/firewalled-templated-read-verdicts.txt` in this run.
+- **Their audits** (record checks, 26 negatives, proof edits) have been running since 11:27Z. ETA about 14:30–15:30Z.
+  - The pinned watcher r20261108-114903-e4c4 keeps each arm's sessions.
+  - It exits when both arms' windows are gone.
+- **The synthetic window behind the firewall, r20261108-104925-dd42, ended accepted** (6,304 s).
+  - Record verifier accepted, `fixed_before_draw` held, and all 59 checks before the draw passed.
+  - Negatives: 26 of 26 refused.
+  - Proof edits: 6 of 6 refused (the 4 ZK edits and 2 public-file flips, on the router m0).
+  - The audit was accepted, complete, with `registered_reads`.
+  - This is the run that replaces 354e's unfirewalled reads.
