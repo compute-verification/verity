@@ -65,10 +65,10 @@ benchmarks = [
     "benchmarks/{flock_s8_block,recursion_e2e}",
     "benchmarks/one_stage/{served_verdicts,served_pearlplus,served_composite}.sh",
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
-    "benchmarks/one_stage/{served_overhead,served_compare}.py",
-    "benchmarks/one_stage/{pyproject.toml,README.md}",
     # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
     "examples/h200/interfaces/verity_e2e_demo/block_record.py",
+    "benchmarks/one_stage/{served_overhead,served_compare}.py",
+    "benchmarks/one_stage/{pyproject.toml,README.md}",
 ]
 
 [private]
