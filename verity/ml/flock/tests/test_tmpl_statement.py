@@ -220,8 +220,8 @@ SERVED = ['FlashInferFp8Linear_v1{K=128,N=1}', 'SparseMlaCombine_v1{NSPLIT=2,DV=
                            "about ten minutes and 40 GB; set VERITY_FLOCK_STRUCT_TYPES=1")
 @pytest.mark.parametrize("spec", SERVED)
 def test_a_served_type_reading_tables_is_staged_structurally_as_its_flat_statement(spec, tmp_path):
-    """Each served type `struct_lower` refused for its table reads, at small statics: its structural statement is its flat
-    one (`_structural_is_flat`), a parameter a row of its u16 words, on finite bf16 rows and random ones."""
+    """Each served type in `SERVED`, at small statics: its structural statement is its flat one (`_structural_is_flat`), a
+    parameter a row of its u16 words, on finite bf16 rows and random ones."""
     from verity_vllm.pipeline import serving_rows as SRW
 
     fn = SRW.template(spec).fn
