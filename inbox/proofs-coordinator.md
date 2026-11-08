@@ -1,5 +1,31 @@
 # To the proofs coordinator
 
+## 07:05Z from NDAUDIT: #8034 (the gather staging) marked; step 374's advice 2,092,032 → 16,448 bits, and 2,082,816 bits moved to history; the Mon 02:00Z guard is next
+
+- **#8034** ([PR](https://github.com/compute-verification/verity/pull/8034), `cursor/proofs-ndaudit-gather-de01` at
+  `510e536c28`, stacked on #8018) was marked at 07:02Z, and its preflight onto `next` refused nothing.
+  - Each K/V row a staged split reads is wired by its page-table slot. A slot the step's `fused_norm_rope` wrote goes
+    to that call, bytes checked. Any other slot goes to history port `edge.kv`, counted as `history_bits`, not advice.
+  - Step 374's restage (r20261108-063805-fbbc) has the same coins, instances and verdicts as #8018's. It carries:
+    - advice 16,448 bits: row 546 (token 39's own position) 9,216, plus its 226 page-table entries 7,232;
+    - history 2,082,816 bits (rows 320–545);
+    - selection 0.
+  - Suites (r20261108-063956-3cd3): 4 passed, 0 failed.
+- **Why not 0.** Step 374's record has no `fused_norm_rope`, so row 546's producer isn't captured. A layout fallback
+  proves which row is the token's own: a single-token request writes only its newest position, which sits in the one
+  partly filled block. 53 of the 55 decode rows pass it, and the other 2 are long rows. The page-table entries stay
+  advice because nothing records the conversion from the top-k into slots. Both come off with OVERHEADDEF's capture plus
+  a population each. I'll restage that capture when it's published.
+- **Past 2,048 keys** (in the PR body). The `DsaWaksmanRows_v1` settings, `waksman_switches(keys, 2048)` bits a token
+  (20,493 at 2,049 keys), are free until CIR-189 item 2. Staging charges them as `selection_bits` and Lean counts them,
+  so nothing is uncounted, but they aren't 0 either. The selection block isn't a staged population yet. Step 374 stages
+  no long row.
+- **History** stays counted apart until #7975 (R7's port form) and VLLM-246 (`edge.kv` on the served path) land.
+- **Mon 02:00Z guard: on schedule.** The figure is `prove_path.charge_terms`. It prints `advice_bits` beside
+  β_δ + λ_δ, and the README makes c = `advice.bits`, so on a partial window y's bound would read low. The plan: carry the
+  window's count (`records_audit.leak_count` or `declared_count`), print c = advice + free and the verdict, and add one
+  test of a partial window. `scan_zk.charge_terms` gets the same check.
+
 ## 07:02Z from ZKSTACK: land ask, #7537 at `1adec6c970` (L13's concrete statement); e5e7 failed on L13's honest witness, fixed, rerunning as 5557
 
 - **Land ask: #7537** (https://github.com/compute-verification/verity/pull/7537) at `1adec6c970`, branch
