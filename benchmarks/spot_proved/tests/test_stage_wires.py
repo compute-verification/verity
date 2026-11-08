@@ -1,9 +1,10 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
 (``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
 whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
-committed SHA-512; an `ADVICE` input is charged at the union of the parts instances read (`Capture.part`), else at its
-width; anything else, and an output of the call enclosing the reader, is `Unwired` with the fix. `traced` records what an
-instance's arguments read, and `wiring` charges each advice argument once."""
+committed SHA-512; a `GAPS` input (a computed value the capture doesn't record) is counted at the union of the parts
+instances read (`Capture.part`), else at its width, as gap bits, never as advice, and an `ADVICE` input (a free choice)
+is charged so; anything else, and an output of the call enclosing the reader, is `Unwired` with the fix. `traced` records
+what an instance's arguments read, and `wiring` counts each such argument once."""
 from __future__ import annotations
 
 import hashlib
@@ -119,25 +120,37 @@ def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_row
         wires.source(0, ev[11]["in"]["self"])
 
 
-def test_a_parameter_is_registered_and_an_advice_input_charged_at_its_width(step) -> None:
+def test_a_parameter_is_registered_and_a_gap_input_counted_at_its_width(step) -> None:
     stage, cap, wires = step
     ev = cap.events[0]
     assert wires.source(0, ev[0]["in"]["mat2"]) == {"kind": "registered", "rank": 0, "param": "w", "sha512": "ab" * 64}
-    adv = wires.source(0, ev[4]["in"]["kv_gathered"])
-    assert (adv["kind"], adv["bits"]) == ("advice", 2 * 6 * 4 * 16) and adv["why"] == stage.ADVICE[("fa3_sparse_mla", "kv_gathered")]
+    gap = wires.source(0, ev[4]["in"]["kv_gathered"])
+    assert (gap["kind"], gap["bits"]) == ("gap", 2 * 6 * 4 * 16) and gap["why"] == stage.GAPS[("fa3_sparse_mla", "kv_gathered")]
+    assert not stage.ADVICE, "no staged population reads a free choice today"
+
+
+def test_a_free_choice_is_charged_as_advice_and_a_gap_is_counted_apart_never_charged(step, monkeypatch) -> None:
+    stage, cap, wires = step
+    ev = cap.events[0]
+    monkeypatch.setitem(stage.ADVICE, ("aten::add", "other"), "a choice nothing computes")
+    adv, gap = wires.source(0, ev[2]["in"]["other"]), wires.source(0, ev[4]["in"]["kv_gathered"])
+    assert (adv["kind"], adv["bits"], adv["why"]) == ("advice", 4 * 8 * 16, "a choice nothing computes")
+    w = stage.wiring({"A": {"gate": [{"key": [0, 2, 0], "sources": [adv, gap]}]}})
+    assert (w["advice_bits"], w["gap_bits"]) == (4 * 8 * 16, 2 * 6 * 4 * 16)
 
 
 def test_an_input_no_earlier_call_output_is_unwired_with_the_fix_and_the_enclosing_calls_output_too(step) -> None:
     stage, cap, wires = step
     ev = cap.events[0]
     for _ in range(2):
-        with pytest.raises(stage.Unwired, match=r"reads other, .*declare \('aten::add', 'other'\) in stage\.ADVICE"):
+        with pytest.raises(stage.Unwired, match=r"reads other, .*declare \('aten::add', 'other'\) in stage\.GAPS if the step "
+                                                r"computes it .* or in stage\.ADVICE if nothing does"):
             wires.source(0, ev[2]["in"]["other"])
     with pytest.raises(stage.Unwired, match="reads self"):
         wires.source(0, ev[6]["in"]["self"])
 
 
-def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_charges_advice_once(step) -> None:
+def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_counts_a_gap_once(step) -> None:
     stage, cap, wires = step
     ev = cap.events[0]
     reads: list = []
@@ -145,14 +158,15 @@ def test_traced_records_the_reads_of_an_instances_arguments_and_wiring_charges_a
                                       cap.tensor(0, ev[4]["in"]["kv_gathered"])[0]], reads)()
     assert len(args) == 3 and len(reads) == 3 and cap.reads is None
     sources = wires.of(reads)
-    assert [s["kind"] for s in sources] == ["block", "advice"]
+    assert [s["kind"] for s in sources] == ["block", "gap"]
     types = {"A": {"gate": [{"key": [0, 1, 0], "sources": sources}, {"key": [0, 1, 1], "sources": sources},
                             {"key": [0, 2, 0], "unwired": "rank 0 ..."}]}}
     w = stage.wiring(types)
-    assert w["advice_bits"] == 2 * 6 * 4 * 16 and len(w["inputs"]["A"]) == 2 and w["unwired"] == {"A": ["rank 0 ..."]}
+    assert (w["gap_bits"], w["advice_bits"]) == (2 * 6 * 4 * 16, 0)
+    assert len(w["inputs"]["A"]) == 2 and w["unwired"] == {"A": ["rank 0 ..."]}
 
 
-def test_an_advice_input_is_charged_at_the_union_of_the_parts_staged_instances_read(step) -> None:
+def test_a_gap_input_is_counted_at_the_union_of_the_parts_staged_instances_read(step) -> None:
     stage, cap, wires = step
     kv = cap.events[0][4]["in"]["kv_gathered"]
     row = 4 * 16
@@ -168,14 +182,14 @@ def test_an_advice_input_is_charged_at_the_union_of_the_parts_staged_instances_r
     assert b[0]["bits"] == 2 * row and "parts" not in wires.source(0, kv), "a reference's own source stays whole"
     assert whole[0]["parts"] == [[[1, 2], [0, 2]], [[0, 1]]] and whole[0]["bits"] == 8 * row
 
-    def charged(*instances):
-        return stage.wiring({"S": {"gate": [{"key": [0, 4, i], "sources": s} for i, s in enumerate(instances)]}})["advice_bits"]
+    def counted(*instances):
+        return stage.wiring({"S": {"gate": [{"key": [0, 4, i], "sources": s} for i, s in enumerate(instances)]}})["gap_bits"]
 
-    assert charged(a, b, a) == 6 * row, "the union over instances, each row once: 6 of the 12 rows"
-    assert charged(a, whole) == 8 * row, "a part over fewer axes takes the rest of them whole: all of token 0's rows"
+    assert counted(a, b, a) == 6 * row, "the union over instances, each row once: 6 of the 12 rows"
+    assert counted(a, whole) == 8 * row, "a part over fewer axes takes the rest of them whole: all of token 0's rows"
     reads: list = []
     stage.traced(cap, lambda: [cap.tensor(0, kv)[0, 1:4]], reads)()
-    assert charged(a, wires.of(reads)) == 12 * row, "a read through `Capture.tensor` takes the input whole"
+    assert counted(a, wires.of(reads)) == 12 * row, "a read through `Capture.tensor` takes the input whole"
 
 
 KV_W = 6  # a cache row's words: kv_c_out's 4, then k_pe_out's 2
@@ -242,7 +256,7 @@ def test_a_gathered_row_is_wired_to_the_steps_cache_write_by_slot_else_to_histor
     stage, make = gather
     of = make()
     got = of((0, slice(4, 8)), (1, slice(2, 6)), (2, slice(0, 2)))
-    assert [s["kind"] for s in got] == ["call", "history", "advice", "selection"]
+    assert [s["kind"] for s in got] == ["call", "history", "gap", "selection"]
     write, history, table, pick = got
     assert (write["seq"], write["op"], write["out"]) == (1, "fused_norm_rope", "kv_c_out+k_pe_out")
     assert write["rows"] == [[0, 7, 0], [1, 5, 1], [2, 0, 2], [2, 1, 3]], "each decode's own position, and the prefill's two"
@@ -254,7 +268,8 @@ def test_a_gathered_row_is_wired_to_the_steps_cache_write_by_slot_else_to_histor
     assert pick == {"kind": "selection", "rank": 0, "seq": 0, "token": 0, "via": "DsaWaksmanRows_v1{N=10,K=8,W=6,E=16}",
                     "bits": waksman_switches(10, TOPK), "why": stage.SELECTION_WHY}, "token 0's 10 keys pass a selection"
     w = stage.wiring({"S": {"gate": [{"key": [0, 2, 0], "sources": got}, {"key": [0, 2, 1], "sources": got}]}})
-    assert (w["advice_bits"], w["history_bits"], w["selection_bits"]) == (10 * 32, 6 * KV_W * 16, waksman_switches(10, TOPK))
+    assert (w["advice_bits"], w["gap_bits"], w["history_bits"], w["selection_bits"]) == (
+        0, 10 * 32, 6 * KV_W * 16, waksman_switches(10, TOPK)), "the page-table entries are a gap, not advice"
     assert w["unproved_calls"] == {"fused_norm_rope": 1}
 
 
@@ -263,7 +278,7 @@ def test_a_row_at_a_slot_the_write_filled_with_other_bytes_or_a_long_row_without
     with pytest.raises(stage.Unwired, match=r"row 5 at slot 21, which fused_norm_rope \(seq 1\) wrote from its row 1, but not"):
         make(corrupt=True)((1, slice(2, 6)))
     of = make(positions=False)
-    assert [s["kind"] for s in of((1, slice(2, 6)))] == ["call", "history", "advice"], "a short row needs no positions"
+    assert [s["kind"] for s in of((1, slice(2, 6)))] == ["call", "history", "gap"], "a short row needs no positions"
     with pytest.raises(stage.Unwired, match="token 0 reads 8 rows, and its keys"):
         of((0, slice(4, 8)))
 
@@ -276,7 +291,7 @@ def test_without_the_steps_cache_write_a_single_token_requests_other_rows_are_hi
         "token 0 reads the top-k's 8 rows (its keys unknown), token 1's row 5 is its own position, token 3 is a prefill's")
     assert (table["in"], table["parts"], table["bits"]) == ("block_table", [[[1, 2], [2, 5]]], 3 * 32)
     every = make(write=False, scheduled={"a": 1, "b": 1, "c": 1, "d": 1})((1, slice(2, 6)))
-    assert [s["kind"] for s in every] == ["advice"], "requests the top-k's decode rows don't match: no token is known single"
+    assert [s["kind"] for s in every] == ["gap"], "requests the top-k's decode rows don't match: no token is known single"
 
 
 def test_own_rows_reads_the_paged_layout_in_any_order_and_refuses_a_row_that_breaks_it(gather) -> None:
