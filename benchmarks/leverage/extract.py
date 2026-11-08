@@ -12,7 +12,8 @@ Parts (--part):
   final   a fault at the unembedding's input (the final norm's output) at coordinate i, value s*A. The logits become
           z + (s*A - h_i) E[:, i], so the top-k served logprobs, divided by s*A, are the k largest (s = +1) or smallest
           entries of column i of the unembedding E, up to one constant (softmax's shift, aligned away). Per fault: k - 1
-          entries. No knowledge of z or h is needed, and no logit bias.
+          entries. No knowledge of z or h is needed, and no logit bias. Under --boxes the amplitude is coordinate i's
+          box, or what one FP8 code reaches at its token's own group scale (--box-amps).
   honest  the honest baseline with the same observables: Carlini et al. 2024's SVD attack. Full logit vectors of n
           honest positions, rounded as served and centred (softmax's shift), give E up to an invertible d x d map G (and
           a constant per column); aligning G by least squares against the truth leaves the error, over V*d - d^2 - d
@@ -26,7 +27,8 @@ Parts (--part):
           knows E, g and b (from the final-site attack, peeling from the top) reads norm(w_j) from m logits (logit bias,
           k - 1 tokens a fault, F = ceil(m/(k-1)) faults) by an MMSE fit weighted by the served rounding's error. Its
           error against norm(w_j) includes what the honest layers after l add, so this part shows where depth costs
-          the attack and where it does not.
+          the attack and where it does not. Under --boxes the values are in range (`fault_values`), a joint fault's
+          target is the sum of what its group's units add, and --pick widest attacks the units with the widest boxes.
 
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part final --out "$OUT"
 """
@@ -107,19 +109,32 @@ def part_final(lm: LM, tok, a) -> dict:
     var = E.var(0)
     grid = getattr(lm, "fp4_grid", None)
     cols = torch.randperm(d, generator=torch.Generator().manual_seed(a.seed))[:a.columns].tolist()
+    specs = list(a.amps) if lm.boxes is None else list(a.box_amps)
+    L = lm.spec.layers
     out = []
     for pi in range(a.prompts):
         pre, last, t0 = prefix(lm, tok, PROMPTS[pi])
-        for amp in a.amps:
+        if lm.boxes is not None:
+            taps = {("final", L): None}
+            lm.forward(last, pre.expand(1), taps=taps)
+            h = taps[("final", L)][0, 0].float()
+            hi = lm.boxes.hi[("final", L)][int(position_class(torch.tensor(t0)))].float()
+        for amp in specs:
             for sign in (1.0, -1.0):
                 for c0 in range(0, len(cols), a.batch):
                     cs = cols[c0:c0 + a.batch]
-                    z = faulted_logits(lm, pre, last, t0, [("final", lm.spec.layers, i, sign * amp) for i in cs])
+                    if amp == "box":
+                        amps = [float(hi[i]) for i in cs]
+                    elif amp == "own":
+                        amps = [fault_values("own", i, h, 0.0, hi, None)[1][0] for i in cs]
+                    else:
+                        amps = [float(amp)] * len(cs)
+                    z = faulted_logits(lm, pre, last, t0, [("final", L, i, sign * A) for i, A in zip(cs, amps)])
+                    sa = (sign * torch.tensor(amps)).to(torch.bfloat16).double()[:, None]
                     for prec in a.precisions:
                         lp = served_logprobs(z, prec)
                         for k in a.ks:
                             top = lp.topk(k, -1)
-                            sa = float(torch.tensor(sign * amp).to(torch.bfloat16))
                             est = top.values.double() / sa
                             tru = E.double()[top.indices, torch.tensor(cs)[:, None]]
                             err = est - tru
@@ -356,6 +371,9 @@ def main() -> int:
     ap.add_argument("--new", type=int, default=96, help="honest: continuation tokens per prompt")
     ap.add_argument("--columns", type=int, default=256, help="final: columns of E attacked")
     ap.add_argument("--amps", type=float, nargs="+", default=[2.0 ** 6, 2.0 ** 10, 2.0 ** 14, 2.0 ** 20, 2.0 ** 40])
+    ap.add_argument("--box-amps", nargs="+", default=["box", "own"],
+                    help="final, under --boxes: each column's amplitude is its coordinate's box, or the most one FP8 "
+                         "code reaches at its token's own group scale")
     ap.add_argument("--ks", type=int, nargs="+", default=[2, 5, 20])
     ap.add_argument("--precisions", nargs="+", default=["bf16", "fp32"])
     ap.add_argument("--fp4", action="store_true",
