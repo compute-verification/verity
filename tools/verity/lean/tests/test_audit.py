@@ -1276,6 +1276,82 @@ def test_facts_key_folds_source_digests_so_a_scanned_source_edit_with_the_same_o
     assert any(h["option"] == "maxHeartbeats" and h["value"] == 400000 for h in body["findings"]["heartbeats"])
 
 
+def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered_or_stale_one(tmp_path):
+    """The facts cache (`store_cached_facts`, `read_cached_facts`) a reuse reads looks a document up only by the `facts_key`
+    the current tree recomputes, never a caller's path, and judges it only when its sidecar vouches for it: a document whose
+    bytes don't match the sidecar's SHA-256 is refused, so is a sidecar recording another key, and a missing sidecar (a
+    crash between the two writes) is a miss, never a hit. The body carries no key, so it stays the bytes `--facts-only`
+    writes and the graph's content cutoff compares."""
+    cache = tmp_path / "facts"
+    doc = {"schema": A.FACTS_SCHEMA, "toolchain": "t", "files": {"M": "M.lean"}, "facts": {"x": 1}, "findings": {}}
+    key, other = "a" * 64, "b" * 64
+
+    A.store_cached_facts(cache, key, doc)
+    assert sorted(p.name for p in cache.iterdir()) == [f"{key}.json", f"{key}.json.gz"], "the pair, and no temporary file"
+    assert A.read_cached_facts(cache, key) == doc, "a hit by the recomputed key"
+    stored = (cache / f"{key}.json.gz").read_bytes()
+    assert stored == A.facts_bytes(doc) and "key" not in json.loads(gzip.decompress(stored)), "the --facts-only bytes"
+    assert A.read_cached_facts(cache, other) is None, "a key no run stored is a miss"
+
+    A.write_facts_document(cache / f"{key}.json.gz", doc | {"facts": {"x": 2}})
+    with pytest.raises(RuntimeError, match="SHA-256: tampered"):
+        A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, other, doc)
+    A.store_cached_facts(cache, key, doc)
+    (cache / f"{key}.json").write_text((cache / f"{other}.json").read_text())
+    with pytest.raises(RuntimeError, match="stale or misfiled"):
+        A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, key, doc)
+    side = json.loads((cache / f"{key}.json").read_text())
+    (cache / f"{key}.json").write_text(json.dumps(side | {"schema": "lean-facts/v0"}))
+    with pytest.raises(RuntimeError, match="refused"):
+        A.read_cached_facts(cache, key)
+    for garbage in ("[]", "{not json"):
+        (cache / f"{key}.json").write_text(garbage)
+        with pytest.raises(RuntimeError, match="refused"):
+            A.read_cached_facts(cache, key)
+
+    A.store_cached_facts(cache, key, doc)
+    (cache / f"{key}.json").unlink()
+    assert A.read_cached_facts(cache, key) is None, "a document without its sidecar is a miss, never a hit"
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_facts_cache_stores_the_sealed_document_under_its_build_s_key_and_judges_as_usual(tmp_path):
+    """`--facts-cache` (`audit(facts_cache=, facts_reuse=True)`, what lean_changed's records step passes) judges as a plain
+    audit does and also stores the sealed document with its sidecar under the build's `facts_key`; a second audit of the
+    same tree recomputes that key and reads the document back as a hit. `--facts-only` (the graph's stage A) still writes
+    the document alone, so its output stays the bytes the graph's cutoff compares, and the two flags exclude each other."""
+    noop = lambda *_: None
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    A.audit(pkg, tmp_path / "pop", build=False, replay=False, runs=False, update=True, log=noop)  # record so it passes
+    plain = A.audit(pkg, tmp_path / "plain", build=False, replay=False, runs=False, log=noop)
+
+    cache = tmp_path / "facts"
+    a = A.audit(pkg, tmp_path / "a", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
+    key = a["facts_key"]
+    assert list(map(str, a["failures"])) == list(map(str, plain["failures"])) == [], "it judges as a plain audit does"
+    assert sorted(p.name for p in cache.iterdir()) == [f"{key}.json", f"{key}.json.gz"]
+    b = A.audit(pkg, tmp_path / "b", build=False, replay=False, runs=False, facts_cache=cache, facts_reuse=True, log=noop)
+    assert b["facts_key"] == key and A.read_cached_facts(cache, key) is not None, "the recomputed key is a hit"
+
+    only = tmp_path / "only"
+    c = A.audit(pkg, tmp_path / "c", build=False, replay=False, runs=False, facts_cache=only, log=noop)
+    assert c["facts_key"] == key and [p.name for p in only.iterdir()] == [f"{key}.json.gz"], "--facts-only: no sidecar"
+    assert (only / f"{key}.json.gz").read_bytes() == (cache / f"{key}.json.gz").read_bytes(), "one document, two caches"
+
+    cli = tmp_path / "cli"
+    assert A.main([str(pkg), "--facts-cache", str(cli), "--no-replay", "--no-runs", "--out", str(tmp_path / "cli-out")]) == 0
+    (side,) = cli.glob("*.json")
+    assert A.read_cached_facts(cli, side.stem) is not None, "the CLI stores a pair a reuse reads back"
+    with pytest.raises(SystemExit):
+        A.main([str(pkg), "--facts-cache", str(tmp_path / "x"), "--facts-only", str(tmp_path / "y")])
+
+
 def test_the_facts_are_kept_only_gzipped_as_the_program_wrote_them(tmp_path, monkeypatch):
     """A recorded run publishes the work directory, where `Facts.lean`'s document is hundreds of MB for `Security`: it is
     kept there only as `facts.json.gz`, its bytes gzipped with no timestamp (equal facts are equal bytes, which the store
