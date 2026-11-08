@@ -34,7 +34,7 @@ coins. Its record (`twoRec`): accepted when the run accepts; sampled incorrect w
 
 namespace WeightSecurity.SecurityProofs
 
-open Claims Claims.Sampling Claims.SamplingGeneric
+open Claims Claims.Sampling Claims.SamplingGeneric WeightSecurity.Assumptions
 open FlockSoundness.Game hiding Msg
 open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
 open scoped ENNReal
@@ -133,6 +133,7 @@ theorem twoRec_accepted_iff [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin 
   rw [TwoPlay.marks_nonempty]
   exact ⟨fun ⟨ha, hn⟩ => ⟨ha, fun e he => hn ⟨ha, e, he⟩⟩, fun ⟨ha, hn⟩ => ⟨ha, fun ⟨_, e, he⟩ => hn e he⟩⟩
 
+omit [Nonempty Coin] in
 /-- **Every extractor coin failing on an accepted run** is at most as likely as one uniform extractor coin failing:
 `PrBad` at a prover with no tape. -/
 theorem pr_acc_noext_le (H : Msg → Msg) {W : Type} (V : Verifier Coin) (R : Rel W) (E : Extractor Coin W V)
@@ -218,7 +219,6 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
         (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => M ≤ Served.lead l) (fun _ => True) 0 (G i) s
         (atEnds_of_forall (fun b s' => ?_) (G i) s)).trans_eq (mul_zero _)) zero_le
-      beta_reduce
       rw [if_pos trivial, Verity.Game.value_map]
       by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
       · refine (Verity.Game.value_mono (fun l hl => ?_) _).trans (Verity.Game.value_false _).le
@@ -293,6 +293,7 @@ theorem TheftServedTwo {Ω R Θ Q Θ' : Type} [Fintype Ω] [Fintype R] [Fintype 
   TheftServed C gen Stolen Aset p Ou T L E (T * (K - 1) + 1) _ (fun θ r => twoRun H Lv δ T (s θ r)) hhon hsim
     fun θ r => two_undetected H Lv hδ T K hks href hcap ε (s θ r) (herr θ r)
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **The cap from the two stages' rates**: where each statement in scope draws its replay sample as a uniform
 `Q`-subset of its `N` correct-class replay blocks and every input replay block, and its second stage samples at least
 `r₂` of every cell, `CapTwo` holds at every `K` with `(1 − (Q/N)·r₂)^K ≤ δ`. -/
