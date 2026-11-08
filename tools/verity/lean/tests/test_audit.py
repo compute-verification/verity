@@ -65,6 +65,13 @@ def every_failure_has_a_code(monkeypatch):
     monkeypatch.setattr(A, "audit", audited)
 
 
+@pytest.fixture(autouse=True)
+def seal_off_the_checkout(tmp_path_factory, monkeypatch):
+    """`main` seals a run under `SEAL_BASE` (`ROOT/.lake/sealed`); here it seals under the test session's tmp instead, so a
+    real-build audit never writes or reads under the checkout, which the suite's read guard would flag as undeclared."""
+    monkeypatch.setattr(A, "SEAL_BASE", tmp_path_factory.mktemp("sealed"))
+
+
 def unshaped(rep: dict) -> list[str]:
     """A report's failures other than the shape rule's, for a test of something else that adds guarantees to the control
     without entering them under `shape.properties`."""
@@ -543,7 +550,7 @@ def test_the_record_follows_a_statement_through_the_modules_the_trees_except(tmp
     class Read(Exception):
         pass
 
-    def facts_of(q, qpol, work, moved=None, keep=True):
+    def facts_of(q, qpol, work, moved=None, keep=True, sealed=None):
         scopes.append(A.record_scope(qpol))
         raise Read
     monkeypatch.setattr(A, "facts_of", facts_of)
@@ -1196,11 +1203,11 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
     (pkg / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
     seen = []
 
-    def facts_of(q, policy, work, moved=None, keep=True):
+    def facts_of(q, policy, work, moved=None, keep=True, sealed=None):
         seen.append(keep)
         return {"modules": [], "oleans": [], "pins": {}}
 
-    def proved(q, policy, facts, work, moved=None, ready=None, keep=True):
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None):
         seen.append(keep)
         raise RuntimeError("stop after the provers' facts")
 
@@ -1510,6 +1517,38 @@ def test_an_antecedent_in_a_conclusion_headed_by_the_package_s_definition_is_a_n
     assert [(p["head"], p.get("antecedent")) for p in f["pins"]["Control.rests"]["premises"]] == [("Control.Opens", True)]
     assert [(p["head"], p.get("antecedent")) for p in f["pins"]["Control.main_thm"]["premises"]] == [("Control.Hyp", None)]
     assert unshaped(A.audit(pkg, tmp_path / "out", replay=False, runs=False, log=lambda *_: None)) == []
+
+
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_an_honest_witness_concludes_a_premise_at_a_defeq_argument_and_not_at_another_instance(tmp_path):
+    """`Facts.lean`'s `agree` on a real build: `fixed_sound` takes `Fixed (@Val.v Unit zeroA)`. An honest witness at
+    `zeroB`, another instance with the same field, concludes it (`isDefEq`, where the texts differ), and so does one at
+    every `n`; one at `one`, an argument that differs from the premise's only in its instance, and not definitionally,
+    doesn't, though with the instances erased the two would read alike."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    (pkg / "Control" / "Agree.lean").write_text(
+        "namespace Control\nclass Val (α : Type) where v : Nat\n"
+        "instance zeroA : Val Unit := ⟨0⟩\ninstance zeroB : Val Unit := ⟨0⟩\ninstance one : Val Unit := ⟨1⟩\n"
+        "def Fixed (n : Nat) : Prop := n ≤ n\n"
+        "theorem fixed_sound (h : Fixed (@Val.v Unit zeroA)) : True := trivial\n"
+        "theorem fixed_same : Fixed (@Val.v Unit zeroB) := Nat.le_refl _\n"
+        "theorem fixed_other : Fixed (@Val.v Unit one) := Nat.le_refl _\n"
+        "theorem fixed_all : ∀ n, Fixed n := Nat.le_refl\nend Control\n")
+    (pkg / "Control.lean").write_text((pkg / "Control.lean").read_text() + "import Control.Agree\n")
+    subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
+    names = ("Control.fixed_sound", "Control.fixed_same", "Control.fixed_other", "Control.fixed_all")
+
+    def cover(witness: str) -> tuple:
+        f = A.facts_of(pkg, {"roots": ["Control"], "guarantees": dict.fromkeys(names, {}),
+                             "witnesses": {"Control.fixed_sound": {"honest": [witness]}}}, tmp_path)
+        (p,) = f["pins"]["Control.fixed_sound"]["premises"]
+        return p["head"], p["agree"], "Control.Fixed" in A.honest_concludes(f["pins"]["Control.fixed_sound"],
+                                                                           [f["pins"][witness]])
+
+    assert cover("Control.fixed_same") == ("Control.Fixed", True, True)
+    assert cover("Control.fixed_all") == ("Control.Fixed", True, True)
+    assert cover("Control.fixed_other") == ("Control.Fixed", False, False)
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
@@ -3386,6 +3425,36 @@ def test_a_domain_hypothesis_says_what_it_restricts_and_the_honest_witness_concl
     assert "witnesses.honest-form" in witness_codes(dom, witnessed(honest=takes)[1]), "it concludes a domain hypothesis"
 
 
+def test_an_honest_witness_concludes_a_premise_it_states_applied_at_the_arguments_the_guarantee_fixes():
+    """An honest witness whose statement is the premise applied at the deployed instance (`P.Compiled P.deploy`) concludes
+    it, as `Facts.lean` reads its type, also where that statement is a definition the witness rule reads lifted (`lifted`,
+    unfolded once past its head): a domain hypothesis it is stays covered, and the honest witness concludes the premise.
+    Where the guarantee fixes an argument (`P.Compiled P.circA`), the witness concludes it only where `Facts.lean` found its
+    conjunct at that argument (`agree`, by `isDefEq`): not where it found another, nor where it says nothing."""
+    pol, f = witnessed()
+    seed = {"open_seed": {"P.Defs": {"issue": "LEAN-1", "due": "2026-11-30"}}}
+    opened = A.judge(pol | seed, f, FILES, update=True)[1]
+    entry = {k: v for k, v in opened["open"]["P.Compiled"].items() if k not in ("issue", "due")}
+    hand = {k: v for k, v in opened.items() if k != "open"} | {
+        "domain": {"P.Compiled": entry | {"why": "the compiled circuits the bound is stated over"}}}
+    dom = A.judge(hand, f, FILES, update=True)[1]
+    assert A.judge(dom, f, FILES)[0] == [] and "P.Compiled" in dom["domain"]
+    lifted = wbody("LE.le", conclusion=[wk("LE.le", defs=["P.deploy"])])
+
+    def at(taken, agree=None):
+        premise = COMPILED | {"args": taken} | ({} if agree is None else {"agree": agree})
+        pol, f = witnessed({"premises": [premise]}, honest={"body": wbody("P.Compiled", lifted=lifted)})
+        return [x.code for x in A.judge(dom, f, FILES)[0] if x.code.startswith("domain.")], witness_codes(pol, f)
+
+    hp = witnessed(honest={"body": wbody("P.Compiled", lifted=lifted)})[1]["pins"]["P.sound_honest"]
+    assert "P.Compiled" not in A.concluded_constants(A.statement_read(hp)), "read lifted, its head is gone"
+    assert at([None]) == ([], []), "an argument over the guarantee's binders fixes nothing: the head decides"
+    assert at(["CP.circA \nR0"], True) == ([], [])
+    for agree in (False, None):
+        assert at(["CP.circA \nR0"], agree) == (["domain.uncovered"], ["witnesses.honest-uncovered"]), agree
+    assert A.honest_witnesses(pol) == {"P.sound": ["P.sound_honest"]}
+
+
 def test_another_listed_guarantee_s_statement_is_a_domain_hypothesis_citing_it():
     """A premise that is the `Guarantees` definition another listed guarantee is lifted into is a domain hypothesis citing
     that guarantee (`cites`), which an update writes; an entry citing anything else fails."""
@@ -4619,7 +4688,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready, keep=True):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
@@ -4631,7 +4700,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
         return f
 
     monkeypatch.setattr(A, "ThreadPoolExecutor", Recording)
-    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True: own)
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: own)
     monkeypatch.setattr(A, "proved", proved)
     monkeypatch.setattr(A, "replay_step", stub("replay_step", ([], {"checked": 1, "reused": 0})))
     monkeypatch.setattr(A, "dependency_scans", stub("dependency_scans", ([A.Failure("unchecked.dependency", None, "unchecked: a hit")], 7)))
@@ -4644,6 +4713,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
     rep = A.audit(pkg, tmp_path / "out", runs=False, log=lambda *_: None)
     assert order == (["pinned", "replay_step", "dependency_scans", "dependency_digests", "proved"] if spec else ["replay_step"])
     assert given["replay_step"][2] is own and given["dependency_scans"][1] == own["oleans"] == given["dependency_digests"][2]
+    assert given["replay_step"][9] is False      # an unsealed audit (no seals here) never writes the shared replay cache
     assert rep["failures"][0] == "unchecked: a hit" and rep["failures"][1].startswith("dependencies: the .olean files of the")
     assert rep["dependency_sources"] == 7 and rep["upstream"] == {"x": 1} and rep["replay"] == {"checked": 1, "reused": 0}
     assert {"audit", "dependency-sources", "upstream", "dependencies", "replay"} <= set(rep["seconds"])
@@ -4703,6 +4773,22 @@ def test_a_run_generates_its_data_and_fails_on_its_exit(tmp_path, monkeypatch):
     assert tests(policy={"exempt": {"U": "?"}, "runs": {"U": entry}})[0] == ["runs: U is not a module of the package"]
 
 
+def test_a_run_whose_lake_a_build_is_still_writing_fails_loudly(tmp_path, monkeypatch):
+    """A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only once every build that
+    writes that `.lake` has ended. Only a dependent's build writes a package's own `.lake`, and a package with `runs` has
+    none, so this never fires in a real run; were a build still holding the package's own `.lake`, the run fails loudly
+    rather than read a build mid-write."""
+    pkg, ran, tests = _runs(tmp_path, monkeypatch, {"args": []})
+    with A._WROTE:
+        A._WRITING.add(pkg.resolve() / ".lake")
+    try:
+        fails, _ = tests()
+    finally:
+        with A._WROTE:
+            A._WRITING.discard(pkg.resolve() / ".lake")
+    assert len(fails) == 1 and fails[0].startswith("runs: a build is still writing") and ran == []
+
+
 def test_a_run_names_paths_outside_its_package_only_through_repo(tmp_path):
     pkg = tmp_path / "a" / "lean"
     pkg.mkdir(parents=True)
@@ -4733,8 +4819,8 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    def audit():
-        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache)
+    def audit():                                             # store=True: the cache is this test's own private dir
+        return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache, store=True)
     build()
     rep = audit()
     assert rep["failures"] == [] and counts(rep) == (4, 0)
@@ -4761,6 +4847,125 @@ def test_a_replay_reuses_only_modules_whose_olean_files_and_imports_passed_it(tm
     rep = audit()
     assert counts(rep) == (1, 4), "Bad alone"
     assert any(f.startswith(kernel["fails"]) for f in rep["failures"]), rep["failures"]
+
+
+#: the parts of a module a seal copies and a swap must overwrite to change what the kernel replays
+_BAD_PARTS = ("Bad.olean", "Bad.olean.server", "Bad.olean.private", "Bad.ir.sig", "Bad.ir")
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_seal_replays_the_build_at_the_seal_not_a_swap_a_dependent_makes(tmp_path, monkeypatch):
+    """The gap LEAN-212 closes: once a package is sealed, a dependent's build may write its `.lake` (`writable`), so a
+    reader of the live files could be shown bytes the build swaps out and back.  The audit copies the build at the seal and
+    reads the copies.  Here a package is built with a `Control.Bad` whose declaration skips the kernel (the sealed, true
+    state), and a dependent package's compile-time `#eval` overwrites that `.olean` with a good one during the window; the
+    replay must reject the sealed declaration all the same and store nothing under the good one's key, and it must keep
+    rejecting on a warm cache.  The mutation that reads the live files instead (``Sealed.moved`` mapping nothing) passes the
+    swapped-in good bytes, which proves the copies are what protect the verdict."""
+    S = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", S, ignore=shutil.ignore_patterns(".lake"))
+    kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
+    for rel, (old, new) in kernel["replace"].items():                   # the canonical way to pull Control.Bad into Control
+        (S / rel).write_text((S / rel).read_text().replace(old, new))
+    A.dump(S, A.load(S) | kernel["policy"])
+    lib = S / ".lake" / "build" / "lib" / "lean" / "Control"
+    build = lambda d=S: subprocess.run(["lake", "build"], cwd=d, check=True, capture_output=True, env=A.lake_env())
+
+    def stash(dst: Path) -> Path:
+        dst.mkdir()
+        for n in _BAD_PARTS:
+            if (lib / n).is_file():
+                shutil.copyfile(lib / n, dst / n)
+        return dst
+
+    def restore(src: Path) -> None:
+        for n in _BAD_PARTS:
+            (lib / n).unlink(missing_ok=True)
+            if (src / n).is_file():
+                shutil.copyfile(src / n, lib / n)
+
+    (S / "Control" / "Bad.lean").write_text("theorem Control.bogus : True := trivial\n")
+    build()
+    good = stash(tmp_path / "good")
+    (S / "Control" / "Bad.lean").write_text(kernel["write"]["Control/Bad.lean"])
+    build()
+    bad = stash(tmp_path / "bad")                        # the sealed, true state: the kernel rejects it
+
+    p = tmp_path / "p"                                   # a dependent whose compile-time code swaps the good bytes in
+    (p / "P").mkdir(parents=True)
+    (p / "lean-toolchain").write_text((S / "lean-toolchain").read_text())
+    (p / "lakefile.toml").write_text('name = "p"\ndefaultTargets = ["P"]\n\n[[require]]\nname = "control"\npath = "../control"'
+                                     '\n\n[[lean_lib]]\nname = "P"\n')
+    (p / "lake-manifest.json").write_text(json.dumps({"version": "1.2.0", "packagesDir": ".lake/packages", "packages": [
+        {"type": "path", "scope": "", "name": "control", "manifestFile": "lake-manifest.json", "inherited": False,
+         "dir": "../control", "configFile": "lakefile.toml"}], "name": "p", "lakeDir": ".lake"}))
+    (p / "P.lean").write_text("import P.Swap\n")
+    names = ", ".join(f'"{n}"' for n in _BAD_PARTS)
+    (p / "P" / "Swap.lean").write_text(
+        '#eval show IO Unit from do\n'
+        f'  for n in [{names}] do\n'
+        f'    let g := System.FilePath.mk ("{good}/" ++ n)\n'
+        '    if ← g.pathExists then\n'
+        f'      IO.FS.writeBinFile (System.FilePath.mk ("{lib}/" ++ n)) (← IO.FS.readBinFile g)\n')
+    def swap() -> None:                                  # the dependent's build; its `#eval` swaps the good bytes in
+        shutil.rmtree(p / ".lake", ignore_errors=True)   # so Lake recompiles `P.Swap` and runs its `#eval` every window
+        build(p)
+
+    def run(out: str, cache: Path) -> dict:
+        restore(bad)
+        seals = A.Seals(tmp_path / f"sealed-{out}")
+        try:
+            return A.audit(S, tmp_path / out, update=True, seals=seals, built=swap, replay_cache=cache, runs=False,
+                           log=lambda *_: None)
+        finally:
+            seals.close()
+
+    def rejected(rep: dict) -> bool:
+        return any(f.startswith("replay:") and "Control.Bad" in f for f in rep["failures"])
+
+    cache = tmp_path / "cache"
+    assert rejected(run("out1", cache)), "the replay read the sealed declaration the kernel rejects, not the swapped-in good one"
+    stored = [json.loads(c.read_text()).get("module") for c in cache.glob("*.json")]
+    assert "Control.Bad" not in stored, "the rejected module is stored under no key, the swapped-in good bytes' included"
+    assert rejected(run("out2", cache)), "a warm cache keeps rejecting: the swap stored no pass that lets the module be skipped"
+    monkeypatch.setattr(A.Sealed, "moved", lambda self, path: None)
+    assert not rejected(run("out3", tmp_path / "cache-live")), \
+        "reading the live files instead passes the swapped-in good bytes: the private copies are what protect the verdict"
+
+
+def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_path):
+    """The hole a seal under ``base/<pid>`` would still have: a killed run leaves its copies there, and a new run under the
+    same pid (container pids are low, a slot persists) would read them, since `Sealed.copy` skips a file already present.
+    `Seals` takes a fresh `mkdtemp` directory per run instead, with the pid only a prefix so `sweep` still drops a dead
+    run's directory.  Here a stale `base/<pid>` directory holds a wrong `.olean` where that layout put it; the seal the run
+    takes reads this build's bytes, not the stale copy, and `sweep` removes a gone process's directory in either naming."""
+    base = tmp_path / "sealed"
+    pkg = tmp_path / "pkg"
+    lib = pkg / ".lake" / "build" / "lib" / "lean"
+    lib.mkdir(parents=True)
+    olean = lib / "Foo.olean"
+    olean.write_bytes(b"this build's bytes")
+    stale = base / f"{os.getpid()}"                              # a killed run's leftover, the old `base/<pid>` layout
+    stale_copy = A.Sealed(pkg, "x", stale / "pkg-0").moved(olean.resolve())
+    stale_copy.parent.mkdir(parents=True)
+    stale_copy.write_bytes(b"a stale run's wrong bytes")
+    seals = A.Seals(base)
+    try:
+        assert seals.dir != stale and seals.dir.name.startswith(f"{os.getpid()}-"), \
+            "the run takes a fresh directory whose pid is only a prefix, not the reused-pid leftover"
+        read = A.Sealed(pkg, "x", seals.dir / "pkg-0")
+        read.copy(olean.resolve())
+        assert read.moved(olean.resolve()).read_bytes() == b"this build's bytes", \
+            "the seal reads this build's `.olean`, not the stale copy a reused pid left"
+    finally:
+        seals.close()
+    gone = tmp_path / "noproc"
+    gone.mkdir()
+    (base / "999999-abcd").mkdir()                               # a dead run's directory, the new `<pid>-<suffix>` layout
+    A.Seals(base).sweep(proc=gone)
+    assert not stale.exists() and not (base / "999999-abcd").exists(), \
+        "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
 
 
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
@@ -4800,9 +5005,9 @@ def test_the_closure_replay_checks_each_imported_module_once_and_then_reuses_it(
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     def build():
         return subprocess.run(["lake", "build"], cwd=pkg, check=True, capture_output=True, env=A.lake_env())
-    def audit():
+    def audit():                                             # store=True: the cache is this test's own private dir
         return A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=cache,
-                       closure=True)
+                       closure=True, store=True)
     build()
     rep = audit()
     c = rep["replay"]["closure"]
@@ -4831,7 +5036,7 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     for m in ("Init", "Old", "A", "Unrelated"):
         (cache / f"{m}.json").write_text("{}")
         os.utime(cache / f"{m}.json", (1000, 1000))
-    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
     monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
     argv = []
 
@@ -4847,6 +5052,85 @@ def test_a_replay_marks_every_entry_it_reuses_used_so_eviction_keeps_the_closure
     mtime = {p.stem: p.stat().st_mtime for p in cache.glob("*.json")}
     assert sorted(mtime) == ["A", "B", "Init", "Old", "Std", "Unrelated"]
     assert mtime["Init"] > 1000 and mtime["Old"] > 1000 and mtime["A"] > 1000 and mtime["Unrelated"] == 1000
+
+
+def test_an_unsealed_replay_reuses_the_cache_but_writes_nothing(tmp_path, monkeypatch):
+    """An unsealed audit (a control, a lean-changed scan, a stubbed test) hashes its replay keys from the live `.lake`, so
+    a stored verdict a dependent's build could have tampered with would poison a later sealed run. With ``store`` false it
+    may reuse the shared cache but writes nothing: neither a new entry for a module it checked, nor a touch of a reused
+    entry's mtime. With ``store`` true (a sealed audit) it stores and touches, so the test is not vacuous."""
+    facts = {"graph": {"A": {"imports": []}, "B": {"imports": ["A"]}}, "modules": ["A", "B"], "axioms": []}
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {m: m for m in facts["graph"]})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+
+    def run(cmd, cwd, log, timeout=None):
+        (tmp_path / "replay.json").write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+
+    def warm(name):                              # a cache with A already passed, which the replay may reuse
+        c = tmp_path / name
+        c.mkdir()
+        (c / "A.json").write_text("{}")
+        os.utime(c / "A.json", (1000, 1000))
+        return c
+
+    unsealed = warm("unsealed")
+    before = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()}
+    fails, stats = A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, unsealed, store=False)
+    assert fails == [] and (stats["checked"], stats["reused"]) == (1, 1)      # B checked, A reused, from the live keys
+    assert {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()} == before
+
+    sealed = warm("sealed")
+    A.replay_step(tmp_path, {"roots": ["A"]}, facts, "t", tmp_path, sealed, store=True)
+    assert (sealed / "B.json").is_file() and (sealed / "A.json").stat().st_mtime > 1000
+
+
+def test_an_unsealed_audit_leaves_the_shared_replay_cache_unchanged(tmp_path, monkeypatch):
+    """lean's rule: an audit without seals keys its replay on the live `.lake`, which a dependent's build can tamper with,
+    so it may reuse the shared cache but must write nothing to it, or a tampered verdict could poison a sealed run. An
+    unsealed `audit` runs a real `replay_step` against a warm cache and leaves every entry, byte and mtime, as it was; the
+    same audit with store=True (its cache a throwaway private dir) does store what it checked."""
+    pkg = tmp_path / "pkg"
+    pkg.mkdir()
+    (pkg / "lean-toolchain").write_text("v0\n")
+    (pkg / "P.lean").write_text("")
+    A.dump(pkg, {"roots": ["P"], "dependencies": {}})
+    own = {"lean": "v0", "modules": ["P"], "declarations": 1, "axioms": [], "escapes": [], "oleans": [],
+           "graph": {"P": {"imports": []}}, "files": {"P": "P.lean"}, "pins": {}}
+    monkeypatch.setattr(A, "facts_of", lambda *a, keep=True, sealed=None: dict(own))
+    monkeypatch.setattr(A, "replay_keys", lambda facts, toolchain, digest=None: {"P": "pkey"})
+    monkeypatch.setattr(A, "replay_threads", lambda pkg: None)
+
+    def run(cmd, cwd, log, timeout=None):
+        A.Path(cmd[cmd.index("--run") + 2]).write_text(json.dumps({"axioms": []}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    monkeypatch.setattr(A, "dependency_scans", lambda *a: ([], 0))
+    monkeypatch.setattr(A, "dependency_digests", lambda *a: {})
+    for name, value in (("judge", ([], {})), ("dropped", []), ("spec_reads", []), ("shape", []), ("unread_spec", {}),
+                        ("read_by_dependents", set()), ("reads_home", {}), ("scans", []), ("heartbeats", []),
+                        ("anonymous_instances", []), ("run_paths", []), ("tree_roles", {}), ("tree_failures", []),
+                        ("inline_failures", ([], {}, []))):
+        monkeypatch.setattr(A, name, lambda *a, value=value, **k: value)
+
+    def warm(name):
+        c = tmp_path / name
+        c.mkdir()
+        (c / "w.json").write_text("{}")
+        os.utime(c / "w.json", (1000, 1000))
+        return c
+
+    unsealed = warm("unsealed")
+    before = {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()}
+    assert A.audit(pkg, tmp_path / "out", replay=True, runs=False, replay_cache=unsealed, log=lambda *_: None)["failures"] == []
+    assert {p.name: (p.read_bytes(), p.stat().st_mtime) for p in unsealed.iterdir()} == before
+
+    private = warm("private")
+    A.audit(pkg, tmp_path / "out2", replay=True, runs=False, replay_cache=private, store=True, log=lambda *_: None)
+    assert (private / "pkey.json").is_file()
 
 
 def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monkeypatch):
@@ -4866,6 +5150,294 @@ def test_two_packages_storing_one_replay_key_at_once_both_succeed(tmp_path, monk
     monkeypatch.setattr(A.os, "replace", replace)
     A.store_replay(tmp_path, "k", "M")
     assert json.loads((tmp_path / "k.json").read_text())["module"] == "M" and not list(tmp_path.glob(".*.tmp"))
+
+
+def test_free_memory_is_the_least_of_the_machines_available_and_what_each_cgroup_has_left(tmp_path):
+    """`free_gib`: `MemAvailable`, bounded by each limited cgroup at or above this one, less what it uses but its
+    inactive page cache."""
+    proc, cg = tmp_path / "proc", tmp_path / "cg"
+    (proc / "self").mkdir(parents=True)
+    (proc / "meminfo").write_text("MemTotal: 1000000000 kB\nMemAvailable: 500000000 kB\n")
+    (proc / "self" / "cgroup").write_text("0::/a/b\n")
+    (cg / "a" / "b").mkdir(parents=True)
+    (cg / "a" / "memory.max").write_text(str(300 * 2**30))
+    (cg / "a" / "memory.current").write_text(str(200 * 2**30))
+    (cg / "a" / "memory.stat").write_text(f"anon 1\ninactive_file {50 * 2**30}\n")
+    (cg / "a" / "b" / "memory.max").write_text("max")
+    assert A.free_gib(proc, cg) == 150
+    (cg / "a" / "memory.max").write_text("max")
+    assert round(A.free_gib(proc, cg)) == 477
+
+
+def test_run_hands_over_each_line_of_standard_output_as_it_comes_and_returns_the_whole(tmp_path):
+    lines = []
+    rc, text = A.run([sys.executable, "-c", "import sys; print('a'); print('b'); print('e', file=sys.stderr)"], tmp_path,
+                     tmp_path / "log", on_line=lines.append)
+    assert rc == 0 and lines == ["a\n", "b\n"] and text == "a\nb\ne\n" == (tmp_path / "log").read_text()
+
+    def fails(line):
+        lines.append(line)
+        raise ValueError(line)
+    lines.clear()
+    rc, text = A.run([sys.executable, "-c", "print('a\\n' * 100000, end='')"], tmp_path, tmp_path / "log", on_line=fails)
+    assert rc == 0 and lines == ["a\n"] and text == "a\n" * 100000, "one that raises is dropped, and the pipe still drained"
+
+
+def pipeline(tmp_path, monkeypatch, files, loop=False, **kw):
+    """A `Pipeline` of a package holding ``files`` under the root `P`; without ``loop``, no batch runs on its own."""
+    pkg = tmp_path / "pkg"
+    for rel in files:
+        (pkg / rel).parent.mkdir(parents=True, exist_ok=True)
+        (pkg / rel).write_text("")
+    if not loop:
+        monkeypatch.setattr(A.Pipeline, "_loop", lambda self: None)
+    return A.Pipeline(pkg, {"roots": ["P"]}, "t", tmp_path / "work", tmp_path / "cache", False, **kw)
+
+
+def test_a_pipeline_batches_the_modules_the_build_reports_once_enough_wait_and_memory_and_the_heavy_slot_are_free(
+        tmp_path, monkeypatch):
+    """A batch takes the package's modules under its roots that Lake reports built, not a facet, another package's module
+    or one outside the roots, once `batch` of them wait, `PIPELINE_FREE_GIB` is free and `_HEAVY_REPLAY` is free, which it
+    never waits for; after `end`, none starts."""
+    free = [10**6]
+    monkeypatch.setattr(A, "free_gib", lambda: free[0])
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean", "Other.lean"], batch=2)
+    for line in ("✔ [1/9] Built P.A (1.2s)\n", "✔ [2/9] Built P.A:c.o (900ms)\n", "✔ [3/9] Built Mathlib.X (2s)\n",
+                 "✔ [4/9] Built Other (2s)\n", "✔ [5/9] Replayed P.B\n"):
+        p.line(line)
+    assert p.pending == ["P.A"] and not p._go()
+    p.line("✔ [6/9] Built P.B (1m 2.5s)\n")
+    free[0] = A.PIPELINE_FREE_GIB - 1
+    assert not p._go()
+    free[0] = A.PIPELINE_FREE_GIB
+    assert A._HEAVY_REPLAY.acquire(blocking=False)
+    try:
+        assert not p._go() and not p.held
+    finally:
+        A._HEAVY_REPLAY.release()
+    assert p._go() and p.held
+    A._HEAVY_REPLAY.release()
+    p.held = False
+    p.end()
+    assert p._go() and not p.held
+
+
+def test_a_pipeline_runs_one_batch_at_a_time_in_the_heavy_slot_and_none_after_the_build(tmp_path, monkeypatch):
+    monkeypatch.setattr(A, "free_gib", lambda: 10**6)
+    ran, started = [], threading.Event()
+
+    def replay(self, mods):
+        if free := A._HEAVY_REPLAY.acquire(blocking=False):
+            A._HEAVY_REPLAY.release()
+        ran.append((list(mods), not free))
+        started.set()
+
+    monkeypatch.setattr(A.Pipeline, "_replay", replay)
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean", "P/C.lean"], loop=True, batch=2)
+    p.line("Built P.A (1s)\n")
+    p.line("Built P.B (1s)\n")
+    started.wait()
+    p.line("Built P.C (1s)\n")
+    p.end()
+    p.thread.join()
+    assert ran == [(["P.A", "P.B"], True)] and p.pending == ["P.C"]
+    assert A._HEAVY_REPLAY.acquire(blocking=False)
+    A._HEAVY_REPLAY.release()
+
+
+def test_a_batch_whose_modules_and_their_closure_all_passed_runs_no_replay(tmp_path, monkeypatch):
+    """A cold build reports every module built, most of them with the bytes an earlier replay passed: a batch whose modules,
+    and with `--closure` every module they import, are in the cache under its copies' keys starts no `Replay.lean`, which
+    would only load them. One left to check, and it replays."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean"])
+    p.closure = True
+    imports = {"D": [], "P.A": ["D"], "P.B": ["P.A"]}
+    for m in imports:
+        (tmp_path / f"{m}.olean").write_text(m)
+    facts = {"graph": {m: {"olean": str(tmp_path / f"{m}.olean"), "imports": i} for m, i in imports.items()},
+             "modules": ["P.A", "P.B"], "axioms": []}
+    monkeypatch.setattr(A.Pipeline, "copied", lambda self, mods, work: (facts, []))
+    calls = []
+    monkeypatch.setattr(A, "replay_step", lambda *a, **k: calls.append(a[2]["modules"]) or
+                        ([], {"checked": 2, "phases": {}, "peak_gib": 0}))
+    keys = A.replay_keys(facts, "t")
+    p.replay_cache.mkdir()
+    for m in ("P.A", "P.B"):
+        A.store_replay(p.replay_cache, keys[m], m)
+    p._replay(["P.A", "P.B"])
+    assert calls == [["P.A", "P.B"]], "D is not stored"
+    A.store_replay(p.replay_cache, keys["D"], "D")
+    p._replay(["P.A", "P.B"])
+    assert calls == [["P.A", "P.B"]] and p.batches[-1]["checked"] == 0 and "error" not in p.batches[-1]
+
+
+def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_bytes_in_place(tmp_path, monkeypatch):
+    """A batch's `.olean` files under a `.lake` the build writes (the package's, a fetched package's) are copied once into
+    the snapshot, every part, and named there, the search path too; the toolchain's stay where they are. Their keys are
+    those of the same bytes in place, so the final replay finds what a batch stored; a file the build rewrites after its
+    copy leaves the copy, and the keys of every later batch, as they were, and the final replay finds none of them."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean", "P/B.lean"])
+    lib = p.pkg / ".lake" / "build" / "lib" / "lean"
+    dep = p.pkg / ".lake" / "packages" / "dep" / ".lake" / "build" / "lib" / "lean"
+    tc = (tmp_path / "toolchain" / "lib" / "lean").resolve()
+    files = {"P.A": lib / "P" / "A.olean", "P.B": lib / "P" / "B.olean", "D": dep / "D.olean", "Init": tc / "Init.olean"}
+    imports = {"P.A": ["D", "Init"], "P.B": ["P.A"], "D": ["Init"], "Init": []}
+    for m, f in files.items():
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(m)
+    (lib / "P" / "A.olean.private").write_text("A's private part")
+    (lib / "P" / "A.ir").write_text("A's code")
+
+    def run(argv, cwd, log=None, timeout=None, on_line=None):
+        Path(argv[argv.index(str(A.TOOL / "Graph.lean")) + 1]).write_text(json.dumps({
+            "search": [str(lib), str(dep), str(tc)],
+            "graph": {m: {"olean": str(f), "imports": imports[m]} for m, f in files.items()}}))
+        return 0, ""
+
+    monkeypatch.setattr(A, "run", run)
+    live = {"graph": {m: {"olean": str(f), "imports": imports[m]} for m, f in files.items()}}
+    for b in ("b1", "b2"):
+        (tmp_path / b).mkdir()
+    facts, search = p.copied(["P.A", "P.B"], tmp_path / "b1")
+    g = facts["graph"]
+    assert facts["modules"] == ["P.A", "P.B"] and g["Init"]["olean"] == str(files["Init"]) and search[2] == str(tc)
+    for m in ("P.A", "P.B", "D"):
+        assert Path(g[m]["olean"]).is_relative_to(p.snapshot) and Path(g[m]["olean"]).read_text() == m
+    assert Path(g["P.A"]["olean"] + ".private").read_text() == "A's private part"
+    assert Path(g["P.A"]["olean"]).with_suffix(".ir").read_text() == "A's code"
+    assert Path(search[0]) / "P" / "A.olean" == Path(g["P.A"]["olean"]) and Path(search[1]) / "D.olean" == Path(g["D"]["olean"])
+    keys = A.replay_keys(facts, "t")
+    assert keys == A.replay_keys(live, "t")
+    files["D"].write_text("rewritten by the build")
+    later, _ = p.copied(["P.B"], tmp_path / "b2")
+    assert Path(later["graph"]["D"]["olean"]).read_text() == "D" and A.replay_keys(later, "t") == keys
+    assert A.replay_keys(live, "t")["P.B"] != keys["P.B"]
+
+
+def graph_reports(monkeypatch, search: list[str], graph: dict) -> None:
+    """Make `Graph.lean` report ``search`` and ``graph`` (paths as strings), so `copied` sees a build's layout without one."""
+    def run(argv, cwd, log=None, timeout=None, on_line=None):
+        Path(argv[argv.index(str(A.TOOL / "Graph.lean")) + 1]).write_text(json.dumps({"search": search, "graph": graph}))
+        return 0, ""
+    monkeypatch.setattr(A, "run", run)
+
+
+def test_a_batch_abandons_a_symlinked_olean_whose_target_escapes_its_search_directory(tmp_path, monkeypatch):
+    """top's A/M swap: a build writes `A.olean` in a writable directory as a symlink to a file outside it. `lean` finds the
+    module by name there and loads the target, but a copy's key must be of bytes under the directory `lean` searched, so
+    `copied` abandons the batch, which stores nothing; the final replay then checks the module."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    d0 = p.pkg / ".lake" / "build" / "lib" / "lean"
+    d1 = p.pkg / ".lake" / "alt" / "lib" / "lean"
+    (d1 / "P").mkdir(parents=True)
+    (d1 / "P" / "M.olean").write_text("M, outside A's directory")
+    (d0 / "P").mkdir(parents=True)
+    (d0 / "P" / "A.olean").symlink_to(d1 / "P" / "M.olean")
+    graph_reports(monkeypatch, [str(d0), str(d1)], {"P.A": {"olean": str(d0 / "P" / "A.olean"), "imports": []}})
+    p._replay(["P.A"])
+    assert "resolves outside" in p.batches[-1]["error"] and "P.A" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
+def test_a_batch_abandons_a_read_in_place_module_that_resolves_into_a_writable_root(tmp_path, monkeypatch):
+    """ci's moved module: a module found in a directory no build writes is read in place, uncopied, so its key is of the
+    bytes there. If its olean is a symlink into a writable root the prover controls, those bytes are not fixed, so `copied`
+    abandons the batch, which stores nothing; the final replay checks it."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    ro = tmp_path / "ro" / "lib" / "lean"            # a directory no build writes: read in place, uncopied
+    w = p.pkg / ".lake" / "build" / "lib" / "lean"   # a writable root
+    (w / "Lib").mkdir(parents=True)
+    (w / "Lib" / "M.olean").write_text("the prover's bytes")
+    (ro / "Lib").mkdir(parents=True)
+    (ro / "Lib" / "M.olean").symlink_to(w / "Lib" / "M.olean")
+    graph_reports(monkeypatch, [str(ro)], {"Lib.M": {"olean": str(ro / "Lib" / "M.olean"), "imports": []}})
+    p._replay(["Lib.M"])
+    assert "writable root" in p.batches[-1]["error"] and "Lib.M" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
+def test_a_batch_abandons_a_module_that_shadows_a_toolchain_module(tmp_path, monkeypatch):
+    """A package module with a toolchain module's name is found in both the writable package directory and the toolchain's,
+    so which one `lean` loads turns on search order, not on a single key's bytes. `copied` abandons the batch, which stores
+    nothing; the final replay checks it."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    lib = p.pkg / ".lake" / "build" / "lib" / "lean"
+    tc = tmp_path / "toolchain" / "lib" / "lean"
+    for d in (lib, tc):
+        d.mkdir(parents=True)
+        (d / "Init.olean").write_text(f"init at {d}")
+    graph_reports(monkeypatch, [str(lib), str(tc)], {"Init": {"olean": str(lib / "Init.olean"), "imports": []}})
+    p._replay(["Init"])
+    assert "shadowed" in p.batches[-1]["error"] and "Init" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
+def kernel_control(pkg: Path) -> dict:
+    """``pkg``, a copy of the control, given `violations.json`'s `kernel` case: a declaration that skipped the kernel."""
+    kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]
+    for rel, text in kernel["write"].items():
+        (pkg / rel).write_text(text)
+    for rel, (old, new) in kernel["replace"].items():
+        (pkg / rel).write_text((pkg / rel).read_text().replace(old, new))
+    A.dump(pkg, A.load(pkg) | kernel["policy"])
+    return kernel
+
+
+def piped_build(pkg: Path, tmp_path: Path, monkeypatch, closure: bool) -> A.Pipeline:
+    """``pkg`` built, its build's lines given to a `Pipeline` that stores into `tmp_path/piped`, and one batch run on
+    every module the build reported."""
+    monkeypatch.setattr(A.Pipeline, "_loop", lambda self: None)
+    pipe = A.Pipeline(pkg, A.load(pkg), (pkg / "lean-toolchain").read_text().strip(), tmp_path / "work",
+                      tmp_path / "piped", closure)
+    rc, text = A.run(["lake", "build"], pkg, tmp_path / "build.log", on_line=pipe.line)
+    assert rc == 0, text
+    pipe._replay(list(pipe.pending))
+    return pipe
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_pipelined_replay_checks_and_rejects_what_the_replay_without_it_does(tmp_path, monkeypatch):
+    """On a real build with a declaration that skipped the kernel: a batch on every module the build reported, run on
+    copies of their files, stores the four the kernel accepted, `Control` (which imports the bad one) included. The replay
+    after the build then checks `Control.Bad` alone, reuses the four, and fails as the replay without a batch fails on a
+    cold cache, which checks all five: the same modules, and the same rejection. Only a real build shows Lake's lines,
+    `Graph.lean`'s graph and the keys of the copies meeting those of the files in place."""
+    pkg = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
+    kernel = kernel_control(pkg)
+    pipe = piped_build(pkg, tmp_path, monkeypatch, closure=False)
+    own = sorted(m for m in A.lean_modules(pkg) if A.under(["Control"], m))
+    (batch,) = pipe.batches
+    assert "error" not in batch and batch["modules"] == batch["checked"] == len(own) == 5, batch
+    assert any(f.startswith(kernel["fails"]) for f in batch["failures"]), batch
+
+    def audit(cache):
+        return A.audit(pkg, tmp_path / cache / "out", update=True, runs=False, log=lambda *_: None,
+                       replay_cache=tmp_path / cache)
+
+    def rejections(rep):
+        return [f.split("\n")[0] for f in rep["failures"] if f.startswith("replay")]
+    serial, piped = audit("serial"), audit("piped")
+    assert counts(serial) == (5, 0) and counts(piped) == (1, 4), "Control.Bad alone"
+    assert rejections(piped) == rejections(serial) and rejections(serial)[0].startswith(kernel["fails"])
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_pipelined_closure_replay_of_module_system_files_leaves_the_final_one_nothing_to_check(tmp_path, monkeypatch):
+    """With `--closure`, on `module` files, whose private parts the batch copies: the batch checks the own modules and the
+    toolchain modules they import, and the replay after the build reuses every one of them. Only the closure's cold
+    replay (the toolchain's `Init`) shows a batch storing closure modules the final replay then finds."""
+    pkg = tmp_path / "modules"
+    shutil.copytree(A.FIXTURES / "modules", pkg, ignore=shutil.ignore_patterns(".lake"))
+    pipe = piped_build(pkg, tmp_path, monkeypatch, closure=True)
+    (batch,) = pipe.batches
+    assert "error" not in batch and batch["failures"] == [] and batch["closure_checked"] > 100, batch
+    rep = A.audit(pkg, tmp_path / "out", update=True, runs=False, log=lambda *_: None, replay_cache=tmp_path / "piped",
+                  closure=True)
+    assert not [f for f in rep["failures"] if f.startswith("replay")], rep["failures"]
+    assert counts(rep) == (0, batch["checked"]) and rep["replay"]["closure"]["checked"] == 0, rep["replay"]
 
 
 @pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")

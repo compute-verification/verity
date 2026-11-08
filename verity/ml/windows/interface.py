@@ -39,7 +39,7 @@ past 111 bytes, or past a Flock block of 2^27 bits). A Boolean-profile port's le
 A wired port's row is committed under its writer's output row's salt, so the two rows' public strings are one, which
 the wiring check holds on the sampled proof blocks (`wiring.check_drawn`). A wire reads a row whole: a row gathered from several
 writers' words (RoPE's query from the Q coordinates, attention's K and V from earlier positions) is refused except in one
-form, the wire cut (``cuts``, `SampledProofs.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
+form, the wire cut (``cuts``, `Spot.Wires`): a port read from several writers is cut ``k`` ways, parameter ``p``
 is ``k`` rows ``p#j``, row ``j`` its outer elements ``[j·n/k, (j+1)·n/k)``, and a wire covers some of a port's rows
 (`Wire.cut`). A unit that reads one row gathered from several writers' outputs reads it through a gather unit
 (``AllGather_v1``) whose ``parts`` are cut.
@@ -457,7 +457,7 @@ def _of(cls: Any, d: Any, fields: Sequence[str], what: str) -> Any:
 @dataclass(frozen=True, init=False)
 class Wire(_Pattern):
     """A wiring pattern (`_Pattern`): each reader row it covers is the ``out`` row of unit ``base + sum(d[k] * step[k])`` of
-    template ``writer``, each index counting its own template's units (the wire cut's form, `SampledProofs.Wires`). With no cut
+    template ``writer``, each index counting its own template's units (the wire cut's form, `Spot.Wires`). With no cut
     it reads the port's one row, a whole-port wire."""
     writer: str
     out: str
@@ -478,12 +478,12 @@ class Wire(_Pattern):
 
     def indices_in(self, at: int, n: int) -> tuple[int, int]:
         """The first and the last reader index of the wire's reader units in units ``[at, at + n)`` of its reader
-        (`SampledProofs.Wires.Wire.indicesIn`)."""
+        (`Spot.Wires.Wire.indicesIn`)."""
         c = self.cut[1]
         return (max(at, self.at) - self.at) * c, max((min(at + n, self.at + self.reader_units) - self.at) * c - 1, 0)
 
     def box(self, lo: int, hi: int) -> tuple[int, int]:
-        """Bounds on the writers of reader indices ``lo`` to ``hi`` (`SampledProofs.Wires.Wire.box`): digit by digit,
+        """Bounds on the writers of reader indices ``lo`` to ``hi`` (`Spot.Wires.Wire.box`): digit by digit,
         the fastest first, where the indices left share the higher digits those digits' values and the digit's terms at
         the two ends, else the digit's least and greatest term and the bounds on the higher digits."""
         a = b = self.base
@@ -714,7 +714,7 @@ class Ingress:
 def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[Wire],
                 cuts: Mapping[str, Mapping[str, int]] | None = None,
                 order: Sequence[tuple[str, int, int]] | None = None) -> None:
-    """Refuse (ValueError) the circuit's cuts and wires as `SampledProofs.Wires.check` does, in its order (``templates``: by
+    """Refuse (ValueError) the circuit's cuts and wires as `Spot.Wires.check` does, in its order (``templates``: by
     descriptor id, its layout and units): a cut naming no template's parameter or not dividing its outer length and words
     (``cuts``); then wire by wire, a reader or writer that is no template (``template``), a port no parameter of the reader
     or an output no output of the writer (``port``), rows not among the port's or a last digit that isn't ``C`` (``cut``),
@@ -754,7 +754,7 @@ def check_wires(templates: Mapping[str, tuple[RowLayout, int]], wires: Sequence[
 
 def check_order(units: Mapping[str, int], wires: Sequence[Wire],
                 order: Sequence[tuple[str, int, int]] | None = None) -> None:
-    """Refuse (ValueError) wires whose dataflow between units isn't acyclic, as `SampledProofs.Wires.check`'s order does
+    """Refuse (ValueError) wires whose dataflow between units isn't acyclic, as `Spot.Wires.check`'s order does
     (``units``: each template's, by descriptor id; ``wires`` already through `check_wires`' other checks). ``order`` ranks
     ranges of units by their place in it, each ``(tid, at, n)`` the units ``[at, at + n)`` of ``tid``, in any order; it
     is refused (``order``) unless each names a template and each template's ranges tile its units. A wire is in order when,
@@ -795,7 +795,7 @@ def check_order(units: Mapping[str, int], wires: Sequence[Wire],
 
 
 def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
-    """`SampledProofs.Wires.kahn`: each template one range of its units, in a topological order of the templates by their
+    """`Spot.Wires.kahn`: each template one range of its units, in a topological order of the templates by their
     wires, the next at each step the first template by id that reads none not yet placed. Refused (``cycle``) where every
     template not placed reads one: walking back from the first of them along each one's first wire from one not placed,
     as many steps as there are of them, ends on a cycle, and the refusal names that template's first such wire."""
@@ -1852,7 +1852,7 @@ def input_count(doc: Mapping[str, Any], resolve: Callable[[str], Any] = resolve,
     """A circuit record's inputs by what fills them, in bits, from its description alone (a stated record's templates, wires
     and declarations, `Circuit.description`; per template, wire and declaration, never per unit, and never its program):
     every unit's input rows (``inputs``), the rows its wires fill (``wired``, a wire's reader rows times its writer row's
-    bits, `SampledProofs.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none,
+    bits, `Spot.Wires`' ``wiredBits``), its registered reads of input rows (a read of an output port fills none,
     `Read`), table reads and openings of a held parameter (``registered``) and its ingress (``ingress``); ``free`` the rest,
     which only the prover chose. A record that lists its members is counted from them, per member: each input row's bits
     once per unit or once per row of its shared-row table, a wired row's ``wired``, a row its registered reads of a held

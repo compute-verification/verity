@@ -1,6 +1,6 @@
 """`research run --cwd clone`: the workload runs in its own clone of the source root, never in the tree other runs of the commit share.
-Proofs ran one Lean audit twice at one sha with `--cwd source`; cancelling the duplicate ran its EXIT trap, which deleted the shared
-`PKG/.lake/packages`, and the live audit failed after 4779 of 4781 targets (3 Oct 2026).  The machine is a directory and ssh is
+With `--cwd source`, cancelling a duplicate of a Lean audit at one sha runs its EXIT trap, which deletes the shared
+`PKG/.lake/packages` under the live audit.  The machine is a directory and ssh is
 `sh -c`, as in test_remote_preflight.py."""
 from __future__ import annotations
 

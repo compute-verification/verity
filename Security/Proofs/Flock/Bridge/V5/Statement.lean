@@ -5,6 +5,7 @@ public import Proofs.Flock.Bridge.LeafRoots
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
@@ -28,7 +29,7 @@ holds at every `own`:
   Bernoulli law, which `drawnFrom` refuses (`Bridge.notBernoulli_designAt`). `Bridge.SampledKSLiveV5R` states the bound at any `law` the verifier samples
   under (`Bridge.DrawsUnder`). At `PopMatches` it is on those strata (`Bridge.LawOn` at `Bridge.nsOf`,
   `Bridge.lawOn_drawsUnder`): `subset kd` (`All` is `subset n`), or `stratified K` or `work K` over them. The verifier
-  samples under it from its own bytes (`Bridge.execSel`, `SampledProofs.Draw.drawUnits` on one stream), and `δ` is that
+  samples under it from its own bytes (`Bridge.execSel`, `Spot.Draw.drawUnits` on one stream), and `δ` is that
   sampling design's own miss of a set `B` of proof blocks (`P_a(B)` of `designOf (oneStageOf law)` on `partOf P κ ns`), not a
   parameter;
 * `live-verifier` at `own` and the sampling design (`Assumptions.Zk.RecordCustodyZKJPLaw`);
@@ -149,7 +150,7 @@ def _root_.Flock.Bridge.EndToEndHiddenV5 : Prop :=
           (fun g o => Bridge.canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2) (reg σ)
           (XplurZC execArith hs512 P (planZHJP dj y₀) (tabZHJP dj y₀) vb (reg σ) (cont σ) k Rw))
         (auditLive L Reg (liveOfZJ dg (planZHJP dj y₀) N wr)) τ ≤
-      ENNReal.ofReal ((Properties.SampledProofs.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) +
+      ENNReal.ofReal ((Properties.Spot.oneStageOf law).Pa ns (W.map Fin.valEmbedding)) +
         ksAvgStrictZ (planZHJP dj y₀) L k qF qS (reg σ) +
         ENNReal.ofReal ((∑ p : vb.Pos,
             (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
@@ -263,7 +264,7 @@ def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
     -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
     -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
-    let r := Properties.SampledProofs.oneStageOf law
+    let r := Properties.Spot.oneStageOf law
     let ns := Bridge.nsOf desc qr
     let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs
@@ -299,12 +300,14 @@ Bernoulli law, though `Draw.flockLaw` parses one: `drawnFrom` refuses it (`OneSt
 (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. No hypothesis is taken on the
 registration's roots: two ports with one root and different domains are a SHA-512 collision that recomputing the roots finds, so the
 bound carries `ecr/sha-512`'s term at that finder (`Bridge.rootsFinderL`, no coins, `Bridge.rootsCostL` SHA-512 calls),
-at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. -/
+at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. Nor is one taken on the
+proof block's circuit: its unit is built because the circuit file parses (`Discharge.Hidden.built_of_parseStmt`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
-    (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D),
+    let hU : Built D.unroll.unit := Discharge.Hidden.built_of_parseStmt hD ((zkTags_typed I).trans ht)
+    ∀ (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)
@@ -357,7 +360,7 @@ def SampledKSLiveV5 : Prop :=
     -- the circuit's constants and every proof block's public input bits, public
     let κ : Fin Cc.N → Option Bool := fun g => Bridge.constsOfP D.unroll hU n pi pub g
     -- the sampling design's design, the registration's strata, and the sampling design's own miss of `B`
-    let r := Properties.SampledProofs.oneStageOf law
+    let r := Properties.Spot.oneStageOf law
     let ns := Bridge.nsOf desc qr
     let δ : ℝ := (Bridge.designOf r).Pa (Bridge.partOf P κ ns) B
     -- cr/sha-512 for the knowledge finders of each table the prover's session runs

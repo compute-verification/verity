@@ -31,9 +31,17 @@ witness bits where the card doesn't measure the type; a line's marginal overhead
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
 * `every_block` (C): serving commits every proof block's outputs, and the audit samples them one-stage; its tax is a
-  lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits by
-  the same count, which Lean states for two-stage only; infiltration is its write form (the K incorrect blocks the plan
-  detects, each the widest block's bits) and skipped work the work target's plan.
+  lower bound, the hashing alone.  Exfiltration is `consumers.exfiltration_bound`'s form, at most the served bits
+  (`audit_exfiltration_delivered`); infiltration is its write form (the K incorrect blocks the plan detects, each the
+  widest block's bits) and skipped work the work target's plan.  Lean checks each of its designs (`figure1.lean_check`,
+  unless `run`'s `lean` is off): a point's `lean` says it did, its exfiltration's count is the bits Lean certifies
+  (`plancheck`), and a refused design is an error.  A point without a design (the trivial bound, or a count of every
+  proof block, which samples none) has `lean` None.
+
+Lean checks each two-stage point too (`lean_two`, unless `lean` is off): its count is the bits Lean certifies
+(`TwoStageCheckPatternsSound` in the patterns' form, `TwoStageCheckServedSound` in the capped sets') at the θ Lean
+finds from the planner's, with the planner's bits (`planner`) and Lean's θ beside them, and a refused point is an
+error.
 
 Each configuration's two panels read one design, the one with the least exfiltration bound at β; skipped work is
 planned on its own.  The serve tax is outside β; the token ids' hashing is in the tax, not in β, for every line.  A
@@ -61,7 +69,8 @@ from textwrap import fill
 
 import cards as spot_cards
 import figure1 as f1
-from verity.core.protocols.sampled_proofs.optimize import Cell, leak_count, two_stage_design, two_stage_price
+from verity.core.protocols.spot import plancheck
+from verity.core.protocols.spot.optimize import Cell, leak_count, two_stage_design, two_stage_price
 from verity.ml.circuits.partition_v2 import unit_class
 
 SCHEMA = "spot-figure1/v2"
@@ -258,7 +267,9 @@ def _definition(block: str) -> tuple[str, int | None]:
 def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with every proof block priced in GPU-seconds from the `proof_overhead` card, and the marginal
     overhead they come to.  A stratum whose type the card measures (its block, else the card's block of the same
-    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap; a type the card doesn't
+    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap.  One the card measures only
+    at another size, 2^Δk its block's, takes 2^Δk its seconds and 2^-Δk its cap: Δk compares the two k_logs as the
+    strata estimate them, the card's block's from the strata where they hold one of its type.  A type the card doesn't
     measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
     fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's
     `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them."""
@@ -271,11 +282,19 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     rate = median(b["seconds_per_block"] / 2 ** b["k_log"] for b in types.values())
     slope, intercept = linear_regression([b["k_log"] for b in types.values()],
                                          [b["fixed_seconds"] for b in types.values()])
+    k_of = {x["block"]: x["k_log"] for x in part.value["strata"] if "k_log" in x}
+    held = {_definition(b["block"]): (b, k_of[b["block"]]) for b in v["blocks"] if b["block"] in k_of}
     strata = []
     for x in part.value["strata"]:
-        if b := by_name.get(x["block"]) or types.get(_definition(x["block"])):
+        if b := by_name.get(x["block"]):
             strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
                           | {"priced": "measured"})
+        elif b := types.get(_definition(x["block"])):
+            b, k = held.get(_definition(x["block"]), (b, b["k_log"]))
+            dk = x["k_log"] - k if "k_log" in x else 0
+            cap = b["statement_blocks"] << -dk if dk < 0 else max(1, b["statement_blocks"] >> dk)
+            strata.append(x | {"seconds_per_block": b["seconds_per_block"] * 2.0 ** dk, "fixed_seconds": b["fixed_seconds"],
+                               "statement_blocks": cap, "priced": "measured"})
         elif "k_log" in x:
             strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
                                "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),
@@ -301,6 +320,11 @@ def _size_class(bits: float) -> int:
     return w
 
 
+def _split(cells: list[Cell], merged: int) -> list[Cell]:
+    """The cells in a two-stage design's strata: the size classes up to `merged` in stratum 0, each wider one its own."""
+    return [replace(c, stratum=0 if _size_class(c.bits) <= merged else _size_class(c.bits)) for c in cells]
+
+
 def _hazard(q: float, y: float) -> float:
     """h(y) = −ln(1 − q(1 − e^{−y})): a replay block's share of Λ once its incorrect blocks have rate y."""
     return -log1p(-q * -expm1(-y)) if y < inf else -log1p(-q) if q < 1 else inf
@@ -314,7 +338,7 @@ def write_form(cells: list[Cell], row: dict, replay_blocks: float, delta: float,
     unit of h, and at most R·F.  A replay block charged c has y at least the least k_t/n_t of a block of at least c bits,
     or c times the least k_t/(n_t b) of a narrower one; c/h(y) only rises between the cells' bits, so its most is at one
     of them or at F."""
-    split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
+    split = _split(cells, row["merged"])
     n: dict[int, float] = {}
     for c in split:
         n[c.stratum] = n.get(c.stratum, 0.0) + c.n
@@ -334,7 +358,7 @@ def computed_proving(cells: list[Cell], row: dict, computed: tuple[bool, ...]) -
     included, that is in the cells `computed` marks: the types `priced` computes rather than measures.  A design that
     samples a few blocks of a type pays its statement's fixed cost on them, so this can be far above the type's share
     of the marginal."""
-    split = [replace(c, stratum=0 if _size_class(c.bits) <= row["merged"] else _size_class(c.bits)) for c in cells]
+    split = _split(cells, row["merged"])
     at = (row["k"], row["q"], row["registration"])
     whole = two_stage_price(split, *at)[2]
     measured = two_stage_price([replace(c, prove=0.0, fixed=0.0) if x else c
@@ -369,6 +393,18 @@ def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: f
                  m.replay.cost * replays / per, boundary_bits)
 
 
+def lean_two(g: Grain, row: dict, delta: float, served: float, form: str) -> tuple[float, dict]:
+    """Lean's check of a two-stage line's point (`plancheck.two`, its replay blocks one class, in the patterns' form or
+    the capped sets'): the bits it certifies, rounded up to a float, at the θ it finds from the planner's, with the
+    planner's bits and that θ beside them; a point Lean refuses is an error."""
+    d = plancheck.two(_split(list(g.cells), row["merged"]), row["k"], g.replay_blocks, row["q"], delta, served,
+                      form == "patterns", row["theta"])
+    ((bits, theta),) = plancheck.check([d])
+    if bits is None:
+        raise plancheck.LeanError(f"Lean refuses the planner's two-stage point: {d}")
+    return plancheck.upper(bits), {"lean": True, "planner": row["bound"], "theta": float(theta)}
+
+
 def _plan(row: dict | None) -> dict | None:
     return None if row is None else f1._plan(row)
 
@@ -377,8 +413,8 @@ def _point(job: tuple) -> dict:
     """One configuration's bounds at one budget, in GPU-seconds: each panel's, with the plan and, for the capped
     exfiltration, which of the count and the served bits binds, the requests a registration samples and its cap (`REG`),
     and the computed share of its design's proving.  A two-stage line's `form` and its registration's replay blocks
-    (`span`) come with it."""
-    name, m, g, budget, computed, form, span = job
+    (`span`) come with it; with `lean`, Lean's check of each line's designs (`figure1.lean_check`, `lean_two`)."""
+    name, m, g, budget, computed, form, span, lean = job
     served = f1.served_total(m)
     if name == "every_block":
         total_bits = m.scope.requests * sum(c.n * c.bits for c in m.cells)
@@ -386,15 +422,22 @@ def _point(job: tuple) -> dict:
         work = f1.point(m, "one-stage", "work", budget)
         written = total_bits if leak["row"] is None else min(m.dot.out_bits * leak_count(m.dot, leak["bound"]),
                                                              total_bits)
-        return {"exfiltration": {"y": min(leak["bound"], served), "count": leak["bound"],
-                                 "binds": "served" if served <= leak["bound"] else "count", "plan": _plan(leak["row"])},
-                "infiltration": {"y": written, "plan": _plan(leak["row"])},
+        count, checked = leak["bound"], {"leak": {}, "work": {}}
+        if lean:
+            (on_leak, count), (on_work, _) = f1.lean_check([(m, "one-stage", "leak", leak),
+                                                             (m, "one-stage", "work", work)])
+            checked = {"leak": {"lean": on_leak}, "work": {"lean": on_work}}
+        return {"exfiltration": {"y": min(count, served), "count": count,
+                                 "binds": "served" if served <= count else "count", "plan": _plan(leak["row"]),
+                                 **checked["leak"]},
+                "infiltration": {"y": written, "plan": _plan(leak["row"]), **checked["leak"]},
                 "skipped_work": {"y": work["bound"], "binds": "trivial" if work["capped"] else "count",
-                                 "plan": _plan(work["row"])}}
+                                 "plan": _plan(work["row"]), **checked["work"]}}
     row = two_stage_design(g.cells, g.replay_blocks, m.delta, budget=budget, replay=g.replay, h=m.byte_s,
                            served=m.served, union=form == "patterns", registration=span)
-    return {"exfiltration": {"y": min(row["bound"], served), "count": row["bound"],
-                             "binds": "served" if served <= row["bound"] else "count", "plan": _plan(row),
+    count, checked = lean_two(g, row, m.delta, m.served, form) if lean else (row["bound"], {})
+    return {"exfiltration": {"y": min(count, served), "count": count,
+                             "binds": "served" if served <= count else "count", "plan": _plan(row), **checked,
                              **{k: row[k] for k in REG},
                              "computed_proving": computed_proving(list(g.cells), row, computed)},
             "infiltration": {"y": write_form(list(g.cells), row, g.replay_blocks, m.delta, g.footprint),
@@ -448,7 +491,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
                 f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
 
-    head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
+    head = (f"{f1.ROLES} {f1.TRUST} "
+            "x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
@@ -528,6 +572,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
              f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
              if trivial else "")
+    exfil += (" Lean checks every two-stage point's design: its count is the bits Lean certifies there, at a θ Lean "
+              "searched." if out.get("lean") else "")
     bi = conf.get("tokens_bi")
     exfil += (family("tokens", "solid", f"serving commits {a.commits}, a replay block is {a.replay_block}, "
                      f"{priced('tokens')}; {patterns}")
@@ -541,8 +587,9 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               f"one token charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
-              "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
-              f"states it for two-stage only): {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
+              "where, at most the served bits (an influence set is a set of served outputs)"
+              + (", each design checked by Lean" if out.get("lean") else "")
+              + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
              f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
              f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
@@ -556,10 +603,11 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
 
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
-        workers: int = 1) -> dict:
-    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes."""
+        workers: int = 1, lean: bool = True) -> dict:
+    """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
+    Lean checking every line's designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, scope_names, request, pool.map if pool else map)
+        return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 
 
 def _lines(model_name: str, request: str) -> tuple:
@@ -583,7 +631,7 @@ def _lines(model_name: str, request: str) -> tuple:
     return sc, c, cuts, confs, inputs, lines, computed
 
 
-def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each) -> dict:
+def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, each, lean: bool) -> dict:
     sc, c, cuts, confs, inputs, lines, computed = _lines(model_name, request)
     tax = taxes(spot_cards.load("serve_tax", model_name), tuple(confs))
     part, fill, h = lines["tokens"]
@@ -604,7 +652,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             g = None if name == "every_block" else grain(m, name, layers, boundary, tokens, batch(conf, s, c))
             span = 0.0 if g is None or conf.registration is None else (
                 g.replay_blocks * registration_gpu_seconds(conf.registration, c) / s.gpu_seconds)
-            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span)
+            plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span, lean)
                                           for beta in betas]))
         bases[s.name] = base
     points = iter(list(each(_point, [job for *_, jobs in plans for job in jobs])))
@@ -614,7 +662,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
             rows = [p[panel] for p in pts]
             series[panel].append({"scope": s.name, "config": name, "beta": betas,
                                   "x": [tax[name]["tax"] + b for b in betas], "y": [r["y"] for r in rows],
-                                  **{k: [r[k] for r in rows] for k in ("binds", "count", *REG, "computed_proving")
+                                  **{k: [r[k] for r in rows]
+                                     for k in ("binds", "count", *REG, "computed_proving", "lean", "planner", "theta")
                                      if k in rows[0]},
                                   "plan": [r["plan"] for r in rows]})
     out_scopes = {s.name: {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
@@ -629,6 +678,8 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
                          "gpu_seconds": registration_gpu_seconds(r, c),
                          "requests": per_gpu_s * registration_gpu_seconds(r, c)} for r, label in REGISTRATIONS.items()}
     out = {"schema": SCHEMA, "model": model_name, "request": request, "overhead": h, "registrations": registrations,
+           "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK), "search": plancheck.SEARCH,
+                    "precision": plancheck.TWO_P} if lean else None,
            "overhead_label": sc["proof_overhead"]["value"]["label"], "betas": betas, "budgets": c["budgets"].value,
            "served_bits_request": c["served_bits"].value, "footprint_bits": [c["served_bits"].value, boundary],
            "configurations": {n: conf.__dict__ | {"panels": list(conf.panels), "overhead": lines[n][2],
@@ -664,7 +715,7 @@ def _bound(line: tuple, scale: float, beta: float) -> float:
     name, i, (tb, fl, oh), s, computed, conf, gpu_s, replays = line
     m = f1.model(i, tb, s, oh * scale, fl)
     g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost * replays, m.served)
-    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds)
+    job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds, False)
     return _point(job)["exfiltration"]["y"]
 
 
@@ -754,7 +805,11 @@ def at_budgets(out: dict) -> list[dict]:
     return rows
 
 
-PRIMARY = "world year"
+PRIMARY, SECONDARY = f1.PRIMARY, f1.SECONDARY
+#: the line the headline scope's exfiltration panel also plots over the stretch scope, and its style there
+STRETCH_LINE, STRETCH_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
+#: references closer than this factor stagger their labels: the lowest below its line, the rest alternating sides
+CROWDED = 2.5
 #: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
 #: plotted over another shows; the sets' form thin and dashed; (C) dashed, its tax a lower bound
 CUT, SETS = (0, (7, 2, 1.5, 2)), (0, (3, 2))
@@ -787,6 +842,8 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
+    stretch = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
+               == (PRIMARY, "exfiltration", SECONDARY, STRETCH_LINE)]
     scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
     fmt = _bytes if p["unit"] == "bit" else _power
     xs = [x for s in series for x in s["x"]] + [tax[s["config"]][k] for s in series for k in ("low", "high")]
@@ -803,7 +860,7 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     refs = _lines(p["references"], scope, scale)
     if panel == "exfiltration":
         refs = sorted(refs + [(out["scopes"][scope]["served_bits"] * scale, "Everything the scope serves", "dotted")])
-    ys = [y * scale for s in series for y in s["y"]]
+    ys = [y * scale for s in series + stretch for y in s["y"]]
     far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
     lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
@@ -819,10 +876,14 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     ax.yaxis.set_minor_locator(NullLocator())
     ax.grid(which="major", color="#E2E2E2", lw=.45)
     styles = REFERENCE_STYLE | {"dotted": (0, (1.2, 2.4))}
-    for amount, label, style in refs:
+    refs, k = sorted(refs), 0
+    for i, (amount, label, style) in enumerate(refs):
+        k = k + 1 if i and amount < refs[i - 1][0] * CROWDED else 0
+        below = k == 0 and i + 1 < len(refs) and refs[i + 1][0] < amount * CROWDED
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(hi_x / 1.3, amount * 1.08, label, ha="right", va="bottom", fontsize=14, color="#555555", zorder=5,
-                bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
+                ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
+                zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
@@ -831,9 +892,14 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.plot([t["low"], t["high"]], [y0, y0], color=color, lw=1.4, zorder=3, marker="|", markersize=12)
         ax.plot([t["tax"]], [y0], marker="o", markersize=13, color=color, zorder=4, mew=2.2,
                 markerfacecolor="white" if t["status"] == "priced" else color)
+    for s in stretch:
+        color, ls, lw = STRETCH_STYLE
+        ax.plot(s["x"], [y * scale for y in s["y"]], color=color, ls=ls, lw=lw, zorder=3)
     configs = list(dict.fromkeys(s["config"] for s in series))
-    handles = [plt_line(STYLE[n]) for n in configs]
-    ax.legend(handles, [fill(legend(out, n), 64) for n in configs], loc="lower left", bbox_to_anchor=(0, 1.01),
+    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(STRETCH_STYLE) for _ in stretch]
+    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY} (the stretch scope)"
+                                                  for s in stretch]
+    ax.legend(handles, [fill(label, 64) for label in labels], loc="lower left", bbox_to_anchor=(0, 1.01),
               ncol=2 if len(configs) > 3 else 3, frameon=False, fontsize=14, handlelength=2.6, columnspacing=1.4,
               borderaxespad=0)
 

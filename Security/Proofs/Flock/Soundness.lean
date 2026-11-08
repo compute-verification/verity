@@ -122,8 +122,6 @@ public import Proofs.Flock.Soundness.Audit.Law
 public import Proofs.Flock.Soundness.Audit.Pooled
 public import Proofs.Flock.Soundness.Audit.Circuit
 public import Proofs.Flock.Soundness.Audit.OneStage
-public import Proofs.Flock.Soundness.Audit.TwoStage
-public import Proofs.Flock.Soundness.Audit.Examples
 public import Proofs.Flock.Soundness.Audit.Flock
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Audit.FlockCompiled
@@ -148,6 +146,7 @@ public import Proofs.Flock.Soundness.Audit.FlockLinked
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 public import Proofs.Flock.Soundness.Audit.Harm
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Proofs.Flock.Soundness.Audit.Delivered
 public import Proofs.Flock.Soundness.Audit.InfluenceWitness
 public import Proofs.Flock.Soundness.Audit.Partitioning
 public import Proofs.Flock.Soundness.Audit.HarmBound

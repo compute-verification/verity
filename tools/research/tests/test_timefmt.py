@@ -19,7 +19,7 @@ NOW = dt.datetime(2026, 9, 30, 20, 41, tzinfo=UTC)
     (dt.datetime(2026, 9, 30, 20, 41), "1:41 PM PDT (20:41Z)"),                         # naive is UTC
     (NOW.timestamp(), "1:41 PM PDT (20:41Z)"),
     (f"{NOW.timestamp():.6f}", "1:41 PM PDT (20:41Z)"),                                   # a Slack ts
-    ("2026-11-01T08:30Z", "1:30 AM PDT (08:30Z)"),                                        # 2026-11-01: the last PDT hour
+    ("2026-11-01T08:30Z", "1:30 AM PDT (08:30Z)"),                                        # the day DST ends: the last PDT hour
     ("2026-11-01T09:30Z", "1:30 AM PST (09:30Z)"),                                        # the same wall time, an hour later
     ("2026-11-01T20:00Z", "12:00 PM PST (20:00Z)"),
     ("2026-10-01T06:05Z", "11:05 PM PDT (06:05Z)"),                                       # the Pacific day is the day before

@@ -177,7 +177,7 @@ def _closing(sites: TW.Sites) -> tuple[tuple[I.Wire, ...], str, str]:
 def test_a_wire_closing_a_cycle_is_refused_and_the_tp_windows_wires_have_none(toy, world):
     """Units that read one another through wires pass every unit's check on a fixed point the prover chose (a combine
     summing a partial its producer computed from that combine's output), so `interface.check_wires` refuses wires whose
-    dataflow between units has a cycle, naming a wire on it (`SampledProofs.Wires.check_acyclic`). The TP window's wires,
+    dataflow between units has a cycle, naming a wire on it (`Spot.Wires.check_acyclic`). The TP window's wires,
     at TP2 (the toy) and TP8 (a Gemm partial a row, `rank_body`), have none and need no order. One wire more, rank 0's
     producer reading its ``x`` from its combine's output, is refused: with no order as a cycle of the two templates, under
     the honest wires' order as the first wire out of it, the forged one, and no order of single units holds it."""

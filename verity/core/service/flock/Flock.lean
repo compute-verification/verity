@@ -16,6 +16,7 @@ public import Flock.Hm96
 public import Flock.Ligerito
 public import Flock.Comp
 public import Flock.Tags
+public import Flock.Scan
 public import Flock.Net
 public import Flock.SplitNL
 public import Flock.Lookup
@@ -66,7 +67,6 @@ public import Flock.RegKnown
 public import Flock.KnownRead
 public import Flock.JsonKeys
 public import Flock.RecordText
-public import Flock.Keccak
 public import Flock.RecCoins
 public import Flock.RecSetup
 public import Flock.RecBudget
@@ -115,6 +115,7 @@ public import Flock.With.SetupEq
 public import Flock.With.SimSetup
 public import Flock.RecOpeningCmd
 public import Flock.RecLinksCmd
+public import Flock.ReadTmplCmd
 public import Flock.RecRecord
 
 @[expose] public section

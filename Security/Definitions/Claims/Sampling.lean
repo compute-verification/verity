@@ -5,7 +5,7 @@ public import Definitions.Claims
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
 
-The claims block of sampled proofs (`verity/core/protocols/sampled_proofs/`), one-stage sampling, on the
+The claims block of sampled proofs (`verity/core/protocols/spot/`), one-stage sampling, on the
 shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
@@ -24,7 +24,7 @@ the code side's.
    topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
    262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its sample's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
@@ -197,16 +197,16 @@ def Partition.blocks (P : Partition) : List (List ℕ) := P.classes.flatten.flat
 def Partition.gates (P : Partition) : List ℕ := P.blocks.flatten
 
 /-- **The widest public size class** of a proof block's outputs, in bits: 262,144, provisional. Setting it to `16` makes
-`unitClasses` `[16]`, the former literal limit. -/
+`sizeClasses` `[16]`, the former literal limit. -/
 def unitClassMax : ℕ := 262144
 
 /-- **The public size classes** `w_c` of a proof block's outputs, in bits: the powers of two from `16` up to
 `unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
-def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
+def sizeClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
 /-- **A proof block's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
 function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
+def unitClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof blocks, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
@@ -403,7 +403,7 @@ proof blocks (sets of gates, constants and unread inputs in one or in none) whos
 classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+`w_{c(u)}` (`sizeClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
@@ -602,6 +602,26 @@ noncomputable def Bext (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
             (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.1 }
     else { S := Unit, out := fun _ => none, cost := fun _ => 0 }
 
+/-- **`B_ext` declared at `T` a rerun**: `Bext`'s coins and outcome, its cost both extractions' own SHA-512 calls plus
+`T` for each rerun of the prover, `T` the budget for one run's whole SHA-512 work, the prover's own included, which the
+reader computes from the prover's time. `ExpectedCR` at it so counts the hashing a prover does outside the oracle, which
+`Bext`'s logged cost doesn't (`KSAt`). -/
+noncomputable def BextAt (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (T : ℕ) : FinderFamily :=
+  fun Ω _ _ P x =>
+    if hk : 0 < V.k x then
+      { S := BCoins Ω Coin (V.k x) × E.C x × E.C x
+        ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
+          Classical.arbitrary _)⟩
+        out := fun s =>
+          findColl (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1) ++
+            ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2))
+        cost := fun s =>
+          (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1)).length +
+            (ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2)).length +
+            T * ((E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.2 +
+              (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.2) }
+    else { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+
 /-- `λ` with `β > 0`: `min(log₂(1/κ), 255.5 − ½ log₂ γ, 256 − log₂(2βc)) − log₂ 3`, where `c` is the extractor's expected
 work in runs. -/
 noncomputable def lamLin (κ γ β c : ℝ) : ℝ :=
@@ -628,6 +648,27 @@ on every prover, tape and coin. -/
 def ExtractOwnLe (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) (calls : Msg → ℕ) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r₀ : Fin (V.k x) → Coin) (c : E.C x),
     (ownLog H (run H P V x ω) (E.ext x r₀ c)).length ≤ calls x
+
+/-- **KS read at a time budget**, at every statement in `Scope`: `KSLinOn`'s bound with each hash term read at the
+budget `T`, the SHA-512 compressions one run of the prover makes, its own and the oracle's, plus the size of any state
+it carries, which the reader computes from the prover's time (`c · time + d` at a stated rate), as PoUW's bounds per
+prover read `ecrBound`. The birthday term is `√γ · sbB` at `B` declared at `2T`, the binding term `ecrBound` at `B_ext`
+declared at `T` a rerun, at `2·T·work`. Either is `⊤` at a prover whose finder fails its assumption, so the statement
+takes no hypothesis on `H`; where both hold it is `κ + 2T·√γ/2^256.5 + 2T·work/2^256`, linear in `T`, so the terms of
+the runs of a monitoring period sum at the adversary's SHA-512 work over the period. -/
+def KSAt (H : Msg → Msg) (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel W) (E : Extractor Coin W V)
+    (κ γ work : Msg → ℝ) : Prop :=
+  ∀ x, Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ),
+    ENNReal.ofReal (PrBad H V R E x P) ≤
+      ENNReal.ofReal (κ x) + ENNReal.ofReal (Real.sqrt (γ x)) * sbB H V P x (2 * T) +
+        ecrBound H (BextAt H V E T Ω P x) (2 * T * work x)
+
+/-- **Cost, `B_ext` at a time budget**: at every budget `T ≥ 1`, both extractions' own calls and `T` a rerun come to at
+most `2·T·work(x)` in expectation, so `KSAt`'s binding term is `2T·work/2^256` wherever `ExpectedCR` holds at its
+finder. -/
+def BextAtCostLe (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (work : Msg → ℝ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ), 1 ≤ T →
+    Ex (fun s => ((BextAt H V E T Ω P x).cost s : ℝ)) ≤ 2 * T * work x
 
 end Finder
 
