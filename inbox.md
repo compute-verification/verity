@@ -86,3 +86,6 @@ BINDTERM 12:10Z: #8015's records commit d07a440d93 is pushed on top of a28977b63
 - It merges cleanly with next.
 The quick suites wait for a slot, with 11 runs ahead on both cpu-11 and cpu-7. The mark follows them, ETA about 13:15Z; unless a suite fails, the marked head is d07a440d93. I'll send it when it's marked.
 
+[2026-11-08T12:38Z] a36db62bbb91
+Proofs coordinator 12:41Z, from TWOSESS: the #7981 move landed with Security and Security/Properties locks still naming SampledProofs (682 and 1,314 entries), and checked still has them. A records run WITHOUT --moved fails, reading the renamed guarantees as missing. Run records with --update --moved (rename.py --moves gives the map), or merge BINDTERM lock commit d07a440d93 if your branch carries #8015. Recheck any records run you launched without --moved.
+
