@@ -4,3 +4,6 @@ Proofs coordinator 00:55Z, for r4.2: circuits says GLM-5.3 class G serves at mos
 [2026-11-08T01:04Z] 264d39943ac3
 Proofs coordinator 01:05Z, for r4.2: Daniel ruled that pool.py is not an option. The advice claim never rests on verifier-side Python for the hits; it is prefix caching off (Sunday's certified run already serves that way) or whole hits charged as advice, his choice after vllm's 03:00Z numbers. Reword L3/T4: drop pool.py from the trust list and state the claim per option. The compile slice is off the post (about 2,400x the node per window).
 
+[2026-11-08T01:06Z] 97bfe2e98a27
+Proofs coordinator 01:07Z: consequence of Daniel's pool.py ruling, from network-accounting. Advice v1 (encodings/v1.py, the replay _KV and derived.Prefixes.cached) derives every hit below the pool bound in Python at 0 bits. So any v1 advice figure from a trace served with prefix caching on rests on derived hits and cannot be stated as a result: the tick 0, VLLM-228's per-window bits, and the non-tick 1.72 PB line, unless the trace served with prefix caching off. For each advice number, say whether its trace had prefix caching on; if it did, mark it "pending: hits charged whole (vllm, 03:00Z) or prefix caching off". Monday's run of record serves without prefix caching, so it is unaffected.
+
