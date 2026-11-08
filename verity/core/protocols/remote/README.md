@@ -461,14 +461,14 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
   (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
   table and link finders as `TableCRZAt` and `LinkCRZCAt`.
-- `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
+- `trusted-host` (`Verity.Assumptions.TrustedHost`, `Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
 - `CoinsConfidential`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
-  control, and only after the commitment. A premise about where the challenger runs, stated in prose in
-  `verity/core/protocols/spot/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
-  it as a hypothesis. (Its companion `OneClock` ties the challenger's clock to onsite's network certifiers; remote has
-  none.)
+  control, and only after the commitment. Only SPOT's prose states it, and no guarantee takes it. It is not
+  `Pouw.Assumptions.CoinsConfidential`, onsite's Lean premise that a replica's coins reach no machine outside its
+  certifier's boundary before it has them, which `Pouw.Guarantees.Dither.FleetSound` takes. Its companion `OneClock`
+  is onsite's.
 
 PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/PeriodJ10R.lean`):
 
