@@ -1,0 +1,101 @@
+"""Markdown tables from reach.py's and extract.py's outputs, and the leverage factor.
+
+lambda = (weight bits a fault's attack recovers) / (16 + loc): the cost table charges an incorrect proof block its
+16-bit content and its location's loc bits. The net factor subtracts what one honest query with the same observables
+recovers (extract.py --part honest), which honest use gives for free; an attack on weights no honest attack reaches
+(the inner layers' rows) has nothing to subtract.
+
+  python benchmarks/leverage/report.py --reach DIR/summary.json --extract DIR/extract-*.json [--loc 0 16 26 40]
+"""
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+
+
+def table(head: list[str], rows: list[list]) -> str:
+    fmt = lambda x: f"{x:.3g}" if isinstance(x, float) else str(x)  # noqa: E731
+    out = ["| " + " | ".join(head) + " |", "|" + "|".join("---" for _ in head) + "|"]
+    out += ["| " + " | ".join(fmt(x) for x in r) + " |" for r in rows]
+    return "\n".join(out)
+
+
+def reach_tables(s: dict) -> str:
+    bpt = s["bits_per_token"]
+    best = {}
+    for g in s["groups"]:
+        key = (g["site"], g["layer"])
+        if key not in best or g["direct_bits_bound"] > best[key]["direct_bits_bound"]:
+            best[key] = g
+    rows = [[k[0], k[1], g["mult"], g["n"], g["flip"], g["raw"], g["direct"], g["direct_after_first"],
+             g["direct_bits_bound"], g["direct_bits_bound"] / bpt, g["lp"], g["nan"]] for k, g in best.items()]
+    head = ["site", "layer", "m (most reach)", "faults", "flip", "raw", "direct", "direct after 1st",
+            "bound (bits)", "bound (tokens)", "lp positions", "nan"]
+    by_mult = {}
+    for g in s["groups"]:
+        by_mult.setdefault(g["mult"], []).append(g)
+    mrows = []
+    for m, gs in sorted(by_mult.items()):
+        n = sum(g["n"] for g in gs)
+        mrows.append([m, n, sum(g["flip"] * g["n"] for g in gs) / n, sum(g["direct"] * g["n"] for g in gs) / n,
+                      sum(g["direct_bits_bound"] * g["n"] for g in gs) / n])
+    return (f"Reach, {s['model']}, N = {s['new']} served positions, {s['faults']} faults, served logits "
+            f"{s['precision']}, top-{s['topk']} lp tolerance {s['lp_tol']}:\n\n" + table(head, rows)
+            + "\n\nBy multiple m of the site's RMS, over all sites:\n\n"
+            + table(["m", "faults", "flip", "direct", "bound (bits)"], mrows))
+
+
+def lam_tables(ex: list[dict], locs: list[int], ks: tuple[int, ...] = (20,)) -> str:
+    parts = {e["part"]: e for e in ex}
+    out = []
+    honest = {}
+    if "honest" in parts:
+        h = parts["honest"]
+        for r in h["rows"]:
+            key = (r["precision"], r["k"])
+            honest[key] = max(honest.get(key, 0.0), r["bits_per_query"])
+        out.append(f"Honest SVD baseline, {h['model']}, {h['states']} states:\n\n" + table(
+            ["precision", "n", "k", "queries", "mse/var (mean over directions)", "median", "bits total", "bits/query",
+             "bits/observed bit"],
+            [[r["precision"], r["n"], r["k"], r["queries"], r["mse_over_var"], r["median_mse_over_var"],
+              r["bits_total"], r["bits_per_query"], r["bits_per_observed_bit"]] for r in h["rows"]]))
+    lh = [f"lambda loc={x}" for x in locs]
+    if "final" in parts:
+        f = parts["final"]
+        rows = []
+        for r in f["rows"]:
+            hb = honest.get((r["precision"], r["k"]), 0.0)
+            rows.append([r["amp"], r["precision"], r["k"], r["faults"], r["mse_over_var"], r["bits_per_entry"],
+                         r["bits_per_fault"], hb] + [r["bits_per_fault"] / (16 + x) for x in locs]
+                        + [(r["bits_per_fault"] - hb) / (16 + locs[-1])])
+        out.append(f"Unembedding-input attack, {f['model']}, {f['columns']} columns:\n\n" + table(
+            ["A", "precision", "k", "faults", "mse/var", "bits/entry", "bits/fault", "honest bits/query"] + lh
+            + [f"net lambda loc={locs[-1]}"], rows))
+    for e in ex:
+        if e["part"] != "rows":
+            continue
+        rows = [[r["site"], r["layer"], r["value"], r["precision"], r["k"], r["units"], r["read_tokens"],
+                 r["faults_per_row"], r["contamination_mse"], r["mse"], r["bits_per_row"], r["mi_bits_per_row"],
+                 r["bits_per_fault"]] + [r["bits_per_fault"] / (16 + x) for x in locs] for r in e["rows"]
+                if r["k"] in ks]
+        out.append(f"Row readout, {e['model']}:\n\n" + table(
+            ["site", "layer", "value", "precision", "k", "units", "logits read", "faults/row", "contamination mse",
+             "mse", "bits/row", "Gaussian MI bits/row", "bits/fault"] + lh, rows))
+    return "\n\n".join(out)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--reach", type=Path, nargs="*", default=[])
+    ap.add_argument("--extract", type=Path, nargs="*", default=[])
+    ap.add_argument("--loc", type=int, nargs="+", default=[0, 16, 26, 40])
+    a = ap.parse_args()
+    for p in a.reach:
+        print(reach_tables(json.loads(p.read_text())) + "\n")
+    if a.extract:
+        print(lam_tables([json.loads(p.read_text()) for p in a.extract], a.loc))
+
+
+if __name__ == "__main__":
+    main()

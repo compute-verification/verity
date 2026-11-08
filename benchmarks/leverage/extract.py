@@ -125,8 +125,10 @@ def part_honest(lm: LM, tok, a) -> dict:
     H = honest_states(lm, tok, a.prompts, a.new)
     ns = sorted({min(int(f * d), H.shape[0]) for f in a.n_over_d})
     Ec = (E - E.mean(0)).double()
-    var = Ec.var(0)
-    dof = V * d - d * d - d
+    _, _, Q = torch.linalg.svd(Ec, full_matrices=False)
+    Ep = Ec @ Q.T
+    var = Ep.var(0)
+    per_dir = V - d - 1
     rows = []
     for prec in a.precisions:
         Z = H @ E.T
@@ -136,17 +138,17 @@ def part_honest(lm: LM, tok, a) -> dict:
         for n in ns:
             _, S, Vh = torch.linalg.svd(Zc[:n].double(), full_matrices=False)
             Eh = Vh[:d].T * S[:d]
-            M = torch.linalg.lstsq(Eh, Ec).solution
-            R = Ec - Eh @ M
-            r = float((R.pow(2).mean(0) / var).mean())
-            bits = rd_bits(dof, r)
-            gap = S[d - 1] / S[d] if n > d else float("nan")
+            M = torch.linalg.lstsq(Eh, Ep).solution
+            ratio = (Ep - Eh @ M).pow(2).mean(0) / var
+            bits = sum(rd_bits(per_dir, float(x)) for x in ratio)
+            spec = (S[max(d - 4, 0):min(d + 4, n)] / S[0]).tolist()
             for k in a.ks:
                 q = n * math.ceil((V - 1) / (k - 1))
                 obs = q * k * (math.log2(V) + LOGPROB_BITS)
-                rows.append({"precision": prec, "n": n, "k": k, "queries": q, "mse_over_var": r,
+                rows.append({"precision": prec, "n": n, "k": k, "queries": q,
+                             "mse_over_var": float(ratio.mean()), "median_mse_over_var": float(ratio.median()),
                              "bits_total": bits, "bits_per_query": bits / q, "bits_per_observed_bit": bits / obs,
-                             "sv_gap_at_d": float(gap)})
+                             "sv_around_d_over_s0": spec})
     return {"part": "honest", "states": int(H.shape[0]), "rows": rows}
 
 
@@ -181,7 +183,7 @@ def part_rows(lm: LM, tok, a) -> dict:
     layers = sorted({l if l >= 0 else lm.spec.layers + l for l in a.layers})
     site = a.row_site
     width = lm.spec.ff if site == "mlph" else lm.spec.heads * lm.spec.head_dim
-    m = int(a.read_over_d * d)
+    reads = [int(r * d) for r in a.read_over_d]
     out = []
     pre, last, t0 = prefix(lm, tok, PROMPTS[0])
     taps0 = {(site, l): None for l in layers}
@@ -202,28 +204,50 @@ def part_rows(lm: LM, tok, a) -> dict:
                     best = s * (h[bi] - b) / g
                     best = norm_dir(lm, best)
                     r_c = float((best - tru).pow(2).mean())
-                    toks = torch.randperm(V, generator=gen)[:m + 1]
-                    A = (E[toks[1:]] - E[toks[0]]).double()
-                    y = (zs[bi, toks[1:]] - zs[bi, toks[0]]).double() - A @ b.double()
-                    xh = torch.linalg.lstsq(A * g.double(), y[:, None]).solution[:, 0].float()
-                    est = norm_dir(lm, s * xh)
-                    r = float((est - tru).pow(2).mean())
-                    out.append((l, v_spec, prec, j, r_c, r))
+                    for m in reads:
+                        r, mi = read_row(E, g, b, zs[bi], torch.randperm(V, generator=gen)[:m], prec, s, tru, lm)
+                        out.append((l, v_spec, prec, m, j, r_c, r, mi))
     rows = []
     groups = {}
-    for l, v_spec, prec, j, r_c, r in out:
-        groups.setdefault((l, v_spec, prec), []).append((r_c, r))
-    for (l, v_spec, prec), rs in sorted(groups.items()):
-        rc = sum(x for x, _ in rs) / len(rs)
-        r = sum(x for _, x in rs) / len(rs)
+    for l, v_spec, prec, m, j, r_c, r, mi in out:
+        groups.setdefault((l, v_spec, prec, m), []).append((r_c, r, mi))
+    for (l, v_spec, prec, m), rs in sorted(groups.items()):
+        rc, r, mi = (sum(x[i] for x in rs) / len(rs) for i in range(3))
         for k in a.ks:
             F = math.ceil(m / (k - 1))
             bits = rd_bits(d - lost, r)
             rows.append({"site": site, "layer": l, "value": v_spec, "precision": prec, "k": k, "units": len(rs),
                          "read_tokens": m, "faults_per_row": F, "contamination_mse": rc, "mse": r,
-                         "bits_per_row": bits, "bits_per_fault": bits / F,
+                         "bits_per_row": bits, "bits_per_fault": bits / F, "mi_bits_per_row": mi,
+                         "mi_bits_per_fault": mi / F,
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
     return {"part": "rows", "rows": rows}
+
+
+def ulp2(z: torch.Tensor, precision: str) -> torch.Tensor:
+    """The variance of rounding z to the served precision, ulp^2 / 12."""
+    mant = 7 if precision == "bf16" else 23
+    e = torch.floor(torch.log2(z.abs().clamp_min(1e-30)))
+    return (2.0 ** (e - mant)).pow(2) / 12
+
+
+def read_row(E, g, b, z, toks, precision, s, tru, lm) -> tuple[float, float]:
+    """MMSE estimate of the normalized row x from the served logits z[toks] = E[toks] (g * s x + b) + c + rounding, the
+    constant c (softmax's shift) unknown, x's prior N(0, I); returns its error against `tru` and the Gaussian
+    information the read carries about x, 1/2 log2 det of the prior over the posterior covariance."""
+    Et = E[toks].double()
+    A = torch.cat([Et * (s * g.double()), torch.ones(len(toks), 1, dtype=torch.float64)], 1)
+    y = z[toks].double() - Et @ b.double()
+    w = 1.0 / ulp2(z[toks].double(), precision)
+    P = (A * w[:, None]).T @ A
+    P[:-1, :-1] += torch.eye(A.shape[1] - 1, dtype=torch.float64)
+    P[-1, -1] += 1e-12
+    C = torch.linalg.inv(P)
+    xh = C @ (A.T @ (w * y))
+    est = norm_dir(lm, xh[:-1].float())
+    r = float((est - tru).pow(2).mean())
+    mi = -0.5 * float(torch.linalg.slogdet(C[:-1, :-1])[1]) / math.log(2)
+    return r, mi
 
 
 def main() -> int:
@@ -243,7 +267,7 @@ def main() -> int:
     ap.add_argument("--row-site", default="mlph", choices=("mlph", "attnh"),
                     help="rows: the MLP's hidden units (down-projection rows) or the attention context (output-projection rows)")
     ap.add_argument("--values", nargs="+", default=["1e6", "1e3", "64rms", "8rms"])
-    ap.add_argument("--read-over-d", type=float, default=1.25, help="rows: logits read per row, over d")
+    ap.add_argument("--read-over-d", type=float, nargs="+", default=[1.25, 4.0], help="rows: logits read per row, over d")
     ap.add_argument("--batch", type=int, default=128)
     ap.add_argument("--threads", type=int, default=0)
     ap.add_argument("--seed", type=int, default=0)
