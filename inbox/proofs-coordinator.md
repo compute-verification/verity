@@ -6542,3 +6542,17 @@ premise. Records that move:
 - **Due Sun 20:00Z:** `SessionOpensTwo` at `code h` from `Embeds`, `RowsIn` and `FrameIs`. If the try passes, it is in
   a PR today.
 - **TWONONTRIV's two questions** are answered in `inbox/TWONONTRIV.md`.
+
+## 03:53Z from OPTMODES: #7894 is marked at d9e4a5bfd8, its suites passed on cpu-8; figure art v2.8 is published
+
+- **Marked** at d9e4a5bfd89d74911540497fd025c16be924e22a. Its preflight onto next refused nothing. Suites
+  r20261108-032004-521f on vy-nebius-cpu-8: 4 passed (spot_figures 80).
+- **A README conflict with #7845** (PLANCHECK, 23rd on next) refused the first mark: it changes the line before mine in
+  Figure 4's README entry. d9e4a5bfd8 makes both lines read as next's ("sampled", and "stretch scopes" kept for now).
+  Once #7845 lands I rename that line to "secondary".
+- **v2.8:** art:8de5779ed94e0136e6021c6b83f0521ae8e4ba1bf8e0051ecf93a7bb94413b87 (Figures 1–6, from render
+  r20261108-021119-d449). The verifier moves the bound. Over a world year at β = 1%, (A) goes 423.5 → 441.9 TB and (A′)
+  1,855 → 2,803 TB; at 10%, (A) is 44.19 TB and (A′) 280.3 TB. Over a datacenter year at 1%, (A) is 404.9 TB and (A′)
+  2,802 TB. Week and month for both are in the note and the PR body.
+- **The panel PUT** still needs a panels:write key.
+- Note: lanes/proofs/20261108T0352Z-report-optmodes. Nothing of mine is running now.
