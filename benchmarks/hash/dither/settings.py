@@ -1,16 +1,16 @@
 """Dither's harness's settings: every variable its benches, execution phases and gates read, declared once (`verity_config.settings`).
 
 It owns ``DITHER_``, ``SBENCH_`` and ``HB_``: a variable with one of them that nothing here declares is refused when the
-registry loads, which every module of this directory that reads one does (``of(__file__)``). The shell-only ones (sbench.sh's
-and hb_served.sh's, which never reach a Python read) are declared too, so their exports are known. ``H1U_*``
+registry loads, which every module of this directory that reads one does (``of(__file__)``). The shell-only ones (sbench.sh's,
+which never reach a Python read) are declared too, so their exports are known. ``H1U_*``
 are h1u.cu's nvcc macros (``-DH1U_JRC=1``), not variables; ``HB_KC_FLAGS`` and its kin carry them to the build.
 
-A build's path (``DITHER_H1C``, ``HB_H1U``, ...) is ``where``: sbench.sh and hb_served.sh build each from this tree's sources
-at the run's commit (RESEARCH_SOURCE_SHA), or check a sent build's sources against it, so the commit is the value.
+A build's path (``DITHER_H1C``, ``HB_H1U``, ...) is ``where``: sbench.sh builds each from this tree's sources
+at the run's commit (RESEARCH_SOURCE_SHA), or checks a sent build's sources against it, so the commit is the value.
 
 The standalone files read their variables themselves: H1V3's reference runs under another tree's PYTHONPATH (h1v3_ref.py),
-live_audit.py reruns itself under main's, and hb_served.sh runs the hb_*.py from the run's inputs when the source has none.
-`REGISTRY.standalone_problems` holds each of their reads to its declaration here.
+and live_audit.py reruns itself under main's. `REGISTRY.standalone_problems` holds each of their reads to its declaration
+here.
 """
 from __future__ import annotations
 
@@ -18,8 +18,8 @@ import json
 
 from verity_config.settings import DEBUG, VALUE, WHERE, Registry, Setting as S, csv, not_zero, one
 
-STANDALONE = ("h1v3_ref.py", "live_audit.py", "hb_sbench.py", "hb_peel.py")
-BUILD = "a build's path in the run's scratch (sbench.sh's or hb_served.sh's, from this tree's sources at the run's commit)"
+STANDALONE = ("h1v3_ref.py", "live_audit.py")
+BUILD = "a build's path in the run's scratch (sbench.sh's, from this tree's sources at the run's commit)"
 TREE = "reference's source tree, run under its own PYTHONPATH; the result records its commit"
 SHELL = "sbench.sh's, read only by the shell"
 
@@ -123,22 +123,15 @@ REGISTRY = Registry(
     S("SBENCH_SHIP", str, None, WHERE, f"a tar of prebuilt libraries taken in place of building ({SHELL})"),
     S("SBENCH_SHIP_OUT", one, False, WHERE, f"1: build the libraries into out/sbench-ship.tar and exit ({SHELL})"),
     S("SBENCH_MPS", str, None, WHERE, f"the MPS share the bandwidth side runs under ({SHELL})"),
-    # the hb arms: hb_served.sh, hb_sbench.py and the gates it runs
-    S("HB_DITHER_DIR", str, None, WHERE, "the tree's dither directory hb_sbench.py imports sbench from"),
-    S("HB_H1U", str, None, WHERE, f"h1u.so, the hb arms' units: {BUILD}"),
-    S("HB_H1U_KSPLIT", str, None, WHERE, f"the K split h1u build (dither-1s-hbk): {BUILD}"),
+    # dither-a's h1u.cu builds (its kh, hbk, hbr and hbc units), and job.sh's lease
+    S("HB_H1U", str, None, WHERE, f"h1u.so, the dither-a-kh arm's units: {BUILD}"),
+    S("HB_H1U_KSPLIT", str, None, WHERE, f"the K split h1u build (dither-a-hbk): {BUILD}"),
     S("HB_H1U_KRONLY", str, None, WHERE, f"the receipts-only h1u build (hbr): {BUILD}"),
     S("HB_H1U_KC", str, None, WHERE, f"h1u_kc.so, the dither-a-hbc arm's: {BUILD}"),
     S("HB_H1U_KC_B", str, None, WHERE, f"h1u_kcb.so, the ARM-kcb arms' second h1u_kc: {BUILD}"),
-    S("HB_H1U_PEEL", str, None, WHERE, f"the peeled h1u build: {BUILD}"),
-    S("HB_H1V3_PEEL_TREE", str, None, WHERE, f"the peeled H1V3's {TREE}"),
-    S("HB_H1V3_PEEL_SHA", str, None, WHERE, "HB_H1V3_PEEL_TREE's commit, which the result records"),
     S("HB_KC_FLAGS", str, None, VALUE, "h1u.cu's nvcc flags for h1u_kc.so (set, even empty, builds it)", empty=True),
     S("HB_KC_FLAGS_B", str, None, VALUE, "h1u.cu's nvcc flags for h1u_kcb.so"),
     S("HB_KC_H1C_FLAGS", str, None, VALUE, "h1c.cu's nvcc flags for libh1c_kc.so"),
-    S("HB_SCRIPT", str, None, WHERE, "a script of this directory hb_served.sh runs in hb_sbench.py's place"),
-    S("HB_KGATE", str, None, DEBUG, "0 or 1 in place of exactlin's kgate.py verdict (hb_served.sh's)"),
-    S("HB_KEEP_SQLITE", one, False, DEBUG, "1: hb_served.sh keeps the nsys capture's sqlite"),
     S("HB_WHO", str, None, WHERE, "the GPU lease's owner (the launchers')"),
     # other libraries' variables the harness reads
     S("VLLM_DISABLED_KERNELS", str, None, VALUE, "vLLM's kernels an arm turns off, which its record holds"),

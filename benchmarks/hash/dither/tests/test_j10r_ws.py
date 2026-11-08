@@ -129,7 +129,7 @@ def test_a_build_with_half_of_the_query_is_refused():
 
 
 def test_no_loader_in_dither_sizes_a_workspace_itself():
-    """Every dither loader that allocates J10-R's workspace (dither_so's tables, unitsbench's MultiJ10R) takes
+    """Every dither loader that allocates J10-R's workspace (dither_so's tables) takes
     j10r_ws.workspace_bytes: none calls a build's kh_j10r_*_bytes, so none sizes an H1U_JW build by its rows. served_h1's
     producer is held to the same in the pouw suite."""
     call = re.compile(r"\bkh_j10r_(?:rows|jw|ws|workspace)_bytes\s*\(")
