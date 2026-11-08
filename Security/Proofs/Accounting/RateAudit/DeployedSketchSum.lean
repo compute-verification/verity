@@ -655,7 +655,7 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Rate.Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Rate.Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 
@@ -679,7 +679,7 @@ theorem pr_deployed_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   gcongr
-  · exact Rate.Deployed.horizon_deployed n hn
+  · exact Rate.Deployed.pooled_deployed n hn
   · exact Rate.Deployed.window_deployed n (by omega)
 
 end SketchDeployedSession
@@ -757,7 +757,7 @@ theorem RemoteSessionConservationSketchDeployed :
   rw [show (2 : ℝ≥0∞) / 2 ^ 40 = 1 / 2 ^ 40 + 1 / 2 ^ 40 by
     rw [ENNReal.div_add_div_same]; norm_num]
   gcongr
-  · exact Deployed.horizon_deployed n hn
+  · exact Deployed.pooled_deployed n hn
   · exact Deployed.window_deployed n (by omega)
 
 /-- At the conservative deployed caps the sum form's query term is `2^-41` before multiplying by windows and passes:

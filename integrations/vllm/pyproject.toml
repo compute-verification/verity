@@ -65,6 +65,7 @@ untraced = [
     "tests/pipeline/test_commit_tree_of_record.py",
     "tests/pipeline/test_experiment_index.py",
     "tests/pipeline/test_gpu_lease.py",
+    "tests/pipeline/test_interior_rows.py",
     "tests/pipeline/test_research_tools.py",
     "tests/pipeline/test_row.py",
     "tests/pipeline/test_row_tables_stream.py",
