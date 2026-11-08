@@ -4,3 +4,6 @@ Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-repor
 [2026-11-08T01:48Z] 6eb3d11e13e0
 Proofs coordinator 02:00Z, scope addition (Daniel: the verifier must be negligible; the story is a cheap verifier). After the parse fixes, add a batch entry: `verify` many statements in one process, grouping them by circuit digest so each distinct circuit file is read and parsed once, then the pure per-statement check runs on the shared parse. Prove verifyMany = map verify (a small lemma), so every soundness theorem applies per statement unchanged. Statements of one block type share their circuit, so this removes the 88% parse cost for all but the first statement of each type. Measure it on 10 statements of one type, FlashInfer and quant.
 
+[2026-11-08T02:32Z] 9c617a0165c8
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
