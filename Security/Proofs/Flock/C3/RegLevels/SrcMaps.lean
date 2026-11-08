@@ -207,7 +207,7 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
   Flock.RecAlgebra.NoEmpty c ∧ capDig (capR sh e0) = cap₀ ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
-      u.op.filterMap Sum.getRight? = ((List.range' 0 k₂).map fun i => c[i]!).map (coinArr fOf)) ∧
+      u.op.filterMap Sum.getRight? = ((List.range' 0 k₂).map fun i => (c)[i]!).map (coinArr fOf)) ∧
     (∀ (rsr : Array Flock.F128) (rs : Flock.RecAlgebra.RsPts Flock.F128) (k₂ : ℕ) (lgr : Array Flock.F128)
       (lg : Flock.RecAlgebra.LgPts) (k₁ : ℕ),
       Flock.RecAlgebra.ringSwitch (msgsO sh w ops) a 0 (Flock.RecAlgebra.CoinSource.ofRounds c) = .ok ((rsr, rs), k₂) →
@@ -216,7 +216,7 @@ def MapsLeft (M : FlockC3.Reps.StackedMaps stmt Vs) (zs : (s : Fin S) → (Vs s)
       OpensAtMaps (readMaps M sh.sched) zs Lb sh (sibsR sh ops sb e) (capR sh e0) (pR sh e0 w ops sb e) lg ∧
       u.lg = FlockSoundness.Discharge.Exec.weave (ligShape GF128 GF256 Dig (holoAt st hp).rsch.sch)
         (ligMsgs (pR sh e0 w ops sb e) capDig sh.sched)
-        (((List.range' k₂ (c.size - k₂)).map (fun i => c[i]!)).map (coinArr fOf))) ∧
+        (((List.range' k₂ (c.size - k₂)).map (fun i => (c)[i]!)).map (coinArr fOf))) ∧
     ∀ ℓ j, u.os.1 2 ℓ j = openRow (pR sh e0 w ops sb e) sh.sched ℓ j
 
 /-- **R's levels at a tied run, from V*'s sessions** at one accepted outer proof: `levelTie_of_maps` at `opsAt` over

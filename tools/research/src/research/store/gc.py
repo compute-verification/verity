@@ -120,7 +120,7 @@ LINEAR_OTHERS = {
 
 
 def scan_linear(gql: Callable[[str, dict], dict]) -> tuple[set[str], set[str], int]:
-    """Every art hex and run id Linear's text names (top, 26 Oct: lanes cite mostly there): each issue's description and comments,
+    """Every art hex and run id Linear's text names (lanes cite mostly there): each issue's description and comments,
     archived ones too, every project's description and content, project updates and documents; and how many pages it read.
     `gql(query, variables)` is `research.linear.Linear.gql`. Any error is a GcError: a citation it couldn't read could lose a blob."""
     arts: set[str] = set()
@@ -396,7 +396,7 @@ def save_marks(path: Path, marks: dict[str, float], now: float) -> None:
 
 
 def list_manifests(remote: Any) -> list[str]:
-    """Every key under `manifests/`, its 16 hex prefixes listed at once: one listing of the whole prefix took 90 s (26 Oct)."""
+    """Every key under `manifests/`, its 16 hex prefixes listed at once: one listing of the whole prefix takes about 90 s."""
     with ThreadPoolExecutor(max_workers=16) as ex:
         return [k for keys in ex.map(remote.list, [f"manifests/{x:x}" for x in range(16)]) for k in keys]
 

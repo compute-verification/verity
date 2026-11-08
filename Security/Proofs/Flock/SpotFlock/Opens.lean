@@ -39,8 +39,8 @@ session circuit that computes the unit's gates gives. Neither holds of every `h`
 to `xS₀` but for its sample and its registered reads (`pin_of_stmtOk`), so `Evaluates` says that `xS₀`'s circuit
 computes the drawn units' gates on the values its witness encodes, and `Reveals` that the frame (`h.frame`) opens them.
 
-So `ksTwo_spot_of_eval`: SPOT[Flock]'s two-stage knowledge soundness at its code (`ksTwo_spot`) from A3 at the coins'
-bytes, `Evaluates` and `Reveals`.
+So `ksTwo_spot_of_eval`: SPOT[Flock]'s two-stage knowledge soundness at its code (`ksTwo_spot`) from `Evaluates` and
+`Reveals`.
 -/
 
 @[expose] public section
@@ -370,10 +370,9 @@ theorem sessionOpensTwo_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at its code from a decoder**: `ksTwo_spot`, with the sessions'
 openings from a decoder whose values evaluate each checked unit (`Evaluates`) and that the reveal opens (`Reveals`). -/
-theorem ksTwo_spot_of_eval (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte) (dec : Dec)
-    (he : Evaluates h dec) (hr : Reveals h dec) :
+theorem ksTwo_spot_of_eval (dec : Dec) (he : Evaluates h dec) (hr : Reveals h dec) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
       FlockDeploy.sha512 :=
-  ksTwo_spot h hA (sessionOpensTwo_of_eval h dec he hr)
+  ksTwo_spot h (sessionOpensTwo_of_eval h dec he hr)
 
 end SpotFlock

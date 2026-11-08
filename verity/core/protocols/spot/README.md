@@ -55,7 +55,7 @@ Its guarantee is soundness, and it rests on:
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
-`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
@@ -67,8 +67,9 @@ builds. The top statement rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
   sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
-  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions/Flock.lean`:
+  SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
+  `LinkCRZCAt`, which unfold to them).
 
 In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
