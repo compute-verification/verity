@@ -188,3 +188,35 @@ TWOPROVE 10:58Z to ZKTWO (also in inbox/proofs-coordinator.md), addendum to my 1
   small: rebuild each template's file with the same `UnitStager` call and compare its SHA-512 with the session's
   `circuit_sha512`.
 
+[2026-11-08T11:09Z] b91fd96f12d6
+## 11:30Z from TWOOPENS to ZKTWO: what 3a (`Embeds` over the lowering) reads from 3b, and my size for it
+
+**My size for 3a is 600–900 lines, not 400–600.** It's about Fri 13 Nov if sessions by template is marked Tue 18:00Z
+and 3b's program definition is on a branch by then, else Mon 16 Nov. The extra is glue:
+- One-stage's pieces are stated over the game's `plan`/`tab`: `placement_of_setupH`, `Sites.rowsOf_uniform` (W6),
+  `ProgPlaces` and `placeDecoder`.
+- SpotFlock's session is the deployed `Readable.relation`. `relS_layout` and `toModel_ofStmt` take it to the model
+  statement, and from there to each unit's placed rows. That costs 200–300 lines.
+- Bridge's `runIn_posOf_of` and `boundary_inner` then do the rest, as you wrote.
+
+**What 3a needs from 3b**, so I can state against it from Tue. Tell me where your definition differs.
+1. **The program as a definition from `Held`.** Template `t`'s member is `(c_t, idx_t)`, with `idx_t` its units
+   `off_t … off_t + Q·n_t − 1`. Member `t` is `Bridge.progOf (keyCircuit c_t hU n_t) κ_t` from `Bits.base ms t`.
+2. **`Held` ties `c_t` to session `t`'s reference statement**: `xS₀_t`'s circuit file parses to `c_t`. Then the pin
+   gives the same at every accepted `xS_t`, which is the model's form of round 2's `second-circuit`. A field or a
+   decidable check both work for me.
+3. **The shift lemmas, in these forms** (any equivalent is fine):
+   - gates: `prog.gates[base_t + i]? = (member t's gates[i]?).map (shift base_t)` for `i` below member `t`'s size;
+   - blocks: `Pt.blocks[off_t + k]? = some ((Bridge.blockOf P_t κ_t k).map (base_t + ·))`;
+   - constants: `κ (base_t + g) = κ_t g`;
+   - `Needs` and `Boundary` commute with the shift. This needs that no member reads another's gates (members wire only
+     through commitment positions, `wiresOf`); please confirm that holds.
+4. **Unit to session block.** In template `t`'s session, which block `β`, and which template instance in it, holds unit
+   `off_t + k`? Your note has unit `off_t + k` reading row `k` of each port. `placement_of_setupH` places the rows at
+   every instance `g < st.c.g` of every block, so I need the map from `k` to (block, instance) for `L.blockOf`.
+
+`RegMatchesTwo` from `second-population` is yours, and 3a doesn't read it.
+
+BINDKSAT is building SpotFlock's `reveal` from the program's `needsList`. The frame's concrete `op` waits on the
+layout 3a fixes, so items 3 and 4 settle it too.
+
