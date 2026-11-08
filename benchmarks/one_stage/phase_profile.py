@@ -4,8 +4,9 @@ process (`phase_profile.sh`'s `tl` step), split into what the GPU ran and what t
     python benchmarks/one_stage/phase_profile.py --sqlite P.sqlite --prove-out prove.out [--phase t.ligerito]
         [--anchor lf_fold_base_pair] [--skip 2] [--json out.json]
 
-A window is one rep's phase: it opens where the prover's thread returns from the last `cudaStreamSynchronize` before the
-anchor kernel's launch (the phase mark's own synchronize) and lasts the rep's `--phase` seconds from the session records in
+A window is one rep's phase: it opens where the prover's thread returns from the phase mark's `cudaStreamSynchronize`, the
+last one before the anchor kernel's launch that follows another with no GPU work queued between them (the previous phase's
+last transcript read, then the mark), and lasts the rep's `--phase` seconds from the session records in
 `--prove-out`, in order; `--skip` drops the first windows (the warm session's reps). Each window is cut at the thread's
 synchronizes (the prover's transcript reads, `hc_wait`) into segments, and each segment's wall is split into GPU time by
 kernel family, the host blocked in the synchronize while the GPU ran, the host's OS calls with the GPU idle (a live coin's
@@ -95,6 +96,33 @@ def complement(busy, a, b):
     return gaps
 
 
+def subtract(iv, cut):
+    """``iv`` less ``cut``, both sorted disjoint interval lists."""
+    out = []
+    for a, b in iv:
+        at = a
+        for x, y in cut:
+            if y <= at or x >= b:
+                continue
+            if x > at:
+                out.append((at, x))
+            at = max(at, y)
+        if at < b:
+            out.append((at, b))
+    return out
+
+
+def attribute(gaps, layers):
+    """Each layer's share of ``gaps``, in precedence order, and what no layer covers."""
+    rest, got = list(gaps), {}
+    for name, iv in layers:
+        left = subtract(rest, iv)
+        got[name] = sum(b - a for a, b in rest) - sum(b - a for a, b in left)
+        rest = left
+    got["host"] = sum(b - a for a, b in rest)
+    return got
+
+
 def phase_seconds(prove_out: str, key: str) -> list[float]:
     """Each rep's ``key`` seconds, in order: the prover's `LIVE` session records, one bucket a rep."""
     vals = []
@@ -110,7 +138,9 @@ def window(gpu, api, osrt, tid, a, b):
     busy = union([(max(x[0], a), min(x[1], b)) for x in g])
     gaps = complement(busy, a, b)
     th = [x for x in api if x[4] == tid and x[1] > a and x[0] < b]
-    is_sync = lambda x: x[2].startswith(("cudaStreamSynchronize", "cudaDeviceSynchronize"))
+    def is_sync(x):
+        return x[2].startswith(("cudaStreamSynchronize", "cudaDeviceSynchronize"))
+
     syncs = [x for x in th if is_sync(x)]
     other_api = [(x[0], x[1]) for x in th if not is_sync(x)]
     os_iv = [(x[0], x[1]) for x in osrt if x[3] == tid and x[1] > a and x[0] < b and BLOCKING.search(x[2])]
@@ -118,7 +148,7 @@ def window(gpu, api, osrt, tid, a, b):
     for x in osrt:
         if x[3] == tid and x[1] > a and x[0] < b and BLOCKING.search(x[2]):
             os_names[x[2]] += 1
-    os_u, api_u, sync_u = union(os_iv), union(other_api), union([(x[0], x[1]) for x in syncs])
+    layers = (("sync", union([(x[0], x[1]) for x in syncs])), ("api", union(other_api)), ("os", union(os_iv)))
     cuts = sorted({min(max(x[1], a), b) for x in syncs} | {a, b})
     segs = []
     for s0, s1 in zip(cuts, cuts[1:]):
@@ -126,10 +156,7 @@ def window(gpu, api, osrt, tid, a, b):
             continue
         seg_busy = overlap(busy, s0, s1)
         seg_gaps = [(max(x, s0), min(y, s1)) for x, y in gaps if y > s0 and x < s1]
-        idle = sum(y - x for x, y in seg_gaps)
-        os_idle = sum(overlap(os_u, x, y) for x, y in seg_gaps)
-        api_idle = sum(overlap(api_u, x, y) for x, y in seg_gaps)
-        sync_idle = sum(overlap(sync_u, x, y) for x, y in seg_gaps)
+        at = attribute(seg_gaps, layers)
         ks = defaultdict(lambda: [0, 0])
         for x in g:
             d = overlap([(x[0], x[1])], s0, s1)
@@ -138,8 +165,8 @@ def window(gpu, api, osrt, tid, a, b):
                 ks[x[2] if x[4] != "kernel" else re.sub(r"[<(].*", "", x[2])][1] += 1
         top = sorted(ks.items(), key=lambda kv: -kv[1][0])[:3]
         segs.append({"t_us": round((s0 - a) / 1e3, 1), "wall_us": round((s1 - s0) / 1e3, 1), "gpu_us": round(seg_busy / 1e3, 1),
-                     "idle_os_us": round(os_idle / 1e3, 1), "idle_api_us": round(api_idle / 1e3, 1),
-                     "idle_sync_us": round(sync_idle / 1e3, 1), "idle_host_us": round((idle - os_idle - api_idle - sync_idle) / 1e3, 1),
+                     "idle_os_us": round(at["os"] / 1e3, 1), "idle_api_us": round(at["api"] / 1e3, 1),
+                     "idle_sync_us": round(at["sync"] / 1e3, 1), "idle_host_us": round(at["host"] / 1e3, 1),
                      "top": [(n, round(v[0] / 1e3, 1), v[1]) for n, v in top]})
     fam = defaultdict(float)
     cnt = defaultdict(int)
@@ -152,12 +179,10 @@ def window(gpu, api, osrt, tid, a, b):
         if x[4] != "kernel":
             by[x[2]] += x[5]
     idle = sum(y - x for x, y in gaps)
-    os_idle = sum(overlap(os_u, x, y) for x, y in gaps)
-    api_idle = sum(overlap(api_u, x, y) for x, y in gaps)
-    sync_idle = sum(overlap(sync_u, x, y) for x, y in gaps)
+    at = attribute(gaps, layers)
     return {"wall_ms": (b - a) / 1e6, "gpu_ms": sum(y - x for x, y in busy) / 1e6, "idle_ms": idle / 1e6,
-            "idle_os_ms": os_idle / 1e6, "idle_api_ms": api_idle / 1e6, "idle_sync_ms": sync_idle / 1e6,
-            "idle_host_ms": (idle - os_idle - api_idle - sync_idle) / 1e6, "syncs": len(syncs),
+            "idle_os_ms": at["os"] / 1e6, "idle_api_ms": at["api"] / 1e6, "idle_sync_ms": at["sync"] / 1e6,
+            "idle_host_ms": at["host"] / 1e6, "syncs": len(syncs),
             "launches": sum(1 for x in th if "Launch" in x[2]), "os_calls": dict(os_names),
             "family_ms": {k: v / 1e6 for k, v in sorted(fam.items(), key=lambda kv: -kv[1])}, "family_n": dict(cnt),
             "copy_bytes": dict(by), "segments": segs}
@@ -181,17 +206,25 @@ def main() -> int:
           f"{len(osrt)} OS calls")
     if len(anchors) != len(secs):
         print("anchors and records differ in number: windows paired in order, the shorter list's length")
+    enq = ("Launch", "Memcpy", "Memset")
     wins = []
     for i, (L, sec) in enumerate(zip(anchors, secs)):
         tid = L[4]
-        before = [x[1] for x in api if x[4] == tid and x[1] <= L[0] and x[2].startswith("cudaStreamSynchronize")]
-        if not before:
+        th = [x for x in api if x[4] == tid and L[0] - 500_000_000 < x[1] <= L[0]]
+        syncs = [x for x in th if x[2].startswith("cudaStreamSynchronize")]
+        if not syncs:
             continue
-        s = max(before)
+        # the phase mark: a synchronize right after the previous phase's last transcript read, no GPU work queued between them
+        s = syncs[-1][1]
+        for p, q in zip(reversed(syncs[:-1]), reversed(syncs[1:])):
+            if not any(p[1] <= x[0] < q[0] and any(k in x[2] for k in enq) for x in th):
+                s = q[1]
+                break
         e = s + int(sec * 1e9)
         after = [x[1] for x in api if x[4] == tid and x[2].startswith("cudaStreamSynchronize") and abs(x[1] - e) < 2_000_000]
         w = window(gpu, api, osrt, tid, s, e)
         w["rep"] = i
+        w["anchor_us"] = round((L[0] - s) / 1e3, 1)
         w["end_vs_sync_us"] = round(min((x - e for x in after), key=abs) / 1e3, 1) if after else None
         wins.append(w)
     timed = wins[a.skip:]
@@ -202,7 +235,8 @@ def main() -> int:
     med = {k: statistics.median(w[k] for w in timed) for k in keys}
     print(f"{a.phase} over {len(timed)} timed reps, median ms a rep: " + ", ".join(f"{k[:-3]} {v:.2f}" for k, v in med.items()))
     print(f"  syncs a rep {statistics.median(w['syncs'] for w in timed)}, launches {statistics.median(w['launches'] for w in timed)}, "
-          f"window end against the nearest synchronize: {[w['end_vs_sync_us'] for w in timed]} us")
+          f"window end against the nearest synchronize: {[w['end_vs_sync_us'] for w in timed]} us; anchor at "
+          f"{[w['anchor_us'] for w in timed]} us")
     fams = sorted({f for w in timed for f in w["family_ms"]}, key=lambda f: -statistics.median(w["family_ms"].get(f, 0) for w in timed))
     for f in fams:
         print(f"  {f:16s} {statistics.median(w['family_ms'].get(f, 0) for w in timed):8.3f} ms  "

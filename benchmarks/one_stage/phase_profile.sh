@@ -9,6 +9,7 @@
 #   ident  prover_is_deterministic pinned to main's digests under M1 and M0; gpu_paths_agree under M1 and M0
 #   tl     one warm process (warm 1 + RUNS M1 dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
+#   an     phase_profile.py again on AS's newest trace (KW/traces; PROVE_OUT: its session records, where they aren't beside it)
 #   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, base and new
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
@@ -111,12 +112,18 @@ if has tl; then
   if [ -s $S/tl-$AS.nsys-rep ]; then
     $NSYS export --type sqlite --force-overwrite true -o $S/tl-$AS.sqlite $S/tl-$AS.nsys-rep > /dev/null 2>&1
     $NSYS stats -r cuda_gpu_kern_sum,cuda_api_sum,osrt_sum -f csv --force-overwrite true -o $O/tl-$AS $S/tl-$AS.nsys-rep > /dev/null 2>&1
-    PO=$(find $O/tl-$AS -name prove.out | head -1)
-    $PY benchmarks/one_stage/phase_profile.py --sqlite $S/tl-$AS.sqlite --prove-out $PO --phase $PHASE --anchor $ANCHOR --skip 2 \
-      --segments 2 --json $O/tl-$AS-phase.json 2>&1 | tee $O/tl-$AS-phase.txt | head -60 | sed "s/^/tl-$AS /" | tee -a $O/job.log
-    mkdir -p $W/traces && cp $S/tl-$AS.sqlite $W/traces/tl-$AS-$(date -u +%H%M).sqlite
+    T=$W/traces/tl-$AS-$(date -u +%H%M); mkdir -p $W/traces
+    cp $S/tl-$AS.sqlite $T.sqlite; cp $(find $O/tl-$AS -name prove.out | head -1) $T.prove.out
     xz -T0 -c $S/tl-$AS.nsys-rep > $O/tl-$AS.nsys-rep.xz
   else log "tl-$AS: no report"; fail=1; fi
+fi
+if has tl || has an; then
+  T=$(ls -t $W/traces/tl-$AS-*.sqlite 2>/dev/null | head -1); T=${T%.sqlite}
+  if [ -n "$T" ]; then
+    $PY benchmarks/one_stage/phase_profile.py --sqlite $T.sqlite --prove-out ${PROVE_OUT:-$T.prove.out} --phase $PHASE --anchor $ANCHOR --skip 2 \
+      --segments 2 --json $O/tl-$AS-phase.json > $O/tl-$AS-phase.txt 2>&1
+    head -40 $O/tl-$AS-phase.txt | sed "s/^/tl-$AS /" | tee -a $O/job.log
+  else log "no trace of $AS under $W/traces"; fi
 fi
 if has ab; then
   read -r BB _ < $W/base.env || { log "no base build"; exit 1; }
