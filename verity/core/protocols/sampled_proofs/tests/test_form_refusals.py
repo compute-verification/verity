@@ -3,12 +3,12 @@
 
 The sessions are M0 `--zk` sessions of four instances, every unit sampled, bound to its template query's partition, written
 by `benchmarks/one_stage/form_refusals.sh`: ``honest``, a small A8 unit (LlBf16DotprodDot_v1 at K=128) flat;
-``templated``, the same unit as its structural template (`verity/flock-circuit/tmpl`, the rows not in the file); and
-``tail``, MoeRouterSigmoidScore_v2 with its MUFU reads in lookup slots, its last stage returning the outputs.
-`ProvedScope.check` admits each; the knowledge-soundness form refuses the last two, and `verify` gives a form's reason
-only once every other check, the proof's included, has passed, so that reason says the session was otherwise accepted.
-The honest session under a statement `verify --zk` must refuse (`WRONG_TAGS`: typed, public outputs, plain leaves,
-templated) is refused as at generation.
+``templated``, the same unit as its structural template (`verity/flock-circuit/tmpl`, the rows not in the file), which
+`verify` refuses at its statement's version; and ``tail``, a toy with its MUFU reads in lookup slots and its last stage
+returning the outputs, which `ProvedScope.check` admits and the knowledge-soundness form (`KsScope.filesWhy`) refuses.
+`verify` gives a form's reason only once every other check, the proof's included, has passed, so that reason says the
+session was otherwise accepted. The honest session under a statement `verify --zk` must refuse (`WRONG_TAGS`: typed,
+public outputs, plain leaves, templated) is refused as at generation.
 
 `Flock.KsScope`'s own tests run its check functions on Lean values, and `flock-verify ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
@@ -81,12 +81,16 @@ def test_verify_zk_accepts_the_honest_session(fx):
     assert v is not None and v.get("accepted") is True, v
 
 
-@pytest.mark.parametrize("case", ["templated", "tail"])
-def test_verify_zk_refuses_a_session_outside_the_form_for_its_form(fx, case):
-    """The session's proof checks and every check before the form pass; the form's check refuses its statement."""
-    v, _ = _verify(fx, case)
+def test_verify_zk_refuses_a_templated_session(fx):
+    v, _ = _verify(fx, "templated")
+    assert v is not None and v.get("accepted") is False and v.get("why") == _cases(fx)["templated"]["lean"]["why"], v
+
+
+def test_verify_zk_refuses_a_tail_returning_the_outputs_for_its_form(fx):
+    """The session's proof checks and every check before the form pass; the form's check refuses its circuit."""
+    v, _ = _verify(fx, "tail")
     assert v is not None and v.get("accepted") is False and str(v.get("why")).endswith(FORM), v
-    assert v["why"] == _cases(fx)[case]["lean"]["why"], v
+    assert v["why"] == _cases(fx)["tail"]["lean"]["why"], v
 
 
 def test_the_v2_audits_own_run_accepts_the_honest_session_and_refuses_the_tail_for_its_form(fx):

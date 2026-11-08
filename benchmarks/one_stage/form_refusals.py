@@ -2,14 +2,13 @@
 M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
 `forged_proofs.py` stages them, differing in the statement's form:
 
-    honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)                 verify --zk accepts
-    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its     refused for its form
-               rows not in the file
-    tail       MoeRouterSigmoidScore_v2 with its MUFU reads in lookup slots, its last stage    refused for its form
-               returning the outputs
+    honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)               verify --zk accepts
+    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its   refused: verify takes no
+               rows not in the file                                                          templated statement
+    tail       `_tail`, its MUFU reads in lookup slots, its last stage returning the         refused for its form
+               outputs (`ProvedScope.scopeOkI`)
 
-`ProvedScope.check` admits each (`scopeOkT`, `scopeOkI`); the sampled audit's knowledge-soundness form refuses the last two
-(`Flock.KsScope`), and `verify` gives a form's reason only once every other check, the proof's included, has passed. Lean's
+`verify` gives a form's reason (`Flock.KsScope`) only once every other check, the proof's included, has passed. Lean's
 verdict on the honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
@@ -39,6 +38,10 @@ import a0  # noqa: E402
 import forged_proofs as FP  # noqa: E402
 from circuit_check import targets as TG  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
+from verity.ml.circuits.defs import CompositeDefinition, bind  # noqa: E402
+from verity.ml.circuits.ops.fp32 import F32AddFtz  # noqa: E402
+from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz  # noqa: E402
+from verity.ml.circuits.types import Array, Value  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
@@ -49,19 +52,31 @@ from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noq
 #: statements outside the form, each refused for another reason: typed, public outputs, plain leaves, templated
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               FC.TMPL_STATEMENT)
-TAIL = "MoeRouterSigmoidScore_v2"
 FORM = ": a statement form the soundness proof does not cover"
+F32 = Value(32)
+
+
+def _tail():
+    """1 / (2^a + b) over f32 (`test_read_slots`' toy), with w, a row no node reads that spans SHA-512 blocks, as a
+    composed circuit needs one."""
+    def body(B, S, a, b, w):
+        return B.call(MufuRcpFtz, B.call(F32AddFtz, B.call(MufuEx2Ftz, a), b))
+
+    return bind(CompositeDefinition("FormRefusalsTail", 1, (), lambda S: ((("a", F32), ("b", F32), ("w", Array(64, F32))), F32),
+                                    body, register=False))
 
 
 def forms(rng) -> dict:
     """Each case's Definition, input rows, output rows, staged rows, stager options and statement."""
     x, w = FP.bf16(rng.normal(0, 1, (FP.N, FP.K))), FP.bf16(rng.normal(0, 0.02, (FP.N, FP.K)))
-    dot = (FP.KIND, [("r0", V2, 32 * FP.K, ["x", "w"])], [(V2, (0,))], {"r0": np.concatenate([x, w], axis=1)})
+    dot = (TG.definition(FP.KIND), [("r0", V2, 32 * FP.K, ["x", "w"])], [(V2, (0,))],
+           {"r0": np.concatenate([x, w], axis=1)})
     f32 = rng.normal(0, 2, (FP.N, 2)).astype(np.float32).view(np.uint32).astype(np.uint64)
     ab = np.stack([f32[:, 0] & 0xFFFF, f32[:, 0] >> 16, f32[:, 1] & 0xFFFF, f32[:, 1] >> 16], axis=1).astype(np.uint16)
     return {"honest": (*dot, {}, FC.STATEMENT),
             "templated": (*dot, {"layout": "iv/hybrid/4", "structural": True}, FC.TMPL_STATEMENT),
-            "tail": (TAIL, [("r0", V2, 64, ["x", "b"])], [(V2, (0,)), (V2, (1,))], {"r0": ab}, {"reads": "slots"},
+            "tail": (_tail(), [("ab", V2, 64, ["a", "b"]), ("w", V2, 2048, ["w"])], [(V2, (0,))],
+                     {"ab": ab, "w": rng.integers(0, 1 << 16, (FP.N, 128), dtype=np.uint16)}, {"reads": "slots"},
                      FC.STATEMENT)}
 
 
@@ -77,8 +92,7 @@ def main() -> int:
     TG.load_registries()
     salt_key = hashlib.sha256(b"verity/flock/form-refusals/salts").digest()
     cases: dict[str, dict] = {}
-    for name, (kind, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
-        fn = TG.definition(kind)
+    for name, (fn, in_rows, out_rows, rows, kw, statement) in forms(np.random.default_rng(20261019)).items():
         program = P.mixed_population_program([(fn, FP.N)])
         part = P.partition(program, P.template_instances_query([fn]))
         d = work / name
@@ -102,7 +116,7 @@ def main() -> int:
             sd["tmpl_unit"] = d / "unit.placed"
         record, live = a0.session(a.bin, sd, FP.N, f"subset:{FP.N}", FP.free_port(), d / "run", zk=True)
         lean = a0.lean_verify(a.lean, sd, FP.N, d / "run", zk=True)
-        cases[name] = {"kind": kind, "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
+        cases[name] = {"definition": getattr(fn, "name", str(fn)), "statement": statement, "live": live, "m0": (record or {}).get("verdict"),
                        "lean": lean, "draw": (record or {}).get("unit_draw")}
         if name == "honest":
             cases[name]["wrong_tags"] = {t: a0.lean_verify(a.lean, {**sd, "statement": t}, FP.N, d / "run", zk=True,
@@ -119,7 +133,8 @@ def main() -> int:
                                               sort_keys=True, default=str))
     honest = cases["honest"]
     ok = (honest["lean"]["accepted"] and not any(v["accepted"] for v in honest["wrong_tags"].values())
-          and all(not c["lean"]["accepted"] and str(c["lean"]["why"]).endswith(FORM) for n, c in cases.items() if n != "honest"))
+          and not cases["templated"]["lean"]["accepted"] and cases["templated"]["lean"]["digest"] is not None
+          and not cases["tail"]["lean"]["accepted"] and str(cases["tail"]["lean"]["why"]).endswith(FORM))
     return 0 if ok else 1
 
 
