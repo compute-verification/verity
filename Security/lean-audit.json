@@ -4354,6 +4354,14 @@
    "honest": ["Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest"],
    "nontrivial": "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
    "kind": "exclusion"
+  },
+  "Verity.SecurityProofs.FingerprintCollision": {
+   "honest": ["Verity.SecurityProofs.FingerprintCollision_honest"],
+   "nontrivial": "Verity.SecurityProofs.FingerprintCollision_nontrivial"
+  },
+  "Verity.SecurityProofs.PrintCollision": {
+   "honest": ["Verity.SecurityProofs.PrintCollision_honest"],
+   "nontrivial": "Verity.SecurityProofs.PrintCollision_nontrivial"
   }
  },
  "unwitnessed": {
@@ -4843,11 +4851,11 @@
   },
   "Flock.SecurityProofs.EndToEndRegistered": {
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "1e593eff43246c5698e43b3175bd99ffb0e0e02f6e9f540f6100e1f91ddf722f"
+   "unfolded_hash": "5963b713557a6efc064c6293549d4f21efcfe5789bb0c30fd40d628915d0ef20"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "d8bf235bf890f463e2f35a70345767a65df02e0e798cbfec6139fcc96193b53f"
+   "unfolded_hash": "4cb4f9c998538d99b983ec8a84802d3db0362f51007f36f2ca7c73e81b1687bc"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "type_hash": "88c47eba72b89cb5a868f2d7e619aa0dcbf84dd413625703e5d758884812fb48",
@@ -14163,15 +14171,15 @@
     ],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "d34a654d92785b037477ecbb7b8edc9da63a9324a6b281174383dfdf496a9e91",
-   "unfolded_hash": "88954b640122ccb8b619bb30b5e7d844f8a120910bd90cea2ed2db2ffb565b14"
+   "unfolded_hash": "5963b713557a6efc064c6293549d4f21efcfe5789bb0c30fd40d628915d0ef20"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
    "owner": "@proofs",
@@ -14181,15 +14189,15 @@
     "assumptions": ["FlockSoundness.Assumptions.SHA512CRExpected", "FlockSoundness.Assumptions.SHA512CRStrict"],
     "domain": ["FlockSoundness.Discharge.ZkReg.LiveAcceptsZKR"],
     "open": [
-     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ",
      "FlockSoundness.Built",
      "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
      "FlockSoundness.Discharge.ZkReg.OwnReadsHJ"
     ],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes", "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ"]
+    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
    },
    "type_hash": "5af258b4edf35bdc24ef90dd56ead302a83b3ae798a0b367538a5134c6f31c23",
-   "unfolded_hash": "ecaa3bfb6c8cbdf6cf58955310bc058b9c95c0ac0ef40b89ef48cd5e1c6d7c98"
+   "unfolded_hash": "4cb4f9c998538d99b983ec8a84802d3db0362f51007f36f2ca7c73e81b1687bc"
   },
   "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
    "owner": "@proofs",
@@ -24127,6 +24135,69 @@
    "type_hash": "112a8c90c018aebd4028397748512fca09566c34295f1a1479fc82c38fe3c058",
    "unfolded_hash": "165a939c6b260746860be36163d893e78c46c0979985edc6600f24c407bd1a93"
   },
+  "Verity.SecurityProofs.FingerprintCollision": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.FingerprintCollision : Verity.Guarantees.FingerprintCollision"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "03fbd0ee7cd5b877c5d84676b2f0497f62fb636229b5f6924f8678a0f35e39a7",
+   "unfolded_hash": "22bf0351270b9cc1da64fcf22014f8df8be7449276efd5566d71a2e61e565f4c"
+  },
+  "Verity.SecurityProofs.FingerprintCollision_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.FingerprintCollision_honest :",
+    "  And",
+    "    (Eq",
+    "      (Verity.Game.prCoin fun c =>",
+    "        Eq (Verity.MemCheck.fingerprint c.fst c.snd (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0)))",
+    "          (Verity.MemCheck.fingerprint c.fst c.snd (Multiset.instInsert.insert 0 (Multiset.instSingleton.singleton 1))))",
+    "      1)",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun c =>",
+    "        And",
+    "          (Ne (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0))",
+    "            (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 1)))",
+    "          (Eq",
+    "            (Verity.MemCheck.fingerprint c.fst c.snd",
+    "              (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 0)))",
+    "            (Verity.MemCheck.fingerprint c.fst c.snd",
+    "              (Multiset.instInsert.insert 1 (Multiset.instSingleton.singleton 1)))))",
+    "      (instHDiv.hDiv 2 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "1cc5015e4d679b4d48464370e57828cd2f5720f4909fcb807f8ffc8043a3c139"
+  },
+  "Verity.SecurityProofs.FingerprintCollision_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.FingerprintCollision_nontrivial :",
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun x =>",
+    "        And (Ne (Multiset.instSingleton.singleton 1) (Multiset.instSingleton.singleton 0)) True)",
+    "      (instHDiv.hDiv 1 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "aad6afec144fe54eca35aaa52cd3d7fc2e53e00b13846080043bfcda61bb4f49"
+  },
   "Verity.SecurityProofs.HopperStepComplete": {
    "owner": "@proofs",
    "signature": ["Verity.SecurityProofs.HopperStepComplete : Verity.Guarantees.HopperStepComplete"],
@@ -24282,6 +24353,64 @@
    },
    "type_hash": "4c3bae588a8b15087f0b98c7fee1a916e24956b95df6fd0453546703c7f048e0",
    "unfolded_hash": "9b357ce37eb093da3677870f727c259fd78f42903c5202ea171ece2e46d09a7c"
+  },
+  "Verity.SecurityProofs.PrintCollision": {
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.PrintCollision : Verity.Guarantees.PrintCollision"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "46098b395d65c8a249f2c6128700a6414eb2614f42b199257ea1fb0aeac06b98",
+   "unfolded_hash": "29cd76a5e2c1958160974772e5c6d4724653d83f10db4a99eb4c39cb12d675fd"
+  },
+  "Verity.SecurityProofs.PrintCollision_honest": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.PrintCollision_honest :",
+    "  ENNReal.instLE.le",
+    "    (Verity.Game.prCoin fun δ =>",
+    "      Exists fun k =>",
+    "        And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k)",
+    "          (Exists fun k' =>",
+    "            And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k')",
+    "              (And (Ne k k') (Eq (Verity.MemCheck.element δ k) (Verity.MemCheck.element δ k')))))",
+    "    (instHDiv.hDiv 3 (instHPow.hPow 2 128))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d937a42351495bf98a1287a5c9a238729032692472535c8e38b9d417f93c6cb0"
+  },
+  "Verity.SecurityProofs.PrintCollision_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.PrintCollision_nontrivial :",
+    "  Not",
+    "    (ENNReal.instLE.le",
+    "      (Verity.Game.prCoin fun x =>",
+    "        Exists fun k =>",
+    "          And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k)",
+    "            (Exists fun k' =>",
+    "              And (SetLike.instMembership.mem (Finset.instInsert.insert 0 (Finset.instSingleton.singleton 1)) k')",
+    "                (And (Ne k k') True)))",
+    "      (instHDiv.hDiv 1 (instHPow.hPow 2 128)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "949b5136173ef2c9e5ee6616a6b82a94c93a4453af6d94e8644bfda844da02c2"
   },
   "Verity.SecurityProofs.PrivateFitsOfLocal": {
    "owner": "@proofs",
@@ -25977,7 +26106,9 @@
    "Accounting.SecurityProofs.JointPooledBlocksLive": "frozen (no-function): Like JointPooledLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": "completeness: UncertifiedElementary's honest lemma: at Honest (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean), at its serving block after the wipe with that block as its one inference block, the weight the inference block leaves equals the split weight, which is 1 (gate 2's operation, split across the wipe), so its cap is attained with a right-hand side above 0. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
-   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: it takes no premise to drop, so a tighter cap fails at an explicit circuit: at Straddle, at its serving block after the wipe with that block as its one inference block, the operation split across the wipe is left at the split weight, so the cap fails at every right-hand side below it, 0 among them. A counterexample at an instance, not a property of a Lean function."
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: it takes no premise to drop, so a tighter cap fails at an explicit circuit: at Straddle, at its serving block after the wipe with that block as its one inference block, the operation split across the wipe is left at the split weight, so the cap fails at every right-hand side below it, 0 among them. A counterexample at an instance, not a property of a Lean function.",
+   "Verity.SecurityProofs.FingerprintCollision": "lemma: the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
+   "Verity.SecurityProofs.PrintCollision": "lemma: the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -32680,6 +32811,13 @@
     "Verity.Guarantees.SoundMono": "fa86a98c87341208789aaed40edf38ef88f68a7c4e2c23a1a19738acbc0771df"
    }
   },
+  "Definitions.Core.Guarantees.MemCheck": {
+   "digest": "20566d150f68bccb4c315d8d2f55dd2fc06c2a849840df7c93f6758a22b8371e",
+   "definitions": {
+    "Verity.Guarantees.FingerprintCollision": "971e7f16cf9698753186838ebb18480de9c996eb4e108db6cb73b777d7297ce0",
+    "Verity.Guarantees.PrintCollision": "b9be6144e6f8626b6d4a817d79dfb1a2a2d0046ebfe548f64b5774fc2d2e9c87"
+   }
+  },
   "Definitions.Core.Guarantees.NaiveStrassen": {
    "digest": "0f2986f521d2f0ef964691ab822e09c526f44c454c4216fe1ae5ce6a8e7e302a",
    "definitions": {
@@ -32880,6 +33018,14 @@
     "Claims.stepWith": "374305791ab13eaaec5223a60da8c58fb4ef3536404c9677f4b67a5d2489f824",
     "Claims.trustedBase": "556bfbde87e5628245b3360e3dbeff759b0c0fffb82449a439504593c2d293b6",
     "Claims.waitAcc": "ba5c834bc3a282d673e62ffdb2c2953269b0e707b8865c7bab96f72bc68afbe2"
+   }
+  },
+  "Definitions.Core.MemCheck": {
+   "digest": "8c70559dc666c382b05a6f4b3018135d2ebf3ea92581aaf064c8928f7bfe736d",
+   "definitions": {
+    "Verity.MemCheck.element": "a1cc316768cfdc593c2dcb6a33922233bf940f28c8dbf708a1d9d5dca86a719e",
+    "Verity.MemCheck.fingerprint": "582656bb3d8964c1e98f7c8610f5d541e37b4bd6b6564238d8105be48e508f84",
+    "Verity.MemCheck.gf128Fintype": "95d4397c4d5a249b1e88fa145b2872f004a6daef6a709e993711783df83ac78d"
    }
   },
   "Definitions.Core.NaiveStrassen": {
@@ -48439,10 +48585,10 @@
    }
   },
   "Proofs.Flock.EndToEndRegistered.Statement": {
-   "digest": "acc36df211c4346cd359c9e1ba07fe84f13225501064f50074157370dacaea84",
+   "digest": "1a86a7ca3e5c37f79d2674f1384cc6d692888ef038349c920bdfc8b694b96d4c",
    "definitions": {
-    "Flock.Guarantees.EndToEndRegistered": "6e32d1f6dc1d96118ade879c8c7c0206b378241837d475c6c62628c55933cc7e",
-    "Flock.Guarantees.EndToEndRegisteredDrawn": "7c9c1bfa2381956e792fbb7d08948484676157d9b0e30e404c1c6e5932042fc0",
+    "Flock.Guarantees.EndToEndRegistered": "7270f3ff9f38eddb65a1e4820226e9fd6539fb025672290b754ddf1d065f0303",
+    "Flock.Guarantees.EndToEndRegisteredDrawn": "4614f58064eff47f7d53aff099a64453b28756f5d61770979a01a80d41c233c5",
     "Flock.Guarantees.EndToEndRegisteredDrawnFlat": "2d87a5a7a69e3f954d35bc130b66ba989c7226b134460dd02bacaa09fcee2d73",
     "Flock.Guarantees.EndToEndRegisteredFlat": "c9787cbcca5a4483ce1213a3f4d3648c1b137b5028b7a99daad498f43a9ed8a4"
    }
