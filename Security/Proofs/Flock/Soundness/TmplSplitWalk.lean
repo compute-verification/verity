@@ -467,7 +467,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
   obtain ⟨h6a, hL1, hL2, has⟩ := hpre
   rw [walk] at h
   simp only [show (!decide (6 ≤ β) && decide (β + al < 6)) = false by simp; omega, Bool.false_eq_true,
-    ↓reduceIte] at h
+    ↓reduceIte, tabled_eq] at h
   obtain ⟨eL, st1, hE, h⟩ := sv_bind_ok h
   obtain ⟨gL, st2, hG, h⟩ := sv_bind_ok h
   obtain ⟨rfl, hH1, ht1⟩ := half_ok hE hst.1
@@ -480,7 +480,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         tabSum pt (β + al - 6) x.1.1 (gLow pt s β x.1.2.1) (Gs pt s pt.qc) (fun t' => Gs pt s (x.1.2.2.getD t' pt.qc)) o)
       (fun (o : Tab) (st : SplitSt) => StOk t lays pt s st ∧ UOk (t.defs.getD d default).ins 1 o)
       (fun x i => callVal t lays pt s F d (x.1.2.1 + 2 ^ β * (x.1.1 * 2 ^ al + off)) (2 ^ β) x.1.2.2 i)
-      _ h ⟨hst2, rows_U _ _ _ _ _ _ _ _ _ _ _ _ _ (uOk_empty _ _)⟩ fun i hi b st b1 st1 hr hq => by
+      _ h ⟨hst2, rows_U _ _ _ _ _ _ _ _ _ _ _ _ _ _ (uOk_empty _ _)⟩ fun i hi b st b1 st1 hr hq => by
         obtain ⟨q1, q2, q3⟩ := walkCall_sum hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1.1 x.1.2.1 x.2 x.1.2.2⟩
@@ -493,7 +493,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     rw [rows_val (fun o => of (eLow pt β a) * tabSum pt (β + al - 6) H (gLow pt s β a) (Gs pt s pt.qc)
         (fun t' => Gs pt s (ip.getD t' pt.qc)) o) (fun o n => rfl)
       (t.defs.getD d default) pt true (2 ^ al) (2 ^ β) as (eqHalf pt.r (β - 6) al)
-        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y)
+        (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) _
       (fun _ cx v => of (eLow pt β a) * (hiE pt (β + al - 6) H cx *
         refS (t.defs.getD d default) pt (β + al - 6) H (2 ^ al) (eqHalf pt.r (β - 6) al)
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (gLow pt s β a) (Gs pt s pt.qc)
@@ -527,7 +527,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
       (fun (o : Tab) (st : SplitSt) => StOk t lays pt s st ∧ UOk (t.defs.getD d default).ins as.size o)
       (fun x i => ∑ k ∈ Finset.range as.size,
         callVal t lays pt s F d (as.getD k 0 + 2 ^ β * (x.1 * 2 ^ al + off)) (2 ^ β) (x.2 k) i)
-      _ h ⟨hst2, rows_U _ _ _ _ _ _ _ _ _ _ _ _ _ (uOk_empty _ _)⟩ fun i hi b st b1 st1 hr hq => by
+      _ h ⟨hst2, rows_U _ _ _ _ _ _ _ _ _ _ _ _ _ _ (uOk_empty _ _)⟩ fun i hi b st b1 st1 hr hq => by
         obtain ⟨q1, q2, q3⟩ := walkCall_exp hs hT hR hlay hcall ih hr hq.1 hq.2 hd (List.mem_range.1 hi) h6
           ⟨h6a, hL1, hL2, has⟩
         exact ⟨⟨q1, q2⟩, fun x => q3 x.1 x.2⟩
@@ -542,11 +542,14 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
     rw [rows_val (tabExp pt s (β + al - 6) H (fun t' k => Gs pt s ((ip k).getD t' pt.qc))) (fun o n => rfl)
       (t.defs.getD d default) pt false (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
         (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y)
+        (fun y => (eqHalf pt.r 0 (β + al - 6)).at
+          (2 ^ β * ((off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) % 2 ^ al) / 64))
       (fun k cx v => hiE pt (β + al - 6) H cx *
         refX (t.defs.getD d default) pt s (β + al - 6) H (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) k v)
       (fun o k cx w vs => refs_tabExp _ _ hs _ _ _ _ _ _ _ _ _ _ _ _ _)
-      (fun _ hB hlow o cx ws vs => refsK_tabExp _ _ _ _ _ _ _ _ _ _ hB hlow _ _ _ _), tabExp_empty, zero_add,
+      (fun _ hB hlow o cx ws vs => refsK_tabExp _ _ _ _ _ _ _ _ _ _ _ hB hlow (fun _ _ => rfl) _ _ _ _), tabExp_empty,
+      zero_add,
       list_sum_comm]
     refine Finset.sum_congr rfl fun k hk => congrArg List.sum (List.map_congr_left fun r _ => ?_)
     have hk' := has h6 k (Finset.mem_range.mp hk)

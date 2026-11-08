@@ -52,6 +52,12 @@ def Half.atFast (T : Half) (u : Nat) : F128 := T.2.1.getD (u &&& ((1 <<< T.1) - 
 def bump {κ : Type} [BEq κ] [Hashable κ] (m : HashMap κ F128) (k : κ) (v : F128) : HashMap κ F128 :=
   m.insert k (m.getD k 0 + v)
 
+/-- `f y`, read from `a` below its size: `tabled ((Array.range n).map f) f` is `f` with its values on `0 .. n` computed
+once. Its caller builds the table: a definition that built it and returned the lookup would be compiled taking `y` too,
+rebuilding the table on every call. -/
+def tabled {α : Type} [Inhabited α] (a : Array α) (f : Nat → α) (y : Nat) : α :=
+  if y < a.size then a.getD y default else f y
+
 /-- A class's fold in chunks: explicit own entries `P[(row chunk, column chunk, slot)]` and the constant's
 `PC[(row chunk, slot)]` (its slot weight `g(qc)` in); summed own entries `S[(row chunk, column chunk)]` and the
 constant's `C[row chunk]`; open inputs `U[(input, low part, row chunk)]`. -/
@@ -192,35 +198,37 @@ def Tab.flushK (as : Array Nat) (nk : Nat) (o : Tab) (cx cy : Nat) (ws acc : Arr
       if x.isZero then m
       else (List.range nk).foldl (fun m k => bump m (cx, cy, as.getD k 0 + t) (ws.getD k 0 * x)) m) o.P }
 
-/-- One reference of `Tab.refsK`: an own column's factor summed at its slot past the copies' low parts, a new run once
-its column chunk changes, any other reference through `Tab.ref` at each copy. -/
-def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (nk cx : Nat)
-    (ws : Array F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
+/-- One reference of `Tab.refsK`: an own column's factor `fac v`, which is `gL.at (B · (pos v mod A) / 64)`, summed at
+its slot past the copies' low parts, a new run once its column chunk changes, any other reference through `Tab.ref` at
+each copy. -/
+def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (nk cx : Nat) (ws : Array F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
   if v < D.cols then
     let P := pos v
     let u := B * (P % A)
-    if P / A == st.2.1 then (st.1, st.2.1, st.2.2.modify (u % 64) (· + gL.at (u / 64)))
-    else (Tab.flushK as nk st.1 cx st.2.1 ws st.2.2, P / A, (Array.replicate 64 0).modify (u % 64) (· + gL.at (u / 64)))
+    if P / A == st.2.1 then (st.1, st.2.1, st.2.2.modify (u % 64) (· + fac v))
+    else (Tab.flushK as nk st.1 cx st.2.1 ws st.2.2, P / A, (Array.replicate 64 0).modify (u % 64) (· + fac v))
   else ((List.range nk).foldl (fun o k => Tab.ref D pt false A B as gL pos o k cx (ws.getD k 0) v) st.1, st.2.1, st.2.2)
 
 /-- An explicit row's references `vs` at every copy `k < nk` at once, weight `ws[k]`, while each copy's low part is
 below `B` and `B` divides 64: an own column's slot is then its copy's low part plus a slot common to the copies, and its
 factor is common, so a run's sums are formed once (`Tab.refStepK`) and added at each copy (`Tab.flushK`). -/
-def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (o : Tab)
-    (nk cx : Nat) (ws : Array F128) (vs : Array Nat) : Tab :=
-  let st := vs.foldl (Tab.refStepK D pt A B as gL pos nk cx ws) (o, 0, Array.replicate 64 0)
+def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
+    (o : Tab) (nk cx : Nat) (ws : Array F128) (vs : Array Nat) : Tab :=
+  let st := vs.foldl (Tab.refStepK D pt A B as gL pos fac nk cx ws) (o, 0, Array.replicate 64 0)
   Tab.flushK as nk st.1 cx st.2.1 ws st.2.2
 
 /-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`; all copies at
-once (`Tab.refsK`) while explicit with every copy's low part below `B` and `B` dividing 64. -/
+once (`Tab.refsK`, an own column's factor `fac`) while explicit with every copy's low part below `B` and `B` dividing
+64. -/
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
-    (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat) (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) :
-    Tab :=
+    (fac : Nat → F128) (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat)
+    (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) : Tab :=
   if !summed && 64 % B == 0 && (List.range nk).all (fun k => as.getD k 0 < B) then
     rows.foldl (fun o (x, ra, rb) =>
       let P := pos x
-      let o := Tab.refsK D pt A B as gL pos o nk (P / A) ((Array.range nk).map fun k => alpha * rowLow k P) ra
-      let o := Tab.refsK D pt A B as gL pos o nk (P / A) ((Array.range nk).map fun k => rowLow k P) rb
+      let o := Tab.refsK D pt A B as gL pos fac o nk (P / A) ((Array.range nk).map fun k => alpha * rowLow k P) ra
+      let o := Tab.refsK D pt A B as gL pos fac o nk (P / A) ((Array.range nk).map fun k => rowLow k P) rb
       { o with work := o.work + nk * (ra.size + rb.size) }) o
   else
     rows.foldl (fun o (x, ra, rb) =>
@@ -342,8 +350,16 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     let n := if summed then al else β + al - 6
     let eL ← half pt true lo n
     let gL ← half pt false lo n
-    let pos := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
-    let o := Tab.rows D pt summed (2 ^ al) (2 ^ β) as gL pos (Tab.rowLow pt summed (2 ^ al) (2 ^ β) as eL)
+    let A := 2 ^ al
+    let B := 2 ^ β
+    let m := if D.cols ≤ D.rows.foldl (fun r (_, ra, rb) => r + ra.size + rb.size) 0 then D.cols else 0
+    let posD := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
+    let pa := (Array.range m).map posD
+    let pos := tabled pa posD
+    let facD := fun (y : Nat) => gL.at (B * (pos y % A) / 64)
+    let fa := (Array.range (if summed then 0 else m)).map facD
+    let fac := tabled fa facD
+    let o := Tab.rows D pt summed A B as gL pos fac (Tab.rowLow pt summed A B as eL)
       pt.alpha (if summed then 1 else as.size) D.rows {}
     (List.range D.calls.size).foldlM
       (walkCall t lays pt (walkChild lays multi pt (walk t lays multi pt fuel)) d β as off al gL) o
