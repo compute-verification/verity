@@ -19,7 +19,7 @@ from math import log, log2, log10
 from pathlib import Path
 
 import figure1 as f1
-from verity.core.protocols.sampled_proofs.optimize import Grain, leak_count
+from verity.core.protocols.spot.optimize import Grain, leak_count
 from verity.ml.circuits.partition_v2 import UNIT_CLASSES
 
 SCHEMA = "spot-figure4/v1"
