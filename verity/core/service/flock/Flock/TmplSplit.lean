@@ -326,6 +326,32 @@ def Tab.colsP (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
     let x := W.getD v 0
     Tab.colsP D pt A B as gL pos fac cx W n (v + 1) (if x.isZero then st else Tab.colD A B as pos fac cx x st v)
 
+/-- `Tab.colsP` taking each column's sum out of `W` as it reads it, so the compiled code frees the sum's cell while it is
+in cache rather than in one pass over `W` when `W` is dropped. -/
+@[specialize]
+def Tab.colsPFast (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (fac : Nat → F128) (cx : Nat) : Array F128 → Nat → Nat → Tab × Nat × Nat × Array F128 → Tab × Nat × Nat × Array F128
+  | _, 0, _, st => st
+  | W, n + 1, v, st =>
+    let x := W.getD v 0
+    Tab.colsPFast D pt A B as gL pos fac cx (W.set! v 0) n (v + 1)
+      (if x.isZero then st else Tab.colD A B as pos fac cx x st v)
+
+theorem Tab.colsPFast_eq (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
+    (fac : Nat → F128) (cx : Nat) (W : Array F128) :
+    ∀ (n v : Nat) (st : Tab × Nat × Nat × Array F128) (W' : Array F128), (∀ j, v ≤ j → W'.getD j 0 = W.getD j 0) →
+      Tab.colsPFast D pt A B as gL pos fac cx W' n v st = Tab.colsP D pt A B as gL pos fac cx W n v st
+  | 0, _, _, _, _ => rfl
+  | n + 1, v, st, W', h => by
+    simp only [Tab.colsPFast, Tab.colsP, h v (Nat.le_refl v)]
+    exact Tab.colsPFast_eq D pt A B as gL pos fac cx W n (v + 1) _ _ fun j hj => by
+      rw [← h j (by omega)]
+      simp [Array.getD_eq_getD_getElem?, show v ≠ j by omega]
+
+@[csimp] theorem Tab.colsP_eq_colsPFast : @Tab.colsP = @Tab.colsPFast := by
+  funext D pt A B as gL pos fac cx W n v st
+  exact (Tab.colsPFast_eq D pt A B as gL pos fac cx W n v st W fun _ _ => rfl).symm
+
 /-- Explicit rows of one row chunk `cx` at one copy, column by column, as the flat fold's `Sparse.foldT` folds: each
 row's weight summed per own column (`Tab.rowT`), then each column's sum times its factor (`Tab.colsP`), so a
 reference costs a sum and a column a product. -/
