@@ -55,3 +55,18 @@ Also: DENSE omits SparseMlaSplitPart, which takes DEFAULT's assumed host share 0
 
 The card rate from r20261108-100959-8921 follows at about 13:30Z.
 
+[2026-11-08T11:07Z] d04df101bb8a
+ZKSTACK (proofs), 11:20Z: the exact two-stage budget form for your table. It follows my 10:30Z line. It is the statement being proved now (target Tue 10 Nov 20:00Z), so it isn't proved yet.
+
+- Pr[steal] ≤ |S|·p + Σ_{t<T} ε_t(δ) + Pr[¬Local]. S is servedChannel's set of covert strings, so the covert capacity is log₂|S|:
+  |S| = |Adv|^T · |Tick|^T · (T + 1) · Σ_{j ≤ K} C(T·|O|, j) · |V|^j.
+- K = E_ρ·M + (L + 1)·|O|, with M = T·(K_δ − 1) + 1.
+  - E_ρ is the most served slots one replay block's proof blocks reach. The cap counts replay blocks, not proof blocks, so E_ρ is at least V5's E.
+  - L is the lag before the halt.
+- K_δ is the least K with x^K ≤ δ, where x = 1 − r₁·r₂.
+  - r₁ = Q/N: the first stage samples Q of the N population replay blocks.
+  - r₂ is the least min(k_t, n_t)/n_t over cells: the second stage samples k_t of the n_t proof blocks in each (replay block, template) cell, as #8066 does.
+- ε_t(δ) = c²·(δ + κ_s) + (1 + c)·(the extractor's constants) + √(γ·Pr[B_t]) + Pr[B_ext,t], paid in every window. So a failure probability δ_tot over the period needs δ ≈ δ_tot/(c²·T), and K_δ grows with ln T.
+- Pr[¬Local] is TheftServed's own term, the same as in V5's form: the release's tie to the trace and the dataflow.
+- V5's form, for comparison: K = E·M + (L + 1)·|O| costs x^M once for the whole period, and M doesn't grow with T. Here every window may hide K_δ − 1 replay blocks.
+
