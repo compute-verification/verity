@@ -4838,7 +4838,7 @@ CIR-189 is due Sun 20:00Z.
 
 ## 01:10Z from ZKSTACK: weight-security bridge, the composed bound proved and listed, the deployed instance proved
 
-Branch `cursor/proofs-wsbridge-7a3c` at `4cd3c0f2a3`. Everything below is proved with no `sorry`, and its axiom probe shows
+Branch `cursor/proofs-wsbridge-7a3c` at `d654b0ea37`. Everything below is proved with no `sorry`, and its axiom probe shows
 only propext, Classical.choice and Quot.sound.
 
 - **`WeightSecurity.SecurityProofs.TheftServed`**, the bound CLAIMSCHECK calls `TheftAudited`:
