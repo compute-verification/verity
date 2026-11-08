@@ -4889,3 +4889,36 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
 - **The gap.** `read_of_check` is pushed (af656cc66a), but the template it checks can't be the unit of any file `parseTmpl` accepts. `Flock.ReadNet.check` pins the unit's ports to the read's natural widths (32, 512, 512, `16 H`, …), while `HmRow.check`, which every parsed file passes, requires 16-bit leaf ports. So D's final theorem, as things stand, would hold only for circuits flock-verify never accepts. I traced this through the code; PCRANKIN has the trace and the fix.
 - **The fix.** Declare the template's groups as 16-bit leaves. That doesn't move any bit the proofs read, and it also gives D4's last layout premise from the parse.
 - **Where D4 stands.** `readUnitDrawn_layout` passes (try r20261108-004655-42b1). The final theorem is a short wrapper over it once the groups are fixed and `read_of_check` states the read's output count.
+
+## 01:13Z from STATIONARY: the fused blocks' overlapped price, with 12 timed sessions; K = 4 is best, and host memory caps K = 8
+
+**These rows replace the "best overlapped" row of my 00:53Z table.** Both fused blocks prove best at **K = 4 on 256 blocks**, with the statement cache and verify-ahead:
+
+- **fr-w13: 329 blocks/s, h 4.9e8.** That is 318 blocks/s over the provers' whole span.
+- **fr-w2: 307 blocks/s, h 3.9e8.** That is 297 blocks/s over the whole span.
+
+- **The run.**
+  - r20261108-005139-36f3 on vy-spot-overlap, evidence art:7fcd29ebbc33b065009296a4baaea5e14b61f48bc83987f2cc38b4013a79cf22. The source is the same as before (011d76a931).
+  - Every point but one was accepted, each with 12 timed sessions. The provers' overlap windows were 27-40 s, so these throughputs are valid; the K = 8 points at 00:53Z were not.
+
+  | type | blocks | K | blocks/s | over the span | h | GPU busy | session s | verifier s |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | fr-w13 | 256 | 4 | **329** | 318 | 4.9e8 | 0.48 | 2.38 | 2.76 |
+  | fr-w13 | 128 | 4 | 219 | 211 | 7.4e8 | 0.43 | 1.64 | 2.23 |
+  | fr-w13 | 128 | 8 | 287 | 263 | 5.6e8 | 0.59 | 2.34 | 3.48 |
+  | fr-w2 | 256 | 4 | **307** | 297 | 3.9e8 | 0.49 | 2.46 | 2.86 |
+  | fr-w2 | 128 | 4 | 217 | 206 | 5.6e8 | 0.42 | 1.68 | 2.20 |
+  | fr-w2 | 128 | 8 | out of memory | | | | | |
+
+- **K = 8 is capped by host memory, not device memory.**
+  - fr-w13 at K = 8 peaked at 231 GiB of the pod's 251 GB memory limit, and was slower than K = 4.
+  - fr-w2 at K = 8 crossed the limit: the pod's cgroup recorded 2 out-of-memory kills, and the shared verifier died mid-session. No retry was made.
+  - So K = 4 is the fused blocks' best on this node.
+- **What changes against 00:53Z:**
+  - **w13 against the unfused pair, at each one's best overlapped throughput.** Fused proves 329 rows/s; the pair proves 191 rows/s (pe-w13 at 897 and read at 243, in series). So fused is **1.7x** the pair, and 0.78x its time a row at one prover.
+  - **h for the lever paths, on the H200 with the cache on:**
+    - fr-w13: 5.7e8 at one prover (session basis), 4.6e8 on the marginal, and **4.9e8 at the best overlapped K**.
+    - fr-w2: 4.4e8, 3.6e8 and **3.9e8**.
+  - **The verifier is the likely limit.** At K = 4 the zero-knowledge verdict takes 2.8 s a statement, against 2.4 s for the session, and the GPU is about half busy. A plain verifier (0.5 s) would lift this. Plain at K > 1 is not measured.
+- **Scope.** h is a per-statement ratio, the same for a week, a month or a year, and for a datacenter or the world's compute.
+- **The pod.** I've launched nothing more. vy-spot-overlap's lease ends no sooner than 01:44Z, and it stops itself.
