@@ -1,8 +1,7 @@
 """The split count S of the top-p pipeline is an OPERAND of the registered Definitions,
 not a static: `TopPMaskWordx{V}(logits, top_p, splits) -> Value<V>`, `TopPMask_v1{V}(logits, top_p, splits)`,
-`GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temp, splits)`.  S_t = SplitsFor_v1(|live(t)|, num_SMs) is a derived value of the
-WORKLOAD the request Program reads from its request-owned `splits` Input (one entry per sampling event) and the fold carries as the split
-kernels' constexpr (`Const32[S]`).  CPU, torch-free:
+`GumbelTopPTokenSelect_v1{V}(logits, top_p, seed, pos, temp, splits)`.  The Program feeds it the registered split count
+`registered_splits(num_SMs)` as a `Const32[S]`, and the fold the split kernels' constexpr, also a `Const32[S]`.  CPU, torch-free:
 
   1. the operand form evaluates to `topp_split.topp_keep_row(x, p, S)` at every S in {1, 2, 4, 8, 16, 32} (the masked row lane by lane);
   2. the keep word is total: an S the pipeline never launches (0, 3, 64, 2^31, -1) keeps no lane (word 0, a word no launched S gives);
@@ -11,7 +10,7 @@ kernels' constexpr (`Const32[S]`).  CPU, torch-free:
   4. the B8 record rows (kernel-consumed bf16 logits at S = 16, V = 128256) through the operand form: masked row bit-exact
      to the kernel (the fixed model behind the operand);
   5. the codec materialises `TopPMaskWordx{V}_v1` by name (the static-S `TopPMaskWordx{V}s{S}_v1` name does not decode: one form);
-  6. `splits_for_v1` (the relation the Match checks the operand against) is the registry's `splits_for` on 1..64 x {132, 142} SMs.
+  6. the registered S (the one the Match holds the operand to) is a launched split count at every SM count.
 """
 from __future__ import annotations
 
@@ -182,9 +181,6 @@ def test_codec_materialises_the_operand_form_by_name():
 # ------------------------------------------------------------------------------------------------ 6. the relation
 
 
-@pytest.mark.parametrize("nsm", [132, 142])
-def test_splits_for_v1_is_the_relation_the_match_checks_the_operand_against(nsm):
-    for n in range(1, 65):
-        S = topp_geometry.splits_for_v1(n, nsm)
-        assert S == topp_geometry.splits_for(n, nsm) and S in SM.SPLIT_COUNTS
-    assert topp_geometry.splits_for_v1(1, nsm) == 32 and topp_geometry.splits_for_v1(8, 142) == 16 and topp_geometry.splits_for_v1(4, 142) == 32
+def test_the_registered_s_is_a_launched_split_count_at_every_sm_count():
+    assert all(topp_geometry.registered_splits(m) in SM.SPLIT_COUNTS for m in range(1, 300))
+    assert [topp_geometry.registered_splits(m) for m in (132, 142, 188)] == [32, 32, 32]
