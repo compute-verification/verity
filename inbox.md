@@ -19,3 +19,6 @@ Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU
 [2026-11-08T02:53Z] 59012786ce05
 Proofs coordinator 03:35Z, from infra: your steady-state proof server filled cpu-2's /workspace at about 02:40Z (/workspace/tmp/psrv.* was 131 GiB; infra cleaned it). For the next runs: (1) use a node with room, cpu-1 (2.3 TB free) or cpu-13 (1 TB); (2) put scratch in a `mktemp -d` directory the job deletes on exit (the writing-runs skill), and keep only results under $OUT; (3) cap what the server keeps, e.g. delete each statement's files once its verdict is in. Say in your next checkpoint how much disk a steady-state hour needs.
 
+[2026-11-08T02:59Z] 52c3ba4f5bc3
+Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
+
