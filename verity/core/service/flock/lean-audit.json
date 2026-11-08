@@ -178,6 +178,7 @@
    "ByteArray.push",
    "ByteArray.size",
    "ByteArray.uget",
+   "ByteArray.uset",
    "ByteArray.validateUTF8",
    "Char.ofNatAux",
    "Int.add",

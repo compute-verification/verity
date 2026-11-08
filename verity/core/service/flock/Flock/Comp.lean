@@ -197,6 +197,24 @@ def ofRows (rows : Array (Array Nat)) (width : Nat) : V Sparse := do
       data := pushLe32 data c
   return ⟨rows.size, width, data, start, len⟩
 
+/-- `ofRows` with `data`'s buffer sized up front (`ofRows_eq_fast`): an empty array is the same value whatever its
+capacity. -/
+def ofRowsFast (rows : Array (Array Nat)) (width : Nat) : V Sparse := do
+  let mut data := ByteArray.emptyWithCapacity (4 * rows.foldl (· + ·.size) 0)
+  let mut start := Array.mkEmpty rows.size
+  let mut len := Array.mkEmpty rows.size
+  for r in rows do
+    start := start.push data.size
+    len := len.push r.size
+    for c in r do
+      if c ≥ width then throw s!"sparse matrix: column {c} outside {width}"
+      data := pushLe32 data c
+  return ⟨rows.size, width, data, start, len⟩
+
+/-- Compiled code runs `ofRowsFast`; the kernel and every proof see `ofRows`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `ofRows`. -/
+@[csimp] theorem ofRows_eq_fast : @ofRows = @ofRowsFast := rfl
+
 /-- Column `t` of row `i`. -/
 @[inline] def col (m : Sparse) (i t : Nat) : Nat := rd32 m.data (m.start[i]! + 4 * t)
 
@@ -214,6 +232,317 @@ def foldRows (m : Sparse) (e : Array F128) : Nat → Nat → Array F128 → Arra
 
 /-- `Xᵀ e`: `out[c] = Σ_{i : c ∈ row i} e[i]` for `c < width`. -/
 def foldT (m : Sparse) (e : Array F128) : Array F128 := m.foldRows e (min m.rows e.size) 0 (Array.replicate m.width 0)
+
+/-- `n` zero bytes, doubling, within `fuel` halvings. -/
+def zerosF : Nat → Nat → ByteArray
+  | 0, _ => ByteArray.empty
+  | fuel + 1, n =>
+    if n == 0 then ByteArray.empty
+    else
+      let h := zerosF fuel (n / 2)
+      if n % 2 == 0 then h ++ h else (h ++ h).push 0
+
+/-- `n` zero bytes. -/
+def zeros (n : Nat) : ByteArray := zerosF (n.log2 + 1) n
+
+/-- `b` with byte `i` set to `x`; `b` when `i` is out of bounds. -/
+@[inline] def setU (b : ByteArray) (i : USize) (x : UInt8) : ByteArray :=
+  if h : i.toNat < b.size then b.uset i x h else b
+
+/-- Byte `i` of `b` as a word; `0` when `i` is out of bounds. -/
+@[inline] def getU (b : ByteArray) (i : USize) : UInt64 :=
+  if h : i.toNat < b.size then (b.uget i h).toUInt64 else 0
+
+/-- Bytes `o, …, o + 7` of `b`, little-endian. -/
+@[inline] def rd64 (b : ByteArray) (o : USize) : UInt64 :=
+  getU b o ^^^ getU b (o + 1) <<< 8 ^^^ getU b (o + 2) <<< 16 ^^^ getU b (o + 3) <<< 24 ^^^ getU b (o + 4) <<< 32 ^^^
+    getU b (o + 5) <<< 40 ^^^ getU b (o + 6) <<< 48 ^^^ getU b (o + 7) <<< 56
+
+/-- `b` with bytes `o, …, o + 7` set to `w`'s, little-endian. -/
+@[inline] def wr64 (b : ByteArray) (o : USize) (w : UInt64) : ByteArray :=
+  let b := setU b o w.toUInt8
+  let b := setU b (o + 1) (w >>> 8).toUInt8
+  let b := setU b (o + 2) (w >>> 16).toUInt8
+  let b := setU b (o + 3) (w >>> 24).toUInt8
+  let b := setU b (o + 4) (w >>> 32).toUInt8
+  let b := setU b (o + 5) (w >>> 40).toUInt8
+  let b := setU b (o + 6) (w >>> 48).toUInt8
+  setU b (o + 7) (w >>> 56).toUInt8
+
+/-- Column `c` of an unboxed accumulator: bytes `16c, …, 16c + 15`, `lo` then `hi`. -/
+@[inline] def colB (b : ByteArray) (c : Nat) : F128 :=
+  let o := (16 * c).toUSize
+  ⟨rd64 b o, rd64 b (o + 8)⟩
+
+/-- `b` with column `c` (`colB`) increased by `x`. -/
+@[inline] def addB (b : ByteArray) (c : Nat) (x : F128) : ByteArray :=
+  let o := (16 * c).toUSize
+  let lo := rd64 b o ^^^ x.lo
+  let hi := rd64 b (o + 8) ^^^ x.hi
+  wr64 (wr64 b o lo) (o + 8) hi
+
+/-- `foldRow` on an unboxed accumulator (`colB`). -/
+def foldRowB (m : Sparse) (i : Nat) (ei : F128) : Nat → Nat → ByteArray → ByteArray
+  | 0, _, acc => acc
+  | fuel + 1, t, acc =>
+    let c := m.col i t
+    foldRowB m i ei fuel (t + 1) (if c < m.width then addB acc c ei else acc)
+
+/-- `foldRows` on an unboxed accumulator (`colB`). -/
+def foldRowsB (m : Sparse) (e : Array F128) : Nat → Nat → ByteArray → ByteArray
+  | 0, _, acc => acc
+  | fuel + 1, i, acc =>
+    let ei := e[i]!
+    foldRowsB m e fuel (i + 1) (if ei.isZero then acc else m.foldRowB i ei m.len[i]! 0 acc)
+
+/-- `foldT` with its accumulator unboxed (`foldT_eq_fast`): no `F128` is allocated until the result. -/
+def foldTFast (m : Sparse) (e : Array F128) : Array F128 :=
+  if 16 * m.width + 16 < USize.size then
+    let acc := m.foldRowsB e (min m.rows e.size) 0 (zeros (16 * m.width))
+    (Array.range m.width).map fun c =>
+      let v := colB acc c
+      if v.lo == 0 && v.hi == 0 then 0 else v
+  else m.foldT e
+
+theorem zerosF_spec : ∀ (fuel n : Nat), n < 2 ^ fuel →
+    (zerosF fuel n).size = n ∧ ∀ p : Nat, (zerosF fuel n)[p]! = 0
+  | 0, n, h => by
+    have : n = 0 := by simp at h; omega
+    subst this
+    exact ⟨rfl, fun p => by simp [zerosF]; rfl⟩
+  | fuel + 1, n, h => by
+    unfold zerosF
+    by_cases h0 : n = 0
+    · subst h0
+      exact ⟨rfl, fun p => by simp; rfl⟩
+    · have ih := zerosF_spec fuel (n / 2) (by rw [Nat.pow_succ] at h; omega)
+      have hz : ∀ p : Nat, (zerosF fuel (n / 2) ++ zerosF fuel (n / 2))[p]! = 0 := by
+        intro p
+        by_cases hp : p < (zerosF fuel (n / 2) ++ zerosF fuel (n / 2)).size
+        · rw [getElem!_pos _ p hp]
+          by_cases hl : p < (zerosF fuel (n / 2)).size
+          · rw [ByteArray.getElem_append_left hl, ← getElem!_pos _ p hl, ih.2]
+          · rw [ByteArray.getElem_append_right (by omega), ← getElem!_pos _ _ (by rw [ByteArray.size_append] at hp; omega),
+              ih.2]
+        · rw [getElem!_neg _ p hp]; rfl
+      simp only [h0, beq_iff_eq, ↓reduceIte]
+      split
+      · exact ⟨by rw [ByteArray.size_append, ih.1]; omega, hz⟩
+      · refine ⟨by rw [ByteArray.size_push, ByteArray.size_append, ih.1]; omega, fun p => ?_⟩
+        rw [ByteArray.getElem!_push]
+        split
+        · rfl
+        · exact hz p
+
+theorem zeros_spec (n : Nat) : (zeros n).size = n ∧ ∀ p : Nat, (zeros n)[p]! = 0 :=
+  zerosF_spec _ n (Nat.lt_log2_self)
+
+theorem setU_eq (b : ByteArray) (i : USize) (x : UInt8) : setU b i x = b.set! i.toNat x := by
+  unfold setU
+  split
+  · rename_i h
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.uset, ByteArray.set!, Array.uset, Array.set!_eq_setIfInBounds, Array.setIfInBounds,
+      show i.toNat < bs.size from h, dite_true]
+  · rename_i h
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.set!, Array.set!_eq_setIfInBounds, Array.setIfInBounds, show ¬ i.toNat < bs.size from h,
+      dite_false]
+
+theorem getU_eq (b : ByteArray) (i : USize) : getU b i = b[i.toNat]!.toUInt64 := by
+  unfold getU
+  split
+  · rename_i h
+    rw [uget_eq_get! b i i.toNat rfl h]
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.get!]
+    rw [getElem!_pos (ByteArray.mk bs) i.toNat h, getElem!_pos bs i.toNat h]
+    rfl
+  · rename_i h
+    rw [getElem!_neg b i.toNat h]
+    rfl
+
+theorem size_setU (b : ByteArray) (i : USize) (x : UInt8) : (setU b i x).size = b.size := by
+  rw [setU_eq, ByteArray.size_set!]
+
+theorem size_wr64 (b : ByteArray) (o : USize) (w : UInt64) : (wr64 b o w).size = b.size := by
+  simp only [wr64, size_setU]
+
+theorem toNat_add_lit (o : USize) (k : Nat) (h : o.toNat + k < USize.size) :
+    (o + (OfNat.ofNat k : USize)).toNat = o.toNat + k :=
+  toNat_add_ofNat o k h
+
+theorem getElem!_setU (b : ByteArray) (i : USize) (x : UInt8) (p : Nat) (h : i.toNat < b.size) :
+    (setU b i x)[p]! = if i.toNat = p then x else b[p]! := by
+  rw [setU_eq, ByteArray.getElem!_set! b i.toNat x p h]
+
+/-- `rd64` reads bytes `o, …, o + 7` by position. -/
+theorem rd64_eq (b : ByteArray) (o : USize) (h : o.toNat + 8 ≤ USize.size) :
+    rd64 b o = b[o.toNat]!.toUInt64 ^^^ b[o.toNat + 1]!.toUInt64 <<< 8 ^^^ b[o.toNat + 2]!.toUInt64 <<< 16 ^^^
+      b[o.toNat + 3]!.toUInt64 <<< 24 ^^^ b[o.toNat + 4]!.toUInt64 <<< 32 ^^^ b[o.toNat + 5]!.toUInt64 <<< 40 ^^^
+      b[o.toNat + 6]!.toUInt64 <<< 48 ^^^ b[o.toNat + 7]!.toUInt64 <<< 56 := by
+  simp only [rd64, getU_eq, toNat_add_lit o 1 (by omega), toNat_add_lit o 2 (by omega), toNat_add_lit o 3 (by omega),
+    toNat_add_lit o 4 (by omega), toNat_add_lit o 5 (by omega), toNat_add_lit o 6 (by omega),
+    toNat_add_lit o 7 (by omega)]
+
+/-- `wr64`'s bytes by position, inside the array. -/
+theorem wr64_get (b : ByteArray) (o : USize) (w : UInt64) (h : o.toNat + 8 ≤ USize.size) (hb : o.toNat + 8 ≤ b.size)
+    (p : Nat) :
+    (wr64 b o w)[p]! = if p = o.toNat then w.toUInt8 else if p = o.toNat + 1 then (w >>> 8).toUInt8
+      else if p = o.toNat + 2 then (w >>> 16).toUInt8 else if p = o.toNat + 3 then (w >>> 24).toUInt8
+      else if p = o.toNat + 4 then (w >>> 32).toUInt8 else if p = o.toNat + 5 then (w >>> 40).toUInt8
+      else if p = o.toNat + 6 then (w >>> 48).toUInt8 else if p = o.toNat + 7 then (w >>> 56).toUInt8 else b[p]! := by
+  simp only [wr64]
+  rw [getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 7 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 6 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 5 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 4 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 3 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 2 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by simp only [size_setU]; rw [toNat_add_lit o 1 (by omega)]; omega),
+    getElem!_setU _ _ _ _ (by omega)]
+  simp only [toNat_add_lit o 1 (by omega), toNat_add_lit o 2 (by omega), toNat_add_lit o 3 (by omega),
+    toNat_add_lit o 4 (by omega), toNat_add_lit o 5 (by omega), toNat_add_lit o 6 (by omega),
+    toNat_add_lit o 7 (by omega)]
+  by_cases h0 : p = o.toNat <;> by_cases h1 : p = o.toNat + 1 <;> by_cases h2 : p = o.toNat + 2 <;>
+    by_cases h3 : p = o.toNat + 3 <;> by_cases h4 : p = o.toNat + 4 <;> by_cases h5 : p = o.toNat + 5 <;>
+    by_cases h6 : p = o.toNat + 6 <;> by_cases h7 : p = o.toNat + 7 <;>
+    simp only [h0, h1, h2, h3, h4, h5, h6, h7, ↓reduceIte] <;> first | omega | (simp only [eq_comm] at *; simp_all)
+
+theorem mod256_shl (w : UInt64) (k : Nat) :
+    ((w >>> (8 * k).toUInt64).toUInt8.toUInt64 <<< (8 * k).toUInt64) = F128.bslot w k := by
+  rw [UInt64.toUInt64_toUInt8]
+  unfold F128.bslot
+  congr 1
+  apply UInt64.toNat_inj.mp
+  rw [UInt64.toNat_mod, UInt64.toNat_and]
+  exact (Nat.and_two_pow_sub_one_eq_mod _ 8).symm
+
+theorem ite_ne {α : Type} {p q : Nat} (h : p ≠ q) (a b : α) : (if p = q then a else b) = b := ite_eq_right h
+
+theorem rd64_wr64 (b : ByteArray) (o : USize) (w : UInt64) (h : o.toNat + 8 ≤ USize.size)
+    (hb : o.toNat + 8 ≤ b.size) : rd64 (wr64 b o w) o = w := by
+  rw [rd64_eq _ o h]
+  simp (disch := omega) only [wr64_get b o w h hb, ite_ne, ↓reduceIte]
+  have e0 := mod256_shl w 0; have e1 := mod256_shl w 1
+  have e2 := mod256_shl w 2; have e3 := mod256_shl w 3
+  have e4 := mod256_shl w 4; have e5 := mod256_shl w 5
+  have e6 := mod256_shl w 6; have e7 := mod256_shl w 7
+  simp only [Nat.mul_zero, Nat.mul_one, Nat.reduceMul] at e0 e1 e2 e3 e4 e5 e6 e7
+  rw [show Nat.toUInt64 0 = 0 from rfl, UInt64.shiftRight_zero, UInt64.shiftLeft_zero] at e0
+  rw [show Nat.toUInt64 8 = 8 from rfl] at e1; rw [show Nat.toUInt64 16 = 16 from rfl] at e2
+  rw [show Nat.toUInt64 24 = 24 from rfl] at e3; rw [show Nat.toUInt64 32 = 32 from rfl] at e4
+  rw [show Nat.toUInt64 40 = 40 from rfl] at e5; rw [show Nat.toUInt64 48 = 48 from rfl] at e6
+  rw [show Nat.toUInt64 56 = 56 from rfl] at e7
+  rw [e0, e1, e2, e3, e4, e5, e6, e7]
+  exact (F128.u64_bytes w).symm
+
+theorem rd64_wr64_ne (b : ByteArray) (o o' : USize) (w : UInt64) (h : o.toNat + 8 ≤ USize.size)
+    (h' : o'.toNat + 8 ≤ USize.size) (hb : o.toNat + 8 ≤ b.size) (hd : o.toNat + 8 ≤ o'.toNat ∨ o'.toNat + 8 ≤ o.toNat) :
+    rd64 (wr64 b o w) o' = rd64 b o' := by
+  rw [rd64_eq _ o' h', rd64_eq _ o' h']
+  simp only [wr64_get b o w h hb]
+  simp (disch := omega) only [ite_ne]
+
+/-- An accumulator and its unboxed form agree: `colB` gives each of the `w` columns. -/
+def Agree (w : Nat) (acc : Array F128) (bs : ByteArray) : Prop :=
+  acc.size = w ∧ bs.size = 16 * w ∧ ∀ c < w, colB bs c = acc[c]!
+
+theorem toNat_col (c w : Nat) (hc : c < w) (hw : 16 * w + 16 < USize.size) : (16 * c).toUSize.toNat = 16 * c := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  simp only [Nat.toUSize, USize.toNat_ofNat']
+  exact Nat.mod_eq_of_lt (by omega)
+
+theorem agree_addB (w : Nat) (acc : Array F128) (bs : ByteArray) (c : Nat) (x : F128) (hw : 16 * w + 16 < USize.size)
+    (hc : c < w) (ha : Agree w acc bs) : Agree w (acc.modify c (· + x)) (addB bs c x) := by
+  obtain ⟨hs, hb, hv⟩ := ha
+  have ho := toNat_col c w hc hw
+  have ho8 : ((16 * c).toUSize + 8).toNat = 16 * c + 8 := by rw [toNat_add_lit _ 8 (by omega), ho]
+  refine ⟨by rw [Array.size_modify, hs], by simp only [addB, size_wr64, hb], fun c' hc' => ?_⟩
+  have ho' := toNat_col c' w hc' hw
+  have ho8' : ((16 * c').toUSize + 8).toNat = 16 * c' + 8 := by rw [toNat_add_lit _ 8 (by omega), ho']
+  have hsz : ∀ v, (wr64 bs (16 * c).toUSize v).size = 16 * w := fun v => by rw [size_wr64, hb]
+  by_cases hcc : c = c'
+  · subst hcc
+    rw [getElem!_pos _ c (by rw [Array.size_modify]; omega), Array.getElem_modify_self, ← getElem!_pos acc c (by omega),
+      ← hv c hc]
+    simp only [addB, colB]
+    rw [rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [hsz]; omega) (by omega),
+      rd64_wr64 _ _ _ (by omega) (by rw [ho]; omega), rd64_wr64 _ _ _ (by omega) (by rw [hsz]; omega)]
+    rfl
+  · rw [getElem!_pos _ c' (by rw [Array.size_modify]; omega), Array.getElem_modify_of_ne hcc,
+      ← getElem!_pos acc c' (by omega), ← hv c' hc']
+    simp only [addB, colB]
+    have d1 : 16 * c + 8 + 8 ≤ 16 * c' ∨ 16 * c' + 8 ≤ 16 * c + 8 := by omega
+    have d2 : 16 * c + 8 ≤ 16 * c' ∨ 16 * c' + 8 ≤ 16 * c := by omega
+    have d3 : 16 * c + 8 + 8 ≤ 16 * c' + 8 ∨ 16 * c' + 8 + 8 ≤ 16 * c + 8 := by omega
+    have d4 : 16 * c + 8 ≤ 16 * c' + 8 ∨ 16 * c' + 8 + 8 ≤ 16 * c := by omega
+    rw [rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [hsz]; omega) (by rw [ho8, ho']; exact d1),
+      rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [ho]; omega) (by rw [ho, ho']; exact d2),
+      rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [hsz]; omega) (by rw [ho8, ho8']; exact d3),
+      rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [ho]; omega) (by rw [ho, ho8']; exact d4)]
+
+theorem agree_foldRow (m : Sparse) (i : Nat) (ei : F128) (hw : 16 * m.width + 16 < USize.size) :
+    ∀ fuel t acc bs, Agree m.width acc bs → Agree m.width (m.foldRow i ei fuel t acc) (m.foldRowB i ei fuel t bs)
+  | 0, _, _, _, h => h
+  | fuel + 1, t, acc, bs, h => by
+    simp only [foldRow, foldRowB]
+    apply agree_foldRow m i ei hw fuel (t + 1)
+    split
+    · exact agree_addB _ _ _ _ _ hw (by assumption) h
+    · rename_i hc
+      have : acc.modify (m.col i t) (· + ei) = acc := by
+        apply Array.ext (by rw [Array.size_modify])
+        intro j h1 h2
+        rw [Array.getElem_modify_of_ne (by obtain ⟨hs, _⟩ := h; omega)]
+      rw [this]; exact h
+
+theorem agree_foldRows (m : Sparse) (e : Array F128) (hw : 16 * m.width + 16 < USize.size) :
+    ∀ fuel i acc bs, Agree m.width acc bs → Agree m.width (m.foldRows e fuel i acc) (m.foldRowsB e fuel i bs)
+  | 0, _, _, _, h => h
+  | fuel + 1, i, acc, bs, h => by
+    simp only [foldRows, foldRowsB]
+    apply agree_foldRows m e hw fuel (i + 1)
+    split
+    · exact h
+    · exact agree_foldRow m i _ hw _ _ _ _ h
+
+/-- Compiled code runs `foldTFast`; the kernel and every proof see `foldT`. `@[csimp]` rewrites only code compiled after
+it, so it stays above every caller of `foldT` but `foldTFast`'s own fallback. -/
+@[csimp] theorem foldT_eq_fast : @foldT = @foldTFast := by
+  funext m e
+  unfold foldTFast
+  split
+  · rename_i hw
+    have z := zeros_spec (16 * m.width)
+    have h0 : Agree m.width (Array.replicate m.width 0) (zeros (16 * m.width)) := by
+      refine ⟨Array.size_replicate .., z.1, fun c hc => ?_⟩
+      rw [getElem!_pos _ c (by simp; omega), Array.getElem_replicate]
+      have ho := toNat_col c _ hc hw
+      have ho8 : ((16 * c).toUSize + 8).toNat = 16 * c + 8 := by rw [toNat_add_lit _ 8 (by omega), ho]
+      simp only [colB]
+      rw [rd64_eq _ _ (by omega), rd64_eq _ _ (by omega)]
+      simp only [z.2]
+      rfl
+    obtain ⟨hs, _, hv⟩ := agree_foldRows m e hw (min m.rows e.size) 0 _ _ h0
+    apply Array.ext (by simp [foldT, hs])
+    intro c h1 h2
+    simp only [Array.getElem_map, Array.getElem_range]
+    have hc : c < m.width := by simpa using h2
+    have := hv c hc
+    rw [getElem!_pos _ c h1] at this
+    unfold foldT
+    rw [← this]
+    split
+    · rename_i hz
+      simp only [Bool.and_eq_true, beq_iff_eq] at hz
+      cases hcol : colB (m.foldRowsB e (min m.rows e.size) 0 (zeros (16 * m.width))) c
+      rw [hcol] at hz
+      simp only at hz
+      rw [hz.1, hz.2]
+      rfl
+    · rfl
+  · rfl
 
 /-- `Mat(X)` of the circuit digest (`Flock.Statement`), appended to `buf`, flushing into `h` every 64 KiB. -/
 def absorbMat (m : Sparse) (rows : Nat) (h0 : Blake3.Hasher) (buf0 : ByteArray) : Blake3.Hasher × ByteArray := Id.run do
