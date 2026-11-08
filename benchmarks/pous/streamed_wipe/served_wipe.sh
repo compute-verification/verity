@@ -9,7 +9,7 @@
 # takes a card of its own (`gpu-lease 1 --wait`) and gives it back after. It refuses (exit 3, no answer, the reason in
 # DIR/refused.txt) a card that isn't idle, any process on it or more than WIPE_IDLE_MIB (1024) of its memory in use, and
 # a challenger command whose ssh key (-i) isn't on this node; it kills nothing. The memory challenger is vy-auditor-2's,
-# through infra's wipe gate, as in Demo B (r20261027-052452-ff66, accepted on vy-dc-h200-2):
+# through infra's wipe gate, as in Demo B:
 #   WIPE_CHALLENGER  its host (vy-auditor-2)
 #   WIPE_ADDRESS     where the prover connects to it (10.96.0.36:47611)
 #   WIPE_COMMAND     what starts its side (ssh -i ~/.ssh/vy-auditor2-wipe -o BatchMode=yes research@10.96.0.36)

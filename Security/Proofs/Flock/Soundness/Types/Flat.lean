@@ -26,7 +26,7 @@ namespace FlockSoundness.Types
 open Flock Flock.Derive Audit
 
 /-- A form's value: the XOR of its wires' values, and its constant. -/
-def formVal (v : ℕ → Bool) (f : Form) : Bool := Bool.xor (xorSum f.ws.toList v) (decide (f.c = 1))
+def formVal (v : ℕ → Bool) (f : Form) : Bool := Bool.xor (Verity.Boolean.xorSum f.ws.toList v) (decide (f.c = 1))
 
 /-- An item's value on the wires before it. A flat type's items are ANDs. -/
 def itemVal (v : ℕ → Bool) : Item → Bool
@@ -44,7 +44,7 @@ def eval (t : CircuitType) (x : ℕ → Bool) : List Bool :=
 
 /-- Rows satisfied by column values `z`: row `r` is `z r = (A_r · z)(B_r · z)`. -/
 def Sat (R : List (List ℕ × List ℕ)) (z : ℕ → Bool) : Prop :=
-  ∀ r p, R[r]? = some p → z r = (xorSum p.1 z && xorSum p.2 z)
+  ∀ r p, R[r]? = some p → z r = (Verity.Boolean.xorSum p.1 z && Verity.Boolean.xorSum p.2 z)
 
 /-- **The honest column values** on inputs `x`: each input bit on its column, each AND item's value on its row, each
 output on its copy row, 1 on the constant, and 0 on every forced-zero row. -/
@@ -63,16 +63,16 @@ def honest (t : CircuitType) (G : Geo) (x : ℕ → Bool) (r : ℕ) : Bool :=
 /-! ## Forms and wires -/
 
 theorem xorSum_append {ι : Type} (l m : List ι) (v : ι → Bool) :
-    xorSum (l ++ m) v = Bool.xor (xorSum l v) (xorSum m v) := by
+    Verity.Boolean.xorSum (l ++ m) v = Bool.xor (Verity.Boolean.xorSum l v) (Verity.Boolean.xorSum m v) := by
   induction l with
-  | nil => simp [xorSum]
+  | nil => simp [Verity.Boolean.xorSum]
   | cons a l ih =>
-    simp only [xorSum, List.cons_append, List.map_cons, List.foldr_cons] at ih ⊢
+    simp only [Verity.Boolean.xorSum, List.cons_append, List.map_cons, List.foldr_cons] at ih ⊢
     rw [ih, Bool.xor_assoc]
 
 theorem formVal_congr {v v' : ℕ → Bool} {f : Form} (h : ∀ x ∈ f.ws.toList, v x = v' x) :
     formVal v f = formVal v' f := by
-  unfold formVal; rw [xorSum_congr h]
+  unfold formVal; rw [Verity.Boolean.xorSum_congr h]
 
 theorem itemVal_congr {v v' : ℕ → Bool} {it : Item}
     (h : ∀ f ∈ (CircuitType.itemForms it).toList, ∀ x ∈ f.ws.toList, v x = v' x) : itemVal v it = itemVal v' it := by
@@ -86,12 +86,12 @@ theorem itemVal_congr {v v' : ℕ → Bool} {it : Item}
 
 /-- A form's row entries, evaluated: its value on the columns' values, the constant at 1. -/
 theorem xorSum_formCols (G : Geo) (nIn : ℕ) (f : Form) (z : ℕ → Bool) (h1 : z G.const = true) :
-    xorSum (G.formCols nIn f) z = formVal (fun w => z (G.col nIn w)) f := by
+    Verity.Boolean.xorSum (G.formCols nIn f) z = formVal (fun w => z (G.col nIn w)) f := by
   unfold Geo.formCols formVal
   rw [xorSum_append, xorSum_map]
   by_cases hc : f.c = 1
-  · simp [hc, xorSum, h1]; rfl
-  · simp [hc, xorSum]; rfl
+  · simp [hc, Verity.Boolean.xorSum, h1]; rfl
+  · simp [hc, Verity.Boolean.xorSum]; rfl
 
 theorem run_lt : ∀ (items : List Item) (v : ℕ → Bool) (w j : ℕ), j < w → run v w items j = v j
   | [], _, _, _, _ => rfl
@@ -281,7 +281,7 @@ theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Deriv
   generalize hG : geo t inSplit outSplit = G at *
   obtain ⟨x, hx⟩ : ∃ x : ℕ → Bool, x = fun i => z ((colOf G.ins i).getD 0) := ⟨_, rfl⟩
   obtain ⟨V, hV⟩ : ∃ V, V = run x t.inBits t.items.toList := ⟨_, rfl⟩
-  have hsat : ∀ r, r ≤ G.const → z r = (xorSum (G.rowAt t r).1 z && xorSum (G.rowAt t r).2 z) :=
+  have hsat : ∀ r, r ≤ G.const → z r = (Verity.Boolean.xorSum (G.rowAt t r).1 z && Verity.Boolean.xorSum (G.rowAt t r).2 z) :=
     fun r hr => hz r _ (rows_get hr)
   -- every wire's column holds its value
   have hw : ∀ w, w < t.inBits + t.items.size → z (G.col t.inBits w) = V w := by
@@ -311,7 +311,7 @@ theorem compose_sound {t : CircuitType} {inSplit outSplit : List ℕ} {d : Deriv
   have hrow := hsat c (by omega)
   rw [rowAt_out_some hc1 hc2 hbc] at hrow
   rw [hcO, Option.getD_some, hrow, xorSum_formCols _ _ _ _ h1, Array.getElem?_eq_getElem ho, Option.getD_some]
-  simp only [xorSum, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, h1, Bool.xor_false, Bool.and_true]
+  simp only [Verity.Boolean.xorSum, List.map_cons, List.map_nil, List.foldr_cons, List.foldr_nil, h1, Bool.xor_false, Bool.and_true]
   rw [formVal_congr (v' := V) (fun y hy => hw y (hof o ho y hy)), eval_getD t _ ho, hV, hx]
 
 /-! ## Completeness -/
@@ -349,7 +349,7 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
       rw [ite_eq_right (show ¬ G.andBase + k = G.const by omega), ite_eq_right (show ¬ G.andBase + k < G.andBase by omega),
         ite_eq_left (show G.andBase + k < G.andBase + G.nAnd by omega), Nat.add_sub_cancel_left, hV]
   have hform : ∀ f : Form, (∀ y ∈ f.ws.toList, y < t.inBits + t.items.size) →
-      xorSum (G.formCols t.inBits f) (honest t G x) = formVal V f := fun f hf => by
+      Verity.Boolean.xorSum (G.formCols t.inBits f) (honest t G x) = formVal V f := fun f hf => by
     rw [xorSum_formCols _ _ _ _ hconst]
     exact formVal_congr fun y hy => hw y (hf y hy)
   refine ⟨fun r p hp => ?_, hconst, fun i hi => ?_, fun o ho => ?_⟩
@@ -363,15 +363,15 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
     simp only [Option.map_some, Option.some.injEq] at hp
     subst hp
     by_cases h0 : r = G.const
-    · subst h0; rw [rowAt_const]; simp [xorSum, hconst]
+    · subst h0; rw [rowAt_const]; simp [Verity.Boolean.xorSum, hconst]
     by_cases h2 : r < G.andBase
     · cases hb : bitAt G.ins r with
       | none =>
         rw [rowAt_in_none h2 hc hb]
-        unfold honest; rw [ite_eq_right h0, ite_eq_left h2, hb]; simp [xorSum]
+        unfold honest; rw [ite_eq_right h0, ite_eq_left h2, hb]; simp [Verity.Boolean.xorSum]
       | some i =>
         rw [rowAt_in_some h2 hc hb]
-        simp [xorSum]
+        simp [Verity.Boolean.xorSum]
     by_cases h3 : r < G.andBase + G.nAnd
     · obtain ⟨k, rfl⟩ : ∃ k, r = G.andBase + k := ⟨r - G.andBase, by omega⟩
       have hk : k < t.items.size := by omega
@@ -389,7 +389,7 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
       cases hb : bitAt G.outs r with
       | none =>
         rw [rowAt_out_none hr1 hr2 hb]
-        unfold honest; rw [ite_eq_right h0, ite_eq_right h2, ite_eq_right h3, hb]; simp [xorSum]
+        unfold honest; rw [ite_eq_right h0, ite_eq_right h2, ite_eq_right h3, hb]; simp [Verity.Boolean.xorSum]
       | some o =>
         have ho := (hout' r hr1 hr2 o hb).1
         obtain ⟨hosz, hof⟩ := flatOk_outputs hflat
@@ -400,7 +400,7 @@ theorem compose_complete {t : CircuitType} {inSplit outSplit : List ℕ} {d : De
         unfold honest
         rw [ite_eq_right h0, ite_eq_right h2, ite_eq_right h3, hb]
         simp only [Array.getElem?_eq_getElem ho', Option.getD_some, ← hV]
-        simp [xorSum]
+        simp [Verity.Boolean.xorSum]
   · obtain ⟨c, hcol, hclt, hbc⟩ := hin i hi
     rw [hcol, Option.getD_some, hinput i hi c hcol hclt hbc]
   · obtain ⟨hosz, hof⟩ := flatOk_outputs hflat

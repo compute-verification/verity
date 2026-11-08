@@ -51,6 +51,7 @@ public import Flock.RecSparseCmd
 public import Flock.RecAlgebra
 public import Flock.RecResiduals
 public import Flock.RecOpening
+public import Flock.HmOutCols
 public import Flock.HmRow
 public import Flock.ReadNet.Sha
 public import Flock.ReadNet.RowSeg
