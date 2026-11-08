@@ -286,6 +286,10 @@
    "digest": "e79ecdc887349564c389cf682a4b8a6e7a7467e8f9de6e664ee9c4853fc07516",
    "why": "A scope: the registration accepted the device's figures, the code's own check (met by `Properties.Site.accepted_iff`)."
   },
+  "Verity.MemCheck.Checked": {
+   "owner": "@proofs",
+   "why": "The memory check's acceptance: what the guarantee says is what a log the check accepts read."
+  },
   "Verity.Partition.Fits": {
    "owner": "@proofs",
    "digest": "456fe0bfb32a76c54987890b6b913fb75e37419dd3cbaf4607c4903ee32ef8c9",
@@ -4323,6 +4327,10 @@
   "Verity.SecurityProofs.PrintCollision": {
    "honest": ["Verity.SecurityProofs.PrintCollision_honest"],
    "nontrivial": "Verity.SecurityProofs.PrintCollision_nontrivial"
+  },
+  "Verity.SecurityProofs.MemoryChecked": {
+   "honest": ["Verity.SecurityProofs.MemoryChecked_honest"],
+   "nontrivial": "Verity.SecurityProofs.MemoryChecked_nontrivial"
   }
  },
  "unwitnessed": {
@@ -23923,6 +23931,15 @@
    "type_hash": "4712837458217893fee3236ecf7855de0efd4d66a8b99532fddbcfb670bdb42b",
    "unfolded_hash": "f562a21be2ba94c1d9e6d3380ba1b7539da29a708ff975ce67d3506ac1ebc0e6"
   },
+  "Verity.SecurityProofs.MemoryChecked": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.MemoryChecked_honest": {
+   "owner": "@proofs"
+  },
+  "Verity.SecurityProofs.MemoryChecked_nontrivial": {
+   "owner": "@proofs"
+  },
   "Verity.SecurityProofs.NaiveBeatsStrassenServed": {
    "owner": "@compute-research",
    "signature": ["Verity.SecurityProofs.NaiveBeatsStrassenServed : Verity.Guarantees.NaiveBeatsStrassenServed"],
@@ -25704,7 +25721,8 @@
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": "frozen (no-function,world-unlisted): CircuitWorkMonitoringPeriod's credit in live words (RT4-INT-8): under its premises at a, b > 0, an accepted period has at least (1 - eps(j))+ of its accepted prefix's live words fixed right (Accounting.Compose.creditPrefix), eps(j) = r(j) N_w/(min(a, b) N_live) at the realized prefix j = PeriodRun.prefixLen (Accounting.Compose.epsPrefix), never at the cap n, except with probability delta_s + n (delta_bind + delta_ks), so a prefix whose eps is at least 1 earns nothing; not a Lean function, an Accounting.TS.prob event that shape.events does not list, with CircuitWorkMonitoringPeriod's claims off the premises list. Proved from CircuitWorkMonitoringPeriod's assembly (creditPrefix_le, with UnitFixed keeping an accepted run's fixed words nonnegative). A credit of words, not of time: the headline's time credit needs CreditOfWork on each credited window's run and is not stated.",
    "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": "frozen (no-function,world-unlisted): INT-PERIOD's restatement of CircuitWork over an accounting period of at most n windows of one declared circuit (Accounting.Compose.WindowPlay, each window with its own live coins and draw), credited up to its first window with a refused proof (Accounting.Compose.Outcomes.Credited, RT3-INT-7) and its words counted on each credited window's live tiles only (RT-INT's fix (c) with RT2-INT-1's), which Daniel took (ASK-64 = A, 19 Oct): an accepted period has its accepted prefix's live words fixed right but for a share at cost Lambda ln(1/delta_s) + j min(a, b) D0 at the realized prefix j (LiveWorkAt at rOfPrefix), except with probability delta_s + n (delta_bind + delta_ks); not a Lean function, an Accounting.TS.prob event that shape.events does not list, and its claims (OperandHMu, ReceiptLuckAt and GuessLuckAt per live tile under PerLiveTile, UnitFixed at the period's modes) are not on the premises list. Proved from CircuitWork's lemmas at n rounds: ServiceBudget per window at the live weights, PeriodBudget, PeriodTailMax once at the accepted prefix, DrawnRightOff at n rounds with PrefixOf, the period layer's covers (Accounting.SecurityProofs.ComposeMonitoringPeriod.periodCovers: Declared.periodLayer's writers are in their own window by its definition) and UnitFixed's sums. Its Scope holds LayerCommitted (each value the prover writes committed by its IR cut, or a computed value only its own unit reads by the draw, on which a late edge's cone lying in the IR's rests), which today's code doesn't meet, so a live window it serves is out of scope; and the period's record (cap and circuit committed before window 0's first coin, each window's first coin after the previous window's draw, closed at the first refused window) is protocol structure today's code doesn't meet either: the served Credits registers a window when it is received. Its live tiles are the ones live in-circuit: under #2731's tile (#2639's PouwH1Tile_v2) the served gate's admit bits admit a scale_only row block whose tile is dead (RT4-LOGIC-4), and under #2902's PouwH1Tile_v4 a tile's live bit is its admit bits' OR (RT4-LOGIC-20). Its quoted numbers take D0 = 0, which nothing computes for the served circuit, and at D0 > 0 DeadConeDead can fail, so that the statement says nothing (RT4-LOGIC-18). Its numbers are for live windows, which no served path runs yet, and the declared circuit is the served Program's only through Properties.Compose.UnitsOfLayout and an extractor that doesn't exist yet.",
    "Verity.SecurityProofs.FingerprintCollision": "lemma: the collision bound behind a memory check's multiset equality test (Verity.MemCheck.fingerprint, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and multisets of packed records, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
-   "Verity.SecurityProofs.PrintCollision": "lemma: the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of."
+   "Verity.SecurityProofs.PrintCollision": "lemma: the collision bound behind a memory check's key prints (Verity.MemCheck.element, Security/Definitions/Core/MemCheck.lean), over an arbitrary finite field and set of packed keys, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of.",
+   "Verity.SecurityProofs.MemoryChecked": "lemma: offline memory checking over an abstract access log (Verity.MemCheck.Checked, Security/Definitions/Core/MemCheck.lean), the reference semantics a memory-checked circuit's log is held to, not a Lean function's acceptance: the memory check's verifier, once in Lean, is what a guarantee states it of."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
