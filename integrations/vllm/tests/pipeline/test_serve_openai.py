@@ -3,6 +3,7 @@ engine and committer, the HTTP stream, the HTTP id -> engine id -> runner id map
 streamed ones."""
 from __future__ import annotations
 
+import asyncio
 import collections
 import json
 import socket
@@ -25,7 +26,7 @@ from verity_vllm.pipeline import serve_commit as sc
 from verity_vllm.pipeline import serve_openai as so
 from verity_vllm.pipeline import serve_protocol as proto
 from verity_vllm.pipeline import serve_seal as ss
-from verity_vllm.pipeline.serve_admit import Admission
+from verity_vllm.pipeline.serve_admit import Admission, Delta
 from verity_vllm.records.predicted_row import FILE
 
 from tests.pipeline import predicted
@@ -547,6 +548,53 @@ def test_under_ids_the_wardens_id_request_streams_raw_id_events_then_done(tmp_pa
             assert [len(c) for c in cells] == [payload, payload, len(IT.TRAILER)]
             assert [int(c[len(IT.ID_EVENT_HEAD):len(IT.ID_EVENT_HEAD) + IT.ID_DIGITS]) for c in cells[:2]] == [4853, 4884]
         assert status == 200 and json.loads(whole)["usage"]["completion_tokens"] == 2
+
+
+class Written:
+    """A stream writer that keeps what the server writes."""
+
+    def __init__(self) -> None:
+        self.raw = b""
+
+    def write(self, data: bytes) -> None:
+        self.raw += data
+
+    async def drain(self) -> None:
+        pass
+
+
+def failed_stream(protocol: Any, error: str) -> tuple[bytes, so.Server]:
+    """The bytes `Server.completions` writes for a streamed request whose engine sends one token, then fails with ``error``."""
+    def submit(adm: Admission) -> None:
+        adm.deliver(Delta([4853], " w"))
+        adm.deliver(Delta([], "", error=error))
+    server = so.Server(proto=protocol, served_name="m", max_model_len=512, tokenizer=Tokenizer(), defaults={"temperature": 1.0},
+                       submit=submit, abort=lambda _: None, clock=lambda: 7)
+    w = Written()
+    asyncio.run(server.completions(dict(CERTIFIER_BODY), w))
+    return w.raw, server
+
+
+def test_under_ids_a_failed_stream_ends_with_the_trailer_alone():
+    """``--protocol ids``: a stream the engine fails mid-way sends its ids so far, then exactly `io_tie.TRAILER`, the same
+    bytes whatever the error says, so no server-chosen text leaves; the reason is in the server's record. Under vLLM's
+    framing (``--protocol vllm``, here its twin `PlainProtocol`) the error event is still sent before ``data: [DONE]``."""
+    ids = proto.IdsProtocol(True, payload=140, base=proto.PlainProtocol(True))
+    raw, server = failed_stream(ids, "RuntimeError: the engine broke")
+    assert raw == IT.id_event(4853, 140) + IT.TRAILER == failed_stream(ids, "the endpoint is stopping: SIGTERM")[0]
+    assert server.stream_errors["n"] == 1
+    assert server.stream_errors["first"][0] | {"http_id": None, "engine_id": None} == {
+        "http_id": None, "engine_id": None, "protocol": "ids", "error": "RuntimeError: the engine broke"}
+
+    raw, server = failed_stream(proto.PlainProtocol(True), "RuntimeError: the engine broke")
+    head, body = dechunked(raw)
+    assert head.startswith(b"HTTP/1.1 200 OK\r\n")
+    ev = events(body)
+    assert json.loads(ev[0])["choices"][0]["text"] == " w"
+    assert json.loads(ev[1]) == {"error": {"message": "RuntimeError: the engine broke", "type": "InternalServerError", "param": None,
+                                           "code": 500}}
+    assert json.loads(ev[2])["usage"]["completion_tokens"] == 1 and ev[3] == "[DONE]" and len(ev) == 4
+    assert server.stream_errors["n"] == 1 and server.stream_errors["first"][0]["protocol"] == "plain"
 
 
 def test_under_ids_the_network_certifiers_clients_get_vllms_http_and_json(tmp_path):

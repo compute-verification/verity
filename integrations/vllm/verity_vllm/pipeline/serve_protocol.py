@@ -144,6 +144,10 @@ class PlainProtocol:
         """One engine delta's bytes in the stream: its `chunk` as one SSE event."""
         return sse(self.chunk(**chunk))
 
+    def error_end(self, error: str) -> bytes:
+        """What a stream the engine fails sends before its end: vLLM's error event, ``error`` its message."""
+        return sse(error_body(error, 500, "InternalServerError").decode())
+
     def usage_chunk(self, *, request_id: str, created: int, model: str, usage: dict[str, int]) -> str:
         return _compact({"id": request_id, "object": "text_completion", "created": created, "model": model, "choices": [], "usage": usage})
 
@@ -234,7 +238,8 @@ class IdsProtocol:
     - each token id its own `io_tie.id_event` of P = ``payload`` bytes (``created`` 0, ``model`` "verity", the id right-
       aligned in 10 characters, spaces before the blank line), whatever the delta carries;
     - no usage chunk, whatever ``force_include_usage``;
-    - then exactly `io_tie.TRAILER`, ``data: [DONE]`` and the blank line.
+    - then exactly `io_tie.TRAILER`, ``data: [DONE]`` and the blank line, the same bytes when the engine fails the stream
+      (`error_end`).
 
     Requests are parsed and sampled as ``base`` does (`VllmProtocol` by default, `PlainProtocol` on CPU), and a whole
     response (``stream`` false) is its."""
@@ -286,6 +291,11 @@ class IdsProtocol:
 
     def events(self, *, token_ids: list[int] | None, **_: Any) -> bytes:
         return b"".join(IT.id_event(int(t), self.payload) for t in token_ids or ())
+
+    def error_end(self, error: str) -> bytes:
+        """Nothing, whatever ``error`` says: a failed stream ends as every stream does, with `io_tie.TRAILER` alone, so no
+        server-chosen text leaves; the reason stays in the server's record."""
+        return b""
 
     def response(self, **kw: Any) -> str:
         return self.base.response(**kw)
