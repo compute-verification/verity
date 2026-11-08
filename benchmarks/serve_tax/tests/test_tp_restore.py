@@ -1,6 +1,7 @@
 """`tp_restore`'s reading of a served run and its comparison with a replay, on synthetic records (stdlib only)."""
 from __future__ import annotations
 
+import gzip
 import json
 from types import SimpleNamespace
 
@@ -206,6 +207,9 @@ def test_step_outputs_are_read_between_two_edges_and_compared_per_sampling_class
     p.write_text("".join(json.dumps({"step": s, "out": {a: [[s], None]}}) + "\n" for s in range(2, 7)))
     assert T.read_outputs(p, 3, 5) == {3: {a: [[3], None]}, 4: {a: [[4], None]}}
     assert T.read_outputs(tmp_path / "none.jsonl", 0, 9) == {}
+    (tmp_path / "outputs.jsonl.gz").write_bytes(gzip.compress(p.read_bytes()))
+    p.unlink()
+    assert T.read_outputs(p, 3, 5) == {3: {a: [[3], None]}, 4: {a: [[4], None]}}
 
 
 def test_requests_fall_at_most_or_past_the_indexers_top_k_by_the_most_keys_they_attend_over():

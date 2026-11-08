@@ -44,6 +44,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import gzip
 import hashlib
 import json
 import os
@@ -431,10 +432,15 @@ def edge_difference(served: Mapping[str, Any], replayed: Mapping[str, Any], serv
 
 
 def read_outputs(path: Path, lo: int, hi: int) -> dict[int, dict]:
-    """`tp_edge.record_outputs`'s steps ``lo`` … ``hi`` - 1: step -> request -> [tokens, logprob bits]."""
+    """`tp_edge.record_outputs`'s steps ``lo`` … ``hi`` - 1: step -> request -> [tokens, logprob bits], from ``path`` or
+    the runner's gzipped copy of it."""
+    gz = path.with_name(path.name + ".gz")
+    if not path.exists() and gz.exists():
+        path = gz
     if not path.exists():
         return {}
-    recs = (json.loads(x) for x in path.read_text().splitlines() if x)
+    text = gzip.decompress(path.read_bytes()).decode() if path.suffix == ".gz" else path.read_text()
+    recs = (json.loads(x) for x in text.splitlines() if x)
     return {r["step"]: r["out"] for r in recs if lo <= r["step"] < hi}
 
 

@@ -1269,6 +1269,9 @@ def served_tp(served: Path, a: int, b: int) -> dict[str, Any]:
             raise SystemExit(f"{d}: no state.pkl: serve with SAVER=boundary:save_edge")
     if not recs[a]["dump"]:
         raise SystemExit(f"edge {a} kept no blocks: serve with --dump {b}")
+    outputs = TR.read_outputs(served / "edges" / "outputs.jsonl", 0, recs[b]["trace_step"])
+    if not outputs:
+        raise SystemExit(f"{served}: no step outputs recorded under edges/: nothing to compare the replay to")
     st = {k: pickle.loads((d / "state.pkl").read_bytes()) for k, d in dirs.items()}
     lo, hi = recs[a]["trace_step"], recs[b]["trace_step"]
     tr = TR.served_trace(served)
@@ -1279,7 +1282,7 @@ def served_tp(served: Path, a: int, b: int) -> dict[str, Any]:
             "arrive": [r for r in TR.arrivals(tr, plan, client, lo, hi) if r["engine_id"] not in held],
             "arrived": {r["request"]: r for r in tr if r["kind"] == "arrive"},
             "steps": {r["step"]: r for r in tr if r["kind"] == "step" and lo <= r["step"] < hi},
-            "outputs": TR.read_outputs(served / "edges" / "outputs.jsonl", lo, hi),
+            "outputs": {s: o for s, o in outputs.items() if lo <= s < hi},
             "rngs": {k: {r["rank"]: r["rng"] for r in recs[k]["ranks"]} for k in (a, b)}}
 
 
