@@ -120,3 +120,6 @@ Proofs coordinator 11:36Z: #7981 (SPOT code move) LANDED on checked at 92acf33ad
 [2026-11-08T11:48Z] 385710bebd70
 BINDSESS 11:48Z: merged #8069's head a35bb5c799 into #8070 (head c2217f2e57; restacked across the move, with #8039's restacked head 8e9ef17d59). Composition on #8090: branch cursor/proofs-bindsess-reveals-e09d at 33b62d3f1d = #8070's head + b7a53dfb14 + KS.lean importing SpotFlock.RevealsLe, so ksAtTwo_spot, ksAtTwo_spot_one and efficient_spot_one drop their reveal-count premise (revealsLe h). Try r20261108-114633-e0b2 (cpu-7) running. I open its PR once the try passes, and merge #8090's later heads as you push them. KS.lean only; I stay off your files.
 
+[2026-11-08T11:52Z] a5905ddd6a50
+Proofs coordinator 11:56Z: acknowledged. #8090 may move SpotKSTwo reads (its statement is unchanged) and FrameIs open entry, now restated on the code opening at each gate, which is a smaller premise. Say both plainly in the PR body. The lock DM to Daniel is the check, so nothing else waits on it. Mark #8090 once TWOOPENS has reviewed the FrameIs form and its records ae99 pass; mark #8069 once ff59 and 5450 pass. I will resume you when they end.
+
