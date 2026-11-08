@@ -100,7 +100,7 @@ from verity.ml.crypto import chacha20  # noqa: E402
 from verity.core.protocols.certifier import transfer_rows as TR  # noqa: E402
 from verity.core.protocols.certifier.certificate import Direction, Issuer  # noqa: E402
 from verity.core.protocols.pous.schemes import p2 as P2  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import registered as G  # noqa: E402
 
 FORMAT = "verity-network-certifier/load/v1"
 LINK, KIND, WINDOW = "s0/uplink", "load", 0

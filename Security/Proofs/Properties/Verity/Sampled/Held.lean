@@ -9,7 +9,7 @@ public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 public import Proofs.Flock.Bridge.V5.Accepted
 public import Proofs.Flock.Claims.Complete.Json.Parse
-public import Proofs.Properties.SampledProofs
+public import Proofs.Properties.Spot
 public import Proofs.Core.QSort
 public import Std.Data.String.ToInt
 public import Mathlib.Data.List.Find
@@ -30,7 +30,7 @@ v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's 
   `--zk` (`ProvedScope.drawLaw`, `lawWhy_zk`), the subset or the stratified sampling design; and the session v2 sets up has no
   `--stratified` input, so `Stmt.setupTables` refuses a stratified sample (`setupTables_stratified`). So the record's sample
   is the `.subset` print of the member's share of the window's sample under the verifier's law, which `DrawHeld` reads at
-  the units v2 drew; the bound is that sampling design's, from v1's window check (`SampledProofs.OneStage.checkAt`), not the
+  the units v2 drew; the bound is that sampling design's, from v1's window check (`Spot.OneStage.checkAt`), not the
   print's.
 * **A subset sample that decodes is its own print** (`ofJson_subset_eq`): a value `norm` fixes that `UnitDraw.ofJson`
   decodes to a subset sample is an object of exactly `law`, `population`, `k` and `units` (`obj_eq_mkObj4`), so it is the
@@ -42,7 +42,7 @@ v2's hold on the record's `unit_draw` (`DrawHeld`). This module gives what v2's 
   (`publicHeld_population`).
 * **The record sample's units** (`provedUnits_eq`, `checkAt_proved`): where v2's run accepts, the session passed the
   population check, so the public file's unit indices are `0, …, N − 1`
-  (`Properties.SampledProofs.FilePart.check_indices`), and proved the units the record's sample names (`step_proved`),
+  (`Properties.Spot.FilePart.check_indices`), and proved the units the record's sample names (`step_proved`),
   which v2 holds to the units v1 proved (`provedHeld_ok`); v1's window check proves the units it drew, a sample v2's
   evidence gives without a closure (`evidenceOf_closure`).
 * **`DrawHeld`** (`drawHeld_of`, `drawHeld`): wherever the subset sample the record's decodes to is over v2's `n` units at
@@ -68,11 +68,11 @@ theorem drawReadAll_coinsRead (k : Verity.Registration.Composite) : DrawReadAll 
 
 /-- **`verify --zk` refuses a session without a sample**: where a session's verdict passes, its record's sample is some. -/
 theorem verdictOf_drawn {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
-    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
+    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+    (h : _root_.Spot.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
       = .ok ()) : draw.isSome = true := by
-  unfold _root_.SampledProofs.OneStageZk.verdictOf at h
+  unfold _root_.Spot.OneStageZk.verdictOf at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨⟨_, _, _⟩, -, h⟩ := ebind_ok h
@@ -86,15 +86,15 @@ theorem verdictOf_drawn {I : Flock.Witness.Inputs} {scope ksFiles population : F
   | some _ => rfl
 
 /-- **One session's `step` from the empty run, where every session accepted, reads a record that holds a sample.** -/
-theorem step_drawn {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
+theorem step_drawn {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
-    {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+    {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
       = .ok r)
     (hall : r.all = true) :
     ∃ recB record, bs.get s.record s!"session {s.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record ∧ (Flock.Witness.recordDraw record).isSome = true := by
-  unfold _root_.SampledProofs.OneStageZk.step at h
+  unfold _root_.Spot.OneStageZk.step at h
   obtain ⟨recB, hb, h⟩ := ebind_ok h
   dsimp only at h
   split at h
@@ -103,10 +103,10 @@ theorem step_drawn {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStag
   · cases h
 
 /-- **Where v2's check accepts, the session's record holds a sample.** -/
-theorem checkBlobsAt_drawn {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {bs : _root_.Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+theorem checkBlobsAt_drawn {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record, sessionRecord e bs = some record ∧ (Flock.Witness.recordDraw record).isSome = true := by
   obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
   have hs := eq_single hsz
@@ -116,11 +116,11 @@ theorem checkBlobsAt_drawn {p : _root_.SampledProofs.OneStageZk.Params}
   exact ⟨record, sessionRecord_eq hs hb hrec, hd⟩
 
 /-- **`setupAt` at a sample holds the sample's law** (`ProvedScope.drawLaw` at `--zk`). -/
-theorem setupAt_drawLaw {W : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {dj : Json}
+theorem setupAt_drawLaw {W : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {dj : Json}
     {x : Flock.SessionSpec × Array Flock.Setup × Json × Json}
-    (h : _root_.SampledProofs.OneStageZk.setupAt W rd (some dj) = .ok x) :
+    (h : _root_.Spot.OneStageZk.setupAt W rd (some dj) = .ok x) :
     Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags W) false (some dj) = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.setupAt at h
+  unfold _root_.Spot.OneStageZk.setupAt at h
   obtain ⟨⟨_, _⟩, -, h⟩ := ebind_ok h
   try dsimp only at h
   obtain ⟨⟨⟩, hu, -⟩ := ebind_ok h
@@ -164,8 +164,8 @@ theorem setupTables_stratified {tags : Flock.Tags} {cf pf : ByteArray} {coins : 
 /-- **v2 accepts only a subset sample**: where composite `k` accepted what the prover sent and v2's case in it accepts,
 the record v2 reads holds a sample (`unit_draw`), which decodes to a sample by the subset sampling design. -/
 theorem recordDraw_subset {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
     (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) {record : String}
     (hr : sentRecord s = some record) :
@@ -333,9 +333,9 @@ theorem forIn_first {β : Type} (p : ℕ → Bool) (f : ℕ → β) : ∀ l : Li
 
 /-- **The header line ends at the first newline**, as `Flock.findByte` finds it. -/
 theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 10 = some nl) :
-    _root_.SampledProofs.FilePart.headerLine b = b.extract 0 nl := by
+    _root_.Spot.FilePart.headerLine b = b.extract 0 nl := by
   unfold Flock.findByte at h
-  unfold _root_.SampledProofs.FilePart.headerLine
+  unfold _root_.Spot.FilePart.headerLine
   simp only [Id.run, Std.Legacy.Range.forIn_eq_forIn_range'] at h ⊢
   rw [forIn_first] at h
   rw [forIn_first]
@@ -357,13 +357,13 @@ theorem headerLine_of_findByte {b : ByteArray} {nl : ℕ} (h : Flock.findByte b 
 
 /-- **The public file's header as the population's load reads it is v2's** (`FilePart.header`). -/
 theorem header_of_headerOf {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValues.headerOf f = some hd) :
-    _root_.SampledProofs.FilePart.header f = .ok hd := by
+    _root_.Spot.FilePart.header f = .ok hd := by
   unfold RecDeploy.SetupValues.headerOf at h
   cases hnl : Flock.findByte f 10 with
   | none => simp only [hnl] at h; cases h
   | some nl =>
     simp only [hnl] at h
-    unfold _root_.SampledProofs.FilePart.header
+    unfold _root_.Spot.FilePart.header
     rw [headerLine_of_findByte hnl]
     cases ht : String.fromUTF8? (f.extract 0 nl) with
     | none => simp only [ht] at h; cases h
@@ -377,9 +377,9 @@ theorem header_of_headerOf {f : ByteArray} {hd : Json} (h : RecDeploy.SetupValue
         simp only [hj, Except.mapError]
         rfl
 
-theorem fail_codes (c : _root_.SampledProofs.Check) (code : String) (w : Json) :
+theorem fail_codes (c : _root_.Spot.Check) (code : String) (w : Json) :
     (c.fail code w).codes.isEmpty = false := by
-  unfold _root_.SampledProofs.Check.fail
+  unfold _root_.Spot.Check.fail
   split
   · rename_i hc
     rw [Bool.eq_false_iff]
@@ -391,11 +391,11 @@ theorem fail_codes (c : _root_.SampledProofs.Check) (code : String) (w : Json) :
 
 /-- **`matches_public` holds the instances to the record's population.** -/
 theorem matchesPublic_population {rec s r d pop : Json}
-    (h : (_root_.SampledProofs.Record.matchesPublic rec s r d pop).codes.isEmpty = true) :
-    _root_.SampledProofs.jeq pop (_root_.SampledProofs.getD rec "population") = true := by
-  unfold _root_.SampledProofs.Record.matchesPublic at h
+    (h : (_root_.Spot.Record.matchesPublic rec s r d pop).codes.isEmpty = true) :
+    _root_.Spot.jeq pop (_root_.Spot.getD rec "population") = true := by
+  unfold _root_.Spot.Record.matchesPublic at h
   simp only [Id.run] at h
-  cases hp : _root_.SampledProofs.jeq pop (_root_.SampledProofs.getD rec "population")
+  cases hp : _root_.Spot.jeq pop (_root_.Spot.getD rec "population")
   · simp only [hp, Bool.not_false, ↓reduceIte] at h
     repeat' split at h
     all_goals
@@ -405,11 +405,11 @@ theorem matchesPublic_population {rec s r d pop : Json}
 
 /-- **v2 holds the public file's instances to the record's population** (`publicHeld`). -/
 theorem publicHeld_population {rec : Json} {pubB : ByteArray} {hd : Json}
-    (h : _root_.SampledProofs.OneStageZk.publicHeld rec pubB = .ok ())
-    (hh : _root_.SampledProofs.FilePart.header pubB = .ok hd) :
-    _root_.SampledProofs.jeq (_root_.SampledProofs.getD hd "instances")
-      (_root_.SampledProofs.getD rec "population") = true := by
-  unfold _root_.SampledProofs.OneStageZk.publicHeld at h
+    (h : _root_.Spot.OneStageZk.publicHeld rec pubB = .ok ())
+    (hh : _root_.Spot.FilePart.header pubB = .ok hd) :
+    _root_.Spot.jeq (_root_.Spot.getD hd "instances")
+      (_root_.Spot.getD rec "population") = true := by
+  unfold _root_.Spot.OneStageZk.publicHeld at h
   obtain ⟨_, he, h⟩ := ebind_ok h
   rw [hh] at he
   cases he
@@ -421,12 +421,12 @@ theorem publicHeld_population {rec : Json} {pubB : ByteArray} {hd : Json}
 
 /-- **A natural number `jeq` holds to a value is the value's natural number.** -/
 theorem nat_of_jeq {m n : ℕ} {j : Json}
-    (hj : _root_.SampledProofs.jeq (.num ⟨Int.ofNat m, 0⟩) j = true) (hn : _root_.SampledProofs.nat? j = some n) :
+    (hj : _root_.Spot.jeq (.num ⟨Int.ofNat m, 0⟩) j = true) (hn : _root_.Spot.nat? j = some n) :
     m = n := by
   cases j with
   | num x =>
     obtain ⟨mx, ex⟩ := x
-    unfold _root_.SampledProofs.nat? _root_.SampledProofs.int? at hn
+    unfold _root_.Spot.nat? _root_.Spot.int? at hn
     by_cases he : ex = 0
     · subst he
       simp only [beq_self_eq_true, ↓reduceIte] at hn
@@ -435,13 +435,13 @@ theorem nat_of_jeq {m n : ℕ} {j : Json}
         simp only [Option.some.injEq] at hn
         subst hn
         obtain ⟨k, rfl⟩ := Int.eq_ofNat_of_zero_le hle
-        simp only [_root_.SampledProofs.jeq, Flock.canon, beq_self_eq_true, ↓reduceIte, pure, Except.pure,
+        simp only [_root_.Spot.jeq, Flock.canon, beq_self_eq_true, ↓reduceIte, pure, Except.pure,
           beq_iff_eq] at hj
         rw [Int.toNat_natCast]
         exact Int.ofNat.inj (Int.repr_injective hj)
       · cases hn
     · simp [he] at hn
-  | _ => simp [_root_.SampledProofs.nat?, _root_.SampledProofs.int?] at hn
+  | _ => simp [_root_.Spot.nat?, _root_.Spot.int?] at hn
 
 /-- **v2's session at a sample loads the population the sample is over**: at one table, `Stmt.setupTables` at a sample `dj`
 that decodes to `D` loads the public file to a population of `D.population` instances (`HmRow.drawn`), on the
@@ -475,14 +475,14 @@ theorem setupTables_population {tags : Flock.Tags} {cf pf : ByteArray} {coins : 
 /-- **A population v2 loads from the public file it held to the record is the record's**: the load reads the header's
 `instances` (`Bridge.loadPublic_core`), which `publicHeld` holds to the record's population. -/
 theorem population_held {rec : Json} {pubB : ByteArray} {tags : Flock.Tags} {c : Flock.Circuit}
-    {pop : Flock.Public} {n : ℕ} (hph : _root_.SampledProofs.OneStageZk.publicHeld rec pubB = .ok ())
+    {pop : Flock.Public} {n : ℕ} (hph : _root_.Spot.OneStageZk.publicHeld rec pubB = .ok ())
     (hl : Flock.HmRow.loadPublic tags c pubB = .ok pop)
-    (hn : _root_.SampledProofs.nat? (_root_.SampledProofs.getD rec "population") = some n) : pop.n = n := by
+    (hn : _root_.Spot.nat? (_root_.Spot.getD rec "population") = some n) : pop.n = n := by
   rw [← Flock.With.loadPublicWith_std] at hl
   obtain ⟨nl, hd, counts, -, hhd, hi, -⟩ := Flock.Bridge.loadPublic_core _ _ _ _ _ hl
   have hj := publicHeld_population hph (header_of_headerOf hhd)
-  have hg : _root_.SampledProofs.getD hd "instances" = .num ⟨Int.ofNat pop.n, 0⟩ := by
-    simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, FlockComplete.JsonRT.nat_ok hi]
+  have hg : _root_.Spot.getD hd "instances" = .num ⟨Int.ofNat pop.n, 0⟩ := by
+    simp only [_root_.Spot.getD, _root_.Spot.field?, FlockComplete.JsonRT.nat_ok hi]
     rfl
   rw [hg] at hj
   exact nat_of_jeq hj hn
@@ -490,11 +490,11 @@ theorem population_held {rec : Json} {pubB : ByteArray} {tags : Flock.Tags} {c :
 /-! ## The record sample's units -/
 
 theorem verdictOf_population {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
-    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
+    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+    (h : _root_.Spot.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
       = .ok ()) : population = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.verdictOf at h
+  unfold _root_.Spot.OneStageZk.verdictOf at h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨⟨_, _, _⟩, -, h⟩ := ebind_ok h
@@ -511,14 +511,14 @@ theorem verdictOf_population {I : Flock.Witness.Inputs} {scope ksFiles populatio
   obtain ⟨_, -, h⟩ := ebind_ok h
   exact h
 
-theorem push_proved {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
-    {programSha : Option String} {want : Json} {r r' : _root_.SampledProofs.OneStageZk.Run}
-    {s : _root_.SampledProofs.OneStageZk.RunFiles} {record : String} {st : _root_.SampledProofs.OneStageZk.SetUp}
+theorem push_proved {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
+    {programSha : Option String} {want : Json} {r r' : _root_.Spot.OneStageZk.Run}
+    {s : _root_.Spot.OneStageZk.RunFiles} {record : String} {st : _root_.Spot.OneStageZk.SetUp}
     {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.push I rd programSha want r s record st coinKey (.ok ()) = .ok r') :
-    ∃ units, _root_.SampledProofs.OneStageZk.provedUnits I.publicFile record = .ok units ∧
+    (h : _root_.Spot.OneStageZk.push I rd programSha want r s record st coinKey (.ok ()) = .ok r') :
+    ∃ units, _root_.Spot.OneStageZk.provedUnits I.publicFile record = .ok units ∧
       r'.proved = r.proved ++ units := by
-  unfold _root_.SampledProofs.OneStageZk.push at h
+  unfold _root_.Spot.OneStageZk.push at h
   dsimp only at h
   split at h
   · cases h
@@ -529,16 +529,16 @@ theorem push_proved {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneSta
 
 /-- **One session's `step` from the empty run, where every session accepted, passed the population check and proved
 the public file's units its record samples** (`provedUnits`). -/
-theorem step_proved {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
+theorem step_proved {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
-    {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+    {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
       = .ok r)
     (hall : r.all = true) :
     ∃ recB record, bs.get s.record s!"session {s.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record ∧ population = .ok () ∧
-      _root_.SampledProofs.OneStageZk.provedUnits I.publicFile record = .ok r.proved := by
-  unfold _root_.SampledProofs.OneStageZk.step at h
+      _root_.Spot.OneStageZk.provedUnits I.publicFile record = .ok r.proved := by
+  unfold _root_.Spot.OneStageZk.step at h
   obtain ⟨recB, hb, h⟩ := ebind_ok h
   dsimp only at h
   split at h
@@ -552,17 +552,17 @@ theorem step_proved {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneSta
   · cases h
 
 theorem provedHeld_ok {proved want : Array ℕ}
-    (h : _root_.SampledProofs.OneStageZk.provedHeld proved want = .ok ()) : proved.qsort (· < ·) = want := by
-  unfold _root_.SampledProofs.OneStageZk.provedHeld at h
+    (h : _root_.Spot.OneStageZk.provedHeld proved want = .ok ()) : proved.qsort (· < ·) = want := by
+  unfold _root_.Spot.OneStageZk.provedHeld at h
   split at h
   · cases h
   · rename_i hne
     simpa using hne
 
-theorem oneStage_closure {b : ByteArray} {e : _root_.SampledProofs.OneStage.Evidence}
-    (h : _root_.SampledProofs.OneStage.evidenceOf b = .ok e) :
-    _root_.SampledProofs.field? e.draw "closure" = none := by
-  unfold _root_.SampledProofs.OneStage.evidenceOf at h
+theorem oneStage_closure {b : ByteArray} {e : _root_.Spot.OneStage.Evidence}
+    (h : _root_.Spot.OneStage.evidenceOf b = .ok e) :
+    _root_.Spot.field? e.draw "closure" = none := by
+  unfold _root_.Spot.OneStage.evidenceOf at h
   obtain ⟨e', -, h⟩ := ebind_ok h
   split at h
   · cases h
@@ -571,10 +571,10 @@ theorem oneStage_closure {b : ByteArray} {e : _root_.SampledProofs.OneStage.Evid
     subst h
     simpa using hc
 
-theorem zk_closure {b : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    (h : _root_.SampledProofs.OneStageZk.evidenceOf b = .ok e) :
-    _root_.SampledProofs.field? e.base.draw "closure" = none := by
-  unfold _root_.SampledProofs.OneStageZk.evidenceOf at h
+theorem zk_closure {b : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    (h : _root_.Spot.OneStageZk.evidenceOf b = .ok e) :
+    _root_.Spot.field? e.base.draw "closure" = none := by
+  unfold _root_.Spot.OneStageZk.evidenceOf at h
   simp only [bind, Except.bind] at h
   repeat' split at h
   all_goals first
@@ -582,9 +582,9 @@ theorem zk_closure {b : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence
     | (cases h; exact oneStage_closure (by assumption))
 
 /-- **v2's evidence names no closure**: `OneStage.evidenceOf` refuses a sample with one. -/
-theorem evidenceOf_closure {b : ByteArray} {ev : _root_.SampledProofs.OneStageZk.Evidence}
+theorem evidenceOf_closure {b : ByteArray} {ev : _root_.Spot.OneStageZk.Evidence}
     (h : VStar.Recursive.Sampled.evidenceOf b = .ok (.inl ev)) :
-    _root_.SampledProofs.field? ev.base.draw "closure" = none := by
+    _root_.Spot.field? ev.base.draw "closure" = none := by
   unfold VStar.Recursive.Sampled.evidenceOf at h
   simp only [bind, Except.bind] at h
   repeat' split at h
@@ -595,13 +595,13 @@ theorem evidenceOf_closure {b : ByteArray} {ev : _root_.SampledProofs.OneStageZk
 /-- **The units v2 proves are the record sample's**: where the public file's unit indices are `0, …, N − 1`, the units
 `provedUnits` reads at the record's `unit_draw` are its units, sorted. -/
 theorem provedUnits_eq {pubB : ByteArray} {record : String} {hd j : Json} {N : ℕ} {us units : Array ℕ}
-    (hh : _root_.SampledProofs.FilePart.header pubB = .ok hd)
-    (hi : _root_.SampledProofs.FilePart.indicesOf hd = .ok (Array.range N))
+    (hh : _root_.Spot.FilePart.header pubB = .ok hd)
+    (hi : _root_.Spot.FilePart.indicesOf hd = .ok (Array.range N))
     (hj : Flock.JsonParse.parse record = .ok j)
-    (hu : _root_.SampledProofs.getD (_root_.SampledProofs.getD j "unit_draw") "units" =
+    (hu : _root_.Spot.getD (_root_.Spot.getD j "unit_draw") "units" =
       .arr (us.map fun x => Lean.toJson x))
-    (h : _root_.SampledProofs.OneStageZk.provedUnits pubB record = .ok units) : units = us.qsort (· < ·) := by
-  unfold _root_.SampledProofs.OneStageZk.provedUnits at h
+    (h : _root_.Spot.OneStageZk.provedUnits pubB record = .ok units) : units = us.qsort (· < ·) := by
+  unfold _root_.Spot.OneStageZk.provedUnits at h
   obtain ⟨_, e1, h⟩ := ebind_ok h
   rw [hh] at e1
   cases e1
@@ -620,7 +620,7 @@ theorem provedUnits_eq {pubB : ByteArray} {record : String} {hd j : Json} {N : �
     refine Array.ext (by simpa using hs) fun i h₁ h₂ => ?_
     have := hb i (by simpa using h₂) h₁
     simp only [Array.getElem_map] at this
-    have hn : _root_.SampledProofs.nat? (Lean.toJson us[i]) = some us[i] := rfl
+    have hn : _root_.Spot.nat? (Lean.toJson us[i]) = some us[i] := rfl
     simp only [hn, bind, Option.bind] at this
     cases hr : (Array.range N)[us[i]]? with
     | none => rw [hr] at this; cases this
@@ -657,7 +657,7 @@ theorem jsonForm_arr' (a : Array Json) : ∃ f, FlockDeploy.jsonForm (.arr a) = 
 /-- **A value whose `norm` is a subset sample's print holds the sample's units**, as numbers, under `units`. -/
 theorem units_of_norm {d : Json} (hw : Claims.Json.Wf d) {pop : ℕ} {us : Array ℕ}
     (hn : Flock.norm d = Flock.Draw.UnitDraw.toJson ⟨.subset us.size, pop, us, #[]⟩) :
-    _root_.SampledProofs.getD d "units" = .arr (us.map fun x => Lean.toJson x) := by
+    _root_.Spot.getD d "units" = .arr (us.map fun x => Lean.toJson x) := by
   have he := FlockDeploy.jsonEquiv_norm d hw
   rw [hn] at he
   have hL : Flock.Draw.UnitDraw.toJson ⟨.subset us.size, pop, us, #[]⟩ =
@@ -679,8 +679,8 @@ theorem units_of_norm {d : Json} (hw : Claims.Json.Wf d) {pop : ℕ} {us : Array
     have hs : (m.get? "units").isSome = true := by rw [← hk, hU]; rfl
     obtain ⟨b, hb⟩ := Option.isSome_iff_exists.1 hs
     have hE := hvals "units" _ b hU hb
-    have hg : _root_.SampledProofs.getD (.obj m) "units" = b := by
-      simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, Json.getObjVal?, hb]
+    have hg : _root_.Spot.getD (.obj m) "units" = b := by
+      simp only [_root_.Spot.getD, _root_.Spot.field?, Json.getObjVal?, hb]
       rfl
     rw [hg]
     obtain ⟨f, hf⟩ := jsonForm_arr' (us.map fun x => Lean.toJson x)
@@ -706,7 +706,7 @@ theorem units_of_norm {d : Json} (hw : Claims.Json.Wf d) {pop : ℕ} {us : Array
 /-- **The record's sample is its `unit_draw` rebuilt**: where the record holds a sample, the record parses, and the sample is
 `norm` of its `unit_draw`, a well-formed value. -/
 theorem recordDraw_raw {record : String} {dj : Json} (h : Flock.Witness.recordDraw record = some dj) :
-    ∃ j d, Flock.JsonParse.parse record = .ok j ∧ _root_.SampledProofs.getD j "unit_draw" = d ∧
+    ∃ j d, Flock.JsonParse.parse record = .ok j ∧ _root_.Spot.getD j "unit_draw" = d ∧
       Claims.Json.Wf d ∧ dj = Flock.norm d := by
   unfold Flock.Witness.recordDraw at h
   split at h
@@ -716,7 +716,7 @@ theorem recordDraw_raw {record : String} {dj : Json} (h : Flock.Witness.recordDr
     · cases h
     · rename_i d _ hd
       refine ⟨j, d, hj, ?_, ?_, (Option.some.inj h).symm⟩
-      · simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, hd]
+      · simp only [_root_.Spot.getD, _root_.Spot.field?, hd]
         rfl
       · cases hw with
         | obj hm hv => exact hv _ _ (FlockComplete.JsonRT.mem_of_getObjVal hm hd).2
@@ -735,7 +735,7 @@ theorem qsort_pairwise {xs : Array ℕ} (h : xs.toList.Pairwise (· < ·)) : xs.
   · have := hl j i hj hi hij
     simp only [show ¬ xs[i] < xs[j] by omega, show ¬ i < j by omega, decide_false]
 
-theorem ascending_lt {xs : Array Int} (h : _root_.Properties.SampledProofs.Ascending xs) :
+theorem ascending_lt {xs : Array Int} (h : _root_.Properties.Spot.Ascending xs) :
     ∀ i j (hi : i < xs.size) (hj : j < xs.size), i < j → xs[i] < xs[j] := by
   intro i j hi hj hij
   induction j with
@@ -745,7 +745,7 @@ theorem ascending_lt {xs : Array Int} (h : _root_.Properties.SampledProofs.Ascen
     · exact Int.lt_trans (ih (by omega) hlt) (h j hj)
     · exact h i hj
 
-theorem qsort_ascending {xs : Array Int} (h : _root_.Properties.SampledProofs.Ascending xs) :
+theorem qsort_ascending {xs : Array Int} (h : _root_.Properties.Spot.Ascending xs) :
     xs.qsort (· < ·) = xs := by
   refine Verity.QSort.qsort_sorted _ _ fun i hi j hj => ?_
   rcases Nat.lt_trichotomy i j with hij | rfl | hij
@@ -755,27 +755,27 @@ theorem qsort_ascending {xs : Array Int} (h : _root_.Properties.SampledProofs.As
     simp only [show ¬ xs[i] < xs[j] from Int.not_lt.2 (Int.le_of_lt this), show ¬ i < j by omega, decide_false]
 
 theorem list_filterMap_int : ∀ {us : List Json} {is : List Int},
-    us.mapM _root_.SampledProofs.int? = some is → us.filterMap _root_.SampledProofs.int? = is
+    us.mapM _root_.Spot.int? = some is → us.filterMap _root_.Spot.int? = is
   | [], is, h => by
     cases is with
     | nil => rfl
     | cons _ _ => simp at h
   | u :: us, is, h => by
     rw [List.mapM_cons] at h
-    cases hu : _root_.SampledProofs.int? u with
+    cases hu : _root_.Spot.int? u with
     | none => simp [hu] at h
     | some i =>
-      cases hr : us.mapM _root_.SampledProofs.int? with
+      cases hr : us.mapM _root_.Spot.int? with
       | none => simp [hu, hr] at h
       | some is' =>
         simp only [hu, hr, Option.bind_eq_bind, Option.bind_some, Option.pure_def, Option.some.injEq] at h
         subst h
         rw [List.filterMap_cons, hu, list_filterMap_int hr]
 
-theorem filterMap_int {us : Array Json} {is : Array Int} (h : us.mapM _root_.SampledProofs.int? = some is) :
-    us.filterMap _root_.SampledProofs.int? = is := by
+theorem filterMap_int {us : Array Json} {is : Array Int} (h : us.mapM _root_.Spot.int? = some is) :
+    us.filterMap _root_.Spot.int? = is := by
   rw [Array.mapM_eq_mapM_toList] at h
-  cases hl : us.toList.mapM _root_.SampledProofs.int? with
+  cases hl : us.toList.mapM _root_.Spot.int? with
   | none => simp [hl] at h
   | some l =>
     simp only [hl, Option.map_eq_map, Option.map_some, Option.some.injEq] at h
@@ -783,18 +783,18 @@ theorem filterMap_int {us : Array Json} {is : Array Int} (h : us.mapM _root_.Sam
     rw [Array.toList_filterMap, list_filterMap_int hl, ← h]
 
 theorem list_filterMap_nat : ∀ {us : List Json} {ps : List ℕ},
-    us.mapM _root_.SampledProofs.int? = some (ps.map fun n : ℕ => (n : Int)) →
-      us.filterMap _root_.SampledProofs.nat? = ps
+    us.mapM _root_.Spot.int? = some (ps.map fun n : ℕ => (n : Int)) →
+      us.filterMap _root_.Spot.nat? = ps
   | [], ps, h => by
     cases ps with
     | nil => rfl
     | cons _ _ => simp at h
   | u :: us, ps, h => by
     rw [List.mapM_cons] at h
-    cases hu : _root_.SampledProofs.int? u with
+    cases hu : _root_.Spot.int? u with
     | none => simp [hu] at h
     | some i =>
-      cases hr : us.mapM _root_.SampledProofs.int? with
+      cases hr : us.mapM _root_.Spot.int? with
       | none => simp [hu, hr] at h
       | some is =>
         simp only [hu, hr, Option.bind_eq_bind, Option.bind_some, Option.pure_def] at h
@@ -803,20 +803,20 @@ theorem list_filterMap_nat : ∀ {us : List Json} {ps : List ℕ},
         | cons p ps =>
           simp only [List.map_cons, Option.some.injEq, List.cons.injEq] at h
           obtain ⟨rfl, rfl⟩ := h
-          have hn : _root_.SampledProofs.nat? u = some p := by
-            simp only [_root_.SampledProofs.nat?, hu]
+          have hn : _root_.Spot.nat? u = some p := by
+            simp only [_root_.Spot.nat?, hu]
             simp
           rw [List.filterMap_cons, hn, list_filterMap_nat hr]
 
 theorem filterMap_nat {us : Array Json} {ps : Array ℕ}
-    (h : us.mapM _root_.SampledProofs.int? = some (ps.map fun n : ℕ => (n : Int))) :
-    us.filterMap _root_.SampledProofs.nat? = ps := by
+    (h : us.mapM _root_.Spot.int? = some (ps.map fun n : ℕ => (n : Int))) :
+    us.filterMap _root_.Spot.nat? = ps := by
   rw [Array.mapM_eq_mapM_toList] at h
-  cases hl : us.toList.mapM _root_.SampledProofs.int? with
+  cases hl : us.toList.mapM _root_.Spot.int? with
   | none => simp [hl] at h
   | some l =>
     simp only [hl, Option.map_eq_map, Option.map_some, Option.some.injEq] at h
-    have hl' : us.toList.mapM _root_.SampledProofs.int? = some (ps.toList.map fun n : ℕ => (n : Int)) := by
+    have hl' : us.toList.mapM _root_.Spot.int? = some (ps.toList.map fun n : ℕ => (n : Int)) := by
       rw [hl, ← Array.toList_map, ← h]
     have := list_filterMap_nat hl'
     apply Array.toList_inj.1
@@ -824,26 +824,26 @@ theorem filterMap_nat {us : Array Json} {ps : Array ℕ}
 
 /-- **v1's window check at the coins `ξ` proves the units it drew**: where it accepts a sample without a closure, the
 evidence's proved units are the sample's (`UnitsProved`, `Drawn`). -/
-theorem checkAt_proved {p : _root_.SampledProofs.OneStage.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ξ : ByteArray} {e : _root_.SampledProofs.OneStage.Evidence} {pub : _root_.SampledProofs.OneStage.Public}
-    {prof : _root_.Core.Integrity} (h : _root_.SampledProofs.OneStage.checkAt p c (some ξ) e = .accept pub prof)
-    (hc : _root_.SampledProofs.field? e.draw "closure" = none) : drawnUnits e.draw = e.provedUnits := by
-  unfold _root_.SampledProofs.OneStage.checkAt at h
-  cases hw : _root_.SampledProofs.OneStage.coinsWhy p c e ξ with
+theorem checkAt_proved {p : _root_.Spot.OneStage.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStage.Evidence} {pub : _root_.Spot.OneStage.Public}
+    {prof : _root_.Core.Integrity} (h : _root_.Spot.OneStage.checkAt p c (some ξ) e = .accept pub prof)
+    (hc : _root_.Spot.field? e.draw "closure" = none) : drawnUnits e.draw = e.provedUnits := by
+  unfold _root_.Spot.OneStage.checkAt at h
+  cases hw : _root_.Spot.OneStage.coinsWhy p c e ξ with
   | some why =>
-    have hb : (some ξ).bind (_root_.SampledProofs.OneStage.coinsWhy p c e) = some why := hw
+    have hb : (some ξ).bind (_root_.Spot.OneStage.coinsWhy p c e) = some why := hw
     rw [hb] at h; simp at h
   | none =>
-    have hb : (some ξ).bind (_root_.SampledProofs.OneStage.coinsWhy p c e) = none := hw
+    have hb : (some ξ).bind (_root_.Spot.OneStage.coinsWhy p c e) = none := hw
     rw [hb] at h
-    have hck : _root_.SampledProofs.OneStage.check p c e = .accept pub prof := h
-    obtain ⟨_, _, _, -, hd, hu, -⟩ := _root_.Properties.SampledProofs.acceptMeans _ _ _ _ _ hck
-    dsimp only [_root_.Properties.SampledProofs.Drawn] at hd
+    have hck : _root_.Spot.OneStage.check p c e = .accept pub prof := h
+    obtain ⟨_, _, _, -, hd, hu, -⟩ := _root_.Properties.Spot.acceptMeans _ _ _ _ _ hck
+    dsimp only [_root_.Properties.Spot.Drawn] at hd
     obtain ⟨-, -, -, -, -, us, is, hus, hm, hasc, -⟩ := hd
-    have hcl : _root_.SampledProofs.getD e.draw "closure" = .null := by
-      simp only [_root_.SampledProofs.getD, hc, Option.getD_none]
-    have hpr : _root_.SampledProofs.Draw.proved e.draw = is := by
-      unfold _root_.SampledProofs.Draw.proved
+    have hcl : _root_.Spot.getD e.draw "closure" = .null := by
+      simp only [_root_.Spot.getD, hc, Option.getD_none]
+    have hpr : _root_.Spot.Draw.proved e.draw = is := by
+      unfold _root_.Spot.Draw.proved
       dsimp only
       rw [hus, hcl]
       dsimp only
@@ -875,7 +875,7 @@ theorem drawHeld_of {k : Verity.Registration.Composite}
 the record's population, since the session loads the public file to the sample's population (`setupTables_population`),
 which v2 held to the record's (`population_held`); and it is at the units v2 drew, since the session proved the public
 file's units the record samples (`provedUnits_eq`, at the indices the population check pins,
-`Properties.SampledProofs.FilePart.check_indices`), v2 held them to the units v1 proved (`provedHeld_ok`), and v1's
+`Properties.Spot.FilePart.check_indices`), v2 held them to the units v1 proved (`provedHeld_ok`), and v1's
 window check proves the units it drew (`checkAt_proved`). -/
 theorem drawHeld (k : Verity.Registration.Composite) : DrawHeld k := by
   refine drawHeld_of fun s dr L n ξ units record dj D kd hS hd hr hdj hD hl => ?_
@@ -897,11 +897,11 @@ theorem drawHeld (k : Verity.Registration.Composite) : DrawHeld k := by
   obtain rfl := Except.ok.inj (hpub1.symm.trans hpub')
   obtain ⟨recB, record'', hb, hrec'', hpc, hpu⟩ := step_proved hstep hall
   obtain rfl := Option.some.inj ((sessionRecord_eq hs1 hb hrec'').symm.trans hrec)
-  obtain ⟨_, _, _, hd, -, -, -, hhd, hidx⟩ := _root_.Properties.SampledProofs.FilePart.check_indices hpc
+  obtain ⟨_, _, _, hd, -, -, -, hhd, hidx⟩ := _root_.Properties.Spot.FilePart.check_indices hpc
   obtain ⟨j, d, hj, hjd, hwd, hdn⟩ := recordDraw_raw hdj
   obtain ⟨hasc, hdj'⟩ :=
     ofJson_subset_eq (Claims.Bridge.Custody.recordDraw_norm ((exec_recordDraw _).trans hdj)) hD hl
-  have hud : _root_.SampledProofs.getD (_root_.SampledProofs.getD j "unit_draw") "units" =
+  have hud : _root_.Spot.getD (_root_.Spot.getD j "unit_draw") "units" =
       .arr (D.units.map fun x => Lean.toJson x) := by
     rw [hjd]
     exact units_of_norm hwd (hdn.symm.trans hdj')

@@ -13,7 +13,7 @@ from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice import BOOK
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice_w212 import CARRY, CLASS, FITTED, OWN
 from verity.core.protocols.certifier.tests.test_network_certifier_compile_slice_w212 import _load
-from verity.core.protocols.sampled_proofs.one_stage import produced
+from verity.core.protocols.spot.one_stage import produced
 from verity.ml.commitments import hm96
 
 PROGRAM, REGISTRATION = "compile-slice-phase14", "cd" * 64
