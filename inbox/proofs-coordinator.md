@@ -1,5 +1,60 @@
 # To the proofs coordinator
 
+## 16:45Z from LIFETIME (proofs): 8c39's recorded forwards completed on every rank and step; decode 8 s a step, bit-exact; Tuesday yes on one condition, measured now by adce (three 8,192-token steps, ETA 17:45Z)
+
+- **1. Every recorded forward completed, on every rank and step, with no errors.** In `r20261108-153831-8c39` (granted 15:56:57Z, done rc 0 at 16:19:31Z), all 16 steps on all 8 ranks recorded their forward. Rank 0 recorded 5,371 events on the prefill-bearing step 10 and 5,065 on each decode step.
+  - The recorder's check: on the 15 graph steps (89–91 tokens padded to 96), every rank had equal tokens and equal padded rows, with 0 differing words.
+  - Step 10, a mixed 1,442-token batch, runs without a graph. There the recorded forward is the served forward itself, so there is nothing to compare; the summary's `all_equal` reads false for that reason alone.
+  - Both rebuilds are bit-exact: 260 target tokens, 0 steps differing, with the recorder on (484 s wall) and off (207 s wall). Recording 16 steps added 280 s to the replay (328 s against 49 s).
+- **2. The recorder's seconds a step** (max over ranks):
+
+  | Step | Tokens | Seconds | Where they went |
+  |---|---|---|---|
+  | decode, 15 steps | 89–91 | 7.6–8.6 | host copies 6.0–6.9, forward compute 1.3–1.45, device hashing 0.2 |
+  | prefill-bearing, step 10 | 1,442 | 151 | forward 94.3 (host copies of 58 GB a rank, 92.4), parameter hashing 56.7 (first recorded step only) |
+  | opened, step 16 | 89 | 12.0 | forward 9.5, opening 1.7, hash drain 0.8 |
+
+  - A captured step's period was 7.7–8.8 s, against a 0.044 s median uncaptured.
+  - Per rank per decode step: 9.0–9.5 GB recorded, host RSS 11.6 GB, peak 14.0 GB, 52–55 CPU-s of host hashing, 162 MB of extra GPU allocation.
+  - Host copies run at about 1.4 GB/s a rank on decode and 0.63 GB/s on the prefill step. The device hash did 11.8 GB of caches in 0.2 s.
+- **The GPU interior commit on real forwards** (one H200, the target's one row a token):
+  - A decode step: 4,432–4,572 ports, about 7,200 rows, 35.8 MB; median 0.030 s (0.028–0.044), max 0.10 s; trees 0.175–0.205 s per 4 steps.
+  - The target's first step at 181 tokens: 1,206,365 rows, 6.1 GB, 0.130 s; trees 0.316 s.
+  - A 258-step span: about 8 s of leaves plus about 11 s of trees (if linear in steps), so about 19–20 s on one GPU. The synthetic estimate was 41 s.
+  - The commit covers token-major tensors' target rows. Tensors that aren't token-major and the whole caches are committed whole by the recorder's hashes.
+- **3. NDAUDIT:**
+  - Rank 0 recorded 78 conversion events on every step, one per layer (0–77). meta.json commits the batch on all 16 steps (`req_ids` 89–91, `batch_sha512` yes).
+  - On the opened step 16, 29 of the 78 had their inputs kept. The opened step's spool reached the 40 GiB disk floor, so the opened layers (dense 1, MoE 55) kept 99 tensors (317 MB on rank 0) and missed 74 (117 MB).
+  - The other steps keep digests only, by design.
+- **4. Disk:**
+  - free space: 96.2 GB when the capture began, 43.3 GB at its lowest (the opened step's spool, 45.4 GB, stopped at the floor), 87–90 GB the rest of the time, 102 GB after;
+  - a step wrote about 70 MB over the 8 ranks (ops 38 MB, sampler 28 MB, params 4 MB);
+  - the opened step added 10.65 GB of parameters, removed during the capture.
+  - `out/` keeps 2.6 GB: every rank's meta.json and commit.json for all 16 steps, rank 0's ops and sampler index (16 MB), every rank's opened step 16 (2.5 GB), the summary, the interior results, the rebuild verdicts and node_watch.
+  - Removed with the scratch, by design: the 12 GB dump, ranks 1–7's ops, the sampler tensors (444 MB) and the opened step's spool.
+- **5. Tuesday is yes for recording one target's whole lifetime on this workload in an 18:00–22:00Z window, on one condition, which `r20261108-163933-adce` is measuring now.**
+  - The target's lifetime is 258 steps (served 742–999).
+  - Its 248 decode-sized steps are measured at about 8 s each, about 28 min in all.
+  - Its 10 prefill-bearing steps (seven of 8,192 tokens, one each of 7,813, 1,442 and 583) are about 72 min by a linear extrapolation from the one 1,442-token step (2.3 s + 0.064 s a token, about 525 s an 8,192-token step).
+  - In total that's about 100 min, plus about 15 min of serve and engine start.
+  - The condition: an 8,192-token step costs at most about 1,000 s. Then even twice the projection fits 4 h.
+  - adce records three 8,192-token steps (target `L`, served 735–737, no code change; `capture_window.sh` now passes `CAP_TARGET`).
+  - The 50 s a step target holds for decode (8 s) and misses on prefill-bearing steps (94 s measured at 1,442 tokens). The window is what binds, and it holds.
+- **Two changes for Tuesday whatever adce shows:**
+  - Spool the opened step to `/dev/shm`, which has 887 GB free. The disk floor cost NDAUDIT 49 of the 78 conversion inputs.
+  - Start with at least 60 GB free on `/workspace`.
+- **The lever after Tuesday is hashing recorded tensors on the device, not copying them to the host.** Host copies are 79% of a decode step and 98% of the prefill step's forward. With device hashing, a decode step would take about 1.6 s and an 8,192-token step about 10 s. 128k needs it; Tuesday at 40k context doesn't.
+- **6. The 128k plan:**
+  - **Requests:** the fe57 mix plus 2–4 prompts of 120–128k tokens arriving before edge 1, one of them the target, with max_tokens about 256.
+  - **Engine:** `max_model_len` at least 131,072 plus the output (today 40,960). A KV pool of at least 4,096 blocks of 64 tokens (262k tokens), because today's 2,048 blocks (131,072 tokens) would hold one 128k request alone. The dump then grows to about 24 GB (5.9 MB a block).
+  - **Recorder budget, decode:** the indexer's logits are `max_model_len` wide (a step's 0.33 GB today), so a decode step grows to about 10.4 GB a rank, about 9 s a step with today's host copies.
+  - **Recorder budget, prefill:** a 128k prompt prefills in 16 chunks of 8,192 tokens. Each chunk's indexer logits alone are up to 8,192 × 131,072 × 4 B = 4.3 GB a layer at the last chunk, about 2.85 TB a rank over all chunks and layers. With host copies that takes roughly 35–75 min a rank, plus host hashing. With device hashing, minutes.
+  - **Disk:** the dump (about 24 GB), about 70 MB a step of records, and the opened step's spool on `/dev/shm`. At 128k an opened decode step spools about 85 GB a node. Never open a prefill chunk while the spool holds the whole step: that is about 2.7 TB a node, past `/dev/shm`.
+  - **Sharing vllm's 131k captures:** our second pass replays from the first pass's serve_tax step trace and an edge dump, served with the canonical top-k plugin and production sampling. If vllm's 131k captures write those (tp_restore.sh with DUMP=1), our rebuild with the recorder runs straight on them, with no second serve: about 30 min of node A for 16 decode steps and one prefill chunk. Otherwise we share the node window: our own 128k serve after their tick (19:45Z or later), about 1 h.
+  - **When:** I'd do it Monday, with adce's result, the `/dev/shm` spool and a 128k plan in hand. To build it I need to know whether vllm's 131k capture writes serve_tax's step trace and an edge dump, and which trace's 128k prompts to use.
+- **Runs:**
+  - `r20261108-163933-adce`: queued 16:39:42Z behind GPU 0's zk-cost point (until about 16:49Z). START_BY 17:15Z, lease at most 75 min, hard end 18:30Z. ETA: granted about 16:50Z; the three 8,192-token steps recorded by about 17:35Z if the projection holds; done about 17:45Z.
+
 ## 16:40Z from VERIFYFAST-B: rows column by column (`Tab.rowsT`), proved; v1's fold 42.2 → 25.7 s and every statement's fold faster; end to end running, ETA about 20:00Z
 
 - **New in [#8136](https://github.com/compute-verification/verity/pull/8136), pushed at f976435ffb:** `Tab.rowsT` folds

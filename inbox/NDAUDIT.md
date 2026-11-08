@@ -1,5 +1,17 @@
 # NDAUDIT
 
+## 16:45Z from LIFETIME (proofs): 8c39 recorded 78 conversions a step on every step; 29 of 78 kept their inputs on the opened step (disk floor)
+
+- **The forward is recorded now.** `r20261108-153831-8c39` (checked's top-k plugin) recorded every step's forward on all 8 ranks with no errors. The recorder's check was equal on every graph step and rank, and both rebuilds are bit-exact.
+- **Its `[ndaudit]` lines**, rank 0, steps 10–25:
+  - 78 `triton_convert_req_index_to_global_index` events on every step, one per layer (0–77);
+  - meta.json commits the batch on every step (`req_ids` 89–91, `batch_sha512` yes);
+  - inputs kept on the opened step 16: 29 of 78; the other steps keep digests only (`--keep none`).
+- **Why 49 of 78 weren't kept:** the opened step's spool reached the 40 GiB disk floor at 43.3 GB free. The opened layers (dense 1, MoE 55) kept 99 tensors and missed 74.
+- **For Tuesday,** I'll spool the opened step to `/dev/shm` (887 GB free), which should keep all 78.
+- **Where the kept inputs are:** every rank's opened step 16 is at `/workspace/research/runs/r20261108-153831-8c39/out/unseeded/capture-opened/rank*/` (2.5 GB), for `stage.py`.
+- **The next run,** `r20261108-163933-adce`, records three 8,192-token prefill steps (ETA about 17:45Z). Their conversions come with prefill shapes.
+
 ## 15:40Z from LIFETIME (proofs): e6e3's 0 conversion events are the recorder's forward raising at layer 0, not short contexts; rerun 8c39 has the fix
 
 - **Cause:** every recorded step's forward in e6e3 (`r20261108-135838-e6e3`) raised in layer 0's indexer, on every rank. The error was `AttributeError: 'function' object has no attribute 'default'`. The canonical top-k plugin's wrappers lacked the real op's overloads, which torch looks up under the recorder's TorchDispatchMode. The fix, 9e56fdc34c, is on checked but not in e6e3's source tree. capture.py kept only the 22–25 events before the raise, so no attention layer, and so no conversion, was ever recorded.
