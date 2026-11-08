@@ -7265,3 +7265,40 @@ its own log's last record, with `history_of_R7` and `history_of_accept` proved. 
 Land ask for #7966 (52 words): "#7966 (proofs, PRF-460) makes the two-stage verifier refuse a round-2 session statement
 outside Flock's proved scope or with unhidden outputs: `SpotFlock.sessionOk` gains `scopeCheck` and `hiddenOf`. It
 refuses more, never less. Its lock commit `b70a0b1644` carries only base drift, and no record of its own moves. Land it."
+
+## 05:15Z from TRUST6: [#7844](https://github.com/compute-verification/verity/pull/7844) and [#7879](https://github.com/compute-verification/verity/pull/7879) re-marked; PR D is [#7996](https://github.com/compute-verification/verity/pull/7996); land asks below
+
+- **#7844** is ready at `42c90b97ab`. Records r20261108-035323-5a35 and suites r20261108-035323-b72c passed. The head
+  merges cleanly onto `next` (`git merge-tree` exit 0).
+- **#7879** is ready at `c0a2be8e2b`, which is r20261108-035323-3168's records over `dd7cbab014`. Suites
+  r20261108-035323-d744 passed 62 of 62 on `dd7cbab014`, and `c0a2be8e2b` differs from it only in the two lock files.
+  The preflight merged it onto `next` at `07fa382b5d`. It warns that the remote README is 12 bytes over its cap at
+  `c0a2be8e2b`. That is a warn gate, and #7996 trims the file to 49144 bytes.
+- **#7996's two failures, one line each:**
+  - Records r20261108-035441-eb35: my change. `Event.lean` was not a root (`orphan.file`). The Properties
+    `reads-changed`, `open.unread` and `open.read-only` entries were stale lock entries from the base, and merging
+    #7879's records commit clears them. I added `Verity.Sampled.Event` to `Security/Proofs`' roots, beside its siblings
+    (importing it from `Sampled.lean` would have made an import cycle).
+  - Suites r20261108-033610-c052: the new fixture test. The store keeps no empty directories, so the honest case has no
+    `tables/`, and the v2 test's `iterdir()` raised. The test now handles that. The other 7 tests and all 58 quick suites
+    passed.
+- **#7996's runs on `ad413de8ca`:** records r20261108-050822-0b4b on cpu-7, and suites r20261108-050828-fdcb on cpu-8
+  (the quick changed set against `c0a2be8e2b`, plus `-k form_refusals`). I'll mark #7996 when both pass. ETA about
+  06:15Z for records, about 06:00Z for suites.
+
+Land ask for #7844 (unchanged from 02:25Z apart from the head): "#7844 (proofs, LEAN-186) makes SHA-512 collision
+resistance and the verifier's uniform randomness named assumptions in the trust base. `SampledKSLiveV3`'s and V5's finder
+CR premises reduce to `SHA512CRStrict` and `SHA512CRExpected`. Records that move: 40 guarantees' premises go from open
+to assumptions, 12 open entries leave, and V3's and V5's trust gaps lose their CR premises. No statement changes. DM
+Daniel at landing."
+
+Land ask for #7879 (unchanged apart from the head): "#7879 (proofs, LEAN-186, on #7844) restates `SampledKSLiveV3` to
+read `Built` and `TagsOkZHJ` off `verify --zk`'s acceptance (`KsScope.check`). Outside them its bound is probability 0,
+so neither is a premise. Records that move: V3's statement record (a new unfolded hash, and `open` loses both premises),
+its unwitnessed entry re-keyed by hand, three `shape.inline` entries, the frozen reason, and V3's trust gap, which
+leaves `Zk.RecordCustodyZKJ` alone. DM Daniel at landing."
+
+Land ask for #7996, once marked (56 words): "#7996 (proofs, PRF-206, on #7879) proves that where one-stage v2's
+check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
+guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
+returning the outputs, and four wrong tags. Land it."
