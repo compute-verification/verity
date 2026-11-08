@@ -20,9 +20,10 @@ COORDS = {"MoeExpertFp8Gemm_v1": {}, "MoeExpertFp8GemmW_v1": {}, "FlashInferFp8L
           "ScaledMmFp8BlockSharedScale_v1": {"E": 1}}
 #: the row Definitions elementwise along the last axis of every parameter and of the output, by that axis's static: a row W wide
 #: is W / w units of its Definition at width w (a halving of W), unit j reading and returning columns [jw, jw + w), the ``cols``
-#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, and torch's multimem
-#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks)
-COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE"}
+#: layout (`moe.MoeSum`'s top-k sum, `tp_allreduce.AllReduceMnnvl`'s all-reduce and its residual add, torch's multimem
+#: all-reduce, `tp_allreduce.AllReduceMultimem`, where `cols_refused` admits its blocks, and `b1.ResidualAdd`'s residual add)
+COLS = {"MoeSum_v1": "H", "AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
+        "ResidualAdd_v1": "N"}
 #: the row Definitions that are batches along axes of their statics, which some parameters carry and the others don't: a row of
 #: extents a_0, a_1, .. along its axes is a_0 a_1 .. units of its Definition at every axis 1, unit (i_0, i_1, ..) (row-major)
 #: reading element i_k along axis k of each parameter that carries it and the others whole, and returning the output's element
