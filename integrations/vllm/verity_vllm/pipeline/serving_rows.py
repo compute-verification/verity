@@ -387,7 +387,7 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
-    return DR.parse_law(law) if isinstance(law, str) else dict(law)
+    return DR.parse_design(law) if isinstance(law, str) else dict(law)
 
 
 def work_table_of(law: Mapping[str, Any], counts: Mapping[str, int], transfer_gates: Sequence[str] = ()) -> dict[str, Any] | None:

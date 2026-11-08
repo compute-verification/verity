@@ -349,7 +349,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     circuit = IF.Circuit(f"{LOOP}/{fam}", ((fn, 1),))
     run_root = hashlib.sha512(f"{LOOP}/{reg['run']}/{blk['g']}".encode()).hexdigest()
-    iw = IF.Window(circuit, run_root, D.parse_law("subset:1"), 1)
+    iw = IF.Window(circuit, run_root, D.parse_design("subset:1"), 1)
     tid = circuit.ids[0]
     iw._recorded[tid] = [IF._Recorded([], [], [*data["rows"].values(), *data["outs"].values()], c, 1, 0)]
     (m,) = iw.window.members
@@ -372,7 +372,7 @@ def bundle_block(blk: dict, st: dict, com: RB.Commitment, win: Locator, weights:
 
     doc, pay = RB.build(wdir, [0], commitment=com, locate=locate, binding=binding_of(win.family(fam).template),
                         coords=lambda label, offset: dict(label), reads=lambda cc, t, p: reads.get(p), weights=weights,
-                        draw={"source": "live", "law": D.parse_law("subset:1"), "receipt": receipt, "coins": COINS},
+                        draw={"source": "live", "law": D.parse_design("subset:1"), "receipt": receipt, "coins": COINS},
                         workers=workers)
     RB.write(doc, pay, out, "bundle")
     rec = json.loads((wdir / "registration.json").read_text())

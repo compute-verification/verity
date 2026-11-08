@@ -452,7 +452,7 @@ def main() -> int:
     n = s.n
     template = s.subcircuit.definition()
     law_text = f"subset:{a.k}"
-    law = D.parse_law(law_text)
+    law = D.parse_design(law_text)
     summary: dict = {"set": a.set, "subcircuit": s.subcircuit.id, "n": n, "law": law, "delta": a.delta, "bind": a.bind}
 
     # the partition: Q_template_instance v0 over the verifier's own population program (unit i is instance i)
@@ -521,7 +521,7 @@ def main() -> int:
     v = V.check(dict(rec, roots=[dict(rec["roots"][0], domain="00" * 64), *rec["roots"][1:]]), program, query, law, SCHEME, want,
                 leaf_layer=leaf_layer)
     neg["registration-domain-not-the-layout's"] = {"refused": not v.ok, "codes": list(v.codes)}
-    v = V.check(rec, program, query, D.parse_law(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
+    v = V.check(rec, program, query, D.parse_design(f"subset:{a.k + 1}"), SCHEME, want, leaf_layer=leaf_layer)
     neg["registration-law-not-the-agreement's"] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(dict(rec, previous=R.digest(rec)), program, query, law, SCHEME, want, leaf_layer=leaf_layer, log=[rec])
     neg["second-registration-for-the-window"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -565,7 +565,7 @@ def main() -> int:
     if a.bind:
         hold_bound(tst, tprog, query)
     theader = public_header(tst["dir"], tn)
-    tlaw = D.parse_law("subset:2")
+    tlaw = D.parse_design("subset:2")
     twant = {p: {"leaves": c, "domain": theader["frame_v3"]["domain_ids"][p]} for p, (_, c) in ports(tst["meta"], tn).items()}
     trec = R.record(tprog, query, tlaw, theader["scheme"], registered_roots(theader, twant),
                     {"kind": "stand-in", "of": "tampered copy of the captured set: bit 0 of every instance's first output word flipped"},

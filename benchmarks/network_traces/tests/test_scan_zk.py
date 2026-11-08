@@ -401,7 +401,7 @@ def test_each_link_windows_answer_is_one_stages_on_the_groups_registration():
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     program = sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES])
     query = sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES])
-    N, law = sum(counts.values()), sz.DR.parse_law(f"stratified:{2 * G * T}")
+    N, law = sum(counts.values()), sz.DR.parse_design(f"stratified:{2 * G * T}")
     reg = R.record(program, query, law, sz.S.SCHEME,
                    [{"port": "rows/egress/1", "root": "aa" * 64, "leaves": T, "domain": "bb" * 64}],
                    {"kind": "stand-in"}, leaf_layer="ee" * 64)
@@ -444,7 +444,7 @@ def _program(G: int, T: int) -> tuple:
     counts = sz.counts_of(sz.members_of(sz.TEMPLATES, G, T))
     defs = {"first": FIRST, "ingress": ING, "egress": EG}
     return (sz.PA.mixed_population_program([(defs[t], counts[t]) for t in sz.TEMPLATES]),
-            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_law(f"stratified:{2 * G * T}"))
+            sz.PA.template_instances_query([defs[t] for t in sz.TEMPLATES]), sz.DR.parse_design(f"stratified:{2 * G * T}"))
 
 
 def test_a_void_run_is_its_honest_round_refused_at_the_egress_member_of_its_fail(tmp_path):
@@ -506,7 +506,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     state = {"root": st.root.hex(), "leaves": T, "domain": sz.ADV.domain(st.binding, T).domain_id.hex()}
     roots = sz.warden_roots([{"warden": m.warden} for m in h.rounds["honest"]]) + [
         {"port": "scan/prog", **prog}, {"port": "scan/state", **state}]
-    law = sz.DR.parse_law(f"stratified:{2 * T}")
+    law = sz.DR.parse_design(f"stratified:{2 * T}")
     reg, chain = (R.record(program, query, law, sz.S.SCHEME, roots, {"kind": "stand-in"}, leaf_layer=x * 64)
                   for x in ("ee", "ff"))
     other = {**reg, "program": "ab" * 64}
@@ -517,7 +517,7 @@ def test_the_rows_forms_case_is_the_link_windows_rows_certificates_and_the_scans
     record = {"accepted": True, "registration": reg, "draw": draw, "proved_units": list(range(2 * T))}
     answer = sz.window_answer(reg, record, sz.Fraction(1, 100), "unused")
     block = sz.PA.mixed_population_program([(defs["block"], E)])
-    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_law(f"stratified:{E}")
+    bquery, blaw = sz.PA.template_instances_query([defs["block"]]), sz.DR.parse_design(f"stratified:{E}")
     entries = PC.entries_port(sz.PA.template_id(defs["block"]))
     assert entries == f"{sz.port_prefix(defs['block'], SimpleNamespace(template='block'))}/o0"
 
@@ -839,7 +839,7 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
 
     def record(ports: dict) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
-        return R.record(program, query, sz.DR.parse_law(f"stratified:{k}"), sz.S.SCHEME, roots,
+        return R.record(program, query, sz.DR.parse_design(f"stratified:{k}"), sz.S.SCHEME, roots,
                         {"kind": "stand-in"}, leaf_layer="ee" * 64)
 
     assert sz.S.check_public(spec, record(want)).ok

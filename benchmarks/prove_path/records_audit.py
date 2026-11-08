@@ -783,7 +783,7 @@ def audit(a: argparse.Namespace) -> int:
 
     t0, wdir, out = time.time(), Path(a.window), Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
-    law = D.parse_law(a.law)
+    law = D.parse_design(a.law)
     try:
         mine, doc, sets = verifier_window(wdir, law, Path(a.template_sets) if a.template_sets else None)
         pins = pinned(json.loads(Path(a.registered).read_text())) if a.registered else {}
@@ -910,7 +910,7 @@ def warm(a: argparse.Namespace) -> int:
     import a5 as A5
 
     t0 = time.time()
-    mine, _doc, sets = verifier_window(Path(a.window), D.parse_law(a.law), Path(a.template_sets) if a.template_sets else None)
+    mine, _doc, sets = verifier_window(Path(a.window), D.parse_design(a.law), Path(a.template_sets) if a.template_sets else None)
     window_s = round(time.time() - t0, 1)
     got = A5.warm(a, sets, mine, a.jobs)
     for g in got:

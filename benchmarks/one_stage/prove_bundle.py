@@ -106,7 +106,7 @@ class Staged:
     def __init__(self, wdir: Path, out: Path) -> None:
         self.wdir, self.out = wdir, out
         self.rec = json.loads((wdir / "registration.json").read_text())
-        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_law(_law(self.rec["law"])), None)
+        self.mine, _doc, self.sets = RA.verifier_window(wdir, D.parse_design(_law(self.rec["law"])), None)
         self.files = (json.loads((wdir / "window.json").read_text()), self.rec)
         self.want = CS.expected_ports(self.mine)
         self.roots = {r["port"]: r for r in self.rec["roots"]}

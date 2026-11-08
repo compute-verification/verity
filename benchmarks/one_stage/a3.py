@@ -117,7 +117,7 @@ def main() -> int:
         m["base"] = base
 
     # one registration, before the sample
-    law = D.parse_law(f"subset:{a.k}")
+    law = D.parse_design(f"subset:{a.k}")
     want, roots, publics = {}, [], {}
     for m in members:
         mine = a0.stand_in_ports(m["st"]["name"], m["st"]["content_digest"], m["st"]["meta"], m["n"])
