@@ -16,6 +16,11 @@ value the unit's block decodes at the column's wire.
 columns, the block circuit's values hold each of the unit's gates (`UnitPlace.apply_decode`) and carry the lowering's
 constants (`decode_consts`). That is what `Embeds` asks of a checked unit (`unitVals`), where the layout's wires are
 such a map.
+
+`shape_of_checked`: a checked proof block, replayed in request `ρ`, is member `t`'s unit `k` (`member_of_replayOf`),
+and in Bridge's terms it is the key program's block `k`, `Bits.base` later, whose lowering sits in the statement's
+program (`sitsAt_member`): the shape half of `Embeds`. `parsed_of_stmtOk`: a checked session's statement is the
+readable form of a parsed statement that passes its check with hidden outputs, the session `embeds_unitPlace` reads.
 -/
 
 namespace SpotFlock
