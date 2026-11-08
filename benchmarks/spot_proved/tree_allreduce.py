@@ -1,12 +1,12 @@
-"""One node's TP all-reduce arithmetic on another: every all-reduce FlashInfer's MNNVL route doesn't take is summed in the serving
-node's multimem reduction tree, in software, so a replay on a node whose NVSwitch reduces in another order computes the served bits.
+"""One node's TP all-reduce arithmetic on another: the all-reduces the serving node's NVSwitch reduced are summed in its multimem
+reduction tree, in software, so a replay on a node whose NVSwitch reduces in another order computes the served bits.
 
 On the served H200 node, `CudaCommunicator.all_reduce` hands a bf16 all-reduce FlashInfer's 0.5 MiB doesn't take to torch's
 symmetric memory (``multimem.ld_reduce ... acc::f32``, to 64 MiB) and past that to NCCL's NVLS; the node's capture found both reduce
 every element in one tree of f32 adds, then round to bf16 (`AllReduceMultimem_v1` at the node's TREES, FTZ off). This plugin keeps
-FlashInfer's route and the fused all-reduce + RMSNorm as they are (their order is the ranks', on every node), and replaces the
-rest with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. It changes what the replay
-node computes, never the served record: a replay under it says so.
+FlashInfer's route, the custom all-reduce and the fused all-reduce + RMSNorm as they are (their order is in software, the same on every node),
+and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. It
+changes what the replay node computes, never the served record: a replay under it says so.
 
     python tree_allreduce.py site DIR --tree '(((((((0,2),3),1),5),6),4),7)' --source WHERE
         # DIR on PYTHONPATH registers the plugin (vLLM general plugin ``verity_tree_allreduce``) with that tree
@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import ast
 import json
+import os
 import sys
 from pathlib import Path
 from typing import Any
@@ -40,15 +41,15 @@ def leaves(t: Tree) -> list[int]:
     return [t] if isinstance(t, int) else leaves(t[0]) + leaves(t[1])
 
 
-def tree_sum(parts: Any, t: Tree) -> Any:
-    """``parts[r]`` (f32, one row per rank) added in the tree's order: a node is its two subtrees' f32 sum."""
-    return parts[t] if isinstance(t, int) else tree_sum(parts, t[0]) + tree_sum(parts, t[1])
-
-
 def reduce_gathered(gathered: Any, world: int, t: Tree) -> Any:
-    """A rank-major all-gather of a bf16 tensor (``world * n`` words) reduced in ``t``: the f32 sum, rounded once to bf16."""
+    """A rank-major all-gather of a bf16 tensor (``world * n`` words) reduced in ``t``, a node its two subtrees' f32 sum, then
+    rounded once to bf16."""
     import torch
-    return tree_sum(gathered.view(world, -1).to(torch.float32), t).to(torch.bfloat16)
+    rows = gathered.view(world, -1)
+
+    def go(x: Tree) -> Any:
+        return rows[x].to(torch.float32) if isinstance(x, int) else go(x[0]) + go(x[1])
+    return go(t).to(torch.bfloat16)
 
 
 def config(d: Path | None = None) -> dict | None:
@@ -68,23 +69,43 @@ def register() -> None:
     _TREE = parse_tree(cfg["tree"])
     from vllm.distributed.device_communicators import cuda_communicator as cc
     cc.CudaCommunicator.all_reduce = wrap(cc.CudaCommunicator.all_reduce, _TREE)
-    print(f"[tree-allreduce] all-reduces past FlashInfer's route sum in {cfg['tree']} ({cfg.get('source', '')})",
+    print(f"[tree-allreduce] symmetric-memory and NCCL all-reduces sum in {cfg['tree']} ({cfg.get('source', '')})",
           file=sys.stderr, flush=True)
 
 
+CHUNK = 1 << 22  # words a rank gathers at once: elementwise, so only the transient memory depends on it
+UNMEASURED = ("qr_comm", "fi_pcie_ipc_ar_comm", "aiter_ar_comm")
+
+
 def wrap(orig: Any, t: Tree) -> Any:
+    """`CudaCommunicator.all_reduce` with the calls vLLM hands torch's symmetric memory or NCCL summed in ``t``. FlashInfer's and
+    the custom all-reduce's calls (rank order on every node) and other dtypes go to vLLM; a route the tree wasn't measured with
+    (NCCL's symmetric memory, quick reduce, FlashInfer's PCIe IPC, aiter) is refused."""
     def all_reduce(self, input_):
         import torch
-        fi, nc = self.fi_ar_comm, self.pynccl_comm
-        if (fi is not None and not fi.disabled and fi.should_use_fi_ar(input_)) or input_.dtype != torch.bfloat16 \
-                or nc is None or nc.disabled:
+        fi, ca = self.fi_ar_comm, self.ca_comm
+        if input_.dtype != torch.bfloat16 or (fi is not None and not fi.disabled and fi.should_use_fi_ar(input_)) \
+                or (ca is not None and not ca.disabled and ca.should_custom_ar(input_)):
             return orig(self, input_)
+        on = [k for k in UNMEASURED if getattr(self, k, None) is not None and not getattr(getattr(self, k), "disabled", False)]
+        if os.environ.get("VLLM_USE_NCCL_SYMM_MEM", "0").lower() in ("1", "true"):
+            on.append("VLLM_USE_NCCL_SYMM_MEM")
+        if on:
+            raise RuntimeError(f"tree-allreduce: {', '.join(on)} on, a route the tree wasn't measured with")
         if sorted(leaves(t)) != list(range(self.world_size)):
-            raise RuntimeError(f"tree {t} is not over the group's {self.world_size} ranks")
+            raise RuntimeError(f"tree-allreduce: tree {t} is not over the group's {self.world_size} ranks")
+        nc, w = self.pynccl_comm, self.world_size
         flat = input_.contiguous().view(-1)
-        gathered = torch.empty(self.world_size * flat.numel(), dtype=flat.dtype, device=flat.device)
-        nc.all_gather(gathered, flat)
-        return reduce_gathered(gathered, self.world_size, t).view(input_.shape)
+        out = torch.empty_like(flat)
+        for i in range(0, flat.numel(), CHUNK):
+            x = flat[i:i + CHUNK]
+            g = torch.empty(w * x.numel(), dtype=x.dtype, device=x.device)
+            if nc is not None and not nc.disabled:
+                nc.all_gather(g, x)
+            else:
+                torch.distributed.all_gather_into_tensor(g, x, group=self.device_group)
+            out[i:i + x.numel()] = reduce_gathered(g, w, t)
+        return out.view(input_.shape)
     all_reduce.__wrapped__ = orig
     return all_reduce
 

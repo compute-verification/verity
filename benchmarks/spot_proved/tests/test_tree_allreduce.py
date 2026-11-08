@@ -74,25 +74,32 @@ def test_another_order_gives_other_bits_so_the_check_can_fail():
 
 
 class _Comm:
-    """`CudaCommunicator` over 8 ranks whose inputs are ``inputs``: FlashInfer's route takes calls up to ``fi_max`` words, and pynccl's
-    all-gather lays the ranks' words out rank-major."""
+    """`CudaCommunicator` over 8 ranks whose inputs are ``inputs``: FlashInfer's route takes calls up to ``fi_max`` words, the custom
+    all-reduce those of exactly ``ca_eq`` words, and pynccl's all-gather lays the ranks' words out rank-major (``gathers`` counts
+    its calls)."""
 
-    def __init__(self, inputs: list[torch.Tensor], fi_max: int, world: int = 8) -> None:
-        self.world_size, self.inputs = world, inputs
+    def __init__(self, inputs: list[torch.Tensor], fi_max: int, world: int = 8, ca_eq: int = -1) -> None:
+        self.world_size, self.inputs, self.gathers = world, inputs, 0
         self.fi_ar_comm = SimpleNamespace(disabled=False, should_use_fi_ar=lambda x: x.numel() <= fi_max)
+        self.ca_comm = SimpleNamespace(disabled=False, should_custom_ar=lambda x: x.numel() == ca_eq)
         self.pynccl_comm = SimpleNamespace(disabled=False, all_gather=self._gather)
+        self.qr_comm = self.fi_pcie_ipc_ar_comm = self.aiter_ar_comm = None
+        self.at = 0
 
     def _gather(self, out: torch.Tensor, inp: torch.Tensor) -> None:
-        out.copy_(torch.cat([x.reshape(-1) for x in self.inputs]))
+        n = inp.numel()
+        out.copy_(torch.cat([x.reshape(-1)[self.at:self.at + n] for x in self.inputs]))
+        self.at, self.gathers = self.at + n, self.gathers + 1
 
 
-def test_the_wrapper_leaves_flashinfers_route_and_other_dtypes_to_vllm_and_sums_the_rest_in_the_tree():
+def test_the_wrapper_leaves_flashinfers_and_the_custom_routes_and_other_dtypes_to_vllm_and_sums_the_rest_in_the_tree():
     rng = np.random.default_rng(3)
     words = rng.integers(0x3000, 0x4800, size=(8, 2, 6), dtype=np.uint16)
     inputs = [_torch_words(w) for w in words]
     seen = []
     ar = TA.wrap(lambda self, x: seen.append(x.shape) or x, TA.parse_tree(NODE_A))
-    assert ar(_Comm(inputs, fi_max=12), inputs[5]) is inputs[5] and seen == [(2, 6)]
+    assert ar(_Comm(inputs, fi_max=12), inputs[5]) is inputs[5]
+    assert ar(_Comm(inputs, fi_max=4, ca_eq=12), inputs[5]) is inputs[5] and seen == [(2, 6), (2, 6)]
     out = ar(_Comm(inputs, fi_max=4), inputs[5])
     assert out.shape == (2, 6) and out.dtype == torch.bfloat16
     assert np.array_equal(_words(out).reshape(-1), _reference(words.reshape(8, -1), [0, 2, 3, 1, 5, 6, 4, 7]))
@@ -100,6 +107,29 @@ def test_the_wrapper_leaves_flashinfers_route_and_other_dtypes_to_vllm_and_sums_
     assert ar(_Comm(inputs, fi_max=4), f32) is f32
     with pytest.raises(RuntimeError, match="not over the group's 4 ranks"):
         ar(_Comm(inputs[:4], fi_max=4, world=4), inputs[0])
+
+
+def test_a_call_is_gathered_in_chunks_with_the_same_bits(monkeypatch):
+    rng = np.random.default_rng(5)
+    words = rng.integers(0x3000, 0x4800, size=(8, 3, 7), dtype=np.uint16)
+    inputs = [_torch_words(w) for w in words]
+    monkeypatch.setattr(TA, "CHUNK", 5)
+    comm = _Comm(inputs, fi_max=4)
+    out = TA.wrap(None, TA.parse_tree(NODE_A))(comm, inputs[2])
+    assert comm.gathers == 5
+    assert np.array_equal(_words(out).reshape(-1), _reference(words.reshape(8, -1), [0, 2, 3, 1, 5, 6, 4, 7]))
+
+
+def test_a_route_the_tree_was_not_measured_with_is_refused(monkeypatch):
+    inputs = [torch.ones(4, dtype=torch.bfloat16)] * 8
+    ar = TA.wrap(None, TA.parse_tree(NODE_A))
+    comm = _Comm(inputs, fi_max=0)
+    comm.qr_comm = SimpleNamespace(disabled=False)
+    with pytest.raises(RuntimeError, match="qr_comm on"):
+        ar(comm, inputs[0])
+    monkeypatch.setenv("VLLM_USE_NCCL_SYMM_MEM", "1")
+    with pytest.raises(RuntimeError, match="VLLM_USE_NCCL_SYMM_MEM on"):
+        ar(_Comm(inputs, fi_max=0), inputs[0])
 
 
 def test_site_registers_the_plugin_with_its_tree(tmp_path, monkeypatch):
