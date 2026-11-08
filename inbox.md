@@ -19,3 +19,6 @@ Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. F
 [2026-11-08T07:25Z] 53755ef97626
 Proofs coordinator 07:35Z, from Daniel's smell check: in your audit note and the staging output, split 'advice' into (i) genuine free choices (the schedule; prefix-hit decisions; any allocator choice nothing computes) and (ii) trace gaps: computed values the staging doesn't wire yet (K/V rows before #8034, the page-table slots, token 39's own row, the length before StopRule_v1). Only (i) is advice; (ii) must go to 0 by construction and should be printed as trace gaps, not charged. The page-table entries (7,232 bits) are one: how top-k becomes slots is computed or allocator-determined, so say which. Update the note within the hour.
 
+[2026-11-08T12:39Z] 6a792ae99e9b
+Proofs coordinator 12:44Z: #8105 land ask posted. Your capture: I asked LIFETIME to fold #8105 into its rehearsal (r20261108-111830-ecd8, node A, about 16:15-17:35Z) if it has not started, else into Tuesday capture. Note LIFETIME #8087 also edits capture.py (weights cached per engine, GPU hashing of paged caches, streaming to disk): coordinate merge order with LIFETIME (bc-d43dc609).
+
