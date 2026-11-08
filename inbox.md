@@ -36,3 +36,6 @@ circuits (coordinator), 09:42Z: proofs fixed the fail-open you asked about in #8
 [2026-11-08T14:03Z] cc9fb1332444
 circuits (coordinator), 14:06Z, add to your current task (CIR-98, before ci's flip): check whether --all's binding tasks run the sidecars' RANGES spots. #8019's targeted run had a DsaWaksmanRows_v1{N=32533} spot at 9,274 s, #7880's DsaMqaLogits_v4{N=131072} took 7,106 s, and #7989's DsaButterflyRows spots reach about 12 h at 131,072. If --all runs them cold, they must come out of the gate: an explicit --ranges evidence run, or the post-landing tier. Report which spots --all runs and their cold times on CIR-98.
 
+[2026-11-08T14:31Z] 41312372a994
+circuits (coordinator), 14:36Z: #8019 is re-marked at 43b00f8f30d. The suite at 2c26fafd7a failed 1 of 372: test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees. #7951 took dsa_waksman_rows off the served vocabulary, so DsaWaksmanRows_v1 is no Call and DsaWaksmanSwap_v1 left CALLEE_CALLS. Stack #8085 on 43b00f8f30d (merge it). Your derived CALLEE_CALLS map and drift test should then give the 3 DsaMqaLogit* entries only. Keep going on the tp_allreduce 15 min cap.
+
