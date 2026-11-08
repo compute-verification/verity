@@ -329,6 +329,7 @@ noncomputable def base : Code :=
     session := fun _ _ v => session h v
     sessions := fun _ => 1
     tables := fun _ => (shapeOf h.xS₀).length
+    unitN₀ := fun _ _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
     innerN₀ := fun _ => ((shapeOf h.xS₀).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum }
 
 /-- The registration the samples read, at a statement that decodes. -/
