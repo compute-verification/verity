@@ -3,25 +3,25 @@ module
 public import Proofs.Flock.Claims.Sampling.Session
 
 /-!
-# A checked unit's session, one way
+# `SessionRunsTo`: a unit's session runs as Flock runs, with the run's acceptance implying the session's
 
-`SessionRunsTo` is `SessionRuns` (`Proofs.Flock.Claims.Sampling.Session`) with the session deciding the run one way: at
-coins that agree with `r` off `u`'s rounds, an accepting sampled run makes the Flock prover's run on the session's coins
-accept. The generic compiler's sessions read only that half (`Claims.SamplingGeneric.runs_ofDeploy`). Where several
-sessions run in one sampled run, the other half can fail: a later session's messages may read an earlier session's
-coins, so one session's run needn't decide whether the sampled run accepts.
-
-* `SessionRuns.to`: `SessionRuns` gives `SessionRunsTo`.
+`SessionRunsTo H D` is `SessionRuns H D` with the acceptance clause one way: where coins off a unit's session rounds are
+fixed, the sampled run accepts only where the session's Flock run accepts. It is what a sampled verifier that runs several
+sessions in sequence, and accepts only where every session accepted, gives: a session that accepts leaves the run free to
+refuse in a later session, so the run's acceptance is not the session's. `SessionRuns.to` reads it off `SessionRuns`.
 -/
 
 @[expose] public section
 
 namespace Claims.Sampling
 
-variable {Coin Col T : Type} [Inhabited Coin]
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **A checked unit's session is a Flock run that the sampled run's acceptance carries**: `SessionRuns` with, at coins
-`r'` agreeing with `r` off `u`'s rounds, the sampled run accepting only when `P'`'s run on `r'`'s session coins does. -/
+/-- **Every checked unit's session runs as Flock runs, the run's acceptance implying the session's**: at the coins `r`
+that check unit `u`, its session is a Flock run at a statement `xS` on its rounds `emb` (all of `u`'s session rounds, in
+order) of some prover `P'`, such that at any coins `r'` that agree with `r` off those rounds the run accepts only where
+that Flock run accepts, and at any coins that agree with `r` before them the session the run shows is that Flock run's
+transcript, whose `H` calls the run makes. -/
 def SessionRunsTo (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : ℕ),
     (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
@@ -33,10 +33,11 @@ def SessionRunsTo (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
         D.session x u (run H P D.V x ω r').seen = some (xS, (run H P' D.flock.V xS () fun i => r' (emb i)).seen) ∧
           ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
 
-/-- **`SessionRuns` gives `SessionRunsTo`**: a session that decides the run both ways decides it one way. -/
-theorem SessionRuns.to {H : Msg → Msg} {D : Deploy Coin Col T} (h : SessionRuns H D) : SessionRunsTo H D :=
-  fun x Ω P ω r u hu =>
-    let ⟨xS, emb, P', hmono, hrange, hacc, hsess⟩ := h x Ω P ω r u hu
-    ⟨xS, emb, P', hmono, hrange, fun r' hr' => (hacc r' hr').mp, hsess⟩
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **`SessionRuns` gives `SessionRunsTo`**: an acceptance that agrees both ways agrees one way. -/
+theorem SessionRuns.to {H : Msg → Msg} {D : Deploy Coin Col T} (h : SessionRuns H D) : SessionRunsTo H D := by
+  intro x Ω P ω r u hu
+  obtain ⟨xS, emb, P', hmono, hrange, hacc, hsess⟩ := h x Ω P ω r u hu
+  exact ⟨xS, emb, P', hmono, hrange, fun r' hr' => (hacc r' hr').mp, hsess⟩
 
 end Claims.Sampling
