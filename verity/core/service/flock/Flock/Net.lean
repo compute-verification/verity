@@ -267,11 +267,12 @@ theorem tokens_eq (s : String) :
   rw [Scan.forIn_tok]
   rfl
 
-/-- `lineNums`, read off the line's bytes (`Scan.nums`) when it is ASCII decimal digits and whitespace, as a row is, and
-as `lineNums` reads it otherwise. -/
+/-- `lineNums`, read off the line's bytes (`Scan.numsU`) when it is ASCII decimal digits and whitespace, as a row is,
+and as `lineNums` reads it otherwise. -/
 def lineNumsFast (s : String) : Option (Array Nat) :=
-  if Scan.ascii s then
-    match Scan.nums s (s.utf8ByteSize + 1) 0 false 0 #[] with
+  let n := s.utf8ByteSize.toUSize
+  if h : Scan.ascii s = true ∧ n.toNat = s.utf8ByteSize then
+    match Scan.numsU s n h.2 0 0 0 #[] with
     | some v => some v
     | none => (tokens s).mapM String.toNat?
   else (tokens s).mapM String.toNat?
@@ -281,17 +282,20 @@ after it, so it stays above `Row.of`, `look` and `parseWith`. -/
 @[csimp] theorem lineNums_eq_fast : @lineNums = @lineNumsFast := by
   funext s
   unfold lineNumsFast lineNums
+  dsimp only
   split
-  · rename_i ha
+  · rename_i h
     split
     · rename_i v hv
-      have hc := Scan.ascii_chars ha
-      have h := Scan.nums_eq hc s.toList [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
+      have hc := Scan.ascii_chars h.1
+      have hu := Scan.numsU_some s _ h.2 (s.utf8ByteSize + 1) 0 0 0 #[] v (by rw [h.2]; omega) (by simp) (by simp) hv
+      simp only [USize.toNat_zero, bne_self_eq_false, UInt64.toNat_zero] at hu
+      have h' := Scan.nums_eq hc s.toList [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
         (by rw [Scan.size_ascii hc]; omega)
-      rw [List.length_nil] at h
-      rw [h] at hv
+      rw [List.length_nil] at h'
+      rw [h'] at hu
       rw [tokens_eq]
-      exact Scan.numsL_tokens s.toList #[] "" false 0 #[] v (by simp) ⟨rfl, rfl⟩ hv
+      exact Scan.numsL_tokens s.toList #[] "" false 0 #[] v (by simp) ⟨rfl, rfl⟩ hu
     · rfl
   · rfl
 

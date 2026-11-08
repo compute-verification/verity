@@ -1,7 +1,8 @@
 /-
-`Flock.Scan`: a row's numbers read off its bytes (`nums`), as `Flock.tokens` and `String.toNat?` read its chars. A line of
-ASCII decimal digits and whitespace gives the numbers `(tokens s).mapM String.toNat?` gives (`nums_eq`, `numsL_tokens`);
-`Net.lineNumsFast` falls back to that expression on any other line, so the two agree on every line.
+`Flock.Scan`: a row's numbers read off its bytes (`nums`, and `numsU` in machine words), as `Flock.tokens` and
+`String.toNat?` read its chars. A line of ASCII decimal digits and whitespace gives the numbers
+`(tokens s).mapM String.toNat?` gives (`numsU_some`, `nums_eq`, `numsL_tokens`); `Net.lineNumsFast` falls back to that
+expression on any other line, and on a number past 19 digits, so the two agree on every line.
 -/
 module
 
@@ -18,8 +19,8 @@ def val (ds : List Char) : Nat := ds.foldl (fun n c => n * 10 + (c.toNat - 48)) 
 theorem val_append (ds : List Char) (c : Char) : val (ds ++ [c]) = val ds * 10 + (c.toNat - 48) := by
   simp [val, List.foldl_append]
 
-theorem foldl_congr {α β : Type} (f g : α → β → α) : ∀ (l : List β) (a : α), (∀ x ∈ l, ∀ a, f a x = g a x) →
-    l.foldl f a = l.foldl g a
+theorem foldl_congr {α β : Type} (f g : α → β → α) :
+    ∀ (l : List β) (a : α), (∀ x ∈ l, ∀ a, f a x = g a x) → l.foldl f a = l.foldl g a
   | [], _, _ => rfl
   | x :: xs, a, h => by
     simp only [List.foldl_cons, h x (by simp) a]
@@ -82,7 +83,8 @@ def numsL : List Char → Bool → Nat → Array Nat → Option (Array Nat)
     else if c.isWhitespace then numsL cs false 0 (if inTok then out.push acc else out)
     else none
 
-/-- `numsL`'s state against `tokStep`'s: inside a token, its chars so far are digits worth `acc`; between tokens, none. -/
+/-- `numsL`'s state against `tokStep`'s: inside a token, its chars so far are digits worth `acc`; between tokens,
+none. -/
 def Inv (cur : String) (inTok : Bool) (acc : Nat) : Prop :=
   if inTok then ∃ ds, cur = String.ofList ds ∧ ds ≠ [] ∧ (∀ c ∈ ds, c.isDigit = true) ∧ acc = val ds
   else cur = "" ∧ acc = 0
@@ -103,7 +105,8 @@ theorem mapM_push_opt {α β : Type} (f : α → Option β) (xs : Array α) (x :
 /-- **What `numsL` reads, `tokens` and `String.toNat?` read**: when `numsL` reads numbers off the rest of the line, the
 tokens `tokStep` reads off it, finished as `Flock.tokens` finishes them, are those numbers. -/
 theorem numsL_tokens : ∀ (cs : List Char) (out : Array String) (cur : String) (inTok : Bool) (acc : Nat)
-    (outN v : Array Nat), out.mapM String.toNat? = some outN → Inv cur inTok acc → numsL cs inTok acc outN = some v →
+    (outN v : Array Nat), out.mapM String.toNat? = some outN → Inv cur inTok acc →
+    numsL cs inTok acc outN = some v →
     (let st := cs.foldl tokStep (out, cur); if st.2 != "" then st.1.push st.2 else st.1).mapM String.toNat? = some v
   | [], out, cur, inTok, acc, outN, v, hout, hinv, h => by
     simp only [numsL, Option.some.injEq] at h
@@ -218,7 +221,8 @@ theorem byte_ascii {s : String} (h : ∀ c ∈ s.toList, c.utf8Size = 1) (P R : 
   simp only [hb, List.getElem_toByteArray, List.getElem_map]
   simp [hs]
 
-/-- The numbers of `s` from byte `i` on, read as `numsL` reads chars: decimal digits and whitespace only, else `none`. -/
+/-- The numbers of `s` from byte `i` on, read as `numsL` reads chars: decimal digits and whitespace only, else
+`none`. -/
 def nums (s : String) : Nat → Nat → Bool → Nat → Array Nat → Option (Array Nat)
   | 0, _, _, _, _ => none
   | fuel + 1, i, inTok, acc, out =>
@@ -230,8 +234,8 @@ def nums (s : String) : Nat → Nat → Bool → Nat → Array Nat → Option (A
     else some (if inTok then out.push acc else out)
 
 /-- On an ASCII string, `nums` from a char's index reads what `numsL` reads off the chars from it. -/
-theorem nums_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) : ∀ (R P : List Char) (fuel : Nat) (inTok : Bool)
-    (acc : Nat) (out : Array Nat), s.toList = P ++ R → R.length < fuel →
+theorem nums_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) : ∀ (R P : List Char) (fuel : Nat)
+    (inTok : Bool) (acc : Nat) (out : Array Nat), s.toList = P ++ R → R.length < fuel →
     nums s fuel P.length inTok acc out = numsL R inTok acc out := by
   have hsz := size_ascii ha
   intro R
@@ -257,5 +261,120 @@ theorem nums_eq {s : String} (ha : ∀ c ∈ s.toList, c.utf8Size = 1) : ∀ (R 
     · split
       · exact ih' _ _ _
       · rfl
+
+theorem toNat_succ {i n : USize} (h : i < n) : (i + 1).toNat = i.toNat + 1 := by
+  have h1 := USize.lt_iff_toNat_lt.mp h
+  have h2 := USize.toNat_lt_size n
+  rw [USize.toNat_add, USize.toNat_one]
+  exact Nat.mod_eq_of_lt (by have : USize.size = 2 ^ System.Platform.numBits := rfl; omega)
+
+/-- `nums` in machine words: the byte index a `USize` below `n`, the string's size, and a number's value a `UInt64` with
+its digit count `k`, `none` past 19 digits. -/
+def numsU (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) (i k : USize) (acc : UInt64) (out : Array Nat) :
+    Option (Array Nat) :=
+  if h : i < n then
+    let b := s.getUTF8Byte ⟨i.toNat⟩ (String.Pos.Raw.lt_iff.mpr (by
+      have := USize.lt_iff_toNat_lt.mp h; simp only [String.byteIdx_rawEndPos]; omega))
+    let c := Char.ofUInt8 b
+    if c.isDigit then
+      if k < 19 then numsU s n hn (i + 1) (k + 1) (acc * 10 + (b.toUInt64 &&& 15)) out else none
+    else if c.isWhitespace then numsU s n hn (i + 1) 0 0 (if k != 0 then out.push acc.toNat else out)
+    else none
+  else some (if k != 0 then out.push acc.toNat else out)
+termination_by n.toNat - i.toNat
+decreasing_by
+  all_goals
+    have := USize.lt_iff_toNat_lt.mp h
+    rw [toNat_succ h]
+    omega
+
+theorem digit_val (b : UInt8) (h : (Char.ofUInt8 b).isDigit = true) :
+    (b.toUInt64 &&& 15).toNat = (Char.ofUInt8 b).toNat - 48 ∧ 48 ≤ b.toNat ∧ b.toNat ≤ 57 := by
+  have hv : (Char.ofUInt8 b).val.toNat = b.toNat := UInt8.toNat_toUInt32 b
+  simp only [Char.isDigit, Bool.and_eq_true, decide_eq_true_eq] at h
+  have h1 : 48 ≤ b.toNat := by
+    have := UInt32.le_iff_toNat_le.mp h.1
+    rw [hv] at this
+    exact this
+  have h2 : b.toNat ≤ 57 := by
+    have := UInt32.le_iff_toNat_le.mp h.2
+    rw [hv] at this
+    exact this
+  refine ⟨?_, h1, h2⟩
+  rw [UInt64.toNat_and, UInt8.toNat_toUInt64, show (Char.ofUInt8 b).toNat = b.toNat from hv]
+  have : (15 : UInt64).toNat = 2 ^ 4 - 1 := rfl
+  rw [this, Nat.and_two_pow_sub_one_eq_mod]
+  omega
+
+theorem usize_lit {m : Nat} (h : m < 2 ^ 32) : (OfNat.ofNat m : USize).toNat = m := by
+  rw [USize.toNat_ofNat]
+  exact Nat.mod_eq_of_lt (by have := USize.le_size; have : USize.size = 2 ^ System.Platform.numBits := rfl; omega)
+
+theorem numsU_some (s : String) (n : USize) (hn : n.toNat = s.utf8ByteSize) : ∀ (fuel : Nat) (i k : USize)
+    (acc : UInt64) (out : Array Nat) (v : Array Nat), n.toNat - i.toNat < fuel → k.toNat ≤ 19 →
+    acc.toNat < 10 ^ k.toNat → numsU s n hn i k acc out = some v →
+    nums s fuel i.toNat (k != 0) acc.toNat out = some v := by
+  intro fuel
+  induction fuel with
+  | zero => intro i k acc out v hf; omega
+  | succ fuel ih =>
+    intro i k acc out v hf hk hacc hv
+    rw [numsU] at hv
+    unfold nums
+    split at hv
+    · rename_i h
+      have hi := USize.lt_iff_toNat_lt.mp h
+      have hi' : i.toNat < s.utf8ByteSize := by omega
+      rw [dite_eq_left_of_eq_true (eq_true hi')]
+      simp only at hv ⊢
+      have hp : (⟨i.toNat⟩ : String.Pos.Raw) < s.rawEndPos := String.Pos.Raw.lt_iff.mpr (by simpa using hi')
+      generalize s.getUTF8Byte ⟨i.toNat⟩ hp = b at hv ⊢
+      split at hv
+      · rename_i hd
+        rw [ite_eq_left_of_eq_true _ _ (eq_true hd)]
+        split at hv
+        · rename_i hk19
+          have hk' := USize.lt_iff_toNat_lt.mp hk19
+          have h19 : (19 : USize).toNat = 19 := usize_lit (by decide)
+          have hsucc := toNat_succ h
+          have hks : (k + 1).toNat = k.toNat + 1 := by
+            have := USize.le_size
+            have : USize.size = 2 ^ System.Platform.numBits := rfl
+            rw [USize.toNat_add, USize.toNat_one]
+            exact Nat.mod_eq_of_lt (by omega)
+          obtain ⟨hdv, _, _⟩ := digit_val _ hd
+          have hc : (Char.ofUInt8 b).toNat = b.toNat := UInt8.toNat_toUInt32 b
+          have hlt : acc.toNat * 10 + ((Char.ofUInt8 b).toNat - 48) < 10 ^ (k.toNat + 1) := by
+            rw [Nat.pow_succ]; omega
+          have hpow : 10 ^ (k.toNat + 1) ≤ 10 ^ 19 := Nat.pow_le_pow_right (by omega) (by omega)
+          have hacc' : (acc * 10 + (b.toUInt64 &&& 15)).toNat = acc.toNat * 10 + ((Char.ofUInt8 b).toNat - 48) := by
+            rw [UInt64.toNat_add, UInt64.toNat_mul, hdv]
+            have : (10 : UInt64).toNat = 10 := rfl
+            rw [this]
+            have h1 : acc.toNat * 10 < 2 ^ 64 := by omega
+            rw [Nat.mod_eq_of_lt h1]
+            exact Nat.mod_eq_of_lt (by omega)
+          have := ih (i + 1) (k + 1) _ out v (by omega) (by omega) (by rw [hks, hacc']; exact hlt) hv
+          rw [hsucc, hacc'] at this
+          have hne : (k + 1 != 0) = true := by
+            simp only [bne_iff_ne, ne_eq]
+            intro h0; rw [h0] at hks; simp at hks
+          rw [hne] at this
+          exact this
+        · exact absurd hv (by simp)
+      · rename_i hd
+        rw [ite_eq_right_of_eq_false _ _ (eq_false hd)]
+        split at hv
+        · rename_i hw
+          rw [ite_eq_left_of_eq_true _ _ (eq_true hw)]
+          have := ih (i + 1) 0 0 _ v (by rw [toNat_succ h]; omega) (by simp) (by simp) hv
+          rw [toNat_succ h] at this
+          simpa using this
+        · exact absurd hv (by simp)
+    · rename_i h
+      have hi : ¬ i.toNat < n.toNat := mt USize.lt_iff_toNat_lt.mpr h
+      have hi' : ¬ i.toNat < s.utf8ByteSize := by omega
+      rw [dite_eq_right_of_eq_false (eq_false hi')]
+      exact hv
 
 end Flock.Scan
