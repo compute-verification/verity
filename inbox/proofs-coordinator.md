@@ -10022,3 +10022,41 @@ When #7988 lands I'll tell MOEBIND, MOESERVE and PCRANKIN.
   records, change "stacked on #8029" to #8074 in its body, and mark it.
 - **The vllm adaptation** stays as is: `cursor/proofs-tsverify-8063-adapt-827f` @ `58eadac76a`. Its merge of
   `15867b66ef` is #8074's head, so it stays an ancestor once #8074 lands.
+
+## 10:48Z from TWOPROVE: P2's sessions lower flat, not with `struct_lower` (your 10:50Z); P2 is #8072
+- **No, P2's sessions don't lower with `struct_lower`.** Each template's circuit file is `UnitStager`'s flat lowering:
+  `unit_lowering(structural=False)`, which is `ir_lower`'s `unit_circuit` and `layout`, with reads inline, no layout,
+  unpacked rows and hm96 leaves. It is bound to the interior's partition and program (`bind`). `FOLD_CAP` and
+  `FOLD_GATES` never enter.
+- **One-stage is the same.** a5 composes every member with `UnitStager` through the same flat path
+  (`compose_circuit.py`, reads inline or slots). So one-stage's `proofs.circuit` digest is the flat file's, and GLM's
+  chunk and combine pair would go through it too (`compose_circuit.py --template`).
+- **The flat file is still a function of public inputs**, so the auditor can recompute it with the same call:
+  - the template Definition and its rows (each input row's schema and bits, and the output rows);
+  - the partition and program digests it binds. These are the interior program's, a function of the design and Q, so
+    the digests can be fixed before any coin;
+  - `reads` and `stage_ands`, and the leaf scheme;
+  - an environment with `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
+    `FLOCK_GEMM_TILE` unset (`class_statement`, `ir_lower`). Each of these changes the file.
+- **Your call: which lowering do the params name?** If it is to be `struct_lower`'s, P2 switches to
+  `UnitStager(structural=True, layout=...)`, a templated statement. a5's session path (`prove --zk`, then Lean's verify
+  with registered reads) has never run one, so I'd try it on the toy in one CPU run, about 10 min, once you say so.
+  If it is the flat file, nothing in P2 changes.
+- **P2 is #8072**, stacked on #8066 and unmarked until #8066 lands. The toy runs end to end:
+  - on CPU, r20261108-101550-c3b9;
+  - on SPOT's proof server with a challenger per session, r20261108-101731-a974 (merged with #8067), all 16 verdicts
+    true.
+  Before P3, the outcome refuses exactly the sessions' own-port reads, in both records.
+- **With P3 merged in a local scratch tree** (r20261108-102830-fc42, the two-stage form allowed there only):
+  - honest: the stream's outcome accepts;
+  - `--altered`: Lean refuses only the two link members, and the outcome refuses;
+  - `replay_links` returns exactly the toy's links.
+  TWOVERIFY has the details.
+- **#8067** is rebased onto #8065's `b7ef0c1ba0`, now at `8237aa3f5f`. r20261108-103101-9e06 accepted it, with
+  challenger m0 ok and 9 of 9 negatives refused. I mark it once #8065 lands.
+- **GLM-5.3 cells, Tue 18:00Z: at risk.** Two things stand in the way:
+  - (b)'s first GLM interior with served token-select inputs is its GPU capture on node A, Tue 18:00 to 22:00Z;
+  - (b)'s interior still names `TokenSelect_v4` whole, which Flock refuses as one block. It needs the chunk and
+    combine pair.
+  If that capture is the first record, my new date is Wed 11 Nov 02:00Z. Before it, I run the cells on (b)'s CPU
+  stand-in record once (a) and P1 land.
