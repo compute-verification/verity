@@ -10,6 +10,7 @@ public import SampledProofs.Supplied
 public import SampledProofs.Registration
 public import SampledProofs.Produced
 public import SampledProofs.Bound
+public import SampledProofs.PlanCheck
 public import SampledProofs.PyJson
 public import SampledProofs.Record
 public import SampledProofs.OneStage
@@ -40,5 +41,6 @@ public import SampledProofs.WiresDrawn
 public import SampledProofs.SiteDifftest
 public import SampledProofs.Interval
 public import SampledProofs.FactorUpper
+public import SampledProofs.TwoStageCheck
 
 @[expose] public section

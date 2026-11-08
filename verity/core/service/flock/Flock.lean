@@ -49,6 +49,10 @@ public import Flock.RecAlgebra
 public import Flock.RecResiduals
 public import Flock.RecOpening
 public import Flock.HmRow
+public import Flock.ReadNet.Sha
+public import Flock.ReadNet.RowSeg
+public import Flock.ReadNet.Leaf
+public import Flock.ReadNet.Select
 public import Flock.Desc
 public import Flock.RecVStar
 public import Flock.ProvedScope
@@ -60,7 +64,6 @@ public import Flock.RegKnown
 public import Flock.KnownRead
 public import Flock.JsonKeys
 public import Flock.RecordText
-public import Flock.Keccak
 public import Flock.RecCoins
 public import Flock.RecSetup
 public import Flock.RecBudget

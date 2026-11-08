@@ -1,7 +1,7 @@
 """One training step as a Program: the forward, the backward and the optimizer of an ordinary `nn.Module`, derived through the same
 front door as a served model (`derive_graph.derive_graph`), with the training rules (`rules/training.py`) added to the default ones.
 
-    step_program(model, loss_fn, optimizer, example_batch, mode="reference") -> Program | Unsupported
+    step_program(model, loss_fn, optimizer, example_batch, mode="reference", cc=None) -> Program | Unsupported
 
 The step is one function of everything a step reads,
 
@@ -183,16 +183,18 @@ class StepSurvey:
 
 
 def step_report(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW, example_batch: torch.Tensor, *, mode: str = "reference",
-                survey: bool = False, rules: RuleSet | None = None, name: str = "TrainStep",
+                survey: bool = False, rules: RuleSet | None = None, cc: tuple[int, int] | None = None, name: str = "TrainStep",
                 exported: tuple[torch.fx.GraphModule, list[torch.Tensor], StepLayout] | None = None) -> DeriveReport | StepSurvey:
-    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules()`). `exported`:
+    """`step_program`'s derivation report. `rules`: the rule set (default `rules.training.training_rules(cc=cc)`). `exported`:
     `export_step`'s result. `survey`: a `StepSurvey` instead, of the step derived with every refused node a hole
     (`rules.training_survey.survey`)."""
     from verity_vllm.program.frontend.rules.training import training_rules
     from verity_vllm.program.frontend.rules.training_survey import survey as survey_graph
 
+    if rules is not None and cc is not None:
+        raise ValueError("step_report: pass rules or cc, not both (training_rules(cc=...) is the rule set cc names)")
     gm, metas, layout = exported if exported is not None else export_step(model, loss_fn, optimizer, example_batch)
-    ruleset = rules if rules is not None else training_rules()
+    ruleset = rules if rules is not None else training_rules(cc=cc)
     theta = layout.inputs[:len(layout.params)]
     rep = derive_graph(gm, metas, mode=mode, rules=ruleset, name=name, input_names=layout.inputs, theta=theta)
     rep.provenance["train_step"] = layout.to_json()
@@ -226,15 +228,16 @@ def primitives(prog: Program) -> dict[str, PrimitiveDefinition]:
 
 
 def step_program(model: torch.nn.Module, loss_fn: Callable, optimizer: AdamW | torch.optim.Optimizer, example_batch: torch.Tensor, *,
-                 mode: str = "reference") -> Program | Unsupported:
+                 mode: str = "reference", cc: tuple[int, int] | None = None) -> Program | Unsupported:
     """One training step of `model` as a `Program`, or the `Unsupported` that says which op of the step no rule lowers.
 
     `loss_fn(model, batch)` returns the scalar loss; `optimizer` is an `AdamW` (or a `torch.optim.AdamW` with one parameter group);
     `example_batch` gives the batch's shape and dtype (its values are never read, nor are the model's). The Program's inputs are the
     parameters (tied ones once), the optimizer state, the step's host scalars (`AdamW.scalars`), the buffers and the batch; its
     outputs are the loss and the new parameters and state, in `annotations["train_step"]`'s order. `mode` is the derivation mode:
-    "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`)."""
-    return step_report(model, loss_fn, optimizer, example_batch, mode=mode).result
+    "reference" lowers every op to the reference vocabulary's exact f32 arithmetic (`rules.training`). `cc` (the compute capability
+    `cublas_bf16.TRAIN_CC`): its bf16 matrix products as that GPU's cuBLAS computes them instead, at the shapes its capture covers."""
+    return step_report(model, loss_fn, optimizer, example_batch, mode=mode, cc=cc).result
 
 
 def in_bits_beyond_theta(program: Program, gates: GateSet) -> int | parts.Unsupported:

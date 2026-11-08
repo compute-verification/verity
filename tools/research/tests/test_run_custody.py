@@ -826,6 +826,17 @@ def test_a_launch_longer_than_the_default_custody_key_needs_an_explicit_ttl_capp
     assert "pass --custody-ttl" in capsys.readouterr().err
 
 
+def test_an_explicit_custody_key_the_run_outlives_is_refused(capsys):
+    """A bare ``--custody-ttl`` is seconds, so ``600`` beside a ``--max-min 180`` launch minted a 10-minute key whose upload
+    would fail hours later; the launch is refused, naming a lifetime that outlasts the run."""
+    why = cli._custody_ttl_problem("600", ["--timeout", "25200"])
+    assert "outlives --custody-ttl 600 (600 s; a bare number is seconds)" in why and "--custody-ttl 8h" in why
+    assert cli._custody_ttl_problem("8h", ["--timeout", "25200"]) is None
+    assert cli._custody_ttl_problem("600", []) is None
+    assert cli.main(["run", "--on", "vy-nowhere", "--custody-ttl", "600", "--timeout", "3600", "--", "true"]) == 2
+    assert "outlives --custody-ttl 600" in capsys.readouterr().err
+
+
 def test_custody_warns_before_pushing_a_run_bigger_than_the_warn_size(tmp_path, monkeypatch):
     (tmp_path / "out.bin").write_bytes(b"x" * 2048)
     assert CU.size_warning(tmp_path) is None
