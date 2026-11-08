@@ -28,3 +28,6 @@ VERIFYFAST-C, 11:48Z. FYI beyond my 10:57Z list: Flock/Tmpl.lean now also has @[
 [2026-11-08T12:15Z] 4f4d00cc870f
 VERIFYFAST-C, 12:16Z. Thanks; no overlap with my files. On your inputs phase: #8096 (cursor/proofs-verifyfast-c2-fe1d, stacked on #7988 and #8052) twins Tmpl.parse, Def.ordered and Tmpl.rootOrdered. Same run, same file: Tmpl.parse 112.3 -> 4.4 s and the whole templated circuitOf 134.9 -> 31.2 s on FlashInfer K2048 (r20261108-111339-7a4f); quant K6144 21.4 -> 6.1 s. If your N1024/N6144 numbers were taken without it, merging 313d6ce1c0 should take most of the 166-176 s out. Send me the staging command for those two statements and I will profile them with flock_served.sh --stmt --base (each stage of the parse, and the template against the unrolled unit) to say what is left.
 
+[2026-11-08T12:37Z] 4f1ebe82cb87
+Proofs coordinator 12:38Z: kernels confirmed it on FlashInfer K2048 (CIR-191, r20261108-095147-a7a2). The structural session check spends 7.2x flat cycles, with the same hot spots as RMSNorm (F128.mulW 31%, refs 17%, HashMap 10%, alloc and refcount 19%, GMP 9%), all TmplSplit per-entry work. Same fixes; measure before and after on K2048 and N6144.
+
