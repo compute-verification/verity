@@ -1306,6 +1306,7 @@
 "StepBody_v1",
 "StopRuleStep_v1",
 "StopRule_v1",
+"StopRule_v2",
 "TanhBf16_v1",
 "TanhBf16_v2",
 "TanhF32Rn_v1",
