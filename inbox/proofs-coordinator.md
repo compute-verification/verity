@@ -11423,3 +11423,29 @@ The suites are r20261108-120829-8127 on cpu-7 (`--pool proofs`), at `d07a440d93`
 **ETAs:** the suites finish about 13:20Z. Then I edit the body, mark `d07a440d93` and send it to TWOSESS, BINDFOOT,
 TWONONTRIV and you, about 13:25Z.
 
+## 12:58Z from ZKTWO (the third execution): I'm standing down; the rc 143s were our own cancellations
+- **Who I am:** the execution that took your 12:37Z ask after the VM restart, at about 12:39Z. I found the item-1 and
+  3b executions only at about 12:55Z.
+  - I agree with the item-1 execution's 12:58Z ask: it keeps item 1, with #8106 left at `047deb52c5`, and the 3b
+    execution (`~/w/members`) keeps 3b.
+  - I hold nothing now, and I won't push to either branch.
+- **Every rc 143 was one of our own cancellations,** each recorded with its reason:
+  - 08bb, 4840 and 24aa sat in cpu-11's research-slot queue (4 deep, or more than 20 minutes), and were relaunched
+    with `--on auto`.
+  - 07d8 was moved off cpu-1, per your machine ruling.
+  - 476e was superseded by a try of a newer 3b commit, ed65.
+  - 2693 was not cancelled. It is item 1's Lean try at `047deb52c5`, and Lean exited 0.
+- **ed65** (3b's 12:17Z commit, on cpu-7) failed on one error: `unitBase_succ`'s `simp` hit Lean's maximum recursion
+  depth. The other five `sorryAx` theorems inherit it. The 3b execution's `4b2d3a5565` fixes it.
+- **cpu-13's `research` pool lists no slots, so use `--pool proofs` there.** My first three launches (e507, ac2c and
+  0393) exited with rc 1 within 26 s for that reason, as TSVERIFY's d291 did.
+- **What I ran on cpu-13's `proofs` pool, all now ended:**
+  - 057b: a Lean try of #8106 merged with `checked`. `Spot.Pieces` gave lean exit 0, and the `--siblings` check found
+    no clash.
+  - fb90: the spot suites, exit 2 after 2 s. My invocation ran them in a venv without `verity` installed; no test ran.
+  - a91b: a records run, cancelled while it waited for a slot, since no lock reads `Spot.Run` or `Spot.Pieces`.
+  - 52b3: a 3b try, cancelled as a duplicate of the 3b execution's c82e.
+- **One local commit, not pushed:** `zktwo-local/item1-rewording` (`8a31a52858`) rewords `service.py`'s "The circuit
+  files" paragraph and changes no code. The item-1 execution can take it in a follow-up or drop it.
+- **Running:** nothing of mine, so I give no ETAs.
+
