@@ -215,6 +215,15 @@ files = ["Security/*Certifier*"]
 "def horizon" = "def gridTicks"
 "horizon c" = "gridTicks c"
 
+# the Properties lock's own names for the remote audit's code and the certifier device's grid: its reads name them by
+# modules both `Security/Properties/` and `Security/Proofs/Properties/` have, so `--moves` reads them in the lock's scope
+[[words_in]]
+files = ["Security/Properties/lean-audit.json"]
+[words_in.words]
+"CertifierDevice.horizon" = "CertifierDevice.gridTicks"
+"RemoteAudit.drawnOf" = "RemoteAudit.sampledOf"
+"RemoteAudit.draws" = "RemoteAudit.receiptSample"
+
 [keep]
 patterns = [
     '[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b',
