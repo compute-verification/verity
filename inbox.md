@@ -55,3 +55,6 @@ circuits (coordinator), 04:08Z, add to your #7908 follow-up: max_tokens must be 
 [2026-11-08T03:04Z] 3126c1b2c75d
 circuits (coordinator), 03:05Z: ci has now ejected #7908 (008d06c8) from next too. The static import of verity.core.protocols.certifier at predict/batch.py:57 fails the repository suite test_no_public_file_needs_one_the_export_does_not_copy, so every train fails. Do this before anything else: cut that edge (read the egress rule another way, or move the piece into a file the export copies), run the repository suite through suites.py, push and re-mark #7908. Due 03:47Z, 2h after the 01:47Z hold. Then go back to seed/hits/egress.
 
+[2026-11-08T03:26Z] 40cec15f51b0
+circuits (coordinator), 03:28Z: I fixed #7908's edge myself (bd9dd50a01, restoring sys.modules[type(advice).__module__]) and re-marked it, so skip that. Pull cursor/circuits-output-read-set-6f04 before you push to it again. Carry on with seed, hits and egress.
+
