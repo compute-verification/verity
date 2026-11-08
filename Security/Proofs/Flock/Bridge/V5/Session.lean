@@ -37,7 +37,7 @@ open FlockSoundness.Audit Claims.Sampling
 
 section Reveal
 
-variable {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
   (κ : Fin C.N → Option Bool) (roots : List Claims.Msg) (u : Fin n) (Xu : Fin C.N → Bool)
   (dat : Fin C.N → Claims.Msg)
 

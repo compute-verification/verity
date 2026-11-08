@@ -67,7 +67,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 theorem mem_io_of_read {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : Fin n} {a h : Fin C.N}
     (hh : P.unit h = some u) (ha : a ∈ (C.op h).args) (hne : P.unit h ≠ P.unit a) : a ∈ P.io u := by
@@ -81,7 +81,7 @@ theorem mem_io_of_owner {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u : 
   obtain ⟨hin, -, ho⟩ := mem_insOf.1 ha
   obtain ⟨h, hh, hr⟩ := reads_of_owner ho
   refine mem_io_of_read hh hr ?_
-  rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
+  rw [hh, (P.input_iff a).2 (by simp [hin, Verity.Boolean.Op.isInput])]
   simp
 
 /-- **A position the unit commits is a wire of `P.io u`**: a gate of `unitGates P u` that `Boundary` commits is the
@@ -109,7 +109,7 @@ theorem posOf_of_boundary {n : ℕ} {P : FlockSoundness.Audit.Partition C n} {u 
       rw [posOf_eq, gates_off g (by omega)] at hin
       exfalso
       cases hop : C.op g with
-      | input => exact absurd ((P.input_iff g).2 (by simp [hop, Op.isInput])) (by simp [hu])
+      | input => exact absurd ((P.input_iff g).2 (by simp [hop, Verity.Boolean.Op.isInput])) (by simp [hu])
       | and a b => simp [lower, hop, gateSize] at hin
       | xor a b => simp [lower, hop, gateSize] at hin
       | not a => simp [lower, hop, gateSize] at hin
@@ -198,7 +198,7 @@ theorem correct_blockOf_of {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (u
   have hκ' : ∀ a b, C.op a = .input → κ a = some b → (∃ h, P.unit h = some u ∧ a ∈ (C.op h).args) → V a = b := by
     rintro a b hin hk ⟨h, hh, ha⟩
     refine hκ a (mem_io_of_read hh ha ?_) b hk
-    rw [hh, (P.input_iff a).2 (by simp [hin, Op.isInput])]
+    rw [hh, (P.input_iff a).2 (by simp [hin, Verity.Boolean.Op.isInput])]
     simp
   rw [ref_blockOf, correct_blockOf]
   by_cases hN : Nonempty (Fin C.N)

@@ -16,7 +16,7 @@ namespace Flock.Bridge
 
 open FlockSoundness.Audit Claims.Sampling
 
-variable {C : FlockSoundness.Audit.Circuit} {κ : Fin C.N → Option Bool}
+variable {C : Verity.Boolean.Circuit} {κ : Fin C.N → Option Bool}
 
 theorem posOf_lt_length (g : Fin C.N) : posOf C g < (progOf C κ).gates.length := by
   have h1 := one_le_gateSize (C.op g)

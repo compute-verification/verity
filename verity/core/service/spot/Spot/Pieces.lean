@@ -62,6 +62,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   (`ChallengerCoins`): `read_reason`, the bytes a sample read against its segment, `coins_reason`, against the segment
   and the session the auditor's ledger opens for the verifier's window (`trusted_session_of`), and `coins_within`, the
   sizes the evidence holds against v2's limits.
+* `challenger_seed_salt`: a window's seed salt as the verifier reads it from the challenger's log (`seed_salt_of`,
+  `Challenger.seedSaltOf`): the one coin of the seed-salt family released after the window's open root.
 * `challenger_coin_trees`, `challenger_session_trees`, `challenger_sample_link_first`: a `--zk` session's coins
   (`ChallengerTrees`): the coin trees a release log shows the challenger sampled and opened (`coin_trees_of`), an
   audit's session records, each on its tables with their `root_B` lengths, held to them, one tree a session
@@ -677,6 +679,7 @@ def table : List (String × (Json → V Json)) :=
    ("challenger_session", Challenger.sessionPiece), ("challenger_credited", Challenger.creditedPiece),
    ("challenger_pinned", Challenger.pinnedPiece), ("challenger_read", Challenger.readPiece),
    ("challenger_draw_coins", Challenger.drawCoinsPiece), ("challenger_within", Challenger.withinPiece),
+   ("challenger_seed_salt", Challenger.seedSaltPiece),
    ("challenger_coin_trees", Challenger.coinTreesPiece), ("challenger_session_trees", Challenger.sessionTreesPiece),
    ("challenger_sample_link_first", Challenger.sampleLinkFirstPiece),
    ("challenger_inner_trees", Challenger.innerTreesPiece),

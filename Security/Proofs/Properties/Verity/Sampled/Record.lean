@@ -277,7 +277,7 @@ theorem V_k_ne {x : Msg} (h : x ≠ xOf A o) : (V A o).k x = 1 := ite_eq_right h
 /-- The commitment's fields are `LayoutIsL`'s at `A`, wherever its circuit's rows are `sha512/row/v2`'s. -/
 theorem layoutIsL (h : Flock.Bridge.RowsV2 A.D.unroll) :
     Flock.Bridge.LayoutIsL A.Cc A.rows A.D.unroll A.Lm A.roots (code A o e) :=
-  ⟨h, rfl, rfl, rfl, rfl, rfl, rfl⟩
+  ⟨h, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩
 
 end Unfold
 
