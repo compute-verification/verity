@@ -409,9 +409,9 @@ def plainLeaves (t : Tags) : Bool :=
 /-- A recursive session's inner statement (`Tags.withPlainLeaves`): the default statement with plain SHA-512 leaves. -/
 def circuitPlainLeaves : Tags := { circuit.withPlainLeaves with name := "verity/flock-circuit+plain-leaves" }
 
-/-- The versions this verifier knows, by name. `verify` accepts a session only at `circuit` or `circuitPlainLeaves`
-(`ProvedScope.served`); it sets every other version up and runs every check, so the agreement corpus and the recorded
-fixtures replay, and then refuses the session. -/
+/-- The versions this verifier knows, by name, beside the templated ones (`templated`). `verify` accepts a session only
+at `circuit`, `circuitPlainLeaves` or `circuitTmpl` (`ProvedScope.served`); it sets every other version up and runs every
+check, so the agreement corpus and the recorded fixtures replay, and then refuses the session. -/
 def all : List Tags := [netlistV1, circuit19c7269a, circuitFd02e847, circuit631567f7, circuitEb90718f, circuitEb90718fSelftest,
   circuitE51e2b86, circuitE51e2b86Selftest, circuit967b8d06, circuit967b8d06Selftest, circuitTypes210d32e1,
   circuitTypes210d32e1Selftest, circuitF5df3bbc, circuitF5df3bbcSelftest, circuitTypesF5df3bbc, circuitTypesF5df3bbcSelftest,
