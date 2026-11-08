@@ -18,14 +18,13 @@ the GPU's (`Binary`), as are `silu_backward`'s operations, `lerp`'s, `addcdiv`'s
 modeled); a vector norm or a sum of a whole tensor is its `reduce_kernel`'s (`rules.training_reduce.FullReduce`); an f32
 embedding's gradient is its kernels' (`EmbeddingDenseBackward`); and the conversions to bf16, to and from f16 and from f32 to
 int64 and uint8, a clamp and a `kthvalue` are its own (`rules.training_masks`).
-A random op's values are an input of the step, committed with its generator's seed (`rules.training_draws.Random`).
 
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, softmax and log-softmax
 `rules.training_softmax`'s, comparisons, masks, integer sums, adds, shifts and ands, conversions, functionalized copies, table
-lookups, `amax` and `kthvalue` `rules.training_masks`'s, samples `rules.training_draws`'s and the helpers the rules emit with
-`rules.training_emit`'s; a survey of what the rules refuse is `rules.training_survey`'s.
+lookups, `amax` and `kthvalue` `rules.training_masks`'s and the helpers the rules emit with `rules.training_emit`'s; a survey of
+what the rules refuse is `rules.training_survey`'s.
 """
 
 from __future__ import annotations
@@ -47,7 +46,6 @@ from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
                                                               _iota, _operand, _operand_ok, _ones, _per_row, _ref, _rounded, _shape,
                                                               _tokens, _TrainRule, _widened, aten)
-from verity_vllm.program.frontend.rules.training_draws import Random
 from verity_vllm.program.frontend.rules.training_masks import (AMax, Cast, Clamp, Compare, Copy, Index, IntOps, IntSum, KthValue,
                                                                Logic, Where)
 from verity_vllm.program.frontend.rules.training_matmul import Matmul
@@ -700,7 +698,7 @@ class EmbeddingDenseBackward(_TrainRule):
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, optimizer-count, reduction, softmax, loss, embedding,
-    comparison, mask, integer, conversion, lookup, order-statistic, sample and copy rules after. `min_view_leaves` is 0 by default:
+    comparison, mask, integer, conversion, lookup, order-statistic and copy rules after. `min_view_leaves` is 0 by default:
     the default views write a permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then
     substitutes as one reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes
     them (`Matmul`), every add, sub, mul and div as its kernels do (`Binary`; `SiluBackward`, `ForeachAdd`, `Lerp` and
@@ -717,7 +715,7 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
                                          FusedAdamW(cc), FullReduce(cc), Reduce(), IntSum(), AMax(), SafeSoftmax(),
                                          SoftmaxBackward(), LogSoftmax(), LogSoftmaxBackward(), NllLossForward(), NllLossBackward(),
                                          EmbeddingDenseBackward(cc), Compare(), Logic(), IntOps(), Where(), Clamp(cc), Index(),
-                                         KthValue(cc), Random(), Copy(cc)] + ([] if cc else [Cast()])
+                                         KthValue(cc), Copy(cc)] + ([] if cc else [Cast()])
     name = "training" if cc is None else f"training-cc{cc[0]}.{cc[1]}" + ("-tf32" if tf32 else "")
     return RuleSet(name, first + list(DEFAULT_RULES.rules) + last, list(DEFAULT_RULES.families))
 
@@ -725,4 +723,4 @@ def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, 
 __all__ = ["training_rules", "Matmul", "Binary", "Unary", "Lerp", "Addcmul", "Addcdiv", "SiluBackward", "ForeachAdd", "FusedAdamW",
            "FullReduce", "Reduce", "IntSum", "AMax", "SafeSoftmax", "SoftmaxBackward", "LogSoftmax", "LogSoftmaxBackward",
            "NllLossForward", "NllLossBackward", "EmbeddingDenseBackward", "Compare", "Logic", "IntOps", "Where", "Clamp", "Cast",
-           "Index", "KthValue", "Random", "Copy"]
+           "Index", "KthValue", "Copy"]

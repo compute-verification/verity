@@ -44,8 +44,8 @@ import Mathlib.Topology.Sheaves.Init
 place of `Flock.Guarantees.ClaimsStated`.
 
 Flock's deployed records (`FlockDeploy.deployZk`, `Claims.ZKMal.zkDeployed` at the deployed plan) are still in its
-proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Models.lean`, which the `security` package
-builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
+proofs package, so this module imports them from `Proofs.Flock.Claims`, and `Definitions.lean`, which the `security`
+package builds without `security_proofs`, does not import it: `Proofs.Flock.Masked` does.
 -/
 
 @[expose] public section

@@ -102,7 +102,7 @@ def _premises(rec: dict) -> list[str] | None:
 
 
 def _ticket(r: dict) -> str:
-    return f"{r.get('issue')}, due {r.get('due')}"
+    return f"{r.get('issue') or 'no issue'}, due {r.get('due')}"
 
 
 def _scope(r: dict) -> str:

@@ -27,7 +27,7 @@ and that call's extraction fails from the state the window brings with probabili
 state terms are one window-level collision term, in expectation over the window's run. The binding errors add: each bounds
 the picked unit's disagreement with the window's committed transcript on the samples where the unit is its call's. So
 `WindowEps` gives gap (4)'s premises (`WindowBoundOfService` on `cursor/pouw-work-bound-stmt2-c7a9`, `KnowledgeSound εks`
-and `LinkSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
+and `BindSound δlink`) at `εks R τ := max_c κ_c + coll R τ` with `coll := Pouw.Window.coll`, and `δlink := ∑_c δlink_c`.
 
 **The deployed sample** (decision 102, `verity/core/protocols/pouw/window.py`). The window's calls are the service's
 sessions and its units the `N` tiles in each (`serviceLaw`): after the receipt the verifier samples one uniform
@@ -53,7 +53,7 @@ decision 101's keyed sample) is retired.
   `g = ⨆_j ksBoundAccZ_j/(1 − rateZ_j)` at the session's strategy, `ksBoundAccZ = ε_c⁻ + √(k·adv₀)` and
   `rateZ = N₀/(ek)` (`Pouw.Window.flockKnowledgeSound_analysisZC`, proved, read through the bridge below).
   `ksJoint_le` (`κ = 2^logLen/(e·Kr)`) is the non-ZK plain-leaf table's, which main's window doesn't run.
-* `LinkSoundIn … σ (δlink σ)`: Flock's link finder at the window's state, over the window's run.
+* `BindSoundIn … σ (δlink σ)`: Flock's link finder at the window's state, over the window's run.
 * `coll`: the random-oracle claim's collision bound at the sessions' counted queries (`CollCounted`, premise, open), on
   average over the oracle; `WindowEps`'s bound at each oracle reads it through `Pouw.Window.avg_counted_le` (proved).
   It holds only where the plays are one oracle program's run at each oracle, counted by that program's calls. As
@@ -125,7 +125,7 @@ that is a function of the prover's state at registration, an analysis of each ca
 sets: if the sample's escapes on `𝓑` are within `η` of the calls' product distribution at every registration (`EscapesWithin`),
 every call's extraction fails from a state `τ` of its session with probability at most `κ c + g c τ`
 (`CallAnalysis.KnowledgeSound`), and every call's binding error in the window is at most `δlink c (R, τ)` at the window's
-state (`LinkSoundIn`), then for every prover the window accepts with its committed transcript's incorrect proof blocks in `𝓑` with
+state (`BindSoundIn`), then for every prover the window accepts with its committed transcript's incorrect proof blocks in `𝓑` with
 probability at most the largest escape over `𝓑` of the calls' product distribution at the prover's registration, plus `η`, plus
 the largest `κ c`, plus the window's collision term at the prover's state (`coll`), plus the sum of the
 `δlink c (R, τ)`.
@@ -141,7 +141,7 @@ def WindowEps : Prop :=
     (δlink : Fin C → (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) (𝓑 : Finset (WUnit n) → Prop),
     EscapesWithin Lw L 𝓑 η →
     (∀ c, (A c).KnowledgeSound (κ c) (g c)) →
-    (∀ c, LinkSoundIn Lw sess committed A c (δlink c)) →
+    (∀ c, BindSoundIn Lw sess committed A c (δlink c)) →
     ∀ σ : Strategy (auditReg Lw (windowSession sess)),
       prob (fun o => o.1 = true ∧ 𝓑 (U.wrong (committed (reg σ) (cont σ)))) (auditReg Lw (windowSession sess)) σ ≤
         (⨆ (B : Finset (WUnit n)) (_ : 𝓑 B), (Law.prod (L (reg σ))).escape B) + η + (⨆ c, κ c) +

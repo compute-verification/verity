@@ -199,6 +199,22 @@ def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"
 
 
+def test_the_listers_share_one_reading_of_the_imports_while_every_file_it_read_is_unchanged(tmp_path):
+    tree = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), FILES)
+    files = graph.tracked(tree)
+    first = lean_module.imports(tree, files)
+    assert lean_module.imports(tree, files) is first, "lean-module, lean-lock and lean-env read the headers once a listing"
+    (tree / "Sec/Proofs/C.lean").write_text("module\n\npublic import Definitions\n")
+    edited = lean_module.imports(tree, files)
+    assert "Sec/Proofs/D.lean" not in edited[2]["Sec/Proofs/C.lean"], "a header edited under the same files is read again"
+    assert edited == lean_module._imports(tree, files)
+    (tree / "Sec/Proofs/lean-audit.json").write_text(json.dumps({"guarantees": [], "roots": ["Proofs.G"]}))
+    rooted = lean_module.imports(tree, files)
+    assert "Sec/Proofs/H.lean" not in rooted[2] and "Sec/Proofs/H.lean" in edited[2], \
+        "and so is the tree after a lock's `roots` change"
+    assert rooted == lean_module._imports(tree, files)
+
+
 def test_one_env_per_toolchain_and_fetched_packages_each_module_reading_its_package_s(tmp_path):
     ts = listed(tmp_path, **OTHER_ENVS)
     assert sorted(i for i in ts if i.startswith("lean-env:")) == ["lean-env:Ext", "lean-env:Old", "lean-env:Sec"], \

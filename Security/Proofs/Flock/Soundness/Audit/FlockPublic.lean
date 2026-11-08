@@ -118,8 +118,8 @@ theorem linkSoundE_mono {decode : DecoderB (C := C) (Reg := Reg) plan tab}
     (hsub : ∀ R τ S u, u ∈ S → ∀ T, P.LinkEvB plan tab decode S R u (Xc' R τ) T →
       P.LinkEvB plan tab decode S R u (Xc R τ) T)
     {δlink : (R : Reg) → Cont L Reg (batchedSession H E plan) R → ℝ≥0∞}
-    (h : (P.analysisBE H E plan tab decode Xc k hk hr hlow).LinkSound δlink) :
-    (P.analysisBE H E plan tab decode Xc' k hk hr hlow).LinkSound δlink := by
+    (h : (P.analysisBE H E plan tab decode Xc k hk hr hlow).BindSound δlink) :
+    (P.analysisBE H E plan tab decode Xc' k hk hr hlow).BindSound δlink := by
   classical
   intro R τ tgt
   refine le_trans (avg_mono fun ω => ?_) (h R τ tgt)
@@ -160,7 +160,7 @@ theorem flock_batched_linkSoundE_pub (ones zeros : Finset (Fin C.N)) (hpub : P.P
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
     (ht : 0 ≤ t') :
     (P.analysisBE (L := L) H E plan tab decode (fun R τ => Xpub ones zeros (P.Xplur H E plan tab vb R τ k Rw)) k hk
-        (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow).BindSound
       (P.linkBoundCR H E plan tab vb k Rw M ρ t') :=
   P.linkSoundE_mono H E plan tab hk _ hlow (fun _ _ _ _ hu _ h => P.linkEvB_of_pub plan tab hpub hu h)
     (P.flock_batched_linkSoundE H E plan tab vb hlow hk hRw hM hρ hr ht)
