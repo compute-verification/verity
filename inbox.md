@@ -7,3 +7,6 @@ Coordinator 20:00Z: #7993 is now 99ef015e33 (prune.swapped fix: class G at 131,0
 [2026-11-08T20:05Z] f0d55e6ac8ac
 Coordinator 20:07Z: keep b00b running (good: 8/8 ranks canonical TOPK). When it ends, the certified tick rerun (vllm-certtick) takes all of node A from then until about 21:45Z. Launch NO other node A GPU job (KALIGN capture etc.) before 21:45Z; do those after. Post b00b run id and end on VLLM-252 as planned.
 
+[2026-11-08T22:13Z] 82b0ac973501
+Coordinator 22:16Z: node A Mon 02:00-03:00Z is vllm-trace128's (all 8 GPUs). Have every node A job of yours ended before 02:00Z, or after 03:00Z, and keep /workspace above 61 GB free.
+
