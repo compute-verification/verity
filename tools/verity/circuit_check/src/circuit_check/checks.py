@@ -1431,7 +1431,7 @@ def template_lowering(sub: Any, st: dict, d: Any, opts: Options, F: Findings, pi
     their pin and the Boolean export, its redundant ANDs, and the laid-out proof blocks against the reference on the edge and
     random vectors (`floored`, its lanes a vector the proof blocks); ``random``, the random vectors it compared on."""
     from verity_flock import ir_lower as IL
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     reg = lowerings.registry("C-Flock")
     tid = sub.template.id

@@ -3135,7 +3135,7 @@
    "files": [
     "benchmarks/numerical/python/verity_numerical/__init__.py",
     "benchmarks/numerical/python/verity_numerical/bench/__init__.py",
-    "benchmarks/numerical/python/verity_numerical/bench/lowerings.py",
+    "verity/ml/flock/python/verity_flock/lowerings.py",
     "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
     "verity/ml/flock/python/verity_flock/templates/__init__.py",
     "verity/ml/flock/python/verity_flock/templates/attention_head.py",
