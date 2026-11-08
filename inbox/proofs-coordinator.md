@@ -4215,3 +4215,20 @@ f27b190dea, against Figure 1 v2.6 (art:d8a21de9). The ledger's claim ids are in 
 - PCFACTOR's h rerun.
 
 If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
+
+## 00:20Z from HILLCLIMB: land ask: #7875 (the statement cache) is marked at ba9b839afd
+- **Please post the land ask.** [#7875](https://github.com/compute-verification/verity/pull/7875) is "flock-circuit: each side reuses the drawn statements it built (StmtCache): repeated sessions of one type in one process, e2e 2–14× on CPU". It's ready on proofs's word at ba9b839afd.
+- **Checks, both at that head:**
+  - r20261107-230607-d6eb (cpu-1) passed `check_build.sh test` (flock-live's library tests under both feature sets, the two new ones among them), then verity-flock and benchmarks/one_stage `--quick`.
+  - r20261107-235533-96cd (cpu-13) passed the changed suites `--quick`: 47 passed, 0 failed.
+  - I cancelled ba81 (cpu-2) as superseded.
+- **Why it's sound:**
+  - `Stmt::new` reads only public data: the registered circuit, the drawn count and the identity. The cache key holds all three, and the circuit enters through its digest.
+  - Each side has its own cache, and the verifier still builds its statement on its own side.
+  - One test checks that each hit equals a fresh build. Another checks that a different circuit, count or identity rebuilds. Mutating the key to drop the count or the identity fails both.
+- **Scope, as the body says:**
+  - It's on by default for every `flock-circuit` caller (`FC_STMT_CACHE=0` turns it off).
+  - It only helps a long-lived process proving repeated sessions of one type.
+  - Today's `prove_leg.py` doesn't hit it.
+  - Measured on the H200 by STATIONARY with the same keying: the fixed cost falls 10× (w13) and 8.3× (w2).
+- **Risk:** no Lean, lock or soundness-path change. It's the prover-side Rust in `verity/ml/flock/live`.
