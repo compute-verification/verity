@@ -1,7 +1,7 @@
 """`edge`: a window's edge holds the requests it must leave to the next that have computed a row, in close order, with a field in
-`edge.kv` each, in `edge.ik` and `edge.iks` where its rows read past INDEX_TOPK and in `edge.last` once past its prompt; the next
-window's carried requests read their fields only when their counters follow from the close, and are refused by name when they
-don't."""
+`edge.kv` each, in `edge.ik` and `edge.iks` where its prompt and certified max_tokens reach past INDEX_TOPK and in `edge.last` once
+past its prompt; the next window's carried requests read their fields only when their counters follow from the close, and are
+refused by name when they don't."""
 from __future__ import annotations
 
 import pytest
@@ -22,6 +22,8 @@ W = WA.Advice((A, B, D, C), (_step((0, 0, 3), (1, 0, 3), (2, 0, 3)), _step((0, 3
 AT_A, AT_B, AT_D = WA.Carried(0, 4, 2, ((0, 4),)), WA.Carried(0, 3, 1, ((0, 3),)), WA.Carried(0, 3, 0, ((0, 3),))
 # window w + 1 carries all three on: a and b keep an output each, and d finishes its prompt and keeps its first
 NEXT = WA.Advice((A, B, D), (_step((0, 4, 1), (2, 3, 3)), _step((1, 3, 1))), (0, 0, 1), (AT_A, AT_B, AT_D))
+# each request's certified max_tokens: a, b and d finish on length at theirs, c on eos within its 8
+CAPS = {"a": 4, "b": 3, "c": 8, "d": 2}
 
 
 def test_the_edge_holds_the_requests_that_must_carry_in_close_order():
@@ -44,24 +46,36 @@ def test_a_carried_request_reads_its_fields_of_the_last_window_s_edge():
                                   E.Slice(1, "b", 3, {"edge.kv": 1, "edge.last": 1}), E.Slice(2, "d", 3, {"edge.kv": 2}))
 
 
-def test_the_indexer_s_keys_and_scales_are_carried_for_a_request_whose_rows_read_past_index_topk():
-    # at INDEX_TOPK 5, a's last row reads 6 keys and d's 7, b's 5: a and d hold `edge.ik` and `edge.iks`, in every window
+def test_the_indexer_s_keys_and_scales_are_carried_for_a_request_whose_max_tokens_reach_past_index_topk():
+    # at INDEX_TOPK 5, a's last row may read 6 keys and d's 7, b's 5: a and d hold `edge.ik` and `edge.iks`, in every window
     held = {"edge.kv": (0, 1, 2), "edge.ik": (0, 2), "edge.iks": (0, 2)}
-    assert E.fields(W, 5) == {**held, "edge.last": (0, 1)} and E.fields(NEXT, 5) == {**held, "edge.last": (0, 1, 2)}
-    assert E.fields(W, 7) == {"edge.kv": (0, 1, 2), "edge.ik": (), "edge.iks": (), "edge.last": (0, 1)}
-    assert [s.fields for s in E.carried(W, NEXT, 5)] == [{"edge.kv": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
+    assert E.fields(W, 5, caps=CAPS) == {**held, "edge.last": (0, 1)} and E.fields(NEXT, 5, caps=CAPS) == {**held, "edge.last": (0, 1, 2)}
+    assert E.fields(W, 7, caps=CAPS) == {"edge.kv": (0, 1, 2), "edge.ik": (), "edge.iks": (), "edge.last": (0, 1)}
+    assert [s.fields for s in E.carried(W, NEXT, 5, caps=CAPS)] == [{"edge.kv": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
                                                          {"edge.kv": 1, "edge.last": 1}, {"edge.kv": 2, "edge.ik": 1, "edge.iks": 1}]
 
 
 def test_the_sparse_attention_decoder_s_latent_history_is_two_ports_one_per_writer():
     split = E.LATENT[1]
-    assert E.fields(W, 5, split) == {"edge.kv_c": (0, 1, 2), "edge.kv_pe": (0, 1, 2), "edge.ik": (0, 2), "edge.iks": (0, 2),
+    assert E.fields(W, 5, split, CAPS) == {"edge.kv_c": (0, 1, 2), "edge.kv_pe": (0, 1, 2), "edge.ik": (0, 2), "edge.iks": (0, 2),
                                      "edge.last": (0, 1)}
-    assert [s.fields for s in E.carried(W, NEXT, 5, split)] == [
+    assert [s.fields for s in E.carried(W, NEXT, 5, split, CAPS)] == [
         {"edge.kv_c": 0, "edge.kv_pe": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
         {"edge.kv_c": 1, "edge.kv_pe": 1, "edge.last": 1}, {"edge.kv_c": 2, "edge.kv_pe": 2, "edge.ik": 1, "edge.iks": 1}]
     with pytest.raises(ValueError, match="latent history groups"):
-        E.fields(W, 5, ("prefix_kv_c",))
+        E.fields(W, 5, ("prefix_kv_c",), CAPS)
+
+
+def test_the_indexer_s_ports_are_keyed_on_max_tokens_never_on_the_output_length():
+    # e and f have prompts of 3 and max_tokens 4: e stops at its 2nd output (its last row reads 4 keys, within INDEX_TOPK 5) and f
+    # runs to its 4th (6 keys). Both may reach 6 keys, all a window knows before either stops, so both hold the indexer's ports
+    e, f, g = WA.RequestAdvice("e", 3, 2, "eos"), WA.RequestAdvice("f", 3, 4, "length"), WA.RequestAdvice("g", 3, 1, "eos")
+    w, caps = WA.Advice((e, f, g), (_step((0, 0, 3), (1, 0, 3)), _step((2, 0, 3))), (0, 0, 1)), {"e": 4, "f": 4, "g": 1}
+    assert E.fields(w, 5, caps=caps) == {"edge.kv": (0, 1), "edge.ik": (0, 1), "edge.iks": (0, 1), "edge.last": (0, 1)}
+    assert E.fields(w, 5, caps={**caps, "e": 2}) == {"edge.kv": (0, 1), "edge.ik": (1,), "edge.iks": (1,), "edge.last": (0, 1)}
+    assert E.fields(w) == {"edge.kv": (0, 1), "edge.last": (0, 1)}, "a model without an indexer reads no cap"
+    with pytest.raises(ValueError, match=r"edge members \['e'\] have no certified max_tokens"):
+        E.fields(w, 5, caps={"f": 4})
 
 
 def test_a_request_idle_in_a_window_stays_in_its_edge_at_the_state_it_was_carried_in():

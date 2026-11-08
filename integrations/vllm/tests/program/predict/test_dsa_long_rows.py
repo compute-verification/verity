@@ -185,6 +185,14 @@ def _step(*rows: tuple[int, int, int, int]):
     return WA.StepAdvice(tuple(WA.Row(i, "decode" if n == 1 and s >= lp else "prefill", s, n, 0, False, ()) for i, lp, s, n in rows))
 
 
+def _short_class_g(tmp_path):
+    from verity_vllm.program.predict.steps import Registered
+    from tests.program.predict.test_steps import CACHE_ON
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
+    return Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+
+
 @pytest.mark.slow
 def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
     """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
@@ -200,12 +208,9 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     from verity.ml.circuits.types import field_types
     from verity_vllm.pipeline import edge as E
     from verity_vllm.pipeline import window_advice as WA
-    from verity_vllm.program.predict.steps import Registered, compile_steps
+    from verity_vllm.program.predict.steps import compile_steps
     from verity_vllm.program.workload import EDGE_PORTS
-    from tests.program.predict.test_steps import CACHE_ON
-    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
-    reg = _class_g(tmp_path, engine=CACHE_ON, model={"hf_config": hf})
-    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    reg = _short_class_g(tmp_path)
     a, b = WA.RequestAdvice("a", 3, 5, "length"), WA.RequestAdvice("b", 2, 3, "length")
     steps = [_step((0, 3, 0, 3), (1, 2, 0, 2)), _step((0, 3, 3, 1), (1, 2, 2, 1)), _step((0, 3, 4, 1)), _step((0, 3, 5, 1)),
              _step((1, 2, 3, 1)), _step((0, 3, 6, 1))]
@@ -221,7 +226,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
     for r in (0, 1):
         assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
-    latent = ("prefix_kv_c", "prefix_kv_pe")
+    latent, caps = ("prefix_kv_c", "prefix_kv_pe"), {q: body["max_tokens"] for q, body in ingress.items()}
     assert [u.edge for u in cs[1].requests] == [(*latent, "prefix_ik", "prefix_iks"), latent]
     ret = field_types(prog[1][0].fn.signature()[1])
     assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(512, Value(16)))), Array(4, Array(6, Array(64, Value(16)))),
@@ -232,7 +237,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
         [*latent, "prefix_ik", "prefix_iks", "last_token"], [*latent, "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
     for adv, wl in ((out, wls[1]), (idle, wls[2]), (into, wls[3])):
-        assert E.fields(adv, TOPK, latent) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+        assert E.fields(adv, TOPK, latent, caps) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
                                                for p, g in EDGE_PORTS if g != "prefix"}, "the advice's side holds the fields the Program's edge returns"
     rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
     for w, held in ((2, [2, 2, 1, 1, 2]), (3, [1, 1, 1, 1, 1])):
@@ -247,3 +252,34 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     for p, pos in zip(prog, ({4, 5, 6}, {4, 5}, set(), {6})):
         assert {int(re.findall(r"\d+", f)[-1]) for f, _ in dict(p[0].fn.signature()[0])["run"].fields} == pos if 0 in p else not pos
         assert 1 not in p or "run" not in dict(p[1].fn.signature()[0])
+
+
+@pytest.mark.slow
+def test_class_g_keys_the_indexer_edge_on_max_tokens_never_on_the_output_length(tmp_path):
+    """Class G (about 25 s): e and f, prompts of 2 and max_tokens 4, admitted together and left by the window after two outputs
+    each; e stops at its 3rd output (its last row reads 4 keys, within INDEX_TOPK) and f runs to its 4th (5 keys, past it). The
+    window can't know which stops first, so both edges carry the indexer's keys and scales for both, as the advice's side
+    (`pipeline.edge.fields` at their caps) holds: the first window's Programs return them and the next reads them as e's and f's
+    history, e's Program reading no `run`. What no cheaper test can: that a request whose rows never read past INDEX_TOPK
+    compiles carrying its indexer history across a window."""
+    from verity_vllm.pipeline import edge as E
+    from verity_vllm.pipeline import window_advice as WA
+    from verity_vllm.program.predict.steps import compile_steps
+    from verity_vllm.program.workload import EDGE_PORTS
+    reg = _short_class_g(tmp_path)
+    e, f, g = WA.RequestAdvice("e", 2, 3, "eos"), WA.RequestAdvice("f", 2, 4, "length"), WA.RequestAdvice("g", 2, 1, "eos")
+    w = WA.Advice((e, f, g), (_step((0, 2, 0, 2), (1, 2, 0, 2)), _step((0, 2, 2, 1), (1, 2, 2, 1)), _step((2, 2, 0, 2))), (0,) * 5)
+    at = WA.Carried(0, 3, 2, ((0, 3),))
+    into = WA.Advice((e, f), (_step((0, 2, 3, 1), (1, 2, 3, 1)), _step((1, 2, 4, 1))), (0,) * 3, (at, at))
+    assert WA.follows(w, into) == [(0, 0), (1, 1)]
+    ingress = {"e": {**GREEDY, "max_tokens": 4, "prompt": [1, 2]}, "f": {**GREEDY, "max_tokens": 4, "prompt": [3, 4]},
+               "g": {**GREEDY, "max_tokens": 1, "prompt": [5, 6]}}
+    cs = [compile_steps(reg, adv, {q.id: ingress[q.id] for q in adv.requests}) for adv in (w, into)]
+    latent, caps = ("prefix_kv_c", "prefix_kv_pe"), {q: body["max_tokens"] for q, body in ingress.items()}
+    assert all(c.batch_rule is None for c in cs)
+    assert [u.edge for u in cs[0].requests] == [(*latent, "prefix_ik", "prefix_iks")] * 2 + [()]
+    out = cs[0].workload.edge.outs
+    assert [i for i, _ in out] == [0, 1] and out[0][1] == out[1][1] and out == cs[1].workload.edge.ins
+    assert cs[1].workload.ports == ("edge.kv_c", "edge.kv_pe", "edge.ik", "edge.iks", "edge.last")
+    assert E.fields(w, TOPK, latent, caps) == {p: (0, 1) for p, g in EDGE_PORTS if g != "prefix"}
+    assert "run" not in dict(cs[1].programs[cs[1].requests[0].digest].fn.signature()[0]), "e's rows read no key past INDEX_TOPK"

@@ -3,7 +3,7 @@ prefill chunks and launches its Program reads (`launch_of`), and what the window
 `steps.Rows`, (step, index in the step, advice row) in step order."""
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from typing import Any
 
 from verity_vllm.pipeline import window_advice as WA
@@ -47,24 +47,31 @@ def launch_of(i: int, LP: int, T: int, C: int, rows: Sequence[tuple[int, int, An
     return tuple(chunks), tuple(tuple((r.n, r.start) for r in steps[s].rows) for s, _, _ in rows[:k + decodes])
 
 
-def edge_groups(net: Any, q: Any) -> tuple[str, ...]:
-    """The history groups a window's edges carry of request `q` (its record, the same in every window: `window_advice.follows`):
-    each one a row of its whole Program reads (`dsa.Net.edge_groups` at its last row's keys, its prompt and `output_len` - 1
-    decodes), so each window computes and hands on a group's rows exactly where the request compiled whole computes them."""
-    return net.edge_groups(int(q.prompt_len) + int(q.output_len) - 1)
+def edge_groups(net: Any, prompt_len: int, max_tokens: int) -> tuple[str, ...]:
+    """The history groups a window's edges carry of a request of `prompt_len` prompt tokens and certified cap `max_tokens`: each
+    one a row of its whole Program may read (`dsa.Net.edge_groups` at the most keys its last row reads, its prompt and
+    `max_tokens` - 1 decodes). Keyed on the cap, never on the output length its record states, which its stop decides after the
+    window (prefix stability), so every window keys a request's groups alike before any of its outputs, and each computes and
+    hands on a group's rows wherever the request compiled whole computes them."""
+    return net.edge_groups(int(prompt_len) + int(max_tokens) - 1)
 
 
-def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[int]) -> Edge | None:
+def edge_of(phi: Any, advice: WA.Advice, units: Sequence[Any], idle: Sequence[int], caps: Mapping[int, int]) -> Edge | None:
     """What the window's edges carry in class G (`workload.Edge`): each request's rows [0, E) of every layer, E where it continues,
-    of its history groups (`edge_groups`) as `Net.prefix_params(E)` lays them out, and from its prompt's end on its last kept
-    output. In, each request the last window left with outputs to keep (carried here with outputs left, in that window's `close`
-    order), E its carried `computed`; out, each one this window leaves so, in its `close` order, E its `computed` at the close,
-    its unit's LP + T (an idle one's as it came in, its fields passed through). A request with no Program here (`partial` refused
-    it) leaves no out member. None when neither edge carries one."""
+    of its history groups (`edge_groups` at its certified `max_tokens`, ``caps`` by request) as `Net.prefix_params(E)` lays them
+    out, and from its prompt's end on its last kept output. In, each request the last window left with outputs to keep (carried
+    here with outputs left, in that window's `close` order), E its carried `computed`; out, each one this window leaves so, in its
+    `close` order, E its `computed` at the close, its unit's LP + T (an idle one's as it came in, its fields passed through). A
+    request with no Program here (`partial` refused it) leaves no out member. None when neither edge carries one; refused where
+    an edge member's cap is unknown (an idle request whose certified body the ingress lacks)."""
     net = decoder(phi, 1, 0)
 
     def groups(i: int, E: int) -> tuple[tuple[str, int, int], ...]:
-        q, carried = advice.requests[i], edge_groups(net, advice.requests[i])
+        if i not in caps:
+            raise Unexpressible(f"request {i}: the window's edge keys its history groups on its certified max_tokens, and the "
+                                f"ingress holds no well-formed body of it")
+        q = advice.requests[i]
+        carried = edge_groups(net, q.prompt_len, caps[i])
         return (*((g, t.leaves, t.homogeneous_width()) for g, t in net.prefix_params(E) if g in carried),
                 *((("last_token", 1, 32),) if E >= q.prompt_len else ()))
 
