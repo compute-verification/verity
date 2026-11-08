@@ -457,7 +457,7 @@ def main() -> int:
     t = time.time()
     held, bind, base = {}, {}, 0
     if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
-        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.core.protocols.spot.one_stage import partition as P
         from verity.ml.circuits.codec import canonical_json, encode_program
 
         program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])

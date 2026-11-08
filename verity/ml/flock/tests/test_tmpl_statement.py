@@ -329,7 +329,7 @@ def test_lean_reads_the_templated_statement_as_the_flat_one(verifier, bound, tmp
     units derived from the verifier's own copy of the Program): the templated statement is the templated tags', its class
     `circuit.class_digest`'s (``HmRow.classOf`` of its canonical META and the rest), and its instance count, regions, Δ,
     partition and partition check the flat statement's."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity.ml.circuits.codec import canonical_json, encode_program
 
     args, rows, _kw = _toy(0)
