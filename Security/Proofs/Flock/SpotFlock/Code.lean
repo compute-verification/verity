@@ -32,7 +32,8 @@ reference prover's framing (`frame`, a code whose verifier and samples are unrea
   (`Interiors.encode`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
 * round 2: the prover's message is the session's statement `xS`, which the verifier checks (`stmtOk`): the run's
   statement decodes and its partition and design evaluate, `xS` sets up as a masked Flock statement with `k₀` rounds,
-  in Flock's masked scope and with `xS₀`'s table shapes (`sessionOk`), its sample is the second stage's, its
+  in Flock's masked scope, in the scope Flock's soundness proof covers and with hidden outputs, and with `xS₀`'s table
+  shapes (`sessionOk`), its sample is the second stage's, its
   registered reads are the auditor's at the run's roots and the interior registration's, and it is `xS₀` in every other
   field (`pinOk`); it refuses `xS` otherwise;
 * rounds 3 on: Flock's masked verifier at `xS`, message for message, whose decision is the run's.
@@ -186,8 +187,17 @@ def shapeOf (xS : Msg) : List ℕ :=
 
 variable (h : Held)
 
-/-- **The session's statement is in scope**: in Flock's masked scope, with the reference statement's table shapes. -/
-def sessionOk (xS : Msg) : Bool := zkOk xS && shapeOf xS == shapeOf h.xS₀
+/-- **The hidden-outputs tag of a session statement's reading**, `false` where it has none. -/
+def hiddenOf (xS : Msg) : Bool :=
+  match FlockDeploy.readOf true xS with
+  | some r => r.tags.hiddenOutputs
+  | none => false
+
+/-- **The session's statement is in scope**: in Flock's masked scope, with the reference statement's table shapes, in
+the scope Flock's soundness proof covers (`FlockDeploy.scopeCheck`, as `flock-verify` refuses any other), and with
+hidden outputs (`hiddenOf`), as the deployed session circuit has. -/
+def sessionOk (xS : Msg) : Bool :=
+  zkOk xS && shapeOf xS == shapeOf h.xS₀ && FlockDeploy.scopeCheck true xS && hiddenOf xS
 
 /-- **The first stage's design**: the one `Select.select` samples on the boundary registration (`slotDesign`). -/
 def replayDesign : Option Design :=
