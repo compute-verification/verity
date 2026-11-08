@@ -183,7 +183,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         envelopes.regime(REG.override({"regime.onsite-links.form": "widths"}), "onsite-links")
     with pytest.raises(ValueError, match="wipe per"):
         envelopes.regime(REG.override({"regime.onsite.per": "rack"}), "onsite")
-    with pytest.raises(ValueError, match="sampled proofs need"):
+    with pytest.raises(ValueError, match="SPOT needs"):
         Detection(1, 3600, sampled=True)
 
 

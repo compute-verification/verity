@@ -1,5 +1,5 @@
 # The loops the watchers supervisor (watchers.py) runs on the control pod: each loop that watches the system and used to run in tmux
-# on an agent VM (INF-131). Deployed as /data/watchers/watchers.toml; the supervisor reads it when it starts. `{dir}` and `{src}`
+# on an agent VM. Deployed as /data/watchers/watchers.toml; the supervisor reads it when it starts. `{dir}` and `{src}`
 # stand for the two paths below. A credential reaches a loop only through the files its `env_files` names (watchers.py's
 # docstring); a loop whose `needs` or `env_files` is missing waits for it.
 dir = "/data/watchers"
