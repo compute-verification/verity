@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import bisect
 import json
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -261,6 +262,17 @@ def test_the_order_check_refuses_a_wire_running_backward(toy):
     with pytest.raises(AssertionError, match=rf"wire {len(tp.circuit.wires)} .* not below it"):
         in_order(tp, (*tp.circuit.wires, back))
 
+
+@pytest.mark.parametrize("world", [W, 8])
+def test_the_circuit_states_the_windows_order_and_the_check_holds_every_wire_to_it(toy, world):
+    """The window's circuit states `Sites.order` (`interface.Circuit.order`), so `interface.check_wires` holds every wire
+    to it: at TP2 (the toy) and TP8 (`rank_body`) the window's wires pass, and with its ranges ranked the other way round
+    a wire reads a range ranked at or after its reader's and is refused by name."""
+    sites = TW.sites_circuit(toy if world == W else [TB.derive([rank_body(world, r) for r in range(world)])], "w")
+    c = sites.circuit
+    assert c.order == sites.order and len({r for *_, r in sites.units}) == world
+    with pytest.raises(ValueError, match=r"order: wire \d+ "):
+        replace(c, order=sites.order[::-1])
 
 def test_each_ranks_sent_partial_is_its_own_segment_at_the_sites_slice(toy):
     """The binding pairs rank r's segment p with rank p's own partial at the site's key, so it relies on each rank sending

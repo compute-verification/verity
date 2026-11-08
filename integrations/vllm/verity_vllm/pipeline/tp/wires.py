@@ -13,7 +13,8 @@ reading a combine's output is a unit of its own Definition, placed at the last s
 site's partial (the LM head reading the last norm), whose producer units each read it. A read by another site's combine
 (the fused all-reduce's residual) is that site's combine units' port. Each template's units are allocated in the
 public order (request, then the site's place in its request Program's call order, its step then its layer, then stage:
-producers, combines, norms, readers; then rank, then position), and `Sites.order` lists those ranges in it.
+producers, combines, norms, readers; then rank, then position), and `Sites.order` lists those ranges in it: the circuit's
+order (`interface.Circuit.order`), to which `interface.check_wires` holds every wire.
 
 **Wires,** every one running forward in that order:
 * each combine unit's parts, cut W ways, row p from rank p's producer unit at its position;
@@ -261,6 +262,6 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
                         target = ("row", *win.consumers[i, r, x], port, 1)
                     win.read(what, target, off, lo, hi, segs)
     templates = tuple((fn, win.count[tid]) for tid, fn in win.fns.items())
-    circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts)
-    return Sites(circuit, {k: tuple(v) for k, v in win.units.items()}, dict(win.consumers), tuple(win.order),
-                 tuple(win.unwired))
+    order = tuple(win.order)
+    circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts, order=order)
+    return Sites(circuit, {k: tuple(v) for k, v in win.units.items()}, dict(win.consumers), order, tuple(win.unwired))
