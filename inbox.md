@@ -645,3 +645,6 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
 
   Over today's 71 real rows it voids exactly these three.
 
+[2026-11-08T15:58Z] 4b7b4c06d1b7
+Proofs coordinator 16:06Z, new measured lever from kernels: #8122 (N4 front overlap) is marked and byte-identical; against verify-ahead on the combined tree the session period goes 1.281 -> 0.771 s under M1 (1.66x) and 1.025 -> 0.581 s under M0 (1.76x). Lower bound: pod capped at 20.4 CPUs, overlapped witness build slows reps 39% under M1; node A remeasure after 18:40Z. Price it as a measured N4 line (lower bound), replacing the modelled N4.
+
