@@ -303,8 +303,6 @@
 "DsaTopKLongRow_v1",
 "DsaTopKLongRow_v2",
 "DsaTopKOneHot_v1",
-"DsaTopKOrder_v1",
-"DsaTopKOrder_v2",
 "DsaTopKShortRow_v1",
 "DsaTopKShortRow_v2",
 "DsaTopKVerdict_v1",

@@ -80,8 +80,7 @@ def _register_lazy_families() -> None:
     # [DeepSeek-V4] the Marlin W4A16 expert-row gathers, likewise built per expert count while deriving (`marlin_moe`)
     register_lazy_family(r"^GatherE2m1Pairx(\d+)_v1$", lambda m: _marlin_moe().gather_e2m1_pair(int(m[1])))
     register_lazy_family(r"^GatherE8m0x(\d+)_v1$", lambda m: _marlin_moe().gather_e8m0(int(m[1])))
-    # [GLM-5.3] the top-k selection relation's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
-    register_lazy_family(r"^DsaTopKOrderCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().order_check(int(m[1]), int(m[2])))
+    # [GLM-5.3] the canonical top-k row's accelerator, one per (row length, TOPK), built while deriving a row past TOPK
     register_lazy_family(r"^DsaTopKLongRowCheck(\d+)x(\d+)_v1$", lambda m: _dsa_topk().long_row_check(int(m[1]), int(m[2])))
     # the top-p keep word (one per vocabulary; the split count S is its i32 `splits` OPERAND) and the bit extractor
     register_lazy_family(r"^TopPMaskWordx(\d+)_v1$", lambda m: _sampling().topp_mask_word(int(m[1])))

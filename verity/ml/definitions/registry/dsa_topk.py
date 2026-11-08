@@ -12,8 +12,9 @@ superset of wires plus selection values computed in the circuit.
   Program's checks, which the verifier requires to be 1.
 
 So the settings the run brings route the one order the logits fix: sparse MLA accumulates the rows in an order the prover does not
-choose.  `DsaTopKOrder`, the relation without the order, accepts any permutation of the set; the pin's kernels unpatched serve
-such an order, whose places come from shared-memory atomics and vary run to run, and the long-row check refuses it.
+choose.  The relation without the order (`order_ok`) would accept any permutation of the set, log2(TOPK!) free bits a row, so no
+Definition checks it alone; the pin's kernels unpatched serve such an order, whose places come from shared-memory atomics and vary
+run to run, and the long-row check refuses it.
 
 The served kernel (vLLM d9105ea80): decode takes `cooperative_topk` at most 64 rows a call (sparse_attn_indexer.py:615-642),
 whose rows of 2049..16384 keys run `histogram_4096_topk` (topk_histogram_4096.cuh:380-548): a 4096-bin histogram of each logit's
@@ -50,8 +51,6 @@ permutation has settings (the column's constraints form paths and even cycles, t
 
 Registered functions (`_v1`; their Boolean versions in `boolean_dsa_topk` are the definitions, these the accelerators tests hold
 equal to them):
-  DsaTopKOrder{N,TOPK}        (scores: N f32, order: TOPK i32) -> bit: order is a permutation of `topk_set`(scores, TOPK)
-  DsaTopKOrderCheck{N}x{K}    the same function as one primitive (`order_check`), DsaTopKOrder's body
   DsaTopKLongRow{N,TOPK}      (scores: N f32, order: TOPK i32) -> bit: order is `topk_set`(scores, TOPK) in ascending order
   DsaTopKLongRowCheck{N}x{K}  the same function as one primitive (`long_row_check`), DsaTopKLongRow's body
   Xor3x16, Xor3x32            (a, b, c: 16 or 32 bits) -> a ^ b ^ c
@@ -74,13 +73,11 @@ from verity.ml.definitions.registry.prims import BF16, BIT, F32, I32, SelectBf16
 
 M32 = 0xFFFFFFFF
 
-_CONF = ("model-untested: the tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 "
-         "(cooperative_topk's rows of 2049..16384 keys) and held by the served cooperative_topk's and persistent_topk's orders "
-         f"on synthetic rows ({EVIDENCE['dsa_topk_order_probe']['run_record']}); a captured served decode past TOPK keys is its "
-         "hardware check")
 _CANONICAL = ("model-untested: the served row under VERITY_DSA_TOPK=canonical, which rewrites each top-k row past TOPK keys as "
-              "`topk_set` in ascending index order; a captured served decode past TOPK keys under it is its hardware check")
-_ORDERS: dict[tuple[int, int], PrimitiveDefinition] = {}
+              "`topk_set` in ascending index order, its tie rule read from vLLM d9105ea80 topk_histogram_4096.cuh:69-84, 380-548 "
+              "(cooperative_topk's rows of 2049..16384 keys) and held by the served cooperative_topk's and persistent_topk's sets "
+              f"on synthetic rows ({EVIDENCE['dsa_topk_order_probe']['run_record']}); a captured served decode past TOPK keys under "
+              "it is its hardware check")
 _LONG_ROWS: dict[tuple[int, int], PrimitiveDefinition] = {}
 
 
@@ -106,29 +103,7 @@ def order_ok(scores, order, TOPK: int) -> int:
 
 def check_statics(N: int, TOPK: int) -> None:
     if not 1 <= TOPK <= N < 1 << 31:
-        raise ValueError(f"DsaTopKOrder: a row of N keys selects 1 <= TOPK <= N (N={N}, TOPK={TOPK})")
-
-
-def order_check(N: int, TOPK: int) -> PrimitiveDefinition:
-    """`DsaTopKOrderCheck{N}x{TOPK}_v1`: `order_ok` over a row of N f32 scores and a TOPK-slot order."""
-    check_statics(N, TOPK)
-    p = _ORDERS.get((N, TOPK))
-    if p is None:
-        def ev(*w: int, _N=N, _K=TOPK) -> int:
-            return order_ok(w[:_N], w[_N:], _K)
-
-        p = PrimitiveDefinition(f"DsaTopKOrderCheck{N}x{TOPK}", 1, (("scores", Array(N, F32)), ("order", Array(TOPK, I32))), BIT,
-                                ev, doc=order_check.__doc__ or "", conformance=_CONF)
-        _ORDERS[(N, TOPK)] = p
-    return p
-
-
-@composite("DsaTopKOrder", 1, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)), ("order", Array(S.TOPK, I32))), BIT),
-           conformance=_CONF)
-def DsaTopKOrder(B, S, scores, order):
-    """The selection relation of a row of N keys: 1 when ``order``'s TOPK slots are distinct indices in [0, N) forming the
-    top-TOPK set of ``scores`` under the module docstring's tie rule, in any order; else 0.  `DsaTopKOrder_v2` is it on bits."""
-    return B.call(order_check(S.N, S.TOPK), scores, order)
+        raise ValueError(f"DsaTopKLongRow: a row of N keys selects 1 <= TOPK <= N (N={N}, TOPK={TOPK})")
 
 
 def canonical_ok(scores, order, TOPK: int) -> int:
@@ -154,7 +129,7 @@ def long_row_check(N: int, TOPK: int) -> PrimitiveDefinition:
 @composite("DsaTopKLongRow", 1, ["N", "TOPK"], lambda S: ((("scores", Array(S.N, F32)), ("order", Array(S.TOPK, I32))), BIT),
            conformance=_CANONICAL)
 def DsaTopKLongRow(B, S, scores, order):
-    """The canonical row of N keys: 1 when ``order`` is `DsaTopKOrder`'s top-TOPK set of ``scores`` listed in strictly ascending
+    """The canonical row of N keys: 1 when ``order`` is the top-TOPK set of ``scores`` (`topk_set`) listed in strictly ascending
     index order, else 0.  One order passes a row, so the order sparse MLA sums the selected rows in is a function of the logits.
     `DsaTopKLongRow_v2` is it on bits."""
     return B.call(long_row_check(S.N, S.TOPK), scores, order)
@@ -367,4 +342,4 @@ def DsaWaksmanOrder(B, S, sw):
     return Coll(Array(S.TOPK, I32), B.call(bind(DsaWaksmanRows, N=S.N, K=S.TOPK, W=1, E=32), sw, tags).refs)
 
 
-DSA_TOPK_COMPOSITES = [DsaTopKOrder, DsaTopKLongRow, DsaWaksmanSwap, DsaWaksmanPick, DsaWaksmanRows, DsaWaksmanOrder]
+DSA_TOPK_COMPOSITES = [DsaTopKLongRow, DsaWaksmanSwap, DsaWaksmanPick, DsaWaksmanRows, DsaWaksmanOrder]
