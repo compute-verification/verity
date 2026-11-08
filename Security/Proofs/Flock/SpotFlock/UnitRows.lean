@@ -136,9 +136,9 @@ theorem bit_block_zOf {T : Model.Statement} (p : Parsed) (w : Claims.Flock.Wit) 
   rw [congrArg (fun k => o.val * 2 ^ k + y.val) hk]
 
 /-- **Each template instance's rows hold at the session witness's bits**: at a statement the verifier parsed whose
-statement check passes, with hidden outputs, table `j` has an accepted statement `a` on `p.sts[j]`, and at every witness
-of the deployed relation, every template instance `g` and every block `o`, the template instance rows hold at table `j`'s
-bits of block `o` in the template instance's columns. -/
+statement check passes, with hidden outputs, table `j` has an accepted statement `a` on `p.sts[j]`, and at every
+witness of the deployed relation, every template instance `g` and every block `o`, the template instance rows hold at
+table `j`'s bits of block `o` in the template instance's columns. -/
 theorem unitRows_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true)
     {j : ℕ} (hj : j < p.sts.size) :
     ∃ (T : Model.Statement) (a : HiddenExec.AcceptedH T), a.st = p.sts[j] ∧ T.kLog = p.sts[j].c.kLog ∧
@@ -205,10 +205,10 @@ noncomputable def unitPlace (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (
   aliased := a.aliased_of_layout (rows_keyProg hU a hparse u) _ o hg (aliased_keyProg hU outs a hparse u hg o)
 
 include hparse in
-/-- **A placed unit carries the lowering's constants** (`Bridge.constsOf`): at a witness the statement accepts, the value
-its block decodes at each input the constants fix that the unit reads is that constant. The unit reads the constant's
-gate only on its constant column, which carries `1` (`UnitPlace.decode_one`), and the zero's only on inputs that read the
-zero, which carry `0` (`AcceptedH.zero_block`); no unit reads the other inputs the constants fix. -/
+/-- **A placed unit carries the lowering's constants** (`Bridge.constsOf`): at a witness the statement accepts, the
+value its block decodes at each input the constants fix that the unit reads is that constant. The unit reads the
+constant's gate only on its constant column, which carries `1` (`UnitPlace.decode_one`), and the zero's only on inputs
+that read the zero, which carry `0` (`AcceptedH.zero_block`); no unit reads the other inputs the constants fix. -/
 theorem decode_consts (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {z : Model.Witness T.m}
     (hz : T.Satisfies z) (x : Fin (Discharge.Layout.keyN c hU n)) (b : Bool) (hk : Bridge.constsOf c hU n x = some b)
     (hr : ∃ g', ((Placed.keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)).unit g' = some u ∧
