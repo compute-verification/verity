@@ -744,9 +744,9 @@ def test_bindings_built_apart_keep_a_pinned_target_and_read_no_pin(tmp_path):
     assert out["values"] == whole["values"] and out["hits"] == sorted(set(out["values"]) - {"SynK_v1{K=2}"}), out["hits"]
 
 
-#: a unit staged whole (`checks.UNIT_OWNERS` is ``syn.pouw.`` in `BLOCKED`): SynTile, made by `syn.build`'s function, which binds
-#: it at no top level, and bound at the top level of `syn.pouw.tile` alone, which only SynHolder's body imports; the tiled
-#: binding makes SynTile from `syn.build`, and the held one reaches it through SynHolder's body
+#: SynTile, made by `syn.build`'s function, which binds it at no top level, and bound at the top level of `syn.pouw.tile` alone,
+#: which only SynHolder's body imports; the tiled binding makes SynTile from `syn.build`, and the held one reaches it through
+#: SynHolder's body
 TILE_FILES = {
     "syn/build.py": """
 from verity.ml.circuits import composite
@@ -802,20 +802,19 @@ def check_definition(fn, opts, *, memo, pins, as_call=None, **kw):
     return {"failures": F.failures, "warnings": [], "gates": fn.gates,
             "value": [evaluate(fn, 3, 0x0105), w["applies"], [f["name"].split(" ")[0] for f in F.failures]]}
 """
-#: `FORKED` with Flock's range at 2^5 witness bits, which SynTile's 48 port bits are past, and ``syn.pouw.`` PoUW's; a unit
-#: counted here first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's
-#: registries have it
+#: `FORKED` with Flock's range at 2^5 bits, which every target's block (2^`K_MIN` at the least) is past; a unit counted here
+#: first, so what counting imports (the kernels its pieces register) is here before any check, as the catalog's registries
+#: have it
 BLOCKED = FORKED.replace("rep = cli.run(", "from verity_flock import circuit as FC\nfrom syn.prims import SynAdd\nFC.unit_witness(SynAdd)\n"
-                         "FC.K_MAX, CK.UNIT_OWNERS = 5, ('syn.pouw.',)\nrep = cli.run(")
+                         "FC.K_MAX = 5\nrep = cli.run(")
 
 
 @pytest.mark.slow
 def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(tmp_path):
-    """The fail-open case: from the bindings' records, built apart or reused, with ``--jobs`` or without, a unit staged whole
-    and past Flock's range fails ``block/past-range`` as a full build fails it, though the module that makes it PoUW's
-    (`sidecars.owner`, `checks.UNIT_OWNERS`) is imported only by another binding's body, which a full build builds before any
-    check: once the records count and SynTile alone misses (its new pin), no process here builds SynHolder's body.  A lookup
-    that read only what the checking process imported would skip the check."""
+    """From the bindings' records, built apart or reused, with ``--jobs`` or without, every unit checked whole and past
+    Flock's range fails ``block/past-range`` as a full build fails it, SynTile among them, though the module that binds it at a
+    top level is imported only by another binding's body, which a full build builds before any check: once the records count
+    and SynTile alone misses (its new pin), no process here builds SynHolder's body."""
     from test_cache import _set_pin
 
     trees = []
@@ -831,8 +830,8 @@ def test_a_unit_past_the_range_fails_block_on_the_fast_path_as_in_a_full_build(t
     root, here = trees
     in_turn = BLOCKED.replace(", jobs=2, isolate=True, fork=True)", ")")
     whole = _run(here, in_turn)
-    assert whole["values"]["SynTile_v1"][1:] == [True, ["block/past-range"]], whole["values"]
-    assert not [fid for fid, v in whole["values"].items() if v[2] and fid != "SynTile_v1"], whole["values"]
+    assert "SynTile_v1" in whole["values"], whole["values"]
+    assert all(v[1:] == [True, ["block/past-range"]] for v in whole["values"].values()), whole["values"]
     first = _run(root, BLOCKED)
     assert first["here"] == [] and first["stats"]["units"]["reused"] == 0, (first["here"], first["stats"]["units"])
     assert first["values"] == whole["values"], (first["values"], whole["values"])

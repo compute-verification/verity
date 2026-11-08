@@ -57,10 +57,11 @@
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
                      head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
-    block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
-                     `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
-                     it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
-                     for the Definitions staged whole as one unit (PoUW's, `UNIT_OWNERS`), recorded for the rest
+    block            the Flock block a whole Definition needs as one unit, read off it before lowering
+                     (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
+                     of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
+                     past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
+                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`)
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -1359,29 +1360,43 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: the packages whose Definitions are each staged whole as one Flock unit (`verity_flock.class_statement.UnitStager`), so
-#: `block_range` fails one past the range: PoUW's.  A served Program's Call is proved as its partition's proof blocks
-#: (`partition`), so a Call's whole count bounds none of them and is recorded, not failed.
-UNIT_OWNERS = ("verity.core.protocols.pouw.",)
-
-
 def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
-    """`block_range` of ``t``, failed past the range where ``t`` is staged whole as one unit: checked whole (``lower_whole``) and
-    owned under `UNIT_OWNERS` (`sidecars.owner`)."""
-    return block_range(t, F, applies=lower_whole and (SC.owner(t) or "").startswith(UNIT_OWNERS))
+    """`block_range` of ``t``, failed past the range where ``t`` is checked whole (``lower_whole``)."""
+    return block_range(t, F, applies=lower_whole)
 
 
 def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
-    """The witness bits ``t`` needs as one Flock unit, read off its Definition (`verity_flock.circuit.unit_witness`), against
-    Flock's proved range of 2^``K_MAX``; past it a failure where ``t`` is one unit (``applies``: checked whole, not as a
-    subcircuit whose units are its template's proof blocks, and owned under `UNIT_OWNERS`), the one `UnitStager` raises
-    before lowering."""
+    """The Flock block ``t`` needs as one unit, read off its Definition (`verity_flock.circuit.unit_block`: its rows'
+    sha512x3 and hm96 slots and the mask beside its own slot, as `compose` places them), against Flock's proved range of
+    2^``K_MAX``; past it a failure where ``t`` is checked whole (``applies``: not as a subcircuit whose units are its
+    template's proof blocks).  Which of those failures are held is the report's (`summarize`, `block_held`), so no target's
+    verdict reads the list."""
     from verity_flock import circuit as FC
 
-    w = FC.unit_witness(t)
-    if applies and (why := FC.past_range(w)) is not None:
-        F.fail("block", "past-range", t.id, why, **w)
-    return {**w, "applies": applies}
+    b = FC.unit_block(t)
+    if applies and (why := FC.past_block(b)) is not None:
+        F.fail("block", "past-range", t.id, why, **b)
+    return {**b, "applies": applies}
+
+
+def _held_blocks(entries: list[dict]) -> tuple[dict[str, str], list[dict]]:
+    """Of ``entries``, the Definitions `block_held.HELD` holds past the block, each with why, and a ``block/stale-hold``
+    failure for each held one checked whole whose block fits."""
+    from .block_held import HELD
+
+    held, stale = {}, []
+    for e in entries:
+        d, b = e.get("definition") or e.get("target"), e.get("block") or {}
+        if d not in HELD or not b.get("applies"):
+            continue
+        if b["k_log"] > b["k_max"]:
+            held[d] = HELD[d]
+            continue
+        F = Findings()
+        F.fail("block", "stale-hold", d, f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}, but block_held.HELD holds it "
+               f"({HELD[d]}): delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX", **b)
+        stale += F.failures
+    return held, stale
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -1654,13 +1669,18 @@ def summarize(entries: Iterable[dict]) -> dict:
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
     (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``by_callees``: each Call partitioned by
     its callees (`by_callees`), with them; ``vectors``: the targets of each `vector_class`, by name, and ``lazy``, those whose
-    correspondence read a table or an operand lazily (where kernels decline and no lowering runs)."""
+    correspondence read a table or an operand lazily (where kernels decline and no lowering runs); ``block_held``: each
+    Definition past the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted
+    (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
+    held, stale = _held_blocks(entries)
     for e in entries:
-        fails.update((f["name"], f) for f in e.get("failures", []))
+        fails.update((f["name"], f) for f in e.get("failures", [])
+                     if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held)
         warns.update((w["name"], w) for w in e.get("warnings", []))
+    fails.update((f["name"], f) for f in stale)
     fails, warns = list(fails.values()), list(warns.values())
     by_check: Counter = Counter()
     by_def: dict[str, Counter] = {}
@@ -1691,6 +1711,7 @@ def summarize(entries: Iterable[dict]) -> dict:
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
             "by_calls": dict(sorted(by_calls.items())), "by_callees": dict(sorted(by_callee.items())),
             "vectors": {c: {"count": len(v), "targets": sorted(v)} for c, v in classes.items()},
+            **({"block_held": dict(sorted(held.items()))} if held else {}),
             "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
@@ -1705,7 +1726,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["Findings", "Options", "SCHEMA", "UNIT_OWNERS", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
+__all__ = ["Findings", "Options", "SCHEMA", "VECTOR_CLASSES", "block_range", "by_callees", "callee_gap",
            "callees_are_calls", "check_definition", "check_row", "check_subcircuit", "classified", "conformance_of", "correspondence", "dead_gates",
            "floored", "is_commit", "load_pins", "partition", "redundant_ands", "redundant_gates", "report", "summarize",
            "target_equivalence", "template_lowering", "uncut", "unit_block", "vector_class", "whole_lowering"]
