@@ -47,7 +47,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
-  ``per_prompt``, ``per_output``, ``drained``) the JSON in ``BOUNDARY_ROWS``, at ``--window-s``.
+  ``per_prompt``, ``per_output``, ``drained``) ``--boundary-rows``'s JSON, at ``--window-s``.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -243,16 +243,17 @@ def server_argv(arm: Arm, model: Model, checkpoint: Path, port: int, num_gpu_blo
 
 
 def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float, kv_window_s: float,
-               edges: dict | None = None) -> dict[str, str]:
+               edges: dict | None = None, boundary_rows: dict | None = None) -> dict[str, str]:
     env = dict(os.environ, VLLM_SERVER_DEV_MODE="1", VLLM_BATCH_INVARIANT="0",
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *SHARED.PYTHONPATH]))
     env.update(arm.env)
-    if "boundary_rows" in arm.plugin and not os.environ.get("BOUNDARY_ROWS"):
-        raise SystemExit("the boundary-rows arm needs BOUNDARY_ROWS, a JSON object naming its check template")
+    if "boundary_rows" in arm.plugin and not (isinstance(boundary_rows, dict) and boundary_rows.get("check")):
+        raise SystemExit("the boundary-rows arm needs --boundary-rows, a JSON object naming its check template "
+                         "(run.sh: BOUNDARY_ROWS)")
     if arm.plugin:
-        rows = ({"boundary_rows": {"window_s": window_s, **json.loads(os.environ["BOUNDARY_ROWS"])}}
-                if "boundary_rows" in arm.plugin else {})
+        rows = ({"boundary_rows": {"window_s": window_s, **boundary_rows}}
+                if "boundary_rows" in arm.plugin and boundary_rows else {})
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
                                       **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}), **rows})
     if arm.tick:
@@ -583,7 +584,8 @@ def run(a: argparse.Namespace) -> int:
     t = time.monotonic()
     with open(srv / "server.log", "wb") as log:
         server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT,
-                                  env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges), start_new_session=True)
+                                  env=server_env(arm, srv, site, tick, a.window_s, a.kv_window_s, edges, a.boundary_rows),
+                                  start_new_session=True)
     rc = 0
     try:
         wait_ready(server, port, a.startup_s)
@@ -1000,6 +1002,8 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--startup-s", type=float, default=1800.0)
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
+    r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
+                   help="the boundary-rows arm's object: check, per_prompt, per_output, drained")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)
