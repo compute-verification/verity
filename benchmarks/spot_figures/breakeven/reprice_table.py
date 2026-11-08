@@ -27,18 +27,26 @@ SERVED = [
     ("N5", "+ a GPU prover 4× on device parts, the witness build undivided", "modeled", "@kernels"),
 ]
 SERVED_EXTRAS = [
-    ("host", "the dense types' host witness 3.5× lower", "assumed (CPU's 2–4×)", "HILLCLIMB"),
-    ("hash4", "in-proof hashing 4× (half the marginal)", "assumed", "no owner"),
+    ("host", "the dense types' host witness 3.5× lower", "assumed (CPU's 2–4×)", "HASHCUT scopes it"),
+    ("hash4", "in-proof hashing 4× (half the marginal)", "assumed", "HASHCUT scopes it"),
+    ("host+hash4", "host + hash4", "assumed", "HASHCUT"),
     ("plain", "Flock without --zk", "fused blocks' shares measured on H200; the rest CPU's", "HILLCLIMB"),
-    ("tmpl", "the templated session check where cheaper (RMSNorm types flat)", "estimate (quant K6144's ratio)",
-     "VERIFYFAST"),
+    ("tmpl", "the templated session check where cheaper", "measured on FlashInfer K2048 and RMSNorm v3: slower than "
+     "flat on every type", "@kernels"),
+    ("tmplgoal", "the templated check at quant K6144's estimate (RMSNorm types flat)", "goal of VERIFYFAST-C's fixes",
+     "VERIFYFAST-C"),
     ("vfloor", "the types the median prices at the fast column's floor (8.7 s)", "a lower bound", ""),
     ("fusedfront", "the fused blocks' front overlap at the kernels' split (device 0.55 of the session)",
      "modeled, unmeasured under contention", "@kernels"),
     ("card", "the quant K6144 at its card's 0.233 s a block (load)", "superseded", "HASHCUT"),
-    ("host+tmpl", "host + tmpl", "assumed", ""),
-    ("host+hash4+tmpl", "host + hash4 + tmpl", "assumed", ""),
+    ("host+tmplgoal", "host + tmplgoal", "assumed; goal", ""),
+    ("host+hash4+tmplgoal", "host + hash4 + tmplgoal", "assumed; goal", ""),
 ]
+#: the memory-checked KV pool, priced on the last step: proved every window (the design), or only on the windows the
+#: plan samples
+POOL = [("every", "walked", "proved every window, every lookup walking (as built)"),
+        ("every", "memo", "proved every window, with the head-of-line memo (not built)"),
+        ("sampled", "walked", "proved only on the windows the plan samples (not the design)")]
 #: the advice when it is not closed: every prefix-cache hit sent whole, or caching off
 ADVICE = [
     ("hits", "+ the prefix-cache hits as advice, 5,181 bits a machine's window", "measured on 2k traces"),
@@ -152,14 +160,18 @@ def served(rows, data):
         print(f"| compile | + compiling each sampled request's Programs, {h} core-h on 8 ranks, at {last}'s plan | "
               f"{'measured a step; 256-step span modeled' if h == COMPILE[0] else 'upper reading'} | @vllm, @circuits "
               "| " + " | ".join(c) + " |")
+    for how, load, what in POOL:
+        c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
+        print(f"| pool | + the memory-checked KV pool, {what} | --zk rate; the verifier at the line's median an AND "
+              "(assumed) | MEMPOOL | " + " | ".join(c) + " |")
     c = []
     for s in ALL_SCOPES:
         r = rows.get((last, s))
-        c.append("–" if r is None or "compile" not in r or r["beta"]["FP4"] is None
-                 else pct(r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]]))
-    data["total"] = {"case": last, "compile_core_h": COMPILE[0], "cells": dict(zip(ALL_SCOPES, c))}
-    print(f"| total | {last} + compiling at {COMPILE[0]} core-h | | | " + " | ".join(c) + " |")
-    print(f"\nExtras on {last}:\n" + head)
+        c.append("–" if r is None or "pool" not in r or r["beta"]["FP4"] is None
+                 else pct(r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]] + r["pool"]["every"]["walked"]))
+    data["total"] = {"case": last, "compile_core_h": COMPILE[0], "pool": "every, walked", "cells": dict(zip(ALL_SCOPES, c))}
+    print(f"| total | {last} + compiling at {COMPILE[0]} core-h + the pool every window | | | " + " | ".join(c) + " |")
+    print(f"\nExtras on {last} (serve tax + proving + verifying; add compiling and the pool from above):\n" + head)
     for e, lever, label, owner in SERVED_EXTRAS:
         case = f"{last}+{e}"
         c, d = cells(rows, case, ALL_SCOPES, beta=False)
