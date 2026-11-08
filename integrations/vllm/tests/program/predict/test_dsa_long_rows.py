@@ -1,7 +1,8 @@
 """verity_vllm.program.predict.dsa past INDEX_TOPK: a row of more than INDEX_TOPK keys selects its top-k as the Build's `vllm_dsa`
 rule does, in the circuit: `DsaTopKMask` marks the logits' top-k set, `DsaButterflySettings` sets the concentrator for it, and
 sparse MLA reads the rows `DsaButterflyRows` routes at those settings, in ascending index order (the canonical row, which an engine
-under `VERITY_DSA_TOPK=canonical` serves).  The Program has no `run` input and no checks.
+under `VERITY_DSA_TOPK=canonical` serves).  The Program has no `run` input, and its top-k adds no check: a request's one check
+is its length rule (`stop_rule`).
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k) and its
 INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one; one test keeps the served INDEX_TOPK and
