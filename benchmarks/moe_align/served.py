@@ -5,7 +5,9 @@
     bash benchmarks/moe_align/served.sh      (its header has the parameters)
 
 One engine; every batch is the workload's first request with its prompt rotated by ``--rotate`` tokens per request
-(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Three phases, written to ``--out``:
+(`served_commit.tp_decode.requests_at`), all arriving at once and decoding to the cap. Its prefill budget
+(``max_num_batched_tokens``) holds the largest batch's prompts, so every batch prefills in one step and then decodes with every
+row; at the row's own budget the first requests of 256 would finish before the last began. Three phases, written to ``--out``:
 
 - ``check.json``: at ``--check-batches`` (default 1 and 8: a prefill step of one prompt, under `moe_align.SMALL_MAX` pairs, and
   of eight at once, over it), a wrap over each rank's Marlin `moe_align_block_size` holds every call's three outputs to
@@ -20,8 +22,16 @@ One engine; every batch is the workload's first request with its prompt rotated 
 
 ``summary.json`` gathers them: per rank the MoE layers whose every call equalled the reference, the paths each rank took in
 prefill and in decode, per batch the TPOT of each op and the paired ratios, and the host cost per call and per decode step.
-Exits 3 when a rank does not serve the canonical op, an MoE layer's calls miss it (they reach no `Align`, reach one of vLLM's
-aligners, or the layer made none), a call differs from the reference, or a rank took either path in no prefill step.
+Exits 3 when a rank does not serve the canonical op or its Marlin experts do not call the module's aligner (`MA.loads_global`,
+the guard `install` holds), an MoE layer's calls miss the op (they reach no `Align`, reach one of vLLM's aligners, or the layer
+made none), a call differs from the reference, or a rank took either path in no prefill step.
+
+``--dummy-layers N`` serves the model without its weights: the checkpoint's small files (`DUMMY_FILES`) fetched at its pinned
+revision and held to the manifest's sha256, its config cut to the first N layers (`cut_config`), and ``load_format="dummy"``.
+DeepSeek-V4-Pro has no dense layer: its first ``num_hash_layers`` (3) route by a token -> experts table, which vLLM fills with
+random experts under dummy weights, and the rest by score, so N = 5 keeps both kinds and both attention compress ratios. The
+expert count, top-k and widths are the checkpoint's; the routing distribution is not, so the decode figures are labelled
+``weights: dummy``.
 """
 from __future__ import annotations
 
@@ -45,6 +55,8 @@ MOE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 VLLM_ALIGNERS = ("moe_align_block_size", "batched_moe_align_block_size", "moe_lora_align_block_size")
 #: rank-local state of the phases (`check_on`, `use`, `timer_on`)
 _STATE: dict[str, Any] = {}
+#: the checkpoint's files a ``--dummy-layers`` engine reads: everything but the weights
+DUMMY_FILES = ("config.json", "generation_config.json", "tokenizer.json", "tokenizer_config.json")
 
 
 def _tp_rank() -> int:
@@ -70,14 +82,51 @@ def moe_layers(model: Any) -> list[str]:
     return out
 
 
+def cut_config(cfg: dict[str, Any], layers: int) -> dict[str, Any]:
+    """``cfg`` with its first ``layers`` decoder layers: ``num_hidden_layers`` and the per-layer ``compress_ratios``, whose entries
+    past the decoder layers (the MTP layer's) stay."""
+    n = int(cfg["num_hidden_layers"])
+    if not 0 < layers <= n:
+        raise SystemExit(f"--dummy-layers {layers}: the checkpoint has {n} layers")
+    out = {**cfg, "num_hidden_layers": layers}
+    if isinstance(cfg.get("compress_ratios"), list):
+        out["compress_ratios"] = cfg["compress_ratios"][:layers] + cfg["compress_ratios"][n:]
+    return out
+
+
+def dummy_model(entry: dict[str, Any], layers: int, where: Path) -> dict[str, Any]:
+    """Write into ``where`` the checkpoint's `DUMMY_FILES`, fetched from the hub at ``entry``'s revision and each held to the
+    manifest's sha256, with config.json cut to ``layers`` layers; what was fetched and cut."""
+    import urllib.request
+
+    got = {}
+    for name in DUMMY_FILES:
+        url = f"https://huggingface.co/{entry['repo']}/resolve/{entry['revision']}/{name}"
+        with urllib.request.urlopen(url, timeout=300) as r:
+            data = r.read()
+        sha = hashlib.sha256(data).hexdigest()
+        if sha != entry["files"][name]["sha256"]:
+            raise SystemExit(f"{url}: sha256 {sha}, not the manifest's {entry['files'][name]['sha256']}")
+        got[name] = sha
+        (where / name).write_bytes(data)
+    cfg = json.loads((where / "config.json").read_text())
+    cut = cut_config(cfg, layers)
+    (where / "config.json").write_text(json.dumps(cut, indent=1) + "\n")
+    return {"repo": entry["repo"], "revision": entry["revision"], "files_sha256": got, "layers": layers,
+            "of_layers": cfg["num_hidden_layers"], "hash_layers": min(int(cfg.get("num_hash_layers") or 0), layers),
+            "compress_ratios": cut.get("compress_ratios"), "experts": cfg.get("n_routed_experts"), "top_k": cfg.get("num_experts_per_tok")}
+
+
 def status(worker: Any) -> dict[str, Any]:
-    """On a rank: the function Marlin's experts call, the installed `Align`'s record, and the vLLM plugins this process sees."""
+    """On a rank: the function Marlin's experts call, whether they call it as the module's global (``guard``, what `MA.install`
+    requires), the installed `Align`'s record, and the vLLM plugins this process sees."""
     from importlib.metadata import entry_points
 
-    fn = getattr(_site(), MA.NAME)
+    site = _site()
+    fn = getattr(site, MA.NAME)
     a = MA.installed()
     return {"rank": _tp_rank(), "pid": os.getpid(), "calls": f"{fn.__module__}:{fn.__qualname__}", "canonical": a is not None,
-            "align": a.record() if a is not None else None,
+            "guard": MA.loads_global(getattr(site, MA.CALLER, None), MA.NAME), "align": a.record() if a is not None else None,
             "plugins": sorted(f"{ep.name} = {ep.value}" for ep in entry_points(group="vllm.general_plugins"))}
 
 
@@ -282,7 +331,7 @@ def summarize_decode(rows: list[dict[str, Any]], host: dict[int, dict[str, list[
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="DeepSeek-V4-Pro TP8 eager: the canonical moe_align_block_size checked, timed and costed")
+    ap = argparse.ArgumentParser(description="DeepSeek-V4-Pro eager: the canonical moe_align_block_size checked, timed and costed")
     ap.add_argument("--workload", required=True, help="the row (its first request is every batch's prompt)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--case", default=None)
@@ -294,6 +343,7 @@ def main() -> None:
     ap.add_argument("--rotate", type=int, default=8)
     ap.add_argument("--engine-arg", action="append", default=[])
     ap.add_argument("--rpc-timeout", type=float, default=3600.0)
+    ap.add_argument("--dummy-layers", type=int, default=0, help="serve the first N layers with dummy weights (0: the checkpoint)")
     a = ap.parse_args()
 
     from verity_vllm.engine import engine_profile as prof
@@ -306,7 +356,6 @@ def main() -> None:
     from verity_vllm.pipeline.commit import git_head, run_workload
     from verity_vllm.pipeline.tp import phases as PH
     from verity_vllm.pipeline.tp import target as TT
-    from verity_vllm.pipeline.tp import trace as TRACE
     from verity_vllm.pipeline.tp.capture import parse_engine_args
     from verity_vllm.pipeline.tp.rank_worker import EXTENSION
 
@@ -319,11 +368,23 @@ def main() -> None:
     target_env, target_kw = TT.apply(target, wl["execution"])
     env_flags = {**prof.apply_env(), **target_env}
     case = va.case_of(wl, a.case)
-    cp = prof.checkpoint_for(case, a.checkpoints)
+    weights, dummy = "dummy" if a.dummy_layers else "checkpoint", None
+    if a.dummy_layers:
+        import tempfile
+
+        entry = next(c for c in json.loads(Path(a.checkpoints).read_text())["checkpoints"] if c.get("repo") == wl["model"])
+        cp = {**entry, "local_path": tempfile.mkdtemp(prefix="moe-align-dummy-")}
+        dummy = dummy_model(entry, a.dummy_layers, Path(cp["local_path"]))
+        print(f"[moe-align] dummy weights: {dummy}", flush=True)
+    else:
+        cp = prof.checkpoint_for(case, a.checkpoints)
     seqs = max(check_batches + batches)
     kw = prof.engine_kwargs(cp, replay=False, seed=prof.ENGINE_SEED, enforce_eager=True, tensor_parallel_size=a.tp)
+    if dummy is not None:
+        kw["load_format"] = "dummy"
     kw.update({"enable_prefix_caching": False, "max_num_seqs": seqs, **target_kw})
     kw.update({k: v for k, v in (wl.get("engine_args_required") or {}).items() if k != "tensor_parallel_size"})
+    kw["max_num_batched_tokens"] = max(int(kw.get("max_num_batched_tokens") or 0), seqs * len(wl["requests"][0]["prompt_token_ids"]))
     kw.update(parse_engine_args(a.engine_arg), worker_extension_cls=EXTENSION)
     llm, build_s, topo = PH.engine(lambda: LLM(**kw), a.tp, a.rpc_timeout, model=cp["repo"], enforce_eager=True, case=case, max_num_seqs=seqs)
     TT.require_ranks(llm, target, a.rpc_timeout)
@@ -342,12 +403,14 @@ def main() -> None:
     reqs = {b: requests_at(wl, b, a.rotate) for b in sorted(set(check_batches + batches))}
     start = llm.collective_rpc(status, timeout=rpc)
     engine_kwargs = {k: v for k, v in kw.items() if k not in ("model", "tokenizer", "worker_extension_cls")}
-    versions = {"git_head": git_head(), "args": vars(a), "build_s": round(build_s, 1), "engine_kwargs": engine_kwargs,
-                "target": TT.as_json(target), "served": served, "ranks": topo, "status": start}
+    versions = {"git_head": git_head(), "args": vars(a), "weights": weights, "dummy": dummy, "build_s": round(build_s, 1),
+                "engine_kwargs": engine_kwargs, "target": TT.as_json(target), "served": served, "ranks": topo, "status": start}
     (out / "versions.json").write_text(json.dumps(versions, indent=1, default=str) + "\n")
-    if len(start) != a.tp or not all(s["canonical"] and s["calls"].startswith(f"{MA.__name__}:") for s in start):
-        print(f"[moe-align] not every rank's Marlin experts call {MA.__name__}'s op: {start}", flush=True)
+    if len(start) != a.tp or not all(s["canonical"] and s["guard"] and s["calls"].startswith(f"{MA.__name__}:") for s in start):
+        print(f"[moe-align] not every rank's Marlin experts call {MA.__name__}'s op as their module's global: {start}", flush=True)
         raise SystemExit(3)
+    print("[moe-align] ranks: " + "; ".join(f"rank {s['rank']} pid {s['pid']}: calls {s['calls']}, guard {s['guard']}" for s in start),
+          flush=True)
 
     def warm(b: int, seed: int) -> None:
         PH.warmups(1, lambda i: run_workload(eng, va.throwaway_requests(eng, reqs[b], seed=seed + i), sampling), tag="moe-align")
@@ -363,8 +426,9 @@ def main() -> None:
     after = llm.collective_rpc(status, timeout=rpc)
     check = summarize_check(seen, before, after)
     (out / "check.json").write_text(json.dumps({**check, "seen": seen, "before": before, "after": after}, indent=1) + "\n")
-    print(f"[moe-align] check ok {check['ok']}: " + "; ".join(
-        f"rank {r}: {v['layers_equal']}/{v['layers']} layers equal, {v['calls']} calls, {v['paths']}" for r, v in check["ranks"].items()), flush=True)
+    print(f"[moe-align] check ok {check['ok']} ({weights} weights): " + "; ".join(
+        f"rank {r}: {v['layers_equal']}/{v['layers']} layers equal, {v['calls']} calls, {v['calls_reaching_align']} reaching Align "
+        f"{v['align_calls']}, vLLM aligners {v['vllm_aligner_calls']}, {v['paths']}" for r, v in check["ranks"].items()), flush=True)
 
     rows: list[dict[str, Any]] = []
     host: dict[int, dict[str, list[dict[str, Any]]]] = {}
@@ -376,12 +440,10 @@ def main() -> None:
             for pair in range(a.pairs):
                 for k, op in enumerate(("canonical", "vllm") if pair % 2 == 0 else ("vllm", "canonical")):
                     llm.collective_rpc(use, timeout=rpc, kwargs={"canonical": op == "canonical"})
-                    cpu0 = llm.collective_rpc(TRACE.thread_cpu, timeout=rpc)
                     r = run_workload(eng, reqs[b], sampling)
-                    cpu = TRACE.cpu_delta(cpu0, llm.collective_rpc(TRACE.thread_cpu, timeout=rpc))
                     row = {"batch": b, "pair": pair, "order_in_pair": k, "op": op, "wall_s": r["wall_s"],
                            "phases": phases(r["step_wall_s"], r["step_tokens_out"], b), "tokens": digest(r["tokens"]),
-                           "thread_cpu_s_rank0": cpu.get(0), "step_wall_s": r["step_wall_s"]}
+                           "step_wall_s": r["step_wall_s"]}
                     rows.append(row)
                     f.write(json.dumps(row) + "\n")
                     f.flush()
@@ -396,10 +458,11 @@ def main() -> None:
     (out / "host.json").write_text(json.dumps({str(b): v for b, v in host.items()}, indent=1) + "\n")
     layers = max((v["layers"] for v in check["ranks"].values()), default=0)
     decode = summarize_decode(rows, host, layers)
-    summary = {"check": check, "decode": decode, "layers": layers, "world": len(topo), "restored": all(s["canonical"] for s in final)}
+    summary = {"weights": weights, "dummy": dummy, "check": check, "decode": decode, "layers": layers, "world": len(topo),
+               "guard": all(s["guard"] for s in final), "restored": all(s["canonical"] for s in final)}
     (out / "summary.json").write_text(json.dumps(summary, indent=1) + "\n")
     for b, d in decode.items():
-        print(f"[moe-align] B{b}: TPOT {d['tpot_ms']} ms, ratio {d['tpot_ratio']}, host {d['host_us_per_decode_call']} us a call, "
+        print(f"[moe-align] B{b} ({weights} weights): TPOT {d['tpot_ms']} ms, ratio {d['tpot_ratio']}, host {d['host_us_per_decode_call']} us a call, "
               f"{d['host_delta_us_per_decode_step']} us a step; tokens one set {d['tokens_one_set']}, "
               f"equal across ops {d['tokens_equal_across_ops']}", flush=True)
     if not check["ok"]:

@@ -6,6 +6,7 @@ public import Proofs.Accounting.RateAudit.DeployedSketchSum
 public import Proofs.Accounting.RateAudit.DeployedRelay
 public import Proofs.Accounting.Requirement
 public import Proofs.Accounting.Gates
+import Proofs.Pous.Prob
 
 /-!
 # Stacking: the carrier lemma and the stacked session
@@ -211,7 +212,7 @@ open scoped ENNReal
 theorem pr_prod_eq_sum_div {X Y : Type} [Fintype X] [Fintype Y] (Q : X × Y → Prop) :
     pr Q = (∑ y, pr fun x => Q (x, y)) / Fintype.card Y := by
   classical
-  unfold pr
+  simp only [Pous.pr_eq_card]
   have e : (Finset.univ.filter Q).card = ∑ y, (Finset.univ.filter fun x => Q (x, y)).card := by
     rw [Finset.card_filter, Fintype.sum_prod_type_right]
     simp only [Finset.card_filter]

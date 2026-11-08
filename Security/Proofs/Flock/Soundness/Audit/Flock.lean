@@ -108,7 +108,7 @@ end FlockTable
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **The verifier's session on a sample**: the tables its plan derives from the sample and the
 transcript, run concurrently; it accepts when every table accepts. -/
