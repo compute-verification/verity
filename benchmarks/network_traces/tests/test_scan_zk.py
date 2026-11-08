@@ -823,8 +823,11 @@ def test_the_window_root_is_the_wardens_signed_link_windows(tmp_path):
 def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_its_stream_takes():
     """`spec_of` on a round of two stand-in templates split a member an execution phase (the scan's own take a minute to
     build; `spec_of` reads only the round's program, query, templates and members), its ports a member's and the scan's
-    trees as `audit` names them, its counts each template's over its members."""
+    trees as `audit` names them, its counts each template's over its members; it declares the window's seed salt, which a
+    round's registration names once the stream has taken it (`a5_coins.salted`), and a Spec without it refuses that
+    registration."""
     T, k, root = 32, 16, "dd" * 64
+    seed = sz.S.Public(R.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
     defs = {"ingress": ING, "egress": EG}
     templates = ("ingress", "egress")
     program = sz.PA.mixed_population_program([(defs[s], 2 * T) for s in templates])
@@ -835,17 +838,20 @@ def test_the_honest_rounds_spec_is_what_its_registration_shows_over_the_units_it
     want = {"ingress-0/row": {"leaves": T, "domain": "aa" * 64}, "egress-1/o0": {"leaves": T, "domain": "bb" * 64},
             "scan/state": {"leaves": 2 * T, "domain": "cc" * 64}}
     schemas = {p: sz.BitRowLeaf.hiding_schema for p in want}
-    spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root)
+    spec, units, counts = sz.spec_of(pg, members, want, schemas, k, root, seed)
     assert units == [ING, EG] and counts == {sz.PA.template_id(ING): 2 * T, sz.PA.template_id(EG): 2 * T}
     assert spec.context == bytes.fromhex(root) and spec.selection.to_json() == {"rule": "law", "law": f"stratified:{k}"}
-    assert spec.check.proof_deadline == 4 * sz.MEMBER_DEADLINE_S
+    assert spec.check.proof_deadline == 4 * sz.MEMBER_DEADLINE_S and spec.public[-1] == seed
 
-    def record(ports: dict) -> dict:
+    def record(ports: dict, window: dict | None = None) -> dict:
         roots = [{"port": p, "root": f"{i + 1:02x}" * 64, **w} for i, (p, w) in enumerate(ports.items())]
         return R.record(program, query, sz.DR.parse_design(f"stratified:{k}"), sz.S.SCHEME, roots,
-                        {"kind": "stand-in"}, leaf_layer="ee" * 64)
+                        window or {"kind": "stand-in"}, leaf_layer="ee" * 64)
 
-    assert sz.S.check_public(spec, record(want)).ok
+    salted = record(want, {"kind": "stand-in", R.SEED_SALT: "5a" * 64})
+    assert sz.S.check_public(spec, record(want)).ok and sz.S.check_public(spec, salted).ok
+    v = sz.S.check_public(replace(spec, public=spec.public[:-1]), salted)
+    assert not v.ok and "undeclared" in v.codes
     v = sz.S.check_public(spec, record({**want, "scan/other": {"leaves": 1, "domain": "ff" * 64}}))
     assert not v.ok and "roots" in v.codes
     with pytest.raises(ValueError, match="no coins of its own"):
