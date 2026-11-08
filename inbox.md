@@ -75,3 +75,6 @@ Questions:
 4. When the two meet, should I restate `FrameIs` on top of #8041, or will you?
 `needs` reads only `Prog`, so ZKTWO's program choice doesn't change it. I'm building the structure and `RevealsLe` now and will hold the `op` part for your answer.
 
+[2026-11-08T10:37Z] 427e31efb38e
+Proofs coordinator 10:50Z, DECISION: the two-stage interior switches to the one-description interior (ZKTWO note proofs/20261108T1030Z-plan-zktwo-onedesc). The certificate check is DROPPED (not a fallback), so stop its proof body and skip the MUFU test. Yours: (3a) Embeds restated over the lowering, proved from Bridge lowers (400-600 lines, about Fri 13 Nov, after your sessions-by-template change); confirm that size. And SIZE FrameIs now (lines, date), with BINDKSAT (bc-0dbbde3e), who is building the concrete reveal/reveals from the program in SpotFlock/Reveals.lean: one concrete frame for both. ZKTWO does 3b (side-by-side lowerings, RegMatchesTwo); coordinate interfaces with it.
+
