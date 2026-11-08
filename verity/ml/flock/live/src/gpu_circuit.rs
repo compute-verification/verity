@@ -229,7 +229,7 @@ unsafe extern "C" {
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
     fn flock_cuda_dev_zero(p: *mut c_void, bytes: usize) -> i32;
-    fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64) -> i32;
+    fn flock_cuda_types_upload(types_gen: u64, set: i32, h: *const *const u32, len: *const usize, n: usize, host: u64, key: *const u8) -> i32;
     fn flock_cuda_types_held(types_gen: u64, set: i32) -> i32;
 }
 
@@ -809,9 +809,9 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
 }
 
 /// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
-/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). Rows of at least `FC_CSC_HOST_MIB` MiB (default 1024) stay
-/// here, page-locked and mapped, where the fold reads them over the bus each rep, and the device holds only their column
-/// pointers; it holds a copy of smaller rows, and they're freed here.
+/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). The device holds one copy of them per GPU, which every prover
+/// there with the same slot types maps ([`arrays_key`]), and they're freed here. With `FC_CSC_HOST_MIB=M`, rows of at least M
+/// MiB stay here instead, page-locked and mapped, where the fold reads them over the bus each rep.
 struct TypeCsc {
     col_ptr: [Vec<u32>; 2],
     nnz: [u32; 2],
@@ -836,9 +836,25 @@ struct Types {
     hcsr: [(Vec<u32>, Vec<u32>); 2],
 }
 
-/// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built: the
-/// column pointers as a copy, a large type's row indices read in place ([`TypeCsc`]); the unit's rows as CSR are built only for
-/// a rep whose units the device computes, until it holds them ([`prove_circuit`]).
+/// A digest of a set's arrays: the key under which every prover on a GPU shares one device copy of them (`fc_share_get`,
+/// prove_circuit.cuh's csc_share.cuh), so a copy another prover made holds exactly these arrays.
+fn arrays_key(arrays: &[&Vec<u32>]) -> [u8; 64] {
+    use sha2::{Digest, Sha512};
+    let mut h = Sha512::new();
+    h.update(b"verity flock-circuit: the slot types' CSC");
+    h.update((arrays.len() as u64).to_le_bytes());
+    for a in arrays {
+        let bytes = unsafe { std::slice::from_raw_parts(a.as_ptr().cast::<u8>(), 4 * a.len()) };
+        let pieces: Vec<[u8; 64]> = bytes.par_chunks(1 << 26).map(|p| Sha512::digest(p).into()).collect();
+        h.update((a.len() as u64).to_le_bytes());
+        pieces.iter().for_each(|p| h.update(p));
+    }
+    h.finalize().into()
+}
+
+/// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built, one
+/// copy per GPU ([`TypeCsc`]); the unit's rows as CSR are built only for a rep whose units the device computes, until it holds
+/// them ([`prove_circuit`]).
 fn types(st: &Stmt) -> &'static Types {
     static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
     static GEN: AtomicU64 = AtomicU64::new(1);
@@ -887,18 +903,22 @@ fn types(st: &Stmt) -> &'static Types {
         let arrays: Vec<&Vec<u32>> =
             csc.iter().flat_map(|t: &TypeCsc| { let r = t.rows.as_ref().unwrap(); [&t.col_ptr[0], &r[0], &t.col_ptr[1], &r[1]] }).collect();
         let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
-        // a type's rows (its odd arrays) of at least FC_CSC_HOST_MIB MiB stay here, which the leaked `Types` keeps, unmoved, for the
-        // process; the device holds a copy of the rest
-        let min = std::env::var("FC_CSC_HOST_MIB").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1024).saturating_mul(1 << 20);
-        let mapped: Vec<bool> = csc.iter().map(|t| 4 * (t.nnz[0] as usize + t.nnz[1] as usize) >= min).collect();
+        // FC_CSC_HOST_MIB=M: a type's rows (its odd arrays) of at least M MiB stay here, which the leaked `Types` keeps, unmoved,
+        // for the process; unset, the device holds every type's rows
+        let min = std::env::var("FC_CSC_HOST_MIB").ok().and_then(|v| v.parse::<usize>().ok()).map(|m| m.saturating_mul(1 << 20));
+        let mapped: Vec<bool> = csc.iter().map(|t| min.is_some_and(|m| 4 * (t.nnz[0] as usize + t.nnz[1] as usize) >= m)).collect();
         let host = mapped.iter().enumerate().filter(|(_, m)| **m).fold(0u64, |b, (t, _)| b | 0b1010 << (4 * t));
         if mapped.contains(&true) {
             let words: usize = csc.iter().zip(&mapped).filter(|(_, m)| **m).map(|(t, _)| t.nnz[0] as usize + t.nnz[1] as usize).sum();
             eprintln!("the slot types' rows read from the host, mapped: {} MiB ({} of {} types)", (4 * words) >> 20,
                       mapped.iter().filter(|m| **m).count(), csc.len());
         }
+        // the device's copy is shared by every prover on its GPU whose slot types' CSC is this one (FC_CSC_SHARE=0: a copy of
+        // this process's own)
+        let key = (host == 0 && std::env::var("FC_CSC_SHARE").map_or(true, |v| v != "0")).then(|| arrays_key(&arrays));
+        let key_ptr = key.as_ref().map_or(null(), |k| k.as_ptr());
         // a device that can't take them now keeps them on the host, and the first rep's fold copies them under the same key
-        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host) } == 0 {
+        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host, key_ptr) } == 0 {
             csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
         }
         let sha = &c.nets[c.sha_net].1;
