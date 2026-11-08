@@ -55,6 +55,7 @@ from typing import Any, Callable, Iterator
 
 import verity_difftest as DT
 from verity_difftest import protocol as PR
+from verity.core.protocols.spot import challenger as Ch, coins as CC
 from verity.core.protocols.spot.one_stage import audit, draw as DR, partition as P, registration as R, verifier as V
 from verity.ml.circuits import codec, partition_object as PO
 from verity.ml.commitments.identity import identity_digest, identity_digest_sha512
@@ -62,6 +63,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.definitions.registry import catalog
 
+import a5_coins as AC
 import r2_population as R2
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
@@ -505,20 +507,28 @@ class Case:
 def params(program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: str, *, partition: dict | None = None,
            log: list | None = None, anchors: list | None = None, work_table: dict | None = None,
            registered: dict | None = None, scheme: str = SCHEME, outputs: dict | None = None,
-           schemas: dict | None = None) -> dict:
-    """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s) appear only
-    when given."""
+           schemas: dict | None = None, challenger: dict | None = None, window_root: str | None = None) -> dict:
+    """``outputs`` and ``schemas`` (a registration reusing an earlier record's values, `registration.check`'s), and
+    ``challenger`` (`{key, label}`: the auditor's challenger the sample's coins come from, and their family) and
+    ``window_root`` (the window's open root, which the challenger's coins and seed salt are read on), appear only when
+    given."""
     return {"anchors": list(anchors or []), "delta": delta, "law": law, "leaf_layer": leaf_layer, "log": list(log or []),
             "partition": partition, "ports": ports, "program": descriptor(program), "query": query,
             "registered": registered, "scheme": scheme, "work_table": work_table,
-            **({"outputs": outputs} if outputs is not None else {}), **({"schemas": schemas} if schemas is not None else {})}
+            **({"outputs": outputs} if outputs is not None else {}), **({"schemas": schemas} if schemas is not None else {}),
+            **({"challenger": challenger} if challenger is not None else {}),
+            **({"window_root": window_root} if window_root is not None else {})}
 
 
-def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None) -> dict:
-    """The evidence of a recorded audit record `a` (what `audit_record` was handed)."""
+def evidence(a: dict, *, instances: int, sessions: list[str], session_roots: dict | None, served: list[int] | None,
+             coins: dict | None = None, seed_salt: dict | None = None) -> dict:
+    """The evidence of a recorded audit record `a` (what `audit_record` was handed), and from the challenger the evidence
+    of the sample's coins (`coins.draw_coins`'s) and of the window's seed salt (`coins.seed_salt_of`'s), each only when
+    given."""
     return {"draw": a["draw"], "instances": instances, "proved_units": a["proved_units"], "receipt": a["receipt"],
             "served": served, "session_roots": session_roots, "sessions": sessions, "statement": a["statement"],
-            "verdicts": a["verdicts"]}
+            "verdicts": a["verdicts"], **({"coins": coins} if coins is not None else {}),
+            **({"seed_salt": seed_salt} if seed_salt is not None else {})}
 
 
 def recorded_audit(a: dict, source: str) -> dict:
@@ -565,8 +575,72 @@ def lean_public(c: Case) -> dict:
     return public_outcome(got)
 
 
+def challenger_coins(p: dict, digest: bytes, e: dict) -> bytes | None:
+    """`OneStage.coinsOf`: with the params' challenger, the coins `coins.draw_coins` reads from the evidence's `coins` under
+    its key, on the params' window, of its family, released after the registration's `digest`; none without one, when the
+    evidence carries no coins. Raises `CoinError` with `coinsOf`'s reason."""
+    ch = p.get("challenger")
+    if ch is None:
+        if e.get("coins") is not None:
+            raise Ch.CoinError("the evidence carries coins, and the verifier names no challenger they come from")
+        return None
+    if p.get("window_root") is None:
+        raise Ch.CoinError("a draw from the challenger's coins needs the window's open root (window_root)")
+    return CC.draw_coins(Ch.ChallengerKey.from_json(ch["key"]), p["window_root"], ch["label"], digest, e.get("coins"),
+                         AC.lms_verify)
+
+
+def challenger_salt(p: dict, e: dict) -> str | None:
+    """`OneStage.seedSaltOf`: the window's seed salt `coins.seed_salt_of` reads from the evidence's `seed_salt` under the
+    params' challenger key, on the params' window, as lowercase hex; refused as missing where the params name a challenger
+    and a window root and the evidence carries none, and none where they don't and it carries none. Raises `CoinError` with
+    `seedSaltOf`'s reason."""
+    ch, window, ev = p.get("challenger"), p.get("window_root"), e.get("seed_salt")
+    if ev is None:
+        if ch is not None and window is not None:
+            raise Ch.CoinError("missing: the verifier names a challenger and a window root, and the evidence carries no "
+                               "seed salt")
+        return None
+    if ch is None:
+        raise Ch.CoinError("the evidence carries a seed salt, and the verifier names no challenger it comes from")
+    if window is None:
+        raise Ch.CoinError("a seed salt is read on the window's session: it needs the window's open root (window_root)")
+    return CC.seed_salt_of(Ch.ChallengerKey.from_json(ch["key"]), window, ev, AC.lms_verify).hex()
+
+
+def coins_why(rec: dict, mine: dict, draw: dict, src: bytes) -> str | None:
+    """`OneStage.coinsReason`: why the sample `draw` is not the one the coins `src` give under the derived sampling design
+    `mine` (`coins.draw_first`, reading them in order; a Bernoulli design refused), every coin opened read; None when it
+    is."""
+    n = rec.get("population")
+    if not (isinstance(n, int) and not isinstance(n, bool) and n >= 0):
+        return "the record names no population"
+    if mine.get("law") == "bernoulli":
+        return "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
+    read = 0
+
+    def source(k: int) -> bytes:
+        nonlocal read
+        b = src[read:read + k]
+        read += len(b)
+        return b
+    try:
+        units = CC.draw_first(CC.OwnRandomness(source), mine, n)["units"]
+    except ValueError as refused:
+        return str(refused)
+    drawn = [u for u in draw["units"] if isinstance(u, int) and not isinstance(u, bool) and u >= 0] \
+        if isinstance(draw.get("units"), list) else []
+    if list(units) != drawn:
+        return "the draw's units are not the ones the challenger's coins draw"
+    if -(-read // Ch.COIN_BYTES) != len(src) // Ch.COIN_BYTES:
+        return f"the draw read {read} bytes of {len(src) // Ch.COIN_BYTES} coins: a coin opened and not read"
+    return None
+
+
 def python(c: Case) -> dict:
-    """Today's Python on the case, as `OneStage.check` writes its outcome (`test_difftest.check`, with Lean's reasons)."""
+    """Today's Python on the case, as `OneStage.check` writes its outcome (`test_difftest.check`, with Lean's reasons): on
+    the challenger's coins (the params' `challenger`), their evidence read first (`challenger_coins`, `coins_why`), then
+    the window's seed salt's (`challenger_salt`), which R1-R7 hold the record to."""
     if c.public is not None:
         x = c.public
         return public_outcome(R.matches_public(c.rec, x["scheme"], x["roots"], x["domains"], x["population"]).to_json())
@@ -576,9 +650,24 @@ def python(c: Case) -> dict:
     delta = Fraction(p["delta"])
     out = lambda verdict, reason=None, public=None, profile=None: PR.outcome(  # noqa: E731
         R.PROTOCOL, verdict, reason, digest, public, profile)
+    try:
+        coins = challenger_coins(p, digest, e)
+    except Ch.CoinError as err:
+        return out("reject", f"coins: {err}")
+    if coins is not None:
+        try:
+            why = coins_why(rec, DR.derive(program, p["query"], p["law"], p["work_table"]), e["draw"], coins)
+        except (P.QueryRefused, ValueError):
+            why = None
+        if why is not None:
+            return out("reject", f"draw: coins: {why}")
+    try:
+        salt = challenger_salt(p, e)
+    except Ch.CoinError as err:
+        return out("reject", f"registration: seed salt: {err}")
     codes = R.check(rec, program, p["query"], p["law"], p["scheme"], p["ports"], p["leaf_layer"], p["anchors"], p["log"],
                     p["partition"], p["work_table"], p["registered"], outputs=p.get("outputs"),
-                    schemas=p.get("schemas")).codes
+                    schemas=p.get("schemas"), window_root=p.get("window_root"), seed_salt=salt).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
     try:

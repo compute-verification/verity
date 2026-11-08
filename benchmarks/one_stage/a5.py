@@ -238,7 +238,6 @@ def link(src: Path, dst: Path) -> None:
         shutil.copyfile(src, dst)
 
 
-SELECT_COINS = AC.SELECT_COINS
 CHALLENGER = "a5.py on the auditor's challenger's coins"
 
 
@@ -254,6 +253,13 @@ def registering(a: argparse.Namespace) -> dict[str, Any]:
     return {k: v for k, v in tie(a).items() if k != "log"}
 
 
+def seeded(a: argparse.Namespace, salt: str | None) -> dict[str, Any]:
+    """The window's seed salt ``salt`` (lowercase hex) as `verifier.check` takes it, beside the window's open root
+    ``a.window_root`` it was released on: empty for a window without one. A caller whose window names one passes it as
+    ``a.seed_salt``; a stream's (`coins_draw`) comes once it has sampled."""
+    return {} if salt is None else {"seed_salt": salt, "window_root": a.window_root}
+
+
 def program_values(program: Program) -> tuple[tuple[str, int, int], ...]:
     """The values a window's population program takes ahead of its templates' parameters (`mixed_population_program`'s
     ``values``, ``(name, leaves, width)`` each); none for a program without."""
@@ -267,7 +273,8 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
     template's Definition where the window's query is `Q_template_instance`), the Spec's values the window's ports (a
     row-table window's `row-table` port a tree over its steps' roots, `service.ROOTS` over row-seg leaves), its public
     items what the registration shows (N, each template's stratum, the window, the leaf layer and each port's and registered
-    value's layout), its selection the partition file's rule, and its proof deadline every member's session. A program that
+    value's layout; on the challenger's coins, the window's seed salt too, its coin), its selection the partition file's
+    rule, and its proof deadline every member's session. A program that
     takes values (`program_values`) has them registered beside the ports, on a stream that takes them and the tie's log
     (`tie`); -> (the stream, `register`'s counts, None for one template's)."""
     defs: dict[str, list] = {}
@@ -291,9 +298,10 @@ def stream_of(a: argparse.Namespace, mine: CS.Binding, members: list[dict], want
               *((f"{x}:{v}", "a registered value's layout") for v, _n, _w in taken for x in ("leaves", "words", "domain"))]
     values = tuple(S.Value(p, S.ROOTS, "serve", over=RT.SCHEMA) if p == CS.TABLE_PORT else S.Value(p, schemas[p], "serve")
                    for p in sorted(want)) + tuple(S.Value(v, None, "serve", registered=True) for v, _n, _w in taken)
+    salted = (AC.SEED_ITEM,) if isinstance(coins, CC.ChallengerCoins) else ()
     spec = S.Spec(values, S.Law(a.rule),
                   S.Check(digests[0] if one else digests, mine.query, proof_deadline=(a.session_timeout + 3600) * len(members)),
-                  tuple(S.Public(item, "structure", why) for item, why in public), bytes.fromhex(a.window_root))
+                  tuple(S.Public(item, "structure", why) for item, why in public) + salted, bytes.fromhex(a.window_root))
     stream = S.Stream(spec, units[0] if one else units, budget=1, delta=a.delta, challenger=CHALLENGER, coins=coins,
                       values=taken, log=tie(a).get("log", ()))
     return stream, None if one else {t: n for t, (_, n) in defs.items()}
@@ -325,20 +333,22 @@ def port_refusal(mine: CS.Binding, draw: dict, port: int, ports: int | None) -> 
 
 
 def coins_draw(a: argparse.Namespace, rank: int, rec: dict, mine: CS.Binding, members: list[dict], want: dict,
-               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, Callable[[int], bytes],
+               leaf_layer: str | None) -> tuple[S.Stream | None, S.Draw | None, dict | None, AC.RankCoins,
                                                 dict | None, dict | None, int | None]:
     """Rank ``rank``'s sample of record (`stream_of`): the stream registers the window under the TP run root (`register`, at
     the window's counts), and samples once (`select`: Lean's `Select.select` on the bytes read, then `check_draw`), on the
     challenger's coins (``a.coins``): the rank first plans its sample's coins from its window (`a5_coins.need`), which opens
-    the step's one session once every rank has planned (`a5_coins.Draws.plan`); then the coins commit to the registration's
-    digest and the stream reads them in the rank's turn on the step's one client. -> (the stream, its
-    sample, `register`'s counts, the coins (their `read`: the bytes read), the challenger coins' segment, why it sampled none,
-    and the challenger coins it planned)."""
+    the step's one session once every rank has planned (`a5_coins.Draws.plan`), releasing the window's seed salt, which the
+    stream takes (`RankCoins.take_salt`) and the registration names (``rec`` salted, `a5_coins.salted`); then the coins commit
+    to the registration's digest and the stream reads them in the rank's turn on the step's one client. -> (the stream, its
+    sample (its registration the salted record), `register`'s counts, the coins (their `read`: the bytes read; their
+    `salt`), the challenger coins' segment, why it sampled none, and the challenger coins it planned)."""
     coins = AC.RankCoins(a.coins, rank)
     stream = draw = counts = refused = None
     try:
         stream, counts = stream_of(a, mine, members, want, leaf_layer, coins)
         coins.plan(AC.need(a.rule, mine.program, mine.query, mine.population, mine.work_table))
+        rec = AC.salted(rec, coins.take_salt(stream, a.window_root))
         reg = stream.register(rec, want, leaf_layer=leaf_layer, window_root=a.window_root, counts=counts, work_table=mine.work_table,
                               **registering(a))
         coins.commit(bytes.fromhex(reg.digest))
@@ -382,65 +392,52 @@ def verifier_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, coun
 
 
 def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts: dict | None, rec: dict, mine: CS.Binding,
-                  members: list[dict], want: dict, leaf_layer: str | None, read: bytes, segment: dict, sessions: list[str],
-                  verdicts: dict, statement: dict, given: dict) -> tuple[dict | None, dict, dict]:
+                  members: list[dict], want: dict, leaf_layer: str | None, coins: AC.RankCoins, segment: dict,
+                  sessions: list[str], verdicts: dict, statement: dict, given: dict
+                  ) -> tuple[dict | None, dict, dict, dict | None]:
     """The sample's outcome of record once the challenger's session has ended (`a5_coins.Draws.evidence`): its proof delivered
     (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
-    roots) with the coins' evidence, whose audit record fails `run` unless the Lean verifier's whole run
-    (`Run.run`, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
-    `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
-    and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
-    where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
-    proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
-    after, root = bytes.fromhex(R.digest(rec)), a.window_root
+    roots) with the coins' evidence and the window's seed salt's (`a5_coins.seed_salt_evidence`), whose audit record fails
+    `run` unless the Lean verifier's whole run (`Run.run`, its window the TP run root, its salt read from the challenger's
+    log) is the Python's; and `coins.coins_reason` (Python's `read_reason`) on the coins' evidence and
+    `a5_coins.seed_salt_reason` on the salt's, the audit record failing `coins` or `seed_salt` where either refuses. ``rec``
+    is the registration of record, naming the salt (`coins_draw`). Then the challenger's negatives
+    (`a5_coins.challenger_negatives`), each its own stream's outcome on the honest sample's bytes. -> (the audit record, None
+    for a late proof or an outcome the stream refuses or holds pending; the negatives; the coins' record; the case's
+    challenger form, `a5_coins.case_form`)."""
+    read, after, root, salt = bytes(coins.read), bytes.fromhex(R.digest(rec)), a.window_root, coins.salt.hex()
     published = a.coins.evidence()
-    ev = AC.evidence(published, segment)
+    ev, salt_ev = AC.evidence(published, segment), AC.seed_salt_evidence(published)
 
-    def outcome(s: S.Stream, d: S.Draw, coins: dict | None) -> tuple[S.Outcome, dict | None]:
+    def outcome(s: S.Stream, d: S.Draw, evidence: dict | None, salt_evidence: dict | None) -> tuple[S.Outcome, dict | None]:
         late = s.deliver(d, sessions)
-        return (late if late is not None else s.outcome(d, verdicts, statement, coins=coins, **given)), s.records[-1]["audit"]
+        return (late if late is not None else
+                s.outcome(d, verdicts, statement, coins=evidence, seed_salt=salt_evidence, **given)), s.records[-1]["audit"]
 
-    def refusal(e: Exception) -> dict:
-        return e.verdict.to_json() if isinstance(e, S.Refused) else {"pending": e.args[0] if e.args else None} \
-            if isinstance(e, S.Pending) else {"stream": str(e)}
-
-    def lean(audit: dict | None) -> dict | None:
-        return ((((audit or {}).get("checks") or {}).get("run") or {}).get("detail") or {}).get("disagree", {}).get("lean")
-
-    def reason(coins: dict | None, window: str = root) -> str | None:
-        return CC.coins_reason(coins, window, after, read, AC.lms_verify)
-
-    why = published.get("error") if ev is None else reason(ev)
+    why = published.get("error") if ev is None else CC.coins_reason(ev, root, after, read, AC.lms_verify)
+    salt_why = ((published.get("error") or "the session released no seed salt") if salt_ev is None
+                else AC.seed_salt_reason(salt_ev, root, salt))
     try:
-        o, result = outcome(stream, draw, ev)
+        o, result = outcome(stream, draw, ev, salt_ev)
         told = {"stream": stream.digest, "record": o.record, "accepted": o.accepted, "codes": list(o.verdict.codes)}
     except (S.Refused, S.Pending) as e:
-        result, told = None, {"stream": stream.digest, "accepted": False, "refused": refusal(e)}
-    if result is not None and why is not None:
+        result, told = None, {"stream": stream.digest, "accepted": False, "refused": AC._refusal(e)}
+    failed = {**({"coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}} if why is not None else {}),
+              **({"seed_salt": {"ok": False, "codes": ["seed-salt"], "detail": {"seed_salt": salt_why}}}
+                 if salt_why is not None else {})}
+    if result is not None and failed:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
-                  "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
-    neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
-    for name, coins in bad.items():
-        window = "00" * 64 if name == "coins-for-another-window" else root
-        s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
-        try:
-            d = s.select(s.register(rec, want, leaf_layer=leaf_layer, window_root=window, counts=counts, work_table=mine.work_table,
-                                    **registering(a)))
-            if d.draw != draw.draw:
-                raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
-            got, audit = outcome(s, d, coins)
-            accepted, side = got.accepted, lean(audit)
-        except (S.Refused, S.Pending, ValueError, AC.Ch.CoinError) as e:
-            accepted, side = None, {"refused": refusal(e)}
-        py = reason(coins, window)
-        at = ((side or {}).get("step"), (side or {}).get("codes"))
-        neg[name] = {"refused": py is not None and accepted is False and at == SELECT_COINS, "accepted": accepted, "python": py,
-                     "lean": side}
+                  "checks": {**result["checks"], **failed}}
+    neg = AC.challenger_negatives(
+        lambda c: stream_of(a, mine, members, want, leaf_layer, c)[0],
+        lambda s, w: s.register(rec, want, leaf_layer=leaf_layer, window_root=w, counts=counts, work_table=mine.work_table,
+                                **registering(a)),
+        outcome, draw, coins, ev, salt_ev, a.coins.pre(), root)
     checks = (result or {}).get("checks") or {}
-    record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "coins_reason": why, "outcome": told,
+    record = {"session": published.get("trusted"), "segment": segment, "read": read.hex(), "seed_salt": salt,
+              "coins_reason": why, "seed_salt_reason": salt_why, "outcome": told,
               "run": None if result is None or not result["verifiers"]["agree"] else checks.get("run", {"ok": True})}
-    return result, neg, record
+    return result, neg, record, AC.case_form(ev, salt_ev, root)
 
 
 def wiring_negatives(members: tuple[CS.Member, ...], publics: dict[str, bytes]) -> dict[str, dict]:
@@ -740,8 +737,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                         "compose_s": compose_s, "pin": made["pin"], "class": made.get("class_sha512")})
     summary["staging"] = {"before_draw_s": round(time.time() - t_stage, 1), "public_files": len(members)}
     leaf_layer = CS.leaf_layer(publics)
+    salt = getattr(a, "seed_salt", None)
     checks["registration"] = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table,
-                                     **tie(a)).to_json()
+                                     **tie(a), **seeded(a, salt)).to_json()
     if mine.row_tables:
         bad = TB.check_row_tables(mine, publics, {r["port"]: r["root"] for r in rec["roots"]}, step_roots)
         checks["row_tables"] = {"ok": not bad, "codes": sorted(bad), "detail": bad}
@@ -793,6 +791,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             return summary, False
         union_draw, drawn_law, receipt = dict(draw.draw), dict(draw.law), dict(draw.registration.receipt)
         (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+        rec, salt = dict(draw.registration.record), coins.salt.hex()
+        (out / "registration.json").write_text(json.dumps(rec, indent=1, sort_keys=True))
+        summary.update(registration=draw.registration.digest, seed_salt=salt)
     (out / "draw.json").write_text(json.dumps(union_draw, sort_keys=True))
     after: dict[str, dict] = {}
     if any(m.wired for m in mine.members):
@@ -958,8 +959,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         verdicts = {x: {**y, "sessions": sessions} if y.get("of_record") else y for x, y in verdicts.items()}
         given = {"proved_units": sorted(proved), "instances": instances, "served": sorted(served_units),
                  "session_roots": session_roots}
-        result, coin_neg, summary["coins"] = coins_outcome(
-            a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, read, segment, sessions, verdicts, statement,
+        result, coin_neg, summary["coins"], form = coins_outcome(
+            a, stream, draw, counts_of, rec, mine, members, want, leaf_layer, coins, segment, sessions, verdicts, statement,
             given)
         if result is None:
             summary.update(audit={"accepted": False, "outcome": summary["coins"]["outcome"]}, draw=union_draw["units"],
@@ -967,12 +968,12 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
             print("A5 " + json.dumps({"no_audit_record": summary["coins"]["outcome"]}, default=str))
             return summary, False
-        result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(),
+        result["coins"] = {"source": "challenger", "segment": segment, "read": read.hex(), "seed_salt": salt,
                            "outcome": summary["coins"]["outcome"]}
         write_case(out, program, query, law, want, leaf_layer, a.delta, table, rec,
                    {"draw": union_draw, "proved_units": given["proved_units"], "receipt": receipt, "statement": statement,
                     "verdicts": verdicts}, instances=instances, sessions=sessions, session_roots=session_roots,
-                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a))
+                   served=given["served"], v2=v2_proof(done, not plain(a)), partition=part, tied=tie(a), challenger=form)
     result["draw_counts"] = counts
     if row_verdicts:
         result["registered_reads"] = TB.reported_reads(reads, row_verdicts)
@@ -994,14 +995,17 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         defs = [tuple(x) for x in by_template.values()]
         taken = program_values(program)
         fewer = R2.program(defs, mixed=len(defs) > 1 or bool(taken), values=taken)
-        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a))
+        v = V.check(rec, fewer, query, law, CS.SCHEME, want, leaf_layer=leaf_layer, work_table=table, **tie(a),
+                    **seeded(a, salt))
         neg["registration-partition-mismatch (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
         other = CS.expected_ports(replace(mine, run="00" * 32))
-        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a))
+        v = V.check(rec, program, query, law, CS.SCHEME, other, leaf_layer=leaf_layer, work_table=table, **tie(a),
+                    **seeded(a, salt))
         neg["domains-bound-to-another-run-root (R3)"] = {"refused": not v.ok, "codes": list(v.codes)}
         first = members[0]["m"].key
         flipped = dict(publics, **{first: publics[first][:-1] + bytes([publics[first][-1] ^ 1])})
-        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a))
+        v = V.check(rec, program, query, law, CS.SCHEME, want, leaf_layer=CS.leaf_layer(flipped), work_table=table, **tie(a),
+                    **seeded(a, salt))
         neg["public-body-not-the-registered-leaf-layer (R4)"] = {"refused": not v.ok, "codes": list(v.codes)}
         v = V.check_draw({**union_draw, "units": union_draw["units"][:-1] + [n_all]}, rec, drawn_law)
         neg["draw-outside-the-partition"] = {"refused": not v.ok, "codes": list(v.codes)}
@@ -1010,7 +1014,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             v = V.check_proved(union_draw, proved[1:], len(proved) - 1)
             neg["proved-set-short-of-the-draw"] = {"refused": not v.ok, "codes": list(v.codes)}
         neg.update(transfer_gate_negatives(getattr(a, "transfer_gate", ()), rec, mine, want, leaf_layer, union_draw, drawn_law, proved,
-                                           tie(a)))
+                                           {**tie(a), **seeded(a, salt)}))
         neg.update(a0.audit_negatives(result, drawn_law, a.delta, session_roots, served=sorted(served_units)))
         neg.update(coin_neg)
         if linked is not None:
@@ -1070,11 +1074,15 @@ def transfer_gate_negatives(transfer_gates: Sequence[str], rec: dict, mine: CS.B
 def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_layer: str | None, delta: float,
                work_table: dict | None, rec: dict, record: dict, *, instances: int, sessions: list[str],
                session_roots: dict, served: list[int], v2: dict | str | None = None,
-               partition: dict | None = None, tied: dict | None = None) -> None:
+               partition: dict | None = None, tied: dict | None = None, challenger: dict | None = None) -> None:
     """The audit as `Spot.OneStage`'s case (`replay.Case.case`: the registration record, the evidence
     `audit_record` was handed and the verifier's params, δ the audit's as an exact ratio, with ``partition`` the
-    verifier's own partition object, which v2 verifies the sessions against, and the window's ``tied`` values, `tie`),
-    in ``out/case.json``, and the current Python on it (`replay.python`) in ``out/case-python.json``. With ``v2``
+    verifier's own partition object, which v2 verifies the sessions against, the window's ``tied`` values, `tie`, and
+    on the challenger's coins its form, ``challenger`` (`a5_coins.case_form`: the params' challenger and window root, the
+    evidence of the sample's coins and of the window's seed salt), in ``out/case.json``, and the current Python on it
+    (`replay.python`) in ``out/case-python.json``; or why there is none in ``out/case-error.txt``, as for a registration
+    whose window names its seed salt with no challenger's evidence of it (a two-stage interior's, which its caller's
+    stream decides). With ``v2``
     (`v2_proof`), the case of the audit on the proofs themselves, `Spot.OneStageZk`'s (`case_v2`), in
     ``out/case-v2.json``, and that case in sampled proofs' one-stage form (`case_with_form`), which onsite's and remote's
     evidence carries for sampled proofs, in ``out/case-sampled.json``; or why there is neither in
@@ -1083,9 +1091,15 @@ def write_case(out: Path, program, query: dict, law: dict, ports: dict, leaf_lay
     try:
         import replay as RP
 
+        ch = challenger or {}
+        if not ch and R.SEED_SALT in (rec.get("window") or {}):
+            raise ValueError("the registration's window names its seed salt, which the case reads from the challenger's "
+                             "log, and the audit has no challenger's evidence of it: its caller's stream decides it")
         d = str(Fraction(delta).limit_denominator(10**12))
-        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}))
-        e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served)
+        p = RP.params(program, query, law, ports, leaf_layer, d, work_table=work_table, partition=partition, **(tied or {}),
+                      challenger=ch.get("challenger"), window_root=ch.get("window_root"))
+        e = RP.evidence(record, instances=instances, sessions=sessions, session_roots=session_roots, served=served,
+                        coins=ch.get("coins"), seed_salt=ch.get("seed_salt"))
         c = RP.Case("", "a5", rec["format"], "audit", "audit", program, p, rec, e, None)
         (out / "case.json").write_text(json.dumps(c.case(), sort_keys=True))
         (out / "case-python.json").write_text(json.dumps(RP.python(c), sort_keys=True, default=str))
