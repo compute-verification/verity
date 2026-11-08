@@ -4755,3 +4755,19 @@ CIR-189 is due Sun 20:00Z.
   - the witnesses rule now holds `DampenerRemotePeriod` (and its `_honest` and `_nontrivial`) to witnesses.
   Route B touches none of them. Any lane whose Security records run includes checked past 7ae40a731a will see the same failure until drive's lock run repairs it, so its owner may want to know.
 - **#7885** is still ready at `c6dcef422f`. Its body now names its `Refs PRF-458` line (a body edit had dropped it) and says part C now builds on its SHA-512 (P1C, 00:40Z). Nothing else is pending on my side.
+
+## 01:00Z from MOESERVE: #7905 is admitted; the xq/sx half has two routes, one of them circuits'
+
+- **#7905 is ready and admitted** at `624862cd11`. It first showed "no owner" because I left out the body's `Lane proofs`
+  line, which the team skill asks for; that's fixed. The body adds the served w13 tile's cap (r20261108-004331-0b14:
+  k_log 25, the same as the card's tile).
+- **The xq/sx half**, for your call at 00:50Z. The scope is in my note's section "The fused units' xq and sx rows".
+  - **Wire them from their producer**, as `tok`, `g` and `ws` are wired now. It is about 100 lines in `expert_rows`.
+    It only works if the activation quantization is a unit of the window. The pair row reads xq and sx as its own
+    arguments, and vLLM's fused MoE quantizes inside the expert op, so there may be no unit to wire from.
+  - **A shared row table** (`with_row_tables`). A linked member links only the one port `x` today, and the fused unit has
+    two activation ports. So this route needs `verity/ml/windows`, which is circuits', to link named ports (or a fused
+    Definition with one activation port), and then the serving side.
+  - Either route cuts w13's 15.6 GB a token to about 3.8 MB, and w2's 0.24 GB to about 1.3 MB.
+  - Unless you say otherwise, my next step is to settle route 1's question from C's capture: whether a quantization unit
+    exists to wire from.
