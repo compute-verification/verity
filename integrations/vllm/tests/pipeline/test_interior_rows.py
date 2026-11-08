@@ -20,9 +20,11 @@ import pytest
 from verity.core.protocols.spot import service as S
 from verity.core.protocols.spot.one_stage import partition as P, registration as R
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.evaluation.reference import evaluate
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
 from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.ml.definitions.registry import dead_free as DF
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay.index import SAMPLER_OP, index_of
 from verity_vllm.check.replay.opening import CommittedStore
@@ -292,3 +294,82 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     (tmp_path / SC.CAPTURE).write_text(json.dumps(doc))
     with pytest.raises(ValueError, match="for 3 tokens at 2 steps"):
         IR.captured(tmp_path, "r1")
+
+
+# --- a token select as the units Flock proves it by ----------------------------------------------------------------------
+
+NAN, NEG_NAN, NEG_ZERO, NEG_INF, INF, ONE, NEG_ONE = 0x7FC0, 0xFFC0, 0x8000, 0xFF80, 0x7F80, 0x3F80, 0xBF80
+
+
+def _select_rows(V: int) -> np.ndarray:
+    """Logits rows of random words, then of edge cases: none above -inf, a NaN logits[0], a tie across chunks, -0 before
+    +0, +inf last, and NaNs but one number in the last chunk."""
+    edge = np.full((6, V), NEG_INF, dtype=np.uint16)
+    edge[1, :], edge[1, 0] = ONE, NAN
+    edge[2, [5, V // 2 + 5]] = ONE
+    edge[3, 3], edge[3, 4] = NEG_ZERO, 0
+    edge[4, -1] = INF
+    edge[5, :], edge[5, -2] = NEG_NAN, NEG_ONE
+    return np.concatenate([np.random.default_rng(20261108).integers(0, 1 << 16, (4, V), dtype=np.uint16), edge])
+
+
+def _selects(tmp_path, V: int) -> dict[str, IR.Span]:
+    """Two requests' captured `TokenSelect_v4{V}` spans of five tokens each, each token its Definition's on its row."""
+    t, rows = f"TokenSelect_v4{{V={V}}}", _select_rows(V)
+    fn = SRW.template(t).fn
+    SC.write(tmp_path, t, {rid: {"logits": part, "tokens": [int(evaluate(fn, r.tolist())[0]) for r in part],
+                                 "steps": list(range(len(part))), "program": "p" * 64}
+                           for rid, part in (("a", rows[:5]), ("b", rows[5:]))})
+    return {rid: IR.captured(tmp_path, rid) for rid in ("a", "b")}
+
+
+@pytest.mark.parametrize("V,c", [(128, None), (64, 16)])
+def test_a_token_selects_pieces_are_its_chunks_and_combine_by_their_definitions(tmp_path, V, c):
+    """`pieces` lays a captured token select out as `TokenSelect_v4` calls it: each token's V / C chunk units, each its
+    Definition's (best, idx) of its logits, then its combine unit over logits[0] and those partials, which its Definition
+    takes to the span's token, on random words and on NaN, ±0, ±inf and ties across chunks; each piece's member is its
+    template's bit rows as Flock stages a unit, each row of exactly its words (Flock refuses the whole select at a served
+    vocabulary). Pieces that don't select the span's token, and chunks that don't tile the row, are refused."""
+    C, out = c or min(DF.CHUNK, V), f"out.{SAMPLED_MEMBER}"
+    k = V // C
+    for s in _selects(tmp_path, V).values():
+        chunks, comb = IR.pieces(s, c)
+        assert (chunks.member, comb.member) == (SRW.unit_member(f"TokenSelectChunk_v2{{C={C}}}", s.n * k),
+                                                SRW.unit_member(f"TokenSelectCombine_v2{{V={V},C={C}}}", s.n))
+        assert [w for _p, w in comb.member.rows] == [1, k, 2 * k]
+        best, idx = chunks.data["outs"]["o0"][:, 0].tolist(), chunks.data["outs"]["o1"].view("<u4")[:, 0].tolist()
+        for j, row in enumerate(s.data["rows"]["in0"].tolist()):
+            parts = [evaluate(bind(DF.TokenSelectChunkV2, C=C), row[a:a + C]) for a in range(0, V, C)]
+            assert list(zip(best[j * k:(j + 1) * k], idx[j * k:(j + 1) * k])) == [tuple(p) for p in parts]
+            token = evaluate(bind(DF.TokenSelectCombineV2, V=V, C=C), row[0], [p[0] for p in parts], [p[1] for p in parts])
+            assert token == (int(s.data["outs"][out].view("<u4")[j, 0]),)
+        assert comb.data["rows"]["in1"].reshape(-1).tolist() == best and comb.data["rows"]["in0"][:, 0].tolist() == [
+            r[0] for r in s.data["rows"]["in0"].tolist()]
+    wrong = s.data["outs"][out].copy()
+    wrong[0, 0] ^= 1
+    with pytest.raises(ValueError, match="its chunks and combine select"):
+        IR.pieces(replace(s, data={**s.data, "outs": {out: wrong}}), c)
+    with pytest.raises(ValueError, match="are not whole chunks"):
+        IR.pieces(s, 3)
+
+
+def test_a_token_selects_interior_is_template_major_one_shared_row_member_a_piece(tmp_path):
+    """The interior of two spans' pieces, each padded to its cell (12 chunk units, 6 combines): the chunks' Q·12 units,
+    then the combines' Q·6, each template one shared-row member whose ports are tables of its own rows and unit off_t + k
+    reads row k, over the verifier's mixed population program; spans of other templates or cells of another count are
+    refused before any commitment."""
+    per = [IR.pieces(s) for s in _selects(tmp_path, 128).values()]
+    it = IR.interior(per, (12, 6), "aa" * 64, [0, 2], row=ROW, salt_key=SALT)
+    w = it.committed.window
+    assert [(m.template, m.base, m.n) for m in w.members] == [(per[0][0].member.template, 0, Q * 12),
+                                                               (per[0][1].member.template, Q * 12, Q * 6)]
+    assert all(dict(m.tables) == {p: m.n for p, _ in m.rows} for m in w.members)
+    assert all(np.array_equal(it.committed.refs[j], np.tile(np.arange(m.n)[:, None], (1, len(m.all_rows))))
+               for j, m in enumerate(w.members))
+    mixed = P.mixed_population_program([(SRW.template(m.template).fn, m.n) for m in w.members])
+    assert w.program.root.id == mixed.root.id
+    assert it.ports == IR.interior_ports([s.member for s in per[0]], (12, 6), "aa" * 64, [0, 2])
+    with pytest.raises(ValueError, match="not the same templates'"):
+        IR.interior([per[0], per[1][:1]], (12, 6), "aa" * 64, [0, 2], row=ROW)
+    with pytest.raises(ValueError, match=r"2 templates and cells \[12\]"):
+        IR.interior(per, 12, "aa" * 64, [0, 2], row=ROW)

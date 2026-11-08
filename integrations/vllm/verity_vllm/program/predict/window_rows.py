@@ -124,16 +124,22 @@ def _be_words(b: bytes) -> np.ndarray:
     return np.frombuffer(bytes(b), ">u8").astype("<u8").view("<u2")
 
 
-def chunk_best(x: np.ndarray) -> tuple[int, int]:
-    """`TokenSelectChunk_v2{C}` on bf16 words ``x``: (best, its index), the first maximum above -inf, a NaN never taken, and
-    (-inf, 0) when there is none."""
+def chunk_bests(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """`TokenSelectChunk_v2{C}` on each row of bf16 words ``x`` (its last axis): (best, its index), the first maximum above
+    -inf, a NaN never taken, and (-inf, 0) where there is none."""
     x = np.asarray(x, dtype=np.uint16)
-    f = (x.astype(np.uint32) << 16).view(np.float32).astype(np.float64)
+    f = (x.astype(np.uint32) << 16).view(np.float32)
     f = np.where(np.isnan(f), -np.inf, f)
-    if not (f > -np.inf).any():
-        return NEG_INF_BF16, 0
-    i = int(np.argmax(f))
-    return int(x[i]), i
+    i = np.argmax(f, axis=-1)
+    none = ~(f > -np.inf).any(axis=-1)
+    best = np.take_along_axis(x, i[..., None], axis=-1)[..., 0]
+    return np.where(none, np.uint16(NEG_INF_BF16), best).astype(np.uint16), np.where(none, 0, i)
+
+
+def chunk_best(x: np.ndarray) -> tuple[int, int]:
+    """`chunk_bests` of one chunk."""
+    best, i = chunk_bests(x)
+    return int(best), int(i)
 
 
 def _pinned(family: str) -> str | None:
