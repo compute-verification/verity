@@ -145,9 +145,13 @@ value, at its sampled replay block's rows. The verifier derives these links from
 (`second_stage.replay_links`), and no party supplies them. Any other port reads its own interior port or a registered
 value. Round 2 reads the statements by position, one for each part in the parts' order (the interior program's
 strata's), and refuses any other list (`second-order`, `second-cover`). Each statement's header is its template's
-reference header, which the auditor's params give beside its circuit file (`template_circuits`), with the run's
-fields blanked in both (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and
-`frame_v3.domain_ids`, which round 2 holds to the run itself); any other header is refused (`second-header`). The
+reference header, which the auditor's params give beside its circuit file (`template_circuits`), placed in the run
+(`second_stage.at_run`). The verifier computes its `set`, `served/<run>/m<k>` with `k` the template's position, and
+each port's `frame_v3.bindings` under the window-domain rule (`ml.commitments.window`), so the prover chooses neither.
+The run's fields are blanked in both (`second_stage.RUN_FIELDS`: `instances`, `units.indices`, `frame_v3.roots` and
+`frame_v3.domain_ids`, which round 2 holds to the run itself, and `registered`, whose reads `second-read` holds); any
+other header is refused (`second-header`). The interior record names the replay sample in order
+(`window.replay_sample`), and round 2 refuses it unless that is the verifier's own (`second-interior-order`). The
 two-stage form itself stays refused until `second_stage.FORM` allows it.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
