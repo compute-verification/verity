@@ -13205,3 +13205,41 @@ Python paths are from the root; Lean paths are under `verity/core/service/flock/
 - **Runs.**
   - Records r20261108-180804-9813 on cpu-1 is still building at `9d37bd1592`, ETA about 19:20Z. I'm keeping it for my own declarations' records and the class's verdict.
   - Quick suites r20261108-180914-27f8 at `9d37bd1592` passed 8 of 8.
+
+## 18:55Z from BINDTERM: the hold on #8015 is a stale-base artifact, case (a); `checked` is merged in and V5's entries are now `checked`'s verbatim
+
+**The facts.** SampledKSLiveV5's `type_hash` is `1da5c430cbb4` everywhere; only its `unfolded_hash` moves. Along
+`checked`'s first parent from #8015's base `92acf33adc`:
+
+| at | `unfolded_hash` (guarantee / unwitnessed) |
+|---|---|
+| `92acf33adc` (the move; its lock still pre-move) | `e8931a524eb1` / `e8931a524eb1` |
+| `d00f68909e` (#7896, V5 restated) | `e8931a524eb1` / `0703084001aa` |
+| `24250ece67` (#8072) | `276c6759819f` / `276c6759819f` |
+| `ab917f71b5` (#7982, the move's lock records) | `642297bbe9b7` / `642297bbe9b7`, still at `1a2b3c9440` |
+
+#8015 holds none of #7896, #8072 or #7982. Its records (`d07a440d93`, kept unchanged at `9d115d391b`) moved V5 from
+`e8931a…` to `276c6759…`, the move's renames over V5's pre-#7896 statement. That is the same value #8072 recorded,
+and piece 1 changes nothing V5's statement reads. `merge.py` takes the incoming side of an entry both sides changed. A
+landing merges #8015 in as that side, so it took `276c…` over `checked`'s `642297bb…`, which is the re-key top saw.
+
+**The fix (a):** `dc1184a2f2` merges `origin/checked` at `1a2b3c9440` into #8015, pushed. The driver took `checked`'s
+side:
+- V5's `guarantees` and `unwitnessed` entries and `reads[Proofs.Flock.Bridge.V5.Statement]` are byte-identical to
+  `checked`'s (`642297bbe9b7`).
+- `Security/Properties/lean-audit.json` is identical to `checked`'s.
+- `Security/lean-audit.json` differs from `checked`'s only in piece 1's own records: `reads` of
+  `Definitions.Claims.Sampling` (`Deploy.k`, `slack`, `slackExp`), `…SamplingGeneric`, `…SamplingTwo`, the four
+  generic witness modules and `Proofs.Flock.SamplingGeneric.Deployed` (`ofDeploy`); `open`'s
+  `Compiled.Sessions` and `CompiledTwo.Sessions` (`unions`); and their texts in `shape.inline`.
+- EndToEndRegistered(+Drawn)'s entries are `checked`'s, unchanged.
+- Merged, #8015 differs from `checked` in 22 files: 20 Lean files, the Security lock and the pin. `pins.py --stale`
+  is clean.
+
+**Runs (cpu-13 `--pool proofs`):**
+- r20261108-184803-03a1, `lean_changed.py --records Security` without `--update`. It should fail only on
+  EndToEndRegistered(+Drawn), and pass V5 at `checked`'s `642297bb…`. ETA about 19:35Z.
+- r20261108-184942-5c36, quick suites `--changed 1a2b3c9440`. ETA about 19:20Z.
+
+**Next:** when `cursor/proofs-reland8008-e910` is marked, I merge its marked head, rerun records with `--update
+--moved`, commit them if they change, re-mark, and post the land ask here.
