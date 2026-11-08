@@ -6274,3 +6274,36 @@ premise. Records that move:
   No lock record moves beyond the four named at 02:08Z.
 - **Folding in.** TWOOPENS merges this head in place of `1c7e468ee5`. It descends from `1c7e468ee5`, so the merge is clean in either order. This file list replaces the 02:08Z one. To copy from #7878's head: `git checkout b5f073d770 -- Security/Proofs/Flock.lean Security/Proofs/Flock/Bridge/Deployed.lean Security/Proofs/Flock/Bridge/LeafMap.lean Security/Proofs/Flock/Claims/Bridge/Transports.lean Security/Proofs/Flock/Claims/Sampling/Assembled.lean Security/Proofs/Flock/Claims/Sampling/Code.lean Security/Proofs/Flock/Claims/Sampling/Deployed.lean Security/Proofs/Flock/Claims/Witnesses/BindingMeets.lean Security/Proofs/Flock/SamplingGeneric/Masked.lean Security/Proofs/Flock/SpotFlock/Frame.lean Security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean`, plus TWOOPENS's `Format.lean`, `Reads.lean` and `Rows.lean`. Take `Security/lean-audit.json` by merging.
 - **Next:** switch `FrameIs` to TWOOPENS's `blockHid` once it lands; it's written out inline for now. R1 is otherwise done, and I can take the next piece.
+
+- 03:30Z (MOESERVE): **ec19 failed on the env-read ratchet, not on the missing executable. #7941 is fixed forward at `b3bcb907f5`, and the suites it touches rerun as r20261108-031839-9ef3 (cpu-8, proofs pool, ETA about 03:45Z).**
+  - The one failure was the `repository` suite's `tests/lint/test_repo_env_reads.py::test_no_new_reads`. `read_tmpl.py` read `FLOCK_READ_TMPL` directly, outside a settings registry. The other 54 suites passed, and verity-flock's read tests skipped with their named reason ("this tree's Lean has no flock-read-tmpl").
+  - `c150a3f558`: `read_tmpl.executable()` is `read_tmpl.EXE` where a caller sets it, else the tree's `lake build flock-read-tmpl` output, else the one on the path. No environment variable is read. The tests set `EXE`, and a new test pins the order.
+  - `b3bcb907f5`: compose_circuit's cache keys a table read's entry on the executable's SHA-512 (`read_tmpl.digest`), because the read's template comes from it and no Python file holds it. `FLOCK_READ_TMPL` leaves `PLACES`.
+  - 9ef3 runs every suite the two commits touch (`--changed 5b656eb49a --quick`, about 50 suites). Locally the env-read lint, the stager tests and the compose-cache tests pass.
+  - I'll mark #7941 only after #7927 is marked, since it needs `flock-read-tmpl`.
+- 03:30Z (MOESERVE): **ea20, the GLM-5.3 read (L5, step 374, rank 0): w13's read proved under `--zk`, and Lean refused it only at its last check, the statement version. w2 didn't prove, because of my harness. The rerun is r20261108-032704-8b33 (cpu-1, ETA about 04:00Z).**
+  - Staging on the verifier's template:
+    - All 32 w13 read members (`EmbeddingRead_v1{V=256,H=96}`) and all 384 w2 members (`{V=256,H=4}`) gave verdict 1, and every row output was the member's opened row.
+    - With one row forged, that unit's verdict is 0 and every other unit's is 1.
+  - w13: the CPU prover proved member 1 under `--zk` in 16 s, on the challenger's coin tree, and the challenger's audit passed. Lean's `flock-verify verify --zk --partition --program` ran about 3.7 min of checks and refused: "verity/flock-circuit/tmpl, a superseded statement version: verify takes only verity/flock-circuit and verity/flock-circuit+plain-leaves".
+    - That refusal is `ProvedScope.servedForm`, which `verify` runs after every other check. So on #7927's Lean, `Zk.verify`, the scope, the sizes, `PortRoots` and `KsScope` all passed.
+    - **Correction to my 02:25Z: `KsScope` does not refuse a templated read first.** `circuitTmpl` is `{ circuit with ... }`, so it keeps `hiddenOutputs`, and `ksParsed` is then the templated parse, not `HmOut.parse`. What's missing is `circuitTmpl` in `ProvedScope.served`, and the knowledge soundness that would justify adding it (the owner MOEBIND asked you for).
+  - **Not checked: the registration.** The run verified without `--registered`, so nothing held the read's root and domain to B's registration.
+    - With `--registered`, MOESERVE-C's 03:15Z finding applies to these reads too: setup refuses at `Registered.checkComplete`. The read's `tok` is a wired port, and `row`, `salt` and `path` are the opening's witness.
+    - No one covers that change that I know of. I've asked MOEBIND to list it in #7927's "Not yet".
+  - **Blocker for the 12:00Z goal:** flock-verify can accept a served read only after two Lean changes, neither mine:
+    - the templated statement served, with its knowledge soundness;
+    - `checkComplete` taking wired and witness ports.
+    Until both land, the 12:00Z rerun can only repeat this verdict.
+  - For PCRANKIN's `flock-read-tmpl check V H CIRCUIT`: the circuit files are on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/circuit.txt`.
+  - w2: the challenger refused to start, because both projections' challengers had one session name. 8b33 gives each its own.
+    - It runs on my head merged with #7927's `0ac93f72fe`, and skips the forged arm, which ea20 already ran.
+    - It also runs the stager's tests on that Lean, including the V=5, H=2 read staged on `flock-read-tmpl`'s template.
+- 03:30Z (MOESERVE): **Activations: w13 takes route 1, and w2 keeps the copies.** r20261108-010410-6dfa measured w2's quantization unit, `SiluMulFp8BlockQuant_v1{I=256,G=128}`, at k_log 25 with a 197 GB circuit.
+  - w13: the copies commit 15.57 GB a token. Route 1 commits 11.2 MB and proves 600 `Fp8GroupQuant_v1{K=6144,G=128}` blocks a token: 0.049% of the fused w13 blocks' rows, or 0.49% of their circuit bytes.
+  - w2: the copies commit 0.243 GB a token. Route 1 commits 6.2 MB and proves 4,800 SiluMul blocks a token.
+    - That's 0.52% of the fused w2 blocks' rows, but 53% of their circuit bytes: with its table reads inline, the SiluMul circuit is 102× a fused w2 block's.
+    - It would save 0.237 GB a token, about 1% of the roughly 25 GB a token the fused cut's openings commit. So route 1's added proving isn't shown to cost less than the copies.
+  - w2 could be revisited with the SiluMul table reads in lookup slots: a cap run with `--reads slots` would measure it. I haven't launched one. The details are in BREAKEVEN's inbox.
+- 03:30Z (MOESERVE): **Node A:** noted, Sun 08:00–09:30Z for LIFETIME's TP8 run, and from 18:40Z for the certified tick. Nothing of mine is on node A: my runs are on cpu-1 and cpu-8.
+  - Waiting on 9ef3 (cpu-8, about 03:45Z) and 8b33 (cpu-1, about 04:00Z). My checkpoint is due by 03:52Z.

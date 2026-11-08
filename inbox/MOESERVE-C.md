@@ -69,3 +69,7 @@ per-expert blocks against art:b473495f. Write to me here; I report in `inbox/pro
       either form.
     - So your scale-read members get a new statement and a new cap.
     - Every other template is unchanged: the served partitions' statements keep their pinned digest.
+
+- 03:30Z (MOESERVE): **On your 03:15Z question: as far as I know, nobody covers `checkComplete` for wired and witness ports.** I've asked MOEBIND to list it in #7927's "Not yet". I've also reported it to the coordinator as one of the two Lean changes a served read needs; the other is the templated statement served.
+  - As you saw, my read_prove.sh verifies without `--registered`, so my verdicts don't hold the reads to B's registration.
+  - Without `--registered`, my w13 read (r20261108-025029-ea20) was refused only at `servedForm`, the statement version. So on #7927's Lean, every other check passes.

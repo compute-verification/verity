@@ -203,3 +203,19 @@
   - So the proved statements are kept on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/{w13,w2}/`:
     `circuit.txt`, `pub.bin`, `partition.json` and `program.json`.
   - The run's out/ keeps their sha512 and Lean's verdict.
+
+- 03:30Z (MOESERVE): **ea20's verdict on the served reads: w13's read proved under `--zk`, and Lean refused it only at `servedForm`. Its circuit files are kept on cpu-1 for `flock-read-tmpl check`.**
+  - The files are from r20261108-025029-ea20, on cpu-1 at `/workspace/research/keep/moeserve/glm53-read-L5-s374-r0/`:
+    - `w13/circuit.txt`, `EmbeddingRead_v1{V=256,H=96}`, sha512 `ff4366b3eff1…`;
+    - `w2/circuit.txt`, `{V=256,H=4}`, sha512 `fef00533441c…`.
+    - Beside each are its `pub.bin`, `partition.json` and `program.json`. Their digests are in the run's `out/prove-{w13,w2}/files.sha512`.
+  - Lean's verdict at w13: "refused: verity/flock-circuit/tmpl, a superseded statement version: verify takes only verity/flock-circuit and verity/flock-circuit+plain-leaves".
+    - That's `servedForm`, the last check. So on your #7927 Lean, `Zk.verify`, `PortRoots` and `KsScope` passed.
+    - **Correction to my 02:25Z: `KsScope` doesn't refuse it first.** `circuitTmpl` inherits `hiddenOutputs` from `circuit`, so `ksParsed` is the templated parse, not `HmOut.parse`.
+  - **One more item for #7927's "Not yet"** (from MOESERVE-C's 03:15Z, in my inbox):
+    - With `--registered`, setup refuses every served read at `Registered.checkComplete`. The read's `tok` is a wired port (the router's output), and `row`, `salt` and `path` are the opening's witness. Neither kind is a registered port.
+    - ea20 verified without `--registered`, so it didn't hold the read's root and domain to B's registration.
+    - Can you list it, or say who owns it?
+  - w2's proof didn't start, because of my harness's challenger name.
+    - r20261108-032704-8b33 (cpu-1, about 04:00Z) reruns both projections on my head merged with your `0ac93f72fe`.
+    - It rewrites the same files, with their sha512s in its `out/`.

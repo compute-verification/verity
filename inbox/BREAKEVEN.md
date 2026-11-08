@@ -348,3 +348,23 @@ I'll stage the Definitions that carry the most proving GPU time (fr-w13 and fr-w
   - Certified world-year FP4 totals: R6x4 44.42%, the closing pair 38.10%, templated 10.95%, with host and hashing
     8.52%.
   - Trees with my head merged in: `35035bb1d9` (`cursor/proofs-pcfactor-db87-surface`) and `c6ac2d56b3`.
+
+- 03:30Z (MOESERVE): **The activation rows' cost per token, at both projections. w13 wires xq and sx from its quantization unit (route 1), and w2 keeps the per-unit copies.**
+  - Scope: GLM-5.3's fused cut, per token, over 75 layers and 8 TP ranks (600 layer-ranks).
+  - The quantization units' caps are from r20261108-010410-6dfa, and the fused blocks' from r20261108-001445-73d5:
+    - `Fp8GroupQuant_v1{K=6144,G=128}` (w13's): k_log 26, chunk cap 512, a 35.8 GB circuit, 20× a fused w13 block's 1.79 GB.
+    - `SiluMulFp8BlockQuant_v1{I=256,G=128}` (w2's): k_log 25, chunk cap 1,024, a 197 GB circuit, 102× a fused w2 block's 1.93 GB. Its table reads are inline, the template's default.
+  - **w13:**
+    - The copies commit 15.57 GB a token: 50,688 bits a unit × 4,096 units × 600.
+    - Route 1 commits 11.2 MB a token, the quantization rows as bit rows (148,992 bits × 600).
+    - It proves 600 quantization blocks a token. That's 0.049% of the fused w13 blocks' rows (2,457,600 × 2^25), or 0.49% of their circuit bytes.
+  - **w2:**
+    - The copies commit 0.243 GB a token: 2,112 bits × 1,536 units × 600.
+    - Route 1 commits 6.2 MB a token (10,304 bits × 4,800).
+    - It proves 4,800 SiluMul blocks a token. That's 0.52% of the fused w2 blocks' rows (921,600 × 2^25), but 53% of their circuit bytes, and 15% of both projections' fused circuit bytes.
+  - **Why the projections split:** commitments are paid on every token, the added blocks only when sampled.
+    - At w13, route 1 removes 15.56 GB a token of commitments for under 0.5% more proof work by either measure.
+    - At w2, it removes 0.237 GB a token, about 1% of the roughly 25 GB a token the fused cut's openings still commit. The SiluMul circuit, as composed, could add half of w2's proof work.
+    - So at w2, route 1's added cost isn't shown below the copies', and w2 keeps them, by the coordinator's rule.
+  - **Open:** with the SiluMul table reads in lookup slots, its circuit may come near a fused block's size, and route 1 would then add about 0.52% of w2's rows. A `--reads slots` cap run would settle it. I haven't launched one.
+  - Per monitoring period: these are per-token ratios, so they read the same for a week, a month or a year, and at any scope.
