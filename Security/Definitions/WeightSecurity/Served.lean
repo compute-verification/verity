@@ -9,7 +9,7 @@ public import Definitions.WeightSecurity
 A deployment serves the outsider one query per window. In window `n` it serves the outsider's `n`-th query with an
 advice `a ∈ Adv` (the run-time choices a registered compiler reads, which the deployment picks), releases the outputs'
 values on the window's egress slots `O` at a timing bucket `Tick`, and then the window's audit runs on live coins: it
-accepts or rejects, and its sample draws one of the window's incorrect proof blocks or misses them all. A release leaves
+accepts or rejects, and its sample holds one of the window's incorrect proof blocks or misses them all. A release leaves
 before its window's verdict (detection, not prevention), and the deployment halts once a window is rejected, after a lag
 of `L` further windows. The network certifier is the layer that makes the release the whole of what leaves: the
 outputs the trace commits, at its bucket, and nothing else.
@@ -17,9 +17,9 @@ outputs the trace commits, at its bucket, and nothing else.
 * `Served`: what a run records of a window;
 * `Served.count L l`: how many of the run `l`'s windows release before the halt;
 * `Served.reply L l n` and `Served.view`: what the outsider receives in its `n`-th round, and its view of the run;
-* `Served.lead l`: the incorrect proof blocks of the windows before the first whose sample draws one of its own;
-* `Served.Escapes M l`: the audit's escape at the budget `M`: an accepted window's sample drew one of its incorrect proof
-  blocks, or the windows before the first draw hold at least `M` incorrect proof blocks;
+* `Served.lead l`: the incorrect proof blocks of the windows before the first whose sample holds one of its own;
+* `Served.Undetected M l`: the audit leaves `M` incorrect proof blocks undetected: an accepted window's sample held one
+  of its incorrect proof blocks, or the windows before the first sampled one hold at least `M`;
 * `Served.Local C E Ou L θ r l`: each window that releases changes at most `E` of its slots per incorrect proof block,
   against the served function's honest answer to the outsider's query at the window's advice. It is what the layers
   below the composition give: the network certifier ties the release to the trace's outputs, and the trace differs
@@ -32,13 +32,13 @@ outputs the trace commits, at its bucket, and nothing else.
 
 namespace WeightSecurity
 
-/-- **What a run records of a served window**: whether its audit accepted it, whether its sample drew one of its
+/-- **What a run records of a served window**: whether its audit accepted it, whether its sample holds one of its
 incorrect proof blocks, how many of its proof blocks are incorrect, and what the deployment released in it before the
 audit ran: the values on the egress slots `O`, the timing bucket, and the advice it served the query with. -/
 structure Served (O V Tick Adv : Type) where
   accepted : Prop
-  drawnWrong : Prop
-  wrong : ℕ
+  sampledIncorrect : Prop
+  incorrect : ℕ
   egress : O → V
   tick : Tick
   adv : Adv
@@ -65,17 +65,17 @@ noncomputable def view (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) 
   Ou.view r (fun h _ => reply L l h.length) n
 
 open Classical in
-/-- **The incorrect proof blocks before the first draw**: those of each window, up to the first window whose sample
-draws one of its own incorrect proof blocks. -/
+/-- **The incorrect proof blocks before the first sampled one**: those of each window, up to the first window whose
+sample holds one of its own incorrect proof blocks. -/
 noncomputable def lead : List (Served O V Tick Adv) → ℕ
   | [] => 0
-  | w :: l => if w.drawnWrong then 0 else w.wrong + lead l
+  | w :: l => if w.sampledIncorrect then 0 else w.incorrect + lead l
 
-/-- **The audit's escape at the budget `M`**: an accepted window's sample drew one of its incorrect proof blocks, or the
-windows before the first draw hold at least `M` incorrect proof blocks. Outside it, every window accepted before the
-first rejection is one whose sample missed its incorrect proof blocks, and they hold fewer than `M`. -/
-def Escapes (M : ℕ) (l : List (Served O V Tick Adv)) : Prop :=
-  (∃ w ∈ l, w.accepted ∧ w.drawnWrong) ∨ M ≤ lead l
+/-- **The audit leaves `M` incorrect proof blocks undetected**: an accepted window's sample held one of its incorrect
+proof blocks, or the windows before the first sampled one hold at least `M`. Outside it, every window accepted before
+the first rejection is one whose sample missed its incorrect proof blocks, and they hold fewer than `M`. -/
+def Undetected (M : ℕ) (l : List (Served O V Tick Adv)) : Prop :=
+  (∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) ∨ M ≤ lead l
 
 open Classical in
 /-- **The slots window `n`'s release changes**: those where it differs from the served function `C`'s honest answer at
@@ -92,7 +92,7 @@ from the honest run at the window's query and advice only within its incorrect p
 `E` slots. -/
 def Local [Fintype O] (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) : Prop :=
-  ∀ n < count L l, ∀ w, l[n]? = some w → (changed C Ou L θ r l n).card ≤ E * w.wrong
+  ∀ n < count L l, ∀ w, l[n]? = some w → (changed C Ou L θ r l n).card ≤ E * w.incorrect
 
 end Served
 

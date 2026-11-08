@@ -10,7 +10,7 @@ The instance `WeightSecurity.Guarantees.TheftServed`'s witnesses are stated at. 
 any party steals the weights (outputs both values) with probability `1/256`. A deployment serves two windows. The
 honest one releases the honest answer in each, with no incorrect proof block, and its audit accepts. The leaking one
 writes the weights' `i`-th value into window `i`'s slot, one incorrect proof block per window, and runs at the verifier
-that accepts everything, whose sample draws nothing. Its thief reads both values back.
+that accepts everything, whose sample is empty. Its thief reads both values back.
 -/
 
 @[expose] public section
@@ -32,7 +32,7 @@ def Stolen (θ θ' : W) : Prop := θ' = θ
 /-- Every honest-use party, on one coin: the class of all parties. -/
 def anyone : Set (Outsider Unit (Unit × Unit) (Unit → Fin 16) W) := Set.univ
 
-/-- The honest deployment's run: two windows, each accepted, drawing nothing, with no incorrect proof block, releasing
+/-- The honest deployment's run: two windows, each accepted on an empty sample, with no incorrect proof block, releasing
 the honest answer. -/
 def honestRun (_ : W) (_ : Unit) : Verity.Game (List (Served Unit (Fin 16) Unit Unit)) :=
   .ret [⟨True, False, 0, fun _ => 0, (), ()⟩, ⟨True, False, 0, fun _ => 0, (), ()⟩]
@@ -43,7 +43,7 @@ def user : Outsider Unit (Unit × Unit) (Option ((Unit → Fin 16) × Unit)) W w
   out _ _ := (0, 0)
 
 /-- The leaking deployment's run at the verifier that accepts everything: window `i` writes the weights' `i`-th value
-into its slot, with one incorrect proof block, and is accepted without a draw. -/
+into its slot, with one incorrect proof block, and is accepted on an empty sample. -/
 def leakRun (θ : W) (_ : Unit) : Verity.Game (List (Served Unit (Fin 16) Unit Unit)) :=
   .ret [⟨True, False, 1, fun _ => θ.1, (), ()⟩, ⟨True, False, 1, fun _ => θ.2, (), ()⟩]
 

@@ -4,18 +4,18 @@ public import Proofs.Flock.Claims.Sampling.Count
 public import Proofs.WeightSecurity.Deployed
 
 /-!
-# The deployed laws' detection pressure
+# The deployed sampling designs' detection pressure
 
-`TheftServedDeployed` takes `pa B ≤ x^|B|` for each window's law. It holds at every strata law (all, uniform subset,
-stratified and work) whose strata each sample at most their size and miss one more incorrect proof block with
-probability at most `x`, that is `fac n k 0 = (n − k)/n ≤ x`.
+`TheftServedDeployed` takes `pa B ≤ x^|B|` for each window's sampling design. It holds at every strata design (all,
+uniform subset, stratified and work) whose strata each sample at most their size and miss one more incorrect proof block
+with probability at most `x`, that is `fac n k 0 = (n − k)/n ≤ x`.
 
 * `gr_le_pow`: a stratum misses `m` incorrect proof blocks with probability at most `x^m`.
 * `strataPa_le_pow`: a strata sample misses `B` with probability at most `x^|B|`.
-* `pa_le_pow`: so does a window's law, at its strata.
-* `strata_of_lawOn`: a registered law's strata cover its population and each sample at most their size.
-* `pa_le_pow_of_fac`: so a registered window's law misses `B` with probability at most `x^|B|` once each of its strata
-  has `fac n k 0 ≤ x`.
+* `pa_le_pow`: so does a window's sampling design, at its strata.
+* `registered_strata`: a registered sampling design's strata cover its population and each sample at most their size.
+* `pa_le_pow_of_fac`: so a registered window's sampling design misses `B` with probability at most `x^|B|` once each
+  of its strata has `fac n k 0 ≤ x`.
 -/
 
 @[expose] public section
@@ -40,8 +40,8 @@ theorem strataPa_le_pow (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1
   rw [List.getD_eq_getElem _ _ (mem_range.1 hi)]
   exact List.getElem_mem _
 
-/-- **A window's law misses `B` with probability at most `x^|B|`** when its strata `ss` cover its population, each
-samples at most its size, and each misses one more incorrect proof block with probability at most `x`. -/
+/-- **A window's sampling design misses `B` with probability at most `x^|B|`** when its strata `ss` cover its
+population, each samples at most its size and misses one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
     (hss : (Properties.SampledProofs.oneStageOf w.law).strata w.ns = some ss) (hk : ∀ p ∈ ss, p.2 ≤ p.1)
     (hcov : (ss.map Prod.fst).sum = w.ns.sum) {x : ℝ} (hf : ∀ p ∈ ss, fac p.1 p.2 0 ≤ x) (B : Finset (Fin w.nJ)) :
@@ -55,8 +55,8 @@ theorem pa_le_pow (w : JointAuditV5) {ss : List (ℕ × ℕ)}
     rw [hcov]
     exact mem_range.1 (hB hv)
 
-/-- **A registered law's strata** cover its population and each sample at most their size. -/
-theorem strata_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.LawOn law ns kd) :
+/-- **A registered sampling design's strata** cover its population and each sample at most their size. -/
+theorem registered_strata {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : Flock.Bridge.LawOn law ns kd) :
     ∃ ss, (Properties.SampledProofs.oneStageOf law).strata ns = some ss ∧ (∀ p ∈ ss, p.2 ≤ p.1) ∧
       (ss.map Prod.fst).sum = ns.sum := by
   cases law with
@@ -84,12 +84,12 @@ theorem strata_of_lawOn {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (h : F
       exact min_le_left _ _
     · rw [hfst, List.map_fst_zip hlen]
 
-/-- **A registered window's law misses `B` with probability at most `x^|B|`** when each of its strata misses one more
-incorrect proof block with probability at most `x`. -/
+/-- **A registered window's sampling design misses `B` with probability at most `x^|B|`** when each of its strata misses
+one more incorrect proof block with probability at most `x`. -/
 theorem pa_le_pow_of_fac (w : JointAuditV5) {x : ℝ}
     (hf : ∀ ss, (Properties.SampledProofs.oneStageOf w.law).strata w.ns = some ss → ∀ p ∈ ss, fac p.1 p.2 0 ≤ x)
     (B : Finset (Fin w.nJ)) : w.pa B ≤ x ^ B.card := by
-  obtain ⟨ss, hss, hk, hcov⟩ := strata_of_lawOn w.hlaw
+  obtain ⟨ss, hss, hk, hcov⟩ := registered_strata w.hlaw
   exact pa_le_pow w hss hk hcov (hf ss hss) B
 
 end WeightSecurity.SecurityProofs

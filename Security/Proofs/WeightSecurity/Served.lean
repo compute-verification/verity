@@ -8,14 +8,14 @@ public import Proofs.SampledProofs.ExfiltrationBound
 public import Proofs.WeightSecurity.Theft
 
 /-! `WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed`, `Theft`'s leakage lemma at an
-audited deployment. On a run whose releases are all local and whose audit doesn't escape at the budget `M`, the
-outsider's view is its view against the datacenter that deviates through the served channel with the run's own covert
-string (`Served.view_eq_resp`): each window's advice and bucket, the values its release changed, and the halt. Those
-values number at most `E · M + (L + 1) · |O|` (`Served.sum_card_changed_le`): the windows accepted before the first
-rejection drew none of their incorrect proof blocks, so their incorrect proof blocks count in `Served.lead`, and the
-rejected window and the lag's windows change at most `|O|` values each. So the outsider steals only where the run
-escapes, a release isn't local, or some honest-use party `Ou.withString ch s` steals, which `HonestUseHard` bounds by
-`p` each.
+audited deployment. On a run whose releases are all local and whose audit leaves fewer than `M` incorrect proof blocks
+undetected, the outsider's view is its view against the datacenter that deviates through the served channel with the
+run's own covert string (`Served.view_eq_resp`): each window's advice and bucket, the values its release changed, and
+the halt. Those values number at most `E · M + (L + 1) · |O|` (`Served.sum_card_changed_le`): the windows accepted
+before the first rejection sampled none of their incorrect proof blocks, so their incorrect proof blocks count in
+`Served.lead`, and the rejected window and the lag's windows change at most `|O|` values each. So the outsider steals
+only where the run leaves `M` undetected, a release isn't local, or some honest-use party `Ou.withString ch s` steals,
+which `HonestUseHard` bounds by `p` each.
 
 `card_servedChannel_le` counts the served channel's covert strings,
 `|Adv|^T · |Tick|^T · (Σ_{j ≤ K} C(T·|O|, j)) · |V|^K · (T + 1)`, the overwrites by the Hamming-ball count
@@ -60,7 +60,7 @@ noncomputable def accLen : List (Served O V Tick Adv) → ℕ
   | w :: l => if w.accepted then accLen l + 1 else 0
 
 /-- Window `n`'s number of incorrect proof blocks, `0` past the run. -/
-def wrongAt (l : List (Served O V Tick Adv)) (n : ℕ) : ℕ := (l[n]?.map Served.wrong).getD 0
+def incorrectAt (l : List (Served O V Tick Adv)) (n : ℕ) : ℕ := (l[n]?.map Served.incorrect).getD 0
 
 theorem count_le_length (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L l ≤ l.length
   | [] => le_rfl
@@ -82,17 +82,17 @@ theorem count_le_accLen (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L 
     · rw [zero_add]
       exact Nat.succ_le_succ (min_le_right _ _)
 
-/-- **The windows accepted before the first rejection count in `lead`** when no accepted window drew an incorrect proof
-block: each of them drew none. -/
-theorem sum_wrongAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ l, w.accepted ∧ w.drawnWrong) →
-    ∑ n ∈ range (accLen l), wrongAt l n ≤ lead l
+/-- **The windows accepted before the first rejection count in `lead`** when no accepted window sampled an incorrect
+proof block: each of them sampled none. -/
+theorem sum_incorrectAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) →
+    ∑ n ∈ range (accLen l), incorrectAt l n ≤ lead l
   | [] => fun _ => by simp [accLen]
   | w :: l => fun h => by
     by_cases ha : w.accepted
-    · have hd : ¬ w.drawnWrong := fun hd => h ⟨w, List.mem_cons_self, ha, hd⟩
-      have ih := sum_wrongAt_le_lead l fun ⟨v, hv, hva⟩ => h ⟨v, List.mem_cons_of_mem _ hv, hva⟩
-      have hs : ∀ n, wrongAt (w :: l) (n + 1) = wrongAt l n := fun n => by simp [wrongAt]
-      have h0 : wrongAt (w :: l) 0 = w.wrong := by simp [wrongAt]
+    · have hd : ¬ w.sampledIncorrect := fun hd => h ⟨w, List.mem_cons_self, ha, hd⟩
+      have ih := sum_incorrectAt_le_lead l fun ⟨v, hv, hva⟩ => h ⟨v, List.mem_cons_of_mem _ hv, hva⟩
+      have hs : ∀ n, incorrectAt (w :: l) (n + 1) = incorrectAt l n := fun n => by simp [incorrectAt]
+      have h0 : incorrectAt (w :: l) 0 = w.incorrect := by simp [incorrectAt]
       simp only [accLen, lead, ite_eq_left ha, ite_eq_right hd]
       rw [sum_range_succ', h0]
       simp only [hs]
@@ -101,11 +101,11 @@ theorem sum_wrongAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ 
 
 variable [Fintype O]
 
-/-- **Through the halt, the releases change at most `E · lead + (L + 1) · |O|` values** when every release is local and no
-accepted window drew an incorrect proof block. -/
+/-- **Through the halt, the releases change at most `E · lead + (L + 1) · |O|` values** when every release is local
+and no accepted window sampled an incorrect proof block. -/
 theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l)
-    (hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.drawnWrong) :
+    (hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) :
     ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card ≤ E * lead l + (L + 1) * Fintype.card O := by
   classical
   have hcl := count_le_length L l
@@ -113,17 +113,17 @@ theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Ou
   rw [← sum_filter_add_sum_filter_not (range (count L l)) (· < accLen l)]
   apply add_le_add
   · calc ∑ n ∈ (range (count L l)).filter (· < accLen l), (changed C Ou L θ r l n).card
-        ≤ ∑ n ∈ (range (count L l)).filter (· < accLen l), E * wrongAt l n := by
+        ≤ ∑ n ∈ (range (count L l)).filter (· < accLen l), E * incorrectAt l n := by
           refine sum_le_sum fun n hn => ?_
           have hn' : n < count L l := mem_range.1 (mem_filter.1 hn).1
           have hlen : n < l.length := lt_of_lt_of_le hn' hcl
           have hw : l[n]? = some l[n] := List.getElem?_eq_getElem hlen
           refine (hloc n hn' _ hw).trans (le_of_eq ?_)
-          simp [wrongAt, hw]
-      _ ≤ ∑ n ∈ range (accLen l), E * wrongAt l n :=
+          simp [incorrectAt, hw]
+      _ ≤ ∑ n ∈ range (accLen l), E * incorrectAt l n :=
           sum_le_sum_of_subset_of_nonneg (fun n hn => mem_range.2 (mem_filter.1 hn).2) fun _ _ _ => Nat.zero_le _
-      _ = E * ∑ n ∈ range (accLen l), wrongAt l n := (mul_sum _ _ _).symm
-      _ ≤ E * lead l := Nat.mul_le_mul_left _ (sum_wrongAt_le_lead l hacc)
+      _ = E * ∑ n ∈ range (accLen l), incorrectAt l n := (mul_sum _ _ _).symm
+      _ ≤ E * lead l := Nat.mul_le_mul_left _ (sum_incorrectAt_le_lead l hacc)
   · calc ∑ n ∈ (range (count L l)).filter (fun n => ¬ n < accLen l), (changed C Ou L θ r l n).card
         ≤ ∑ _n ∈ (range (count L l)).filter (fun n => ¬ n < accLen l), Fintype.card O :=
           sum_le_sum fun n _ => card_le_univ _
@@ -146,10 +146,10 @@ noncomputable def overwrite (C : Θ → Q × Adv → O → V) (Ou : Outsider R (
 
 theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (E M : ℕ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv))
-    (T : ℕ) (hloc : Local C E Ou L θ r l) (hesc : ¬ Escapes M l) :
+    (T : ℕ) (hloc : Local C E Ou L θ r l) (hesc : ¬ Undetected M l) :
     (univ.filter fun p => overwrite C Ou L θ r l T p ≠ none).card ≤ E * M + (L + 1) * Fintype.card O := by
   classical
-  have hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.drawnWrong := fun h => hesc (Or.inl h)
+  have hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect := fun h => hesc (Or.inl h)
   have hlead : lead l < M := lt_of_not_ge fun h => hesc (Or.inr h)
   calc (univ.filter fun p => overwrite C Ou L θ r l T p ≠ none).card
       ≤ ((range (count L l)).sigma fun n => changed C Ou L θ r l n).card := by
@@ -167,10 +167,10 @@ theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (E M : ℕ)
 
 variable [Fintype V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
 
-/-- **A local run that doesn't escape is the served channel's deviation with its own covert string**: each window's
-advice and bucket, the run's overwrite and its halt. -/
+/-- **A local run that leaves fewer than `M` incorrect proof blocks undetected is the served channel's deviation with
+its own covert string**: each window's advice and bucket, the run's overwrite and its halt. -/
 theorem view_eq_resp (C : Θ → Q × Adv → O → V) (E M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) (hesc : ¬ Escapes M l) :
+    (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) (hesc : ¬ Undetected M l) :
     ∃ s : (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S,
       view Ou L r l T =
         Ou.view r ((servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).resp C s θ r) T := by
@@ -336,13 +336,13 @@ theorem TheftServed : Guarantees.TheftServed := by
   classical
   have hcov : ∀ (z : Ω × R) (l : List (Served O V Tick Adv)),
       Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)) →
-        (¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Escapes M l) ∨
+        (¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) ∨
           ∃ s : (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S, Stolen (gen z.1)
             ((Ou.withString (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)) s).model z.2
               (honest C (gen z.1)) T) := by
     intro z l hst
     by_cases hloc : Served.Local C E Ou L (gen z.1) z.2 l
-    · by_cases he : Served.Escapes M l
+    · by_cases he : Served.Undetected M l
       · exact Or.inl (Or.inr he)
       · obtain ⟨s, hs⟩ := Served.view_eq_resp C E M Ou T L (gen z.1) z.2 l hloc he
         refine Or.inr ⟨s, ?_⟩
@@ -351,8 +351,8 @@ theorem TheftServed : Guarantees.TheftServed := by
     · exact Or.inl (Or.inl hloc)
   refine (value_leak C gen Stolen T A p Ou _ hhon hsim (fun z => run (gen z.1) z.2)
     (fun z l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)))
-    (fun z l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Escapes M l) hcov).trans ?_
-  calc avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Escapes M l)
+    (fun z l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) hcov).trans ?_
+  calc avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l)
           (run (gen z.1) z.2)) + ENNReal.ofReal
           (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p)
       ≤ avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ) +
@@ -419,7 +419,7 @@ theorem TheftServedNontrivial : Guarantees.TheftServedNontrivial := by
     unfold WeightSecurity.ToyServed.leakRun
     rw [value_ret, ite_eq_right (not_not.2 ?_)]
     intro n _ w hw
-    have hwr : w.wrong = 1 := by
+    have hwr : w.incorrect = 1 := by
       rcases n with _ | _ | n
       · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
         rw [← hw]
