@@ -7144,3 +7144,35 @@ Land ask for #7880 (52 words): "#7880 (circuits, CIR-186) makes `DsaMqaLogits_v4
 Call a row and `DsaMqaLogitsKey_v1` batched over the keys, registered to 131,072 keys. Its range holds at nine spots with
 0 failures, both blocks pass correspondence and partition at served H and D, and it supersedes #7902's v4. No Lean or
 lock changes."
+
+## 05:05Z from VERIFYFAST-C: piece 3 is #7988 (PRF-456): `maskLogOf` 65 s to 1 ms, `circuitOf` 306 s to 153 s on FlashInfer; the mark waits on records and suites
+
+- **Seconds per phase**, `flock_served.sh KIND 2 --layout iv/hybrid/4` (quant `--structural`). Before is `checked` at
+  c8bec5c915, after is the branch at 3c7f11e70b, each pair on cpu-2. Peak memory so far in brackets:
+
+  | phase | FlashInfer K2048, before | after | quant K6144, before | after |
+  |---|---|---|---|---|
+  | `sha512` | 10.6 | 10.1 | 2.07 | 2.13 |
+  | `maskLogOf` | 65.4 (78 GB) | 0.001 (4.3 GB) | 10.9 (14 GB) | 0.003 (0.9 GB) |
+  | `circuitOf` | 305.7 (83 GB) | 152.5 (12 GB) | 62.6 (15 GB) | 34.1 (3.0 GB) |
+  | `KsScope.checkOf` | 586.2 | 571.3 | 588.8 | 572.5 |
+  | `setupTablesOf` | 0.52 | 0.35 | 3.90 | 3.67 |
+
+  What's left is `KsScope.checkOf` (VERIFYFAST-B's `scopeOkT`) and `circuitOf`'s split and row scan (VERIFYFAST-A's
+  fixes).
+- **#7988 at `480b55da3f`** carries:
+  - B's layout: `TEMPLATE n` and the template's lines right after META;
+  - a refusal of META `definition` in `parseTmpl`, which closes `queryTemplate`'s size-class path to a templated file;
+  - fixes to two proofs B's commit missed, `Names.parse_unit` and `VStarNets.parse_nets`, which read the section loop's
+    start as line 2;
+  - `tmplLines` and `tmplOf` moved to `Flock.TmplSection`, since `HmRow.lean` was over its line cap (the suites' one red).
+  No statement changes and no lock moves.
+- **The mark waits on** the records run r20261108-044612-5389 and the quick suites r20261108-044823-22e1, both waiting
+  for a cpu-1 slot since 04:46Z. Each takes 1 to 2 h once it has one.
+- **Piece 4, after A's estimate:** the nets' parse is about 1 s of FlashInfer's run once A's fixes land, and about 2 s of
+  MoE's 10.8 s. Holding them by digest changes every walk of `HmRow.parse`'s loop (8 proofs), or the file format across
+  Rust, Python and Lean, for at most 2 s a statement. I'd skip that. The cheap form is a `@[csimp]` memo on the nets'
+  text: one split to prove, no assumption, parsed once a process. It only gains from a batch's second statement on, and
+  it meets A's `Net.parse` twin, so I'd build it on A's batch entry once that lands. Say if you'd rather drop it.
+- **Deviations:** the branch is on `checked`'s c8bec5c915, not `main`, so the baselines compare; it takes B's commit as B
+  offered.
