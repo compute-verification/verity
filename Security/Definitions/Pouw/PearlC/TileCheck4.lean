@@ -100,7 +100,7 @@ def tileCheck4 (ops : RowOps)
   anchorsOf H s U u act := fun g => BitVec.ofNat _ (anchors4 (lines H s U u act) g.val)
   anchorsOK _ _ _ _ _ := True
   rowsOf U u c := fun g => BitVec.ofNat _
-    (rows4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.weight (U.layout.wid u))
+    (rows4 (U.layout.shape u).m (U.layout.shape u).n (U.layout.shape u).k 64 64 c.act (U.fixed (U.layout.fixedId u))
       c.ticket c.useful g.val)
   Collides _ _ _ _ _ _ := False
 

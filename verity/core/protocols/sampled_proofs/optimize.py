@@ -1158,6 +1158,12 @@ def _capped(g: tuple[float, ...], lw: float) -> tuple[float, float]:
 
 def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> float:
+    """`two_stage_rankin`'s bits."""
+    return two_stage_rankin(cells, k, replay_blocks, q, delta, served, union, tol)[0]
+
+
+def two_stage_rankin(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks: int, q: float, delta: float,
+                     served: float | None = None, union: bool = False, tol: float = 1e-6) -> tuple[float, float]:
     """At least log2 of `CompiledTwo.Exfil`'s count, Σ_{T ∈ admissibleTwo} 2^{b(T)}, over `replay_blocks` replay blocks
     (R) of the cells each, the first stage sampling each replay block with probability q and the second `k[t]` of
     stratum t's n_t proof blocks in a sampled one.
@@ -1171,7 +1177,8 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
     G − 1 <= Σ_j e^{−θ a_j}(∏_v (1 + 2^{b_v} e^{−θ s_j r_v}) − 1) + e^{−θ h(Y_J)}(∏_{r_v<∞} (1 + 2^{b_v}) − 1)
     + e^{−θ h(∞)} ∏_{r_v<∞} (1 + 2^{b_v}) (∏_{r_v=∞} (1 + 2^{b_v}) − 1), each product over a replay block's proof
     blocks, a T meeting a stratum proved whole at h(∞).  The bound takes the θ minimizing it, by golden section on ln θ
-    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted.
+    to within `tol` (it is convex in θ, and holds at any θ), and is at most R log2 ∏_v (1 + 2^{b_v}), every T counted
+    (θ = 0).  It returns the bits and that θ.
 
     `served`, S, caps each replay block's charge at the bits it serves (a cap lemma in progress).  The sets' form
     counts Σ_{T adm} 2^{Σ_ρ min(b(T_ρ), S)}: each product's factor over a group of n blocks of b bits and one rate
@@ -1231,7 +1238,7 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
         full = min(full, (fsum(groups.values()) + served) * _LN2F)
     every = replay_blocks * full / _LN2F
     if q == 0 or full == 0:
-        return every
+        return every, 0.0
     lam = log(1 / delta)
 
     def h_at(y: float) -> float:
@@ -1275,7 +1282,8 @@ def two_stage_exfil(cells: Iterable[Cell], k: Mapping[int, float], replay_blocks
             lo, c, fc = c, d, fd
             d = lo + gold * (hi - lo)
             fd = f(d)
-    return min(min(fc, fd) / _LN2F, every)
+    best, u = min((fc, c), (fd, d))
+    return (best / _LN2F, exp(u)) if best / _LN2F < every else (every, 0.0)
 
 
 def registration_cap(sampled: float, span: float) -> int:
@@ -1382,8 +1390,9 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
     where that costs less (`two_stage_statements`), q then the most the budget pays for (`_registration_q`).  Its row:
     `merged` (the widest size class in stratum 0), `kappa`, `k`, `q`, `registration`, `registration_sample` (Q, the
     replay blocks a registration samples), `registration_cap` (K0), `shared` and `padding` (their shares of proving),
-    `bound` (bits), `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`, `boundary`, `interior`, `commit`
-    (their sum), `total` and `fill` (proving over its marginal); None when the boundary alone is over the budget."""
+    `bound` (bits) and the Rankin `theta` it takes, `replay_sample`, `draws` (proved proof blocks), `prove`, `replay`,
+    `boundary`, `interior`, `commit` (their sum), `total` and `fill` (proving over its marginal); None when the boundary
+    alone is over the budget."""
     cells = list(cells)
     if not cells or not budget >= boundary:
         return None
@@ -1428,7 +1437,8 @@ def two_stage_design(cells: Iterable[Cell], replay_blocks: int, delta: float, *,
                          "fill": prove / marginal if marginal > 0 else 1.0})
     best = min(rows, key=lambda r: (r["bound"], r["total"]))
     split = best.pop("split")
-    return best | {"bound": two_stage_exfil(split, best["k"], replay_blocks, best["q"], delta, served, union)}
+    bound, theta = two_stage_rankin(split, best["k"], replay_blocks, best["q"], delta, served, union)
+    return best | {"bound": bound, "theta": theta}
 
 
 __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BITS", "LN_PREC", "LN_TERMS",
@@ -1439,5 +1449,5 @@ __all__ = ["Candidate", "Commitment", "CostModel", "Grain", "HM96_ANDS", "LN_BIT
            "frontier", "grain_costs", "grain_optimum", "leak_count", "leak_draws", "ln_bound", "ln_upper", "loc_bits",
            "max_harm", "max_harm_check", "met_replay", "needs_benchmark", "overlaps", "perturb", "pinned_ands",
            "registration_cap", "replay_cost", "row_ands", "sensitivity", "sqrt_grain", "structure", "template_cost",
-           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_statements", "weigh",
+           "touched", "two_stage_design", "two_stage_exfil", "two_stage_price", "two_stage_rankin", "two_stage_statements", "weigh",
            "work_draws", "work_law"]

@@ -10,7 +10,8 @@ statement holding each checked unit's gates at the layout's wires (`Embeds`).
 
 **The layout** (`Layout`). The session statement's block circuit `C` (`Claims.Flock.Stmt`) runs once per Flock block.
 A layout names the block that holds each checked unit (`blockOf`, read off the session statement, whose sample selects
-the units) and, for each program gate, the gate of `C` that holds its value for that unit (`wire`).
+the units), for each program gate, the gate of `C` that holds its value for that unit (`wire`), and for each value the
+unit reads from the run's commitment, the session's registered read that holds its row (`rowOf`).
 
 **The decoder** (`decOf`). Unit `u`'s value at program gate `g` is `C`'s value at `wire u g` in `u`'s block, on the
 inputs Flock's relation gives that block at the witness's hidden values (`valueAt`, as `Claims.Flock.RelS` evaluates
@@ -36,11 +37,14 @@ namespace SpotFlock
 open Claims Claims.Sampling SamplingDeploy
 
 /-- **A session layout**: the Flock block holding each checked unit (`blockOf x m₁ xS u`, at the run's statement `x`,
-the interior registration `m₁` and the session statement `xS`), and the gate of the session's block circuit holding
-each program gate's value for that unit (`wire u g`). -/
+the interior registration `m₁` and the session statement `xS`), the gate of the session's block circuit holding each
+program gate's value for that unit (`wire u g`), and where the session reads the row of each value the unit reads from
+the run's commitment (`rowOf x m₁ xS u g = some (j, i, p)`): table `j`'s template instance `i` in the unit's block, at
+its circuit's port `p`, whose registered read is the row's. -/
 structure Layout where
   blockOf : Msg → Msg → Msg → ℕ → Option ℕ
   wire : ℕ → ℕ → ℕ
+  rowOf : Msg → Msg → Msg → ℕ → ℕ → Option (ℕ × ℕ × ℕ)
 
 /-- **The block circuit's value at gate `j` of block `β`**, on the inputs Flock's relation gives that block at the
 hidden values `w` (`Claims.Flock.RelS`); `false` past the circuit's gates. -/
