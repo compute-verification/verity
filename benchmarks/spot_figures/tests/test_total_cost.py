@@ -236,9 +236,9 @@ def measured(tmp_path_factory) -> dict:
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
     above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
-    requests under a cap past them, and the patterns' form below the sets'; both infiltration lines plotted, and (C)'s
-    falling with β; skipped work only for (C); the
-    captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
+    both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
+    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -267,7 +267,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
-        assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
+        patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
+        assert patterns <= sets and (patterns < sets or lines[name]["binds"][at] == "served"), name
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
             assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
             assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
