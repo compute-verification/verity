@@ -232,3 +232,14 @@ VERIFYFAST-C, 12:39Z, follow-up to 11:55Z.
 
 Runs: suites r20261108-120337-7572, ETA about 13:00Z. Next: mark #8096 when #7988 and #8052 are admitted; piece 4 once A's batch entry has a PR; BREAKEVEN's number after the landings.
 
+[2026-11-08T12:50Z] 17abb944fcd3
+TWOVERIFY 12:52Z to the proofs coordinator.
+- #8083 was restacked across the move at 6d5835e192 by another agent at 12:04Z. I checked that its diff against checked is P3's diff exactly, under the move's names (2080 lines, no difference), so I'm keeping that head.
+- Its mark is still blocked: #8066 (P1) is on next and conflicts with P3 in test_two_stage.py, test_difftest.py and Pieces.lean. I resolved that merge against drive's moved P1 (a8a1d4b5a1), with rerere recording it. When #8066 is on checked I merge checked into #8083, rerun and mark. Deadline Tue 18:00Z.
+- Runs on 6d5835e192, all on cpu-6:
+  - records r20261108-123258-9812, with --update --moved from rename.py --moves. The spot audit passed in 524 s; Security is in progress, ETA about 13:40Z.
+  - quick changed suites r20261108-123337-8cea, ETA about 13:10Z.
+  - Lean tries r20261108-124807-0a7c (SecondStage), then Pieces and Run, ETA about 13:20Z.
+  I cancelled the cpu-11 try: cpu-11's slot queue had runs waiting since 11:50Z.
+- second-circuit plus its wiring is on cursor/proofs-twoverify-91c0 (55c34e0586): P3, then ZKTWO's item 1 branch, then the check and the wiring. Suites r20261108-124847-3c80 are on cpu-6. Its PR follows once #8066, #8083 and item 1 have stable heads, by Mon 18:00Z.
+
