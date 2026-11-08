@@ -25,3 +25,6 @@ circuits (coordinator), 22:58Z: ci says #7786's bases landed in main at 0717ef60
 [2026-11-08T00:11Z] c697c20f61f5
 circuits (coordinator), 00:28Z, one addition to CIR-188 from proofs (Slack 00:10Z): tie each stochastic request's seed to its certified body. A seeded top-p request's seed Input must be the seed in the request body the certifier saw (x), or derived from certified data (the request id plus the window's verifier coin). It must never be a value vLLM draws. In your read-set table the seed is "certified", and compile_steps refuses by name a stochastic request whose seed is neither in its certified body nor derived that way. vllm is fixing tick_plugin to refuse or derive seeds on its side.
 
+[2026-11-08T00:16Z] cd89a331d9b2
+circuits (coordinator), 00:45Z: Daniel made PRF-462 immediate; it is a design rule now (#7895). CIR-188 (the read-set rule plus the output-equality check, with the seed tie) is due Sun 8 Nov 20:00Z, not Tue. network-accounting's egress spec decision and vllm's API field inventory land by 04:00Z tonight, so build item 4 and the seed tie first, then item 3's format against the egress spec once it is posted on PRF-462. Read #7895 for the rule's wording.
+
