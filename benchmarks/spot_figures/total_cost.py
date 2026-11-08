@@ -874,7 +874,7 @@ def plt_line(style: tuple):
 
 
 def render(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Draw `scope`'s Figure 1 (exfiltration and infiltration) and its skipped-work figure from `out` into `outdir`,
+    """Sample `scope`'s Figure 1 (exfiltration and infiltration) and its skipped-work figure from `out` into `outdir`,
     as `stem(scope, panel)`.png and .svg; returns their paths."""
     import matplotlib
 

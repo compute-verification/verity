@@ -32,7 +32,7 @@ open Lean (Json toJson)
 
 namespace Properties.NetworkCertifier
 
-/-- The verifier's own run of C-Flock's verifier proved the link's proof block and the sample: every gate of the proof
+/-- The verifier's own run of Flock's verifier proved the link's proof block and the sample: every gate of the proof
 block names a pinned circuit digest, and it found one or more sessions, each accepted, naming the registered Program and
 proving exactly the sampled proof blocks. -/
 def WindowProved (c : Case) : Prop :=
@@ -46,7 +46,7 @@ def CommitsRow (row : ByteArray) (bits : Nat) (salt : Option ByteArray) (bc : By
     Flock.Hm96.Default512.commitString (rowDigest row bits) s = bc
 
 /-- The delivered output word is 3 (verdict and deadline bits both 1), and the statement's public file names the sampled
-unit once and holds its row commitments (``pub``, ``wit``, ``o0``): the ``pub`` commitment is of the verifier's own
+proof block once and holds its row commitments (``pub``, ``wit``, ``o0``): the ``pub`` commitment is of the verifier's own
 public row of the execution phase, and the ``o0`` commitment of the word. -/
 def WindowOpened (c : Case) : Prop :=
   c.output = some 3 ∧ ∃ row file u bcPub bcWit bcOut, pubRow c = .ok (some row) ∧ c.statement = some file ∧

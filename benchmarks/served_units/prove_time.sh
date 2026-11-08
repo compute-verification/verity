@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Served proof blocks' C-Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
+# Served proof blocks' Flock --zk prove time against the statement's size, on one GPU or on the CPU prover, for each block
 # type's proof overhead and its fixed cost a statement. Run from the tree (research run --on NODE --cwd source):
 #   1. build   flock-circuit (verity/ml/flock/pod/60-circuit.sh MODE=build; with PT_DEVICE=gpu its CUDA prover), outside any lease
 #   2. stage   each UNIT of PT_UNITS (stage.py's TYPE[:S=V,...], `+public-weights` for its --public-weights, `+packed-weights`

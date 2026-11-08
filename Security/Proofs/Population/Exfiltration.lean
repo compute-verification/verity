@@ -12,7 +12,7 @@ import Mathlib.Data.EReal.Inv
 # Exfiltration before detection: the stopping-time bounds
 
 The game is `Definitions.Population.Exfiltration`'s: an adaptive prover, windows audited with live coins, each window
-leaking what its wrong units' cones carry, and the deployment halting at the first failure.
+leaking what its incorrect proof blocks' cones carry, and the deployment halting at the first failure.
 
 * `tail_cum`, **leakage through the first detection**: under detection pressure `κ`, with every window leaking at most
   `ℓ`, the probability that what leaves up to and including the first detection reaches `x` is at most
@@ -21,7 +21,7 @@ leaking what its wrong units' cones carry, and the deployment halting at the fir
 * `tail_cumPrev`, **when a caught window's egress is withheld**: at most `exp (-κ x)`, and no per-window term.
 * `ex_cumUpTo`, **the rate form**: before the `j`-th detection at most `j (ℓ + 1/κ)` leaves on average, so each failure a
   deployment tolerates costs at most `ℓ + 1/κ`.
-* `escape_le_exp`: a draw that includes the units independently, unit `u` caught with probability `a u`, lets a wrong
+* `escape_le_exp`: a sample that includes the units independently, unit `u` caught with probability `a u`, lets a wrong
   set `B` escape with probability at most `exp (-Σ_{u ∈ B} a u)`; with `a u ≥ κ E(u)` that is detection pressure for the
   leak `Σ_{u ∈ B} E(u)`.
 -/
@@ -266,7 +266,7 @@ theorem ex_cumUpTo (hμ : IsDist μ) {κ ℓ : ℝ} (hκ : 0 < κ) {A : Strategy
 
 /-! ## Where detection pressure comes from -/
 
-/-- **A draw that includes units independently**: if unit `u` is caught with probability `a u ∈ [0, 1]`, independently,
+/-- **A sample that includes units independently**: if unit `u` is caught with probability `a u ∈ [0, 1]`, independently,
 the wrong set `B` escapes with probability `Π_{u ∈ B} (1 - a u) ≤ exp (-Σ_{u ∈ B} a u)`. With
 `a u ≥ κ E(u)` that is detection pressure `κ` for the leak `Σ_{u ∈ B} E(u)`. -/
 theorem escape_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ B, 0 ≤ a u ∧ a u ≤ 1) :
@@ -275,7 +275,7 @@ theorem escape_le_exp {U : Type} (B : Finset U) (a : U → ℝ) (ha : ∀ u ∈ 
   refine prod_le_prod₀ (fun u hu => by linarith [(ha u hu).2]) fun u _ => ?_
   linarith [Real.add_one_le_exp (-a u)]
 
-/-- **`k` independent draws**: a wrong set each draw catches with probability `d` escapes `k` draws with probability
+/-- **`k` independent samples**: a wrong set each sample catches with probability `d` escapes `k` samples with probability
 `(1 - d) ^ k ≤ exp (-k d)`. -/
 theorem pow_escape_le_exp {d : ℝ} (hd1 : d ≤ 1) (k : ℕ) : (1 - d) ^ k ≤ Real.exp (-(k * d)) := by
   rw [show -(k * d) = k * (-d) by ring, Real.exp_nat_mul]

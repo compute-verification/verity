@@ -42,7 +42,7 @@ import Std.Tactic.BVDecide.Normalize.Prop
 `LiveZk` without `--zk`: the live session (`Live.liveV`) decided by flock-verify's verdict on the transcript `wr x o`
 the outcome is written as, every SHA-512 call of the verdict an oracle query (`Hashes.oc`, `DeployOC`):
 
-* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's draw,
+* `verdictPL I t`: `Accepts`' steps as an `OC` program: the session's statement set up from `I` and the record's sample,
   then `verifyWithM Hashes.oc`. `verdictPL_eval`: against `H`, it accepts exactly when `verifyWith (hOf H)` does;
   `verdictPL_sha`: against SHA-512 (`shaH`), exactly when `Accepts` holds.
 * `Pr_acc_plain`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s

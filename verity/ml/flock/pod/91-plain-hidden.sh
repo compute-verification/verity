@@ -3,7 +3,7 @@
 # outputs, no shared rows and no registered value, proved in one loopback session without --zk under a subset sample on the
 # keyed coin tree (FC_COINS=tree), which the auditor's challenger samples and opens (challenger.sh: serve --tree-from; its
 # release log holds the session's record, challenger/audit.json), then Lean's `flock-verify verify --coins tree` on it with
-# the verifier's own program and partition (`Flock.ProvedScope`: the plain claim at hidden outputs draws by the subset law
+# the verifier's own program and partition (`Flock.ProvedScope`: the plain claim at hidden outputs samples by the subset sampling design
 # at one table, FailClosed.SoundExecH at its subset sample design). The staged files, the session and its challenger's
 # challenger/ (no private key or secret) go into the evidence store as a fixture (`research data put --kind fixture/v1
 # --preserve`), whose id `out/fixture.txt` names. Run from the verity tree (research run --cwd source); CPU only. Outputs

@@ -44,9 +44,9 @@ on `v'` at the pads `h`, evaluates to what it does on `v` at zero pads (`rows_pa
 switch rows by their masked evaluations (`ZerocheckMasked.c_eval_eval`, `final_eval`, `FlockComplete.Replay`'s
 `lcRunning_eval`, `lcAbValue_eval`), applied once at `(v, v', h)` and once at `(v, v, 0)`; the lane rows by the lane run
 at the pads (`laneRun_padFree`) and their coordinates (`limb_padFree`); the triple's rows vanish at both. So the batched
-residual `⟨λ, h⟩ − θ` at a draw is a function of the witness, the worker's values, the mask slot and level 0's hiding
-alone (`resid_padFree`), and the constraint holds at the drawn pads exactly where it holds at every pad
-(`rowsAt_iff_pass`): the firewall's own check of the drawn pads decides `Table.RowsAt`, and its stop reveals
+residual `⟨λ, h⟩ − θ` at a sample is a function of the witness, the worker's values, the mask slot and level 0's hiding
+alone (`resid_padFree`), and the constraint holds at the sampled pads exactly where it holds at every pad
+(`rowsAt_iff_pass`): the ZK server's own check of the sampled pads decides `Table.RowsAt`, and its stop reveals
 `1[¬RowsAt (w, v)]`, a function of the witness and the worker's values, `0` for the honest prover's (`innerOf_holds`).
 -/
 
@@ -350,8 +350,8 @@ theorem batch_resid {F : Type} [Field F] {nE n : ℕ} (γ : Fin n → F) (R : Fi
 
 variable (P : LigProver) {mPts : ℕ}
 
-/-- **The residual at a draw reads no pad**: at a `--zk` table of a setup, on any clear values a worker supplies
-(`Table.onVals`), rep `r`'s batched residual `⟨λ, h⟩ − θ` at the draw `ω` is a function of the witness, the worker's
+/-- **The residual at a sample reads no pad**: at a `--zk` table of a setup, on any clear values a worker supplies
+(`Table.onVals`), rep `r`'s batched residual `⟨λ, h⟩ − θ` at the sample `ω` is a function of the witness, the worker's
 values, the mask slot and level 0's hiding alone: the ten rows on the clear values at zero pads. -/
 theorem resid_padFree (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
@@ -414,8 +414,8 @@ theorem resid_padFree (Tz : TabZK 𝔽 mPts) (st : Stmt) :
   exact rows_padFree Tz st c r ((C.T c).tab.onVals.vals r p ω.1 ω.2.1) (((C.T c).tab.onVals.view p ω).pre.2.1 r)
     _ hE hvv hab htw' _ _ k
 
-/-- **Passing at the drawn pads is passing at every pad**: where a worker's values pass rep `r`'s inner constraint at
-one draw for every rep, the rows hold at its mask slot and level 0's hiding (`Table.RowsAt`), at every pad. -/
+/-- **Passing at the sampled pads is passing at every pad**: where a worker's values pass rep `r`'s inner constraint at
+one sample for every rep, the rows hold at its mask slot and level 0's hiding (`Table.RowsAt`), at every pad. -/
 theorem rowsAt_of_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st
     ∀ c p (ω₀ : (C.T c).tab.onVals.Rand),
@@ -428,9 +428,9 @@ theorem rowsAt_of_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
   rw [hu, hR] at e
   exact sub_eq_zero.mp (e.trans (e0.symm.trans (sub_eq_zero.mpr (h0 r))))
 
-/-- **The constraint at the drawn pads decides `RowsAt`**: a worker's values pass rep `r`'s inner constraint at the
-draw `ω₀`, for both reps, exactly where its rows hold at `ω₀`'s mask slot and level 0's hiding at every pad. The
-firewall's own `Finish` check at the drawn pads therefore stops exactly on `¬RowsAt (w, v)`, a function of the witness
+/-- **The constraint at the sampled pads decides `RowsAt`**: a worker's values pass rep `r`'s inner constraint at the
+sample `ω₀`, for both reps, exactly where its rows hold at `ω₀`'s mask slot and level 0's hiding at every pad. The
+ZK server's own `Finish` check at the sampled pads therefore stops exactly on `¬RowsAt (w, v)`, a function of the witness
 and the worker's values. -/
 theorem rowsAt_iff_pass (Tz : TabZK 𝔽 mPts) (st : Stmt) :
     let C := coinedOf P Tz st

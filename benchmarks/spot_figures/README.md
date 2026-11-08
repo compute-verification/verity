@@ -140,7 +140,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   cuts, priced from their bytes a token and the hash rate, beside the card's measured points for the model.
   `figure3.py card` writes the hash loop's card from its `hash-loop.json`.
 - **Figure 4** (`figure4.py`), for 'Randomness is powerful': the sampling rate that keeps the model's FP4 weights in at
-  δ = 2^-40, against a proof block's output bits. It is drawn in the simple form q = b ln(1/δ)/T and in the planner's
+  δ = 2^-40, against a proof block's output bits. It is sampled in the simple form q = b ln(1/δ)/T and in the planner's
   exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
   total cost buys at each line's marginal proof overhead, counting proving alone.
 - The headline scope (`figure1.PRIMARY`, a datacenter year) gets the bare file names. Its exfiltration panel also

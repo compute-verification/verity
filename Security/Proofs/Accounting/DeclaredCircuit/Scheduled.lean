@@ -13,7 +13,7 @@ the coins the schedule check accepts. At each prefix, `Properties.RemoteAudit.st
 check accepts there makes the layout the slot of the schedule's `cap + 1` padded bits (`steered_on`). The session priced
 (`RateSketch.pr_session_le`) is `A` on summaries of `a + (cap + 1)` bits, the devices' `a` then the schedule's
 (`SketchSummarySession.widen`), on the schedule's slot, which is the layout on the accepted coins, so there each pass's
-events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the draws are `G`'s on a session the check
+events are `G`'s (`RateSketch.pass_congr`). A window's reads counted against the samples are `G`'s on a session the check
 accepts at every pass, and its correct receipts on one it refuses, which no shortfall reaches.
 -/
 

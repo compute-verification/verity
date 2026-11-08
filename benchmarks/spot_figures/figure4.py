@@ -123,7 +123,7 @@ def caption(out: dict) -> str:
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
-    """Draw the figure into `outdir` as figure4.png and .svg; returns their paths."""
+    """Sample the figure into `outdir` as figure4.png and .svg; returns their paths."""
     import matplotlib
 
     matplotlib.use("Agg")
