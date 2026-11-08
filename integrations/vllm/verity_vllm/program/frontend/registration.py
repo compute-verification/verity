@@ -9,6 +9,7 @@ from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import RecordType, Type, Value
 
 from verity.ml.definitions.registry.tables import table_type
+from verity_vllm.program.inputs import run_field
 
 
 class RegisteredInputs:
@@ -81,6 +82,8 @@ class RunInputs:
         return cls(len(params) - 1)
 
     def value(self, name: str, t: Type) -> Coll:
+        """Field `name`, refused unless `program.inputs` declares it (`run_field`)."""
+        run_field(name)
         if any(f["name"] == name for f in self.fields):
             raise ValueError(f"run value {name!r} is read twice")
         offset = sum(f["type"].leaves for f in self.fields)
