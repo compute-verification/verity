@@ -115,16 +115,16 @@ static bool chunk_ring_grouped() {
     return v;
 }
 
-// The combine on the tensor cores (chunk_ring_combine_basis_bmma) on sm_90, where its b1 MMAs run at full rate, once a 16-row MMA
-// tile shares its eq high half (k >= 4); FC_RING_SPLIT=1 keeps chunk_ring_combine_basis_split, for a same-job control
-static bool chunk_ring_bmma(int k) {
+// The ring switch's fold and combine on the tensor cores (ring_switch.cuh's _bmma kernels) on sm_90, where their b1 MMAs run at
+// full rate; FC_RING_SPLIT=1 keeps the split kernels, for a same-job control
+static bool chunk_ring_bmma() {
     static const bool v = [] {
         const char* e = std::getenv("FC_RING_SPLIT");
         int dev = 0, major = 0;
         return !(e && e[0] == '1') && cudaGetDevice(&dev) == cudaSuccess &&
                cudaDeviceGetAttribute(&major, cudaDevAttrComputeCapabilityMajor, dev) == cudaSuccess && major == 9;
     }();
-    return v && k >= 4;
+    return v;
 }
 
 __global__ void chunk_comb_expand(const F128* __restrict__ comb_sub, const F128* __restrict__ ratio, int sub_log,
@@ -1230,8 +1230,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     } else {
         build_eq_device(d_sc_lo, xfull_c.data() + 1, sfx_k);
         build_eq_device(d_sc_hi, xfull_c.data() + 1 + sfx_k, sfx_d - sfx_k);
-        chunk_ring_fold_rows_split<<<ring_switch_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len, ring_switch_chunks, d_shat_partials);
-        ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, ring_switch_chunks, d_shat);
+        int fold_chunks = ring_switch_chunks;
+        if (chunk_ring_bmma() && sfx_k >= 8 && len == 1LL << sfx_d) {
+            fold_chunks = ring_fold_bmma_blocks(sfx_k, len >> sfx_k, ring_switch_chunks);
+            chunk_ring_fold_rows_bmma<<<fold_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len >> sfx_k, d_shat_partials);
+        } else
+            chunk_ring_fold_rows_split<<<ring_switch_chunks, 256>>>(df, d_sc_lo, d_sc_hi, sfx_k, len, ring_switch_chunks, d_shat_partials);
+        ring_switch_fold_rows_reduce<<<128, 256>>>(d_shat_partials, fold_chunks, d_shat);
         CK(cudaGetLastError());
         CK(cudaMemcpy(shats[1].data(), d_shat, 128 * sizeof(F128), cudaMemcpyDeviceToHost));
     }
@@ -1308,9 +1313,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         for (int j = 0; j < 128; j++) { w[j] = MUL(gam[0], eq_rd[0][j]); w[128 + j] = MUL(gam[1], eq_rd[1][j]); }
         CK(cudaMemcpy(d_w, w.data(), 256 * sizeof(F128), cudaMemcpyHostToDevice));
         if (chunk_ring_grouped()) ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
-        else if (chunk_ring_bmma(sfx_k) && len == 1LL << sfx_d)
-            chunk_ring_combine_basis_bmma<<<(unsigned)std::min<long long>(len >> sfx_k, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo, d_sc_hi,
-                sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
+        else if (chunk_ring_bmma() && sfx_k >= 4 && sfx_d > sfx_k && len == 1LL << sfx_d)
+            chunk_ring_combine_basis_bmma<2><<<(unsigned)std::min<long long>(len >> (sfx_k + 1), 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
+                d_sc_hi, sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
         else chunk_ring_combine_basis_split<<<(unsigned)std::min<long long>((len + 255) / 256, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
             d_sc_hi, sfx_k, d_w, d_w + 128, len, dcb);
         CK(cudaGetLastError());

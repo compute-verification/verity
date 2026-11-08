@@ -1,6 +1,7 @@
 // The ring switch's row kernels over eq halves (eq_split), included by prove_chunk.cuh; tests/ring_switch.cu builds them alone
 // against a Flock b684b12 checkout's cuda-ghash.
 #pragma once
+#include <algorithm>
 #include <cstdint>
 #include "f128.cuh"
 
@@ -98,6 +99,17 @@ __device__ __forceinline__ void ring_bmma(uint32_t a0, uint32_t a1, uint32_t a2,
 #endif
 }
 
+// ring_bmma accumulating into d
+__device__ __forceinline__ void ring_bmma_acc(uint32_t a0, uint32_t a1, uint32_t a2, uint32_t a3, uint32_t b0, uint32_t b1, uint32_t* d) {
+#if defined(__CUDA_ARCH__) && __CUDA_ARCH__ >= 800
+    asm("mma.sync.aligned.m16n8k256.row.col.s32.b1.b1.s32.and.popc {%0,%1,%2,%3}, {%4,%5,%6,%7}, {%8,%9}, {%0,%1,%2,%3};"
+        : "+r"(d[0]), "+r"(d[1]), "+r"(d[2]), "+r"(d[3])
+        : "r"(a0), "r"(a1), "r"(a2), "r"(a3), "r"(b0), "r"(b1));
+#else
+    __trap();
+#endif
+}
+
 // A warp's 32x32 bit transpose: lane l returns bit l of every lane's x, lane r's in bit r
 __device__ __forceinline__ uint32_t ring_transpose32(uint32_t x, int lane) {
 #pragma unroll
@@ -117,12 +129,14 @@ __device__ __forceinline__ uint32_t ring_transpose32(uint32_t x, int lane) {
 // M_c(x^j·hi_c[b]). A block builds Z_b's 128 rows of 256 bits in shared memory, one column a thread; each warp then takes 16 rows
 // a at a time as an MMA's A fragment, and sixteen MMAs, eight output bits each, give every output bit's popcount, whose parity is
 // the bit. B's column g of tile t is output bit 32(g >> 1) + 2t + (g & 1), so lane 4g + q's sixteen tiles hold word q of rows g
-// and g + 8 in bit order, shifted in one bit at a time. Needs k >= 4 (an MMA's 16 rows share b), nb = len >> k, and sm_80 on.
+// and g + 8 in bit order, shifted in one bit at a time. NBP b's share a pass over the lo entries. Needs k >= 4 (an MMA's 16 rows
+// share b), nb = len >> k a multiple of NBP, and sm_80 on.
+template <int NBP>
 __global__ void __launch_bounds__(256) chunk_ring_combine_basis_bmma(
     const F128* __restrict__ ab_lo, const F128* __restrict__ ab_hi, const F128* __restrict__ c_lo, const F128* __restrict__ c_hi,
     int k, const F128* __restrict__ weights_ab, const F128* __restrict__ weights_c, long long nb, F128* __restrict__ combined) {
     __shared__ F128 tab[2][32][16];
-    __shared__ uint32_t zt[128][8];   // Z_b's row n: bit l of word w is column 32w + l
+    __shared__ uint32_t zt[NBP][128][8];   // Z_b's row n: bit l of word w is column 32w + l
     ring_weight_tables(weights_ab, weights_c, tab);
     __syncthreads();
     const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, g = lane >> 2, q = lane & 3;
@@ -130,26 +144,31 @@ __global__ void __launch_bounds__(256) chunk_ring_combine_basis_bmma(
     const F128 xj = j < 64 ? F128{1ull << j, 0} : F128{0, 1ull << (j - 64)};
     const uint32_t* la = reinterpret_cast<const uint32_t*>(ab_lo);
     const uint32_t* lc = reinterpret_cast<const uint32_t*>(c_lo);
-    const int rows = 1 << k;
-    for (long long b = blockIdx.x; b < nb; b += gridDim.x) {
-        const F128 col = ring_weigh(tab, c, ghash_mul_karatsuba(xj, c ? c_hi[b] : ab_hi[b]));
-        const uint32_t cw[4] = {(uint32_t)col.lo, (uint32_t)(col.lo >> 32), (uint32_t)col.hi, (uint32_t)(col.hi >> 32)};
-        uint32_t mine[4];   // row 32h + lane's word wid
+    const int rows = 1 << k, step = 16 * (blockDim.x >> 5);
+    for (long long b0 = (long long)blockIdx.x * NBP; b0 < nb; b0 += (long long)gridDim.x * NBP) {
+        uint32_t mine[NBP][4];   // row 32h + lane's word wid of each b's Z
 #pragma unroll
-        for (int h = 0; h < 4; h++) mine[h] = ring_transpose32(cw[h], lane);
+        for (int e = 0; e < NBP; e++) {
+            const F128 col = ring_weigh(tab, c, ghash_mul_karatsuba(xj, c ? c_hi[b0 + e] : ab_hi[b0 + e]));
+            const uint32_t cw[4] = {(uint32_t)col.lo, (uint32_t)(col.lo >> 32), (uint32_t)col.hi, (uint32_t)(col.hi >> 32)};
+#pragma unroll
+            for (int h = 0; h < 4; h++) mine[e][h] = ring_transpose32(cw[h], lane);
+        }
         __syncthreads();   // every warp has read the previous b's rows
 #pragma unroll
-        for (int h = 0; h < 4; h++) zt[32 * h + lane][wid] = mine[h];
-        __syncthreads();
-        uint32_t bf[16][2];
+        for (int e = 0; e < NBP; e++)
 #pragma unroll
-        for (int t = 0; t < 16; t++) {
-            const int n = 32 * (g >> 1) + 2 * t + (g & 1);
-            bf[t][0] = zt[n][q];
-            bf[t][1] = zt[n][4 + q];
-        }
-        uint32_t* out = reinterpret_cast<uint32_t*>(combined + (b << k));
-        const int step = 16 * (blockDim.x >> 5);
+            for (int h = 0; h < 4; h++) zt[e][32 * h + lane][wid] = mine[e][h];
+        __syncthreads();
+        uint32_t bf[NBP][16][2];
+#pragma unroll
+        for (int e = 0; e < NBP; e++)
+#pragma unroll
+            for (int t = 0; t < 16; t++) {
+                const int n = 32 * (g >> 1) + 2 * t + (g & 1);
+                bf[e][t][0] = zt[e][n][q];
+                bf[e][t][1] = zt[e][n][4 + q];
+            }
         int r = 16 * wid + g;
         uint32_t a[4] = {};
         if (r < rows) { a[0] = la[4 * r + q]; a[1] = la[4 * (r + 8) + q]; a[2] = lc[4 * r + q]; a[3] = lc[4 * (r + 8) + q]; }
@@ -157,24 +176,119 @@ __global__ void __launch_bounds__(256) chunk_ring_combine_basis_bmma(
             const int rn = r + step;
             uint32_t an[4] = {};
             if (rn < rows) { an[0] = la[4 * rn + q]; an[1] = la[4 * (rn + 8) + q]; an[2] = lc[4 * rn + q]; an[3] = lc[4 * (rn + 8) + q]; }
-            uint32_t w0 = 0, w1 = 0;
 #pragma unroll
-            for (int t0 = 0; t0 < 16; t0 += 4) {
-                uint32_t d[4][4];
+            for (int e = 0; e < NBP; e++) {
+                uint32_t w0 = 0, w1 = 0;
 #pragma unroll
-                for (int u = 0; u < 4; u++) ring_bmma(a[0], a[1], a[2], a[3], bf[t0 + u][0], bf[t0 + u][1], d[u]);
+                for (int t0 = 0; t0 < 16; t0 += 4) {
+                    uint32_t d[4][4];
 #pragma unroll
-                for (int u = 0; u < 4; u++) {
-                    w0 = __funnelshift_r(w0, d[u][0], 1);
-                    w0 = __funnelshift_r(w0, d[u][1], 1);
-                    w1 = __funnelshift_r(w1, d[u][2], 1);
-                    w1 = __funnelshift_r(w1, d[u][3], 1);
+                    for (int u = 0; u < 4; u++) ring_bmma(a[0], a[1], a[2], a[3], bf[e][t0 + u][0], bf[e][t0 + u][1], d[u]);
+#pragma unroll
+                    for (int u = 0; u < 4; u++) {
+                        w0 = __funnelshift_r(w0, d[u][0], 1);
+                        w0 = __funnelshift_r(w0, d[u][1], 1);
+                        w1 = __funnelshift_r(w1, d[u][2], 1);
+                        w1 = __funnelshift_r(w1, d[u][3], 1);
+                    }
                 }
+                uint32_t* out = reinterpret_cast<uint32_t*>(combined + ((b0 + e) << k));
+                out[4 * r + q] = w0;
+                out[4 * (r + 8) + q] = w1;
             }
-            out[4 * r + q] = w0;
-            out[4 * (r + 8) + q] = w1;
 #pragma unroll
             for (int h = 0; h < 4; h++) a[h] = an[h];
         }
     }
+}
+
+// chunk_ring_fold_rows_split's sums, the same field elements, as GF(2) products on the tensor cores. Σ_i w_i[t]·lo[a]·hi[b] over
+// rows i = (b, a) is Σ_b hi[b]·Y_b[t] with Y_b[t] = Σ_a w_(b,a)[t]·lo[a], and Y_b as a 128x128 bit matrix is W_b^T·LO over GF(2),
+// summed over the rows a. A block takes RING_FOLD_ROWS rows a (all of them when there are fewer) and a share of the b's. It
+// transposes its lo entries into shared memory once (row u's word w holds bit u of 32 entries, words swizzled so a warp's B
+// fragments hit distinct banks); then per b and 256 rows a it transposes the witness rows the same way, and warp w accumulates
+// Y_b's rows t in [16w, 16w + 16) as one m16n8k256 A fragment against sixteen B fragments of LO, with column g of tile n being
+// eq bit 32(g >> 1) + 2n + (g & 1) so lane 4g + q's parities make word q of rows g and g + 8. Each row's four words meet in one
+// lane of the quad, which adds the row times hi[b]. partials[t·gridDim.x + block] as chunk_ring_fold_rows_split's, launched at
+// ring_fold_bmma_blocks blocks; needs k >= 8, nb = len >> k and sm_80 on.
+constexpr int RING_FOLD_ROWS = 2048;
+
+inline int ring_fold_bmma_blocks(int k, long long nb, int max_blocks) {
+    const int n_ar = (1 << k) / std::min(1 << k, RING_FOLD_ROWS);
+    return n_ar * (int)std::min<long long>(nb, std::max(1, max_blocks / n_ar));
+}
+
+__device__ __forceinline__ int ring_lot_at(int u, int w) { return u * (RING_FOLD_ROWS / 32) + (w ^ ((u & 1) << 2 | ((u >> 5) & 3) << 3)); }
+
+__device__ __forceinline__ void ring_words(F128 v, uint32_t* w) {
+    w[0] = (uint32_t)v.lo; w[1] = (uint32_t)(v.lo >> 32); w[2] = (uint32_t)v.hi; w[3] = (uint32_t)(v.hi >> 32);
+}
+
+__global__ void __launch_bounds__(256) chunk_ring_fold_rows_bmma(const F128* __restrict__ witness, const F128* __restrict__ lo,
+                                                                 const F128* __restrict__ hi, int k, long long nb,
+                                                                 F128* __restrict__ partials) {
+    __shared__ uint32_t lot[128 * (RING_FOLD_ROWS / 32)];
+    __shared__ uint32_t wt[128][9];   // this step's witness rows transposed: row t's word G holds bit t of rows 32G..32G+31
+    const int lane = threadIdx.x & 31, wid = threadIdx.x >> 5, g = lane >> 2, q = lane & 3;
+    const int rows = min(1 << k, RING_FOLD_ROWS), n_ar = (1 << k) / rows, steps = rows / 256;
+    const int a0 = (blockIdx.x % n_ar) * rows, n_bg = gridDim.x / n_ar;
+    for (int r = threadIdx.x; r < rows; r += blockDim.x) {
+        uint32_t v[4];
+        ring_words(lo[a0 + r], v);
+#pragma unroll
+        for (int h = 0; h < 4; h++) lot[ring_lot_at(32 * h + lane, r >> 5)] = ring_transpose32(v[h], lane);
+    }
+    __syncthreads();
+    uint32_t acc[16][4] = {};
+    F128 y_acc{0, 0};   // lanes q < 2: Σ_b hi[b]·Y_b[16·wid + g + 8q]
+    long long b = blockIdx.x / n_ar;
+    int s = 0;
+    F128 v = b < nb ? witness[(b << k) + a0 + threadIdx.x] : F128{0, 0};
+    while (b < nb) {
+        const long long bn = s + 1 < steps ? b : b + n_bg;
+        const int sn = s + 1 < steps ? s + 1 : 0;
+        const F128 vn = bn < nb ? witness[(bn << k) + a0 + 256 * sn + threadIdx.x] : F128{0, 0};
+        uint32_t vw[4], tw[4];
+        ring_words(v, vw);
+#pragma unroll
+        for (int h = 0; h < 4; h++) tw[h] = ring_transpose32(vw[h], lane);
+        __syncthreads();   // every warp has read the previous step's rows
+#pragma unroll
+        for (int h = 0; h < 4; h++) wt[32 * h + lane][wid] = tw[h];
+        __syncthreads();
+        const int t0 = 16 * wid + g;
+        const uint32_t fa0 = wt[t0][q], fa1 = wt[t0 + 8][q], fa2 = wt[t0][4 + q], fa3 = wt[t0 + 8][4 + q];
+#pragma unroll
+        for (int n = 0; n < 16; n++) {
+            const int u = 32 * (g >> 1) + 2 * n + (g & 1);
+            ring_bmma_acc(fa0, fa1, fa2, fa3, lot[ring_lot_at(u, 8 * s + q)], lot[ring_lot_at(u, 8 * s + 4 + q)], acc[n]);
+        }
+        if (s == steps - 1) {
+            uint32_t w0 = 0, w1 = 0;
+#pragma unroll
+            for (int n = 0; n < 16; n++) {
+                w0 = __funnelshift_r(w0, acc[n][0], 1);
+                w0 = __funnelshift_r(w0, acc[n][1], 1);
+                w1 = __funnelshift_r(w1, acc[n][2], 1);
+                w1 = __funnelshift_r(w1, acc[n][3], 1);
+#pragma unroll
+                for (int e = 0; e < 4; e++) acc[n][e] = 0;
+            }
+            uint32_t y[4];
+#pragma unroll
+            for (int j = 0; j < 4; j++) {
+                const uint32_t x0 = __shfl_sync(0xffffffffu, w0, 4 * g + j), x1 = __shfl_sync(0xffffffffu, w1, 4 * g + j);
+                y[j] = q == 0 ? x0 : x1;
+            }
+            if (q < 2) {
+                const F128 p = ghash_mul_karatsuba(F128{(u64)y[0] | (u64)y[1] << 32, (u64)y[2] | (u64)y[3] << 32}, hi[b]);
+                y_acc.lo ^= p.lo;
+                y_acc.hi ^= p.hi;
+            }
+        }
+        b = bn;
+        s = sn;
+        v = vn;
+    }
+    if (q < 2) partials[(long long)(16 * wid + g + 8 * q) * gridDim.x + blockIdx.x] = y_acc;
 }
