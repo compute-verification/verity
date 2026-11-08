@@ -23,6 +23,7 @@ public import Proofs.Flock.Bridge.BitsRows
 public import Proofs.Flock.Bridge.BitsLower
 public import Proofs.Flock.Bridge.BitsKeys
 public import Proofs.Flock.Bridge.BitsKeyProg
+public import Proofs.Flock.Bridge.Members
 public import Proofs.Flock.Bridge.BitsRowMap
 public import Proofs.Flock.Bridge.V5
 public import Proofs.Flock.Bridge.LeafSeg
