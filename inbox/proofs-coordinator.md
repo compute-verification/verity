@@ -13636,3 +13636,55 @@ own. Say if you'd rather I wait for it.
 
 When records and suites pass I mark #8015 and post the land ask here, then tell TWOSESS, BINDKSAT, TWONONTRIV and
 BINDFOOT the head.
+
+## 21:04Z from TWOOPENS: (1c) is done and pushed, ahead of its ETA; checked is merged; RUN_FIELDS can grow by four
+
+**(1c) is on `cursor/proofs-sessions-bytemplate-3e7a`.** I pushed two heads.
+- `cb0caca1f0` is (1c) itself. Try r20261108-200646-a073: the build completed, lean exit 0, and SpotFlock has no
+  warnings. Only the sibling stub failed, on stale oleans.
+  - Round 1 is one interior record, read as JSON.
+  - Replay block ρ's view is `encNat (ρ's index in the record's replay_sample) :: the boundary record's port roots`.
+  - `orderOk` holds `replay_sample` to the first-stage sample. `blocksOf_of_orderOk` then gives `blocksOf rec =
+    sample`, so `interiorFixed`, `run_fst_take` and `opens` keep their proofs.
+  - Round 2 calls the deployed `SecondStage.stmtCodes` directly, per your decision (1).
+- `6901922a0f` (now the branch head) adds three things to `cb0caca1f0`: `checked` merged, TWOVERIFY's `e6a146c3b9`
+  merged, and the header held by TWOVERIFY's `second-header`. Try r20261108-203350-4dbc: the build completed (12329
+  jobs), lean exit 0, and there is no `sorry` outside ArkLib. Only the sibling stub failed, on the known stale
+  `SampledProofs` olean.
+  - The header check reads each template's reference header from `Own.refs := refsOf h`. The model's own
+    `pinHeader` is deleted.
+  - Merging `checked` needed #8175's `Verity.Boolean` names in five files this branch carries. Only
+    `Bridge/Members.lean` (three lines) is also on ZKTWO's branch, and I've sent ZKTWO those edits.
+
+**Model-only checks that remain.** Each is stronger than the deployed round 2, so the soundness transfer still owes
+them:
+- `orderOk`: it stays model-only until TWOVERIFY's check carries the clause I sent at 19:52Z (amended at 20:14Z).
+- `pinOk` byte-pins the decoded statement apart from its header, draw and reads. For the circuit file, the deployed
+  check pins it through the header's `circuit_sha512`: Flock refuses a header naming another file's hash, and
+  `second-header` doesn't blank that field. So for the circuit, the two differ only at a SHA-512 collision.
+  - Your call: keep the byte pin and name that gap, or state the pin as the hash and add a collision step, in the
+    `Claims.Finder` style `Bridge/PortRoots` uses.
+  - Besides the circuit, `pinOk` fixes the statement id, the lookup tables and the verifier's own flags and files. I
+    haven't yet matched those against the arguments the deployed driver passes.
+
+**RUN_FIELDS (TWOVERIFY's 20:08Z item): from the proof's side, add all four fields.**
+- Flock's verifier reads none of `set`, `frame_v3.bindings` or `units.blocks`. Nothing reads `units.blocks`; it
+  is only written.
+- Flock checks the header's `registered` itself, against the auditor's own roots (`Registered.check` with
+  `--registered`). That is the step the model's proof already uses (`opens_of_setup`).
+- `second-roots` and `second-read` still hold the domains and the reads to the run.
+- TWOVERIFY proposed three fields. `units.blocks` is the fourth, by TWOVERIFY's own note.
+- (3)'s completeness guard can't pass on an honest run until this lands.
+
+**Open:**
+- `FrameIs` covers only sessions with registered reads. A session that binds its interior ports through
+  `second-roots` needs a second branch: its published roots equal the interior record's under one domain, so its row
+  digests equal the record's, else there is a SHA-512 collision. That needs a collision-finder step across the
+  session's file and the record, in `Bridge/PortRoots`' `Claims.Finder`/`ecrBound` style. I'll scope it with
+  BINDKSAT.
+- The PR for `-3e7a` waits for #8083 and #8168 to reach `checked`; both are open. Then I merge `checked`, run the
+  records fast path, open it in the queue (`--issue PRF-460`) and mark it.
+- (3) waits on your RUN_FIELDS decision and on TWOPROVE's honest files.
+
+**Runs:** none of mine is running. The two tries above are done. I cancelled the superseded r20261108-201358-18dd
+and r20261108-201847-dc67, whose heads failed only on #8175's rename.
