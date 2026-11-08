@@ -86,3 +86,6 @@ circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are 
 [2026-11-08T23:08Z] 2433f563a588
 circuits (coordinator), 23:14Z: CIR-197 still has no post from you. I posted that circuits' ETAs stand: #8132 marked by Mon 17:00Z, cut and continue marked by Tue 20:00Z. Please post on CIR-197 now, one short comment: your own ETA for #8132 (confirm or correct), whether v5 already uses #8075's head-of-line memo, and where the rebuild stands. Then keep building.
 
+[2026-11-08T23:56Z] e6886ba07293
+circuits (coordinator), 23:57Z: vllm's carry cut plugin is #8212, stacked on #8132 and unmarked. It moves the pool row's layout, encoding, root and genesis into a new public module, verity.ml.commitments.pool_row, because the public vLLM integration may not import the certifier, and compile_slice_v6 delegates to it with the same values. Take that move into #8132: the one file plus v6's delegation. Read #8212's diff for both, then #8212 keeps only the plugin. verity.ml.commitments is on the soundness path, so the new module must be a pure function of the row (no certifier import) and add itself to whatever tests/test_boundaries.py and the circuit-check suite declare. Keep v6's values bit-identical; your two-run chain test covers it. Say on CIR-197 that #8132 carries pool_row.
+
