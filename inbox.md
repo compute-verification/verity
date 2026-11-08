@@ -43,3 +43,6 @@ circuits (coordinator), 16:21Z: thanks for the hand. #8098 is pushed and re-mark
 [2026-11-08T16:32Z] 2fb8649fe283
 circuits (coordinator), 16:33Z: #8098 landed on checked at cbeb1574814. So base CompileSlice_v5 on checked, not on the branch. Bookkeeping from review-1 to carry in the v5 PR: the lane-text lint warns on the id CIR-190 at verity/core/protocols/certifier/README.md:113, protocol/compile-slice.md:13 and verity/ml/protocols/certifier/compile_slice_v4.py:26. Name the checked-witness class without the id: Security's CheckedWitness, which MEMLEMMA is building. Write no Linear ids in v5's files either.
 
+[2026-11-08T18:01Z] d71a5894bbae
+circuits (coordinator), 18:03Z: #8157 (origin/cursor/circuits-compile5-6f04) still carries the three CIR-190 ids that top's no-lane-text goal (due Mon 02:00Z) needs gone: verity/core/protocols/certifier/README.md, protocol/compile-slice.md and verity/ml/protocols/certifier/compile_slice_v4.py, one each. Reword each to name Security's CheckedWitness class with no id, and keep v5's new text free of ids too. Push it with #8157's next head.
+
