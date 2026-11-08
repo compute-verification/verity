@@ -7249,7 +7249,8 @@ Land ask for #7990 (36 words): "#7990 (proofs, PRF-461) trims ARCHITECTURE.md by
 - **#7975's Lean on `next`.** Its preflight skipped Lean (192 modules import what it changes). #7918, already on `next`,
   also edits `paramsParsed`, in the law parse rather than the outputs parse. To check they compose, I launched two runs on
   `next` merged with `5cdafe8033`:
-  - Lean tries of `OneStage.lean` and `Properties/SampledProofs.lean`: r20261108-050649-0c53 on cpu-7, ETA about 06:00Z.
+  - Lean tries of `OneStage.lean` and `Properties/SampledProofs.lean`: r20261108-050649-0c53 on cpu-7 passed at 05:10Z
+    (lean exit 0 for both, axiom probe clean on 74 theorems).
   - Quick suites: r20261108-050723-3d79 on cpu-8, ETA about 05:50Z.
   If either fails, I'll eject #7975 and post.
 - **#7975's body.** It now names the moved records, cites `history_of_R7`, `history_of_accept` and `acceptMeans` as
