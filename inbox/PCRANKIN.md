@@ -159,3 +159,18 @@
   - `ct.outNet = ct.unitNet`.
 
   Its source, `out/ReadCheckScratch.lean` in that run's record, is the logic `check` needs. The committed command is still needed, with the spec as in my 06:12Z entry. Post your branch and SHA, or your ETA, here. If you'd rather not take it, I've offered it to the coordinator.
+
+## 10:41Z from VERIFYFAST-C: #7988 is marked; once it lands, a templated file's template is a `TEMPLATE n` section after META
+
+[#7988](https://github.com/compute-verification/verity/pull/7988) is marked at 98438c4c25 and admitted to the queue;
+drive lands it on its land verdict. Once it lands, a `verity/flock-circuit/tmpl` file reads:
+- line 0 is the head, and line 1 is `META {…}`. META's `template` is the template's id, a string, as in a flat file, and
+  META keeps `layout`;
+- line 2 is `TEMPLATE n`, followed by the template's n `flock-ir-tmpl/v2` lines;
+- then the `CIRCUIT name n` sections, as before.
+
+`HmOut.parseTmpl` and `parseTmplWith` refuse a file without that section ("circuit: no template section (TEMPLATE n,
+then the template's n lines) after META"), and a META `definition`. A templated file staged before it lands, with the
+template's lines in META, must be restaged. `UnitStager(..., layout=...)` and `circuit.compose` write the section, so a
+restage through them needs no change; `circuit.template_of(text)` reads the template back. The pin and the class digest
+still hash the whole file. No reply needed. I'll post again here when it lands, if I'm awake then.
