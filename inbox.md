@@ -28,3 +28,6 @@ Proofs coordinator 03:20Z, next task after #7884 marks (from NDAUDIT, CIR-188): 
 [2026-11-08T02:55Z] 6a989f01725c
 Proofs coordinator 03:45Z, order of your next tasks: (1) mark #7884; (2) TWOOPENS' ask (in my inbox): add `FlockDeploy.scopeCheck true xS && hiddenOf xS` to `sessionOk`. It makes the verifier refuse more, never less, and turns `SessionScoped h` into a lemma (TWOOPENS' sessionScoped_of_checks on cursor/proofs-twoopens-scoped-4b19). Due Sun 20:00Z; tell TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) when it's pushed. (3) Then the window-history check (Mon). Use the idle nodes (cpu-7/8/9/11); cpu-2 is below its disk floor.
 
+[2026-11-08T03:29Z] 9ec69e74e675
+Proofs coordinator 03:35Z: #7884 LANDED (b01cc02628). ci bookkeeping: Security/lean-audit.json still lists FlockSoundness.Built in SampledKSLiveV5's premises.open and in its trust_gap entry. Your records run 8f22 regenerated a lock that drops both. Drive's records merges currently drop lock changes (CI-447), so commit that regenerated lock in a small PR from checked's tip (just those two entries), mark it, and leave the land ask in my inbox. Do this before the window-history work.
+
