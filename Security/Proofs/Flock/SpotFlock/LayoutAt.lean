@@ -44,9 +44,9 @@ theorem col_val {T : Model.Statement} (a : HiddenExec.AcceptedH T) {gi : ℕ} (h
       (fun u => a.st.c.unitRange.slot (gi * a.st.c.upv + u)) (fun c => upos a.st.c c.val) (a.L.hbM a.regs hg) x).val = _
   unfold stackPlaceAt colAt
   by_cases hx : x.val < (unitRows a.st a.L.unit_built).stackW a.st.c.upv - 1
-  · rw [dif_pos hx, if_pos hx]
+  · rw [dite_eq_left hx, ite_eq_left hx]
     rfl
-  · rw [dif_neg hx, if_neg hx]
+  · rw [dite_eq_right hx, ite_eq_right hx]
     rfl
 
 variable (h : Held)
@@ -70,13 +70,15 @@ noncomputable def pickAny (t k G : ℕ) : ℕ :=
     if hU : Built h.ms[t].1.unit then
       if hk : k < h.ms[t].2.size then
         if hy : ∃ y, Spot.Bits.base h.ms t + _root_.Flock.Bridge.posOf (keyC h t ht hU) y = G then
-          if hc : ∃ cc, (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
-              (Discharge.Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) ⟨k, hk⟩).wire cc = hy.choose then
+          if hc : ∃ cc : Fin ((Placed.keyProg h.ms[t].1 hU h.ms[t].2.size).rows ⟨k, hk⟩).w,
+              (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
+                (Discharge.Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) ⟨k, hk⟩).wire cc = hy.choose then
             hc.choose.val
           else 0
         else 0
       else 0
     else 0
+  else 0
 
 /-- **`pickAny` places each unit's wires**: every wire a unit computes or reads is one of its columns' (`exists_wire`),
 and its position fixes the wire (`posOf_injective`). -/
@@ -86,14 +88,15 @@ theorem picks_pickAny : Picks h (pickAny h) := by
   have hex : ∃ y', Spot.Bits.base h.ms t + _root_.Flock.Bridge.posOf (keyC h t ht hU) y' =
       Spot.Bits.base h.ms t + _root_.Flock.Bridge.posOf (keyC h t ht hU) y := ⟨y, rfl⟩
   have hyc : hex.choose = y := _root_.Flock.Bridge.posOf_injective (Nat.add_left_cancel hex.choose_spec)
-  have hc : ∃ cc, (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
-      (Discharge.Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) ⟨k.val, k.isLt⟩).wire cc = hex.choose := by
+  have hc : ∃ cc : Fin ((Placed.keyProg h.ms[t].1 hU h.ms[t].2.size).rows ⟨k.val, k.isLt⟩).w,
+      (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
+        (Discharge.Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) ⟨k.val, k.isLt⟩).wire cc = hex.choose := by
     rw [hyc]
     exact exists_wire (Const.Prog.instC (Placed.keyProg h.ms[t].1 hU h.ms[t].2.size)
       (Discharge.Layout.outsOf h.ms[t].1 hU h.ms[t].2.size) ⟨k.val, k.isLt⟩) hy
   refine ⟨hc.choose, hc.choose_spec.trans hyc, ?_⟩
   unfold pickAny
-  rw [dif_pos ht, dif_pos hU, dif_pos k.isLt, dif_pos hex, dif_pos hc]
+  rw [dite_eq_left ht, dite_eq_left hU, dite_eq_left k.isLt, dite_eq_left hex, dite_eq_left hc]
 
 open Classical in
 /-- **The session layout at rank `rank` and column choice `pick`** (the module's docstring): unit `u` of session
@@ -147,7 +150,7 @@ theorem placesAt_layoutAt (rank : Msg → Msg → Msg → ℕ → ℕ) {pick : �
         else 0).getD 0 = _
       rw [hfs, htu, hku]
       show (if hb : Built (lunit a.st.c) then colAt a.st hb (rank x m₁ xS u % a.st.c.g) (pick t k G) else 0) = _
-      rw [dif_pos (show Built (lunit a.st.c) from a.L.unit_built)]
+      rw [dite_eq_left (show Built (lunit a.st.c) from a.L.unit_built)]
     rw [hL, he, Nat.zero_mul, Nat.zero_add]
     exact (col_val a hgi (Fin.cast (congrArg FlockSoundness.Rows.w (rows_keyProg hU a hparse k)) cc)).symm
 
