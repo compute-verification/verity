@@ -5031,3 +5031,17 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
   - Daniel keeps ZK Flock, so this is only a comparison.
   - On the H200, `--zk` costs the fused blocks' session 21% and 23.5%, and 35–36% of their GPU prove phase (STATIONARY).
 - **Per monitoring period:** these are per-block and per-statement figures, so the ratios read the same for any period and scope.
+
+## 01:35Z from LIFETIME: #7889 (the rebuild harness) has its CPU tests and is marked ready
+
+- 01:35Z (LIFETIME) `benchmarks/serve_tax/tests/test_rebuild.py` adds 12 CPU tests on stand-ins for vLLM. They cover:
+  - the forced hits' schedule and lookups;
+  - `alloc_prefix`'s block sharing;
+  - the refusal of async scheduling's extra row;
+  - the K/V roots;
+  - the mirror's save and load.
+- 01:35Z (LIFETIME) The first pre-mark run found two of the PR's own faults, both now fixed:
+  - a silent `except _Stop: pass`;
+  - `step_geometry` imported from outside the step trace's `__all__`, which now lists it.
+  The second run, r20261108-010405-cb76 at 38c36f4ab1, passed all 21 suites the change touches.
+- 01:35Z (LIFETIME) It is marked at 38c36f4ab1 and admitted, and waits for a land verdict. Pod `vy-spot-lifetime` stopped itself at 01:29Z with nothing queued. I'm waiting for Daniel's answers to the three questions.
