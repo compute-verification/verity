@@ -867,10 +867,17 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
     return out
 
 
+def own_value(port: str) -> str:
+    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`).
+    It is never the port's own name: the audit takes a value named as a registration root's port for a registered value
+    of the record (`audit.session_registered`), which a registration listing none refuses."""
+    return f"committed/{port}"
+
+
 def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = ()) -> dict[str, dict[str, Any]]:
     """Header ``registered`` entries (`registered_header`'s form) for shared-row member ``mem``'s ports but ``without``, from
     its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
-    of the value ``<member>/<port>``, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
+    of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
     position i with its path. A statement checked against registered reads must have every port registered
     (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
     verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
@@ -894,7 +901,7 @@ def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = 
         lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
         if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
             raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
-        out[p] = {"value": f"{mem['name']}/{p}", "positions": list(range(n)),
+        out[p] = {"value": own_value(f"{mem['name']}/{p}"), "positions": list(range(n)),
                   "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(n)]}
     return out
 
@@ -923,7 +930,7 @@ def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping
                 raise ValueError(f"{m.key} {p}: the registration holds no root for it")
             if int(e["leaves"]) != m.n:
                 continue
-            ports[p] = {"value": m.port(p), "root": e["root"], "leaves": m.n, "words": words[p],
+            ports[p] = {"value": own_value(m.port(p)), "root": e["root"], "leaves": m.n, "words": words[p],
                         "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
                         "reads": list(range(m.n)), registered.READS_FROM: m.base}
         out[m.key] = {**f, "ports": dict(sorted(ports.items()))}

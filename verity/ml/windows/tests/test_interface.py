@@ -1236,8 +1236,9 @@ def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_r
     (`Flock.Registered.checkComplete`), so `fed_chain`'s chained GEMMs, which read ``w``, are staged with each other port
     registered as rows of its own tree: the header (`rows.own_entries`) gives row i at position i, its path climbing to
     the root the registration holds for ``<member>/<port>``, and the verifier's file (`rows.own_reads`) reads that root,
-    unit ``base + i`` row i. A member reading nothing gains no reads, a port the registration holds no root for is refused,
-    and so is a body whose rows don't make the registered root."""
+    unit ``base + i`` row i, as a value no registration port is named (`rows.own_value`). A member reading nothing gains
+    no reads, a port the registration holds no root for is refused, and so is a body whose rows don't make the registered
+    root."""
     circuit, w, feed_ins, feed, _ins, outs = fed_chain()
     win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
     win.record(SRC, feed_ins, feed)
@@ -1256,7 +1257,7 @@ def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_r
         assert set(got) == {p for p, _w in m.all_rows} - {"w"}
         for p, e in got.items():
             dom, bc = c.domains[m.port(p)], c.bc[m.port(p)]
-            assert e["value"] == m.port(p) and e["positions"] == list(range(m.n))
+            assert e["value"] == CS.own_value(m.port(p)) not in roots and e["positions"] == list(range(m.n))
             leaves = [row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]),
                                m.schema(p)) for i in range(m.n)]
             assert all(_climb(dom, i, leaves[i], bytes.fromhex(x)) == c.roots[m.port(p)] for i, x in enumerate(e["paths"]))
@@ -1267,7 +1268,7 @@ def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_r
         m = ms[k]
         ports = files[m.key]["ports"]
         assert list(ports) == sorted(p for p, _w in m.all_rows) and ports["w"] == {"value": "w"}
-        assert all(ports[p] == {"value": m.port(p), "root": roots[m.port(p)]["root"], "leaves": m.n, "words": n,
+        assert all(ports[p] == {"value": CS.own_value(m.port(p)), "root": roots[m.port(p)]["root"], "leaves": m.n, "words": n,
                                 "word_bits": 16, "domain": roots[m.port(p)]["domain"], "row_schema": m.schema(p),
                                 "reads": list(range(m.n)), "reads_from": m.base} for p, n in m.rows + m.outs if p != "w")
     k = chained[0]
