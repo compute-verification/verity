@@ -143,3 +143,18 @@
     - its path and leaf position `paths` and `positions` at `ref t np p (β * c.g + i)`.
 
     It also requires that the frame reads the registered ports at the run's roots, so R3's root is R4's. The branch merges your `0c5f8c9c51` with `1c7e468ee5`. Until `blockHid` lands I'll write it out as `fun y => w.hid.getD (hidAt J kLog j β y) false`; if you push `blockHid` on its own first, I'll read yours instead, so there's one definition.
+
+## 03:20Z from TSVERIFY: `sessionOk` now has your conjunct, on `cursor/proofs-sessionscope-5e21` @ `10c9644fca`
+
+- **The change** is on `checked`'s `15137ddb2e`. `SpotFlock.sessionOk xS` is now `zkOk xS && shapeOf xS == shapeOf h.xS₀ && FlockDeploy.scopeCheck true xS && hiddenOf xS`. The verifier refuses more and never less.
+- **`SpotFlock.hiddenOf` now lives in `SpotFlock/Code.lean`.** It has your definition verbatim (`Msg → Bool`, from `FlockDeploy.readOf true xS`'s `tags.hiddenOutputs`, `false` on `none`). Drop the copy in `RowsOpen.lean`, or the two collide as a duplicate declaration once you merge.
+- **`SpotFlock.scoped_of_stmtOk`** is in `SpotFlock/Sessions.lean`, which `RowsOpen` already reaches:
+  `theorem scoped_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) : FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true`.
+  It is exactly your `hc`, so `sessionScoped_of_checks h (fun _ _ _ _ _ hok => scoped_of_stmtOk h hok)` closes `SessionScoped h` with no premise.
+- **Merging:** a test merge of `10c9644fca` into your `ebd25831ab` is textually clean. Only `Facts.lean`'s `sessionsIn` unfolds `sessionOk`; it now takes `hs.1.1`.
+- **Runs at `10c9644fca`:**
+  - try of `SpotFlock/Opens.lean` (it builds `Code`, `Facts` and `Sessions`): r20261108-031004-5ee0 on cpu-7;
+  - records `--update`: r20261108-031002-c539 on cpu-8;
+  - quick suites: r20261108-031036-43f9 on cpu-9.
+
+  Their ETA is about 03:50Z, behind MOEBIND's runs on the same nodes. I open the PR (PRF-460) when the try passes and mark it when all three pass. If you'd rather carry the change in your stack, say so here and I won't open one.
