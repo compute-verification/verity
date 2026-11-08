@@ -5,23 +5,27 @@
 # verify --zk --partition --program` on it as a0.lean_verify runs them (under `perf record` where the node has perf); a
 # templated statement's verify runs its session and then refuses it (`ProvedScope.servedForm`). With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
-# (flock_read/Main.lean) its parse's phases. Run from a clone (the builds write the verifier's .lake):
+# (flock_read/Main.lean) its parse's phases. With --stmt (a templated statement), flock-tmpl stmt (flock_tmpl/Main.lean)
+# times the statement's parse instead, whole and a stage at a time, and sizes its template against the unrolled unit.
+# Run from a clone (the builds write the verifier's .lake):
 #   research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
 #     --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-#     [--layout MODE [--structural]]
+#     [--layout MODE [--structural] [--stmt]]
 # N: the kind's first N saved units, as a11's --per-kind staged them (the session's population). $OUT gets build.json
 # (flock_served.py's), archive-put.{log,time}, verify.{log,time}, perf.txt and perf-samples.txt.gz, served.jsonl and
-# served.time, and on a flat statement with --phases phases.jsonl and read.time.
+# served.time, and on a flat statement with --phases phases.jsonl and read.time; with --stmt stmt.jsonl and stmt.time
+# in place of served's.
 set -euo pipefail
 O=${OUT:?run under research run, which sets OUT}
-kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE [--structural]]}
+kind=${1:?usage: flock_served.sh KIND [N] [--phases] [--layout MODE [--structural] [--stmt]]}
 shift
-n= phases= layout= structural=
+n= phases= layout= structural= stmtp=
 while [ $# -gt 0 ]; do
   case $1 in
     --phases) phases=1 ;;
     --layout) layout=$2; shift ;;
     --structural) structural=1 ;;
+    --stmt) stmtp=1 ;;
     *) n=$1 ;;
   esac
   shift
@@ -68,7 +72,12 @@ if [ -n "$session" ]; then
   fi
   cat "$O/verify.log"
 fi
-if [ -n "$phases" ] || [ -n "$layout" ]; then
+if [ -n "$stmtp" ]; then
+  scratch flock-tmpl
+  /usr/bin/time -v -o "$O/stmt.time" "$S/flock-tmpl/.lake/build/bin/flock-tmpl" stmt "$w/circuit.txt" > "$O/stmt.out" || true
+  grep '^PHASE ' "$O/stmt.out" | sed 's/^PHASE //' > "$O/stmt.jsonl" || true
+  cat "$O/stmt.jsonl"
+elif [ -n "$phases" ] || [ -n "$layout" ]; then
   scratch flock-served
   /usr/bin/time -v -o "$O/served.time" "$S/flock-served/.lake/build/bin/flock-served" "$w/circuit.txt" "$pub" "$stmt" \
     "$w/partition.json" "$w/program.json" > "$O/served.out" || true
