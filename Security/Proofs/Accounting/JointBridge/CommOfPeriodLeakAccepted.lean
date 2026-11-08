@@ -64,7 +64,7 @@ open Claims Claims.Sampling NetTiming Accounting.JointBridge Finset
 theorem pr_exists_le {β : Type} [Fintype β] {n : ℕ} (P : Fin n → β → Prop) :
     Pouw.pr (fun x => ∃ i, P i x) ≤ ∑ i, Pouw.pr (P i) := by
   classical
-  unfold Pouw.pr
+  unfold Pouw.pr Claims.Pr
   rw [← Finset.sum_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   have hsub : (univ.filter fun x => ∃ i, P i x) ⊆ univ.biUnion (fun i => univ.filter (P i)) := fun x hx => by

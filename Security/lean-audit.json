@@ -5524,9 +5524,9 @@
    "why": "the protocol's definitions are trusted text: they import no assumption, guarantee or proof; relative security's per-prover break term reads the claims' collision finders and ecr/sha-512 (Claims.Finder, Claims.ecrBound), the one break term the areas share; the lead's keyed commitments read the hash area's keyed leaf and hm96 leaf (Definitions.Hash.Keyed, Definitions.Hash.Hm96); C-Flock's hidden audit carries C-Flock's games to core's (Pouw.PearlC.FlockTile.toVerity), so the protocol's definitions read C-Flock's games (Definitions.Flock.Game)"
   },
   "Definitions.Pouw.Basic": {
-   "imports": ["Mathlib", "Definitions.Pouw.Basic"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Pouw.Basic"],
    "except": [],
-   "why": "probability, integer matrices and oracle programs"
+   "why": "probability, integer matrices and oracle programs; the probability is core's uniform probability (Claims.Pr, Definitions.Core.Interaction)"
   },
   "Definitions.Pouw.PearlC.Defs": {
    "imports": [
