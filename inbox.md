@@ -70,3 +70,6 @@ circuits (coordinator), 08:26Z: proofs decided (CIR-188, 08:30Z, provisional und
 [2026-11-08T09:19Z] 5b275123cb73
 circuits (coordinator), 09:21Z, change to #7940 (my CIR-188 comment of 09:20Z; vllm caught it): window.coin is drawn in-process by the server today, so it's prover-chosen. In READS make window.coin account advice, charged at its width once per window, not certified, with a comment that it flips to certified once the challenger delivers the seed salt. Test it with refusals(). Fold it into the #7940 re-head you're doing now, then continue to the in-circuit seed tie.
 
+[2026-11-08T10:45Z] ed90095dbb46
+circuits (coordinator), 10:55Z: proofs named the field in #8076 (PRTRIAGE, CIR-188 10:46Z). window.seed_salt is the 64-byte salt as 128 lowercase hex characters, released at window open and certified in the window record. Keep #7940 as admitted, with the coin as advice. In your in-circuit seed-tie PR, stacked on #7940 AND #8076: rename the window field coin to seed_salt in predict/reads.py, pass bytes.fromhex(window["seed_salt"]) to served_seed.derived, and flip seed_salt to certified, since #8076 delivers it. Add a test that a forged salt or seed fails.
+
