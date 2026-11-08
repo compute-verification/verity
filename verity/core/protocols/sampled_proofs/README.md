@@ -558,6 +558,8 @@ window root are refused the same way, a reject failing `run`; a sample that read
 At the window's open, before it serves, the stream draws its seed salt (`Stream.seed_salt`, `coins.draw_seed_salt`): the
 first coin of the challenger's `seed-salt` family after the window's open root, a family no sample reads. The record
 names it (`window.seed_salt`), a certified input the window's circuits read in place of a value the server would choose,
-public as `coins` (`check_public`). A verifier reads it from the challenger's log (`coins.seed_salt_of`, Lean
-`Challenger.seedSaltOf`), and R6 refuses a window naming another salt, none, or a salt where the verifier read none
-(`R6-seed-salt`). Pinned by `tests/test_registered.py` and the difftest's `challenger_seed_salt`.
+public as `coins` (`check_public`). The audit and the run read it from the challenger's log in their evidence, never
+from their parameters: the audit's `seed_salt` under its challenger's key (`coins.seed_salt_of`, Lean
+`OneStage.seedSaltOf`), the run's carrying the key (`coins.seed_salt_in`, `Run.seedSaltOf`), an interior registration
+its own. R6 refuses a window naming another salt, none, or a salt where the verifier read none (`R6-seed-salt`).
+Pinned by `tests/test_registered.py` and the difftest's `challenger_seed_salt`, `run` and protocol ports.
