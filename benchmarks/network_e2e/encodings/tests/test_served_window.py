@@ -112,6 +112,54 @@ def test_the_charge_chain_is_code_v1s_through_forced_admissions(recs):
     assert (sum(a != b for a, b in zip(other, lens)), sum(other)) == (330, 5968)
 
 
+@pytest.mark.slow
+def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails(recs):
+    """With the length terms sent (`lengths`: each request's output_len in width(max_tokens + 1) bits, then its finish),
+    code_v1's window costs its decisions' segment plus its requests' tails. The certifier's window chain
+    (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
+    output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v4 on w212 at its own statics
+    (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
+    refuses one bit less."""
+    from types import SimpleNamespace
+
+    from verity.core.protocols.certifier import served_rows as SR
+    from verity.ml.protocols.certifier import compile_slice_v4 as V4, window_charge as WC
+    from verity_vllm.pipeline.advice_code import lengths as LN
+
+    book = next(s for s in json.loads(ARITH.read_text())["streams"]
+                if s["source"].startswith("async-light"))["decisions"]["book"]
+    per, reqs = [], []
+    for w in range(213):
+        tr = RP.load_step_trace(RV.served_window(recs, w)[0])
+        per.append([int(d.arrived) for d in RP.decisions(tr)[0]])
+        reqs.append(tr.requests)
+    D, L = 32, max(map(len, reqs))
+
+    def slots(d, rq):
+        pad = [0] * (L - len(rq))
+        return ([1] * len(d) + [0] * (D - len(d)), d + [0] * (D - len(d)), (), (), (), (), (), [1] * len(rq) + pad,
+                [r.max_tokens for r in rq] + pad, [r.output_len for r in rq] + pad)
+
+    ses = WC.session(D, 0, 0, L, book, [slots(d, rq) for d, rq in zip(per, reqs)])
+    seg = CV.encode([CV.Window(arrived=d) for d in per], CV.Book.from_json(book)).lens
+    tails = [sum(LN.widths(rq, [range(len(rq))])[0]) for rq in reqs]
+    assert [s[0] for s in ses] == [a + b for a, b in zip(seg, tails)]
+
+    fx = json.loads(SLICE.read_text())
+    st = V4.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"])
+    S = SimpleNamespace(**st)
+    assert fx["decisions"] == per[212]
+    assert [tuple(a[1:3]) for a in fx["arrivals"]] == [(r.prompt_len, r.output_len) for r in reqs[212]]
+    sl = V4.Slice(tuple(map(tuple, fx["arrivals"])), tuple(fx["decisions"]), fx["steps"], (),
+                  tuple(r.max_tokens for r in reqs[212]))
+    kw = {"served": [SR.step_rows(S, step, fx["ids"]) for step in fx["served"]], "carry": WC.carry_of(ses[212][1])}
+    honest = V4.case(S, sl, book, **kw)
+    assert (honest.verdict, honest.length, tails[212]) == (V4.ACCEPT, seg[212] + tails[212], 14)
+    assert tuple(honest.rows["cout"]) == tuple(ses[212][2])
+    low = V4.case(S, sl, book, charge=honest.length - 1, **kw)
+    assert V4.evaluate(st, [honest, low]) == [V4.ACCEPT, V4.ACCEPT & ~(1 << 3)]
+
+
 def test_a_window_on_a_busy_engine_is_refused(recs):
     """A window opened while a request still runs (window 213's open moved before w212's last step) is refused by name."""
     moved = [{**r, "before_step": 3968} if r.get("kind") == "window" and (r["window"], r["event"]) == (213, "open") else r
