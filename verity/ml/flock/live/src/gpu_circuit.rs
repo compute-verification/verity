@@ -296,23 +296,23 @@ pub fn device_leaves(x: &[u8], salts: &[u8]) -> Vec<u8> {
 /// A slot whose witness the host computed: its absolute F128 word offset and its z, a, b words.
 pub type HostSlot = (usize, Vec<F128>, Vec<F128>, Vec<F128>);
 
-/// `parts` back to back, copied in parallel
-pub fn concat(parts: &[&[F128]]) -> Vec<F128> {
-    let n = parts.iter().map(|p| p.len()).sum();
+/// `parts` back to back, copied in parallel a chunk at a time (many short parts or a few long ones)
+pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Vec<F128> {
+    let n = parts.iter().map(|p| p.as_ref().len()).sum();
     let mut out: Vec<F128> = Vec::with_capacity(n);
     let mut rest = &mut out.spare_capacity_mut()[..n];
-    let mut dst = Vec::with_capacity(parts.len());
-    for p in parts {
-        let (a, b) = std::mem::take(&mut rest).split_at_mut(p.len());
-        dst.push(a);
+    let mut pairs = Vec::new();
+    for s in parts.iter().flat_map(|p| p.as_ref().chunks(1 << 15)) {
+        let (a, b) = std::mem::take(&mut rest).split_at_mut(s.len());
+        pairs.push((a, s));
         rest = b;
     }
-    dst.into_par_iter().zip(parts.par_iter()).for_each(|(d, s)| {
-        for (d, &x) in d.iter_mut().zip(s.iter()) {
+    pairs.into_par_iter().for_each(|(d, s)| {
+        for (d, &x) in d.iter_mut().zip(s) {
             d.write(x);
         }
     });
-    // SAFETY: the parts cover the first n words, and each was written above
+    // SAFETY: the chunks cover the first n words, and each was written above
     unsafe { out.set_len(n) };
     out
 }
@@ -1002,7 +1002,7 @@ pub fn prove_circuit(
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (z.pads.concat(), z.extra.concat())
+        (concat(&z.pads), concat(&z.extra))
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
@@ -1085,10 +1085,12 @@ mod tests {
 
     #[test]
     fn concat_is_the_parts_in_order() {
-        let parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        let mut parts: Vec<Vec<F128>> = (0..300u64).map(|k| (0..k % 7).map(|i| F128::new(k, i)).collect()).collect();
+        parts.push((0..100_000u64).map(|i| F128::new(i, !i)).collect());
         let slices: Vec<&[F128]> = parts.iter().map(Vec::as_slice).collect();
         assert!(concat(&slices) == parts.concat());
-        assert!(concat(&[]).is_empty());
+        assert!(concat(&parts) == parts.concat());
+        assert!(concat::<Vec<F128>>(&[]).is_empty());
     }
 
     #[test]
