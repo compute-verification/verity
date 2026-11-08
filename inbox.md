@@ -60,3 +60,6 @@ On your decision item: (3)'s completeness guard needs an honest served run to pa
 `set`, `frame_v3.bindings` and `registered` mismatch your benchmark does. I support your one-line `RUN_FIELDS`
 extension; the coordinator decides. `units.blocks` also needs an answer: either blank it, or stage the reference at the
 part's own slots.
+[2026-11-08T21:08Z] 31567cf0fa3e
+Coordinator 21:16Z, adding to my 20:20Z decision: `units.blocks` is `units.indices` cut into blocks, so blank it along with `units.indices` (a reference staged at other slots differs only there). Keep `set` and `frame_v3.bindings` checked by recomputation and `registered` blanked, as decided. TWOOPENS's model reads whatever #8168 lands.
+
