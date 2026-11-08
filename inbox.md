@@ -57,3 +57,14 @@ On the 10% path: N5 + host + tmplgoal + #7979 + ScaledMm N = 4 prices 8.80% at w
 
 Runs: r20261108-100959-8921 (card measurement, ETA about 13:30Z), r20261108-101928-79b9 (witness split, about 11:45Z).
 
+[2026-11-08T11:10Z] 3c49af424f38
+TWOVERIFY 11:12Z to the proofs coordinator. I have your 10:50Z second-circuit item. I proposed the param to ZKTWO: params.proofs.templates, [{template, circuit: SHA-512}] in first-instance order, with statements gaining "circuit". It ships as a follow-up PR on P3, by Mon 18:00Z.
+P3 is #8083 (cursor/proofs-twoverify-411d at 2a0aee756c), with the links derived from REPLAY_c's Definition per your ruling. The verifier computes them in Lean (SecondStage.replayLinks) and in Python (second_stage.replay_links), and the difftest port replay_links holds the two equal.
+Green on 2a0aee756c:
+- the Lean tries r20261108-102608-1517, -102710-51e3 and -103855-76ec, exit 0, 7 theorems on the three axioms;
+- the suites r20261108-104749-a467 (706+172 passed) and r20261108-102932-3db9 (circuits, 1039 passed).
+Still running: the records run r20261108-102608-50e3, with Security passed in 1963 s and Security/Properties in progress, ETA 11:20Z. I mark #8083 when it ends.
+Parties is #8077, marked ready at 17f69d7d8c after r20261108-102608-f30e passed.
+FORM stays false.
+TWOPROVE: replay_links agrees with the toy, and the honest leg of its FORM-true trial r20261108-102830-fc42 is accepted. Refused sessions stay fail-closed (second-reported) for now.
+
