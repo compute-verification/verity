@@ -8,11 +8,13 @@ own opens for `WINDOW`, withheld (the verifier takes only a withheld session's c
 ends once the sample is read, as a served session's would (`remote.open_session`, `remote.close_session`). `evidence(digest)` is then `coins.coins_reason`'s evidence for the sample after `digest`.
 `Stream` is a `service.Stream` over one, as a deployment drives it: `register` names the window, `select` commits the
 coins to the registration's digest first (a second stage's to the interior registration's), and `outcome` hands the
-verifier the sample's evidence (a two-stage sample's, both stages') and a two-stage sample's second-stage sessions'
-statements, an honest prover's (`statements`)."""
+verifier the sample's evidence (a two-stage sample's, both stages'), a two-stage sample's second-stage sessions'
+statements, an honest prover's (`statements`), and the auditor's params naming each template's circuit file
+(`proofs`), the stand-in each statement's header names (`circuit_of`)."""
 
 from __future__ import annotations
 
+import hashlib
 import itertools
 import shutil
 import tempfile
@@ -30,6 +32,11 @@ from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key
 
 LABEL = "positions"
+
+
+def circuit_of(template: str) -> str:
+    """A stand-in SHA-512 for template `template`'s circuit file, which its sessions' public files name."""
+    return hashlib.sha512(b"circuit/" + template.encode()).hexdigest()
 
 
 class Challenger(T.ChallengerCoins):
@@ -117,9 +124,10 @@ class Stream(S.Stream):
         return self.fake.evidence(registration.digest) if self.fake and after in self.fake.sessions else None
 
     def outcome(self, draw: S.Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
-                coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, **kwargs: Any) -> S.Outcome | S.Pending:
+                coins: Mapping[str, Any] | None = _NONE, statements: Any = _NONE, proofs: Any = _NONE,
+                **kwargs: Any) -> S.Outcome | S.Pending:
         """A two-stage sample's evidence is both stages': the first stage's after the registration, the second's
-        (`interior_coins`) after the interior registration."""
+        (`interior_coins`) after the interior registration; its statements and params default to the honest ones."""
         first = draw.replay_sample or draw
         if coins is Stream._NONE:
             coins = self._evidence(first.registration)
@@ -127,12 +135,22 @@ class Stream(S.Stream):
             kwargs.setdefault("interior_coins", self._evidence(draw.registration))
         if statements is Stream._NONE:
             statements = None if draw.replay_sample is None else self.statements(draw)
-        return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, **kwargs)
+        if proofs is Stream._NONE:
+            proofs = None if draw.replay_sample is None else self.proofs(draw)
+        return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, proofs=proofs, **kwargs)
+
+    def proofs(self, second: S.Draw) -> dict[str, Any]:
+        """The auditor's params naming each template's circuit file (`service.template_circuits`), in the interior
+        program's order of its templates (`circuit_of`)."""
+        e = self._entries[second.registration.order]
+        return {"templates": [{"template": t, "circuit": circuit_of(t)}
+                              for t, _ in P.strata(e.interior_program, self.spec.check.query)]}
 
     def statements(self, second: S.Draw) -> list[dict[str, Any]]:
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
         the interior program, its header over the template's slots of the interior registration at its roots (the ports
-        `<template>/<port>` there where the record names ports by template), its sample the second stage's units among
+        `<template>/<port>` there where the record names ports by template), naming its template's circuit file
+        (`circuit_of`), its sample the second stage's units among
         them, counted from its first, and its registered reads: each port the replay block's Definition links
         (`second_stage.replay_links`) of the boundary port its link names, each slot the first row of its cell's replay
         block, and each value the interior registration registers, under a port of its name (None when it reads
@@ -157,6 +175,7 @@ class Stream(S.Stream):
                 for x in links if x.template == t and x.value in at}}
             out.append({"template": t, "registered": {"ports": reads} if reads else None,
                         "header": {"scheme": rec["scheme"], "instances": hi - lo, "units": {"indices": list(range(lo, hi))},
+                                   "circuit_sha512": circuit_of(t),
                                    "frame_v3": {"roots": {p: r["root"] for p, r in roots.items()},
                                                 "domain_ids": {p: r["domain"] for p, r in roots.items()}}},
                         "draw": {"law": "subset", "population": hi - lo, "k": len(units), "units": units}})

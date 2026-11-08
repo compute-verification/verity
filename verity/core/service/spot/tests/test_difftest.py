@@ -1395,7 +1395,7 @@ def run(j):
         sample = DR.proved(drawn["draw"])
         links = SS.replay_links(p["program"], it["replay"]["program_fn"], rec)
         own = SS.Own(tuple(sample), SS.parts(len(sample), strata), it["record"], rec, tuple(DR.proved(inner["draw"])),
-                     links, audit.session_registered(verdicts))
+                     links, audit.session_registered(verdicts), it["circuits"])
         out2 = SS.attach(out2, SS.check(SS.FORM, own, it["statements"]))
         accepted = accepted and out2["accepted"] is True
         staged = {"interior": {"audit": codec.canonical_json(out2).decode(), "draw": inner["draw"], "read": inner["read"],
@@ -1406,9 +1406,9 @@ def run(j):
 
 
 def _interior_of(it) -> dict:
-    """`Pieces.run`'s `interior`, decoded where the Lean decodes it: its params, one replay block's program object, its
-    values, received, source, proved units, instances and statements, and refused where it names links; the rest as
-    given."""
+    """`Pieces.run`'s `interior`, decoded where the Lean decodes it: its params, without the `proofs` that name each
+    template's circuit file (`service.template_circuits`, as `circuits`), one replay block's program object, its values,
+    received, source, proved units, instances and statements, and refused where it names links; the rest as given."""
     if not (isinstance(it, dict) and isinstance(it.get("replay"), dict)):
         raise D.Reject("an interior's replay is a program object")
     if not isinstance(it.get("received"), str):
@@ -1418,7 +1418,12 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior's proved_units is not a list of integers")
     if not (it.get("statements") is None or isinstance(it["statements"], list)):
         raise D.Reject("an interior's statements is a list")
-    decoded = _params_of(it)
+    ip = it.get("params")
+    decoded = _params_of({"params": {k: v for k, v in ip.items() if k != "proofs"} if isinstance(ip, dict) else ip})
+    try:
+        circuits = service.template_circuits(ip.get("proofs"), decoded["query"])
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
     if not it["replay"]:
         raise D.Reject("an interior's replay is not a program descriptor")
     sha = PO.program_sha512(it["replay"])
@@ -1434,7 +1439,8 @@ def _interior_of(it) -> dict:
         raise D.Reject("an interior names no links: the verifier derives them from the replay block's Definition")
     return {**it, "decoded": decoded, "replay_program": PROGRAMS[sha], "values": values, "proved_units": proved,
             "instances": instances, "served": it.get("served"), "session_roots": it.get("session_roots"),
-            "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements")}
+            "record": it.get("record"), "coins": it.get("coins"), "statements": it.get("statements"),
+            "circuits": circuits}
 
 
 def _interior_steps(j: dict, it: dict, k, sample: list[int]) -> dict:
@@ -3455,8 +3461,9 @@ def _two_stage_text(seed: int) -> str:
     """A two-stage run's input (canonical text; the coins' sessions are signed once): the boundary registration over
     `BOUNDARY`'s replay blocks, its first stage from a ledger session's challenger opened after its digest, then the
     interior registration over the replay sample's six proof blocks, logged after it in a window of its own, its second
-    stage from another session's challenger opened after the interior registration's digest; the verdicts accepting, and
-    the second-stage session's statement the honest one (`_second_statement`)."""
+    stage from another session's challenger opened after the interior registration's digest, its params naming its
+    template's circuit file (`_circuit`); the verdicts accepting, and the second-stage session's statement the honest one
+    (`_second_statement`)."""
     rng = random.Random(f"two-stage/{seed}")
     rule, b, i = _rule(TWO_STAGE_RULE), BOUNDARY, INTERIOR
     first_law = DR.derive(b.program, b.query, service.selection_law(rule, b.population))
@@ -3510,7 +3517,9 @@ def _two_stage_text(seed: int) -> str:
         "public": public, "received": RECEIVED, "record": rec, "rule": TWO_STAGE_RULE, "served": None,
         "session_roots": dict(BOUNDARY_ROOTS), "sessions": RUN_SESSIONS, "source": d1.read.hex(),
         "statement": {"instances": len(sample)}, "values": values, "verdicts": verdicts,
-        "interior": {"params": params(i, irec["law"], [rec], d2), "replay": _json(codec.encode_program(Program(BLOCK))),
+        "interior": {"params": {**params(i, irec["law"], [rec], d2), "proofs": {"templates": [
+                         {"template": t, "circuit": _circuit(t)} for t in i.templates]}},
+                     "replay": _json(codec.encode_program(Program(BLOCK))),
                      "values": ivalues, "record": irec, "received": "2026-10-07T00:01:00Z", "source": d2.read.hex(),
                      "coins": d2.evidence(d2.segment.to_json()), "proved_units": None, "instances": None,
                      "served": None, "session_roots": dict(ROOTS), "statements": statements}})
@@ -3564,7 +3573,8 @@ def _restated(ss, x: int):
 #: One change each to a two-stage run: its rule (another k, one per template, one naming another template or one more,
 #: a replay law the record's law isn't, another grain), the
 #: interior registration missing or not one, its record's population, previous record, window or roots, its values,
-#: its copies' query or program, its replay block, its coins, their evidence, its received, proved units, instances,
+#: its copies' query or program, the circuit files its params name (none, another, or not the check's templates' in
+#: their form), its replay block, its coins, their evidence, its received, proved units, instances,
 #: served units, session roots, second-stage statements (none, not a list, or one changed: `_restated`), links it names
 #: (which the verifier derives, so refuses), a verdict that didn't accept, and the reads a verdict reports (the
 #: interior's `x` or the boundary's `x` at their roots, `x` at another or none).
@@ -3590,6 +3600,9 @@ TWO_STAGE_CHANGES = [
      st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "params": {**it["params"], "program": [SETUPS[1].desc, BOUNDARY.desc][x % 2]}}),
      st.integers(0, 63)),
+    (_inner(lambda it, x: {**it, "params": {**it["params"], "proofs": [
+        None, {"templates": [{"template": INTERIOR.templates[0], "circuit": "00" * 64}]}, {"templates": []},
+        {"templates": [{"template": INTERIOR.templates[0], "circuit": "AB" * 64}]}, 5][x % 5]}}), st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "replay": [SETUPS[0].desc, SETUPS[1].desc, INTERIOR.desc, 5, {}][x % 5]}),
      st.integers(0, 63)),
     (_inner(lambda it, x: {**it, "source": [str(it.get("source"))[:-2], str(it.get("source"))[:8], "", "zz", 5][x % 5]}),
@@ -4828,7 +4841,8 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     and `o0`) at the boundary, with both audit records, and rejected on round 2's refusal of the two-stage form alone
     (`two-stage-form`), which the Python allowing the form (`second_stage.FORM`) accepts, as it does the run whose
     session also reads the interior's own `out`, each slot its own rows, which its verifier reports; a session reading
-    its linked `x` from the interior's own is refused (`second-read`), and an interior naming links is no run's. Then
+    its linked `x` from the interior's own is refused (`second-read`), as is one whose interior params name no circuit
+    files (`second-circuit`), and an interior naming links is no run's. Then
     refused at each
     step: a grain the registration's query isn't (`grain`); no interior registration (`interior`); an interior
     registration of another population (`interior-population`), not after the boundary registration (`R6-previous`), or
@@ -4857,8 +4871,10 @@ def test_a_two_stage_run_reaches_every_step(pieces):
     def reported(*ports):
         return _verdict_change(lambda v, c, x: {**v, "registered": {
             **v["registered"], **{p: {"value": p, "root": ROOTS[p]} for p in ports}}})
+    unnamed = _inner(lambda it, x: {**it, "params": {k: v for k, v in it["params"].items() if k != "proofs"}})(case, 0)
     for changed, codes in ((reported("out")(reads(out=[2 * u for u in range(6)])(case, 0), 0), ["two-stage-form"]),
-                           (reported("x")(reads(x=list(range(6)))(case, 0), 0), ["second-read"])):
+                           (reported("x")(reads(x=list(range(6)))(case, 0), 0), ["second-read"]),
+                           (unnamed, ["second-circuit"])):
         out = run(copy.deepcopy(changed))
         assert D.replay(RUN, changed, pieces) == ("output", D.canonical(out))
         assert json.loads(out["interior"]["audit"])["checks"]["statements"]["codes"] == codes, out

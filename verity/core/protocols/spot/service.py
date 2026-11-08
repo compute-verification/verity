@@ -2192,7 +2192,8 @@ class Stream:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
         interior program's strata make, the design's links, which it derives from the replay block's Definition
-        (`second_stage.replay_links`), and the reads the verdicts report), and the registration's
+        (`second_stage.replay_links`), the reads the verdicts report and the circuit files `proofs` names
+        (`template_circuits`)), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
         failing `run` where the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
@@ -2213,7 +2214,7 @@ class Stream:
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
                      ireg.record, reg.record, tuple(D.proved(second.draw)),
                      SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
-                     A.session_registered(verdicts))
+                     A.session_registered(verdicts), template_circuits(proofs, self.spec.check.query))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
                                   verdicts, self.delta, e.sessions, None, replay_session_roots, own_reads=True)

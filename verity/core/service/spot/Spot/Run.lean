@@ -31,9 +31,10 @@ check the stream ran on it, in the stream's order.
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links, which the verifier derives from the replay
-  block's Definition in the challenger's program (`SecondStage.replayLinks`), as its `statements` check
-  (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
+  interior registration, the second stage's cells, the design's links, which the verifier derives from the replay
+  block's Definition in the challenger's program (`SecondStage.replayLinks`), and the circuit files the interior's
+  params name (`templateCircuits`), as its `statements` check (`SecondStage.check`, the two-stage form allowed only
+  when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
 
@@ -214,7 +215,7 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
         drawn := (Draw.proved draw).map Int.toNat,
         links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
-        reported := Record.sessionRegistered i.verdicts }
+        reported := Record.sessionRegistered i.verdicts, circuits := it.circuits }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),
       ("read", Lean.toJson read), ("audit", Json.str (← PyJson.canonical rec_))])])

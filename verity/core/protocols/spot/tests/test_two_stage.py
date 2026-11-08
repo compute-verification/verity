@@ -129,16 +129,16 @@ def _reads_of(statements) -> dict | None:
     return out or None
 
 
-def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of) -> S.Outcome:
+def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, **kwargs) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
-    `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
-    reporting the reads `reads` gives of them."""
+    `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), the verifier of record
+    reporting the reads `reads` gives of them, and `outcome`'s other arguments `kwargs`."""
     _, second = _stages(stream)
     stream.deliver(second, [SESSION])
     if callable(statements):
         statements = statements(stream.statements(second)[0], second)
     return stream.outcome(second, _lean(reads=reads(statements)), {"statement": "stub"},
-                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements, **kwargs)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -237,6 +237,8 @@ def _frame(key: str, f):
     (_restated(template="TwoStageTestOther_v0"), ["second-template", "second-cover"]),
     (lambda s, second: [{k: v for k, v in s.items() if k != "registered"}], ["second-statement", "second-cover"]),
     (_restated(header=None), ["second-statement", "second-cover", "second-reported"]),
+    (_header(circuit_sha512="00" * 64), ["second-circuit"]),
+    (_header(circuit_sha512=None), ["second-circuit"]),
     (_header(instances=Q * N_RHO + 1), ["second-population"]),
     (_header(units={"indices": list(range(1, Q * N_RHO + 1))}), ["second-population"]),
     (_header(scheme="frame-v3-sha512/other"), ["second-roots"]),
@@ -259,7 +261,8 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     and refuses: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
     twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
     when its session's reads are reported, since no statement makes them), and one that isn't the
-    run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
+    run's: another circuit file than the one the params commit for its template, or none (`second-circuit`), another
+    population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
     or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
     cell's replay block, another slot's rows, a boundary port by a port no link names, another port's own, or a linked
     port's own, or a linked port not read (`second-read`). Neither audit record refuses the reads of its own ports at
@@ -269,6 +272,17 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
     assert "registered" not in checks and stream.records[0]["replay_sample"]["audit"]["accepted"]
+
+
+def test_round_two_needs_the_params_to_name_each_template_s_circuit_file():
+    """The run's own statements fail round 2 on the form's refusal alone where the auditor's params name each
+    template's circuit file (`proofs`, the honest prover's by default), and on `second-circuit` where they name none, by
+    both verifiers."""
+    for kwargs, codes in (({}, ["two-stage-form"]), ({"proofs": None}, ["second-circuit"])):
+        stream = _stream()
+        out = _two_stage_outcome(stream, lambda s, second: [s], **kwargs)
+        checks = stream.records[0]["audit"]["checks"]
+        assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks
 
 
 @pytest.mark.parametrize("reads", [
