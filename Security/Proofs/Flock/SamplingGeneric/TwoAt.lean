@@ -4,6 +4,7 @@ public import Proofs.Flock.SamplingGeneric.TwoCode
 public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.Soundness.Assumptions
 public import Proofs.Core.Game.Basic
+public import Proofs.Flock.Claims.Sampling.Reg
 
 /-!
 # The two-stage sampled verifier at its round order (`SampledKSTwo`)
@@ -40,22 +41,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Finset
 
-/-! ## The round order -/
-
-/-- **The deployed round order** of a statement's `k` rounds: the coin the first stage reads (`first`) comes before the
-coin the second stage reads (`second`). -/
-structure Order (k : ℕ) where
-  first : Fin k
-  second : Fin k
-  lt : first < second
-
-/-- **The code at its round order**: `c` with its second stage the rounds after the first stage's coin, and each
-session's rounds those of `c`'s after the second stage's coin. -/
-def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
-  { c with
-    stage2 := fun x => univ.filter fun t => (j x).first < t
-    rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
-
 /-- **A challenger call's bytes are uniform** (`UniformRandomBytes`, A3): at every statement `x`, the bytes `b x`
 returns on a uniform coin. -/
 def CallsUniform (L : Msg → ℕ) (b : (x : Msg) → FlockDeploy.Coin → Fin (L x) → Fin 256) : Prop :=
@@ -64,17 +49,6 @@ def CallsUniform (L : Msg → ℕ) (b : (x : Msg) → FlockDeploy.Coin → Fin (
 variable (c : Code) (reg : Msg → Option RegTwo) (two : AuditStatement → Option Claims.Sampling.Design.Two)
   (L₁ L₂ : Msg → ℕ) (j : (x : Msg) → Order (c.V.k x))
   (b₁ : (x : Msg) → FlockDeploy.Coin → Fin (L₁ x) → Fin 256) (b₂ : (x : Msg) → FlockDeploy.Coin → Fin (L₂ x) → Fin 256)
-
-/-- The first stage's bytes: `b₁ x` on the first stage's coin. -/
-def bytesFirst : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256 :=
-  fun x r => b₁ x (r (j x).first)
-
-/-- The second stage's bytes: `b₂ x` on the second stage's coin. -/
-def bytesSecond : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256 :=
-  fun x r => b₂ x (r (j x).second)
-
-/-- **The two-stage sampled verifier's code at its round order.** -/
-abbrev codeTwoAt : Code := codeTwo (c.atOrder j) reg L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂)
 
 /-! ## The bytes -/
 

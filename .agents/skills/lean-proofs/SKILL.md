@@ -104,8 +104,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 - **A changed record is a changed claim**: an `--update` change you didn't mean is your edit changing what that
   guarantee says. Undo it, or say so in the PR and paste the printout.
 - **A move is not a change**: map old names to new (declarations or namespaces) in `MOVES.json` for `check.py --update
-  --moved MOVES.json PKG` on the record as it was; a lift (`theorem X : e` to `theorem X : G`, `G` unfolding to `e`)
-  needs no map.
+  --moved MOVES.json PKG` on the record as it was (the fast path's `--records PKG --update --moved MOVES.json` takes it
+  to PKG's requirers too); a lift (`theorem X : e` to `theorem X : G`, `G` unfolding to `e`) needs no map.
 - **One shape** (`shape` in the README): a property takes its inputs, one hypothesis that its function returned an
   outcome, and premises (heads under `shape.premises`, or a conjecture); the rest, in any binder order, is its
   conclusion, a probability's acceptance inside the event. What doesn't fit yet is under `shape.frozen`, its reason
@@ -117,7 +117,8 @@ The rules are AGENTS.md "Lean"; the Lean check's reference is `tools/verity/lean
 ## Standards
 
 The checks in `tests/test_lean_packages.py` and `tests/test_retired_terms.py` print their fixes. Two they don't
-hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation3 "X"` makes `X` a token).
+hold: Mathlib's names, and no binder `X` or `Y` where ArkLib is imported (its `notation3 "X"` and `"Y"` make each a
+token, and the parse error lands far from the binder).
 
 ## Before the PR
 
@@ -125,8 +126,9 @@ hold: Mathlib's names, and no binder `X` where ArkLib is imported (its `notation
   tools/verity/check/tests/test_lean_*.py tests/test_lean_packages.py`.
 - The PR says which guarantees changed and why; the ledger's status rows match `lean-audit.json`.
 - Fetch and merge `main`, never rebase, with `python tools/verity/lean/merge.py --install` run once per clone so
-  `lean-audit.json` merges without a rebuild and never conflicts; each `merge.py:` warning names an entry it took from
-  one side, so read them.
+  `lean-audit.json` merges without a rebuild, by `origin/main`'s copy of the driver; each `merge.py:` warning names an
+  entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
+  the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
   commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
   records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
@@ -162,8 +164,7 @@ Their history is in the decisions log.
 - Every security guarantee has an honest lemma (its hypotheses hold at the honest deployed instance) and a nontrivial
   one (its conclusion fails for a verifier that accepts everything), in the lock as a claim's `meets` and `fails`;
   failing either, it says nothing. Both build their instance (`witnesses` in `check.py`), taking
-  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one named
-  premise and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
+  only listed assumptions; an exclusion's nontrivial lemma is a circuit where the other premises hold and one assumption and the bound fail, or, for an exclusion with no premise, one where a tighter bound fails. `nontrivial` may
   be a list: each lemma past the first has that exclusion form, whatever the guarantee's kind, and drops a premise no
   earlier one drops (a `Wf` negation, when `Wf` is a premise).
 - A property's premises are assumptions about the world the function can't see; what the code can see, it checks. A

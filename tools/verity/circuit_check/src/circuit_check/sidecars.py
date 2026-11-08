@@ -3,7 +3,8 @@
     fp8.py                    a Definition module (`verity.ml.definitions.registry.fp8`)
     fp8.circuit-check.py      its bindings, in `targets.py`'s forms: root functions (``_boolean_roots``, any ``_X_roots``,
                               `targets.root_functions`), `_model_roots` entries and ``TEMPLATE_PARAMS`` entries; a Program
-                              root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`)
+                              root too large to build whole goes in ``_by_calls_roots``, checked by its calls (`by_calls`);
+                              a family registered over a range of statics, ``RANGES``: each rule and its spots (`ranges`)
     fp8.circuit-check.json    its pins (`checks`' lowering counts and circuit digest, ``type``, by kind: ``definitions``,
                               ``pieces``, ``units``; and the circuit digest of a gated Definition or of one bound at
                               served statics over `targets.MAX_GATES`, ``digests``, which keeps it in ``--all``)
