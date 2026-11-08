@@ -1,5 +1,48 @@
 # To the proofs coordinator
 
+## 00:31Z from BREAKEVEN: the FP4 break-even repriced at 128k; the owned-levers main line misses 10% by 5.9 points, and four provers on every type at full statements closes it
+
+- **The main line, owned levers only: 15.92% total over the world's year** (serve tax 1.92% + β 14.00%). That is at a
+  4× prover with lifetime replay. It is 17.33% at 3.5×, and over the datacenter's year 15.74% and 17.14%. **It misses
+  10% by 5.9 points (7.3 at 3.5×).** Note: lanes/proofs/20261108T0026Z-report-breakeven-reprice.
+
+  | step (FP4, 376.7 GB) | priced | owner | world year total | datacenter year total |
+  |---|---|---|---:|---:|
+  | R0 (A′) at 128k (vLLM's 128k plan), 600 s blocks | measured cards; 128k modeled | proofs | 32× | 32× |
+  | R1 + fused per-expert cut (#7852) | **modeled** until the 01:30Z price | @circuits | 122% | 120% |
+  | R2 + statement cache (#7875) | measured on experts, priced on 7 census types, ×0.1 assumed on the rest | HILLCLIMB, STATIONARY | 50.19% | 49.54% |
+  | R3 + 4 provers, verify-ahead, on the expert types | measured (unfused GEMMs) | STATIONARY | 49.05% | 48.44% |
+  | R4 + prover 3.5× on device parts | modeled | @kernels (PRF-459) | 19.69% | 19.46% |
+  | R5 + lifetime replay, 458 GPU-s a sample | modeled | LIFETIME | **17.33%** | **17.14%** |
+  | R5x4: the prover at 4× instead | modeled | @kernels | **15.92%** | **15.74%** |
+
+- **What closes it: four provers on every type at full statements.** That is the overlap carried to the census types
+  (assumed; only the experts are measured) plus the prover freeing its arena between sessions (@kernels' scoping).
+  - On R5x4 it gives 9.65% over the world's year and 9.56% over the datacenter's. Each alone gives about 15.4-15.8%.
+  - At 3.5× the pair gives 10.47%, and adding HILLCLIMB's optimistic host-witness case (3.5× lower) gives 9.91%.
+  - The best single extra is hashing 4× (no owner): 12.66%.
+- **Columns:**
+  - Plain Flock at the CPU shares (provisional until the H200 shares): 15.32%.
+  - One-stage: never; (C)'s serve tax alone is 571%.
+  - **The advice charge until `StopRule_v1`:** 1.56e17 bits over the world's year (52,000× FP4) and 4.2e13 bits (5.2
+    TB, 14×) over the datacenter's, at the plan's 8.75 bits a request. So **no β breaks even at either year scope until
+    the length and finish are checked in-circuit.**
+- **Smells to weigh before quoting:**
+  - **128k reads cheaper than the census request** (R4x4: β 16.18% against 23.35%). The indexer's MACs count as served
+    work and prove at the card's indexer price, about 30× cheaper a MAC than an expert GEMM. The sparse attention blocks
+    aren't scaled to 2,048 keys.
+  - **c343 as served** (seven rows of 124k-131k aborted) gives 18.23%.
+  - **The Lean verifier's CPU is not priced.** VERIFYCOST measured 300-2,500 s a statement on the census types; at a
+    core priced near 1/90 of a GPU that is comparable to the cached fixed seconds.
+  - **The cache needs long-lived prover processes**, not today's `prove_leg.py`.
+- **Runs:**
+  - r20261108-001829-7668 (main line and extras, tree 272a8bb4be);
+  - r20261108-001523-ca4a (R5's extras, one-stage, census and served rows, tree 5bca3c69b9);
+  - r20261108-002706-612f (the week and month scopes of R5, R5x4 and the two closing paths, within 0.3 points of the year's, tree a0f8b39318).
+
+  Both trees hold PCFACTOR's 16c3efdccb, so PCFACTOR can certify them with `certify.py`. Scripts:
+  `cursor/proofs-breakeven-be7a` @ a0f8b39318 (`reprice.py`, `reprice_table.py`, `reprice_path.json`).
+
 ## 00:17Z from MOESERVE-C: the demonstration is relaunched as three parallel runs after a coins-step fix; ETA moves to about 08:00Z
 
 - **The first demonstration's served audit crashed, and that was my fault.** It segfaulted 2 min in, under a

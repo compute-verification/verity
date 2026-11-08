@@ -906,3 +906,24 @@ has the pieces), so use today's column.
 - 21:25Z (proofs) Daniel, 1:02 PM PST: (1) **world year is the headline again**, conditional on vllm's VLLM-228 checks at 22:30Z (all 7 traces at 0 bits with the tick, and the verifier bound to the prefix-cache recompute); prepare both and lead with world year. (2) **The post won't claim zero knowledge**: no ZK in captions, tables or trust lists. (3) 'Sampled proofs' becomes **SPOT** everywhere (RENAME does the docs now and the code move after Sunday); say SPOT in new prose.
 - 21:25Z (proofs) NEW, after the advice item: **VLLM-243**, the tick's trade-off diagram for a lab ML engineer, by Sun 06:00Z. Panels: (a) a timeline schematic of continuous vs tick admission; (b) latency and throughput against the tick period, with the no-tick point (vllm's table, Sun 03:00Z); (c) the advice term with and without the tick at datacenter and world year against the FP4 line. Read the issue for the questions it must answer.
 - 21:35Z (proofs, PLANCHECK): [#7845](https://github.com/compute-verification/verity/pull/7845) is marked ready. Lean now checks every one-stage and request-level design in Figure 1, in both the total-cost and the overhead form. `figure1.run`, `total_cost.run` and `figures.py` check by default (`lean=True`, which builds `sampled-proofs-plancheck` with `lake` on first use), and a design Lean refuses raises. Keep the default when you render figures. Pass `lean=False`/`--no-lean` only in tests. Against v2.4, Lean refused nothing in any of the six scopes, world year included. The exfiltration counts moved by at most 4.1e−7 of their value, and every two-stage series is unchanged. The interface from 16:45Z is unchanged.
+
+## 2026-11-08T00:31Z from BREAKEVEN: the 01:30Z surfaces and a path for Figure 5, repriced at 128k on the measured levers
+
+- **Surfaces** (each run's `out/breakeven_surface.json`, rows by case and scope, FP4 and FP8 β, the tax in each row):
+  - r20261108-001829-7668: the main line R0-R5x4 and R5x4's extras, at the world's and the datacenter's year.
+  - r20261108-001523-ca4a: R5's extras, the one-stage rows R1-1s and R5x4-1s, and R0-census, R4x4-census and
+    R5x4-served.
+  - r20261108-002706-612f: R5, R5x4, R5x4+all+arena and R5+all+arena+host at the week and month scopes.
+- **Path:** `benchmarks/spot_figures/breakeven/reprice_path.json` on `cursor/proofs-breakeven-be7a` @ a0f8b39318, in
+  `figure5.PATH`'s format.
+  - 10 steps: measured R0, R2 and R3; modeled R1, R4, R5 and R5x4; three assumed extras. Each carries a note.
+  - The one-stage series has cases at R1 and R5x4; both are "never", since (C)'s serve tax alone is 571%.
+  - Render: `figure5.py 7668.json ca4a.json 612f.json --path reprice_path.json`.
+- **FP4 total over the world's year (the datacenter's year):**
+  - Owned levers end at 17.33% (17.14%) with a 3.5× prover and 15.92% (15.74%) with a 4× prover, so they miss 10%.
+  - The closing step is "4 provers on every type, full statements" (assumed): 9.65% (9.56%).
+  - Then the host witness cut: 9.09% (9.01%). Then hashing 4× (no owner): 7.10% (7.03%).
+- **The advice is its own term, not in the surface.** Until `StopRule_v1` its charge is 1.56e17 bits over the world's
+  year (52,000× FP4) and 4.2e13 bits (14×) over the datacenter's, at 8.75 bits a request. It sits above the FP4 line at
+  every β, so draw it as a flat line, conditional, beside the path.
+- Note: lanes/proofs/20261108T0026Z-report-breakeven-reprice (tables, levers, caveats).
