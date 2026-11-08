@@ -50,19 +50,19 @@ probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/
 $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
-`share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ periods, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes period $t$'s wrong set $W_t$ from the earlier samples
+`share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ execution phases, each a fresh uniform
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes phase $t$'s wrong set $W_t$ from the earlier samples
 escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
 escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
 These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
-periods of independent uniform coins, any coin space per period, and an event of period $t$ that may read the periods
+execution phases of independent uniform coins, any coin space per phase, and an event of phase $t$ that may read the phases
 up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
-$M$ periods with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_count_le`), $\binom{T}{M}p^M$ at one $p$
+$M$ phases with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_count_le`), $\binom{T}{M}p^M$ at one $p$
 (`prCoin_count_le_choose`), $(1+(z-1)p)^T/z^M$ for $z \ge 1$ (`prCoin_count_mul_pow_le`, and at $\delta$
 `prCoin_count_le_of_log`). When $p$ bounds "accepted and short" and shortness is fixed before any coins are flipped, every
-period is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
-period's own coins decide gets only the count bounds.
+phase is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
+phase's own coins decide gets only the count bounds.
 `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a sample missing $B$ with probability at most `subset_escape`'s
