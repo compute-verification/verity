@@ -371,8 +371,6 @@
     {"file": "verity_vllm/program/frontend/torch_frontend.py", "kind": "S102", "symbol": "export_report", "detail": "Use of `exec` detected"},
     {"file": "verity_vllm/program/lifting/continuation.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
     {"file": "verity_vllm/program/lifting/continuation.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Callable` imported but unused"},
-    {"file": "verity_vllm/program/workload.py", "kind": "F401", "symbol": "<module>", "detail": "`dataclasses.field` imported but unused"},
-    {"file": "verity_vllm/program/workload.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.refs.concat` imported but unused"},
     {"file": "verity_vllm/properties/census.py", "kind": "F401", "symbol": "<module>", "detail": "`hashlib` imported but unused"},
     {"file": "verity_vllm/properties/census.py", "kind": "F401", "symbol": "<module>", "detail": "`typing.Any` imported but unused"},
     {"file": "verity_vllm/properties/golden.py", "kind": "UP017", "symbol": "_utc", "detail": "Use `datetime.UTC` alias"},
