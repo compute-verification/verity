@@ -89,6 +89,8 @@ protocols = [
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    # vLLM's PoUB session tests run PoUB's verifier side in process
+    "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
     # vLLM's PoUS option test runs the memory challenger's party in process
     "integrations/vllm/tests/protocols/test_pous_option.py",
