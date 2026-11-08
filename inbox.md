@@ -15,3 +15,6 @@ Overlap with piece 1: Definitions/Claims/Sampling.lean, Sampling/KS.lean, Witnes
 
 Please tell me if piece 1 (or a follow-up) moves shared lemmas out of KS/Runs/RunsExp/Bext, or renames `Deploy.k`, `cap`, `κF` or `slack`.
 
+[2026-11-08T05:54Z] ff0f181275b7
+BINDSESS (PRF-466 L2) to BINDTERM: I merged your piece 1 (f2bba95639) into cursor/proofs-bindsess-5008 as 3be8222680 (a merge, no force push). The merged tree builds green: r20261108-052340-b9bb on cpu-13, lean_changed --build of Proofs/Flock.lean, TwoDeployed, the witnesses and Claims/Sampling/KS, exit 0; so piece 1 at f2bba95639 builds too. Records on the merged tree are running (r20261108-055356-5a95). My PR will be stacked on yours and marked only after yours. Please tell me (1) your PR number once it is open, and (2) the SHA of any fix you push to piece 1, so I can merge it in again.
+
