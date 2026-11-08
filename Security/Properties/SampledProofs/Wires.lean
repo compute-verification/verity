@@ -15,7 +15,9 @@ outputs and reads the output rows its wired rows hold, one for each entry of a w
 input rows are no unit's writes, so they add no dependency, and the population leaves them out (`input` is empty).
 
 `WiresAcyclic`: the dataflow of a wiring `check` accepts is acyclic (`Population.Dataflow.Acyclic`): no unit depends on
-itself through a chain of units each reading what the one before writes.
+itself through a chain of units each reading what the one before writes. Its witnesses' wirings are here (`Wires.honest`,
+a template whose second unit reads its first under a stated order; `Wires.selfRead`, a unit wired to read itself), so
+their statements read no proof.
 -/
 
 @[expose] public section
@@ -35,5 +37,22 @@ def wiresDataflow (c : Wiring) : Population.Dataflow (String × Int) (String × 
 /-- The dataflow of a wiring `check` accepts is acyclic. -/
 def WiresAcyclic : Prop :=
   ∀ (c : Wiring) (S : Summary), check c = .ok S → (wiresDataflow c).Acyclic
+
+namespace Wires
+
+/-- A template whose second unit reads its first unit's output, with its order stated: `check` accepts it. -/
+def honest : Wiring :=
+  { templates := [("g", ⟨2, [("x", ⟨1, 1⟩)], [("o", 1)]⟩)], cuts := [],
+    wires := [{ reader := "g", port := "x", writer := "g", out := "o", start := 1, radix := [1], base := 0, step := [0],
+                cut0 := 0, cuts := 1 }],
+    order := some [("g", 0, 1), ("g", 1, 1)] }
+
+/-- A unit wired to read its own output: its dataflow has a cycle. -/
+def selfRead : Wiring :=
+  { templates := [("g", ⟨1, [("x", ⟨1, 1⟩)], [("o", 1)]⟩)], cuts := [],
+    wires := [{ reader := "g", port := "x", writer := "g", out := "o", start := 0, radix := [1], base := 0, step := [0],
+                cut0 := 0, cuts := 1 }] }
+
+end Wires
 
 end Properties.SampledProofs

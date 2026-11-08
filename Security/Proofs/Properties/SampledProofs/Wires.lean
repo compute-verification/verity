@@ -10,8 +10,8 @@ another reads through an entry of a wire, so it is that entry's edge of `Wiring.
 dependencies is a chain of those edges (`Wires.transGen_reads`), and `check_acyclic` refuses one from a unit back to
 itself.
 
-The honest witness is a template whose second unit reads its first under a stated order, the shape of a window's
-circuit; the nontrivial one is a unit wired to read its own output, whose dataflow has a cycle.
+The honest witness is `Wires.honest`, a template whose second unit reads its first under a stated order, the shape of a
+window's circuit; the nontrivial one is `Wires.selfRead`, a unit wired to read its own output, whose dataflow has a cycle.
 -/
 
 @[expose] public section
@@ -40,19 +40,6 @@ theorem transGen_reads {c : Wiring} {x y : String × Int} (h : Relation.TransGen
   induction h with
   | single h => exact .single (dep_reads h)
   | tail _ h ih => exact .tail ih (dep_reads h)
-
-/-- A template whose second unit reads its first unit's output, with its order stated. -/
-def honest : Wiring :=
-  { templates := [("g", ⟨2, [("x", ⟨1, 1⟩)], [("o", 1)]⟩)], cuts := [],
-    wires := [{ reader := "g", port := "x", writer := "g", out := "o", start := 1, radix := [1], base := 0, step := [0],
-                cut0 := 0, cuts := 1 }],
-    order := some [("g", 0, 1), ("g", 1, 1)] }
-
-/-- A unit wired to read its own output. -/
-def selfRead : Wiring :=
-  { templates := [("g", ⟨1, [("x", ⟨1, 1⟩)], [("o", 1)]⟩)], cuts := [],
-    wires := [{ reader := "g", port := "x", writer := "g", out := "o", start := 0, radix := [1], base := 0, step := [0],
-                cut0 := 0, cuts := 1 }] }
 
 end Wires
 
