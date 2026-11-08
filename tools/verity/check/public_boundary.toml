@@ -91,11 +91,13 @@ protocol_tests = [
     "integrations/vllm/tests/program/test_io_shell.py",
     "integrations/vllm/tests/commit/test_memory_map.py",
     "integrations/vllm/tests/protocols/{remote_bandwidth,test_pous_option.py,pous_gpu.sh,pous_gpu.py}",
+    "integrations/vllm/tests/pipeline/test_serve_remote.py",
+    "integrations/vllm/tests/engine/int8_store_gpu.py",
 ]
-# vLLM's adapter of PoUS, which `verity_vllm.protocols.adapter` loads by name and refuses as not on this tree where it
-# is absent
+# vLLM's adapter of PoUS and driver of the bandwidth audit, which `verity_vllm.protocols.adapter` and `driver` load by name
+# and refuse as not on this tree where they are absent
 adapters = [
-    "integrations/vllm/verity_vllm/protocols/pous.py",
+    "integrations/vllm/verity_vllm/protocols/{pous.py,remote_bandwidth}",
 ]
 # vLLM's migration of superseded Definitions, which runs the circuit check, and the tests that read it
 checks = [
