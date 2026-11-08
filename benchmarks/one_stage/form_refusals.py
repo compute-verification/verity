@@ -3,13 +3,13 @@ M0 `--zk` sessions, each of N instances with every unit sampled and bound to its
 `forged_proofs.py` stages them, differing in the statement's form:
 
     honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)               verify --zk accepts
-    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its   refused for its version
-               rows not in the file                                                          (`ProvedScope.servedForm`)
+    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its   verify --zk accepts
+               rows not in the file (`ProvedScope.scopeOkT`)
     tail       `_tail`, its MUFU reads in lookup slots, its last stage returning the         refused for its form
                outputs (`ProvedScope.scopeOkI`)                                              (`Flock.KsScope`)
 
-`verify` gives either reason only once every earlier check, the proof's included, has passed. Lean's verdict on the honest
-session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
+`verify` gives the tail's reason only once every earlier check, the proof's included, has passed. Lean's verdict on the
+honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\
@@ -50,7 +50,8 @@ from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import tmpl as TM  # noqa: E402
 from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
-#: statements outside the form, each refused for another reason: typed, public outputs, plain leaves, templated
+#: statements the flat session's files don't fit, each refused for its own reason: typed, public outputs, plain leaves,
+#: templated
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
               FC.TMPL_STATEMENT)
 FORM = ": a statement form the soundness proof does not cover"
@@ -137,7 +138,7 @@ def main() -> int:
                                               sort_keys=True, default=str))
     honest = cases["honest"]
     ok = (honest["lean"]["accepted"] and not any(v["accepted"] for v in honest["wrong_tags"].values())
-          and not cases["templated"]["lean"]["accepted"] and cases["templated"]["lean"]["digest"] is not None
+          and cases["templated"]["lean"]["accepted"]
           and not cases["tail"]["lean"]["accepted"] and str(cases["tail"]["lean"]["why"]).endswith(FORM))
     return 0 if ok else 1
 
