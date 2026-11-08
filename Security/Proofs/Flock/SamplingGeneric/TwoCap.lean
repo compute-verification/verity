@@ -32,8 +32,9 @@ def Design.Two.wrongBlocks (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ �
 
 /-- A footprint counts at most its cell's proof blocks. -/
 theorem footprint_le_card (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (Pt Pρ : Partition)
-    (w : Wit) (ι : ℕ → ℕ → Bool) (ρ t : ℕ) : footprint H Cm s Pt Pρ w ι ρ t ≤ (cell Pt Pρ ρ t).card :=
-  card_filter_le _ _
+    (w : Wit) (ι : ℕ → ℕ → Bool) (ρ t : ℕ) : footprint H Cm s Pt Pρ w ι ρ t ≤ (cell Pt Pρ ρ t).card := by
+  classical
+  exact card_filter_le _ _
 
 /-- **A cell with one incorrect proof block** escapes with probability `1 − min(k, n)/n`. -/
 theorem escCell_one (k : ℕ) {n : ℕ} (hn : 0 < n) : escCell n k 1 = 1 - ((min k n : ℕ) : ℝ) / (n : ℝ) := by
@@ -89,8 +90,7 @@ theorem Design.Two.card_wrongBlocks_lt (d : Design.Two) (Pt : Partition) (q : �
     (hK : (1 - r₁ * r₂) ^ K ≤ δ) {fp : ℕ → ℕ → ℕ} (hfp : fp ∈ d.M Pt δ)
     (hcell : ∀ ρ t, fp ρ t ≤ (cell Pt d.part ρ t).card) :
     (d.wrongBlocks Pt fp).card < K := by
-  by_contra hge
-  push_neg at hge
+  refine Nat.lt_of_not_le fun hge => ?_
   have hδ : δ < d.Pa Pt fp := hfp
   have hx0 : 0 ≤ 1 - r₁ * r₂ := by nlinarith [mul_nonneg (sub_nonneg.2 hr₁') hr₂]
   have hx1 : 1 - r₁ * r₂ ≤ 1 := by nlinarith [mul_nonneg hr₁ hr₂]
@@ -99,7 +99,7 @@ theorem Design.Two.card_wrongBlocks_lt (d : Design.Two) (Pt : Partition) (q : �
       (1 - r₁ * r₂) ^ (d.wrongBlocks Pt fp).card := by
     calc ∏ ρ ∈ range d.part.blocks.length, (1 - q ρ + q ρ * d.esc Pt fp ρ)
         ≤ ∏ ρ ∈ range d.part.blocks.length, (if ρ ∈ d.wrongBlocks Pt fp then 1 - r₁ * r₂ else 1) := by
-          refine prod_le_prod (fun ρ hρ => ?_) fun ρ hρ => ?_
+          refine prod_le_prod₀ (fun ρ hρ => ?_) fun ρ hρ => ?_
           · obtain ⟨h1, h2⟩ := hq ρ (mem_range.1 hρ)
             nlinarith [d.esc_nonneg Pt fp ρ, mul_nonneg (le_trans hr₁ h1) (d.esc_nonneg Pt fp ρ)]
           · obtain ⟨h1, h2⟩ := hq ρ (mem_range.1 hρ)
@@ -127,7 +127,6 @@ theorem Design.Two.card_wrongBlocks_lt_subsetInputs (d : Design.Two) (Pt : Parti
   have hr₁' : (Q : ℝ) / c.flatten.length ≤ 1 := div_le_one_of_le₀ (by exact_mod_cast hQ) (Nat.cast_nonneg _)
   refine d.card_wrongBlocks_lt Pt _ (d.subsetInputs_Pa_le hd hP hQ) (fun ρ _ => ?_) hr₁ hr₁' hr₂ hr₂' hrate hK hfp
     hcell
-  dsimp only
   split_ifs
   · exact ⟨le_rfl, hr₁'⟩
   · exact ⟨hr₁', le_rfl⟩
