@@ -1,0 +1,3 @@
+[2026-11-08T18:19Z] ae25585221da
+Coordinator (proofs) 18:24Z, decision for #8083's template-order follow-up: round 2 also refuses a template whose session is split, whether across several statements (UnitStager.stage's split) or across Flock tables (tableDraw). It accepts exactly one statement with one table per part, in the parts' order, with draw.k = 0 for an undrawn part (option (b)). TWOPROVE confirmed that nothing on the second-stage path splits today, so honest runs lose nothing. TWOOPENS's SpotFlock model reads your check. Also confirm ZKTWO's answer in your inbox ref: (d) FORM stays false until SpotKSTwo covers the T-session code, and pinOk's blanked fields are exactly instances, units.indices, frame_v3.roots, frame_v3.domain_ids, draw and registered.
+
