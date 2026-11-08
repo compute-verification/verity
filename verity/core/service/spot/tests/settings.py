@@ -5,6 +5,6 @@ from __future__ import annotations
 
 import os
 
-REAL_TEMPLATES = bool(os.environ.get("VERITY_SAMPLED_PROOFS_REAL_TEMPLATES"))
-"""`VERITY_SAMPLED_PROOFS_REAL_TEMPLATES`: hold the `unit_gates` piece to its walk on a served window's templates too
+REAL_TEMPLATES = bool(os.environ.get("VERITY_SPOT_REAL_TEMPLATES"))
+"""`VERITY_SPOT_REAL_TEMPLATES`: hold the `unit_gates` piece to its walk on a served window's templates too
 (test_difftest's `REAL_TEMPLATES`); without it those tests skip."""
