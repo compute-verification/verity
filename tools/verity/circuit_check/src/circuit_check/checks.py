@@ -83,7 +83,7 @@ from verity.ml.circuits.evaluation import ScalarReference, evaluate, kernels, se
 from verity.ml.circuits.evaluation.reference import resolve, signature_of, standalone_call
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean import is_boolean
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind, conformance_label
+from verity.ml.circuits.defs import PrimitiveDefinition, conformance_label
 
 from . import bodies as BD
 from . import sidecars as SC
@@ -184,9 +184,7 @@ def _where(prim: str, scope: str) -> str:
 # --- correspondence ---------------------------------------------------------------------------------------------------------
 
 def _gates(t: Any) -> int:
-    if isinstance(t, (PrimitiveDefinition, ScalarReference)):
-        return 1
-    return int((bind(t) if isinstance(t, CompositeDefinition) else t).gates)
+    return 1 if isinstance(t, (PrimitiveDefinition, ScalarReference)) else int(t.gates)
 
 
 def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
@@ -626,7 +624,7 @@ def _word_vectors(word: Any, pw: Sequence, opts: Options) -> tuple[int, int]:
     least ``opts.min_vectors``, at most half of them all-edge; and at least `WORD_RANDOM_FLOOR` of them random either way, so a
     Definition too large for the full count is still compared on random vectors."""
     full = 16 * opts.vectors
-    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(word))))
+    n = max(opts.min_vectors, WORD_RANDOM_FLOOR, min(full, 16 * opts.reference_budget // max(1, _gates(resolve(word)))))
     return n, min(edge_count(pw), n if n == full else n // 2, n - WORD_RANDOM_FLOOR)
 
 
