@@ -288,6 +288,7 @@
   },
   "Verity.MemCheck.Checked": {
    "owner": "@proofs",
+   "digest": "59c9fbd9e8827097c111a5a48fff2bc26389d88352bc98f1b264086b27006aff",
    "why": "The memory check's acceptance: what the guarantee says is what a log the check accepts read."
   },
   "Verity.Partition.Fits": {
@@ -23932,13 +23933,55 @@
    "unfolded_hash": "f562a21be2ba94c1d9e6d3380ba1b7539da29a708ff975ce67d3506ac1ebc0e6"
   },
   "Verity.SecurityProofs.MemoryChecked": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["Verity.SecurityProofs.MemoryChecked : Verity.Guarantees.MemoryChecked"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Verity.MemCheck.Checked"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "793f8bc52e7423298ffd56585d4fa3d7eafe07a401a89662ebf0f2294e81dd03",
+   "unfolded_hash": "2882e47a03fc0337d15571cd202a4d237a904c6dbafd6e1a079f6d5a04d4afd1"
   },
   "Verity.SecurityProofs.MemoryChecked_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.MemoryChecked_honest :",
+    "  Verity.MemCheck.Checked (fun x => 0)",
+    "    (List.cons { a := Bool.true, v := 0, t := 0, w := 5, now := 1 }",
+    "      (List.cons { a := Bool.true, v := 5, t := 1, w := 7, now := 2 }",
+    "        (List.cons { a := Bool.false, v := 0, t := 0, w := 3, now := 3 } List.nil)))",
+    "    (Finset.instInsert.insert Bool.true (Finset.instSingleton.singleton Bool.false)) fun a =>",
+    "    ite (Eq a Bool.true) { fst := 7, snd := 2 } { fst := 3, snd := 3 }"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ef40f8c9ce87b8a282d4457da797ba2ade9e2500303224e8102c78386bc94069",
+   "unfolded_hash": "deeff913967a11d0df722e6c87f75beb9088eb1a9bcdd0db62d6368652a960b6"
   },
   "Verity.SecurityProofs.MemoryChecked_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Verity.SecurityProofs.MemoryChecked_nontrivial :",
+    "  Not",
+    "    (Verity.MemCheck.ReadsCorrect (fun x => 0) (List.cons { a := Bool.true, v := 9, t := 1, w := 9, now := 1 } List.nil)",
+    "      (Finset.instSingleton.singleton Bool.true) fun x => { fst := 0, snd := 0 })"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d21255e817f90bf794af5cade4d50ca9367901f165cbd2d41aa9b6887680f6da"
   },
   "Verity.SecurityProofs.NaiveBeatsStrassenServed": {
    "owner": "@compute-research",
@@ -32345,9 +32388,10 @@
    }
   },
   "Definitions.Core.Guarantees.MemCheck": {
-   "digest": "20566d150f68bccb4c315d8d2f55dd2fc06c2a849840df7c93f6758a22b8371e",
+   "digest": "45a76caf6ca472623a2c90195d819e50a2105c5f11c4db4a77bb2d07fef0322a",
    "definitions": {
     "Verity.Guarantees.FingerprintCollision": "971e7f16cf9698753186838ebb18480de9c996eb4e108db6cb73b777d7297ce0",
+    "Verity.Guarantees.MemoryChecked": "26d1e44db6cc26394becfaa42e3a70f444ee03811c50ac4e711f04f8017daf9b",
     "Verity.Guarantees.PrintCollision": "b9be6144e6f8626b6d4a817d79dfb1a2a2d0046ebfe548f64b5774fc2d2e9c87"
    }
   },
@@ -32551,11 +32595,22 @@
    }
   },
   "Definitions.Core.MemCheck": {
-   "digest": "8c70559dc666c382b05a6f4b3018135d2ebf3ea92581aaf064c8928f7bfe736d",
+   "digest": "b4be4c41602f0796ab67a1a7b73c556dd9b480c93320576f1a7ff6615f53b32d",
    "definitions": {
+    "Verity.MemCheck.Access": "0b86140401877645156b61983aacede482f9859d54c94ba658b1b9ff36605d47",
+    "Verity.MemCheck.Access.a": "0eb8ed78adce61bafab8ed3c1a00e44d3d3812663db72e968d4e737f92274e80",
+    "Verity.MemCheck.Access.now": "3eea38ec1c0adafd6f7314f47a4301f8332aaa4dbcc2cb6094015e48fafa1f8a",
+    "Verity.MemCheck.Access.t": "cf73b3a028292df191e28de30b2b56a5af085832b067435ca07070527855d2ac",
+    "Verity.MemCheck.Access.v": "0a6849b6fa0cd4c669bef88c4a854bf87dc98b55e26c7633da99e057c90d1f37",
+    "Verity.MemCheck.Access.w": "ca1be0cffb1e255a1b2871995b4ff40f442243bfa1d169efebdb55d2f3bc4210",
+    "Verity.MemCheck.Checked": "59c9fbd9e8827097c111a5a48fff2bc26389d88352bc98f1b264086b27006aff",
+    "Verity.MemCheck.ReadsCorrect": "f16459c285e75536f86988a59e2e2f3da0ffad5331d4475b46dae0e075b6dee3",
     "Verity.MemCheck.element": "a1cc316768cfdc593c2dcb6a33922233bf940f28c8dbf708a1d9d5dca86a719e",
     "Verity.MemCheck.fingerprint": "582656bb3d8964c1e98f7c8610f5d541e37b4bd6b6564238d8105be48e508f84",
-    "Verity.MemCheck.gf128Fintype": "95d4397c4d5a249b1e88fa145b2872f004a6daef6a709e993711783df83ac78d"
+    "Verity.MemCheck.gf128Fintype": "95d4397c4d5a249b1e88fa145b2872f004a6daef6a709e993711783df83ac78d",
+    "Verity.MemCheck.ram": "033f013194a09b9835b83f43a54f7fb4bb4f62952d93bbdca53688846827dd86",
+    "Verity.MemCheck.reads": "a710f9bf19314535d9654e0636976dd40975f46540c7bc8cad3d1686c8388a8f",
+    "Verity.MemCheck.writes": "1c38908ef9e8367fde00aec41c3ab3f68b095301e6825c57cb0c90a3a633444a"
    }
   },
   "Definitions.Core.NaiveStrassen": {
