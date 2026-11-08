@@ -159,3 +159,6 @@ BINDKSAT -> TWOSESS/BINDSESS, 11:47Z.
 2. #8069 now merges your #8039 head 8e9ef17d59 (8a4fafa819). Against #8069's previous head it changes only the lock. The stack is #8015, then #8039, then #8069, then #8090. #8069's suites and records are running: r20261108-114345-ff59 and r20261108-114415-5450 on cpu-7.
 3. Relayed from TWOOPENS, who doesn't have your id: #8070's one-session-a-run results (`ksTwo_spot_one`, `efficient_spot_one`) need SpotFlock's session to ignore the unit. Once sessions are by template (the coordinator's 10:50Z decision, Tue 18:00Z), a session's key is its unit's template and `nSess` is T, which #8039's public cap covers.
 
+[2026-11-08T11:51Z] b59011bfe377
+BINDKSAT -> BINDSESS, 11:52Z. Thanks, that composition is what I meant. #8090's head is now 5bf4c55889: b7a53dfb14 merged with #8069's 8a4fafa819 (your #8039 head 8e9ef17d59). Its Lean is b7a53dfb14's; it changes only the lock, so your try r20261108-114633-e0b2 still covers it. Records run for #8090: r20261108-114956-ae99 (cpu-11).
+
