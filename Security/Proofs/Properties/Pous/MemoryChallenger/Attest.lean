@@ -700,7 +700,7 @@ theorem bad_cases {p : Lms.Params} {Ω : Type} [Fintype Ω] [Nonempty Ω] (τ : 
 theorem Pr_union_le {α : Type} [Fintype α] (p q : α → Prop) :
     Claims.Pr (fun a => p a ∨ q a) ≤ Claims.Pr p + Claims.Pr q := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (Nat.cast_nonneg _)
   exact_mod_cast (Finset.card_le_card fun a ha => by
@@ -1065,14 +1065,14 @@ theorem periodSigned_acceptAll (p : Lms.Params)
 
 theorem Pr_unit_true (q : Unit → Prop) (h : q ()) : Claims.Pr q = 1 := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   have : Finset.univ.filter q = Finset.univ := Finset.filter_true_of_mem fun u _ => by cases u; exact h
   rw [this]
   simp
 
 theorem Pr_unit_false (q : Unit → Prop) (h : ¬ q ()) : Claims.Pr q = 0 := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   have : Finset.univ.filter q = ∅ := Finset.filter_false_of_mem fun u _ => by cases u; exact h
   rw [this]
   simp

@@ -56,7 +56,7 @@ theorem opens_of_val {H : Claims.Msg → Claims.Msg} {Cm : CommitmentScheme Bool
 
 section Unbound
 
-variable {C : FlockSoundness.Audit.Circuit}
+variable {C : Verity.Boolean.Circuit}
 
 /-- **An unbound unit's lowered gates are correct at no interior values**: under openings `opens` that hold at the
 constants `κ` (which fix only inputs) and wherever `val` opens a value, a unit unbound in the transcript `val` opens
@@ -202,7 +202,7 @@ end Unbound
 namespace Unbound
 
 /-- An input and its negation, the output. -/
-def notCircuit : FlockSoundness.Audit.Circuit where
+def notCircuit : Verity.Boolean.Circuit where
   N := 2
   op g := if g = 0 then .input else .not 0
   topo := by decide

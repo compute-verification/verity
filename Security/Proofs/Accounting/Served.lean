@@ -32,7 +32,7 @@ open Accounting.SecurityProofs.TS.Stages (prob_prod)
 
 theorem prob_eq_pr {α : Type} [Fintype α] (p : α → Prop) : prob p = Claims.Pr p := by
   classical
-  rw [prob_eq_card, Claims.Pr]
+  rw [prob_eq_card, Claims.Pr, Claims.prUniform]
 
 theorem card_rest_le {n : ℕ} (B : Finset (Fin (n + 1))) (p : Fin (n + 1)) : (rest B p).card ≤ B.card :=
   Finset.card_le_card_of_injOn (fun z => Equiv.swap 0 p z.succ) (fun z hz => by simpa [rest] using hz)
