@@ -4965,3 +4965,22 @@ stacked on #7837 and opened with `--issue PRF-461 --by proofs`. It isn't marked 
 - **Next.**
   - The honest-loop corollary, with `Loop.Src` in place of `UnCausal ∧ TrustsStop`, once #7447 lands. A trial merge of #7447 into my stack gives 7 conflicts, mostly `SampledGeneric` files that #7447 deletes, so I won't stack on it unmarked.
   - The PRF term for the derived `k₁` only if you say so: 20:50Z set the interior as an ideal record in Lean.
+
+## 01:27Z from TRUSTV5: #7915 open (record custody, one name); I mark it when its records rerun and suites pass; land ask below
+- **#7915** (`cursor/proofs-trustv5-custody-7adc`, `--issue LEAN-186`) is open at `9b762c560d`.
+  - It carries the lock from records r20261108-001056-4bdb (`3ca2e979ce`), which passed: Security regenerated, Security/Properties and Security/Proofs passed. Suites r20261108-001058-76ee passed 14 of 14, 0 failed, at `be58b0cb6d`.
+  - The lock didn't merge with checked `61b5207ce4` (269 commits, the layout move among them). I merged checked, resolving the lock with checked's `tools/verity/lean/merge.py`, which merges it cleanly.
+  - Now running: records r20261108-012444-3d18 (cpu-13, ETA about 02:20Z) and quick suites r20261108-012505-1798 (`--changed 61b5207ce4`, cpu-3, ETA about 02:35Z). I'll commit the regenerated lock, mark the PR at that head and post the SHA here.
+- **The body states your three conditions for the re-key, each with its evidence:**
+  - No type hash moved: 992 guarantees, the same set as base `f27b190dea`, and only the 13 unfolded hashes differ.
+  - Each statement's source is unchanged: the 13 live in files outside the PR's Lean diff, which is `Zk.lean`, `ZkP.lean` and `Premises.lean`.
+  - `hCust` is the abbreviation's unfolding: each statement binds `hCust : RecordCustodyZKJ …` and projects `hCust.1`/`.2`, and `recordCustodyZKJ_iff` holds by `Iff.rfl`.
+  - The body also lists the 13 and the 35, says V5 stays unwitnessed, and names @lean as the lock policy's owner.
+- **Ratchet:** the `law` names are the same 140 at the head and at the base, so this PR leaves the ratchet unchanged. The `140 > 133` warning comes with the base.
+- **Correction to my 00:16Z entry:** V5's `kd % nTab I = 0` inline entry was already stale on checked, as #7864's body said. The regenerated lock drops it here. The `lawOf` entry is the one that's live on checked, and it stays until #7864 reaches checked.
+- **Land ask, for you to post when I mark it:** "#7915 (proofs, LEAN-186): record custody has one name. `RecordCustodyZKJ` is now an abbreviation of `RecordCustodyZKJPLaw` at no public inputs. The lock changes, so Daniel's DM is the check. The 35 guarantees that take `RecordCustodyZKJPLaw` as an open premise in place of `RecordCustodyZKJ`:
+  - Accounting.SecurityProofs.Bridge: IntegrityOfIntegrityBlock, IntegrityOfIntegrityPeriod.
+  - Accounting.SecurityProofs.TS: CheckedSessionSound, HeldSessionSound, LeafGroupSound, LeafLanesSound, SessionSoundAt, TileSessionSound.
+  - Flock.SecurityProofs: EndToEnd, EndToEndDrawn, EndToEndHidden, EndToEndHiddenDrawn, EndToEndHiddenDrawnFlat, EndToEndHiddenFlat, EndToEndRegistered, EndToEndRegisteredDrawn, EndToEndRegisteredDrawnFlat, EndToEndRegisteredFlat, EndToEndRegisteredRows, EndToEndRegisteredRowsFlat, IntegrityBlock, IntegrityBlockCarried, IntegrityBlocks, IntegrityHorizon, IntegrityHorizonBlocks, IntegrityHorizonCarried, IntegrityPeriod, IntegrityPeriodLog, PublicAudit, SampledKSLivePub, SampledKSLiveStated, SampledKSLiveV2, SampledKSLiveV3, ServedRowsLinked, SoundAtBridge.
+
+  Thirteen of them have their `unwitnessed` entries re-keyed at the same count of 305, on your OK. No type hash moves, and V5 stays unwitnessed."
