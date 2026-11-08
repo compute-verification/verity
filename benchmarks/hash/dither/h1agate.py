@@ -278,7 +278,7 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--scratch", default=None, help="unused (sbench.sh's SBENCH_SCRIPT passes it)")
     ap.add_argument("--reps", type=int, default=9)
-    ap.add_argument("--t", default=str(T), help="the window's slots (each A table's rows), one or more: 64,256")
+    ap.add_argument("--t", default=str(T), help="the execution phase's slots (each A table's rows), one or more: 64,256")
     ap.add_argument("--forms", default="0", help="h1c_a_form values, each gated, then each timed, in this process")
     a = ap.parse_args()
     out = Path(a.out)

@@ -80,8 +80,8 @@ def test_a_slot_too_small_trains_only_or_blocked_never_takes_the_job():
 
 
 def test_a_pool_every_fitting_slot_of_which_a_window_closes_never_takes_the_job():
-    """A window that closes every slot of a pool for days leaves its line empty; --on auto must not rank that empty line first
-    and leave a run waiting there."""
+    """A window that closes every fitting slot of a pool for days leaves that pool's line empty, which must not rank it first:
+    a job placed there waits until the window ends."""
     win = "window 2026-11-06T19:25:00Z (5315 min) is open or starts within 30 min"
     closed = pool(*(slot(f"b{i}", blocked=win) for i in range(4)))
     busy = pool(*(slot(f"r{i}", held=True) for i in range(4)), waiters=6)
