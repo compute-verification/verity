@@ -8,8 +8,8 @@ GLM-5.3's V = 154,880, 3,924 of 85 Definitions; at V = 16, 392 of 59), and a win
 * wires every carried parameter to the output row of the unit that wrote it, and refuses a row whose served token is not the
   twin's and a partition that leaves out a stage's template.
 
-`test_slices_reads_the_program_s_constants_and_the_sampler_s_words_at_the_row_s_step` holds `serving_rows._slices`, which the
-others replace, to the replay's reads of those operands.
+`test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step` holds `stage_rows._operand` to the replay's
+reads of those operands; the others replace `serving_rows._slices`, which reads the rest.
 """
 from __future__ import annotations
 
@@ -50,7 +50,7 @@ SETTINGS = ((0.7, 0.9, 16), (0.0, 0.8, 1), (1.3, 0.5, 32), (1.0, 0.95, 8))
 
 
 class Served:
-    """``n`` rows of ``spec`` (row p's logits, top_p, seed, pos, temp and splits are arguments 6p .. 6p + 5, as `_slices` reads
+    """``n`` rows of ``spec`` (row p's logits, top_p, seed, pos, temp and splits are arguments 6p .. 6p + 5, as `slices` reads
     them) and the store of their served tokens (`sampling_rows.gumbel_topp_token_select_row`'s)."""
 
     def __init__(self, spec: str = ROW, n: int = 1, seed: int = 7):
@@ -72,9 +72,8 @@ class Served:
             self.rows.append(("r0", None, r, d))
         self.tok = np.asarray(toks, dtype=np.int64)
 
-    def slices(self, _pi, _store, _weights, _rid, _arrive, g, step=None):
-        """`serving_rows._slices`: an argument group's elements, read at the row's step."""
-        assert step == STEP
+    def slices(self, _pi, _store, _weights, _rid, _arrive, g):
+        """`serving_rows._slices`: an argument group's elements."""
         return [self.ops[g[0][1]]]
 
     def words(self, rid, step, op, member, lo, hi):
@@ -198,9 +197,9 @@ def test_a_partition_without_a_stage_s_template_is_refused():
     assert all(m.wired == () for m in members(s, [first]))
 
 
-def test_slices_reads_the_program_s_constants_and_the_sampler_s_words_at_the_row_s_step():
+def test_a_row_reads_the_program_s_constants_and_the_sampler_s_words_at_its_step():
     """A Program constant is its one word; the sampler's seed and splits are the request's committed words at the row's step
-    (``splits``' slice names that step), and without the row's step they are refused, as before."""
+    (``splits``' slice names that step); any other row's reads refuse them, as before."""
     class Pi:
         pnames = ["weights", "seed", "splits"]
         by_i = {3: {"spec": "Const32[0x3f666666]_v1"}, 4: {"spec": "Const64[0x2a]_v1"}}
@@ -213,15 +212,15 @@ def test_slices_reads_the_program_s_constants_and_the_sampler_s_words_at_the_row
             assert (rid, op, lo, hi) == ("r0", SAMPLER_OP, 0, 1)
             return (np.array([step * 100 + {"seed": 1, "splits": 2}[member]], np.int64), None)
 
-    got = SRW._slices(Pi(), Store(), None, "r0", 10, [["n", 3, 0, 1], ["n", 4, 0, 1], ["p", 1, 0, 1], ["p", 2, 5, 6]], step=5)
+    got = ST._operand(Pi(), Store(), None, "r0", 10, [["n", 3, 0, 1], ["n", 4, 0, 1], ["p", 1, 0, 1], ["p", 2, 5, 6]], 5, SRW._slices)
     assert [(a.dtype.name, a.tolist()) for a in got] == [("uint32", [0x3F666666]), ("uint64", [42]), ("int64", [1501]),
                                                          ("int64", [1502])]
     with pytest.raises(LookupError, match=re.escape("splits slice [4, 5) is not the sampler's one word at the row's step 5")):
-        SRW._slices(Pi(), Store(), None, "r0", 10, [["p", 2, 4, 5]], step=5)
-    with pytest.raises(LookupError, match="the serving rows read committed members, registered weights, Program constants"):
-        SRW._slices(Pi(), Store(), None, "r0", 10, [["p", 1, 0, 1]])
+        ST._operand(Pi(), Store(), None, "r0", 10, [["p", 2, 4, 5]], 5, SRW._slices)
     with pytest.raises(LookupError, match="is not inside one committed member"):
-        SRW._slices(Pi(), Store(), None, "r0", 10, [["n", 7, 0, 1]], step=5)
+        ST._operand(Pi(), Store(), None, "r0", 10, [["n", 7, 0, 1]], 5, SRW._slices)
+    with pytest.raises(LookupError, match="the serving rows read committed members and registered weights only"):
+        SRW._slices(Pi(), Store(), None, "r0", 10, [["p", 1, 0, 1]])
 
 
 @pytest.mark.slow

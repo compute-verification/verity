@@ -560,15 +560,11 @@ def GumbelTopPTokenSelectSharedGreedy(B, S, logits, top_p, seed, pos, temp, spli
     return B.call(bind(GumbelSelectF32GivenGreedy, V=S.V), masked, seed, pos, greedy)
 
 
-def _topp_cut(t):
-    from verity.ml.definitions.registry.topp_stages import cut
-
-    return cut(t)
-
-
 #: the Calls serving stages as their cut, by family: every split count's top-p pipeline and the select in units of at most a
-#: Flock block each (`topp_stages.cut`), which circuit-check holds to the block in the Call's place (`checks.cut_of`)
-CUTS = {"GumbelTopPTokenSelect_v1": _topp_cut, "GumbelTopPTokenSelectSharedGreedy_v1": _topp_cut}
+#: Flock block each (`topp_stages.cut`), which circuit-check holds to the block in the Call's place (`checks.cut_of`).  Each
+#: names the module whose ``cut`` it is rather than importing it: that module's units call this one's noise
+_TOPP_CUT = "verity.ml.definitions.registry.topp_stages"
+CUTS = {"GumbelTopPTokenSelect_v1": _TOPP_CUT, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_CUT}
 
 
 def f32_bits(x: float) -> int:

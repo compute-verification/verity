@@ -91,7 +91,7 @@ CHAIN_OF = {f: row for row, fs in CHAINS.items() for f in fs}
 #: `topp_stages.plan`), which circuit-check holds to the Flock block in the row's place
 _TOPP_STAGES = ("TopPStatsHead_v1", "TopPStatsExp_v1", "TopPProbs_v1", "TopPStep_v1", "GumbelTopPSelect_v1")
 STAGES = {"GumbelTopPTokenSelect_v1": _TOPP_STAGES, "GumbelTopPTokenSelectSharedGreedy_v1": _TOPP_STAGES}
-STAGE_FAMILIES = frozenset(f for fs in STAGES.values() for f in fs)
+STAGE_OF = {f: tuple(row for row, fs in STAGES.items() if f in fs) for fs in STAGES.values() for f in fs}
 #: the row Definitions cut per expert (`expert_rows`), by the row family: its block family, a pair's GEMM over n of its expert's
 #: rows (n a power of two dividing G and N, N / n blocks of the row), each block's rows and its G-block's scale row read at the
 #: pair's expert from a table registered one expert a row (`gates.embedding.EmbeddingRead_v1`, ``READ``), whose key is the slot
@@ -183,7 +183,7 @@ def template(t: str) -> Template:
     layout = ("coord" if coord_width(word) else "cols" if spec_base(word) in COLS
               else "part" if spec_base(word) in PART_OF else "slice" if sl and all(int(spec_statics(word)[a]) == 1 for a in sl[0])
               else "kchunk" if spec_base(word) in KCHUNKS.values() else "split" if spec_base(word) in SPLIT_OF
-              else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_FAMILIES
+              else "chain" if spec_base(word) in CHAIN_OF else "stage" if spec_base(word) in STAGE_OF
               else LAYOUTS.get(spec_base(word), "row"))
     packed = None
     if widths != {16} and layout not in ("s8", "read", "fused"):
@@ -344,9 +344,9 @@ def unit_templates(spec: str) -> tuple[tuple[str, int], ...]:
 
             hit += tuple((descriptor_id(c), n) for c, n in CUTS[spec_base(spec)](sp))
         if spec_base(spec) in STAGES:
-            from verity.ml.definitions.registry.sampling import CUTS as STAGE_CUTS
+            from verity.ml.definitions.registry.topp_stages import cut
 
-            hit += tuple((descriptor_id(c), n) for c, n in STAGE_CUTS[spec_base(spec)](sp))
+            hit += tuple((descriptor_id(c), n) for c, n in cut(sp))
         if (fam := EXPERTS.get(spec_base(spec))) is not None:
             from verity.ml.commitments.gates.embedding import read
 

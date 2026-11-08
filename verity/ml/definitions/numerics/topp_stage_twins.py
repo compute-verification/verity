@@ -1,6 +1,6 @@
 """Every unit of `topp_stages.plan(V)` on one `GumbelTopPTokenSelect_v1{V}` row, and the served token: `stage_rows`.
 
-The twin runs `topp_stages`' own stage functions, each kind of unit over all its blocks at once, in :class:`FastEngine` (the
+The twin runs `topp_stages`' own stage functions, each kind of unit over all its blocks at once, in :class:`ArrayEngine` (the
 builder's `Engine` with each word gate on numpy arrays), so a unit's outputs here are the words its Definition computes from the
 same inputs: what the serving reader commits for a row cut into those units, and what the tests hold each unit Definition to.
 The select chunks' carries (positions, tie counts, best and index) are read off the row's lanes at each chunk's end.
@@ -95,7 +95,7 @@ class _Arrays:
         return np.uint64(int(v))
 
 
-class FastEngine(K.Engine):
+class ArrayEngine(K.Engine):
     """The builder's `Engine` on one row (T = 1), each operation's instances by its word gate on numpy arrays."""
 
     def __init__(self):
@@ -222,7 +222,7 @@ def _scaled(E, V: int, logits, temp: int):
 
 def keep_bits(V: int, logits, top_p: int, temp: int, S: int) -> np.ndarray:
     """Split count S's keep bits on the row (``top_p``, ``temp`` f32 bits), as its units compute them."""
-    E = FastEngine()
+    E = ArrayEngine()
     keep, _ = _pipeline(E, T.Geo(V, S), _scaled(E, V, logits, temp), E.free(1, 32, [[int(top_p)]]), {})
     return vals(keep).astype(bool)
 
@@ -230,7 +230,7 @@ def keep_bits(V: int, logits, top_p: int, temp: int, S: int) -> np.ndarray:
 def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[int, dict]:
     """(token, outs): the served token of ``GumbelTopPTokenSelect_v1{V}`` on the row, and ``outs[key]`` every unit's output
     fields by its `topp_stages.plan(V)` key (each a u64 word array)."""
-    E = FastEngine()
+    E = ArrayEngine()
     x = _scaled(E, V, logits, temp)
     p = E.free(1, 32, [[int(top_p)]])
     outs: dict = {}
@@ -259,4 +259,4 @@ def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, split
     return int(bi[-1]), outs
 
 
-__all__ = ["FAST", "FastEngine", "keep_bits", "stage_rows", "vals"]
+__all__ = ["ArrayEngine", "FAST", "keep_bits", "stage_rows", "vals"]

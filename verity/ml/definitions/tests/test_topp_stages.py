@@ -158,7 +158,8 @@ def test_the_served_cut_s_units():
         by[d.defn.name] += n
     assert (len(cut), sum(by.values())) == (85, 3924)
     assert by == {"TopPStatsHead": 147, "TopPStatsExp": 268, "TopPProbs": 484, "TopPStep": 2420, "GumbelTopPSelect": 605}
-    assert SA.CUTS["GumbelTopPTokenSelect_v1"](bind(SA.GumbelTopPTokenSelect, V=SERVED_V)) == cut
+    assert T.cut(bind(SA.GumbelTopPTokenSelect, V=SERVED_V)) == cut
+    assert {SA.CUTS[f] for f in ("GumbelTopPTokenSelect_v1", "GumbelTopPTokenSelectSharedGreedy_v1")} == {T.__name__}
 
 
 SPECIAL = [0, 0x80000000, 0x7F800000, 0xFF800000, 0x7FC00000, 0xFFC00001, 0x7F800001, 1, 0x807FFFFF, 0x3F800000, 0xBF800000,

@@ -133,7 +133,7 @@ import numpy as np
 
 from verity.core.protocols.spot.one_stage import draw as DR, partition as P, registration as R
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.check.replay.index import SAMPLER_OP, SEED_PARAM, ProgramIndex, const_word, index_of
+from verity_vllm.check.replay.index import ProgramIndex, index_of
 from verity_vllm.check.replay.opening import CommittedStore
 from verity_vllm.commit import index as IX, row_tables as RTB, step_rows
 from verity.ml.windows import interface as IF
@@ -145,10 +145,9 @@ from verity_vllm.pipeline import s8_rows as S8, slice_rows as SL
 from verity_vllm.pipeline import split_rows as SP, stage_rows as ST, weight_rows as WT
 from verity_vllm.pipeline.chunk_rows import s8_words
 from verity_vllm.pipeline.serving_templates import (CHAINS, COLS, COORDS, CUT, KCHUNKS, LAYOUTS, PACKED, PART_OF, PARTS,  # noqa: F401
-                                                    SLICES, SPLITS, WIDE_COORDS, Template, _bind, coord_width, part, template,
-                                                    unit_templates)
+                                                    SLICES, SPLITS, STAGES, WIDE_COORDS, Template, _bind, coord_width, part,
+                                                    template, unit_templates)
 from verity_vllm.program.compact import runs_from_file_items
-from verity_vllm.query.manifest.format import SPLITS_PARAM
 
 #: the layouts whose units are bit rows as Flock's `UnitStager` stages them (`chunk_rows`), in chunks of at most a chunk cap
 CHUNKED = ("s8", "coord", "cols", "slice", "kchunk", "split", "chain", "stage", *EX.LAYOUTS)
@@ -235,9 +234,8 @@ def member_rows(programs: dict[str, dict[str, Any]], tmpls: Sequence[str], scope
             if len(hits) > 1 and (None in ps or len({p[0] for p in ps}) < len(ps)) and (None in chain or len(chain) > 1) and not experts:
                 raise ValueError(f"row {i} ({r['spec']}) holds instances of {[tmpls[k] for k, _ in hits]}: one member reads a row, "
                                  f"or one member per part of it (PARTS), or one per K-chunk template of one chain (KCHUNKS), or one "
-                                 f"per split part and combine template of it (SPLITS), or one per key-block and end template of "
-                                 f"it (CHAINS), or one per stage template of it (STAGES), or its per-expert blocks, fused blocks "
-                                 f"and table reads (EXPERTS, FUSED)")
+                                 f"per split part and combine (SPLITS), key-block and end (CHAINS) or stage (STAGES) template of it, "
+                                 f"or its per-expert blocks, fused blocks and table reads (EXPERTS, FUSED)")
             for k, n in hits:
                 out[k].append((str(rid), pi, r, d))
                 counts[k] += n
@@ -664,8 +662,7 @@ def read_all(ms: Sequence[CS.Member], rows: Sequence[list[Row]], store: Any, wei
         elif layout == "s8":
             out += _read_s8(mine, rs, store, weights, arrivals)
         elif layout == "stage":
-            out += CR.split(mine, *ST.read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals, _slices,
-                                           twins))
+            out += CR.split(mine, *ST.read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals, _slices, twins))
         elif mine[0].name:
             out += CR.split(mine, *read(replace(mine[0], n=sum(m.n for m in mine), name=""), rs, store, weights, arrivals))
         else:
@@ -705,26 +702,18 @@ def _operand(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, grou
 
 
 def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group: Sequence, *,
-            bits: int | None = None, step: int | None = None) -> list[np.ndarray]:
+            bits: int | None = None) -> list[np.ndarray]:
     """Each run of one argument group, a stored ``"N"``/``"P"`` progression as its runs (`compact.runs_from_file_items`, the
     replay's `row_args`): a GLM-5.3 rank Program stores MoeSum's TOPK expert outputs as one node progression.  Given the port's
     element width ``bits``, a committed member of a wider signed integer dtype (``BY_VALUE``: the sampler's i64 token under the
-    vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`).  A
-    Program constant (``Const32/64[..]_v1``: a stochastic selector's top_p, temperature and pos) is its one word, and given the
-    row's ``step`` the sampler's inputs are the request's committed ``runner.sampler`` words at that step (``seed``, and
-    ``splits``, whose slice names the step), as the replay reads them."""
+    vocabulary shard's 32-bit ``tok``) is read by value, its low word with the high word zero or refused (`_by_value`)."""
     words = []
     for sl in runs_from_file_items(group):
         kind, a, lo, hi = sl[0], int(sl[1]), int(sl[2]), int(sl[3])
-        pname = (pi.pnames[a] if a < len(pi.pnames) else None) if kind == "p" else None
         if kind == "n":
             m = pi.member_at(a, lo, hi)
             if m is None:
-                c = const_word(pi.by_i.get(a)) if (lo, hi) == (0, 1) else None
-                if c is None:
-                    raise LookupError(f"arg slice {list(sl)} is not inside one committed member")
-                words.append(c)
-                continue
+                raise LookupError(f"arg slice {list(sl)} is not inside one committed member")
             pd, member, mlo, mhi, dt = m
             width = next(int(mm[1]) for mm in pd["members"] if mm[0] == member)
             w, why = store.words(rid, arrive + pd["step"], pd["op_path"], member, pd["row"] * width + mlo, pd["row"] * width + mhi)
@@ -734,7 +723,7 @@ def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group
             if bits is not None and dt in BY_VALUE and w.dtype.itemsize * 8 > bits:
                 w = _by_value(w, bits, f"member {member} of {pd['op_path']}")
             words.append(w)
-        elif pname == "weights":
+        elif kind == "p" and (pi.pnames[a] if a < len(pi.pnames) else None) == "weights":
             ws = pi.weight_slice(lo, hi)
             if ws is None:
                 raise LookupError(f"weights slice [{lo}, {hi}) spans fields")
@@ -743,16 +732,8 @@ def _slices(pi: Any, store: Any, weights: Callable, rid: str, arrive: int, group
             if arr is None:
                 raise LookupError(f"registered weight field {fname} is not available")
             words.append(np.asarray(arr).reshape(-1))
-        elif pname in (SEED_PARAM, SPLITS_PARAM) and step is not None:
-            if hi - lo != 1 or (pname == SPLITS_PARAM and lo != step):
-                raise LookupError(f"{pname} slice [{lo}, {hi}) is not the sampler's one word at the row's step {step}")
-            w, why = store.words(rid, arrive + step, SAMPLER_OP, pname, 0, 1)
-            if w is None:
-                raise LookupError(why)
-            words.append(np.asarray(w).reshape(-1))
         else:
-            raise LookupError(f"arg slice {list(sl)}: the serving rows read committed members, registered weights, Program "
-                              f"constants and the sampler's inputs only")
+            raise LookupError(f"arg slice {list(sl)}: the serving rows read committed members and registered weights only")
     return words
 
 
