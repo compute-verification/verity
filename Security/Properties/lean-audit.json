@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": [
   "Properties.Pouw",
   "Properties.Pouw.Check",
@@ -23133,17 +23134,17 @@
    }
   },
   "SampledProofs.Select": {
-   "digest": "d5183d2d2f65d188981e368241fa3b937d90a93801b558494577b030f44a59cd",
+   "digest": "f401001363423086a23995fc11a8e50bd176de24f82bfa6f35f79d8c4308a147",
    "definitions": {
     "SampledProofs.Select.Rule": "4d6275879b486259c6334a2786df14db3abbdb1d68f5fc81e4cf8e7366e5b42e",
     "SampledProofs.Select.Rule.all": "2544366e1ae9127d40ce553944a8944f3b817850a309fde4b98ec81121a23c1f",
     "SampledProofs.Select.Rule.casesOn": "291c8380be510951b8c2bc763f394d90676009c7bd9ccc5abd653291d9c3eb17",
     "SampledProofs.Select.Rule.ctorIdx": "bff8b46139414ff6a3abbdbcc82f097eff880717f9f1e60602262b114c128e98",
     "SampledProofs.Select.Rule.law": "39a8d67112af8f387b93fad55d8b851bfbc3c8412a7cbbcfbff6d1b7cbc4748b",
-    "SampledProofs.Select.Rule.lawOver": "b871e1d26c24c18a39cf291e265f4ae03013a5eae64dab93c2ea5cd030c44e1b",
+    "SampledProofs.Select.Rule.lawOver": "1c4f229370a8b12447967011be12009aa8cdf67ebb053488c64214559dc63698",
     "SampledProofs.Select.Rule.rec": "6b86a047e84a8f81717cf905ce6b3fe4789ce2e9f0eabe7f0dd770a0b3088159",
     "SampledProofs.Select.Rule.twoStage": "0fe2600bfc07c6847a00ff955691d1aad66506571afff078dccbe826fb5a4e4e",
-    "SampledProofs.Select.parseLaw": "cc8dbd40bd1f85fe0585814b2e216ba1a54633ae9b6ca3480b51cec1047d6f3e",
+    "SampledProofs.Select.parseDesign": "fca8d1fdcf56cc17540b48227b5c59665d529927869ed8f21921f97258ef71ab",
     "SampledProofs.Select.secondLaw": "d28af09c79c12dc7da2b428d0dfc296686e50622f69349521069853929f9a2a1",
     "SampledProofs.Select.select": "ae11255de4e13f81e340be857bc4cede0d122046a593d11a00b93241a23bd2f4",
     "SampledProofs.Select.selectSecond": "c7856b451e1dd82eca2efca5a2ba53508bdad5c50fe369da3355c47b9c85aeb3",

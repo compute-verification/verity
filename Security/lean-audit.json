@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": ["Definitions"],
  "proved_in": ["Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -101,7 +102,7 @@
   },
   "FlockSoundness.Audit.Analysis.BindSound": {
    "owner": "@proofs",
-   "digest": "aa8c54f9cf3049269a757cf2022e42740f230b939efc6e4b7808382546aa9e25",
+   "digest": "5a8cf97e623b4d06efc754808b4a93f4f79f4ee9eb0bfec3ccd8c9b58971c698",
    "why": "δ_link of the layer below, as `KnowledgeSound`."
   },
   "FlockSoundness.Audit.Analysis.KnowledgeSound": {
@@ -111,7 +112,7 @@
   },
   "FlockSoundness.Audit.Analysis₂.BindSound": {
    "owner": "@proofs",
-   "digest": "06f8ee00cf97f113fdf6d5106959445535b5da41236518b30408a28f31d45599",
+   "digest": "d32af45f66fa79d4d21f4daf6ef43e1ec7be28c91762af5ad9354c4573472f52",
    "why": "The two-stage form of `BindSound`."
   },
   "FlockSoundness.Audit.Analysis₂.KnowledgeSound": {
@@ -4344,14 +4345,6 @@
    "type_hash": "fabaf877067f5e46ea4a935870364484d98d0b161f650b5a356673fae8dfd82a",
    "unfolded_hash": "1011824b219e766a58b27537b5057ee59fe3b79faca722c26f773238295fb123"
   },
-  "Accounting.SecurityProofs.ComputeOfPouw": {
-   "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27",
-   "unfolded_hash": "b1ee09e3140c457b9f63ab214e54cc15a5a206b1584a3f86b2dc2e0136f7b45a"
-  },
-  "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
-   "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42",
-   "unfolded_hash": "77a5872f365790bab33cdabac8b682e599fb579f54cb7cd51521ddc49085c8d1"
-  },
   "Accounting.SecurityProofs.CovertResidual": {
    "type_hash": "89a050fbdfa6a718cc71e69413c2ea03e70e9cb47076c42b6531b9acf5047a64",
    "unfolded_hash": "bdbe81137b8eb1b2dd5d1808f5dfa3af0800f2190f69d7a6f209e58a0ce62a52"
@@ -5252,14 +5245,6 @@
   "Pouw.SecurityProofs.ShaRealize.ExtractOfRealize": {
    "type_hash": "6cf84ec33aad45716ced5eb802b2006e2e6e85c755b136bc7fa565fe97a8513e",
    "unfolded_hash": "7ca9d74ab26582d2bd596ff4a36e4c611e513080bc47c9aa72ed41f85cebae78"
-  },
-  "Pouw.SecurityProofs.SpareCapacityAtDeadline": {
-   "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45",
-   "unfolded_hash": "d143bfc0ad4f56777a925c26b36431f2a092161aa8fb7af2f3747ce78607dd92"
-  },
-  "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
-   "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf",
-   "unfolded_hash": "f752b9accc70529c8b356903472e7b6297eec07416c9d1374466655cc2274878"
   },
   "Verity.SecurityProofs.BlockDescription": {
    "type_hash": "80baa463fd43086b3ca137b50dc78ace3b4400bfbabdb344ddc3c090d1f6dbeb",
@@ -6927,7 +6912,7 @@
     "reads": []
    },
    "type_hash": "dde82660e7599ddb7892eb0d5eac586a06536c297c7fdc330aa5c545e0fefd27",
-   "unfolded_hash": "15b0c555022a6a64231b2f0379fe0aea6a88e1c796c40d618ecba7c8dadad8e7"
+   "unfolded_hash": "d2a51d6f363ee986934b4017651aedb83cf321bbbe99f58e33a5c36a5e4a3950"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun": {
    "owner": "@memory-accounting",
@@ -6940,7 +6925,7 @@
     "reads": []
    },
    "type_hash": "c0bae848d5eca780c94a102c38a296194575afc01d1470ad366d262ecc166b42",
-   "unfolded_hash": "f78b071b5154327e11158fa64258f96f382b3f4bd5a344ccaf9a2caff4545525"
+   "unfolded_hash": "676c3c06c978eb1a43faf177a483458d08df4412e893ab8ce00825b1f0372411"
   },
   "Accounting.SecurityProofs.ComputeOfPouwPerRun_honest": {
    "owner": "@memory-accounting",
@@ -8094,7 +8079,7 @@
     "reads": []
    },
    "type_hash": "31c0943a819102e21c0f851f870d2ab5a9e93937491c328813e69182e5fccce1",
-   "unfolded_hash": "e739f3a2724be40ba3e81766f90366f7cefa3679f2676b45106bc55b52efdff4"
+   "unfolded_hash": "6c2b049513170e5addbc951b192be81bc4fa224ea222d4a2bb7b0732fc2e2b6d"
   },
   "Accounting.SecurityProofs.PouwLocalOff": {
    "owner": "@compute-accounting",
@@ -15279,7 +15264,7 @@
     "FlockSoundness.Audit.Adaptive.life_harm_budget {n : Nat} {L : Nat → FlockSoundness.Audit.Law n} {Reg : Nat → Type}",
     "  {session : (m : Nat) → Finset (Fin n) → Reg m → Verity.Game Bool}",
     "  (A : (m : Nat) → FlockSoundness.Audit.Analysis (L m) (Reg m) (session m)) {εks δlink : Nat → ENNReal}",
-    "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).LinkSound (δlink m))",
+    "  (hks : ∀ (m : Nat), (A m).KnowledgeSound (εks m)) (hlink : ∀ (m : Nat), (A m).BindSound (δlink m))",
     "  {π h : Fin n → Real} (hL : ∀ (m : Nat), (L m).Design π) {lam : Real} (hlam0 : Real.instLE.le 0 lam)",
     "  (hlam : ∀ (u : Fin n), Real.instLE.le (instHMul.hMul lam (h u)) (π u)) (H : Real) (N : Nat)",
     "  (s : (FlockSoundness.Audit.Adaptive.life L Reg session N).Strategy) :",
@@ -15293,14 +15278,14 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.Law.Design"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "83edf087185978f69c2291e749981c6f3f85ea48bd204ec55b01b6e628d13cd7"
+   "type_hash": "01db69bfdebc5e066f53a0a2d4ce3930ab704ff2f60d2f1056857339f1f15dba"
   },
   "FlockSoundness.Audit.Partition.Refines.twoStage_influence": {
    "owner": "@proofs",
@@ -15318,7 +15303,7 @@
     "    (S : Finset (Fin nf)) →",
     "      (R : Reg) →",
     "        (S₁ : Finset (Fin nc)) → (I : Int S₁) → (session S R S₁ I).Strategy → Fin nf → Option (Fin C.N → Bool))",
-    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)",
+    "  (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).BindSound δlink)",
     "  (hin : FlockSoundness.Audit.Partition.AnchorsSound₂ X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.twoStage L₁ L₂ Reg Int session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15335,14 +15320,14 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis₂.BindSound",
      "FlockSoundness.Audit.Analysis₂.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis₂.LinkSound",
      "FlockSoundness.Audit.Partition.AnchorsSound₂"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "5be3f75f2858bc60c1f43945e8ac322fb7af700c8f562683cf31533dd3e3702e"
+   "type_hash": "950edbc0bad60780b3cc03bef9ecb21ef3259f10f5d08466abcc6b3ef8972278"
   },
   "FlockSoundness.Audit.Partition.audit_exfiltration": {
    "owner": "@proofs",
@@ -15353,7 +15338,7 @@
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} {M : Type} [Fintype M] [Nonempty M]",
-    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)",
+    "  [DecidableEq M] (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)",
     "  (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (hD : Finset.instPartialOrder.le D P.committed)",
     "  (hb : Fin n → Nat) (K : Finset (Fin n) → Finset (Fin C.N))",
     "  (hK : ∀ (B : Finset (Fin n)), Finset.instPartialOrder.le (K B) P.committed)",
@@ -15384,8 +15369,8 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.IsHarmBound",
      "FlockSoundness.Audit.Partition.AnchorsSound",
      "FlockSoundness.Audit.Partition.Separates"
@@ -15393,7 +15378,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "bb4eecfb7bd7e366bd65bb40726964f474e43c37d62942144b73c4f5f5cd411f"
+   "type_hash": "4bc0ba7d8d3ba3f1edc2f2c64faaa493fd925a468ccba5d5ba1494c3bc99544d"
   },
   "FlockSoundness.Audit.Partition.audit_influence": {
    "owner": "@proofs",
@@ -15404,7 +15389,7 @@
     "  {X : (R : Reg) → FlockSoundness.Audit.Cont L Reg session R → Fin C.N → Bool}",
     "  {ext : (S : Finset (Fin n)) → (R : Reg) → (session S R).Strategy → Fin n → Option (Fin C.N → Bool)}",
     "  {a : Fin C.N → Bool} {εks δlink δin : ENNReal} {D : Finset (Fin C.N)} (hks : (P.analysis X ext).KnowledgeSound εks)",
-    "  (hlink : (P.analysis X ext).LinkSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
+    "  (hlink : (P.analysis X ext).BindSound δlink) (hin : FlockSoundness.Audit.Partition.AnchorsSound X a δin) (δ : ENNReal)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
     "    (Verity.Game.prob",
@@ -15420,21 +15405,21 @@
    "premises": {
     "assumptions": [],
     "domain": [
+     "FlockSoundness.Audit.Analysis.BindSound",
      "FlockSoundness.Audit.Analysis.KnowledgeSound",
-     "FlockSoundness.Audit.Analysis.LinkSound",
      "FlockSoundness.Audit.Partition.AnchorsSound"
     ],
     "open": [],
     "reads": []
    },
-   "type_hash": "edd83f91c99695a493721463430c0f5627d9244b7daa9438febfdf1c74fa10a0"
+   "type_hash": "65624bb957ae700cc6fc754071203d69d29559d8518680a101f52a5967f481a8"
   },
   "FlockSoundness.Audit.audit_profile": {
    "owner": "@proofs",
    "signature": [
     "FlockSoundness.Audit.audit_profile {n : Nat} {L : FlockSoundness.Audit.Law n} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool} (A : FlockSoundness.Audit.Analysis L Reg session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (𝓑 : Finset (Fin n) → Prop)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (𝓑 : Finset (Fin n) → Prop)",
     "  (σ : (FlockSoundness.Audit.audit L Reg session).Strategy) :",
     "  ENNReal.instLE.le",
     "    (Verity.Game.prob (fun o => And (Eq o.fst Bool.true) (𝓑 (A.wrong (A.committedOf σ))))",
@@ -15444,11 +15429,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "d344ae7c7fc73d5cab39db07a4d4aae73cf91d2f78577d19ed7f4ff4ad1168f7"
+   "type_hash": "4814a27e5c54996ff912db20d9f833f62003ca6046b4e4b85e1e660db37e1735"
   },
   "FlockSoundness.Audit.audit_window_split_of_record": {
    "owner": "@proofs",
@@ -15460,7 +15445,7 @@
     "    FlockSoundness.Audit.Analysis",
     "      ((FlockSoundness.Audit.Law.stratified σ (FlockSoundness.Audit.Law.windowK σ call w f 27713) ⋯).closure cl) Reg",
     "      session)",
-    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink)",
+    "  {εks δlink : ENNReal} (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink)",
     "  (hW : instLTNat.lt 0 (FlockSoundness.Audit.Law.totalWork σ w))",
     "  (hone :",
     "    ∀ (s : Fin m),",
@@ -15494,11 +15479,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "20fd7b63f9dffd3439640facd8a13bb069ebdc707095587b02130ec2cfe536e3"
+   "type_hash": "73b48a52c85dff5069fc2f52551899db7c325d0b7836c049e984851ff669b153"
   },
   "FlockSoundness.Audit.audit_work_floor": {
    "owner": "@proofs",
@@ -15506,7 +15491,7 @@
     "FlockSoundness.Audit.audit_work_floor {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
-    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m)",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m)",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty) (b : Nat)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15527,11 +15512,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "60dad443cde6b0b8b007b0224719d8ccc4c94363bdd7f57c178d8e7e241b012e"
+   "type_hash": "52755417613941cc1a7dfddf7b49d8f6c6c65fa47adff723df9f262716efb93b"
   },
   "FlockSoundness.Audit.audit_work_whole_stratum": {
    "owner": "@proofs",
@@ -15539,7 +15524,7 @@
     "FlockSoundness.Audit.audit_work_whole_stratum {n m : Nat} {σ : Fin n → Fin m} {w f : Fin m → Nat} {K : Nat} {Reg : Type}",
     "  {session : Finset (Fin n) → Reg → Verity.Game Bool}",
     "  (A : FlockSoundness.Audit.Analysis (FlockSoundness.Audit.Law.work σ w f K) Reg session) {εks δlink : ENNReal}",
-    "  (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (s : Fin m) (hf : instLENat.le 1 (f s))",
+    "  (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (s : Fin m) (hf : instLENat.le 1 (f s))",
     "  (hs : (FlockSoundness.Audit.Law.stratum σ s).Nonempty)",
     "  (σ' : (FlockSoundness.Audit.audit (FlockSoundness.Audit.Law.work σ w f K) Reg session).Strategy) :",
     "  ENNReal.instLE.le",
@@ -15553,11 +15538,11 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": ["FlockSoundness.Audit.Analysis.KnowledgeSound", "FlockSoundness.Audit.Analysis.LinkSound"],
+    "domain": ["FlockSoundness.Audit.Analysis.BindSound", "FlockSoundness.Audit.Analysis.KnowledgeSound"],
     "open": [],
     "reads": []
    },
-   "type_hash": "2277cd0772dd066ffd4fe2c28b301d475b36c5245577ae34793a847cadb813f2"
+   "type_hash": "d2cacfa253ea8c19328e6612398cc15864d04df65cbc4f4ca067e2fa7ef919a0"
   },
   "FlockSoundness.Discharge.FailClosed.flock_verify_public_ties": {
    "owner": "@proofs",
@@ -20409,7 +20394,7 @@
     "reads": []
    },
    "type_hash": "5285cb8cbec9dd6a634d4653607b825be7d9eea4c260b93e29cb3fad67b09cee",
-   "unfolded_hash": "e95f586ab4c8a1fff8dfe200c62a61e8e1e38422940ee07441a3f747b97135ac"
+   "unfolded_hash": "ca43890aca5e6ff6138490dd942be793bbabec015a89a0df65b58a39a1e27530"
   },
   "Pouw.SecurityProofs.EndToEndEps": {
    "owner": "@compute-research",
@@ -23080,7 +23065,7 @@
     "reads": []
    },
    "type_hash": "3594d8805abf1f58d5952a6080b16acb0ce96995d0d67a7d5c820e099b09dc45",
-   "unfolded_hash": "a1f5189102b47669474f1e1e2dd7850fff87ef91db9a087e05e618fcc94c094b"
+   "unfolded_hash": "1b134d166e883c901485d3f97685b46b3d506546438b63e11af5915e1ca43927"
   },
   "Pouw.SecurityProofs.SpareCapacityAtDeadline_honest": {
    "owner": "@compute-accounting",
@@ -23114,7 +23099,7 @@
     "          (And",
     "            (Real.instLT.lt",
     "              (instHSub.hSub (instHMul.hMul 0 (instHSub.hSub 0 Pouw.Witness.Deadline.idleRun.ts))",
-    "                (instHMul.hMul (instHMul.hMul (instHSub.hSub 1 (Pouw.reductionGamma 0 1)) (instHSub.hSub 1 (1 / 2)))",
+    "                (instHMul.hMul (instHMul.hMul (instHSub.hSub 1 (Pouw.reductionGap 0 1)) (instHSub.hSub 1 (1 / 2)))",
     "                  (Pouw.totalWref Pouw.Witness.Deadline.acceptAll Pouw.Witness.Deadline.dot.layout)))",
     "              0)",
     "            (Not (Pouw.Witness.Deadline.commitAll.Breaks Pouw.Witness.Deadline.dot x.fst x.snd.fst))))",
@@ -23127,7 +23112,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "4f13379fa708c0ae4d456e965fd704f40da7faf8413e2d13d3053d2a51ab92f7"
+   "type_hash": "302c26410883bfe45692caaee15403257ce122dd9a20d1c7ae311b50011de2c6"
   },
   "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline": {
    "owner": "@compute-accounting",
@@ -23145,7 +23130,7 @@
     "reads": []
    },
    "type_hash": "91340f91f97e76024fe99b6313f85175f771c69ba355cd042cf23d1d01d660cf",
-   "unfolded_hash": "2af6ac26819ebceff45778cb2ad39a6ff12ba498bfbd8bd698eb053e675d64b4"
+   "unfolded_hash": "4e863e6741af8fa406f90a151469bc833cd77e59d498509febad3b1c09bd7cf8"
   },
   "Pouw.SecurityProofs.WorkBetweenSaltAndDeadline_honest": {
    "owner": "@compute-accounting",
@@ -23182,7 +23167,7 @@
     "            x.snd.snd)",
     "          (And",
     "            (Real.instLT.lt 0",
-    "              (instHMul.hMul (instHMul.hMul (instHSub.hSub 1 (Pouw.reductionGamma 0 1)) (instHSub.hSub 1 (1 / 2)))",
+    "              (instHMul.hMul (instHMul.hMul (instHSub.hSub 1 (Pouw.reductionGap 0 1)) (instHSub.hSub 1 (1 / 2)))",
     "                (Pouw.totalWref Pouw.Witness.Deadline.acceptAll Pouw.Witness.Deadline.dot.layout)))",
     "            (Not (Pouw.Witness.Deadline.commitAll.Breaks Pouw.Witness.Deadline.dot x.fst x.snd.fst))))",
     "      (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 (1 / 2)) 1) 0))"
@@ -23194,7 +23179,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "df98e7ea2f968b4ab54b30b6ead6c18a0e8b0ad66b8d46a6615a67d5ae002183"
+   "type_hash": "b6da91897e3f8deef6035fd5221672b6df8917857b577437b452ed2637ae566b"
   },
   "RecDeploy.HonestHalfFixture.honest_half_fixture": {
    "owner": "@proofs",
@@ -26263,8 +26248,7 @@
     "∀ (sh : Pouw.Shape), Real.instLE.le (credit' sh) (credit sh)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TileUnpredictableOfNCPU": {
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul γ₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (U : Pouw.Workload), Pouw.Workload.InDomain D U → ∀ (u : Nat), instLTNat.lt u U.layout.N → Real.instLE.le P.d.cast (instHMul.hMul g₀ (instHMul.hMul 3 (U.layout.shape u).k.cast))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.TileUnpredictablePearlCOfTTOut": {
     "∀ (H : Q → R) (s : S) (U : Pouw.PearlC.Workload) (u : Nat) (c : Pouw.PearlC.Commit), Pouw.PearlC.Correct P U H s u c → And (Real.instLE.le 0 (P.credit H s U u c.act)) (Real.instLE.le (credit (U.layout.shape u)) (P.credit H s U u c.act))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -26507,9 +26491,8 @@
     "Flock.Bridge.RowsOk D.unroll": "Flock.Bridge.RowsOk taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.Registered.dupName D.unroll) Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Flock.Bridge.PopMatches desc qr n": "Flock.Bridge.PopMatches taken inline, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "Eq (instHMod.hMod (Flock.Bridge.lawK (Flock.Bridge.lawOf desc qr lj tb n)) (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJP dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.ZeroKnowledgeHidden": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -26917,28 +26900,23 @@
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1Cap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem' (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCHiddenSm120v1LoopCast8p72Rev1RowSeedCodeCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1KRowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) semC (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledSm120v1RowSeed_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120) sem' (1 / 400)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.PearlC.pearlCSampledSm120v2RowSeedCap1000_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1RowCap (Pouw.PearlC.devSm120v2 Pouw.PearlC.Prices.sm120) sem' (1 / 1000)).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.Dither.FleetSound": {
     "∀ (u : Fin N) (ω : Ω), Real.instLE.le (κ u (A u ω)) (κmax u)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -27023,28 +27001,23 @@
    },
    "Pouw.SecurityProofs.PearlCSampledByDeadline": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i (TR.tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ (TR.Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g (TR.tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ (TR.Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i (TR.tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ (TR.Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_16384": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_8192": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": {
     "instLENat.le q (instHPow.hPow 2 64)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (g : Nat), instLTNat.lt g ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w g).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout g))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (i : Nat), instLTNat.lt i ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).tiling U.layout).NT → Eq (w i).cast (instHMul.hMul κ ((Pouw.PearlC.pearlCTilesDevRev1K (Pouw.PearlC.devSm120v1 Pouw.PearlC.Prices.sm120Loop) sem (1 / 1000) (instHSub.hSub (218 / 25) (8953 / 1000))).Wref U.layout i))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Pouw.SecurityProofs.RelativeSecurity.OverlapFloorK": {
     "instLTNat.lt 0 (instHMul.hMul L (Finset.univ.sum fun t => instHMul.hMul (instHMul.hMul (n t) (n' t)) (B t)))": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -28754,18 +28727,18 @@
    }
   },
   "Definitions.Accounting.Guarantees.PerRun": {
-   "digest": "dc84af000669f37743a1bd705af23f3a2e52939956ee9f1f9bd6af503b62193f",
+   "digest": "76be3192bc61811fbae31b446e84efad349628c61f6f98086fdd452b34691fd7",
    "definitions": {
     "Accounting.Guarantees.ComputeOfPearlCPerRunPriced": "b0bceaca0e431690e1b36c9695f7e067aaab1afef2ce61a16fbc22dd83d0532a",
     "Accounting.Guarantees.ComputeOfPearlCStopPerRunPriced": "2117a48efb37fb5019a295d18918e269bb8aedd14c9f99f775cdea6124787f5c",
-    "Accounting.Guarantees.ComputeOfPouwPerRun": "46e7cf2d3b442778517e3ec5f05756770c91a6af31d76c5079248dc5d17423f7",
+    "Accounting.Guarantees.ComputeOfPouwPerRun": "392cae553fcf2accb0656ba8f7a9c0d816d29dd26259a9c289b196d980a3480f",
     "Accounting.Guarantees.CovertResidualPerRun": "a7888fcadf38ef0ff8dab66f1c20973cc90f9a1ed3f5c74ebae7c7cada1be4f6",
     "Accounting.Guarantees.CovertResidualPerRunPriced": "8e3a3e7076a9762c2ae540c03f93e756d15bd26f49b2f68cdfa2a6154b2d96a6",
     "Accounting.Guarantees.JointPerRun": "66d14586b1fe8ef2b9a48535fc1d89439b5df0b40448a8e2f5a3039eb30187f8",
     "Accounting.Guarantees.JointPerRunPriced": "526fce1e7f1814c4c016871cc8472a2fda2bed744fed3c3cfb59e6455001c2a5",
     "Accounting.Guarantees.PearlCEndToEndPerRun": "452ffaf9c17edaa48fd2e2cca9151adc48eb4bf335953d9f77b2dcfdfe206422",
     "Accounting.Guarantees.PearlCStopEndToEndPerRun": "e907e95dd36b73e61a12886a437d9423b1f1f02dbbe8e3f9d2882ea28010afab",
-    "Accounting.Guarantees.PouwEndToEndPerRun": "12356afa16a9b314c5d6543bb5d35c3e0c2188f87e94dd7068c671f21aa2d611"
+    "Accounting.Guarantees.PouwEndToEndPerRun": "8779fe03c1cce424b990b60ac00feb834f61a22c9341b9f98bf8d35e5fc975e4"
    }
   },
   "Definitions.Accounting.Guarantees.PeriodBinding": {
@@ -28777,9 +28750,9 @@
    }
   },
   "Definitions.Accounting.Guarantees.Pouw": {
-   "digest": "4d189b81cd1c7acdbb0ce6cefedc4bd91e0472694bd2e609561aed47f1f01980",
+   "digest": "7a14feefacc4754aacf4191fab0f4a40be789fef9ee1547d9f5265de1ffe2cdf",
    "definitions": {
-    "Accounting.Guarantees.ComputeOfPouw": "3c86e1930b191261db75b9fe3b97535f3331beb948864dcb83b55eda05abb8c9"
+    "Accounting.Guarantees.ComputeOfPouw": "1e1057b6aa33aa54f2241ef477a3118f379d9b1f866b5bf085e20e8715e98d16"
    }
   },
   "Definitions.Accounting.Guarantees.PouwWork": {
@@ -35185,10 +35158,10 @@
    }
   },
   "Definitions.Pouw.Advantage": {
-   "digest": "06f00f19dc13afce7de394b53b9fe42104f02e39b41b249661fdf24af55f23e5",
+   "digest": "360ecbd847671d86d8aa494789c9fe3ef1af182e30d446abf712297c00b5a983",
    "definitions": {
-    "Pouw.AuditGε": "1018242281a8345d41f701daf0fbd65f98cd833dac9bd05a6adab67d41d2b4ab",
-    "Pouw.Gε": "17407b446cfc8dd6b970b287ef7e6046f5f2d1d0ea1bd052eb7a1fd7c7266338",
+    "Pouw.AuditGε": "d1381f5221b408d2e4bdc8b187a2ca292623d99bc64b0a09f21e4c245b71d6b3",
+    "Pouw.Gε": "c2410ec1d758d5de24350dfe7aec9c29fe82d15f2f607099aed85ee80e6349fd",
     "Pouw.NCP.Params.InstanceU": "3b60969f8f81104b0596a2883beb8066d6bf0d7e7b08219325779dc298b062a1",
     "Pouw.PearlC.Gε": "e7eb1879e9a9d2b6d504f015840a0523aef7ac69e8665ba155766fa5771e234e",
     "Pouw.Protocol.WrefWithin": "cac063df365f7c845e896f15d04ac61e77ab0c59876e7f1a913d3fd4f2841858"
@@ -35897,7 +35870,7 @@
    }
   },
   "Definitions.Pouw.Game.Defs": {
-   "digest": "61d1deb713d93d41869b2e44c84b491a7f2b58ebaf6b709781c48d0599d3299e",
+   "digest": "157bb25ddea75495a8dbaa9d90977aa8ac3637e051099f8772c96046dfe3511b",
    "definitions": {
     "Pouw.ActOK": "57df5c36d420d174dd1ebd0c6da6f2b1b1224f87e845887cad3141376edf8246",
     "Pouw.Adversary": "31e5f27929c23a83f5a51c9ac4c7ffdb286783adfe2232061e07c1434ee9748f",
@@ -35925,12 +35898,11 @@
     "Pouw.CostModel.hashed": "a3d274cf5e15ddf592cae012cabb73af934220e8545e73c6744b3fca52fea6eb",
     "Pouw.CostModel.run": "a58ca384714fac464df83c61ed6802f3009d402516e86d7659c1f9d8df63d5c3",
     "Pouw.CostModel.sha": "08925556dfe1ce039de4d771d7ee02fef592f1389d89ebe898d817dacd9035e6",
-    "Pouw.GGap": "16d508a96b953367f772af6251c6a05b72a5ceffb0b455ff92c12f190f3fa4ec",
-    "Pouw.Gγ": "52a074b5b07458c9e84c0872dbde1ffa97003d0abb95fcb8d5b3c59e5144ef2e",
+    "Pouw.GGap": "b929aac4c671f78fed3e8267590b1cec603928ac7b20b44b56698eab25f70505",
     "Pouw.Layout": "2e18468b7be02502f243fe4db6718ce1c0cabe54a4864559f76faf120f2419b2",
     "Pouw.Layout.N": "9297eda572e2b04c2e6c21d6916ced7a02994c809e904b4297803cb1de4f4223",
     "Pouw.Layout.fixedId": "d22ac4b9b745b4a54649b43f4eaa4b3cbd0bcb675e3a6d9fdeaaed8e268c1316",
-    "Pouw.Layout.rowsOf": "f2d53689ee5b0744e61153f82a68fd213b64da0c401d927766a25f54b028c5d6",
+    "Pouw.Layout.rowsOf": "2ec7d69048073ba4300053fb64ef02e8f90c46e272cac987f47c0f03d14a50bc",
     "Pouw.Layout.shape": "8430626bcd7f744f5d427e1fea19463ca0973dfefdd08dbccdbce0f30e96c720",
     "Pouw.OutOK": "24389dacf6503d45b12b0e6f9e77a6682fd910d7e61167d47403ab673f04225f",
     "Pouw.Protocol": "9de4d268fda0a18e2e12d7697292862e2d3e8288d384c1f47fe216527ae22573",
@@ -35974,15 +35946,15 @@
    }
   },
   "Definitions.Pouw.Guarantees.Deadline": {
-   "digest": "40b46f0d5844af4e972ffab63adcd6413e7ad0ded083cb0ec834a3d878f0e3e8",
+   "digest": "67b371b215e685a4f7800320a9c89be63027d6937349da3dcd778f6c0c951aa1",
    "definitions": {
     "Pouw.Guarantees.PearlCSampledByDeadline": "32b66324f1abc7be9de13572b5dbdd41c11db98de72a0f1e75ee6404ec800ec8",
     "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_16384": "bbac0f9592b106084ec1e91c3c9a4690bd86fb7f31e794cd9a09f8231e6d93be",
     "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_8192": "719a70e220fea49fb67fd5147b0dde0a7a0967920fc42f02e664586b93608123",
     "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_llama31_8b": "2a64f9f3530204db29462005bdf897dca43f0113acc64d36df81c0d2bdb6c5c4",
     "Pouw.Guarantees.PearlCSm120Rev1Cap1000ByDeadline_qwen3_8b": "c40ead1d81761485a4dfbb334126e916db89c45b28788eef46cecacddbafa7e8",
-    "Pouw.Guarantees.SpareCapacityAtDeadline": "4ebac7978d79abb77d76d06ba4eb615230134e0e8e3750250b7c063943a6423e",
-    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "f29b15e2b3a4aa004129c64a383292f3f9c2e97ad03ffd5e36c775604f9c697c"
+    "Pouw.Guarantees.SpareCapacityAtDeadline": "d75ac4eac7bff4c63d869a295b0582be1b09903e931bd35a0773dd9639e86d5a",
+    "Pouw.Guarantees.WorkBetweenSaltAndDeadline": "00a7c62ae00ae997c8d6dcf85903e4dadf7cde0677510a633756df45d350599d"
    }
   },
   "Definitions.Pouw.Guarantees.Dither": {
@@ -36015,9 +35987,9 @@
    }
   },
   "Definitions.Pouw.Guarantees.Game": {
-   "digest": "db7de57798ac9fe7e922bfcf134ba2882b03f3d98c2c1cbd4629deef2c460db9",
+   "digest": "c10ad8764d42599228eb4202bbbf3b1dee35a81bc83c8a87ac8b3ddc4de41456",
    "definitions": {
-    "Pouw.Guarantees.EndToEnd": "e53b80bf81424d2323545b2f8d9a9ddb3b549621bfb0eb2659851579935a455d",
+    "Pouw.Guarantees.EndToEnd": "1c59741be77376e29e4f5509802d7a36d4ab51ffec87cc45d5046883a4405c44",
     "Pouw.Guarantees.GapFromTT": "a2f4039046d792b3a7a3d9b17bc5bb708faaf5ce915fb08bb50734952e5d17d4"
    }
   },
@@ -36437,7 +36409,7 @@
    }
   },
   "Definitions.Pouw.M1": {
-   "digest": "7f23bf06b262b2b51d390df86d5f1e5492c378f1353b94fa9cf399defd0289ed",
+   "digest": "b2e52820b1671d84fa28869fe024e78b54f318cfd40ebfe062d81cf3e70b6cdf",
    "definitions": {
     "Pouw.D1.M1Act": "4139a5d9ea8e13c4ec36397c72d0052c66ba5977b3d7d9e10d81bf30b132bd77",
     "Pouw.D1.M1Q": "83e2db21d421bec9e66244c5af1ec1a5f5808c28d0ac06a43505c35d890cbce2",
@@ -36446,16 +36418,16 @@
     "Pouw.D1.encAct": "9fa599012e2c3ee3af4082d318dd11ac98ef91ed2182438caaff114d0bee52db",
     "Pouw.D1.field": "2c1092aefca7868f73f59c1188f84df57119e8b380d9bf3868c385ea006efa93",
     "Pouw.D1.m1": "854ae100d6ed51fcc354440bbd4aefc06893fc20c7908f21f27b93c2fb1fc7a7",
-    "Pouw.D1.m1Domain": "352393386914a86baaf5b6ad5ab754b2bcb48fca4a8dab7088ae41a284c36e75",
+    "Pouw.D1.m1Domain": "7d45b3a746f612cdd96796a1ae5f740bc5b7a7ddf556940a4ea32e264e754159",
     "Pouw.D1.m1ELQ": "101574ec524b26df3e113c5b8a2c671317887b6bd59ad15070a3b1aaecc653a9",
     "Pouw.D1.m1ERQ": "8cc826bac35e3cdd7f701b11e1973ab6115f2dd271e982e627c3f996987703c1",
     "Pouw.D1.m1Entry": "0b678dd90384f3262a4420afc0d3bffd99f8499227c44066ae7840714eb34adf",
     "Pouw.D1.m1FQ": "f6634b9bf9189fa249d5908871efeaf0f9b18e849492b21a4fd4cd17f44e7518",
-    "Pouw.D1.m1GroupRows": "5d71b9a799aa4f35916ce1f79cefc35b3fcf381a831e674aa286fec3ecebaeb1",
+    "Pouw.D1.m1GroupRows": "f2d4e0221508eedb59630c15cf6a82ba599f636a914c8afd1e2bfe131026b4cf",
     "Pouw.D1.m1Outer": "77c9010ab995e057cd989cf331f0dd022b21255e3c767f0f27874c0863a43f55",
     "Pouw.D1.m1Queries": "8e36f84c9c383b5b02f987a25eae5ad927c16387d77a90c215a2db2d7cdffb1c",
     "Pouw.D1.m1Sign": "95bc5e61ba457a93b9c91bf68a2ee1ce95511515365ed54ddaee1c247165dadd",
-    "Pouw.D1.m1Wref": "9514067c4e197ce692773ff695b45e0c336803da19d9e9ae60fb46f5458f92b7",
+    "Pouw.D1.m1Wref": "6159c09d21d4d085547f0e56fdcd72ba58be08c45bc3e7d0fd9826ff9cccae10",
     "Pouw.D1.rowShare": "de494d229b1052b5d7f592bee13ef1c872d04a5775eb0fc696a6b0c502d0f5f1"
    }
   },
@@ -37968,13 +37940,13 @@
    }
   },
   "Definitions.Pouw.Witness.Honest": {
-   "digest": "735778c21d9a1f437ebe0444c9ab863f788eb589e8dafc858ce999fca0da86bf",
+   "digest": "2009538e6f19f212b443248a516dd609877228a05d14436dfc065d9eb4b1af72",
    "definitions": {
     "Pouw.Proofs.M1.sixteen": "5f60a6294ab3233a0c57138c1c8fc701ce88f35f88f51983174485909c767a2a",
-    "Pouw.Proofs.commitAns": "499e1bd55418d983038ac4cbe69589c023f81650a80f6f9d6e91112904bbf936",
+    "Pouw.Proofs.commitAns": "d1f7ad27a29de48494e3260629f50443b60dbef979c7f078077f47d328d3c91f",
     "Pouw.Proofs.honestProg": "dc0ebfb163a16b705323251de2bafda947a71a20089ee1ee80e833aed58d2813",
     "Pouw.Proofs.pricedHonest": "f42510b453f3f0bcb5d5c6a18ba4f23e7b86b25341123d26d82ba6e28ee9fad0",
-    "Pouw.Proofs.unitProg": "d5492d0f06781dcfb21c3b425f8ce5c1a4eb155c23e3b814b5884ffcf29fd04a",
+    "Pouw.Proofs.unitProg": "d4582b740e4e5ae776938429626cd7bf8a98c6827b251c80b2b2446f09d847c3",
     "Pouw.Witness.Deadline.acceptAll": "d99e70e0e2d616ad6860eea9fbcad0480138a8a57448a95baa947107299a200a",
     "Pouw.Witness.Deadline.commitAll": "3b64c5531b028bd902b93c5881d9fc5606cf2ce3a923248c5071fd2fa1e2c547",
     "Pouw.Witness.Deadline.dot": "3f94fbefea7b0a9ef8d8f2fb2cd412008e883b64767fbbb2daa1ee9a2591e4ba",
@@ -48864,11 +48836,11 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.OneStage": {
-   "digest": "2add35e79bab8fef84fe9dfcc92b6581bb4f77fa3db9bf171dfee7a9dfa6caa0",
+   "digest": "1f262a6aa0c9bb6c7e018d8ee6a661d4496504b0ce6164294feb394edd0fad96",
    "definitions": {
     "FlockSoundness.Audit.Analysis": "13631c71e1c15d4e63eb3e2391c323df0f1e07bed04ce8886d7d5ff25afddfed",
+    "FlockSoundness.Audit.Analysis.BindSound": "5a8cf97e623b4d06efc754808b4a93f4f79f4ee9eb0bfec3ccd8c9b58971c698",
     "FlockSoundness.Audit.Analysis.KnowledgeSound": "d2f8858afae86803eb0858e0969fec051a08c08795b41681399fb0e1a729fbe1",
-    "FlockSoundness.Audit.Analysis.LinkSound": "aa8c54f9cf3049269a757cf2022e42740f230b939efc6e4b7808382546aa9e25",
     "FlockSoundness.Audit.Analysis.Tr": "5c80e91d3a4f117bb707913f4b8a6f49c0a8c940ae30e6f597ca9e7584192e46",
     "FlockSoundness.Audit.Analysis.committed": "cf7c6a90dec5eccf62cbe42f0895cb9a28406451613bc916ce4c65ebb78fe9fc",
     "FlockSoundness.Audit.Analysis.committedOf": "7b86ddb211dcb42f6c82a62b8ef00bfddb343e1adf6462dd13b152da4f99fa22",
@@ -48891,11 +48863,11 @@
    }
   },
   "Proofs.Flock.Soundness.Audit.TwoStage": {
-   "digest": "41ca61ab8332e1e7cbcb1650a188f88ea2324c5a6b8d16634496ba6919744afc",
+   "digest": "6822f162d0d0ac2fb214d3b8b16828e2fea922c4425415965241dfe069f5dbff",
    "definitions": {
     "FlockSoundness.Audit.Analysis₂": "c77251f299be001355f95b39f4313c585182d22b370aaecb22a02fedde30fbac",
+    "FlockSoundness.Audit.Analysis₂.BindSound": "d32af45f66fa79d4d21f4daf6ef43e1ec7be28c91762af5ad9354c4573472f52",
     "FlockSoundness.Audit.Analysis₂.KnowledgeSound": "0a22cec892f9e752e5dd8911dd185c2461c660c8de04f3a4ae25d9b109908f6c",
-    "FlockSoundness.Audit.Analysis₂.LinkSound": "06f8ee00cf97f113fdf6d5106959445535b5da41236518b30408a28f31d45599",
     "FlockSoundness.Audit.Analysis₂.TrC": "f54dff4d5ed5eb1003497578065c4b0c61fceebd15159e4c9872eac2878e0bb5",
     "FlockSoundness.Audit.Analysis₂.TrF": "5ab7eeb3db7b90d022d4cc5302ded83497b22f5c0d85cbc2a064dd3a00ce314f",
     "FlockSoundness.Audit.Analysis₂.committedC": "23f2ddae6e1bf2f55fb91aae9d94a67271fb526ed190bb7ed0eaf6016789b98b",
@@ -53439,17 +53411,17 @@
    }
   },
   "SampledProofs.Select": {
-   "digest": "d5183d2d2f65d188981e368241fa3b937d90a93801b558494577b030f44a59cd",
+   "digest": "f401001363423086a23995fc11a8e50bd176de24f82bfa6f35f79d8c4308a147",
    "definitions": {
     "SampledProofs.Select.Rule": "4d6275879b486259c6334a2786df14db3abbdb1d68f5fc81e4cf8e7366e5b42e",
     "SampledProofs.Select.Rule.all": "2544366e1ae9127d40ce553944a8944f3b817850a309fde4b98ec81121a23c1f",
     "SampledProofs.Select.Rule.casesOn": "291c8380be510951b8c2bc763f394d90676009c7bd9ccc5abd653291d9c3eb17",
     "SampledProofs.Select.Rule.ctorIdx": "bff8b46139414ff6a3abbdbcc82f097eff880717f9f1e60602262b114c128e98",
     "SampledProofs.Select.Rule.law": "39a8d67112af8f387b93fad55d8b851bfbc3c8412a7cbbcfbff6d1b7cbc4748b",
-    "SampledProofs.Select.Rule.lawOver": "b871e1d26c24c18a39cf291e265f4ae03013a5eae64dab93c2ea5cd030c44e1b",
+    "SampledProofs.Select.Rule.lawOver": "1c4f229370a8b12447967011be12009aa8cdf67ebb053488c64214559dc63698",
     "SampledProofs.Select.Rule.rec": "6b86a047e84a8f81717cf905ce6b3fe4789ce2e9f0eabe7f0dd770a0b3088159",
     "SampledProofs.Select.Rule.twoStage": "0fe2600bfc07c6847a00ff955691d1aad66506571afff078dccbe826fb5a4e4e",
-    "SampledProofs.Select.parseLaw": "cc8dbd40bd1f85fe0585814b2e216ba1a54633ae9b6ca3480b51cec1047d6f3e",
+    "SampledProofs.Select.parseDesign": "fca8d1fdcf56cc17540b48227b5c59665d529927869ed8f21921f97258ef71ab",
     "SampledProofs.Select.secondLaw": "d28af09c79c12dc7da2b428d0dfc296686e50622f69349521069853929f9a2a1",
     "SampledProofs.Select.select": "ae11255de4e13f81e340be857bc4cede0d122046a593d11a00b93241a23bd2f4",
     "SampledProofs.Select.selectSecond": "c7856b451e1dd82eca2efca5a2ba53508bdad5c50fe369da3355c47b9c85aeb3",
