@@ -299,12 +299,18 @@ REGISTERED_SETUPS += SUPPLIED_SETUPS
 POOLED = RegisteredSetup(_registered_program("CoreSpotPooled", 2, (
     ("pin", Array(1, Array(16, Value(32)))), ("pout", Array(1, Array(16, Value(32))))), ("pin", "pout")),
     [{"pin": 16, "pout": 16}])
+#: `POOLED` whose window also reads its certified arrivals `ing` (four slots of a valid bit, an id and a length) and its
+#: request rows `req`, which no unit reads.
+CONTINUED = RegisteredSetup(_registered_program("CoreSpotContinued", 2, (
+    ("ing", Array(4, Array(3, Value(16)))), ("req", Array(4, Array(12, Value(16)))),
+    ("pin", Array(1, Array(16, Value(32)))), ("pout", Array(1, Array(16, Value(32))))), ("ing", "req", "pin", "pout")),
+    [{"ing": 3, "req": 12, "pin": 16, "pout": 16}])
 GENESIS = "9e" * 64
 #: A two-stage design's two registrations: the boundary one over four replay blocks under the grain, its ports its own,
 #: and the interior one over a replay sample of two of them, six proof blocks under the check's query.
 BOUNDARY = Setup(P.population_program(BLOCK, 4), P.template_instance_query(BLOCK.id), names=("bout", "bx"))
 INTERIOR = Setup(P.population_program(PAIR, 6), P.template_instance_query(PAIR.id))
-PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, BOUNDARY, INTERIOR]}
+PROGRAMS = {s.sha512: s.program for s in SETUPS + REGISTERED_SETUPS + [POOLED, CONTINUED, BOUNDARY, INTERIOR]}
 PROGRAMS[PO.program_sha512(Program(BLOCK))] = Program(BLOCK)
 PROGRAMS_TEMPLATES = [PAIR.id, TRIPLE.id]
 #: The strata a work table may name: the templates' and the Calls'.
@@ -4396,6 +4402,65 @@ def test_a_window_opens_the_pool_its_chain_left(pieces):
     for extra in ({"supplied": {"pin": [[{"bytes": GENESIS}]]}}, {"outputs": {"pout": {"port": "x"}}},
                   {"row_schemas": {"pin": G.SCHEMA_SEG}}):
         assert codes({**then, **extra}, record(WINDOW, pout1, carried, [first])) == "reject", extra
+
+
+def test_a_request_cut_at_a_windows_edge_continues_from_the_pool_it_left(pieces):
+    """Lean and Python agreeing on cut and continue over three windows. Each window's certified arrivals are the root the
+    network certifier signed for it, which the verifier pins (`ing`: the requests open at the last window's edge first,
+    each at its prompt and the outputs released of it); its request rows (`req`) are its own, under its open root; and
+    its pool chains. Three windows that carry the pool are accepted, arrivals with a continuation counted from the
+    engine's outputs or the last window's arrivals again are `R7-held`, and after a refused window the next is accepted
+    from the empty pool alone, its carried pool refused by name."""
+    s, law = CONTINUED, {"k": 1, "law": "subset"}
+    roots = [{"port": p, "root": ROOTS[p], **s.ports[p]} for p in s.ports]
+    windows, wroots = (EARLIER, WINDOW, {**WINDOW, "row": 102}), (EARLIER_WROOT, WROOT, "a8" * 64)
+
+    def stamp(rows, tag):
+        salts = [hashlib.shake_256(f"ing/{tag}/{r}".encode()).digest(192) for r in range(len(rows))]
+        return G.Registered.commit(s.sha512, "ing", rows, salts).entry()
+
+    stamps = [stamp(rows, i) for i, rows in enumerate((
+        [[1, 7, 5], [1, 8, 2], [1, 9, 3], [0, 0, 0]], [[1, 7, 8], [1, 9, 3], [1, 10, 1], [0, 0, 0]],
+        [[1, 9, 4], [1, 10, 1], [0, 0, 0], [0, 0, 0]]))]
+
+    def params(i, log, accepted=True):
+        return {"anchors": [], "delta": "1/10", "law": law, "leaf_layer": LEAF, "log": list(log),
+                "parameters": s.signature, "partition": None, "ports": s.ports, "program": s.desc, "query": s.query,
+                "pool": {"accepted": accepted, "genesis": GENESIS, "pin": "pin", "pout": "pout"},
+                "pinned": {"ing": stamps[i]["root"]}, "registered": {"ing": 3, "req": 12, "pin": 16, "pout": 16},
+                "scheme": SCHEME, "window_root": wroots[i], "work_table": None}
+
+    def record(i, pin, log=(), ing=None):
+        """Window i's record after `log`, `pin` its entry for `pin`, the empty pool filled from `genesis` where it is None."""
+        def bare(*extra):
+            return R.record(s.program, s.query, law, SCHEME, roots, windows[i], leaf_layer=LEAF,
+                            previous=R.digest(log[-1]) if log else None,
+                            registered=[ing or stamps[i], *s.entries({"req": 12, "pout": 16}, wroots[i]), *extra])
+
+        if pin is None:
+            pin = G.supplied_value(s.program, "pin", [[("bytes", GENESIS)]], bare(), ["pin"]).entry()
+        return bare(pin)
+
+    def carried(rec):
+        return {**next(e for e in rec["registered"] if e["value"] == "pout"), "value": "pin"}
+
+    def codes(p, rec):
+        kind, out = D.replay(REGISTRATION, _json({"params": p, "record": rec}), pieces)
+        return json.loads(out)["codes"] if kind == "output" else kind
+
+    first = record(0, None)
+    second = record(1, carried(first), [first])
+    third = record(2, carried(second), [first, second])
+    for i, rec in enumerate((first, second, third)):
+        assert codes(params(i, [first, second][:i]), rec) == [], i
+    engine = stamp([[1, 7, 9], [1, 9, 3], [1, 10, 1], [0, 0, 0]], "engine")
+    for ing in (engine, stamps[0]):
+        assert codes(params(1, [first]), record(1, carried(first), [first], ing)) == ["R7-held"], ing
+    assert codes(params(1, [first]), record(1, None, [first])) == ["R7-domain", "R7-held", "R7-pool-chain"]
+    refused = params(2, [first, second], accepted=False)
+    assert codes(refused, record(2, None, [first, second])) == []
+    assert codes(refused, third) == ["R7-domain", "R7-supplied", "R7-pool-chain"]
+    assert codes(refused, record(2, None, [first, second], stamps[1])) == ["R7-held"]
 
 
 def test_a_root_with_a_trailing_newline_is_refused(pieces):
