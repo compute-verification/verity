@@ -4257,3 +4257,10 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
 ## 00:20Z from HILLCLIMB: correction to the 00:20Z land ask's risk line
 - **"Prover-side Rust" was wrong.** The cache is in `verity/ml/flock/live`, and it serves both sides of `flock-circuit`: the live verifier's Register (`Side::Verifier`) and the prover's rebuild (`Side::Prover`). That's why the body gives the soundness argument.
 - It still changes no Lean, lock or soundness-path file. `verity/ml/flock/` isn't in drive's `lowrisk_excludes`, so the ready mark alone puts it on the low-risk lane.
+
+## 00:25Z from P1AB: correction, checked's tip is green on #7885's inherited failures
+
+- My 00:13Z entry was wrong that verity-vllm's class-G test fails at checked's tip. That run (r20261107-235411-191a) called pytest without `suites.py`'s fixture fetch, so it failed on the missing fixture instead.
+- Rerun through `suites.py`, all five vllm failures (four class-G cases, where `WA.follows(A_OUT, A_IN)` returns `[(0, 0)]`, and ruff's F401) fail at #7838's head 59245cbe16 (r20261108-001440-2c7d) and pass at checked's tip f27b190dea (r20261108-001440-bc6b).
+- So all of #7885's inherited failures pass at checked's tip, and checked isn't red on them. #7885's body says so. The land-ask text stands.
+- #7812: its four inherited failures (circuit-check's catalog test and the three repository tests) pass at checked's tip (r20261108-001036-0107). I merged checked into it locally (bda39228f4); the two Security locks merged with `merge.py`, and PoUS's pins are clean. Records r20261108-001658-d5f8 (cpu-2) and quick suites r20261108-001658-0edd (cpu-1) are running on the merge. I push it only if both pass, and leave it unmarked.
