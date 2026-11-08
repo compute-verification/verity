@@ -283,7 +283,7 @@ theorem deriveLaw_some {p : _root_.Spot.Program} {q law : Json} {tbl : Option Js
     · rename_i hc
       exact absurd (by decide) hc
 
-theorem flockLaw_subset_text (K n : ℕ) (hn : K ≤ n) :
+theorem flockLaw_subset_text (K n : ℕ) (hk : 1 ≤ K) (hn : K ≤ n) :
     _root_.Spot.Draw.flockLaw (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) n =
       .ok (.subset K) := by
   unfold _root_.Spot.Draw.flockLaw
@@ -292,7 +292,7 @@ theorem flockLaw_subset_text (K n : ℕ) (hn : K ≤ n) :
   dsimp only
   rw [keys_count, show _root_.Spot.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "k" =
     Lean.toJson K from rfl, nat_toJson]
-  simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, Nat.not_lt.2 hn]
+  simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, Nat.not_lt.2 hk, Nat.not_lt.2 hn]
   rfl
 
 theorem splitOn_slash_repr (a b : ℕ) :
@@ -371,7 +371,7 @@ theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L 
     rcases flockLaw_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
     · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
         (deriveLaw_none _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
-        (flockLaw_subset_text k n hkn)
+        (flockLaw_subset_text k n (hk k rfl) hkn)
     · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
         (deriveLaw_none _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
         (flockLaw_bernoulli_text a b n hb hab)
