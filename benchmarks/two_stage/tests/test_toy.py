@@ -122,11 +122,15 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     path = bytes.fromhex(port.header(SAMPLE)["paths"][0])
     assert REG.verify_read(bc.domains[value], port.root, SAMPLE[0], honest[0], path, T.V2)
     assert not REG.verify_read(bc.domains[value], port.root, SAMPLE[1], honest[0], path, T.V2)
-    off = T.replay(port.rows_at(SAMPLE))["ingress"].copy()
+    off = port.rows_at(SAMPLE).copy()
     off[0, -1] ^= 1
-    bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, rows={"ingress": off})
+    bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, replayed=off)
     x = rows_bc(bad.committed, lin.port("row"), Q)[0]
     assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)
+    lout, egress = it.window.members[3], T.boundary_ports(bc.window)["o0"]
+    y, opath = rows_bc(bad.committed, lout.port("o0"), Q)[0], bytes.fromhex(it.ports[lout.key].header(SAMPLE)["paths"][0])
+    assert not REG.verify_read(bc.domains[egress], bc.roots[egress], SAMPLE[0], y, opath, T.V2)
+    assert rows_bc(bad.committed, lout.port("o0"), Q)[1:] == rows_bc(it.committed, lout.port("o0"), Q)[1:]
     pub, flip = publics(it.committed), it.window.members[2]
     body = bytearray(pub[flip.key])
     body[0] ^= 1                                        # unit 0's x string, which the fold unit's output wires

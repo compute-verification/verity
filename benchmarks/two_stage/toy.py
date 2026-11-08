@@ -11,9 +11,10 @@ proves them (`audit.py`).
 * **The interior registration** (`interior_window`, `interior`): the replay sample S's Q·n_rho proof blocks, template-major,
   span S[i]'s j-th instance of template t at slot off_t + i·n_t + j (off_t = Q·Σ_{t'<t} n_t'), one member a template, under
   the interior run (`interior_run`). Each internal edge is a wire (`rows.Member.wired`): a reader's row is its writer's
-  output row under that row's salt. Each link member is a shared-row member whose boundary port's rows are the boundary
-  record's at S[i] under the boundary's salts, so their ``b || c`` are the boundary's, its header naming the boundary
-  port, the leaves S and each one's path to the boundary root (`verity.ml.windows.links.Port`).
+  output row under that row's salt. Each span is replayed from its ingress, the boundary record's row at S[i]. Each link
+  member is a shared-row member whose boundary port's rows (b_in's input, b_out's output) are committed under the
+  boundary's salts at S[i], so an honest replay's ``b || c`` are the boundary's, its header naming the boundary port, the
+  leaves S and each one's path to the boundary root (`verity.ml.windows.links.Port`).
 * **The verifier's reads** (`link_reads`): each link member's ``--registered`` file from the boundary record and S alone.
 """
 from __future__ import annotations
@@ -188,22 +189,22 @@ class Interior:
 
 
 def interior(bc: CS.Committed, boundary_digest: str, sample: Sequence[int], law: Mapping | None = None, *,
-             salt_key: bytes | None = None, rows: Mapping[str, np.ndarray] | None = None) -> Interior:
+             salt_key: bytes | None = None, replayed: np.ndarray | None = None) -> Interior:
     """The proof server's interior of the replay sample ``sample``: each span replayed from its ingress, the boundary record's
-    row (``bc``, the boundary's commitment), and committed; a link member's boundary port the boundary's rows and salts at the
-    sample's leaves. ``rows``: a replayed block's rows replaced (``{"fold" | "flip0" | ..., rows}``: tests and negatives)."""
+    row (``bc``, the boundary's commitment), and committed, each link member's boundary port under the boundary's salts at the
+    sample's leaves. ``replayed``: the ingress replayed instead, ``(Q, 2H/16)`` u16: a prover's whose link rows don't open the
+    boundary record (tests and refused runs)."""
     q, at = len(sample), [int(s) for s in sample]
     win = interior_window(boundary_digest, at, law)
     names = boundary_ports(bc.window)
     ports = {win.members[t].key: LK.Port.of(bc, names[b]) for t, (_p, b) in LINKS.items()}
-    lin, lout = (ports[win.members[t].key] for t in LINKS)
-    r = {**replay(lin.rows_at(at)), **(rows or {})}
+    r = replay(ports[win.members[0].key].rows_at(at) if replayed is None else replayed)
     flips = np.stack([r["flip0"], r["flip1"]], axis=1).reshape(2 * q, -1)
     refs = {"refs": np.arange(q, dtype=np.int64)[:, None]}
     data = [{"rows": {"row": r["ingress"]}, "outs": {"o0": r["ingress"]}, **refs},
             {"rows": {"x": r["ingress"]}, "outs": {"o0": r["fold"]}},
             {"rows": {"x": np.stack([r["fold"], r["flip0"]], axis=1).reshape(2 * q, -1)}, "outs": {"o0": flips}},
-            {"rows": {"row": r["flip1"]}, "outs": {"o0": lout.rows_at(at)}, **refs}]
+            {"rows": {"row": r["flip1"]}, "outs": {"o0": r["egress"]}, **refs}]
     salts_of, registered = {}, {}
     for t, (p, _b) in LINKS.items():
         m = win.members[t]

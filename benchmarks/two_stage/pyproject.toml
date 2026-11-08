@@ -7,6 +7,9 @@ testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
 
 [tool.verity.tests]
-# `verity`: the circuits the toy builds and evaluates, the windows it commits, and the one-stage verifier's check and
-# registered reads the tests hold them to
-inputs = ["verity"]
+# test files that start a program the read guard can't trace (the Lean verifier of record): keyed on the suite's whole tree
+untraced = ["tests/test_toy.py"]
+# `verity`: the circuits the toy builds and evaluates, the windows it commits, the one-stage verifier's check and registered
+# reads the tests hold them to, and the Lean packages its verifier of record builds from; that lakefile, named on its own, is
+# the package the tests build (`one_stage.verifier.executable`), so check runs them after lean-build
+inputs = ["verity", "verity/core/service/sampled_proofs/lakefile.toml"]
