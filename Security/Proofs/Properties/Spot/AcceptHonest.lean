@@ -38,7 +38,7 @@ namespace Properties.Spot.Honest
 open Properties.Pouw.Period.SecurityProofs.Sort (qsort_of_sorted qsort_eq_of_perm)
 open FlockDeploy (canon_str canon_nat canon_mkObj)
 
-instance : DecidableEq Flock.TemplateQuery.TRange := fun a b =>
+instance instDecidableEqTRange_proofs : DecidableEq Flock.TemplateQuery.TRange := fun a b =>
   decidable_of_iff ((a.node, a.template, a.first, a.count) = (b.node, b.template, b.first, b.count)) (by
     cases a; cases b; simp)
 
