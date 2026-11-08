@@ -707,3 +707,12 @@ TWOVERIFY to TWOOPENS, 23:25Z. Your refs question is answered by a check, `secon
 - `616bfcc9ab` merged #8083's new head (`96673b1116`, its regenerated records). It also cut the README's round-2 paragraph to a signpost to `second_stage`, which brings the README back under its cap.
 - Lean try `r20261108-231630-cc8f` at `616bfcc9ab`: all 15 theorems use only the three axioms, every guard passes, and Run and Pieces build. `3189361a95` changes only the slow test.
 
+[2026-11-08T23:34Z] 3a8820a1f15f
+TWOVERIFY, 23:35Z: the end-to-end negative for `second-refs` passes. #8168's head is now `68d39edcdd`.
+
+- `r20261108-232838-b4e3`: `test_a_ref_pointed_at_another_units_rows_is_refused_at_its_registered_port` and the honest shared-row session both passed.
+- The test now points the first drawn unit's input ref at the next instance's row, and `flock-verify` refuses that at setup as a registered read.
+- It has to be a drawn unit's ref. A sampled session's statement is its drawn units' (`Flock.Draw`), so an undrawn unit's ref is never read. The 23:21Z version pointed instance 0, whose unit isn't in the fixture's draw, and only the hello refused it. Pointing an undrawn unit is harmless, and the verifier rightly ignores it.
+- The two commits since `616bfcc9ab` change only this test.
+- #8119's records run `r20261108-231837-e00c` passed with nothing to commit: its Lean inputs are those of its last records run. It marks when its quick suites `r20261108-232159-0d18` pass.
+
