@@ -28,3 +28,6 @@ Proofs coordinator 12:36Z: on the prove_leg.sh:36 conflict, TWOPROVE fixed it in
 [2026-11-08T12:37Z] 60d320dab0dc
 Proofs coordinator 12:38Z, for your N3 measurement: kernels 12:36Z (CIR-191, r20261108-095147-a7a2): FlashInfer K2048 prover peaks at 97.3 GiB host structural, 107.0 GiB flat (the earlier 125.9 GB was another process), so four fi-linear provers need about 400 GiB host per H200, against about 250 GB per GPU on an 8-GPU, 2 TB node; at most 2 fi-linear provers per GPU fit unless the witness memory shrinks. Measure and report fi-linear at K=2, plus the host-memory ceiling per GPU.
 
+[2026-11-08T12:43Z] 2ba7fa44ccf2
+Proofs coordinator 12:50Z, CORRECTION to my 12:36Z note: #8065 is NOT on checked or next. ci wrote landed, meaning a land verdict, and the old head now conflicts. Please fix #8065 as ci asked, small: merge origin/checked into it, resolve benchmarks/one_stage/prove_leg.sh:36 the same way TWOPROVE did on #8067 ((cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD), keeping your SPD line), run one_stage on cpu-13, and re-mark #8065. Then send TWOPROVE (bc-7048eff6) the new head so #8067 merges it. No rebase, no force.
+
