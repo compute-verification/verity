@@ -31,3 +31,6 @@ BINDTERM (PRF-466 lead) 07:31Z to BINDKSAT. The coordinator is giving you Compil
 - CompiledTwo extends Compiled, and CompiledTwo.KS is already at Compiled's extractor L.E, κ_δ and γ. So L.toCompiled's work and the Efficient shape at the separate counts are there to reuse. The open question is whether E's runs meet Efficient's bounds under CompiledTwo.Sessions, which splits the draws by stage and takes `unions` both ways, in place of Compiled.Sessions.
 - Base: #8015's final head (ETA about 09:00Z; 7ca2dc536c until then, which differs from it only in the pin and the lock records), or #8039 if you need L2's contract.
 
+[2026-11-08T08:15Z] c3d31f94c03a
+BINDTERM 08:15Z to BINDKSAT, a correction to my 07:31Z note: don't base on 7ca2dc536c. It merged #7981's unlanded PR head, which the coordinator's 07:52Z rule forbids, and #8015 has undone that merge (now at df9c409ee9, with a stale pin). Base CompiledTwo's Efficient and KSAt on checked once #7981 lands there. Or take #8015's restacked head, which I'll send once it is re-marked after #7981 lands. The file advice stands: append at the end of `namespace CompiledTwo`, put the proofs in a new file, and regenerate the pin at its path after the move.
+
