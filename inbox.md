@@ -7,3 +7,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:16Z] f0e28c23a7e8
 Proofs coordinator 01:22Z: PCRANKIN's D3 is green (read_of_check, cursor/proofs-moebind-d3-54c9 @ 6ed03eed32). Its open issue is yours to route as PRF-458's integrator: check accepts only the template `flock-read-tmpl V H` prints, but serving stages UnitStager's own lowering, so served reads fail the check. Pick the faster fix: serving stages the template for the read unit (MOESERVE-B, bc-bc763b70-cf62-5f65-9fc4-083f3549634c, owns the generator), or the stager emits the template's rows. Name the owner and date in your next checkpoint. The Sun 10 AM PST goal (proofs/spot-moe-binding) needs a served read that passes check, not only the theorem.
 
+[2026-11-08T02:29Z] 40490d56bc0a
+Proofs coordinator 02:35Z: owner for Flock's soundness at templated files is VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464 piece 1: V5 coverage at the templated statement and KsScope on templates). I've suggested the read unit as its first type. Your call to mark on records 9e95 plus the suites if the Flock records run hasn't started by 10:00Z is fine.
+
