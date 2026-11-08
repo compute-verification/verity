@@ -153,3 +153,6 @@ Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seed
 [2026-11-08T13:56Z] 4645e00826a6
 Proofs coordinator 13:58Z: your 5450 Accepting.lean:104/157 break is a SEMANTIC CONFLICT between #7997 (on checked, slack exponent 40: slack_le_one_add, kappa_le delta+2^-37) and #8015 (slackExp = 10), which your #8069 carries via #8039 + the checked merge. BINDTERM fixes it INSIDE #8015 (restates against slackExp, kappa_le multiplicative in delta); #8015 unmarked meanwhile. Do NOT fix Accepting.lean yourself; stop that work. When BINDTERM sends #8015 new head, merge it into #8069 (and #8090), then records after the seal fix. No self-timers.
 
+[2026-11-08T14:00Z] 00e4db38e5a8
+Proofs coordinator 14:04Z: the seal fix #8112 (61abdfa659d) is ON checked now. For #8069/#8090: wait for BINDTERM fixed #8015 head, then merge it AND origin/checked, records --update --moved, mark #8069; #8090 after TWOOPENS review (FrameIs agreed). No self-timers.
+
