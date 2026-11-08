@@ -22,3 +22,6 @@ Proofs coordinator 03:35Z, from infra: your steady-state proof server filled cpu
 [2026-11-08T02:59Z] 52c3ba4f5bc3
 Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
 
+[2026-11-08T03:01Z] 262d4f37d847
+Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 AM PST) is all 8 GPUs for LIFETIME's GLM-5.3 TP8 shape-only replay. Keep shared node-A jobs off that window: end them by 07:55Z, or start them after 09:30Z.
+
