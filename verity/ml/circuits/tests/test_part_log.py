@@ -7,6 +7,7 @@ import json
 import random
 
 import pytest
+import test_codec_stream as CS
 
 from verity.ml.circuits import bind, codec
 from verity.ml.circuits.codec import (ALIAS_WINDOW, SCHEMA_V0, SCHEMA_V1, _BodyEncoder, _flat_parts, _part_key, canonical_json,
@@ -263,10 +264,15 @@ def _sum_body(B, S, x):
     return B.call(Neg16, acc)
 
 
-def _attention_like(N: int, use_log: bool, dead_row: int | None = None) -> Program:
-    """Row t of the history is one call's output; call t reads rows 0..t (a causal attention's key sequence)."""
+def _last_body(B, S, x):
+    return B.call(Neg16, x[x.type.n - 1])
+
+
+def _attention_like(N: int, use_log: bool, dead_row: int | None = None, read=_sum_body) -> Program:
+    """Row t of the history is one call's output; call t reads rows 0..t (a causal attention's key sequence) and sums them, or,
+    with ``read=_last_body``, negates the last word alone, so a long history's descriptor is its root's references."""
     pair = _comp("TPLPair", [("a", V16)], Array(2, V16), _pair_body)
-    sums = [_comp(f"TPLSum{P}", [("x", Array(2 * P, V16))], V16, _sum_body) for P in range(1, N + 1)]
+    sums = [_comp(f"TPL{read.__name__}{P}", [("x", Array(2 * P, V16))], V16, read) for P in range(1, N + 1)]
 
     def body(B, S, x):
         rows = [B.call(pair, x[t]) for t in range(N)]
@@ -353,6 +359,7 @@ def test_a_descriptor_is_the_key_tuple_writers_byte_for_byte(monkeypatch):
     progs = [_attention_like(N, log, dead) for N in (3, 12, 40) for log in (True, False) for dead in (None, N - 1)]
     progs += [_long_rows(2, 3, 12, False), _long_rows(2, 3, 12, True), _long_rows(3, 2, 10, False)]
     progs.append(decode_program(json.loads(json.dumps(encode_program(_attention_like(30, True)))), reg))
+    progs += [_attention_like(400, log, read=_last_body) for log in (True, False)]
 
     def written():
         return [(canonical_json(encode_program(p)), b"".join(descriptor_chunks(p))) for p in progs]
@@ -361,3 +368,33 @@ def test_a_descriptor_is_the_key_tuple_writers_byte_for_byte(monkeypatch):
     monkeypatch.setattr(codec, "_BodyEncoder", _KeyTupleWriter)
     assert written() == new
     assert all(b'"alias"' in whole for whole, _ in new)
+    assert [whole.count(b'"alias"') for whole, _ in new[-2:]] == [398, 398], "every cut past the second aliases the one before"
+
+
+recorded = CS.recorded
+
+
+def test_the_codec_streams_programs_are_the_key_tuple_writers_byte_for_byte(monkeypatch, recorded):
+    """`test_codec_stream`'s Programs, its random ones (`_Gen`) and every one the circuits tests it runs build (`MODULES`), are
+    written as the key-tuple writer wrote them, whole and streamed at node batches of 1, 3 and the default (an alias reaching
+    back across a batch boundary), or refused with its refusal. That suite holds them to the codec before the streamed digest,
+    which calls today's writer."""
+    CS.run_the_other_tests()
+    others = list(recorded)
+    progs = [CS._Gen(seed).program() for seed in range(CS.RANDOM)] + others
+    batches = (1, 3, codec._NODE_BATCH)
+
+    def written():
+        out = []
+        for p in progs:
+            out.append(CS.outcome(lambda q: canonical_json(encode_program(q)), p))
+            for b in batches:
+                monkeypatch.setattr(codec, "_NODE_BATCH", b)
+                out.append(CS.outcome(lambda q: b"".join(descriptor_chunks(q)), p))
+        return out
+
+    new = written()
+    monkeypatch.setattr(codec, "_BodyEncoder", _KeyTupleWriter)
+    assert written() == new
+    whole = new[::len(batches) + 1]
+    assert len(others) > 50 and sum(o == "ok" and b'"alias"' in w for o, w in whole[:CS.RANDOM]) > CS.RANDOM // 10

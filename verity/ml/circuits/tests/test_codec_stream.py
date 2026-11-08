@@ -302,8 +302,8 @@ def recorded(monkeypatch):
             del REGISTRY.defs[fid]
 
 
-def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
-    """Every Program the circuits tests' zero-argument tests build (`MODULES`): old and new agree on each, bytes or refusal."""
+def run_the_other_tests() -> None:
+    """Run each zero-argument test of `MODULES`, for the Programs it builds (`recorded` keeps them)."""
     for name in MODULES:
         mod = importlib.import_module(name)
         for fname, f in inspect.getmembers(mod, inspect.isfunction):
@@ -311,6 +311,11 @@ def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
                 continue
             with contextlib.suppress(Exception):  # only the Programs it built are wanted
                 f()
+
+
+def test_the_other_tests_programs_have_the_old_codecs_bytes(recorded):
+    """Every Program the circuits tests' zero-argument tests build (`MODULES`): old and new agree on each, bytes or refusal."""
+    run_the_other_tests()
     assert len(recorded) > 50
     assert sum(assert_same(p, batches=(1, C._NODE_BATCH)) for p in recorded) > 50
 
