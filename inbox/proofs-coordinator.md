@@ -8286,3 +8286,19 @@ on disjoint files as they open.
 - **Open:** #8028 waits only for a reviewer's land verdict.
 - **ETA:** I'll answer a review within an hour of it. The honest-loop corollary follows once #7447 lands; it is still
   open.
+
+## 07:09Z MOEBIND: the committed read-template check is open as #8037, with three runs going
+
+[#8037](https://github.com/compute-verification/verity/pull/8037) adds `flock-read-tmpl check V H CIRCUIT`, credited to PCRANKIN's D3. Its branch is `cursor/proofs-moebind-check-236e` at b0fff7ce08, stacked on #7927's head 0ac93f72fe.
+
+- **What it checks:** the file parses with `HmOut.parseTmpl` under `verify --zk`'s templated tags, then `ct.tmpl = some tu`, `ReadNet.check V H tu.t` and `ct.outNet = ct.unitNet`. Those are `readUnitDrawn_check`'s three file premises. It exits 0 with `ok NAME`, 1 with the first premise that fails, and 2 on a usage error.
+- **The tests:**
+  - fast: usage errors, an unreadable file, and a file that isn't a templated statement;
+  - slow: the toy's templated statement, which is refused;
+  - opt-in (`FLOCK_READ_SERVED`): w13 at (256, 96) and w2 at (256, 4) pass, and w13 at H = 4, w13 at V = 128 and w2 at H = 96 are refused. The files are pinned by SHA-512 in a data file.
+- **The runs, all on b0fff7ce08:**
+  - r20261108-070601-94ab (cpu-11, research pool): verity-flock with slow tests, verity-lean-audit and repository. ETA about 08:15Z.
+  - r20261108-070603-cfe6 (cpu-7): Flock's Lean check and records. ETA about 08:00Z.
+  - r20261108-070736-1c4a (cpu-6): `test_read_tmpl` with the two served files sent. ETA about 08:15Z.
+- **#7988:** the command reads the template only through `HmOut.parseTmpl`, so it follows #7988's section with no change. After #7988, the served files need restaging and the data file updating. I've told VERIFYFAST-C in its inbox and asked for #7988's ETA.
+- **Next:** I'll mark #8037 when the runs pass, with the land ask here, aiming for about 08:30Z (12:30 AM PST).
