@@ -31,9 +31,10 @@ A verifier bound to a stream and a prover (`binding`: its stream's digest and th
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
 
-A verifier holds the record's window to name the window's seed salt it read from the challenger's log (`seedSalt`,
-`Challenger.seedSaltOf`: the one coin of the seed-salt family released after the window's open root), and to name none
-when it read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
+`check`'s salt is the window's seed salt the verifier read from the challenger's log, never one of its copies: the one coin
+of the seed-salt family released after the window's open root, which the audit and the stream's run read from their
+evidence (`OneStage.seedSaltOf`, `Run.seedSaltOf`). R6 holds the record's window to name it, and to name none when the
+verifier read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
 
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
 declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
@@ -126,9 +127,6 @@ structure Verifier where
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
   samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
-  /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
-  challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
-  seedSalt : Option String := none
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -324,8 +322,9 @@ def PortIndex.find (ix : PortIndex) (p : String) : Option Json :=
 
 def PortIndex.has (ix : PortIndex) (p : String) : Bool := (ix.find p).isSome
 
-/-- `registration.check`'s failure codes, R1–R7 in order: empty when the record holds. -/
-def check (rec : Json) (v : Verifier) : Array String := Id.run do
+/-- `registration.check`'s failure codes, R1–R7 in order, with `seedSalt` the window's seed salt the verifier read
+from the challenger's log (lowercase hex of 64 bytes; none when it read none): empty when the record holds. -/
+def check (rec : Json) (v : Verifier) (seedSalt : Option String) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
@@ -383,7 +382,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
   -- a term, not a statement: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
+  c := if jeq (getD (get "window") "seed_salt") (optStr seedSalt) then c else addCode c "R6-seed-salt"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -393,7 +392,7 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
 
 /-- `check` as first written, R3 quadratic in the ports: each root's port compared, re-canonicalized, with every port
 before it and every verifier port with every root. The reference `check` is proved equal to (`check_eq_checkRef`). -/
-def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
+def checkRef (rec : Json) (v : Verifier) (seedSalt : Option String) : Array String := Id.run do
   let v2 := !v.registered.isEmpty
   if keys? rec != some (if v2 then KEYS_V2 else KEYS) then return #["keys"]
   let get := getD rec
@@ -452,7 +451,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
-  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
+  c := if jeq (getD (get "window") "seed_salt") (optStr seedSalt) then c else addCode c "R6-seed-salt"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -553,7 +552,8 @@ theorem portIndex_find (roots : Array Json) (p : String) :
 
 set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
-theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
+theorem check_eq_checkRef (rec : Json) (v : Verifier) (seedSalt : Option String) :
+    check rec v seedSalt = checkRef rec v seedSalt := by
   simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]
 
 end SampledProofs.Registration

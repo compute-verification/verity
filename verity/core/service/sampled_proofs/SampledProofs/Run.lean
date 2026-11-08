@@ -4,8 +4,9 @@ whose selection rule `Select.Rule` reads: what the challenger holds once a deliv
 check the stream ran on it, in the stream's order.
 
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
-  the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
-  (`Registration.check`) against the challenger's copies under the sampling design the rule names over that population
+  the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), the window's
+  seed salt read from the challenger's log (`seedSaltOf`: `seed-salt` where its evidence doesn't read), then R1–R7
+  (`Registration.check`) against the challenger's copies and that salt under the sampling design the rule names over that population
   (`Select.Rule.lawOver`, whatever law the copies carry), a `bernoulli` sampling design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
@@ -22,7 +23,8 @@ check the stream ran on it, in the stream's order.
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
   sample's `Q · n` proof blocks, `n` those of one replay block (`Partition.units` of the challenger's replay block Program
   under the check's query), replay block `sample[i]`'s being `[i·n, (i+1)·n)`: the public-items rule on the interior
-  values, the population (else `interior-population`), R1–R7 against its copies under `subset:Q·n` (all of them
+  values, the population (else `interior-population`), its window's seed salt from its own evidence on its copies'
+  window (`seed-salt`), R1–R7 against its copies and that salt under `subset:Q·n` (all of them
   committed), `population-order`, and its receipt; and `second`: the second stage on its own coins
   (`Select.selectSecond`), read after the interior registration's digest and carrying their evidence as the first
   stage's do (`coins`);
@@ -58,8 +60,8 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
-the interior values, the record and its place in the log, the second stage's coins and their evidence, and its audit
-record's proved units, instances, served units and session roots. -/
+the interior values, the record and its place in the log, the second stage's coins and their evidence, its audit
+record's proved units, instances, served units and session roots, and the evidence of its window's seed salt. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -72,6 +74,8 @@ structure Interior where
   instances : Option Int
   served : Json
   sessionRoots : Json
+  /-- the evidence of the interior's window's seed salt (`seedSaltOf`); null when its window has none -/
+  seedSalt : Json := Json.null
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -94,6 +98,8 @@ structure Input where
   served : Json
   sessionRoots : Json
   coins : Json := Json.null
+  /-- the evidence of the window's seed salt (`seedSaltOf`); null when the window has none -/
+  seedSalt : Json := Json.null
   interior : Option Interior := none
 
 private def refused (step : String) (codes : Array String) : Json :=
@@ -121,6 +127,15 @@ def coinsHold (coins record : Json) (window : Option String) (read : ByteArray) 
   | some w, .ok after => (Challenger.coinsReason coins w after read).isNone
   | _, _ => false
 
+/-- The window's seed salt the run reads from the challenger's log, lowercase hex: from `evidence`, in its coins' form
+with the salt's segment (`Challenger.seedSaltIn`), on the verifier's window `window`; none when the evidence is null,
+and no salt but a refusal when it doesn't read or the verifier holds no window. Never one of the copies. -/
+def seedSaltOf (evidence : Json) (window : Option String) : Except String (Option String) :=
+  match evidence, window with
+  | .null, _ => .ok none
+  | _, none => .error "a seed salt is read on the window's session: it needs the window's open root (window_root)"
+  | ev, some w => (some ∘ Flock.hexOf) <$> Challenger.seedSaltIn ev w
+
 /-- The audit record over `draw` (`Record.record`) with the run's statement, verdicts, δ and sessions. -/
 private def audit (i : Input) (record receipt draw law : Json) (proved : Array Int) (instances : Int)
     (served sessionRoots : Json) : V Json :=
@@ -147,7 +162,8 @@ private def interiorSteps (i : Input) (it : Interior) (k : Nat) (sample : Array 
   let m := sample.size * n
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
-  let codes := Registration.check it.record v
+  let .ok salt := seedSaltOf it.seedSalt v.windowRoot | return .error ("interiors", #["seed-salt"])
+  let codes := Registration.check it.record v salt
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
@@ -187,7 +203,8 @@ def run (i : Input) : V Json := do
   let some rule := i.rule.over n | return refused "register" #["rate"]
   let law ← rule.lawOver n
   let v := { v with law }
-  let codes := Registration.check i.record v
+  let .ok salt := seedSaltOf i.seedSalt v.windowRoot | return refused "register" #["seed-salt"]
+  let codes := Registration.check i.record v salt
   if !codes.isEmpty then return refused "register" codes
   if Draw.bernoulli law then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]

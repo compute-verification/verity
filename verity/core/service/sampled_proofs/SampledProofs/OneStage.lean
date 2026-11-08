@@ -25,9 +25,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
   declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
-  seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
-  `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form;
+  record's program to (`Registration.declaredCode`), refused in any other form; never the window's seed salt, which
+  the verifier reads from the challenger's log (`seed_salt` in the evidence);
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -35,13 +34,20 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   sampled proof blocks' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
   absent), and `coins` when the parameters name a challenger: the evidence of the sample's coins
-  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); the protocol refuses a sample that carries a
-  `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
+  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); and `seed_salt` when the window has one: the
+  evidence of the window's seed salt in the same form, its segment the salt's; the protocol refuses a sample that
+  carries a `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
+* **seed salt** (`seedSaltOf`): with `seed_salt`, the one coin of the seed-salt family that the session the ledger opens
+  on the verifier's window under the parameters' challenger key released after the window's open root
+  (`Challenger.seedSaltOf`), refused when it doesn't read or the parameters name no challenger; without it, none. R6
+  holds the record's window to name it, or none (`R6-seed-salt`): the salt comes from the challenger's log, never from
+  the parameters or the record;
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
 * **check** (`checkLive`, at the coins `checkAt`): with coins, that the sample's units are the ones their raw bytes sample
-  under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
+  under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) the seed salt
+  (`seedSaltOf`), R1–R7 against it (`Registration.check`), then the
   record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
   roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
   the registered one). It rejects when one fails or
@@ -90,6 +96,8 @@ structure Evidence where
   served : Option (Array Nat)
   sessionRoots : Option Json
   coins : Json := Json.null
+  /-- the evidence of the window's seed salt (`seedSaltOf`); null when the window has none -/
+  seedSalt : Json := Json.null
 
 structure Public where
   drawn : Array Nat
@@ -152,7 +160,6 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
     else keys
-  let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -236,12 +243,6 @@ def paramsParsed (j : Json) : V Params := do
     | .null => pure none
     | .str r => if r.length == 128 && isHex r then pure (some r) else throw "a window root is lowercase hex of 64 bytes"
     | _ => throw "a window root is lowercase hex of 64 bytes"
-  let seedSalt ← match getD j "seed_salt" with
-    | .null => pure none
-    | .str s => if s.length == 128 && isHex s then pure (some s) else throw "a seed salt is lowercase hex of 64 bytes"
-    | _ => throw "a seed salt is lowercase hex of 64 bytes"
-  if seedSalt.isSome && windowRoot.isNone then
-    throw "a seed salt is read on the window's session: it needs the window's open root (window_root)"
   let challenger ← match field? j "challenger" with
     | none => pure none
     | some ch => do
@@ -270,7 +271,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared, seedSalt },
+                                    declared },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
@@ -297,7 +298,8 @@ def evidenceParsed (b : ByteArray) : V Evidence := do
   let j ← Core.canonicalJson b
   let keys := #["draw", "instances", "proved_units", "receipt", "served", "session_roots", "sessions", "statement",
     "verdicts"]
-  exactly j (if (field? j "coins").isSome then keys.push "coins" else keys) "the evidence"
+  let keys := if (field? j "coins").isSome then keys.push "coins" else keys
+  exactly j (if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys) "the evidence"
   let some instances := nat? (getD j "instances") | throw "instances is not a natural number"
   let verdicts ← (entries (← obj (getD j "verdicts") "verdicts")).mapM fun (n, v) => do pure (n, ← obj v s!"verdict {n}")
   if !verdicts.all fun (_, v) =>
@@ -317,7 +319,8 @@ def evidenceParsed (b : ByteArray) : V Evidence := do
            served := ← match getD j "served" with
              | .null => pure none
              | x => some <$> nats x "served",
-           sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins" }
+           sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins",
+           seedSalt := getD j "seed_salt" }
 
 /-- The evidence (`evidenceParsed`), with a sample that carries a closure refused: a work sample widened by a closure map
 proves a set whose size varies with the sample, which the sampled audit's soundness statement doesn't cover (the stream's
@@ -390,12 +393,25 @@ def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteAr
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
-/-- R1–R7, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the sample. -/
+/-- The window's seed salt the verifier reads from the challenger's log (module docstring, **seed salt**), lowercase hex:
+from the evidence's `seed_salt`, under the parameters' challenger key, on the verifier's window; none when the evidence
+carries none. -/
+def seedSaltOf (p : Params) (e : Evidence) : Except String (Option String) :=
+  match e.seedSalt, p.challenger, p.verifier.windowRoot with
+  | .null, _, _ => .ok none
+  | _, none, _ => .error "the evidence carries a seed salt, and the verifier names no challenger it comes from"
+  | _, some _, none => .error "a seed salt is read on the window's session: it needs the window's open root (window_root)"
+  | ev, some (key, _), some w => (some ∘ Flock.hexOf) <$> Challenger.seedSaltOf key w ev
+
+/-- The seed salt, R1–R7, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no
+coins: the check `checkAt` runs once the coins drew the sample. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
+  match seedSaltOf p e with
+  | .error why => .reject s!"registration: seed salt: {why}"
+  | .ok salt =>
   let v := p.verifier
   let rec_ := c.record
-  let codes := Registration.check rec_ v
+  let codes := Registration.check rec_ v salt
   if !codes.isEmpty then .reject s!"registration: {", ".intercalate codes.toList}" else
   match Draw.derive v.program v.query v.law v.workTable with
   | .error err => .reject s!"registration: R1-law: {err}"

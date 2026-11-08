@@ -13,7 +13,8 @@ coins through this (`Core.Live`) takes its sample from the challenger's record, 
 
 `seedSaltOf key window coins` reads a window's seed salt the same way: the one coin of the challenger's
 `SEED_SALT_FAMILY`, a family no sample reads, that the session released after the window's open root itself, which
-R6 holds the window's registrations to name (`Registration.Verifier.seedSalt`).
+R6 holds the window's registrations to name (`Registration.check`'s salt). `seedSaltIn` reads it from evidence in
+`coinsReason`'s form, with the challenger's key, as the stream's run reads its coins.
 -/
 module
 
@@ -59,6 +60,18 @@ def seedSaltOf (key : ChallengerKey) (window : String) (coins : Json) : V ByteAr
   let salt ← drawCoins key window SEED_SALT_FAMILY (← Flock.unhex window) coins
   unless nat? (getD (getD coins "segment") "start") == some 0 && salt.size == COIN_BYTES do throw SEED_SALT_ONE
   return salt
+
+def SEED_SALT_FORM : String :=
+  "a seed salt's evidence is {key, ledger, main, pins, segment, session}: the challenger's key, the auditor's ledger, " ++
+  "the verifier's copy of main's first-parent history, the host's pins log, the salt's coin (Segment.to_json) and the " ++
+  "challenger session's files"
+
+/-- `seedSaltOf` on evidence in `coinsReason`'s form, `{key, ledger, main, pins, segment, session}`, its segment the
+salt's (`coins.seed_salt_in`): the stream's run's, whose coin evidence carries the challenger's key. -/
+def seedSaltIn (coins : Json) (window : String) : V ByteArray := do
+  unless keys? coins == some #["key", "ledger", "main", "pins", "segment", "session"] do throw SEED_SALT_FORM
+  seedSaltOf (← ChallengerKey.ofJson (getD coins "key")) window
+    (Json.mkObj (["ledger", "main", "pins", "segment", "session"].map fun k => (k, getD coins k)))
 
 /-- `{"coins", "key", "window"}` to `seed_salt_of`'s: `{"reason": null, "salt"}`, the salt in hex, or `{"reason", "salt":
 null}` where it raises; `{"refused"}` for a key `ChallengerKey.ofJson` refuses, and refused for a request in another

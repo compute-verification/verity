@@ -815,14 +815,14 @@ theorem declaredCode_none_iff (rec : Json) (v : Registration.Verifier) :
     · by_cases hp : jeq (getD rec "program") (.str p) = true <;> simp [h, hp]
     · simp [h]
 
-theorem registration_nil (rec : Json) (v : Registration.Verifier) :
-    Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
+theorem registration_nil (rec : Json) (v : Registration.Verifier) (salt : Option String) :
+    Registration.check rec v salt = #[] ↔ (∃ law, Registered v rec law) ∧ WindowSeedSalt rec salt := by
   rw [Registration.check_eq_checkRef]
   unfold Registration.checkRef
   extract_lets v2 get c0 w program part partDigest mine roots previous j14 j13 j12 j11 j10 j9 j8 distinct j7 j6 j5 jD j4 j3 j2
     j1 j0 c1
   have h14 : ∀ c, j14 () c = #[] ↔ c = #[] ∧ True := fun c => ⟨fun h => ⟨h, trivial⟩, fun h => h.1⟩
-  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec v ∧ (v2 = true → R7 rec v) ∧ True := by
+  have h13 : ∀ c, j13 () c = #[] ↔ c = #[] ∧ WindowSeedSalt rec salt ∧ (v2 = true → R7 rec v) ∧ True := by
     intro c
     simp only [j13]
     by_cases hv : v2 = true
@@ -834,7 +834,7 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   have h12 : ∀ c, j12 () c = #[] ↔ c = #[] ∧ (∀ sp, v.binding = some sp →
       jeq (getD (get "window") "stream") (.str sp.1) = true ∧
       jeq (getD (get "window") "prover") (.str sp.2) = true) ∧
-      (WindowSeedSalt rec v ∧ (v2 = true → R7 rec v) ∧ True) := by
+      (WindowSeedSalt rec salt ∧ (v2 = true → R7 rec v) ∧ True) := by
     intro c
     simp only [j12]
     rcases hb : v.binding with _ | ⟨stream, prover⟩
@@ -1009,10 +1009,10 @@ theorem registration_nil (rec : Json) (v : Registration.Verifier) :
   · rintro ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, _, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩, hloop, hpop, _, hdecl, hsch, hroots, hports,
       h7', h4', h5', h6a, h6b, h6c, h6d, h7r, _⟩
     have ⟨l1, l2, l3⟩ := (r2loop get _ _ _).1 hloop
-    exact ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
-      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d⟩, h7r⟩
-  · rintro ⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
-      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c, h6d⟩, h7r⟩
+    exact ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3 d hd'⟩, hpop, hdecl⟩,
+      ⟨hsch, hroots.1, hroots.2, hports.1, hports.2.1, hports.2.2, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩, h6d⟩
+  · rintro ⟨⟨law, ⟨hk, hf, hp, hd, hl, hw1, hw2⟩, ⟨hprog, l1, l2, ⟨d, hd', l3⟩, hpop, hdecl⟩,
+      ⟨hsch, hr1, hr2, hp1, hp2, hp3, h7'⟩, h4', h5', ⟨h6a, h6b, h6c⟩, h7r⟩, h6d⟩
     refine ⟨hk, ⟨hf, hp⟩, ⟨law, hd, hl⟩, rfl, ⟨hw1, hw2⟩, hprog, ⟨d, hd'⟩,
       (r2loop get _ _ _).2 ⟨l1, l2, fun d' hd'' => ?_⟩, hpop, rfl, hdecl, hsch, ⟨hr1, hr2⟩, ⟨hp1, hp2, hp3⟩, h7', h4',
       h5', h6a, h6b, h6c, h6d, h7r, trivial⟩
@@ -1213,11 +1213,17 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       ∃ law d n, Registered p.verifier c.record law ∧ Drawn e.draw (getD c.record "population") law ∧
         UnitsProved c e ∧ VerdictsAccept e.verdicts ∧
         Record.profileDraw law = some d ∧ nat? (getD c.record "population") = some n ∧
-        pub = publicOf p e law d n ∧ prof = profileOf p c e d n := by
+        pub = publicOf p e law d n ∧ prof = profileOf p c e d n ∧ SeedSaltNamed p c e := by
   unfold OneStage.check
+  rcases hs : OneStage.seedSaltOf p e with why | salt
+  · simp only [reduceCtorEq, false_iff]
+    rintro ⟨law', d', n', -, -, -, -, -, -, -, -, salt', hs', -⟩
+    rw [hs] at hs'; cases hs'
   simp only []
-  by_cases h1 : Registration.check c.record p.verifier = #[]
-  · obtain ⟨law, hreg⟩ := (registration_nil _ _).1 h1
+  have hsalt : SeedSaltNamed p c e ↔ WindowSeedSalt c.record salt :=
+    ⟨fun ⟨s, h, hw⟩ => by rw [hs] at h; cases h; exact hw, fun hw => ⟨salt, hs, hw⟩⟩
+  by_cases h1 : Registration.check c.record p.verifier salt = #[]
+  · obtain ⟨⟨law, hreg⟩, hw⟩ := (registration_nil _ _ _).1 h1
     have hd := registered_law hreg
     have uniq : ∀ law', Registered p.verifier c.record law' → law' = law := fun law' h' => by
       have := registered_law h'
@@ -1247,8 +1253,8 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
           · simp only [Core.Outcome.accept.injEq]
             constructor
             · rintro ⟨rfl, rfl⟩
-              exact ⟨law, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl⟩
-            · rintro ⟨law', d', n', hreg', -, -, -, hd', hn', rfl, rfl⟩
+              exact ⟨law, d, n, hreg, hdr, hu, hva, hpd, rfl, rfl, rfl, hsalt.2 hw⟩
+            · rintro ⟨law', d', n', hreg', -, -, -, hd', hn', rfl, rfl, -⟩
               obtain rfl := uniq law' hreg'
               rw [hpd] at hd'; cases hd'
               cases hn'
@@ -1272,23 +1278,23 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
       rintro ⟨law', d', n', hreg', hdr, -⟩
       obtain rfl := uniq law' hreg'
       exact h2 ((checkDraw_nil _ _ _).2 hdr)
-  · have : (Registration.check c.record p.verifier).isEmpty = false := by
+  · have : (Registration.check c.record p.verifier salt).isEmpty = false := by
       simpa [Array.isEmpty_iff] using h1
     simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
-    rintro ⟨law', d', n', hreg', -⟩
-    exact h1 ((registration_nil _ _).2 ⟨law', hreg'⟩)
+    rintro ⟨law', d', n', hreg', -, -, -, -, -, -, -, -, hsn⟩
+    exact h1 ((registration_nil _ _ _).2 ⟨⟨law', hreg'⟩, hsalt.1 hsn⟩)
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
 /-- Completeness of `AcceptMeans`: a commitment whose registration keeps R1–R7, with a sample of the agreed law over the
-registered population, its units proved and served as sampled, and verdicts that accept, is accepted, publishing
-`publicOf` and the profile `profileOf`. -/
+registered population, its units proved and served as sampled, verdicts that accept, and a window naming the seed salt
+read from the challenger's log, is accepted, publishing `publicOf` and the profile `profileOf`. -/
 theorem acceptMeans_complete (p : Params) (c : Commitment) (e : Evidence) (law : Json) (d : Core.Draw) (n : Nat)
     (hr : Registered p.verifier c.record law) (hd : Drawn e.draw (getD c.record "population") law)
     (hu : UnitsProved c e) (hv : VerdictsAccept e.verdicts) (hp : Record.profileDraw law = some d)
-    (hn : nat? (getD c.record "population") = some n) :
+    (hn : nat? (getD c.record "population") = some n) (hs : SeedSaltNamed p c e) :
     OneStage.check p c e = .accept (publicOf p e law d n) (profileOf p c e d n) :=
-  (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl⟩
+  (acceptMeans_iff p c e _ _).2 ⟨law, d, n, hr, hd, hu, hv, hp, hn, rfl, rfl, hs⟩
 
 theorem digestIsRecord's : DigestIsRecord's := by
   intro b c h
@@ -1306,7 +1312,7 @@ theorem digestIsRecord's : DigestIsRecord's := by
 
 theorem bernoulliBounds : BernoulliBounds := by
   intro p c e pub prof h r l hl hd
-  obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl⟩ := acceptMeans p c e pub prof h
+  obtain ⟨law, d, n, -, -, -, -, -, -, rfl, rfl, -⟩ := acceptMeans p c e pub prof h
   simp only [profileOf, List.mem_toArray, List.mem_singleton] at hl
   subst hl
   simp only [Option.some.injEq] at hd

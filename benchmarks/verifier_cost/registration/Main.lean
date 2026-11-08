@@ -2,8 +2,9 @@ import SampledProofs
 
 /-!
 `registration-time FILE [--no-ref]`: `Registration.check` and `Registration.checkRef` (R3 as first written, quadratic in
-the ports; `check_eq_checkRef` proves them equal) on one `{"params", "record"}` input, as the `registration` piece reads
-it, each timed after the input is parsed, one `PHASE {json}` line each on stdout; exit 1 if their codes differ.
+the ports; `check_eq_checkRef` proves them equal) on one `{"params", "record"}` input with its optional `seed_salt`, as
+the `registration` piece reads it, each timed after the input is parsed, one `PHASE {json}` line each on stdout; exit 1 if
+their codes differ.
 `registration.sh` builds it against the checkout's verifier and runs it; it is a measurement, not a verifier.
 -/
 
@@ -37,7 +38,8 @@ def main (args : List String) : IO UInt32 := do
   let v := p.verifier
   let roots := match getD rec_ "roots" with | .arr rs => rs.size | _ => 0
   let mut got : Array (Array String) := #[]
-  for (name, f) in [("check", Registration.check), ("checkRef", Registration.checkRef)] do
+  let salt := match getD j "seed_salt" with | .str s => some s | _ => none
+  for (name, f) in [("check", (Registration.check · · salt)), ("checkRef", (Registration.checkRef · · salt))] do
     if name == "checkRef" && !ref then continue
     let (cs, ms) ← timed f rec_ v
     got := got.push cs
