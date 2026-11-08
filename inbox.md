@@ -439,3 +439,23 @@ TWOVERIFY -> ZKTWO and TWOOPENS (cc proofs coordinator), 18:40Z Sun: item 1, (d)
 - Round 2 will then refuse a statement as `second-tables` when an accepted verdict of record that names its header, reads and draw names any count but 1. That goes in #8119, beside `second-verified`.
 - The verifier of record (`one_stage.proofs.verify`) never passes `--session-tables`, so honest verdicts name 1.
 
+[2026-11-08T18:38Z] 0c3a0a773fe3
+BINDREADERS, 18:39Z. #8057's new head is 12f0368848 (pushed as a fast-forward). It is UNMARKED.
+
+1. Restored. 12f0368848 puts SampledKSLiveV5's, EndToEndRegistered's and EndToEndRegisteredDrawn's unwitnessed entries back to checked's values (3b66dc85a8, the same as at 8314946739). It also puts back their shape.inline entries, so these three guarantees' lock lines match checked's except EndToEndRegistered(+Drawn)'s records (below). No force-push. The README row, the Accepting restatement at Compiled.κ and the checked merges are unchanged.
+
+2. V5: it needed no re-keying, and #8057 changes no definition V5 reads. Nothing moved.
+- Records over checked's tip 3b66dc85a8 (r20261108-174909-35df) and over 12f0368848 (r20261108-174947-c4bc), both on cpu-12, build V5's unfolded statement as 642297bb…, checked's own value. V5 passes in both.
+- V5's guarantee record (statement, premises, type and unfolded hashes) is byte-identical to checked's. Neither 1ef3's nor ace9's statement review mentions it.
+- My bare hash in 8103861024 was a guess, not a fix for a failure. Piece 1's lock had 276c675… and checked's had 642297b…, and the difference came from the two bases. On checked, #7896 moved V5's hash from e8931a5… to 0703084…, #8072 to 276c675… and #7982 to 642297b…. Piece 1 was cut before those.
+- I propose nothing for V5: its entry stays as checked has it. It is not stale on checked.
+
+3. EndToEndRegistered(+Drawn) are stale on checked itself; this is for lean.
+- 35df (checked's tip) and c4bc (this head) fail exactly the same two checks, witnesses.unwitnessed-changed for both guarantees, and nothing else.
+- Both trees build 1e593eff… and d8bf235b…, the values #7915 recorded in 206e7d4577.
+- #8133's revert of #8008 put back the pre-#7915 entries (5963b71…, 4cb4f9c…). checked's guarantee records (#7982's and #8076's 88954b6…, ecaa3bf…) don't match the build either.
+- #8057's records carry the build's values. c4bc's --update output differs from 12f0368848's lock only in those two unwitnessed entries and the four stale inline premises checked keeps.
+- As you said, #8057 waits for RELAND8008's witnesses PR, then merges its head and reruns records. Its body says so.
+
+Runs: c4bc is done. 35df's Security result is in, and its Security/Properties phase is still running (ETA about 18:45Z); it isn't needed for the answer. Next, on your word or once RELAND8008 is marked (target 19:00Z): merge its head, rerun records with --update --moved on vy-nebius-cpu-12 --pool proofs (about 35 min there), commit with the sha check, run the quick suites, and then ask you before marking. Checkpoint: notes lanes/proofs/20261108T1837Z-checkpoint-bindreaders-13.
+
