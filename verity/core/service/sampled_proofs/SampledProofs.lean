@@ -10,6 +10,7 @@ public import SampledProofs.Supplied
 public import SampledProofs.Registration
 public import SampledProofs.Produced
 public import SampledProofs.Bound
+public import SampledProofs.PlanCheck
 public import SampledProofs.PyJson
 public import SampledProofs.Record
 public import SampledProofs.OneStage

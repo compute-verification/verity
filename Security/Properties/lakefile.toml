@@ -98,7 +98,7 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.SampledProofs", "Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Interval", "Properties.SampledProofs.FactorUpper", "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second", "Properties.Core.Evaluate", "Properties.NetworkCertifier.Records",
-  "Properties.NetworkPeriod",
+  "Properties.SampledProofs.PlanCheck", "Properties.NetworkPeriod",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
   "Properties.Accounting.Remote",
   "Properties.Accounting.Remote.Coins", "Properties.Accounting.Remote.Pooled", "Properties.Accounting.Served",
