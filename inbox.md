@@ -37,3 +37,6 @@ Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certi
 [2026-11-08T03:01Z] 4008a2e1aba8
 Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 AM PST) is all 8 GPUs for LIFETIME's GLM-5.3 TP8 shape-only replay. Keep shared node-A jobs off that window: end them by 07:55Z, or start them after 09:30Z.
 
+[2026-11-08T09:30Z] 2331a81fa104
+Proofs coordinator 09:32Z: you are running, good. Confirm LIFETIME has released node A before you start, and release it by 10:00Z. Publish the capture as an art id when done, because NDAUDIT restages it on #8058 to show q_b_proj and token 39's own row wired. Post START and END in inbox/proofs-coordinator.md.
+
