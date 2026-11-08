@@ -17,7 +17,7 @@
   },
   "notes": {
    "exfiltration_appendix": [
-    "The advice cap here is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, times the scope's machine windows, the most any accepted advice is charged. With the tick and certified arrivals, today's advice is the response length, charged until a circuit checks the stop rule; once one does, and with batch-invariant Definitions, it is 0 bits."
+    "The advice cap here is a registered cap a 600 s machine window on the scheduler's advice without the certified tick, measured with prefix caching on and so pending, times the scope's machine windows, the most any accepted advice is charged. With the tick, certified arrivals (the run with the real network certifier is pending) and prefix caching off, today's advice is the response length, charged until a circuit checks the stop rule; once one does, and with batch-invariant Definitions, it is 0 bits."
    ]
   }
  }

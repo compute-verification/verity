@@ -191,9 +191,10 @@ def priced_card(model: str = "GLM-5.3") -> dict:
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
                        "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
-                       "certified arrivals, it leaves no scheduling advice in any window, with v1 sending no "
-                       "prefix-cache hit (each is the replay's, derived by the registered pool model); the response "
-                       "length stays advice until a circuit checks the stop rule"}
+                       "certified arrivals and prefix caching off, it leaves no scheduling advice but the response "
+                       "length, which stays advice until a circuit checks the stop rule; the run with the real network "
+                       "certifier is pending (a client stood in for it in the measured runs, which served with prefix "
+                       "caching on)"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
