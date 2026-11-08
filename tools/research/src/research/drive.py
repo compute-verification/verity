@@ -30,7 +30,7 @@ landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs t
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
 circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red is named on `checked` as any red is); beside the
 tick, without its lock or a write to its state, `research queue promote` moves it there as soon as that run ends (a loop on
-drive's host runs it: `queue.promote`), and ci's `research queue baseline SHA` to a commit ci knows passed them, each tick
+drive's host runs it: `queue.promote`), and `research queue baseline SHA --by ci` to a commit known to pass them, each tick
 taking a `main` so moved as verified (`_main_moved`); with `land_into = "main"` they land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
@@ -46,7 +46,7 @@ its head branch (`_close_carried`, `_delete_head`); the sweep after a landing (`
 PR that landed or was closed unmerged, but one drive closed as stale or unlandable.  A `main` pushed outside drive is merged
 into `checked` (`_absorb`).
 Drive takes a tip of `checked` only when it wrote it (a landing, a revert, `_absorb`'s merge; each recorded in its state
-before its push: `_push_into`) or ci accepted it (`research queue accept-checked`); on any other tick it holds, landing
+before its push: `_push_into`) or it was accepted (`research queue accept-checked`); on any other tick it holds, landing
 nothing, syncing no `next` and moving no `main`, and rings `CI` and `TOP` once naming the commit and its author
 (`_unwritten`).  A member whose own change touches Lean, a lock or the spec lands on its verdict like any other.  And
 every .py file the landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  And
@@ -91,8 +91,8 @@ packages, lean-suites' suites and lean-build beside them) passed, for `main` and
 it (`shard_steps`, each shard's plan its live record's), launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
-records step (`_plan`: `check.py --shard-plan`) and each shard `--shard auto:K/N --shard-plan-file PLAN`; a run ci launched in
-place of a shard's twin counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K
+records step (`_plan`: `check.py --shard-plan`) and each shard `--shard auto:K/N --shard-plan-file PLAN`; a run launched by
+hand in place of a shard's twin counting once `/data/infra/drive.sh queue drive-shard-add TIP K RUN_ID` adds it to shard K
 (`queue.drive_shard_add`: only a run whose own record is shard K/N of TIP's commit, of the run's auto plan when it has one;
 cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
@@ -177,8 +177,8 @@ from .store import vocab
 
 #: who hears what drive can't settle
 CI = "@ci"
-#: how many of the landing branch's tips drive wrote (or ci accepted) its state keeps (`drive["checked_tips"]`, newest last):
-#: the tips `Driver._unwritten` takes, more than one tick's pushes
+#: how many of the landing branch's tips drive wrote (or `accept-checked` recorded) its state keeps (`drive["checked_tips"]`,
+#: newest last): the tips `Driver._unwritten` takes, more than one tick's pushes
 CHECKED_TIPS = 32
 #: the oldest git whose `merge-tree` takes `--attr-source` (`Queue._merge`): on an older one drive refuses each tick and rings
 #: `CI` and `INFRA`, again each `OLD_GIT_EVERY_S` while it stays (`Driver._old_git`)
@@ -583,7 +583,7 @@ PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
 
 
 def _epoch(ts: object) -> float | None:
-    """A UTC timestamp (`2026-10-12T21:09:00Z`) as seconds since the epoch, None when it isn't one."""
+    """A UTC timestamp (`YYYY-MM-DDTHH:MM:SSZ`) as seconds since the epoch, None when it isn't one."""
     try:
         t = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
     except ValueError:
@@ -1205,7 +1205,7 @@ class Driver:
         self.warn_steps = warn_steps
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place, but
         #: for `SLIM_STEPS`, a run of them alone beside it: `_follow_tasks`, `_follow_slim`); ``tasks``, the executor (default:
-        #: infra's queue, `QueueTransport` running ``executor_enqueue``)
+        #: the task executor's queue, `QueueTransport` running ``executor_enqueue``)
         self.executor, self._tasks, self.executor_enqueue = executor, tasks, executor_enqueue
         #: drive.toml's low-risk lane (`land_lowrisk`): on, its most landings a tick, and what keeps a change off it (`lowrisk`)
         self.lowrisk_lane, self.lowrisk_per_tick, self.lowrisk_excludes = lowrisk_lane, lowrisk_per_tick, lowrisk_excludes
@@ -1357,10 +1357,10 @@ class Driver:
 
     def _unwritten(self, drive: dict) -> str | None:
         """Why the tick is held, or None: the landing branch (`checked`) is at a commit drive didn't write.  Drive takes a tip
-        of it only when it pushed it (`_push_into`: a landing, a revert, `_absorb`'s merge of or fast-forward to `main`) or ci
-        accepted it (`research queue accept-checked`).  On any other it follows and launches no run, lands nothing, syncs no
+        of it only when it pushed it (`_push_into`: a landing, a revert, `_absorb`'s merge of or fast-forward to `main`) or it
+        was accepted (`research queue accept-checked`).  On any other it follows and launches no run, lands nothing, syncs no
         `next` and moves no `main`, and rings `CI` and `TOP` once per such commit, naming it and its author, until the branch
-        is reset to the last tip drive wrote or ci accepts the one it is at.  Never with `land_into = "main"`, under --shadow,
+        is reset to the last tip drive wrote or `accept-checked` accepts the one it is at.  Never with `land_into = "main"`, under --shadow,
         or while origin has no landing branch (it reads as `main`, and `drive_names` refuses the tick); a state that records no
         tip yet takes the one the branch is at."""
         q = self.q
@@ -2661,7 +2661,7 @@ class Driver:
         waits for: `_target`) with nothing red and no launch of it that registered no run (`_launch_failed`, which the ring
         then counts): then verification is only under way (a cold run is ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
         culprit's lane and the owner of what failed), else `CI` and `TOP`, as it does for a warn step's red, whose culprits were
-        rung once (`_warns`).  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
+        rung once (`_warns`).  Drive's tick, not an hourly sweep, rings it: drive holds the last verified
         `main`, its landings since and what is red."""
         if not (pl := drive.get("postland")) or self.dry_run or self.q.shadow:
             return
@@ -3087,7 +3087,7 @@ class Driver:
         """Commit ``files``, the records lock run ``rid`` regenerated, staged on its ``tip``, and push that lock commit onto the
         landing branch, or its merge onto the branch's tip when the branch moved (`_commit_locks`).  The bookkeeping the run
         repaired (`merge.bookkeeping_warnings`: it warns, and the next PR fixes it) is listed in the commit and
-        told to the Lean lane and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
+        told to the Lean check's owner and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
         (`CI` told once) or the push lost a race (the next tick tries again)."""
         from .merge import bookkeeping_warnings
 
@@ -3896,7 +3896,7 @@ class Driver:
 
     def _unbaselined(self, drive: dict) -> str | None:
         """Why no review landing happens now, or None: `main` has no baseline (`_baselined`), so a failure after a landing couldn't be told from one `main` had before it.  The
-        first run is then of `main` itself (`start_postland`), once any after-landing run still going has ended; with `land_into = "checked"`, ci moves `main` to a green commit of
+        first run is then of `main` itself (`start_postland`), once any after-landing run still going has ended; with `land_into = "checked"`, `main` is moved to a green commit of
         it by hand (`/data/infra/drive.sh queue baseline SHA --by ci`), which the next tick takes as verified (`_main_moved`)."""
         into = self.q.into
         main = _out(self.repo, "rev-parse", self.q.base)
