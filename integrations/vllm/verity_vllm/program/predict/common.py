@@ -57,6 +57,32 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
+def stacked(rows: list[Refs]) -> Refs:
+    """The rows' references end to end, one row after another: one `Affine` or `Strided` run where the rows are equal runs of one
+    node at a constant stride (each row of a batch's output, or one field of it), else their concatenation."""
+    from verity.ml.circuits.refs import Affine, Strided
+    r0 = rows[0]
+    if len(rows) > 1 and isinstance(r0, Affine) and all(isinstance(r, Affine) and (r.space, r.idx, r.count) == (r0.space, r0.idx, r0.count)
+                                                         for r in rows):
+        s = rows[1].base - r0.base
+        if s > 0 and all(r.base == r0.base + i * s for i, r in enumerate(rows)):
+            return Affine(r0.space, r0.idx, r0.base, len(rows) * r0.count) if s == r0.count else \
+                Strided(r0.space, r0.idx, r0.base, r0.count, s, 1, len(rows) * r0.count)
+    return concat(rows)
+
+
+def each(B, fn, *args) -> list[Coll]:
+    """`fn` over a launch's rows, a member a row: each argument a list of the rows' `Refs` (mapped) or one `Refs` every row reads
+    -> each row's output.  One row is a call, more one batch node (`Builder.batch`) over them."""
+    params = _ptypes(fn)
+    n = next(len(a) for a in args if isinstance(a, list))
+    if n == 1:
+        return [B.call(fn, *(Coll(t, a[0] if isinstance(a, list) else a) for t, a in zip(params, args)))]
+    colls = [Coll(Array(n, t), stacked(a)) if isinstance(a, list) else Coll(t, a) for t, a in zip(params, args)]
+    out = B.batch(fn, *colls, axes=tuple(0 if isinstance(a, list) else None for a in args))
+    return [out[m] for m in range(n)]
+
+
 def reads_run(net, keys: int) -> bool:
     """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
     return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
