@@ -61,6 +61,11 @@ abbrev bernoulli (n num den : ℕ) [NeZero den] : Law n where
   Ω := Fin n → Fin den
   draw ω := Finset.univ.filter fun u => (ω u).val < num
 
+/-- Each unit `u` sampled independently with probability `num u / den`. -/
+abbrev bernoulliOf (num : Fin n → ℕ) (den : ℕ) [NeZero den] : Law n where
+  Ω := Fin n → Fin den
+  draw ω := Finset.univ.filter fun u => (ω u).val < num u
+
 /-- One Bernoulli coordinate's average of `a` when sampled and `1` when not. -/
 noncomputable def bernFactor (num den : ℕ) (a : ℝ≥0∞) : ℝ≥0∞ :=
   ((num : ℝ≥0∞) * a + ((den - num : ℕ) : ℝ≥0∞)) / den
