@@ -29,22 +29,28 @@ def reach_tables(s: dict) -> str:
         key = (g["site"], g["layer"])
         if key not in best or g["direct_bits_bound"] > best[key]["direct_bits_bound"]:
             best[key] = g
+    codes = ("rank_bits_bound", "xent_bits", "kl_bits")
     rows = [[k[0], k[1], g["mult"], g["n"], g["flip"], g["raw"], g["direct"], g["direct_after_first"],
-             g["direct_bits_bound"], g["direct_bits_bound"] / bpt, g["lp"], g["nan"]] for k, g in best.items()]
+             g["direct_bits_bound"], g["direct_bits_bound"] / bpt] + [g.get(c, "-") for c in codes]
+            + [g["lp"], g["nan"]] for k, g in best.items()]
     head = ["site", "layer", "m (most reach)", "faults", "flip", "raw", "direct", "direct after 1st",
-            "bound (bits)", "bound (tokens)", "lp positions", "nan"]
+            "bound (bits)", "bound (tokens)", "rank code (bits)", "cross-entropy (bits)", "sum KL (bits)",
+            "lp positions", "nan"]
     by_mult = {}
     for g in s["groups"]:
         by_mult.setdefault(g["mult"], []).append(g)
     mrows = []
     for m, gs in sorted(by_mult.items()):
         n = sum(g["n"] for g in gs)
-        mrows.append([m, n, sum(g["flip"] * g["n"] for g in gs) / n, sum(g["direct"] * g["n"] for g in gs) / n,
-                      sum(g["direct_bits_bound"] * g["n"] for g in gs) / n])
+        mean = lambda key: sum(g[key] * g["n"] for g in gs) / n if all(key in g for g in gs) else "-"  # noqa: E731
+        mrows.append([m, n, mean("flip"), mean("direct"), mean("direct_bits_bound")] + [mean(c) for c in codes])
+    temp = s.get("temperature", 0.0)
     return (f"Reach, {s['model']}, N = {s['new']} served positions, {s['faults']} faults, served logits "
-            f"{s['precision']}, top-{s['topk']} lp tolerance {s['lp_tol']}:\n\n" + table(head, rows)
+            f"{s['precision']}, {'greedy' if not temp else f'sampled at temperature {temp:g}'}, top-{s['topk']} lp "
+            f"tolerance {s['lp_tol']}:\n\n" + table(head, rows)
             + "\n\nBy multiple m of the site's RMS, over all sites:\n\n"
-            + table(["m", "faults", "flip", "direct", "bound (bits)"], mrows))
+            + table(["m", "faults", "flip", "direct", "bound (bits)", "rank code (bits)", "cross-entropy (bits)",
+                     "sum KL (bits)"], mrows))
 
 
 def lam_tables(ex: list[dict], charges: list[float], ks: tuple[int, ...] = (20,)) -> str:
