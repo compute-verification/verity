@@ -65,7 +65,6 @@ public import Definitions.Pouw.PearlC.Fp4
 public import Definitions.Pouw.PearlC.Fp4Chain
 public import Definitions.Pouw.PearlC.Fp4Skip
 public import Definitions.Pouw.PearlC.Fp4Vectors
-public import Definitions.Pouw.PearlC.FlockTile.Bridge
 public import Definitions.Pouw.PearlC.FlockTile.Audit
 public import Definitions.Pouw.PearlC.Game
 public import Definitions.Pouw.PearlC.Hidden
@@ -226,8 +225,8 @@ sessions (`serviceLaw`, `sessionLaw`, `CopyClosed`) with its units' statements, 
 (`UnitStmts.copies`, `WrongCopyClosed`).
 The window's ε from its calls' (M2) and the service's sample at `η = 0` are `Definitions.Pouw.Guarantees.Window`, stated and
 not yet proved. `Proofs.Pouw.Window`: the deployed wrong sets are copy-closed, PoUW's reading with the served tie, the
-collision term on average over the oracle, and the bridge from the window's game to Flock's, with Flock's knowledge
-bound at main's `--zk` sessions.
+collision term on average over the oracle, and Flock's analysis of a session as the window's call's, with Flock's
+knowledge bound at main's `--zk` sessions.
 -/
 
 @[expose] public section
