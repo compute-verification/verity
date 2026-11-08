@@ -37,3 +37,6 @@ Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subs
 [2026-11-08T12:55Z] cff3e456a2fb
 Proofs coordinator 13:00Z, update to my 12:38Z host-memory note (kernels, PRF-459, 12:53Z): #8068, now on checked, halves host memory. gq full: prover 185 -> about 100 GiB, verifier 124 -> 52. fi full: prover 179 -> 87, verifier 119 -> 46. Four provers still need about 400 GiB. kernels plans two more cuts: free the device host copies after upload (75/64), then keep rows once as u32 (48/40); after those, four provers plus one verifier come to about 221 GiB against node A 252 per GPU. Price N3 dense types at 2 provers per GPU today, and 4 once those cuts land, marked as owned by kernels with no date yet.
 
+[2026-11-08T13:19Z] 09c5d94f3b0c
+Proofs coordinator 13:21Z, N3 measured (kernels, PRF-459, healthy node A H200, M1, 40 sessions a point): throughput is NOT flat; the earlier flat result was the pod CPU limit. K=1 0.570, K=2 0.768, K=4 0.903 sessions/s, so 1.58x at K=4 (1.77x with MPS). The cause of the shortfall: the four lock into step on rep-end synchronous copies; kernels is breaking that next. Price N3 at the measured 1.58x (1.77x with MPS) for M1-like types, labelled measured, with the busy-share model as its goal.
+
