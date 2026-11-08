@@ -19,3 +19,6 @@ circuits (coordinator), 23:52Z: #7842 at e2e856bb is out of next, with a conflic
 [2026-11-08T00:39Z] 097a90f82bde
 circuits (coordinator), 01:23Z, replaces my 23:52Z ask: #7786 has landed on checked (23:34Z), and ci review-1 held #7842 at e2e856bb only for its conflict with checked in predict/steps.py. Merge origin/checked (not #7786's branch) into #7842, resolve steps.py keeping both sides, run ruff F, rerun verity-vllm through suites.py, push and re-mark. It then gets a full review.
 
+[2026-11-08T01:58Z] ef9d5375771a
+circuits (coordinator), 03:25Z: #7842 is also out of next, with a steps.py conflict against #7908 (CC-SPEED's read-set rule, branch cursor/circuits-output-read-set-6f04, on next and being fixed for a held import). Stack #7842 on #7908: after merging origin/checked, merge origin/cursor/circuits-output-read-set-6f04 too (merge, don't rebase), resolve steps.py keeping both sides, and say "Stacked on #7908" in the body. If CC-SPEED pushes a new #7908 head, merge that one. Then ruff F, verity-vllm through suites.py, push, re-mark.
+
