@@ -47,16 +47,16 @@ open FlockSoundness FlockSoundness.Audit FlockSoundness.Discharge.Hm
 
 /-! ## A unit's rows hold at its local evaluation -/
 
-theorem sat_localEval {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows}
+theorem sat_localEval {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) (X : Fin C.N → Bool) : R.Sat fun c => P.localEval X u (I.wire c) := by
   intro i
   show P.localEval X u (I.wire (R.comp i)) = _
   rw [P.localEval_of_mem X (I.mem i), I.op i]
-  simp only [Op.apply, xorSum_map]
+  simp only [Verity.Boolean.Op.apply, xorSum_map]
   rfl
 
 /-- A column that is no computed row is read from the transcript. -/
-theorem localEval_wire {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows}
+theorem localEval_wire {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows}
     (I : P.IsRowsUnit u R) (X : Fin C.N → Bool) {c : Fin R.w} (hc : R.nIn + R.nComp ≤ c.val ∨ c.val < R.nIn) :
     P.localEval X u (I.wire c) = X (I.wire c) :=
   P.localEval_of_not_mem X (I.outside c fun i h => by
@@ -137,7 +137,7 @@ theorem stack_one (R : Rows) (k : ℕ) {u : ℕ} (hu : u < k) {z : Fin (R.stack 
     z (R.stackCol k hu R.one) = z (R.stack k).one := by
   have hs := h ⟨u * (R.nComp + 1) + 0, Rows.mul_add_lt hu (by omega)⟩
   rw [stack_comp_one R k hu, stack_a_one R k hu, stack_b_one R k hu] at hs
-  simpa [xorSum] using hs
+  simpa [Verity.Boolean.xorSum] using hs
 
 /-! ## A net's rows are its laid-out rows -/
 
@@ -148,8 +148,8 @@ theorem colVal_fin {w : ℕ} (z : Fin w → Bool) (c : Fin w) : colVal z c.val =
   simp [colVal, c.isLt]
 
 theorem xorRow_colVal {w : ℕ} (z : Fin w → Bool) {l : List (Fin w)} {cs : Array ℕ} (h : l.map Fin.val = cs.toList) :
-    xorRow (colVal z) cs = xorSum l z := by
-  unfold xorRow xorSum
+    xorRow (colVal z) cs = Verity.Boolean.xorSum l z := by
+  unfold xorRow Verity.Boolean.xorSum
   rw [← h]
   clear h
   induction l with
@@ -187,7 +187,7 @@ theorem laidRows_ofNet {net : Flock.Net} (hB : Built net) {name : String} {l : F
 
 section Copy
 
-variable {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} {k : ℕ}
+variable {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {R : Rows} {k : ℕ}
 
 /-- **Copy `j`'s column values** in a unit of `k` stacked copies of `R`: column `c` of the copy is the unit's local
 evaluation at the copy's column `c`'s wire. -/
@@ -241,7 +241,7 @@ net's rows (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant
 (`copyVal`), `laid_recOpen` holds: if the copy's input columns hold the row, `acc`, the coefficients, the siblings and
 the position's bits, its output columns from `outStart` hold the verifier's climb and 64 zero bytes, then the
 consistency term at `k = 0, 1` and the rest of `acc`. -/
-theorem unit_recOpen {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
+theorem unit_recOpen {C : Verity.Boolean.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)
     (hone : X (I.wire ((Rows.ofNet hB).stack k).one) = true)
     (ms : Flock.MerkleScheme) (hms : ∀ l r, ms.node l r = Flock.Sha512.hash (l ++ r)) (LANES H : ℕ) (hH : H ≤ 32)
