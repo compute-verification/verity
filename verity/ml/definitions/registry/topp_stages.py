@@ -31,7 +31,7 @@ import numpy as np
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.ops.fp32 import F32AddFtz
 from verity.ml.circuits.ops.prims import Bf16ToF32
-from verity.ml.circuits.ops.scalar import BF16, BIT, F32, I32
+from verity.ml.circuits.ops.scalar import BF16, F32, I32
 from verity.ml.circuits.refs import Coll, tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.definitions.registry import topp_keep_builder as K
@@ -246,57 +246,63 @@ def keep_lanes(E, x, dm, cum, h1, plog, numkeep, stop, ties):
 #: a round state's words beside the row's M, Z and 1/Z (two halves each) and the round's 16 pivots
 STATE_WORDS = ("lo", "hi", "best", "best_mass", "best_minl", "best_nmin", "pivot", "dup", "numdup", "numkeep")
 _COUNTS = {"best_nmin", "numdup", "numkeep"}
-RSW = 1 + 2 + 2 + 2 * len(STATE_WORDS) + 2 * F
-#: a round state's bits: early, done and nomask (two halves each), fin and best_fin (2 R F each), zero-padded to u16 words
-RSB = 176
+#: a round state's flags, each a word of 0 or 1: early, done and nomask (two halves each), fin and best_fin (2 R F each)
+STATE_FLAGS = 6 + 4 * R * F
+RSW = 1 + 2 + 2 + 2 * len(STATE_WORDS) + 2 * F + STATE_FLAGS
 CAW = 3 * F
 CARRY = 3 + 2 + 5 * (len(K.SPLIT_COUNTS) - 1)
 
 
 def scw(S: int) -> int:
-    """The words of S's row scalars for the select: M, Z, 1/Z, pivot logit, dup, numkeep (two halves each), pre[2 S]."""
-    return 11 + 2 * S
+    """The words of S's row scalars for the select: M, Z, 1/Z, pivot logit, dup, numkeep (two halves each), pre[2 S], and the
+    flags stop (two halves) and ties."""
+    return 14 + 2 * S
 
 
 def _w(v, w: int):
     return K.Vec(w, v.k, v.kv, v.d, v.r)
 
 
-def _pad16(E, bits):
-    n = -len(bits) % 16
-    return bits if not n else K.cat([bits, E.const([0] * n, 1)])
+def flag_words(E, bits):
+    """Bits as words of 0 or 1: a serving row's elements are whole u16 words, so no unit's port is bits."""
+    return _w(E.op("b2i", bits), 32)
+
+
+def word_flags(E, words):
+    return E.op("weq", words, 1)
 
 
 def pack_state(E, M, Zh, rZ, st, piv, early):
-    words = K.cat([_w(v, 32) for v in (M, Zh, rZ, *(st[k] for k in STATE_WORDS), piv)])
-    bits = _pad16(E, K.cat([early, st["done"], st["nomask"], st["fin"], st["best_fin"]]))
-    assert len(words) == RSW and len(bits) == RSB
-    return words, bits
+    flags = K.cat([early, st["done"], st["nomask"], st["fin"], st["best_fin"]])
+    words = K.cat([_w(v, 32) for v in (M, Zh, rZ, *(st[k] for k in STATE_WORDS), piv)] + [flag_words(E, flags)])
+    assert len(words) == RSW
+    return words
 
 
-def unpack_state(rw, rb=None):
-    """(M, Zh, rZ, st, piv, early) from a round state's words (and bits: st's flags and early; None without them)."""
+def unpack_state(E, rw, flags: bool = False):
+    """(M, Zh, rZ, st, piv, early) from a round state's words; with ``flags``, st's flags and early too (else early is None)."""
     M, Zh, rZ = rw[[0]], rw[[1, 2]], rw[[3, 4]]
     st, o = {}, 5
     for k in STATE_WORDS:
         st[k] = _w(rw[[o, o + 1]], CW if k in _COUNTS else 32)
         o += 2
     piv, early = rw[np.arange(o, o + 2 * F)], None
-    if rb is not None:
-        early, st["done"], st["nomask"] = rb[[0, 1]], rb[[2, 3]], rb[[4, 5]]
-        st["fin"], st["best_fin"] = rb[np.arange(6, 6 + 2 * R * F)], rb[np.arange(6 + 2 * R * F, 6 + 4 * R * F)]
+    if flags:
+        fb = word_flags(E, rw[np.arange(o + 2 * F, RSW)])
+        early, st["done"], st["nomask"] = fb[[0, 1]], fb[[2, 3]], fb[[4, 5]]
+        st["fin"], st["best_fin"] = fb[np.arange(6, 6 + 2 * R * F)], fb[np.arange(6 + 2 * R * F, 6 + 4 * R * F)]
     return M, Zh, rZ, st, piv, early
 
 
 def pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties):
-    words = K.cat([_w(v, 32) for v in (M, Zh, rZ, plog, st["dup"], st["numkeep"], pre)])
-    return words, _pad16(E, K.cat([stop, ties]))
+    return K.cat([_w(v, 32) for v in (M, Zh, rZ, plog, st["dup"], st["numkeep"], pre)] + [flag_words(E, K.cat([stop, ties]))])
 
 
-def unpack_scalars(sw, sb, S: int):
+def unpack_scalars(E, sw, S: int):
     """(M, Zh, rZ, plog, dup, numkeep, pre, stop, ties) from S's row scalars."""
+    fb = word_flags(E, sw[np.arange(11 + 2 * S, 14 + 2 * S)])
     return (sw[[0]], sw[[1, 2]], sw[[3, 4]], sw[[5, 6]], sw[[7, 8]], _w(sw[[9, 10]], CW), _w(sw[np.arange(11, 11 + 2 * S)], CW),
-            sb[[0, 1]], sb[[2]])
+            fb[[0, 1]], fb[[2]])
 
 
 def pack_ca(ca):
@@ -325,24 +331,24 @@ def _res(E, *vs):
 def _head_sig(S):
     ps = [("logits", Array(S.N, BF16)), ("temp", F32)]
     if not S.FIRST:
-        ps += [("hw", Array(3, F32)), ("hb", Array(16, BIT))]
-    return tuple(ps), Tuple(Array(3, F32), Array(16, BIT))
+        ps.append(("hw", Array(4, F32)))
+    return tuple(ps), Array(4, F32)
 
 
-def _head_body(B, S, logits, temp, hw=None, hb=None):
+def _head_body(B, S, logits, temp, hw=None):
     E = IREngine(B)
     x = _x(B, E, logits, temp)
     bm, bmin, anyb = stats_block(E, x, [S.N])
     carry = None
     if not S.FIRST:
-        w, b = _words(E, hw), _words(E, hb, 1)
-        carry = (w[[0]], w[[2]], b[[0]])
+        w = _words(E, hw)
+        carry = (w[[0]], w[[2]], word_flags(E, w[[3]]))
     nm, rescale, mn, af = stats_fold(E, bm, bmin, anyb, carry)
-    return _res(E, K.cat([nm, rescale, mn]), _pad16(E, af))
+    return _res(E, K.cat([nm, rescale, mn, flag_words(E, af)]))
 
 
 def _exp_sig(S):
-    ps = [("logits", Array(S.N, BF16)), ("temp", F32), ("hw", Array(3, F32))]
+    ps = [("logits", Array(S.N, BF16)), ("temp", F32), ("hw", Array(4, F32))]
     if S.AT:
         ps.append(("acc", Array(THREADS, F32)))
     if S.LAST and not S.FIRST:
@@ -368,8 +374,8 @@ def _probs_sig(S):
     if not S.HEAD:
         return tuple(ps + [("rw", Array(RSW, F32))]), Array(S.N, F32)
     for s in Geo(S.V, S.S).slices:
-        ps += [(f"hw{s}", Array(3, F32)), (f"hb{s}", Array(16, BIT)), (f"es{s}", Array(1, F32))]
-    return tuple(ps), Tuple(Array(S.N, F32), Array(RSW, F32), Array(RSB, BIT))
+        ps += [(f"hw{s}", Array(4, F32)), (f"es{s}", Array(1, F32))]
+    return tuple(ps), Tuple(Array(S.N, F32), Array(RSW, F32))
 
 
 def slice_stats(E, geo: Geo, stats: dict):
@@ -391,32 +397,29 @@ def _probs_body(B, S, logits, temp, *rest):
     x = _x(B, E, logits, temp)
     h1 = geo.h1(np.arange(S.N))
     if not S.HEAD:
-        M, Zh, rZ, *_ = unpack_state(_words(E, rest[0]))
+        M, Zh, rZ, *_ = unpack_state(E, _words(E, rest[0]))
         return _res(E, probs(E, x, M, Zh, rZ, h1))
     stats = {}
     for i, s in enumerate(geo.slices):
-        hw, hb, es = rest[3 * i:3 * i + 3]
+        hw, es = rest[2 * i:2 * i + 2]
         w = _words(E, hw)
-        stats[s] = (w[[0]], _words(E, es), w[[2]], _words(E, hb, 1)[[0]])
+        stats[s] = (w[[0]], _words(E, es), w[[2]], word_flags(E, w[[3]]))
     M, Zh, rZ, early, st, piv = row_head(E, *slice_stats(E, geo, stats), S.S)
-    rw, rb = pack_state(E, M, Zh, rZ, st, piv, early)
-    return _res(E, probs(E, x, M, Zh, rZ, h1), rw, rb)
+    return _res(E, probs(E, x, M, Zh, rZ, h1), pack_state(E, M, Zh, rZ, st, piv, early))
 
 
 def _step_sig(S):
     geo = Geo(S.V, S.S)
     ps = [("pr", Array(S.N, F32)), ("rw", Array(RSW, F32))]
-    if S.COMBINE >= 0:
-        ps.append(("rb", Array(RSB, BIT)))
     if not S.FIRST:
         ps.append(("ca", Array(CAW, F32)))
     if S.COMBINE < 0:
         return tuple(ps), Array(CAW, F32)
     ps += [(f"ca{s}", Array(CAW, F32)) for s in geo.slices[:-1]] + [("top_p", F32)]
     if S.COMBINE < R - 1:
-        return tuple(ps), Tuple(Array(RSW, F32), Array(RSB, BIT), Array(2 * F * S.S, F32))
+        return tuple(ps), Tuple(Array(RSW, F32), Array(2 * F * S.S, F32))
     ps += [(f"ph{r}", Array(2 * F * S.S, F32)) for r in range(R - 1)]
-    return tuple(ps), Tuple(Array(scw(S.S), F32), Array(16, BIT))
+    return tuple(ps), Array(scw(S.S), F32)
 
 
 def gather_parts(E, geo: Geo, cas: dict):
@@ -432,8 +435,7 @@ def _step_body(B, S, pr, rw, *rest):
     E = IREngine(B)
     geo = Geo(S.V, S.S)
     rest = list(rest)
-    rb = _words(E, rest.pop(0), 1) if S.COMBINE >= 0 else None
-    M, Zh, rZ, st, piv, early = unpack_state(_words(E, rw), rb)
+    M, Zh, rZ, st, piv, early = unpack_state(E, _words(E, rw), S.COMBINE >= 0)
     carry = None if S.FIRST else unpack_ca(_words(E, rest.pop(0)))
     ca = step_fold(E, step_block(E, _words(E, pr), piv, Geo.h2(np.arange(S.N), S.S), [S.N]), carry)
     if S.COMBINE < 0:
@@ -444,21 +446,19 @@ def _step_body(B, S, pr, rw, *rest):
     pm, pl, pn = gather_parts(E, geo, cas)
     st, part = round_combine(E, pm, pl, pn, st, piv, p, Zh, early, S.S, S.COMBINE)
     if S.COMBINE < R - 1:
-        rw2, rb2 = pack_state(E, M, Zh, rZ, st, K.ladder(E, st["lo"], st["hi"]), early)
-        return _res(E, rw2, rb2, K.cat([part[1], _w(part[2], 32)]))
+        return _res(E, pack_state(E, M, Zh, rZ, st, K.ladder(E, st["lo"], st["hi"]), early), K.cat([part[1], _w(part[2], 32)]))
     parts = []
     for r in range(R - 1):
         ph = _words(E, rest.pop(0))
         parts.append((None, ph[np.arange(F * S.S)], _w(ph[np.arange(F * S.S, 2 * F * S.S)], CW)))
     parts.append(part)
     plog, ties, stop, pre = mask_head(E, st, parts, Zh, M, p, early, S.S)
-    return _res(E, *pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties))
+    return _res(E, pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties))
 
 
 def _select_sig(S):
     ps = [("logits", Array(S.N, BF16)), ("temp", F32), ("seed", I64), ("pos", I64), ("splits", I32)]
-    for s in K.SPLIT_COUNTS:
-        ps += [(f"sw{s}", Array(scw(s), F32)), (f"sb{s}", Array(16, BIT))]
+    ps += [(f"sw{s}", Array(scw(s), F32)) for s in K.SPLIT_COUNTS]
     if not S.FIRST:
         ps.append(("cw", Array(CARRY, F32)))
     return tuple(ps), I32 if S.LAST else Array(CARRY, F32)
@@ -548,13 +548,13 @@ def _select_body(B, S, logits, temp, seed, pos, splits, *rest):
     rest, N = list(rest), S.N
     x = _x(B, E, logits, temp)
     tv, sp = E.param(temp, 32), E.param(splits, 32)
-    scal = {s: unpack_scalars(_words(E, rest[2 * i]), _words(E, rest[2 * i + 1], 1), s) for i, s in enumerate(K.SPLIT_COUNTS)}
+    scal = {s: unpack_scalars(E, _words(E, rest[i]), s) for i, s in enumerate(K.SPLIT_COUNTS)}
     zero = E.const([0], CW)
     if S.FIRST:
         head = (None, zero, zero)
         per = {s: (zero, zero, zero, zero, zero) for s in K.SPLIT_COUNTS}
     else:
-        head, per = _carry_split(_words(E, rest[2 * len(K.SPLIT_COUNTS)]))
+        head, per = _carry_split(_words(E, rest[len(K.SPLIT_COUNTS)]))
     keep, out_pos = E.const([0] * N, 1), {}
     for s in K.SPLIT_COUNTS:
         geo = Geo(S.V, s)
@@ -648,8 +648,7 @@ def plan(V: int) -> tuple[Unit, ...]:
         hi = min(lo + N, V)
         first, last = k == 0, k == len(starts) - 1
         w = []
-        for S in K.SPLIT_COUNTS:
-            w += [(f"sw{S}", scalars_unit(V, S), 0), (f"sb{S}", scalars_unit(V, S), 1)]
+        w += [(f"sw{S}", scalars_unit(V, S), 0) for S in K.SPLIT_COUNTS]
         if not first:
             w.append(("cw", ("select", k - 1), 0))
         out.append(Unit(("select", k), bind(GumbelTopPSelect, V=V, N=hi - lo, FIRST=first, LAST=last), (lo, hi), tuple(w)))
@@ -662,7 +661,7 @@ def _pipeline(geo: Geo) -> list[Unit]:
         for t, (lo, n) in enumerate(geo.blocks(s, K.STATS_BLOCK)):
             hk = ("head", S, s, t)
             out.append(Unit(hk, bind(TopPStatsHead, N=n, FIRST=t == 0), (lo, lo + n),
-                            () if t == 0 else (("hw", ("head", S, s, t - 1), 0), ("hb", ("head", S, s, t - 1), 1))))
+                            () if t == 0 else (("hw", ("head", S, s, t - 1), 0),)))
             parts = -(-n // STATS_PART)
             for a in range(parts):
                 plo, pn = lo + a * STATS_PART, min(STATS_PART, n - a * STATS_PART)
@@ -681,8 +680,7 @@ def _pipeline(geo: Geo) -> list[Unit]:
             w = []
             for s2 in geo.slices:
                 t2 = last_head[s2]
-                w += [(f"hw{s2}", ("head", S, s2, t2), 0), (f"hb{s2}", ("head", S, s2, t2), 1),
-                      (f"es{s2}", ("exp", S, s2, t2, last_exp[(s2, t2)]), 0)]
+                w += [(f"hw{s2}", ("head", S, s2, t2), 0), (f"es{s2}", ("exp", S, s2, t2, last_exp[(s2, t2)]), 0)]
         else:
             w = [("rw", ("probs", S, 0), 1)]
         out.append(Unit(("probs", S, b), bind(TopPProbs, V=geo.V, S=S, N=n, HEAD=b == 0), (lo, lo + n), tuple(w)))
@@ -692,14 +690,12 @@ def _pipeline(geo: Geo) -> list[Unit]:
         for b, (s, t, lo, n) in enumerate(steps):
             comb = r if b == len(steps) - 1 else -1
             w = [("pr", ("probs", S, b), 0), ("rw", rs, 1 if r == 0 else 0)]
-            if comb >= 0:
-                w.append(("rb", rs, 2 if r == 0 else 1))
             if t:
                 w.append(("ca", ("step", S, r, b - 1), 0))
             if comb >= 0:
                 w += [(f"ca{s2}", ("step", S, r, last_step[s2]), 0) for s2 in geo.slices[:-1]]
                 if r == R - 1:
-                    w += [(f"ph{r2}", ("step", S, r2, len(steps) - 1), 2) for r2 in range(R - 1)]
+                    w += [(f"ph{r2}", ("step", S, r2, len(steps) - 1), 1) for r2 in range(R - 1)]
             out.append(Unit(("step", S, r, b), bind(TopPStep, V=geo.V, S=S, N=n, FIRST=t == 0, COMBINE=comb), (lo, lo + n),
                             tuple(w)))
     return out

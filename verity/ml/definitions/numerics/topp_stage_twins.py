@@ -120,11 +120,6 @@ def vals(v) -> np.ndarray:
     return np.where(v.k, v.kv, v.d[0]).astype(np.uint64)
 
 
-def _bits(v) -> np.ndarray:
-    b = vals(v)
-    return np.concatenate([b, np.zeros(-len(b) % 16, np.uint64)])
-
-
 def _words(*vs) -> np.ndarray:
     return np.concatenate([vals(v) for v in vs])
 
@@ -143,7 +138,7 @@ def _pipeline(E, geo: T.Geo, x, p, outs: dict):
         nm, rescale, mn, af = T.stats_fold(E, bm, bmin, anyb, carry)
         for i, s in enumerate(act):
             run[s] = (nm[[i]], mn[[i]], af[[i]])
-            outs[("head", S, s, t)] = [_words(nm[[i]], rescale[[i]], mn[[i]]), _bits(af[[i]])]
+            outs[("head", S, s, t)] = [_words(nm[[i]], rescale[[i]], mn[[i]], T.flag_words(E, af[[i]]))]
         nparts = [-(-n // T.STATS_PART) for _, n in segs]
         acc = {}
         for a in range(T.PARTS):
@@ -173,9 +168,9 @@ def _pipeline(E, geo: T.Geo, x, p, outs: dict):
     pr = T.probs(E, x, M, Zh, rZ, h1)
     steps = [(s, t, lo, n) for s in geo.slices for t, (lo, n) in enumerate(geo.blocks(s, K.STEP_BLOCK))]
     nb = len(steps)
-    rw, rb = T.pack_state(E, M, Zh, rZ, st, piv, early)
+    rw = T.pack_state(E, M, Zh, rZ, st, piv, early)
     for b, (s, t, lo, n) in enumerate(steps):
-        outs[("probs", S, b)] = [vals(pr[np.arange(lo, lo + n)])] + ([vals(rw), _bits(rb)] if b == 0 else [])
+        outs[("probs", S, b)] = [vals(pr[np.arange(lo, lo + n)])] + ([vals(rw)] if b == 0 else [])
     h2 = T.Geo.h2(off, S)
     parts = []
     for r in range(R):
@@ -196,12 +191,10 @@ def _pipeline(E, geo: T.Geo, x, p, outs: dict):
         st, part = T.round_combine(E, pm, pl, pn, st, piv, p, Zh, early, S, r)
         if r < R - 1:
             piv = K.ladder(E, st["lo"], st["hi"])
-            rw, rb = T.pack_state(E, M, Zh, rZ, st, piv, early)
-            outs[("step", S, r, nb - 1)] = [vals(rw), _bits(rb), _words(part[1], part[2])]
+            outs[("step", S, r, nb - 1)] = [vals(T.pack_state(E, M, Zh, rZ, st, piv, early)), _words(part[1], part[2])]
         parts.append(part)
     plog, ties, stop, pre = T.mask_head(E, st, parts, Zh, M, p, early, S)
-    sw, sb = T.pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties)
-    outs[("step", S, R - 1, nb - 1)] = [vals(sw), _bits(sb)]
+    outs[("step", S, R - 1, nb - 1)] = [vals(T.pack_scalars(E, M, Zh, rZ, plog, st, pre, stop, ties))]
     dm = T.tie_lanes(E, pr, h1, st["dup"], stop)
     c = K.scan(E, E.op("b2i", dm), [n for s in geo.slices for _, n in geo.blocks(s, K.MASK_BLOCK)])
     cum = E.op("iadd", c, pre[(np.arange(geo.V) // geo.L) * 2 + h1])
@@ -224,7 +217,7 @@ def _argmax_prefix(y: np.ndarray) -> np.ndarray:
 
 def stage_rows(V: int, logits, top_p: int, seed: int, pos: int, temp: int, splits: int) -> tuple[int, dict]:
     """(token, outs): the served token of ``GumbelTopPTokenSelect_v1{V}`` on the row, and ``outs[key]`` every unit's output
-    fields by its `topp_stages.plan(V)` key (each a u64 word array; a bit field's bits, zero-padded to u16 words)."""
+    fields by its `topp_stages.plan(V)` key (each a u64 word array)."""
     E = FastEngine()
     lg = np.asarray(logits, np.uint16).reshape(-1)
     x = T.temp_scale(E, E.free(V, 32, (lg.astype(np.uint64) << np.uint64(16))[None]), E.free(1, 32, [[int(temp)]]))
