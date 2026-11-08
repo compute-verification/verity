@@ -1313,9 +1313,9 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         for (int j = 0; j < 128; j++) { w[j] = MUL(gam[0], eq_rd[0][j]); w[128 + j] = MUL(gam[1], eq_rd[1][j]); }
         CK(cudaMemcpy(d_w, w.data(), 256 * sizeof(F128), cudaMemcpyHostToDevice));
         if (chunk_ring_grouped()) ring_switch_combine_basis<<<(unsigned)((len + 255) / 256), 256>>>(d_suffix_ab, d_suffix_c, d_w, d_w + 128, len, dcb);
-        else if (chunk_ring_bmma() && sfx_k >= 4 && sfx_d > sfx_k && len == 1LL << sfx_d)
-            chunk_ring_combine_basis_bmma<2><<<(unsigned)std::min<long long>(len >> (sfx_k + 1), 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
-                d_sc_hi, sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
+        else if (chunk_ring_bmma() && sfx_k >= 4 && len == 1LL << sfx_d)
+            chunk_ring_combine_basis_bmma<<<(unsigned)std::min<long long>(len >> sfx_k, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo, d_sc_hi,
+                sfx_k, d_w, d_w + 128, len >> sfx_k, dcb);
         else chunk_ring_combine_basis_split<<<(unsigned)std::min<long long>((len + 255) / 256, 4096), 256>>>(d_sab_lo, d_sab_hi, d_sc_lo,
             d_sc_hi, sfx_k, d_w, d_w + 128, len, dcb);
         CK(cudaGetLastError());
