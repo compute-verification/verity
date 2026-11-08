@@ -29,6 +29,8 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
   && git apply $REPO/verity/ml/flock/flock-glue-b684b12.patch) || exit 1
 # Flock ZK: Ligerito level 0's hiding (flock-circuit --zk)
 (cd $F && git apply $REPO/verity/ml/flock/flock-zk-b684b12.patch) || exit 1
+# the ZK level-0 padding codeword at the queried positions alone (FC_ZK_PADCW: at, full or both)
+(cd $F && git apply $REPO/verity/ml/flock/flock-zkq-b684b12.patch) || exit 1
 # the session verifier's phase timers in the opening (session_verify.rs): clocks only, no check changes
 (cd $F && git apply $REPO/verity/ml/flock/flock-vtime-b684b12.patch) || exit 1
 # the CPU prover's phase timers (FLOCK_PHASE_TIMES, CPUPHASE lines): clocks only

@@ -19,6 +19,8 @@
 #      only: every point and K with it on, none with it off; both: every point and K off, then on)
 #      ST_MPS=1 (the provers through NVIDIA's MPS, one control daemon for the job: their kernels run at once, not time-sliced)
 #      ST_KEEP_BIN (a path the built prover is copied to)  ST_BIN (a prover built so: no build)
+#      ST_AFTER_TYPE (a command run after each type's points, before its circuit and sessions are removed, with Z, X, SD,
+#      BIN, PTS, PY, O and PC set; its output into after.log)
 #      ST_CPU=1 (no CUDA: the CPU prover, `prove --zk` without --gpu, for checking the runner on a CPU node)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
@@ -201,6 +203,8 @@ EOF
       prove "$p" || rc=1
     done
     cache ${pts//,/ } || rc=1
+    [ -z "${ST_AFTER_TYPE:-}" ] || Z=$Z X=$X SD=$sd BIN=$BIN PTS=$pts PY=$PY O=$O PC=$PC bash -c "$ST_AFTER_TYPE" \
+      >> "$O/after.log" 2>&1 || { log "$u: ST_AFTER_TYPE failed"; rc=1; }
     keep
     rm -f "$sd"/c*/stage/circuit.txt "$sd"/c*/stage/*.bin
     ran=1; break

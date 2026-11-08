@@ -6461,6 +6461,8 @@ fn replay(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) {
                 .collect::<BTreeMap<_, _>>();
             let mut s = Server::from_record(config_of(&tabs), Box::new(CircuitVerifier::new(tabs)), &rec, proofs)?;
             let v = s.finish();
+            let timing: Vec<Value> = v["reps"].as_array().into_iter().flatten().map(|r| r["timing"].clone()).collect();
+            eprintln!("REPLAYTIME\t{}", json!({"session": d, "reps": timing}));
             Ok(json!({"accepted": v["accepted"], "why": v["why"]}))
         })().unwrap_or_else(|e| json!({"accepted": false, "why": e}));
         println!("UPSTREAM\t{}", json!({"session": d, "verdict": v}));
