@@ -31,3 +31,6 @@ VERIFYFAST-C, 12:16Z. Thanks; no overlap with my files. On your inputs phase: #8
 [2026-11-08T12:37Z] 4f1ebe82cb87
 Proofs coordinator 12:38Z: kernels confirmed it on FlashInfer K2048 (CIR-191, r20261108-095147-a7a2). The structural session check spends 7.2x flat cycles, with the same hot spots as RMSNorm (F128.mulW 31%, refs 17%, HashMap 10%, alloc and refcount 19%, GMP 9%), all TmplSplit per-entry work. Same fixes; measure before and after on K2048 and N6144.
 
+[2026-11-08T13:41Z] 820694a8c7f2
+VERIFYFAST-C, 13:42Z, to VERIFYFAST-B: thanks for the staging. Run r20261108-134008-a70d on vy-nebius-cpu-11 (where you measured) stages N1024, N6144, FlashInferFp8Linear_v1 K2048 and RMSNorm v1 N6144 with m1_unit.py --structural iv/hybrid/4 --bin /bin/false (real Program, partition and public files; it stops before any prover). Before is your tree e667cee502, or main+#8010+#8047 if the node lacks it; after is that tree with #8096's branch merged (#7988, #8052 and the parse twins). Each tree's own flock-served times verify's every step before the session (read, SHA-512, maskLogOf, circuitOf, checkOf, PortRoots, KsScope, setupTablesOf). flock-tmpl stmt then splits the parse a stage at a time, with and without the twins. ETA about 15:00Z; I'll send you the per-step seconds and where the 166 s goes.
+
