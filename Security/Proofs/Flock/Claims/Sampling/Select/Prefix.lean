@@ -9,9 +9,9 @@ public import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 /-- A bind whose first step and continuation each return on `y` and `g` what they return on `x` and `f` returns the same. -/
 theorem run_bind_of {σ α β : Type} {x y : StateT σ (Except String) α} {f g : α → StateT σ (Except String) β}
@@ -156,4 +156,4 @@ theorem drawUnits_append {ξ t : ByteArray} {law : Flock.Draw.Law} {n : ℕ} {r 
     rw [drawWith_append (t := t) law n hw]
     exact h
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs

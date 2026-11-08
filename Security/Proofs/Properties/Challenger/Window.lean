@@ -30,13 +30,13 @@ set_option backward.privateInPublic.warn false
 
 set_option mvcgen.warning false
 
-open private verifies isBodyOf isDigest from SampledProofs.ChallengerSession
+open private verifies isBodyOf isDigest from Spot.ChallengerSession
 
 namespace Properties.Challenger.Window
 
 open Lean (Json)
 open Std.Do
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 open FlockDeploy (JsonEquiv)
 open Properties.NetworkCertifier.Bytes (bs bs_append bs_length bs_inj be64_size)
 open Properties.Pouw.LiveSalt.Coin (enc enc_inj taggedBytes tagged_ok)

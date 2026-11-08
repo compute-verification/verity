@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Deploy
 /-!
 # v2's verdict on its one session is the record's decision at that session
 
-One-stage v2 (`SampledProofs.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
+One-stage v2 (`Spot.OneStageZk`) decides its one session with `verdictOf`: the session set up at its record's
 draw (`setupAt`: `sessionAt`'s `buildSessionOf` and `verifyCmd`'s checks, then the draw's law), the rep files its
 `reps` name (`filesOf`), `Zk.verify`, the scope check and the refusals after it. The record's session is flock-verify
 `--zk` in public-coin form (`FlockDeploy.V true`), which at SHA-512 accepts exactly when `Zk.verify` at its statement's
@@ -57,9 +57,9 @@ private theorem forIn_ok_of_all {α : Type} {xs : Array α} {b : α → PUnit �
 
 /-- **The model's reading of the session's statement holds v2's inputs**: what `FlockDeploy.Raw.ins` reads of the
 session's statement (`si`) holds, field by field, what v2's `sessionAt` and `verdictOf` read under `--zk`: the inputs
-`I` (`SampledProofs.OneStageZk.inputsOf`'s), none of `--work`, `--stratified`, `--closure` or `--public-inputs`, and the
+`I` (`Spot.OneStageZk.inputsOf`'s), none of `--work`, `--stratified`, `--closure` or `--public-inputs`, and the
 verifier's registered reads `rd`. -/
-structure SessionMatch (si : Ins) (I : Flock.Witness.Inputs) (rd : SampledProofs.OneStageZk.Reads) : Prop where
+structure SessionMatch (si : Ins) (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : Prop where
   zk : si.read.zk = true
   stmtTags : si.stmtTags = I.tags
   tags : si.read.I.tags = I.tags
@@ -78,7 +78,7 @@ structure SessionMatch (si : Ins) (I : Flock.Witness.Inputs) (rd : SampledProofs
 
 section Match
 
-variable {si : Ins} {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads}
+variable {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
 
 theorem SessionMatch.read_tags (hm : SessionMatch si I rd) : si.read.tags = Flock.Witness.zkTags I := by
   unfold Flock.Readable.Read.tags
@@ -113,10 +113,10 @@ end Match
 
 /-- The scope check v2's `run` builds and each session's verdict runs (`ProvedScope.checkOf` on the circuit at `I`'s
 `--zk` tags, with the verifier's registered reads, then the circuit's template check, `OneStageZk.templateOk`). -/
-def scopeOf (I : Flock.Witness.Inputs) (rd : SampledProofs.OneStageZk.Reads) : V Unit := do
+def scopeOf (I : Flock.Witness.Inputs) (rd : Spot.OneStageZk.Reads) : V Unit := do
   Flock.ProvedScope.checkOf (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
     (Flock.Witness.zkTags I) true I.publicFile I.count false rd.registered.isSome
-  SampledProofs.OneStageZk.templateOk (← Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
+  Spot.OneStageZk.templateOk (← Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables)
 
 /-! ## v2's setup, unfolded -/
 
@@ -126,13 +126,13 @@ absence (`noIdentifier`), and `Registered.checkFull` at the draw. -/
 theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Flock.Coins}
     {tables : List (String × ByteArray)} {count : ℕ} {draw partition : Option Json} {program : Option ByteArray}
     {registered : Option (Array Flock.Registered.Port)} {spec : SessionSpec} {sts : Array Stmt}
-    (hb : SampledProofs.OneStageZk.buildSessionOf (Flock.ProvedScope.circuitOf tags cB tables) tags cB pB coins tables
+    (hb : Spot.OneStageZk.buildSessionOf (Flock.ProvedScope.circuitOf tags cB tables) tags cB pB coins tables
       count draw partition program registered = .ok (spec, sts)) :
     tags.hm96Rows = true ∧
       Flock.Stmt.setupTables tags cB pB coins count tables draw partition program = .ok (spec, sts) ∧
       (∀ st ∈ sts, Flock.checkRegistered st registered = .ok () ∧ FlockDeploy.noIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () := by
-  unfold SampledProofs.OneStageZk.buildSessionOf at hb
+  unfold Spot.OneStageZk.buildSessionOf at hb
   have hh : tags.hm96Rows = true := by
     refine Classical.byContradiction fun hne => ?_
     simp [hne, throw, throwThe, MonadExceptOf.throw, bind, Except.bind] at hb
@@ -140,7 +140,7 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
   have hstep : ∃ x : SessionSpec × Array Stmt,
       Flock.Stmt.setupTables tags cB pB coins count tables draw partition program = .ok x ∧
       (∀ st ∈ x.2, Flock.checkRegistered st registered = .ok () ∧
-        SampledProofs.OneStageZk.checkIdentifier st = .ok ()) ∧
+        Spot.OneStageZk.checkIdentifier st = .ok ()) ∧
       Flock.Registered.checkFull registered draw = .ok () ∧ (x.1, x.2) = (spec, sts) := by
     split at hb
     · next hhid =>
@@ -148,7 +148,7 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
       refine ⟨x, ?_, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
       rw [Flock.Stmt.setupTables_eq]
       simpa only [Flock.ProvedScope.circuitOf, hhid, eq_self_iff_true, ↓reduceIte] using hs
@@ -156,7 +156,7 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
       obtain ⟨⟨⟩, hloop, hb⟩ := bind_ok hb
       obtain ⟨⟨⟩, hfull, hb⟩ := bind_ok hb
       exact ⟨x, hs, fun st hst => (body_ok (A := fun st => Flock.checkRegistered st registered)
-        (B := SampledProofs.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
+        (B := Spot.OneStageZk.checkIdentifier)).1 (forIn_mem body_yield hloop st hst), hfull,
         Except.ok.inj hb⟩
   obtain ⟨⟨spec', sts'⟩, hs, hpt, hfull, hx⟩ := hstep
   simp only [Prod.mk.injEq] at hx
@@ -165,18 +165,18 @@ theorem setupTables_of_build {tags : Flock.Tags} {cB pB : ByteArray} {coins : Fl
 
 /-- **`sessionAt`, unfolded**: the program check, the inner checks, `buildSessionOf` at `I`'s `--zk` tags and coins,
 `verifyCmd`'s checks on the tables, `Zk.shapeOk`, and the checks after it. -/
-theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads} {draw : Option Json}
+theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {sts : Array Stmt}
-    (h : SampledProofs.OneStageZk.sessionAt I rd draw = .ok (spec, sts)) :
+    (h : Spot.OneStageZk.sessionAt I rd draw = .ok (spec, sts)) :
     Flock.Registered.checkProgram I.program rd.registered.isSome = .ok () ∧
       Flock.RecSetup.checkInner none none (pure (none, none)) = .ok () ∧
-      SampledProofs.OneStageZk.buildSessionOf
+      Spot.OneStageZk.buildSessionOf
           (Flock.ProvedScope.circuitOf (Flock.Witness.zkTags I) I.circuitFile I.tables) (Flock.Witness.zkTags I)
           I.circuitFile I.publicFile (Flock.Witness.zkCoins I) I.tables I.count draw I.partition I.program
           rd.registered = .ok (spec, sts) ∧
-      SampledProofs.OneStageZk.setupChecks I rd sts = .ok () ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
-      SampledProofs.OneStageZk.recChecks rd sts = .ok () := by
-  unfold SampledProofs.OneStageZk.sessionAt at h
+      Spot.OneStageZk.setupChecks I rd sts = .ok () ∧ sts.forM Flock.Zk.shapeOk = .ok () ∧
+      Spot.OneStageZk.recChecks rd sts = .ok () := by
+  unfold Spot.OneStageZk.sessionAt at h
   dsimp only at h
   obtain ⟨⟨⟩, hprog, h⟩ := bind_ok h
   obtain ⟨⟨⟩, hinner, h⟩ := bind_ok h
@@ -189,13 +189,13 @@ theorem sessionAt_ok {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.R
 
 /-- **`setupAt`, unfolded**: `sessionAt`'s session `(spec, sts)`, whose tables' verifier-side setups are the model's
 (`FlockDeploy.tabsOf`), and the draw's law where there is a draw. -/
-theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads} {draw : Option Json}
+theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {tabs : Array Setup} {p o : Json}
-    (h : SampledProofs.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
-    ∃ sts, SampledProofs.OneStageZk.sessionAt I rd draw = .ok (spec, sts) ∧ tabs = FlockDeploy.tabsOf sts ∧
+    (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
+    ∃ sts, Spot.OneStageZk.sessionAt I rd draw = .ok (spec, sts) ∧ tabs = FlockDeploy.tabsOf sts ∧
       (if draw.isSome then Flock.ProvedScope.drawLaw true (Flock.Witness.zkTags I) false draw else pure () : V Unit) =
         .ok () := by
-  unfold SampledProofs.OneStageZk.setupAt at h
+  unfold Spot.OneStageZk.setupAt at h
   obtain ⟨⟨spec', sts⟩, hs, h⟩ := bind_ok h
   dsimp only at h
   obtain ⟨⟨⟩, hlaw, h⟩ := bind_ok h
@@ -205,11 +205,11 @@ theorem setupAt_ok {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Rea
   exact ⟨sts, mapError_ok hs, rfl, hlaw⟩
 
 /-- **`setupChecks` makes `RecSetup.checks`** at `I`'s statement tags and tables and the registered reads. -/
-theorem setupChecks_checks {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads} {sts : Array Stmt}
-    (h : SampledProofs.OneStageZk.setupChecks I rd sts = .ok ()) :
+theorem setupChecks_checks {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {sts : Array Stmt}
+    (h : Spot.OneStageZk.setupChecks I rd sts = .ok ()) :
     Flock.RecSetup.checks none none I.tags I.tables sts I.circuitFile I.partition I.program rd.registered none none
       none = .ok () := by
-  unfold SampledProofs.OneStageZk.setupChecks at h
+  unfold Spot.OneStageZk.setupChecks at h
   rcases hr : rd.registered with _ | own
   all_goals
     simp only [hr] at h
@@ -228,15 +228,15 @@ theorem setupChecks_checks {I : Flock.Witness.Inputs} {rd : SampledProofs.OneSta
 the one v2 set up at, v2's `setupAt` being `.ok` gives each call `FlockDeploy.Ins.setup` makes (the hm96-sha512 rows
 check, the inner checks, `Read.setup`, each table's registered reads and identifier, the full registration,
 `RecSetup.checks`, `Zk.shapeOk`, check 5, the public rows and the draw's law). -/
-theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads}
+theorem setup_of_setupAt {si : Ins} {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads}
     {draw : Option Json} {spec : SessionSpec} {tabs : Array Setup} {p o : Json} (hm : SessionMatch si I rd)
-    (hdraw : si.read.draw = draw) (h : SampledProofs.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
+    (hdraw : si.read.draw = draw) (h : Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, p, o)) :
     ∃ sts, si.setup = .ok (spec, sts) ∧ tabs = FlockDeploy.tabsOf sts := by
   obtain ⟨sts, hsa, rfl, hlaw⟩ := setupAt_ok h
   obtain ⟨-, hci, hb, hsc, hsh, hrc⟩ := sessionAt_ok hsa
   obtain ⟨hh, hs0, hregs, hfull⟩ := setupTables_of_build hb
   have hchecks := setupChecks_checks hsc
-  unfold SampledProofs.OneStageZk.recChecks at hrc
+  unfold Spot.OneStageZk.recChecks at hrc
   obtain ⟨⟨⟩, hcoins, hrc⟩ := bind_ok hrc
   obtain ⟨⟨⟩, hpub, -⟩ := bind_ok hrc
   refine ⟨sts, ?_, rfl⟩
@@ -262,23 +262,23 @@ public-coin form accepts at SHA-512, given:
 * `Shows`: `f`'s statement is `x` (`hstmt`), its record the session's record (`hrec`) and its proof files the session's
   rep files (`hfiles`);
 * `LiveCoins`: the record's live session is the session's messages and coins (`hlive`). -/
-theorem decide_of_verdictOf {I : Flock.Witness.Inputs} {rd : SampledProofs.OneStageZk.Reads} {bs : Core.Blobs}
-    {ksFiles population : V Unit} {coinKeys : Array String} {record : String} {q : SampledProofs.OneStageZk.RunFiles}
+theorem decide_of_verdictOf {I : Flock.Witness.Inputs} {rd : Spot.OneStageZk.Reads} {bs : Core.Blobs}
+    {ksFiles population : V Unit} {coinKeys : Array String} {record : String} {q : Spot.OneStageZk.RunFiles}
     {coinKey : Option String} {x : Claims.Msg} {as : List Claims.Msg} {cs : List Coin} {si : Ins}
     {spec : SessionSpec} {sts : Array Stmt} {link : List ByteArray × List ByteArray} {c₁ : Coin}
     {mids : List (Claims.Msg × Coin)} {f : Final}
-    (hv : SampledProofs.OneStageZk.verdictOf I (scopeOf I rd) ksFiles population coinKeys record
-      (Flock.Witness.recordDraw record) (SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))
-      (SampledProofs.OneStageZk.filesOf bs q
-        (SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))) coinKey = .ok ())
+    (hv : Spot.OneStageZk.verdictOf I (scopeOf I rd) ksFiles population coinKeys record
+      (Flock.Witness.recordDraw record) (Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))
+      (Spot.OneStageZk.filesOf bs q
+        (Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record))) coinKey = .ok ())
     (hact : FlockDeploy.act true x as cs = .decide si spec sts link c₁ mids f) (hm : SessionMatch si I rd)
     (hdraw : si.read.draw = Flock.Witness.recordDraw record) (hstmt : f.stmt = x) (hrec : f.record = record)
-    (hfiles : SampledProofs.OneStageZk.filesOf bs q
-      (SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record)) = .ok f.proofs)
+    (hfiles : Spot.OneStageZk.filesOf bs q
+      (Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record)) = .ok f.proofs)
     (hlive : (do FlockDeploy.custody spec (← FlockDeploy.liveOf spec f.record) link c₁ mids : V Unit) = .ok ()) :
     ((FlockDeploy.next true x as cs).eval FlockDeploy.sha512).1 = .acc := by
   rw [FlockDeploy.next_decide_sha512 hact]
-  unfold SampledProofs.OneStageZk.verdictOf at hv
+  unfold Spot.OneStageZk.verdictOf at hv
   obtain ⟨proofs, hpf, hv⟩ := bind_ok hv
   rw [hfiles] at hpf
   obtain rfl : f.proofs = proofs := Except.ok.inj hpf

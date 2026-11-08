@@ -48,9 +48,9 @@ from verity.core.deploy.party import Finish, Identity, Received, LogEntry, Send,
 from verity.core.protocols.pous import wipe_monitoring, wipe_period
 from verity.core.protocols.pouw import period_check
 from verity.core.protocols.pouw import window as pouw_window_rules
-from verity.core.protocols.sampled_proofs import parties
-from verity.core.protocols.sampled_proofs.coins import OwnRandomness, draw_first
-from verity.core.protocols.sampled_proofs.one_stage import registered as R
+from verity.core.protocols.spot import parties
+from verity.core.protocols.spot.coins import OwnRandomness, draw_first
+from verity.core.protocols.spot.one_stage import registered as R
 from verity.core.wire import Body, Int, Message, Schema
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits import codec
@@ -814,7 +814,7 @@ def coin_bytes(k: int, n: int) -> int:
 
 
 def draw(coins: bytes, blk: Block) -> list[int]:
-    """Sampled proofs' sample (`sampled_proofs.coins.draw_first`) on the verifier's live coins."""
+    """Sampled proofs' sample (`spot.coins.draw_first`) on the verifier's live coins."""
     buf = bytearray(coins)
 
     def read(n: int) -> bytes:
@@ -908,7 +908,7 @@ def answer(protocol: str, verdict: str, commitment: str | None, reason: str | No
             "public": public if ok else None, "profile": profile if ok else None}
 
 
-def sampled_proofs(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]]
+def spot(d: Declaration, blk: Block, units: Sequence[int], checks: Mapping[int, Mapping[str, Any]]
                    ) -> dict[str, Any]:
     """Sampled proofs' answer for the declaration: every sampled proof block's values check held."""
     bad = [f"unit {u}: {checks[u]['values']}" for u in units if u not in checks or checks[u]["values"]]
@@ -1398,7 +1398,7 @@ class Verifier:
         d, blk, proofs = self.declarations[k - 1], self.circuit[k - 1], self.parts[k]["proofs"]
         checks = {u: verify(self.statement(k, u), proofs.get(str(u), {})) for u in self.draws[k]}
         dk = Declaration(k, d["advice"], d["record"])
-        sp = sampled_proofs(dk, blk, self.draws[k], checks)
+        sp = spot(dk, blk, self.draws[k], checks)
         answers = {sp["protocol"]: sp, self.work: pouw_window(sp, blk, self.work),
                    IDS["inference-only"]: inference_only(dk, blk),
                    **self.answers(k, checks)}

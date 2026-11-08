@@ -48,11 +48,11 @@ set_option synthInstance.maxSize 1024 in
 draw file (`RefOk`), the record's sampled verifier is knowledge sound (`Claims.Sampling.KS_of`). -/
 theorem ks_record (A : Live) (o : Own) (e : Ext) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A)
-    {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
-    (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.SampledProofs.OneStageZk.Reads}
-    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd)
+    {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
+    (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false) {rd : _root_.Spot.OneStageZk.Reads}
+    (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd)
     (hpart : A.I.partition = some p.own.partition)
-    (hidx : _root_.SampledProofs.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
+    (hidx : _root_.Spot.FilePart.indicesOf A.pub.header = .ok (Array.range A.n))
     (he : e.reveal = revealRec A) (hv2 : Flock.Bridge.RowsV2 A.D.unroll) (hscope : ScopeOk A)
     (href : ∃ d, RefOk A o d) : Claims.Sampling.KS sha512Msg (record A o e) :=
   Claims.Sampling.KS_of (fun _ _ _ => A.roots) (record_binds A o e hv2)

@@ -18,7 +18,7 @@ what the play's signatures are on (`signsPlay_dev`), so `Binding.logged_le` hold
 
 * **The lines** (`rootValue`, `releaseValue`, `helloValue`, `openValue`): the values the deployed challenger writes as
   its release log's lines (`LiveRecord._root` and `LiveRecord._release`, `LiveChallenger.sample_tree` and
-  `LiveChallenger.open_tree` in `verity/core/protocols/sampled_proofs/challenger.py`), each line its value's
+  `LiveChallenger.open_tree` in `verity/core/protocols/spot/challenger.py`), each line its value's
   `Flock.canon` text (`lineOf`). Each value holds its keys in order and prints, so its line is its text
   (`canon_lineOf`), and it has the fields v2 reads (`root_value`, `release_plain`, `hello_value`, `open_value`).
 * **The printer** (`printLog`, `prints_printLog`): a log's lines, from what the device holds between releases (its
@@ -57,12 +57,12 @@ fixes from what the play fixed (`Deployment.setupOf`).
 set_option backward.privateInPublic true
 set_option backward.privateInPublic.warn false
 
-open private pairs from SampledProofs.ChallengerSession
+open private pairs from Spot.ChallengerSession
 
 namespace Verity.Sampled.Device
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 open Properties.Challenger (History Run OpensOn)
 open Verity.Sampled.Lines (Canon PlainValue RootValue SpecValue HelloValue OpenValue Prints)
 

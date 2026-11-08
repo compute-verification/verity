@@ -18,7 +18,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkView.Decode
 
 * `drawLaw`: the record's draw meets `DrawLaw`. The draw coins are all first-stage (`stage2` is the session's rounds,
   `coinsAt_congr`), so a set `B`'s weight is its miss indicator at the first-stage coins. Its mean is the probability that
-  v2's challenger draw (`SampledProofs.Draw.drawUnits`) on the draw coins' bytes misses `B`; a draw checks at most the
+  v2's challenger draw (`Spot.Draw.drawUnits`) on the draw coins' bytes misses `B`; a draw checks at most the
   population's `n` units (`kd_le_of_lawOn`), so every position it holds is checked. The bytes of `DRAW_ROUNDS` uniform
   coins are uniform (`pr_drawBytes`), so that probability is at most the law's `P_a(B)` on the registration's strata
   (`Flock.Bridge.drawUnits_miss_le`), which is the statement's design's on its partition (`Flock.Bridge.pa_partOf`). A
@@ -102,7 +102,7 @@ def srcOf (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) (j : Fin drawLen) : Fin 256
 theorem ofFin_toFin_u8 (x : UInt8) : UInt8.ofFin x.toFin = x := rfl
 
 theorem bytesOf_srcOf (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) :
-    _root_.Properties.SampledProofs.bytesOf (srcOf c) = drawBytes (List.ofFn c) := by
+    _root_.Properties.Spot.bytesOf (srcOf c) = drawBytes (List.ofFn c) := by
   have hlen : ((List.ofFn c).flatMap FlockDeploy.Coin.bytes).length = drawLen := drawList_length c
   have h : (Array.ofFn fun i => UInt8.ofFin (srcOf c i)) =
       ((List.ofFn c).flatMap FlockDeploy.Coin.bytes).toArray := by
@@ -111,7 +111,7 @@ theorem bytesOf_srcOf (c : Fin DRAW_ROUNDS → FlockDeploy.Coin) :
     · intro i _ _
       rw [Array.getElem_ofFn, List.getElem_toArray]
       exact ofFin_toFin_u8 _
-  unfold _root_.Properties.SampledProofs.bytesOf drawBytes
+  unfold _root_.Properties.Spot.bytesOf drawBytes
   rw [h]
 
 theorem ofFn_inj_of {α : Type} {n : ℕ} {f g : Fin n → α} (h : List.ofFn f = List.ofFn g) : f = g := by
@@ -150,17 +150,17 @@ theorem coinsAt_eq {k : ℕ} (hk : DRAW_ROUNDS ≤ k) (r : Fin k → FlockDeploy
 uniform bytes. -/
 theorem pr_drawBytes {k : ℕ} (hk : DRAW_ROUNDS ≤ k) (Q : ByteArray → Prop) :
     Pr (fun r : Fin k → FlockDeploy.Coin => Q (drawBytes (coinsAt r))) =
-      Pr (fun src : Fin drawLen → Fin 256 => Q (_root_.Properties.SampledProofs.bytesOf src)) := by
+      Pr (fun src : Fin drawLen → Fin 256 => Q (_root_.Properties.Spot.bytesOf src)) := by
   classical
   have h1 : Pr (fun r : Fin k → FlockDeploy.Coin => Q (drawBytes (coinsAt r))) =
       Pr (fun c : Fin DRAW_ROUNDS → FlockDeploy.Coin => Q (drawBytes (List.ofFn c))) := by
     simp only [coinsAt_eq hk]
     exact Claims.Sampling.Pr_comp_inj (Fin.castLE hk) (Fin.castLE_injective hk) fun c => Q (drawBytes (List.ofFn c))
   have h2 : Pr (fun c : Fin DRAW_ROUNDS → FlockDeploy.Coin => Q (drawBytes (List.ofFn c))) =
-      Pr (fun c : Fin DRAW_ROUNDS → FlockDeploy.Coin => Q (_root_.Properties.SampledProofs.bytesOf (srcOf c))) :=
+      Pr (fun c : Fin DRAW_ROUNDS → FlockDeploy.Coin => Q (_root_.Properties.Spot.bytesOf (srcOf c))) :=
     Pr_congr fun c => by rw [bytesOf_srcOf]
   rw [h1, h2]
-  exact Claims.ZKMal.Pr_comp_fiber srcOf fiber_srcOf fun src => Q (_root_.Properties.SampledProofs.bytesOf src)
+  exact Claims.ZKMal.Pr_comp_fiber srcOf fiber_srcOf fun src => Q (_root_.Properties.Spot.bytesOf src)
 
 /-! ## The law -/
 
@@ -204,11 +204,11 @@ theorem nPU_record : nPU (record A o e) (xOf A o) = A.n := by
   exact hlen
 
 theorem drawn_of_ok {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.SampledProofs.Draw.drawUnits A.law A.n src = .ok (u, rd)) : drawn A src = u.toList := by
+    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .ok (u, rd)) : drawn A src = u.toList := by
   simp only [drawn, h]
 
 theorem drawn_of_error {src : ByteArray} {err : String}
-    (h : _root_.SampledProofs.Draw.drawUnits A.law A.n src = .error err) : drawn A src = List.range A.n := by
+    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .error err) : drawn A src = List.range A.n := by
   simp only [drawn, h]
 
 /-- **The record's draw law.** -/
@@ -242,7 +242,7 @@ theorem drawLaw : DrawLaw (record A o e) := by
     · exact (Pr_congr fun _ => iff_false_intro hE).trans_le Pr_false.le
   · refine (Ex_ind _).trans_le ?_
     have hPa : (stmtA A).design.Pa (partA A) B =
-        (_root_.Properties.SampledProofs.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
+        (_root_.Properties.Spot.oneStageOf A.law).Pa (Flock.Bridge.nsOf A.desc A.qr) B :=
       Flock.Bridge.pa_partOf A.P hns _ B hB
     rw [hPa]
     rcases B.eq_empty_or_nonempty with rfl | ⟨v0, hv0⟩
@@ -253,15 +253,15 @@ theorem drawLaw : DrawLaw (record A o e) := by
       rw [V_k_xOf]
       omega
     refine (Pr_mono fun r hr => ?_).trans ((pr_drawBytes hk fun b => ∃ units read,
-      _root_.SampledProofs.Draw.drawUnits A.law A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
+      _root_.Spot.Draw.drawUnits A.law A.n b = .ok (units, read) ∧ ∀ u ∈ B, u ∉ units).le.trans
       (Flock.Bridge.drawUnits_miss_le A.hlaw hns B hB drawLen))
     have hr' : ∀ v ∈ B, ∀ p : Fin A.n, (drawn A (drawBytes (coinsAt r)))[p.val]? ≠ some v := fun v hv p => by
       have h := hr v hv ⟨p.val, by rw [hnPU]; exact p.isLt⟩
       rwa [record_checked_xOf] at h
-    show ∃ units read, _root_.SampledProofs.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
+    show ∃ units read, _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) = .ok (units, read) ∧
       ∀ u ∈ B, u ∉ units
     have hv0n : v0 < A.n := Finset.mem_range.1 (hB hv0)
-    cases hd : _root_.SampledProofs.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) with
+    cases hd : _root_.Spot.Draw.drawUnits A.law A.n (drawBytes (coinsAt r)) with
     | error err =>
       have h := hr' v0 hv0 ⟨v0, hv0n⟩
       rw [drawn_of_error A hd] at h
@@ -270,7 +270,7 @@ theorem drawLaw : DrawLaw (record A o e) := by
       obtain ⟨units, read⟩ := res
       refine ⟨units, read, rfl, fun u hu hmem => ?_⟩
       obtain ⟨i, hi, rfl⟩ := Array.mem_iff_getElem.1 hmem
-      have hsz : units.size = A.kd := _root_.Properties.SampledProofs.SecurityProofs.drawUnits_size A.hlaw hd
+      have hsz : units.size = A.kd := _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw hd
       have hkd : A.kd ≤ A.n := (kd_le_of_lawOn A.hlaw).trans_eq hns
       have h := hr' _ hu ⟨i, by omega⟩
       rw [drawn_of_ok A hd] at h
@@ -284,7 +284,7 @@ law's one-stage rule is well formed over the population's strata. The program's 
 (`Flock.Bridge.topological_progOf`). -/
 def ScopeOk : Prop :=
   (partA A).Partitions (stmtA A).prog ∧
-    (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+    (_root_.Properties.Spot.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 theorem inScope_of_scopeOk (h : ScopeOk A) : InScope (partA A) (stmtA A) :=
   ⟨Flock.Bridge.topological_progOf, h.1,

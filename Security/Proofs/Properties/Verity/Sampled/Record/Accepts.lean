@@ -9,7 +9,7 @@ import all Init.Data.String.Defs
 /-!
 # v2's acceptance is the record's, past the draw file round
 
-Where one-stage v2 (`SampledProofs.OneStageZk.checkBlobsAt`) accepts, the record's verifier (`Record.V`) accepts a run
+Where one-stage v2 (`Spot.OneStageZk.checkBlobsAt`) accepts, the record's verifier (`Record.V`) accepts a run
 whose draw file round keeps the run's draw file (`drawOk`) and whose session the blobs show (`acc_of_pass`):
 
 * **the run walks to the session** (`reach`): the draw rounds answer their coins, and the draw file round, keeping the
@@ -85,22 +85,22 @@ private theorem mapM_ok_of_getElem {α β ε : Type} (g : α → Except ε β) :
 /-- **The run's draw file**: the prover's message at the draw file round. -/
 def drawOf (v : Seen) : Msg := (v.msgs.map Prod.fst).getD DRAW_ROUNDS []
 
-/-- **v2's inputs at `A`** (`SampledProofs.OneStageZk.inputsOf`): `A`'s statement tags and committed files, the
+/-- **v2's inputs at `A`** (`Spot.OneStageZk.inputsOf`): `A`'s statement tags and committed files, the
 parameters' own partition object and program, and the lookup tables the blobs hold. -/
-def inputsAt (A : Live) (p : _root_.SampledProofs.OneStageZk.Params) (bs : Core.Blobs) : Flock.Witness.Inputs :=
-  _root_.SampledProofs.OneStageZk.inputsOf A.I.tags p.own A.I.circuitFile A.I.publicFile bs
+def inputsAt (A : Live) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Flock.Witness.Inputs :=
+  _root_.Spot.OneStageZk.inputsOf A.I.tags p.own A.I.circuitFile A.I.publicFile bs
 
 /-- **v2 reads `A`'s and `o`'s inputs** at the parameters `p` and the blobs `bs`: the committed circuit and public
 files are `A`'s, so are the lookup tables the blobs hold and the program; `o`'s partition object and registered file
 read (`FlockDeploy.jsonOf`) as the parameters' own; and the statement's tags are `A`'s. -/
-structure Names (A : Live) (o : Own) (p : _root_.SampledProofs.OneStageZk.Params) (bs : Core.Blobs) : Prop where
+structure Names (A : Live) (o : Own) (p : _root_.Spot.OneStageZk.Params) (bs : Core.Blobs) : Prop where
   circuit : bs.get p.own.circuit "circuit" = .ok A.I.circuitFile
   pub : bs.get p.own.pub "public file" = .ok A.I.publicFile
-  tables : _root_.SampledProofs.OneStageZk.tablesOf bs = A.I.tables
+  tables : _root_.Spot.OneStageZk.tablesOf bs = A.I.tables
   program : A.I.program = some p.own.program
   partition : FlockDeploy.jsonOf "partition" o.partition = .ok p.own.partition
   registered : o.registered.mapM (FlockDeploy.jsonOf "registered reads") = .ok p.own.registered
-  tags : Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags
+  tags : Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags
 
 /-- **The blobs show the run's session.** Where the run reaches the draw file round, at each session `s` the evidence
 names, `s`'s record is on the blobs and its draw is the run's draw file, as the session's statement reads it
@@ -108,7 +108,7 @@ names, `s`'s record is on the blobs and its draw is the run's draw file, as the 
 reads as the link message, and its last `f` as the prover's last, at the session's statement at the run's draw file;
 `s`'s record is `f`'s; and `s` names each rep stream's file of the session's setup, the proof file `f` carries in its
 place. -/
-def Shows (A : Live) (o : Own) (ev : _root_.SampledProofs.OneStageZk.Evidence) (bs : Core.Blobs) (v : Seen) : Prop :=
+def Shows (A : Live) (o : Own) (ev : _root_.Spot.OneStageZk.Evidence) (bs : Core.Blobs) (v : Seen) : Prop :=
   (DRAW_ROUNDS < v.msgs.length → ∀ s ∈ ev.sessions, ∃ rec : String,
     bs.get s.record "a session's record" = .ok rec.toUTF8 ∧
     ∃ J, FlockDeploy.jsonOf "draw" ⟨(drawOf v).toArray⟩ = .ok J ∧ Flock.Witness.recordDraw rec = some (Flock.norm J)) ∧
@@ -241,9 +241,9 @@ end Walk
 
 section Accepts
 
-variable {A : Live} {o : Own} {p : _root_.SampledProofs.OneStageZk.Params}
-  {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
-  {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
+variable {A : Live} {o : Own} {p : _root_.Spot.OneStageZk.Params}
+  {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
+  {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
 
 private theorem if_throw_ok {b : Bool} {e : String} (h : (if b then (throw e : Flock.V Unit) else pure ()) = .ok ()) :
     b = false := by
@@ -254,26 +254,26 @@ private theorem if_throw_ok {b : Bool} {e : String} (h : (if b then (throw e : F
 /-- **v2's acceptance is its one session's verdict**: the evidence names one session `s`; the statement's tags are
 `A`'s, with hm96 leaves; the verifier's registered reads are `rd`; `s`'s record is on the blobs, as UTF-8; and
 `verdictOf` at `A`'s inputs on `s` set up at its record's draw is `.ok`. -/
-theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
+theorem verdict_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) :
     ∃ s rd B record ksFiles population, ev.sessions = #[s] ∧ A.I.tags.plainLeaves = false ∧
-      _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd ∧
+      _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd ∧
       bs.get s.record s!"session {s.name}'s record" = .ok B ∧ String.fromUTF8? B = some record ∧
-      _root_.SampledProofs.OneStageZk.verdictOf (inputsAt A p bs) (scopeOf (inputsAt A p bs) rd) ksFiles population
+      _root_.Spot.OneStageZk.verdictOf (inputsAt A p bs) (scopeOf (inputsAt A p bs) rd) ksFiles population
         #[] record (Flock.Witness.recordDraw record)
-        (_root_.SampledProofs.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))
-        (_root_.SampledProofs.OneStageZk.filesOf bs s
-          (_root_.SampledProofs.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record)))
-        (_root_.SampledProofs.OneStageZk.coinKeyOf record
-          (_root_.SampledProofs.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))) =
+        (_root_.Spot.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))
+        (_root_.Spot.OneStageZk.filesOf bs s
+          (_root_.Spot.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record)))
+        (_root_.Spot.OneStageZk.coinKeyOf record
+          (_root_.Spot.OneStageZk.setupAt (inputsAt A p bs) rd (Flock.Witness.recordDraw record))) =
         .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at hacc
+  unfold _root_.Spot.OneStageZk.checkBlobsAt at hacc
   dsimp only at hacc
   split at hacc
   case h_1 => cases hacc
   rename_i R hR
   have hall : R.all = true := by
-    cases hca : _root_.SampledProofs.OneStage.checkAt p.base c (some ξ) { ev.base with verdicts := R.out } with
+    cases hca : _root_.Spot.OneStage.checkAt p.base c (some ξ) { ev.base with verdicts := R.out } with
     | accept pb pf =>
       simp only [hca] at hacc
       cases hb : R.all
@@ -291,7 +291,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   have hsz : ev.sessions.size = 1 := by
-    unfold _root_.SampledProofs.OneStageZk.oneSession at h1
+    unfold _root_.Spot.OneStageZk.oneSession at h1
     by_contra hne
     have hb : ¬ (ev.sessions.size == 1) = true := by simpa using hne
     rw [ite_eq_right hb] at h1
@@ -300,7 +300,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
     rcases hl : ev.sessions with ⟨_ | ⟨s, _ | ⟨_, _⟩⟩⟩
     all_goals rw [hl] at hsz
     all_goals first | (simp at hsz; done) | exact ⟨s, rfl⟩
-  unfold _root_.SampledProofs.OneStageZk.run at hR
+  unfold _root_.Spot.OneStageZk.run at hR
   simp only [hn.tags] at hR
   obtain ⟨_, hpl, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
@@ -321,7 +321,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   simp only [List.foldlM_cons, List.foldlM_nil] at hfold
   obtain ⟨R'', hstep, hpure⟩ := bind_ok hfold
   obtain rfl : R'' = R' := Except.ok.inj hpure
-  unfold _root_.SampledProofs.OneStageZk.step at hstep
+  unfold _root_.Spot.OneStageZk.step at hstep
   obtain ⟨B, hB, hstep⟩ := bind_ok hstep
   cases hu : String.fromUTF8? B with
   | none => rw [hu] at hstep; cases hstep
@@ -330,7 +330,7 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
     dsimp only at hstep
     obtain ⟨_, -, hstep⟩ := bind_ok hstep
     try dsimp only at hstep
-    unfold _root_.SampledProofs.OneStageZk.push at hstep
+    unfold _root_.Spot.OneStageZk.push at hstep
     dsimp only at hstep
     split at hstep
     · rename_i why hvd
@@ -342,13 +342,13 @@ theorem verdict_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
 /-- **v2's acceptance bounds the lengths its length refusal reads** (`fitsWhy` at `WORD`): `A`'s circuit and public
 files, its lookup tables (their number, names and bytes) and its program, and the printed text of the verifier's
 partition object and registered reads (`printedSize`), each under `2^64`. -/
-theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
+theorem lengths_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) :
     A.I.circuitFile.size < 2 ^ 64 ∧ A.I.publicFile.size < 2 ^ 64 ∧ A.I.tables.length < 2 ^ 64 ∧
       (∀ t ∈ A.I.tables, t.1.toUTF8.size < 2 ^ 64 ∧ t.2.size < 2 ^ 64) ∧ (∀ b ∈ A.I.program, b.size < 2 ^ 64) ∧
-      _root_.SampledProofs.OneStageZk.printedSize p.own.partition < 2 ^ 64 ∧
-      (∀ j ∈ p.own.registered, _root_.SampledProofs.OneStageZk.printedSize j < 2 ^ 64) := by
-  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at hacc
+      _root_.Spot.OneStageZk.printedSize p.own.partition < 2 ^ 64 ∧
+      (∀ j ∈ p.own.registered, _root_.Spot.OneStageZk.printedSize j < 2 ^ 64) := by
+  unfold _root_.Spot.OneStageZk.checkBlobsAt at hacc
   dsimp only at hacc
   split at hacc
   case h_1 => cases hacc
@@ -360,7 +360,7 @@ theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
-  unfold _root_.SampledProofs.OneStageZk.run at hR
+  unfold _root_.Spot.OneStageZk.run at hR
   simp only [hn.tags] at hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
   obtain ⟨_, -, hR⟩ := bind_ok hR
@@ -372,12 +372,12 @@ theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
   split at hfw
   · cases hfw
   rename_i hf
-  have hf' : _root_.SampledProofs.OneStageZk.fitsWhy _root_.SampledProofs.OneStageZk.WORD A.I.circuitFile
+  have hf' : _root_.Spot.OneStageZk.fitsWhy _root_.Spot.OneStageZk.WORD A.I.circuitFile
       A.I.publicFile A.I.tables A.I.program (some p.own.partition) p.own.registered = none := by
     rw [← hn.tables, hn.program]
     exact hf
-  have hW : _root_.SampledProofs.OneStageZk.WORD = 2 ^ 64 := rfl
-  unfold _root_.SampledProofs.OneStageZk.fitsWhy at hf'
+  have hW : _root_.Spot.OneStageZk.WORD = 2 ^ 64 := rfl
+  unfold _root_.Spot.OneStageZk.fitsWhy at hf'
   try rw [hW] at hf'
   split_ifs at hf' with h1 h2 h3 h4 h5 h6 h7
   refine ⟨Nat.lt_of_not_le h1, Nat.lt_of_not_le h2, Nat.lt_of_not_le h3, ?_, ?_, ?_, ?_⟩
@@ -400,12 +400,12 @@ theorem lengths_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt 
 the draw file `d` and the verifier's own partition object and registered file (`o`'s bytes) are each under `2^64`
 bytes: v2's length refusal gives the rest (`lengths_of_accepts`). Where `o`'s bytes are the printed text of what v2
 reads of them, `lengths_of_accepts` bounds those too. -/
-theorem fits_of_accepts (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
+theorem fits_of_accepts (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof)
     (hn : Names A o p bs) {d : Msg} (hd : d.length < 2 ^ 64) (hpart : o.partition.size < 2 ^ 64)
     (hreg : ∀ b ∈ o.registered, b.size < 2 ^ 64) : Fits A o d := by
   obtain ⟨hc, hp, htl, ht, hpr, -, -⟩ := lengths_of_accepts hacc hn
   refine ⟨?_, hc, hp, htl, ht, ?_, ?_, ?_, hpr, ?_, ?_, ?_, ?_, hreg, ?_⟩
-  · show _root_.SampledProofs.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64
+  · show _root_.Spot.OneStageZk.STATEMENT.toUTF8.size < 2 ^ 64
     decide
   · show (1 : ℕ) < 2 ^ 64
     decide
@@ -434,11 +434,11 @@ end Accepts
 
 section Ins
 
-variable {A : Live} {o : Own} {p : _root_.SampledProofs.OneStageZk.Params} {bs : Core.Blobs}
+variable {A : Live} {o : Own} {p : _root_.Spot.OneStageZk.Params} {bs : Core.Blobs}
 
 /-- The registered file reads as the verifier's registered reads `rd` (`readsOf`'s, on what `o`'s bytes read as). -/
-theorem registered_of_names (hn : Names A o p bs) {rd : _root_.SampledProofs.OneStageZk.Reads}
-    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd) :
+theorem registered_of_names (hn : Names A o p bs) {rd : _root_.Spot.OneStageZk.Reads}
+    (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) :
     o.registered.mapM (fun b => do Flock.Registered.ofJson (← FlockDeploy.jsonOf "registered reads" b)) =
       .ok rd.registered := by
   have hreg := hn.registered
@@ -457,7 +457,7 @@ theorem registered_of_names (hn : Names A o p bs) {rd : _root_.SampledProofs.One
       rw [hj] at hreg
       obtain hp : some j = p.own.registered := Except.ok.inj hreg
       rw [← hp] at hrd
-      unfold _root_.SampledProofs.OneStageZk.readsOf at hrd
+      unfold _root_.Spot.OneStageZk.readsOf at hrd
       obtain ⟨own, hown, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
       obtain ⟨_, -, hrd⟩ := bind_ok hrd
@@ -472,12 +472,12 @@ theorem registered_of_names (hn : Names A o p bs) {rd : _root_.SampledProofs.One
 `FlockDeploy.Raw.ins` gives a reading `si` that matches v2's inputs at `A` and the verifier's registered reads `rd`
 (`SessionMatch`), with the draw `J`. -/
 theorem ins_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
-    {rd : _root_.SampledProofs.OneStageZk.Reads}
-    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} {J : Json}
+    {rd : _root_.Spot.OneStageZk.Reads}
+    (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} {J : Json}
     (hJ : FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J) :
     ∃ si, ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok si ∧
       SessionMatch si (inputsAt A p bs) rd ∧ si.read.draw = some (Flock.norm J) := by
-  have hf : Flock.Tags.byName? _root_.SampledProofs.OneStageZk.STATEMENT = some A.I.tags :=
+  have hf : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some A.I.tags :=
     Flock.Tags.byName?_of_find? hn.tags
   have hdm : (some (⟨d.toArray⟩ : ByteArray)).mapM (FlockDeploy.jsonOf "draw") = .ok (some J) := by
     rw [Option.mapM_some, hJ]
@@ -550,8 +550,8 @@ theorem readOf_sess {d : Msg} (hfits : Fits A o d) {r : Flock.Readable.Read}
 fits its length words and flock-verify `--zk` reads it as `r`, `r` is `ins_sess`'s reading: v2's inputs at `A`
 (`SessionMatch`), its draw the draw file's JSON. -/
 theorem read_sess (hn : Names A o p bs) (hpl : A.I.tags.plainLeaves = false)
-    {rd : _root_.SampledProofs.OneStageZk.Reads}
-    (hrd : _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} (hfits : Fits A o d)
+    {rd : _root_.Spot.OneStageZk.Reads}
+    (hrd : _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd) {d : Msg} (hfits : Fits A o d)
     {r : Flock.Readable.Read} (h : FlockDeploy.readOf true (sessStmt A o d) = some r) :
     ∃ si J, si.read = r ∧ SessionMatch si (inputsAt A p bs) rd ∧
       FlockDeploy.jsonOf "draw" ⟨d.toArray⟩ = .ok J ∧ r.draw = some (Flock.norm J) := by
@@ -597,15 +597,15 @@ theorem act_decide_of {x : Msg} {s : Ins} {spec : Flock.SessionSpec} {sts : Arra
 
 /-- **The session's rep files are its last message's proof files** where each stream's file is that proof file and
 there are as many proof files as streams. -/
-theorem filesOf_eq {bs : Core.Blobs} {s : _root_.SampledProofs.OneStageZk.RunFiles}
-    {st : _root_.SampledProofs.OneStageZk.SetUp} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {pj oj : Json}
+theorem filesOf_eq {bs : Core.Blobs} {s : _root_.Spot.OneStageZk.RunFiles}
+    {st : _root_.Spot.OneStageZk.SetUp} {spec : Flock.SessionSpec} {tabs : Array Flock.Setup} {pj oj : Json}
     (hst : st = .ok (spec, tabs, pj, oj)) {proofs : Array ByteArray}
     (hreps : ∀ k (hk : k < spec.repStreams.size), ∃ d,
       (s.reps.find? (·.1 == s!"{spec.repStreams[k].2.2.replace "/" "."}.bin")).map (·.2) = some d ∧
         ∃ hk' : k < proofs.size, bs.get d "session files" = .ok proofs[k])
     (hnp : proofs.size = spec.repStreams.size) :
-    _root_.SampledProofs.OneStageZk.filesOf bs s st = .ok proofs := by
-  unfold _root_.SampledProofs.OneStageZk.filesOf
+    _root_.Spot.OneStageZk.filesOf bs s st = .ok proofs := by
+  unfold _root_.Spot.OneStageZk.filesOf
   rw [hst]
   show spec.repStreams.mapM _ = _
   rw [Array.mapM_eq_mapM_toList]
@@ -624,12 +624,12 @@ theorem filesOf_eq {bs : Core.Blobs} {s : _root_.SampledProofs.OneStageZk.RunFil
 
 /-- `setupAt` is `.ok` where `verdictOf` on it is. -/
 theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit}
-    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
+    {coinKeys : Array String} {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+    (h : _root_.Spot.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
       = .ok ()) :
     ∃ spec tabs pj oj, st = .ok (spec, tabs, pj, oj) := by
-  unfold _root_.SampledProofs.OneStageZk.verdictOf at h
+  unfold _root_.Spot.OneStageZk.verdictOf at h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨_, -, h⟩ := bind_ok h
   obtain ⟨⟨spec, tabs, pj, oj⟩, hst, -⟩ := bind_ok h
@@ -641,10 +641,10 @@ theorem setupAt_of_verdictOf {I : Flock.Witness.Inputs} {scope ksFiles populatio
 one-stage v2 accepts on the blobs `bs` reading `A`'s and `o`'s inputs (`Names`), the run of the record's verifier
 against `sha512` accepts, given that the blobs show the run's session (`Shows`), live-verifier at it (`LiveCoins`), and
 the draw file round keeps the run's draw file (`drawOk`, whose statement then fits its length words). -/
-theorem acc_of_pass (A : Live) (o : Own) {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {ev : _root_.SampledProofs.OneStageZk.Evidence} {bs : Core.Blobs}
-    {ξ : ByteArray} {pub : _root_.SampledProofs.OneStage.Public} {prof : Core.Integrity}
-    (hacc : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
+theorem acc_of_pass (A : Live) (o : Own) {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {ev : _root_.Spot.OneStageZk.Evidence} {bs : Core.Blobs}
+    {ξ : ByteArray} {pub : _root_.Spot.OneStage.Public} {prof : Core.Integrity}
+    (hacc : _root_.Spot.OneStageZk.checkBlobsAt p c ξ ev bs = .accept pub prof) (hn : Names A o p bs)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (r : Fin ((V A o).k (xOf A o)) → Coin)
     (hshow : Shows A o ev bs (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen)
     (hlive : LiveCoins A o ξ (run FlockDeploy.sha512 P (V A o) (xOf A o) ω r).seen

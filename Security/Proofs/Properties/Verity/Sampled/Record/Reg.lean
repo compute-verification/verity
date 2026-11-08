@@ -40,25 +40,25 @@ namespace Verity.Sampled.Record
 open Lean (Json)
 open Claims.Sampling
 open Verity.Sampled.Trees (bind_ok)
-open Properties.SampledProofs.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
+open Properties.Spot.SecurityProofs (layout_ok units_eq popUnits strataOf_perm partition_evaluate_tiles
   laysOut_units length_popUnits lawObj kindOf flockLaw_cases deriveLaw_cases slotDesign_law bind_eq_ok throw_ne
   throw_bind_ne nat_toJson derive_bounds derive_ok deriveWork_ok)
-open private split1 digits from SampledProofs.Select
+open private split1 digits from Spot.Select
 
-theorem strataSizes_slotPartition (l : _root_.SampledProofs.Slots.Layout) :
-    strataSizes ((_root_.Properties.SampledProofs.slotPartition l).classes.headD []) =
+theorem strataSizes_slotPartition (l : _root_.Spot.Slots.Layout) :
+    strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) =
       (l.classes.toList.headD #[]).toList.map Array.size := by
-  unfold _root_.Properties.SampledProofs.slotPartition strataSizes
+  unfold _root_.Properties.Spot.slotPartition strataSizes
   generalize l.classes.toList = cs
   cases cs <;> simp [Function.comp_def]
 
 /-- **v2's slots are two classes**: the population in the registration's strata, whose sizes are those of the first
 class of the registration's layout `l`, and the input class, at most one stratum. -/
-theorem partSlots_classes (A : Live) {p : _root_.SampledProofs.Program} {l : _root_.SampledProofs.Slots.Layout}
-    (hp : _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p)
-    (hl : _root_.SampledProofs.Slots.layout p A.qr = .ok l) :
+theorem partSlots_classes (A : Live) {p : _root_.Spot.Program} {l : _root_.Spot.Slots.Layout}
+    (hp : _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p)
+    (hl : _root_.Spot.Slots.layout p A.qr = .ok l) :
     ∃ pop ins, (partSlots A).classes = [pop, ins] ∧ ins.length ≤ 1 ∧
-      strataSizes pop = strataSizes ((_root_.Properties.SampledProofs.slotPartition l).classes.headD []) := by
+      strataSizes pop = strataSizes ((_root_.Properties.Spot.slotPartition l).classes.headD []) := by
   refine ⟨_, InputSlot.inputClass (Flock.Bridge.progOf A.Cc A.κ), rfl, ?_, ?_⟩
   · unfold InputSlot.inputClass
     split <;> simp
@@ -73,7 +73,7 @@ the population. -/
 theorem regIs_of_setsUp (A : Live) {ι : Type} {dv : Accounting.Device ι} {α : Type} [Fintype α]
     {V : Vocab dv α} {θ : ByteArray} {F : Array ByteArray} (hsu : SetsUp V θ F A) :
     ∃ p, ParamsAt θ p ∧ p.base.verifier.query = A.qr ∧ lawAt p.base.verifier A.n = .ok A.law ∧
-      _root_.SampledProofs.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
+      _root_.Spot.Program.parse ⟨A.desc.toArray⟩ = .ok p.base.verifier.program := by
   obtain ⟨p, hp, -, -, hl, hd, hq, -⟩ := hsu.params
   exact ⟨p, hp, hq.symm, hl, hd⟩
 
@@ -127,10 +127,10 @@ theorem toNat!_repr (K : ℕ) : (Nat.repr K).toNat! = K := by
 digits, is `{law: kind, k: K}`. -/
 theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : ℕ)
     (h1 : 1 ≤ K) :
-    _root_.SampledProofs.Select.parseDesign (kind ++ ":" ++ Nat.repr K) =
+    _root_.Spot.Select.parseDesign (kind ++ ":" ++ Nat.repr K) =
       .ok (Json.mkObj [("law", Json.str kind), ("k", Lean.toJson K)]) := by
   have hka : ':' ∉ kind.toList := by rcases hk with rfl | rfl | rfl <;> decide
-  unfold _root_.SampledProofs.Select.parseDesign
+  unfold _root_.Spot.Select.parseDesign
   rw [split1_colon kind (Nat.repr K) hka (not_mem_repr (by decide) K)]
   simp only [digits_repr, toNat!_repr, Bool.and_true, decide_eq_true h1]
   rcases hk with rfl | rfl | rfl <;> rfl
@@ -138,9 +138,9 @@ theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stra
 /-- **`parseDesign` reads `bernoulli:NUM/DEN` back**: at `0 < DEN` and `NUM ≤ DEN`, each in `Nat.repr`'s digits, it is
 `{law: bernoulli, p: "NUM/DEN"}`. -/
 theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.SampledProofs.Select.parseDesign ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
+    _root_.Spot.Select.parseDesign ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
       .ok (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) := by
-  unfold _root_.SampledProofs.Select.parseDesign
+  unfold _root_.Spot.Select.parseDesign
   rw [show "bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b) =
     "bernoulli" ++ ":" ++ (Nat.repr a ++ "/" ++ Nat.repr b) from rfl, split1_colon _ _ (by decide) ?_]
   · dsimp only
@@ -155,10 +155,10 @@ theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
 
 /-- **The population is `PopMatches`' count**: where the descriptor parses as `p` and `p`'s layout under the query is
 `l`, `PopMatches desc q n` makes `Partition.units p q` the count `n`. -/
-theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.SampledProofs.Program}
-    {l : _root_.SampledProofs.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
-    (hp : _root_.SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p)
-    (hl : _root_.SampledProofs.Slots.layout p q = .ok l) : _root_.SampledProofs.Partition.units p q = .ok n := by
+theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_.Spot.Program}
+    {l : _root_.Spot.Slots.Layout} (h : Flock.Bridge.PopMatches desc q n)
+    (hp : _root_.Spot.Program.parse ⟨desc.toArray⟩ = .ok p)
+    (hl : _root_.Spot.Slots.layout p q = .ok l) : _root_.Spot.Partition.units p q = .ok n := by
   obtain ⟨rs, he, pop, rfl, hlays⟩ := layout_ok p q _ hl
   rw [units_eq p q rs he]
   have hperm : (popUnits (Flock.Draw.strataOf (rs.map fun r => (r.template, r.first, r.count)))).Perm
@@ -173,20 +173,20 @@ theorem units_of_popMatches {desc : Claims.Msg} {q : Json} {n : ℕ} {p : _root_
 /-! ## The design at the law's text -/
 
 theorem sort_law_k :
-    _root_.SampledProofs.sortStrings #["k", "law"] = _root_.SampledProofs.sortStrings #["law", "k"] :=
+    _root_.Spot.sortStrings #["k", "law"] = _root_.Spot.sortStrings #["law", "k"] :=
   Array.toList_inj.1 (Properties.Pouw.Period.SecurityProofs.Sort.qsort_eq_of_perm (List.Perm.swap "law" "k" []))
 
 theorem keys_count (s : String) (K : ℕ) :
-    _root_.SampledProofs.keys? (Json.mkObj [("law", Json.str s), ("k", Lean.toJson K)]) =
-      some (_root_.SampledProofs.sortStrings #["law", "k"]) := by
+    _root_.Spot.keys? (Json.mkObj [("law", Json.str s), ("k", Lean.toJson K)]) =
+      some (_root_.Spot.sortStrings #["law", "k"]) := by
   rw [← sort_law_k]
-  unfold _root_.SampledProofs.keys?
+  unfold _root_.Spot.keys?
   with_unfolding_all rfl
 
 theorem keys_bernoulli (p : String) :
-    _root_.SampledProofs.keys? (Json.mkObj [("law", "bernoulli"), ("p", Json.str p)]) =
-      some (_root_.SampledProofs.sortStrings #["law", "p"]) := by
-  unfold _root_.SampledProofs.keys?
+    _root_.Spot.keys? (Json.mkObj [("law", "bernoulli"), ("p", Json.str p)]) =
+      some (_root_.Spot.sortStrings #["law", "p"]) := by
+  unfold _root_.Spot.keys?
   with_unfolding_all rfl
 
 theorem kindOf_count (s : String) (K : ℕ) : kindOf (Json.mkObj [("law", Json.str s), ("k", Lean.toJson K)]) = s :=
@@ -196,7 +196,7 @@ theorem kindOf_bernoulli (p : String) : kindOf (Json.mkObj [("law", "bernoulli")
   (rfl)
 
 theorem getD_law_of_kindOf {law : Json} {s : String} (h : kindOf law = s) (hs : s ≠ "") :
-    _root_.SampledProofs.getD law "law" = .str s := by
+    _root_.Spot.getD law "law" = .str s := by
   unfold kindOf at h
   split at h
   · rename_i s' hs'
@@ -204,19 +204,19 @@ theorem getD_law_of_kindOf {law : Json} {s : String} (h : kindOf law = s) (hs : 
   · exact absurd h.symm hs
 
 /-- **`deriveLaw` reads only a law's kind and `k`.** -/
-theorem deriveLaw_congr (p : _root_.SampledProofs.Program) (q : Json) (tbl : Option Json) {a b : Json}
-    (hl : _root_.SampledProofs.getD a "law" = _root_.SampledProofs.getD b "law")
-    (hn : _root_.SampledProofs.nat? (_root_.SampledProofs.getD a "k") =
-      _root_.SampledProofs.nat? (_root_.SampledProofs.getD b "k")) :
-    _root_.SampledProofs.Draw.deriveLaw p q a tbl = _root_.SampledProofs.Draw.deriveLaw p q b tbl := by
-  unfold _root_.SampledProofs.Draw.deriveLaw
+theorem deriveLaw_congr (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {a b : Json}
+    (hl : _root_.Spot.getD a "law" = _root_.Spot.getD b "law")
+    (hn : _root_.Spot.nat? (_root_.Spot.getD a "k") =
+      _root_.Spot.nat? (_root_.Spot.getD b "k")) :
+    _root_.Spot.Draw.deriveLaw p q a tbl = _root_.Spot.Draw.deriveLaw p q b tbl := by
+  unfold _root_.Spot.Draw.deriveLaw
   rw [hl, hn]
 
 /-- **`deriveLaw` expands neither a subset nor a Bernoulli law.** -/
-theorem deriveLaw_none (p : _root_.SampledProofs.Program) (q : Json) (tbl : Option Json) {law : Json}
+theorem deriveLaw_none (p : _root_.Spot.Program) (q : Json) (tbl : Option Json) {law : Json}
     (h1 : kindOf law ≠ "stratified") (h2 : kindOf law ≠ "work") :
-    _root_.SampledProofs.Draw.deriveLaw p q law tbl = .ok none := by
-  unfold _root_.SampledProofs.Draw.deriveLaw
+    _root_.Spot.Draw.deriveLaw p q law tbl = .ok none := by
+  unfold _root_.Spot.Draw.deriveLaw
   split
   next s hs =>
     have hk : kindOf law = s := by simp [kindOf, hs]
@@ -238,11 +238,11 @@ theorem deriveWork_k {k : ℕ} {S : Array (String × Array (ℕ × ℕ))} {tab :
     exact hc.1
 
 /-- **`deriveLaw`'s expansion is the law's kind at its `k`**, of at least one unit. -/
-theorem deriveLaw_some {p : _root_.SampledProofs.Program} {q law : Json} {tbl : Option Json} {L : Flock.Draw.Law}
-    (h : _root_.SampledProofs.Draw.deriveLaw p q law tbl = .ok (some L)) :
-    ∃ k, _root_.SampledProofs.nat? (_root_.SampledProofs.getD law "k") = some k ∧ 1 ≤ k ∧
+theorem deriveLaw_some {p : _root_.Spot.Program} {q law : Json} {tbl : Option Json} {L : Flock.Draw.Law}
+    (h : _root_.Spot.Draw.deriveLaw p q law tbl = .ok (some L)) :
+    ∃ k, _root_.Spot.nat? (_root_.Spot.getD law "k") = some k ∧ 1 ≤ k ∧
       ((kindOf law = "stratified" ∧ ∃ S, L = .stratified k S) ∨ (kindOf law = "work" ∧ ∃ S, L = .work k S)) := by
-  unfold _root_.SampledProofs.Draw.deriveLaw at h
+  unfold _root_.Spot.Draw.deriveLaw at h
   split at h
   next s hs =>
     have hk : kindOf law = s := by simp [kindOf, hs]
@@ -284,13 +284,13 @@ theorem deriveLaw_some {p : _root_.SampledProofs.Program} {q law : Json} {tbl : 
       exact absurd (by decide) hc
 
 theorem flockLaw_subset_text (K n : ℕ) (hn : K ≤ n) :
-    _root_.SampledProofs.Draw.flockLaw (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) n =
+    _root_.Spot.Draw.flockLaw (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) n =
       .ok (.subset K) := by
-  unfold _root_.SampledProofs.Draw.flockLaw
-  rw [show _root_.SampledProofs.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "law" =
+  unfold _root_.Spot.Draw.flockLaw
+  rw [show _root_.Spot.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "law" =
     .str "subset" from rfl]
   dsimp only
-  rw [keys_count, show _root_.SampledProofs.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "k" =
+  rw [keys_count, show _root_.Spot.getD (Json.mkObj [("law", Json.str "subset"), ("k", Lean.toJson K)]) "k" =
     Lean.toJson K from rfl, nat_toJson]
   simp only [bne_self_eq_false, Bool.false_eq_true, ↓reduceIte, Nat.not_lt.2 hn]
   rfl
@@ -308,8 +308,8 @@ theorem splitOn_slash_repr (a b : ℕ) :
   simp only [List.map_cons, List.map_nil, String.ofList_toList]
 
 theorem probability_repr (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.SampledProofs.Draw.probability? s!"{a}/{b}" = some (a, b) := by
-  unfold _root_.SampledProofs.Draw.probability?
+    _root_.Spot.Draw.probability? s!"{a}/{b}" = some (a, b) := by
+  unfold _root_.Spot.Draw.probability?
   rw [show s!"{a}/{b}" = Nat.repr a ++ "/" ++ Nat.repr b from rfl, splitOn_slash_repr]
   dsimp only
   simp only [toNat!_repr, decide_eq_true hb, decide_eq_true hab, Bool.and_true]
@@ -319,13 +319,13 @@ theorem probability_repr (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
     exact absurd (Bool.and_eq_true_iff.2 ⟨digits_repr a, digits_repr b⟩) hc
 
 theorem flockLaw_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.SampledProofs.Draw.flockLaw (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) n =
+    _root_.Spot.Draw.flockLaw (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) n =
       .ok (.bernoulli a b) := by
-  unfold _root_.SampledProofs.Draw.flockLaw
-  rw [show _root_.SampledProofs.getD (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) "law" =
+  unfold _root_.Spot.Draw.flockLaw
+  rw [show _root_.Spot.getD (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) "law" =
     .str "bernoulli" from rfl]
   dsimp only
-  rw [keys_bernoulli, show _root_.SampledProofs.getD (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")])
+  rw [keys_bernoulli, show _root_.Spot.getD (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")])
     "p" = .str s!"{a}/{b}" from rfl]
   dsimp only
   rw [probability_repr a b hb hab]
@@ -334,11 +334,11 @@ theorem flockLaw_bernoulli_text (a b n : ℕ) (hb : 0 < b) (hab : a ≤ b) :
 
 /-- **`lawAt`'s steps**: the verifier's law's expansion, the law `flockLaw` reads from its law object, and the
 expansion where there is one. -/
-theorem lawAt_ok {v : _root_.SampledProofs.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
+theorem lawAt_ok {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
     (h : lawAt v n = .ok L) :
-    ∃ derived parsed, _root_.SampledProofs.Draw.deriveLaw v.program v.query v.law v.workTable = .ok derived ∧
-      _root_.SampledProofs.Draw.flockLaw (lawObj v.law derived) n = .ok parsed ∧ L = derived.getD parsed := by
-  unfold lawAt _root_.SampledProofs.Draw.derive at h
+    ∃ derived parsed, _root_.Spot.Draw.deriveLaw v.program v.query v.law v.workTable = .ok derived ∧
+      _root_.Spot.Draw.flockLaw (lawObj v.law derived) n = .ok parsed ∧ L = derived.getD parsed := by
+  unfold lawAt _root_.Spot.Draw.derive at h
   obtain ⟨lawJ, hJ, h⟩ := bind_eq_ok.1 h
   obtain ⟨d, hd, hJ⟩ := bind_eq_ok.1 hJ
   obtain ⟨d', hd', h⟩ := bind_eq_ok.1 h
@@ -359,13 +359,13 @@ def lawText : Flock.Draw.Law → String
 /-- **The design at the law's text is the law `lawAt` reads**: over the verifier's program and query of `n` units,
 where `lawAt` reads the law `L`, `slotDesign` under the rule `law (lawText L)` is `L`'s one-stage design, then `all`,
 at a subset law of at least one unit. -/
-theorem slotDesign_lawText {v : _root_.SampledProofs.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
-    (hu : _root_.SampledProofs.Partition.units v.program v.query = .ok n) (hl : lawAt v n = .ok L)
+theorem slotDesign_lawText {v : _root_.Spot.Registration.Verifier} {n : ℕ} {L : Flock.Draw.Law}
+    (hu : _root_.Spot.Partition.units v.program v.query = .ok n) (hl : lawAt v n = .ok L)
     (hk : ∀ k, L = .subset k → 1 ≤ k) :
-    _root_.Properties.SampledProofs.slotDesign (.law (lawText L)) v.program v.query v.workTable =
-      .ok ⟨[_root_.Properties.SampledProofs.oneStageOf L, .all]⟩ := by
+    _root_.Properties.Spot.slotDesign (.law (lawText L)) v.program v.query v.workTable =
+      .ok ⟨[_root_.Properties.Spot.oneStageOf L, .all]⟩ := by
   obtain ⟨derived, parsed, hd, hf, rfl⟩ := lawAt_ok hl
-  have hne : _root_.SampledProofs.Select.Rule.law (lawText (derived.getD parsed)) ≠ .all := nofun
+  have hne : _root_.Spot.Select.Rule.law (lawText (derived.getD parsed)) ≠ .all := nofun
   cases derived with
   | none =>
     rcases flockLaw_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
@@ -392,10 +392,10 @@ theorem slotDesign_lawText {v : _root_.SampledProofs.Registration.Verifier} {n :
 
 /-- **v2's design at the law's text**: over the verifier's program and query of `A`'s population, where `lawAt` reads
 `A`'s law, the design under `law (lawText A.law)` is `designSlots A`. -/
-theorem slotDesign_designSlots (A : Live) {v : _root_.SampledProofs.Registration.Verifier}
-    (hu : _root_.SampledProofs.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.law)
+theorem slotDesign_designSlots (A : Live) {v : _root_.Spot.Registration.Verifier}
+    (hu : _root_.Spot.Partition.units v.program v.query = .ok A.n) (hl : lawAt v A.n = .ok A.law)
     (hk : ∀ k, A.law = .subset k → 1 ≤ k) :
-    _root_.Properties.SampledProofs.slotDesign (.law (lawText A.law)) v.program v.query v.workTable =
+    _root_.Properties.Spot.slotDesign (.law (lawText A.law)) v.program v.query v.workTable =
       .ok (designSlots A) :=
   slotDesign_lawText hu hl hk
 

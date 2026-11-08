@@ -94,9 +94,9 @@ theorem get_ok {j : Json} {k ctx : String} {v : Json} (h : Flock.J.get j k ctx =
   | error e => rw [hg] at h; cases h
   | ok w => rw [hg] at h; cases h; rfl
 
-/-- A field `Flock.J.arr` reads as an array is that array, as `SampledProofs.getD` reads it. -/
+/-- A field `Flock.J.arr` reads as an array is that array, as `Spot.getD` reads it. -/
 theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.arr j k ctx = .ok a) :
-    _root_.SampledProofs.getD j k = .arr a := by
+    _root_.Spot.getD j k = .arr a := by
   unfold Flock.J.arr at h
   obtain ⟨v, hv, h⟩ := bind_ok h
   have hg := get_ok hv
@@ -107,16 +107,16 @@ theorem getD_of_arr {j : Json} {k ctx : String} {a : Array Json} (h : Flock.J.ar
       | (cases h; rfl)
       | cases h
   rw [← hva]
-  simp only [_root_.SampledProofs.getD, _root_.SampledProofs.field?, hg, Except.toOption, Option.getD_some]
+  simp only [_root_.Spot.getD, _root_.Spot.field?, hg, Except.toOption, Option.getD_some]
 
 /-- **A draw file's units, as v2 credits them, are as many as its draw's**: `unitsAt` reads one unit per entry of the
 draw's `units` field, which `UnitDraw.ofJson` reads as its units. -/
 theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
-    (hu : _root_.Properties.SampledProofs.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
+    (hu : _root_.Properties.Spot.Units.unitsAt h j = some xs) (hD : Flock.Draw.UnitDraw.ofJson j = .ok D) :
     xs.size = D.units.size := by
   obtain ⟨⟨a, ha, hm⟩, -, -⟩ := FlockSoundness.Discharge.Composed.ofJson_shape hD
   have hga := getD_of_arr ha
-  unfold _root_.Properties.SampledProofs.Units.unitsAt at hu
+  unfold _root_.Properties.Spot.Units.unitsAt at hu
   obtain ⟨_, -, hu⟩ := Option.bind_eq_some_iff.1 hu
   try dsimp only at hu
   rw [hga] at hu
@@ -127,10 +127,10 @@ theorem unitsAt_size {h j : Json} {xs : Array ℕ} {D : Flock.Draw.UnitDraw}
 
 /-- **The coins draw `A.kd` units** where the draw ends: `A`'s law is on its strata and draws `A.kd` (`Live.hlaw`). -/
 theorem drawn_length (A : Live) {src : ByteArray} {u : Array ℕ} {rd : ℕ}
-    (h : _root_.SampledProofs.Draw.drawUnits A.law A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
+    (h : _root_.Spot.Draw.drawUnits A.law A.n src = .ok (u, rd)) : (drawn A src).length = A.kd := by
   unfold drawn
   simp only [h, Array.length_toList]
-  exact _root_.Properties.SampledProofs.SecurityProofs.drawUnits_size A.hlaw h
+  exact _root_.Properties.Spot.SecurityProofs.drawUnits_size A.hlaw h
 
 /-- **A draw `ProvedScope.drawLaw` keeps proves its drawn units alone**: it is by a subset or stratified law, whose
 draws carry no closure. -/
@@ -164,7 +164,7 @@ variable {A : Live} {o : Own}
 theorem stmtTags_sess {d : Msg} {s : Ins}
     (hins : ({ baseRaw A o with draw := some ⟨d.toArray⟩ } : FlockDeploy.Raw).ins = .ok s) :
     s.stmtTags = Flock.Tags.circuit := by
-  have hf : Flock.Tags.byName? _root_.SampledProofs.OneStageZk.STATEMENT = some Flock.Tags.circuit :=
+  have hf : Flock.Tags.byName? _root_.Spot.OneStageZk.STATEMENT = some Flock.Tags.circuit :=
     Flock.Tags.byName?_of_find? FlockSoundness.Discharge.Recursion.find?_circuit
   exact Option.some.inj ((RecDeploy.ResLower.raw_ins_tags hins).1.symm.trans hf)
 

@@ -5,13 +5,13 @@ public import Proofs.Flock.Claims.Sampling.Session
 public import Proofs.Flock.Claims.Sampling.Deployed
 public import Proofs.Flock.Claims.Sampling.InputSlot
 public import Proofs.Flock.Bridge.LeafMap
-public import Proofs.Properties.SampledProofs.Units
+public import Proofs.Properties.Spot.Units
 public import Proofs.Properties.Verity.Recursive.PartStatement
 
 /-!
 # One-stage v2's audit at a session, as a sampling record
 
-The claims' sampling record (`Claims.Sampling.Deploy`) of the session one-stage v2 (`SampledProofs.OneStageZk`) sets up
+The claims' sampling record (`Claims.Sampling.Deploy`) of the session one-stage v2 (`Spot.OneStageZk`) sets up
 (`Verity.Sampled.Live`, `A`), with the verifier's own partition object and registered file `o` (`Own`): v2's audit in
 public-coin form (`V`), with what the sampling claims read of it (`code`, `record`).
 
@@ -54,9 +54,9 @@ structure Own where
 
 /-- **The session's statement before the draw**: v2's statement, the committed circuit and public files and lookup
 tables, `--zk`, one table, the verifier's partition object, program and registered file, and no work, stratified,
-closure or public-input input (`SampledProofs.OneStageZk.inputsOf`). -/
+closure or public-input input (`Spot.OneStageZk.inputsOf`). -/
 def baseRaw (A : Live) (o : Own) : FlockDeploy.Raw where
-  statement := _root_.SampledProofs.OneStageZk.STATEMENT
+  statement := _root_.Spot.OneStageZk.STATEMENT
   circuit := A.I.circuitFile
   publicFile := A.I.publicFile
   tables := A.I.tables
@@ -89,19 +89,19 @@ def coinsAt {k : ℕ} (r : Fin k → FlockDeploy.Coin) : List FlockDeploy.Coin :
 def drawBytes (cs : List FlockDeploy.Coin) : ByteArray := ⟨(cs.flatMap FlockDeploy.Coin.bytes).toArray⟩
 
 /-- **The units the coins' bytes `src` draw** under the session's law over its population, as v2's challenger draw
-reads them (`SampledProofs.Draw.drawUnits`); a draw that fails draws every unit (`Live.L`). -/
+reads them (`Spot.Draw.drawUnits`); a draw that fails draws every unit (`Live.L`). -/
 def drawn (A : Live) (src : ByteArray) : List ℕ :=
-  match _root_.SampledProofs.Draw.drawUnits A.law A.n src with
+  match _root_.Spot.Draw.drawUnits A.law A.n src with
   | .ok (d, _) => d.toList
   | .error _ => List.range A.n
 
-/-- **The units a draw file proves**, as v2 credits a session's (`SampledProofs.OneStageZk.provedUnits`): the public
-file's `units.indices` of the instances the draw names, ascending (`Properties.SampledProofs.Units.unitsAt`); the draw
+/-- **The units a draw file proves**, as v2 credits a session's (`Spot.OneStageZk.provedUnits`): the public
+file's `units.indices` of the instances the draw names, ascending (`Properties.Spot.Units.unitsAt`); the draw
 file read as the session's statement reads it (`FlockDeploy.jsonOf`, `Flock.norm`), the public file's header as the
 session reads it (`A.pub`). -/
 def provedOf (A : Live) (d : Msg) : Option (Array ℕ) := do
   let j ← (FlockDeploy.jsonOf "draw" ⟨d.toArray⟩).toOption
-  _root_.Properties.SampledProofs.Units.unitsAt A.pub.header (Flock.norm j)
+  _root_.Properties.Spot.Units.unitsAt A.pub.header (Flock.norm j)
 
 /-- **A reference draw file**: the session's statement at the draw file `d` reads as `baseRaw` with `d`, and sets up one
 table, of `A.kd` units. -/
@@ -173,7 +173,7 @@ noncomputable def sessionOf (A : Live) (o : Own) (v : Seen) : Msg × Seen :=
 
 /-- The statement's audit statement: V5's at the session (`Live.extract`'s). -/
 noncomputable def stmtA (A : Live) : AuditStatement :=
-  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.SampledProofs.oneStageOf A.law) A.desc ⟨"", 0, []⟩ A.roots
+  Flock.Bridge.stmtOf A.P A.κ (_root_.Properties.Spot.oneStageOf A.law) A.desc ⟨"", 0, []⟩ A.roots
 
 /-- The statement's partition: V5's at the session's population. -/
 noncomputable def partA (A : Live) : Claims.Sampling.Partition :=
@@ -189,7 +189,7 @@ noncomputable def partSlots (A : Live) : Claims.Sampling.Partition :=
 
 /-- **v2's design** (`slotDesign`'s two rules): the law's one-stage rule over the population, then every input slot. -/
 def designSlots (A : Live) : Claims.Sampling.Design :=
-  ⟨[_root_.Properties.SampledProofs.oneStageOf A.law, .all]⟩
+  ⟨[_root_.Properties.Spot.oneStageOf A.law, .all]⟩
 
 /-- The statement's audit statement at v2's design. -/
 noncomputable def stmtSlots (A : Live) : AuditStatement := { stmtA A with design := designSlots A }
@@ -207,7 +207,7 @@ the lowered program, and the law's one-stage rule is well formed over the popula
 `all`, is well formed at every class. -/
 def ScopeSlotsOk (A : Live) : Prop :=
   (partSlots A).Partitions (stmtSlots A).prog ∧
-    (_root_.Properties.SampledProofs.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
+    (_root_.Properties.Spot.oneStageOf A.law).WellFormed (Flock.Bridge.nsOf A.desc A.qr)
 
 /-- **What the record takes as given**: what a session's Flock witness reveals and how many openings at most
 (`reveal`, `reveals`), and the reference prover's framing (`step`, `reads`, `wit`). -/

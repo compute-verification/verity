@@ -6,9 +6,9 @@ public import Proofs.Core.QSort
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open FlockSoundness FlockSoundness.Audit
 
@@ -161,4 +161,4 @@ theorem drawUnits_size {law : Flock.Draw.Law} {ns : List ℕ} {kd n : ℕ} {src 
           rw [Array.toList_map, List.map_map]
           exact hsum
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs
