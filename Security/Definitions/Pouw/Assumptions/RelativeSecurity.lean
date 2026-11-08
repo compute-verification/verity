@@ -476,7 +476,7 @@ play's game or breaks binding or zero knowledge in some round, at most `δb` and
 `ServiceSoundOverlap`, the premise the overlapped floor of record
 `Definitions.Pouw.Guarantees.RelativeSecurity.OverlapFloorKOneSided` is proved from (accepted runs charged below
 `(R − 274 ln 2) · κ L Σ_t n_t n'_t B_t − Vmax` with probability at most `2^{−40} + R (δb + δz)`, at the parity luck
-0.854 a draw), so that `OverlapFloorKOneSidedJ10R` is that floor read at the call. -/
+0.854 a sample), so that `OverlapFloorKOneSidedJ10R` is that floor read at the call. -/
 def ServiceSoundOverlapJ10R (Mc : Machine) (S : Service) (run : JORunMap Mc S R St n L B n' Ar)
     (e : S.Seed ≃ Paths (OJSpot St n L B n') R) (δb δz : ℝ) : Prop :=
   ∀ (Ω' : Type) [Fintype Ω'] (M : Mc.Alg (S.Seed × Ω') (S.Com × S.Ans)),
