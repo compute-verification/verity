@@ -15,7 +15,8 @@ A value of none of these is free: the prover picks it, nothing charges it, and i
 each new one out, each naming the fix:
 
 - `parameter`: a Program parameter `PARAMS` doesn't declare (`predict.build.build_program`, `predict.node.node_parameters`);
-- `run_field`: a field of the `run` parameter `RUN_FIELDS` doesn't declare (`frontend.registration.RunInputs.value`);
+- `run_field`: a field of the `run` parameter read under no declaration of `RUN` (`frontend.registration.RunInputs.value`,
+  whose caller names the declaration it reads under);
 - `check`: a check bit no relation of `RELATIONS` computes (`frontend.derive.Ctx.check`, `predict.common.with_checks`).
 
 What is free today is `ALLOWED`, each entry with its reason, its bound in bits and its fix; the list only shrinks.
@@ -32,11 +33,18 @@ KINDS = ("block", "certified", "registered", "advice", "witness")
 #: hits past the pool bound and its order entries), so no Program input is advice until a term counts it
 CHARGED: frozenset[str] = frozenset()
 
+#: each relation whose check bit a served Program returns: its Definition's base id -> the evidence that it holds for one value
+#: alone of what reaches the outputs, a test (``path::function``) or a Lean theorem (``path::name``)
+RELATIONS: dict[str, str] = {
+    "DsaTopKLongRow_v1":
+        "integrations/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
+}
+
 
 @dataclass(frozen=True)
 class Kind:
     """A declared input: its kind, why it is that kind, and for ``advice`` the charge's term that counts its bits, for
-    ``witness`` the relation (a Definition's base id, a key of `RELATIONS`) whose check holds it to one value."""
+    ``witness`` the relation (a key of `RELATIONS`) whose check holds it to one value."""
 
     kind: str
     why: str
@@ -52,15 +60,8 @@ class Kind:
             raise ValueError(f"a witness names its relation in RELATIONS ({sorted(RELATIONS)}), not {self.relation!r}")
 
 
-#: each relation whose check bit a served Program returns: its Definition's base id -> the evidence that it holds for one value
-#: alone of what reaches the outputs, a test (``path::function``) or a Lean theorem (``path::name``)
-RELATIONS: dict[str, str] = {
-    "DsaTopKLongRow_v1":
-        "integrations/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
-}
-
 #: a Program parameter's name (a node Program's ``rank<r>.`` prefix and a leaf's ``[i]`` aside) -> its kind; ``run`` is
-#: declared field by field (`RUN_FIELDS`)
+#: declared field by field (`RUN`)
 PARAMS: dict[str, Kind] = {
     "prompt": Kind("certified", "the request's prompt ids: ingress v0's parse unit outputs them, else its certified body "
                                 "(`predict.steps.request_of`)"),
@@ -75,27 +76,28 @@ PARAMS: dict[str, Kind] = {
     "weights": Kind("registered", "the model's weights, registered before any coin"),
 }
 
-#: a field of the `run` parameter (`frontend.registration.RunInputs`), as a pattern over its name -> its kind
-RUN_FIELDS: dict[str, Kind] = {
-    r"[\w.]+/topk_switches\[t=\d+\]": Kind(
+#: the declarations a field of the `run` parameter is read under (`RunInputs.value`'s ``declared``) -> its kind
+RUN: dict[str, Kind] = {
+    "dsa_topk_switches": Kind(
         "witness", "a DSA row past TOPK keys: the Waksman settings that route its top-k order. Only the top-k set in ascending "
                    "index order passes `DsaTopKLongRow_v1`, and every reader reads the routed rows, a function of that order, "
                    "so the settings' redundant bits reach no output", relation="DsaTopKLongRow_v1"),
 }
 
-#: what is free today: (``parameter`` or ``run field``, a pattern over the name) -> its reason, its bound and its fix
-ALLOWED: dict[tuple[str, str], str] = {
-    ("parameter", "schedule"):
-        "DeepSeek-V4's `MoeAlignRanks` key of each (token, slot) pair, the position serving's atomicAdd gave it, which no "
-        "check holds. The key puts the pair in one of its expert's moe blocks, and the block sets the Marlin split-K cut bits "
-        "(`MarlinMoeSchedule`), so it moves output bits: at most sum_e log2(c_e! / prod_b s_b!) bits a MoE layer a step, c_e "
-        "the expert's pairs and s_b its blocks' sizes. Fix: serve the align in pair order and key `MoeAlignRanks` by the pair "
-        "index, or charge the key as advice",
-    ("parameter", "splits"):
+#: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
+ALLOWED: dict[str, str] = {
+    "schedule":
+        "the Marlin MoE decoder's `MoeAlignRanks` key of each (token, slot) pair, the position serving's atomicAdd gave it, "
+        "which no check holds. The key puts the pair in one of its expert's moe blocks, and the block sets the Marlin split-K "
+        "cut bits (`MarlinMoeSchedule`), so it moves output bits: at most sum_e log2(c_e! / prod_b s_b!) bits a MoE layer a "
+        "step, c_e the expert's pairs and s_b its blocks' sizes. `predict.batch.check_compiled` refuses it (R1) in every "
+        "compiled session. Fix: serve the align in pair order and key `MoeAlignRanks` by the pair index, or charge the key "
+        "as advice",
+    "splits":
         "a derived top-p split count, SplitsFor_v1 of the batch's live rows, per sampling event, at most log2 6 bits an event; "
         "`predict.batch.check_compiled` refuses it (R3) in every compiled session, and serving pins `registered_splits`. Fix: "
         "delete the derived form",
-    ("run field", r"hole\d+\.\d+:.+"):
+    "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",
 }
@@ -113,37 +115,34 @@ def _fix(what: str) -> str:
             f"it), or charge it at its width in a term of the window charge (CHARGED) and declare it as advice")
 
 
-def _allowed(where: str, name: str) -> str | None:
-    return next((why for (w, pat), why in ALLOWED.items() if w == where and re.fullmatch(pat, name)), None)
-
-
 def parameter(name: str) -> Kind | str:
     """Program parameter `name`'s declaration, or its `ALLOWED` reason; `Free` otherwise."""
     base = re.sub(r"\[\d+\]$", "", re.sub(r"^rank\d+\.", "", name))
     base = "peers_*" if re.fullmatch(r"peers_\d+", base) else base
     if base in PARAMS:
         return PARAMS[base]
-    if (why := _allowed("parameter", base)) is not None:
-        return why
+    if base in ALLOWED:
+        return ALLOWED[base]
     raise Free(_fix(f"Program parameter {name!r}"))
 
 
-def check_params(params: Any) -> None:
-    """Refuse a Program whose parameters (``(name, type)`` pairs) aren't each declared (`parameter`); ``run``'s fields are
-    each refused where they're read (`run_field`)."""
+def check_params(params: Any) -> tuple:
+    """`params` (``(name, type)`` pairs) as a tuple, refused unless each is declared (`parameter`); ``run``'s fields are each
+    refused where they're read (`run_field`)."""
     for name, _ in params:
         if name != "run":
             parameter(name)
+    return tuple(params)
 
 
-def run_field(name: str) -> Kind | str:
-    """Field `name` of the `run` parameter's declaration, or its `ALLOWED` reason; `Free` otherwise."""
-    for pat, kind in RUN_FIELDS.items():
-        if re.fullmatch(pat, name):
-            return kind
-    if (why := _allowed("run field", name)) is not None:
-        return why
-    raise Free(_fix(f"run field {name!r}"))
+def run_field(name: str, declared: str) -> Kind | str:
+    """The declaration `declared` that field `name` of the `run` parameter is read under (`RUN`), or its `ALLOWED` reason;
+    `Free` otherwise."""
+    if declared in RUN:
+        return RUN[declared]
+    if f"run.{declared}" in ALLOWED:
+        return ALLOWED[f"run.{declared}"]
+    raise Free(_fix(f"run field {name!r}, read under {declared!r},"))
 
 
 def check(B: Any, ok: Any, what: str) -> None:

@@ -419,7 +419,7 @@ class _Model:
                     continue
                 if self.net.long_rows:
                     _refuse(self.net.long_rows)
-                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)))
+                sw = self.run.value(run_field(L, pos0 + i), Array(waksman_switches(n, TOPK), Value(1)), "dsa_topk_switches")
                 order = self.call(self.k("dsa_waksman_order", N=n, TOPK=TOPK), sw.refs)
                 self.checks.append((self.call(self.k("dsa_topk_long_row", N=n, TOPK=TOPK), logits.refs, order.refs),
                                     f"{run_field(L, pos0 + i).split('/')[0]} t={pos0 + i}: the top-{TOPK} order the run's Waksman "

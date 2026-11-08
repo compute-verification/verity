@@ -20,13 +20,13 @@ FIX = "serve it canonically"
 #: the list only shrinks: lower the cap with the entry that goes
 ALLOWED_CAP = 3
 
-#: where each `ALLOWED` entry's name is still made, so an entry nothing makes is stale
+#: where each `ALLOWED` entry is still made or read, so an entry nothing makes is stale
 MADE_AT = {
-    ("parameter", "schedule"): ("integrations/vllm/verity_vllm/program/predict/build.py", '("schedule", '),
-    ("parameter", "splits"): ("integrations/vllm/verity_vllm/program/predict/build.py", '("splits", '),
-    ("run field", r"hole\d+\.\d+:.+"): ("integrations/vllm/verity_vllm/program/frontend/rules/training_survey.py",
-                                        'f"hole{k}.{i}:{node.name}"'),
+    "schedule": ("integrations/vllm/verity_vllm/program/predict/build.py", '("schedule", '),
+    "splits": ("integrations/vllm/verity_vllm/program/predict/build.py", '("splits", '),
+    "run.survey_hole": ("integrations/vllm/verity_vllm/program/frontend/rules/training_survey.py", '"survey_hole"'),
 }
+PACKAGE = ROOT / "integrations/vllm/verity_vllm"
 
 
 @pytest.mark.parametrize("name,kind", [("prompt", "certified"), ("seed", "certified"), ("prefix_ik", "block"),
@@ -44,15 +44,21 @@ def test_an_allowed_parameter_returns_its_reason_and_an_undeclared_one_is_refuse
     IN.check_params([("prompt", None), ("seed", None), ("run", None), ("peers_0", None), ("weights", None)])
 
 
-def test_a_run_field_is_read_only_when_declared():
+def test_a_run_field_is_read_only_under_a_declaration():
     r = RunInputs.declare([])
-    sw = r.value("model.layers.3.self_attn.attn/topk_switches[t=2049]", Array(3, Value(1)))
+    sw = r.value("model.layers.3.self_attn.attn/topk_switches[t=2049]", Array(3, Value(1)), "dsa_topk_switches")
     assert sw.type == Array(3, Value(1))
-    assert IN.run_field("model.layers.3.self_attn.attn/topk_switches[t=2049]").relation == "DsaTopKLongRow_v1"
-    assert "check_identity" in IN.run_field("hole0.1:add_3")
+    assert IN.run_field("layer/topk_switches[t=2049]", "dsa_topk_switches").relation == "DsaTopKLongRow_v1"
+    assert "check_identity" in IN.run_field("hole0.1:add_3", "survey_hole")
     with pytest.raises(IN.Free, match=FIX):
-        r.value("model.layers.3.mlp/align_key[t=7]", Value(32))
+        r.value("model.layers.3.mlp/align_key[t=7]", Value(32), "moe_align_key")
     assert [f["name"] for f in r.fields] == ["model.layers.3.self_attn.attn/topk_switches[t=2049]"]
+
+
+@pytest.mark.parametrize("declared", sorted(IN.RUN))
+def test_every_run_declaration_is_read(declared):
+    readers = [p for p in PACKAGE.rglob("*.py") if p.name != "inputs.py" and f'"{declared}"' in p.read_text()]
+    assert readers, f"no rule reads a run field under {declared!r}: remove its declaration from RUN"
 
 
 def _call(defn):

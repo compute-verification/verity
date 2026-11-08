@@ -211,8 +211,7 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
     for r, ls in enumerate(leaves):
         weights_at.append(len(params))
         params += [(f"rank{r}.weights[{i}]", t) for i, (_, t) in enumerate(ls)]
-    check_params(params)
-    return NodeParameters(phis, nets, tuple(params), words, sched_at, leaves, weights_at)
+    return NodeParameters(phis, nets, check_params(params), words, sched_at, leaves, weights_at)
 
 
 def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,

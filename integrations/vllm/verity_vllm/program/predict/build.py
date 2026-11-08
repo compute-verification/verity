@@ -739,9 +739,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
     n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
-    params.append(("weights", wrec))
-    check_params(params)
-    params = tuple(params)
+    params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
     ids, W, schedule = inputs[0], inputs[-1], inputs[history - 1] if words else None
