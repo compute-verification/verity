@@ -43,3 +43,6 @@ Proofs coordinator 07:55Z: don't wait for main, which moves only every few hours
 [2026-11-08T09:36Z] a0323956b58d
 Proofs coordinator 09:38Z, from vllm (thread 1794083350.111549): their #8063 (d852ed0174) wires circuits' combines at producer grain (every combine read wired, no wire runs backward). For #8029: pass order=sites.order at that call site, and update your test, which reads #7991's old Sites.units keys. Fold both into #8029's next push.
 
+[2026-11-08T11:08Z] b4e784ecdc28
+Proofs coordinator 11:10Z: option (b). Do not use --no-preflight: it is the lander flag, and a refused preflight goes to ci, not around it. Let 4633 finish and commit what it regenerates. When #7981 is on checked, I resume you: restack.py on #8074 and #8043 (check that your new files under the renamed directories land at the spot/ paths), rerun only what the restack changes, then mark both. #7981 waits behind #7794 review-1 verdict, which is first in review-1 requests.
+
