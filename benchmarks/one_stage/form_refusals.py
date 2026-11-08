@@ -3,13 +3,13 @@ M0 `--zk` sessions, each of N instances with every unit sampled and bound to its
 `forged_proofs.py` stages them, differing in the statement's form:
 
     honest     forged_proofs.py's A8 unit, flat (`Flock.ProvedScope.scopeOkH`)               verify --zk accepts
-    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its   refused: verify takes no
-               rows not in the file                                                          templated statement
+    templated  the same unit as its structural template (`verity/flock-circuit/tmpl`), its   refused for its version
+               rows not in the file                                                          (`ProvedScope.servedForm`)
     tail       `_tail`, its MUFU reads in lookup slots, its last stage returning the         refused for its form
-               outputs (`ProvedScope.scopeOkI`)
+               outputs (`ProvedScope.scopeOkI`)                                              (`Flock.KsScope`)
 
-`verify` gives a form's reason (`Flock.KsScope`) only once every other check, the proof's included, has passed. Lean's
-verdict on the honest session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
+`verify` gives either reason only once every earlier check, the proof's included, has passed. Lean's verdict on the honest
+session under each of `WRONG_TAGS`, statements `verify --zk` must refuse, is recorded beside.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm:<tree>/tools/verity/circuit_check/src:\\
       <tree>/benchmarks/numerical/python python benchmarks/one_stage/form_refusals.py --bin flock-circuit --lean flock-verify \\

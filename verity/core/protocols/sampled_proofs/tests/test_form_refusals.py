@@ -4,11 +4,12 @@
 The sessions are M0 `--zk` sessions of four instances, every unit sampled, bound to its template query's partition, written
 by `benchmarks/one_stage/form_refusals.sh`: ``honest``, a small A8 unit (LlBf16DotprodDot_v1 at K=128) flat;
 ``templated``, the same unit as its structural template (`verity/flock-circuit/tmpl`, the rows not in the file), which
-`verify` refuses at its statement's version; and ``tail``, a toy with its MUFU reads in lookup slots and its last stage
-returning the outputs, which `ProvedScope.check` admits and the knowledge-soundness form (`KsScope.filesWhy`) refuses.
-`verify` gives a form's reason only once every other check, the proof's included, has passed, so that reason says the
-session was otherwise accepted. The honest session under a statement `verify --zk` must refuse (`WRONG_TAGS`: typed,
-public outputs, plain leaves, templated) is refused as at generation.
+`verify` refuses for its statement's version, last (`ProvedScope.servedForm`); and ``tail``, a toy with its MUFU reads
+in lookup slots and its last stage returning the outputs, which `ProvedScope.check` admits and the knowledge-soundness
+form (`KsScope.filesWhy`) refuses. `verify` gives either reason only once every earlier check, the proof's included, has
+passed, so it says the session was otherwise accepted; a change that lets `verify` take the templated statement changes
+the templated case's verdict, and this test with it. The honest session under a statement `verify --zk` must refuse
+(`WRONG_TAGS`: typed, public outputs, plain leaves, templated) is refused as at generation.
 
 `Flock.KsScope`'s own tests run its check functions on Lean values, and `flock-verify ks-form` runs the check alone; these are
 the tests that `verify --zk`'s verdict calls them. Each verify sets up an m = 25 table (about 10 s), so they are slow.
