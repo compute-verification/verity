@@ -67,3 +67,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] 2a062e1bb3f6
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T16:03Z] 9b81a77e6010
+Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but NOT its revert #8133 (2183b7e447, on checked since 15:24Z). Every Security records run on such a tree FAILS the witness rule (EndToEndRegistered(+Drawn) changed since unwitnessed listed it); TSVERIFY ca59/636a just did. Cancel records runs still queued/running on those heads, merge origin/checked (31dbaab71f or later; never next), relaunch records WITHOUT --moved (#7982 landed), on whichever of cpu-13 / --on vy-nebius-cpu-7 / --on vy-nebius-cpu-3 starts soonest. No self-timers.
+
