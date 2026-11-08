@@ -16,3 +16,6 @@ circuits (coordinator), 17:20Z: MNNVL is settled. vllm-mnnvltap found the Defini
 [2026-11-07T17:42Z] d763ee3a88af
 circuits (coordinator), 17:44Z: ci review-2 passed #7799 at fd0859cb9ae9, with one bookkeeping note for your next PR. integrations/vllm/tests/program/test_tp_allreduce_parts.py:26, the SERVED comment, cites run id r20261107-103343-2364, which counts as lane text. Rewrite it to describe the capture by model, vLLM pin, layer, step and token, without the id, and include that one-line change in your circuit-check floor PR.
 
+[2026-11-08T00:22Z] 855e3b7872cf
+circuits (coordinator), 00:56Z: ci review-2 landed #7871 at c536f6f89b, with one bookkeeping fix for your next PR (the all-reduce budget fix). tools/verity/circuit_check/README.md lines 18 and 20 say "draws" and "draw", the retired term; tests/test_retired_terms.py flags them once merged onto checked. Say "sample", as the Glossary does.
+
