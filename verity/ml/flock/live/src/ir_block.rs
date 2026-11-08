@@ -13,7 +13,7 @@
 use std::sync::OnceLock;
 
 use flock_core::{
-    lincheck::{LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
+    lincheck::{CscCircuit, LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
     proof::eq_skip_weights,
     r1cs::{BlockR1cs, SparseBinaryMatrix, WitnessLayout},
     verifier::ExtraClaim,
@@ -349,6 +349,13 @@ impl IrUnitNet {
 
     pub fn load(path: &str) -> Self {
         Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+    }
+
+    /// The unit's slot type as the lincheck reads it: its rows over its `2^unit_log` columns, read in place.
+    pub fn csc(&self) -> CscCircuit {
+        let (n, k) = (self.a.n_rows(), 1usize << self.unit_log);
+        assert!(self.b.n_rows() == n && n <= k, "a unit net of {n} A rows and {} B rows in a {k}-row slot", self.b.n_rows());
+        CscCircuit::from_rows(n, k, |r| self.a.row_cols(r), |r| self.b.row_cols(r))
     }
 
     fn matrices(&self) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
@@ -1003,6 +1010,20 @@ mod tests {
             let input = |col: usize| col as u64 * 0x2545_f491_4f6c_dd1d;
             assert!(fwd.eval64_flat(input) == fwd.eval64(input));
             assert!(fwd.flat.0.get().is_some_and(|f| f.is_none()), "a later column took the one-pass path");
+        }
+    }
+
+    #[test]
+    fn csc_reads_the_rows_in_place() {
+        for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
+            let net = random_net(seed, in_words, useful);
+            for n in [&net, &placed(&net)] {
+                let (a, b) = n.matrices();
+                assert!(n.csc() == CscCircuit::from_matrices(&a, &b), "net {seed}: the slot type's CSC");
+                let (ra, rb) = (Rows::from_vecs(&n.a), Rows::from_vecs(&n.b));
+                let got = CscCircuit::from_rows(ra.len(), 1 << n.unit_log, |r| ra.row_cols(r), |r| rb.row_cols(r));
+                assert!(got == n.csc(), "net {seed}: the CSC from Rows");
+            }
         }
     }
 

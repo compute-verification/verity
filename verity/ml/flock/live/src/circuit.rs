@@ -2737,12 +2737,7 @@ impl Stmt {
             let key = format!("{:?}", r.kind);
             let t = *type_of.entry(key).or_insert_with(|| {
                 let circ = match r.kind {
-                    Kind::Net(i) => {
-                        let net = &c.nets[i].1;
-                        let k = 1usize << net.unit_log;
-                        let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                        CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b))
-                    }
+                    Kind::Net(i) => c.nets[i].1.csc(),
                     Kind::Mask => {
                         let k = 1usize << r.slot_log;
                         let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
