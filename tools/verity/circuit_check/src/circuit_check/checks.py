@@ -8,7 +8,8 @@
                      none declined inside the reference's domain unless the kernel is partial; else ``kernel-<fault>``), a
                      template's evaluated target where it is another Definition, and
                      the Flock Boolean lowering (`verity_flock.ir_lower`: the whole Definition when it is small, a template's
-                     proof blocks otherwise) and, under ``Options.struct_max_gates``, the structural lowering's template
+                     proof blocks otherwise) and, under ``Options.struct_max_gates`` or its family's struct budget
+                     (`struct_budget`), the structural lowering's template
                      (``c-flock:struct_lower``, `struct_lowering`, evaluated from the template); the word Definition a
                      Boolean Definition names
                      (`verity.ml.circuits.boolean.trace.word_of`) must equal the Boolean gates through the word view
@@ -863,6 +864,20 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
 
 
 STRUCT_VIA = "c-flock:struct_lower"
+#: a family's struct budget is its key under this kind in its module's sidecar pins (``{"struct_max_gates": {family: gates}}``)
+STRUCT_PINS = "struct_max_gates"
+
+
+def struct_budget(t: Any, opts: Options, pins: Any) -> tuple[int, int | None]:
+    """``(gates, declared)``: a composite of at most ``gates`` gates is realized by its structural lowering, the larger of
+    ``opts.struct_max_gates`` and its family's struct budget, ``declared``, the ``struct_max_gates`` entry of its module's
+    sidecar pins (None when there is none).  Read as a pin, so every run checks a family the same way and a target's cached
+    result holds the entry by its value, or its absence."""
+    from .targets import family
+
+    budgets = pins.get(STRUCT_PINS)
+    declared = None if budgets is None else budgets.get(family(t))
+    return max(opts.struct_max_gates, int(declared or 0)), None if declared is None else int(declared)
 
 
 def struct_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: list, F: Findings) -> dict:
@@ -1092,8 +1107,13 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         else:
             low = {"lowered": False, "reason": "lowered as its template's units"}
         corr["realizations"].append({"via": "c-flock:ir_lower", **low})
-        if kind == "composite" and arrays is not None and t.gates <= opts.struct_max_gates:
+        budget, declared = struct_budget(t, opts, pins)
+        if kind == "composite" and arrays is not None and t.gates <= budget:
             corr["realizations"].append(struct_lowering(t, params, arrays, ref, F))
+        elif kind == "composite" and declared is not None:
+            corr["realizations"].append({"via": STRUCT_VIA, "lowered": False, "reason": (
+                f"{t.gates} gates: over its family's struct budget, {declared} (its sidecar's {STRUCT_PINS!r})"
+                if t.gates > budget else "no vectors to compare it on")})
     with spent("word-view"):
         wv = word_view(t, opts, F)
     if wv is not None:

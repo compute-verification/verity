@@ -16,6 +16,9 @@ RANGES = {
         "N=288", "N=2048", "N=2049", "N=8192",
     ),
 }
+#: `DsaMqaLogits_v3`'s struct budget (its pins' ``struct_max_gates``, `circuit_check.checks.struct_budget`) is 204 IR gates a
+#: key times 2,048 keys: a row of at most 2,048 keys is realized by its structural lowering too, within about ten minutes a
+#: check; a longer row is not (C-Flock's template format holds no more than about 3,900 keys of it unrolled)
 
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
