@@ -16,12 +16,17 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
   ``PiecewiseBackend.__call__`` when it is, where values that pass only between two Inductor Triton kernels are not
   recorded. Inside vLLM's Python custom ops (``vllm::``) the ops they dispatch are recorded too, each naming its
   ``parent``. Each tensor argument is recorded before the call, and each return and written argument after it. A parameter
-  is named, not copied. A tensor above ``BIG`` bytes (a KV cache) is recorded by shape only;
+  is named, not copied. A tensor above ``BIG`` bytes (a KV cache) is recorded by shape only. An op whose ``Tensor[]``
+  return can hold an undefined tensor (`OUTSIDE_MODE`: FA3's ``fwd``) is recorded the same way by a wrapper that runs it
+  outside the mode, which couldn't hand such a list back;
 * calls no dispatcher sees: each Triton fused-MoE launch (``invoke_fused_moe_triton_kernel``: A, its scales, the expert
   ids, the sorted token ids, the routed weights, the config, and C after the launch), and each sparse MLA kernel call
   (FlashMLA's ``_bf16_flash_mla_kernel``, or FA3's ``flash_attn_varlen_func`` in the FlashAttention sparse backend: the
   queries, the global top-k rows, the outputs, and the KV rows those indices read for ``--mla-tokens`` tokens: FlashMLA's
-  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``).
+  first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``), and
+  each other kernel `PY_KERNELS` lists, launched from Python (GLM-5.3's fused q/kv norm and RoPE with its cache writes, its
+  fused query RoPE and quantization, and the router's GEMM at up to 16 tokens): its arguments by name, a paged cache by
+  shape only, and after the call its returns and the arguments it writes.
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
 extra forward writes the same KV values to the same slots, so the step and every later one are unchanged.
@@ -266,6 +271,8 @@ def _install() -> None:
     _wrap(pb.PiecewiseBackend, "__call__", pb_call)
     _install_moe()
     _install_mla()
+    _install_py_kernels()
+    _install_outside_mode()
 
 
 def _install_sampler() -> None:
@@ -474,6 +481,52 @@ def _install_mla() -> None:
     _wrap(fa, "flash_attn_varlen_func", varlen)
 
 
+#: kernels the served forward launches from Python, which no dispatcher sees: the module its caller looks the name up in, the
+#: name (also the event's op), its positional arguments' names, the arguments it writes, and the paged caches it writes
+#: whole, recorded by shape only
+PY_KERNELS = (
+    ("vllm.models.deepseek_v32.attention", "fused_norm_rope",
+     ("positions", "q_c", "q_rms_norm_w", "q_rms_eps", "kv_c", "kv_rms_norm_w", "kv_rms_eps", "k_pe", "k_rope_cos_sin_cache",
+      "index_k", "index_k_layer_norm_w", "index_k_layer_norm_bias", "index_k_layer_norm_eps", "index_k_rope_cos_sin_cache",
+      "topk_indices_buffer"),
+     ("q_c_out", "kv_c_out", "k_pe_out", "index_k_out", "topk_indices_buffer"), ("mla_kv_cache", "indexer_k_cache")),
+    ("vllm.models.deepseek_v32.attention", "fused_q",
+     ("positions", "q_pe", "q_pe_cos_sin_cache", "index_q", "index_q_cos_sin_cache", "ql_nope", "q_scale", "index_weights",
+      "index_weights_softmax_scale", "index_weights_head_scale"), (), ()),
+    ("vllm.model_executor.kernels.linear.cute_dsl.ll_bf16", "ll_bf16_gemm", ("hidden_states", "router_weight", "output_dtype"),
+     (), ()),
+)
+
+
+def _py_kernel(op: str, names: tuple[str, ...], written: tuple[str, ...], caches: tuple[str, ...]):
+    def make(orig):
+        def run(*a, **kw):
+            if not S.recording:
+                return orig(*a, **kw)
+            args = {**dict(zip(names, a)), **kw}
+            ins = {k: {"shape": list(v.shape), "dtype": str(v.dtype), "kv_rows": True} if k in caches and v is not None
+                   else _ref(v) for k, v in args.items()}
+            out = orig(*a, **kw)
+            outs = {f"r{i}": _ref(t) for i, t in enumerate(out if isinstance(out, tuple) else (out,))}
+            outs.update({k: _ref(args[k]) for k in written if args.get(k) is not None})
+            _event(op, ins, outs)
+            return out
+        return run
+    return make
+
+
+def _install_py_kernels() -> None:
+    import importlib
+    for mod, name, names, written, caches in PY_KERNELS:
+        try:
+            owner = importlib.import_module(mod)
+        except ImportError as e:
+            _note(f"no {mod} ({e}): {name} is not recorded")
+            continue
+        if hasattr(owner, name):
+            _wrap(owner, name, _py_kernel(name, names, written, caches))
+
+
 def _recorder_base():
     from torch.utils._python_dispatch import TorchDispatchMode
     return TorchDispatchMode
@@ -490,26 +543,61 @@ class Recorder(_recorder_base()):
         ns = getattr(func, "namespace", "aten")
         if S.quiet or (ns == "aten" and base in SKIP):
             return func(*args, **kwargs)
-        schema = func._schema
-        flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
-        cache = CACHES.get(f"{ns}::{base}", ())
-        ins = {a.name: _ref(v, write=a.name not in cache) for a, v in zip(schema.arguments, flat)}
-        seq = _event(f"{ns}::{base}", ins, {})
-        if ns == "vllm" and torch._C._dispatch_has_kernel_for_dispatch_key(func.name(), "CUDA"):
-            S.parents.append(seq)
-            try:
-                with self:
-                    out = func.redispatch(torch._C.DispatchKeySet(torch._C.DispatchKey.CUDA), *args, **kwargs)
-            finally:
-                S.parents.pop()
-        else:
-            out = func(*args, **kwargs)
-        outs = {f"ret{i}": _ref(t) for i, t in enumerate(out if isinstance(out, (tuple, list)) else (out,))}
-        for a, v in zip(schema.arguments, flat):
-            if a.alias_info is not None and a.alias_info.is_write:
-                outs[a.name] = _ref(v, write=a.name not in cache)
-        S.events[seq]["out"] = outs
-        return out
+
+        def call(seq: int) -> Any:
+            if ns == "vllm" and torch._C._dispatch_has_kernel_for_dispatch_key(func.name(), "CUDA"):
+                S.parents.append(seq)
+                try:
+                    with self:
+                        return func.redispatch(torch._C.DispatchKeySet(torch._C.DispatchKey.CUDA), *args, **kwargs)
+                finally:
+                    S.parents.pop()
+            return func(*args, **kwargs)
+        return _record_op(f"{ns}::{base}", func._schema, args, kwargs, call)
+
+
+def _record_op(op: str, schema: Any, args: tuple, kwargs: dict, call) -> Any:
+    """One op's event: its arguments by schema name before ``call(seq)``, and its returns and written arguments after it."""
+    flat = list(args) + [kwargs.get(a.name) for a in schema.arguments[len(args):]]
+    cache = CACHES.get(op, ())
+    ins = {a.name: _ref(v, write=a.name not in cache) for a, v in zip(schema.arguments, flat)}
+    seq = _event(op, ins, {})
+    out = call(seq)
+    outs = {f"ret{i}": _ref(t) for i, t in enumerate(out if isinstance(out, (tuple, list)) else (out,))}
+    for a, v in zip(schema.arguments, flat):
+        if a.alias_info is not None and a.alias_info.is_write:
+            outs[a.name] = _ref(v, write=a.name not in cache)
+    S.events[seq]["out"] = outs
+    return out
+
+
+#: ops returning a ``Tensor[]`` that can hold an undefined tensor (FA3's split-KV accumulators when a call doesn't split), which
+#: a Python dispatch mode can't hand back: it sees the undefined one as None, and C++ refuses a None in a ``Tensor[]``
+#: ("Unable to cast Python instance of type <class 'list'>"). Each is recorded as `Recorder` would, by a wrapper on
+#: ``torch.ops.<ns>.<name>`` that runs the op with the Python modes off.
+OUTSIDE_MODE = (("_vllm_fa3_C", "fwd"),)
+
+
+def _install_outside_mode() -> None:
+    import torch
+    from torch.utils._python_dispatch import _disable_current_modes, _get_current_dispatch_mode
+    for ns, name in OUTSIDE_MODE:
+        space = getattr(torch.ops, ns)
+        try:
+            packet = getattr(space, name)
+        except AttributeError as e:
+            _note(f"no {ns}::{name} ({e}): it is recorded under the mode")
+            continue
+
+        def run(*a, _packet=packet, _op=f"{ns}::{name}", **kw):
+            if S.quiet or not isinstance(_get_current_dispatch_mode(), Recorder):
+                return _packet(*a, **kw)
+
+            def call(seq: int) -> Any:
+                with _disable_current_modes():
+                    return _packet(*a, **kw)
+            return _record_op(_op, _packet.default._schema, a, kw, call)
+        setattr(space, name, run)
 
 
 def _params(runner: Any) -> None:

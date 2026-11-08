@@ -73,11 +73,18 @@ def _launch(t: dict, seq: int, routed: bool) -> dict:
     return {"seq": seq, "op": "moe_launch", "parent": None, "layer": 5, "in": ins, "out": out}
 
 
-def test_the_w13_launch_is_staged_beside_w2_each_pair_on_its_own_a_row(monkeypatch) -> None:
+def _router(t: dict, seq: int, ids: np.ndarray, layer: int = 5) -> dict:
+    out = {"ret0": _ref(t, 0, "router.w", np.ones((M, TOPK), dtype=np.float32)), "ret1": _ref(t, 0, "router.ids", ids.astype(np.int32))}
+    return {"seq": seq, "op": "_moe_C::grouped_topk", "parent": None, "layer": layer, "in": {}, "out": out}
+
+
+def test_the_w13_launch_is_staged_beside_w2_each_pair_on_its_own_a_row_and_the_routers_expert(monkeypatch) -> None:
     stage = _stage(monkeypatch)
     from verity_vllm import TargetProfile
     t: dict = {}
-    cap = _Cap([0], {0: [_launch(t, 0, False), _launch(t, 1, True)]}, t)
+    l13, l2 = _launch(t, 1, False), _launch(t, 2, True)
+    other = (E - 1) - t[(0, "w13.ids")].reshape(M, TOPK)
+    cap = _Cap([0], {0: [_router(t, 0, other), l13, l2]}, t)
     insts = list(stage.moe_instances(cap, TargetProfile(compute_capability=(9, 0), batch_invariant=False)))
     assert [i[0].split("_K")[0] for i in insts] == ["MoeExpertFp8Gemm", "MoeExpertFp8GemmW"]
     assert insts[0][1].id.startswith("MoeExpertFp8Gemm_v1{") and insts[1][1].id.startswith("MoeExpertFp8GemmW_v1{")
@@ -85,12 +92,16 @@ def test_the_w13_launch_is_staged_beside_w2_each_pair_on_its_own_a_row(monkeypat
     (_, _, _, a13, y13), (_, _, _, a2, y2) = insts
     A, As, ex, B, Bs = a13()
     assert np.array_equal(A, t[(0, "w13.A")][j // TOPK]) and np.array_equal(As, t[(0, "w13.As")][j // TOPK])
-    assert int(ex[0]) == int(t[(0, "w13.ids")][j])
+    assert int(ex[0]) == int(t[(0, "router.ids")].reshape(-1)[j]) != int(t[(0, "w13.ids")][j])
+    assert int(a2()[2][0]) == int(t[(0, "router.ids")].reshape(-1)[j])
     assert np.array_equal(B, t[(0, "w13.B")][:, col:col + 1]) and np.array_equal(Bs, t[(0, "w13.Bs")][:, 1:2])
     assert np.array_equal(y13()[0], t[(0, "w13.C")][j // TOPK, j % TOPK, col:col + 1])
     A, As, ex, g, B, Bs = a2()
     assert np.array_equal(A, t[(0, "w2.A")][j]) and float(g[0]) == float(t[(0, "w2.g")].reshape(-1)[j])
     assert np.array_equal(y2()[0], t[(0, "w2.C")][j // TOPK, j % TOPK, col:col + 1])
+    for events in ([l13], [_router(t, 0, other, layer=4), l13]):
+        with pytest.raises(LookupError, match="align's schedule"):
+            list(stage.moe_instances(_Cap([0], {0: events}, t), TargetProfile(compute_capability=(9, 0), batch_invariant=False)))
 
 
 def _allreduce_cap(rows_of: list[int], multimem: bool = False, W: int = 8, Hd: int = 6144) -> _Cap:
