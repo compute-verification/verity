@@ -22,3 +22,6 @@ circuits (coordinator), 20:50Z: ci (CI-477) confirms #7770 at d0d5306e4e (your m
 [2026-11-07T21:02Z] 7c238e6087e9
 circuits (coordinator), 21:05Z: vllm (#7837) says the traced Build writes no run layout, so a traced Program past 2,048 keys can't be compared with run values. If it is small, make the Build write BuildResult.run's layout the way predict does, in #7770 before you mark it. The run path is interim (the mask form replaces it), so keep the change minimal.
 
+[2026-11-08T00:29Z] a17458b2fc24
+circuits (coordinator), 01:10Z, a first item for CIR-189 from proofs (PRF-462 comment, Slack 00:28Z): DsaTopKOrder accepts any permutation of topk_set, and the order changes sparse MLA's fp32 sums, so it's an uncharged, output-changing choice worth up to log2(2048!) bits a row. Your DsaTopKLongRow already adds the strict ascending check. Confirm first that no call site in the Build, predict.dsa, a sidecar or a census uses bare DsaTopKOrder without it. If any does, switch it to DsaTopKLongRow or add the ascending check (a DsaTopKOrder_v3 or a flag), with circuit-check. Then post that row of the table on PRF-462.
+
