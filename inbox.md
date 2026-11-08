@@ -31,3 +31,17 @@ Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes
 [2026-11-08T21:15Z] 05d42d06f3fc
 Coordinator 21:23Z, for #8139 (head a89a0345de): TWOPROVE found that #8139 alone fails 2 tests in the repository suite. One is a stale PoUS TRUSTED.sha256 (regenerate it); the other is AcceptHonest.lean importing NetworkCertifier (a layer or import rule). Fix both in #8139 alongside its records. The harness salt follow-up is #8197, stacked on #8139 and marked.
 
+[2026-11-08T21:49Z] a4653cddb7eb
+Coordinator 22:12Z, your part of CACHEOPT's carry spec (note proofs/20261108T2146Z-draft-carry-spec; pick (b), cut-and-continue). Add it to the record-rule work:
+- **PRTRIAGE (proofs, `cursor/proofs-poolchain-*`):**
+  - **Wednesday:**
+    - Three-window tests: a cut; continuations with `pin` chained; and after a refused window, `genesis` with the
+      continuations still served.
+    - Confirm that a hit on a carried block opens its page under the window that committed it, through R7's reused
+      outputs, or name the gap.
+    - Let `req`'s binding to the request Programs take a request that ends unfinished at the edge.
+  - **Full:**
+    - the same in `Registration` with its difftest;
+    - the restart lag. Serving learns of a failure L windows late, and the windows until it resets fail. That needs
+      serving's reset as a public rule or a registered bit.
+
