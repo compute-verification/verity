@@ -49,6 +49,8 @@ vllm = ["integrations/vllm"]
 shared = [
     "verity/core/primitives/{randomness,lms}",
     "verity/core/difftest",
+    # the reporting grid every monitoring-period report states: its periods and δs
+    "verity/core/protocols/reporting.py",
     "tools/config",
     "Security/Properties/SampledProofs/{Draw,Bits}.lean",
     "Security/Proofs/Properties/Accounting/Remote/Sort.lean",
@@ -65,6 +67,8 @@ benchmarks = [
     "benchmarks/one_stage/{served_verdicts,composite,served_cases,inference_only,served_integrity,served_shares}.py",
     "benchmarks/one_stage/{served_overhead,served_compare}.py",
     "benchmarks/one_stage/{pyproject.toml,README.md}",
+    # the block record the served verdicts write, which `served_verdicts.py` loads from `examples/h200/interfaces`
+    "examples/h200/interfaces/verity_e2e_demo/block_record.py",
 ]
 
 [private]

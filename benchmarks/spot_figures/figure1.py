@@ -8,7 +8,7 @@ census and rho's reference.  The output carries them all beside every plotted se
 the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
-a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
+a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
@@ -70,7 +70,7 @@ from math import inf, log, sqrt
 from pathlib import Path
 
 import cards as spot_cards
-from verity.core.protocols.pous.wipe_monitoring import PERIODS
+from verity.core.protocols.reporting import PERIODS
 from verity.core.protocols.sampled_proofs.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
 

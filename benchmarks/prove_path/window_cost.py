@@ -54,7 +54,7 @@ from pathlib import Path
 from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
-from verity.core.protocols.pous import wipe_monitoring
+from verity.core.protocols import reporting
 from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
@@ -83,8 +83,8 @@ ROOT_JSON_BYTES = 360
 RATES = {"3.1 G/s": 3.1e9, "4.79 G/s": 4.79e9}
 #: the reference datacenter (`benchmarks/census/deployments.json`, dc-12500-machines-600s)
 GPUS = 12_500 * 8
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's monitoring periods (`reporting`), seconds by name
+PERIODS = dict(reporting.PERIODS)
 
 
 @dataclass(frozen=True)
