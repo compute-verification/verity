@@ -1,7 +1,7 @@
 module
 
 public import Properties.Pous.TimedAudit
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 import all Lean.Data.Json.Basic
 import all Init.Data.Ord.String
 
