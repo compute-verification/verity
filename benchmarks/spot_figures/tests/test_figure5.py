@@ -16,7 +16,10 @@ SURFACE = {"meta": {"weights_bits": {"FP8": 2 * FP4, "FP4": FP4}},
 LATER = {"meta": {"weights_bits": {"FP4": FP4}}, "rows": [_row("F", f1.PRIMARY, 0.02, 1.5, 4e14)]}
 PATH = {"steps": [{"label": "today", "status": "measured", "cases": {"two-stage": "A"}, "note": "as served"},
                   {"label": "a cache", "status": "assumed", "cases": {"two-stage": None}, "note": "pending"},
-                  {"label": "the cut", "status": "modeled", "cases": {"two-stage": "F"}, "note": "fused"}]}
+                  {"label": "the cut", "status": "modeled", "cases": {"two-stage": "F"}, "note": "fused"}],
+        "off": [{"label": "a hash cut", "status": "assumed", "owner": None, "after": "today",
+                 "cases": {"two-stage": "F"}, "note": "off"}],
+        "adds": [{"label": "a slice, unmeasured", "total": None, "note": "adds to every step"}]}
 
 
 @pytest.fixture(scope="module")
@@ -46,13 +49,23 @@ def test_a_status_outside_the_three_is_refused():
         f.run([SURFACE], bad)
 
 
+def test_an_off_path_lever_is_priced_beside_its_step_and_a_bad_branch_is_refused(out):
+    (hash_cut,) = out["off"]
+    assert hash_cut["after_index"] == 0 and hash_cut["at"]["two-stage"][f1.PRIMARY]["beta"] == 1.5
+    with pytest.raises(ValueError, match="no step"):
+        f.run([SURFACE], PATH | {"off": [PATH["off"][0] | {"after": "nowhere"}]})
+
+
 def test_the_figure_renders(out, tmp_path):
     text = f.caption(out)
     assert "breaks even at 1,102%, 110x the goal" in text
     assert "A cache (assumed, pending: no number yet, and the steps after it leave it out)" in text
+    assert "Off the path, grey: a hash cut (unowned, assumed): off; after today it would break even at 152%" in text
+    assert "Not in any step, a slice, unmeasured: adds to every step." in text
     assert [p.name for p in f.render(out, tmp_path)] == ["figure5.png", "figure5.svg"]
 
 
 def test_the_default_path_names_a_case_and_a_status_for_every_step():
     assert f.PATH["steps"][0]["cases"] == {"two-stage": "A"}
-    assert {st["status"] for st in f.PATH["steps"]} <= set(f.STATUSES)
+    assert {st["status"] for st in f.PATH["steps"] + f.PATH["off"]} <= set(f.STATUSES)
+    assert not any("hash" in c for st in f.PATH["steps"] for c in st["cases"].values() if c)

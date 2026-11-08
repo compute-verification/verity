@@ -149,7 +149,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   the β at which the bound reaches them) over the headline scope, along a path of levers from today's measured system.
   Each step adds one lever to the ones before it. Beside it is the bound at a 10% total cost. It reads break-even
   surfaces (`breakeven_surface.json`) and a path (`figure5.PATH` or `--path`) giving each step's status (measured,
-  modeled or assumed) and the surface case that prices it. A step no surface prices is drawn as pending.
+  modeled or assumed) and the surface case that prices it. A step no surface prices is drawn as pending. A lever off
+  the path (`off`) is drawn in grey with its owner, and a cost no step includes (`adds`) is drawn as a named line.
 - **Figure 6** (`figure6.py`), the certified tick's trade-off:
   - (a) a timeline of continuous admission against tick admission, with the network certifier stamping release
     buckets as its own layer;

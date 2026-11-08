@@ -5,8 +5,11 @@ total cost of `GOAL`.
 It reads break-even surfaces (`breakeven_surface.json`: each case's serve tax, its bound at the reported βs and its β
 at each weight size, per scope) and a path, the steps in order, each adding one lever to the steps before it, with
 its status (measured, modeled or assumed) and the surface case that prices it in each series. A step whose case no
-surface has is pending: it has no number yet, and the steps after it leave it out. The bound at `GOAL` is interpolated
-on log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count binds.
+surface has is pending: it has no number yet, and the steps after it leave it out. A lever off the path (`off`, with
+its owner, or none) is drawn in grey beside the step it would follow, and a cost no step includes (`adds`, with its
+share of serving compute, or none while unmeasured) is drawn as a named line or arrow. The bound at `GOAL` is
+interpolated on log-log axes between the surface's two nearest βs, which it fits within a part in 10^3 where the count
+binds.
 
     uv run python benchmarks/spot_figures/figure5.py SURFACE.json... [--path PATH.json] [--out DIR]
 """
@@ -38,10 +41,15 @@ PATH = {"steps": [
      "note": "each statement derived once, not per session, priced from the measured phases it leaves"},
     {"label": "a 4x prover", "status": "assumed", "cases": {"two-stage": "F+busy+fast4"},
      "note": "all proving, marginal and fixed, a quarter of today's"},
-    {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "F+busy+fast4+hash4"},
-     "note": "in-proof hashing at a half share of the marginal, cut 4x"},
-    {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "F+busy+fast4+hash4+life"},
+    {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "F+busy+fast4+life"},
      "note": "a sampled request replays only its lifetime, with no K/V committed at an edge"},
+], "off": [
+    {"label": "hashing cut 4x", "status": "assumed", "owner": None, "after": "a 4x prover",
+     "cases": {"two-stage": "F+busy+fast4+hash4"}, "note": "in-proof hashing at a half share of the marginal, cut 4x"},
+], "adds": [
+    {"label": "compile-slice proving, every window, unmeasured", "total": None,
+     "note": "the network audit proves every window's compile slice, never sampled, so its share of serving compute "
+             "adds to every step's total"},
 ]}
 COLORS = ("#08306B", "#D95F02", "#1B9E77", "#7570B3")
 
@@ -73,15 +81,23 @@ def run(surfaces: list[dict], path: dict = PATH) -> dict:
     target_bits = float(weights[TARGET])
     scopes = (f1.PRIMARY, f1.SECONDARY)
     series = list(dict.fromkeys(n for st in path["steps"] for n in st["cases"]))
-    steps = []
-    for st in path["steps"]:
+    labels = [st["label"] for st in path["steps"]]
+
+    def priced(st: dict) -> dict:
         if st["status"] not in STATUSES:
             raise ValueError(f"step {st['label']!r}: status {st['status']!r} is not one of {STATUSES}")
         at = {n: {sc: point(by[(c, sc)], target_bits) if (c, sc) in by else None for sc in scopes}
               for n, c in st["cases"].items()}
-        steps.append(st | {"at": at, "pending": all(v[f1.PRIMARY] is None for v in at.values())})
+        return st | {"at": at, "pending": all(v[f1.PRIMARY] is None for v in at.values())}
+
+    off = []
+    for st in path.get("off", []):
+        if st["after"] not in labels:
+            raise ValueError(f"off-path step {st['label']!r}: no step {st['after']!r} on the path to branch from")
+        off.append(priced(st) | {"after_index": labels.index(st["after"])})
     return {"schema": SCHEMA, "goal": GOAL, "target": {"label": TARGET_LABEL, "key": TARGET, "bits": target_bits},
-            "primary": f1.PRIMARY, "secondary": f1.SECONDARY, "series": series, "steps": steps}
+            "primary": f1.PRIMARY, "secondary": f1.SECONDARY, "series": series,
+            "steps": [priced(st) for st in path["steps"]], "off": off, "adds": list(path.get("adds", []))}
 
 
 def _pct(x: float) -> str:
@@ -116,7 +132,13 @@ def caption(out: dict) -> str:
                      + f"): {st['note']}." for st, after in zip(out["steps"], later))
     second = (f" The dashed line is the same path over a {out['secondary']}." if any(
         st["at"][s0][out["secondary"]] for st in done) else "")
-    return lead + marks + notes + second
+    off = "".join(f" Off the path, grey: {st['label']} ({st['owner'] or 'unowned'}, {st['status']}): {st['note']}"
+                  + (f"; after {st['after']} it would break even at {_pct(st['at'][s0][p]['total'])}"
+                     if st["at"].get(s0, {}).get(p) else "") + "." for st in out["off"])
+    adds = "".join(f" Not in any step, {a['label']}: {a['note']}"
+                   + ("" if a["total"] is None else f", {_pct(a['total'])} of serving compute") + "."
+                   for a in out["adds"])
+    return lead + marks + notes + second + off + adds
 
 
 def render(out: dict, outdir: Path) -> list[Path]:
@@ -159,6 +181,32 @@ def render(out: dict, outdir: Path) -> list[Path]:
                 ax.text(x, .5, "pending", transform=ax.get_xaxis_transform(), rotation=90, ha="center", va="center",
                         fontsize=13, color="#888888", style="italic",
                         bbox={"facecolor": "white", "alpha": .9, "edgecolor": "none", "pad": 1.5})
+    s0, grey = out["series"][0], "#8C8C8C"
+    for st in out["off"]:
+        here, base = st["at"].get(s0, {}).get(p), out["steps"][st["after_index"]]["at"].get(s0, {}).get(p)
+        if not here:
+            continue
+        x = st["after_index"] + .42
+        for ax, key, fmt in ((top, "total", _pct), (bottom, "bound_at_goal", _bytes)):
+            if base and base[key] and here[key]:
+                ax.plot([st["after_index"], x], [base[key], here[key]], color=grey, ls=(0, (1, 2)), lw=1.4, zorder=2)
+            if here[key]:
+                ax.plot([x], [here[key]], marker="o", ms=11, mew=1.8, color=grey, mfc="white", zorder=4)
+                ax.annotate(f"{st['label']}: {fmt(here[key])}\n({st['owner'] or 'unowned'}, {st['status']})",
+                            (x, here[key]), textcoords="offset points", xytext=(0, -14), ha="center", va="top",
+                            fontsize=11, color="#6E6E6E")
+    priced = [(x, st["at"][s0][p]["total"]) for x, st in zip(xs, out["steps"]) if st["at"].get(s0, {}).get(p)]
+    for a in out["adds"]:
+        if a["total"] is not None:
+            top.axhline(a["total"], color=grey, ls=(0, (6, 2, 1, 2)), lw=1.4, zorder=1)
+            top.text(len(out["steps"]) - .6, a["total"] * 1.1, a["label"], ha="right", va="bottom", fontsize=13,
+                     color="#6E6E6E")
+        elif priced:
+            x, y = priced[-1][0] - .3, priced[-1][1]
+            top.annotate("", (x, y * 3), (x, y * 1.15), arrowprops={"arrowstyle": "-|>", "color": grey, "lw": 1.6,
+                                                                    "ls": (0, (6, 2, 1, 2))})
+            top.text(x, y * 3.3, textwrap.fill(f"+ {a['label']}", 20), ha="center", va="bottom", fontsize=12,
+                     color="#6E6E6E")
     top.axhline(out["goal"], color="#E69F00", lw=1.6, zorder=1)
     top.text(-.4, out["goal"] / 1.12, f"the goal: {out['goal']:.0%} of serving compute", ha="left", va="top",
              fontsize=14, color="#B07800")
@@ -172,7 +220,7 @@ def render(out: dict, outdir: Path) -> list[Path]:
         for side in ("top", "right"):
             ax.spines[side].set_visible(False)
         lo, hi = ax.get_ylim()
-        ax.set_ylim(lo / 3, hi * 3)
+        ax.set_ylim(lo / (8 if ax is bottom and out["off"] else 3), hi * 3)
     top.yaxis.set_major_formatter(FuncFormatter(lambda y, _: _pct(y)))
     lo, hi = bottom.get_ylim()
     bottom.yaxis.set_major_locator(FixedLocator([8 * 10.0 ** e for e in range(floor(log10(lo / 8)),
