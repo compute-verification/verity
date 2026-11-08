@@ -57,14 +57,12 @@ def multimem_trees(trees, world: int) -> tuple:
 
 
 def stated_node(trees, ftz, world: int) -> tuple | None:
-    """A registration's stated (TREES, FTZ) in canonical form, or None when it states neither or a tree that is not one per owner
-    of `world` ranks."""
+    """A registration's stated (TREES, FTZ) in canonical form, or None when it states neither or not one tree per owner of `world`
+    ranks; a stated tree that is not a reduction tree over the ranks is refused (`multimem_tree`'s ValueError)."""
     if trees is None or ftz is None:
         return None
-    try:
-        return multimem_trees(trees, world), bool(ftz)
-    except ValueError:
-        return None
+    trees = tuple(trees)
+    return (multimem_trees(trees, world), bool(ftz)) if len(trees) == world else None
 
 
 def _fields(where: str, d, keys) -> dict:
