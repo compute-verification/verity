@@ -15,7 +15,7 @@ from verity_vllm.records.required_manifest import RequiredManifest
 
 
 #: the binding map's `encoding.dtype` is the collector's torch dtype name; the manifest's short names are accepted too
-_ITEMSIZE = {"bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
+_ITEMSIZE = {"u8": 1, "bf16": 2, "f16": 2, "u16": 2, "i32": 4, "u32": 4, "f32": 4, "i64": 8, "u64": 8,
              "bfloat16": 2, "float16": 2, "int16": 2, "uint16": 2, "float32": 4, "int32": 4, "uint32": 4, "int64": 8, "uint64": 8, "float64": 8,
              # the LIFTED words of the padded MoE construction (manifest_format.LIFTED_DTYPES): Value<17> -> u32, Value<33> -> u64
              "l17": 4, "l33": 8, "w8": 1, "uint8": 1, "int8": 1, "float8_e4m3fn": 1, "float8_e5m2": 1}

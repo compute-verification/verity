@@ -1,12 +1,16 @@
 """The training-step frontend (`program.frontend.train_step`, `derive_graph`, the training rules): each training rule's Program run
-on small CPU tensors of even and odd lengths, bit for bit against torch where the rule states torch CPU's own f32 operation, and
-where the reference vocabulary's arithmetic is its own (sequential sums, a correctly rounded exp) bit for bit against the rule's
-stated arithmetic, composed from the evaluators of the Definitions it names, and to a tolerance against torch; the functional AdamW
-against `torch.optim.AdamW(foreach=False)`; `BoxPermute` against torch's permute; and the lf model's s step derived in reference
-mode, which is refused at its one op with no Definition (`_log_softmax`: `F32LogRn`)."""
+on small CPU tensors of even and odd lengths, bit for bit against torch where the rule states torch CPU's own f32 operation (in
+bf16, its f32 operation on the widened operands rounded once), and where the reference vocabulary's arithmetic is its own
+(sequential sums, a correctly rounded exp) bit for bit against the rule's stated arithmetic, composed from the evaluators of the
+Definitions it names, and to a tolerance against torch; the functional AdamW against `torch.optim.AdamW(foreach=False)`;
+`BoxPermute` against torch's permute; the tiny step in f32 and in bf16 (its linears' operands cast, as autocast casts them); the
+bf16 GEMMs on sm_120 (`training_rules(cc=(12, 0))`), each its captured route's Definition and, on stand-in routes at small
+shapes, bit for bit that route's model; and the lf model's s step derived in reference mode, which is refused at its one op with
+no Definition (`_log_softmax`: `F32LogRn`)."""
 from __future__ import annotations
 
 import bisect
+import collections
 import functools
 import math
 
@@ -17,6 +21,7 @@ from torch.fx.experimental.proxy_tensor import make_fx
 from torch.utils._python_dispatch import TorchDispatchMode
 
 from tests.program.train_step_lf import ADAMW, loss_fn, meta_step, square_loss
+from verity.ml.circuits.boolean.trace import word_of
 from verity.ml.circuits.boundary import gate_width
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.parts import Part, n_members
@@ -24,6 +29,8 @@ from verity.ml.circuits.program import is_input
 from verity.ml.circuits.query_ast import GateSet, evaluate, parse
 from verity.ml.circuits.refs import runs as ref_runs
 from verity.ml.definitions.numerics.serve3_reference import materialize
+from verity.ml.definitions.registry import bf16_gemm_check as BC
+from verity.ml.definitions.registry import cublas_bf16 as CB
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
 from verity_vllm.program.frontend.boolean import derived
@@ -39,10 +46,10 @@ from verity_vllm.program.frontend.train_step import AdamW, export_step, in_bits_
 aten = torch.ops.aten
 
 
-def _program(f, *xs, theta=()):
+def _program(f, *xs, theta=(), rules=None):
     gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
     names = [f"x{i}" for i in range(len(xs))]
-    rep = derive_graph(gm, xs, mode="reference", rules=training_rules(), name="T", input_names=names, theta=theta)
+    rep = derive_graph(gm, xs, mode="reference", rules=rules or training_rules(), name="T", input_names=names, theta=theta)
     assert rep.program is not None, rep.unsupported
     return rep.program
 
@@ -51,6 +58,8 @@ def _bits(x: torch.Tensor) -> list[int]:
     x = x.detach().contiguous().reshape(-1)
     if x.dtype == torch.float32:
         return x.view(torch.int32).numpy().astype(np.uint32).tolist()
+    if x.dtype == torch.bfloat16:
+        return x.view(torch.int16).numpy().astype(np.uint16).tolist()
     return [int(v) & ((1 << (8 * x.element_size())) - 1) for v in x.tolist()]
 
 
@@ -67,10 +76,10 @@ class _IeeeSqrt(TorchDispatchMode):
 
 
 def _run(f, *xs) -> tuple[torch.Tensor, torch.Tensor]:
-    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor."""
+    """(the Program's outputs, torch's with IEEE sqrt), each as one flat f32 tensor (bf16 words widened)."""
     prog = _program(f, *xs)
     tab = materialize(prog, [_bits(x) for x in xs])
-    got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
+    got = np.array([tab[g] << 32 - gate_width(prog, g) for g in prog.circuit.root_outputs()], dtype=np.uint32).view(np.float32)
     with _IeeeSqrt():
         want = torch.cat([t.detach().reshape(-1).float() for t in f(*xs)])
     return torch.from_numpy(got.copy()), want
@@ -103,6 +112,7 @@ ROW, COL = _data(16, seed=3), _data(4, 1, seed=4)
 #: odd lengths, where torch's vectorized loops end in a scalar tail: 67 elements, and rows of 67
 X67, Y67, POS67 = _data(67, seed=8), _data(67, seed=9), _data(67, positive=True, seed=10)
 M67, N67, ROW67, COL3 = _data(3, 67, seed=11), _data(3, 67, seed=12), _data(67, seed=13), _data(3, 1, seed=14)
+XB, POSB, X67B, M67B = (t.to(torch.bfloat16) for t in (X, POS, X67, M67))
 
 
 def _elementwise(x, y, pos, m, row, col) -> dict:
@@ -133,10 +143,40 @@ def _elementwise(x, y, pos, m, row, col) -> dict:
     }
 
 
+def _elementwise_bf16(x, y, pos, m, row, col) -> dict:
+    """The element-wise cases of bf16 values (the f32 inputs rounded) that torch's bf16 kernels compute as one f32 operation rounded
+    to bf16, numbers bf16 holds among them, and of a bf16 and an f32 value, which torch computes in f32."""
+    xb, yb, pb, mb, rb, cb = (t.to(torch.bfloat16) for t in (x, y, pos, m, row, col))
+    return {
+        "add": (lambda a, b: (a + b,), (xb, yb)),
+        "sub": (lambda a, b: (a - b,), (xb, yb)),
+        "mul": (lambda a, b: (a * b,), (xb, yb)),
+        "div": (lambda a, b: (a / b,), (xb, pb)),
+        "add_scalar": (lambda a: (a + 0.375,), (xb,)),
+        "sub_scalar": (lambda a: (a - 1.5,), (xb,)),
+        "mul_scalar": (lambda a: (a * 0.375,), (xb,)),
+        "div_scalar": (lambda a: (a / 3.0,), (xb,)),
+        "one_minus": (lambda a: (torch.empty_like(a).fill_(1.0) - a,), (xb,)),
+        "mul_row": (lambda a, r: (a * r,), (mb, rb)),
+        "mul_col": (lambda a, c: (a * c,), (mb, cb)),
+        "neg": (lambda a: (-a,), (xb,)),
+        "sqrt": (lambda a: (torch.sqrt(a),), (pb,)),
+        "reciprocal": (lambda a: (torch.reciprocal(a),), (pb,)),
+        "pow2": (lambda a: (a ** 2,), (xb,)),
+        "pow_half": (lambda a: (a ** 0.5,), (pb,)),
+        "pow_m1": (lambda a: (a ** -1,), (pb,)),
+        "mul_mixed": (lambda a, b: (a * b,), (xb, y)),
+        "add_mixed": (lambda a, b: (a + b,), (x, yb)),
+        "mul_row_mixed": (lambda a, r: (a * r,), (mb, row)),
+    }
+
+
 #: the rules torch CPU computes with the same f32 operations: bit for bit
 EXACT = {
     **_elementwise(X, Y, POS, X, ROW, COL),
     **{f"{k}_67": case for k, case in _elementwise(X67, Y67, POS67, M67, ROW67, COL3).items()},
+    **{f"{k}_bf16": case for k, case in _elementwise_bf16(X, Y, POS, X, ROW, COL).items()},
+    **{f"{k}_bf16_67": case for k, case in _elementwise_bf16(X67, Y67, POS67, M67, ROW67, COL3).items()},
     "nll_backward": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, -100, tw),),
                      (torch.tensor(1.0), X, torch.tensor([3, 0, 15, 7]), torch.tensor(4.0))),
     "nll_backward_ignored": (lambda go, logp, t, tw: (aten.nll_loss_backward(go, logp, t, None, 1, 0, tw),),
@@ -207,6 +247,20 @@ def _exp_scaled(x):
 def _sigmoid(x):
     """`Unary`'s sigmoid: `F32Div_v1(1, F32Add_v1(F32ExpRn_v1(F32Neg_v1(x)), 1))`."""
     return [P.F32Div.evaluate(ONE, P.F32Add.evaluate(R.F32ExpRn.evaluate(SC.F32Neg.evaluate(v)), ONE)) for v in _bits(x)]
+
+
+def _exp(x):
+    """`Unary`'s exp: `F32ExpRn_v1(x)`."""
+    return [R.F32ExpRn.evaluate(v) for v in _bits(x)]
+
+
+def _in_bf16(ref):
+    """`ref`'s f32 arithmetic on bf16 operands, as the bf16 rules compute it: each word widened (`Bf16ToF32_v1`), each result rounded
+    (`F32ToBf16Rn_v1`), the bf16 word read as `_run` reads it (widened)."""
+    def widen(x):
+        w = np.array([P.Bf16ToF32.evaluate(v) for v in _bits(x)], dtype=np.uint32)
+        return torch.from_numpy(w.view(np.float32).reshape(tuple(x.shape)).copy())
+    return lambda *xs: [P.F32ToBf16Rn.evaluate(v) << 16 for v in ref(*map(widen, xs))]
 
 
 def _safe_softmax(x):
@@ -295,6 +349,14 @@ CLOSE = {
                             _nll_forward(0)),
     "nll_forward_67": (lambda logp, t: aten.nll_loss_forward(logp, t, None, 1, -100),
                        (_data(5, 67, seed=18), torch.tensor([3, -100, 66, 7, 0])), _nll_forward(-100)),
+    "sigmoid_bf16": (lambda x: (torch.sigmoid(x),), (XB,), _in_bf16(_sigmoid)),
+    "sigmoid_bf16_67": (lambda x: (torch.sigmoid(x),), (X67B,), _in_bf16(_sigmoid)),
+    "exp_bf16": (lambda x: (torch.exp(x),), (XB,), _in_bf16(_exp)),
+    "mm_bf16": (lambda a, b: (a @ b,), (XB, _data(16, 8, seed=5).to(torch.bfloat16)), _in_bf16(_mm)),
+    "mm_bf16_67": (lambda a, b: (a @ b,), (M67B, _data(67, 5, seed=15).to(torch.bfloat16)), _in_bf16(_mm)),
+    "bmm_bf16": (lambda a, b: (torch.bmm(a, b),),
+                 (_data(2, 4, 16, seed=6).to(torch.bfloat16), _data(2, 16, 4, seed=7).to(torch.bfloat16)),
+                 _in_bf16(lambda a, b: [w for i in range(a.shape[0]) for w in _mm(a[i], b[i])])),
 }
 
 
@@ -322,8 +384,9 @@ def test_rule_is_its_stated_arithmetic(name: str) -> None:
 
 @pytest.mark.parametrize("name", sorted(CLOSE))
 def test_rule_close(name: str) -> None:
+    """Against torch: f32 to a few ulps; bf16 to about one bf16 ulp, where the f32 results' difference crosses a rounding."""
     got, want = _close(name)
-    torch.testing.assert_close(got, want, rtol=2e-6, atol=1e-6)
+    torch.testing.assert_close(got, want, **(dict(rtol=1e-2, atol=1e-5) if "_bf16" in name else dict(rtol=2e-6, atol=1e-6)))
 
 
 def test_log_softmax_refused_with_the_definition_it_needs() -> None:
@@ -331,6 +394,18 @@ def test_log_softmax_refused_with_the_definition_it_needs() -> None:
     rep = derive_graph(gm, (X,), mode="reference", rules=training_rules(), name="T")
     u = rep.unsupported
     assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and "F32LogRn" in u.hint, u
+
+
+@pytest.mark.parametrize("f, x, why", [
+    (lambda a: (a ** 3,), XB, "rounds in between"), (lambda a: (a ** -2,), POSB, "rounds in between"),
+    (lambda a: (torch.rsqrt(a),), POSB, "rounds in between"), (lambda a: (a ** -0.5,), POSB, "rounds in between"),
+    (lambda a: (a + 0.1,), XB, "bf16 doesn't hold"), (lambda a: (a * 0.1,), XB, "bf16 doesn't hold")])
+def test_bf16_rounding_in_between_is_refused(f, x, why: str) -> None:
+    """Where torch's bf16 kernel rounds otherwise than once after one f32 operation, the rules refuse: `pow` 3 and -2 round the
+    square to bf16, `rsqrt`'s scalar loop the square root, and `add` rounds a number to bf16 where `mul` keeps its f32 value."""
+    gm = make_fx(f, tracing_mode="fake")(x)
+    u = derive_graph(gm, (x,), mode="reference", rules=training_rules(), name="T").unsupported
+    assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered" and why in u.hint, u
 
 
 def _adamw_inputs(seed: int = 0, n: int = 64):
@@ -409,6 +484,118 @@ def test_tiny_step_survey_lists_its_one_hole_and_holds_no_program() -> None:
     assert s.census["totals"]["gates"] > 0 and "F32Add_v1" in s.primitives
     assert s.theta["names"] == [f"param_{n}".replace(".", "_") for n in layout.params]
     assert s.theta["bits"] == 32 * sum(p.numel() for p in model.parameters())
+
+
+def test_tiny_bf16_step() -> None:
+    """The tiny step with its linears' operands cast to bf16, as bf16 autocast casts them (`LM(matmul_dtype=torch.bfloat16)`). With
+    the log-free loss every op derives, and each bf16 matrix product is `LinearRef_v1` rows of bf16 words (attention's are f32:
+    torch's math path computes it from upcast operands); with the cross-entropy the survey's one hole is `_log_softmax`, as in f32,
+    and the casts are among the primitives."""
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
+    opt = AdamW(**ADAMW)
+    ex = export_step(model, square_loss, opt, batch)
+    prog = step_report(model, square_loss, opt, batch, exported=ex).result
+    assert not isinstance(prog, Unsupported), prog
+    bf16 = ["DT='bf16'" in nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.startswith("LinearRef_v1")]
+    mms = sum(n.target is aten.mm.default and n.meta["val"].dtype == torch.bfloat16 for n in ex[0].graph.nodes)
+    assert sum(bf16) == mms > 0 and not all(bf16), (sum(bf16), len(bf16), mms)
+    s = step_report(model, loss_fn, opt, batch, survey=True, exported=export_step(model, loss_fn, opt, batch))
+    assert [(h["op"], h["reason"]) for h in s.holes] == [("aten._log_softmax.default", "numerics_unregistered")]
+    assert {P.Bf16ToF32.id, P.F32ToBf16Rn.id} <= set(s.primitives)
+
+
+CC = CB.TRAIN_CC
+
+
+def _linear_gemms(x, w, dy):
+    """F.linear's three GEMMs at x (M, K), W (N, K), laid out as autograd lays them out: x @ W^T, dY @ W and dY^T @ X."""
+    return x @ w.t(), dy @ w, dy.t() @ x
+
+
+def _meta(*shapes) -> list[torch.Tensor]:
+    return [torch.empty(*s, dtype=torch.bfloat16, device="meta") for s in shapes]
+
+
+def _gpu_refusal(f, *xs) -> Unsupported:
+    gm = make_fx(torch.func.functionalize(f, remove="mutations"), tracing_mode="fake")(*xs)
+    u = derive_graph(gm, xs, mode="reference", rules=training_rules(cc=CC), name="T").unsupported
+    assert isinstance(u, Unsupported) and u.reason == "numerics_unregistered", u
+    return u
+
+
+@pytest.mark.parametrize("K, N", CB.LF_LINEARS)
+def test_gpu_gemms_are_the_captured_routes(K: int, N: int) -> None:
+    """On sm_120 the lf model's s step's linears at B 2 x S 1024: each of F.linear's GEMMs, its role read off its operands'
+    layouts, is one batch over its rows of its captured route's Definition on words."""
+    M = CB.LF_M[0]
+    prog = _program(_linear_gemms, *_meta((M, K), (N, K), (M, N)), rules=training_rules(cc=CC))
+    calls = [(nd.fn.id, nd.n) for nd in prog.root.body.nodes[3:]]
+    assert calls == [(word_of(CB.train_linear(r, M, K, N)).id, rows) for r, rows in (("fwd", M), ("dX", M), ("dW", N))]
+
+
+#: stand-in routes at M 32, K 64, N 48, each a kind the capture fitted somewhere: (role, its route)
+TINY_ROUTES = {"fwd": {"kernel": "nosplit"}, "dX": {"kernel": "serialk", "SPLIT_K": 3},
+               "dW": {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}}
+
+
+def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch) -> None:
+    """At stand-in routes (`TINY_ROUTES`), the derived GEMMs evaluated on words are each route's model
+    (`bf16_gemm_check.cublas_route_rows`), the one the capture's words hold to sm_120's (`test_cublas_train`)."""
+    M, K, N = 32, 64, 48
+    for role, route in TINY_ROUTES.items():
+        monkeypatch.setitem(CB.TRAIN_ROUTES, (M, K, N, role), route)
+    xs = [_data(*s, seed=20 + i).to(torch.bfloat16) for i, s in enumerate(((M, K), (N, K), (M, N)))]
+    prog = _program(_linear_gemms, *xs, rules=training_rules(cc=CC))
+    tab = materialize(prog, [_bits(x) for x in xs])
+    got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint16)
+    x, w, dy = (t.view(torch.int16).numpy().astype(np.uint16) for t in xs)
+    want = [BC.cublas_route_rows(TINY_ROUTES["fwd"], x, w), BC.cublas_route_rows(TINY_ROUTES["dX"], dy, w.T),
+            BC.cublas_route_rows(TINY_ROUTES["dW"], dy.T, x.T)]
+    assert np.array_equal(got, np.concatenate([y.reshape(-1) for y in want]))
+    assert not np.array_equal(BC.cublas_route_rows({"kernel": "nosplit"}, dy, w.T), want[1]), "the routes differ here"
+
+
+#: stand-in routes for the tiny step's linears at M 32: unsplit, but the attention projections' dW (split-K over 2 slices with a
+#: bf16 workspace) and the MLP up projections' dX (serial split-K over 3)
+TINY_STEP_ROUTES = {**{(32, K, N, r): {"kernel": "nosplit"} for K, N in ((64, 64), (64, 192), (192, 64)) for r in ("fwd", "dX", "dW")},
+                    (32, 64, 64, "dW"): {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"},
+                    (32, 64, 192, "dX"): {"kernel": "serialk", "SPLIT_K": 3}}
+
+
+def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
+    """The tiny bf16 step on sm_120 at stand-in routes (`TINY_STEP_ROUTES`): each linear's three GEMMs are their routes'
+    Definitions on words, read off the layouts autograd gives them (nine linears at (K, N) = (64, 64), the lm_head among them,
+    four at (64, 192), two at (192, 64)), and attention's f32 products are `LinearRef_v1` rows as without `cc`."""
+    for key, route in TINY_STEP_ROUTES.items():
+        monkeypatch.setitem(CB.TRAIN_ROUTES, key, route)
+    model, batch = meta_step("tiny", 2, ctx=16, vocab=64, matmul_dtype=torch.bfloat16)
+    prog = step_program(model, square_loss, AdamW(**ADAMW), batch, cc=CC)
+    assert not isinstance(prog, Unsupported), prog
+    got = collections.Counter(nd.fn.id for nd in prog.root.body.nodes if nd.fn.id.split("{")[0] in (
+        "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1", "LinearRef_v1"))
+    want = collections.Counter()
+    for (K, N), linears in {(64, 64): 9, (64, 192): 4, (192, 64): 2}.items():
+        for role in ("fwd", "dX", "dW"):
+            want[word_of(CB.train_linear(role, 32, K, N)).id] += linears
+    assert {k: v for k, v in got.items() if not k.startswith("LinearRef_v1")} == want
+    assert all("DT='f32'" in k for k in got if k.startswith("LinearRef_v1")), got
+
+
+def test_gpu_refuses_what_its_capture_does_not_cover() -> None:
+    """On sm_120 a bf16 product is refused, with its fix, where no captured route lowers it: a shape the capture doesn't cover, a
+    layout none of F.linear's GEMMs has, a bmm, and a route with no Definition on words (smollm2's grid.z dW); f32 products
+    are as without `cc`, and a `cc` without captured routes is refused."""
+    assert "is not captured" in _gpu_refusal(_linear_gemms, *_meta((32, 64), (48, 64), (32, 48))).hint
+    assert "operand layouts ('col', 'col')" in _gpu_refusal(lambda a, b: (a.t() @ b.t(),), *_meta((64, 32), (48, 64))).hint
+    assert "only F.linear's GEMMs" in _gpu_refusal(lambda a, b: (torch.bmm(a, b),), *_meta((2, 16, 32), (2, 32, 16))).hint
+    assert "names no word Definition" in _gpu_refusal(lambda dy, x: (dy.t() @ x,), *_meta((4096, 576), (4096, 576))).hint
+    b = _data(16, 8, seed=5)
+    ids = [[nd.fn.id for nd in _program(lambda x, y: (x @ y,), X, b, rules=r).root.body.nodes[2:]] for r in (None, training_rules(cc=CC))]
+    assert ids[0] == ids[1] and ids[0][0].startswith("LinearRef_v1") and "DT='f32'" in ids[0][0], ids
+    with pytest.raises(ValueError, match="no captured cuBLAS routes"):
+        training_rules(cc=(9, 0))
+    with pytest.raises(ValueError, match="rules or cc"):
+        step_report(None, None, None, None, rules=training_rules(), cc=CC)
 
 
 def test_tiny_step_theta_is_the_parameters() -> None:

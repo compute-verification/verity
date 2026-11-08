@@ -172,6 +172,7 @@ tests = [
     "tests/test_declared_tables.py",
     "tests/test_named_targets.py",
     "tests/test_pinned_targets.py",
+    "tests/test_ranges.py",
     "tests/test_targets.py",
     "tests/test_wide_outputs.py",
 ]

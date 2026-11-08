@@ -705,7 +705,9 @@ def settings_of(disable_custom_all_reduce: bool, env) -> dict:
 
 def served_route(settings: dict, M: int, N: int) -> tuple[str | None, str]:
     """The setting name and communicator route vLLM d9105ea80 takes for one bf16 [M,N] all-reduce: under batch invariance
-    pynccl's at any world (`BATCH_INVARIANT`), else the H200 dispatch at world 8."""
+    pynccl's at any world (`BATCH_INVARIANT`), else the H200 dispatch at world 8.  M is the rows the call runs at, under a CUDA graph
+    (FULL or PIECEWISE alike) the step's padded tokens: no communicator reads the graph mode (`should_use_fi_ar`, `should_custom_ar`
+    and `should_use_symm_mem` read the bytes; a capture changes only the custom all-reduce's input copy, not its kernel)."""
     if settings.get("batch_invariant"):
         return BATCH_INVARIANT, "pynccl_comm"
     custom = bool(settings.get("custom_all_reduce"))

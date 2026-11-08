@@ -1,6 +1,7 @@
 """Figure 1 in its total-cost form: the configurations and their serve-tax card, the registrations' spans, the write form
 against every admissible set of a small design, the break-even's search, and one scope end to end with a measured tax
 dropped in."""
+from fractions import Fraction
 from itertools import product
 from math import comb
 
@@ -21,13 +22,21 @@ def test_the_configurations_are_the_cards():
 
 def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_sets_form():
     """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
-    exfiltration plots; a registration's GPU-seconds are its machines' over the census window."""
+    exfiltration plots; a registration's GPU-seconds are its machines' over the census window.  Each replays its whole
+    batch, and (A) replayed alone, which needs batch-invariant kernels, is a comparison at one machine's that pays
+    their tax."""
     for name in ("tokens", "per_expert"):
-        lines = {n: c for n, c in t.CONFIGURATIONS.items() if n == name or c.variant_of == name}
+        lines = {n: c for n, c in t.CONFIGURATIONS.items()
+                 if (n == name or c.variant_of == name) and c.replay != "request"}
+        assert {c.replay for c in lines.values()} == {"block"}
         assert sorted(c.registration for c in lines.values() if c.form == "patterns") == sorted(t.REGISTRATIONS)
         (sets,) = [c for c in lines.values() if c.form == "sets"]
         assert sets.registration == t.CONFIGURATIONS[name].registration and sets.panels == ("exfiltration",)
         assert all(c.label == t.CONFIGURATIONS[name].label for c in lines.values())
+    (bi,) = [n for n, c in t.CONFIGURATIONS.items() if c.replay == "request"]
+    assert (t.CONFIGURATIONS[bi].variant_of, t.CONFIGURATIONS[bi].registration, t.CONFIGURATIONS[bi].serve) == (
+        "tokens", "machine", None)
+    assert t.CONFIGURATIONS["layer_of_token"].replay == "step"
     c = f1.cards("GLM-5.3")
     window, gpus = c["window"].value, c["machine_gpus"].value
     assert [t.registration_gpu_seconds(r, c) for r in t.REGISTRATIONS] == [
@@ -116,7 +125,7 @@ def test_the_kept_priced_taxes_are_the_generators():
 
 def test_a_card_without_every_configuration_is_refused():
     card = t.priced_card("GLM-5.3")
-    card["value"]["configurations"] = card["value"]["configurations"][:2]
+    card["value"]["configurations"] = card["value"]["configurations"][:-1]
     with pytest.raises(ValueError, match="no tax for \\['every_block'\\]"):
         t.taxes(card)
     with pytest.raises(ValueError, match="low <= tax <= high"):
@@ -165,6 +174,28 @@ def test_the_write_form_is_at_most_every_replay_block_at_its_footprint():
     assert t.write_form(cells, {"merged": 16, "k": {0: 1}, "q": 1e-12}, 1000, .01, 500) == 1000 * 500
 
 
+def test_a_two_stage_point_is_what_lean_certifies(monkeypatch):
+    """A two-stage point's count is the bits Lean certifies for its design (`plancheck.two` of its strata, its replay
+    blocks and the planner's θ, in the patterns' form or the capped sets'), rounded up to a float, with the planner's
+    bits and Lean's θ beside it; a point Lean refuses is an error.  The checker is stubbed here; the sampled-proofs
+    suite runs it."""
+    cells = (Cell(3, 16), Cell(1, 64, stratum=64))
+    g = t.Grain(4, cells, 1.0, 100.0)
+    row = {"merged": 64, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
+    seen = []
+    monkeypatch.setattr(t.plancheck, "check", lambda ds: seen.extend(ds) or [(Fraction(10**6, 7), Fraction(3))])
+    count, checked = t.lean_two(g, row, .01, 80.0, "patterns")
+    assert (count, checked) == (t.plancheck.upper(Fraction(10**6, 7)), {"lean": True, "planner": 50.0, "theta": 3.0})
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, True, 2.0)]
+    seen.clear()
+    assert t.lean_two(g, row, .01, 80.0, "sets") == (count, checked)
+    assert seen == [t.plancheck.two([Cell(3, 16), Cell(1, 64)], {0: 1}, 4, .5, .01, 80.0, False, 2.0)]
+    assert seen[0]["form"] == "capped"
+    monkeypatch.setattr(t.plancheck, "check", lambda ds: [(None, Fraction(0))])
+    with pytest.raises(t.plancheck.LeanError, match="refuses the planner's two-stage point"):
+        t.lean_two(g, row, .01, 80.0, "patterns")
+
+
 def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
     """Two of a hundred narrow blocks sampled pay their statement's whole fixed cost, so a computed type at 2 of a
     sampled replay block's 3 marginal seconds is 52 of its 53."""
@@ -178,7 +209,8 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s,
+    `test_a_two_stage_point_is_what_lean_certifies` the two-stage lines', and the sampled-proofs suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 
@@ -190,7 +222,7 @@ def measured(tmp_path_factory) -> dict:
 
     mp.setattr(t.spot_cards, "load", with_measured)
     mp.setattr(t, "BETAS", (1e-3, 1e-1, 1.0))
-    out = t.run("GLM-5.3", ("datacenter week",), workers=4)
+    out = t.run("GLM-5.3", ("datacenter week",), workers=4, lean=False)
     mp.undo()
     return out
 
@@ -237,15 +269,19 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
     assert "sessions padded to a public cap" in caps["exfiltration"]
+    assert all(f"{f1.ROLES} {f1.TRUST}" in c for c in caps.values())
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
     assert served_at and "tokens" not in served_at
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
     for name in ("tokens", "per_expert", "layer_of_token"):
         s = lines[name]
         assert all(0 < v < 1 for v in s["computed_proving"])
-        assert f"{t._share(s['computed_proving'][at])} of its sampled replay block's proving" in caps["exfiltration"]
+        assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
-    assert "a lower bound, the hashing alone" in caps["skipped_work"]
+    assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
+    assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]
+    assert all(b <= a for a, b in zip(lines["tokens"]["count"], lines["tokens_bi"]["count"]))
+    assert out["taxes"]["tokens_bi"]["tax"] > out["taxes"]["tokens"]["tax"] + 0.1
     rows = t.at_budgets(out)
     assert {(r["panel"], r["config"]) for r in rows} == {(p, n) for n, c in t.CONFIGURATIONS.items() for p in c.panels}
     paths = t.render(out, scope, tmp_path)
@@ -253,4 +289,4 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                        "figure1_skipped_work_datacenter_week.png",
                                        "figure1_skipped_work_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")
+    assert (t.stem("datacenter year"), t.stem("datacenter year", "skipped_work")) == ("figure1", "figure1_skipped_work")

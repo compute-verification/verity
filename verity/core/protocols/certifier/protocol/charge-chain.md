@@ -232,7 +232,7 @@ charge until then. A class whose windows send hits, order entries or length term
   can't be charged, so that window's proof block fails.
 
 **Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
-copy of the carry, at `{1, 1, 1, 1}` and `{2, 2, 0, 2}`.
+copy of the carry: 40,508 at `{2, 2, 0, 2}`, and 54,015 for the link at `{1, 1, 1, 1}`.
 
 | proof block | ANDs |
 |---|---|

@@ -152,7 +152,7 @@ LABELS = {"seed-A": domains.PEARL_C4_SEED_A.encode(), "seed-B": domains.PEARL_C4
 #: block a precomputed first compression.  The seeds keep its first 32 bytes; a line block keeps all 64 (four lines)
 LABEL_BLOCKS = {r: (label + b"\0").ljust(128, b"\0") for r, label in LABELS.items()}
 
-DELTA = 0x3E800000                 # δ = 1/4
+DELTA = 0x3E800000                 # 1/4, the noise scale over ρ (Pearl's δ, the Lean's noise scale σ)
 FOUR = 0x40800000
 TOP = 0x45280000                   # 2688 = 6 · 448, NVFP4's largest value at unit FP32 scale
 FLOOR = 0x2F800000                 # 2^-32
