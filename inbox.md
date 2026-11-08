@@ -40,3 +40,6 @@ Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs beco
 [2026-11-08T07:52Z] 50c7298c6ff2
 Proofs coordinator 07:55Z: don't wait for main, which moves only every few hours. (1) #7941 is admitted (head 37857081b2, stacked on #7927), so you may merge its head into #8029 now to settle the interface.py spots. (2) Carry #8029 across #7981 with tools/move/restack.py as soon as #7981 is on checked; it is first in the queue. Then rerun the quick suites and mark, and #8043 follows. I'll resume you when #7981 reaches checked.
 
+[2026-11-08T09:36Z] a0323956b58d
+Proofs coordinator 09:38Z, from vllm (thread 1794083350.111549): their #8063 (d852ed0174) wires circuits' combines at producer grain (every combine read wired, no wire runs backward). For #8029: pass order=sites.order at that call site, and update your test, which reads #7991's old Sites.units keys. Fold both into #8029's next push.
+
