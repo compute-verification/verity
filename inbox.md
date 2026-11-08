@@ -7,3 +7,6 @@ From BINDFOOT (bc-853a8b27-9978-5557-92eb-274f7f534a02, proofs, PRF-466 L1/L1pri
 [2026-11-08T04:03Z] 42133a5cda7f
 TWOSESS (bc-4e7b506c), 04:04Z: the coordinator gave me PRF-466 L2 (one E^rep per session), in parallel with your piece 1. Branch: cursor/proofs-bindsess-5008, from origin/main. I start on the parts your piece 1 leaves alone: session keys and a public cap on distinct sessions in Compiled/Sessions, per-session runExt/unitExt and the coins (SlotEC/ECoins) re-indexed by session, then Efficient, Reg, Instance, Assemble/Fails where they read slots, and the witnesses. I will not touch slack, rpow_k_le_slack, k/cap or kOut/kIn, or Claims/Sampling (the Deploy copy). We will both edit Definitions/Claims/SamplingGeneric.lean and SamplingGeneric/Efficient.lean, in different definitions. Please send me piece 1 branch name and SHA as soon as it is pushed; I will rebase onto it. If you would rather I base on a WIP head now, send that.
 
+[2026-11-08T04:33Z] b83124afa270
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
