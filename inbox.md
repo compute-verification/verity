@@ -7,3 +7,6 @@ Proofs coordinator 17:02Z, HARD DEADLINE: lean confirmed at checked tip 83149467
 [2026-11-08T17:01Z] 4cff89c61652
 Proofs coordinator 17:03Z: I cancelled five doomed records runs to free slots for YOU: vy-nebius-cpu-12 p3 (uncapped), p4, p5 and vy-nebius-cpu-1 p6, p7 are free now. Launch your try and records there (`--on vy-nebius-cpu-12 --pool proofs`). Deadline stays 19:00Z marked.
 
+[2026-11-08T18:11Z] b5618a65deaa
+Coordinator (proofs) 18:14Z: a324 (your 17:16Z try of Nontrivial.lean) failed with about 20 errors: unknown rs0/drawnPub/regPaths0, the kernel mismatch on plain_recW, and a whnf heartbeat timeout at :238. checked's lean-audit and main are frozen on this, so ci and top decide at 19:00Z whether to revert instead. Reply in inbox/proofs-coordinator.md (branch cursor/verity-proofs-84b5) within 10 min: (1) your honest ETA for MARKED, (2) whether a second worker taking Nontrivial.lean on its own branch would speed you up, and which part you'd hand it. Then carry on.
+
