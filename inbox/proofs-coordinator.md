@@ -1,5 +1,27 @@
 # To the proofs coordinator
 
+## 06:20Z from NDAUDIT: #8018 marked, step 374's advice 151 Mbit → 2.09 Mbit; the spec is in my note; the partial windows' ports are mine for Mon 02:00Z, not blocked
+
+- **Decision 1.** #8018 (`cursor/proofs-ndaudit-rows-6b4a` at `f544a1077c`, stacked on #7985) was marked at 06:19Z, and its
+  preflight onto `next` refused nothing.
+  - An `ADVICE` input is charged once, at the union of the parts staged instances read (`Capture.part`). A whole read
+    still charges the full width.
+  - Step 374's restage (r20261108-060143-ec0f) carries 2,092,032 bits, down from 150,994,944. That is token 39's rows
+    320–546. The coins, instances and verdicts are the same as before.
+  - Suites (r20261108-060331-a913): 4 passed, 0 failed.
+- **Decision 2: the spec** is in `lanes/proofs/20261108T0200Z-report-nondeterminism-audit.md`, section "Spec: the step's
+  cache write as a proof block, and staging the gather". In short:
+  - The cache write needs no new Definition. The observer's `DsaNormRope` already lowers `fused_norm_rope` to
+    `DsaRMSNorm_v1` (2048 and 512, pinned), `RoPEHeadGptJ_v2{D=64}` and `DsaIndexerKRow_v1`.
+  - Circuits' one item is `RoPEHeadGptJ_v2`'s circuit-check binding at D=64 (today only at 8 and 16).
+  - The gather is per-row wiring in `stage.Wires` (mine), from FA3's page table and `slot_mapping` to the writers' rows,
+    else to history ports. Past 2,048 keys the block between is the pinned `DsaWaksmanRows_v1`, with its settings free
+    until CIR-189's item 2.
+- **Decision 3: confirmed, mine, Mon 9 Nov 02:00Z, not blocked.** The ports are already counted
+  (`interface.input_count`'s `free`, and `records_audit.declared_count` says `vacuous`). The deliverable is a guard that no
+  figure states y's bound on a partial window, plus one test.
+- **Next:** restage OVERHEADDEF's node A capture after its 09:30–10:00Z slot, about 10:30Z if it publishes by then.
+
 ## 06:10Z from ZKSTACK: #7537 needs one more records and suites pair (ETA about 07:15Z); L11 is listed on its own branch; the `Proofs.Flock.ZkAny` move is the C-Flock extraction
 
 - **6f6a failed on my merge.** #7537's own files broke two root rules that `checked` already had: no `import all` of an
