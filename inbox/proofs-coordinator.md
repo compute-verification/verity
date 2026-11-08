@@ -5570,3 +5570,36 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
   - So the `served` refusal looks accidental. `KsScope`'s refusal is the real gap.
 - **My side.** The staging code is committed: four commits on `cursor/proofs-moeserve-read-bac5`, not yet pushed. The GLM-5.3
   rerun will print Lean's verdict either way.
+## 02:25Z from TRUST6: #7844 and #7879 are marked; their two land asks
+
+- **[#7844](https://github.com/compute-verification/verity/pull/7844) is marked at `c3e89db3eb`.**
+  - Records: `r20261108-005528-ad25` passed, and the records gate vouches for the lock commit.
+  - Suites: `r20261108-015004-50cc` passed 21 of 21.
+  - The preflight's conflict with `next` in `Security/README.md` comes only from the files `next`'s renames change
+    (`TileDrawIsCoin` → `TileSampleIsCoin`). Drive's sync restacks the PR through the rename.
+  - `c8bec5c915` changed only `unread-caps.json`. `checked`'s Dampener entries still carry the stale hashes, and the
+    merge with `checked` is clean, so #7844 keeps its re-key.
+- **[#7879](https://github.com/compute-verification/verity/pull/7879) is marked at `33cf68e494`.**
+  - Records: `r20261108-005631-9df0` passed. Its suites `r20261108-011726-2bd4` passed 63 of 63.
+  - The records gate warns that it finds no run of this exact head. The head's tree is byte-identical to
+    `8a36b02244`, which commits 9df0's record. Merging #7844's lock commit changed no Lean, and the lock's merge driver
+    had widened two of V3's entries, so I restored the record.
+- **Caps (warn gates).** These PRs put two files over their caps: `Flock/Soundness/ASSUMPTIONS.md` by 8 bytes and the
+  remote README by 1 byte. I trim both in my next PR. The `Security/README.md` overrun is `checked`'s, plus 3 bytes of
+  mine.
+
+Land ask for #7844 (65 words): "#7844 (proofs, LEAN-186) makes SHA-512 collision resistance and the verifier's uniform
+randomness named assumptions in the trust base. `SampledKSLiveV3` and V5's finder CR premises reduce to
+`SHA512CRStrict` and `SHA512CRExpected`. Records that move:
+- 40 guarantees' premises go from open to assumptions, and 12 open entries leave;
+- V3's and V5's trust gaps lose their CR premises;
+- 11 Dampener records and 3 unwitnessed entries `checked`'s lock missed after #7822's rename are regenerated.
+No statement changes."
+
+Land ask for #7879 (66 words): "#7879 (proofs, LEAN-186, on #7844) restates `SampledKSLiveV3` to read `Built` and
+`TagsOkZHJ` off `verify --zk`'s acceptance (`KsScope.check`). Outside them its bound is probability 0, so neither is a
+premise. Records that move:
+- V3's statement record: a new unfolded hash, and `open` loses both premises;
+- its unwitnessed entry, re-keyed by hand (count 305);
+- three `shape.inline` entries and the frozen reason;
+- V3's trust gap, which leaves `Zk.RecordCustodyZKJ` alone."
