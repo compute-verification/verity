@@ -7520,3 +7520,51 @@ records move."
   Both root tests pass locally. Records r20261108-052651-05e1 (cpu-11) and quick suites r20261108-052713-96b3 (cpu-7)
   are running, with an ETA of about 06:25Z. cpu-9's proofs slots are blocked on reserved memory (5 waiters), so I
   cancelled my two runs there before they started.
+
+## 05:45Z from MOESERVE-C: Lean now accepts the served table reads with `--registered` (synthetic windows, fused and unfused); the real L5 served arms are rerunning; draft [#8003](https://github.com/compute-verification/verity/pull/8003)
+
+- **`Registered.checkComplete` is done in Python, with no Lean change.** A read member's `--registered` file used to name
+  only the table's ports, so Lean refused every served read at `tok`. Now every other port of a read member is registered
+  as rows of its own tree at the registration's roots, read in place. That's `rows.own_reads` on the verifier's side and
+  `rows.own_entries` for the prover's paths, the pattern `served_registered.py` uses.
+  - A new negative drops one port from both the header and the reads; Lean must refuse it at `checkComplete`.
+  - It's on `cursor/proofs-moeserve-c-2ce2`, stacked on #7941, as draft [#8003](https://github.com/compute-verification/verity/pull/8003) (`Refs CIR-185`).
+    I'll mark it once the real layer shows a read accepted.
+- **Shown on synthetic served windows.** These used real C-Flock `--zk`, `flock-verify --zk --registered` and the flat
+  read statements: the change cherry-picked onto `f440991a3e`, branch `cursor/proofs-moeserve-c-flat-2ce2`. Lean accepted
+  every drawn session, reads included.
+  - Unfused (r20261108-044034-4c3e): the router, a weight read, a scale read and both GEMMs.
+  - Fused (r20261108-044055-7fcb): the router, a scale read, `MoeExpertFp8ReadGemm_v1` and `MoeExpertFp8ReadGemmW_v1`.
+  - Their negatives, the new one among them, are still running.
+- **The suites pass:** `verity/ml/windows`, `benchmarks/one_stage`, `benchmarks/spot_proved`, the vLLM pipeline files and
+  `tests/test_boundaries.py`.
+- **The real L5 layer is rerunning on the flat branch** on cpu-1, served arm only, with `MW_THREADS=12` and otherwise
+  the posted command.
+  - Fused: r20261108-051615-53ff, staging since 05:35Z. Unfused: r20261108-051638-ee9f, waiting for a slot.
+  - The read sessions' verdicts come about 1.5 h after staging, so a served read accepted by Lean should show by about
+    07:30Z.
+  - The negatives come later; the next point says why.
+  - I cancelled the old tree's fused served, fused forged and unfused served arms (85f2, 3f49, 4085). They were
+    superseded, since they refused every read at `checkComplete`, and they held 280 GB of the reservations blocking
+    cpu-1's pool. Their sessions' times and verdicts are in the note `proofs/20261108T0533Z-data-moeserve-c-old-arms`.
+- **Possible benchmark: an audit's record checks are slow.** Each `V.check` (R1–R7, by `sampled-proofs-verifier`,
+  beside the Python reference) is sent the whole `program.json`. That file is 208 MB for the 57-member synthetic window
+  and 435 MB for L5.
+  - The audit's negatives make several such calls: R2, R3, R4, the wiring and more.
+  - So after the sessions, the synthetic window has spent over 50 min on them. L5's unfused served arm had spent over
+    3 h when I cancelled it.
+  - On L5 this puts the registered-read negatives and proof edits hours after the reads' verdicts. For the 12:00Z
+    demonstration I'll take the session verdicts as they come. If the negatives haven't reached the registered reads by
+    10:00Z, I'll run those negatives alone against the real sessions in a scratch job.
+  - Whose is the verifier's input size: yours to place?
+- **Fused h, one sample each, old tree's arms.** There's no card row for the fused templates, so these are ratios alone.
+  - Served over bench `prove_total_s` at `MW_THREADS=12`:
+    - router: 0.97;
+    - `MoeExpertFp8ReadGemmW_v1` (w2): 1.00;
+    - `MoeExpertFp8ReadGemm_v1` (w13): 1.23;
+    - scale reads: 1.29 at `H=96` and 0.98 at `H=4`.
+  - The w13 and `H=96` figures are above the earlier noise of about 10%. With one sample each, I don't yet know why.
+  - The unfused h stands: w2 ratio 1.014, h = 5.50e8 against the card's 5.43e8.
+- **`benchmarks/prove_path` is red on `checked`** from #7905's `read_all` signature. #7984 (vllm) fixes it. I'd made the
+  same fix on my branch and have reverted it.
+
