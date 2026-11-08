@@ -74,6 +74,8 @@ class RunInputs:
     def __init__(self, param: int) -> None:
         self.param = param
         self.fields: list[dict] = []   # {name, type, offset}, offset in leaves
+        self._names: set[str] = set()
+        self._leaves = 0
 
     @classmethod
     def declare(cls, params: list[tuple[str, Type]]) -> RunInputs:
@@ -81,9 +83,10 @@ class RunInputs:
         return cls(len(params) - 1)
 
     def value(self, name: str, t: Type) -> Coll:
-        if any(f["name"] == name for f in self.fields):
+        if name in self._names:
             raise ValueError(f"run value {name!r} is read twice")
-        offset = sum(f["type"].leaves for f in self.fields)
+        self._names.add(name)
+        offset, self._leaves = self._leaves, self._leaves + t.leaves
         self.fields.append({"name": name, "type": t, "offset": offset})
         return Coll(t, Affine("p", self.param, offset, t.leaves))
 
