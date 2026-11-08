@@ -25,3 +25,6 @@ Proofs coordinator 00:20Z, re your format draft: YES to the format and its prove
 [2026-11-08T02:32Z] 6fe962d75e63
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T04:30Z] 09988ff42477
+Proofs coordinator 04:33Z: for #7972, suites a738 passed, but records 3bb7 (cpu-8) and the sessionOpensTwo_of_frame try 68bb (cpu-7) both FAILED with rc 1. If the cause is a stale lock entry from the base (the Dampener and V5 re-keys), merge origin/checked (never next). TWOSESS's frame head is 889901e49c on cursor/proofs-twosess-frame-5d2e. TWOSESS is now on PRF-466, so open the frame PR yourself if one is needed, crediting TWOSESS. Rerun on whichever of cpu-7/8/9/11/12 starts soonest.
+
