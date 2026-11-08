@@ -235,16 +235,24 @@ __global__ void __launch_bounds__(HM96_MASK_TPB, 1) hm96_mask_leaves(uint8_t* tr
             bf[t][kt][1] = v.y;
         }
     const long long tiles = (n - base + 15) / 16;
-    for (long long mt = blockIdx.x; mt < tiles; mt += gridDim.x) {
+    // tile mt's salt words of leaves g and g + 8 (zero past n)
+    auto load = [&](long long mt, uint32_t* a, uint32_t* b) {
         const long long l0 = base + 16 * mt + g, l1 = l0 + 8;
-        uint32_t s0[12], s1[12];
 #pragma unroll
         for (int h = 0; h < 3; h++) {
             const uint4 u = l0 < n ? __ldg((const uint4*)(salts + 48 * (l0 - base) + 12 * q) + h) : make_uint4(0, 0, 0, 0);
             const uint4 v = l1 < n ? __ldg((const uint4*)(salts + 48 * (l1 - base) + 12 * q) + h) : make_uint4(0, 0, 0, 0);
-            s0[4 * h] = u.x; s0[4 * h + 1] = u.y; s0[4 * h + 2] = u.z; s0[4 * h + 3] = u.w;
-            s1[4 * h] = v.x; s1[4 * h + 1] = v.y; s1[4 * h + 2] = v.z; s1[4 * h + 3] = v.w;
+            a[4 * h] = u.x; a[4 * h + 1] = u.y; a[4 * h + 2] = u.z; a[4 * h + 3] = u.w;
+            b[4 * h] = v.x; b[4 * h + 1] = v.y; b[4 * h + 2] = v.z; b[4 * h + 3] = v.w;
         }
+    };
+    uint32_t s0[12] = {}, s1[12] = {};
+    if (blockIdx.x < tiles) load(blockIdx.x, s0, s1);
+    for (long long mt = blockIdx.x; mt < tiles; mt += gridDim.x) {
+        const long long l0 = base + 16 * mt + g, l1 = l0 + 8;
+        // the next tile's salts are loaded while this tile's products run (one block an SM hides little latency otherwise)
+        uint32_t n0[12] = {}, n1[12] = {};
+        if (mt + gridDim.x < tiles) load(mt + gridDim.x, n0, n1);
         uint32_t lo = 0, hi = 0;
 #pragma unroll
         for (int t = 0; t < 8; t++) {
@@ -262,6 +270,8 @@ __global__ void __launch_bounds__(HM96_MASK_TPB, 1) hm96_mask_leaves(uint8_t* tr
         const uint32_t loh = __shfl_xor_sync(0xffffffffu, lo, 2), hih = __shfl_xor_sync(0xffffffffu, hi, 2);
         if (q == 0 && l0 < n) ((uint64_t*)(tree + l0 * 64))[w] ^= (uint64_t)loh << 32 | lo;
         if (q == 1 && l1 < n) ((uint64_t*)(tree + l1 * 64))[w] ^= (uint64_t)hih << 32 | hi;
+#pragma unroll
+        for (int j = 0; j < 12; j++) { s0[j] = n0[j]; s1[j] = n1[j]; }
     }
 }
 
