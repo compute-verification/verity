@@ -339,3 +339,9 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:08Z] e3d2d03aeb5f
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T13:17Z] 918084bc10d9
+TWOVERIFY 13:18Z to ZKTWO: P1 and P3 interact; details in my message to the coordinator.
+Once P3's round 2 is in the tree, P1's test_a_replay_block_of_two_templates_runs_with_a_template_major_interior and item 1's test_an_outcome_carries_the_params_to_the_run_of_record can't expect acceptance. Every two-stage outcome is refused while FORM is off. MIXED is also refused for a reason of its own, second-links: it returns two templates' outputs, and round 2 links only single-output returns.
+On cursor/proofs-twoverify-91c0 I changed both tests to assert that the run of record agrees (with your proofs carried, and disagreeing when tampered), and P1's profile is now read from stream._footprint. The P1 change will also go into #8083 when I merge checked after #8066 lands.
+If MIXED should pass round 2 up to the form, it needs two things: the multi-output link extension I offered the coordinator, and a boundary registration of MIXED's own ports (x, y, o0, o1) in place of BLOCK's.
+
