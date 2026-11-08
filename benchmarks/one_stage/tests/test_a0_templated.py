@@ -59,3 +59,22 @@ def test_a_templated_stage_reaches_both_sides_and_the_verifier(tmp_path, monkeyp
     want = TMPL if templated else a0.STATEMENT_ID
     assert argv["verify"][argv["verify"].index("--statement") + 1] == want
     assert a0.firewall_env(st)["FC_FIREWALL_STATEMENT"] == want
+
+
+def test_templated_places_a_templated_statements_unit_once_and_a_flat_one_none(tmp_path):
+    """`a0.templated`: a templated META's unit placed by the stand-in flock-tmpl-unit from its template and layout mode, once
+    per directory; a flat META's stage reads nothing more, and a templated one with no placing binary is refused."""
+    calls, bin_ = tmp_path / "calls.jsonl", tmp_path / "flock-tmpl-unit"
+    bin_.write_text(f"#!{sys.executable}\nimport json, pathlib, sys\nopen({str(calls)!r}, 'a').write(json.dumps(sys.argv[1:]) + '\\n')\n"
+                    "pathlib.Path(sys.argv[sys.argv.index('--out') + 1]).write_text('placed')\n")
+    bin_.chmod(0o755)
+    meta = {"statement": TMPL, "template": ["a", "b"], "layout": "iv/hybrid/4"}
+    d = tmp_path / "m0"
+    assert a0.templated({"statement": a0.STATEMENT_ID}, d, None) == {}
+    with pytest.raises(SystemExit):
+        a0.templated(meta, d, None)
+    for _ in range(2):
+        assert a0.templated(meta, d, str(bin_)) == {"statement": TMPL, "tmpl_unit": d / "unit.placed"}
+    assert (d / "unit.tmpl").read_text() == "a\nb\n" and (d / "unit.layout").read_text() == "iv/hybrid/4"
+    assert [json.loads(x) for x in calls.read_text().splitlines()] == [
+        [str(d / "unit.tmpl"), "--layout", "iv/hybrid/4", "--out", str(d / "unit.placed")]]
