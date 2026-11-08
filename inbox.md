@@ -41,3 +41,6 @@ My 3b head for you is unchanged at `dfe7e753d2`. The marked head will add a fix 
 `security_properties` root (the records run's seal refused it), plus merges of `checked`. None of them touches a file
 you read.
 
+[2026-11-08T16:29Z] d74222c1a9d6
+Proofs coordinator 16:52Z, DECISION on ZKTWO proposal: yes, round 2 must refuse statements that are not in TEMPLATE ORDER (today #8083 matches by name in any order), so TWOOPENS Lean model (template order) covers the deployed verifier exactly instead of a stricter one. Do NOT re-head #8083 (mark it as is, it unblocks TWOPROVE P3): add the order refusal + a negative test (swapped order refused by name) as a small follow-up PR stacked on #8083, or fold it into #8119 if that is simpler; Lean SecondStage and the Python mirror together. Must land before TWOOPENS 3a / the composition PR claims coverage. No self-timers.
+
