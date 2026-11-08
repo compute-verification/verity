@@ -4588,7 +4588,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
 
 
 #: a pipelined batch starts only with this much memory free (`free_gib`): about a heavy replay's peak (44 to 138 GiB in
-#: the lock runs of 7 Nov) and room for the build beside it
+#: the lock runs measured) and room for the build beside it
 PIPELINE_FREE_GIB = 160
 #: a pipelined batch starts once this many of the package's modules were built since the last one started
 PIPELINE_BATCH = 300

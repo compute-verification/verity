@@ -12,7 +12,7 @@ operations, `cuda:op`, and Boolean gates, `cuda:gate`, at its integer rate times
 the upper bound that claims nothing; the residuals are declared.
 
 `with_dpu` adds an NVIDIA BlueField-3 DPU between a node's NIC and its way out, and the DPU's BMC behind it, with Amodo's
-measured stores and wipe coverage (amododesign.com/notes/2026-10-02-dpu-memory-wipes): what a wipe can't reach on them is
+measured stores and wipe coverage (amododesign.com, its note on DPU memory wipes): what a wipe can't reach on them is
 each device's residual, and neither states a write ceiling. `leaf_spine` puts nodes behind a leaf-spine fabric, each
 through its own certifier, with hosts outside every block and challengers on the leaves. `rack` is the demo's: nodes with DPUs on one leaf, a challenger, and
 the outside world over a WAN. `two_sites` is a fleet: two leaf-spines joined by a WAN between their spines.
