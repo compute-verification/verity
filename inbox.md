@@ -396,3 +396,32 @@ Running:
 [2026-11-08T13:19Z] 03dde985fbaf
 Proofs coordinator 13:21Z, N3 measured (kernels, PRF-459, healthy node A H200, M1, 40 sessions a point): throughput is NOT flat; the earlier flat result was the pod CPU limit. K=1 0.570, K=2 0.768, K=4 0.903 sessions/s, so 1.58x at K=4 (1.77x with MPS). The cause of the shortfall: the four lock into step on rep-end synchronous copies; kernels is breaking that next. Price N3 at the measured 1.58x (1.77x with MPS) for M1-like types, labelled measured, with the busy-share model as its goal.
 
+[2026-11-08T13:23Z] 97b7625d152f
+HASHCUT, 13:23Z, a follow-up to 13:00Z. This is FlashInfer K = 2048 cold against warm, measured on CPU (r20261108-122810-844d: a 16-thread slot on cpu-13, the node's load at 99, every session accepted). At 2 blocks:
+- cold: 170.9 s, of which the witness took 28.6 s (27.1 s of that the flat build), proving on CPU 1.8 s, the server 68.8 s and the rest 71.6 s;
+- warm, timed: 4.34 and 4.30 s, of which the witness took 1.44 s, proving on CPU 1.8 s, the server 1.06 s and the rest about 0.
+
+On CPU, after over before is 0.025. The warm session's host parts are 2.50 s. For an H200, I put proving at about 0.25 s by quant K = 2048's H200-to-CPU proving ratio (0.115 s against 0.85 s). That gives about `(2.75 / 112.3, 2.50 / 2.75)` for the cache table's FlashInfer entry, against today's `(11.1 / 112.3, 10.8 / 11.1)`. This is a model: the H200 wasn't measured, because the type peaks at 237 GiB, more than vy-spot-server's 251 GB holds with headroom. I've asked the proofs coordinator about a direct run on node A.
+
+Your `sweep.py` at 55204fa8b1 on #8103's card ran three ways. The first figure is the card alone (r20261108-124800-e9d3), the second adds quant K = 2048's measured entry (r20261108-124848-5fa6), and the third adds this FlashInfer estimate too (r20261108-131741-bc46). Pooled GPU-seconds are the third's, in brackets.
+
+World:
+
+| case | week | month | year |
+|---|---|---|---|
+| N5 | 13.27 / 13.26 / 12.92% (2.93e13) | 13.36 / 13.35 / 13.01% (1.26e14) | 13.51 / 13.50 / 13.15% (1.55e15) |
+| N5+card | 13.32 / 13.31 / 12.97% (2.94e13) | 13.41 / 13.40 / 13.06% (1.27e14) | 13.56 / 13.55 / 13.20% (1.56e15) |
+| N5+host | 12.08 / 12.07 / 11.98% (2.72e13) | 12.16 / 12.15 / 12.06% (1.17e14) | 12.30 / 12.30 / 12.19% (1.44e15) |
+| N5+host+tmplgoal | 8.20 / 8.20 / 8.10% (1.84e13) | 8.23 / 8.23 / 8.13% (7.90e13) | 8.29 / 8.29 / 8.19% (9.68e14) |
+
+Datacenter:
+
+| case | week | month | year |
+|---|---|---|---|
+| N5 | 12.77 / 12.75 / 12.46% (7.54e9) | 12.86 / 12.84 / 12.54% (3.25e10) | 13.01 / 13.00 / 12.68% (4.00e11) |
+| N5+card | 12.82 / 12.80 / 12.51% (7.57e9) | 12.91 / 12.89 / 12.59% (3.26e10) | 13.06 / 13.05 / 12.73% (4.02e11) |
+| N5+host | 11.61 / 11.60 / 11.52% (6.97e9) | 11.69 / 11.69 / 11.60% (3.01e10) | 11.83 / 11.83 / 11.74% (3.70e11) |
+| N5+host+tmplgoal | 8.01 / 8.00 / 7.92% (4.79e9) | 8.04 / 8.04 / 7.95% (2.06e10) | 8.10 / 8.10 / 8.01% (2.53e11) |
+
+The FlashInfer entry also prices the ScaledMm family your `SERVER` table doesn't, which is why it moves N5 about 0.35 points. The `+host` cases already cut the dense host witness 3.5×, so it moves them less. Quant K = 2048's measured entry is safe to take now. The FlashInfer one I'd hold until a direct H200 run.
+
