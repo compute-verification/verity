@@ -16,8 +16,8 @@ use rayon::prelude::*;
 use crate::{
     LiveChallenger,
     chunk::comp,
-    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, decode_with, link_cb, prove_params, sched, statics_for},
-    ir_block::IrUnitNet,
+    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, csr, decode_with, link_cb, prove_params, sched, statics_for},
+    ir_block::{IrUnitNet, RowRead},
     circuit::{Kind, Stmt},
 };
 
@@ -426,6 +426,41 @@ impl HostBuf {
         let held: Vec<HostBuf> = (0..count).map_while(|_| HostBuf::mapped(len)).collect();
         drop(held);
     }
+
+    /// `parts` back to back in mapped memory from the pool ([`crate::concat_into`]), which the device copies from at full
+    /// speed rather than through pageable staging; None where the runtime refuses or with `FC_COPY_PINNED=0`
+    pub fn concat<P: AsRef<[F128]>>(parts: &[P]) -> Option<Self> {
+        if std::env::var("FC_COPY_PINNED").as_deref() == Ok("0") {
+            return None;
+        }
+        let n: usize = parts.iter().map(|p| p.as_ref().len()).sum();
+        let mut b = HostBuf::mapped(2 * n)?;
+        // SAFETY: an F128 is two u64 words (lo, hi), and mapped memory is page-aligned
+        let out = unsafe { std::slice::from_raw_parts_mut(b.as_mut_ptr() as *mut std::mem::MaybeUninit<F128>, n) };
+        crate::concat_into(parts, out);
+        Some(b)
+    }
+}
+
+/// Words the device copies from the host once a rep: in mapped memory from the pool ([`HostBuf::concat`]), else on the heap
+#[cfg(feature = "sha512")]
+enum Words {
+    Pinned(HostBuf),
+    Heap(Vec<F128>),
+}
+
+#[cfg(feature = "sha512")]
+impl Words {
+    fn of(parts: &[Vec<F128>]) -> Self {
+        HostBuf::concat(parts).map_or_else(|| Words::Heap(crate::concat(parts)), Words::Pinned)
+    }
+
+    fn as_ptr(&self) -> *const u64 {
+        match self {
+            Words::Pinned(b) => b.as_ptr(),
+            Words::Heap(v) => v.as_ptr() as *const u64,
+        }
+    }
 }
 
 impl std::ops::Deref for HostBuf {
@@ -575,22 +610,18 @@ impl HostSlots {
         HostSlots { at, words, zab, ab, dev_zab: None, dev_rows: None, pinned_rows: None, hm96_rows: Vec::new() }
     }
 
-    /// Copy `rows` (the compressions' input rows) into page-locked memory, which the device copies from at full speed rather
-    /// than through pageable staging; for mapped host slots only, and not with `FC_ROWS_PINNED=0`
+    /// Copy `rows` (the compressions' input rows) into page-locked memory ([`HostBuf::concat`]), which the device copies from
+    /// at full speed rather than through pageable staging; for mapped host slots only, and not with `FC_ROWS_PINNED=0`
     pub fn pin_rows(&mut self, rows: &[F128]) {
         if !self.zab.is_mapped() || std::env::var("FC_ROWS_PINNED").as_deref() == Ok("0") {
             return;
         }
-        // SAFETY: an F128 is two u64 words (lo, hi)
-        let rw: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
-        if let Some(mut b) = HostBuf::mapped(rw.len()) {
-            b.copy_from_slice(rw);
-            self.pinned_rows = Some(b);
-        }
+        self.pinned_rows = HostBuf::concat(&[rows]);
     }
 
     /// Copy the a, b host slots and `rows` (the compressions' input rows the device takes beside them) to device memory, which
-    /// the device then reads in place of the mapped host memory and the pageable rows. For a witness built ahead of its session
+    /// the device then reads in place of the mapped host memory and the pageable rows. The rows go through mapped memory from
+    /// the pool ([`HostBuf::concat`]), back in the pool once copied. For a witness built ahead of its session
     /// (`FC_DEV_PREFETCH=1`), the copies run beside the previous session's device work. Whatever the device has no room for
     /// stays on the host.
     pub fn upload(&mut self, rows: &[F128]) {
@@ -598,13 +629,23 @@ impl HostSlots {
             return;
         }
         let t = Instant::now();
+        let staged = HostBuf::concat(&[rows]);
         // SAFETY: an F128 is two u64 words (lo, hi), as the device takes the rows
-        let r: &[u64] = unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) };
+        let r: &[u64] = match &staged {
+            Some(b) => &b[..],
+            None => unsafe { std::slice::from_raw_parts(rows.as_ptr() as *const u64, 2 * rows.len()) },
+        };
+        let rows_bytes = 8 * r.len();
         self.dev_zab = DevBuf::copy_of(&self.zab);
         self.dev_rows = DevBuf::copy_of(r);
+        let rows_pinned = staged.is_some();
+        if self.dev_rows.is_none() {
+            self.pinned_rows = staged;
+        }
         if crate::circuit::unit_profile() {
-            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "upload", "zab_bytes": 8 * self.zab.len(), "rows_bytes": 8 * r.len(),
-                "zab": self.dev_zab.is_some(), "rows": self.dev_rows.is_some(), "wall_s": t.elapsed().as_secs_f64()}));
+            eprintln!("UNITPROF\t{}", serde_json::json!({"part": "upload", "zab_bytes": 8 * self.zab.len(), "rows_bytes": rows_bytes,
+                "zab": self.dev_zab.is_some(), "rows": self.dev_rows.is_some(), "rows_pinned": rows_pinned,
+                "wall_s": t.elapsed().as_secs_f64()}));
         }
     }
 
@@ -743,20 +784,14 @@ pub struct UnitSched {
     pub order: Vec<u32>,
 }
 
-/// `rows` as CSR: each row's offset into the concatenated columns, then the columns.
-pub fn csr(rows: &[Vec<usize>]) -> (Vec<u32>, Vec<u32>) {
-    let mut off = vec![0u32];
-    let mut col = Vec::new();
-    for r in rows {
-        col.extend(r.iter().map(|&c| c as u32));
-        off.push(col.len() as u32);
-    }
-    (off, col)
-}
-
 /// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
 /// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
 pub fn schedule(net: &IrUnitNet) -> UnitSched {
+    schedule_of(net, &net.a, &net.b)
+}
+
+/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
+fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
     let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
     let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
     let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
@@ -767,7 +802,7 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
     }
     for i in first..u {
         if i != cpos {
-            late[i] = net.a[i].iter().chain(&net.b[i]).any(|&c| c != i && c != cpos && late[c]);
+            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
         }
     }
     if cut_rows.iter().any(|&r| late[r as usize]) {
@@ -787,7 +822,7 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
             if i == cpos || late[i] != phase {
                 continue;
             }
-            let l = 1 + net.a[i].iter().chain(&net.b[i]).filter(|&&c| c != i && c != cpos && late[c] == phase && c >= first).map(|&c| level[c]).max().unwrap_or(0);
+            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
             level[i] = l;
             max = max.max(l);
         }
@@ -1137,17 +1172,17 @@ pub fn prove_circuit(
         }
     }
     #[cfg(feature = "sha512")]
-    let zk_words: Option<(Vec<F128>, Vec<F128>)> = level0.filter(|_| !taken).map(|z| {
+    let zk_words: Option<(Words, Words)> = level0.filter(|_| !taken).map(|z| {
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (crate::concat(&z.pads), crate::concat(&z.extra))
+        (Words::of(&z.pads), Words::of(&z.extra))
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
         (p.zk_on, p.zk_rep, p.zk_t_pad, p.zk_tamper) = (1, z.rep as i32, z.t_pad as i32, z.tamper as i32);
         if let Some((pads, extra)) = &zk_words {
-            (p.zk_pads, p.zk_extra) = (pads.as_ptr() as *const u64, extra.as_ptr() as *const u64);
+            (p.zk_pads, p.zk_extra) = (pads.as_ptr(), extra.as_ptr());
         }
     }
     #[cfg(not(feature = "sha512"))]
@@ -1246,5 +1281,78 @@ mod tests {
         assert_eq!((off.clone(), col.clone()), (vec![0, 2, 2, 5], vec![3, 1, 0, 5, 2]));
         let back: Vec<Vec<usize>> = off.windows(2).map(|w| col[w[0] as usize..w[1] as usize].iter().map(|&c| c as usize).collect()).collect();
         assert_eq!(back, rows);
+    }
+
+    fn next(s: &mut u64, m: usize) -> usize {
+        *s ^= *s << 13;
+        *s ^= *s >> 7;
+        *s ^= *s << 17;
+        (*s % m as u64) as usize
+    }
+
+    /// One side's rows of a unit: input rows `[i]` or empty, the constant last, and every other row a few columns before it or
+    /// the constant, repeats and empty rows among them, some reading their own column (an assertion row). A row before `until`
+    /// reads no column in `avoid`.
+    fn random_side(s: &mut u64, first: usize, useful: usize, avoid: std::ops::Range<usize>, until: usize) -> Vec<Vec<usize>> {
+        let cp = useful - 1;
+        (0..useful)
+            .map(|i| {
+                if i == cp {
+                    return vec![cp];
+                }
+                if i < first {
+                    return if next(s, 5) == 0 { vec![] } else { vec![i] };
+                }
+                let n = next(s, 6);
+                let mut r: Vec<usize> = (0..n)
+                    .map(|_| match next(s, 9) {
+                        0 => cp,
+                        _ => match next(s, i) {
+                            c if i < until && avoid.contains(&c) => c - avoid.start,
+                            c => c,
+                        },
+                    })
+                    .collect();
+                if n > 1 && next(s, 3) == 0 {
+                    r.push(r[0]);
+                }
+                if next(s, 7) == 0 {
+                    r.push(i);
+                }
+                r
+            })
+            .collect()
+    }
+
+    #[test]
+    fn device_builders_read_rows_alike() {
+        use crate::ir_block::{Group, Rows};
+        let g = |col: usize| Group { col, words: 1, bits: vec![128] };
+        // a one-phase unit, and a cut unit (late input rows 128..256, cut output rows 256..384, which read no late row)
+        for (seed, useful, ins, outs) in [(3u64, 600usize, vec![g(0)], vec![g(4)]), (0x51ed, 5000, vec![g(0), g(1)], vec![g(30), g(2)])] {
+            let (mut s, first, k) = (seed, ins.len() * 128, useful.next_power_of_two().max(128));
+            let a = random_side(&mut s, first, useful, 128..256, 1000);
+            let b = random_side(&mut s, first, useful, 128..256, 1000);
+            let (ra, rb) = (Rows::from_vecs(&a), Rows::from_vecs(&b));
+            let pad = |rows: &Vec<Vec<usize>>| {
+                let mut r = rows.clone();
+                r.resize(k, Vec::new());
+                SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
+            };
+            for (v, r) in [(&a, &ra), (&b, &rb)] {
+                assert_eq!(csc_of(r, k), csc_of(v, k), "net {seed}: the CSC from Rows");
+                assert_eq!(csc_of(v, k), csc_from_rows(&pad(v)), "net {seed}: the CSC of the rows padded to the slot");
+                assert_eq!(csr(r), csr(v), "net {seed}: the CSR from Rows");
+            }
+            let in_words = ins.len();
+            let net = IrUnitNet { name: "t".into(), useful, const_pos: useful - 1, in_groups: ins, out_groups: outs, in_words,
+                                  out_cols: vec![], a, b, unit_log: k.trailing_zeros() as usize, sha256: [0; 32], leaves: None,
+                                  cut: None, order: None, flat: Default::default() };
+            let (x, y) = (schedule(&net), schedule_of(&net, &ra, &rb));
+            assert_eq!((x.levels0, &x.late_rows, &x.cut_rows, &x.level_off, &x.order), (y.levels0, &y.late_rows, &y.cut_rows, &y.level_off, &y.order),
+                       "net {seed}: the schedule from Rows");
+            assert!(x.level_off.len() > 3, "net {seed}: a schedule of under three levels");
+            assert_eq!(x.cut_rows.is_empty(), net.in_groups.len() == 1, "net {seed}: the cut unit's schedule is not two-phase");
+        }
     }
 }

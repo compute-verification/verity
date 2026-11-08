@@ -75,7 +75,7 @@ theorem pr_comp_equiv [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (π : 
       invFun := fun x => (x.1 ∘ π.symm, x.2)
       left_inv := fun x => by ext q <;> simp
       right_inv := fun x => by ext q <;> simp }
-  unfold pr Claims.Pr
+  unfold pr Claims.Pr Claims.prUniform
   congr 2
   exact Finset.card_equiv e fun x => by simp [e]
 

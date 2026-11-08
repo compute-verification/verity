@@ -13,7 +13,7 @@
 use std::sync::OnceLock;
 
 use flock_core::{
-    lincheck::{LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
+    lincheck::{CscCircuit, LincheckCircuit, SparseMatrixCircuit, pack_z_lincheck_from_packed},
     proof::eq_skip_weights,
     r1cs::{BlockR1cs, SparseBinaryMatrix, WitnessLayout},
     verifier::ExtraClaim,
@@ -47,6 +47,14 @@ pub trait RowRead {
     fn nnz(&self) -> usize {
         (0..self.n_rows()).map(|i| self.row_len(i)).sum()
     }
+    /// Whether row `i` is exactly `cols`, in order.
+    fn row_is(&self, i: usize, cols: &[usize]) -> bool {
+        self.row_len(i) == cols.len() && self.row_cols(i).eq(cols.iter().copied())
+    }
+    /// Row `i`'s columns, and none past the last row.
+    fn cols_or_empty(&self, i: usize) -> impl Iterator<Item = usize> + '_ {
+        (i < self.n_rows()).then(|| self.row_cols(i)).into_iter().flatten()
+    }
 }
 
 impl RowRead for [Vec<usize>] {
@@ -70,6 +78,33 @@ impl RowRead for Vec<Vec<usize>> {
     }
     fn row_cols(&self, i: usize) -> impl ExactSizeIterator<Item = usize> + '_ {
         self[i].iter().copied()
+    }
+}
+
+/// A net's rows as a builder writes them: one row at a time, in row order. `Vec<Vec<usize>>` and [`Rows`] write alike.
+pub trait RowWrite: RowRead + Sized {
+    fn with_rows(rows: usize) -> Self;
+    fn push_row(&mut self, row: &[usize]);
+    /// These rows with row `i` replaced by `row`, and empty rows before it if it is past the last.
+    fn with_row(&self, i: usize, row: &[usize]) -> Self {
+        let n = self.n_rows().max(i + 1);
+        let mut out = Self::with_rows(n);
+        let mut cols = Vec::new();
+        for r in 0..n {
+            cols.clear();
+            cols.extend(self.cols_or_empty(r));
+            out.push_row(if r == i { row } else { &cols });
+        }
+        out
+    }
+}
+
+impl RowWrite for Vec<Vec<usize>> {
+    fn with_rows(rows: usize) -> Self {
+        Vec::with_capacity(rows)
+    }
+    fn push_row(&mut self, row: &[usize]) {
+        self.push(row.to_vec());
     }
 }
 
@@ -142,6 +177,15 @@ impl RowRead for Rows {
     }
     fn nnz(&self) -> usize {
         Rows::nnz(self)
+    }
+}
+
+impl RowWrite for Rows {
+    fn with_rows(rows: usize) -> Self {
+        Rows::with_capacity(rows, 0)
+    }
+    fn push_row(&mut self, row: &[usize]) {
+        self.push(row);
     }
 }
 
@@ -284,6 +328,21 @@ impl Flat {
     }
 }
 
+/// A netlist's `useful` rows, each line `na a.. nb b..`, written in order.
+fn read_rows<'a, R: RowWrite>(lines: &mut impl Iterator<Item = &'a str>, useful: usize) -> (R, R) {
+    let (mut a, mut b) = (R::with_rows(useful), R::with_rows(useful));
+    let mut v: Vec<usize> = Vec::new();
+    for _ in 0..useful {
+        v.clear();
+        v.extend(lines.next().expect("row").split_whitespace().map(|t| t.parse::<usize>().unwrap()));
+        let na = v[0];
+        let nb = v[1 + na];
+        a.push_row(&v[1..1 + na]);
+        b.push_row(&v[2 + na..2 + na + nb]);
+    }
+    (a, b)
+}
+
 impl IrUnitNet {
     pub fn parse(text: &str) -> Self {
         let sha256: [u8; 32] = Sha256::digest(text.as_bytes()).into();
@@ -312,18 +371,11 @@ impl IrUnitNet {
         let (o0, o1) = (out_groups[0].col, out_groups.last().map(|g| g.col + g.words).unwrap());
         let out_cols: Vec<usize> = (o0..o1).collect();
         assert!(const_pos == useful - 1);
-        let (mut a, mut b) = (Vec::with_capacity(useful), Vec::with_capacity(useful));
-        for _ in 0..useful {
-            let v: Vec<usize> = lines.next().expect("row").split_whitespace().map(|t| t.parse().unwrap()).collect();
-            let na = v[0];
-            let nb = v[1 + na];
-            a.push(v[1..1 + na].to_vec());
-            b.push(v[2 + na..2 + na + nb].to_vec());
-        }
+        let (a, b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = read_rows(&mut lines, useful);
         for i in 0..in_words * WORD {
-            assert!((a[i] == [i] && b[i] == [i]) || (a[i].is_empty() && b[i].is_empty()), "unit row {i} is not an input row");
+            assert!((a.row_is(i, &[i]) && b.row_is(i, &[i])) || (a.row_len(i) == 0 && b.row_len(i) == 0), "unit row {i} is not an input row");
         }
-        assert!(a[const_pos] == [const_pos] && b[const_pos] == [const_pos]);
+        assert!(a.row_is(const_pos, &[const_pos]) && b.row_is(const_pos, &[const_pos]));
         let mut rest = lines.peekable();
         let mut tagged = |tag: &str| -> Option<serde_json::Value> {
             let j = rest.next_if(|l| l.starts_with(tag))?;
@@ -341,7 +393,7 @@ impl IrUnitNet {
                 assert!(p < useful && !std::mem::replace(&mut seen[p], true), "ORDER: column {p} is placed twice or past the rows");
                 assert!(x >= first || p == x, "ORDER: input row {x} moves");
             }
-            assert!(seen.iter().enumerate().all(|(p, &s)| s || (a[p].is_empty() && b[p].is_empty())), "ORDER: an unplaced row is not empty");
+            assert!(seen.iter().enumerate().all(|(p, &s)| s || (a.row_len(p) == 0 && b.row_len(p) == 0)), "ORDER: an unplaced row is not empty");
         }
         let unit_log = (useful.next_power_of_two().trailing_zeros() as usize).max(7);
         // D11: an output group lies inside its unit's slot, so a region at its column stays in the slot
@@ -359,6 +411,13 @@ impl IrUnitNet {
 
     pub fn load(path: &str) -> Self {
         Self::parse(&std::fs::read_to_string(path).expect("netlist"))
+    }
+
+    /// The unit's slot type as the lincheck reads it: its rows over its `2^unit_log` columns, read in place.
+    pub fn csc(&self) -> CscCircuit {
+        let (n, k) = (self.a.n_rows(), 1usize << self.unit_log);
+        assert!(self.b.n_rows() == n && n <= k, "a unit net of {n} A rows and {} B rows in a {k}-row slot", self.b.n_rows());
+        CscCircuit::from_rows(n, k, |r| self.a.row_cols(r), |r| self.b.row_cols(r))
     }
 
     fn matrices(&self) -> (SparseBinaryMatrix, SparseBinaryMatrix) {
@@ -912,13 +971,13 @@ pub fn check_order(net: &IrUnitNet) -> Result<(), String> {
         if i == net.const_pos {
             continue;
         }
-        let assertion = net.b[i] == [net.const_pos] && net.a[i].contains(&i);
-        for &c in net.a[i].iter().chain(&net.b[i]) {
+        let assertion = net.b.row_is(i, &[net.const_pos]) && net.a.row_cols(i).any(|c| c == i);
+        for c in net.a.row_cols(i).chain(net.b.row_cols(i)) {
             if c >= i && c != net.const_pos && !(assertion && c == i) {
                 return Err(format!("unit row {i} reads column {c}, not an earlier one"));
             }
         }
-        if net.a[i] == [i] && net.b[i] == [i] {
+        if net.a.row_is(i, &[i]) && net.b.row_is(i, &[i]) {
             return Err(format!("unit row {i} is a free row"));
         }
     }
@@ -973,13 +1032,28 @@ mod tests {
         let span = 2 * (cp - first) + 1;
         let pos: Vec<usize> = (0..=cp).map(|x| if x < first { x } else if x == cp { first + span } else { first + (x - first) * 7919 % span }).collect();
         let size = first + span + 1;
-        let (mut a, mut b) = (vec![Vec::new(); size], vec![Vec::new(); size]);
-        for x in 0..=cp {
-            a[pos[x]] = net.a[x].iter().map(|&c| pos[c]).collect();
-            b[pos[x]] = net.b[x].iter().map(|&c| pos[c]).collect();
+        let mut at = vec![None; size];
+        (0..=cp).for_each(|x| at[pos[x]] = Some(x));
+        let (mut a, mut b): (Vec<Vec<usize>>, Vec<Vec<usize>>) = (RowWrite::with_rows(size), RowWrite::with_rows(size));
+        for x in at {
+            let moved = |rows: &Vec<Vec<usize>>| x.map_or(Vec::new(), |x| rows.row_cols(x).map(|c| pos[c]).collect());
+            a.push_row(&moved(&net.a));
+            b.push_row(&moved(&net.b));
         }
         IrUnitNet { useful: size, const_pos: size - 1, a, b, unit_log: size.next_power_of_two().trailing_zeros().max(7) as usize,
                     order: Some(pos), ..net.clone() }
+    }
+
+    /// `net` as a `flock-ir-unit/v2` netlist: its rows under one input group of its input words and one output group of the
+    /// word after them.
+    fn text_of(net: &IrUnitNet) -> String {
+        let (w, cp) = (net.in_words, net.const_pos);
+        let mut t = format!("flock-ir-unit/v2 t {} {cp} 1 0 {w} 1 {} 1 {w} 1 1 1\n", net.useful, w * WORD);
+        for (ra, rb) in net.a.iter().zip(&net.b) {
+            let row = |r: &Vec<usize>| std::iter::once(r.len()).chain(r.iter().copied()).map(|x| x.to_string()).collect::<Vec<_>>().join(" ");
+            t += &format!("{} {}\n", row(ra), row(rb));
+        }
+        t
     }
 
     #[test]
@@ -1022,6 +1096,43 @@ mod tests {
     }
 
     #[test]
+    fn csc_reads_the_rows_in_place() {
+        for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
+            let net = random_net(seed, in_words, useful);
+            for n in [&net, &placed(&net)] {
+                let (a, b) = n.matrices();
+                assert!(n.csc() == CscCircuit::from_matrices(&a, &b), "net {seed}: the slot type's CSC");
+                let (ra, rb) = (Rows::from_vecs(&n.a), Rows::from_vecs(&n.b));
+                let got = CscCircuit::from_rows(ra.len(), 1 << n.unit_log, |r| ra.row_cols(r), |r| rb.row_cols(r));
+                assert!(got == n.csc(), "net {seed}: the CSC from Rows");
+            }
+        }
+    }
+
+    #[test]
+    fn row_shapes_read_alike() {
+        let net = random_net(0x51ed, 2, 3000);
+        let rows = Rows::from_vecs(&net.a);
+        let (n, cp) = (net.a.len(), net.const_pos);
+        for i in 0..n + 3 {
+            let want = net.a.get(i).cloned().unwrap_or_default();
+            assert_eq!(rows.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from Rows");
+            assert_eq!(net.a[..].cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a slice");
+            assert_eq!(net.a.cols_or_empty(i).collect::<Vec<_>>(), want, "row {i} from a Vec");
+            if i >= n {
+                continue;
+            }
+            let (mut short, mut rev) = (want.clone(), want.clone());
+            short.pop();
+            rev.reverse();
+            for probe in [want.clone(), short, rev, vec![i], vec![cp], vec![], vec![i, i]] {
+                let is = want == probe;
+                assert_eq!((rows.row_is(i, &probe), net.a[..].row_is(i, &probe), net.a.row_is(i, &probe)), (is, is, is), "row {i} is {probe:?}");
+            }
+        }
+    }
+
+    #[test]
     fn evaluators_read_rows_alike() {
         let flat = |f: Option<Flat>| f.map(|f| (f.off, f.cols, f.own));
         for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
@@ -1041,6 +1152,32 @@ mod tests {
                 assert_eq!(want.is_some(), one_pass, "net {seed}: the flat form's refusal");
                 assert!(flat(Flat::of_rows(n, &ra, &rb)) == want, "net {seed}: the flat form from Rows");
             }
+        }
+    }
+
+    /// The parser writes a netlist's rows into `Rows` exactly as into vectors, and those are the rows the text holds.
+    #[test]
+    fn the_parser_writes_rows_alike() {
+        for (seed, in_words, useful) in [(1u64, 1usize, 200usize), (0x9e37_79b9, 2, 5000)] {
+            let net = random_net(seed, in_words, useful);
+            let text = text_of(&net);
+            let parsed = IrUnitNet::parse(&text);
+            assert!(parsed.a == net.a && parsed.b == net.b, "net {seed}: the rows parsed");
+            let (ra, rb): (Rows, Rows) = read_rows(&mut text.lines().skip(1), useful);
+            assert!(ra == Rows::from_vecs(&net.a) && rb == Rows::from_vecs(&net.b), "net {seed}: the rows parsed into Rows");
+        }
+    }
+
+    #[test]
+    fn rows_are_edited_alike() {
+        let net = random_net(0x51ed, 1, 400);
+        let rows = Rows::from_vecs(&net.a);
+        for (i, row) in [(0, vec![]), (200, vec![3, 3, 399]), (399, vec![399]), (450, vec![7])] {
+            let mut want = net.a.clone();
+            want.resize(want.len().max(i + 1), Vec::new());
+            want[i] = row.clone();
+            assert_eq!(net.a.with_row(i, &row), want, "row {i} of vectors");
+            assert_eq!(rows.with_row(i, &row), Rows::from_vecs(&want), "row {i} of Rows");
         }
     }
 
