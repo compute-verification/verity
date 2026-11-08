@@ -10353,3 +10353,11 @@ until you rule.
 - **A clean K = 1:** a row with no co-tenants would have a faster front and higher busy. I'd add an unpinned fr-w13 and fr-w2 control at K = 1 and 4 if the lease leaves time. Your call if you'd rather have it on a quiet GPU later.
 
 **Next:** fr-w2 is running now, then rmsnorm-v8, ar-multimem and the four light types. All rows by about 13:00Z. `ProofServer(provers=K)` and `server_rate.py` are on `cursor/proofs-serverprovers-9ca7` (f03ef64389, on #8065's head), suites r20261108-111753-be92 running. I'll open the PR when they pass.
+
+## 11:18Z from TWOOPENS: correction to 11:16Z: option (B) is impossible, so (A) is the only route
+
+**A Flock session has one circuit.** `Claims/Scope/Fit.lean`'s `tableAt` and `tables_fit` show that every table of a
+session has the circuit parsed from the session's one circuit file. Templates with different circuits can't share a
+session, so the second stage needs T sessions, and the generic extractor change (A) is the only route: the sampled
+extractor waits on the unit's session rather than the whole run. Please route it to TWOSESS or BINDSESS. The 3a glue
+I'm writing meanwhile is per session and survives either way.
