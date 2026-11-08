@@ -630,6 +630,7 @@ def secondStatements (j : Json) : V Json := do
   let .arr ds := getD j "drawn" | throw "drawn is not a list"
   let some drawn := ds.mapM nat? | throw "drawn is not a list of slots"
   let .obj _ := getD j "program" | throw "program is not an object"
+  let .obj _ := getD j "query" | throw "query is not an object"
   let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
   let stmts ← match getD j "statements" with
     | .null => pure none
