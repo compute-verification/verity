@@ -10,8 +10,10 @@ The Program's side, each field's type and the reads of it, is `program.workload.
 - **Which requests.** A window's edge members are its `close` entries that must carry and have computed a row, in close order
   (`members`): its carried requests in the order w − 1 left them, then the ones it admitted, by first row. A request that only
   may carry (its last kept output is in w's last step) has no Program in w + 1, and one that never ran has no history.
-- **Which fields.** Each port is a Tuple with one field per member holding it, in member order (`fields`). `edge.kv` holds
-  every member's latent rows [0, computed) of every layer (a request Program's `prefix`). `edge.ik` and `edge.iks` hold the
+- **Which fields.** Each port is a Tuple with one field per member holding it, in member order (`fields`). Every member's
+  rows [0, computed) of every layer of its decoder's latent history (`LATENT`): on the sparse-attention decoder two ports, one
+  per writer, since an edge row takes its writer's grain: `edge.kv_c` the normed kv_c (`prefix_kv_c`, DsaRMSNorm's output) and
+  `edge.kv_pe` the roped k_pe (`prefix_kv_pe`, RoPEHeadGptJ's); elsewhere one, `edge.kv` (`prefix`). `edge.ik` and `edge.iks` hold the
   indexer's keys and scales (`prefix_ik`, `prefix_iks`) of each member whose record's last row reads past the model's
   INDEX_TOPK keys (`prompt_len + output_len - 1` > INDEX_TOPK, `predict.segment.edge_groups`), the same in every window; a
   model without an indexer has neither port. `edge.last` holds the last kept output (`last_token`) of each member past its
@@ -37,11 +39,12 @@ from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 from verity.ml.circuits.codec import program_digest
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, RecordType, Tuple as TupleT, Type, field_types
+from verity_vllm.program import workload as W
 
 from . import window_advice as WA
 
-__all__ = ["VALUES", "Slice", "Value", "carried", "commit", "entries", "fields", "history", "members", "out_ports", "roots",
-           "row_words"]
+__all__ = ["LATENT", "VALUES", "Slice", "Value", "carried", "commit", "entries", "fields", "history", "members", "out_ports",
+           "roots", "row_words"]
 
 
 class Value(NamedTuple):
@@ -55,8 +58,10 @@ class Value(NamedTuple):
     past_topk: bool = False
 
 
-VALUES = (Value("edge.kv", "prefix", False), Value("edge.ik", "prefix_ik", False, True), Value("edge.iks", "prefix_iks", False, True),
-          Value("edge.last", "last_token", True))
+VALUES = (Value("edge.kv", "prefix", False), Value("edge.kv_c", "prefix_kv_c", False), Value("edge.kv_pe", "prefix_kv_pe", False),
+          Value("edge.ik", "prefix_ik", False, True), Value("edge.iks", "prefix_iks", False, True), Value("edge.last", "last_token", True))
+#: the latent history layouts: one group, or the sparse-attention decoder's two, each one writer's output (`dsa.Net.prefix_params`)
+LATENT = W.EDGE_LATENT
 
 
 class Slice(NamedTuple):
@@ -74,24 +79,32 @@ def members(advice: WA.Advice) -> tuple[WA.Close, ...]:
     return tuple(c for c in WA.close(advice) if c.must and c.state.computed)
 
 
-def fields(advice: WA.Advice, topk: int | None = None) -> dict[str, tuple[int, ...]]:
+def _latent(groups: tuple[str, ...]) -> tuple[str, ...]:
+    if tuple(groups) not in LATENT:
+        raise ValueError(f"latent history groups {tuple(groups)} are none of {list(LATENT)}")
+    return tuple(groups)
+
+
+def fields(advice: WA.Advice, topk: int | None = None, latent: tuple[str, ...] = LATENT[0]) -> dict[str, tuple[int, ...]]:
     """Each port's members holding a field, as indices in ``advice``, in field order. ``topk``: the model's INDEX_TOPK, None for a
-    model without an indexer (no `edge.ik` or `edge.iks`)."""
-    held = members(advice)
+    model without an indexer (no `edge.ik` or `edge.iks`). ``latent``: the decoder's latent history groups (`LATENT`)."""
+    held, latent = members(advice), _latent(latent)
+    others = {g for lay in LATENT for g in lay} - set(latent)
 
     def holds(v: Value, c: WA.Close) -> bool:
         q = advice.requests[c.request]
         return (not v.past_prompt or c.state.computed >= q.prompt_len) and (not v.past_topk or q.prompt_len + q.output_len - 1 > topk)
-    return {v.name: tuple(c.request for c in held if holds(v, c)) for v in VALUES if topk is not None or not v.past_topk}
+    return {v.name: tuple(c.request for c in held if holds(v, c)) for v in VALUES
+            if v.history not in others and (topk is not None or not v.past_topk)}
 
 
-def carried(last: WA.Advice, advice: WA.Advice, topk: int | None = None) -> tuple[Slice, ...]:
+def carried(last: WA.Advice, advice: WA.Advice, topk: int | None = None, latent: tuple[str, ...] = LATENT[0]) -> tuple[Slice, ...]:
     """The verifier's: ``advice`` held to ``last``, the window before it (`window_advice.follows`, refusing by name), and each
-    carried request's fields in ``last``'s edge (`fields` at ``topk``), in ``advice``'s order. A carried request that isn't one
-    of ``last``'s members reads no history and has no slice."""
+    carried request's fields in ``last``'s edge (`fields` at ``topk`` and ``latent``), in ``advice``'s order. A carried request
+    that isn't one of ``last``'s members reads no history and has no slice."""
     pairs = WA.follows(last, advice)
-    held = fields(last, topk)
-    at = set(held[VALUES[0].name])
+    held = fields(last, topk, latent)
+    at = set(held[next(v.name for v in VALUES if v.history == latent[0])])
     return tuple(Slice(k, advice.requests[k].id, advice.carried[k].computed,
                        {p: f.index(i) for p, f in held.items() if i in f}) for k, i in pairs if i in at)
 

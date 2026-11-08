@@ -141,13 +141,13 @@ def test_tampered_history_is_refused_by_name(two):
 
 
 class _Dsa:
-    """A stand-in decoder with the DSA history layout: per layer and position a latent row, per indexer layer and position a
-    key row and a scale."""
+    """A stand-in decoder with the DSA history layout: per layer and position a normed kv_c row and a roped k_pe row, per indexer
+    layer and position a key row and a scale."""
 
     def prefix_params(self, C: int) -> list:
-        return [("prefix", Array(3, Array(C, Array(576, Value(16))))), ("prefix_ik", Array(2, Array(C, Array(128, Value(8))))),
-                ("prefix_iks", Array(2, Array(C, Value(32))))]
+        return [("prefix_kv_c", Array(3, Array(C, Array(512, Value(16))))), ("prefix_kv_pe", Array(3, Array(C, Array(64, Value(16))))),
+                ("prefix_ik", Array(2, Array(C, Array(128, Value(8))))), ("prefix_iks", Array(2, Array(C, Value(32))))]
 
 
 def test_a_row_is_one_position_of_one_layer_of_its_group():
-    assert E.row_words(_Dsa()) == {"edge.kv": 576, "edge.ik": 128, "edge.iks": 1, "edge.last": 1}
+    assert E.row_words(_Dsa()) == {"edge.kv_c": 512, "edge.kv_pe": 64, "edge.ik": 128, "edge.iks": 1, "edge.last": 1}

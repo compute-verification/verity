@@ -66,7 +66,7 @@ from .phi import Phi
 OWN_GROUPS = ("prompt", "seed")
 #: the Input groups of a request's history (`build.build_program`'s C: every layer's rows of its first C positions, and a resumed
 #: request's last token), its own where R2 checks it (`workload_labels`)
-HISTORY_GROUPS = ("prefix", "prefix_ik", "prefix_iks", "last_token")
+HISTORY_GROUPS = ("prefix", "prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks", "last_token")
 
 
 class BatchDependent(Unexpressible):

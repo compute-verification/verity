@@ -40,7 +40,8 @@
   Program's boundary inputs (`build.build_program`'s C): a cache hit's C rows, the producers', which GP-01 records per block; or,
   for a request the window carries in, its own rows up to where it continues (its carried `computed`), from its prompt's end on
   with its last kept output (`last_token`, from which it resumes at decode C), which GP-01 reads from the last window's edge
-  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv` (the latent rows), `edge.ik` and `edge.iks` (the
+  values (`segment.edge_of`, `workload.Edge`): registered parameters `edge.kv_c` and `edge.kv_pe` (the latent rows' normed kv_c
+  and roped k_pe, each its writer's output; a decoder with one latent group `edge.kv`), `edge.ik` and `edge.iks` (the
   indexer's keys and scales, of a request whose rows read past INDEX_TOPK keys in some window) and `edge.last`, each the carried
   requests' fields of one group in the last window's `close` order, that window's output ports; a history group no edge carries
   stays an Input of the request's own, which no row reads. A request the window leaves with outputs to keep reaches as far as

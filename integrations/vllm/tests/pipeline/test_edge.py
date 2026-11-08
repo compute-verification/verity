@@ -32,8 +32,8 @@ def test_the_edge_holds_the_requests_that_must_carry_in_close_order():
 
 
 def test_each_port_has_a_field_per_member_holding_it_and_edge_last_only_past_the_prompt():
-    assert [(v.name, v.history) for v in E.VALUES] == [("edge.kv", "prefix"), ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"),
-                                                       ("edge.last", "last_token")]
+    assert [(v.name, v.history) for v in E.VALUES] == [("edge.kv", "prefix"), ("edge.kv_c", "prefix_kv_c"), ("edge.kv_pe", "prefix_kv_pe"),
+                                                       ("edge.ik", "prefix_ik"), ("edge.iks", "prefix_iks"), ("edge.last", "last_token")]
     assert E.fields(W) == {"edge.kv": (0, 1, 2), "edge.last": (0, 1)}
     assert E.fields(NEXT) == {"edge.kv": (0, 1, 2), "edge.last": (0, 1, 2)}
     assert E.fields(WA.Advice((C,), (_step((0, 0, 3)),), (0,))) == {"edge.kv": (), "edge.last": ()}
@@ -51,6 +51,17 @@ def test_the_indexer_s_keys_and_scales_are_carried_for_a_request_whose_rows_read
     assert E.fields(W, 7) == {"edge.kv": (0, 1, 2), "edge.ik": (), "edge.iks": (), "edge.last": (0, 1)}
     assert [s.fields for s in E.carried(W, NEXT, 5)] == [{"edge.kv": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
                                                          {"edge.kv": 1, "edge.last": 1}, {"edge.kv": 2, "edge.ik": 1, "edge.iks": 1}]
+
+
+def test_the_sparse_attention_decoder_s_latent_history_is_two_ports_one_per_writer():
+    split = E.LATENT[1]
+    assert E.fields(W, 5, split) == {"edge.kv_c": (0, 1, 2), "edge.kv_pe": (0, 1, 2), "edge.ik": (0, 2), "edge.iks": (0, 2),
+                                     "edge.last": (0, 1)}
+    assert [s.fields for s in E.carried(W, NEXT, 5, split)] == [
+        {"edge.kv_c": 0, "edge.kv_pe": 0, "edge.ik": 0, "edge.iks": 0, "edge.last": 0},
+        {"edge.kv_c": 1, "edge.kv_pe": 1, "edge.last": 1}, {"edge.kv_c": 2, "edge.kv_pe": 2, "edge.ik": 1, "edge.iks": 1}]
+    with pytest.raises(ValueError, match="latent history groups"):
+        E.fields(W, 5, ("prefix_kv_c",))
 
 
 def test_a_request_idle_in_a_window_stays_in_its_edge_at_the_state_it_was_carried_in():

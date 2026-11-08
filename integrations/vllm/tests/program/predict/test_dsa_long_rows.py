@@ -191,7 +191,8 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     whole in one window are, call for call, their Programs across three: the first leaves A at position 6 and B at 3, the second
     runs B's last row with A carried through it idle, and the third runs A's last. A's rows read the indexer's keys and scales
     past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples and its checks (rows 4 and 5),
-    then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`,
+    then every layer's normed kv_c and roped k_pe rows, index-K slots and scales so far, out-ports `edge.kv_c`, `edge.kv_pe`,
+    `edge.ik`, `edge.iks` and `edge.last`,
     while B's index-K history stays its own unread Inputs; the idle window passes A's fields through to its own edge, and the
     third reads them as A's history, `edge.ik` and `edge.iks` one field each. Each window's `run` holds the orders of the rows it
     computes, and the advice's side (`pipeline.edge.fields`) holds each port's members as each window's Program returns them. What
@@ -220,24 +221,25 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
     for r in (0, 1):
         assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
-    assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
+    latent = ("prefix_kv_c", "prefix_kv_pe")
+    assert [u.edge for u in cs[1].requests] == [(*latent, "prefix_ik", "prefix_iks"), latent]
     ret = field_types(prog[1][0].fn.signature()[1])
-    assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
-                                                       Array(3, Array(6, Value(32))))
+    assert ret[1] == Array(3 * 2, BIT) and ret[2:] == (Array(4, Array(6, Array(512, Value(16)))), Array(4, Array(6, Array(64, Value(16)))),
+                                                       Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
     assert field_types(wls[1].fn.signature()[1])[0] == TupleT(Array(4, I32), Array(6, BIT))
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
-        ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
+        [*latent, "prefix_ik", "prefix_iks", "last_token"], [*latent, "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
     for adv, wl in ((out, wls[1]), (idle, wls[2]), (into, wls[3])):
-        assert E.fields(adv, TOPK) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
-                                       for p, g in EDGE_PORTS}, "the advice's side holds the fields the Program's edge returns"
+        assert E.fields(adv, TOPK, latent) == {p: tuple(i for i, gs in (wl.edge.outs if wl.edge else ()) if g in [h for h, _, _ in gs])
+                                               for p, g in EDGE_PORTS if g != "prefix"}, "the advice's side holds the fields the Program's edge returns"
     rids = {w: [r.request_id for r in wls[w].requests] for w in (2, 3)}
-    for w, held in ((2, [2, 1, 1, 2]), (3, [1, 1, 1, 1])):
+    for w, held in ((2, [2, 2, 1, 1, 2]), (3, [1, 1, 1, 1, 1])):
         params = dict(wls[w].fn.signature()[0])
-        assert wls[w].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
+        assert wls[w].ports == ("edge.kv_c", "edge.kv_pe", "edge.ik", "edge.iks", "edge.last")
         assert [len(field_types(params[p])) for p in wls[w].ports] == held
-        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[3].leaves]
+        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[4].leaves]
     names = [n for n, _ in wls[2].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n]
     assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
     assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [

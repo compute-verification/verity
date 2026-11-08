@@ -69,6 +69,8 @@ PARAMS: dict[str, Kind] = {
     "seed": Kind("certified", "the request's seed, its certified body's or the public default (`predict.steps.policy_of`)"),
     "prefix": Kind("block", "a request's first C positions' rows: the producers' outputs (a prefix-cache hit) or the last "
                             "window's edge ports (a carried request)"),
+    "prefix_kv_c": Kind("block", "the sparse-attention decoder's normed kv_c rows of the history, DsaRMSNorm_v1's, as ``prefix``"),
+    "prefix_kv_pe": Kind("block", "the sparse-attention decoder's roped k_pe rows of the history, RoPEHeadGptJ_v2's, as ``prefix``"),
     "prefix_ik": Kind("block", "the indexer's key rows of the history, as ``prefix``"),
     "prefix_iks": Kind("block", "the indexer's key scales of the history, as ``prefix``"),
     "last_token": Kind("block", "a carried request's last kept output, the last window's ``edge.last``"),

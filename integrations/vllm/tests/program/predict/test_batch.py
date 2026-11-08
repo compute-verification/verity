@@ -377,7 +377,7 @@ def test_r1_a_composition_reading_another_requests_input_is_refused():
         check_compiled(None, adv, ing, _compile(adv, ing, cross=True), plan)
 
 
-@pytest.mark.parametrize("group", ["schedule", "prefix", "prefix_ik", "prefix_iks", "last_token"])
+@pytest.mark.parametrize("group", ["schedule", "prefix", "prefix_kv_c", "prefix_kv_pe", "prefix_ik", "prefix_iks", "last_token"])
 def test_r1_a_batch_provenance_input_is_refused(group):
     """A `schedule` Input is the batch's, and so is a history Input (`batch.HISTORY_GROUPS`) on a request whose history R2 didn't
     check: neither a hit on its own tokens nor the state a window carries it in with."""
