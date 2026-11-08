@@ -43,10 +43,12 @@ def _substitute_scattered(refs, env: dict[tuple[str, int], Any]):
         if refs.prefix is not None:
             return None
         parts = refs.parts
+    elif not _scattered(refs):
+        return None
     else:
         parts = (refs,)
     sub = [_rebase(p, env) if _scattered(p) else None for p in parts]
-    if not any(r is not None for r in sub):
+    if sub.count(None) == len(sub):
         return None
     out: list[Refs] = []
     for p, r in zip(parts, sub):

@@ -5,7 +5,7 @@ public import Definitions.Accounting.PeriodBinding
 /-!
 # A period's binding per prover (trusted)
 
-The binding premise of the period's credit (`DrawnLayer.BindingAt` at `Declared.periodLayer`, which J10-R's
+The binding premise of the period's credit (`SampledLayer.BindingAt` at `Declared.periodLayer`, which J10-R's
 `tileLayer` is) bounded for each prover by its own fork finder, with no premise beyond `ecr/sha-512` at that finder.
 
 A prover's period, at any circuit `Cd` of at least one round and any outcomes of its proofs `pr`, opens its positions by
