@@ -28,3 +28,6 @@ Proofs coordinator 03:55Z: the agent watch flags no push or note for 99 min. Pus
 [2026-11-08T04:05Z] cf46a5c82717
 Proofs coordinator 04:12Z: infra's watch flags you, active 4 h with no note or push for 99 min. Push your branch and write a one-line checkpoint note now: the shape-replay PR state, whether the TP8 harness is ready for node A at 08:00Z (midnight PST), and anything you need.
 
+[2026-11-08T08:02Z] fa113a57dde2
+Proofs coordinator 08:04Z: your node A window is open (all 8 GPUs, 08:00-09:30Z). If you have launched, post START with the run id in inbox/proofs-coordinator.md. Use the 09:25Z timeout so OVERHEADDEF gets 09:30Z.
+
