@@ -417,8 +417,8 @@ REGISTRY = Registry(
     Setting("VERITY_ML_BOOLEAN_EXHAUSTIVE", flag, False, WHERE, "the Boolean lowerings' exhaustive tests run, on every f32 word "
             "and every pair of bf16 words (2^32 instances each, minutes): which tests run, never what a circuit computes"),
     # ---- verity_flock's suite
-    Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which the "
-            "suite's CUDA word tests build their kernels against where a GPU is present: which tests run"),
+    Setting("VERITY_ML_FLOCK_CUDA_GHASH", stripped, "", WHERE, "a Flock b684b12 checkout's cuda-ghash directory, which "
+            "test_zerocheck_fused and test_ring_switch build their kernels against where a GPU is present: which tests run"),
     schema=RECORD_SCHEMA)
 
 
