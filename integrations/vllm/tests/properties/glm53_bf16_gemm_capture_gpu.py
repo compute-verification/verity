@@ -1490,6 +1490,8 @@ def main(argv: list[str] | None = None) -> int:
     lo, hi = (int(v) for v in a.scan_m.split(":"))
     SCAN_M = range(lo, hi + 1)
     if a.scan_run:
+        if not scan_targets(set(a.only.split(",")), a.models.split(",")):
+            ap.error(f"--scan-run: {a.models} has no {a.only} case (MODELS): drop that model or phase")
         return scan_run(a)
     return 0 if run(a)["ok"] else 1
 
