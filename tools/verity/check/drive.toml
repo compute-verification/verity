@@ -20,9 +20,9 @@ regenerate_locks = true
 # its merge onto `next` at the sync, which leaves out what they refuse; the
 # vLLM integration's lint ratchets don't grow, and a change to a lint is judged like source. A sync's TOP holds every PR
 # below it, so a gate is priced at a sync's N PRs, not one:
-# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, one tick ran over 50 min).
+# ratchet_gate caches each change's verdict and judges it once per `main` (uncached, every sync judges all N again).
 # It is left out while `main` moves only on a full check of a prefix of `next`: that check runs the vLLM lints over the
-# whole tree, and each move of `main` re-judged every member cold (a 514-PR rebuild took 70 min, about 8 s a merge).
+# whole tree, and each move of `main` would judge every member again, cold.
 # A ready mark admits a PR: its merge onto `next` at the sync (a conflict, these gates) is the only check before it joins, and
 # the sync runs no preflight.
 # unread_gate (tools/verity/lean/unread_gate.py) refuses a merge that grows a package's unread Lean modules past its cap; one
