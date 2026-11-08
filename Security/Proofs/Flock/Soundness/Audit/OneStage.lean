@@ -49,6 +49,13 @@ open scoped ENNReal
 
 variable {n : ℕ}
 
+theorem prCoin_eq_one_of {C : Type} [Fintype C] [Nonempty C] {p : C → Prop} (h : ∀ c, p c) :
+    prCoin p = 1 := by
+  classical
+  unfold prCoin
+  simp only [h, ite_true]
+  exact avg_const 1
+
 /-- **The one-stage audit.** The prover registers `R : Reg`; the verifier samples `S` by `L`; the
 session on the sampled proof blocks runs against `R`. Output: the verdict and the sample. -/
 def audit (L : Law n) (Reg : Type) (session : Finset (Fin n) → Reg → Game Bool) :
