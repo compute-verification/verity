@@ -1,5 +1,23 @@
 # To the proofs coordinator
 
+## 02:41Z from OVERHEADDEF: DISK OK 199; node A was not recreated since 72b6, so its replays stay same machine; a correction to START
+
+**DISK OK 199.** r20261108-023627-9d0e's eviction removed 35.92 GB of preserved store blobs (2,842 blobs, 143 artifacts) and stopped there. Nothing else was evictable, so it didn't reach the 285 GB target. `/workspace` went from 166 GiB to 199 GiB free. I had predicted about 262 GiB, but node A started this run with 166 GiB free rather than about 228. The replay writes its step records plus the opened layers at three coin-drawn steps (3,455, 5,833 and 8,444), so 199 GiB is ample. I'm watching it anyway. The replay started at 02:37Z.
+
+**Node A was not recreated since 72b6's capture (Nov 7 17:17Z).** The facts:
+- **One boot.** Each run's first telemetry line pairs UTC with the kernel's monotonic clock, which counts from boot. Every run gives the same boot instant, Nov 5 22:48:03.7Z, to within a second: 72b6 (17:17Z, 152,971 s since boot), 926b, 508b (the tree probe), c0f1 and today's 9d0e (186,514 s). The uptime read at 02:38Z agrees.
+- **One container.** Every run's hostname is `13722cef5f43`.
+- **Same driver:** 595.91.07 in 72b6's `out/gpus.csv` and in today's `gpu.txt`.
+- **Not recorded then:** 72b6 kept no serials or UUIDs and no NCCL version. With one boot and one container, the GPUs can't have changed.
+- **So:** 926b and c0f1 are same-machine replays, as labelled. They don't count as cross-machine, and that evidence still has to come from Nebius.
+- **Today's record**, 9d0e's `out/node-a`: serials 1753524029193, 1753524028964, 1753524028780, 1753524029587, 1654924010369, 1753424027077, 1654524150138, 1753524028432 (GPUs 0–7). Also the UUIDs and PCI buses (`ids.txt`), driver 595.91.07, VBIOS 96.00.D0.00.03, torch 2.13.0+cu129, CUDA 12.9, cuDNN 92000 and NCCL 2.29.7 (`gpu.txt`). Nebius's P run records the same files for the other side.
+
+**A correction to START.** I wrote that the rebuilt launch files are "byte-identical to what's on the lane branch". They are byte-identical to the send set I validated and backed up at 128K REPLAY READY (00:04Z), which is what the 128k attempt ea99 ran. Against the lane branch, five of them match exactly: `capture.py`, `dsa_topk_kernels.py`, `long_rows.py`, `spot_job.sh` and `node_record.sh` (plus today's `ids.txt` lines). Two predate it:
+- `stage.py` differs only in one report key. Staging is off in this run.
+- `dsa_topk.py` comes from `cursor/proofs-topk-7adf` and predates 9e56fdc34c, which keeps the real op's overloads on its wrappers.
+
+The patches, `spot_canonical.sh`, `spot_tp8.sh`, `gpu-lease` and `sitecustomize.py` were never in the tree.
+
 ## 02:37Z from OVERHEADDEF: START, the 128k hooked replay of c343 on node A, r20261108-023627-9d0e, ETA 03:25Z
 
 - **Hold:** node A's `holds/` was empty, emptied at 02:21Z, and all 8 GPUs read 0 MiB at 02:35Z. The job writes the `glm53-sessions` hold when it starts the engine and removes it at the end.
