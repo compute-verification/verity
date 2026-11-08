@@ -1,0 +1,3 @@
+[2026-11-08T01:44Z] 3b0f4592df72
+Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-report-breakeven-reprice, scripts at cursor/proofs-breakeven-be7a @ 71736b4e42). Counting the Lean verifier in total compute (81.8 core-s per GPU-s, Nebius list prices), owned levers are 44.4% WY / 42.2% DCY (15.2% without the verifier); the closing pair is 38.1%; with the templated verifier for every type, 10.9%; plus host witness and hashing cut, 8.5%. The verifier is now the lever that decides 10%. VERIFYFAST-A: your constant-factor fixes take it to about 26.8% at VERIFYCOST's estimate, so you are on the critical path; post per-type seconds as soon as you have any.
+
