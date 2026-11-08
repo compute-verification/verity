@@ -14,12 +14,13 @@ roots otherwise. What each opening holds, its value and its data, is an opener's
 program's whatever the opener: at most the largest number of gates one of the partition's proof blocks needs opened
 (`length_le`).
 
-* `needs`: the gates unit `u`'s proof block needs opened, none off the partition;
+* `needs`: the gates unit `u`'s proof block needs opened, each once, none off the partition;
 * `rootsAt`: the roots gate `g`'s opening is under;
 * `reveal`: one opening per gate `needs` lists, at that gate, under its roots;
 * `reveals`: the largest number of gates one of the partition's proof blocks needs opened;
 * `frameAt`: the opener that reads a code's reveal, its first opening at the gate under the roots;
-* `mem_reveal`, `needs_eq`, `rootsAt_eq`: what `reveal` holds, at a unit in the partition and the two-stage design.
+* `mem_needs`, `mem_reveal`, `rootsAt_eq`: what `reveal` holds, at a unit in the partition and the two-stage design:
+  an opening at each gate `Prog.Needs` names, under `rootsAt`, and nothing else.
 -/
 
 @[expose] public section
@@ -31,11 +32,11 @@ open Claims Claims.Sampling SamplingDeploy
 variable (part : AuditStatement → Option Partition) (two : AuditStatement → Option Design.Two)
   (ir : Seen → ℕ → List Msg)
 
-/-- **The gates unit `u`'s proof block needs opened** at the statement `s` (`Prog.needsList`); none where the partition
-doesn't evaluate or has no block `u`. -/
+/-- **The gates unit `u`'s proof block needs opened** at the statement `s` (`Prog.needsList`), each once; none where
+the partition doesn't evaluate or has no block `u`. -/
 def needs (s : AuditStatement) (u : ℕ) : List ℕ :=
   match part s with
-  | some P => (P.blocks[u]?.map s.prog.needsList).getD []
+  | some P => (P.blocks[u]?.map fun b => (s.prog.needsList b).dedup).getD []
   | none => []
 
 /-- **The roots gate `g`'s opening is under**, for unit `u` at the transcript `v`: the interior roots `ir v ρ` of `u`'s
@@ -63,7 +64,7 @@ def reveal (s : AuditStatement) (u : ℕ) (v : Seen) (wF : Claims.Flock.Wit) : L
 needs opened, at the statement `x` parses to; `0` where it doesn't parse or the partition doesn't evaluate. -/
 def reveals (parse : Msg → Option AuditStatement) (x : Msg) : ℕ :=
   match parse x with
-  | some s => (((part s).map fun P => P.blocks.map fun b => (s.prog.needsList b).length).getD []).foldr max 0
+  | some s => (((part s).map fun P => P.blocks.map fun b => (s.prog.needsList b).dedup.length).getD []).foldr max 0
   | none => 0
 
 /-- **The opener that reads a code's reveal**: `f`'s first opening at gate `g` under the roots `r`, and an empty
@@ -82,13 +83,18 @@ theorem le_foldr_max {l : List ℕ} {a : ℕ} (h : a ∈ l) : a ≤ l.foldr max 
     · exact (ih h).trans (Nat.le_max_right _ _)
 
 theorem needs_eq {s : AuditStatement} {u : ℕ} {P : Partition} {b : List ℕ} (hP : part s = some P)
-    (hb : P.blocks[u]? = some b) : needs part s u = s.prog.needsList b := by
+    (hb : P.blocks[u]? = some b) : needs part s u = (s.prog.needsList b).dedup := by
   simp [needs, hP, hb]
+
+/-- **`needs` lists exactly what the proof block's correctness reads** (`Prog.Needs`). -/
+theorem mem_needs {s : AuditStatement} {u g : ℕ} {P : Partition} {b : List ℕ} (hP : part s = some P)
+    (hb : P.blocks[u]? = some b) : g ∈ needs part s u ↔ s.prog.Needs b g := by
+  rw [needs_eq part hP hb, List.mem_dedup, ← Prog.needs_iff]
 
 theorem length_needs_le (parse : Msg → Option AuditStatement) {x : Msg} {s : AuditStatement} (hx : parse x = some s)
     (u : ℕ) : (needs part s u).length ≤ reveals part parse x := by
   have hr : reveals part parse x =
-      (((part s).map fun P => P.blocks.map fun b => (s.prog.needsList b).length).getD []).foldr max 0 := by
+      (((part s).map fun P => P.blocks.map fun b => (s.prog.needsList b).dedup.length).getD []).foldr max 0 := by
     simp only [reveals, hx]
   rw [hr]
   cases hP : part s with
