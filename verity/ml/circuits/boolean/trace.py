@@ -778,24 +778,25 @@ def folded(name: str, version: int, build: Callable, n_args: int, n_out: int, do
     (`pattern_of`): over the pattern's parameters, as one ``Array<n, Value<1>>``, to ``Array<n_out, Value<1>>``, each argument
     a constant or the XOR of parameters P names. A builder reaches it through `CallTracingCircuit.fold_call`, so a Definition
     traced with calls (`trace`) calls it where its builder would have written ``build``'s gates. It has no ``build``: a lowering
-    that runs builders (`verity_flock.ir_lower`) lowers the caller's builder, which writes those gates again."""
+    that runs builders (`verity_flock.ir_lower`) lowers the caller's builder, which writes those gates again, and runs its
+    ``fold_build(S, C, x)`` (``build`` at the pattern ``S.P``) only on an activation no caller's builder holds."""
+
+    def fold_build(S, C, x):
+        """``build`` on the forms ``x``, the parameters, at the pattern ``S.P``."""
+        def arg(e):
+            if isinstance(e, str):
+                return ONE if e == "o" else ZERO
+            f = x[e[0][0]]
+            for i in e[0][1:]:
+                f = f ^ x[i]
+            return f.inv() if e[1] else f
+
+        return list(build(C, [arg(e) for e in parse_pattern(S.P, n_args)[0]]))
 
     @lru_cache(maxsize=None)
     def traced(P: str) -> Traced:
-        entries, n = parse_pattern(P, n_args)
-
-        def b(C, x):
-            def arg(e):
-                if isinstance(e, str):
-                    return ONE if e == "o" else ZERO
-                f = x[e[0][0]]
-                for i in e[0][1:]:
-                    f = f ^ x[i]
-                return f.inv() if e[1] else f
-
-            return list(build(C, [arg(e) for e in entries]))
-
-        return trace(b, [Array(n, BL.BIT)], Array(n_out, BL.BIT))
+        _, n = parse_pattern(P, n_args)
+        return trace(partial(fold_build, SimpleNamespace(P=P)), [Array(n, BL.BIT)], Array(n_out, BL.BIT))
 
     def signature(S):
         _, n = parse_pattern(S.P, n_args)
@@ -819,6 +820,7 @@ def folded(name: str, version: int, build: Callable, n_args: int, n_out: int, do
     d = CompositeDefinition(name, version, ("P",), signature, body, conformance=conformance, doc=doc, register=register,
                             refuse=refuse)
     d.fold = build  # type: ignore[attr-defined]
+    d.fold_build = fold_build  # type: ignore[attr-defined]
     d.n_args, d.n_out = n_args, n_out  # type: ignore[attr-defined]
     d.traced = traced  # type: ignore[attr-defined]
     FOLDED[name] = d

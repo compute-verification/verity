@@ -9,8 +9,11 @@ import hashlib
 
 import pytest
 
+from verity.ml.circuits.boolean import trace as TR
+from verity.ml.circuits.boolean.forms import const_bits
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.gates import embedding as E, frame_v3 as F, hm96 as H, rowleaf as R
+from verity.ml.commitments.gates.sha512 import IV, Sha512CompressFolded
 from verity_flock.ir_lower import _sha256, layout, netlist_pieces, whole
 
 ROW = "hm96-sha512/row/v2"
@@ -49,3 +52,12 @@ def test_a_call_trace_lowers_to_the_whole_circuit(name: str) -> None:
     for piece in netlist_pieces(lay, "unit"):
         h.update(_sha256(piece).digest())
     assert (lay.useful, h.hexdigest()) == PINS[name]
+
+
+def test_a_folded_definition_alone_is_lowered_by_its_builder() -> None:
+    """A compression no part holds (circuit-check's binding) is lowered by its own builder at its pattern (``fold_build``), with
+    its commits, not gate by gate (minutes of linear forms growing round over round): its trace's ANDs."""
+    iv = ["o" if b.c else "z" for v in IV for b in const_bits(v, 64)]
+    P = TR.encode_pattern(iv + [((i,), 0) for i in range(1024)])
+    C = whole(bind(Sha512CompressFolded, P=P)).circuit()
+    assert C.counts()["ands"] == Sha512CompressFolded.traced(P).counts["and"]
