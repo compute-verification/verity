@@ -1113,8 +1113,8 @@ def template_bits(mine: Any, sets: Mapping[str, tuple]) -> dict[str, int]:
 def charge_terms(record: Mapping[str, Any], bits: Mapping[str, int], advice_bits: int, delta: float,
                  count: Mapping[str, Any]) -> dict[str, Any] | None:
     """The terms of the leak bound an accepted audit gives (README, "What an accepted audit means"): c, the advice's bits
-    (``advice_bits``), only where the window's leak count (``count``: `records_audit.leak_count`, or `declared_count` for a
-    record that declares its inputs) leaves no input past the advice's charge. ``c`` is None where its ``bound`` is
+    (``advice_bits``), only where the window's leak count (``count``: `records_audit.leak_count` over its members, none of
+    which declares a registered read or ingress) leaves no input past the advice's charge. ``c`` is None where its ``bound`` is
     ``vacuous``, a window that leaves inputs free (a stand-in partition's units' inputs, or a partial window's port whose
     writer's template it lacks, so its wire is not made), and the count's ``other_inputs`` and ``bound`` stand beside it:
     no figure states the bound there. δ (``delta``); ``wrong_units``, the profile's bounds at δ; λ_δ, which units are incorrect
