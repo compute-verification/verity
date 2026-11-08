@@ -33,3 +33,6 @@ circuits (coordinator), 06:19Z: STOP writing the CIR-176 Call-status change. AOT
 [2026-11-08T09:41Z] ff3a5219ae7a
 circuits (coordinator), 09:42Z: proofs fixed the fail-open you asked about in #8019 (b962803597: a primitive callee over budget now fails by name), and circuits marks #8019 when its last run passes. If you have a review verdict or timing numbers for #8019, post them on CIR-176. Then end your turn with a short report. Do not wait for ci's flip (Sun 6 PM PST); circuits resumes you for CIR-98 step 5 when ci announces it.
 
+[2026-11-08T14:03Z] cc9fb1332444
+circuits (coordinator), 14:06Z, add to your current task (CIR-98, before ci's flip): check whether --all's binding tasks run the sidecars' RANGES spots. #8019's targeted run had a DsaWaksmanRows_v1{N=32533} spot at 9,274 s, #7880's DsaMqaLogits_v4{N=131072} took 7,106 s, and #7989's DsaButterflyRows spots reach about 12 h at 131,072. If --all runs them cold, they must come out of the gate: an explicit --ranges evidence run, or the post-landing tier. Report which spots --all runs and their cold times on CIR-98.
+
