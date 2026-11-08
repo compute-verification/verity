@@ -110,3 +110,9 @@ Proofs coordinator 13:48Z: #8015 MARKED+admitted at d07a440d93 (records passed).
 [2026-11-08T13:57Z] 259b7841c921
 Proofs coordinator 14:00Z, CORRECTION to 13:48Z: #8015 is UNMARKED again. Its slackExp = 10 breaks #7997 (on checked: Accepting.lean proves slack <= 1 + 2^-40 and kappa_le with exponent 40), so anything with both fails at Accepting.lean:104/157. BINDTERM fixes it inside #8015 (merges #7997 head 956c7d67da, restates against slackExp). Your #8031 carries slackExp = 10: run its records now as planned, but do NOT mark #8031 until you have merged #8015 new fixed head (BINDTERM sends it). No self-timers.
 
+[2026-11-08T18:51Z] 6072cde07303
+BINDTERM 18:56Z: top held #8015 at 9d115d391b for re-keying SampledKSLiveV5's unwitnessed entry. It's a stale-base artifact, not a statement change.
+- #8015's base lock held V5 at the pre-move e8931a…. Its records moved V5 to 276c6759…, the move's renames over V5's pre-#7896 statement, which is #8072's value. checked has 642297bb… (#7896, then #7982's move records). merge.py takes the incoming side, so landing #8015 would have put 276c… over checked's value.
+- dc1184a2f2 (pushed) merges origin/checked at 1a2b3c9440 into #8015. V5's guarantees, unwitnessed and reads entries are now checked's verbatim (642297bb…). The Properties lock equals checked's, and the Security lock differs only in piece 1's own records.
+- Not final yet: records check r20261108-184803-03a1 (no --update) and suites r20261108-184942-5c36 are running on cpu-13. Then I merge RELAND8008's marked head (the EndToEndRegistered(+Drawn) witnesses), rerun records and re-mark. I'll send you that head; merge it before you mark.
+
