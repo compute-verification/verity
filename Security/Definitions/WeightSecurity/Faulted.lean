@@ -13,6 +13,7 @@ blocks `φ` names writing `φ`'s values; a checked population's run is unique (`
 egress is a function of the inputs and the pattern alone.
 
 * `Outsider.withFaults O φ₀`: the outsider asking the faulted function, each query with the pattern `φ₀` beside it;
+* `NoFault size φ₀`: `φ₀` is the empty pattern, of size `0`;
 * `faultChannel … size T M K`: the covert channel of a deployment whose releases are faulted runs. A covert string is
   each window's fault pattern, the sizes summing to at most `M`, and then the served channel's string: each window's
   advice and timing bucket, an overwrite of at most `K` released values, and the halt;
@@ -34,6 +35,10 @@ output on what it saw with the patterns dropped. -/
 def Outsider.withFaults (O : Outsider R X M Θ') (φ₀ : F) : Outsider R (X × F) M Θ' where
   query r h := (O.query r (h.map fun e => (e.1.1, e.2)), φ₀)
   out r h := O.out r (h.map fun e => (e.1.1, e.2))
+
+/-- **The empty fault pattern**: `φ₀` names no proof block, so it spends none of the budget. It is the pattern beside
+each honest query, and the one the fault channel asks with past its `T` windows. -/
+def NoFault (size : F → ℕ) (φ₀ : F) : Prop := size φ₀ = 0
 
 /-- **The fault channel** over `T` windows, at fault patterns `F` of sizes `size`. A covert string is each window's
 fault pattern, the patterns' sizes summing to at most `M`; each window's advice and timing bucket; an overwrite of at

@@ -155,7 +155,7 @@ undetected with probability at most `δ` (`Served.UndetectedLe`), then the outsi
 at most `Pr[gen ω ∉ Typ] + |S| · N^(λ - 1) · p + δ + Pr[a release isn't faithful]`. `|S|` is the fault channel's
 covert strings, `N` times the served channel's at the overwrite budget `(L + 1) · |O|`, so the faults cost
 `N^λ = 2^(λ · C_arb)`, where `TheftServed` charges every value their reach `E` can overwrite. `φ₀` is the empty
-pattern, of size `0`. -/
+pattern (`NoFault`). -/
 def TheftFaulted : Prop :=
   ∀ {Ω R Θ Q Adv O V Tick F Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
     [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick] [Fintype F]
@@ -164,7 +164,7 @@ def TheftFaulted : Prop :=
     (Af : Set (Outsider R ((Q × Adv) × F) (O → V) Θ')) (p lam : ℝ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L M : ℕ) (δ : ℝ≥0∞)
     (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),
-    size φ₀ = 0 →
+    NoFault size φ₀ →
     HonestUseHard C gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T A p →
     FaultedUseHard C Cf size gen (fun θ θ' => θ ∈ Typ ∧ Stolen θ θ') T M A Af lam →
     Simulable Af (Ou.withFaults φ₀) (faultChannel R Q Adv O V Tick F size T M ((L + 1) * Fintype.card O)) →
@@ -182,7 +182,7 @@ the budget `1` and `λ = 1`. Neither the served function nor the faulted one rea
 them with probability at most `1/256`, faults or not. Every class holds the user with each covert string written in,
 and the honest run's audit leaves no incorrect proof block undetected. -/
 def TheftFaultedHonest : Prop :=
-  ToyServed.size none = 0 ∧
+  NoFault ToyServed.size none ∧
     HonestUseHard ToyServed.C ToyServed.gen (fun θ θ' => θ ∈ Set.univ ∧ ToyServed.Stolen θ θ') 2 ToyServed.anyone
       (1 / 256) ∧
     FaultedUseHard ToyServed.C ToyServed.Cf ToyServed.size ToyServed.gen
