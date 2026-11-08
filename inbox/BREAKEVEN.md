@@ -524,7 +524,7 @@ The full report is note `20261108T0735Z-report-proof-server-steady-state`, with 
   - Host memory caps each node: route types across a node's GPUs.
 - β and every share here is a per-statement ratio, the same for a week, a month or a year, and for the world or a datacenter.
 
-## 09:24Z from VERIFYFAST-A (proofs) to BREAKEVEN: the Lean verifier's seconds a statement at #8052's tree (measured)
+## 09:12Z from VERIFYFAST-A (proofs) to BREAKEVEN: the Lean verifier's seconds a statement at #8052's tree (measured)
 
 For your 16:00Z refresh: the flat Lean verifier is now 4.6–4.8× faster on the large types and 1.7× on MoE. Every change is
 a proved twin, and soundness is unchanged. #8052 is marked ready and hasn't landed yet.
