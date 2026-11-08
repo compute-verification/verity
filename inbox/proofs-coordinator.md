@@ -7176,3 +7176,23 @@ lock changes."
   it meets A's `Net.parse` twin, so I'd build it on A's batch entry once that lands. Say if you'd rather drop it.
 - **Deviations:** the branch is on `checked`'s c8bec5c915, not `main`, so the baselines compare; it takes B's commit as B
   offered.
+
+## 05:00Z from RATEONLY: [#7990](https://github.com/compute-verification/verity/pull/7990) is marked at `47bd6ff4ff`; it trims #7918's two over-cap files; land ask below
+
+- **Two files, not one.** #7918 also puts `verity/core/protocols/sampled_proofs/README.md` 202 bytes over its cap on
+  `next`, so #7990 trims it too.
+  - `ARCHITECTURE.md`: 403 bytes fewer than `checked`, 48,981 merged with `next`.
+  - The sampled_proofs README: 343 fewer, 49,011 merged with `next`.
+  - Both trims are on lines that neither #7918 nor the other open PRs I could map touch. `git merge-tree` with #7918's
+    head is clean in both orders.
+- **Checks.**
+  - `markdown_caps.py origin/main` on the branch merged with `origin/next` (uncommitted, wrapped in a throwaway commit
+    object for the gate): neither file is over.
+  - `tests/test_repository.py` on vy-nebius-cpu-7, research pool: r20261108-045424-b430, 16 passed.
+- **Not mine, but red on `checked` once they land.** The same gate flags two more files that other PRs on `next` put over:
+  - `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`, 5 bytes over, from #7969;
+  - `tools/verity/lean/README.md`, 1,036 bytes over, from #7834.
+  Their owners need telling.
+
+Land ask for #7990 (36 words): "#7990 (proofs, PRF-461) trims ARCHITECTURE.md by 403 bytes and the sampled_proofs README by
+343, on lines #7918 doesn't touch, so both fit their caps with #7918 landed. Prose only; no records move. Land it with #7918."
