@@ -804,8 +804,6 @@
    "FlockSoundness.Assumptions.SHA512CRStrict": "SHA-512 collision resistance: a finder of at most q evaluations finds a collision with probability at most q^2 / 2^513 (cr/sha-512)",
    "FlockSoundness.Assumptions.UniformRandomBytes": "the verifier server's uniform randomness: the bytes read from the operating system are uniform (A3)",
    "FlockSoundness.Assumptions.UniformRandomBytesTest": "the verifier server's uniform randomness: the bytes read from the operating system pass a test as uniform bytes do, up to its advantage (A3 at one test)",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJ": "the honest verifier server's record custody: the record flock-verify --zk reads is the one its challenger wrote, and the draw file the one flock-verify draw printed",
-   "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw": "the honest verifier server's record custody: the record flock-verify --zk reads is the one its challenger wrote, and the draw file the one flock-verify draw printed",
    "Verity.Assumptions.ChallengerLogsCoins": "the honest verifier server's log and flip order: the challenger logs every coin it releases, and each is its own flip",
    "Verity.Assumptions.FlipsAfterRecorded": "the honest verifier server's log and flip order: the challenger flips a coin only after its log before that coin is fixed",
    "Verity.Assumptions.VerifierReadsLog": "the honest verifier server's log and flip order: the verifier reads its coins only from the challenger's log, in order"
