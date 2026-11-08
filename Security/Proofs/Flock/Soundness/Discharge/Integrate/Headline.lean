@@ -8,7 +8,7 @@ public import Proofs.Flock.Soundness.Discharge.Layout.Scope
 # The headline at the executable, with every open guarantee named
 
 `Prog.flock_headline` is about the unsalted batched session. At the production statements (`hm96-sha512/v1` leaves) an
-honest transcript fails its openings check, so the headline the executable instantiates is e2e-exec's salted, one-table
+honest transcript fails its openings check, so the headline the executable instantiates is the salted, one-table
 form at flock-verify's verdict, `Prog.flock_headline_live_on`, whose hypotheses are `Prog.flock_headline`'s (`pp`,
 `hConst`, `hZero`, `lay`, `rs`, `hHm`, A3, `hKS`, `hCR`) with the refinement discharged up to the decoder (`hdec`, the
 decoder right at the sampling design's samples, `DecodesOn`).
@@ -42,7 +42,7 @@ variable {c : Flock.Circuit} (hU : Built c.unit) {n : ℕ} {I : Inputs} (ht : I.
   (hpub : HmRow.loadPublic I.tags c I.publicFile = .ok pub) (hpt : pub.tables = none)
   (hscope : Layout.scopeOk c = true) {Reg : Type}
 
-/-- **`lay` at the session's tables**: e2e-layout's `keyedLayout` at `sitesAt`, the program's outputs the returned
+/-- **`lay` at the session's tables**: `Layout.keyedLayout` at `sitesAt`, the program's outputs the returned
 outputs' bits, the rows' salts at the `hm96` slots' salt columns, the registration's bits the population's returned
 outputs. -/
 noncomputable abbrev layAt :
@@ -52,7 +52,7 @@ noncomputable abbrev layAt :
         (Layout.keyPlace (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n))) :=
   Layout.keyedLayout (sitesAt_parse ht dj x₀ hc) (Layout.outsOf c hU n) Hm.saltCol fun _ => pub
 
-/-- **`rs` at the session's tables**: e2e-layout's `keyedRowsOuts` at `sitesAt`, its circuit conditions from
+/-- **`rs` at the session's tables**: `Layout.keyedRowsOuts` at `sitesAt`, its circuit conditions from
 `scopeOk` (`Layout.scopeOk_spec`), with `hsite` from `sitesAt_bcSite` at a public file without shared-row tables
 (`hpt`). -/
 noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) (Reg := Reg)) :=
@@ -60,7 +60,7 @@ noncomputable abbrev rsAt : Binding.HmRows (layAt hU ht hc dj x₀ (pub := pub) 
     (Layout.scopeOk_spec hU hscope).2.2 (Layout.scopeOk_spec hU hscope).2.1
     (sitesAt_bcSite ht dj x₀ hc (Layout.scopeOk_spec hU hscope).2.1 hpub hpt)
 
-/-- **`hHm` at the session's rows**: e2e-hm's `keyedRowsOuts_computes`. In a satisfying witness of a sampled proof block's
+/-- **`hHm` at the session's rows**: `Hm.keyedRowsOuts_computes`. In a satisfying witness of a sampled proof block's
 table, each row port's `b ‖ c` at the unit's site is the commit string of the row's bytes under the salt at its
 `hm96` slot. -/
 theorem rsAt_computes : (rsAt hU ht hc dj x₀ hpub hpt hscope (Reg := Reg)).Computes :=
@@ -86,13 +86,12 @@ Its hypotheses, past the session's inputs:
   unit has only its leaf group, returns the outputs, has `unitLog ≤ 32`, reads only port bits among its inputs, and
   has only `sha512/row/v1` rows (`v1Ports`: each port `v2 = false`, unsegmented, `bits = 16 · words`, `0 < chunks`).
   `Layout.scopeOk_spec` gives `rs`'s `h1`, `ho` and `PortReads`, `Layout.scopeOk_ports` gives `hHm`'s v1 rows;
-  e2e-layout's `#eval` on the circuit prover's composed RoPE circuit returns `true`;
-* `hdec` (`DecodesOn`, R11b, at the sampling design's samples only), open: owner e2e-exec (the framing decoder, `wr` as the server's
+* `hdec` (`DecodesOn`, at the sampling design's samples only), open (the framing decoder, `wr` as the server's
   record, `opn`, `fin`, `capOf`). At a sample flock-verify accepts whose record carries the challenger's sample `dj S`,
   proving `S`, with link points `mPts`, the table is `stmtOf` of the statement it accepted (`tableAt_of_accepts`, by
-  `model_eq_stmtOf`), the statement e2e-exec's acceptance plays. At an accepted sample whose link points are not `mPts`
+  `model_eq_stmtOf`), the statement the executable's acceptance plays. At an accepted sample whose link points are not `mPts`
   the table is unsatisfiable and `hdec` fails there, so `hdec` also needs every accepted sample of the sampling design to set up at
-  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (e2e-exec's `setupH_mPts_drawn`, `setupH_mPts_eq`);
+  `mPts`; setupH's link points are `mPtsOf c.g |D.proved|` (`Exec.setupH_mPts_drawn`, `Exec.setupH_mPts_eq`);
 * the assumptions of record: A3 (`hA3`, `uniform/io-getrandombytes`), `cr/sha-512` for the knowledge finders (`hKS`),
   `ecr/sha-512` for the link finders (`hCR`); A6 (`uniform/flock-coin-server`) is the live session `liveTable` itself;
 * numeric conditions and the strata's match (`hks`, `hS`, `hk`, `hRw`, `hM`, `hρ`, `hr`, `ht'`).

@@ -68,7 +68,7 @@ DEFAULT_TTL = "6h"
 ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2", "ListMultipartUploads", "ListParts",
            "PutObject", "CreateMultipartUpload", "UploadPart", "CompleteMultipartUpload", "AbortMultipartUpload")
 # `research run --store-read`: a second, read-only key for the workload itself (its `research data fetch`), staged apart from
-# custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment (INF-70)
+# custody's in <root>/requests/<run-id>/store-read/; unlike custody's it is put in the workload's environment
 READ_DIR_NAME = "store-read"
 READ_ACTIONS = ("HeadObject", "GetObject", "GetBucketLocation", "ListObjectsV1", "ListObjectsV2")
 PUSH_TRIES = 3

@@ -52,7 +52,8 @@ form, bits and efficiency are the compiled sampled verifier's at the deployed re
 * `ScopeMatches`, from the deployed design's well-formedness (`scopeMatches_of`, `designWellFormed`) where the scope
   check is the readable scope's program part;
 * `Universal`, from the unit's Definition (`Universal_of`);
-* `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`);
+* `Binding`, at hm96 leaves under the registered frame-v3-sha512 path check (`Binding_of_hm96`); at a commitment of
+  any form, a hypothesis (`sampling_assembled_bind`);
 * `FaultyBoundary` (`faultyBoundary`).
 
 ## What remains: the hypotheses
@@ -95,6 +96,15 @@ def Deploy.mask {Coin Col T : Type} (D : Deploy Coin Col T) (Nonce Rest : Type) 
   { toDeploy := D, Nonce := fun _ => Nonce, Rest := fun _ => Rest, tapeOf := fun _ => tapeOf, S := S }
 
 set_option synthInstance.maxSize 1024 in
+/-- **The sampling claims at a deployment whose commitment binds** (`hbind`), at every hash: `sampling_assembled`'s
+conclusion, at a commitment of any form. -/
+theorem sampling_assembled_bind {T : Type}
+    (D : Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T) (H : Msg → Msg) (hbind : Binding D)
+    (hslots : DrawSlots D) (hprog : ProgramScope D) (huniv : UniversalIs D) (hComplete : Complete H D) :
+    ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ Complete H D :=
+  ⟨scopeMatches_of D hslots hprog, hbind, Universal_of huniv, faultyBoundary, hComplete⟩
+
+set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at a deployment**, at every hash: the readable scope is the verifier's; the trace commitment
 binds; the universal unit runs its private circuit; the incorrect set is the boundary form's; and completeness. The
 hypotheses are what remains (the module docstring says what discharges each). -/
@@ -105,8 +115,7 @@ theorem sampling_assembled {T : Type}
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hslots : DrawSlots D) (hprog : ProgramScope D) (huniv : UniversalIs D) (hComplete : Complete H D) :
     ScopeMatches D ∧ Binding D ∧ Universal D ∧ FaultyBoundary ∧ Complete H D :=
-  ⟨scopeMatches_of D hslots hprog, Binding_of_hm96 D own at_ row salt π layer hcommit hrow, Universal_of huniv,
-    faultyBoundary, hComplete⟩
+  sampling_assembled_bind D H (Binding_of_hm96 D own at_ row salt π layer hcommit hrow) hslots hprog huniv hComplete
 
 /-- **The masked record's decoder lists within the radius**: it is the masked radius decoder
 (`FlockDeploy.decode_zk`, `FlockDeploy.listWithin_zk`). -/

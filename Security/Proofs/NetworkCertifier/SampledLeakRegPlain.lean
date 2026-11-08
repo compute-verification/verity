@@ -49,10 +49,10 @@ import Proofs.NetworkCertifier.SampledLeakReg
 `sampledLeak_registered` is stated at any compiled sampled verifier. At the deployed sampling record over any Flock
 record `F` (`SamplingDeploy.deployOf F c`) its trace commitment is `F`-free (`SamplingDeploy.deployOf_commit`), hm96
 leaves under the verifier's own registered path check, and binds at every `H` with no hypothesis (`binds_deployOf`, from
-`Binding_of_regPath`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the plain
-record as a compiled verifier (`SamplingDeploy.compiled` at `deployPlainTrim`) the bound takes only its `Compiled.KS`
-(`sampledLeak_registered_plain`), which the compiler at Flock gives at SHA-512 at the deployed relation from Flock's
-plain KS (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.plain_KS`) and the code's facts
+`SamplingDeploy.commit_binds`). So the masked and plain records share one commitment (`deployPlain_commit`), and at the
+plain record as a compiled verifier (`SamplingDeploy.compiled` at `deployPlainTrim`) the bound takes only its
+`Compiled.KS` (`sampledLeak_registered_plain`), which the compiler at Flock gives at SHA-512 at the deployed relation from
+Flock's plain KS (`SamplingDeploy.ks_compiled`, `FlockDeploy.KS.plain_KS`) and the code's facts
 (`sampledLeak_registered_plain_sha512`). `SampledAuditAccepted` is discharged by its proof.
 -/
 
@@ -65,8 +65,7 @@ open Claims Claims.Sampling
 /-- **The deployed commitment binds, at any Flock record**: hm96 leaves under the registered path check, at every `H`. -/
 theorem binds_deployOf {T : Type} (F : Claims.Flock.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) T)
     (c : SamplingDeploy.Code) (H : Msg → Msg) : (SamplingDeploy.deployOf F c).commit.Binds H :=
-  Binding_of_regPath _ c.own c.at_ _ c.π c.layer (SamplingDeploy.deployOf_commit F c)
-    (fun H => hm96Leaf_binds H (SamplingDeploy.row_places c.place c.bits) c.salt) H
+  SamplingDeploy.commit_binds c H
 
 /-- The masked and plain records' trace commitment is one. -/
 theorem deployPlain_commit (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation)

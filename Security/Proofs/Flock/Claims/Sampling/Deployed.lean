@@ -47,15 +47,16 @@ deployed plain verifier at the trimmed record Flock's plain KS is stated at, `Fl
 * `flock`: `F`; the sessions' `E^rep` waits and truncation are the deployment's (`innerWaits`, `innerCap`:
   `Numbers.waits`, `Numbers.cap`).
 * `commit`: hm96 leaves (`hm96Leaf`) of `sha512/row/v2` bit rows holding the opened bit at its place (`row`), under the
-  verifier's own registered frame-v3-sha512 path check (`regPath`); the row's other bits, the salt and the path are
-  read off the opening's data, as the reveal encodes them.
+  verifier's own registered frame-v3-sha512 path check (`regPath`) at the ports the opening's position reads under its
+  roots (`Code.ownAt`, `own` unless the code sets it); the row's other bits, the salt and the path are read off the
+  opening's data, as the reveal encodes them.
 * `universal`: the universal unit's Definition (`universalProg`).
 * `εtable`, `weight`: Flock's per-table bounds, `2^{-205}` on a table's error (`FlockDeploy.tableErr_zk_le`) and
   `2^33` on its weight (`FlockDeploy.tableWeight_zk_le`), times the most tables a session at the statement sets up
   (`Code.tables`): each session's sums are at most these (`FlockDeploy.εtable_le`, `FlockDeploy.weight_zk_le`).
 * `openCalls`: the most openings one session reveals (`Code.reveals`) times one opening's calls, at most
   `4 + depth own` (`opens_calls_le`): the leaf's three, the leaf's frame, and one node per level of the deepest
-  registered port.
+  registered port, no position's ports being deeper (`Code.ownAt_depth`).
 * `Tape`, `P`: the sampled reference prover (`Reference.refP F.P`), at the code's framing, on one of `F`'s tapes per
   session statement: in each session, `F`'s reference prover on what it reveals, checked by this commitment.
 * `δc`: the sessions' count (`Code.sessions`) times the largest of `F`'s error `F.δc` (at `deployZk`,
@@ -67,10 +68,11 @@ deployed plain verifier at the trimmed record Flock's plain KS is stated at, `Fl
   prover's framing.
 
 What is then a fact about the record at any `F`: its `ε_table` is nonnegative (`deployOf_εtable_nonneg`), its
-commitment is hm96 leaves under the registered path check (`deployOf_commit`, `rfl`) of rows that place the value
-(`row_places`), its universal unit is the Definition's (`universalIs_deployOf`), its opening check's calls are bounded
-by the reveal count (`openCallsLe_deployOf`, from `RevealsLe`), and the inner numbers are Flock's where `F`'s are
-bounded by the tables' (`innerNumbers_deployOf`). `sampling_deployed_of` is `sampling_assembled` at the record, those
+commitment is the code's (`deployOf_commit`, `rfl`), which binds at every `H` (`commit_binds`: at each opening's roots
+and position, hm96 leaves of rows that place the value, `row_places`, under the registered path check at the ports
+there), its universal unit is the Definition's (`universalIs_deployOf`), its opening check's calls are bounded by the
+reveal count (`openCallsLe_deployOf`, from `RevealsLe`), and the inner numbers are Flock's where `F`'s are bounded by
+the tables' (`innerNumbers_deployOf`). `sampling_deployed_of` is `sampling_assembled_bind` at the record, those
 discharged; `sampling_deployed` adds zero knowledge at `deploy`. The inner numbers are Flock's at `deploy` where every
 session is in Flock's masked scope (`SessionsIn`, `innerNumbers_deploy`), and at `deployPlain` where every session is in
 Flock's plain scope (`SessionsInPlain`, `innerNumbers_deployPlain`): the compiled sampled verifier's knowledge soundness
@@ -109,13 +111,28 @@ theorem row_places (place : ℕ → (w : ℕ) × Fin w) (bits : Msg → ℕ → 
   simp only [rowBits] at hb
   simpa using congrFun (List.ofFn_inj.1 hb) (place p).2
 
-/-- **The deployed trace commitment**: hm96 leaves of the rows under the verifier's own registered path check. -/
-def commit (c : Code) : CommitmentScheme Bool :=
-  pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer
+/-- **The deployed trace commitment**: hm96 leaves of the rows under the verifier's own registered path check, at the
+ports the opening's position reads under its roots (`Code.ownAt`). -/
+def commit (c : Code) : CommitmentScheme Bool where
+  opens roots o :=
+    (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (c.ownAt roots o.pos)) c.layer).opens roots o
+  layer := c.layer
 
-/-- The deepest registered port's levels. -/
-def depth (own : Array _root_.Flock.Registered.Port) : ℕ :=
-  own.toList.foldr (fun p m => max (_root_.Flock.log2ceil p.leaves) m) 0
+/-- **The deployed trace commitment binds, at every `H`**: at an opening's roots and position, hm96 leaves of rows that
+place the value (`row_places`) under the registered path check at the ports there (`pathCommit_binds`). -/
+theorem commit_binds (c : Code) (H : Msg → Msg) : (commit c).Binds H := by
+  intro roots o o' hp
+  have e : ∀ o'' : Opening Bool, o''.pos = o.pos → (commit c).opens roots o'' =
+      (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (c.ownAt roots o.pos)) c.layer).opens
+        roots o'' := by
+    intro o'' h
+    show (pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath (c.ownAt roots o''.pos)) c.layer).opens
+      roots o'' = _
+    rw [h]
+  unfold CommitmentScheme.Opens
+  rw [e o rfl, e o' hp.symm]
+  exact pathCommit_binds (at_ := c.at_) (π := c.π) (layer := c.layer)
+    (hm96Leaf_binds H (row_places c.place c.bits) c.salt) (regPath_binds H (c.ownAt roots o.pos)) roots o o' hp
 
 theorem le_foldr_max {α : Type} (f : α → ℕ) {a : α} :
     ∀ {l : List α}, a ∈ l → f a ≤ l.foldr (fun p m => max (f p) m) 0
@@ -150,9 +167,11 @@ theorem regPath_calls (H : Msg → Msg) (own : Array _root_.Flock.Registered.Por
     · simp [OC.eval]
   · simp [OC.eval]
 
-/-- **One opening's calls**: at most the leaf's three, the leaf's frame and one node per level of the deepest port. -/
+/-- **One opening's calls**: at most the leaf's three, the leaf's frame and one node per level of the deepest port its
+position reads, which is no deeper than the registered ports (`Code.ownAt_depth`). -/
 theorem opens_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Opening Bool) :
     (((commit c).opens roots o).eval H).2.length ≤ 4 + depth c.own := by
+  have hd := c.ownAt_depth roots o.pos
   simp only [commit, pathCommit]
   split
   · rename_i ri _
@@ -160,7 +179,7 @@ theorem opens_calls_le (H : Msg → Msg) (c : Code) (roots : List Msg) (o : Open
     simp only [List.length_cons, List.length_nil]
     split
     · rename_i l _
-      have := regPath_calls H c.own ri.1 ri.2 l (c.π o)
+      have := regPath_calls H (c.ownAt roots o.pos) ri.1 ri.2 l (c.π o)
       omega
     · simp only [OC.eval, List.length_nil]
       omega
@@ -215,9 +234,7 @@ theorem deployOf_εtable_nonneg (x : Msg) : 0 ≤ (deployOf F c).εtable x := by
   show 0 ≤ (c.tables x : ℝ) * 2 ^ (-(205 : ℝ))
   positivity
 
-theorem deployOf_commit :
-    (deployOf F c).commit = pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer :=
-  rfl
+theorem deployOf_commit : (deployOf F c).commit = commit c := rfl
 
 theorem universalIs_deployOf : UniversalIs (deployOf F c) := fun _ _ => rfl
 
@@ -251,15 +268,14 @@ theorem innerNumbers_deployOf (hw : ∀ xS, F.waits xS = Claims.Flock.Numbers.wa
     hwt.trans (mul_le_mul_of_nonneg_right hn' (by positivity))⟩
 
 set_option synthInstance.maxSize 1024 in
-/-- **The sampling claims at the deployed record over any Flock record**, at every hash: `sampling_assembled` at
+/-- **The sampling claims at the deployed record over any Flock record**, at every hash: `sampling_assembled_bind` at
 `deployOf F c` with the record's facts discharged. The hypotheses are what remains: the slots and the program scope of
 the sampled verifier's run (`DrawSlots`, `ProgramScope`) and completeness. -/
 theorem sampling_deployed_of (H : Msg → Msg) (hslots : DrawSlots (deployOf F c)) (hprog : ProgramScope (deployOf F c))
     (hComplete : Complete H (deployOf F c)) :
     ScopeMatches (deployOf F c) ∧ Binding (deployOf F c) ∧ Universal (deployOf F c) ∧ FaultyBoundary ∧
       Complete H (deployOf F c) :=
-  sampling_assembled (deployOf F c) H c.own c.at_ (row c.place c.bits) c.salt c.π c.layer (deployOf_commit F c)
-    (row_places c.place c.bits) hslots hprog (universalIs_deployOf F c) hComplete
+  sampling_assembled_bind (deployOf F c) H (commit_binds c) hslots hprog (universalIs_deployOf F c) hComplete
 
 end Of
 
@@ -272,9 +288,7 @@ theorem deploy_flock : (deploy rel c).flock = FlockDeploy.deployZk rel := rfl
 theorem deploy_εtable_nonneg (x : Msg) : 0 ≤ (deploy rel c).εtable x :=
   deployOf_εtable_nonneg (FlockDeploy.deployZk rel) c x
 
-theorem deploy_commit :
-    (deploy rel c).commit = pathCommit c.at_ (hm96Leaf (row c.place c.bits) c.salt) c.π (regPath c.own) c.layer :=
-  rfl
+theorem deploy_commit : (deploy rel c).commit = commit c := rfl
 
 theorem universalIs_deploy : UniversalIs (deploy rel c) := universalIs_deployOf (FlockDeploy.deployZk rel) c
 
