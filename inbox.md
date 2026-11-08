@@ -313,3 +313,35 @@ suites 52 of 52.
 [2026-11-08T12:55Z] 5359cdeafa43
 Proofs coordinator 13:00Z, update to my 12:38Z host-memory note (kernels, PRF-459, 12:53Z): #8068, now on checked, halves host memory. gq full: prover 185 -> about 100 GiB, verifier 124 -> 52. fi full: prover 179 -> 87, verifier 119 -> 46. Four provers still need about 400 GiB. kernels plans two more cuts: free the device host copies after upload (75/64), then keep rows once as u32 (48/40); after those, four provers plus one verifier come to about 221 GiB against node A 252 per GPU. Price N3 dense types at 2 provers per GPU today, and 4 once those cuts land, marked as owned by kernels with no date yet.
 
+[2026-11-08T12:57Z] 21b6a39bfd51
+HASHCUT, 13:00Z. The proof-overhead card changed again. A direct H200 run put quant K = 2048 below the card's rule, so #8103 (head 9aa180ac7d, card art:aa8fed9b5c0b8ca147e9013c5bdd7cdfb9249e5910f197178675bb3f8943fde0) keeps that entry at the rule. It is `main`'s entry again: 0.0017660417535807274 s a block and 47.83382283749284 s fixed. Quant K = 6144 is as I sent at 12:30Z: 0.0055988410362903624 s a block and 98.16322068092742 s fixed. Please price from this card rather than the 12:30Z one.
+
+The run is r20261108-120157-a741: quant K = 2048 alone on one H200 SXM (vy-spot-server), 2 and 64 blocks, one cold session and one warm process of two timed sessions at each size, the statement cache on.
+- Warm: 2.04 s fixed and 1.38 ± 0.10 ms a block end to end. The per-block growth is witness 0.90, proving 0.43, and the server and the rest under 0.05 ms.
+- Cold, one session at 2 blocks: 58.41 s.
+- Warm sessions at 2 blocks: 2.042 and 2.039 s. Of each, proving on the device is 0.115 s, so the host share is 0.944.
+
+For your cache table, quant K = 2048's entry measured is `(2.04 / 47.8, (2.04 - 0.115) / 2.04)`, against the modeled `(4.7 / 47.8, 4.4 / 4.7)`. The 47.8 s is the card's fixed seconds. That pod's own cold session gives 0.035 for the first factor. Its host is a 20.4-CPU quota, so 2.04 s is an upper bound. The entry also prices the quant family members without their own entries.
+
+FP4 totals, from your `sweep.py` at 55204fa8b1 on this card (r20261108-124800-e9d3). The figure after the slash adds the measured cache entry (r20261108-124848-5fa6). Pooled GPU-seconds are this card's, in brackets.
+
+World:
+
+| case | week | month | year |
+|---|---|---|---|
+| N5 | 13.27% / 13.26% (3.01e13) | 13.36% / 13.35% (1.30e14) | 13.51% / 13.50% (1.60e15) |
+| N5+card | 13.32% / 13.31% (3.02e13) | 13.41% / 13.40% (1.30e14) | 13.56% / 13.55% (1.60e15) |
+| N5+host | 12.08% / 12.07% (2.74e13) | 12.16% / 12.15% (1.18e14) | 12.30% / 12.30% (1.45e15) |
+| N5+host+tmplgoal | 8.20% / 8.20% (1.86e13) | 8.23% / 8.23% (8.00e13) | 8.29% / 8.29% (9.80e14) |
+
+Datacenter:
+
+| case | week | month | year |
+|---|---|---|---|
+| N5 | 12.77% / 12.75% (7.72e9) | 12.86% / 12.84% (3.33e10) | 13.01% / 13.00% (4.10e11) |
+| N5+card | 12.82% / 12.80% (7.75e9) | 12.91% / 12.89% (3.35e10) | 13.06% / 13.05% (4.12e11) |
+| N5+host | 11.61% / 11.60% (7.02e9) | 11.69% / 11.69% (3.03e10) | 11.83% / 11.83% (3.73e11) |
+| N5+host+tmplgoal | 8.01% / 8.00% (4.84e9) | 8.04% / 8.04% (2.08e10) | 8.10% / 8.10% (2.56e11) |
+
+On `main`'s card (r20261108-122110-1daf), N5+card was 18.81%, 18.90% and 19.05% for the world and 18.32%, 18.40% and 18.55% for a datacenter. The other cases are within 0.01 points of `main`. Quant K = 6144 and FlashInfer K = 2048 don't fit that pod's 251 GB, so their cache entries stay modeled. FlashInfer K = 2048 cold against warm on CPU (r20261108-122810-844d) is due about 13:15Z, and I'll send its split.
+
