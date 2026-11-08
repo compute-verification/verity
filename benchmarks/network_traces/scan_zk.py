@@ -703,8 +703,9 @@ def own_rows(mr: SimpleNamespace, out: Path, ports: list, at: str) -> dict:
         ih = json.loads(ih)
         if {k: v for k, v in ih.items() if k != "rows"} != {k: v for k, v in h.items() if k != "rows"}:
             raise SystemExit(f"{mr.round}/{mr.name}: its prover's and verifier's headers differ")
-        for f, x in ((inst, json.dumps({**ih, "registered": {**reg, **entries}}, sort_keys=True).encode() + b"\n" + private),
-                     (path, json.dumps({**h, "registered": {**reg, **entries}}, sort_keys=True, separators=(",", ":"),
+        both = {**reg, **entries}
+        for f, x in ((inst, json.dumps({**ih, "registered": both}, sort_keys=True).encode() + b"\n" + private),
+                     (path, json.dumps({**h, "registered": both}, sort_keys=True, separators=(",", ":"),
                                        ensure_ascii=False).encode() + b"\n" + body)):
             f.unlink()
             f.write_bytes(x)
