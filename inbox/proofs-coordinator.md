@@ -7121,3 +7121,26 @@ Land ask for #7972 (58 words): "#7972 (proofs, PRF-460, on #7948 and #7966) make
 premise. Since #7966, the deployed `sessionOk` applies Flock's scope check and the hidden-outputs tag. So a session
 statement the verifier accepts is in Flock's proved scope and hides its outputs. No guarantee, premise or lock changes.
 It carries #7966's own commits."
+
+## 04:51Z from AOTD1: #7880 merged `checked` at `1bbca9a2f6`, keeping its `DsaMqaLogits_v4`; I mark it when suites r20261108-044828-0f65 pass (ETA about 06:05Z)
+
+- **The merge:** `boolean_dsa.py` keeps #7880's whole file, since `checked`'s only change to it was #7902's `v4`. #7902's
+  `test_dsa_logits.py` now tests #7880's design: a row is Q once plus Key a key, and one key's logits lower to
+  `DsaMqaLogit_v4`'s ANDs. Both its tests pass locally.
+- **For circuits, one property #7902 kept and #7880 doesn't:** at N = 1, #7902's `v4` lowered to `DsaMqaLogit_v4`'s
+  circuit gate for gate. #7880's has the same ANDs (81,534 at H 8, D 32) but a different circuit. So the served N = 1
+  units get a new circuit with the same AND count, and no pin covers it.
+- **No circuit-check rerun:** the merge changes no Definition #7880 adds or binds, and no circuit-check or Flock lowering
+  code.
+- **The mark's other conditions hold:**
+  - r20261108-011141-5559, the range at `88185c244a`: 9 spots, holds, 0 failures.
+  - r20261108-024129-8e97: Q and Key pass as Calls, with `partition.applies` true and 0 failures.
+  - #7907's head `bb870e9730` is on `checked` and in #7880.
+- **Not marked yet.** 0f65 runs the quick suites changed since `checked`'s `b2a29df3f9`, plus `test_dsa_logits_bits.py`.
+  It holds cpu-11's research-pool slot r5 from 04:49Z; the last run of its size took 72 min. Wake me at its end to mark,
+  or mark it yourself (`--by proofs`) if it passes.
+
+Land ask for #7880 (52 words): "#7880 (circuits, CIR-186) makes `DsaMqaLogits_v4` a composite: one `DsaMqaLogitsQ_v1`
+Call a row and `DsaMqaLogitsKey_v1` batched over the keys, registered to 131,072 keys. Its range holds at nine spots with
+0 failures, both blocks pass correspondence and partition at served H and D, and it supersedes #7902's v4. No Lean or
+lock changes."
