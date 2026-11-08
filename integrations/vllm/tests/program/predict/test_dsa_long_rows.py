@@ -9,8 +9,12 @@ INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the serve
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
+import sys
 from collections import Counter
+from pathlib import Path
 
 import pytest
 
@@ -20,6 +24,7 @@ from verity.ml.definitions.registry.dsa_topk import waksman_apply, waksman_switc
 from verity_vllm.check.batch import own
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program import workload as W
+from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.batch import workload_labels
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.common import Unexpressible
@@ -260,3 +265,34 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     for p, pos in zip(prog, ({4, 5, 6}, {4, 5}, set(), {6})):
         assert _families(p[0].fn.body.nodes)["DsaTopKMask_v1"] == 3 * len(pos) if 0 in p else not pos
         assert 1 not in p or _families(p[1].fn.body.nodes)["DsaTopKMask_v1"] == 0
+
+
+@pytest.mark.slow
+def test_a_class_g_chunked_prompt_past_index_topk_traced_build_is_its_compiled_program(tmp_path):
+    """The prompt above (10 tokens in chunks of 6 and 4 beside a short request, then two decodes; rows past INDEX_TOPK from
+    position 4), compiled at rank 0 under the cut checkpoint, and its trace: the command `trace_commands` gives it, run on the
+    pinned vLLM with the cut config.json in the hub and no CUDA device visible, as the row driver runs a Build.  `compare` finds the
+    two digests equal.  What no cheaper test can: that the Build's `vllm_dsa` rule, on vLLM's own graph, traces the mask form the
+    predictor writes past INDEX_TOPK.  It needs the pinned vLLM (a pod's venv), so it skips without it."""
+    pytest.importorskip("vllm")
+    from verity_vllm.program.predict.steps import Registered, compare, compile_steps, trace_commands
+    hub = tmp_path / "hub"
+    hf = _short(json.loads((HF_CONFIG_DIR / "GLM53.config.json").read_text()))
+    reg = _class_g(hub, model={"hf_config": hf})
+    cp = Path(S.hf_config_path(str(hub), reg.phi.model["repo"], reg.phi.model["revision"]))
+    assert cp.is_file(), "the config.json `_class_g` wrote, which the trace loads"
+    cp.write_text(json.dumps(hf))
+    reg = Registered.of(Phi.from_json({**reg.phi.to_json(), "engine": _canonical(reg.phi.engine)}), default_seed=7)
+    advice, ingress = _session([(10, 3, {**GREEDY, "max_tokens": 3, "ignore_eos": True}), (3, 2, {**GREEDY, "max_tokens": 2, "ignore_eos": True})],
+                               [[(0, 0, 6)], [(0, 6, 4), (1, 0, 3)], [(0, 10, 1), (1, 3, 1)], [(0, 11, 1)]])
+    c = compile_steps(reg, advice, {"q0": ingress["q0"]}, partial=True)
+    u = c.requests[0]
+    assert (u.LP, u.T, u.chunks) == (10, 2, (6, 4))
+    assert _families(c.programs[u.digest].fn.body.nodes)["DsaTopKMask_v1"] == 3 * 8
+    s = c.summary()
+    (cmd,) = trace_commands(s, reg, str(tmp_path / "traces"))
+    assert json.loads(cmd[cmd.index("--launch-context") + 1])["chunks"] == [6, 4]
+    subprocess.run([sys.executable, "-m", "verity_vllm.pipeline.cli", *cmd[1:]], check=True,
+                   env={**os.environ, "HF_HUB_CACHE": str(hub), "CUDA_VISIBLE_DEVICES": ""})
+    got = compare(s, str(tmp_path / "traces"))
+    assert (got["equal"], got["mismatches"]) == (1, 0), got["units"]
