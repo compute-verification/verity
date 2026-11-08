@@ -368,3 +368,39 @@ I'll stage the Definitions that carry the most proving GPU time (fr-w13 and fr-w
     - So at w2, route 1's added cost isn't shown below the copies', and w2 keeps them, by the coordinator's rule.
   - **Open:** with the SiluMul table reads in lookup slots, its circuit may come near a fused block's size, and route 1 would then add about 0.52% of w2's rows. A `--reads slots` cap run would settle it. I haven't launched one.
   - Per monitoring period: these are per-token ratios, so they read the same for a week, a month or a year, and at any scope.
+
+## 03:31Z from HASHCUT (proofs, PRF-456): in-proof hashing priced in your planner; the quant K=6144's price decides 10%, not hashing
+
+All figures are total FP4 (β + the 1.921% tax), your sweep at `71736b4e42`, case `R6x4+all+4perH200+host+vtmpl`, world year unless named, solved with your own `sweep.run_case` after every lever. A cut moves each type's k_log by Flock's slot layout (`circuit._ranges`: sha512x3 slots of 2^18 bits, one hm96 slot a row rounded to a power of two, the unit's slot), which matches UnitStager's staging for all 7 templates I staged (r20261108-024035-60bd).
+
+- **`hash4` overstates what hashing can give.** Free hashing in every block gives 8.66%, and `hash4` gives 8.51%. A real 4× cut of the hashing slots gives 9.15%, and 2× gives 9.43%. Four compressions a sha512x3 slot instead of three gives 9.87%.
+- **Hashing is 33% of proving at break-even.** That holds in every scope (32.2–33.0%).
+  - Its GPU-seconds are 2.63%, 2.65% and 2.68% of the world's compute over a week, a month and a year.
+  - For a datacenter they are 2.53%, 2.55% and 2.58%.
+  - In ANDs proven, the world's are 8.98e22 a week, 3.87e23 a month and 4.76e24 a year. A datacenter's are 2.31e19, 9.96e19 and 1.23e21.
+- **What decides 10% is the price of `Fp8GroupQuantUe8m0_v1{K=6144,G=128}`, not hashing.**
+  - It is 44% of proving at break-even. Its card price is 0.2328 s a block at k 25, which is 6.94 ns a witness bit, 66× the median of the measured types.
+  - That price comes from a 2-block session. In r20261107-022601-2bd3 the GPU prove took 0.49–0.50 s for 2 instances at dense_m 28. Its `fixed_seconds`, 97.7, is that session's e2e.
+  - So the per-block price is half of a padded 2^28 statement's GPU work, and the planner charges it 1024 blocks a statement.
+  - If the quant is priced at the median per-bit rate, the total is **6.84%** with nothing else changed. At 4× the median it is 7.01%, and at the 2^28 statement's own per-bit rate (17× the median) it is 7.73%.
+  - **Please price it as computed, or re-measure its marginal on a statement of many blocks, before anyone reads 10.38% as the baseline.**
+- **The biggest real lever is cutting the wide-output blocks into column blocks, so a sampled block proves and hashes only the columns it opens.**
+  - Your leakage planner's cost per stratum goes as n·(b + ℓ), so cutting a 49–98 kbit block into 16 cuts its cost roughly 16× in b, while k falls 4 steps.
+  - Every figure below uses the card's quant price:
+
+    | cut | total FP4 |
+    | --- | ---: |
+    | AllReduce (Multimem, Mnnvl, ResidualMnnvl) and MoeSum ÷16 | 9.76% |
+    | the same, plus ResidualAdd ÷16 | 9.43% |
+    | the same three, plus hashing 4× | 9.19% |
+    | the quant K=6144 ÷16 | 7.02% |
+    | all five wide families ÷16 (the four above and SiluMul) | 5.94% |
+    | all five ÷16, plus hashing 4× | 5.28% |
+    | all five ÷16, plus free hashing | 4.77% |
+
+  - At the median quant rate, all five ÷16 gives 5.76%.
+- **Widening (more outputs a block) makes it worse** under your planner. Taking DSA N=1 to wider blocks gives 10.50%.
+- **Two pricing caveats in `total_cost.priced()`:**
+  - It matches a stratum to a measured block "of the same Definition and K". So a narrower `MoeSum_v1{H=192}` would take `MoeSum_v1{H=3072}`'s measured seconds, and an `AllReduceMultimem_v1{SIZE=192}` would take SIZE=3072's. My split prices instead scale the matched type's seconds by 2^Δk.
+  - The card has `MoeSum_v1{TOPK=8,H=3072}` at k 22 (9.93e-05 s), while the census and Flock's layout both give it k 27.
+- **Next:** the full table per monitoring period, world and datacenter, with the scripts and data in the evidence store, goes in my report note by 20:00Z. I'm building the column-block cut first: ResidualAdd in `COLS`, and the census picking a COLS row's width by leakage-weighted cost.
