@@ -35,6 +35,9 @@ find "$X" -type f | sort | xargs sha256sum | sed "s|$X/||" > "$OUT/served_inputs
 sed "s|^CUDA_HOME=/usr/local/cuda-12.9\$|CUDA_HOME=$CU|" "$X/$EEF" > "$OUT/engine_env.h8.txt"
 diff "$X/$EEF" "$OUT/engine_env.h8.txt"
 export CUDA_HOME=$CU PATH="$CU/bin:$PATH" PYTHONPATH="$OV${PYTHONPATH:+:$PYTHONPATH}"
+# this node's NVSwitch fabric refuses to bind NVLS multicast memory (CUDA error 401 in ncclCommInitRank; nccl_probe.py). The
+# all-reduces node A's NVLS reduced are summed in its tree here (TREE_AR) over an NCCL all-gather, a copy under any algorithm.
+export NCCL_NVLS_ENABLE=0
 VENV=$V CUDA_HOME=$CU bash "$IN/node_record.sh" "$OUT/node" 2>&1 | tail -2
 VENV=$V SERVED_OUT=$X/out REC=$X/$ARMDIR LOAD=$LOADN ENGINE_ENV_FILE=$OUT/engine_env.h8.txt OLD=/nonexistent \
   STEPS=$STEPS MIN_FREE_G=${MIN_FREE_G:-30} KEEP_TENSORS=opened MLA_TOKENS=$MLA SAMPLER=1 GATE_EVERY=0 STAGE=0 \
