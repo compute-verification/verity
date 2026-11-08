@@ -1,0 +1,12 @@
+# The two-stage audit's second stage on a toy replay block (`toy.py`): its templates and their models, the boundary and
+# interior windows, the link members' rows read from the boundary record (`verity.ml.windows.links`) and the verifier's own
+# reads of them. Not a package: the tests load toy.py from this directory. Nothing is lowered or proved (audit.py does, on a
+# node).
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]
+
+[tool.verity.tests]
+# `verity`: the circuits the toy builds and evaluates, the windows it commits, and the one-stage verifier's check and
+# registered reads the tests hold them to
+inputs = ["verity"]

@@ -1,0 +1,144 @@
+"""The two-stage toy before anything is lowered or proved (`audit.py` proves it, on a node): each template and the replay
+block are their numpy models; the replay block is its templates' instances; the interior is template-major and wired as
+the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
+its salts, and open its root there, as the verifier's own reads (from the boundary record and S alone) name them; both
+registrations pass the verifier's check; and a link row one bit off, a read of another leaf and a broken wire are refused."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R, \
+    verifier as V
+from verity.ml.circuits.evaluation.bits import evaluate_bits
+from verity.ml.circuits.program import Program
+from verity.ml.windows import wiring as WI
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+import toy as T
+
+N, Q = 6, 3
+SAMPLE = (4, 1, 5)
+KEY = b"\x07" * 32
+
+
+@pytest.fixture(scope="module")
+def run(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("two-stage-toy")
+    u = T.ingress(N)
+    bc = T.boundary(u, Q, salt_key=KEY)
+    brec = T.write(bc, tmp / "boundary", {"toy": "boundary"}, index_salt=b"\x01" * 192)
+    digest = R.digest(brec)
+    it = T.interior(bc, digest, SAMPLE, salt_key=b"\x08" * 32)
+    irec = T.write(it.committed, tmp / "interior", {"interior": True, "boundary": digest, "replay_sample": list(SAMPLE)},
+                   previous=digest, registered=it.registered, index_salt=b"\x02" * 192)
+    return {"tmp": tmp, "u": u, "bc": bc, "brec": brec, "digest": digest, "it": it, "irec": irec}
+
+
+def publics(c) -> dict[str, bytes]:
+    return {m.key: c.public_body(k) for k, m in enumerate(c.window.members)}
+
+
+def rows_bc(c, port: str, n: int) -> list[bytes]:
+    b = c.bc[port]
+    return [b[i * T.CS.BC_BYTES:(i + 1) * T.CS.BC_BYTES] for i in range(n)]
+
+
+def test_each_template_and_the_replay_block_are_their_models():
+    u = T.ingress(5, b"model")
+    r = T.replay(u)
+    for defn, x, y in ((T.LINK_IN, u, u), (T.FOLD, u, r["fold"]), (T.FLIP, r["fold"], r["flip0"]),
+                       (T.FLIP, r["flip0"], r["flip1"]), (T.LINK_OUT, r["flip1"], r["flip1"]), (T.REPLAY, u, r["egress"])):
+        assert np.array_equal(np.asarray(evaluate_bits(defn, T.bits(x))).reshape(len(u), -1), T.bits(y)), defn.id
+    assert np.array_equal(r["egress"], u[:, :T.H // T.WORD] ^ u[:, T.H // T.WORD:])
+
+
+def test_the_replay_block_is_its_templates_instances():
+    ids = [P.template_id(t) for t in T.TEMPLATES]
+    got = P.ranges(Program(T.REPLAY), P.template_instances_query(T.TEMPLATES))
+    assert [t for t, _, _ in got] == [ids[0], ids[1], ids[2], ids[2], ids[3]] and [n for *_, n in got] == [1] * T.N_RHO
+    assert [sum(1 for t, _, _ in got if t == i) for i in ids] == list(T.N_T)
+
+
+def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):
+    win = run["it"].window
+    assert [m.base for m in win.members] == T.offsets(Q) == [0, Q, 2 * Q, 4 * Q]
+    assert [m.n for m in win.members] == [Q * n for n in T.N_T] and win.population == Q * T.N_RHO
+    assert P.in_order(win.program, win.query, Q * T.N_RHO)
+    flip = win.members[2]
+    (_p, _o, writers), = flip.wired
+    assert writers[2 * 1] == T.offsets(Q)[1] + 1 and writers[2 * 1 + 1] == T.offsets(Q)[2] + 2
+    WI.validate(win.members)
+    assert WI.check(win.members, publics(run["it"].committed)) == {}
+
+
+def test_each_link_row_is_the_boundary_row_at_its_spans_leaf_and_opens_the_boundary_root(run):
+    bc, it, brec = run["bc"], run["it"], run["brec"]
+    win, names = it.window, T.boundary_ports(bc.window)
+    reads = T.link_reads(brec, win, SAMPLE)
+    roots = {r["port"]: r for r in brec["roots"]}
+    head = json.loads((run["tmp"] / "interior" / "window.json").read_text())
+    for t, (p, b) in T.LINKS.items():
+        m = win.members[t]
+        port, value = it.ports[m.key], names[b]
+        assert port.root == bc.roots[value] and port.root.hex() == roots[value]["root"]
+        file = reads[m.key]
+        assert file["format"] == REG.READS_V1 and list(file["ports"]) == [p]
+        e = file["ports"][p]
+        assert e["value"] == value and e["reads"] == list(SAMPLE) and e[REG.READS_FROM] == m.base
+        assert (e["leaves"], e["domain"], e[REG.SCHEMA_KEY]) == (N, roots[value]["domain"], T.V2)
+        assert e["words"] == dict(m.all_rows)[p] == port.words
+        header = T.CS.registered_header(head, t)[p]
+        assert header["value"] == value and header["positions"] == list(SAMPLE)
+        mine = rows_bc(it.committed, m.port(p), Q)
+        assert mine == [rows_bc(bc, value, N)[s] for s in SAMPLE]
+        assert all(REG.verify_read(bc.domains[value], port.root, s, x, bytes.fromhex(path), T.V2)
+                   for s, x, path in zip(SAMPLE, mine, header["paths"]))
+
+
+def test_both_registrations_pass_the_verifiers_check_and_the_interior_follows_the_boundary(run):
+    bc, it, brec, irec = run["bc"], run["it"], run["brec"], run["irec"]
+    for rec, c in ((brec, bc), (irec, it.committed)):
+        w = c.window
+        v = V.check(rec, w.program, w.query, w.law, T.CS.SCHEME, T.CS.expected_ports(w),
+                    leaf_layer=T.CS.leaf_layer(publics(c)), **({"log": [brec]} if rec is irec else {}))
+        assert v.ok, v.codes
+    assert irec["previous"] == run["digest"] and irec["window"]["replay_sample"] == list(SAMPLE)
+    assert irec["window"]["run"] == T.interior_run(run["digest"], SAMPLE) != brec["window"]["run"]
+    assert brec["query"] == R.query_digest(P.template_instance_query(T.REPLAY)) and brec["population"] == N
+
+
+def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
+    bc, it = run["bc"], run["it"]
+    lin = it.window.members[0]
+    value = T.boundary_ports(bc.window)["ingress"]
+    port = it.ports[lin.key]
+    honest = rows_bc(it.committed, lin.port("row"), Q)
+    path = bytes.fromhex(port.header(SAMPLE)["paths"][0])
+    assert REG.verify_read(bc.domains[value], port.root, SAMPLE[0], honest[0], path, T.V2)
+    assert not REG.verify_read(bc.domains[value], port.root, SAMPLE[1], honest[0], path, T.V2)
+    off = T.replay(port.rows_at(SAMPLE))["ingress"].copy()
+    off[0, -1] ^= 1
+    bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, rows={"ingress": off})
+    x = rows_bc(bad.committed, lin.port("row"), Q)[0]
+    assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)
+    pub, flip = publics(it.committed), it.window.members[2]
+    body = bytearray(pub[flip.key])
+    body[0] ^= 1                                        # unit 0's x string, which the fold unit's output wires
+    broken = {**pub, flip.key: bytes(body)}
+    assert set(WI.check(it.window.members, broken)) == {flip.key}
+    assert set(WI.check_drawn(it.window.members, broken, [flip.base])) == {flip.key}
+    assert WI.check_drawn(it.window.members, broken, [flip.base + 1]) == {}
+
+
+def test_the_link_reads_refuse_a_port_the_boundary_record_does_not_name_or_a_leaf_outside_it(run):
+    brec, win = run["brec"], run["it"].window
+    with pytest.raises(ValueError, match="names port"):
+        T.LK.reads(brec, "nobody/row", 16, T.V2, SAMPLE, 0, registered=REG)
+    with pytest.raises(ValueError, match="outside"):
+        T.link_reads(brec, win, (N, 0, 1))
