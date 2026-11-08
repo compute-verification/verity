@@ -86,7 +86,9 @@ the challenger's seed-salt family released after the window's open root (`coins.
 reads, drawn once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
 (`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`). Each registration of that window is held to it by
 both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified input the window's
-circuits read. A verifier that didn't draw it reads it from the challenger's log (`coins.seed_salt_of`).
+circuits read. The run of record (`outcome`, `verifier.run`) and the audit (`OneStage.check`) read it from the
+challenger's log instead (`coins.seed_salt_in`, `coins.seed_salt_of`), from evidence `outcome` is handed, never from the
+stream's copy.
 
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
@@ -781,10 +783,9 @@ class _Entry:
     law: Mapping[str, Any]
     program: Program
     work_table: Mapping[str, Any] | None = None
-    #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
+    #: what `register` handed R1-R7 besides the record and its window's seed salt: (ports, leaf_layer, anchors, the log's
+    #: records, registered, supplied, pinned, schemas, window_root, held, outputs)
     copies: tuple[Any, ...] = ()
-    seed_salt: str | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
@@ -797,7 +798,6 @@ class _Entry:
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
-    interior_seed_salt: str | None = None
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1709,7 +1709,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, work_table), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs), seed_salt))
+                                     window_root, held, outputs)))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1831,7 +1831,6 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
-        e.interior_seed_salt = seed_salt
         return reg
 
     def _drawn_op(self, draw: Draw) -> dict[str, Any]:
@@ -1980,7 +1979,8 @@ class Stream:
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
                 session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None,
-                interior_coins: Mapping[str, Any] | None = None) -> Outcome:
+                interior_coins: Mapping[str, Any] | None = None, seed_salt: Mapping[str, Any] | None = None,
+                interior_seed_salt: Mapping[str, Any] | None = None) -> Outcome:
         """The sample's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
@@ -1997,7 +1997,11 @@ class Stream:
         registration's window (`register`'s `window_root`), from main's code (`challenger.pinned_session`), released
         after the registration's digest, each checked against its
         commitment and every one read; missing evidence, or a registration without its window root, is a reject failing
-        `run` too, never a skip. Raises `Refused` for a second outcome, a verdict of record about
+        `run` too, never a skip. Nor has it the window's seed salt: the Lean's run reads it from `seed_salt`, its evidence
+        in the same form (`coins.seed_salt_in`'s; the window's one coin of the seed-salt family, `seed_salt`'s, released
+        after the window's open root), and holds the record's window to name it, so a window that names the salt the
+        stream drew is a reject failing `run` unless `seed_salt` shows that salt in the challenger's log, and one that
+        names none carries none. Raises `Refused` for a second outcome, a verdict of record about
         other sessions, public outputs the verdicts of record don't report alike, or `coins` for a sample that read no
         coins.
 
@@ -2005,7 +2009,8 @@ class Stream:
         `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the registration
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
-        `interior_coins` the second stage's. The outcome accepts when the registration's audit record (over the replay
+        `interior_coins` the second stage's, and `interior_seed_salt` is the evidence of the interior registration's
+        window's seed salt. The outcome accepts when the registration's audit record (over the replay
         sample) and the interior registration's (over the sample) both do, and the run of record checks both."""
         op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._drawn_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
@@ -2027,11 +2032,12 @@ class Stream:
             if self.n_rho is not None:
                 got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
                                                                               instances, served, session_roots, coins,
-                                                                              interior_coins)))
+                                                                              interior_coins, seed_salt,
+                                                                              interior_seed_salt)))
                 op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
-                                                            session_roots, coins)))
+                                                            session_roots, coins, seed_salt)))
             op["accepted"] = got["audit"]["accepted"]
             return None
         d = self._held(self._decide(op, {"now": lambda: float(self._clock()), "verdicts": held}), got.get("verdicts"))
@@ -2056,8 +2062,8 @@ class Stream:
 
     def _audit(self, e: _Entry, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
-               session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None
-               ) -> tuple[dict[str, Any], dict[str, Any]]:
+               session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None = None,
+               seed_salt: Mapping[str, Any] | None = None) -> tuple[dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit record, once the verdicts hold (failing `run` where the whole run isn't the verifier's),
         and the public outputs."""
         assert e.sessions is not None
@@ -2083,7 +2089,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given, seed_salt=e.seed_salt)
+                      value_outputs=given, seed_salt=seed_salt)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2091,7 +2097,9 @@ class Stream:
     def _audit_two(self, e: _Entry, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                    proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
-                   interior_coins: Mapping[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   interior_coins: Mapping[str, Any] | None, seed_salt: Mapping[str, Any] | None = None,
+                   interior_seed_salt: Mapping[str, Any] | None = None
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample and the registration's over the replay sample, both failing `run` where the whole
         run isn't the verifier's; and the public outputs."""
@@ -2128,10 +2136,10 @@ class Stream:
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
+                      held=held, coins=coins, value_outputs=given, seed_salt=seed_salt,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
-                                "seed_salt": e.interior_seed_salt,
+                                "seed_salt": interior_seed_salt,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,

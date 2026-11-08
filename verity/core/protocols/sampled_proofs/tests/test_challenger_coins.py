@@ -320,7 +320,8 @@ def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, sig
     """Over a challenger served on loopback for the window, withheld: the stream draws the window's seed salt at its
     open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
     (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the
-    window's open root). A session whose challenger released a second coin after the root (a server picking its salt
+    window's open root), and the run reads it from the same evidence carrying the key (`coins.seed_salt_in`, refused in
+    any other form). A session whose challenger released a second coin after the root (a server picking its salt
     between two) is refused, read alone or both, and so are a forged coin, another family's coins and another window's."""
     import test_remote
     from test_challenger import lms_verify
@@ -363,3 +364,9 @@ def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, sig
     assert "does not open" in read(window, forged)
     assert "family's" in read(window, {**segments[window], "label": "positions"})
     assert isinstance(read(window, at=other), str) and isinstance(read(window, at="33" * 64), str)
+    keyed = {"key": test_remote.pinned_key().to_json(), "ledger": ledger, "main": test_remote.MAIN,
+             "pins": test_remote.HOST_PINS, "segment": segments[window], "session": files[window]}
+    assert T.seed_salt_in(keyed, window, lms_verify) == salts[window]
+    for bad in ({k: v for k, v in keyed.items() if k != "key"}, {**keyed, "extra": 1}, None):
+        with pytest.raises(C.CoinError, match=re.escape(T.SEED_SALT_FORM)):
+            T.seed_salt_in(bad, window, lms_verify)

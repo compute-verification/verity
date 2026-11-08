@@ -464,7 +464,7 @@ def _binding(binding: Mapping[str, str] | None) -> dict[str, str] | None:
 
 def _seed_salt(seed_salt: str | None, window: str | None) -> str | None:
     """The window's seed salt the verifier read (Seed salt): None, or lowercase hex of 64 bytes beside the window's open
-    root `window`; ValueError otherwise, which the Lean verifier refuses too (`OneStage.paramsOfJson`)."""
+    root `window`; ValueError otherwise, which the Lean registration piece refuses too (`Pieces.registration`)."""
     if seed_salt is None:
         return None
     if not (isinstance(seed_salt, str) and len(seed_salt) == 128 and _HEX.fullmatch(seed_salt)):

@@ -4,7 +4,6 @@ stream asked to sample from coins other than a challenger's refuses: the verifie
 
 from __future__ import annotations
 
-import itertools
 import random
 
 import pytest
@@ -14,7 +13,7 @@ import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs import challenger as C, coins as T, service as S
+from verity.core.protocols.sampled_proofs import coins as T, service as S
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
@@ -610,9 +609,8 @@ SEED_ITEM = S.Public(R.SEED_SALT, "coins", "the window's seed salt: the challeng
 
 
 def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
-    """The seed-salt family of a challenger of the test's own."""
-    ch = C.LiveChallenger(FC.SCHEME, 0, [(T.SEED_SALT_FAMILY, 2)], FC.entropy(seed))
-    return T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
+    """The seed-salt family of a challenger of the test's own, whose log the run reads the salt back from."""
+    return FC.Challenger(seed, 2, T.SEED_SALT_FAMILY)
 
 
 def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration():
@@ -620,8 +618,9 @@ def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_re
     the window's open root, logged on the challenger's clock, drawn once and before the window's first registration.
     Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
     one naming another or none is refused (`R6-seed-salt`); where the stream drew no salt, a window naming one (a salt
-    the server chose) is refused by name. The Spec declares the salt public, of kind `coins`, or a seeded window is
-    refused as undeclared."""
+    the server chose) is refused by name. The run of record reads the salt from the challenger's log, never from the
+    stream: an outcome handed no evidence of it (`seed_salt`) is rejected, failing `run`. The Spec declares the salt
+    public, of kind `coins`, or a seeded window is refused as undeclared."""
     clock = Clock()
     clock.now = 3.0
     spec = _spec(public=RECORD_ITEMS + (SEED_ITEM,))
@@ -638,6 +637,12 @@ def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_re
     assert stream.deliver(draw, [SESSION]) is None
     out = stream.outcome(draw, _lean(), {"statement": "stub"})
     assert out.accepted and out.verdict.ok and len(stream.epoch_log) == 1
+    unread = _stream(spec, clock=clock)
+    draw = unread.select(unread.register(named(unread.seed_salt(_seed_coins("unread"), root).hex()), _ports(6)))
+    assert unread.deliver(draw, [SESSION]) is None
+    out = unread.outcome(draw, _lean(), {"statement": "stub"}, seed_salt=None)
+    assert not out.accepted and out.verdict.detail["reject"]["checks"] == ["run"]
+    assert unread.records[-1]["audit"]["checks"]["run"]["codes"] == ["disagree"]
     late = _stream(spec)
     late.register(rec, _ports(6))
     assert _refused(lambda: late.seed_salt(_seed_coins(), root)) == ("seed-salt-late",) and late.epoch_log == ()
