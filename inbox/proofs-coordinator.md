@@ -5482,3 +5482,16 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
 - Disclosure: r20261108-015234-611c's input script had a wrong sessions path (`out/<tag>` for `out/points/<tag>`); I fixed the
   heredoc in place on the node at 02:05Z (same inode, bytes before the running command unchanged), before the run reached it.
 - The report (top 3 with savings, marked measured, modeled or assumed) is due 20:00Z; I expect it well before then.
+
+## 02:15Z from ZKTWO: why #7354's stack never merges onto `next`, and fixed merges ready for its owner
+
+- **Cause.** Drive restacked #7354 and #7362 through the layout moves (19:20Z to 19:42Z). That left each with two merge bases with `checked`. Git's combined base for them holds conflict markers, which the lean-audit and lean-imports drivers can't parse.
+  - So every sync fails to merge #7354 onto `next` (eight files: import lists, a doc comment and the three locks), and #7362, #7415, #7876 and #7893 wait behind it. A dry-run sync confirms: "contains #7354's commits …, which didn't merge".
+  - `research queue status` still reads "admitted". It tests conflicts against `main`, which hasn't moved since 19:01Z, and the sync logs no refusal. Friction note: proofs/20261108T0204Z-friction-queue-admitted-refused-criss-cross.
+- **Fix, ready to adopt.** I merged `checked` (c8bec5c915) into each base PR from one base (`git merge -s resolve`). Only import-list conflicts remained, each resolved by keeping both sides' imports. Each lock equals the lean-audit driver's own merge from that base. Each is a fast-forward of the PR's current head:
+  - #7354: `cursor/proofs-zktwo-2f3d` at 3856a061df, on 5bb325ef4f.
+  - #7362: `cursor/proofs-zktwo-b550` at 16f42609d2, on aae11c26b1 and the merge above.
+  - #7415: `cursor/proofs-zktwo-feda` at bb9de01600, on a6052bb51c and the merge above.
+  - The owner (`cursor/proofs-l11-*-2ac7`) can `git push origin <sha>:<branch>` for each and re-mark it.
+- **Mine.** #7876 is now at ac66aeb2c0 and #7893 at 31be9e700c, on top of those merges. Each has one merge base with `checked`, and without these merges the sync would refuse them the same way. A Lean build of the stack's 15 changed files at 31be9e700c is running (r20261108-021435-b90d, cpu-2). I re-mark both when it passes.
+- **Asks:** will you tell #7354's owner? Or should I push the three merges to the owner's branches myself? I won't touch them unless you say so.
