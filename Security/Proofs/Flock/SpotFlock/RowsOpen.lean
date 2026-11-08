@@ -175,10 +175,10 @@ column, is the decoded value (`decOf_bitAt`). -/
 theorem reveals_of_frameRows (L : Layout) (hsc : SessionScoped h) (hf : FrameRows h L) : Reveals h (decOf L) := by
   intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
   have hsx := hsc x m₁ xS c₀ c₁ hok
-  obtain ⟨-, ins, spec, sts, own, -, hset, hown, -, hall⟩ := rows_open h hx hok hsx hck
+  obtain ⟨_it, ins, spec, sts, own, -, hset, hown, -, hall⟩ := rows_open h hx hok hsx hck
   obtain ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot, hopen⟩ :=
     hf x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
-  obtain ⟨t, -, ht, -, hregs⟩ := hall j hj
+  obtain ⟨t, _idx, ht, -, hregs⟩ := hall j hj
   obtain ⟨q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
   obtain rfl : q' = q := Option.some.inj (hq'.symm.trans hq)
   obtain ⟨-, -, hopens⟩ := hrows n hn
