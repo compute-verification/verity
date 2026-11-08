@@ -83,7 +83,9 @@ def test_the_adapter_gives_the_audits_verdicts_on_generated_units(lean):
     prefix of its own and, when no record is certified, with no key and no ingress parameters (`active_replay.py`'s
     calls); and a `ValueError` where the Lean check refuses the evidence (a frame of other than B bytes). With `grid`
     False, the same on units whose egress records are all certified, with no egress `mismatch` (an ingress one stays),
-    and a `ValueError` from both where a raw or committed record names an egress link."""
+    and a `ValueError` from both where a raw or committed record names an egress link. Then 20 certified units under the
+    changes that leave a window undecided, checked over every window (about a minute more): the only cases that give a
+    grid-free `no-verdict` whatever else the suite imports, which no cheaper test of the adapter compares."""
     kinds, no_grid = {}, {}
 
     @settings(derandomize=True, database=None, deadline=None, max_examples=600)
