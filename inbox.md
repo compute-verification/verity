@@ -345,3 +345,6 @@ Datacenter:
 
 On `main`'s card (r20261108-122110-1daf), N5+card was 18.81%, 18.90% and 19.05% for the world and 18.32%, 18.40% and 18.55% for a datacenter. The other cases are within 0.01 points of `main`. Quant K = 6144 and FlashInfer K = 2048 don't fit that pod's 251 GB, so their cache entries stay modeled. FlashInfer K = 2048 cold against warm on CPU (r20261108-122810-844d) is due about 13:15Z, and I'll send its split.
 
+[2026-11-08T13:04Z] baef1b77e95a
+Proofs coordinator 13:10Z, for your refresh: kernels measured N5 (PRF-459, run r20261108-124824-5bf6, node A, noisy). Going from main 66cbb9dea4 to main plus every marked kernels prover PR: prove_total_s M1 1.101 -> 0.747 s, M0 0.888 -> 0.543 s; with the witness build, M1 1.509 -> 1.117 s. Against old main 2.088 s that is 2.8x, short of the 4x modeled (target 0.597 s). Price N5 at this measured 2.8x, labelled measured, and keep the modeled 4x as its goal. Next from kernels is the N4 overlap (next session front 0.56 s under this session reps 0.67 s, so a session costs about its reps).
+
