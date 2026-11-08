@@ -103,7 +103,7 @@ variable (H : List UInt8 → D) (E : Merkle.Enc (List 𝔽) D) (Lf : Merkle.Leaf
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (plan S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (plan S R).length → Cap D) (N : ℕ)
 
-/-- **The decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table** (R11b, named):
+/-- **The decoder is right on the sessions flock-verify accepts, at the sampling design's samples, table by table** (the decoder premise, named):
 at every sample `L.draw ω`, registration `R` and table `j` of the plan, on every live outcome whose session directory
 flock-verify accepts, table `j`'s reps run on the tapes decoded from its streams and its proof files, and the salted
 table's verdict on those runs, with the cap `root_B` decodes to and the openings and salts the proof files decode to,

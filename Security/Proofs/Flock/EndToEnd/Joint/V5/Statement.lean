@@ -3,7 +3,7 @@ module
 public import Definitions.Flock.Game.Tape
 public import Proofs.Flock.Bridge.V5.Statement
 public import Proofs.Flock.EndToEnd.Period.Run
-public import Proofs.Flock.Soundness.Assumptions.Finders
+public import Proofs.Flock.Soundness.Finders
 
 /-!
 # One window's sample over several members, each verified in its own session (trusted)
