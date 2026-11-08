@@ -6,6 +6,7 @@ computed as ``mnnvl``'s kernels compute it (against a thread-by-thread model of 
 plugin's site registering it."""
 from __future__ import annotations
 
+import functools
 import importlib
 import json
 import sys
@@ -372,7 +373,20 @@ def test_fused_calls_on_another_workspace_are_computed_as_mnnvl_computes_them_an
     comm = _Comm(inputs, fi_max=0)
     _fused_stubs(monkeypatch, comm)
     seen = []
-    fused = TA.fused_from_mnnvl(lambda *a, **kw: seen.append(kw["workspace"].backend) or "vllm", TA.parse_tree(NODE_A))
+
+    def served(*a, **kw):
+        seen.append(kw["workspace"].backend)
+        return "vllm"
+
+    @functools.wraps(served)
+    def api(*a, **kw):  # FlashInfer's own decorator sets __wrapped__ too
+        return served(*a, **kw)
+    fc = sys.modules["flashinfer.comm"]
+    fc.allreduce_fusion = api
+    for _ in range(2):
+        TA.install_fused(TA.parse_tree(NODE_A), torch.device("cpu"))
+    fused = fc.allreduce_fusion
+    assert fused.__wrapped__ is api
     res_w, gamma_w = _row_words(rng, t), _rne((rng.random(DIM) + 0.5).astype(np.float32))
 
     def call(backend, pattern=1, **extra):
