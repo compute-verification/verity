@@ -21,12 +21,13 @@ inline bool zf_packed(int m) { return m - 7 >= 3 && (1LL << (m - 6)) / 16 > ZT_F
 
 template <int T>
 __device__ __forceinline__ void zf_load_table(F128* tab, const F128* __restrict__ ft) {
-    if (T == 0) return;
-    for (int e = threadIdx.x; e < ZF_WORDS; e += blockDim.x) {
-        const int p = e >> 7, v = (e >> 3) & 15;
-        tab[e] = T == 1 ? ft[e] : ft[(p >> 1) * 256 + ((p & 1) ? v << 4 : v)];
+    if constexpr (T != 0) {
+        for (int e = threadIdx.x; e < ZF_WORDS; e += blockDim.x) {
+            const int p = e >> 7, v = (e >> 3) & 15;
+            tab[e] = T == 1 ? ft[e] : ft[(p >> 1) * 256 + ((p & 1) ? v << 4 : v)];
+        }
+        __syncthreads();
     }
-    __syncthreads();
 }
 
 // One row's fold at z from its 8 bytes (bytes 0-3 in lo, 4-7 in hi, little-endian); g = the lane's copy of the nibble tables.
@@ -36,8 +37,8 @@ __device__ __forceinline__ F128 zf_row(const F128* __restrict__ ft, const F128* 
 #pragma unroll
     for (int j = 0; j < 8; j++) {
         const uint32_t v = ((j < 4 ? lo : hi) >> (8 * (j & 3))) & 0xff;
-        if (T == 0) acc = f128_add(acc, ft[j * 256 + v]);
-        else if (T == 1) acc = f128_add(acc, tab[j * 256 + v]);
+        if constexpr (T == 0) acc = f128_add(acc, ft[j * 256 + v]);
+        else if constexpr (T == 1) acc = f128_add(acc, tab[j * 256 + v]);
         else acc = f128_add(acc, f128_add(tab[(32 * j + (v & 15)) * 8 + g], tab[(32 * j + 16 + (v >> 4)) * 8 + g]));
     }
     return acc;
