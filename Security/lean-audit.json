@@ -32503,7 +32503,7 @@
    }
   },
   "Definitions.Core.Interaction": {
-   "digest": "3bbfc102386c3db38feec81cd38d887f5382a22f1d3df33a9c78eae5a0e0564c",
+   "digest": "101b59f23a40349c64df2afeb59544b80d533d8d6ed91965bb77b56c4e537e68",
    "definitions": {
     "Claims.B": "4fd019056e63b04b42be5f7cab62e91b26792ff23bfe40dfe6a751905512cde8",
     "Claims.BCoins": "dfd5aa495abff4c66b0bfe023034e60f7c9119d9087c0c2f068e5fc89defd0e3",
@@ -32551,7 +32551,6 @@
     "Claims.Out.rec": "acb7a8c44e9a66422d667f4fd0314ea55c58992f25f8b3c5294bc9c59a18a074",
     "Claims.Out.rej": "ecd0be2fb93cb8c70662611f8eebcda8e8df7d68f25347d8d2984235a87e705e",
     "Claims.Out64": "35f6c91fd42935ab0960d14720a80caec791d835ff64a8e6312007e1b107bdac",
-    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d",
     "Claims.PrB": "7304eb2900f036965f930788e1b2c0b663b721c1dc06650ad40015dc77948216",
     "Claims.PrBad": "15aea807ec7b06a2dc2eac1dffe69a8a58e8bda4950afe6245b7c7710ae613f1",
     "Claims.Prover": "c453957b0e4ec4d7b15811b452bc33c53387cfff949e0c4f91e38d137b316136",
@@ -33103,6 +33102,12 @@
     "Verity.TC.Spec.runGroups": "d0968531ff8c4cf1b6f9bd78d8674ddf24ad5ee2a2ef36c8a5fe1c4e007f56c2",
     "Verity.TC.Spec.tcDotChainTotal": "d623703b721fe61125e932a17c39e6b5433254ed6ddb7953e456e02d61249a2e",
     "Verity.TC.Spec.tcDotTotal": "b02bfff4370bb8591d9bb4589ab8f204ae2b2d79ea79448a2db58940865e061b"
+   }
+  },
+  "Definitions.Core.Uniform": {
+   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "definitions": {
+    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
    }
   },
   "Definitions.Core.ValueSalts": {
@@ -35774,9 +35779,9 @@
    }
   },
   "Definitions.Pouw.Basic.Prob": {
-   "digest": "942703a432c5fb2594b72b9f7bd38aa8f1cc0a08aff2cdaf5742a1935d9ca690",
+   "digest": "95ffff7d20d7e3f7fd9d36678827bffdec0cc058b05c4cdbdb5f5ea6a05ec4dc",
    "definitions": {
-    "Pouw.pr": "c72cdec579500ec37c510210e22769c63de3d3f4f7e39a9f243452a0b22e4134"
+    "Pouw.pr": "6f1b562dc06aad84d836228f2049fc8cd0db85fa862ed120fb3de65a548fa2f9"
    }
   },
   "Definitions.Pouw.Basic.QTree": {
