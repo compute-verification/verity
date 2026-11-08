@@ -26915,7 +26915,7 @@ theorem v6_pr_eq_prob {n : ℕ} (P : Equiv.Perm (Bits n) → Prop) :
   classical
   have h := LazyPerm.prob_congr (Equiv.funUnique Unit (Equiv.Perm (Bits n))).symm
     (fun ω : LazyPerm.Oracle (fun _ : Unit => Bits n) => P (ω ()))
-  rw [← h]
+  rw [← h, Pous.pr_eq_card]
   rfl
 
 theorem hist_length_le_add (S : Strategy (BandAlpha ℓ c)) (π : Oracle (BandAlpha ℓ c)) (m : ℕ) :
