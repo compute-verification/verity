@@ -15,14 +15,13 @@ through an opened reader, registered weights for weight slices), committed in M0
   window written into ``O`` as a ``stand-in``: serving's commitment is the record's roots, and these rows are committed afterwards
   from the bundle, so their link to those roots is provenance (``deferred_rows.stand_in``).
 
-The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": "rate:NUM/DEN" | "stratified-rate:NUM/DEN" |
-"work-rate:NUM/DEN" | "subset:K" | "stratified:K" | "work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances",
-"scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?: {<descriptor id>: cap}, "row_tables"?: true, "partition_digest"?}``.  A rate,
-the one form a stream's rule takes (`service.Law`), is resolved over the window's population (`service.params_law`).  A ``work:K``
-or ``work-rate`` window samples by the work table `work_table_of` derives from the registered compiler's transfer-gate templates
-(`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the stratified sampling design
-samples it.  The members are its templates in order, each instance count read off the Build's
-Programs; the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
+The partition file is the verifier's: ``{"templates": [<descriptor id>, ...], "law": <a rate> | "subset:K" | "stratified:K" |
+"work:K" | {...}, "query"?: "Q_template_instance" | "Q_template_instances", "scope"?: {"op_path_prefix", "steps"}, "chunk_cap"?:
+{<descriptor id>: cap}, "row_tables"?: true, "partition_digest"?}``, a rate (`rated`) resolved over the window's population
+(`service.params_law`).  A ``work`` window samples by the work table `work_table_of` derives from the registered compiler's
+transfer-gate templates (`pipeline.advice_windows`): every unit of those is proved (an All stratum), the rest sampled as the
+stratified sampling design samples it.  The members are its templates in order, each instance count read off the Build's Programs;
+the population program over them (``ml.windows.population.population_program``: ``TemplatePopulations`` for several
 templates, or for one when the file names ``Q_template_instances``) is the one the verifier builds from the same Programs, and a
 ``partition_digest`` in the file that is not that program's partition is refused, as is any other query (a word partition,
 ``Q_word``, never: with the stratified sampling design it is refused by name, its strata being templates).  ``partition.json`` beside the window
@@ -398,12 +397,9 @@ def with_row_tables(ms: Sequence[CS.Member], tmpls: Sequence[str], rows: Sequenc
 
 
 def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
-    """The partition file's law as one-stage's law object, a rate's (`rated`) its kind alone until the window's population
-    resolves it: ``subset`` for ``rate:``, ``stratified`` for ``stratified-rate:``, ``work`` for ``work-rate:``."""
-    if not rated(law):
-        return DR.parse_design(law) if isinstance(law, str) else dict(law)
-    strata = DR.parse_strata_rate(law)
-    return {"law": "subset" if strata is None else "work" if strata[0] else "stratified"}
+    """The partition file's law as one-stage's law object; a rate's (`rated`) is its kind until `population` resolves it."""
+    kind = rated(law) and ("subset" if DR.parse_rate(law) else "work" if DR.parse_strata_rate(law)[0] else "stratified")
+    return {"law": kind} if kind else DR.parse_design(law) if isinstance(law, str) else dict(law)
 
 
 def rated(law: str | Mapping[str, Any]) -> bool:
@@ -467,8 +463,7 @@ def population(programs: dict[str, dict[str, Any]], partition: Mapping[str, Any]
     table = work_table_of(law, n_of, transfer_gates)
     if table is not None:
         table = {P.template_id(fn): table[t] for fn, t in zip(defs, tmpls, strict=True)}
-    if rated(partition["law"]):
-        law, table = SV.params_law(partition["law"], program, query, table)
+    law, table = SV.params_law(partition["law"], program, query, table) if rated(partition["law"]) else (law, table)
     window = CS.Binding(program, query, law, run_root, tuple(ms), tables, context, table)
     want = partition.get("partition_digest")
     if want and want != window.partition_digest:
