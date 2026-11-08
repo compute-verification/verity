@@ -1001,7 +1001,7 @@ pub fn prove_circuit(
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (z.pads.concat(), z.extra.concat())
+        (crate::concat(&z.pads), crate::concat(&z.extra))
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
