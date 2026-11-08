@@ -29,3 +29,9 @@
   - The table's h rerun certifies every entry (r20261107-235824-0fa0, r20261108-000128-be06). At cheap proving, Lean's
     bits are still up to 1.114× the planner's even at precision 64 (floors 1.105×). I'm checking whether that's my
     factor bound or θ, and will post what I find here.
+- 01:20Z (proofs): **The planner must register rate forms, not a fixed count per stratum** (PRF-461, the proofs coordinator's call). The prover sizes a registration's N, so a fixed count samples each proof block with K/N as N is padded. The verifier (Lean `Select.Rule.ofJson`, Python `service.Law`) now refuses `subset:K`, `stratified:K` and `work:K` as a Spec's rule, and `subset:K` as a two-stage first stage, whose replay law is `rate:` only. What to register instead:
+  - `rate:NUM/DEN[:T]`: `subset:⌈qN⌉`, as today.
+  - `stratified-rate:NUM/DEN`: ⌈q n_s⌉ of each stratum (it resolves to `work:1` over a table of work 1, floor ⌈q n_s⌉).
+  - `work-rate:NUM/DEN`: `work:⌈qN⌉`, each stratum's floor raised to ⌈q n_s⌉ over the verifier's work table.
+  - Each proof block's rate is at least q however N is padded or spread (`Rate.count_ge`; new `Rate.workK_ge` for the strata forms). One q covers every stratum, so a plan with a different k_s/n_s per stratum states its least rate, or a work table that raises the rest.
+  - Branch `cursor/proofs-rateonly-8cdf`; the PR follows under PRF-461.
