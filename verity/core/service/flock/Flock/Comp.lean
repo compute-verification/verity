@@ -76,7 +76,8 @@ theorem toUInt8_shiftRight (x : Nat) (k : UInt32) (hx : x ≤ 4294967295) (hk : 
   simp [Nat.toUInt8, UInt8.toNat_ofNat']
 
 /-- `pushLe32` as compiled code computes it (`pushLe32_eq_fast`): the bytes cut from a `UInt32` when `x` fits one. The
-bound is `≤ 4294967295`, not `< 2 ^ 32`: compiled code parses a literal past `UInt32` from its decimal string each call. -/
+bound is `≤ 4294967295`, not `< 2 ^ 32`: compiled code parses a literal past `UInt32` from its decimal string each
+call. -/
 def pushLe32Fast (b : ByteArray) (x : Nat) : ByteArray :=
   if x ≤ 4294967295 then
     let w := x.toUInt32
