@@ -7,14 +7,17 @@
   every statement it proves.
 * **Verifiers.** One a type: `serve --zk --queue -`, its circuit loaded once, each session's public file and sample
   taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
-  directory).
+  directory). A verifier serves its queue in the order its prover connects, so `submit` writes a session's two lines
+  together.
 * **The verdict of record.** A session's ``verdict`` (Lean `flock-verify verify --zk` on its record, say) runs on a pool
   of ``verdicts`` threads once both sides have recorded the session, off the provers' path.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
-nothing is retried. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and the
-verdicts, and returns each process's exit status.
+nothing is retried. A prover's exit also retires its types' verifiers once they have filed the sessions it finished
+(their queues hold sessions it will never connect for), and the next session on its device or types starts fresh
+processes. `close` (or leaving the ``with`` block) ends every queue and stream, waits for the processes and the verdicts,
+and returns each process's exit status by name (a restarted process's name gets ``.2``, ``.3``, ..).
 """
 from __future__ import annotations
 
@@ -99,12 +102,12 @@ class Session:
 
 
 class _Process:
-    """One long-lived `flock-circuit`: lines written to its stdin, its stdout read by a thread of its own and copied to
-    its log beside its stderr."""
+    """One long-lived `flock-circuit`, a prover (``key``: its device) or a verifier (``key``: its type's pin): lines
+    written to its stdin, its stdout read by a thread of its own and copied to its log beside its stderr."""
 
-    def __init__(self, name: str, cmd: list[str], log: Path, env: dict[str, str], on_line: Callable[[str, dict], None],
-                 on_exit: Callable[[_Process], None]):
-        self.name, self.log = name, log
+    def __init__(self, name: str, kind: str, key: Any, cmd: list[str], log: Path, env: dict[str, str],
+                 on_line: Callable[[str, dict], None], on_exit: Callable[[_Process], None]):
+        self.name, self.kind, self.key, self.log = name, kind, key, log
         self.addr: str | None = None
         self.started = threading.Event()
         self.sessions: set[str] = set()
@@ -170,6 +173,8 @@ class ProofServer:
         self._lock, self._send = threading.Lock(), threading.Lock()
         self._provers: dict[int | None, _Process] = {}
         self._verifiers: dict[str, _Process] = {}
+        self._started: list[_Process] = []
+        self._retiring: list[threading.Thread] = []
         self._sessions: dict[str, Session] = {}
         self._pool = ThreadPoolExecutor(max(1, verdicts), thread_name_prefix="verdict")
         self._closed = False
@@ -219,7 +224,6 @@ class ProofServer:
                 "verifier": v.addr, "label": label}
         if self_check is not None:
             line["self_check"] = self_check
-        # a verifier serves its queue in the order its prover connects, so each session's two lines go out together
         with self._send:
             try:
                 v.send(q)
@@ -233,23 +237,18 @@ class ProofServer:
         records, and returns each process's exit status by name."""
         with self._lock:
             self._closed = True
-            provers, verifiers = list(self._provers.values()), dict(self._verifiers)
-        for p in [*provers, *verifiers.values()]:
+            provers, verifiers = list(self._provers.values()), list(self._verifiers.values())
+        for p in [*provers, *verifiers]:
             p.end()
         for p in provers:
+            p.join()
+        # every prover has ended, so a verifier still holding a session no prover will connect for is retired too
+        for v in verifiers:
+            self._retire(v)
+        for t in list(self._retiring):
+            t.join()
+        for p in self._started:
             self.exits[p.name] = p.join()
-        # every prover has ended: a verifier still holding a session no prover will connect for would wait for it forever,
-        # so once it has filed the sessions the provers finished it is stopped
-        with self._lock:
-            unfiled = [s for s in self._sessions.values() if s.served is None]
-        for pin, v in verifiers.items():
-            mine = [s for s in unfiled if s.pin == pin]
-            for s in mine:
-                if s.live is not None:
-                    s._done.wait()
-            if any(s.served is None for s in mine) and v.p.poll() is None:
-                v.p.terminate()
-            self.exits[v.name] = v.join()
         self._pool.shutdown(wait=True)
         for s in self._sessions.values():
             s._fail("the proof server closed before its records")
@@ -266,25 +265,31 @@ class ProofServer:
             self._routes[pin] = min(self.devices, key=lambda d: load[d])
         return self._routes[pin]
 
+    def _start(self, base: str, kind: str, key: Any, cmd: list[str], env: dict[str, str]) -> _Process:
+        n = sum(1 for p in self._started if p.kind == kind and p.key == key)
+        name = base if n == 0 else f"{base}.{n + 1}"
+        p = _Process(name, kind, key, cmd, self.out / f"{name}.log", env, self._line, self._exited)
+        self._started.append(p)
+        return p
+
     def _verifier(self, st: Statement) -> _Process:
         v = self._verifiers.get(st.pin)
         if v is None:
-            name = f"verifier-{st.pin[:16]}"
+            base = f"verifier-{st.pin[:16]}"
             cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
-                   "--out", str(self.out / name), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
+                   "--out", str(self.out / base), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
                    "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1)]
-            v = self._verifiers[st.pin] = _Process(name, cmd, self.out / f"{name}.log", self._env, self._line, self._exited)
+            v = self._verifiers[st.pin] = self._start(base, "verifier", st.pin, cmd, self._env)
         return v
 
     def _prover(self, dev: int | None) -> _Process:
         p = self._provers.get(dev)
         if p is None:
-            name = "prover-cpu" if dev is None else f"prover-gpu{dev}"
             env = {**self._env, "FC_VERIFY_AHEAD": str(self.verify_ahead)}
             if dev is not None:
                 env["CUDA_VISIBLE_DEVICES"] = str(dev)
             cmd = [self.binary, "prove", *(["--zk"] if self.zk else []), *([] if dev is None else ["--gpu"]), "--stream", "-"]
-            p = self._provers[dev] = _Process(name, cmd, self.out / f"{name}.log", env, self._line, self._exited)
+            p = self._provers[dev] = self._start("prover-cpu" if dev is None else f"prover-gpu{dev}", "prover", dev, cmd, env)
         return p
 
     def _line(self, tag: str, rec: dict) -> None:
@@ -296,14 +301,11 @@ class ProofServer:
                 s.live = rec
             else:
                 s.served = rec
-                v = self._verifiers[s.pin]
-                s.dir = Path(rec.get("out") or self.out / v.name) / rec["session"]
+                s.dir = Path(rec.get("out") or self.out / f"verifier-{s.pin[:16]}") / rec["session"]
             if s.live is None or s.served is None:
                 return
             s.seconds = round(time.monotonic() - s._t0, 3)
             s._done.set()
-            self._verifiers[s.pin].sessions.discard(s.label)
-            self._provers[s.device].sessions.discard(s.label)
             if s._fn is None:
                 s._judged.set()
             else:
@@ -319,8 +321,31 @@ class ProofServer:
             s._judged.set()
 
     def _exited(self, p: _Process) -> None:
+        stale = []
         with self._lock:
-            left = [self._sessions[x] for x in p.sessions]
-            p.sessions.clear()
+            left = [s for x in p.sessions if not (s := self._sessions[x])._done.is_set()]
+            mine = self._provers if p.kind == "prover" else self._verifiers
+            if mine.get(p.key) is p:
+                del mine[p.key]
+            if p.kind == "prover":
+                for pin, v in list(self._verifiers.items()):
+                    if self._routes.get(pin) == p.key and any(self._sessions[x].served is None for x in v.sessions):
+                        del self._verifiers[pin]
+                        stale.append(v)
         for s in left:
             s._fail(f"{p.name} exited (rc {p.p.returncode}) before its records: {p.tail()}")
+        for v in stale:
+            t = threading.Thread(target=self._retire, args=(v,), name=f"retire-{v.name}", daemon=True)
+            self._retiring.append(t)
+            t.start()
+
+    def _retire(self, v: _Process) -> None:
+        """Ends verifier ``v`` once it has filed the sessions its prover finished: the rest of its queue never comes."""
+        with self._lock:
+            mine = [self._sessions[x] for x in v.sessions]
+        for s in mine:
+            if s.live is not None:
+                s._done.wait()
+        v.end()
+        if v.p.poll() is None and any(s.served is None for s in mine):
+            v.p.terminate()

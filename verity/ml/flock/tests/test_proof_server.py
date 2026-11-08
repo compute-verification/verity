@@ -125,15 +125,19 @@ def test_one_cpu_prover_without_devices(binary, tmp_path):
     assert s.device is None and "--gpu" not in record(s)["proved"]["argv"] and set(ps.exits) >= {"prover-cpu"}
 
 
-def test_a_dead_prover_fails_its_unfinished_sessions(binary, tmp_path, monkeypatch):
+def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
+    """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
+    and the next session meets a new prover and verifier on their first lines."""
     monkeypatch.setenv("FAKE_PROVE_DIES_AFTER", "1")
+    pin = "ff" * 64
     with ProofServer(binary, tmp_path / "ps") as ps:
-        first, *rest = [ps.submit(statement(tmp_path, "ff" * 64), draw([i]), f"s{i}") for i in range(3)]
-        assert first.result().accepted
-        for s in rest:
-            with pytest.raises(ProofServerError, match="prover-cpu exited"):
-                s.result()
-    assert ps.exits["prover-cpu"] == 4
+        first = ps.submit(statement(tmp_path, pin), draw([0]), "s0").result()
+        with pytest.raises(ProofServerError, match="prover-cpu exited"):
+            ps.submit(statement(tmp_path, pin), draw([1]), "s1").result()
+        last = ps.submit(statement(tmp_path, pin), draw([2]), "s2").result()
+    assert first.accepted and last.accepted and record(last)["queue"]["label"] == "s2"
+    v = f"verifier-{pin[:16]}"
+    assert ps.exits == {"prover-cpu": 4, "prover-cpu.2": 0, v: ps.exits[v], f"{v}.2": 0} and ps.exits[v] != 0
 
 
 def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkeypatch):
