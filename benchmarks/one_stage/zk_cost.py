@@ -151,18 +151,12 @@ class Peak:
         return self.peak_kb
 
 
-def environ(env: dict | None) -> dict:
-    """This process's environment with ``env`` over it, a None value removing its variable (flock-circuit takes the host's
-    witness when FC_HOST_WITNESS is set at all)."""
-    return {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
-
-
 def timed(cmd: list[str], stdout, stderr, env: dict | None = None,
           peak: Peak | None = None) -> tuple[int, dict, list[tuple[float, str]]]:
     """Run ``cmd``; its exit code, wall and CPU seconds and peak RSS, and each stdout line with the seconds since start;
     ``peak`` also samples its process tree."""
     t0 = time.monotonic()
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, text=True, env=environ(env))
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=stderr, text=True, env=a0.environ(env))
     if peak is not None:
         peak.roots.append(p.pid)
     lines = []
@@ -298,7 +292,7 @@ def session(a, pt: dict, arm: str, mode: str, rep: int, out: Path) -> dict:
                               "--instances", pub, "--circuit", str(d / "circuit.txt"), *tables,
                               "--pin", pt["pin"], "--operator", "zk-cost", "--draw-file", str(sd / f"draw-k{k}.json"),
                               "--sessions", str(warm + runs)], stdout=serve_log, stderr=subprocess.STDOUT, text=True,
-                             env=environ(env))
+                             env=a0.environ(env))
     peak = Peak()
     peak.roots.append(serve.pid)
     serve_usage = None
