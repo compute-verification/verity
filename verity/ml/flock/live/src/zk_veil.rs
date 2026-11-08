@@ -41,7 +41,45 @@ use flock_field::{F128, F256};
 use flock_transcript::challenger::Challenger;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha512};
+use std::cell::RefCell;
 use std::sync::OnceLock;
+use std::time::Instant;
+
+thread_local! {
+    static LAPS: RefCell<Option<Vec<(&'static str, f64)>>> = const { RefCell::new(None) };
+}
+
+/// Starts recording this thread's verifier laps ([`lap`]) until [`take_laps`]; nothing is recorded otherwise.
+pub fn start_laps() {
+    LAPS.with(|l| *l.borrow_mut() = Some(Vec::new()));
+}
+
+/// The seconds since `t` as phase `name`, added to the phase's earlier laps, while this thread records.
+pub fn lap(name: &'static str, t: Instant) {
+    let s = t.elapsed().as_secs_f64();
+    LAPS.with(|l| {
+        if let Some(v) = l.borrow_mut().as_mut() {
+            match v.iter_mut().find(|(k, _)| *k == name) {
+                Some((_, x)) => *x += s,
+                None => v.push((name, s)),
+            }
+        }
+    });
+}
+
+/// A lap ([`lap`]) from its start to where it is dropped, early returns included.
+pub struct Lap(pub &'static str, pub Instant);
+
+impl Drop for Lap {
+    fn drop(&mut self) {
+        lap(self.0, self.1);
+    }
+}
+
+/// This thread's laps since [`start_laps`], in first-lap order; recording stops.
+pub fn take_laps() -> Vec<(&'static str, f64)> {
+    LAPS.with(|l| l.borrow_mut().take().unwrap_or_default())
+}
 
 pub const LABEL_ZC: &[u8] = b"flock-zerocheck-v0";
 pub const LABEL_PCS: &[u8] = b"flock-pcs-open-batch-v0";
@@ -667,10 +705,12 @@ pub struct Replayed {
 /// sampling exactly their coins, with every message-dependent quantity an affine form in the pads. `own_comb`: the prover's own
 /// replay passes its lincheck's folded `comb` (upstream's `comb_partial`) instead of folding again; a verifier passes `None`
 /// and folds its own (a proof's field is never read). `c0_identity` keeps `r1cs.c0_is_identity()` (a pass over its 2^k rows)
-/// once computed, for the statement's later replays.
+/// once computed, for the statement's later replays. A verifier's comb is `FC_ZK_LINCHECK`'s: `flat` (the default: the 2^k_log
+/// eq table, the fold, a bind per round), `partial` (from the block's structure after the rounds,
+/// `session_verify::comb_structured`, flat where it doesn't cover the circuit) or `both`, rejecting when they differ.
 #[allow(clippy::too_many_arguments)]
 pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc: &ZerocheckProof, lc: &LincheckProof,
-                              circuit: &dyn LincheckCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
+                              circuit: &crate::circuit::BlockCircuit, lay: &Layout, root: &[u8; 64], own_comb: Option<&[F128]>, ch: &mut Ch)
                               -> Result<Replayed, String> {
     let s = lay.len();
     let m = r1cs.m;
@@ -739,16 +779,31 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         return Err("zk: the prover's folded comb has the wrong length".into());
     }
     let own = own_comb.is_some();
-    let mut comb_vec = if own {
+    let mode = std::env::var("FC_ZK_LINCHECK").unwrap_or_default();
+    if !matches!(mode.as_str(), "" | "flat" | "partial" | "both") {
+        return Err(format!("FC_ZK_LINCHECK={mode}: flat, partial or both"));
+    }
+    let ws = x_ab.z_skip.weights(K_SKIP);
+    let structured = !own && matches!(mode.as_str(), "partial" | "both") && matches!(x_ab.z_skip, SkipPoint::Phi8(_))
+        && crate::session_verify::structured_at(circuit, &ws, &x_ab.x_inner_rest, K_SKIP);
+    let flat = !own && (mode != "partial" || !structured);
+    let mut comb_vec = if !flat {
         Vec::new()
     } else {
-        let eq_inner = build_quirky_eq_table_from_weights(&x_ab.z_skip.weights(K_SKIP), &x_ab.x_inner_rest);
-        circuit.fold_alpha_batched(alpha, &eq_inner)
+        let t = Instant::now();
+        let eq_inner = build_quirky_eq_table_from_weights(&ws, &x_ab.x_inner_rest);
+        lap("lincheck_eq_table_s", t);
+        let t = Instant::now();
+        let c = circuit.fold_alpha_batched(alpha, &eq_inner);
+        lap("lincheck_fold_s", t);
+        c
     };
     let mut running = a.scale(alpha).add(&b);
+    let mut beta_v = F128::ZERO;
     if let Some(col) = circuit.const_pin_col() {
         let beta = ch.sample_f128();
-        if !own {
+        beta_v = beta;
+        if flat {
             comb_vec[col] += beta;
         }
         running = running.add_const(beta);
@@ -763,14 +818,26 @@ pub fn replay<Ch: Challenger>(r1cs: &BlockR1cs, c0_identity: &OnceLock<bool>, zc
         let e0 = running.add(&e1);
         let c1 = e0.add(&e1).add(&einf);
         running = einf.scale(rr * rr).add(&c1.scale(rr)).add(&e0);
-        if !own {
+        if flat {
+            let t = Instant::now();
             let half = comb_vec.len() / 2;
             for i in 0..half {
                 comb_vec[i] = comb_vec[i] + rr * (comb_vec[i + half] + comb_vec[i]);
             }
             comb_vec.truncate(half);
+            lap("lincheck_binds_s", t);
         }
         r_rounds.push(rr);
+    }
+    if structured {
+        let t = Instant::now();
+        let rr: Vec<F128> = r_rounds.iter().rev().copied().collect();
+        let cp = crate::session_verify::comb_structured(circuit, alpha, beta_v, &ws, &x_ab.x_inner_rest, &rr, &mut Vec::new());
+        lap("lincheck_partial_s", t);
+        if flat && cp != comb_vec {
+            return Err("FC_ZK_LINCHECK=both: the structured comb differs from the flat".into());
+        }
+        comb_vec = cp;
     }
     if let Some(c) = own_comb {
         comb_vec = c.to_vec();
@@ -1052,7 +1119,9 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, final_c: F128
     ch.observe_f128_slice(&[pr.rho, pr.sigma]);
     cons.extend(triple_constraints(lay, eps, pr.rho, pr.sigma));
     let gammas = ch.sample_f128_vec(cons.len());
+    let t0 = Instant::now();
     let (c, t) = batch(&cons, &gammas);
+    lap("inner_batch_s", t0);
     ch.observe_bytes(&pr.tau_commit);
     let beta = ch.sample_f128();
     if beta == F128::ZERO {
@@ -1068,6 +1137,7 @@ pub fn verify_inner<Ch: Challenger>(pr: &InnerProof, lay: &Layout, final_c: F128
         return Err("zk inner: the batched constraint fails (⟨c, Y⟩ ≠ t + β τ)".into());
     }
     let depth = code.n.trailing_zeros() as usize;
+    let _cols = Lap("inner_columns_s", Instant::now());
     for (k, &j) in qs.iter().enumerate() {
         let (a, b) = pr.opened[k];
         if code.at(&pr.y, j) != a + beta * b {

@@ -580,7 +580,17 @@ impl StatementVerifier for CircuitVerifier {
     fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
         if is_zk(&tb.st) {
-            return Self::verify_zk(tb, rep, proof, ch, link);
+            let t0 = Instant::now();
+            zkv::start_laps();
+            let r = Self::verify_zk(tb, rep, proof, ch, link);
+            let laps = zkv::take_laps();
+            let total = t0.elapsed().as_secs_f64();
+            let mut ph: serde_json::Map<String, Value> = laps.iter().map(|(k, v)| (k.to_string(), json!(v))).collect();
+            let top = ["decode_s", "bind_s", "replay_s", "regions_s", "ring_switch_s", "opening_s", "ligerito_cons_s", "inner_s"];
+            ph.insert("other_s".into(), json!(total - laps.iter().filter(|(k, _)| top.contains(k)).map(|(_, v)| v).sum::<f64>()));
+            ph.insert("total_s".into(), json!(total));
+            *self.phases.lock().unwrap_or_else(PoisonError::into_inner) = Some(Value::Object(ph));
+            return r;
         }
         let t0 = Instant::now();
         let mut ph = sverify::Phases::default();
@@ -639,7 +649,9 @@ impl CircuitVerifier {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
+        let t = Instant::now();
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
+        zkv::lap("decode_s", t);
         verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
@@ -658,9 +670,16 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
         return Err("R7/F2: proof's PCS parameters differ from the pinned Fast100 parameters".into());
     }
     let lay = zk_layout(st);
+    let t = Instant::now();
     bind_statement(ch, &st.r1cs, commitment);
+    zkv::lap("bind_s", t);
+    let t = Instant::now();
     let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, ch)?;
+    zkv::lap("replay_s", t);
+    let t = Instant::now();
     let extra = st.extra_claims(points, inst);
+    zkv::lap("regions_s", t);
+    let t = Instant::now();
     let rs = &proof.pcs_open.ring_switches;
     if rs.len() != 2 + extra.len() {
         return Err("zk: the opening's ring switches are not one per claim".into());
@@ -678,18 +697,23 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     }
     let skip_refs: Vec<&[F128]> = skips.iter().map(|v| v.as_slice()).collect();
     let x_refs: Vec<&[F128]> = xs.iter().map(|v| v.as_slice()).collect();
+    zkv::lap("ring_switch_s", t);
+    let t = Instant::now();
     let cfg = flock_core::pcs::ligerito::zk::verifier_config(pcs.ligerito_verifier_config()?, zk_queries0(st.m)?);
     let rec = verify_opening_batch_ligerito_mixed_with_grinding_zk(commitment, &values, &skip_refs, &x_refs, &[], &proof.pcs_open, &cfg,
                                                                    pcs.opening_grinding(),
                                                                    Some(flock_core::pcs::ligerito::zk::Level0Params { t_pad: zk_t_pad(st.m), rep }), ch)
         .map_err(|e| format!("opening: {e:?}"))?
         .ok_or("zk: the opening has no level-0 record")?;
+    zkv::lap("opening_s", t);
+    let t = Instant::now();
     let lg = &proof.pcs_open.ligerito;
     let t_prime = lg.zk_level0.as_ref().ok_or("zk: level 0's hiding messages are missing")?.t_prime;
     let mut cons = rp.cons;
     cons.push(("ring switch ab", con_ab));
     cons.push(("ring switch c", con_c));
     cons.extend(zkv::ligerito_constraints(&lay, &rec, &zkv::ligerito_exposed(lg, &lay), t_prime)?);
+    zkv::lap("ligerito_cons_s", t);
     Ok((cons, rec))
 }
 
@@ -700,6 +724,7 @@ fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
         let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
+        let _inner = zkv::Lap("inner_s", Instant::now());
         zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
