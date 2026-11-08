@@ -3,6 +3,7 @@ module
 public import SampledProofs.Registration
 public import Proofs.Flock.Claims.Sampling.Code
 public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Properties.SampledProofs.Second
 
 /-!
 # The registrations the samples of record read, and the code's round order
@@ -10,7 +11,8 @@ public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
 What the deployed sampled verifier's samples read of a registration, and the code with its checked units and rounds set
 from them, with no proof module beneath: `Reg`, the registration `SampledProofs.Run.run` hands `Select.select`, and its
 sample of record (`Reg.checked`); `RegTwo`, a two-stage registration, its replay sample, the second stage's proof
-blocks and its checked units (`RegTwo.sample`, `RegTwo.blockAt`, `RegTwo.checked`); `codeTwo`, the code with those
+blocks and its checked units (`RegTwo.sample`, `RegTwo.templateAt`, `RegTwo.blockAt`, `RegTwo.checked`); `codeTwo`, the
+code with those
 checked units, and `replayTwo`, the replay sample of record; and `Code.atOrder`, the code at its round order (`Order`):
 its second stage the rounds after the first stage's coin, and its sessions' rounds those after the second stage's, and
 `codeTwoAt`, the two-stage code at its round order, each stage's bytes read off its own coin (`bytesFirst`,
@@ -52,14 +54,14 @@ def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
   (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
 
 /-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
-(`first`), the proof blocks in each replay block (`n`) and the second stage's count in each (`k`), the statement's
-proof block at position `p` of replay block `ρ` (`blockOf ρ p`), and the proof blocks checked whatever the stages sample
-(`always`). -/
+(`first`), each template's proof blocks in a replay block (`ns`, a cell each) and the second stage's count in each of
+its cells (`ks`), the statement's proof block at position `p` of template `t`'s cell in replay block `ρ`
+(`blockOf ρ t p`), and the proof blocks checked whatever the stages sample (`always`). -/
 structure RegTwo where
   first : Reg
-  n : ℕ
-  k : ℕ
-  blockOf : ℕ → ℕ → ℕ
+  ns : Array ℕ
+  ks : Array ℕ
+  blockOf : ℕ → ℕ → ℕ → ℕ
   always : ℕ → Bool
 
 /-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
@@ -69,14 +71,24 @@ def RegTwo.sample (g : RegTwo) (src : ByteArray) : Array ℕ :=
   | .ok (_, proved, _) => proved
   | .error _ => #[]
 
-/-- Interior unit `j`'s proof block: position `j % n` of replay block `sample[j / n]`. -/
-def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ := g.blockOf (sample.getD (j / g.n) 0) (j % g.n)
+/-- Interior unit `j`'s template over a replay sample of `q`: the first whose cells end past `j`, the interior being
+template-major (`cellOff`); `ns.size` past them all. -/
+def RegTwo.templateAt (g : RegTwo) (q j : ℕ) : ℕ :=
+  ((List.range g.ns.size).find? fun t => decide (j < cellOff q g.ns (t + 1))).getD g.ns.size
+
+/-- Interior unit `j`'s proof block: position `(j - off) % n` of its template `t`'s cell in replay block
+`sample[(j - off) / n]`, where `t`'s cells start at `off` and hold `n` each. -/
+def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ :=
+  let t := g.templateAt sample.size j
+  let o := cellOff sample.size g.ns t
+  let n := g.ns.getD t 0
+  g.blockOf (sample.getD ((j - o) / n) 0) t ((j - o) % n)
 
 /-- **The checked proof blocks** below `N`, at first-stage bytes `src₁` and second-stage bytes `src₂`: those the second
 stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
 is refused. -/
 def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
-  match SampledProofs.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
+  match SampledProofs.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ with
   | .ok (draw, _) => (List.range N).filter fun v =>
       g.always v || (SampledProofs.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
   | .error _ => List.range N

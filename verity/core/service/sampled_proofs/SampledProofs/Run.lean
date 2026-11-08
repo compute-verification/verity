@@ -20,12 +20,13 @@ check the stream ran on it, in the stream's order.
 * under a two-stage rule (`Select.Rule.twoStage grain replay k`), the registration is the boundary commitment over the
   replay blocks, the population of the challenger's program under its query, which is the rule's `grain` (else `grain`),
   and `select` is the first stage, its replay sample. Then `interiors`: the interior registration (`Interior`) over the
-  sample's `Q · n` proof blocks, `n` those of one replay block (`Partition.units` of the challenger's replay block Program
-  under the check's query), replay block `sample[i]`'s being `[i·n, (i+1)·n)`: the public-items rule on the interior
-  values, the population (else `interior-population`), R1–R7 against its copies under `subset:Q·n` (all of them
-  committed), `population-order`, and its receipt; and `second`: the second stage on its own coins
-  (`Select.selectSecond`), read after the interior registration's digest and carrying their evidence as the first
-  stage's do (`coins`);
+  sample's `Q · n` proof blocks, `n = Σ n_t` those of one replay block, `n_t` its instances of template `t`
+  (`Select.replayCells` of the challenger's replay block Program under the check's query), template-major, replay block
+  `sample[i]`'s instances of template `t` being `[off_t + i·n_t, off_t + (i+1)·n_t)`, `off_t = Q · Σ_{t'<t} n_t'`: the
+  public-items rule on the interior values, the population (else `interior-population`), R1–R7 against its copies under
+  `subset:Q·n` (all of them committed), `population-order`, and its receipt; and `second`: the second stage on its own
+  coins (`Select.selectSecond`, the rule's counts over the cells, `Select.Counts.over`), read after the interior
+  registration's digest and carrying their evidence as the first stage's do (`coins`);
 * `deliver`: one or more session records' SHA-512 (`service._DIGEST`);
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
@@ -135,25 +136,26 @@ private def grainHolds (rule : Select.Rule) (query : Json) : Bool :=
   | .twoStage grain _ _ => jeq query grain
   | _ => true
 
-/-- The interior registration and the second stage over the first stage's replay sample `sample`, `k` proof blocks in
-each: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step and
-codes. -/
-private def interiorSteps (i : Input) (it : Interior) (k : Nat) (sample : Array Nat) :
+/-- The interior registration and the second stage over the first stage's replay sample `sample`, the rule's counts `k`
+in each cell: the interior, its receipt, the second stage's sample and law, and the bytes it read; or the refusal's step
+and codes. -/
+private def interiorSteps (i : Input) (it : Interior) (k : Select.Counts) (sample : Array Nat) :
     V (Except (String × Array String) (Interior × Json × Json × Json × Nat)) := do
   let v := it.params.verifier
   let pub ← Service.checkPublic it.record (Json.str v.scheme) (← Registration.queryDigest v.query) it.values i.declared
   if !pub.codes.isEmpty then return .error ("interiors", pub.codes)
-  let n ← Partition.units it.replay v.query
-  let m := sample.size * n
+  let ns ← Select.replayCells it.replay v.query
+  let ks ← k.over (← Select.templateIds v.query) ns
+  let m := sample.size * ns.toList.sum
   if nat? (getD it.record "population") != some m then return .error ("interiors", #["interior-population"])
   let v := { v with law := Json.mkObj [("law", "subset"), ("k", Lean.toJson m)] }
   let codes := Registration.check it.record v
   if !codes.isEmpty then return .error ("interiors", codes)
   if !Slots.popOk v.program v.query m then return .error ("interiors", #["population-order"])
   let receipt ← receipt it.record i.challenger it.received
-  let (draw, read) ← Select.selectSecond sample n k it.source
+  let (draw, read) ← Select.selectSecond sample ns ks it.source
   if !coinsHold it.coins it.record v.windowRoot (it.source.extract 0 read) then return .error ("second", #["coins"])
-  return .ok (it, receipt, draw, Select.secondLaw sample n k, read)
+  return .ok (it, receipt, draw, Select.secondLaw sample ns ks, read)
 
 /-- The second stage, under a two-stage rule, over the first stage's replay sample `sample`; none under a one-stage
 rule. -/

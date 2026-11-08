@@ -161,20 +161,20 @@ def scopeOk (C : Prog) (Pt : Partition) (d : Design.Two) : Bool :=
     (d.replay.rules.zip d.part.classes).all (fun p => oneStageOk (strataSizes p.2) p.1) &&
     d.k.length == Pt.strata.length && d.k.all (1 ≤ ·)
 
-/-- **The replay layout's slots are the second stage's cells**, decided: each population slot `ρ` of `l` is unit `ρ`,
-whose `n` proof blocks `blockOf ρ` are distinct and are its one cell, in a stratum whose `k` is the registration's; every
-proof block of an input slot is always checked. -/
+/-- **The replay layout's slots are the second stage's cells**, decided: the registration's templates are `Pt`'s
+strata, each with the design's count; each population slot `ρ` of `l` is unit `ρ`, whose cell of each stratum `t` is
+the `n_t` proof blocks `blockOf ρ t`, distinct; every proof block of an input slot is always checked. -/
 def cellsOk (g : RegTwo) (Pt : Partition) (l : SampledProofs.Slots.Layout) (d : Design.Two) : Bool :=
-  (List.range l.blocks.size).all fun ρ =>
-    match l.blocks[ρ]? with
-    | some b =>
-      match b.unit with
-      | some u => u == ρ && decide ((List.range g.n).map (g.blockOf ρ)).Nodup &&
-          (List.range Pt.strata.length).any fun t₀ => d.k.getD t₀ 0 == g.k &&
-            (List.range (Pt.strata.length + 1)).all fun t =>
-              decide (cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅)
-      | none => (List.range Pt.blocks.length).all fun v => replayOf Pt d.part v != some ρ || g.always v
-    | none => true
+  g.ns.size == Pt.strata.length && (List.range Pt.strata.length).all (fun t => d.k.getD t 0 == g.ks.getD t 0) &&
+    (List.range l.blocks.size).all fun ρ =>
+      match l.blocks[ρ]? with
+      | some b =>
+        match b.unit with
+        | some u => u == ρ && (List.range Pt.strata.length).all fun t =>
+            decide ((List.range (g.ns.getD t 0)).map (g.blockOf ρ t)).Nodup &&
+              decide (cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t))
+        | none => (List.range Pt.blocks.length).all fun v => replayOf Pt d.part v != some ρ || g.always v
+      | none => true
 
 /-- The tables' sizes `m` a session's statement sets up under `--zk`, in order; none where it doesn't set up. -/
 def shapeOf (xS : Msg) : List ℕ :=
@@ -231,7 +231,7 @@ def src (c : FlockDeploy.Coin) : ByteArray := bytesOf (coinByte c)
 
 /-- **The second stage's sample** on the coins of rounds 0 and 1; none where either stage is refused. -/
 def secondDraw (c₀ c₁ : FlockDeploy.Coin) : Option Json :=
-  match SampledProofs.Select.selectSecond (h.reg.sample (src c₀)) h.reg.n h.reg.k (src c₁) with
+  match SampledProofs.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (src c₁) with
   | .ok (draw, _) => some draw
   | .error _ => none
 
