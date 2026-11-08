@@ -25,7 +25,10 @@ stages the ``--units`` chunks, or the combine, of a synthetic logits row of V (`
 `TokenSelect_v1{V}` on the whole row and each staged output to its word Definition's.
 
 A structural statement proved with ``--bin`` takes ``--tmpl-unit-bin``: flock-tmpl-unit places its unit's rows for the prover
-(`a11.templated`), and Lean verifies it as the templated statement.
+(`a11.templated`), and Lean verifies it as the templated statement.  Proved on the default rows, the unit is bound to a
+population Program of its one Definition at ``--n`` instances and that Program's partition (`partition.mixed_population_program`,
+as `verifier_cost/flock_served.py` binds a served kind), which Lean's verify reads (``--program``, ``--partition``); without a
+Program it refuses every session once its checks pass.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/m1_unit.py --spec 'RMSNormFusedCudaVector8_v1{N=6144,EPS=...,BLOCK=256}' --out DIR \\
@@ -452,9 +455,22 @@ def main() -> int:
 
     d = out / "stage"
     t = time.time()
+    held, bind, base = {}, {}, 0
+    if a.bin and not (a.call_n or a.chunk_k or a.call_w or a.row or a.vchunks):
+        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.ml.circuits.codec import canonical_json, encode_program
+
+        program, query = P.mixed_population_program([(fn, a.n)]), P.template_instances_query([fn])
+        part = P.partition(program, query)
+        (_, base, _), = P.ranges(program, query)
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "partition.json").write_text(json.dumps(part, sort_keys=True))
+        (d / "program.json").write_bytes(canonical_json(encode_program(program)))
+        held = {"partition_file": d / "partition.json", "program_file": d / "program.json"}
+        bind = {"bind": {"partition": P.digest(part), "program": part["program"]}}
     with K.no_cyclic_gc():
         st = CS.UnitStager(fn, f"m1/{K.family(fn.id)}", rows, K.out_rows(n_out), circuit=d / "circuit.txt", reads=a.reads,
-                           stage_ands=None if a.stage_ands == "none" else a.stage_ands,
+                           stage_ands=None if a.stage_ands == "none" else a.stage_ands, **bind,
                            **({"layout": a.structural, "structural": True} if a.structural else {}))
     m, c = st.meta, getattr(st.low, "counts", None) or st.low.layout.counts
     cap = int(m["vus_per_block"]) << (M_MAX - int(m["k_log"])) if M_MAX - int(m["k_log"]) >= 3 else 0
@@ -534,7 +550,7 @@ def main() -> int:
         vals = {r: bf16_rows(rng, a.n, b // 16) for r, _s, b, _p in rows}
     t = time.time()
     with K.no_cyclic_gc():
-        got = st.stage(vals, d, os.urandom(32))
+        got = st.stage(vals, d, os.urandom(32), **({"indices": range(base, base + a.n)} if held else {}))
     for f in ("inst", "pub"):
         (d / f"{f}.bin").rename(d / f"{f}-{a.n}.bin")
     IL.write_tables(d / "tables")
@@ -561,7 +577,7 @@ def main() -> int:
     say("proved", seconds=round(time.time() - t, 1), accepted=(live or {}).get("accepted"), why=(live or {}).get("why"),
         **{k: (live or {}).get(k) for k in ("k_log", "nbl", "dense_m", "prove_total_s", "witness_s", "proof_bytes", "units")},
         verdict=(record or {}).get("verdict"))
-    v = a0.lean_verify(a.lean, {"dir": d, **form}, a.n, out / "session", zk=True)
+    v = a0.lean_verify(a.lean, {"dir": d, **form, **held}, a.n, out / "session", zk=True)
     say("verified", **v)
     return 0 if (live or {}).get("accepted") and v["accepted"] else 1
 
