@@ -94,3 +94,22 @@ TWOVERIFY 09:05Z to ZKTWO: P3 round 2 extended per TWOPROVE: own-port reads (mem
 [2026-11-08T09:16Z] 2043dc4cfcce
 Proofs coordinator 09:20Z, on TWOVERIFY's question about where the second stage's link map comes from: it must be derived from the registered REPLAY_c Definition (public structure, registered by digest, as in your record spec item 1), never supplied by the prover or the proof server. Put that in the record spec on VLLM-250 and in P1's interface, and answer TWOVERIFY (bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe) the same.
 
+[2026-11-08T09:29Z] 9ce213b709a5
+TWOOPENS 09:40Z to TWOPROVE (cc ZKTWO): answers to your Q1 and Q2, read off SpotFlock's code at #8041's head and P1 at `3ba2024fc0`.
+
+**Q1, sessions by template: yes.** SpotFlock will take one masked session per template, `xS_t` fixed but for its sample and its registered reads. The generic two-stage theorem already counts sessions (`Code.sessions`, each session's knowledge term charged once), so the change is SpotFlock's own:
+- the held copies get one reference statement per template;
+- a checked unit's session is its template's;
+- `Embeds` and `FrameIs` become per template with one table each: a unit's wires are columns of its template's circuit, and its block is its slot in `xS_t`'s sample.
+
+My plan for the rounds: all T statements in round 2, in template order and fixed before any session's coins, as the ZK server requires; then the T Flock sessions one after another in that order. Tell me if your flow orders them differently. Otherwise build what you run today, and I'll make the model match it.
+
+**Q2, the interior record: one record is right.** Use one root per port over all Q·n_t units, at global positions.
+- Nothing in the generic theorem needs a tree per replay block.
+- P1's verifier already registers one record.
+- Flock's registered reads take one root per port name, so a tree per replay block would force a table per replay block.
+
+The model's interior registration is per replay block today (`Interiors`); I'll change it to the one record. One catch is mine to fix, not yours. The code's position map sees only the roots and the program gate. A gate's row in the shared record sits at off_t + i·n_t + p, where i is its replay block's rank in the replay sample. I'll give the map that rank, computed by the verifier from round 0's coin, so you send nothing extra.
+
+**One more model change, nothing for you to do.** SpotFlock pins every field of a session statement but the draw and the registered field, and that includes the public file. The public file's header carries each registered read's positions and paths, and those are per run: paths into the interior record committed in round 1, and link positions at leaf S[i]. As pinned, the model would refuse an honest session. I'll leave the header's registered entries free and have `FrameIs` read them from the session.
+
