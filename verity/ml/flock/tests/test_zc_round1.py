@@ -1,6 +1,7 @@
 """``cuda/zc_round1.cuh``, the zerocheck's round 1 from the packed witness, word for word against upstream's table kernel
 (``zerocheck_round1_cpustyle.cuh``): the 64 a·b sums and the 64 c sums, at sizes from one outer chunk to grids its warps
-stride several times, with a·b by clmad where the GPU has it and by the log tables (``ZC_R1_TABLES``).
+stride several times, with a·b by clmad where the GPU has it and by the log tables (``ZC_R1_TABLES``); and the lincheck's z
+transpose (``cuda/zlin_transpose.cuh``) byte for byte against the byte-at-a-time kernel, with nothing written past its end.
 ``zc_round1.cu`` runs them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash``
 (``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU is present."""
 from __future__ import annotations
@@ -18,6 +19,8 @@ from verity import settings
 SOURCE = Path(__file__).resolve().with_name("zc_round1.cu")
 #: outer chunks: one, a partial warp step's worth, and past a resident grid's warps (an H200's 132 SMs hold 3,168)
 N_OUT = (1, 3, 64, 1000, 5003, 65543)
+#: (k_log, stripes, blocks): one thread, a partial block, and grids that stride over several blocks' worth
+ZT_CASES = ((7, 1, 4096), (7, 1000, 4096), (10, 333, 3), (14, 77, 5), (14, 4096, 4096))
 
 
 @cache
@@ -51,6 +54,8 @@ def lib(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
     dll = ctypes.CDLL(str(out))
     dll.zr_check.argtypes = [ctypes.c_longlong, ctypes.c_uint64, ctypes.POINTER(ctypes.c_longlong)]
     dll.zr_check.restype = ctypes.c_int
+    dll.zt_check.argtypes = [ctypes.c_int, ctypes.c_longlong, ctypes.c_int, ctypes.c_uint64, ctypes.POINTER(ctypes.c_longlong)]
+    dll.zt_check.restype = ctypes.c_int
     return dll
 
 
@@ -65,4 +70,17 @@ def test_round_1_from_the_packed_witness_is_the_table_kernels_word_for_word(lib:
             assert lib.zr_check(n_out, seed, out) == 0, (n_out, seed)
             if any(out):
                 bad[(n_out, seed)] = {"ab": out[0], "c": out[1]}
+    assert not bad, bad
+
+
+@pytest.mark.slow
+@needs_gpu
+def test_the_z_transpose_is_the_bytewise_kernels_byte_for_byte(lib: ctypes.CDLL) -> None:
+    """Slow for its nvcc builds (shared with round 1's test): the transpose, which only a GPU runs."""
+    bad = {}
+    for k_log, stripes, blocks in ZT_CASES:
+        out = ctypes.c_longlong()
+        assert lib.zt_check(k_log, stripes, blocks, 3, ctypes.byref(out)) == 0, (k_log, stripes, blocks)
+        if out.value:
+            bad[(k_log, stripes, blocks)] = out.value
     assert not bad, bad

@@ -16,38 +16,12 @@
 #include "ring_switch.cuh"
 #include "zerocheck_fused.cuh"
 #include "zc_round1.cuh"
+#include "zlin_transpose.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
 // *p += v: the lincheck's pinned column takes β on the device, so the host reads nothing back to add it
 __global__ void chunk_add_word(F128* p, F128 v) { *p = f128_add(*p, v); }
-
-// out[(s << k_log) + c] holds bit c of z's rows 8s..8s+7 (bit r: row 8s + r). A thread's 128 bytes are sixteen 8x8 bit
-// transposes, stored 16 bytes at a time (out is 16-byte aligned)
-__global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
-    const long long wpr = (1LL << k_log) / 128;   // F128 words per block row
-    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr;
-         t += (long long)gridDim.x * blockDim.x) {
-        long long s = t / wpr, w = t % wpr;
-        F128 v[8];
-#pragma unroll
-        for (int r = 0; r < 8; r++) v[r] = z[(8 * s + r) * wpr + w];
-        uint4* o = reinterpret_cast<uint4*>(out + (s << k_log) + w * 128);
-#pragma unroll
-        for (int q = 0; q < 8; q++) {
-            u64 p[2];
-#pragma unroll
-            for (int h = 0; h < 2; h++) {
-                const int j = 2 * q + h;   // byte j of each row: output bytes 8j..8j+7
-                u64 x = 0;
-#pragma unroll
-                for (int r = 0; r < 8; r++) x |= (((j < 8 ? v[r].lo : v[r].hi) >> (8 * (j & 7))) & 0xFF) << (8 * r);
-                p[h] = zlin_t8(x);
-            }
-            o[q] = make_uint4((uint32_t)p[0], (uint32_t)(p[0] >> 32), (uint32_t)p[1], (uint32_t)(p[1] >> 32));
-        }
-    }
-}
 
 // ring_switch_fold_rows_grouped's partials, the same XOR sums at [bit][chunk]: a warp takes a row at a time and lane l its bits
 // 4l..4l+3, so each witness row and suffix word is read once (the grouped kernel reads them once per 8 bits, 16 times)

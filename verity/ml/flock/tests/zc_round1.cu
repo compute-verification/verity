@@ -1,7 +1,8 @@
 // cuda/zc_round1.cuh against the table kernel it replaces (cuda-ghash/zerocheck_round1_cpustyle.cuh), for test_zc_round1.py.
 // zr_check draws a packed witness of n_out outer chunks (128 columns of a, b and z each), eq_out, the extension's columns and
 // the scale from seed, runs launch_zerocheck_first_round_cpu_structured and launch_zc_round1 on them, and counts the words
-// that differ: bad[0] of the 64 a·b sums, bad[1] of the 64 c sums.
+// that differ: bad[0] of the 64 a·b sums, bad[1] of the 64 c sums. zt_check does the same for the lincheck's z transpose
+// (zlin_transpose.cuh) against the byte-at-a-time kernel it replaced.
 // Built with -DZR_MAIN it is also `zc_round1 N_OUT REPS`: one JSON line with each path's mean time over REPS and the words
 // that differ.
 #include <cstdint>
@@ -91,6 +92,51 @@ extern "C" int zr_check(long long n_out, uint64_t seed, long long* bad) {
     cudaError_t e = zr_setup(c, n_out, seed);
     if (e == cudaSuccess) e = zr_compare(c, bad);
     zr_free(c);
+    return (int)e;
+}
+
+// chunk_zlin_transpose's bytes one a thread a store
+__global__ void zr_zlin_bytewise(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
+    const long long wpr = (1LL << k_log) / 128;
+    for (long long t = (long long)blockIdx.x * blockDim.x + threadIdx.x; t < n_stripes * wpr; t += (long long)gridDim.x * blockDim.x) {
+        const long long s = t / wpr, w = t % wpr;
+        for (int b = 0; b < 128; b++) {
+            uint8_t byte = 0;
+            for (int r = 0; r < 8; r++) {
+                const F128 v = z[(8 * s + r) * wpr + w];
+                byte |= (uint8_t)((((b < 64 ? v.lo : v.hi) >> (b & 63)) & 1) << r);
+            }
+            out[(s << k_log) + w * 128 + b] = byte;
+        }
+    }
+}
+
+// z of n_stripes stripes at k_log drawn from seed, transposed on a grid of `grid` blocks and by the reference into buffers
+// poisoned 4 KiB past their end: the bytes that differ, in *bad
+extern "C" int zt_check(int k_log, long long n_stripes, int grid, uint64_t seed, long long* bad) {
+    const size_t words = (size_t)n_stripes << (k_log - 4), bytes = words * 16 + 4096;
+    F128* z = nullptr;
+    uint8_t *want = nullptr, *got = nullptr;
+    cudaError_t e = cudaMalloc((void**)&z, words * 16);
+    if (e == cudaSuccess) e = cudaMalloc((void**)&want, bytes);
+    if (e == cudaSuccess) e = cudaMalloc((void**)&got, bytes);
+    if (e == cudaSuccess) {
+        zr_fill<<<1024, 256>>>((uint64_t*)z, (long long)words * 2, seed);
+        cudaMemset(want, 0xa5, bytes);
+        cudaMemset(got, 0xa5, bytes);
+        zr_zlin_bytewise<<<1024, 256>>>(z, k_log, n_stripes, want);
+        chunk_zlin_transpose<<<grid, 256>>>(z, k_log, n_stripes, got);
+        e = cudaDeviceSynchronize();
+    }
+    if (e == cudaSuccess) {
+        uint8_t* h = (uint8_t*)malloc(2 * bytes);
+        e = cudaMemcpy(h, want, bytes, cudaMemcpyDeviceToHost);
+        if (e == cudaSuccess) e = cudaMemcpy(h + bytes, got, bytes, cudaMemcpyDeviceToHost);
+        *bad = 0;
+        for (size_t i = 0; i < bytes; i++) *bad += h[i] != h[bytes + i];
+        free(h);
+    }
+    for (void* p : {(void*)z, (void*)want, (void*)got}) cudaFree(p);
     return (int)e;
 }
 

@@ -3,16 +3,7 @@
 #pragma once
 #include <cstdlib>
 #include "zerocheck_round1_cpustyle.cuh"
-
-// an 8x8 bit matrix, row r in byte r (bit c its column c), transposed
-__device__ __forceinline__ u64 zlin_t8(u64 x) {
-    u64 t = (x ^ (x >> 7)) & 0x00AA00AA00AA00AAULL;
-    x ^= t ^ (t << 7);
-    t = (x ^ (x >> 14)) & 0x0000CCCC0000CCCCULL;
-    x ^= t ^ (t << 14);
-    t = (x ^ (x >> 28)) & 0x00000000F0F0F0F0ULL;
-    return x ^ t ^ (t << 28);
-}
+#include "zlin_transpose.cuh"
 
 // Zerocheck round 1 (zerocheck_first_round_cpu_structured's outputs) with z folded before its extension. The table kernel's
 // c output is Σ_o eq_o Σ_j γ^j φ8(Σ_k x^k ẑ_λ(o, j, k)), ẑ_λ = Σ_s z_s M[s][λ] the extension of a column's 64 bits, where
@@ -30,12 +21,13 @@ __device__ __forceinline__ u64 zlin_t8(u64 x) {
 // No shared-memory conflicts: a quarter-warp's 16-byte table reads are 8 slots of one 128-byte row (copy k & 1, word pair
 // w ^ (b & 3)), its gbuf stores 8 slots (odd columns' rows swap their 16-byte halves), a gbuf row read is the row, and a
 // quarter-warp's eight φ8 reads lane l's copy, on bank quad l & 7. The grid is resident (zc_round1_smem bytes a block,
-// ZC_R1_MINB blocks an SM) and its warps stride over the outer chunks, so each block loads the copies once.
+// ZC_R1_MINB blocks an SM) and its warps stride over the outer chunks, so each block loads the copies once; one block of 16
+// warps an SM leaves the most L1 for the streamed columns.
 #ifndef ZC_R1_W
-#define ZC_R1_W 8
+#define ZC_R1_W 16
 #endif
 #ifndef ZC_R1_MINB
-#define ZC_R1_MINB 2
+#define ZC_R1_MINB 1
 #endif
 template <int W>
 constexpr size_t zc_round1_smem() { return 256 * 8 * sizeof(F128) + 256 * 256 + W * (1024 + 64) + 768; }
