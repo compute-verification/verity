@@ -18,6 +18,7 @@ public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Flock.SamplingGeneric.FlockZk
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoCount
+public import Proofs.Flock.SamplingGeneric.TwoKSAt
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
@@ -51,7 +52,10 @@ fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneri
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
-finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`).
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). At two stages the
+extractor is `Compiled.E` at the two-stage verifier's own waits' counts, and the two-stage contract gives the facts
+its cost reads, so **`CompilerEfficientTwo` and `CompilerKSAtTwo` are proved** (`compilerEfficientTwo`,
+`compilerKSAtTwo`, `SamplingGeneric/TwoKSAt.lean`).
 
 A frozen sampled record is a compiled verifier over Flock (`ofDeploy`, `SamplingGeneric/Deployed.lean`): its opening
 count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), its errors are within `Claims.Sampling`'s, and it

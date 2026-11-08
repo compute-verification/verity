@@ -38,7 +38,9 @@ are the proof blocks, with `k = 1` and no interior registration.
    on its replay block's boundary values and interior values (`opens`). `slots`, `refuses`, `fixed` and `runs` are
    `Sessions`'.
 6. **The claims**: `CompiledTwo.KS`, at `Compiled`'s `κ_δ`, `γ` and `ε_bind`, and the compiler's statement
-   `CompilerKSTwo`; `CompiledTwo.Exfil` and `CompilerExfilTwo`, the exfiltration bound (7).
+   `CompilerKSTwo`; the extractor's cost, `Compiled.Efficient` at the two-stage verifier's own waits' counts `k_out`
+   and `k_in` (`CompilerEfficientTwo`), and so `CompiledTwo.KSAt`, KS read at a time budget at `Compiled`'s `work`
+   (`CompilerKSAtTwo`); `CompiledTwo.Exfil` and `CompilerExfilTwo`, the exfiltration bound (7).
 7. **What the incorrect proof blocks can serve**: a set `T` of proof blocks is admissible at `δ` when its counts per cell
    (`counts`) are a footprint in `M̄_δ` (`admissibleTwo`); `b(T)` is the values its proof blocks commit (`bitsOf`). The
    influence set at input values `a` (`influenceTwo`) is the served outputs (`served`) of every boundary trace with
@@ -300,6 +302,16 @@ def Exfil (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
         InScopeTwo Pt d s →
         (influenceTwo H L.commit s Pt d δ a).card ≤ ∑ T ∈ admissibleTwo Pt d δ, 2 ^ bitsOf s Pt T
 
+/-- **KS at the footprint read at a time budget** (`Compiled.KSAt` at `RTwo`), on the statements in scope, at every
+`δ ≥ 0`: `Pr[acc ∧ no interiors put the footprint in M̄_δ]` is at most
+`κ_δ + √γ·sbB(2T) + ecrBound(B_ext at T, 2·T·work)` for every prover and every budget `T` on one run's SHA-512 work
+(`Sampling.KSAt`), and `B_ext` at `T` costs at most `2·T·work` in expectation (`Sampling.BextAtCostLe`), at
+`Compiled`'s extractor, errors and `work`, whose waits' counts `k_out` and `k_in` are the two-stage verifier's own. -/
+def KSAt (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop :=
+  (∀ δ : ℝ, 0 ≤ δ →
+    Sampling.KSAt H L.V L.Scope (RTwo H L.commit L.parse L.partition L.two δ) L.E (L.κ δ) L.γ L.work) ∧
+    Sampling.BextAtCostLe H L.V L.E L.work
+
 end CompiledTwo
 
 /-- **The two-stage compiler is knowledge sound at the footprint**: over every proof system for proof blocks that is
@@ -314,5 +326,20 @@ two-stage verifier meets `CompiledTwo.Exfil`. -/
 def CompilerExfilTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.Exfil H
+
+/-- **The two-stage compiler's KS read at a time budget**: at `CompilerKSTwo`'s premises and the opening checks' count,
+every compiled two-stage verifier meets `CompiledTwo.KSAt` (a corollary of `CompilerKSTwo` and
+`CompilerEfficientTwo`). -/
+def CompilerKSAtTwo : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSAt H
+
+/-- **The two-stage extractor's cost**: the two-stage extractor is `Compiled.E`, so every compiled two-stage verifier
+that meets the contract has `Compiled.Efficient`'s three bounds at its own waits' counts, from the opening checks'
+count: reruns at most `1 + k_out + k_out·k_in·(1 + n_sess·e_s)` in expectation, and own SHA-512 calls at most
+`k_out·k_in·n_PU·openCalls`. -/
+def CompilerEfficientTwo : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
+    (H : Msg → Msg), L.Sessions H → L.OpenCallsLe H → L.Efficient H
 
 end Claims.SamplingGeneric
