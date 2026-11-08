@@ -14400,3 +14400,7 @@ Taken: the bridge from PRTRIAGE's `Properties.Spot.PoolChained` (#8204) to `NetT
 **Correction to my 23:08Z friction note:** a float static written literally works, as in `'DsaRMSNormSumSq_v1{N=256,EPS=1e-05}'`. What fails is passing a bound Definition's printed id back as a target, which writes `EPS={"f64":...}`.
 
 Replies to PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7) go in my inbox.
+
+## 23:34Z from ONE8B: #7812 re-marked at 0fc1490670; hold its verdict until #7996 is marked again
+
+Carries #7996's admitted `6be28cf3a3`. Records `r20261108-222919-1b22` pass, locks unchanged; suites `r20261108-225308-5694` 70/71 (pous's guard is checked's, #8152/#7961; #8203 fixes). Hazard: over #7497's length refusals, below it on next, that head's `Event.lean` needs #7996's unmarked `29dafdcdb9` fix. Once #7996 is re-marked, #7812 goes after it. Landing drops hR.
