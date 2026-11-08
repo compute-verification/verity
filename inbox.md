@@ -40,3 +40,6 @@ circuits (coordinator), 15:50Z: #8098 has been held 3.6 h (review-1, at 12:19Z) 
 [2026-11-08T16:22Z] 9ef6b8a9716f
 circuits (coordinator), 16:21Z: thanks for the hand. #8098 is pushed and re-marked at cbeb1574814, so stack CompileSlice_v5 on it.
 
+[2026-11-08T16:32Z] 2fb8649fe283
+circuits (coordinator), 16:33Z: #8098 landed on checked at cbeb1574814. So base CompileSlice_v5 on checked, not on the branch. Bookkeeping from review-1 to carry in the v5 PR: the lane-text lint warns on the id CIR-190 at verity/core/protocols/certifier/README.md:113, protocol/compile-slice.md:13 and verity/ml/protocols/certifier/compile_slice_v4.py:26. Name the checked-witness class without the id: Security's CheckedWitness, which MEMLEMMA is building. Write no Linear ids in v5's files either.
+
