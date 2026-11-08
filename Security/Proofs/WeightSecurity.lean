@@ -14,5 +14,7 @@ public import Proofs.WeightSecurity.Theft
 leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`, with its witnesses at the toy
 deployment. `Stop`: the incorrect proof blocks a period leaves undetected, over SPOT's period machinery. `Deployed`:
 `TheftServed` at the deployment audits (`TheftServedDeployed`). `Pressure`: a registered window's `pa B ≤ x^|B|`, the
-pressure `TheftServedDeployed` takes.
+pressure `TheftServedDeployed` takes. `Faulted`: the leakage lemma with the audit's incorrect proof blocks as inputs to
+a faulted circuit rather than overwrites of releases, `WeightSecurity.Guarantees.TheftFaulted`, with its witnesses at the
+toy deployment, the releases' faithfulness from a checked dataflow, and the range clamp.
 -/

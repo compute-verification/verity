@@ -251,7 +251,9 @@ theorem withString_mem_faultBudget (Ou : Outsider R (Q × Adv) (Option ((O → V
     | succ n ih =>
       rw [sum_range_succ, ← ih]
       simp only [Outsider.view, List.map_cons, List.sum_cons, hq, Outsider.view_length]
-      split_ifs <;> simp [hφ₀, add_comm]
+      split_ifs
+      · exact Nat.add_comm _ _
+      · simp [hφ₀]
   rw [key T]
   calc ∑ i ∈ range T, (if hi : i < T then size (s.1.val ⟨i, hi⟩) else 0) = ∑ t : Fin T, size (s.1.val t) := by
         rw [← Fin.sum_univ_eq_sum_range]
@@ -373,6 +375,7 @@ theorem view_eq_faultResp (Cf : Θ → (Q × Adv) × F → O → V) (size : F �
       rw [hso, Option.getD_some]
   · rw [if_neg hnc, dif_neg fun h => hnc (lt_of_lt_of_le h.1 (min_le_left _ _))]
 
+omit [Fintype O] in
 /-- **`Faithful` from the dataflow.** If each accepted window that releases released, on the egress slots `eg`, a trace
 `σ` of a checked population at the inputs `inp θ x` of the outsider's query `x` served with the window's advice, with at
 most the window's count of incorrect units (the network certifier's tie), then its releases are faulted runs of the
