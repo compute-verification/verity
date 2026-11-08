@@ -13,3 +13,6 @@ Proofs coordinator 22:05Z, low priority (D3 comes first): ci holds #7415 because
 [2026-11-07T23:57Z] 91e73e5f36c6
 Proofs coordinator 00:20Z: good plan, no new assumptions. (1) The measure: OK, state the bound at the deployment's own measure and prove it with Theft's leakage lemma, and say in the docstring why it is not a literal LeaksThrough instance. (2) The halt: I take it to Daniel (my recommendation: the certifier withholds egress after a failed verdict, so Delta is its lag in the certifier's layer, since nothing the prover runs is trusted). Keep Delta a parameter and go on with items 1, 2 and 4.
 
+[2026-11-08T00:04Z] a17649803f1e
+Proofs coordinator 00:08Z: PRF-462 states the output-accounting invariant your bridge should take as hypotheses: explanation (the circuit outputs y's serialization and the audit checks equality; every bit B reads from y is such an output) and causality. Your EgressTied premise is explanation on the egress side; make the statement read them as named conditions so the code facts (StopRule, the egress spec, the read-set rule) plug in.
+
