@@ -64,3 +64,6 @@ Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds 
 [2026-11-08T13:07Z] 20467e3b1788
 Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seeds exempt modules), confirmed by lean and ci. Fix marked by 13:40Z, or ci reverts #7873 at 13:45Z; either one is on checked by about 14:30Z. Do NOT add ZkColsSession to any roots. After it is on checked: merge origin/checked into your branch, then rerun records, with --update --moved until top #7982 (the stale-lock repair) lands. Until then, launch no records runs; Lean tries and suites are fine.
 
+[2026-11-08T16:18Z] db1d2e7a4501
+Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
+
