@@ -88,10 +88,9 @@ def test_class_g_composes_its_eight_ranks_with_stable_digests_and_wires_every_pe
     all-gather); each rank's sent partial is its own segment at every site's slice; every wire runs forward in the public
     order; no read of a combine's output is left free, the MoE row's new residual into the next attention all-reduce's
     chunk units among them; and C-Flock's composer refuses none of the window's own units. `at_rank` of the registration is
-    each rank's own, so
-    each rank's digest is `compile_steps`' there. What no cheaper test can: the binding of eight ranks of a served model's
-    compiled Programs at their producers' grain, each rank's place among the others read from its Programs, and their
-    digests' stability across processes; it compiles GLM-5.3 eight times in each of two processes."""
+    each rank's own, so each rank's digest is `compile_steps`' there. What no cheaper test can: the binding of eight ranks
+    of a served model's compiled Programs at the chunk grain, each rank's place among the others read from its Programs,
+    and their digests' stability across processes; it compiles GLM-5.3 eight times in each of two processes."""
     code = ("import json, sys; from pathlib import Path; from tests.program.predict.test_tp_steps import class_g_tp; "
             "print(json.dumps(class_g_tp(Path(sys.argv[1]))))")
     seeds, runs = ("1", "2"), []
