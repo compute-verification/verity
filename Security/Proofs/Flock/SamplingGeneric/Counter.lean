@@ -286,7 +286,7 @@ theorem ownLog_innerBody₀ (H : Msg → Msg) (n oc : ℕ) (x : Msg) (run' : (Fi
     have hk : ∀ p q, (L₀ n oc).skey x ((L₀ n oc).checked x li.2.1) p =
         (L₀ n oc).skey x ((L₀ n oc).checked x li.2.1) q → p = q := fun _ _ h => h
     dsimp only
-    rw [dif_pos (show 0 < (L₀ n oc).nPU x ∧
+    rw [dite_eq_left (show 0 < (L₀ n oc).nPU x ∧
         ((L₀ n oc).sessSlots x ((L₀ n oc).checked x li.2.1) i).head? = some i.val from
           ⟨hlt, by simp only [Compiled.sessSlots_eq_singleton hk hi hlt, List.head?_cons]⟩),
       Compiled.sessBlocks_eq_singleton hk hi hlt]

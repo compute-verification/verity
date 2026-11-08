@@ -527,7 +527,7 @@ theorem E_agree_unit (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sa
   by_cases hu : u < Claims.Sampling.nPU D x
   · have hpL : ((ofDeploy D iroots).checked x r)[p.val]? = some u := by
       show ((D.checked x r).take (Claims.Sampling.nPU D x))[p.val]? = some u
-      rw [List.getElem?_take, if_pos p.isLt]
+      rw [List.getElem?_take, ite_eq_left p.isLt]
       exact hpu
     have hk : ∀ a b, (ofDeploy D iroots).skey x ((ofDeploy D iroots).checked x r) a =
         (ofDeploy D iroots).skey x ((ofDeploy D iroots).checked x r) b → a = b := fun _ _ h => h

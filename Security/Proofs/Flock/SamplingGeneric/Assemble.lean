@@ -195,7 +195,7 @@ theorem mem_runExt (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (run' : (Fi
   rw [flatMapRP_eval]
   refine List.mem_flatMap.2 ⟨(i, u), mem_zip_finRange hi, ?_⟩
   dsimp only
-  rw [dif_pos ⟨hlt, hfirst⟩]
+  rw [dite_eq_left ⟨hlt, hfirst⟩]
   exact hq
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in

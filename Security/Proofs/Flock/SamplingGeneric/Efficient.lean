@@ -541,14 +541,14 @@ theorem runExt_runs_le (hS : L.Sessions H) {x : Msg} {Ω : Type} (P : Prover Ω)
     | some u =>
       simp only [Option.map_some, Option.getD_some]
       by_cases hu : u < L.nPU x ∧ (L.sessSlots x (L.checked x r) i).head? = some i.val
-      · rw [dif_pos hu, if_pos hu.2]
+      · rw [dite_eq_left hu, ite_eq_left hu.2]
         obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.mem_of_getElem? hl)
         rw [L.sessExt_runs_eq H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) s _ _]
         refine (A.reruns_le H xS Unit P' () _ _).trans ?_
         show 1 + A.waits (A.shape xS) * A.cap (A.shape xS) ≤ L.ρs x
         rw [hshape]
         exact le_maxBelowN (fun u => 1 + A.waits (L.sh x u) * A.cap (L.sh x u)) hu.1
-      · rw [dif_neg hu]
+      · rw [dite_eq_right hu]
         exact Nat.zero_le _
   · rw [← Finset.sum_filter, Finset.sum_const, smul_eq_mul]
     exact Nat.mul_le_mul_right _ (card_first_le hS x r)
@@ -569,13 +569,13 @@ theorem runExt_own_le (hS : L.Sessions H) (hopen : L.OpenCallsLe H) {x : Msg} {s
     | some u =>
       simp only [Option.map_some, Option.getD_some]
       by_cases hu : u < L.nPU x ∧ (L.sessSlots x (L.checked x r) i).head? = some i.val
-      · rw [dif_pos hu, if_pos hu.2]
+      · rw [dite_eq_left hu, ite_eq_left hu.2]
         obtain ⟨xS, P', hshape, -, -, hcard, -, hview⟩ := hS.runs x Ω P ω r u (List.mem_of_getElem? hl)
         refine (L.sessExt_own_le H P ω P' r hshape hcard (fun r' h => (hview r' h).1) (fun _ _ => rfl) hopen hs _
           _).trans ?_
         refine (Nat.add_le_add_right (A.own_le H xS Unit P' () _ _) _).trans ?_
         exact (Nat.zero_add _).trans_le (Nat.mul_le_mul_right _ (List.length_filterMap_le _ _))
-      · rw [dif_neg hu]
+      · rw [dite_eq_right hu]
         exact Nat.zero_le _
   · rw [← Finset.sum_filter, ← Finset.sum_mul]
     exact Nat.mul_le_mul_right _ ((L.sum_first_le x (L.checked x r)).trans (hS.slots x r))
@@ -631,10 +631,10 @@ theorem slotRuns_none (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
     rw [Option.map_some, Option.getD_some]
     by_cases hu : u < L.nPU x ∧ (L.sessSlots x (L.checked x r) i).head? = some i.val
     · have hs := selSlot_eq_some.2 (show L.firstSel x i (L.checked x r) = some i ∧
-        (L.checked x r)[i.val]? = some (⟨u, hu.1⟩ : Fin (L.nPU x)).val from ⟨if_pos hu.2, hr⟩)
+        (L.checked x r)[i.val]? = some (⟨u, hu.1⟩ : Fin (L.nPU x)).val from ⟨ite_eq_left hu.2, hr⟩)
       rw [h] at hs
       exact (Option.some_ne_none _ hs.symm).elim
-    · exact dif_neg hu
+    · exact dite_eq_right hu
 
 theorem slotRuns_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : AuditStatement)
     (run' : (Fin (L.V.k x) → Coin) → Trace) {i u : Fin (L.nPU x)} {r : Fin (L.V.k x) → Coin}
@@ -644,7 +644,7 @@ theorem slotRuns_some (H : Msg → Msg) (L : Compiled Coin A) (x : Msg) (s : Aud
       (((L.sessExt x s (L.sessBlocks x (L.checked x r) i) u r (run' r).seen (ρ u)).eval H run').2.2 : ℝ) := by
   unfold slotRuns
   rw [h, Option.map_some, Option.getD_some]
-  exact dif_pos ⟨u.isLt, hf⟩
+  exact dite_eq_left ⟨u.isLt, hf⟩
 
 /-- **Slot `i`'s expected reruns given acceptance**: over the second stage `d` at `r`, acceptance times slot `i`'s
 expected reruns is at most `e_s` where slot `i` is its session's first, and `0` elsewhere. Resampling its block's
@@ -678,12 +678,12 @@ theorem slot_exp_le (hS : L.Sessions H) {x : Msg} (s : AuditStatement)
     have hfi : (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val ∧ i' = i := by
       unfold firstSel at hsel
       by_cases hf : (L.sessSlots x (L.checked x (forkOn (L.stage2 x) r d)) i).head? = some i.val
-      · rw [if_pos hf] at hsel
+      · rw [ite_eq_left hf] at hsel
         exact ⟨hf, (Option.some.inj hsel).symm⟩
-      · rw [if_neg hf] at hsel
+      · rw [ite_eq_right hf] at hsel
         cases hsel
     rw [hfi.2] at h hm
-    rw [if_pos hfi.1]
+    rw [ite_eq_left hfi.1]
     have hmem : u.val ∈ L.checked x (forkOn (L.stage2 x) r d) := List.mem_of_getElem? hm
     rw [selRounds_some h]
     simp only [forkOn_sub (hS.fixed x _ u hmem).1]

@@ -296,8 +296,8 @@ def place (L : Compiled Coin A) (x : Msg) (u : ℕ) (xS : Msg) (r : Fin (L.V.k x
 
 /-! ## 3. The extractor -/
 
-/-- **The slots of slot `i`'s session** in the sample `l`, in order: those whose proof block is below `n_PU` and whose key
-is `i`'s (`skey`). The first is the session's first slot, where the extractor extracts it. -/
+/-- **The slots of slot `i`'s session** in the sample `l`, in order: those whose proof block is below `n_PU` and whose
+key is `i`'s (`skey`). The first is the session's first slot, where the extractor extracts it. -/
 def sessSlots (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : ℕ) : List ℕ :=
   (List.range l.length).filter fun j => (l[j]?.any fun u => decide (u < L.nPU x)) && L.skey x l j == L.skey x l i
 

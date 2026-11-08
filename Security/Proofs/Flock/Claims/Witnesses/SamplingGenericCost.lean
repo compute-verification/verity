@@ -259,7 +259,7 @@ theorem effL_runExt (H : Msg → Msg) (x : Msg) (run : (Fin ((effL Coin).V.k x) 
   rw [hd, show (effL Coin).checked x r = [0] from rfl, List.zip_cons_cons]
   refine Nat.lt_of_lt_of_le ?_ (ownLog_flatMapRP_head _ _ _ _ _)
   dsimp only
-  rw [dif_pos (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),
+  rw [dite_eq_left (show 0 < (effL Coin).nPU x ∧ ((effL Coin).sessSlots x [0] 0).head? = some 0 from ⟨h1, rfl⟩),
     Compiled.sessExt, Compiled.sessWit, show (effL Coin).session x 0 v = some (x, ⟨[], .acc⟩) from rfl]
   dsimp only
   rw [dite_eq_left (show (findA Coin).shape x = (effL Coin).sh x 0 from rfl)]

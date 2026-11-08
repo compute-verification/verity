@@ -215,7 +215,7 @@ theorem leadOf_some {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i : Fin (L.n
   obtain ⟨i₀, u₀, hhead, hle, hu₀, hu₀lt, -, -⟩ := first_of_slot hi hv
   have hi₀ : i₀ < L.nPU x := lt_of_le_of_lt hle i.isLt
   refine ⟨⟨i₀, hi₀⟩, ⟨u₀, hu₀lt⟩, ?_, hu₀⟩
-  simp only [leadOf, hhead, Option.bind_some, dif_pos hi₀]
+  simp only [leadOf, hhead, Option.bind_some, dite_eq_left hi₀]
 
 /-- The first slot of slot `i`'s session has `i`'s key, so `i`'s session, of which it is the first. -/
 theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (L.nPU x)}
@@ -225,7 +225,7 @@ theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (
   unfold leadOf at h
   obtain ⟨j, hj, h'⟩ := Option.bind_eq_some_iff.1 h
   by_cases hjn : j < L.nPU x
-  · rw [dif_pos hjn, Option.some.injEq] at h'
+  · rw [dite_eq_left hjn, Option.some.injEq] at h'
     subst h'
     obtain ⟨-, -, -, hk⟩ := mem_sessSlots.1 (List.mem_of_mem_head? hj)
     have hc : L.sessSlots x l j = L.sessSlots x l i := sessSlots_congr hk
@@ -233,16 +233,18 @@ theorem of_leadOf {L : Compiled Coin A} {x : Msg} {l : List ℕ} {i i₀ : Fin (
     refine ⟨hk, hc, ?_⟩
     rw [hc]
     exact hj
-  · rw [dif_neg hjn] at h'
+  · rw [dite_eq_right hjn] at h'
     exact (Option.some_ne_none _ h'.symm).elim
 
 /-- **A sample's sessions hold at most its slots**: the sessions at distinct first slots are disjoint, and each is
 among the sample's slots. -/
 theorem sum_first_le (L : Compiled Coin A) (x : Msg) (l : List ℕ) :
-    ∑ i ∈ (Finset.univ : Finset (Fin (L.nPU x))).filter (fun i => (L.sessSlots x l i).head? = some i.val),
+    ∑ i ∈ (Finset.univ : Finset (Fin (L.nPU x))).filter
+        (fun i : Fin (L.nPU x) => (L.sessSlots x l i.val).head? = some i.val),
       (L.sessSlots x l i).length ≤ l.length := by
   classical
-  set F := (Finset.univ : Finset (Fin (L.nPU x))).filter fun i => (L.sessSlots x l i).head? = some i.val
+  set F := (Finset.univ : Finset (Fin (L.nPU x))).filter fun i : Fin (L.nPU x) =>
+    (L.sessSlots x l i.val).head? = some i.val
   have hnd : ∀ i : Fin (L.nPU x), (L.sessSlots x l i).Nodup := fun i =>
     (L.sessSlots_pairwise x l i).imp (fun h => Nat.ne_of_lt h)
   have hdisj : (F : Set (Fin (L.nPU x))).PairwiseDisjoint fun i => (L.sessSlots x l i).toFinset := by
@@ -294,8 +296,8 @@ end Sessions
 the sample's (`Sessions.keys`). -/
 theorem card_first_le {H : Msg → Msg} {L : Compiled Coin A} (hS : L.Sessions H) (x : Msg)
     (r : Fin (L.V.k x) → Coin) :
-    ((Finset.univ : Finset (Fin (L.nPU x))).filter fun i =>
-      (L.sessSlots x (L.checked x r) i).head? = some i.val).card ≤ L.nSess x := by
+    ((Finset.univ : Finset (Fin (L.nPU x))).filter fun i : Fin (L.nPU x) =>
+      (L.sessSlots x (L.checked x r) i.val).head? = some i.val).card ≤ L.nSess x := by
   refine (Finset.card_le_card_of_injOn (fun i : Fin (L.nPU x) => L.skey x (L.checked x r) i.val) ?_ ?_).trans
     (hS.keys x r)
   · intro i hi
