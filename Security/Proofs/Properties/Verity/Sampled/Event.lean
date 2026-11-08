@@ -221,7 +221,7 @@ theorem checkBlobsAt_event {p : _root_.SampledProofs.OneStageZk.Params} {c : _ro
   have hs := eq_single hsz
   rw [hs] at hrun
   obtain ⟨tags0, circuitB, pubB, rd, ht, hc, hp, hrd, scope, programSha, want, hstep⟩ := run_event hrun
-  obtain rfl : pubB' = pubB := Except.ok.inj (hpub'.symm.trans hp)
+  obtain rfl : pubB = pubB' := Except.ok.inj (hp.symm.trans hpub')
   obtain ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv, hk, hks, -⟩ := step_event hstep hall
   have hrec' := sessionRecord_eq hs hb hrec
   have hv2 : V2Verified p e bs record spec tabs rest proofs :=
