@@ -6,8 +6,9 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
-* past TOPK keys `DsaTopKMask_v1` marks the row's top-TOPK set from its logits, `DsaButterflySettings_v1` computes the
-  concentrator's settings for it, and sparse MLA reads the rows `DsaButterflyRows_v1` routes at them, in ascending index order;
+* past TOPK keys, at the row's class (its keys rounded up to a multiple of TOPK), `DsaTopKMask_v1` marks the row's top-TOPK set
+  from its logits, `DsaButterflySettings_v1` computes the concentrator's settings for it, and sparse MLA reads the rows
+  `DsaButterflyRows_v1` routes at them (`DsaButterflyRowsPad_v1` below the class), in ascending index order;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -549,21 +550,27 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
 
 
 def test_a_row_past_topk_selects_its_top_k_from_its_logits_and_reads_its_rows_in_index_order(served):
-    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer marks its logits' top-2 set
-    (`DsaTopKMask_v1{N=3,TOPK=2}`) and computes the concentrator's settings for it (`DsaButterflySettings_v1{N=3,K=2}`), and both
-    layers' `SparseMla_v1{T=2}` read the rows `DsaButterflyRows_v1{N=3,K=2}` routes at those settings: the Program has no `run`
-    input and no checks, and its outputs are the reference's over the set in ascending index order."""
+    """TOPK 2: the decode row at position 2 has 3 keys, so its class is 4 (`vllm_dsa.long_row_keys`).  The indexer layer marks
+    the top-2 set of its 3 logits and one `PAD_SCORE` (a slice of the Program's one block of it: `DsaTopKMask_v1{N=4,TOPK=2}`)
+    and computes the concentrator's settings for it (`DsaButterflySettings_v1{N=4,K=2}`), and both layers' `SparseMla_v1{T=2}`
+    read the rows `DsaButterflyRowsPad_v1{T=3,N=4,K=2}` routes at those settings over the 3 history rows and one zero row: the
+    Program has no `run` input and no checks, and its outputs are the reference's over the set in ascending index order."""
     model = _model(topk=2)
     xs = _inputs(model)
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
-    assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance
+    assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance and vllm_dsa.long_row_keys(3, 2) == 4
     assert len(rep.program.fn.signature()[0]) == len(xs) + 1, "the inputs, then the weights"
-    mask = bind(dsa_topk_mask.DsaTopKMask, N=3, TOPK=2).id
-    settings = bind(dsa_topk_mask.DsaButterflySettings, N=3, K=2).id
-    rows = bind(dsa_topk_mask.DsaButterflyRows, N=3, K=2, W=L + R, E=16).id
+    mask = bind(dsa_topk_mask.DsaTopKMask, N=4, TOPK=2).id
+    settings = bind(dsa_topk_mask.DsaButterflySettings, N=4, K=2).id
+    rows = bind(dsa_topk_mask.DsaButterflyRowsPad, T=3, N=4, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
     assert [i for i in _ids(rep) if i in (mask, settings, rows, attn2)] == [attn2, attn2, mask, settings, rows, attn2, rows, attn2]
+    nodes = rep.program.fn.body.nodes
+    (m,) = [n for n in nodes if n.fn.id == mask]
+    (lg, pad) = runs(m.args[0].refs)
+    assert nodes[lg[1]].fn.id == bind(dsa.DsaMqaLogitsV3, N=3, H=H, D=D).id and lg[2:] == (0, 3)
+    assert (nodes[pad[1]].form, nodes[pad[1]].fn.id, nodes[pad[1]].n, pad[2:]) == ("batch", f"Const32[0x{vllm_dsa.PAD_SCORE:08x}]_v1", 1, (0, 1))
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
               and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
     assert app["preconditions_checked"]["past_topk"] == [2]
