@@ -4,8 +4,8 @@ values at the model's served statics, staged for Flock as a ``verity/flock-circu
     UNIT  TYPE[:S=V,...]   a type of `UNITS` or `PARTS` at its statics (each type's defaults are its model's: GLM-5.3's at TP8,
                            s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192
     N     N1,N2,...        with a type of `UNITS`, several statements on one built circuit, each count's in OUT's ``{n}``;
-                           ``half`` and ``full`` (a window type's) the counts that fill half and all of a MAX_STATEMENT_BITS
-                           statement on the built circuit
+                           ``quarter``, ``half`` and ``full`` (a window type's) the counts that fill a quarter, half and all
+                           of a MAX_STATEMENT_BITS statement on the built circuit
     --public-weights       a `UNITS` type's weight row ``w`` as public input ports (`UnitStager`'s ``public_inputs``, each leaf in
                            its own u16 words) instead of a row hashed in the circuit, on the same values: the price of the block
                            with its weight row's in-circuit opening removed, the in-circuit share a registered weight encoding
@@ -105,8 +105,8 @@ from verity.ml.windows import interface as WI
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
 #: N to the most instances under it
 MAX_STATEMENT_BITS = 1 << 35
-#: counts a type of `UNITS` resolves on its built circuit: a statement of MAX_STATEMENT_BITS, and half of one
-SIZES = ("half", "full")
+#: counts a type of `UNITS` resolves on its built circuit: a statement of MAX_STATEMENT_BITS, and half and a quarter of one
+SIZES = ("quarter", "half", "full")
 
 
 def bf16(v: np.ndarray) -> np.ndarray:
@@ -530,7 +530,7 @@ def main() -> None:
     if sized:
         per = (1 << stager.meta["k_log"]) // (stager.meta.get("vus_per_block") or 1)
         full = max(1, MAX_STATEMENT_BITS // per)
-        ns = [{"full": full, "half": max(1, full // 2)}.get(x) or int(x) for x in counts]
+        ns = [{"full": full, "half": max(1, full // 2), "quarter": max(1, full // 4)}.get(x) or int(x) for x in counts]
         outs = [Path(args[2].format(n=n)) for n in ns]
         rows, twin = u.draw(S, max(ns), np.random.default_rng(seed))
     for n, out in zip(ns, outs):
