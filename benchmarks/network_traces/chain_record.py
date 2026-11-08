@@ -580,8 +580,8 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
       the verifier's own, never the record's) is the root the window's registration records for it (``roots``, its
       ``registered_roots``; `interface.held_params`); a read of any other parameter stays free, and with no pins every
       one does;
-    * ``external``: the rows of each port ``external`` names as the system's I/O that no wire or held read fills;
-    * ``free``: the rest, ``#(freeInputs \\ reg)``.
+    * ``free``: the rest, ``#(freeInputs \\ reg)``. A port ``external`` names as the system's I/O stays free, as
+      ``countsOf`` leaves it: the prover chooses its values as it does any other unwired input.
 
     Refused (ValueError): a record that lists its members, a statement row of no one port, a wire or declaration outside
     its port's units or rows, two filling one row (Lean's ``apart``), and a pin of `SCAN_STATE`."""
@@ -610,7 +610,6 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
                              f"{cuts.get(t, {}).get(port, 1)} rows of one width")
     held = IF.held_params(pins, roots)
     rects: dict[tuple[str, str], list[tuple[int, int, int, int, str]]] = {}
-    on: dict[tuple[str, str], int] = {}
 
     def fill(tid: str, port: str, at: int, n: int, r0: int, r1: int, what: str, bits: int) -> int:
         if (tid, port) not in rows or not (0 <= at and at + n <= units[tid] and 0 <= r0 < r1 <= len(rows[tid, port])):
@@ -619,7 +618,6 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
             if a2 < at + n and at < b2 and s2 < r1 and r0 < e2:
                 raise ValueError(f"{tid} {port}: {w2} and {what} both fill rows of units from {max(at, a2)}")
         rects[tid, port].append((at, at + n, r0, r1, what))
-        on[tid, port] = on.get((tid, port), 0) + bits
         return bits
 
     wired = sum(fill(w.reader, w.port, w.at, w.reader_units, w.cut[0], w.cut[0] + w.cut[1], f"wire {w.doc()}",
@@ -641,22 +639,13 @@ def input_terms(circuit: dict, pins: dict | None = None, roots: dict | None = No
                 k = len(rows.get((o.reader, p), ()))
                 registered += fill(o.reader, p, o.at, o.units, 0, max(k, 1), f"opening {o.doc()} {p}",
                                    o.units * sum(rows.get((o.reader, p), ())) if o.table in pinned else 0)
-    external = 0
-    for e in circuit.get("external") or ():
-        t, port = e.rsplit("/", 1)
-        if t not in units:
-            raise ValueError(f"external port {e!r} is no template's")
-        if (t, port) in rows:
-            external += units[t] * sum(rows[t, port]) - on.get((t, port), 0)
     inputs = sum(units[t] * sum(rs) for (t, _p), rs in rows.items())
-    return {"inputs": inputs, "wired": wired, "registered": registered, "external": external,
-            "free": inputs - wired - registered - external}
+    return {"inputs": inputs, "wired": wired, "registered": registered, "free": inputs - wired - registered}
 
 
 def free_inputs(circuit: dict, pins: dict | None = None, roots: dict | None = None) -> int:
     """``#(freeInputs \\ reg)`` of a compute audit's window from its ``circuit.json``: every proof block's input-row
-    bits less those its wires, the held registered reads at the verifier's ``pins`` and its external ports fill
-    (`input_terms`)."""
+    bits less those its wires and the held registered reads at the verifier's ``pins`` fill (`input_terms`)."""
     return input_terms(circuit, pins, roots)["free"]
 
 
