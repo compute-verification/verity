@@ -187,7 +187,7 @@ def test_without_protocols_nothing_is_installed(built):
 
 
 def test_a_refused_set_raises_before_the_engine_is_built(built):
-    with pytest.raises(ValueError, match="sampled proofs runs in the Commit stage"):
+    with pytest.raises(ValueError, match="SPOT runs in the Commit stage"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols="sampled-proofs:rows-sha512")
     with pytest.raises(ValueError, match="unknown protocol"):
         L.LLM(LLAMA[0], revision=LLAMA[1], protocols={"zk": "v1"})
@@ -241,6 +241,27 @@ def test_an_engine_class_fills_its_settings():
     assert L.class_options({"seed": 3}) == {"seed": 3}
     assert EC.max_num_seqs("G") == EC.CLASS_G_LIMITS["max_num_seqs"] == 256
     assert all(0 < v <= EC.CLASS_G_LIMITS[k] for k, v in EC.CLASS_G_SERVED.items())
+
+
+def test_class_g_serves_compiled_at_its_breakable_graphs():
+    """Class G's compiled execution is vLLM's breakable CUDA graphs at the class's capture sizes: its options fix them, and a built
+    compiled engine that ran other graphs is refused by name."""
+    sizes = [1, 2, 4, *range(8, 256, 8), *range(256, 513, 16)]
+    graphs = {"cudagraph_mode": "FULL_AND_PIECEWISE", "cudagraph_capture_sizes": sizes}
+    assert L.class_options({"engine_class": "G", "execution": "compiled"}) == {
+        "engine_class": "G", "execution": "compiled", "max_num_seqs": 256, **CLASS_G_ARGS, "compilation_config": graphs}
+    assert EC.compilation("G", "compiled") == "breakable" and EC.compilation("G", None) is None
+    with pytest.raises(Refused, match="execution 'bi-compiled' \\(class G serves eager, compiled\\)"):
+        EC.compilation("G", "bi-compiled")
+    with pytest.raises(Refused, match="compilation_config=.*where the class serves"):
+        L.class_options({"engine_class": "G", "execution": "compiled", "compilation_config": {"cudagraph_mode": "PIECEWISE"}})
+    eff = {"tensor_parallel_size": 8, "enable_prefix_caching": False, **EC.CLASS_G_SERVED,
+           "enforce_eager": False, "breakable_cudagraph": True, "capture_sizes": sizes}
+    assert EC.effective_refusals("G", eff) == []
+    assert EC.effective_refusals("G", {**eff, "breakable_cudagraph": False, "capture_sizes": [1, 2, 4]}) == [
+        "the built engine's breakable_cudagraph is False, not the class's True",
+        f"the built engine's capture_sizes is [1, 2, 4], not the class's {sizes}"]
+    assert EC.effective_refusals("G", {**eff, "enforce_eager": True, "breakable_cudagraph": False}) == []
 
 
 def test_an_option_the_class_contradicts_is_refused_by_name():

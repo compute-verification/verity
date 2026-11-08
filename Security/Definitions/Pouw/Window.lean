@@ -42,7 +42,7 @@ guarantee `audit_window_split_of_record` is stated over), on its own so that a g
 * the premises of the window's composition, each in the shape of a compiled bound, a constant plus a term of the
   prover's state: `EscapesWithin` (the sample's escapes on a family within `η` of the product distribution's at every
   registration), `CallAnalysis.KnowledgeSound` (a call's extraction, `κ_c` plus a term `g_c` of its session's state)
-  and `LinkSoundIn` (a call's binding error in the window, against the window's committed transcript, a function of the
+  and `BindSoundIn` (a call's binding error in the window, against the window's committed transcript, a function of the
   window's state);
 * `coll`: the window's collision term, the calls' state terms `g_c` summed along the window's run, in expectation over
   the sample; `CollCounted` (premise): on average over the oracle, at most a function of the sessions' counted queries,
@@ -265,12 +265,12 @@ def CallAnalysis.KnowledgeSound {Reg Tr : Type} {U : UnitStmts Tr n} {c : Fin C}
 /-- **A call's binding error in the window** (premise `δlink_c`): for every window prover state `τ` after the registration
 `R` and every rule that picks a sampled proof block before the sessions' first coin, the average over the sample of call `c`'s
 `link` at the picked unit if it is one of `c`'s, at the state the window's run brings to `c`'s session (`along`),
-against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `LinkSound`'s
+against the window's committed transcript, is at most `δlink_c(R, τ)`, a function of the window's state as `BindSound`'s
 `δlink` is (`Proofs/Flock/Soundness/Audit/Extraction.lean`): the link's finder bounds it at the state. The committed
 transcript is a function of the prover's state at registration, so it is the same for every call and every sample. The
 picked unit's `link` is at its place `⟨c, u⟩` (`CallAnalysis`): no state or rule sets a unit's position, and the roots
 its seed reads are the committed transcript's, fixed before the sample. -/
-def LinkSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
+def BindSoundIn {Reg Tr : Type} {U : UnitStmts Tr n} (Lw : Reg → Law (WUnit n))
     (sess : (c : Fin C) → Finset (Fin (n c)) → Reg → Game Bool)
     (committed : (R : Reg) → Cont Lw (windowSession sess) R → Tr) (A : (c : Fin C) → CallAnalysis U c (sess c))
     (c : Fin C) (δlink : (R : Reg) → Cont Lw (windowSession sess) R → ℝ≥0∞) : Prop :=
@@ -365,9 +365,9 @@ the words that unit reads from the `-h3` leaf at its position. -/
 def Served {Tr : Type} (U : UnitStmts Tr n) (P : ServedPass Tr n U.Pos) (X : Tr) : Prop :=
   P.rootOf X = P.rootH3 ∧ ∀ v, P.outputs X v = P.tileRead (P.leaf (U.pos X v)) v
 
-/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowEps`; open on main): every prover's window
+/-- **The tie to what's served** (premise `δ_in`, PoUW's reading of `WindowDelta`; open on main): every prover's window
 accepts while its committed transcript isn't anchored and served (`Anchored`, `Served`, against the served pass `P`)
-with probability at most `δin(R, τ)`, a function of the window's state. `WindowEps` bounds the incorrect proof blocks of whatever
+with probability at most `δin(R, τ)`, a function of the window's state. `WindowDelta` bounds the incorrect proof blocks of whatever
 transcript the analysis commits; this is what makes that transcript the served computation's, not a self-consistent copy
 the prover chose. The units' statements `U` and the served pass `P` are fixed before the window, so the prover picks
 neither.
@@ -449,7 +449,7 @@ def UnitStmts.copies {Tr : Type} {N : ℕ} (V : UnitStmts Tr fun _ : Fin 1 => N)
   rootB X v := V.rootB X ⟨0, v.2⟩
   computes v si X := V.computes ⟨0, v.2⟩ si X
 
-/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowEps`, which it reads at
+/-- **The deployed wrong sets are copy-closed** (PoUW's reading of `WindowDelta`, which it reads at
 `𝓑 = harmSets W_ref ε ∧ CopyClosed`, and `ServiceEscapes`'s family): at every transcript, the incorrect proof blocks hold a tile
 in every session or in none. It holds for the service's statements (`Pouw.Window.wrongCopyClosed_copies`), and there
 `𝓑`'s copy-closed conjunct is automatic (`Pouw.Window.harmSets_copyClosed_iff`). -/

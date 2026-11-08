@@ -366,7 +366,7 @@ class DitherState:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.phase("before")
         self.m, self.flags, self.cap = m, 0, None
         if self.arms and m == self.arm_m:
@@ -480,7 +480,7 @@ class DitherState:
         self.s += 1
         self.steps += 1
         if self.s + 1 >= DF.ROUNDS:
-            raise RuntimeError(f"the window's {DF.ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {DF.ROUNDS} rounds are spent")
 
     def stats(self) -> dict:
         ph, self.phases = self.phases, []

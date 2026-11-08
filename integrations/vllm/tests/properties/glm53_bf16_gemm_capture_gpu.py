@@ -77,6 +77,15 @@ served default's before the first GEMM and after the last).
     cd integrations/vllm; PY=/workspace/venv312/bin/python     # PYTHONPATH as pod_bootstrap.sh sets it
     $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --out DIR [--scratch DIR] [--workers N] [--quick] [--no-default]
         [--no-scan] [--models glm53,dsv4-pro] [--only router,linear,f32out,bmm]
+
+The route table (`bf16_gemm_check.CUBLAS_ROUTES`) is one served-default scan process per model, tabled phase (`TABLED`) and M
+range, so each profiler session stays small, then `--write-routes` (`route_table`), which needs no GPU:
+
+    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models MODEL --only PHASE --scan-m LO:HI \\
+        --scratch DIR --out SCANS/MODEL-PHASE-LO     # the ranges tile 1:m_max, the router's 17:m_max; m_max the largest
+                                                     # launch served
+    $PY tests/properties/glm53_bf16_gemm_capture_gpu.py --write-routes SCANS/*/scan.json --run-record ART \\
+        --out ../../verity/ml/definitions/registry
 """
 from __future__ import annotations
 
@@ -88,6 +97,7 @@ import ctypes.util
 import json
 import multiprocessing
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -755,12 +765,18 @@ def scan_run(a: argparse.Namespace) -> int:
     import torch
     from vllm.config import CompilationConfig, VllmConfig, set_current_vllm_config
 
-    doc: dict[str, Any] = {"cases": {}, "errors": {}, "env_cleared": cleared}
+    doc: dict[str, Any] = {"cases": {}, "errors": {}, "env_cleared": cleared, "served_default": bool(a.served_default)}
     try:
         doc["switch"] = switch(a.served_default)
     except Exception as e:  # noqa: BLE001
         doc["errors"]["switch"] = _error(e)
         doc["switch"] = {"ok": False}
+    try:
+        p = torch.cuda.get_device_properties(0)
+        doc["device"] = {"device": torch.cuda.get_device_name(0), "compute_capability": [p.major, p.minor],
+                         "multiprocessors": int(p.multi_processor_count)}
+    except (RuntimeError, AssertionError) as e:
+        doc["errors"]["device"] = _error(e)
     vllm_config = VllmConfig(compilation_config=CompilationConfig(custom_ops=["all"]))
     with set_current_vllm_config(vllm_config):
         gates: dict[str, Any] = {}
@@ -813,6 +829,94 @@ def scan_run(a: argparse.Namespace) -> int:
     (outdir / "scan.json").write_text(json.dumps(doc, indent=1, default=str) + "\n")
     tmp.cleanup()
     return 0 if doc["ok"] else 1
+
+
+#: the phases whose scanned routes `bf16_gemm_check`'s route table holds (bmm's absorbs bind `BatchedGemm_v1` at every M)
+TABLED = ("router", "linear", "f32out")
+ROUTES_SCHEMA = "verity-vllm/cublas-default-routes/v1"
+
+
+def route_key(model: str, phase: str, name: str) -> str:
+    """The route table's key of one scanned case, "phase K N"."""
+    m = MODELS[model]
+    if phase == "router":
+        return f"router {m.hidden} {m.experts}"
+    (K, N), = [(k, n) for nm, k, n in getattr(m, phase) if nm == name]
+    return f"{phase} {K} {N}"
+
+
+def route_conditions(config: dict[str, Any], device: dict[str, Any]) -> dict[str, Any]:
+    """A scan process's `ROUTE_CONDITIONS`: its device, and its configuration as `configuration` read it."""
+    return {**{k: device[k] for k in ("device", "compute_capability", "multiprocessors")}, "torch": config["torch"],
+            "cublas_version": config["cublas_version"], **{k: config[k] for k in REDUCED},
+            "preferred_blas_library": config["preferred_blas_library"], "env": config["env"]}
+
+
+def route_table(scans: list[dict[str, Any]], run_record: str) -> dict[str, Any]:
+    """`bf16_gemm_check`'s route table (`cublas_routes.json`) from the scan processes' scan.json documents: every tabled case's
+    runs, joined across the documents that scanned it (split by model, phase or M range), under the one set of conditions every
+    process read before its first GEMM and after its last.  Raises naming the fault: a scan not ok or not at the served default,
+    conditions that differ, or a shape whose runs leave a gap or an overlap, start elsewhere than M 1 (the router: past the
+    ll_bf16 tier) or stop at another M than the other shapes'."""
+    from verity.ml.definitions.registry import bf16_gemm_check as BC
+
+    conditions: dict[str, Any] | None = None
+    runs: dict[str, list[list[int | None]]] = {}
+    for i, doc in enumerate(scans):
+        if not doc.get("ok"):
+            bad = [k for k, c in doc.get("cases", {}).items() if not c.get("ok")]
+            raise ValueError(f"scan {i} is not ok: errors {sorted(doc.get('errors', {}))}, cases not ok {bad}")
+        if doc.get("served_default") is not True:
+            raise ValueError(f"scan {i} ran the split-K-off switch, not vLLM's served default (--served-default)")
+        got = route_conditions(doc["switch"], doc["device"])
+        if (after := route_conditions(doc["switch_after"], doc["device"])) != got:
+            raise ValueError(f"scan {i}'s configuration moved during the scan: {got} before, {after} after")
+        if conditions is None:
+            conditions = got
+        elif got != conditions:
+            raise ValueError(f"scan {i} ran under {got}, scan 0 under {conditions}")
+        for skey, case in doc["cases"].items():
+            model, phase, name = skey.split("/", 2)
+            if phase in TABLED:
+                runs.setdefault(route_key(model, phase, name), []).extend([list(r) for r in case["routes"]])
+    if conditions is None or not runs:
+        raise ValueError("no scan holds a router, linear or f32out case")
+    table: dict[str, list[list[int | None]]] = {}
+    for key, rs in sorted(runs.items()):
+        joined: list[list[int | None]] = []
+        for r in sorted(rs, key=lambda r: r[0]):
+            want = joined[-1][1] + 1 if joined else (BC.LL_MAX_M + 1 if key.startswith("router ") else 1)
+            if r[0] != want:
+                raise ValueError(f"{key}: a run starts at M={r[0]} where M={want} is next (a gap or an overlap)")
+            if joined and joined[-1][2] == r[2]:
+                joined[-1][1] = r[1]
+            else:
+                joined.append(r)
+        table[key] = joined
+    tops = {k: v[-1][1] for k, v in table.items()}
+    if len(set(tops.values())) != 1:
+        raise ValueError(f"the shapes' runs stop at different M: {tops}")
+    return {"schema": ROUTES_SCHEMA, "run_record": run_record, "m_max": next(iter(tops.values())), "conditions": conditions,
+            "routes": table}
+
+
+def route_table_text(table: dict[str, Any]) -> str:
+    """`cublas_routes.json`'s layout: the header fields one a line, then one line of runs per shape."""
+    head = "".join(f'  "{k}": {json.dumps(table[k])},\n' for k in ("schema", "run_record", "m_max", "conditions"))
+    rows = ",\n".join(f'    "{k}": {json.dumps(v, separators=(",", ":"))}' for k, v in table["routes"].items())
+    return "{\n" + head + '  "routes": {\n' + rows + "\n  }\n}\n"
+
+
+def write_routes(paths: list[str], run_record: str, outdir: str) -> int:
+    """Write `<outdir>/cublas_routes.json` from the scan.json files at `paths` (`route_table`)."""
+    if not re.fullmatch(r"art:[0-9a-f]{64}", run_record):
+        raise ValueError(f"--run-record {run_record!r} is not an art: id (art:<sha256 hex>)")
+    table = route_table([json.loads(Path(p).read_text()) for p in paths], run_record)
+    out = Path(outdir) / "cublas_routes.json"
+    out.write_text(route_table_text(table))
+    print(f"[glm53-bf16-gemm] wrote {out}: m_max {table['m_max']}, {len(table['routes'])} shapes "
+          f"({sum(len(v) for v in table['routes'].values())} runs)", flush=True)
+    return 0
 
 
 def scan_subprocess(a: argparse.Namespace, outdir: Path) -> dict[str, Any]:
@@ -1375,10 +1479,19 @@ def main(argv: list[str] | None = None) -> int:
                     help="LO:HI, the scan's decode batches (the router's cuBLAS tier starts past 16 tokens: scan it from 17)")
     ap.add_argument("--models", default=",".join(MODELS), help=f"comma list of models: {', '.join(MODELS)}")
     ap.add_argument("--only", default=",".join(PHASES), help=f"comma list of phases: {', '.join(PHASES)}")
+    ap.add_argument("--write-routes", nargs="+", metavar="SCAN_JSON",
+                    help="no GPU: write <out>/cublas_routes.json, bf16_gemm_check's route table, from these --scan-run scan.json files")
+    ap.add_argument("--run-record", help="with --write-routes: the art: id of the run whose scans these are")
     a = ap.parse_args(argv)
+    if a.write_routes:
+        if not a.run_record:
+            ap.error("--write-routes needs --run-record")
+        return write_routes(a.write_routes, a.run_record, a.out)
     lo, hi = (int(v) for v in a.scan_m.split(":"))
     SCAN_M = range(lo, hi + 1)
     if a.scan_run:
+        if not scan_targets(set(a.only.split(",")), a.models.split(",")):
+            ap.error(f"--scan-run: {a.models} has no {a.only} case (MODELS): drop that model or phase")
         return scan_run(a)
     return 0 if run(a)["ok"] else 1
 

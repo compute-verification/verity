@@ -122,10 +122,14 @@ conditional escape and its leak relation as hypotheses, which `SampledKSLive` an
 history would discharge, and doesn't discharge them yet.
 
 **The charge terms the run prints** (`summary.json` of `prove_path.py audit`; each rank's `ranks.<r>.charge` holds
-`advice_bits`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and `exfiltration_bound`):
-- c, which the run doesn't print. Once the advice is the only free input outside the registration, c is `advice.bits`,
-  the registration's `window.advice.bits`: the I1 advice's length, which `prove_path.py advice` prints as `bits`. Over
-  several windows, c is their sum.
+`advice_bits`, `c`, `other_inputs`, `bound`, `delta`, `wrong_units`, `location_bits`, `harm_bound` and
+`exfiltration_bound`):
+- c is `c`. It is `advice.bits` (the registration's `window.advice.bits`: the I1 advice's length, which
+  `prove_path.py advice` prints as `bits`) only while the window's leak count (`records_audit.leak_count`) is within the
+  charge, so the advice is the only free input outside the registration. Otherwise `c` is null and `bound` is `vacuous`,
+  with the count's `other_inputs` beside it. That covers a stand-in partition, whose free inputs are its units' inputs,
+  and a partial window, which lacks a writer's template, so the wire from it is not made and its port is free. No figure
+  states the leak bound there. Over several windows, c is their sum, and null if any one's is.
 - δ is `delta`. Per rank, `ranks.<r>.audit.wrong_units` is `{delta, of, bound, rule, per_template}` (the
   `wrong_units` function in `verity/core/protocols/sampled_proofs/one_stage/audit.py`). Except with probability δ, at most
   `bound` of the `of` units are incorrect, and at most `per_template[t]` of them are in template t (`Stratified.count_bound`,
@@ -235,7 +239,10 @@ The unit closes the named gap: the advice is never opened, and the verifier neve
   gates the sample on), `serve_check` holds the published records to the verifier's own and refuses by name: another window
   (`window`), a compiler whose digest carries no cap (`cap`) or isn't the verifier's (`compiler`), another advice root
   (`advice`), a published root that isn't 64 bytes of a `rows-sha512` store (`sha512`) or isn't the row dir's run root
-  (`run_root`), and a registration naming another Commit (`commit`). Its negatives run beside the audit's. `serve-standin`
+  (`run_root`), a registration naming another Commit (`commit`), and a carried request that doesn't follow from the close of
+  the window before (`follows`: the advice is read as `window_advice`'s, and its carried requests are held to that window's
+  close, opened under its registration, naming the request and what doesn't follow: its order, a request dropped with outputs
+  still to keep, its record, or a counter of its state). Its negatives run beside the audit's. `serve-standin`
   lays a single-GPU Commit of record out as a served run, the stand-in until serve-openai seals its windows.
 - **The audit from the records alone** (`records_audit.py audit`, `run.sh` with `PP_RECORDS=1` on a served window) reads only
   what an integration hands Verity (`verity.ml.windows.interface`): the window's `circuit.json`, which its registration binds

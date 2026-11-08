@@ -41,7 +41,7 @@ sys.path.insert(0, str(ROOT / "benchmarks" / "pous"))
 from p2_v1 import reference as R  # noqa: E402
 
 PARAMS = S.P2Params(*S.POINT)
-SPEC = R.Params(PARAMS.w, PARAMS.c0, PARAMS.payload_bytes, PARAMS.blocks_per_segment)
+SPEC = R.DEPLOYMENT
 ROW = PARAMS.block_bytes          # 2,056
 PAYLOAD = PARAMS.payload_bytes    # 2,054
 LEAD = ROW - PAYLOAD              # a decoded row's zero bytes before its payload
@@ -128,15 +128,14 @@ class StoreLayout:
                 raise ValueError(f"{t.name} shares a block with the tensor before it")
             at = t.first_block + t.blocks
             if t.staging_offset < staged.get(t.layer, 0):
-                raise ValueError(f"{t.name} overlaps the tensor before it in layer {t.layer}'s staging buffer")
+                raise ValueError(f"{t.name} overlaps the tensor before it in layer {t.layer}'s load buffer")
             staged[t.layer] = t.staging_offset + t.size
         if at > p.blocks:
             raise ValueError(f"the tensors run to block {at}, past the store's {p.blocks}")
 
     @property
     def spec(self) -> R.Params:
-        p = self.params
-        return R.Params(p.w, p.c0, p.payload_bytes, p.blocks_per_segment, p.segments)
+        return R.Params.of(self.params)
 
     def layer(self, layer: int) -> tuple[Tensor, ...]:
         out = tuple(t for t in self.tensors if t.layer == layer)

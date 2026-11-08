@@ -879,9 +879,9 @@ def test_the_agreement_refuses_a_machine_it_cannot_run_on_in_seconds(tmp_path, m
 
 
 def test_the_agreements_smoke_replay_expects_upstreams_own_verdict_where_a_case_records_a_divergence(tmp_path, monkeypatch):
-    """r20261027-131150-7678: set 16's honest session, which Lean refuses for completeness and upstream accepts
-    (`upstream_accepted`), failed the preflight because it was held to Lean's verdict. A case without the key expects its one
-    verdict of both."""
+    """A case that records a divergence (`upstream_accepted`: an honest session Lean refuses for completeness and upstream
+    accepts) is held to upstream's own verdict: held to Lean's, it would fail the preflight. A case without the key expects
+    its one verdict of both."""
     v = tmp_path / "verifier"
     v.mkdir()
     (v / "agree.py").write_text("def drawn(d):\n    return False\n\ndef upstream_cmd(a, public, extra):\n    return [a.upstream]\n")
@@ -1242,6 +1242,59 @@ def test_the_lean_audit_step_refuses_a_fast_path_result(tmp_path):
         assert rec["status"] == "failed" and "is not an audit's report" in rec["detail"], rec
     rec = step({"passed": True, "failed": [], "packages": [{**full, "seconds": ["replay"]}]})
     assert rec["status"] == "failed" and rec["detail"].startswith(f"refused: a: a {kind} result"), rec
+
+
+def test_a_check_s_passes_are_the_packages_its_audit_passed_on_the_commit_s_own_lock_by_their_inputs_keys(tmp_path, monkeypatch):
+    """result.json's `passes` ({inputs key: package}): each package the lean-audit step passed with the kernel replay on the
+    commit's own lock, under the key `lean_changed.py --inputs-key` prints for it at that commit, which a records run of the
+    commit keeps too, so `research queue`'s records gate finds a check's pass as it finds a records run's.  None of a
+    package that failed, passed only on a record it regenerated or without the replay; none at all from a refused or stopped
+    step or an audit that crashed."""
+    import subprocess
+    import sys
+
+    lc = CHECK._load("lean_changed", CHECK.LEAN_JOBS)
+    root = tmp_path / "repo"
+    files = {"a/lakefile.toml": "", "a/lean-audit.json": "{}", "a/A.lean": "def a := 1\n",
+             "a/lake-manifest.json": json.dumps({"packages": [{"name": "p", "type": "path", "dir": "../p"}]}),
+             "p/lakefile.toml": "", "p/lean-audit.json": "{}", "p/P.lean": "def p := 1\n",
+             "c/lakefile.toml": "", "c/lean-audit.json": "{}", "d/lakefile.toml": "", "d/lean-audit.json": "{}"}
+    for f, text in files.items():
+        (root / f).parent.mkdir(parents=True, exist_ok=True)
+        (root / f).write_text(text)
+    for args in (["init", "-q"], ["add", "-A"], ["commit", "-q", "-m", "packages"]):
+        subprocess.run(["git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", *args], cwd=root,
+                       check=True, capture_output=True)
+    for m in (CHECK, lc, lc.LA):
+        monkeypatch.setattr(m, "ROOT", root)
+    full = {"failures": [], "seconds": {"build": 1.0, "audit": 1.0, "replay": 1.0}}
+    audit = {"passed": False, "failed": ["p"], "cached": {"a": "k"}, "regenerated": {"c": "c/lean-audit.json"},
+             "packages": [{**full, "package": "a"}, {**full, "package": "p", "failures": ["audit: no"]},
+                          {**full, "package": "c", "settled": True, "regenerated": "c/lean-audit.json"},
+                          {**full, "package": "d", "seconds": {"build": 1.0, "audit": 1.0}}]}
+    (tmp_path / "lean-audit").mkdir()
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    step = {"step": "lean-audit", "status": "failed", "rc": 1, "log": "lean-audit.log", "seconds": 1.0}
+    printed = subprocess.run([sys.executable, str(CHECK.LEAN_JOBS / "lean_changed.py"), "--inputs-key", "a", "--repo", str(root)],
+                             check=True, capture_output=True, text=True).stdout
+    key = json.loads(printed)["a"]
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {key: "a"}
+    for bad in ({**step, "detail": "refused: a: a lean-fast/v1 result"}, {**step, "status": "stopped", "rc": -15},
+                {**step, "detail": "hung: no output for 30 min"}):
+        assert CHECK.lean_passes(tmp_path, [bad], lc) == {}, bad
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps({**audit, "failed": ["p", "check.py exit 2"]}))
+    assert CHECK.lean_passes(tmp_path, [step], lc) == {}, "check.py crashed: what it reported isn't every verdict"
+    (tmp_path / "lean-audit" / "audit.json").write_text(json.dumps(audit))
+    (root / "a" / "A.lean").write_text("def a := 2\n")
+    got = CHECK.lean_passes(tmp_path, [step], lc)
+    assert list(got.values()) == ["a"] and key not in got, "keyed on the files the audit read: here a change not committed"
+
+    monkeypatch.setenv("RESEARCH_RUN_ID", "r-test")
+    monkeypatch.setattr(CHECK, "lean_passes", lambda out, done, lc=None: {key: "a"})
+    CHECK.write_result(tmp_path, False, [step])
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {key: "a"}
+    CHECK.write_result(tmp_path, False, [step], stopped_by="SIGTERM")
+    assert json.loads((tmp_path / "result.json").read_text())["passes"] == {}, "a stopped run has no verdict"
 
 
 def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_path, monkeypatch):

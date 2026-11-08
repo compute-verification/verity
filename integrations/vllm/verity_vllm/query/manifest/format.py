@@ -43,7 +43,8 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
             "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
             "scale_products",                   # additive (query.scale_products): a shared-scale FP8 GEMM's products per row, `<linear module>/scale_products`
-            "call_boundaries")                  # Q_word: a Value two Calls of one module body exchange, `<module>/<fx node>[/<port>]`
+            "call_boundaries",                  # Q_word: a Value two Calls of one module body exchange, `<module>/<fx node>[/<port>]`
+            "run_values")                       # additive: only a Program whose `run` Input has `<op_path>/<member>` fields (`RUN_PARAM`)
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
@@ -521,6 +522,17 @@ SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 def has_splits_param(params) -> bool:
     return any(str(n) == SPLITS_PARAM for n, _t in (params or []))
+
+
+#: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.
+#: A field named `<op_path>/<member>` is one request-owned value of the engine step whose forward reads it, committed then (identity
+#: `<op_path>/<member>`, element range [0, its leaves), family `run_values`; the row also names its leaves in `run`, the module its
+#: first reader is lowered from, `attention_module`, and that reader's `statics`): a DSA row's top-k order past INDEX_TOPK is
+#: `model.layers.<L>.self_attn.attn/topk_switches[t=<P>]`, read by `DsaWaksmanOrder_v1{N=P+1,TOPK}`, its Waksman settings, one byte
+#: (0 or 1) a leaf (`commit.committer.run_values`).  A field of any other name (a fold's sampling values) is registration's, never
+#: committed.  Emitted iff the Program HAS such a field: every other manifest is byte-for-byte unchanged.
+RUN_PARAM = "run"
+RUN_FAMILY = "run_values"
 
 
 def is_token_select(family: str) -> bool:

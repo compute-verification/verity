@@ -1,7 +1,7 @@
 # The serve tax (README.md). Not a package: its runs use a node's pinned vLLM venv; the suite tests the metrics and the
 # table on synthetic client records, the plugin's changes on a stand-in scheduler, the replay's window and comparison
-# and the restore's on a synthetic arm, and the boundary state's capture and restore on stand-ins for vLLM's engine
-# core, stdlib only but for the tests of arrays, which skip without numpy.
+# and the restore's on a synthetic arm, and the boundary state's capture and restore and the rebuild's bookkeeping on
+# stand-ins for vLLM's engine core, stdlib only but for the tests of arrays, which skip without numpy.
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = ["slow: takes over about 5 s; deselect with -m 'not slow'"]

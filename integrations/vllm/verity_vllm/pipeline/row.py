@@ -56,8 +56,8 @@ class _Row:
     world: int | None = option("--world", env="WORLD", type=int, default=None, help="TP: ranks (default: the manifest's sweep.tp)")
     query: str = option("--query", env="VERITY_QUERY_ID", default="Q_word_v1{X=16,W=32,R=no-recompute}", help="verification query id (recorded)")
     protocols: str | None = option("--protocols", env="PROTOCOLS", default=None,
-                                   help="the row's protocol set, sampled proofs included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:rows-sha512' "
-                                        "(verity_vllm.protocols); default: the workload target's, else sampled proofs alone")
+                                   help="the row's protocol set, SPOT included: 'pouw:<scheme>,pous:<scheme>,sampled-proofs:rows-sha512' "
+                                        "(verity_vllm.protocols); default: the workload target's, else SPOT alone")
     build: BuildConfig = group(BuildConfig)
     match: MatchConfig = group(MatchConfig)
     commit: CommitConfig = group(CommitConfig)

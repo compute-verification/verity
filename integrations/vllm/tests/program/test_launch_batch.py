@@ -78,6 +78,63 @@ def test_launch_tokens_and_keys_read_the_step_and_refuse_another_requests_batch(
         TG.launch_tokens(1, 0, TG.parse_launch_context("conflict"))
 
 
+def test_under_breakable_graphs_a_steps_captured_kernels_run_at_its_capture_size():
+    """vLLM pads a step of n tokens to the least capture size of at least n (`acquire.served.dispatch`), and runs one past the
+    largest uncaptured; the logits, outside the graphs, stay at the sequences."""
+    sizes = (1, 2, 4, 8, 16)
+    assert [TG.graph_tokens(n, sizes) for n in (1, 3, 5, 9, 16, 17, 67)] == [1, 4, 8, 16, 16, 17, 67]
+    assert TG.graph_tokens(3) == 3
+    ctx = TG.parse_launch_context({"batch": [[[1, 17], [1, 231], [1, 5]], [[1, 18], [1, 232], [1, 6], [2, 0]]]})
+    assert TG.launch_tokens(1, 0, ctx, capture_sizes=sizes) == 4 and TG.launch_tokens(1, 1, ctx, capture_sizes=sizes) == 8
+    assert TG.launch_tokens(1, 1, ctx, sampled=True, capture_sizes=sizes) == 4
+    assert TG.launch_tokens(3, 0, None, capture_sizes=sizes) == 4 and TG.launch_tokens(3, 0, None, sampled=True, capture_sizes=sizes) == 3
+    from verity_vllm.program.predict.common import _Launch
+    launch = _Launch(capture_sizes=sizes).with_batch([[[1, 17], [1, 231], [1, 5]]])
+    assert launch.capture_sizes == sizes and launch.tokens(1) == 4 and launch.tokens(1, sampled=True) == 3
+    assert _Launch([[[1, 17], [1, 231], [1, 5]]]).tokens(1) == 3
+
+
+def test_step_982_a_full_graph_decode_reduces_on_flashinfer_mnnvl_at_its_padded_size():
+    """Node A's replay r20261107-171723-72b6 under class G's FULL_AND_PIECEWISE graphs: step 982, 25 decoding sequences, replays a
+    FULL graph at 32 tokens; steps 163 and 436 (369 and 299 tokens, mixed) PIECEWISE graphs at 384 and 304; a step past 512 runs
+    uncaptured.  No communicator of vLLM d9105ea80 reads the graph mode, so 32 rows reduce on FlashInfer's MNNVL (under its
+    512 KiB), the PIECEWISE steps on symm_mem's multimem.  The FULL graph captures the attention at the padded batch, its 7
+    padding rows without keys, which leave FA3's split counts the real batch's."""
+    from verity_vllm.engine.profiles.engine_classes import CLASS_G_LIMITS
+    from verity_vllm.program.frontend.compilations import COMPILATIONS
+    from verity_vllm.program.predict.common import _Launch
+    from verity.ml.definitions.registry.sparse_mla_split import launch_num_splits
+    sizes, seqs = tuple(COMPILATIONS["breakable"]["capture_sizes"]), CLASS_G_LIMITS["max_num_seqs"]
+    decode = [[[1, 300 + 37 * i] for i in range(25)]]
+    assert TG.graph_launch(25, True, sizes, seqs) == ("FULL", 32)
+    assert [TG.graph_launch(n, False, sizes, seqs) for n in (369, 299, 600)] == [("PIECEWISE", 384), ("PIECEWISE", 304), ("NONE", 600)]
+    assert TG.graph_launch(25, False, sizes, seqs) == ("PIECEWISE", 32) and TG.graph_launch(25, True, sizes, 16) == ("PIECEWISE", 32)
+    launch = _Launch(capture_sizes=sizes, max_num_seqs=seqs).with_batch(decode)
+    assert launch.graph(1) == ("FULL", 32) and launch.tokens(1) == 32
+    for disable_custom in (False, True):
+        settings = TA.settings_of(disable_custom, {})
+        assert [TA.served_route(settings, M, 6144)[1] for M in (32, 384, 304)] == ["fi_ar_comm", "symm_mem_comm", "symm_mem_comm"]
+        setting, route = TA.served_route(settings, launch.tokens(1), 6144)
+        c = TA.covered(setting, 6144, route, 32)
+        assert c.definition == "AllReduceMnnvl_v1" and TA.route_binding(c, 8, 32, 6144, 1)[1] == {"WORLD": 8, "N": 6144, "SHOT": 2}
+    real = [p + 1 for (_, p) in decode[0]]
+    keys = launch.keys([real[3]])
+    assert keys == real + [0] * 7
+    assert launch_num_splits(keys, 132, 2048)[:25] == launch_num_splits(real, 132, 2048)
+    mixed = _Launch(capture_sizes=sizes, max_num_seqs=seqs).with_batch([[[1, 40], [2, 0]]])
+    assert mixed.graph(2) == ("PIECEWISE", 4) and mixed.keys([1, 2]) == [41, 1, 2]
+
+
+def test_the_bindings_read_the_padded_launch_under_a_breakable_target(declared):
+    VB.observe_launch_context(TG.parse_launch_context({"batch": [[[1, 3], [2, 0]]]}))
+    node, sampled = _node({"launch_step": 0, "launch_rows": "tokens"}), _node({"launch_step": 0, "launch_rows": "sampled"})
+    assert OB.launch_tokens_of(node, 2) == 3
+    VB.observe_target_profile(TargetProfile(batch_invariant=False, compilation="breakable"))
+    assert OB.launch_tokens_of(node, 2) == 4 and OB.launch_tokens_of(sampled, 1) == 2
+    with OB.launch_region(0, "tokens"):
+        assert OB.traced_launch_tokens(2) == 4
+
+
 def test_batch_dispatch_is_a_multi_request_row_without_batch_invariance():
     reqs = [(64, 3, 0), (300, 2, 1)]
     assert LC.batch_dispatch(_wl(reqs, batch_invariant=False))

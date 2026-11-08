@@ -20,8 +20,9 @@ assignment, numbered in a random order; `Γ` is at, below or above the division'
 just above its largest fresh input per gate, written reduced or not. About a third of the instances are malformed, each in one way the
 check refuses (every code of `NciCheck.Check`). Then come `mistyped_vectors.cases()`'s (`mistyped()`): references
 that name leaves of other widths than their types give them, which the codec and the check refuse as `program`, and
-their well-typed neighbours. The data ends with `pinned()`'s two instances on the declaration worked by hand (`hand()`):
-θ every input, which the check must refuse, and θ the registered input, which it must accept.
+their well-typed neighbours. The data ends with `pinned()`'s three instances: two on the declaration worked by hand
+(`hand()`), θ every input, which the check must refuse, and θ the registered input, which it must accept, and one on a
+declaration with a constant gate (`hand_const()`), which it must accept.
 """
 from __future__ import annotations
 
@@ -401,16 +402,34 @@ def hand() -> str:
     return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
 
 
+def hand_const() -> str:
+    """A declaration with a constant: a: Value<8> (registered), b: Value<8> (bound per run); k = `Const8[0x2a]`, which
+    reads nothing; c = f(a, k): Value<8>; d = g(c, b): Value<4>. Gates, and root nodes, 0 a, 1 b, 2 k, 3 c, 4 d."""
+    from verity.ml.circuits.ops.prims import const
+
+    k, f, g = const(8, 0x2A), prim((8, 8), 8), prim((8, 8), 4)
+
+    def body(B, S, a, b):
+        return B.call(g, B.call(f, a, B.call(k)), b)
+    fn = bind(CompositeDefinition("HandConstDecl", 1, (), lambda S: ((("a", Value(8)), ("b", Value(8))), Value(4)), body,
+                                  register=False))
+    return codec.canonical_json(codec.encode_program(Program(fn, registered=("a",)))).decode()
+
+
 def pinned() -> list[dict]:
-    """The two instances the data ends with, on `hand()` divided as {c}, {d, e}, with the result each must get (`expect`):
-    θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the registered input
-    alone, which saves IU 1 a's 8 bits and gets a verdict. Gate ids are root node ids here, so each is an instance of
-    `NciCheck.Desc` too."""
+    """The three instances the data ends with, with the result each must get (`expect`). Two on `hand()` divided as
+    {c}, {d, e}: θ every input (`theta_kind` "all"), which holds b, bound per run, so it is refused; and θ the
+    registered input alone, which saves IU 1 a's 8 bits and gets a verdict. Then `hand_const()` divided as {k, c}, {d}
+    with θ its registered input: the constant is a gate of IU 0 that reads nothing, so IU 0 reads no fresh bit, and
+    IU 1 reads c's 8 and b's 8. Gate ids are root node ids here, so each is an instance of `NciCheck.Desc` too."""
     base = {"program": hand(), "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     return [
         {"instance": base | {"theta": [0, 1]}, "theta_kind": "all", "expect": {"error": "theta-not-registered"}},
         {"instance": base | {"theta": [0]}, "theta_kind": "registered",
          "expect": {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}},
+        {"instance": {"program": hand_const(), "theta": [0], "owner": ["input", "input", 0, 0, 1], "gamma": 2,
+                      "alpha": [16, 1]}, "theta_kind": "registered",
+         "expect": {"gates": 5, "ius": [[2, 0], [1, 16]], "complies": True, "failure": None}},
     ]
 
 
