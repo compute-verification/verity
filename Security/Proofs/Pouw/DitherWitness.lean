@@ -151,7 +151,7 @@ section Sampling
 
 theorem prob_le_zero {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : ∀ ω, ¬ p ω) : prob p ≤ 0 := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   rw [filter_false_of_mem fun ω _ => h ω, card_empty, Nat.cast_zero, zero_div]
 
 theorem word_inj {a b : Fin 16} (h : ((a : ℕ) : Word) = ((b : ℕ) : Word)) : a = b := by

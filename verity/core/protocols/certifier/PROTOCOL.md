@@ -1125,7 +1125,7 @@ of the incorrect proof blocks (step 3 below), I_ε = log2 #Φ, and δ_audit = δ
 1. **Fix a.** Then every proof block's circuit is fixed, because `compile` is a function of the registered items and of
    a. So for each a the audit is the one-stage audit of a fixed circuit, and `audit_influence` applies: the audit
    accepts while the values it delivers lie outside Φ_a with probability at most δ_audit. Φ_a is the set of values
-   reachable when the incorrect proof blocks form a set whose acceptance probability is at least δ, and it is fixed before
+   reachable when the incorrect proof blocks form a set whose miss probability is at least δ, and it is fixed before
    the sample.
 2. **With no incorrect proof block, the egress is a function of I and a.** Every committed value is the forward evaluation of the
    compiled circuits from I, w and a, because every value a circuit reads has exactly one writer (A2). Each tie proof

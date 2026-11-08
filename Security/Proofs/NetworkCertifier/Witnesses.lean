@@ -465,7 +465,7 @@ theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
-  simp [Pr]
+  simp [Pr, Claims.prUniform]
 
 /-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
@@ -473,6 +473,6 @@ theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by
-  simp [Pr]
+  simp [Pr, Claims.prUniform]
 
 end NetTiming.Witness

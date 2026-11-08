@@ -55,7 +55,8 @@ worker_gb = 8
 # sidecar anywhere else is read outside these and fails the guard), and the modules they import. Test-only:
 # test_sampled_replay.py (test_circuit_check.py's request Program), with verity_vllm/records, which its replay modules import.
 # verity_vllm/engine/spec.py: what the package's lazy `EngineSpec` (in its `__all__`) imports when a session fixture resolves
-# the package's names.
+# the package's names. verity_vllm/engine/__init__.py and served_seed.py: program/predict/seed_rule.py's sidecar builds the
+# served seed rule, whose domain tag and derivation are served_seed's.
 # Read only to check the catalog's records (conftest.py):
 # pouw/window.py and spot/service.py, which the records digest as import sites of the PoUW modules they hold
 # (`units._unchanged`), and which a whole build never imports. pouw/weights.py and spot/__init__.py: h1zy reads an
@@ -134,6 +135,7 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/check", "integrations/vllm/verity_vllm/commit", "integrations/vllm/verity_vllm/correspondence",
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
+          "integrations/vllm/verity_vllm/engine/__init__.py", "integrations/vllm/verity_vllm/engine/served_seed.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
           # boundary_rows defines TemplateInlined_v1, which its sidecar binds
           "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
@@ -155,6 +157,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v4.py",
           "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v5.py",
+          "verity/ml/protocols/certifier/compile_slice_v5.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v5.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
           "verity/core/protocols/certifier/release.py"]
 

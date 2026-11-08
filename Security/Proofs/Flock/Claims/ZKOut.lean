@@ -61,7 +61,7 @@ theorem pr_eq_sum_fiber {α St : Type} [Fintype α] [Fintype St] (f : α → St)
     ext a
     simp only [Finset.mem_filter, Finset.mem_univ, true_and]
     exact and_comm
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [h, Nat.cast_sum, Finset.sum_div]
   exact Finset.sum_congr rfl fun o _ => by congr
 
@@ -73,7 +73,7 @@ theorem pr_prod_eq_sum {St C : Type} [Fintype St] [Nonempty St] [Fintype C] (q :
     rw [Finset.card_filter, Fintype.sum_prod_type]
     exact Finset.sum_congr rfl fun o _ => (Finset.card_filter _ _).symm
   have ha : (Fintype.card St : ℝ) ≠ 0 := Nat.cast_ne_zero.2 Fintype.card_ne_zero
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   rw [h, Fintype.card_prod, Nat.cast_sum, Nat.cast_mul, ← Finset.sum_div, ← mul_div_assoc,
     mul_div_mul_left _ _ ha]
 
