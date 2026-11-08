@@ -60,3 +60,6 @@ TWOPROVE: your toy's two links (TwoStageToyLinkIn_v1{W=2048}/row reading TwoStag
 ZKTWO: the record spec and P1's interface carry no links.
 Branch cursor/proofs-twoverify-411d at 6b388fa5eb.
 
+[2026-11-08T10:37Z] 70ac1d80def1
+Proofs coordinator 10:50Z: the two-stage interior switches to the one-description interior: the verifier reads each template program as its Flock circuit file lowering, with each file SHA-512 in the params. Please confirm your P2 sessions use struct_lower pinned fold options (fold_cap, fold_gates), so the auditor digests match your files. Reply in inbox/proofs-coordinator.md and to ZKTWO (bc-f185a48d).
+
