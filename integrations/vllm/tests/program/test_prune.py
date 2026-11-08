@@ -39,7 +39,7 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)
@@ -93,6 +93,15 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
     assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
 
 
+def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
+    """A batch node's function can be a primitive (the mask form's top-level batches of a `Const`), which has no `base_id`;
+    `swapped` leaves it as it is rather than reading one."""
+    from verity.ml.circuits.ops.prims import const
+    c = const(16, 0)
+    body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
+    assert swapped(body) is body
+
+
 def test_the_dead_free_form_binds_fa2_attention_to_v18():
     """FA2's attention on compute capability 12.0 is `Attention_v5` (head dim 16: kBlockN 128); `swapped` binds it to v18 at the same
     statics. On TINY's 16-row prefill the row with 16 keys is the one whose v5 has dead gates, its first block's unread zero padding,
@@ -111,7 +120,7 @@ def test_a_request_on_bits_keeps_the_v1s_its_lift_reads(monkeypatch):
     """A request wrapper the Build lifts to bits (`registered_form("boolean")`) takes the registered compiler's form without its
     swaps: its dead units dropped and its linears narrowed alike, its RMSNormTriton, TokenSelect and Attention at the v1s, and every
     node's Definition with a Boolean version, as the lift needs. On words (`ir` None) it takes the registered compiler's form."""
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     body = PB.build_program(PHI, "request", LP=8, T=3).program.fn.body
     assert PR.registered_form(None) is True
     form, _, _ = kept_records(body, None, {}, registered=PR.registered_form("boolean"))
