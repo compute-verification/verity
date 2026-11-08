@@ -1572,6 +1572,15 @@
     },
     {
       "paths": {
+        "Security/Definitions/Accounting/ComposePeriod.lean": "Security/Definitions/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Definitions/Accounting/Guarantees/ComposePeriod.lean": "Security/Definitions/Accounting/Guarantees/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod.lean": "Security/Proofs/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod/": "Security/Proofs/Accounting/ComposeMonitoringPeriod/",
+        "Security/Proofs/Accounting/Lemmas/ComposePeriod.lean": "Security/Proofs/Accounting/Lemmas/ComposeMonitoringPeriod.lean"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/numerical/python/verity_numerical/bench/templates.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
         "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
         "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.json": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.json",
@@ -1584,6 +1593,11 @@
       "paths": {
         "Security/Definitions/Population/DrawPressure.lean": "Security/Definitions/Population/SamplePressure.lean",
         "Security/Proofs/Population/DrawPressure.lean": "Security/Proofs/Population/SamplePressure.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/covert_witness/grader/": "benchmarks/training_slowdown/grader/"
       }
     },
     {
@@ -1673,6 +1687,25 @@
         "Security/Properties/RemoteAudit/Schedule.lean": "Security/Properties/Accounting/Remote/Schedule.lean",
         "Security/Properties/RemoteAudit/Shared.lean": "Security/Properties/Accounting/Remote/Shared.lean",
         "Security/Properties/RemoteAudit/Subprotocol.lean": "Security/Properties/Accounting/Remote/Subprotocol.lean"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/pous/band_gpu/memory_challenger.py": "verity/core/devices/memory_challenger/timed_audit.py"
+      }
+    },
+    {
+      "paths": {
+        "verity/core/protocols/pous/challenger_party.py": "verity/core/devices/memory_challenger/challenger_party.py"
+      }
+    },
+    {
+      "paths": {
+        "benchmarks/remote_session/verifier.py": "verity/core/protocols/remote_bandwidth/session/verifier.py",
+        "benchmarks/remote_session/lean_verifier.py": "verity/core/protocols/remote_bandwidth/session/lean_verifier.py",
+        "benchmarks/remote_session/checks.py": "verity/core/protocols/remote_bandwidth/session/checks.py",
+        "benchmarks/remote_session/challengers.py": "verity/core/protocols/remote_bandwidth/session/challengers.py",
+        "benchmarks/remote_session/wire.py": "verity/core/protocols/remote_bandwidth/session/wire.py"
       }
     },
     {

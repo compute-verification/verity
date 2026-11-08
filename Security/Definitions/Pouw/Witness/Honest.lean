@@ -37,15 +37,15 @@ def commitAns (U : Workload) (u : ℕ) (A : Mat) (a b : List R) : Commit :=
   let E := P.expAct sh a b
   let F := P.expWt sh b
   let act' : Mat := fun i l => wrap32 (A i l + mmW P.r E.1 E.2 i l)
-  let wt' : Mat := fun l j => wrap32 (U.weight (U.layout.wid u) l j + mmW P.r F.1 F.2 l j)
+  let wt' : Mat := fun l j => wrap32 (U.fixed (U.layout.fixedId u) l j + mmW P.r F.1 F.2 l j)
   ⟨A, fun t => mmW (D1.blockEnd P.d sh.k t) act' wt',
     fun i j => wrap32 (wrap32 (mmW sh.k act' wt' i j - mmW P.r (mmW sh.k A F.1) F.2 i j)
       - mmW P.r E.1 (mmW sh.k E.2 wt') i j)⟩
 
 /-- Unit `u`'s honest program: query its noise, then commit. -/
 def unitProg (U : Workload) (act : ℕ → Mat) (s : S) (u : ℕ) : QTree Q R Commit :=
-  (queryAll (P.qAct s u (act u) (U.layout.wid u))).bind fun a =>
-    (queryAll (P.qWt s u (U.layout.wid u))).bind fun b => done (commitAns P U u (act u) a b)
+  (queryAll (P.qAct s u (act u) (U.layout.fixedId u))).bind fun a =>
+    (queryAll (P.qWt s u (U.layout.fixedId u))).bind fun b => done (commitAns P U u (act u) a b)
 
 /-- The honest reference: every unit's honest program, in order. -/
 def honestProg (U : Workload) (act : ℕ → Mat) (s : S) : QTree Q R Transcript :=
