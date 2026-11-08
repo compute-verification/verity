@@ -2,10 +2,11 @@
 # The certified tick's network certifier side: warden_serve.py rehearse --watermark on this host, in front of vllm's
 # GLM-5.3 endpoint (serve-openai --admit tick, τ_b 100 ms, the recorder) on the serving node's loopback, reached through an
 # ssh local forward. A `research run` job from the shipped tree's root (--cwd source); tick-sunday/launch.sh launches it:
-#   PEER=research@HOST PORT=P [KEY=FILE] [RATE=1.67] [REQUESTS=3000] [SEED=0] [REACH_ONLY=1 | FAKE=1] bash tick-sunday/job.sh
+#   PEER=USER@HOST PORT=P [SSH_PORT=22] [KEY=FILE] [RATE=1.67] [REQUESTS=3000] [SEED=0] [REACH_ONLY=1 | FAKE=1] bash tick-sunday/job.sh
 # 1. Reach, in under a minute, before anything is sent: KEY readable, the tunnel up (ssh -N -L 127.0.0.1:LOCAL to the peer's
-#    127.0.0.1:PORT), the endpoint's /v1/models answered through it, each GET's round trip timed: $OUT/reach.json. A
-#    failure says which of those it was and exits 3. REACH_ONLY=1 stops here.
+#    127.0.0.1:PORT), the endpoint's /v1/models answered through it, each GET's round trip timed: $OUT/reach.json, and
+#    the peer's host key the tunnel met: $OUT/peer-known-hosts. A failure says which of those it was and exits 3.
+#    REACH_ONLY=1 stops here.
 # 2. The rehearsal, into $OUT/warden: RATE Poisson arrivals a second for REQUESTS requests of warden_serve's varied traffic
 #    (`varied_traffic`: prompts of 16-1024 tokens of filler words and a question, max_tokens 16-1024 under EOS, both
 #    log-uniform), greedy, top_p the endpoint's own, the model the endpoint's one (/v1/models), at SCHEDULE below.
@@ -14,7 +15,8 @@
 # 3. warden_serve.py check on $OUT/warden, from its files alone: $OUT/check.txt; then $OUT/summary.json.
 # FAKE=1 runs 2 and 3 against warden_serve's fake endpoint (FIRST_MS, TOKEN_MS) with no tunnel: the dry run.
 #
-# SCHEDULE, for GLM-5.3 at TP8 eager under the tick and the recorder, through a tunnel of about 100 ms round trip:
+# SCHEDULE, for GLM-5.3 at TP8 eager under the tick and the recorder, through a tunnel of up to about 150 ms round trip
+# (reach.json times it):
 # - B = 256, r = 1: r·P = 247 bytes a bucket each way. A streamed /v1/completions token is about 200-280 bytes (its
 #   event and chunk framing), so egress drains about 10 tokens a second, under the slowest per-request stream expected
 #   there; the server is read eagerly, so this pacing never slows it, and what it streams faster waits in the buffer.
@@ -40,25 +42,28 @@ trap cleanup EXIT
 log() { echo "$(date -u +%H:%M:%SZ) tick: $*" | tee -a "$OUT/job.log"; }
 
 if [ -z "${FAKE:-}" ]; then
-  PEER=${PEER:?PEER: research@HOST, the serving node}; PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the peer}
+  PEER=${PEER:?PEER: USER@HOST, the serving node}; PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the peer}
+  SSH_PORT=${SSH_PORT:-22}
   KEY=${KEY:-$HOME/.ssh/vy-tick-tunnel}
   LOCAL=${LOCAL:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
-  log "reach: $PEER's 127.0.0.1:$PORT from $(hostname) as 127.0.0.1:$LOCAL, key $KEY"
+  log "reach: $PEER (ssh port $SSH_PORT)'s 127.0.0.1:$PORT from $(hostname) as 127.0.0.1:$LOCAL, key $KEY"
   if [ ! -r "$KEY" ]; then
     log "UNREACHED: no key $KEY on $(hostname): the tunnel key @infra makes here and authorizes on the peer (KEY=FILE)"
     echo '{"reached": false, "why": "no key"}' > "$OUT/reach.json"; exit 3
   fi
-  ssh -N -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes \
-      -o ServerAliveInterval=15 -o IdentitiesOnly=yes -i "$KEY" -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" "$PEER" \
-      2> "$OUT/tunnel.log" &
+  # a known_hosts of the run's own: RunPod hands a gone pod's IP and port to a new pod, whose host key a shared file refuses
+  ssh -N -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new -o UserKnownHostsFile="$W/known_hosts" \
+      -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o IdentitiesOnly=yes -p "$SSH_PORT" -i "$KEY" \
+      -L "127.0.0.1:$LOCAL:127.0.0.1:$PORT" "$PEER" 2> "$OUT/tunnel.log" &
   TUN=$!
-  timeout 50 python3 - "$TUN" "$LOCAL" "$OUT/reach.json" "$OUT/tunnel.log" "$PEER" "$PORT" <<'EOF'
+  timeout 50 python3 - "$TUN" "$LOCAL" "$OUT/reach.json" "$OUT/tunnel.log" "$PEER" "$PORT" "$SSH_PORT" <<'EOF'
 import http.client, json, os, socket, sys, time
-pid, local, out, tlog, peer, port = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6]
+pid, local, out, tlog, peer, port, ssh_port = (int(sys.argv[1]), int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5],
+                                               sys.argv[6], int(sys.argv[7]))
 
 def done(reached, why, **kw):
-    json.dump({"reached": reached, "why": why, "peer": peer, "port": int(port), "local": local, **kw}, open(out, "w"),
-              indent=1)
+    json.dump({"reached": reached, "why": why, "peer": peer, "ssh_port": ssh_port, "port": int(port), "local": local, **kw},
+              open(out, "w"), indent=1)
     print(("REACHED: " if reached else "UNREACHED: ") + why, flush=True)
     sys.exit(0 if reached else 3)
 
@@ -67,9 +72,9 @@ def ssh_said():
     for needle, why in (("administratively prohibited", "the peer forbids this forward (permitopen must name the port)"),
                         ("open failed", "the tunnel is up but nothing listens on the peer's 127.0.0.1:PORT (is vllm's "
                                         "endpoint up?)"),
-                        ("Permission denied", "the peer refuses the key: @infra authorizes its public half for research@"),
-                        ("timed out", "no TCP to the peer's port 22: its security group must admit this host"),
-                        ("Connection refused", "the peer's port 22 refuses: no sshd there, or the wrong address"),
+                        ("Permission denied", "the peer refuses the key: @infra authorizes its public half for PEER's user"),
+                        ("timed out", "no TCP to the peer's ssh port (SSH_PORT): its security group must admit this host"),
+                        ("Connection refused", "the peer's ssh port refuses: no sshd there, or the wrong address or SSH_PORT"),
                         ("No route", "no route to the peer"), ("Could not resolve", "the peer's name doesn't resolve")):
         if needle in text:
             return why
@@ -109,6 +114,7 @@ done(True, f"{models[0]} at {peer}'s 127.0.0.1:{port}, GET round trips {gets} ms
      get_ms=gets, model=models[0])
 EOF
   rc=$?
+  cp "$W/known_hosts" "$OUT/peer-known-hosts" 2>/dev/null
   [ "$rc" = 124 ] && { log "UNREACHED: the reach check took over 50 s"; exit 3; }
   [ "$rc" = 0 ] || exit 3
   [ -n "${REACH_ONLY:-}" ] && exit 0
