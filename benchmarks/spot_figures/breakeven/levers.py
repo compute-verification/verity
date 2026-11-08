@@ -81,8 +81,10 @@ def bound(L, beta, scope="world week", scale=1.0, full=False, lean=False):
     """The line's exfiltration bound at beta (bits), as total_cost._point computes it, with its row if `full` and
     Lean's check of its design if `lean`.  `extra_budget_share` is a share of the scope's compute taken out of beta
     before the audit (a serve-time cost counted in beta)."""
-    name, i, (tb, fl, oh), comp, conf, replay_gpu_s, extra = L
-    s = SCOPES[scope]
+    name, i, (tb, fl, oh), comp, conf, replay_gpu_s, extra, *more = L
+    opts = more[0] if more else {}
+    s = opts.get("scopes", SCOPES)[scope]
+    name = opts.get("point", name)
     m = f1.model(i, tb, s, oh * scale, fl)
     replay = (m.replay.cost * tc.batch(conf, s, c)) if replay_gpu_s is None else replay_gpu_s
     g = tc.Grain(m.replay.replay_blocks, m.cells, replay, m.served)

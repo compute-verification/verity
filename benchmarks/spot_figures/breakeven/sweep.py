@@ -14,7 +14,7 @@ import argparse
 import json
 import sys
 from concurrent.futures import ProcessPoolExecutor
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from math import exp, log
 from pathlib import Path
 
@@ -23,6 +23,7 @@ from levers import (MACHINE_GPUS, WEIGHTS, bound, floor_bits, fuse_reads, make_l
                     scale_proving, tb)
 
 from common import SCOPES, c, sc, tc  # noqa: E402
+import reprice  # noqa: E402
 
 REPORT = (0.01, 0.05, 0.10)
 #: each cut's prover busy time against its end-to-end reading on the same sessions, (marginal, fixed a statement): the
@@ -35,6 +36,8 @@ PARTS = {p["part"]: p["share"] for p in TAXES["tokens"]["parts"]}
 EDGE_PAUSE = tc.EDGE_PAUSE[0]
 WINDOW = c["window"].value
 REPLAY_FACTOR = c["replay_factor"].value
+COMMIT_WRITE = reprice.COMMIT_WRITE
+TAX_ONE_STAGE = tc.taxes(tc.spot_cards.load("serve_tax", "GLM-5.3"), ("every_block",))["every_block"]["tax"]
 
 
 @dataclass(frozen=True)
@@ -52,23 +55,45 @@ class Case:
     live: bool = False
     busy: bool = False
     labels: tuple[str, ...] = field(default_factory=tuple)
+    cache: bool = False
+    overlap: str = ""
+    prover: float = 1.0
+    arena: bool = False
+    host: float = 1.0
+    plain: bool = False
+    ctx: str = ""
+    form: str = ""
+    commit_write: bool = False
 
     def tax(self) -> float:
         """The serve tax: the certified tick and the top-k always; the edge snapshot's pause over the replay block's
-        length, or none when the replay reads the edge's state live."""
+        length, or none when the replay reads the edge's state live; every full K/V page hashed when written if
+        `commit_write`.  The one-stage design's is the every-block line's, hashing every block's outputs."""
+        if self.form == "one-stage":
+            return TAX_ONE_STAGE
         edge = 0.0 if self.live else EDGE_PAUSE / (self.edge_s or WINDOW)
-        return PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
+        return (PARTS["certified-tick rule"] + PARTS["deterministic top-k"] + edge
+                + (COMMIT_WRITE if self.commit_write else 0.0))
 
 
 def build(case: Case):
     strata = None
-    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy:
+    per_type = case.cache or case.overlap or case.prover != 1.0 or case.host != 1.0 or case.plain
+    if case.fuse or case.marginal != 1.0 or case.cap != 1.0 or case.fixed != 1.0 or case.busy or per_type:
         strata = priced_strata(case.line)
         if case.fuse:
             strata = fuse_reads(strata, fixed="sum" if case.fixed_sum else "read")
+        if per_type:
+            strata = reprice.apply(strata, cache=case.cache, overlap=case.overlap, prover=case.prover,
+                                   arena=case.arena, host=case.host, plain=case.plain)
         bm, bf = BUSY[case.line] if case.busy else (1.0, 1.0)
         strata = scale_proving(strata, marginal=case.marginal * bm, fixed=case.fixed * bf, cap=case.cap)
-    return make_line(case.line, strata, replay_gpu_s=case.replay, registration=case.registration)
+    L = make_line(case.line, strata, replay_gpu_s=case.replay, registration=case.registration)
+    if case.ctx:
+        L = reprice.workload(L, {"c343": reprice.C343, "c343-served": reprice.C343_SERVED}[case.ctx])
+    if case.form == "one-stage":
+        L = (*L[:7], (L[7] if len(L) > 7 else {}) | {"point": "every_block"})
+    return L
 
 
 def solve(L, target: float, scope: str, scale: float, lo: float = 1e-5, hi: float = 1e4, rel: float = 0.005):
@@ -227,6 +252,37 @@ def cases() -> dict[str, Case]:
     }
     for name, kw in more.items():
         out[name] = Case(**{**bases["F"].__dict__, "busy": True, **kw})
+    return out | repriced()
+
+
+def repriced() -> dict[str, Case]:
+    """(A′) at 128k over vLLM's 128k serve plan, each measured or modeled lever added in turn (`R0`..`R5x4`), the
+    extras on the main line's last two steps, the one-stage design on the same blocks, and the census request and the
+    plan as served beside it."""
+    hash4 = 1 - 0.5 * (1 - 1 / 4)
+    base = dict(line="per_expert", ctx="c343", replay=reprice.BLOCKS_128K)
+    life = dict(replay=reprice.LIFETIME_128K, live=True, commit_write=True)
+    steps = {"R0": {}, "R1": dict(fuse=True), "R2": dict(fuse=True, cache=True),
+             "R3": dict(fuse=True, cache=True, overlap="experts")}
+    steps["R4"] = steps["R3"] | dict(prover=3.5)
+    steps["R4x4"] = steps["R3"] | dict(prover=4.0)
+    steps["R5"] = steps["R4"] | life
+    steps["R5x4"] = steps["R4x4"] | life
+    extras = {"all": dict(overlap="all"), "arena": dict(arena=True), "host": dict(host=3.5),
+              "hash4": dict(marginal=hash4), "plain": dict(plain=True),
+              "all+arena": dict(overlap="all", arena=True),
+              "all+arena+host": dict(overlap="all", arena=True, host=3.5),
+              "all+arena+host+plain": dict(overlap="all", arena=True, host=3.5, plain=True),
+              "all+arena+host+hash4": dict(overlap="all", arena=True, host=3.5, marginal=hash4)}
+    out = {n: Case(**(base | kw)) for n, kw in steps.items()}
+    for s in ("R5", "R5x4"):
+        for e, kw in extras.items():
+            out[f"{s}+{e}"] = Case(**(base | steps[s] | kw))
+    for s in ("R0", "R1", "R3", "R5", "R5x4", "R5x4+all+arena+host"):
+        out[f"{s}-1s"] = replace(out[s], form="one-stage")
+    out["R4x4-census"] = replace(out["R4x4"], ctx="", replay=None)
+    out["R0-census"] = replace(out["R0"], ctx="", replay=None)
+    out["R5x4-served"] = replace(out["R5x4"], ctx="c343-served")
     return out
 
 
