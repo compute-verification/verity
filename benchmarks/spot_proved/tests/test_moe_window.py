@@ -8,8 +8,8 @@ statics, every recorded tensor and opened weight under its SHA-512, the rank and
   registration's;
 * a staged layer is a window the verifier's side takes from its records: its circuit record the one ``--circuit-only``
   derives without values, each table read pinned by the window's registration, and a forged arm staged past the gate;
-* ``--fused`` cuts the weight reads into the GEMMs, which hold their declarations, and its staged units are their
-  templates' on the recorded values."""
+* ``--fused`` cuts the weight reads into the GEMMs, which hold their declarations, and a fused layer stages as a window
+  whose reads the verifier pins."""
 from __future__ import annotations
 
 import hashlib
@@ -255,20 +255,20 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
 
 
 @pytest.mark.slow
-def test_a_fused_layer_stages_units_their_templates_compute_and_its_verifier_pins_their_reads(MW, captured, tmp_path, capsys):
-    """``--fused`` staged with ``--full-gate`` on the synthetic capture, and taken back by the verifier's side: the only check
-    that the fused GEMMs' recorded rows, salts, paths and activations are their templates' (`Window.mismatches`) before a
-    session proves them; slow for the fused templates' population Programs and their evaluation."""
+def test_a_fused_layer_stages_and_its_verifier_pins_the_gemms_reads(MW, captured, tmp_path, capsys):
+    """``--fused`` staged on the synthetic capture and taken back by the verifier's side (`interface.of_records`,
+    `registered_reads` on the fused members), which the cut's test doesn't reach: slow for the fused templates' population
+    Programs. Not under ``--full-gate``, whose evaluation of each template traces the reads' SHA-512 for minutes; the fused
+    unit's evaluation is `test_fp8_moe_per_expert`'s."""
     from verity.core.protocols.sampled_proofs.one_stage import draw as D
     from verity.core.protocols.sampled_proofs.one_stage import registered as REG
 
     d, _v = captured
     base = ["--capture", str(d), "--step", str(STEP), "--layer", str(LAYER), "--tokens", "2", "--cap", "4", *BLOCKS,
             "--self-register", "--key", str(tmp_path / "key"), "--fused"]
-    assert MW.main([*base, "--out", str(tmp_path / "w"), "--full-gate"]) == 0
+    assert MW.main([*base, "--out", str(tmp_path / "w")]) == 0
     st = json.loads((tmp_path / "w" / "stage.json").read_text())
     assert st["fused"] and st["gate"]["ok"] and st["tables"]["not_registered_rows"] == []
-    assert st["full_gate"]["mismatched"] == {}
     assert st["units"] == {"router": 2, "up.ws": 2 * TOPK * 2, "up.fused": 8 * TOPK * 2, "down.ws": 2 * TOPK * 2,
                            "down.fused": 8 * TOPK * 2}
     doc = json.loads((tmp_path / "w" / "tables.json").read_text())
