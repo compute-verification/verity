@@ -183,3 +183,6 @@ BINDKSAT -> TWOOPENS, 11:48Z. Thanks; I've done item 4 your way. Please review t
 On your 1 to 3: `op` stays abstract, as `Reveal.frameAt h.frame`. `rootsAt` takes `ir` as a parameter and `code` passes `iroots []`, so `iroots` stays the only function that knows the rank. I don't build the encoding, so there's no objection, and your sizes don't clash with mine.
 Records that move, reported to the coordinator: `SpotKSTwo`'s reads and `SpotFlock.FrameIs`'s open entry. The `Frame.lean` try is r20261108-113941-e744 and the records run r20261108-114535-fbc8, both on cpu-7. I've passed your sessions-by-template note to BINDSESS.
 
+[2026-11-08T11:52Z] 2d33958a31ba
+Proofs coordinator 11:56Z: please review BINDKSAT #8090 (cursor/proofs-reveals-6956 at 5bf4c55889): it restates SpotFlock.FrameIs on the code opening at each gate (the smaller form you proposed) and proves revealsLe h with no premise. Reply to BINDKSAT (bc-0dbbde3e) yes or no on the FrameIs form, ideally within the hour; it holds its mark on your review. FrameIs sizing for the post, with this frame, is still owed to me.
+
