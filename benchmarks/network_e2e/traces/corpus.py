@@ -17,6 +17,11 @@ and DIR/README.md. `compare` does the same comparison across corpora that serve 
 prefill, an 8192-token budget): ``honest`` under vLLM's own scheduler, the others under `vllm_adversarial_plugin`'s hostile
 one, with its seed and prefix-cache mode. If a request's output ids moved with the hostile choices, `compare` shows it.
 
+`CUT`'s traces serve honest's server and load with the carried pool's cut at every window edge
+(`verity_vllm.pipeline.cut_plugin`, configured by ``VERITY_CUT``): at each edge every running request is preempted and
+continues in the next window, hitting its own cached blocks. `compare` against ``honest`` shows whether a cut moves any
+request's output ids, and each edge's record (``raw/cut.PID.jsonl``) holds its hold, its cut set and its cost.
+
 `WARDEN`'s traces serve a trace's server and load through the active warden: `warden_serve.py serve` in front of the
 server, a process beside it on its host (``warden beside the server, not on the auditor host``), and the client
 (`drive_warden`) speaking cells through the relay's shim. The relay, the client and the server each run on cores of
@@ -135,6 +140,11 @@ TRACES |= {name: (["--enable-chunked-prefill", "--max-num-batched-tokens", "8192
                   f"heavy's load, chunked prefill (8192-token budget), a hostile scheduler (seed {h[1]}: random "
                   f"preemptions, hold-backs, order and prefill splits; {CACHE_WHAT[h[0]]})")
            for name, h in HOSTILE.items()}
+#: cut trace -> its ``VERITY_CUT`` less the log (`verity_vllm.pipeline.cut_plugin.cut_config`): honest's server and load,
+#: every open request cut at each window edge
+CUT = {"cut-8": {"every_steps": 8}, "cut-64": {"every_steps": 64}, "cut-1s": {"every_s": 1.0}}
+TRACES |= {name: (TRACES["honest"][0], f"{TRACES['honest'][1]}, cut at every window edge ({json.dumps(c)})")
+           for name, c in CUT.items()}
 #: warden trace -> (the trace whose server and load it serves, D in buckets). The client reaches the server only through the
 #: active warden (`verity.core.protocols.certifier.warden`, run by `benchmarks/network_traces/warden_serve.py serve`), in
 #: cells. A late egress cell fails its connection closed and vLLM aborts the request, so D, from the warden's egress base
@@ -272,15 +282,18 @@ def load_docs(c4: Path, tokenizer: Path, n: int) -> list[list[int]]:
     return [e.ids for e in tok.encode_batch(texts, add_special_tokens=False)]
 
 
-def plugin_site(site: Path, tick: bool = False) -> Path:
+def plugin_site(site: Path, tick: bool = False, cut: bool = False) -> Path:
     """A directory whose .dist-info declares `vllm_adversarial_plugin.register` and `vllm_trace_plugin.register` as vLLM
     general plugins, in that order: vLLM calls them in the file's order, so the tracer wraps the adversary's `schedule`
-    and records the step after the adversary has put back what it held. With `tick`, `tick_plugin.register` too, whose
-    gate wraps each scheduler built after them, so that the tracer sees a request when the gate adds it."""
+    and records the step after the adversary has put back what it held. With `cut`, `cut_plugin.register` between them,
+    so that the tracer records the step after the cut. With `tick`, `tick_plugin.register` too, whose gate wraps each
+    scheduler built after them, so that the tracer sees a request when the gate adds it, and adds it through the cut's
+    numbering in release order."""
     d = site / "verity_trace_corpus-0.0.dist-info"
     d.mkdir(parents=True, exist_ok=True)
     (d / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-trace-corpus\nVersion: 0.0\n")
-    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n"
+    (d / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_adversary = vllm_adversarial_plugin:register\n" +
+                                        ("verity_cut = verity_vllm.pipeline.cut_plugin:register\n" if cut else "") +
                                         "verity_trace = vllm_trace_plugin:register\n" +
                                         ("verity_tick = verity_vllm.pipeline.tick_plugin:register\n" if tick else ""))
     return site
@@ -720,7 +733,8 @@ def check_warden(d: Path) -> int:
 
 def rate_of(model: Model, name: str, rate: float | None) -> float | None:
     """A trace's Poisson rate: `rate` where given, else the model's for the trace's load (None if it has none)."""
-    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE else WARDEN.get(name, (name,))[0])
+    return rate if rate is not None else model.rates.get("heavy" if name in HOSTILE or name in CUT
+                                                         else WARDEN.get(name, (name,))[0])
 
 
 def tick_args(trace: str | None, given_ms: str | None) -> dict:
@@ -773,6 +787,8 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     tick = getattr(args, "tick", None)
     hostile = HOSTILE.get(name)
     adversary = {"VERITY_ADV_CACHE": hostile[0], "VERITY_ADV_SEED": str(hostile[1])} if hostile else {}
+    if (cut := CUT.get(name)) is not None:
+        adversary["VERITY_CUT"] = json.dumps({**cut, "log": str(out / name / "raw")})
     if base == "smallkv":
         server_args = [*server_args, "--kv-cache-memory-bytes", str(KV_SMALL_TOKENS * kv_bytes_per_token(checkpoint))]
     d = out / name
@@ -794,7 +810,7 @@ def run_trace(name: str, out: Path, model: Model, checkpoint: Path, requests: li
     ids = [request_id(r["i"]) for r in requests]
     cpus = cpu_plan(list(os.sched_getaffinity(0))) if delay is not None else None
     meta = {"trace": name, "rate": rate, "why": why, "server_argv": argv[1:], "engine_env": engine_env,
-            "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None,
+            "adversary": {"cache": hostile[0], "seed": hostile[1]} if hostile else None, "cut": cut,
             "requests": len(requests), "arrivals_span_s": round(arr[-1], 3)}
     if delay is not None:
         meta["cpus"] = cpus or f"not pinned: the job has {len(os.sched_getaffinity(0))} cores"
@@ -924,7 +940,8 @@ def run(args: argparse.Namespace) -> int:
         (out / "meta.json").write_text(json.dumps(meta, indent=1))
         try:
             meta["traces"][name] = run_trace(name, out, model, checkpoint, requests,
-                                             plugin_site(out / ".site", tick=args.tick is not None), args)
+                                             plugin_site(out / ".site", tick=args.tick is not None,
+                                                         cut=any(n in CUT for n in traces)), args)
         except Exception as e:  # noqa: BLE001 -- the next trace still runs
             meta["traces"][name] = {"error": f"{type(e).__name__}: {e}"}
             print(f"[corpus] {name}: FAILED {e}", flush=True)

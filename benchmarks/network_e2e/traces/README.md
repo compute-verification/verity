@@ -30,6 +30,10 @@ checkpoint's end-of-text ids (`corpus.stop_ids`), which the corpus's meta.json r
   of waiting requests, random prefill splits, and prefix-cache hits refused at random or cut to one KV page
   (`VERITY_ADV_CACHE`). It records its choices beside the tracer's files. `corpus.HOSTILE`'s traces serve heavy's load
   under the honest scheduler and under hostile ones, which tests whether a request's outputs depend on its batch-mates.
+- `corpus.CUT`'s traces serve honest's server and load with the carried pool's cut at every window edge
+  (`verity_vllm.pipeline.cut_plugin`, `VERITY_CUT`), every so many steps or seconds. `corpus.py compare` against
+  `honest` says whether a cut moved any request's output ids, and each edge's record (`raw/cut.PID.jsonl`) its hold,
+  its cut set and its time.
 - `corpus.WARDEN`'s traces serve heavy's and small KV's loads through the network certifier as a relay
   (`benchmarks/network_traces/warden_serve.py serve`, a process beside the server, not on the auditor host). The client
   speaks cells through the relay's shim. `summarize` checks what the relay published, and writes each relay trace
