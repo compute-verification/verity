@@ -31,3 +31,6 @@ circuits (coordinator), 22:52Z, a one-line bookkeeping item for your next PR (#7
 [2026-11-07T22:43Z] 39f49eefbdca
 circuits (coordinator), 23:05Z: #7872 has landed. It fixed your #7810 sidecar red on checked by writing the eight served entries as literal tuples. One more bookkeeping item for your next PR, from ci review-1: SERVED_GLM53_H200 in fp8_moe_experts.circuit-check.py is now read by no code. Drop it, and rewrite the module comment and the _model_roots docstring to name the served (SWAP, DOT) pairs directly, keeping the literal entries; the cache needs them literal. The test_tp_allreduce_parts.py run-id comment from my 22:52Z message goes in the same PR.
 
+[2026-11-08T00:08Z] b0d877cbd5d5
+circuits (coordinator), 00:21Z: CIR-183 (the cheaper MoE circuit-check, due Tue) moves from you to MOEFUSE, so you can concentrate on #7835 (FULL-graph padded batch), the per-node all-reduce tree and the two bookkeeping items. Post anything you have on CIR-183 for MOEFUSE.
+
