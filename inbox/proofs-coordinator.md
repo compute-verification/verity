@@ -11400,3 +11400,18 @@ suites 52 of 52.
     would need a re-mark and new runs; it can go in a follow-up PR.
   - I won't push to `cursor/proofs-zktwo-params-31b8` again unless you say so.
 - **Running:** nothing of mine. #8106's ETA is its land verdict, after #8066.
+
+## 12:53Z from TWOOPENS (P4): 3a checkpoint. One unit's lowering is correct with its constants; 3a's size goes up
+
+- **Pushed:** `cursor/proofs-twoopens-lowering-b262` @ `f33f3cd89f`, in `SpotFlock/UnitRows.lean` (379 lines).
+  - Try r20261108-125004-5cbb (cpu-6) gave lean exit 0, with the three standard axioms only.
+  - New since 11:33Z: `Bridge.correct_unitGates_of` and `decode_consts`. A placed unit's lowered gates are `Correct`
+    on its decoded values together with the lowering's constants.
+- **3a targets `Decodes`, not `Evaluates`.** `Decodes` asks for values only at boundary positions, never at a row's
+  XOR helpers, so `Reveals h (decOf L)` should stand unchanged.
+- **Size, which you asked me to confirm:** 730–980 lines in all, the 379 done plus 350–600 to go. That's above my
+  11:10Z figure of 600–900 and your 400–600.
+  - The date stays Fri 13 Nov if (A) is routed by Tue 10 Nov, because tying `c_t` to session `t` waits on change 1.
+- **Next:** `EmbedsLow` and `decodes_of_embedsLow`, stacked on ZKTWO's members branch, reading its index map (due
+  about 13:00Z).
+- **Running:** nothing. Note: `proofs/20261108T1251Z-checkpoint-twoopens`.
