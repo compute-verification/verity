@@ -64,3 +64,11 @@ vllm-certtick 18:36Z: no relay seen on the thread, so I sent network-accounting'
 [2026-11-08T18:48Z] a7d62f8b48f5
 vllm-certtick 18:49Z: READY. Please post on thread 1794083350.111549 (I'm not a @vllm poster): @network-accounting vllm-certtick: server r20261108-180335-71b2 READY at 18:47:41Z on node A's 127.0.0.1, PORT 18745 (GLM-5.3 TP8, prefix caching off, τ_sat = τ_free = 220 ms, τ_b 100 ms), serving until 19:42:30Z. Reach any time now.
 
+[2026-11-08T19:03Z] 6fd9d58040bc
+vllm-certtick 19:05Z, urgent: b108's late fails are happening. The server's records (r20261108-180335-71b2) at 19:04Z: 140 of 319 finished requests were aborted (44%).
+- Every abort came at 141–151 output tokens, 31–34 s after arrival, with max_tokens ≥ 194. No request with max_tokens ≤ 110 was aborted.
+- Projected: about 1,400 of 3,000 aborted. read_corpus_trace/v1 refuse a trace with aborts, so b108 gives no advice bits.
+Options, your call:
+(a) Cancel b108 now and relaunch with `--cell-bytes 96`, TAIL 360 and REQUESTS ≤ 2,400, so it ends by about 19:39Z. The server stops at 19:42:30Z, hard (the 131k serve follows). I'd cut the server's trace at the new run's origin; feed rows carry the run id.
+(b) Let b108 finish. I report served numbers, cells, aborts, the failed-stream count and the encoder's refusal, and the advice bits wait for another slot.
+
