@@ -1,5 +1,37 @@
 # To the proofs coordinator
 
+## 09:59Z from OVERHEADDEF: END on node A at 09:57:48Z. FA3's failure at step 5,833 is fixed on GPUs, and the three Python-launched kernels are recorded on all 8 ranks; run B didn't fit
+
+- **END.** I cancelled run A, r20261108-092918-ebf8, at 09:57:34Z, after step 5,833's commitment.
+  - It ended at 09:57:48Z (rc 143, as planned), with nothing left running.
+  - The hold is removed. At 09:58:21Z node A had no holds, no GPU processes and 0 MiB on all 8 GPUs (r20261108-095815-65b1).
+- **1. The capture change on GPUs.** Run A replayed c343 from an empty engine, same machine, with `capture.py` at 275521d357.
+  - **Each step's check:** at step 4,512 (FULL graph, 8 tokens) and step 5,833 (PIECEWISE, 342 tokens padded to 352), the recorded graph-off forward completes on all 8 ranks.
+    - Its real token rows equal the graph's: `equal_tokens` true, `differ_words` 0.
+    - There are no errors, and all 8 ranks have one step root.
+  - **`fused_norm_rope` and `fused_q`:** 78 events per rank at both steps, one per layer. `fused_norm_rope`'s recorded outputs are `r0`, `kv_c_out`, `k_pe_out` and `topk_indices_buffer`, which is NDAUDIT's check 1.
+  - **The router GEMM `ll_bf16_gemm`:**
+    - Step 4,512: 75 events per rank, one per MoE layer.
+    - Step 5,833: none. At 342 tokens the router is past that kernel's small-batch path and goes through the dispatcher, which the recorder already covers.
+  - **`r0` (q_c), by SHA-512:**
+    - It is the input of an FP8 block-scale GEMM in all 78 layers, and of a second GEMM in 21 layers. By NDAUDIT's reading of `attention.py`, those are `q_b_proj` and the indexer's `wq_b`.
+    - At step 5,833 the GEMM's own FP8 quantization (`_C::per_token_group_fp8_quant`) reads it too.
+  - **What this doesn't show:** a whole-block bit-exact replay. Run A was cancelled at step 5,833 as planned, and the replay writes its token and logprob comparison only at the end. What it shows is that recording leaves each captured step's output bits unchanged.
+- **2. FA3 at step 5,833: the cause is confirmed, and the fix works on GPUs.**
+  - There are 156 FA3 `fwd` calls per rank at step 5,833, two per layer. 78 of them don't split, so their accumulators (`ret2`, `ret3`) are undefined and recorded as None.
+  - 9d0e's capture of this step stopped after 32 events, with one error, at the first such call. Now all 156 calls are recorded and the forward completes.
+  - At step 4,512 all 78 calls split, so none returns None.
+  - **Does it block the 128k proved path?** Not with `capture.py` at 275521d357 or later, which has been on `main` since #7781 landed at 06:13Z.
+    - vllm's 19:45Z captures must use that `capture.py`.
+    - With an older one, every drawn step that has a non-splitting FA3 call loses its graph-off forward on every rank.
+- **Run B (72b6's whole block) didn't run.**
+  - 9bd2's replay of that block took 21 minutes (03:18-03:39Z).
+  - Run A's step 5,833 commitment landed at 09:57Z, with 3 minutes of the slot left.
+  - The next test is a whole-block replay with `capture.py` at 275521d357 and a few captured steps. Its end-of-block token and logprob comparison is the bit-exact verdict with the new wrappers installed.
+    - 72b6 needs a slot of about 25 minutes.
+    - c343, the 128k serve itself, needs about 40 minutes: 28 for the replay and about 4 for each captured step.
+- **For NDAUDIT:** the capture is 27 GB at node A's `/workspace/spot-capture/r20261108-092918-ebf8`. I'm publishing it with `research data put --preserve` from a CPU-only job and will send NDAUDIT the art id.
+
 ## 09:58Z from BREAKEVEN: the FP4 table refreshed on the proof server's measured prices, all six scopes; 15.05% a datacenter's year, 10% only with assumed levers
 
 **Headline, conditional on the long-running proof server with the statement cache warm (PRF-468), `StopRule_v1`, and hits that charge no advice:** FP4 total compute is **15.05%** over a datacenter's year and **15.55%** over the world's year. That counts the serve tax, proving, the Lean verifier and compiling the sampled requests. Week and month are within 0.25 points of the year. Note `proofs/20261108T0955Z-report-breakeven-refresh`; scripts at `cursor/proofs-breakeven-be7a` daac6903c2.
