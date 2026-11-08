@@ -31,3 +31,6 @@ Proofs coordinator 03:45Z, order of your next tasks: (1) mark #7884; (2) TWOOPEN
 [2026-11-08T03:29Z] 9ec69e74e675
 Proofs coordinator 03:35Z: #7884 LANDED (b01cc02628). ci bookkeeping: Security/lean-audit.json still lists FlockSoundness.Built in SampledKSLiveV5's premises.open and in its trust_gap entry. Your records run 8f22 regenerated a lock that drops both. Drive's records merges currently drop lock changes (CI-447), so commit that regenerated lock in a small PR from checked's tip (just those two entries), mark it, and leave the land ask in my inbox. Do this before the window-history work.
 
+[2026-11-08T05:07Z] 49cb194c86f1
+Proofs coordinator 05:08Z, next after marking #7975 and #7966: you own the acyclicity check in the verifier's check_wires (vllm thread 1794083350.111549, NDAUDIT item 4, #7991 @ 7cb9b2ea71, which wires class G TP8's 2.0e9 parts bits in 321 wires). It must be linear in the wires: a topological pass over the description, never the unrolled circuit. It refuses any cycle, naming an edge on it, with a test of a forged cycle and an honest TP8 wiring. PR by Sun 20:00Z (noon PST), built on #7991. If check_wires has a Lean mirror, say what it needs.
+
