@@ -80,7 +80,7 @@ digests (`expectedRoot`, also against `audit.payload_tree`), the hello's decisio
 safetensors headers and config.json, the arena's layout from them (`tensors`, `arena`) and the weights blocks' digests
 (`weight_digests`); the Lean takes those digests as given. It lives in this tree because a period's circuit is this
 tree's git hash (`verity/remote-bandwidth/v0 verifier tree
-<tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
+<tree>`, `spot.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
 A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
@@ -130,8 +130,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
-- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`sampled_proofs.challenger`, in
-  process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
+- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`spot.challenger`, in
+  process or through `spot.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
   coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
