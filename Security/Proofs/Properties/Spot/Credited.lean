@@ -2,7 +2,7 @@ module
 
 public import Proofs.Properties.Spot
 public import Proofs.Properties.Spot.Units
-public import Proofs.Properties.Nci.ReadsExact
+public import Proofs.Core.QSort
 public import Proofs.Properties.Pous.MemoryChallenger.Sort
 public import Proofs.Properties.Accounting.Remote.Sort
 public import Proofs.Flock.Bridge.V5.Accepted
@@ -52,7 +52,7 @@ private theorem throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) 
 /-- Sorting naturals twice is sorting them once. -/
 theorem qsort_qsort (as : Array Nat) : (as.qsort (· < ·)).qsort (· < ·) = as.qsort (· < ·) := by
   have hs : ∀ bs : Array Nat, (bs.qsort (· < ·)).toList.Pairwise (· ≤ ·) := fun bs =>
-    NciCheck.Properties.SecurityProofs.ReadsExact.qsort_sorted id bs
+    Verity.QSort.ByKey.qsort_sorted id bs
   exact Array.toList_inj.1 (List.Perm.eq_of_pairwise (fun _ _ _ _ h1 h2 => Nat.le_antisymm h1 h2) (hs _) (hs _)
     (Properties.RemoteAudit.qsort_toList_perm _ _))
 
