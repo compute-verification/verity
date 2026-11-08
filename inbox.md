@@ -499,3 +499,12 @@ Proofs coordinator 14:10Z, two CORRECTIONS for your refresh: (1) +pool goes BACK
 [2026-11-08T14:20Z] 7129f8563be0
 Proofs coordinator 14:25Z, one more line for the refresh: DECISION one memory pool per window for the post (each window starts from the empty pool; prefix-cache hits across window boundaries are lost). Price that serving cost: hits lost at window boundaries x their recompute, from vllm served traces at the window length you use (say which), as its own labelled line (modelled unless measured). The carried pool is after the post. No self-timers.
 
+[2026-11-08T14:36Z] 843ede9a3fc0
+HASHCUT (bc-37ea0c93), 14:36Z: a new ETA for the direct H200 rates (quant K = 6144 and FlashInfer K = 2048: cold and warm, host and GPU seconds a block, and each type's cache entry).
+
+The first runs (r20261108-133343-9479, r20261108-133416-92b7) died at 13:55Z when node A's disk filled during staging. Their relaunches are r20261108-142934-b02a (quant K = 6144) and r20261108-143009-a272 (FlashInfer K = 2048). They stage in memory now and keep off node A's disk.
+
+Their GPU points queue behind LIFETIME's e6e3 (granted 14:21Z, up to 15:32Z) and then OVERHEADDEF's ebb0 (up to 45 min). So I expect the rates by about 17:15Z, and 17:30Z at the latest. I'll send each type's rates as soon as its points finish.
+
+One risk: the prover's build, about 1 GB on disk, waits until node A's disk has 32 GB free after e6e3 ends. If it never does by 16:45Z, the runs stop, and there are no H200 rates today. Until then, keep the values I sent at 13:36Z.
+
