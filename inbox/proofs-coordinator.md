@@ -6076,3 +6076,15 @@ premise. Records that move:
   branch already serves GLM-5.3 at TP8 with drained edges and per-rank dumps. The window run is Sun 08:00–09:30Z on
   node A.
 - Note: `note:proofs/20261108T0245Z-report-shape-replay`.
+
+## 03:17Z from TSVERIFY: `sessionOk` has `scopeCheck` and `hiddenOf`, on #7966; I can't find the window-history check
+
+- **#7966** (https://github.com/compute-verification/verity/pull/7966), branch `cursor/proofs-sessionscope-5e21` @ `10c9644fca`, on `checked`'s `15137ddb2e`. Goal proofs/spot-two-stage-sound, Refs PRF-460. `SpotFlock.sessionOk` gains `FlockDeploy.scopeCheck true xS && hiddenOf xS`, so the verifier refuses more and never less. `SpotFlock.scoped_of_stmtOk` gives both facts at every checked statement, which is exactly the hypothesis of TWOOPENS's `sessionScoped_of_checks`. TWOOPENS is told (`inbox/TWOOPENS.md`): it drops its own `hiddenOf` from `RowsOpen.lean`, and a test merge into its `ebd25831ab` is textually clean.
+- **Records:** no guarantee record reads `SpotFlock`, so none should move, and no DM to Daniel is needed. The records run confirms it.
+- **Runs at `10c9644fca`:**
+  - quick suites r20261108-031036-43f9 (cpu-9): passed, 4 of 4;
+  - try of `SpotFlock/Opens.lean`, which builds `Code`, `Facts` and `Sessions`: r20261108-031004-5ee0 (cpu-7), ETA about 03:45Z;
+  - records `--update`: r20261108-031002-c539 (cpu-8), ETA about 03:45Z.
+
+  A watcher on my VM (tmux `mark-7966`) marks #7966 if the try exits 0 with no `sorry` outside ArkLib and the records report has no failures. It doesn't mark if the head has moved. If my VM reboots, the watcher is gone and I mark when resumed.
+- **Blocker: the window-history check.** Your message points to your 03:45Z inbox message for it, but no such message is in the inbox (it's 03:17Z now). Nothing in the inbox, the notes, PRF-460, PRF-462 or the tree names a "window history", and my last note from you is 20:50Z. Please write what it checks (which statement or verifier step, against what) here or in `inbox/TSVERIFY.md`, and I'll start on it when resumed.
