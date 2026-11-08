@@ -67,7 +67,7 @@ namespace Claims
 /-! ## Probability lemmas -/
 
 theorem Pr_const_of {α : Type} [Fintype α] [Nonempty α] {p : Prop} (hp : p) : Pr (fun _ : α => p) = 1 := by
-  unfold Pr
+  unfold Pr Claims.prUniform
   have : (0 : ℝ) < Fintype.card α := by exact_mod_cast Fintype.card_pos
   rw [div_eq_one_iff_eq this.ne']
   norm_cast
@@ -81,7 +81,7 @@ theorem Pr_const_of_not {α : Type} [Fintype α] {p : Prop} (hp : ¬ p) : Pr (fu
 
 theorem Pr_or_le {α : Type} [Fintype α] (p q : α → Prop) : Pr (fun a => p a ∨ q a) ≤ Pr p + Pr q := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [← add_div]
   refine div_le_div_of_nonneg_right ?_ (by positivity)
   norm_cast

@@ -42,7 +42,7 @@ theorem ex_sum {α ι : Type} [Fintype α] [Fintype ι] (b : ι → α → ℝ) 
 theorem ex_ite_one {α : Type} [Fintype α] (p : α → Prop) [DecidablePred p] :
     ex (fun x => if p x then (1 : ℝ) else 0) = pr p := by
   classical
-  simp only [ex, pr, Claims.Pr, Finset.sum_boole]
+  simp only [ex, pr, Claims.Pr, Claims.prUniform, Finset.sum_boole]
   congr 3
   ext x
   simp

@@ -33437,9 +33437,10 @@
    }
   },
   "Definitions.Core.Uniform": {
-   "digest": "4c89bb9e29a36a5684af69a69f2a713a3757cca256ab843a79183e6a3ec68de9",
+   "digest": "ffd7c7a9986a1dc1d4cbf3b195714ef832836d7f9457f98b7b6fb63d909f66d5",
    "definitions": {
-    "Claims.Pr": "27c2a2e48a7f290e37323352d7f3f414ac2db95d6a888a4b1abb226570449e1d"
+    "Claims.Pr": "9056e3a71637194df30ffbf31cd301e3882983ded7f8936d6ea655319f3fda30",
+    "Claims.prUniform": "7b5d8971f0b41aff9cacb0343c6eaaed88950cfbe8f99b3e72e607f56678ba04"
    }
   },
   "Definitions.Core.ValueSalts": {
@@ -38341,7 +38342,7 @@
    }
   },
   "Definitions.Pouw.RelativeSecurity": {
-   "digest": "7cf202b295db4917f33dd0f383c74990a7fef66f607eb2a7c9f23b1f843f08f9",
+   "digest": "93fa6c95ace62399ad10f406e51a7fed36ae72b1eb4924a732afea60be5d0830",
    "definitions": {
     "Pouw.RelativeSecurity.AffMulAt": "2197bcb412748343c41abc872592f2c70728ff8c1269cdf596f5881233a50bd5",
     "Pouw.RelativeSecurity.AffProd": "761e1fe15ee21f266f1c73a8e98309fee1dda3663dae91cdaac1ca99af78e5d1",
@@ -38478,7 +38479,7 @@
     "Pouw.RelativeSecurity.mergeAt": "d8e17f97c89f71b8e1bd9ed118eec0ec6fbe6e4d3f4a2725d91c7e6889de89be",
     "Pouw.RelativeSecurity.ovDef": "9feed3614b7f903ee21c45bc0650999ce15bd8c51be60fd6776968dbf973ae5b",
     "Pouw.RelativeSecurity.pairDiff": "ad9325ad6578ed61205224c8bb57e9fb543906a328fe725dcd372ddf15f879e7",
-    "Pouw.RelativeSecurity.prob": "45903db0657e0aae952b67744101d45314e1904c052d74ff5b83d86cbbdda633",
+    "Pouw.RelativeSecurity.prob": "f9d6443628cce74d9bd0c6c0c88826e8c252e0dc0247fdf21ca37a3d39c5ebb6",
     "Pouw.RelativeSecurity.spotDef": "570a99145dfeca9ca83a513e2efa15b10ec5a75a23c245b7e82adcdde4ef2296",
     "Pouw.RelativeSecurity.toF2": "febe273cd0e685fd56f20620cba0d349b20d074287ef06cf0bf89e320ac84051",
     "Pouw.RelativeSecurity.wRe": "20b4073887fa446a3bd7e8ee7daf10b314259733dd07cd38211e9b81574f86f6"
