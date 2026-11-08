@@ -129,9 +129,8 @@ its `draw` is null when the registration was not sampled. `Outcome.record` is it
 
 **Not built yet.** A stream refuses the `Sequential` rule, a window statement, a timed session and a
 check with no proof deadline, and under a two-stage design a window of templates, a per-stratum `k` and more than one
-round. After R1 to R7, `register` refuses a sampling design whose sampled count varies (`shapes`: `bernoulli`
-at `0 < p < 1`), and `select` refuses a closure map (`closure`), which the sampled audit's soundness statement doesn't
-cover either.
+round. After R1 to R7, `register` refuses a `bernoulli` sampling design at any `p` (`bernoulli`), and `select` refuses a
+closure map (`closure`), which the sampled audit's soundness statement doesn't cover either.
 """
 from __future__ import annotations
 
@@ -695,15 +694,17 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     return {"law": "subset", "k": k}
 
 
-def count_varies(law: Mapping[str, Any]) -> bool:
-    """Whether `law` (a `selection_law`) samples a count that varies from sample to sample, so the sessions of one registration
-    set up tables of different shapes: `bernoulli` at 0 < p < 1. A work sample's closure varies too, and `Stream.select`
-    refuses a closure map (`closure`). The Lean verifier's `Draw.countVaries` is this. A Spec
-    that wants Bernoulli's public rate at a fixed count states the rate sampling design, `rate:NUM/DEN[:T]`."""
-    if law.get("law") != "bernoulli":
-        return False
-    num, _, den = str(law.get("p")).partition("/")
-    return D.digits(num) and D.digits(den) and 0 < int(num) < int(den)
+#: The refusal of a `bernoulli` sampling design (`bernoulli`), the Lean verifier's `Draw.BERNOULLI`.
+BERNOULLI = "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
+
+
+def bernoulli(law: Mapping[str, Any]) -> bool:
+    """Whether `law` (a `selection_law`) is `bernoulli`, at any p, which the sampled audit's soundness statement doesn't
+    cover: at 0 < p < 1 its sampled count varies, and p = 0 (nothing sampled) and p = 1 aren't covered either. A work
+    sample's closure varies too, and `Stream.select` refuses a closure map (`closure`). The Lean verifier's
+    `Draw.bernoulli` is this. A Spec that wants Bernoulli's public rate at a fixed count states the rate sampling design,
+    `rate:NUM/DEN[:T]`, and one that wants every proof block, `All`."""
+    return law.get("law") == "bernoulli"
 
 
 def select_draw(rule: Selection, law: Mapping[str, Any], n: int, coins: Callable[[int], bytes], *,
@@ -1603,7 +1604,7 @@ class Stream:
         aren't at least one instance for each of its templates and N in all, or a single proof block's stream is given any
         (`population`), when the rule's rate sampling design
         samples none or more than N proof blocks (`rate`, `selection_law`, before R1-R7), when either check fails, or, after both,
-        when the sampling design samples a count that varies (`shapes`, `count_varies`), when the program's proof blocks read stratum by stratum
+        when the sampling design is `bernoulli` at any p (`bernoulli`, `BERNOULLI`), when the program's proof blocks read stratum by stratum
         are not its N proof blocks in order (`population-order`, `partition.in_order`), or its fleet refuses it (`halted`)."""
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
@@ -1633,8 +1634,8 @@ class Stream:
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             work_table, registered, supplied, pinned, self.binding, schemas, window_root, held,
                             outputs=outputs)
-                if v.ok and count_varies(law):
-                    v = _refuse("shapes", {"law": law}).verdict
+                if v.ok and bernoulli(law):
+                    v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
                     v = _refuse("population-order", {"population": n}).verdict
                 got.update(program=program, law=law, earlier=earlier)

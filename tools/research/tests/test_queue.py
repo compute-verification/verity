@@ -4376,7 +4376,7 @@ def test_a_remote_quick_tier_does_not_wait_for_a_local_tier_of_the_same_reposito
     monkeypatch.delenv("FAKE_FAIL", raising=False)
 
     class NonBlocking:
-        LOCK_EX, LOCK_NB = fcntl.LOCK_EX, fcntl.LOCK_NB
+        LOCK_EX, LOCK_SH, LOCK_NB = fcntl.LOCK_EX, fcntl.LOCK_SH, fcntl.LOCK_NB
 
         @staticmethod
         def flock(f, op):

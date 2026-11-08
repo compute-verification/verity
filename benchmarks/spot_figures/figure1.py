@@ -109,6 +109,16 @@ DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token
               "layer_of_token": "Deferred interiors at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
+#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
+ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
+         "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
+         "no recursion (the proof_overhead card's dev arm); and a verifier draws the sample on the challenger's live "
+         "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
+         "and bucket at ingress, is a layer of its own.")
+#: what every bound rests on
+TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and an "
+         "honest verifier; a bound that reads the certifier's stamp rests on the certifier's own assumptions too, "
+         "stated in its layer.")
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
@@ -594,18 +604,18 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
                     f"escape among them; never above the scope's served bits either ({OUTS_STATUS}).")
     inf = infiltration["value"] if infiltration else None
     out = {
-        "exfiltration": (f"{DEPLOYMENT['exfiltration']} Two-stage, width-stratified (solid): {two}; the second stage "
+        "exfiltration": (f"{DEPLOYMENT['exfiltration']} {ROLES} {TRUST} Two-stage, width-stratified (solid): {two}; the second stage "
                          "samples a request's proof blocks of the public size classes up to a threshold together and "
                          "each wider class apart, at the threshold and rates with the least bound. "
                          f"{request} {exact}{capped}{fill}{gaps}"),
-        "exfiltration_appendix": (f"{DEPLOYMENT['exfiltration']} Every design, with the reference lines the main "
+        "exfiltration_appendix": (f"{DEPLOYMENT['exfiltration']} {ROLES} {TRUST} Every design, with the reference lines the main "
                                   f"figure leaves out. Two-stage, width-stratified (solid) and uniform (thin, one "
                                   f"sample over a request's proof blocks): {two}. "
                                   f"One-stage (dashed) {serve}; its bound counts the incorrect proof blocks' output "
                                   f"bits, each the widest block's, and which ones they are. {request} {exact}{capped}"
                                   f"{patterns}{fill}"),
         "infiltration": inf["caption"] if inf else "Pending: the design that certifies infiltration, and its consumer.",
-        "skipped_work": (f"{DEPLOYMENT['skipped_work']} One-stage (solid) {serve}. Request-level (dotted) proves each "
+        "skipped_work": (f"{DEPLOYMENT['skipped_work']} {ROLES} {TRUST} One-stage (solid) {serve}. Request-level (dotted) proves each "
                          f"sampled request whole; serving commits only {tokens}, inside the budget. Two-stage is left "
                          f"out: its interiors are committed after the first stage, so they don't show the work was done "
                          f"at serve time.{fill}{gaps}"),
