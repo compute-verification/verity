@@ -1,0 +1,284 @@
+"""SPOT's proof server's rate on one device: each staged type's full statement proved by K streaming provers on the device
+(`verity_flock.proof_server.ProofServer`'s ``provers``), its sessions back to back, each K in turn.
+
+    python benchmarks/one_stage/server_rate.py --bin flock-circuit --staged Z --types frw13,frw2 --provers 1,2,4 --out DIR \\
+        [--device D] [--sessions 24] [--warm 2] [--ahead 2] [--lean flock-verify [--lean-sessions 2]]
+
+* **Statements**: ``Z/<type>/c<n>/stage`` (`stationary_gpu.sh`'s layout), the type's largest n, every unit drawn: a
+  sampled replay block at the full statement.
+* **Load**: a saturated server, K (ahead + 2) sessions outstanding until K warm + ``--sessions`` are submitted.
+* **Measured**, for each type and K: statements a second over the steady window, from the K warm-th session's records to
+  the last but K's; the device's busy share (`nvidia-smi` utilization.gpu every 200 ms, its mean over the window) and its
+  memory peak; host memory (each process's RSS every 0.5 s: each prover's peak, the provers' summed peak, the
+  verifiers'); the provers' CPU seconds a statement and the node's load over the window; each window session's prover
+  timings (``e2e_s`` from Register to the last proof, ``prove_total_s`` its device phases, ``front_s`` the difference).
+* **The verdict of record** (``--lean``): at K = 1, the last ``--lean-sessions`` sessions get Lean `flock-verify verify
+  --zk` on their record on the server's verdict pool, one at a time and after the steady window, each with its own CPU
+  seconds and peak RSS (`os.wait4`), the circuit and the public file archived once a type.
+
+Writes DIR/rate.json (a row a type and K, as each ends) and DIR/<type>-k<K>/ (the server's logs and session records; no
+circuit, prover file or proof). A type whose server fails at some K is recorded with its error, and the next goes on.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import statistics
+import subprocess
+import sys
+import threading
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "verity/ml/flock/python"))
+
+from verity_flock.proof_server import ProofServer, Statement
+
+STATEMENT_ID = "verity/flock-circuit"
+PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
+
+
+def cpu_s(pids) -> float:
+    """The user and system seconds of ``pids`` so far (`/proc/PID/stat`); an exited process counts nothing."""
+    s = 0
+    for pid in pids:
+        try:
+            f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
+        except OSError:
+            continue
+        s += int(f[11]) + int(f[12])
+    return s / os.sysconf("SC_CLK_TCK")
+
+
+def staged(z: Path, t: str) -> tuple[Statement, int, Path]:
+    d = max((z / t).glob("c*/stage"), key=lambda p: int(p.parent.name[1:]))
+    n = json.loads((d / "stage.json").read_text())["n"]
+    return Statement(pin=(d / "pin.txt").read_text().strip(), circuit=d / "circuit.txt", tables=d / "tables",
+                     instances=d / "inst.bin", public=d / "pub.bin"), n, d
+
+
+class Device:
+    """The device's utilization and memory every ``ms`` milliseconds, each sample with its monotonic time."""
+
+    def __init__(self, dev: str, ms: int = 200) -> None:
+        self.samples: list[tuple[float, float, float]] = []
+        self._p = subprocess.Popen(["nvidia-smi", "-i", dev, "--query-gpu=utilization.gpu,memory.used",
+                                    "--format=csv,noheader,nounits", f"--loop-ms={ms}"], stdout=subprocess.PIPE, text=True)
+        self._t = threading.Thread(target=self._read, daemon=True)
+        self._t.start()
+
+    def _read(self) -> None:
+        for line in self._p.stdout:
+            try:
+                u, m = (float(x) for x in line.split(","))
+            except ValueError:
+                continue
+            self.samples.append((time.monotonic(), u, m))
+
+    def stop(self) -> None:
+        self._p.terminate()
+        self._p.wait()
+        self._t.join()
+
+    def busy(self, t0: float, t1: float) -> float | None:
+        u = [s[1] for s in self.samples if t0 <= s[0] <= t1]
+        return round(statistics.fmean(u) / 100, 4) if u else None
+
+    def peak_mib(self) -> float | None:
+        return max((s[2] for s in self.samples), default=None)
+
+
+class Host:
+    """Each of a server's processes' RSS every ``every`` seconds: each one's peak, and the peaks of the provers' and the
+    verifiers' sums."""
+
+    def __init__(self, ps: ProofServer, every: float = 0.5) -> None:
+        self.ps, self.peak, self.provers_kb, self.verifiers_kb = ps, {}, 0, 0
+        self._stop = threading.Event()
+        self._every = every
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            sums = {"prover": 0, "verifier": 0}
+            for name, pid in self.ps.pids.items():
+                try:
+                    kb = int(Path(f"/proc/{pid}/statm").read_text().split()[1]) * PAGE_KB
+                except (OSError, IndexError, ValueError):
+                    continue
+                self.peak[name] = max(self.peak.get(name, 0), kb)
+                sums[name.split("-", 1)[0]] = sums.get(name.split("-", 1)[0], 0) + kb
+            self.provers_kb = max(self.provers_kb, sums["prover"])
+            self.verifiers_kb = max(self.verifiers_kb, sums["verifier"])
+            self._stop.wait(self._every)
+
+    def stop(self) -> dict:
+        self._stop.set()
+        self._t.join()
+        gib = lambda kb: round(kb / 2**20, 2)  # noqa: E731
+        return {"provers_gib": gib(self.provers_kb), "verifiers_gib": gib(self.verifiers_kb),
+                "each_gib": {k: gib(v) for k, v in sorted(self.peak.items())}}
+
+
+def throttled() -> dict:
+    """The cgroup's CPU throttling so far (cpu.stat), where readable."""
+    try:
+        return {k: int(v) for k, v in (x.split() for x in Path("/sys/fs/cgroup/cpu.stat").read_text().splitlines())}
+    except OSError:
+        return {}
+
+
+class Lean:
+    """Lean `flock-verify verify --zk` on a session's record, with its own CPU seconds and peak RSS; the circuit, public
+    file and tables archived once."""
+
+    def __init__(self, lean: str, d: Path, out: Path) -> None:
+        self.lean, self.out = lean, out
+        self.archive = out / "archive"
+        tables = sorted(str(f) for f in (d / "tables").glob("*") if f.is_file()) if (d / "tables").is_dir() else []
+        p = subprocess.run([lean, "archive-put", str(self.archive), str(d / "circuit.txt"), str(d / "pub.bin"), *tables],
+                           capture_output=True, text=True)
+        (out / "archive-put.log").write_text(p.stdout + p.stderr)
+        self.keys = {Path(x.split()[1]).name: x.split()[0] for x in p.stdout.splitlines() if len(x.split()) == 2}
+        self._one = threading.Lock()
+
+    def __call__(self, s) -> dict:
+        cmd = [self.lean, "verify", "--statement", STATEMENT_ID, "--archive", str(self.archive),
+               "--circuit", self.keys.get("circuit.txt", ""), "--public", self.keys.get("pub.bin", ""), "--zk",
+               "--session", str(s.dir)]
+        log = self.out / f"lean-{s.label.replace('/', '-')}.log"
+        with self._one, open(log, "w") as f:
+            t = time.monotonic()
+            p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=f, text=True)
+            stdout = p.stdout.read()
+            _, status, ru = os.wait4(p.pid, 0)
+            p.returncode = os.waitstatus_to_exitcode(status)
+            wall = time.monotonic() - t
+            f.write(stdout)
+        line = next((x for x in stdout.splitlines() if x.startswith("VERDICT ")), None)
+        v = json.loads(line.split(" ", 1)[1]) if line else {"accepted": False, "why": f"no verdict (rc {p.returncode})"}
+        return {"accepted": v.get("accepted") is True, "why": v.get("why"), "wall_s": round(wall, 2),
+                "cpu_s": round(ru.ru_utime + ru.ru_stime, 2), "user_s": round(ru.ru_utime, 2),
+                "maxrss_gib": round(ru.ru_maxrss / 2**20, 2)}
+
+
+def one(a, dev: str, t: str, K: int) -> dict:
+    st, n, d = staged(Path(a.staged), t)
+    out = Path(a.out) / f"{t}-k{K}"
+    out.mkdir(parents=True, exist_ok=True)
+    lean = Lean(a.lean, d, out) if a.lean and K == 1 and a.lean_sessions else None
+    draw = {"law": "subset", "population": n, "k": n, "units": list(range(n))}
+    total, window = K * a.warm + a.sessions, K * (a.ahead + 2)
+    room, lock, done = threading.Semaphore(window), threading.Lock(), []
+    gpu, t_start, cpu0 = Device(dev), time.monotonic(), throttled()
+    rec: dict = {"type": t, "provers": K, "n": n, "pin": st.pin, "verify_ahead": a.ahead, "warm": a.warm,
+                 "sessions": a.sessions, "device": dev, "stage": json.loads((d / "stage.json").read_text())}
+    ps = ProofServer(a.bin, out, devices=[dev], provers=K, verify_ahead=a.ahead, verdicts=1,
+                     env={"FC_FIREWALL": "0", "FC_HOST_WITNESS": None, "FC_PHASE_TIMES": "1"})
+    host = Host(ps)
+
+    def wait(s, i: int) -> None:
+        try:
+            s.result()
+            err = None
+        except Exception as e:  # noqa: BLE001 -- recorded with the session, the rest go on
+            err = str(e)[:600]
+        c = cpu_s(pid for name, pid in ps.pids.items() if name.startswith("prover-"))
+        with lock:
+            done.append({"t": time.monotonic(), "i": i, "s": s, "error": err, "cpu": c, "load1": os.getloadavg()[0]})
+        room.release()
+
+    waits, judged = [], []
+    try:
+        for i in range(total):
+            room.acquire()
+            fn = lean if lean is not None and i >= total - a.lean_sessions else None
+            s = ps.submit(st, draw, f"{t}/k{K}/{i}", verdict=fn)
+            if fn is not None:
+                judged.append(s)
+            waits.append(threading.Thread(target=wait, args=(s, i), daemon=True))
+            waits[-1].start()
+        for w in waits:
+            w.join()
+    finally:
+        rec["exits"] = ps.close()
+        rec["host"] = host.stop()
+        gpu.stop()
+    rec["wall_s"] = round(time.monotonic() - t_start, 1)
+    done.sort(key=lambda r: r["t"])
+    bad = [r for r in done if r["error"] or not r["s"].accepted]
+    rec["accepted"] = len(done) - len(bad)
+    rec["refused"] = [{"label": r["s"].label, "error": r["error"], "why": (r["s"].live or {}).get("why")} for r in bad][:8]
+    i0, i1 = K * a.warm - 1, len(done) - 1 - K
+    if i1 - i0 < 2:
+        i0, i1 = 0, len(done) - 1
+    w0, w1 = done[i0], done[i1]
+    span = w1["t"] - w0["t"]
+    win = [r for r in done[i0 + 1:i1 + 1] if r["s"].live]
+    med = lambda k: round(statistics.median(v), 4) if (v := [r["s"].live.get(k) for r in win  # noqa: E731
+                                                             if isinstance(r["s"].live.get(k), (int, float))]) else None
+    rec |= {"statements_per_s": round((i1 - i0) / span, 4) if span > 0 else None, "window_s": round(span, 2),
+            "window_sessions": i1 - i0, "busy": gpu.busy(w0["t"], w1["t"]), "device_peak_mib": gpu.peak_mib(),
+            "prover_cpu_s_per_statement": round((w1["cpu"] - w0["cpu"]) / (i1 - i0), 2) if i1 > i0 else None,
+            "load1": [round(w0["load1"], 1), round(w1["load1"], 1)],
+            "throttled": {k: throttled().get(k, 0) - cpu0.get(k, 0) for k in ("nr_throttled", "throttled_usec")},
+            "median": {k: med(k) for k in ("e2e_s", "prove_total_s", "witness_s", "wait_s", "verdict_wait_s", "tp_s")},
+            "prebuilt_used": sum(1 for r in win if r["s"].live.get("witness_prebuilt_s") is not None),
+            "per_prover": {p: sum(1 for r in win if r["s"].prover == p) for p in sorted({r["s"].prover for r in win})}}
+    if rec["median"]["e2e_s"] is not None and rec["median"]["prove_total_s"] is not None:
+        rec["median"]["front_s"] = round(rec["median"]["e2e_s"] - rec["median"]["prove_total_s"], 4)
+    if lean is not None:
+        rec["lean"] = []
+        for s in judged:
+            try:
+                rec["lean"].append({"label": s.label, **s.verdict()})
+            except Exception as e:  # noqa: BLE001 -- a failed verdict is recorded, not raised
+                rec["lean"].append({"label": s.label, "error": str(e)[:400]})
+    with open(out / "sessions.jsonl", "w") as f:
+        for r in done:
+            live = {k: v for k, v in (r["s"].live or {}).items() if k not in ("verdict", "buckets", "roots", "unit_draw", "identity")}
+            f.write(json.dumps({"i": r["i"], "t": round(r["t"] - t_start, 3), "prover": r["s"].prover, "error": r["error"],
+                                "live": live}, default=str) + "\n")
+    return rec
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
+    ap.add_argument("--bin", required=True)
+    ap.add_argument("--staged", required=True)
+    ap.add_argument("--types", required=True, help="comma-separated staged type directories, each run at every K")
+    ap.add_argument("--provers", default="1,2,4")
+    ap.add_argument("--out", required=True)
+    ap.add_argument("--device", default=None, help="the GPU (default: CUDA_VISIBLE_DEVICES, as gpu-lease sets it)")
+    ap.add_argument("--sessions", type=int, default=24, help="timed sessions a K")
+    ap.add_argument("--warm", type=int, default=2, help="warm sessions a prover")
+    ap.add_argument("--ahead", type=int, default=2)
+    ap.add_argument("--lean", default=None)
+    ap.add_argument("--lean-sessions", type=int, default=2)
+    ap.add_argument("--deadline", type=float, default=0, help="UTC epoch seconds after which no type and K starts")
+    a = ap.parse_args()
+    dev = a.device or (os.environ.get("CUDA_VISIBLE_DEVICES") or "0").split(",")[0]
+    out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for t in a.types.split(","):
+        for K in (int(k) for k in a.provers.split(",")):
+            if a.deadline and time.time() > a.deadline:
+                rows.append({"type": t, "provers": K, "skipped": "past the deadline"})
+                continue
+            try:
+                r = one(a, dev, t, K)
+            except Exception as e:  # noqa: BLE001 -- the next type and K go on
+                r = {"type": t, "provers": K, "error": f"{type(e).__name__}: {str(e)[:800]}"}
+            rows.append(r)
+            (out / "rate.json").write_text(json.dumps(rows, indent=1, default=str))
+            print("RATE " + json.dumps({k: r.get(k) for k in ("type", "provers", "statements_per_s", "busy", "device_peak_mib",
+                                                              "host", "accepted", "median", "lean", "error")}, default=str),
+                  flush=True)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

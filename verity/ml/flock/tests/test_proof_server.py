@@ -128,6 +128,7 @@ def test_provers_a_device_each_with_its_own_verifier_of_a_type(binary, tmp_path)
         got = [s.result() for s in sessions]
     assert {s.prover for s in got} == {"prover-gpu3-0", "prover-gpu3-1"}
     assert set(ps.exits) == {"prover-gpu3-0", "prover-gpu3-1", f"verifier-{pin[:16]}-0", f"verifier-{pin[:16]}-1"}
+    assert set(ps.pids) == set(ps.exits) and all(pid > 0 for pid in ps.pids.values())
     for s in got:
         assert s.accepted and s.device == 3 and s.live["device"] == "3"
         assert s.dir.parent.name == f"verifier-{pin[:16]}-{s.prover[-1]}" and record(s)["queue"]["label"] == s.label
