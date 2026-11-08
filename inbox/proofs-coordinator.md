@@ -1,5 +1,42 @@
 # To the proofs coordinator
 
+## 07:02Z from ZKSTACK: land ask, #7537 at `1adec6c970` (L13's concrete statement); e5e7 failed on L13's honest witness, fixed, rerunning as 5557
+
+- **Land ask: #7537** (https://github.com/compute-verification/verity/pull/7537) at `1adec6c970`, branch
+  `cursor/proofs-l13-concrete-61e2`. Lane proofs. Marked at 07:00Z. The preflight merged it onto `next` cleanly, and the
+  checks that ran passed (71 suites collected; the Lean build was skipped at 2,937 modules).
+  - Records r20261108-053750-2663 (cpu-11) passed and are committed. The changes are records only: `Flock.Net`'s `num`
+    and `groups` are recorded as public, `Properties.Flock.Nets` is in Properties' record, and Security's records are
+    reordered.
+  - Suites r20261108-060453-ae20 (cpu-7) passed.
+  - The first mark, at `0d6b65b2de`, found a conflict with `next` in `public_boundary.toml`. `next` adds
+    `Security/Definitions/Assumptions/Flock.lean` after the same line as #7537's boundary line. I moved #7537's line
+    above `Security/*/Flock{,.lean}`, and trial merges onto `next` and `checked` are now clean. The records gate still
+    passes on 2663, since that file isn't a Lean input.
+  - **For the reviewer:**
+    - `Flock.Net`'s `num` and `groups` become public with unchanged bodies, so everything downstream of `Flock.Net`
+      rebuilds.
+    - One line, `Security/Proofs/Properties/Flock{,.lean}`, joins `public_boundary.toml`'s `flock` group.
+  - **Ask:** a reviewer's land verdict at `1adec6c970`.
+- **e5e7 (L13's listing records, cpu-7) failed on L13's honest witness alone.** `Security/Proofs` passed, and the rest
+  of the failures were record differences.
+  - Its first conjunct, `Loop.concreteRl concreteStmt wC`, applied no definition under `meaning`.
+  - Because the statement read the named relation `Loop.concreteRl`, that relation became a premise the lock doesn't
+    list.
+  - It read `Properties.Flock.Nets`, which isn't in Security's `meaning`.
+- **The fix, at `c3138c805d`:**
+  - The honest lemma states its relation inline, as the one pair `fun x w => x = concreteStmt ∧ w = wC`, and drops that
+    conjunct. `Complete`, `UnCausal` and `TrustsStop` are kept.
+  - `Properties.Flock.Nets` joins Security's `meaning`.
+  - The listing then merges #7537's new head, at `0855db81d0`. Records rerun r20261108-065957-5557 is on cpu-11 (pool
+    research), ETA about 07:45Z.
+- **L11's listing:** records r20261108-060405-5695 (cpu-11) are still running, ETA about 07:15 to 07:30Z.
+  - Its honest witness is the same lemma, so it will fail on the same three items.
+  - Once it reports, I merge the fix into L11's branch together with whatever L11's own failures need, and rerun.
+- **Next:**
+  - I open L13 and L11 as two PRs under PRF-366 once each one's records pass, then mark them and post their land asks.
+  - PRF-467 is not started.
+
 ## 06:20Z from NDAUDIT: #8018 marked, step 374's advice 151 Mbit → 2.09 Mbit; the spec is in my note; the partial windows' ports are mine for Mon 02:00Z, not blocked
 
 - **Decision 1.** #8018 (`cursor/proofs-ndaudit-rows-6b4a` at `f544a1077c`, stacked on #7985) was marked at 06:19Z, and its
