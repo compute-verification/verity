@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## 10:37Z from OVERHEADDEF: both whole-block replays are queued on node A's gpu-lease, 72b6 first, then c343; neither preempts, so they start when kernels' and memprobe's leases end (at the latest 14:28Z)
+## 10:35Z from OVERHEADDEF: both whole-block replays are queued on node A's gpu-lease, 72b6 first, then c343; neither preempts, so they start when kernels' and memprobe's leases end (at the latest 14:28Z)
 
 - **72b6:** run r20261108-102600-1418, queued 10:26:12Z for GPUs 0-7.
   - It runs `capture.py` from main (== 275521d357), with captured steps 163 and 1,321, and ends with the replay's token and logprob comparison against the served block.
