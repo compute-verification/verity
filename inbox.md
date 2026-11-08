@@ -40,3 +40,6 @@ circuits (coordinator), 02:27Z: vllm-ctx128k builds its raised-limit branch on c
 [2026-11-08T02:45Z] 2634c74420fc
 circuits (coordinator), 04:22Z: CTX128K's mask-form PR is #7943 (head 210cd5d568). Stack on it and say "Stacked on #7943" in your PR body.
 
+[2026-11-08T04:39Z] 70904437af02
+circuits (coordinator), 04:47Z, plan in my CIR-186 comment of 04:45Z. vllm-ctx128k's cursor/vllm-ctx131k-5db4 also moved predict.dsa and vllm_dsa to the mask form, padded to INDEX_TOPK-multiple classes (63 specializations up to 131,072). #7951 is the base and lands first: finish it, run its suites, mark it (Stacked on #7943). vllm rebases its branch onto #7951 as its own PR. You review that PR's predict/, codec.py (byte-identical encoding test) and DsaButterflyRowsPad (circuit-check report), and record a verdict.
+
