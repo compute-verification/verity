@@ -330,7 +330,6 @@ def _install_sampler() -> None:
 
 
 def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
-    import torch
     d = S.dir / "rank0" / f"step{step}" / "sampler"
     d.mkdir(parents=True, exist_ok=True)
     if rec.get("topp_out") is not None:
@@ -340,7 +339,7 @@ def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
     for k, t in rec.items():
         if t is None:
             continue
-        raw = t.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+        raw = _flat_bytes(t).numpy().tobytes()
         (d / f"{k}.bin").write_bytes(raw)
         doc["tensors"][k] = {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
     (d / "sampler.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
@@ -662,6 +661,16 @@ def _blobs(v: Any):
             yield from _blobs(x)
 
 
+def _flat_bytes(t: Any) -> Any:
+    """``t``'s bytes in row-major order, as a flat uint8 view. ``contiguous`` leaves a one-element view its stride (a size-1
+    dimension is contiguous under any stride), which a uint8 ``view`` refuses, so such a tensor is copied."""
+    import torch
+    flat = t.detach().contiguous().reshape(-1)
+    if flat.numel() and flat.stride(0) != 1:
+        flat = flat.clone(memory_format=torch.contiguous_format)
+    return flat.view(torch.uint8)
+
+
 def _ref_quiet(v: Any, write: bool = True) -> Any:
     import torch
     if isinstance(v, torch.Tensor):
@@ -673,7 +682,7 @@ def _ref_quiet(v: Any, write: bool = True) -> Any:
             return {**d, "device": v.device.type}
         if nb > BIG:
             return {**d, "big": nb}
-        raw = v.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy().tobytes() if nb else b""
+        raw = _flat_bytes(v).cpu().numpy().tobytes() if nb else b""
         h = hashlib.sha512(raw).hexdigest()
         if write and h not in S.seen:
             S.seen.add(h)
@@ -772,7 +781,6 @@ def _check(mine: Any, out: Any, mode: str, batch_desc: Any) -> None:
 
 
 def _finish(runner: Any) -> None:
-    import torch
     d = S.root() / f"step{S.step}"
     d.mkdir(parents=True, exist_ok=True)
     lines = "".join(json.dumps(e, sort_keys=True, separators=(",", ":")) + "\n" for e in S.events).encode()
@@ -783,7 +791,7 @@ def _finish(runner: Any) -> None:
 
     def digest(name: str) -> tuple[str, dict]:
         t = S.param_of[name]
-        raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+        raw = _flat_bytes(t).cpu().numpy()
         return name, {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
     with ThreadPoolExecutor(8) as pool:
         params = dict(pool.map(digest, sorted(S.used_params)))
@@ -806,7 +814,6 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     """The step's interior root over every rank's, then the coins, flipped by rank 0 only after every rank's root is fixed, and
     the layers they open: ``--open`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
     writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
-    import torch
     import torch.distributed as dist
     group = None
     try:
@@ -855,7 +862,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     for name, t in sorted(S.param_of.items()):
         if not any(m in f".{name}" for m in marks):
             continue
-        raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+        raw = _flat_bytes(t).cpu().numpy()
         (od / f"{name}.bin").write_bytes(memoryview(raw))
         files[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
                        "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
@@ -865,7 +872,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
             t = S.param_of[name]
             if t.numel() * t.element_size() > SMALL_PARAM:
                 continue
-            raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+            raw = _flat_bytes(t).cpu().numpy()
             (od / f"{name}.bin").write_bytes(memoryview(raw))
             small[name] = {"shape": list(t.shape), "dtype": str(t.dtype), "stride": list(t.stride()),
                            "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
