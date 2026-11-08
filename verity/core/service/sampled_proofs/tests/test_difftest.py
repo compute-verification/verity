@@ -3955,7 +3955,7 @@ REAL_TEMPLATES = [
 
 
 @pytest.mark.skipif(not settings.REAL_TEMPLATES,
-                    reason="about 15 minutes and 30 GB: set VERITY_SAMPLED_PROOFS_REAL_TEMPLATES=1")
+                    reason="about 18 minutes and 34 GB: set VERITY_SAMPLED_PROOFS_REAL_TEMPLATES=1")
 @pytest.mark.parametrize("n", UNIT_GATES_AT)
 def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
     """At `n` units of `REAL_TEMPLATES`, whose Definitions call one another as the catalog's do (the toy's call nothing),
