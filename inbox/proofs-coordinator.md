@@ -7055,3 +7055,33 @@ My recommendation is (b′), with (c′) done inside piece 2 so piece 2 doesn't 
 you confirm. Full note: `lanes/proofs/20261108T0435Z-checkpoint-bindterm-p1`.
 
 **Running:** r20261108-042715-675e (Lean try, Flock root, vy-nebius-cpu-7).
+
+## 04:42Z from TWONONTRIV: `SpotFlock.accepting` compiles: at every `h`, `SampledKSTwo`'s premises hold at SPOT[Flock] with `SessionOpensTwo` as the one hypothesis, \(\kappa_\delta \le \delta + 2^{-37}\), and acceptance wherever Flock's masked verifier accepts; the PR opens when records pass
+
+- **The answer to PRF-460.** No premise of `SampledKSTwo` is shown false at an accepting verifier, but a lock witness `SampledKSTwo_accepting` can't be built yet. At SPOT[Flock], seven premises hold at every `h`, and the eighth is being discharged on the frame branches. Acceptance there reduces to Flock's masked verifier accepting at a statement the check passes. What compiles, at every `h : Held`:
+  ~~~lean
+  theorem SpotFlock.accepting (hopens : SessionOpensTwo sha512 (deploy relation (code h)) (two h) iroots) :
+      CallsUniform (fun _ => L) (fun _ => coinByte) ∧ RegMatchesTwo … ∧ RefusesTwo … ∧ InteriorFixed … ∧
+      SessionRuns sha512 (deploy relation (code h)) ∧ SessionsIn (code h) ∧
+      (compiledTwo (deployZk relation) (code h) iroots (two h) (rs h)).KS sha512 ∧
+      (∀ x δ, 0 ≤ δ → δ ≤ 1 → (compiledTwo …).κ δ x ≤ δ + 2⁻¹ ^ 37) ∧
+      (∀ x m₀ m₁ xS c₀ c₁, stmtOk h x m₁ xS c₀ c₁ = true → ∀ Ω (P' : Prover Ω) ω r',
+        (run sha512 P' (FlockDeploy.V true) xS ω r').out = .acc →
+        0 < Pr fun r => (run sha512 (proverOf m₀ m₁ xS P') (code h).V x ω r).out = .acc)
+  ~~~
+  - **(a)** Seven premises are proved. The eighth, `SessionOpensTwo`, is the hypothesis. Swapping in TWOOPENS's `sessionOpensTwo_of_frame L he hr hF` is one line once it lands.
+  - **(b)** A prover that sends `m₀`, `m₁` and `xS`, then plays a Flock prover `P'`, is accepted with positive probability. That holds wherever Flock's masked verifier accepts `P'` at an `xS` the check passes at some coins (`run_proverOf`, `accepts_pos`).
+  - **(c)** \(\kappa_\delta \le \delta + 2^{-37}\) at every statement and every \(\delta \in [0, 1]\), so \(\kappa_\delta < 1\) at \(\delta \le 1/2\) (`κ_le`, `κ_lt_one`).
+  - **A3 needs no premise.** `SpotFlock.callsUniform` proves it at the coins' bytes. So `ksTwo_spot` and `ksTwo_spot_of_eval` drop `hA`, as TWOOPENS asked. No partner branch calls either one.
+- **Why the brief's toy KS inner argument can't instantiate `SampledKSTwo`.** The premise `SessionRuns` ties acceptance at checked coins to the record's inner verifier, which is Flock's masked one (`deployZk`). `SessionsIn` puts every session statement in `FlockDeploy.ZkIn`: 1 to 200 tables, \(m\) from 25 to 35. The generic layer already has an accepting witness with a toy inner argument, `compilerKSTwo_honest`.
+- **What a lock witness would still need.** The witness rule allows no ∀ over the instance and no hypothesis beyond named assumptions. So a witness needs:
+  - a concrete `Held`: a masked Flock statement's bytes with `zkOk xS₀ = true`, decided by the kernel;
+  - `SessionOpensTwo` at a concrete layout (`Embeds`, `RowsIn` and `FrameIs`);
+  - for positive acceptance, an accepting run of Flock's masked verifier at a statement the check passes. Lean's masked completeness is conditional (`ProverRunsAt`, `RepShapedAt`, `LgInnerAt`), so this means evaluating a masked Flock transcript in the kernel.
+- **Checks.** All three tries ran on vy-nebius-cpu-11, and each exited 0 with its theorems using only `propext`, `Classical.choice` and `Quot.sound`:
+  - `Coins.lean`: try r20261108-032202-4763, 3 theorems;
+  - `Accepting.lean`: try r20261108-041148-6b64, 11 theorems;
+  - `Opens.lean` with the `hA` drop: try r20261108-040916-4b3a, 18 theorems.
+
+  Two runs are going, on `cursor/proofs-twonontriv-2be9` rebased onto `checked` @ `ad8e5542ca`: records r20261108-041922-15ad and quick suites r20261108-043542-cca1. I open the PR (`--issue PRF-460`) when both pass.
+- **Ask:** none. If you want `accepting` recorded somewhere the lock reads, say where. It can't be a lock witness, because it ranges over `h` and takes `hopens`.
