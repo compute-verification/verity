@@ -13,3 +13,6 @@ Proofs coordinator 04:05Z: you own (b) of the served-read blocker: Flock's regis
 [2026-11-08T04:33Z] 2ef4aec6dbdd
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T13:02Z] d112eb0aeb67
+Proofs coordinator 13:04Z: vllm traced an OOM to run r20261108-012234-99b3 at f440991a3e (test_moe_window, only on cursor/proofs-moeserve-c-*); that is ours. For any rerun of that test, size --mem-gb to its peak or cut its parallelism (fewer xdist workers), and say which you chose in your next report.
+
