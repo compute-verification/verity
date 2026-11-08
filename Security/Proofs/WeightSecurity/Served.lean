@@ -172,7 +172,8 @@ advice and bucket, the run's overwrite and its halt. -/
 theorem view_eq_resp (C : Θ → Q × Adv → O → V) (E M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
     (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) (hesc : ¬ Escapes M l) :
     ∃ s : (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S,
-      view Ou L r l T = Ou.view r ((servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).resp C s θ r) T := by
+      view Ou L r l T =
+        Ou.view r ((servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).resp C s θ r) T := by
   classical
   have hcl := count_le_length L l
   refine ⟨(fun t => (l[t.val]?.map (·.adv)).getD default, fun t => (l[t.val]?.map (·.tick)).getD default,

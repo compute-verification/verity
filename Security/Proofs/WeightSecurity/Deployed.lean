@@ -7,14 +7,15 @@ public import Proofs.WeightSecurity.Stop
 /-!
 # Weight security at the deployed audit
 
-`TheftServed` at the deployment one-stage v2 audits: each window, the datacenter releases what leaves on the egress slots,
-at its timing bucket and on its advice, and then the window's audit runs (`JointAuditV5`, every member's
-`SampledKSLiveV5` session on one live sample). Its escape at the budget `M` is at most
+`TheftServed` at the deployed one-stage audit. Each window, the datacenter releases what leaves on the egress slots, at
+its timing bucket and on its advice, and then the window's audit runs (`JointAuditV5`: every member's `SampledKSLiveV5`
+session on one live sample). The escape at the budget `M` is at most
 $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
-(`period_escapes`): a window is accepted with a drawn incorrect proof block at most its members' knowledge and binding
-terms (`JointAuditV5.accepted_drawnWrong_le`), and its sample misses `w` incorrect proof blocks with probability at most
-`P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the law's per-block miss, a premise on its `P_a`). The named
-assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
+by `period_escapes`. A window is accepted with a drawn incorrect proof block with probability at most its members'
+knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le`). Its sample misses its `w` incorrect proof blocks
+with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the law's per-block miss: a premise on its
+`P_a`, which `pa_le_pow` discharges at the strata laws). The named assumptions are `JointHorizonV5`'s, at every window,
+and weight security's own.
 -/
 
 @[expose] public section
