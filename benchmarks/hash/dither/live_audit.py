@@ -122,8 +122,8 @@ def core_check(a: argparse.Namespace) -> int:
     import verity
     from verity.core.protocols.pouw import core_check as CC
     from verity.core.protocols.pouw import window as Wd
-    from verity.core.protocols.sampled_proofs import challenger as Ch
-    from verity.core.protocols.sampled_proofs import remote as R
+    from verity.core.protocols.spot import challenger as Ch
+    from verity.core.protocols.spot import remote as R
     src = Path(verity.__file__).resolve().parent
     if not src.is_relative_to(Path(a.core_from).resolve()):
         raise SystemExit(f"core's check imported verity from {src}, not --core-from {a.core_from}")

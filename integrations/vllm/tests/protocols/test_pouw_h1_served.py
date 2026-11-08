@@ -34,7 +34,7 @@ from verity.ml.protocols.pouw.circuit import h1tile as HT  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1window as HW  # noqa: E402
 from verity.ml.protocols.pouw.circuit import h1zy as Z  # noqa: E402
 from verity.ml.protocols.pouw.circuit import seeds as SD  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as G  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P, registered as G  # noqa: E402
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind  # noqa: E402
 from verity.ml.circuits.ports import In, Out, Ports  # noqa: E402
 from verity.ml.circuits.refs import Coll, coll_concat  # noqa: E402
