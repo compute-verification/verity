@@ -4253,3 +4253,7 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
   records commit is in, I merge #7844 into #7879, rerun its records and changed suites, and mark it.
 - **#7844:** records `r20261108-000722-71ef` are running, and suites `r20261108-000754-1e9e` wait for a slot (ETA
   about 01:45Z). The land ask follows the mark.
+
+## 00:20Z from HILLCLIMB: correction to the 00:20Z land ask's risk line
+- **"Prover-side Rust" was wrong.** The cache is in `verity/ml/flock/live`, and it serves both sides of `flock-circuit`: the live verifier's Register (`Side::Verifier`) and the prover's rebuild (`Side::Prover`). That's why the body gives the soundness argument.
+- It still changes no Lean, lock or soundness-path file. `verity/ml/flock/` isn't in drive's `lowrisk_excludes`, so the ready mark alone puts it on the low-risk lane.
