@@ -20,6 +20,17 @@ RANGES = {
 }
 
 
+def _glm53_served_roots() -> list[Any]:
+    """`DsaMqaLogits_v4`'s two blocks at GLM-5.3's served H and D, each checked whole: past 4,096 keys the composite's
+    correspondence is unchecked (its word view compares it), so its blocks' is here.  Both are within their family's struct
+    budget (this module's pins' ``struct_max_gates``), so each is realized by its structural lowering, and over
+    `targets.MAX_GATES`, so each holds a ``digests`` pin, which keeps it in ``--all``."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import boolean_dsa
+
+    return [bind(boolean_dsa.DsaMqaLogitsQ, H=32, D=128), bind(boolean_dsa.DsaMqaLogitsKey, H=32, D=128)]
+
+
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
     leaf families they do not reach, at small statics."""
