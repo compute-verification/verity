@@ -217,7 +217,10 @@ names, that passes wherever the commit string of row `q` of a unit `n` of the ta
 * the registered read `reg` of the session's registered ports `own` that table `j`'s port `q` is named like, at the
   position and through the path the session gives the unit; or
 * at a one-table session, port `q`'s published tree over the session's population (`pubPort`), at the row of the unit
-  the sample drew as `n`, through the path from that row. -/
+  the sample drew as `n`, through the path from that row.
+
+A session of more than one table needs only the first: round 2 refuses a session split across Flock tables
+(`second-tables`). -/
 def FrameRows (L : Layout) : Prop :=
   ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
