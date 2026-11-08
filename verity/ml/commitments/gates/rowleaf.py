@@ -41,7 +41,7 @@ from .. import rowleaf as R
 from .sha512 import compress_gadget, midstate, pad_tail, words_be
 
 __all__ = ["Sha512RowSeg", "Sha512RowSegOuter", "Sha512RowSegSegment", "arguments", "digest", "digest_bits", "digest_bytes",
-           "outer_hash", "reference", "segment_hash"]
+           "digest_calls", "outer_hash", "reference", "segment_hash"]
 
 BIT = BL.BIT
 WORD = Array(64, BIT)
@@ -152,16 +152,24 @@ def _refs(c: Coll) -> list:
     return [c.refs[k] for k in range(c.refs.count)]
 
 
-def _body(B, S, row):
-    bits = _refs(row)
+def digest_calls(B, bits: Sequence, n_bits: int) -> Coll:
+    """The digest of the row ``bits`` (``n_bits`` node refs) in a composite body ``B``, as `Sha512RowSeg_v1`'s body makes it:
+    each segment's part, then the outer hash's."""
+    _check_bits(n_bits)
+    if len(bits) != n_bits:
+        raise ValueError(f"a row of {n_bits} bits, not {len(bits)}")
     one = [B.call(BL.constant(b)).refs[0] for b in (0, 1)]
-    segments = _segments(S.N_BITS)
+    segments = _segments(n_bits)
     d = []
     for j, m in enumerate(segments):
         cv = [one[(v >> k) & 1] for v in midstate(R.sha512_row_seg_segment_prefix(j, len(segments), m)) for k in range(64)]
         seg = bits[SEG_BITS * j:SEG_BITS * j + m]
         d += _refs(B.call(bind(Sha512RowSegSegment, M=m), Coll(DIGEST, TR._refs(cv)), Coll(Array(m, BIT), TR._refs(seg))))
-    return B.call(bind(Sha512RowSegOuter, N_BITS=S.N_BITS), Coll(Array(len(segments), DIGEST), TR._refs(d)))
+    return B.call(bind(Sha512RowSegOuter, N_BITS=n_bits), Coll(Array(len(segments), DIGEST), TR._refs(d)))
+
+
+def _body(B, S, row):
+    return digest_calls(B, _refs(row), S.N_BITS)
 
 
 Sha512RowSeg = CompositeDefinition(

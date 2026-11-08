@@ -491,6 +491,24 @@ def _sig(S):
     return tuple((r, Array(bits[r], BIT)) for r in ROWS), Array(16, BIT)
 
 
+def block_keys(B, Kc, S, req, delta) -> dict[tuple[int, int], list]:
+    """RK's initial values in a body `B`: each arrival slot k's CU BlockKey_v1 calls chained from `block_key.ROOT` over
+    its tokens in ``req``, block j's print under ``delta`` at (k, j)."""
+    sh = shape(S)
+    bk = bind(BK.BlockKey, B=S.B, TOK=sh.TOK)
+    tok = RC._split(_refs(req), fields(S)["req"])["tok"]
+    root = [x for i in range(8) for x in Kc.bits(int.from_bytes(BK.ROOT[8 * i:8 * i + 8], "big"), 64)]
+    prints = {}
+    for k in range(S.K):
+        parent = root
+        for j in range(S.CU):
+            at = (k * S.CU + j) * S.B
+            tk = [x for t in tok[at:at + S.B] for x in list(t) + Kc.bits(0, sh.TOK - S.CTW)]
+            o = _refs(B.call(bk, delta, _coll(BK.DIGEST, parent), _coll(Array(S.B, Array(sh.TOK, BIT)), tk)))
+            parent, prints[(k, j)] = o[:512], o[512:640]
+    return prints
+
+
 def _body(B, S, adv, ing, req, srv, cout, coin, chk):
     Kc = _Consts(B)
     sh = shape(S)
@@ -514,18 +532,7 @@ def _body(B, S, adv, ing, req, srv, cout, coin, chk):
         recs.append(_coll(Array(n, t), out[at:at + wd]))
         at += wd
     bus = _refs(B.scan(bus_p, _coll(Array(TT + 128, BIT), Kc.bits(0, TT) + Kc.bits(1, 128)), recs, [alpha]))[:TT + 128]
-
-    bk = bind(BK.BlockKey, B=S.B, TOK=sh.TOK)
-    tok = RC._split(_refs(req), F_["req"])["tok"]
-    root = [x for i in range(8) for x in Kc.bits(int.from_bytes(BK.ROOT[8 * i:8 * i + 8], "big"), 64)]
-    prints = {}
-    for k in range(S.K):
-        parent = root
-        for j in range(S.CU):
-            at = (k * S.CU + j) * S.B
-            tk = [list(t) + Kc.bits(0, sh.TOK - S.CTW) for t in tok[at:at + S.B]]
-            o = _refs(B.call(bk, delta, _coll(BK.DIGEST, parent), col(Array(sh.TOK, BIT), tk)))
-            parent, prints[(k, j)] = o[:512], o[512:640]
+    prints = block_keys(B, Kc, S, req, delta)
 
     lay, elay = V3S._carry_layout(S3), V3S._entry_layout(S3)
     size, esize = V3S._size(lay), V3S._size(elay)
@@ -740,9 +747,10 @@ def rk_keys(S, sl: CS.Slice, delta: int) -> dict[int, int]:
     return out
 
 
-def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
-    """The window as a prover runs it from `sl` (the module's docstring). ``refused`` says why the load, a step or a call
-    refuses the slice, where one does, and the run ends there; it is None otherwise."""
+def scan(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = None) -> SimpleNamespace:
+    """The window as a prover runs it from `sl` (the module's docstring), its calls on `stream` (default a new one on the
+    empty pool, RK's keys `rk_keys`'). ``refused`` says why the load, a step or a call refuses the slice, where one does,
+    and the run ends there; it is None otherwise."""
     sh = shape(S)
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
@@ -751,7 +759,8 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
         return SimpleNamespace(refused="the load refuses the slice")
     cur, win = loaded
     rnum = request_numbers(sl)
-    stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
+    if stream is None:
+        stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
     CA, R, names = sh.CA, S.R, RC.arrival_names(Sc)
     nc, fl = (0,) * R, (0,) * R
     zero = ((0,) * R, (0,) * CA, (0,) * CA, (0,) * R)
@@ -814,14 +823,14 @@ def _encode_pool(S, nc: Sequence[int], fl: Sequence[int]) -> list[int]:
     return [b for v in nc for b in CS._bits(v, CW)] + ([int(x) for x in fl] if S.AS else [])
 
 
-def reference(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace | None:
+def reference(S, sl: CS.Slice, delta: int = COINS[2], stream: V3S.Stream | None = None) -> SimpleNamespace | None:
     """The registered rows and the checked witness the unit accepts `sl`'s advice with under the print coin δ, by `scan`'s
-    run (``srv``, ``cout`` and ``chk``'s bits, unpadded), or None where the load, a step, a step's heads
+    run on `stream` (``srv``, ``cout`` and ``chk``'s bits, unpadded), or None where the load, a step, a step's heads
     (`replay_chain.advance`: it takes more arrivals than are queued, or reads more than A decisions or past the
     window's), a call or the class (the stream past NS slots or NM M entries, an access outside the touched list's
     runs) refuses the slice."""
     sh = shape(S)
-    sc = scan(S, sl, delta)
+    sc = scan(S, sl, delta, stream)
     if sc.refused is not None:
         return None
     for u, (cur, nxt) in enumerate(zip(sc.states, sc.states[1:])):
