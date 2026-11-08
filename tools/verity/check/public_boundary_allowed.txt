@@ -39,11 +39,6 @@ integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/proto
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/steps.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/ml/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/layout.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/schemes/__init__.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/schemes/p2.py
-integrations/vllm/verity_vllm/protocols/pous.py -> verity/core/protocols/pous/verifier.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/binder.py -> verity/core/protocols/remote_bandwidth/audit.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py -> verity/core/protocols/remote_bandwidth/__init__.py
 integrations/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
