@@ -3404,8 +3404,7 @@
    "Flock.Guarantees.LoopInnerRound0"
   ],
   "NetTiming.SecurityProofs.PeriodLeakAccepted": [
-   "Claims.Flock.ListWithin",
-   "Claims.Sampling.KS",
+   "Claims.SamplingGeneric.Compiled.KS",
    "NetTiming.ScopeAcc",
    "NetTiming.TapOpens",
    "Verity.Assumptions.TrustedHost"
