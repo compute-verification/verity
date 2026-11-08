@@ -75,8 +75,8 @@ from pathlib import Path
 
 import cards as spot_cards
 from verity.core.protocols.reporting import PERIODS
-from verity.core.protocols.sampled_proofs import plancheck
-from verity.core.protocols.sampled_proofs.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.core.protocols.spot import plancheck
+from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
 
 HERE = Path(__file__).resolve().parent

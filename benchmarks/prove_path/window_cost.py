@@ -55,7 +55,7 @@ from verity_vllm.program.predict import scan_state as SS
 from verity_vllm.program.predict.window_circuit import WindowClass
 
 from verity.core.protocols import reporting
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
+from verity.core.protocols.spot.optimize import SHA512_ANDS
 from verity.ml.circuits.defs import bind
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF

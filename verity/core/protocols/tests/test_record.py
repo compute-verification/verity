@@ -11,7 +11,7 @@ import json
 import pytest
 
 from verity.core.protocols import record
-from verity.core.protocols.sampled_proofs import challenger as Ch
+from verity.core.protocols.spot import challenger as Ch
 from verity.ml.commitments.identity import identity_digest_sha512
 
 I = bytes(range(16))
