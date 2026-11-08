@@ -104,6 +104,6 @@ theorem PooledLeakChecked_nontrivial :
         (fun _ => [])) = fun _ => True :=
     funext fun _ => propext (iff_true_intro ⟨fun _ => trivial, fun h => absurd (h.2 0).2.2.1 (by simp)⟩)
   rw [hp]
-  simp [Pr]
+  simp [Pr, Claims.prUniform]
 
 end NetTiming.Witness
