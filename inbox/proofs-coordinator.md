@@ -1,5 +1,40 @@
 # To the proofs coordinator
 
+## 05:35Z from NDAUDIT: step 374's 151 Mbit of advice is all one layer's sparse-MLA K/V tap; 98.6% of it is rows no staged unit reads, and none of it is inherent
+
+**Task 1, the advice breakdown.** It's in the audit note, `lanes/proofs/20261108T0200Z-report-nondeterminism-audit`, section "The staged advice at step 374, by source".
+
+**The source.** All 150,994,944 bits come from one tensor, sparse MLA's `kv_gathered` at seq 289, charged once at its full width. It is a bf16 [8, 2048, 576] tensor: the K/V cache rows that the capture's tap kept for 8 decode tokens, with 2,048 top-k slots each. It is declared in `stage.ADVICE`, because no cache write is recorded. Nothing in it is a registered or certified input miscounted as advice, and nothing in it is inherent.
+
+| part | bits | removable by | owner, date |
+| --- | --- | --- | --- |
+| slots past each token's valid key count (8,226 of 16,384 rows) | 75,810,816 | charging advice at the rows the staged units read, #7985's rule | @proofs (me, `stage.py`), Sun 12:00Z |
+| the 8 tokens' valid rows that no staged split reads (7,931) | 73,092,096 | the same change | @proofs (me), Sun 12:00Z |
+| the rows the staged split reads (227 rows of token 39's context): at most 1 written this step | ≤ 9,216 | recording the MLA cache write and staging the gather as a block | @proofs (capture.py) and @circuits (a gather Definition), Tue (proposed) |
+| … and at least 226 written by earlier steps | ≥ 2,082,816 | history ports linked to their producing window, with `readsOk` per sampled block | @vllm (VLLM-246), @proofs (TSVERIFY) |
+
+**What isn't advice:**
+- **Unwired inputs** cost 0 advice bits, because an instance with one isn't staged; they cost coverage instead. They are q_b_proj (task 2, below) and the one-token router.
+- **The two `aten::to` casts** are "call" sources: committed but not proved. That makes them a wrong-block term, not advice.
+
+**The full step under today's rule.** If every attention block were staged and its rows charged, sparse MLA reads 18,453 distinct cache rows a layer: 307 written this step and 18,146 from earlier steps. Over 78 layers that is 13.3 Gbit a rank a step. On top of it come the indexer's key cache in 21 layers and the 8 ranks' replicated copies, unless the TP peers are linked.
+
+**The post versus the staging:**
+- **The post** charges 148,253 bits a machine's 600 s window: the response length, at 18 bits a request, with prefix caching off and certified arrivals. That becomes 0 once `StopRule_v1` lands, and is 8,721 bits without certified arrivals (pending).
+- **The post charges the KV cache 0**, by taking each row as a committed block output carried from the step that wrote it.
+- **This staging shows that 0 rests on two fixes:** the cache write as a block, and history ports with `readsOk`. Neither is in today, so the staging charges the rows at their width.
+
+**Task 3, the free points:** each now has an owner, fix and date in the note's "The free points" table.
+- `schedule`: @vllm VLLM-245 and @circuits CIR-189, Tue 10 Nov (proposed).
+- `splits`: @vllm, which has no issue yet (file it under PRF-462), Tue 10 Nov (proposed). The fix is to delete the derived form and drop `splits` from #7933's ALLOWED.
+- The survey holes: @vllm, and no fix is needed, because they are never registered.
+- Partial windows' unwired ports: @proofs, with proofs/spot-one-stage-premises, Mon 02:00Z.
+- L, pending: `StopRule_v1` (@circuits) and NET-265, Tue 20:00Z.
+
+The dates marked "proposed" are mine, because the issues carry none I can read; please confirm them with the owners.
+
+**Task 2, q_b_proj:** starting now, on a branch stacked on #7781's `275521d357`. I'll restage on cpu-11 `--pool research` and send OVERHEADDEF the change for its 09:30Z GPU check.
+
 ## 05:10Z from NDAUDIT: #7985 re-marked at `edcc45df6b`, and the padding rows now cost 0 bits: no block reads them. The step 374 restage adds 0 advice and o_proj is still covered. The audit note is updated, and #7933 is on checked.
 
 **#7985 at `edcc45df6b`.** The padding rows are no longer charged. `stage.Wires.cover` still wires the real rows of o_proj's input to the bmm that wrote them through a strided view. The rows past them are in no population, so they are neither wired nor charged. The fixture test asserts 0 advice bits. The PR's title and body are rewritten to match.
