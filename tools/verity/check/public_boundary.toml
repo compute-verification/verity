@@ -95,6 +95,17 @@ team = [
     "integrations/vllm/tests/pipeline/test_{circuit_db,source_identity,research_tools,workload_fetch}.py",
     "integrations/vllm/tests/regression/test_attempt_resolution.py",
 ]
+# Flock's measurement campaigns (their pod scripts, the bench drivers they run, the run and store tool's declarations)
+# and the tests that read the numerical bench, circuit-check or NCI's difftest vectors
+flock_bench = [
+    "verity/ml/flock/pod/{20-pure,30-cell,31-replay,33-ir-cell,50-preflight,61-circuit-cell}.sh",
+    "verity/ml/flock/pod/{74-gemm-hill,76-read-gadget,92-zk-sessions,93-zk-tree-from}.sh",
+    "verity/ml/flock/pod/{gemm_hill,read_gadget}.py",
+    "verity/ml/flock/python/verity_flock/{bench,circuit_bench,ir_bench,register}.py",
+    "verity/ml/flock/{tool.py,verifier/tool.py}",
+    "verity/ml/flock/tests/test_{backend_bench,challengers,class_statement,gemm_hill,ir_lowering_bench}.py",
+    "verity/ml/flock/tests/test_{lean_width_refusals,partition_units}.py",
+]
 
 # Each entry: globs exported only as far as public files need them, the public groups whose files may pull them in
 # ("*": any public file), and the kinds of need that may (`via`, `public_boundary.KINDS`; "*", the default: any). A file
