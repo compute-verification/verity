@@ -591,7 +591,7 @@ def init (salt : List ℕ) (pr : Prog) (U : Workload) (act : ℕ → Codes) (σ 
   else if a.1 = 2 then (if a.2 = 0 then w32 σ.length else zig (σ.getD (a.2 - 1) 0))
   else if a.1 = 3 then w32 ((pr.consts U.layout).getD a.2 0)
   else if a.1 = 4 then w32 (act x.1 y.1 y.2)
-  else if a.1 = 5 then w32 (U.weight x.1 y.1 y.2)
+  else if a.1 = 5 then w32 (U.fixed x.1 y.1 y.2)
   else 0
 
 /-- The committed transcript of a final memory: every declared unit's activations (within its shape as the program
@@ -614,7 +614,7 @@ def FreeFetch (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (τ : Tr
   let x := Nat.unpair a.2
   let y := Nat.unpair x.2
   (a.1 = 4 ∧ x.1 ∈ correctSet P U H s τ ∧ y.1 < (U.layout.shape x.1).m ∧ y.2 < (U.layout.shape x.1).k) ∨
-    (a.1 = 5 ∧ ∃ u ∈ correctSet P U H s τ, U.layout.wid u = x.1 ∧ y.1 < (U.layout.shape u).n ∧ y.2 < (U.layout.shape u).k)
+    (a.1 = 5 ∧ ∃ u ∈ correctSet P U H s τ, U.layout.fixedId u = x.1 ∧ y.1 < (U.layout.shape u).n ∧ y.2 < (U.layout.shape u).k)
 
 open Classical in
 /-- **The cost model W1** on the device `dv`, for the protocol `P` (whose `Correct` decides which operand fetches are
@@ -636,7 +636,7 @@ def w1Read (dv : W1Device) (salt : List ℕ) (pr : Prog) (U : Workload) (act : �
 
 /-- **W1 priced, with no refund**: a run's compute, the instructions' prices (`final`'s `cost`), plus
 `fetch` per word it reads (`w1Read`). Compute goes to the compute account and the read to the bandwidth account, and the
-γ-gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
+gap property is stated over this priced sum. It reads neither the oracle nor the protocol. -/
 noncomputable def w1Priced (dv : W1Device) (salt : S → List ℕ) : CostModel Q R S where
   Prog := Prog
   run := fun pr _ U act σ s => readout U act (final dv (salt s) pr U act σ).mem
