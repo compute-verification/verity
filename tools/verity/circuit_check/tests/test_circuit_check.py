@@ -818,11 +818,12 @@ _GLM53_TREES = "(" + ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * 8) + ")"
 _SERVED_ALLREDUCE = ("GLM-5.3 TP8's all-reduce at a served row count, kept in the suite by its digest pin (`tp_allreduce.circuit-check.py`'s "
                      "`_glm53_served_roots`); its partition is checked at `_model_roots`' WORLD=8 bindings, and its cut at served size is pending")
 
-#: Calls the suite checks over `Options.partition_max_gates` or `Options.partition_max_leaves`, each with why it is allowed:
-#: two σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`), whose split moves GLM-5.3's and
-#: DeepSeek-V4's word digests, and GLM-5.3 TP8's served all-reduces over the gate budget (36 gates an element two-shot MNNVL,
-#: past 22 rows of 6,144; 16 multimem, past 50 rows), multimem at 86 rows and more over the leaf budget too.  Each passes no
-#: Call status to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
+#: Calls over `Options.partition_max_gates` or `Options.partition_max_leaves` whose partition stays unchecked, each with why it
+#: is allowed: the suite's (two σ Definitions at their smallest bindings, `boolean_sigma.circuit-check.py`, whose split moves
+#: GLM-5.3's and DeepSeek-V4's word digests, and GLM-5.3 TP8's served all-reduces over the gate budget: 36 gates an element
+#: two-shot MNNVL, past 22 rows of 6,144; 16 multimem, past 50 rows; multimem at 86 rows and more over the leaf budget too), and
+#: any range spot or callee of one `_unchecked_walk` reaches.  Each passes no Call status to its callees
+#: (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
 OVER_PARTITION_BUDGET = {
     "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
     "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
@@ -847,6 +848,40 @@ def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
     return out
 
 
+_WALK: dict = {}
+
+
+def _unchecked_walk(catalog) -> tuple[dict[str, set[str]], set[str]]:
+    """What `targets.CALLEE_CALLS` should be, and the `OVER_PARTITION_BUDGET` ids reached: from the suite's Calls over the budget
+    (`_over_budget`) and the range spots that are Calls (`circuit_check.ranges`), the families of each `checks.uncut` Call's
+    callees that are no Call otherwise, each with the families of the Calls that pass it, through each callee `uncut` itself;
+    one `OVER_PARTITION_BUDGET` holds passes nothing."""
+    if not _WALK:
+        from circuit_check import ranges as RG
+
+        suite, calls = catalog.suite, TG.call_families()
+        own = calls - set(TG.CALLEE_CALLS)
+        stack = [suite[k] for k in _over_budget(catalog, calls)]
+        stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
+        want: dict[str, set[str]] = {}
+        held: set[str] = set()
+        seen: set[str] = set()
+        while stack:
+            fn = stack.pop()
+            if fn.id in seen or not hasattr(fn, "body") or CK.uncut(fn, OPTS) is None:
+                continue
+            seen.add(fn.id)
+            if fn.id in OVER_PARTITION_BUDGET:
+                held.add(fn.id)
+                continue
+            for n in fn.body.nodes:
+                if (f := TG.family(n.fn)) not in own:
+                    want.setdefault(f, set()).add(TG.family(fn))
+                stack.append(n.fn)
+        _WALK.update(want=want, held=held)
+    return _WALK["want"], _WALK["held"]
+
+
 @pytest.mark.slow
 def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
@@ -857,35 +892,19 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     over = _over_budget(catalog, calls)
     assert {k: why for k, why in over.items() if k not in OVER_PARTITION_BUDGET and not CK.callees_are_calls(suite[k], OPTS)} == {}, \
         "a Call over the partition budget whose callees aren't all Calls: list its callees in targets.CALLEE_CALLS, or hold it here"
-    assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
-        "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
-    assert sorted(k for k in OVER_PARTITION_BUDGET if CK.callees_are_calls(suite[k], OPTS)) == [], \
+    assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - _unchecked_walk(catalog)[1]) == [], \
+        "no longer an over-budget Call the suite checks, or a range spot or callee of one: remove it from OVER_PARTITION_BUDGET"
+    assert sorted(k for k in OVER_PARTITION_BUDGET if k in suite and CK.callees_are_calls(suite[k], OPTS)) == [], \
         "partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
 
 
 @pytest.mark.slow
 def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
     """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
-    itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it.  The
-    uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from `OVER_PARTITION_BUDGET`'s: they pass
-    nothing, and stay unchecked until their cut lands."""
-    from circuit_check import ranges as RG
-
-    suite, calls = catalog.suite, TG.call_families()
-    own = calls - set(TG.CALLEE_CALLS)
-    stack = [suite[k] for k in _over_budget(catalog, calls) if k not in OVER_PARTITION_BUDGET]
-    stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
-    want: dict[str, set[str]] = {}
-    seen: set[str] = set()
-    while stack:
-        fn = stack.pop()
-        if fn.id in seen or not hasattr(fn, "body") or CK.uncut(fn, OPTS) is None:
-            continue
-        seen.add(fn.id)
-        for n in fn.body.nodes:
-            if (f := TG.family(n.fn)) not in own:
-                want.setdefault(f, set()).add(TG.family(fn))
-            stack.append(n.fn)
+    itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it
+    (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
+    `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands."""
+    want, _held = _unchecked_walk(catalog)
     assert want == {f: set(by) for f, by in TG.CALLEE_CALLS.items()}, (
         f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
         "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
