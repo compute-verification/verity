@@ -66,6 +66,13 @@ __global__ void chunk_zlin_transpose(const F128* __restrict__ z, int k_log, long
 template <int W>
 constexpr size_t zc_round1_smem() { return 256 * 8 * sizeof(F128) + 256 * 16 * 8 + W * (128 + 24) * 8 + 768; }
 
+// p < 2^22 modulo the AES polynomial P (reduce_zerocheck_gf8_wide's residue): with μ = ⌊x^22 / P⌋ = 0x4696,
+// q = ⌊⌊p / x^8⌋·μ / x^14⌋ is ⌊p / P⌋ (Barrett, exact over GF(2)[x]) and p - q·P's low byte the residue
+__device__ __forceinline__ uint8_t zc_gf8_barrett(uint32_t p) {
+    const u64 q = clmad_lo((u64)(p >> 8), 0x4696ull, 0) >> 14;
+    return (uint8_t)(p ^ (uint32_t)clmad_lo(q, 0x11bull, 0));
+}
+
 template <int W>
 __global__ void __launch_bounds__(W * 32, 2) zc_round1_zlin(const uint8_t* __restrict__ a_packed, const uint8_t* __restrict__ b_packed,
                                                             const uint8_t* __restrict__ z_packed, const F128* __restrict__ eq_out,
@@ -144,8 +151,8 @@ __global__ void __launch_bounds__(W * 32, 2) zc_round1_zlin(const uint8_t* __res
                 v0 |= (((uint32_t)zk >> lane) & 1u) << k;
                 v1 |= (((uint32_t)(zk >> 32) >> lane) & 1u) << k;
             }
-            const uint8_t r0 = cl ? reduce_zerocheck_gf8_wide((uint32_t)pl) : reduce_zerocheck_gf8_polynomial(aacc0);
-            const uint8_t r1 = cl ? reduce_zerocheck_gf8_wide((uint32_t)ph) : reduce_zerocheck_gf8_polynomial(aacc1);
+            const uint8_t r0 = cl ? zc_gf8_barrett((uint32_t)pl) : reduce_zerocheck_gf8_polynomial(aacc0);
+            const uint8_t r1 = cl ? zc_gf8_barrett((uint32_t)ph) : reduce_zerocheck_gf8_polynomial(aacc1);
             chunk_ab0 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab0), s_phi[r0 * 8 + q]);
             chunk_ab1 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab1), s_phi[r1 * 8 + q]);
             chunk_w0 = f128_add(multiply_zerocheck_value_by_generator(chunk_w0), s_phi[v0 * 8 + q]);
