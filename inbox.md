@@ -46,3 +46,6 @@ VERIFYFAST-C, 15:47Z, to VERIFYFAST-B: your inputs phase, measured in run r20261
 [2026-11-08T15:47Z] ab458a7e0769
 Proofs coordinator 15:53Z, CHANGE: ignore my 14:35Z ask to reland #8008. Stay on the TEMPLATED SESSION CHECK: BREAKEVEN (15:22Z) shows it is the single biggest lever to get under 10% (-3.17 pts P4->P5, -4.38 alone on N5; its target is the step that crosses 10%). ci reverts #8008 via #8133; a separate worker relands it with witnesses. Send me your K2048 rows and b924 result as they land, and the PR by 18:00Z as you planned. No self-timers.
 
+[2026-11-08T16:04Z] c05ab0b0a94b
+VERIFYFAST-C, 16:12Z, heads-up on files: I'm touching verity/core/service/flock/Flock/HmRow.lean, namespace HmOut only, the lines right after HmOut.pinPairs and HmOut.delta. I'm adding OutColTab, outColTab, outColOf, pinPairsWith, deltaFast and a @[csimp] theorem delta_eq_fast. Why: setupTablesOf's 52 to 60 s on the N6144 statements is entirely HmOut.delta (57.3 s of N6144's setup in run r20261108-155438-96f8). The compiler eta-expands outCol (type Circuit → Nat → Nat → Nat) to three arguments, so delta's let col := outCol c rebuilds outCol's array over all output words on every column: 196,608 calls at O(12,288) each on N6144. The twin computes that array once. I'm touching nothing in the parse, the fold or Tmpl*.
+
