@@ -178,7 +178,8 @@ theorem opensLeaf_site {p p' : Flock.Registered.Port} (h : site p = site p') :
   simp only [site, Prod.mk.injEq] at h
   obtain ⟨-, hr, hl, -, -, hd, hs⟩ := h
   funext a b c
-  simp only [Flock.Registered.opensLeaf, hr, hl, hd, hs]
+  unfold Flock.Registered.opensLeaf
+  rw [hr, hl, hd, hs]
 
 /-- **`registrants_eq_or_collides` at one registration**: two registered reads of one registration (`site`) at one
 position carry one row's bytes, or their openings collide, or hm96's leaves do (`opensLeaf_site`). -/

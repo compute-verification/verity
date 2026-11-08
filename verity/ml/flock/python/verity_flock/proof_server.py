@@ -11,6 +11,10 @@
   together.
 * **The verdict of record.** A session's ``verdict`` (Lean `flock-verify verify --zk` on its record, say) runs on a pool
   of ``verdicts`` threads once both sides have recorded the session, off the provers' path.
+* **The challenger** (``challenger=True``, FLOCK_CHALLENGER=1's): each verifier takes every session's coin tree from a
+  challenger of its own (`verity_flock.challengers`, `serve --queue --tree-from`), whose session ends with the verifier's
+  queue. Its audit holds every session the verifier served to the challenger's release log at once (no tree unused, none
+  shared), so it runs at `close`, into ``challengers`` by verifier name, and a session counts only if its verifier's passed.
 
 `submit` returns a `Session` at once: `Session.result` waits for both sides' records, `Session.verdict` for the verdict of
 record. A process that exits ends its unfinished sessions as failures (`ProofServerError`) carrying its log's tail;
@@ -30,6 +34,8 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Mapping, Sequence
+
+from verity_flock import challengers as CH
 
 __all__ = ["ProofServer", "ProofServerError", "Session", "Statement"]
 
@@ -55,7 +61,8 @@ class ProofServerError(RuntimeError):
 class Session:
     """One submitted session: ``label`` (unique on its server), its type (``pin``) and ``device`` (None: the CPU prover);
     once done, ``live`` (the prover's ``LIVE`` record), ``served`` (the verifier's ``SESSION`` line), ``dir`` (its record's
-    directory) and ``seconds`` from submission to both records."""
+    directory) and ``seconds`` from submission to both records; on a server with challengers, once it has closed,
+    ``challenger`` (its verifier's challenger's exit and audit, `challengers.end`'s)."""
 
     def __init__(self, label: str, pin: str, device: int | None, verdict: Callable[[Session], Any] | None):
         self.label, self.pin, self.device = label, pin, device
@@ -63,6 +70,7 @@ class Session:
         self.served: dict | None = None
         self.dir: Path | None = None
         self.seconds: float | None = None
+        self.challenger: dict | None = None
         self._t0 = time.monotonic()
         self._fn = verdict
         self._done, self._judged = threading.Event(), threading.Event()
@@ -111,6 +119,7 @@ class _Process:
         self.addr: str | None = None
         self.started = threading.Event()
         self.sessions: set[str] = set()
+        self.challenger: tuple[Path, subprocess.Popen] | None = None
         self._out = open(log, "w", buffering=1)
         self.p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=self._out, text=True,
                                   bufsize=1, env=env, start_new_session=True)
@@ -159,18 +168,20 @@ class ProofServer:
     """SPOT's proof server on ``binary`` (a `flock-circuit` with `prove --stream` and `serve --queue`), its processes'
     logs and the verifiers' own records under ``out``. ``devices``: the GPUs to prove on (None: one CPU prover).
     ``route``: a type's device by pin, for types the caller places itself. ``env``: added to every process's environment
-    (a None value removes the variable). ``zk``: the masked protocol (`--zk`), SPOT's; off, the plain one."""
+    (a None value removes the variable). ``zk``: the masked protocol (`--zk`), SPOT's; off, the plain one. ``challenger``:
+    each verifier on a challenger of its own (`--zk`, or ``FC_COINS=tree`` in ``env``)."""
 
     def __init__(self, binary: str | os.PathLike, out: str | os.PathLike, *, devices: Sequence[int] | None = None,
                  verify_ahead: int = 2, verdicts: int = 4, route: Mapping[str, int] | None = None,
-                 env: Mapping[str, str | None] | None = None, zk: bool = True):
+                 env: Mapping[str, str | None] | None = None, zk: bool = True, challenger: bool = False):
         self.binary, self.out = str(binary), Path(out)
         self.out.mkdir(parents=True, exist_ok=True)
         self.devices: list[int | None] = list(devices) if devices else [None]
-        self.verify_ahead, self.zk = verify_ahead, zk
+        self.verify_ahead, self.zk, self.challenger = verify_ahead, zk, challenger
+        self.challengers: dict[str, dict] = {}
         self._env = {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
         self._routes: dict[str, int | None] = dict(route or {})
-        self._lock, self._send = threading.Lock(), threading.Lock()
+        self._lock, self._send, self._typing = threading.Lock(), threading.Lock(), threading.Lock()
         self._provers: dict[int | None, _Process] = {}
         self._verifiers: dict[str, _Process] = {}
         self._started: list[_Process] = []
@@ -197,13 +208,13 @@ class ProofServer:
         `serve --draw-file` serves one) as session ``label``, its record filed under ``out`` (else the verifier's own
         directory). ``self_check``: ``"skip"`` for a negative control's prover. ``verdict``: the session's verdict of
         record, run on the session once it ends."""
+        v = self._ensure_verifier(st)
         with self._lock:
             if self._closed:
                 raise ProofServerError("the proof server is closed")
             if label in self._sessions:
                 raise ValueError(f"session {label!r} was already submitted")
             dev = self._route(st.pin)
-            v = self._verifier(st)
             p = self._prover(dev)
             s = Session(label, st.pin, dev, verdict)
             self._sessions[label] = s
@@ -252,6 +263,12 @@ class ProofServer:
         self._pool.shutdown(wait=True)
         for s in self._sessions.values():
             s._fail("the proof server closed before its records")
+        for v in self._started:
+            if v.challenger is not None:
+                mine = [self._sessions[x] for x in sorted(v.sessions)]
+                got = self.challengers[v.name] = CH.end(*v.challenger, [str(s.dir) for s in mine if s.dir is not None])
+                for s in mine:
+                    s.challenger = got
         return dict(self.exits)
 
     # --- processes ---------------------------------------------------------------------------------------------------
@@ -265,22 +282,42 @@ class ProofServer:
             self._routes[pin] = min(self.devices, key=lambda d: load[d])
         return self._routes[pin]
 
-    def _start(self, base: str, kind: str, key: Any, cmd: list[str], env: dict[str, str]) -> _Process:
+    def _name(self, base: str, kind: str, key: Any) -> str:
         n = sum(1 for p in self._started if p.kind == kind and p.key == key)
-        name = base if n == 0 else f"{base}.{n + 1}"
+        return base if n == 0 else f"{base}.{n + 1}"
+
+    def _start(self, name: str, kind: str, key: Any, cmd: list[str], env: dict[str, str]) -> _Process:
         p = _Process(name, kind, key, cmd, self.out / f"{name}.log", env, self._line, self._exited)
         self._started.append(p)
         return p
 
-    def _verifier(self, st: Statement) -> _Process:
-        v = self._verifiers.get(st.pin)
-        if v is None:
-            base = f"verifier-{st.pin[:16]}"
+    def _ensure_verifier(self, st: Statement) -> _Process:
+        """``st``'s type's verifier, started (with its challenger) if it has none. One type's start at a time, outside the
+        server's lock: a challenger is started only once it listens."""
+        with self._typing:
+            with self._lock:
+                if self._closed:
+                    raise ProofServerError("the proof server is closed")
+                v = self._verifiers.get(st.pin)
+                if v is not None:
+                    return v
+                base = f"verifier-{st.pin[:16]}"
+                name = self._name(base, "verifier", st.pin)
+            ch = None
+            if self.challenger:
+                d = self.out / f"{name}-challenger"
+                try:
+                    p, flags = CH.start(d)
+                except RuntimeError as e:
+                    raise ProofServerError(f"{name}'s challenger: {e}") from e
+                ch = (d, p)
             cmd = [self.binary, "serve", *(["--zk"] if self.zk else []), "--queue", "-", "--listen", "127.0.0.1:0",
                    "--out", str(self.out / base), "--circuit", str(st.circuit), "--tables", str(st.tables), "--pin", st.pin,
-                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1)]
-            v = self._verifiers[st.pin] = self._start(base, "verifier", st.pin, cmd, self._env)
-        return v
+                   "--operator", "proof-server", "--concurrency", str(self.verify_ahead + 1), *(flags if ch else [])]
+            with self._lock:
+                v = self._verifiers[st.pin] = self._start(name, "verifier", st.pin, cmd, self._env)
+                v.challenger = ch
+            return v
 
     def _prover(self, dev: int | None) -> _Process:
         p = self._provers.get(dev)
@@ -289,7 +326,8 @@ class ProofServer:
             if dev is not None:
                 env["CUDA_VISIBLE_DEVICES"] = str(dev)
             cmd = [self.binary, "prove", *(["--zk"] if self.zk else []), *([] if dev is None else ["--gpu"]), "--stream", "-"]
-            p = self._provers[dev] = self._start("prover-cpu" if dev is None else f"prover-gpu{dev}", "prover", dev, cmd, env)
+            name = self._name("prover-cpu" if dev is None else f"prover-gpu{dev}", "prover", dev)
+            p = self._provers[dev] = self._start(name, "prover", dev, cmd, env)
         return p
 
     def _line(self, tag: str, rec: dict) -> None:

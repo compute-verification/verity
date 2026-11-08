@@ -134,7 +134,7 @@ def main() -> int:
             session["started"] = True
             emit("started", k=session["k"])
 
-    def got():
+    def got() -> tuple[dict, bytes, int]:
         head, body, stamp = recv()
         if head.get("type") == "closed":
             emit("passes", k=head.get("k"), at_ns=stamp)

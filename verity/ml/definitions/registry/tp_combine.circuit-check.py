@@ -9,8 +9,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """The combine units at WORLD 8: the fused MNNVL's coordinate, one- and two-shot; its chunks 2 and 3 of 16 of a 64-element
     token, one- and two-shot (GLM-5.3's chunks of 96 are over `circuit_check.targets.MAX_GATES`); row 2 of torch's multimem
     all-reduce of 4 rows of 24 (16 elements per owner) at a chain for owners 0-3 and a balanced tree for 4-7, which meets owners
-    3 and 4, so both trees; and row 1 of vLLM's custom 2-stage all-reduce of 4 rows of 16 (one pack per owner), which meets
-    owners 2 and 3."""
+    3 and 4, so both trees; row 1 of vLLM's custom 2-stage all-reduce of 4 rows of 16 (one pack per owner), which meets
+    owners 2 and 3; and a row of 32 as 4 chunk rows of 8."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import tp_allreduce as TA
     from verity.ml.definitions.registry import tp_combine as TC
@@ -24,4 +24,5 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
         ("AllReduceMultimemRow_v1",
          lambda: bind(TC.AllReduceMultimemRow, WORLD=8, N=24, ROWS=4, ROW=2, TREES=trees, FTZ=False)),
         ("AllReduceCustomRow_v1", lambda: bind(TC.AllReduceCustomRow, WORLD=8, N=16, ROWS=4, ROW=1, STAGE=2)),
+        ("RowChunks_v1", lambda: bind(TC.RowChunks, N=32, C=8)),
     ]

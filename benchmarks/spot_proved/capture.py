@@ -25,7 +25,8 @@ recorded. A step the engine runs without a graph is recorded as it runs. What is
   queries, the global top-k rows, the outputs, and the KV rows those indices read for ``--mla-tokens`` tokens: FlashMLA's
   first ones, FA3's with the most keys (``seqused_k``), the ones with the most splits, named in ``kv_gathered_rows``), and
   each other kernel `PY_KERNELS` lists, launched from Python (GLM-5.3's fused q/kv norm and RoPE with its cache writes, its
-  fused query RoPE and quantization, and the router's GEMM at up to 16 tokens): its arguments by name, a paged cache by
+  fused query RoPE and quantization, the router's GEMM at up to 16 tokens, and the sparse backend's conversion of each
+  token's top-k positions to global slots through its request's page table): its arguments by name, a paged cache by
   shape only, and after the call its returns and the arguments it writes.
 
 Then the graph call runs as served, and its hidden states must equal the recorded forward's bit for bit (``check``). The
@@ -36,7 +37,7 @@ opened layers' tensors are written, once each, under ``DIR/rank<r>/blobs/<sha512
 to ``--keep-max-mib`` as it is recorded, at every step or at the ``--keep-steps``, until the disk would fall below
 ``--min-free-gib``; the rest are written only in the opened layers). ``DIR/rank<r>/step<s>/ops.jsonl`` lists
 the events in order. ``step<s>/meta.json`` holds the step (tokens, padding, graph mode, the scheduled requests and their
-token counts), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
+token counts, the batch's request ids in its order), the check, and the rank's interior root for the step: SHA-512 over the SHA-512s of ``ops.jsonl`` and of
 ``params.json``, which gives each parameter a recorded op read (its shape, dtype and SHA-512 over its bytes). Every
 recorded event names its blobs by SHA-512 and its decoder layer, so the root binds every recorded byte. With
 ``--allreduce-tree``, ``step<s>/allreduce_tree.json`` beside it holds the node's multimem reduction tree and where it was
@@ -495,6 +496,8 @@ PY_KERNELS = (
       "index_weights_softmax_scale", "index_weights_head_scale"), (), ()),
     ("vllm.model_executor.kernels.linear.cute_dsl.ll_bf16", "ll_bf16_gemm", ("hidden_states", "router_weight", "output_dtype"),
      (), ()),
+    ("vllm.v1.attention.backends.mla.flashattn_mla_sparse", "triton_convert_req_index_to_global_index",
+     ("req_id", "block_table", "token_indices"), (), ()),
 )
 
 
@@ -791,7 +794,8 @@ def _finish(runner: Any) -> None:
     if S.allreduce_tree is not None:
         (d / TREE_FILE).write_text(json.dumps(S.allreduce_tree, sort_keys=True))
     ops_sha, params_sha = hashlib.sha512(lines).hexdigest(), hashlib.sha512((d / "params.json").read_bytes()).hexdigest()
-    meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs, "events": len(S.events),
+    meta = {"rank": S.rank, "step": S.step, "check": S.check, "scheduled": reqs,
+            "req_ids": [str(x) for x in getattr(S.input_batch, "req_ids", None) or []], "events": len(S.events),
             "blob_bytes": S.bytes, "errors": S.errors, "seconds": round(time.time() - S.t0, 1),
             "ops_sha512": ops_sha, "params_sha512": params_sha,
             "rank_root": hashlib.sha512(f"verity/spot/rank-root\0{ops_sha}\0{params_sha}".encode()).hexdigest()}
