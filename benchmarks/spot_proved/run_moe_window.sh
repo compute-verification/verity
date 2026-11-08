@@ -15,6 +15,9 @@
 #   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] [MW_FUSED=1] bash benchmarks/spot_proved/run_moe_window.sh
 # MW_THREADS is the prover's thread count (default the slot's cores): arms timed in separate runs compare at one count.
 # MW_FUSED=1 stages the fused cut (moe_window.py --fused): each GEMM reads its own weight rows.
+# MW_PORTS (default 64) is the audit's --ports: a session a member with a sampled unit, its closure's included (stratified:1
+# samples one unit a template), and an audit needing more refused before any session listens (a5.port_refusal).
+# records_audit's default, one a member, finds no free run of ports for a real layer's thousands of members.
 #   MW_MODE=build ...  # the builds only; MW_STAGE_ONLY=1 ...: each arm staged, none audited
 #   MW_MODE=synth ...  # tests/test_moe_window.write_capture's synthetic capture in place of MW_CAPTURE (its step, layer and
 #                      # blocks, two tokens, members of 4): the smoke run
@@ -117,7 +120,7 @@ arm() {   # arm NAME [moe_window flags]: stage NAME's window, then audit it; -> 
   log "moe-window $name: audit ${flags[*]}"
   "$VPY" "$RA" audit --window "$d/stage/window" --law "$LAW" --circuit "${held% *}" --run "${held#* }" \
     --registered "$d/stage/tables.json" --challenger local --main "$MAIN" --m0-pythonpath "$PYTHONPATH" --bin "$BIN" --lean "$LEAN" --firewall "$FC_FIREWALL_LEAN" \
-    --out "$d/audit" "${flags[@]}" > "$o/audit.log" 2>&1
+    --ports "${MW_PORTS:-64}" --out "$d/audit" "${flags[@]}" > "$o/audit.log" 2>&1
   rc=$?
   for f in summary.json window/audit.json; do [ -e "$d/audit/$f" ] && cp "$d/audit/$f" "$o/$(basename "$f")"; done
   log "moe-window $name: audit exit $rc: $(grep -E '^(RECORDS|PROOF-EDITS) ' "$o/audit.log" | cut -c1-900)"
