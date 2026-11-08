@@ -9389,3 +9389,52 @@ allocation), not what writing in place saves. A standalone Lean micro-benchmark 
 build, never pushed, on cpu-6 and cpu-10. If it holds, I build the proved twin as a PR stacked on #8052, landing only once
 @lean agrees. The bigger levers are text handling (about 83 s; I've offered B to take the byte-level parse) and one
 SHA-512 pass instead of two (about 48 s; asked C whether it fits #7988).
+
+## 09:50Z from TWOOPENS: the Bridge assessment (P4 part 1) is done. Bridge doesn't give `SessionOpensTwo`; P4 grows to sessions by template
+
+**Answer.** One-stage's Bridge doesn't give `SessionOpensTwo`, directly or by instantiation. Its lowering does most of
+`Embeds`' work, and `FrameIs` needs a frame that nothing in the tree defines yet. Note:
+`proofs/20261108T0945Z-report-twoopens-bridge`.
+
+**Why not.** `SampledKSLiveV5` has no session-opens premise because it defines both things `SessionOpensTwo` asks about
+from the session's own files:
+- the program is the lowering of the parsed circuit (`keyProgP`, `progOf`), and `Bridge.lowers` proves every unit of
+  every circuit correct on the circuit's evaluation;
+- the openings are the rows at the public file's leaf map (`rowOfHP`, `openingsCanonV5`).
+
+V5 is also stated over FlockSoundness's game, not over the `SamplingGeneric` deployments. SpotFlock's premise is about an
+auditor-held program and frame. No concrete frame exists anywhere, and every `SamplingGeneric` deployment, one-stage
+ones included, takes its session-opens fact as a premise. Running V5 itself per template session would bypass the
+two-stage compiler and need a new composition in the game's terms, far bigger than the two premises.
+
+**What Bridge gives `Embeds`.** The session's block circuit has the type `progOf` takes, so Bridge's lowering applies
+directly. One catch: `Embeds` as stated (each program gate at one wire) can't hold where the circuit has Flock row
+gates, because their XOR sums sit at no wire. So I'll restate it the Bridge way:
+- a decidable per-template check that each checked unit's gates are the lowering of its template's circuit;
+- a decoder that evaluates that lowering;
+- Bridge's position lemmas, to tie the needed gates to the wires the frame opens.
+
+That is about 400 to 600 lines. With the check in the verifier's scope, `Embeds`' open entry goes.
+
+**What Bridge gives `FrameIs`.** Only the deployed check's side, which `Frame.lean` already uses. The rest needs a
+frame defined from each session's setup. Not by Wed.
+
+**Scope change: sessions by template.** TWOPROVE's proof server takes one table per session (its 09:16Z note), so the
+second stage is one session per template. SpotFlock's code has exactly one session. The generic theorem already counts
+sessions, so moving SpotFlock to one per template is SpotFlock's own change: about 500 to 800 lines across `Code`,
+`Sessions`, `Accepting`, `Facts` and `Opens`. `Embeds` is written against it.
+
+Two more model fixes surfaced:
+- **One interior record.** The interior registration becomes P1's one record, and the code's position map gets the
+  replay block's rank.
+- **The session pin.** The pin must leave the public file's registered positions and paths free. As pinned, the model
+  refuses an honest two-stage session. That gap is in completeness, not soundness.
+
+I sent TWOPROVE and ZKTWO this shape at 09:40Z: sessions by template with one table each, and one interior record.
+
+**Dates.** P4 grows from about 600 lines to about 1,100 to 1,400.
+- Sessions by template: marked Tue 18:00Z.
+- `Embeds` as a check plus its proof: marked Wed 18:00Z, holding if sessions by template lands Tue.
+- `FrameIs`: after Wed.
+
+Both are stacked on P1 and restacked across #7981 once it's on `checked`. I'm starting sessions by template now.
