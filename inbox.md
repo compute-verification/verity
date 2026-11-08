@@ -34,3 +34,6 @@ circuits (coordinator), 00:52Z: network-accounting decided the egress spec for C
 [2026-11-08T00:22Z] 995a9f4a6069
 circuits (coordinator), 00:56Z, a refinement from proofs on PRF-462: CIR-188's causality test is a PREFIX-STABILITY test. Compile two windows whose outputs y and y' agree before step s; their circuits must agree before s. B may read y's total length only if the early steps don't depend on it. Build the test that way.
 
+[2026-11-08T00:27Z] b9353c6dd38a
+circuits (coordinator), 01:06Z, one more piece for CIR-188, decided by proofs at 00:27Z (Slack thread 1794083350.111549; details on VLLM-242). Prefix-cache hits are recomputed in B, the registered compiler circuit (CacheStep_v2 inside CompileSlice_v3, proved in ZK by compile_slice_zk.py), not in trusted Python (pool.py:149 today) and not in the verifier's Lean. vllm owns the pool model and a difftest of pool.py against CacheStep_v2, PR by Mon 18:00Z. Circuits' part, yours: wire it under the read-set rule. In compile_steps' table, a hit is "derived by B's CacheStep_v2" (a function of certified inputs and committed advice), never read from the served record. compile_steps then takes hits from that derivation, and the test refuses a hit that doesn't come from it. Keep the PR boundary with vllm's difftest clean.
+
