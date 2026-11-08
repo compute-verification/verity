@@ -203,7 +203,8 @@ class Align:
             self.calls["one"] += 1
             PB = max(next_pow2(P), 16)
             T = min(self.tile, PB)
-            K["align_small"]((cdiv(P, T),), (topk_ids, mp, *bufs), (P, L, NB, E, BM),
+            # program 0 writes num_tokens_post_pad and the tail, so it runs even at 0 pairs
+            K["align_small"]((max(cdiv(P, T), 1),), (topk_ids, mp, *bufs), (P, L, NB, E, BM),
                              {"HAS_MAP": has_map, "PB": PB, "T": T, "JB": min(self.cols, T), "EP": EP, "TB": STORE,
                               "PW": PAD_STORE}, warps(PB))
         else:

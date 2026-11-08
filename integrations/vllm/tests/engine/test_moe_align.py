@@ -255,6 +255,39 @@ def test_refuses_what_vllms_op_cannot_take():
         moe_align.Align()(ids, E, 8, s, b[:5], n)
 
 
+class Grids:
+    """The Triton kernels' stand-ins: each launch's kernel and grid."""
+
+    def __init__(self) -> None:
+        self.launched: list[tuple[str, tuple]] = []
+
+    def kernel(self, name: str):
+        grids = self
+
+        class Kernel:
+            def __getitem__(self, grid):
+                return lambda *a, **k: grids.launched.append((name, grid))
+        return Kernel()
+
+
+def test_every_call_launches_the_program_that_writes_the_total_even_at_zero_pairs(monkeypatch):
+    # program 0 of either path writes num_tokens_post_pad (the kernels' `_tail`); align_small's grid of cdiv(P, T) programs
+    # launched none at P = 0 and left it unwritten
+    torch = pytest.importorskip("torch")
+    grids = Grids()
+    monkeypatch.setattr(moe_align, "_KERNELS", {k: grids.kernel(k) for k in ("align_small", "count_chunks", "scan_chunks", "place_chunks")})
+    align = moe_align.Align(fast_launch=False)
+    for tokens in (0, 1, moe_align.SMALL_MAX // TOPK, moe_align.SMALL_MAX // TOPK + 1):
+        L = moe_align.sorted_len(tokens * TOPK, E, 8)
+        s, b, n = (torch.empty(k, dtype=torch.int32) for k in (L, moe_align.cdiv(L, 8), 1))
+        grids.launched.clear()
+        align(torch.zeros((tokens, TOPK), dtype=torch.int32), E, 8, s, b, n)
+        assert grids.launched and all(min(g) >= 1 for _k, g in grids.launched), (tokens, grids.launched)
+        if tokens == 0:
+            assert grids.launched == [("align_small", (1,))]
+    assert align.calls == {"one": 3, "chunked": 1}
+
+
 def run_kernels(torch, align, ids, num_experts, block, expert_map=None, dtype=None):
     t = torch.tensor(ids, dtype=dtype or torch.int32).reshape(-1, 1)
     L = moe_align.sorted_len(len(ids), num_experts, block)
@@ -302,3 +335,11 @@ def test_kernels_write_the_reference_in_interpreter(interpreted, path):
     ids = [1 << 32 | 1, 2, -1, 1, 0, 1 << 33]
     assert run_kernels(torch, align, ids, 3, 2, dtype=torch.int64) == reference(ids, 3, 2)
     assert align.calls[path] == len(cases) + 1
+
+
+def test_kernels_write_the_total_at_zero_pairs_in_interpreter(interpreted):
+    torch = interpreted
+    align = moe_align.Align()
+    for ne, bm, mp in ((E, 8, None), (5, 4, None), (3, 2, [-1, 0, 2])):
+        assert run_kernels(torch, align, [], ne, bm, mp) == reference([], ne, bm, mp) == ([], [], 0)
+    assert align.calls == {"one": 3, "chunked": 0}
