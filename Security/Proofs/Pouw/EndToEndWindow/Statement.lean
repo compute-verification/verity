@@ -74,8 +74,8 @@ it a discharge of `WindowBound` is named there (`Proofs.Pouw.Window.FlockBridge`
 `Pouw.Guarantees.PearlCSampledByDeadline`).
 
 Flock's audit definitions are still in the proofs package, so this module imports them, as `Flock.Guarantees.EndToEnd`'s
-statement does Flock's; `Models.lean`, which the `security` package builds without `security_proofs`, does not import
-it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
+statement does Flock's; `Definitions.lean`, which the `security` package builds without `security_proofs`, does not
+import it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
 
 @[expose] public section
@@ -402,7 +402,7 @@ def WindowBoundOfService : Prop :=
     (∀ H s R' τ, tx H s ((An H s).committed R' τ) = Ccom H s R') →
     (∀ H s, Realizes P U H s σ w (fun _ => ∅) (An H s).wrong (tx H s)) →
     ∀ εks δlink : (H : Q → R) → (s : S) → (R' : Reg) → Cont (Law.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
-    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).LinkSound (δlink H s)) →
+    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (δlink H s)) →
     ∀ σ' : (H : Q → R) → (s : S) →
       FlockSoundness.Game.Strategy (auditReg (fun _ : Reg => Law.subset N K hK) (session H s)),
       WindowBound P U ε Ccom σ' fun H s =>

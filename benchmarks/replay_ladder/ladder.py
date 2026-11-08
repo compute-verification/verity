@@ -36,6 +36,7 @@ import gzip
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from dataclasses import dataclass
@@ -50,6 +51,7 @@ sys.path.insert(0, str(SERVE_TAX))
 import inductor_pin as P  # noqa: E402 (beside this file, on sys.path when it runs and when its tests import it)
 import replay as R  # noqa: E402 (serve_tax's, put on sys.path above)
 import serve_tax as S  # noqa: E402
+import topk_probe as T  # noqa: E402 (beside this file, as inductor_pin)
 from verity_config.settings import of  # noqa: E402 (put on sys.path by serve_tax)
 
 ENV = of(__file__)
@@ -79,6 +81,7 @@ LADDER = {
     "qwen3-30b-a3b-fp8": Rung("QWEN3_30B_A3B_FP8", "qwen3-30b-a3b-fp8"),
     "llama31-70b": Rung("LLAMA31_70B", "llama-3.1-70b", tp=2),
     "qwen3-235b-a22b-fp8": Rung("QWEN3_235B_A22B_FP8", "qwen3-235b-a22b-fp8", tp=4),
+    "glm53": Rung("GLM53", "glm-5.3", tp=8),
 }
 
 
@@ -141,6 +144,40 @@ def native_tokens(tok: Any) -> tuple[int, int]:
     return int(start), int(blank[0])
 
 
+def own_sampling(real: Any) -> Any:
+    """`corpus.request_body` for a plan whose requests carry their own sampling (`prod_plan`): the request's sampling, its
+    seed by the public seed rule when it is sampled, and no ignore_eos; serve_tax's body for any other plan's request."""
+    C = S.corpus()
+
+    def body(served: str, r: dict, rid: str, sampling: str) -> dict:
+        if "sampling" not in r:
+            return real(served, r, rid, sampling)
+        b = {"model": served, "prompt": r["prompt_ids"], "max_tokens": r["max_tokens"], **r["sampling"], "stream": True,
+             "stream_options": {"include_usage": True}, "return_token_ids": True, "user": rid}
+        if r.get("seeded"):
+            b["seed"] = C.request_seed(rid)
+        return b
+    body.own_sampling = True
+    return body
+
+
+def max_model_len(args: tuple[str, ...], n: int) -> tuple[str, ...]:
+    """serve_tax's engine arguments with the context limit set to ``n``."""
+    i = args.index("--max-model-len")
+    return (*args[:i + 1], str(n), *args[i + 2:])
+
+
+def route_capture_site(d: Path, src: Path) -> None:
+    """Add the route capture's plugin, copied from ``src`` with the settings registry it reads beside it, to the site
+    directory ``d`` as a vLLM general plugin. It writes nothing unless ROUTECAP_OUT is set."""
+    info = d / "verity_route_capture-0.0.dist-info"
+    info.mkdir(parents=True, exist_ok=True)
+    (info / "METADATA").write_text("Metadata-Version: 2.1\nName: verity-route-capture\nVersion: 0.0\n")
+    (info / "entry_points.txt").write_text("[vllm.general_plugins]\nverity_route_capture = route_capture_plugin:register\n")
+    for f in ("route_capture_plugin.py", "settings.py"):
+        shutil.copy(src / f, d / f)
+
+
 def serve(a: argparse.Namespace) -> int:
     ck = register(a.model)
     from transformers import AutoTokenizer
@@ -148,31 +185,52 @@ def serve(a: argparse.Namespace) -> int:
     traffic = S.corpus().traffic
     traffic.BOS, traffic.BLANK_LINE = native_tokens(AutoTokenizer.from_pretrained(str(ck), trust_remote_code=True))
     out = Path(a.out)
+    out.mkdir(parents=True, exist_ok=True)
+    if a.max_model_len:
+        S.BASE_ARGS = max_model_len(S.BASE_ARGS, a.max_model_len)
+    own_plan = []
+    if a.plan:
+        C = S.corpus()
+        if not getattr(C.request_body, "own_sampling", False):
+            C.request_body = own_sampling(C.request_body)
+        (out / "plan.jsonl").write_bytes(Path(a.plan).read_bytes())
+        own_plan = ["--plan", str(out / "plan.jsonl")]
+        plan_len = sum(1 for _ in open(out / "plan.jsonl"))
     cap = out / "capacity"
     real_site = S.plugin_site
 
     def plugin_site(site: Path, tick: bool) -> Path:
-        """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write."""
-        return P.site(real_site(site, tick), pin=pin() == "pinned",
-                      tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
+        """serve_tax's plugins and inductor_pin, whose log the capacity server's processes write, and the route capture's
+        plugin when LADDER_ROUTE_CAPTURE names it (serve_tax builds the server's environment after its site)."""
+        d = P.site(real_site(site, tick), pin=pin() == "pinned",
+                   tilings=str(out / SERVING_TILINGS) if site.parent == cap else None)
+        if ENV.LADDER_ROUTE_CAPTURE:
+            route_capture_site(d, Path(ENV.LADDER_ROUTE_CAPTURE))
+            os.environ["ROUTECAP_OUT"] = str(site.parent / "route_capture")
+        return d
 
     S.plugin_site = plugin_site
     base = ["--model-id", a.model, "--checkpoint", str(ck), "--c4", a.c4, "--docs", str(a.docs), "--reps", "1",
             "--warm-s", "10"]
-    if S.main(["run", "--arm", "compiled", *base, "--rates", "burst=1000", "--requests", str(a.burst), "--out", str(cap)]):
+    if S.main(["run", "--arm", "compiled", *base, *own_plan, "--rates", "burst=1000", "--requests", str(a.burst),
+               "--out", str(cap)]):
         return 1
     burst = S.arm_metrics(cap)["loads"]["burst"][0]
     capacity = burst["req_per_s"]
     rate = round(a.over * capacity, 2)
     print(f"[ladder] {a.model}: capacity {capacity:.2f} req/s, {burst['output_tok_per_s']:.0f} out tok/s; "
           f"serving the window at {rate} req/s for {a.span_s:g} s", flush=True)
+    if own_plan and plan_len < S.plan_need({LOAD: rate}, a.span_s, None):
+        raise SystemExit(f"{a.plan} holds {plan_len} requests, fewer than the window at {rate} req/s for {a.span_s:g} s "
+                         f"may send ({S.plan_need({LOAD: rate}, a.span_s, None)}): build a longer one")
     rc = S.main(["run", "--arm", "record", *base, "--rates", f"{LOAD}={rate}", "--span-s", str(a.span_s),
                  "--plan", str(out / "plan.jsonl"), "--out", str(out / "record")])
     rec = S.arm_metrics(out / "record")
     (out / "serve.json").write_text(json.dumps({
         "schema": SCHEMA + "/serve", "model": a.model, "checkpoint": f"{S.MODELS[a.model].repo}@{S.MODELS[a.model].revision}",
         "tp": LADDER[a.model].tp, "bos": traffic.BOS, "blank_line": traffic.BLANK_LINE, "capacity": burst, "over": a.over,
-        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pin(),
+        "rate": rate, "span_s": a.span_s, "docs": a.docs, "inductor_pin": pin(), "plan": a.plan,
+        "max_model_len": a.max_model_len,
         "window": (rec["loads"].get(LOAD) or [None])[0], "error": rec.get("error"), "run_id": S.SHARED.RESEARCH_RUN_ID,
     }, indent=1))
     return rc
@@ -225,7 +283,11 @@ def replay(a: argparse.Namespace) -> int:
     out = Path(a.out)
     os.environ["LADDER_TILINGS"] = str(out / f"replay-{a.index}")
     P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
-    argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}")]
+    if ENV.LADDER_TOPK_PROBE:
+        os.environ["LADDER_TOPK_PROBE_OUT"] = str(out / f"replay-{a.index}" / "topk")
+        probe_topk()
+    argv = ["--arm-dir", str(out / "record"), "--load", LOAD, "--checkpoint", str(ck), "--out", str(out / f"replay-{a.index}"),
+            *(["--logprobs"] if a.logprobs else [])]
     if a.index > 1:
         argv += ["--against", str(out / "replay-1")]
     return R.main(argv)
@@ -291,12 +353,15 @@ COMPILE_FRESH = re.compile(r"Compiling a graph for compile range|saved AOT compi
 COMPILE_LOAD = re.compile(r"Directly load AOT compilation|Directly load the compiled graph")
 
 
-def compile_mode(log: Path) -> str | None:
-    """``compile`` when the process compiled its graphs, ``load`` when it read them from vLLM's compile cache."""
-    if not log.exists():
-        return None
-    text = log.read_text(errors="replace")
-    return "compile" if COMPILE_FRESH.search(text) else "load" if COMPILE_LOAD.search(text) else None
+def compile_mode(log: Path, fresh: Path | None = None) -> str | None:
+    """``compile`` when the process compiled its graphs, ``load`` when it read them from vLLM's compile cache. Where vLLM
+    logs neither (GLM-5.3 at the pin), a replay that run.sh started from empty caches (its ``.fresh`` mark) compiled."""
+    text = log.read_text(errors="replace") if log.exists() else ""
+    if COMPILE_FRESH.search(text):
+        return "compile"
+    if COMPILE_LOAD.search(text):
+        return "load"
+    return "compile" if fresh is not None and fresh.exists() else None
 
 
 def model_row(d: Path) -> dict:
@@ -327,7 +392,8 @@ def model_row(d: Path) -> dict:
             "token_positions_differing": r["token_positions_differing"],
             "rows_exact_share": 1 - r["token_positions_differing"] / tokens, "bit_exact": r["bit_exact"],
             "against_first_requests_differing": (r.get("against") or {}).get("requests_tokens_differing"),
-            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log"),
+            "against_first_logprobs_differing": ((r.get("against") or {}).get("logprobs") or {}).get("requests_logprobs_differing"),
+            "replay_over_served": r["replay_over_served"], "compile": compile_mode(d / f"{rd.name}.log", d / f"{rd.name}.fresh"),
             "tilings": tilings(rd)})
     row["serve_tilings"] = tilings(d / SERVING_TILINGS)
     runs = [k for k in (kept(d / SERVING_TILINGS), *(kept(d / f"replay-{x['index']}") for x in row["replays"])) if k]
@@ -389,10 +455,15 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--docs", type=int, default=1 << 20,
                    help="the shard's first documents the plans take prompts from (default: all; a fast model's window runs "
                         "serve_tax's 20,000 out)")
+    s.add_argument("--plan", help="a plan to serve instead of serve_tax's (prod_plan.py build): each request with its own "
+                                  "sampling, stopping at its end of text or its cap")
+    s.add_argument("--max-model-len", type=int, help="the servers' context limit, over serve_tax's 4,096")
     r = sub.add_parser("replay")
     r.add_argument("--model", required=True, choices=sorted(LADDER))
     r.add_argument("--out", required=True)
     r.add_argument("--index", type=int, required=True)
+    r.add_argument("--logprobs", action="store_true", help="record each sampled token's logprob and, from the second "
+                                                           "replay on, compare them with the first replay's bit for bit")
     al = sub.add_parser("alone")
     al.add_argument("--model", required=True, choices=sorted(LADDER))
     al.add_argument("--out", required=True)
@@ -404,8 +475,14 @@ def main(argv: list[str] | None = None) -> int:
     return {"serve": serve, "replay": replay, "alone": alone, "summary": summary}[a.cmd](a)
 
 
+def probe_topk() -> None:
+    """This process's DSA prefill top-k, probed as the ladder's settings say (topk_probe)."""
+    T.apply(mode=ENV.LADDER_TOPK_PROBE, out=ENV.LADDER_TOPK_PROBE_OUT, real=ENV.LADDER_TOPK_PROBE_REAL)
+
+
 # a spawned engine process imports this module as __mp_main__ and inherits the environment
 P.apply(pin=pin() == "pinned", tilings=ENV.LADDER_TILINGS)
+probe_topk()
 
 if __name__ == "__main__":
     sys.exit(main())

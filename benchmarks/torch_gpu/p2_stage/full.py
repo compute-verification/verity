@@ -481,7 +481,7 @@ def main(argv=None) -> int:
         read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
         ok &= gemm_pass(args, lay, src, read, out)
     rc = summary.get("receipts")
-    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
+    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors loaded and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
           + (f"; receipts pass {rc['pass']} over the tensors' {rc['units']} units of the store's {rc['store_units']} "
              f"({rc['padding_units_left_out']} padding units left out), root {rc['root'][:16]}..., step with receipts "
