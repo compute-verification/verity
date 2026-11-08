@@ -459,8 +459,8 @@ class _Verifier:
             return "schema"
         if i in self.registrations:
             return "out-of-phase"
-        if (record := _record(m.body)) is None:
-            return "schema"
+        if isinstance(record := _record(m.body), str):
+            return record
         self.registrations[i] = (m.body, record)
         return None
 
@@ -492,13 +492,13 @@ class _Verifier:
         return [*out, Finish({"verdicts": list(self.lines)}, refused)]
 
 
-def _record(body: bytes) -> dict[str, Any] | None:
-    """A registration's body as its record, or None when it isn't a JSON object."""
+def _record(body: bytes) -> dict[str, Any] | str:
+    """A registration's body as its record, or the refusal `schema` when it isn't a JSON object."""
     try:
         record = json.loads(body)
     except ValueError:
-        return None
-    return record if isinstance(record, dict) else None
+        return "schema"
+    return record if isinstance(record, dict) else "schema"
 
 
 def _unavailable(i: int, e: Unavailable) -> LogEntry:
@@ -593,8 +593,8 @@ class SpotVerifier(_Verifier):
         if m.type == "Interior":
             if i >= len(self.samples) or i in self.interiors or i < len(self.lines):
                 return "out-of-phase"
-            if (record := _record(m.body)) is None:
-                return "schema"
+            if isinstance(record := _record(m.body), str):
+                return record
             self.interiors[i] = (m.body, record)
             return None
         if i >= len(self.seconds if self.TWO else self.samples) or i in self.proofs or i < len(self.lines):

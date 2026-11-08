@@ -339,6 +339,7 @@ def test_in_two_stages_the_verifier_refuses_an_interior_or_a_proof_out_of_its_ph
     assert _refused(_said(_started(P.TwoStageVerifier()), P.PROOF_SERVER, "Interior", 0, interior(0))) == "out-of-phase"
     assert _refused(_said(_drawn(), P.PROOF_SERVER, "Proof", 0, proof(0))) == "out-of-phase"
     assert _refused(_said(_drawn(), P.PROOF_SERVER, "Interior", 0, b"[1]")) == "schema"
+    assert _refused(_said(_drawn(), P.PROOF_SERVER, "Interior", 0, b"{")) == "schema"
     v = _drawn()
     sent = _said(v, P.PROOF_SERVER, "Interior", 0, interior(0))
     assert [(s.message.type, s.message.body) for s in sent] == [("Second", second(0))]
