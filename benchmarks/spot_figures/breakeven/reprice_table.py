@@ -26,12 +26,12 @@ POOL = [("every", "built walked", "proved every window, as built, every lookup w
         ("every", "v5 memo", "proved every window, v5 planned, with the memo"),
         ("sampled", "built walked", "sampled like the other units, as built (unsound as drafted)")]
 #: the pool readings a total takes until the pool's unit is settled: every case as built, the last step and the path's
-#: end also with the ragged row and with v5
+#: end also with the ragged row and with v5, and a pool per window those its entry names (`pools`)
 TOTAL_POOLS = (("every", "built walked", "the pool proved every window as built"),
                ("every", "ragged walked", "the pool proved every window with the ragged row"),
                ("every", "v5 walked", "the pool proved every window at v5 (planned)"))
 #: each theorem form a row is priced under, as the table names it
-FORM = {"v5": "V5 per block: one-stage proof only", "tk": "T·K_δ: two-stage, proved",
+FORM = {"v5": "V5 per block: not proved for two-stage", "tk": "T·K_δ: two-stage, proved",
         "v5-1s": "V5 per block: one-stage, proved"}
 
 
@@ -159,10 +159,14 @@ def entries(rows, data, items, head, title):
         print(f"| {case} | {x['label']} | {x['status']} | {x['owner']} | {FORM[x['form']]} | " + " | ".join(c) + " |")
 
 
-def totals(rows, data, cases, every=()):
-    """Each case's totals: with the pool as built, and with each other reading for the cases in `every`."""
+def totals(rows, data, cases, every=(), pools=None):
+    """Each case's totals: with the pool as built, with each other reading for the cases in `every`, and with only the
+    readings `pools` names for a case it holds."""
     for case in cases:
-        for how, load, name in TOTAL_POOLS if case in every else TOTAL_POOLS[:1]:
+        readings = TOTAL_POOLS if case in every else TOTAL_POOLS[:1]
+        if pools and case in pools:
+            readings = [p for p in TOTAL_POOLS if p[1] in pools[case]]
+        for how, load, name in readings:
             t = total(rows, case, (how, load))
             data[f"{case} total, {name}"] = {"case": case, "compile_core_h": COMPILE[0], "pool": f"{how} {load}",
                                              "cells": t}
@@ -202,8 +206,8 @@ def served(rows, data):
             "it):")
     entries(rows, data, PATH["pool_window"], head, "One pool per window: the hits it loses recomputed (total FP4 before "
             "compiling and the pool):")
-    windows = [x["cases"]["two-stage"] for x in PATH["pool_window"]]
-    totals(rows, data, windows, every=windows[:2])
+    totals(rows, data, [x["cases"]["two-stage"] for x in PATH["pool_window"]],
+           pools={x["cases"]["two-stage"]: x["pools"] for x in PATH["pool_window"]})
     entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
     entries(rows, data, PATH["zk"], head, "The per-window budget form, T windows of K_delta (total FP4):")
     print("\nAdvice not closed (each scope's FP4 bits less the advice it charges):\n" + head)
