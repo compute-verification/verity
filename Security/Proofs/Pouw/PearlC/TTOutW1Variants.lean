@@ -4,7 +4,7 @@ public import Definitions.Pouw.Assumptions.PearlC.DeviceChainCap
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutUOnly
 public import Definitions.Pouw.Assumptions.PearlC.TTOutChainOnlyW1
-public import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.PearlC.TTOutW1
 
 /-!
 # TT_OUT's chain-only, chain-cap and U-only forms at W1 are those forms at the cost model `W1.w1Priced`
@@ -41,8 +41,8 @@ theorem ttOutTilePearlCDevChainCap_of_w1 {dv : W1.W1Device} {salt : S → List �
     TTOutTilePearlCDevChainCap (W1.w1Priced dv salt) d sem ρ :=
   ⟨w1Priced_queries dv salt, h⟩
 
-theorem ttOutUW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ)
-    (ε : ℕ → ℕ → ℝ) : TTOutUW1 dv salt P D γ₀ ε ↔ TTOutU (W1.w1Priced dv salt) P D γ₀ ε :=
+theorem ttOutUW1_iff (dv : W1.W1Device) (salt : S → List ℕ) (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ)
+    (δ : ℕ → ℕ → ℝ) : TTOutUW1 dv salt P D g₀ δ ↔ TTOutU (W1.w1Priced dv salt) P D g₀ δ :=
   ⟨fun h => ⟨w1Priced_queries dv salt, h⟩, fun h => And.right h⟩
 
 theorem ttOutPearlCDevUOnly_of_w1 {dv : W1.W1Device} {salt : S → List ℕ} {d : PearlCDevice}

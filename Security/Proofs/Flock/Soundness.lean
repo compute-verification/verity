@@ -66,6 +66,7 @@ public import Proofs.Flock.Soundness.ExtractAcc
 public import Proofs.Flock.Soundness.SessionAcc
 public import Proofs.Flock.Soundness.SessionBatchAcc
 public import Proofs.Flock.Soundness.Game.Seq
+public import Proofs.Flock.Soundness.Game.Tape
 public import Proofs.Flock.Soundness.ExtractWait
 public import Proofs.Flock.Soundness.LinkFinder
 public import Proofs.Flock.Soundness.LinkCarry
@@ -86,7 +87,10 @@ public import Proofs.Flock.Soundness.TmplSplitEq
 public import Proofs.Flock.Soundness.TmplUnit
 public import Proofs.Flock.Soundness.TmplShare
 public import Proofs.Flock.Soundness.TmplUnrollAt
-public import Proofs.Flock.Soundness.TmplScope
+public import Proofs.Flock.Soundness.Discharge.FailClosed.Scope
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Flock.TmplOrder
+public import Flock.NetAt
 public import Proofs.Flock.Soundness.TmplValue
 public import Proofs.Flock.Soundness.TmplValueUnit
 public import Proofs.Flock.Soundness.TmplUnitNet
@@ -143,6 +147,7 @@ public import Proofs.Flock.Soundness.Audit.FlockLinked
 public import Proofs.Flock.Soundness.Audit.FlockPublic
 public import Proofs.Flock.Soundness.Audit.Harm
 public import Proofs.Flock.Soundness.Audit.Influence
+public import Proofs.Flock.Soundness.Audit.Delivered
 public import Proofs.Flock.Soundness.Audit.InfluenceWitness
 public import Proofs.Flock.Soundness.Audit.Partitioning
 public import Proofs.Flock.Soundness.Audit.HarmBound
@@ -150,7 +155,7 @@ public import Proofs.Flock.Soundness.Audit.HarmBudget
 public import Proofs.Flock.Soundness.Audit.HarmBudgetLife
 public import Proofs.Flock.Soundness.Refine
 public import Proofs.Flock.Soundness.E2E
-public import Proofs.Flock.Soundness.Certificate
+public import Proofs.Flock.Soundness.GateRows
 public import Proofs.Flock.Soundness.StrictCR
 public import Proofs.Flock.Soundness.Teeth
 public import Proofs.Flock.Soundness.Types.Units
@@ -195,7 +200,6 @@ public import Proofs.Flock.Soundness.Discharge.HiddenExec
 public import Proofs.Flock.Soundness.Discharge.HiddenDec
 public import Proofs.Flock.Soundness.Discharge.HdecCor
 public import Proofs.Flock.Soundness.Discharge.Hidden
-public import Proofs.Flock.Soundness.Discharge.Pinned
 public import Proofs.Flock.Soundness.Discharge.ZkCoins
 public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Hides
 public import Proofs.Flock.Soundness.Discharge.ZkHidden

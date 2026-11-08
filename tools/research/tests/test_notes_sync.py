@@ -15,7 +15,7 @@ from research.store.remote import FsRemote
 
 DOC = "kb/doc.md"
 SECTION = "\n".join(f"filler {i}" for i in range(12))
-NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.timezone.utc)
+NOW = dt.datetime(2026, 9, 28, 6, 42, tzinfo=dt.UTC)
 
 
 def _git(repo: Path, *args: str) -> str:
@@ -160,7 +160,7 @@ def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, m
 
 def test_the_watcher_reports_a_failed_sync_as_sync_failed_with_its_lag_every_pass(machines):
     origin, a, b = machines
-    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.timezone.utc)
+    now = dt.datetime(2026, 9, 26, 4, 50, tzinfo=dt.UTC)
     for i in range(3):
         _insert_after(a / DOC, "<!-- a -->", f"a says yes {i}")
         assert NS.sync(a, secrets=[])["pushed"]
@@ -326,7 +326,7 @@ def test_sync_and_checkpoint_exit_5_naming_the_note_and_the_stamp_to_use(machine
 
 
 def test_created_is_read_from_the_front_matter_with_or_without_seconds():
-    utc = dt.timezone.utc
+    utc = dt.UTC
     for value, when in (("2026-09-28T07:00Z", dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
                         ("2026-09-28T07:00:30Z", dt.datetime(2026, 9, 28, 7, 0, 30, tzinfo=utc)),
                         ('"2026-09-28 07:00"', dt.datetime(2026, 9, 28, 7, 0, tzinfo=utc)),
@@ -562,7 +562,7 @@ def test_token_url_names_the_github_repo_with_an_explicit_user_and_never_the_tok
     assert NS.token_url("/srv/notes.git") is None and NS.token_url("https://gitlab.com/a/b.git") is None
 
 
-BROKER_NOW = dt.datetime(2026, 11, 3, 4, 0, tzinfo=dt.timezone.utc).timestamp()
+BROKER_NOW = dt.datetime(2026, 11, 3, 4, 0, tzinfo=dt.UTC).timestamp()
 BROKER_EXPIRES = "2026-11-03T05:00:00Z"
 
 

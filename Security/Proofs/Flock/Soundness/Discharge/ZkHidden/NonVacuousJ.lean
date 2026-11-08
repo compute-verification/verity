@@ -1,28 +1,50 @@
 module
 
+public import Proofs.Flock.Soundness.Assumptions.CustodyZk
 public import Proofs.Flock.Soundness.Discharge.Composed.NonVacuousJ
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.View
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundJ
 
 /-!
-# The hidden-output `J`-table statements' draw hypotheses hold together
+# The hidden-output `J`-table statements' sample hypotheses hold together
 
 `Composed/NonVacuousJ.lean` under hidden outputs (`Stmt.setupHidden`). `zk_session_soundHJ`, its custody forms,
 `zk_session_composedHJ` and `zk_session_viewHJ` take a reference setup `y₀ : DrawSetupZHJ` at table 0's inputs and, the
-first four, `DrawOkZKHJ` at every draw of the law, all at one link-point count; a `DrawSetupZKH` of the whole statement
-at the whole draw has the whole draw's count, and none exists at the tables' at 16 drawn units, two tables and `g = 1`.
+first four, `DrawOkZKHJ` at every sample of the sampling design, all at one link-point count; a `DrawSetupZKH` of the whole statement
+at the whole sample has the whole sample's count, and none exists at the tables' at 16 sampled proof blocks, two tables and `g = 1`.
 
-* `setupZHJ_of_acceptsZK`: every table of a session `verify --zk` accepts at a draw `DrawOkZKHJ` admits is set up.
-* `drawHypsZHJ`: at the coin server's draw file with the tables dividing `kd`, `DrawOkZKHJ` at every draw and every
+* `setupZHJ_of_acceptsZK`: every table of a session `verify --zk` accepts at a sample `DrawOkZKHJ` admits is set up.
+* `drawHypsZHJ`: at the challenger's live-coin part's sample file with the tables dividing `kd`, `DrawOkZKHJ` at every sample and every
   table of an accepted session set up, at `mPtsOf c.g (kd / nTab I)` link points.
 * `zk_session_soundHJ_nonvacuous`, `zk_session_soundHJ_custody_nonvacuous`,
   `zk_session_soundHJ_custody_json_nonvacuous`, `zk_session_composedHJ_nonvacuous`, `zk_session_viewHJ_nonvacuous`: each
-  statement's `y₀` and draw hypotheses at one accepted session, each proof applying its statement to the `y₀` it builds.
+  statement's `y₀` and sample hypotheses at one accepted session, each proof applying its statement to the `y₀` it builds.
 * `drawSetupZKH_whole_mPts`, `drawSetupZKH_whole_empty_16_2_1`, `y0_binderH_16_2_1`: the whole-draw binder's count, its
-  emptiness at 16 drawn units, two tables and `g = 1`, and the statements' `y₀` at the same draw.
+  emptiness at 16 sampled proof blocks, two tables and `g = 1`, and the statements' `y₀` at the same sample.
 
-What none of this covers: that a session `verify --zk` accepts exists at a draw of the file, `RecordsLiveZKJ`, `hpub`,
+What none of this covers: that a session `verify --zk` accepts exists at a sample of the file, `RecordsLiveZKJ`, `hpub`,
 `hpt`, `hkd`, A3, the count curve's parameters, `TableCRZ`, `zk_session_composedHJ`'s and `zk_session_viewHJ`'s `hdm`
 (`avoidsMask`, which no check implies), and `zk_session_composedHJ`'s `hKey` (a named assumption); `zk_session_viewHJ`'s
 `hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`).
@@ -39,8 +61,8 @@ variable {n mPts : ℕ}
 
 /-- **Every hidden-output table of a session `verify --zk` accepts is set up.** On untyped tags with hidden outputs,
 whose circuit file `HmOut.parse` accepts under the `--zk` tags as `c`, at a session `verify --zk` accepts whose record
-carries the draw `dj S`, at which `DrawOkZKHJ` holds at `mPts` link points: table `j` has a `DrawSetupZHJ` at its
-inputs, its draw's units of `S` and its draw, whatever the wires feed. -/
+carries the sample `dj S`, at which `DrawOkZKHJ` holds at `mPts` link points: table `j` has a `DrawSetupZHJ` at its
+inputs, its sample's units of `S` and its sample, whatever the wires feed. -/
 theorem setupZHJ_of_acceptsZKI (I : Inputs) (hh : I.tags.hiddenOutputs = true) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
     (dj : Finset (Fin n) → Lean.Json) {S : Finset (Fin n)} {t : Exec.Transcript} (h : AcceptsZK I t)
@@ -76,10 +98,10 @@ theorem setupZHJ_of_acceptsZK (I : Inputs) (hh : I.tags.hiddenOutputs = true) (h
     Nonempty (DrawSetupZHJ (inputsJ I j) mPts (partS I (dj S) S j) (drawJ I (dj S) j)) :=
   setupZHJ_of_acceptsZKI I hh ht hc dj h hd hok j
 
-/-- **The hidden-output `J`-table draw hypotheses hold together at an accepted session.** On untyped inputs under
+/-- **The hidden-output `J`-table sample hypotheses hold together at an accepted session.** On untyped inputs under
 `TagsOkZHJ`'s tags, whose circuit file `HmOut.parse` accepts as `c` (`hU`, `hscope`: its unit returns the outputs):
-when the record's draw file is the verifier's `subset kd` draw (`DrawFileZK`) and the tables divide `kd`, `DrawOkZKHJ`
-holds at every draw, and at a session `verify --zk` accepts at the draw `dj S` every table is set up, all at
+when the record's sample file is the verifier's `subset kd` sample (`DrawFileZK`) and the tables divide `kd`, `DrawOkZKHJ`
+holds at every sample, and at a session `verify --zk` accepts at the sample `dj S` every table is set up, all at
 `mPtsOf c.g (kd / nTab I)` link points. -/
 theorem drawHypsZHJ (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit) (hscope : Layout.scopeOkH c = true)
@@ -92,10 +114,10 @@ theorem drawHypsZHJ (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ 
     setupZHJ_of_acceptsZK I hTags.1 ht hc (Layout.scopeOkH_spec hU hscope).2.1 dj h hd
       (drawOkZKHJ_of_file I ht hc kd n hdiv dj hdj S)⟩
 
-/-- **`zk_session_soundHJ`'s `y₀` and `hDraw` hold together.** At the coin server's draw file (`DrawFileZK`,
-`subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the draw `dj S`, on the inputs `ht`,
+/-- **`zk_session_soundHJ`'s `y₀` and `hDraw` hold together.** At the challenger's live-coin part's sample file (`DrawFileZK`,
+`subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the sample `dj S`, on the inputs `ht`,
 `hTags`, `hc`, `hU` and `hscope` describe: at `mPts = mPtsOf c.g (kd / nTab I)` there is a `y₀` (table 0's setup),
-every table is set up, and `DrawOkZKHJ` holds at every draw, so at every draw of the law (`hDraw`). The proof applies
+every table is set up, and `DrawOkZKHJ` holds at every sample, so at every sample of the sampling design (`hDraw`). The proof applies
 `zk_session_soundHJ` to this `y₀` and `hDraw`. Not covered: the session's existence, `hRec`, `hpub`, `hpt`, `hkd`,
 `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
@@ -115,11 +137,11 @@ theorem zk_session_soundHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (
       (pub := pub) (kd := kd) (Ω := Unit) (Lb := Lb) (src := src) (hDraw := fun _ => hok _)
   exact ⟨⟨y₀⟩, hy, hok⟩
 
-/-- **`zk_session_soundHJ_custody`'s `y₀` and the custody's draw file hold together.** At the draw file `hCust.2` is
-(`DrawFileZK`, `subset kd`), the tables dividing `kd` (`hdiv`), and a session `verify --zk` accepts at the draw `dj S`,
+/-- **`zk_session_soundHJ_custody`'s `y₀` and the custody's sample file hold together.** At the sample file `hCust.2` is
+(`DrawFileZK`, `subset kd`), the tables dividing `kd` (`hdiv`), and a session `verify --zk` accepts at the sample `dj S`,
 on the inputs `ht`, `hTags`, `hc`, `hU` and `hscope` describe: there is a `y₀` at `mPtsOf c.g (kd / nTab I)` link points
-(table 0's setup), every table is set up there, and `DrawOkZKHJ`, which the statement derives from the draw file, holds
-at every draw at the same count. The proof applies `zk_session_soundHJ_custody` to this `y₀`. Not covered: the
+(table 0's setup), every table is set up there, and `DrawOkZKHJ`, which the statement derives from the sample file, holds
+at every sample at the same count. The proof applies `zk_session_soundHJ_custody` to this `y₀`. Not covered: the
 session's existence, `hCust.1` (`RecordsLiveZKJ`), `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and
 `TableCRZ`. -/
 theorem zk_session_soundHJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
@@ -139,7 +161,7 @@ theorem zk_session_soundHJ_custody_nonvacuous (I : Inputs) (ht : I.tags.typed = 
   exact ⟨⟨y₀⟩, hy, hok⟩
 
 /-- **`zk_session_soundHJ_custody_json`'s `y₀` and `hdj` hold together.** As `zk_session_soundHJ_custody_nonvacuous`,
-with each draw file the JSON value `flock-verify draw` printed for the verifier's `subset kd` draw (`hdj`). The proof
+with each sample file the JSON value `flock-verify draw` printed for the verifier's `subset kd` sample (`hdj`). The proof
 applies `zk_session_soundHJ_custody_json` to the `y₀` it builds and to `hdj`. Not covered: the session's existence,
 `hRec`, `hpub`, `hpt`, `hkd`, `hA3`, the count curve's parameters and `TableCRZ`. -/
 theorem zk_session_soundHJ_custody_json_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I)
@@ -181,9 +203,9 @@ theorem zk_session_composedHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false
       (pub := pub) (kd := kd) (Ω := Unit) (Lb := Lb) (src := src) (hDraw := fun _ => hok _)
   exact ⟨⟨y₀⟩, hy, hok⟩
 
-/-- **`zk_session_viewHJ`'s `y₀` exists, at the draw `dj S` its conclusion's setups `ys` exist too.** At the coin
-server's draw file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
-draw `dj S`, on the inputs `ht`, `hTags`, `hc`, `hU` and `hscope` describe: at `mPts = mPtsOf c.g (kd / nTab I)` there
+/-- **`zk_session_viewHJ`'s `y₀` exists, at the sample `dj S` its conclusion's setups `ys` exist too.** At the challenger's
+live-coin part's sample file (`DrawFileZK`, `subset kd`, the tables dividing `kd`) and one session `verify --zk` accepts at the
+sample `dj S`, on the inputs `ht`, `hTags`, `hc`, `hU` and `hscope` describe: at `mPts = mPtsOf c.g (kd / nTab I)` there
 is a `y₀` (table 0's setup) and every table of `dj S` is set up, so the conclusion's `ys` exist at `S`. The proof
 applies `zk_session_viewHJ` to this `y₀`. Not covered: the session's existence and `hdm` (`avoidsMask`, which no check
 implies); `hT1` holds at the pinned key's hiding gap (`CROnly.hm96Hiding_gap`). -/
@@ -203,8 +225,8 @@ theorem zk_session_viewHJ_nonvacuous (I : Inputs) (ht : I.tags.typed = false) (h
 
 /-! ## The whole-draw binder -/
 
-/-- **A whole-draw hidden-output setup has the whole draw's link points**: a `DrawSetupZKH` of the whole statement at
-a draw file of the verifier's `subset kd` draw has `mPtsOf c.g kd` link points, `c` the circuit file's `HmOut.parse`
+/-- **A whole-draw hidden-output setup has the whole sample's link points**: a `DrawSetupZKH` of the whole statement at
+a sample file of the verifier's `subset kd` sample has `mPtsOf c.g kd` link points, `c` the circuit file's `HmOut.parse`
 under the `--zk` tags. -/
 theorem drawSetupZKH_whole_mPts (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) {kd pop : ℕ}
@@ -212,8 +234,8 @@ theorem drawSetupZKH_whole_mPts (I : Inputs) {c : Flock.Circuit}
     (y₀ : DrawSetupZKH I mPts S₀ (dj S₀)) : mPts = mPtsOf c.g kd :=
   y₀.x.hmPts.symm.trans (setupHidden_mPts_of_proved hc (drawFileZK_proved_size hdj S₀) y₀.x.h)
 
-/-- **At 16 drawn units, two tables and `g = 1`, the whole-draw hidden-output binder is empty**: no whole-draw
-`DrawSetupZKH` at `mPtsOf c.g (16 / nTab I)` link points exists at a draw file of the verifier's `subset 16` draw. -/
+/-- **At 16 sampled proof blocks, two tables and `g = 1`, the whole-draw hidden-output binder is empty**: no whole-draw
+`DrawSetupZKH` at `mPtsOf c.g (16 / nTab I)` link points exists at a sample file of the verifier's `subset 16` sample. -/
 theorem drawSetupZKH_whole_empty_16_2_1 (I : Inputs) {c : Flock.Circuit}
     (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hJ : nTab I = 2) (hg : c.g = 1)
     (dj : Finset (Fin n) → Lean.Json) (hdj : DrawFileZK dj (.subset 16) n) (S₀ : Finset (Fin n)) :
@@ -223,8 +245,8 @@ theorem drawSetupZKH_whole_empty_16_2_1 (I : Inputs) {c : Flock.Circuit}
     rw [hJ, hg] at h
     exact mPtsOf_16_ne_8 h.symm⟩
 
-/-- **At 16 drawn units, two tables and `g = 1`, the hidden-output statements' `y₀` exists and a whole-draw one
-doesn't.** At the verifier's `subset 16` draw file and one session `verify --zk` accepts at the draw `dj S`: the tables'
+/-- **At 16 sampled proof blocks, two tables and `g = 1`, the hidden-output statements' `y₀` exists and a whole-draw one
+doesn't.** At the verifier's `subset 16` sample file and one session `verify --zk` accepts at the sample `dj S`: the tables'
 count is 27, a `y₀` (`zk_session_soundHJ`'s `DrawSetupZHJ` at table 0's inputs) exists at it, and no whole-draw
 `DrawSetupZKH` does. -/
 theorem y0_binderH_16_2_1 (I : Inputs) (ht : I.tags.typed = false) (hTags : TagsOkZHJ I) {c : Flock.Circuit}

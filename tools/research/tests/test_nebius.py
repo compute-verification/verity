@@ -885,6 +885,30 @@ def test_launch_refuses_to_spend_without_yes_and_a_lease():
     assert r.returncode == 1 and "NEBIUS_SA_ID is not set" in r.stderr
 
 
+def _wait_state(tmp_path, want: str, states: list[str]) -> subprocess.CompletedProcess:
+    """`wait_state ID WANT` against a VM whose successive `instance get`s read ``states`` (the last one repeats)."""
+    seq = tmp_path / "states"
+    seq.write_text("\n".join(states) + "\n")
+    script = (f". {NEBIUS / 'common.sh'}; "
+              'nb() { s=$(head -1 "$SEQ"); [ "$(wc -l < "$SEQ")" -gt 1 ] && sed -i 1d "$SEQ"; '
+              'printf \'{"status": {"state": "%s"}}\\n\' "$s"; }; '
+              f"wait_state computeinstance-x {want} 20")
+    return subprocess.run(["bash", "-c", script], capture_output=True, text=True,
+                          env={**os.environ, "SEQ": str(seq), "XDG_RUNTIME_DIR": str(tmp_path), "NEBIUS_POLL_S": "0"})
+
+
+def test_wait_state_ends_when_a_refused_start_goes_back_to_stopped(tmp_path):
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED", "STARTING", "STARTING", "STOPPED"])
+    assert r.returncode == 1 and "went back to STOPPED: Nebius refused its start" in r.stderr
+    assert (tmp_path / "states").read_text() == "STOPPED\n", "it read past the fallback"
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED", "STARTING", "RUNNING"])
+    assert r.returncode == 0, r.stderr
+    r = _wait_state(tmp_path, "RUNNING", ["STOPPED"])                    # never started: it waits out its tries
+    assert r.returncode == 1 and "is STOPPED, not RUNNING, after waiting" in r.stderr
+    r = _wait_state(tmp_path, "STOPPED", ["STARTING", "STOPPED"])
+    assert r.returncode == 0, r.stderr
+
+
 def _auth_harness(tmp_path):
     fake = tmp_path / "nebius"
     fake.write_text('#!/bin/bash\nwhile [ $# -gt 0 ]; do [ "$1" = --private-key-file-path ] && cp "$2" "$OUT"; shift; done\n')

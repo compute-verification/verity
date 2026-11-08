@@ -1,27 +1,25 @@
 module
 
-public import PouwCheck.Inputs
 public import PouwCheck.Pass
 public import PouwWindow.Record
 public import PouwWindow.Side
-public import Identity.Domains
 
 /-!
 # A unit's opening (`core_check.py`, "a unit's opening")
 
-`opening`: the tile proof's public file opens the unit's rows under the registered window root. The unit is drawn
-(unless it is opened undrawn, the filler's). A certified window (its context names a PoUW window, `windowOf`) opens only
-a salted template's units (`Tile.salted`), under the 64-byte certified salt the verifier holds, and any other window no
+`opening`: the tile proof's public file opens the unit's rows under the registered execution phase root. The unit is sampled
+(unless it is opened unsampled, the filler's). A certified execution phase (its context names a PoUW execution phase, `windowOf`) opens only
+a salted template's units (`Tile.salted`), under the 64-byte certified salt the verifier holds, and any other execution phase no
 salt and no salted unit (`saltReason`). The registered entries root's domain is one-stage's served domain of the
 registered program and partition over the check's P entries (`windowDomain?`). The opening's entry, under its salt, is
 that root's leaf at its index (`verifyPath`). The unit is one of the entry's tiles (`tileIn?`). The proof's header names one
 instance, over the circuit the verifier pins for the check's template (`tile?`), whose first two ports, `a0` and `b0`
 (`PC8_PORTS`), are an A row and a B row of the fp8-p schemas (`opened`), read by name. Each of those rows' b ‖ c, at the head of the body, is the entry's side tree's leaf at the unit's row.
-C-Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so the header's keys, in key order
+Flock reads port k's b ‖ c at the body's k-th place, in the circuit's port order, so the header's keys, in key order
 (serde's), must list the opened side rows first and in port order (`portsOf`): a header that orders them otherwise is
 refused, never read in its own order.
 A salted unit's tile (i, j) is A rows R·i + k and B rows C·j + k, each opened the same way, and the b ‖ c after them is
-its public row's, which must be `publicBc` of the window's context, the certified salt, the unit's position and the
+its public row's, which must be `publicBc` of the execution phase's context, the certified salt, the unit's position and the
 entry's side roots.
 Python's reading is kept where its outcome depends on it: hex as `bytes.fromhex` reads it, integers as `struct`
 packs them (a boolean is one), an entry as `Entry.from_json` reads it.
@@ -77,7 +75,7 @@ def publicBc (context : String) (salt : ByteArray) (position : Nat) (roots : Byt
     (Flock.Sha512.hash (Flock.HmRow.rowPrefixV2 PUBLIC_ROW_BITS ++ publicRow salt position roots))
     (publicRowSalt context position)
 
-/-- `_salt_reason`: a certified window opens only a salted template's units, under a 64-byte salt; any other window, no
+/-- `_salt_reason`: a certified execution phase opens only a salted template's units, under a 64-byte salt; any other execution phase, no
 salt and no salted unit. -/
 def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option String :=
   let salted := t.bind (·.salted)
@@ -91,8 +89,8 @@ def saltReason (p : Params) (t : Option Tile) (salt : Option ByteArray) : Option
   else if salted.isSome then some "the window's template's unit reads a salt, which only a certified window has"
   else none
 
-/-- `window_domain`: the window root's domain, one-stage's window domain (`registration.window_domain`) of the
-registered program and partition over the check's P entries in the window's context. -/
+/-- `window_domain`: the execution phase root's domain, one-stage's execution phase domain (`registration.window_domain`) of the
+registered program and partition over the check's P entries in the execution phase's context. -/
 def windowDomain? (p : Params) (c : Registration) : Except String Domain := do
   let n := p.check.entries
   let binding ← Identity.identityDigestSha512 SERVED_DOMAIN (Json.mkObj [("program", c.program),
@@ -151,8 +149,8 @@ def header? (pub : ByteArray) : Option (Json × ByteArray) := do
   | .obj _ => some (h, pub.extract (nl + 1) pub.size)
   | _ => Option.none
 
-/-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered window root, else
-why not, `core_check.opening`'s reason. `salt` is a certified window's salt (`certified_salt`). -/
+/-- `opening`: none when the proof's public file `pub` opens unit `unit`'s rows under the registered execution phase root, else
+why not, `core_check.opening`'s reason. `salt` is a certified execution phase's salt (`certified_salt`). -/
 def opening (p : Params) (c : Registration) (units : Option (List Int)) (unit : Int) (pub : ByteArray) (op : Json)
     (salt : Option ByteArray := Option.none) : Except String (Option String) := do
   if let some us := units then

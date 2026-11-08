@@ -1,32 +1,69 @@
 module
 
-public import Proofs.Flock.Claims.ZK.FinishSwLigE
 public import Proofs.Flock.Claims.ZK.FinishInner
+public import Proofs.Flock.Claims.ZK.FinishSwLigE
+public import Proofs.Flock.Claims.ZK.FinishSwSrc
+public import Proofs.Flock.Claims.ZK.FrameTape
 public import Proofs.Flock.Claims.ZK.InnerY
+public import Proofs.Flock.Claims.ZK.PiopSrcVals
+public import Proofs.Flock.Claims.ZK.SimInner
+public import Proofs.Flock.Claims.ZK.SimLig
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.SentE
 
 /-!
 # The inner proof at the switched source
 
-`repCut_fw`'s `hinner` asks the source for the inner proof's values (`InnerSrc`) at the firewall's pads. The switched
+`repCut_fw`'s `hinner` asks the source for the inner proof's values (`InnerSrc`) at the ZK server's pads. The switched
 pre-final view keeps `ρ_in`, `σ_in` on either branch of `swPre` (`Table.shift` moves `h_tx`, `h_ty` against the exposed
-pads), and `Y₂` (the padding's pads are not moved); where the rows hold its `Y₁` is the honest view's too. The firewall's
-pads are the request's draws, which are the tape's wherever the tape's pads of table `j`'s rep `r` are the frame's.
+pads), and `Y₂` (the padding's pads are not moved); where the rows hold its `Y₁` is the honest view's too. The ZK server's
+pads are the request's samples, which are the tape's wherever the tape's pads of table `j`'s rep `r` are the frame's.
 
 * `Table.innerMsg_padShift`: the triple's two messages don't move under `padShift`.
 * `Table.swPre_inner`, `Table.swPre_Y2`: the switched pre-final view's are the honest view's; `Table.swPre_Y1` where the
   rows hold.
 * `Masked.swSrcE_inner`, `Masked.swSrcE_y`: so the switched source's `ρ_in`, `σ_in` are the honest source's, and its `Y`
   where table `j`'s rows hold at its base.
-* `Masked.pads_frame_eq`: the firewall's pads (`Finish.padsOf` of the request's draws) are the honest pads.
-* **`Masked.swSrcE_innerSrc_frame`**: `InnerSrc` at the switched source at the firewall's pads and the deployed rep's
-  coins, at the inner proof's slot, from the batched constraint (which `repCut_fw` hands `hinner`: the firewall's own
+* `Masked.pads_frame_eq`: the ZK server's pads (`Finish.padsOf` of the request's samples) are the honest pads.
+* **`Masked.swSrcE_innerSrc_frame`**: `InnerSrc` at the switched source at the ZK server's pads and the deployed rep's
+  coins, at the inner proof's slot, from the batched constraint (which `repCut_fw` hands `hinner`: the ZK server's own
   inner proof checked it, `innerP_batched`) and `τ`'s commitment.
 -/
 
 @[expose] public section
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- as in the ZK files this builds on; its own need is unmeasured
 
 /-- The triple's two messages `ρ_in`, `σ_in` are the same on pads moved by `padShift`. -/
 theorem FlockSoundness.ZK.Table.innerMsg_padShift {F K W Salt Seed D Hi VL : Type} [Field F] [Field K] [CharP F 2]
@@ -189,9 +226,9 @@ theorem innerLayE_layE (x : Msg) (j : Fin (jOf x)) : innerLayE x j = layE x j :=
   rw [htab]
   rfl
 
-/-- **The firewall's pads are the honest pads**: at frame rep `rep j r` of the release `L`, on draws of `drawBytes`
-bytes, where the tape's pads of table `j`'s rep `r` are those on the tape of the release's draws, the request's pads
-(`Finish.padsOf` of its draws, as the analysis's) are the tape's at the table's layout. -/
+/-- **The ZK server's pads are the honest pads**: at frame rep `rep j r` of the release `L`, on samples of `drawBytes`
+bytes, where the tape's pads of table `j`'s rep `r` are those on the tape of the release's samples, the request's pads
+(`Finish.padsOf` of its samples, as the analysis's) are the tape's at the table's layout. -/
 theorem pads_frame_eq {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (τ : UE.Tape) (j : Fin (jOf x)) (r : Fin 2) (q : _root_.Flock.Firewall.Finish.RepIn)
     (hq : q.draws = L.drawsAt x ρ (rep j.val r.val)) (hlay : L.lay x (rep j.val r.val) = layE x j)
@@ -238,9 +275,9 @@ theorem betaSlot_inner {x : Msg} (hx : Live x) {s spec} (hs : FlockDeploy.setupO
 
 /-- **`repCut_fw`'s `hinner` at the switched source, at the deployed rep's coins**: at a live statement, a witness, a
 tape, opened coins not refused by round `n` and the session's setup, at table `j`'s rep `r` inner proof begun at its
-slot (`L₀`), where the firewall's pads are the request's draws and the tape's pads are those draws' (`pads_frame_eq`'s
+slot (`L₀`), where the ZK server's pads are the request's samples and the tape's pads are those samples' (`pads_frame_eq`'s
 premises) and table `j`'s rows hold at its base, the switched source carries the inner proof's values (`InnerSrc`) at
-the firewall's pads and the constraints `cons`, given the batched constraint and `τ`'s commitment there. -/
+the ZK server's pads and the constraints `cons`, given the batched constraint and `τ`'s commitment there. -/
 theorem swSrcE_innerSrc_frame {W R : Type} (L : Claims.ZKServer.LeanRelease W R) (ρ : R) (t₀ : FlockComplete.TapeZk)
     (rep : ℕ → ℕ → ℕ) (x : Msg) (hx : Live x) (w : Claims.Flock.Wit) (τ : UE.Tape)
     (c : Fin (refK x) → FlockDeploy.Coin) (n : ℕ) (hn : ¬ Refused x c n) (s : _) (spec : _root_.Flock.SessionSpec)

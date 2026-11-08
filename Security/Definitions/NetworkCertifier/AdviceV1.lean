@@ -1,7 +1,11 @@
 module
 
+public import Mathlib.Data.Nat.Bits
 public import Mathlib.Data.Nat.Size
-public import Mathlib.Data.List.OfFn
+public import Mathlib.Data.Subtype
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.ToAdditive
+import Mathlib.Tactic.Finiteness.Attr
 
 /-!
 # Advice v1's charge: the counted coded length of a decision stream under the registered book

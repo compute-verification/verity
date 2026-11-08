@@ -1,7 +1,9 @@
 module
 
 public import Proofs.Pouw.Fp8Atom.H1TGapStaging
-public import Proofs.Pouw.Fp8Atom.H1TProofs
+import Mathlib.Data.Fin.VecNotation
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.Fp8Atom.H1TProofs
 
 /-!
 # H-1T: the late words against staircases (staging, unpinned)

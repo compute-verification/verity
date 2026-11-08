@@ -77,7 +77,7 @@ window's calls are held to those K's (``call_ks``); with ``--j10r`` it is serve-
 '{"pouw": {"unit": "j10r", "ks": [...]}}'``.
 
 ``--credit`` (with ``--commit`` and ``--receipts``) runs core credit's statement steps over the honest Commit window
-(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier of record that
+(`credit_check`, `pouw_h1_credit`): `credit.registered_file`, `credit._verified` on a stand-in verifier that
 opens each sampled proof block's pub, o0 and o1 rows against that file's roots and recomputes its receipt, `credit._proved` and
 `credit._registration`, the sampled proof blocks the first and last of each kept call; then a receipt word flipped (with and
 without its round's root re-listed), a public table under another step's A root and an ok row 0, each to be refused.
@@ -102,7 +102,7 @@ challenge phase of its own, and ``commit.coins`` (`coins_summary`) holds each wi
 ``--handoff SOCK --handoff-state DIR`` (fill, with ``--challenger``) splits the window at its last served step, so the
 GPU is held only while it serves: the serving process records what only it sees (`served_measures`), saves the window,
 hands its challenge phase's stream to the holder at SOCK and exits (`hand_off`, `pouw_h1_handoff`), and ``--close-from DIR
---stream-fd FD`` closes and releases it on no GPU (`fill_close`): the same close, trees, draw and challenge phase close, the
+--stream-fd FD`` closes and releases it on no GPU (`fill_close`): the same close, trees, sample and challenge phase close, the
 record the same `RECORD`.
 """
 from __future__ import annotations
@@ -145,7 +145,7 @@ from verity_vllm.protocols.pouw.h1 import served as SV
 shapes, modules, rows, steps, j10r, arch = json.loads(sys.argv[1])
 unit = None
 if j10r:
-    from verity.core.protocols.pouw.circuit import h1tile as HT, h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT, h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     unit = lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 t = time.monotonic()
@@ -162,8 +162,8 @@ def period_unit(j10r: bool, arch: str | None = None) -> Any:
     on ``arch`` (``--j10r``)."""
     if not j10r:
         return None
-    from verity.core.protocols.pouw.circuit import h1tile as HT
-    from verity.core.protocols.pouw.circuit import h1window as HW
+    from verity.ml.protocols.pouw.circuit import h1tile as HT
+    from verity.ml.protocols.pouw.circuit import h1window as HW
     from verity_vllm.protocols.pouw import h1 as PH
     return lambda k: HW.tile_unit(k, PH.TILE, HT.PouwH1Tile5, **({"arch": arch} if arch else {}))
 
@@ -243,12 +243,12 @@ def await_end(status: Any, polls: int = 300) -> dict[str, Any]:
 def gate_command(argv: list[str]) -> Any:
     """The `pouw_h1_window.Gate` that runs the gate's verbs as `argv` + VERB (an ``ssh ... research@HOST``): ``open
     --session S --root R``, its JSON answer's ``commitment`` (null until serve.py signs its record) then read from ``status
-    S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a draw's
+    S``, and the answer returned once its ``port`` listens on this host (`await_listener`); with ``withhold`` (a sample's
     challenge phase, reserved withheld, whose commitment is released only when it closes) the answer must say
     ``withheld`` and ``signed`` and carry no ``commitment``. ``reserve(peer, steps)`` is the gate's reserve of a window
-    of S = `steps` rounds served on `peer` (with `steps` None, of the window's draw's challenge phase,
+    of S = `steps` rounds served on `peer` (with `steps` None, of the window's sample's challenge phase,
     `pouw_h1_challenger.draw_families`, reserved ``--withhold``; its answer; ValueError naming what the gate said when
-    it refuses, or when it reserved a draw's challenge phase plain), and ``ended(session)`` the challenge phase's
+    it refuses, or when it reserved a sample's challenge phase plain), and ``ended(session)`` the challenge phase's
     ``status`` once it has its end entry (`await_end`)."""
     def verb(*args: str) -> dict[str, Any]:
         return json.loads(subprocess.run(gate_argv(argv, args), check=True, capture_output=True, text=True).stdout)
@@ -292,7 +292,7 @@ def window_sessions(gate: Any, peer: str, steps: int) -> Any:
     """With ``--peer``: each window the run serves gets a challenge phase of its own, reserved at the gate (``gate.reserve``) just
     before the window is installed, since the auditor host's challenger serves one window a challenge phase and a challenge phase opens
     once; ``sessions(name)`` is window `name`'s reserve answer (`pouw_h1_window.reserved_of`), and a name asked for twice
-    is refused (ValueError), as is a reserve the gate refuses. Each window's draw session is reserved with it
+    is refused (ValueError), as is a reserve the gate refuses. Each window's sample session is reserved with it
     (``gate.reserve(peer, None)``), ``sessions.draws[name]`` its answer. ``sessions.held`` maps each window to its
     answer."""
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -399,8 +399,8 @@ def h1_settings(eng: Any, rows: int, steps: int, challenger: str | None = None, 
     """The option's settings for one served window: the engine's model runner (where the scheduler's admissions arrive) and
     the window's coins, its salt coin and one live round coin a step: the auditor host's at `challenger` (``HOST:PORT``, one
     challenge phase a window, `pouw_h1_challenger`) in the `session` the challenger gate reserved for it, which `gate`
-    opens on the window's open root, and its draw coin from the `draw_session` the gate reserved beside it, which `gate`
-    opens withheld on the window's draw root; else held in this process, which no verifier trusts and which credits
+    opens on the window's open root, and its sampling coin from the `draw_session` the gate reserved beside it, which `gate`
+    opens withheld on the window's sample root; else held in this process, which no verifier trusts and which credits
     nothing (a measurement)."""
     if challenger:
         return {"pouw": {"challenger": challenger, "session": session, "draw_session": draw_session, "gate": gate,
@@ -1018,7 +1018,7 @@ def hand_off(h1: Any, a: argparse.Namespace, doc: dict[str, Any]) -> dict[str, A
 
 def fill_close(a: argparse.Namespace) -> dict[str, Any]:
     """The close phase, on no GPU: the window ``--close-from`` holds, its challenge phase the stream ``--stream-fd``,
-    closed and released as the serving process would have (`pouw_h1_handoff`), its draw's challenge phase opened through
+    closed and released as the serving process would have (`pouw_h1_handoff`), its sample's challenge phase opened through
     ``--gate``, and the fill record completed from ``SERVING``."""
     from verity_vllm.protocols.pouw.h1 import handoff as HO
     from verity_vllm.protocols.pouw.h1 import window as PHW
@@ -1211,7 +1211,7 @@ def coins_summary(doc: dict[str, Any], challenger: bool) -> dict[str, Any]:
     its challenge phase and how that ended, and its credit gate (`pouw_h1.H1Run.credit`): the gate-passed rows, the refused calls
     with each reason, and the credited share, gate-passed MACs over served MACs. ``ok`` without ``challenger``; with it,
     when every window's coins are the auditor host's from a challenge phase of its own that ended closed and complete,
-    and the honest Commit window's gate passes rows and refuses none of its calls, its draw's challenge phase ended
+    and the honest Commit window's gate passes rows and refuses none of its calls, its sample's challenge phase ended
     closed and complete too (a refused negative may never open its own)."""
     wins = {"commit": doc.get("h1_commit"), **{f"commit-{k}": v.get("window") for k, v in (doc.get("negatives") or {}).items()},
             "fill": doc.get("h1")}
@@ -1426,10 +1426,10 @@ def check_challenger(calls_file: str, directory: str, public_sha512: str, out: s
     must credit the lane's period with the window accepted and presented as its close's windows, its open committing
     ``draw_k`` (`pouw_h1_challenger.period_reason`, core's `credit.period`). Its ``credit`` is core's
     (`pouw_h1_challenger.credit_reason`) over `descriptor`, the bytes of the circuit the period committed
-    (`pouw_h1_served.descriptor`; none refuses it), the drawn calls' `statements` (`pouw_h1_challenger.statement`'s) and
+    (`pouw_h1_served.descriptor`; none refuses it), the sampled calls' `statements` (`pouw_h1_challenger.statement`'s) and
     the window's `live` evidence (`credit.LIVE_STATEMENTS`, ``h1_prove/live.py evidence``'s; none refuses it).
-    `draw_directory` is the window's draw session as `directory` is its session (its ``out/`` with `window_file`, else
-    its tree), from which its draw coin is read (none refuses it)."""
+    `draw_directory` is the window's sample session as `directory` is its session (its ``out/`` with `window_file`, else
+    its tree), from which its sampling coin is read (none refuses it)."""
     from verity.core.protocols.sampled_proofs import remote
     from verity_vllm.protocols.pouw import h1 as PH
     from verity_vllm.protocols.pouw.h1 import challenger as PHC

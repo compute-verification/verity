@@ -2,6 +2,10 @@ module
 
 public import Proofs.Flock.Soundness.ExtractWait
 public import Proofs.Flock.Soundness.Assumptions
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Extract
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Seq
 
 /-!
 # The link finder: a trial, then further trials until one reads the same string
@@ -10,7 +14,7 @@ The link theorem's collision finder (DESIGN.md §3), for any trial. A trial (`T`
 reads a set of values behind one commit string (`rd`). The finder (`finderG`) runs a trial and then
 up to `M` more. It succeeds (`Succ`) if
 
-* its first trial reads two values (two drawn units opened the string differently), or
+* its first trial reads two values (two sampled proof blocks opened the string differently), or
 * its first trial reads one value, and the first further trial that reads anything reads another.
 
 With `p v` the probability that a trial reads exactly `v`, `s` that it reads two or more values and
@@ -340,11 +344,12 @@ variable {O : Type} (op : τ → Val → O) (collide : O → O → List UInt8 ×
 
 open Classical in
 /-- **The finder's output from openings**: a collision from two openings with different values, the first from its first
-trial, the second from that trial or from the first further trial that reads anything. `op e v` is an opening trial `e`
-found for value `v`, and `collide` turns two openings into the two byte strings. -/
+trial, the second from the first further trial that reads anything when the first trial read one value, and from the
+first trial otherwise. It reads the further trials only where `finderCost` charges them. `op e v` is an opening trial
+`e` found for value `v`, and `collide` turns two openings into the two byte strings. -/
 noncomputable def outOf (x : τ × List τ) : Option (List UInt8 × List UInt8) :=
   if h : ∃ p : τ × Val × Val, p.2.1 ≠ p.2.2 ∧ p.2.1 ∈ rd x.1 ∧ p.2.2 ∈ rd p.1 ∧
-      (p.1 = x.1 ∨ nextRead rd x.2 = some p.1) then
+      (if (rd x.1).card = 1 then nextRead rd x.2 = some p.1 else p.1 = x.1) then
     some (collide (op x.1 (Classical.choose h).2.1) (op (Classical.choose h).1 (Classical.choose h).2.2))
   else none
 
@@ -359,10 +364,10 @@ theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (Good : O → Prop) (val
     ∃ a b, outOf rd op collide x = some (a, b) ∧ a ≠ b ∧ Hc a = Hc b := by
   classical
   have hex : ∃ p : τ × Val × Val, p.2.1 ≠ p.2.2 ∧ p.2.1 ∈ rd x.1 ∧ p.2.2 ∈ rd p.1 ∧
-      (p.1 = x.1 ∨ nextRead rd x.2 = some p.1) := by
+      (if (rd x.1).card = 1 then nextRead rd x.2 = some p.1 else p.1 = x.1) := by
     rcases hS with h2 | ⟨v, hv, e', hn, hne⟩
     · obtain ⟨a, ha, b, hb, hab⟩ := Finset.one_lt_card.1 (by omega : 1 < (rd x.1).card)
-      exact ⟨(x.1, a, b), hab, ha, hb, Or.inl rfl⟩
+      exact ⟨(x.1, a, b), hab, ha, hb, by rw [ite_eq_right (by omega)]⟩
     · have hnon : (rd e').Nonempty := by
         have := List.find?_some hn
         simpa using this
@@ -375,7 +380,8 @@ theorem outOf_spec {Dh : Type} {Hc : List UInt8 → Dh} (Good : O → Prop) (val
         rw [← hall w₀ hw₀]
         exact hw₀
       obtain ⟨w, hw, hwv⟩ := hw
-      exact ⟨(e', v, w), Ne.symm hwv, by rw [hv]; exact Finset.mem_singleton_self v, hw, Or.inr hn⟩
+      exact ⟨(e', v, w), Ne.symm hwv, by rw [hv]; exact Finset.mem_singleton_self v, hw,
+        by rw [ite_eq_left (by rw [hv]; exact Finset.card_singleton v)]; exact hn⟩
   unfold outOf
   rw [dite_eq_left_of_eq_true (eq_true hex)]
   obtain ⟨hne, h1, h2, -⟩ := Classical.choose_spec hex

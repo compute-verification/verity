@@ -6,11 +6,11 @@
 
 * `gates`: the gate count, the output wires and the SHA-512 of the gates, one line each (`input`, `const b`, `not i`,
   `and w…`, `xor w…`), against the Definition's canonical layout (`standalone_call`): at the sidecar's statics
-  (K = 132, M = 0 and K = 4, M = 1, LIMIT = 500,000), at drawn statics, and at statics both refuse.
+  (K = 132, M = 0 and K = 4, M = 1, LIMIT = 500,000), at sampled statics, and at statics both refuse.
 * `eval`: the code's run of `prog` on a session's openings, its round verdicts and its acceptance, against the compiled
   circuit's output (`evaluate_bits`), `verdict_circuit.round_verdict` and `verdict_value`: at the sidecar's statics on
   an honest session, late receipts (one past LIMIT and far past), wrong digests (the first and the last bit), records of
-  another round, receipts before their sends, and exactly M and M + 1 misses; on drawn statics and sessions; and on
+  another round, receipts before their sends, and exactly M and M + 1 misses; on sampled statics and sessions; and on
   malformed sessions, which both refuse.
 """
 
@@ -30,7 +30,7 @@ from hypothesis import strategies as st
 
 import verity_difftest as D
 from verity.core.protocols.pous import memory_challenger as mc
-from verity.core.protocols.pous import verdict_circuit as V
+from verity.ml.protocols.pous import verdict_circuit as V
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import bits as EB

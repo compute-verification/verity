@@ -1,7 +1,7 @@
-"""A drawn H1 leaf proved as its lanes and their combine: the statement set, the values each statement
+"""A sampled H1 leaf proved as its lanes and their combine: the statement set, the values each statement
 reads and at which row, and the lane partials' layout, the after-draw value the statements share.
 
-Serving keeps one CP-W receipt a 32 × 32 leaf. A drawn leaf's proof is its 32 lane statements and one combine statement
+Serving keeps one CP-W receipt a 32 × 32 leaf. A sampled leaf's proof is its 32 lane statements and one combine statement
 (`circuit.h1zy`'s `PouwH1LaneZy_v1{TILE}`, lane l by its public index, and `PouwH1Combine_v1{TILE}`), each proved under the
 ZK server on its own. The statements share the leaf's lane partials (``partials``), which the prover recomputes after the
 sample from what it committed before it and commits once under hiding leaves (`sampled_proofs.one_stage.produced`). A
@@ -64,11 +64,11 @@ n = `weights.chunks`(K) chunks along K (`h1zy.lane_statements`; every served J10
   the circuit returns, and the combine holds the rest of each ok row to 0.
 
 STAND-IN: the rows of ``a``, ``b``, ``zy`` and ``receipt`` are leaf-local (the leaf's own registration); in a served
-window they are the window's table rows (`circuit.h1window`), which this module then takes as an offset.
+execution phase they are the execution phase's table rows (`circuit.h1window`), which this module then takes as an offset.
 
-**In a served window** (`served`): a drawn leaf u's after-draw values and its known rows are its own,
+**In a served execution phase** (`served`): a sampled leaf u's after-draw values and its known rows are its own,
 ``<prefix><value>@<u>`` (``<prefix>partials@<u>``, ``<prefix>pub<l>@<u>``, ``<prefix>ok<i>@<u>``, ...), so no two leaves
-of a window share a tree, and each known row is committed under `known_salt` of the window's draw root and its name,
+of an execution phase share a tree, and each known row is committed under `known_salt` of the execution phase's sample root and its name,
 which the verifier and the prover derive alike (`credit`'s lanes form).
 """
 from __future__ import annotations
@@ -77,7 +77,6 @@ import hashlib
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from verity.core.protocols.pouw.circuit import seeds as SD
 from verity.core.protocols.pouw.weights import chunks
 from verity.core.protocols.sampled_proofs.one_stage import produced as PR
 from verity.core.protocols.sampled_proofs.one_stage import registered as G
@@ -105,12 +104,15 @@ OKS, CARRY = "oks", "carry"
 FULL = (A, B, PARTIALS, OKS)
 LANE_ROWS, LANE_COLS = 4, 8
 LANE, CHUNK, COMBINE = "lane", "chunk", "combine"
+#: the least K at which a leaf's combine is proved (`h1zy.combine`); a lane is proved at any K the Definitions bind
+#: (64 <= K)
+LEAST_K = 384
 #: the tag of a served leaf's known rows' salts (`known_salt`)
 KNOWN_SALT_TAG = b"verity/pouw/h1/leaf-known/v1\0"
 
 
 def served(prefix: str, value: str, u: int) -> str:
-    """Drawn leaf ``u``'s own ``value`` in a served window of parameter prefix ``prefix``: ``<prefix><value>@<u>``."""
+    """Sampled leaf ``u``'s own ``value`` in a served execution phase of parameter prefix ``prefix``: ``<prefix><value>@<u>``."""
     if not (isinstance(u, int) and u >= 0):
         raise ValueError(f"a leaf is a unit of the window, a natural number, not {u!r}")
     return f"{prefix}{value}@{u}"
@@ -118,7 +120,7 @@ def served(prefix: str, value: str, u: int) -> str:
 
 def known_salt(registration: str, value: str) -> bytes:
     """The salt a served leaf's known row ``value`` (its `served` name) is committed under, public, so the prover's tree is
-    the verifier's: SHA-512 of `KNOWN_SALT_TAG`, i (u32 little-endian), the window's draw root ``registration`` (64 bytes
+    the verifier's: SHA-512 of `KNOWN_SALT_TAG`, i (u32 little-endian), the execution phase's sample root ``registration`` (64 bytes
     in hex) and the name, for i = 0, 1, 2, the 192 bytes of an hm96-sha512 row's salt."""
     head = bytes.fromhex(registration) + value.encode()
     return b"".join(hashlib.sha512(KNOWN_SALT_TAG + i.to_bytes(4, "little") + head).digest() for i in range(3))
@@ -268,6 +270,19 @@ def bits_words(bits: Sequence[int]) -> list[int]:
     return [sum(x << t for t, x in enumerate(b[i:i + 16])) for i in range(0, len(b), 16)]
 
 
+def _leaf_bits(data: bytes) -> list[int]:
+    """`data`'s bits as the unit's seed reads them (`seeds.leaves`): its big-endian 32-bit halves, each least significant
+    bit first."""
+    return [(h >> j) & 1 for i in range(0, len(data), 4) for h in [int.from_bytes(data[i:i + 4], "big")] for j in range(32)]
+
+
+def _u64_bits(x: int) -> list[int]:
+    """A u64's bits as `_leaf_bits` reads its 8 big-endian bytes (`seeds.position_leaves`)."""
+    if not 0 <= x < 1 << 64:
+        raise ValueError(f"a position or a counter is a u64, not {x!r}")
+    return _leaf_bits(x.to_bytes(8, "big"))
+
+
 def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, call: int | None = None,
               blocks: Sequence[int] | None = None) -> list[int]:
     """Lane ln's ``pub`` row: the salt's, the position's and the two roots' leaves as the unit's seed reads them
@@ -281,9 +296,9 @@ def pub_words(salt: bytes, position: int, roots: Sequence[bytes], ln: int, *, ca
         raise ValueError(f"the lane index is a u16 word, not {ln!r}")
     if (call is None) != (blocks is None) or (blocks is not None and len(blocks) != 2):
         raise ValueError("a J10-R lane's row has the unit's call and its two blocks, a v1 lane's neither")
-    bits = SD.leaves(salt, True) + SD.position_leaves(position, True) + SD.leaves(roots[0], True) + SD.leaves(roots[1], True)
+    bits = _leaf_bits(salt) + _u64_bits(position) + _leaf_bits(roots[0]) + _leaf_bits(roots[1])
     if call is not None:
-        bits += SD.position_leaves(call, True) + SD.position_leaves(blocks[0], True) + SD.position_leaves(blocks[1], True)
+        bits += _u64_bits(call) + _u64_bits(blocks[0]) + _u64_bits(blocks[1])
     assert len(bits) == sum((PUBLIC_BITS if call is None else PUBLIC_J10R_BITS)[:-1])
     return bits_words(bits) + [int(ln)]
 
@@ -310,7 +325,7 @@ def known_rows(r: int, c: int, kind: str, ln: int | None = None, ch: int | None 
 
 
 def produced_values(r: int, c: int, k: int, *, j10r: bool = False) -> dict[str, tuple[int, int]]:
-    """The drawn leaf's after-draw values (`one_stage.produced`), each ``(rows, u16 words a row)``: ``partials`` (a row a
+    """The sampled leaf's after-draw values (`one_stage.produced`), each ``(rows, u16 words a row)``: ``partials`` (a row a
     lane of 2 `words`(k)), and a J10-R leaf's ``carry<ch>`` (a row a lane, `carry_words`) and ``oks`` (a row a lane or
     chunk statement, one word)."""
     out = {PARTIALS: (lanes(r, c), 2 * words(k))}
@@ -324,7 +339,7 @@ def produced_values(r: int, c: int, k: int, *, j10r: bool = False) -> dict[str, 
 def verifier_entries(registration: Mapping[str, Any], produced: Mapping[str, Any], lanes_: int,
                      words_: int, *, values: Mapping[str, tuple[int, int]] | None = None,
                      ) -> tuple[dict[str, Mapping[str, Any]], dict[str, str]]:
-    """The verifier's entries and roots of a drawn leaf's values, from the accepted registration record and the accepted
+    """The verifier's entries and roots of a sampled leaf's values, from the accepted registration record and the accepted
     produced record alone (Lean's `PouwWindow.Lanes.roots?`): each registered value's entry in the registration's
     ``registered`` (the first of its value) and that entry's root, and ``partials``' own entry (`produced.entry`:
     ``lanes_`` rows of ``words_`` u16 words under the registration's digest) at the produced record's root of

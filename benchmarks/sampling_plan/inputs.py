@@ -1,13 +1,17 @@
 """The int8 rows' inputs to the sampling planner (Llama-3.1-8B and Qwen3-8B): each a value, a low and a high, its source and
 its status (M measured, A assumed, D derived from the others), in one currency, GPU-seconds of an RTX PRO 6000 (sm_120);
-the models' shapes; and what every scale commits at serve time, a token a layer, by PoUW scheme (the scales
-table)."""
+the models' shapes; what every scale commits at serve time, a token a layer, by PoUW scheme (the scales
+table); and the cost model's observations by card (`CARDS`: the RTX PRO 6000's, and the `h200` card's in H200
+GPU-seconds)."""
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from math import ceil, log2
 
+from verity.ml.windows.interface import K_MAX, K_MIN, LAST_BLOCK_BYTES, MASK_LOG, PER_SLOT, SLOT_LOG
 from verity.core.protocols.sampled_proofs.costfit import Observation
+from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS
 
 
 @dataclass(frozen=True)
@@ -21,15 +25,15 @@ class Input:
 
 I = {
     "cpu": Input(1 / 55, 1 / 110, 1 / 27, "vCPU $0.033/h against sm_120 $1.80/h (X = 55)", "M"),
+    "cpu_h200": Input(0.033 / 5.29, 0.033 / 10.58, 0.033 / 2.65, "vCPU $0.033/h against one H200 SXM's $5.29/h on "
+                      "RunPod, the h200 card's pod (X = 160)", "M"),
     "round": Input(12.6, 12.6, 12.6, "a round (the budget model)", "A"),
     "rounds": Input(48_000, 48_000, 48_000, "a week of rounds (the budget model's S)", "A"),
     "tokens_per_s": Input(20_000, 8_000, 40_000, "int8 Llama-3.1-8B on one RTX PRO 6000: 7.2G MACs a token at 2K context "
                           "against 5e14 MAC/s dense int8 at 30-40% (prefill) down to decode's weight-bandwidth bound", "A"),
-    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell)", "A"),
-    "step_tokens": Input(256, 64, 2048, "tokens a forward step (a replay unit is one layer of one step)", "A"),
-    "replay_layer_step": Input(5.2e-4, 1.0e-4, 2.0e-3, "one layer of one step re-executed from its committed input: its "
-                               "weights' read (218 MB at 1.8 TB/s) plus 256 tokens at the plain rate; Qwen3-8B on H200 "
-                               "is 0.18 ms a layer-step at B32", "A"),
+    "context": Input(2048, 2048, 2048, "prefill at 2K, positions uniform (the budget model's binding cell): a request is "
+                     "one prompt of it, re-run whole from its committed tokens and the weights to rebuild a drawn proof "
+                     "block's witness, at `tokens_per_s`", "A"),
     "commit_per_byte": Input(4.34e-12, 2.2e-12, 1.3e-11, "SHA-512 rows on H200: 3.62 ps a byte plus 2.94 ns a 4 KiB leaf; "
                              "sm_120 taken at 0.5-3x", "M"),
     "commit_floor": Input(0.060, 0.045, 0.101, "the one serve-time term of the 'floor' scheme: the measured "
@@ -52,7 +56,7 @@ I = {
 #: ANDs of the pieces (their pins and hm96 PROTOCOL §5)
 S8_STEP = 4_190
 EPILOGUE = 5_000
-SHA512 = 58_120
+SHA512 = SHA512_ANDS
 HM96 = 116_240
 
 
@@ -166,10 +170,33 @@ def tree_chain(leaves: float) -> int:
 
 
 
+def block_k_log(ands: int, rows: Sequence[int]) -> int:
+    """The ``k_log`` of the Flock block that holds one proof block of ``ands`` ANDs opening ``rows`` (bytes each), as
+    Flock's composer lays it out (`verity_flock.circuit.compose`'s ranges): the unit's slot, the least power of two above
+    its ANDs and its rows' bits (a row an AND and a column a port bit, as `UnitStager`'s early check counts them), beside an
+    hm96 slot a row (a power of two in all) and the mask, then a sha512x3 slot per `PER_SLOT` compressions before the rows'
+    last SHA-512 blocks. A row's opening is those slots, not ANDs in the unit's slot."""
+    hm = (1 << (len(rows) - 1).bit_length()) << SLOT_LOG
+    slot = 1 << max(7, (ands + 8 * sum(rows)).bit_length())
+    comps = sum(-(-(b - LAST_BLOCK_BYTES) // 128) for b in rows if b > LAST_BLOCK_BYTES)
+    bits = (-(-(hm + slot + (1 << MASK_LOG)) >> SLOT_LOG) + -(-comps // PER_SLOT)) << SLOT_LOG
+    return max(K_MIN, (bits - 1).bit_length())
+
+
+def cap(ands: int, rows: Sequence[int]) -> int:
+    """A statement's proof blocks of ``ands`` ANDs opening ``rows``: one a Flock block of 2^`block_k_log` under
+    m = k_log + nbl <= 35, at most 2^20 (below 2^22 the composer packs several a block, about as many a statement); 0, not a
+    proof block, past Flock's 2^`K_MAX`."""
+    k = block_k_log(ands, rows)
+    return 0 if k > K_MAX else min(1 << (35 - k), 1 << 20)
+
+
 def s8_coord_ands(k: int) -> int:
     """One s8 coordinate's ANDs with its rows' openings, as `costfit` counts them: K/32 steps, the epilogue, two K-byte
-    operand rows and three one-block rows (the scales and the output)."""
-    return k // 32 * S8_STEP + EPILOGUE + 2 * (HM96 + SHA512 * ceil((k + 17) / 128)) + 3 * (HM96 + SHA512)
+    operand rows and three one-block rows (the scales and the output), each at `optimize.row_ands`."""
+    from verity.core.protocols.sampled_proofs.optimize import row_ands
+
+    return k // 32 * S8_STEP + EPILOGUE + 2 * row_ands(k) + 3 * row_ands(1)
 
 
 #: the measurements the cost model is fitted from (`costfit`): benchmarks/one_stage/zk_cost.py's sessions of
@@ -200,7 +227,7 @@ ZK: dict[tuple[int, int, int], tuple[float, float, float]] = {
     (14336, 512, 512): (131.07, 119.78, 41.6)}
 
 
-#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a drawn receipt opened in
+#: PoUB's opening unit (`verity.ml.commitments.gates.block_check`): a sampled receipt opened in
 #: circuit, its 4 KiB block decoded to its payload, its sketch receipt recomputed, and the receipt leaf and the payload
 #: opened to their roots (its ANDs are the whole unit's, every opening included)
 OPENING = "BlockOpeningCheck_v1{N=512,C=569,K=2,MASKED=0,BYTES=4096,ROWS=16,LEAF=16,P=64,DR=2,DP=12,DV=1}"
@@ -218,7 +245,96 @@ OPENING_SESSIONS: dict[str, dict[tuple[int, int], float]] = {
     "r20261018-211523-93ec": {(512, 64): 156.0, (512, 128): 161.0, (512, 256): 197.0, (512, 512): 234.0}}
 
 
-def observations() -> list[Observation]:
+#: the `h200` card: GLM-5.3's proof blocks at TP8 (benchmarks/served_units/stage.py's types) proved on one H200 by
+#: benchmarks/one_stage/zk_cost.py with `flock-circuit prove --zk --gpu`, the device building the witness and no send check
+#: (arm dev, the deployed prover), per run and (Definition, ANDs a proof block as staged, staged proof blocks, sampled): the
+#: median end-to-end seconds of a warm prover's timed sessions (GPU-s, the live verifier's round trips in them), the CPU
+#: time of Lean `verify --zk` where it verified that point (None elsewhere) and the statement's staging (CPU-s); its
+#: `overhead` step's observations.json
+ZK_H200: dict[str, dict[tuple[str, int, int, int], tuple[float, float | None, float]]] = {
+    "r20261106-074634-13c4": {
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 4096, 4096): (2.409, None, 28.6),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 8): (1.144, None, 32.0),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 64): (1.311, None, 32.0),
+        ("MoeExpertFp8BlockCoordinateW_v1{K=256,G=128,KB=128,SWAP=True}", 73969, 8192, 8192): (3.956, 12.82, 32.0),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 512, 512): (7.542, None, 93.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 8): (6.341, None, 103.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 64): (6.528, None, 103.2),
+        ("MoeExpertFp8BlockCoordinate_v1{K=6144,G=128,KB=128,SWAP=True}", 1737375, 1024, 1024): (8.794, 43.32, 103.2),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 2048, 2048): (3.489, None, 58.4),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 8): (2.312, None, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 64): (2.195, None, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=2048,G=128}", 539177, 4096, 4096): (4.542, 17.97, 79.7),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 8192, 8192): (2.407, None, 33.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 8): (1.212, None, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 64): (1.266, None, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=256,G=128}", 66607, 16384, 16384): (4.086, 12.14, 45.9),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 1024, 8): (4.281, None, 108.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 1024, 1024): (5.497, None, 108.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 8): (4.732, None, 137.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 64): (4.724, None, 137.8),
+        ("ScaledMmFp8BlockCoordinate_v2{K=6144,G=128}", 1619337, 2048, 2048): (6.764, 42.37, 137.8)},
+    "r20261106-092817-df0b": {
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 128, 128): (19.884, None, 62.4),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 8): (16.883, None, 68.8),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 64): (17.583, None, 68.8),
+        ("MoeExpertFp8CoordinateChunk_v1{E=256,K=256,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1,FIRST=False,LAST=False}", 619034, 256, 256): (18.481, 21.54, 68.8)},
+    "r20261106-074918-e6ff": {
+        ("DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}", 126769, 8192, 8192): (5.776, None, 107.5),
+        ("DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}", 126769, 16384, 8): (3.813, None, 149.1),
+        ("DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}", 126769, 16384, 64): (4.429, None, 149.1),
+        ("DsaIndexerKRow_v1{D=128,ROPE=64,EPS=1e-06}", 126769, 16384, 16384): (8.054, 60.62, 149.1),
+        ("DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}", 122673, 8192, 8192): (5.976, None, 84.6),
+        ("DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}", 122673, 16384, 8): (4.582, None, 104.8),
+        ("DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}", 122673, 16384, 64): (4.938, None, 104.8),
+        ("DsaIndexerQHead_v1{D=128,ROPE=64,NH=32}", 122673, 16384, 16384): (7.996, 59.87, 104.8),
+        ("DsaMqaLogit_v1{H=32,D=128}", 1087058, 1024, 1024): (4.577, None, 71.8),
+        ("DsaMqaLogit_v1{H=32,D=128}", 1087058, 2048, 8): (3.907, None, 75.6),
+        ("DsaMqaLogit_v1{H=32,D=128}", 1087058, 2048, 64): (3.702, None, 75.6),
+        ("DsaMqaLogit_v1{H=32,D=128}", 1087058, 2048, 2048): (6.252, 28.04, 75.6),
+        ("DsaTopKShortRow_v1{TOPK=2048}", 28, 16384, 16384): (2.473, None, 91.3),
+        ("DsaTopKShortRow_v1{TOPK=2048}", 28, 32768, 8): (0.984, None, 166.9),
+        ("DsaTopKShortRow_v1{TOPK=2048}", 28, 32768, 64): (1.072, None, 166.9),
+        ("DsaTopKShortRow_v1{TOPK=2048}", 28, 32768, 32768): (4.197, 12.92, 166.9),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 4096, 4096): (2.763, None, 77.7),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 8192, 8): (1.496, None, 120.8),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 8192, 64): (1.550, None, 120.8),
+        ("MoeRouterSigmoidBias_v1{E=256,TOPK=8,SCALE=2.5,KERNEL='block'}", 164320, 8192, 8192): (4.138, 17.82, 120.8),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 16384, 16384): (2.641, None, 23.6),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 32768, 8): (1.234, None, 25.5),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 32768, 64): (1.035, None, 25.5),
+        ("MoeSumCoordinate_v1{TOPK=8}", 6494, 32768, 32768): (4.033, 13.21, 25.5),
+        ("RMSNormFusedCuda_v2{N=6144,EPS=1e-05}", 12778458, 512, 512): (26.543, None, 559.3),
+        ("RMSNormFusedCuda_v2{N=6144,EPS=1e-05}", 12778458, 1024, 8): (27.654, None, 633.5),
+        ("RMSNormFusedCuda_v2{N=6144,EPS=1e-05}", 12778458, 1024, 1024): (30.936, 652.35, 633.5),
+        ("RMSNormTriton_v1{N=2048,EPS=1e-06}", 4368140, 1024, 1024): (21.757, None, 301.7),
+        ("RMSNormTriton_v1{N=2048,EPS=1e-06}", 4368140, 2048, 8): (16.018, None, 347.5),
+        ("RMSNormTriton_v1{N=2048,EPS=1e-06}", 4368140, 2048, 2048): (17.793, 461.70, 347.5),
+        ("RopeOut_v1", 2998, 4096, 4096): (2.261, None, 22.3),
+        ("RopeOut_v1", 2998, 8192, 8): (1.087, None, 23.8),
+        ("RopeOut_v1", 2998, 8192, 64): (1.197, None, 23.8),
+        ("RopeOut_v1", 2998, 8192, 8192): (3.985, 10.06, 23.8),
+        ("SiluMulBf16_v2", 1416, 8192, 8192): (2.432, None, 23.0),
+        ("SiluMulBf16_v2", 1416, 16384, 8): (1.111, None, 23.0),
+        ("SiluMulBf16_v2", 1416, 16384, 64): (1.001, None, 23.0),
+        ("SiluMulBf16_v2", 1416, 16384, 16384): (3.664, 10.98, 23.0),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 8192, 8192): (2.247, None, 126.4),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 16384, 8): (1.260, None, 237.2),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 16384, 64): (0.996, None, 237.2),
+        ("SiluMulFp8BlockQuantGroup_v1{G=128}", 48230, 16384, 16384): (3.558, 10.77, 237.2)},
+    "r20261106-092821-266a": {
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 128, 128): (17.365, None, 64.0),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 8): (19.276, None, 68.3),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 64): (17.762, None, 68.3),
+        ("MoeExpertFp8GemmW_v1{E=256,K=256,N=1,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}", 620575, 256, 256): (20.799, 21.94, 68.3)}}
+
+
+def observations(card: str = "rtx-pro-6000") -> list[Observation]:
+    if card not in CARDS:
+        raise ValueError(f"no card {card!r}: one of {', '.join(CARDS)}")
+    if card == "h200":
+        return [Observation(run, t, a, c, d, prove=p, verify=v, stage=s)
+                for run, points in ZK_H200.items() for (t, a, c, d), (p, v, s) in points.items()]
     return [Observation(ZK_RUN, f"ScaledMmS8Coordinate_v1{{K={k}}}", s8_coord_ands(k), c, d, prove=p, verify=v, stage=s)
             for (k, c, d), (p, v, s) in ZK.items()] + \
         [Observation(run, OPENING, OPENING_ANDS, c, d, prove=p)
@@ -232,3 +348,12 @@ KEY = {"prover": "flock-circuit bin-dec484d021e461a0-g1-sm120 (binary 21944fa201
        "hardware": "RTX PRO 6000 Blackwell Server Edition (driver 580.173.02), Xeon 6776P, vy-nebius-2; the opening "
                    "unit's, the same card on vy-nebius-1",
        "templates": f"ScaledMmS8Coordinate_v1{{K=4096|14336}}, {OPENING}"}
+
+KEY_H200 = {"prover": "flock-circuit bin-32a698fff862d3db-g1-sm90 (binary 09fbd3d8c1d3, CUDA 13.3), --zk --gpu, "
+                       "FC_HOST_WITNESS and FC_FIREWALL unset",
+            "verifier": "flock-verify lean-3e804125132e928c (binary f399b8425bd6), verify --zk, one CPU",
+            "hardware": "H200 SXM 141 GB (driver 595.91.07), Xeon Platinum 8568Y+, vy-spot-h1",
+            "templates": "GLM-5.3's served proof-block types at TP8 (benchmarks/served_units/stage.py)"}
+
+#: each card's observations, the builds and hardware they key, and its price ratio (`I`'s key): GPU-seconds of that card
+CARDS = {"rtx-pro-6000": (KEY, "cpu"), "h200": (KEY_H200, "cpu_h200")}

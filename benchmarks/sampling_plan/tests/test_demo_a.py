@@ -2,7 +2,7 @@
 its own ANDs and every unit its output bits, statements shared, core's risk wherever core computes it, the certificate
 `certify`'s where core's exact count is cheap and its location term never below it, at each budget the plan under the
 exchange rate no worse than either half's best alone, within the budget, the least execution phase the first whose share of its
-GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform draw and the
+GPU time affords a plan, PoUW's lanes their traced chunks and combine sharing statements, and M3's uniform sample and the
 tile strata's epsilon as core and PoUW state them."""
 
 from __future__ import annotations
@@ -78,8 +78,8 @@ def test_the_partition_is_families_table_within_the_cap():
             a0 = t.groups * (cm.statement_fixed + cm.statement_per_and * proved) + cm.statement_fixed \
                 + cm.statement_per_and * combine
             assert cm.statement(c) == (pytest.approx(a0), 0.0) and cm.unit(c) == rates.unit(c)
-    assert D.costs(blocks=7).replay["request"].units == 7 * m.batch
-    assert all(D.costs(blocks=7).replay[t.id].units == 7 * t.units for t in tiles)
+    assert D.costs(blocks=7).replay["request"].replay_blocks == 7 * m.batch
+    assert all(D.costs(blocks=7).replay[t.id].replay_blocks == 7 * t.units for t in tiles)
     assert m.block_s == pytest.approx(32 * 6.35)
     g = D.ands_against_gpu()
     assert sum(d["ands_share"] for d in g["definitions"].values()) == pytest.approx(1)
@@ -108,7 +108,7 @@ def test_location_is_location_bits_at_the_exact_count():
 
 
 def test_the_certificate_is_certifys_on_small_strata():
-    cands = [replace(c, units=60 + 7 * i, replay="", per_replay=0) for i, c in enumerate(D.candidates()[:6])]
+    cands = [replace(c, units=60 + 7 * i, grain="", n_rho=0) for i, c in enumerate(D.candidates()[:6])]
     sizes = {c.template: 40 for c in cands}
     objective = Objective(0.01, work=1e-9, bits=1e-3)
     ours, core = D.certificate(sizes, cands, objective), certify(sizes, cands, objective)

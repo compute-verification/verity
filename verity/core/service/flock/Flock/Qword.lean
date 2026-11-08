@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §16.7: `Q_word` v1, the partition query (`verity.ir.cut`), over each Call's computing graph
+`Flock.Partition`: `Q_word` v1, the partition query (`verity.ir.cut`), over each Call's computing graph
 (`Partition.CallGraph`): the flat cut (`cutWord`: output units packed from the returned gates, then values several units read
 promoted to committed units, dead gates last), a Definition's cut (a primitive is one unit or none, a separable body its
 members' cuts, any other body the flat cut), and the Program's units (by Call, then within the Call's cut) with `locate`.
@@ -11,6 +11,7 @@ module
 
 public import Flock.Partition
 public import Flock.Steps
+public import Lean.Data.Json.FromToJson.Basic
 
 @[expose] public section
 set_option backward.privateInPublic true

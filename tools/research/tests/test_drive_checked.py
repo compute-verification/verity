@@ -1,16 +1,18 @@
 """The review landing onto `checked` (drive.toml's `land_into`: `main` holds only tested commits).  A
 landing fast-forwards `checked`, never `main`; `main` is fast-forwarded only to a commit of `checked` whose after-landing run
-passed every step on the merge gate; a red run moves nothing on `main`, and its culprit is reverted on `checked`.  A job off
-the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and reverts its culprit, but holds no promotion."""
+passed every step on the merge gate; a red run moves nothing on `main`, and its culprit, unless fixed forward in time, is
+reverted on `checked`.  A job off the gate (drive's policy, policy.toml's `off_gate`: circuit-check) runs in that run and names
+its culprit as any red does, but holds no promotion."""
 from __future__ import annotations
 
 import json
 
 import pytest
 
-from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, FIX_WINDOW_S, TAIL
+import research.drive as D
+from research.drive import AFTER_LANDING, AFTER_LANDING_OPTIONAL, TAIL
 from research.queue import DriveFlags, QueueError
-from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _subject
+from test_drive_review import GATED_TREE, Review, _main, _move_main, _owning, _rings, _subject
 from test_queue import World, _git
 from test_queue_drive import _failed_run, _steps_run
 
@@ -73,10 +75,10 @@ def test_a_red_after_landing_run_moves_nothing_on_main_and_its_culprit_is_revert
     h.run_state["r-post-0"] = ("done", 1, None)
     h.evidence = [_failed_run(tmp_path, "tests/test_x.py::test_y", "tests/test_x.py:2")]
     h.tick()
-    (ring,) = [p for p in h.posts if "is red on" in p]
+    (ring,) = _rings(h)
     assert "suite pkg is red on `checked`" in ring and "Culprit: #2" in ring, ring
-    assert _main(world) == main
-    h.clock += FIX_WINDOW_S + 1
+    assert _checked(world) == tip and _main(world) == main
+    h.clock += D.FIX_FORWARD_S
     h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and _main(world) == main
@@ -106,25 +108,46 @@ def test_a_pr_containing_a_head_landed_on_checked_never_waits_for_it_and_one_on_
     assert st[8].state == "waiting" and st[8].why == "contains #6, which isn't admitted" and st[8].held == {6: six}
 
 
-def test_main_follows_no_baseline_that_passed_fewer_steps(world, monkeypatch):
-    """ci's baseline of only some steps lets landing go on, as a red baseline run does, but isn't a full check: `main` stays."""
-    from research import queue as Q
+def _cli(h: Review, *args: str) -> list[str]:
+    """`research queue ARGS` against ``h``'s drive: its clone, origin and store."""
+    w = h.world
+    return [*args, "--workdir", str(h.q.workdir), "--remote", str(w.origin), "--repo", "o/r", "--store", str(w.tmp / "store"),
+            "--rules", str(w.dev / "ci" / "queue.toml")]
 
+
+def test_ci_baseline_moves_main_at_once_beside_a_tick_holding_its_lock_and_writes_nothing_of_drives(world, monkeypatch, capsys):
+    """ci's `research queue baseline` fast-forwards `main` itself, at once: a tick holds the clone's lock for its whole run (an
+    hour and more), and a baseline that waited for it, then left `main` to the tick after, kept `main` that far behind a green
+    `checked`.  It reads drive's clone as the tick left it and writes no ref of it and nothing of drive's state, takes only a
+    commit on `checked`'s first-parent chain whose steps cover every step on the merge gate, and is refused but by ci and off
+    drive."""
+    from research import queue as Q
+    from research.merge import DRIVE_ENV
+
+    _move_main(world, {**GATED_TREE, "tools/verity/check/drive.toml": 'land_into = "checked"\n'})
     h = Review(world, monkeypatch, land_into="checked")
     main = _main(world)
-    world.gh.put(1, world.change({"a.txt": "1\n"}))
-    h.review(1)
-    assert h.tick().startswith("landed #1")
-    tip = _checked(world)
-    state = h.q.load_state()
-    state["drive"]["postland"]["run"] = None                    # its run lost; ci records `checked` by hand instead
-    h.q.save_state(state)
-    assert Q.baseline(h.q, tip, "ci", "lean-audit") == 0
-    h.tick()
-    assert _main(world) == main
-    assert Q.baseline(h.q, tip, "ci") == 0
-    h.tick()
-    assert _main(world) == tip
+    tip = _landed(h, {"a.txt": "1\n"})
+    argv = _cli(h, "baseline", tip, "--by", "ci")
+    state, refs = h.q.state_path.read_bytes(), _git(h.q.workdir, "for-each-ref")
+    lock = Q._lock(h.q.workdir)                                 # a tick runs
+    try:
+        assert Q.main(_cli(h, "status")) == 1 and "another `research queue` holds" in capsys.readouterr().err
+        monkeypatch.delenv(DRIVE_ENV)
+        assert Q.main(argv) == 1 and "this isn't drive" in capsys.readouterr().err
+        monkeypatch.setenv(DRIVE_ENV, "1")
+        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only ci" in capsys.readouterr().err
+        assert Q.main([*argv, "--steps", ",".join(GATED[:-1])]) == 1
+        assert f"--steps leaves out {GATED[-1]}, on the merge gate" in capsys.readouterr().err
+        assert Q.main(_cli(h, "baseline", f"{tip}^2", "--by", "ci")) == 1      # #1's head, merged into `checked`
+        assert "is not on `checked`'s first-parent chain" in capsys.readouterr().err
+        assert _main(world) == main
+        assert Q.main([*argv, "--steps", ",".join(GATED)]) == 0                # circuit-check, off the gate, needn't be among them
+        assert _main(world) == tip and f"`main` fast-forwarded from {main[:12]} to {tip[:12]}" in capsys.readouterr().out
+        assert Q.main(argv) == 0 and "already: nothing to move" in capsys.readouterr().out
+    finally:
+        lock.close()
+    assert h.q.state_path.read_bytes() == state and _git(h.q.workdir, "for-each-ref") == refs
 
 
 def _gated(world: World, monkeypatch) -> Review:
@@ -163,19 +186,29 @@ def _circuit_red(h: Review, tmp_path) -> None:
     h.evidence = [_steps_run(tmp_path, "r-post-0", {**{s: "passed" for s in GATED}, "circuit-check": "failed"})]
 
 
-def test_a_red_circuit_check_reverts_its_culprit_on_checked_at_once_and_holds_no_promotion(world, monkeypatch, tmp_path):
-    """No `FIX_WINDOW_S` for circuit-check, and no marked fix holds its revert: it runs only after landing, so each landing on its
-    red goes unchecked."""
+def test_a_red_circuit_check_names_its_culprit_holds_no_promotion_and_its_revert_waits_for_a_marked_fix(world, monkeypatch,
+                                                                                                         tmp_path):
+    """circuit-check runs only after landing, so each landing on its red goes unchecked: its ring says no PR touching its inputs
+    lands until it passes, and `main` moves all the same.  Its culprit is fixed forward or reverted as every red's is: a fix
+    marked (here one saying `fixes step circuit-check`) holds the revert past `FIX_FORWARD_S`, and once it is ejected the next
+    tick reverts it on `checked`."""
     h = _gated(world, monkeypatch)
     tip = _landed(h, {"pkg/x.circuit-check.py": "X = 1\n"})
     world.gh.put(9, world.change({"c.txt": "9\n"}), body="Lane `lane-9`. fixes step circuit-check")
     _circuit_red(h, tmp_path)
     h.tick()
     (ring,) = [p for p in h.posts if "Culprit: #1" in p]
-    assert "step circuit-check is red on `checked`" in ring and "Drive reverts #1 now" in ring, ring
+    assert "step circuit-check is red on `checked`" in ring and ring.endswith(
+        "or drive reverts #1 then. No PR touching circuit-check's inputs lands until it passes on `checked`."), ring
+    assert _checked(world) == _main(world) == tip
+    h.clock += D.FIX_FORWARD_S
+    h.tick()
+    assert _checked(world) == tip and any("culprit #1 isn't reverted: #9 at " in x for x in world.logs), world.logs
+    world.gh.ready.discard((9, world.gh.prs[9].head))
+    h.tick()
     reverted = _checked(world)
     assert _git(world.origin, "rev-parse", f"{reverted}^") == tip and h.posted[-1][0] == reverted
-    assert any("a red circuit-check is reverted at once" in p for p in h.posts), h.posts
+    assert any("#1 reverted on `checked`: step circuit-check is red" in p for p in h.posts), h.posts
     assert _main(world) == tip
     assert "pkg/x.circuit-check.py" not in _git(world.origin, "ls-tree", "-r", "--name-only", reverted)
     h.evidence = []
@@ -284,6 +317,108 @@ def test_a_sharded_run_that_passes_moves_main_and_the_verified_record_together_a
     assert not any("passed without passing" in p for p in h.posts), h.posts
 
 
+def _shard(tmp_path, rid: str, steps: dict[str, str], live: dict[str, str] | None = None, preflight: bool = False,
+           state: str = "running"):
+    """A shard's run dir: ``steps`` ended in its steps.jsonl, and its live record (`LIVE`, the check's ``state``) naming the
+    preflight's steps, those and ``live``'s, still to end (pending, running); with ``preflight``, the preflight's alone, its
+    groups not yet planned."""
+    from research.drive import LIVE, PREFLIGHT
+
+    d = _steps_run(tmp_path, rid, steps)
+    planned = {s: "running" if preflight else "passed" for s in PREFLIGHT} | ({} if preflight else {**steps, **(live or {})})
+    (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": state,
+                                      "steps": [{"step": s, "state": v} for s, v in planned.items()]}))
+    return d
+
+
+def _part(suite: str, k: int, status: str = "passed") -> dict:
+    """``suite``'s row of its part K of 3 by test id, as suites.py reports it."""
+    return {"name": suite, "suite": suite, "status": status, "failed_tests": ["tests/test_x.py::test_y"] * (status == "failed"),
+            "part": {"ks": [k], "m": 3, "digest": "d", "by": "id"}}
+
+
+def test_a_step_more_than_one_shard_holds_passed_only_once_every_shard_that_holds_it_passed_it(tmp_path):
+    """A sharded after-landing run's shards hold parts of one step (lean-audit's packages, lean-suites' suites, lean-build beside
+    them): it passed once every shard that holds it passed it (or skipped it, or failed it only on what an allowance covers),
+    none having it still to run by its live record, so another shard's pass doesn't pass a part that runs on, failed or was
+    stopped; a twin's pass passes it for its shard, and twins' other words rank whatever their order (`RANK`); a step an ended
+    check never started was stopped; and nothing passed while a shard's plan isn't known.  A suite in parts passed once every
+    part of one partition did."""
+    from research.drive import PREFLIGHT, shard_ended, shard_passed, shard_steps, suite_passed
+
+    one = _shard(tmp_path, "r1", {"lean-build": "passed", "lean-suites": "passed", "pytest": "passed"})
+    two = _shard(tmp_path, "r2", {"lean-build": "passed"}, {"lean-suites": "running", "lean-agreement": "pending"})
+    view = shard_steps([[one], [two]], [True, False])
+    assert view[1] == {**dict.fromkeys(PREFLIGHT, "passed"), "lean-build": "passed", "lean-suites": None, "lean-agreement": None}
+    assert shard_passed(view) == shard_ended(view) == {*PREFLIGHT, "lean-build", "pytest"}
+
+    failed, stopped, skipped = (shard_steps([[one], [_shard(tmp_path / s, "r2", {"lean-suites": s})]], [True, False])
+                                for s in ("failed", "stopped", "skipped"))
+    assert "lean-suites" not in shard_passed(failed) and "lean-suites" in shard_passed(failed, {"lean-suites"})
+    assert "lean-suites" not in shard_passed(stopped, {"lean-suites"}) and "lean-suites" in shard_ended(stopped)
+    assert "lean-suites" in shard_passed(skipped)
+    twins = [_shard(tmp_path / "t", "r2", {"lean-suites": "stopped"}), _shard(tmp_path / "t", "r2b", {"lean-suites": "passed"})]
+    assert "lean-suites" in shard_passed(shard_steps([[one], twins], [True, False])), "a twin's pass passes its shard"
+    twins[1] = _shard(tmp_path / "u", "r2b", {}, {"lean-suites": "running"})
+    assert shard_steps([[one], twins], [True, False])[1]["lean-suites"] is None, "one twin still runs it"
+    for a, b in (("stopped", "failed"), ("failed", "stopped"), ("skipped", "stopped"), ("stopped", "skipped")):
+        pair = [_shard(tmp_path / f"{a}-{b}", "r2", {"lean-suites": a}), _shard(tmp_path / f"{a}-{b}", "r2b", {"lean-suites": b})]
+        assert shard_steps([[one], pair], [True, False])[1]["lean-suites"] == ("failed" if "failed" in (a, b) else "skipped")
+    closed = shard_steps([[one], [_shard(tmp_path / "c", "r2", {"lean-build": "failed"}, {"lean-suites": "pending"}, state="failed")]],
+                         [True, False])
+    assert closed[1]["lean-suites"] == "stopped", "its group stopped on lean-build's failure: it never starts"
+    assert "lean-suites" in shard_ended(closed) and "lean-suites" not in shard_passed(closed, {"lean-suites"})
+
+    early, bare = _shard(tmp_path / "e", "r2", {}, preflight=True), _steps_run(tmp_path / "b", "r2", {"lean-build": "passed"})
+    assert shard_steps([[one], [early]], [True, False]) is None and shard_steps([[one], [bare]], [True, False]) is None
+    assert shard_steps([[one], [bare]], [True, True])[1] == {"lean-build": "passed"}, "a twin exited 0: its steps.jsonl"
+    assert shard_steps([[bare]], [False]) == [{"lean-build": "passed"}], "an unsharded run: its steps.jsonl"
+
+    assert suite_passed([{"name": "s", "status": "passed"}]) and suite_passed([_part("s", 3), _part("s", 1), _part("s", 2)])
+    assert not suite_passed([_part("s", 1), _part("s", 3)]) and not suite_passed([_part("s", 1), _part("s", 2, "failed"), _part("s", 3)])
+    assert not suite_passed([_part("s", 1), {**_part("s", 2), "part": {"ks": [2], "m": 3, "digest": "e"}}, _part("s", 3)])
+
+
+def test_a_sharded_run_moves_main_only_once_every_shard_that_holds_a_step_passed_it(world, monkeypatch):
+    """ci.toml's 3-shard plan runs lean-suites in each shard (the composition suite's three parts, lean-build again beside two
+    of them): while it still runs in one shard, by that shard's live record, the others' passes move nothing on `main`; once it
+    fails there the run is red, and neither the suite nor the step is green at its tip, so the red's culprit is sought among the
+    landings since each last passed whole."""
+    _move_main(world, GATED_TREE)
+    h = Review(world, monkeypatch, land_into="checked")
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    h.d.evidence = lambda repo, ids: [d for d in h.evidence if d.name in ids]
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    h.run_state["r-post-0"] = ("done", 0, None)
+    h.tick()
+    assert [kw["shard"] for _, _, kw in h.posted[1:]] == ["1/3", "2/3", "3/3"]
+    comp = "verity-core-composition"
+    shards = ({s: "passed" for s in ("lean-audit", "pytest", "lean-build", "lean-suites")},
+              {s: "passed" for s in ("lean-build", "lean-unit-cut", "lean-audit", "lean-agreement", "lean-changed")},
+              {s: "passed" for s in ("flock-circuit-build", "circuit-check", "flock-rust-tests", "lean-build", "lean-suites",
+                                     "ratchet-gate")})
+    assert {s for x in shards for s in x} == set(AFTER_LANDING)
+    h.run_state.update({"r-post-1": ("done", 0, None), "r-post-2": ("running", None, None), "r-post-3": ("done", 0, None)})
+    h.evidence = [_shard(world.tmp, "r-post-1", shards[0]), _shard(world.tmp, "r-post-2", shards[1], {"lean-suites": "running"}),
+                  _shard(world.tmp, "r-post-3", shards[2])]
+    for d, k in ((h.evidence[0], 3), (h.evidence[2], 2)):
+        (d / "suites-lean.json").write_text(json.dumps([_part(comp, k)]))
+    h.tick()
+    assert _main(world) == main and "gated" not in h.postland(), "lean-suites runs on in shard 2"
+
+    h.run_state["r-post-2"] = ("done", 1, None)
+    h.evidence[1] = _shard(world.tmp / "ended", "r-post-2", {**shards[1], "lean-suites": "failed"})
+    (h.evidence[1] / "suites-lean.json").write_text(json.dumps([_part(comp, 1, "failed")]))
+    h.tick()
+    pl = h.postland()
+    assert _main(world) == main and "gated" not in pl and pl["run"] is None and pl["failed"] == tip, world.logs
+    green = pl.get("green") or {}
+    assert green.get("step lean-build") == tip and green.get("step lean-suites") != tip and green.get(f"suite {comp}") != tip
+    assert pl["red"][f"suite {comp}"]["base"] != tip, pl["red"]
+
+
 def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
     """ci's `--steps` baseline counts once it names every step on the merge gate: circuit-check, off it, needn't be among them."""
     from research import queue as Q
@@ -294,12 +429,109 @@ def test_main_follows_a_baseline_of_every_step_on_the_gate(world, monkeypatch):
     state = h.q.load_state()
     state["drive"]["postland"]["run"] = None
     h.q.save_state(state)
-    assert Q.baseline(h.q, tip, "ci", ",".join(GATED[:-1])) == 0
-    h.tick()
+    with pytest.raises(QueueError, match=f"--steps leaves out {GATED[-1]}, on the merge gate"):
+        Q.baseline(h.q, tip, "ci", ",".join(GATED[:-1]))
     assert _main(world) == main
-    assert Q.baseline(h.q, tip, "ci", ",".join(GATED)) == 0
+    assert Q.baseline(h.q, tip, "ci", ",".join(GATED)) == 0 and _main(world) == tip
     h.tick()
-    assert _main(world) == tip and any("(ci baseline)" in x for x in world.logs), world.logs
+    assert h.postland()["verified"] == tip, world.logs
+
+
+def test_a_tick_takes_a_main_moved_beside_it_as_verified_and_follows_what_it_brought_once(world, monkeypatch):
+    """A `main` moved beside drive (`research queue baseline` or `promote`) is `verified` from the next tick on, as drive's own
+    promotion leaves it: the red records at or below it of steps on the merge gate end (a `suite` one too, the gate holding
+    pytest and lean-suites), one off the gate stays, keeping as its newest green the old `verified` that passed it, and what
+    `main` brought follows as a landing on `main` does, once."""
+    from research import queue as Q
+
+    h = _gated(world, monkeypatch)
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    state = h.q.load_state()
+    red = lambda key: {"tip": tip, "base": main, "step": key.split(" ")[1], "culprit": None, "first": "x"}  # noqa: E731
+    state["drive"]["postland"]["red"] = {k: red(k) for k in ("step lean-audit", "suite pkg::test_y", "step circuit-check")}
+    h.q.save_state(state)
+    assert Q.baseline(h.q, tip, "ci") == 0 and h.after == []
+    h.tick()
+    pl = h.postland()
+    assert pl["verified"] == tip and pl["verified_as"]["steps"] == GATED and pl["pending"] == [] and pl["main"] == tip
+    assert list(pl["red"]) == ["step circuit-check"] and pl["green"]["step circuit-check"] == main
+    assert pl["green"]["step lean-audit"] == pl["green"]["suite pkg::test_y"] == tip
+    assert h.after == [(main, {tip: ""})] and pl["run"]["ids"] == ["r-post-0"]
+    h.tick()
+    assert h.after == [(main, {tip: ""})] and h.postland()["verified"] == tip
+
+
+def test_a_tick_whose_promotion_finds_main_moved_past_it_meanwhile_leaves_main_there(world, monkeypatch):
+    """ci's baseline moves `main` while a tick runs, past the commit that tick moves it to: the tick's push is refused, which is
+    no failure of the tick and moves `main` nowhere back; the next tick takes `main` and follows what it brought once."""
+    from research import queue as Q
+
+    h = Review(world, monkeypatch, land_into="checked")
+    main = _main(world)
+    one = _landed(h, {"a.txt": "1\n"})
+    world.gh.put(2, world.change({"b.txt": "2\n"}))
+    h.review(2)
+    assert h.tick().startswith("landed #2"), world.logs
+    two = _checked(world)
+    _pass(h)                                                    # the run of `one`: this tick moves `main` to it
+    revert_reds = h.d._revert_reds
+
+    def baseline_meanwhile(drive: dict) -> None:
+        revert_reds(drive)
+        assert Q.baseline(h.q, two, "ci") == 0
+
+    monkeypatch.setattr(h.d, "_revert_reds", baseline_meanwhile)
+    h.tick()
+    assert _main(world) == two and h.postland()["verified"] == one and h.after == []
+    assert any(f"`main` is at {two[:12]} already, which holds {one[:12]}" in x for x in world.logs), world.logs
+    assert not any("was refused" in x for x in world.logs), world.logs
+    monkeypatch.setattr(h.d, "_revert_reds", revert_reds)
+    h.evidence = []                                             # the run of `two` has passed nothing yet
+    for _ in range(2):
+        h.tick()
+        assert h.postland()["verified"] == two and h.after == [(main, {one: "", two: ""})]
+
+
+def test_promote_moves_main_once_every_shard_ended_passing_the_gate_and_never_before(world, monkeypatch, capsys):
+    """`research queue promote` moves `main` to the after-landing run's tip as soon as the run ends, not at drive's next tick
+    (up to its 2 min sleep and an hour's tick later): nothing while a shard runs or once a step on the gate failed, `main` there
+    once every shard passed them.  It reads drive's state and writes none; drive's next tick follows what `main` brought."""
+    from research import queue as Q
+
+    h = _gated(world, monkeypatch)
+    h.d.after_landing_shards = 3
+    h.d.records_artifact = lambda rid: f"art:{'a' * 64}@{'b' * 64}" if rid == "r-post-0" else None
+    main = _main(world)
+    tip = _landed(h, {"a.txt": "1\n"})
+    h.run_state["r-post-0"] = ("done", 0, None)                 # circuit-check's records step
+    h.tick()
+    h.tick()
+    shards = ["r-post-1", "r-post-2", "r-post-3"]
+    assert h.postland()["run"]["ids"] == shards and _main(world) == main
+
+    def promote(out: str) -> None:
+        assert Q.promote(h.q, states=h.d.states, evidence=h.d.evidence) == 0
+        assert out in capsys.readouterr().out
+
+    def ended(k: int, passed: list[str], failed: str | None = None):
+        h.run_state[shards[k]] = ("done", 1 if failed else 0, None)
+        return _steps_run(world.tmp / f"{k}-{failed}", shards[k], {**dict.fromkeys(passed, "passed"),
+                                                                    **({failed: "failed"} if failed else {})})
+
+    state = h.q.state_path.read_bytes()
+    rest = [s for s in h.posted[-1][1].split(",") if s not in GATED[:7]]          # the last shard's: ratchet-gate, circuit-check
+    h.evidence = [ended(0, GATED[:4]), ended(1, GATED[4:7])]
+    promote("r-post-3 still runs")
+    h.evidence.append(ended(2, [s for s in rest if s != GATED[-1]], GATED[-1]))
+    promote("it didn't pass every step on the merge gate")
+    assert _main(world) == main
+    h.evidence[2] = ended(2, rest)
+    promote(f"`main` fast-forwarded from {main[:12]} to {tip[:12]}, whose after-landing run r-post-1 r-post-2 r-post-3 passed")
+    assert _main(world) == tip and h.q.state_path.read_bytes() == state
+    promote("already: nothing to move")
+    h.tick()
+    assert h.postland()["verified"] == tip and h.after == [(main, {tip: "r-post-1 r-post-2 r-post-3"})]
 
 
 def test_a_main_pushed_outside_drive_is_merged_into_checked_and_main_follows_once_that_is_checked(world, monkeypatch):

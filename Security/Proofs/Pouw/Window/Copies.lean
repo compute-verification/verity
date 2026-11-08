@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Pouw.Window
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The service's units read the tile, not the session: its wrong sets are copy-closed
@@ -9,7 +11,7 @@ The deployed window's units are the `N` tiles in each of its sessions (`serviceL
 tiles' statements read in every session (`UnitStmts.copies`), since an instance's public inputs are its tile `t` and the
 window's common words, never the session. So at every transcript a tile is wrong in every session or in none
 (`wrongCopyClosed_copies`), and on such statements PoUW's family `harmSets W_ref ε ∧ CopyClosed`, at which it reads
-`WindowEps` and `ServiceEscapes` gives `η = 0`, holds of a wrong set exactly when `harmSets` does
+`WindowDelta` and `ServiceEscapes` gives `η = 0`, holds of a wrong set exactly when `harmSets` does
 (`harmSets_copyClosed_iff`).
 -/
 

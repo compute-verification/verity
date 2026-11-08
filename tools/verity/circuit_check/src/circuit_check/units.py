@@ -53,7 +53,7 @@ body.  A target that misses, through such a binding or one whose record counted,
 (`cli._prepare`), so the bodies they share are built once, as a full build builds them, and no target is built or described
 here one after another; the target is held to the descriptor its binding's build gave or its record holds, and one that
 differs is its check's error.  A primitive its id makes, which has no body, is made here (`built_here`), and so is each
-Boolean Definition a binding's build registered (`made_words`, or its module imported): C-Flock lowers a word primitive by the
+Boolean Definition a binding's build registered (`made_words`, or its module imported): Flock lowers a word primitive by the
 first one registered of that word, so a check forked from here finds the one a full build's would.  A binding whose process
 dies fails the run, as it would kill a build in one process.  When every binding was built apart, the task list's entry is
 stored as a full build stores it, its reads every binding's share and this process's own; it and each record are digested
@@ -69,7 +69,7 @@ every binding's record counts, a ``--binding`` run makes only that binding's roo
 them, held to the ids the record lists (`plan`'s ``binding``).  Beside each binding's root ids the record holds what making
 them did beyond them, and so for working out the Call families (`_noting`: each Definition registered and each in-tree module
 imported, in order); the run does that in each one's place, in catalog order (`_replay`), so its registry and its modules are
-a full plan's: C-Flock lowers a word primitive by its registered Boolean Definition, which another binding's roots can be the
+a full plan's: Flock lowers a word primitive by its registered Boolean Definition, which another binding's roots can be the
 first to register (a ``MoeSelectBf16x{E}``'s, made per E).
 
 Every binding's record is still read so, and the roots record holds every binding file's digest, so one binding's edit
@@ -435,11 +435,9 @@ def _lookup(cache: Path, repo: Path, e: Entry) -> tuple[dict, dict[str, list[str
 
 def _took(record: Path) -> float | None:
     """The CPU seconds of the build that last stored the record at ``record``, kept beside it (`store`); None when none was."""
-    try:
-        with CC.internal():
-            return float(record.with_suffix(".seconds").read_text())
-    except (OSError, ValueError):
-        return None
+    seconds = record.with_suffix(".seconds")
+    with CC.internal():
+        return float(seconds.read_text()) if seconds.is_file() else None
 
 
 @dataclass
@@ -735,7 +733,7 @@ def _word_steps(plan: Plan) -> Iterator[list]:
 def made_words(plan: Plan, steps: Iterable[list] | None = None) -> int:
     """Made here: each Boolean Definition (a ``word`` and a ``build``) that a binding's build registered where this process
     didn't build it (``words``: built apart, or its record's) and that this process doesn't hold, from the record that reaches
-    it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  C-Flock lowers a
+    it (`make`), else by importing the module that holds it (`_words`: one it registers as it is imported).  Flock lowers a
     word primitive by the build of the first registered Boolean Definition of that word (`verity_flock.ir_lower`'s
     ``_boolean_build``), so each check forked from here finds the build a full build's would.  ``steps``: those a full plan
     took (`slices`), else `_word_steps`; each one taken is in ``plan.words``, with whether an object built here already

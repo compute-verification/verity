@@ -1,8 +1,42 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.LamDeployedTight
 public import Proofs.Flock.Claims.Recursion.BitsLin2
 public import Proofs.Flock.Claims.Recursion.DeployedCounts
+public import Proofs.Flock.Claims.Recursion.LamDeployed
+public import Proofs.Flock.Claims.Recursion.LamDeployedTight
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Route 2C's split bound at the deployment's sizes: `κ ≤ 2^{−167.7}` and `ε ≤ 2^{−174.95}`
@@ -304,7 +338,8 @@ theorem kappa_eps_deployed (rel : _root_.Flock.Readable.Parsed → _root_.Flock.
 
 /-- **The deployment's sizes at a statement `x`**, `kappa_eps_deployed`'s side conditions on `x`: its inner statement
 is one plain table, each V\* part it stages is one `--zk` table, and its inner setup has at most `2^32` calls. The
-parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). -/
+parts' count is none: the verifier refuses more than `RecBudget.MAX_STATEMENTS = 16` (`nS_le_of_partIn`). Every
+statement the compiled verifier accepts is at these sizes (`sizesAt_of_run_acc`). -/
 def SizesAt (b : Brings) (x : Msg) : Prop :=
   (∃ s spec sts, FlockDeploy.PlainIn (xIOf x) s spec sts ∧ sts.size = 1) ∧
     (∀ j < nS x, ∃ i spec' sts', PartIn (staged b.st x (pick b.st x j) j) i spec' sts' ∧ sts'.size = 1) ∧

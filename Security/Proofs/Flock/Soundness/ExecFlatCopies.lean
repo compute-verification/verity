@@ -2,7 +2,12 @@ module
 
 public import Proofs.Flock.Soundness.ExecFlatClass
 public import Proofs.Flock.Soundness.Types.ProgramPlaces
-public import Properties.Flock.Circuit.Keys
+public import Proofs.Flock.Soundness.ExecSetup
+public import Proofs.Flock.Soundness.ExecTyped
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecTemplateSetup
+import Proofs.Flock.Soundness.SparseRows
+import Proofs.Flock.Soundness.Types.Parts
 
 /-!
 # A typed flat class's input copies and forced-zero rows (1e for flat classes)
@@ -1052,7 +1057,7 @@ theorem setupH_flatCopy (g : Fin st.c.unitRange.count)
           ite_eq_right (by have := j.isLt; intro he; exact hlt (he ▸ this))]
     rw [hZ.block_eq hz o, flatZero_block ht h hr regs g hz o]
 
-/-- **A flat class's table class** (the soundness lane's `TableClass`), from the statement `Stmt.setupH` accepted: its
+/-- **A flat class's table class** (the soundness model's `TableClass`), from the statement `Stmt.setupH` accepted: its
 unit slots, the unit's composed rows placed at each (`setupH_flatPlacement`), each input's copy position
 (`setupH_flatCopy`) and the slots' forced-zero rows (`setupH_flatZero`). -/
 def setupH_flatTableClass : TableClass ((setupH_flatLayout ht h hr).2.2.model regs) where

@@ -1,10 +1,22 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.DecodeZL.Wire
-public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
 public import Proofs.Flock.Soundness.Discharge.Exec.Verdict
-public import Proofs.Flock.Soundness.Discharge.Exec.LiveOn
 public import Proofs.Flock.Soundness.Discharge.Integrate.Headline
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The message half of R11b, and the decoder at the headline: statements
@@ -21,7 +33,7 @@ verdict accepts. The statements here:
   parameter of the headline, and at a `wr` constant at an accepted transcript `DecodesOn` is false (an outcome with no
   rounds can't play `repC`, which starts with a coin); `RecordsLive` says `wr` is the challenger's record of the
   outcome.
-* `decAt`, `opnAt`: the decoder and the openings at draw `S`, read off the table `T S R` and setupH's statement there.
+* `decAt`, `opnAt`: the decoder and the openings at sample `S`, read off the table `T S R` and setupH's statement there.
 * `DecodesOnExec`: `DecodesOn` at the plain headline's tables, the decoder `decAt`, `one := true`, no final messages,
   `capOfRoot`.
 -/
@@ -45,7 +57,7 @@ def ZLCarries : Prop :=
     Carries (wZL m kLog) (zcShape 𝔽 m ++ lcShape 𝔽 kLog) (.dom d :: (zcFrames m dig cap zp ++ lcFrames kLog lp))
       (zcMsgs m zp ++ lcMsgs kLog lp) []
 
-/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, PROTOCOL.md §8). -/
+/-- **The lengths a decoded proof has** (`decodeProof`'s `vecExact` checks, `Flock.Proof`). -/
 structure ProofSizes (sh : Shape) (p : Proof) : Prop where
   r1ab : p.zerocheck.round1ab.size = 64
   r1c : p.zerocheck.round1c.size = 64
@@ -96,7 +108,7 @@ def TagsOk (I : Inputs) : Prop :=
 variable {n mPts : ℕ} {Reg : Type}
 
 /-- **`wr` is the challenger's record of the live session**: whenever flock-verify accepts what `wr` writes for the
-outcome `o` at draw `S`, the record carries the draw `dj S`, the proof files are `o`'s, and the record decodes to a
+outcome `o` at sample `S`, the record carries the sample `dj S`, the proof files are `o`'s, and the record decodes to a
 session whose table's `root_B`, link points and rep streams' rounds are `o`'s. -/
 def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (wr : Finset (Fin n) → Reg → LiveOut mPts → Exec.Transcript) : Prop :=
@@ -108,7 +120,7 @@ def RecordsLive (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
         sess.streams.find? (fun x => x.name == toString spec.tables[0]! ++ toString "/rep" ++ toString r.val) =
           some s ∧ s.rounds.toList = pick (o.rep0, o.rep1) r
 
-/-- **The challenger's draw at `S`**: it proves `S`, and setupH sets up at it with `mPts` link points. -/
+/-- **The challenger's sample at `S`**: it proves `S`, and setupH sets up at it with `mPts` link points. -/
 def DrawOk (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Finset (Fin n)) : Prop :=
   (∀ D, Draw.UnitDraw.ofJson (dj S) = .ok D → ∀ u ∈ S, u.val ∈ D.proved) ∧
     ∀ st, Stmt.setupH I.tags I.circuitFile I.publicFile I.coins I.tables (some (dj S)) I.partition I.program = .ok st →
@@ -118,13 +130,13 @@ def DrawOk (I : Inputs) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ) (S : Fi
 noncomputable def nX (T : Finset (Fin n) → Reg → TabSpec mPts) (S : Finset (Fin n)) (R : Reg) : ℕ :=
   (Model.extraClaims (T S R).S (T S R).ptLocal mPts (fun _ _ => (0 : 𝔽))).length
 
-/-- **The decoder at draw `S`**: the zerocheck's and lincheck's wires, the opening's, then Ligerito's, at the table's
+/-- **The decoder at sample `S`**: the zerocheck's and lincheck's wires, the opening's, then Ligerito's, at the table's
 dimensions, number of claims and schedule. -/
 noncomputable def decAt (T : Finset (Fin n) → Reg → TabSpec mPts) (wOP : ℕ → List (List Wire))
     (wLIG : Accounting.Schedule → List (List Wire)) (S : Finset (Fin n)) (R : Reg) : ℕ → ByteArray → List Msg :=
   decOf (wZL (T S R).S.m (T S R).S.kLog ++ (wOP (nX T S R + 2) ++ wLIG (T S R).sch))
 
-/-- **The openings at draw `S`**: `opnOf` at the statement setupH sets up at the record's draw `dj S` and its `fast100`
+/-- **The openings at sample `S`**: `opnOf` at the statement setupH sets up at the record's sample `dj S` and its `fast100`
 schedule, on the first two proof files. -/
 noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Inputs) (dj : Finset (Fin n) → Lean.Json)
     (S : Finset (Fin n)) (R : Reg) (proofs : Array ByteArray) : Opens 𝔽 Dig × Salts (List UInt8) :=
@@ -134,8 +146,8 @@ noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Input
     | none => default
   | .error _ => default
 
-/-- **The decoder is right at the headline's draws** (R11b): given the opening's and Ligerito's chunk lemmas, the
-tags, `wr` the challenger's record and the challenger's draws proving their units at `mPts` link points, `DecodesOn`
+/-- **The decoder is right at the headline's samples** (R11b): given the opening's and Ligerito's chunk lemmas, the
+tags, `wr` the challenger's record and the challenger's samples proving their units at `mPts` link points, `DecodesOn`
 holds at the plain headline's tables with the decoder `decAt`, single coins as field elements, no final messages and
 `capOfRoot`. -/
 def DecodesOnExec : Prop :=

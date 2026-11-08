@@ -1,7 +1,7 @@
-"""A draw's coins: the auditor's challenger's, and the one-stage draws the verifier makes from them.
+"""A sample's coins: the auditor's challenger's, and the one-stage samples the verifier makes from them.
 
 The verifier samples no coins of its own. Every coin of a sample is the challenger's (`ChallengerCoins`), read from its log
-after the prover's commitments are registered, with no derivation and no beacon, by exact samplers (`OwnRandomness`).  `draw_first` draws a one-stage sampling design's proof blocks as the Lean verifier's
+after the prover's commitments are registered, with no derivation and no beacon, by exact samplers (`OwnRandomness`).  `draw_first` samples a one-stage sampling design's proof blocks as the Lean verifier's
 `Flock.Draw.drawWith` does from the same bytes, and `closure_of` widens a work sample by the verifier's closure map.  A
 sampled proof block's outcome is final: nothing resamples.
 
@@ -20,12 +20,13 @@ from __future__ import annotations
 
 from collections.abc import Callable, Mapping, Sequence
 from fractions import Fraction
-from typing import Any
+from typing import Any, NamedTuple
 
 from verity.ml.randomness import uniform_from_words
 
-from .challenger import (COIN_BYTES, WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify,
-                         live_reason, record_many, trusted_session_of, withheld_on)
+from .challenger import (COIN_BYTES, MAX_COINS, MAX_HELLOS, MAX_LEDGER_LINES, MAX_LOG_LINES, MAX_PATH, MAX_PINS,
+                         WITHHELD, ChallengerKey, CoinError, LiveCommitment, LiveOpening, LiveRecord, Verify, live_reason,
+                         record_many, trusted_session_of, withheld_on)
 from .one_stage.draw import digits, strata_problem
 from .remote import MAX_BATCH
 
@@ -158,7 +159,7 @@ class ChallengerCoins:
     index, `after` and the openings), from which the verifier replays the bytes (`challenger_stream`, `read_reason`,
     and `coins_reason`, which the Lean verifier's run checks). It
     refuses a commitment whose coins are opened already, a read before any commitment, and every read after a coin
-    fails: a retry never redraws.
+    fails: a retry never resamples.
 
     On a withheld session (`remote.RemoteChallenger.withheld`) a read uses each coin's raw bytes as the challenger gave
     them, and the segments hold those until the session closes; `settle` then puts in each coin's full opening, checked
@@ -303,9 +304,9 @@ def coins_reason(coins: Any, window: str, after: bytes, read: bytes, verify: Ver
     copy of main's first-parent line `main` (`trusted_session_of`, through `pinned_session`). `window` is the root the
     verifier reads from the challenger's signed open of the registration's window (`registration.check`'s
     `window_root`), never the record's or the evidence's. So a prover picks no window: coins another window's session
-    released after the same commitment are refused, and a prover with sessions in several windows gets one draw, not
+    released after the same commitment are refused, and a prover with sessions in several windows gets one sample, not
     the best of them. The session must be a withheld one (`withheld_on`), as `draw_coins`'s. `service.Stream.outcome`
-    hands the evidence to the Lean verifier, whose run refuses a draw from the challenger without evidence that holds
+    hands the evidence to the Lean verifier, whose run refuses a sample from the challenger without evidence that holds
     (`Run.run`'s `select`, code `coins`)."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["key", "ledger", "main", "pins", "segment", "session"]:
         return COINS_FORM
@@ -331,7 +332,7 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     open root) under `key` released after `after`, read from `coins`, `{ledger, main, pins, segment, session}`, in order.
     Unlike `coins_reason`'s evidence, this carries no key: the key, the window and the family are the verifier's, so a
     prover can't sign a ledger of its own. The session must be a withheld one (`withheld_on`): its challenger released
-    no root, salt or path before it closed. One-stage's check reads its draw's coins through it (`OneStage.coinsOf`).
+    no root, salt or path before it closed. One-stage's check reads its sample's coins through it (`OneStage.coinsOf`).
     Raises `CoinError`."""
     if not isinstance(coins, Mapping) or sorted(coins) != ["ledger", "main", "pins", "segment", "session"]:
         raise CoinError(DRAW_FORM)
@@ -345,17 +346,54 @@ def draw_coins(key: ChallengerKey, window: str, label: str, after: bytes, coins:
     return challenger_stream(commitment, segment, after, roots.get(label, ()))
 
 
+class Limits(NamedTuple):
+    """Bounds on the sizes of a sample's coin evidence (`coins_within`), each defined once in `challenger`, whose device
+    code refuses past each (`remote`, "The device's caps")."""
+    log: int
+    hellos: int
+    ledger: int
+    pins: int
+    openings: int
+    path: int
+
+    def form(self) -> str:
+        """The refusal of evidence past these."""
+        return (f"a draw's coin evidence holds at most {self.log} release log lines, {self.hellos} refused hellos, "
+                f"{self.ledger} ledger lines, {self.pins} pins log lines and {self.openings} openings, each opening's "
+                f"path at most {self.path} digests")
+
+
+LIMITS = Limits(MAX_LOG_LINES, MAX_HELLOS, MAX_LEDGER_LINES, MAX_PINS, MAX_COINS, MAX_PATH)
+
+
+def coins_within(coins: Any, limits: Limits = LIMITS) -> bool:
+    """Lean `Challenger.withinAt`: every size the evidence of a sample's coins holds is within `limits`, as v2 requires of
+    its evidence's ``coins`` at `LIMITS` before it reads anything else of it (`OneStageZk.evidenceOf`): the session's
+    release log lines and refused hellos, the ledger's and the pins log's lines, the segment's openings and each
+    opening's path. A value absent or not a list counts as none: what reads it refuses it."""
+    def get(j: Any, k: str) -> Any:
+        return j.get(k) if isinstance(j, Mapping) else None
+
+    def size(j: Any) -> int:
+        return len(j) if isinstance(j, list) else 0
+    session, openings = get(coins, "session"), get(get(coins, "segment"), "openings")
+    return (size(get(session, "log")) <= limits.log and size(get(session, "hellos")) <= limits.hellos
+            and size(get(coins, "ledger")) <= limits.ledger and size(get(coins, "pins")) <= limits.pins
+            and size(openings) <= limits.openings
+            and all(size(get(o, "path")) <= limits.path for o in (openings if isinstance(openings, list) else ())))
+
+
 def closure_of(closure: Mapping[int, Sequence[int]], units: Sequence[int]) -> list[int]:
     """A sample's closure under the verifier's closure map (Lean `Flock.Draw.closureOf`): every proof block in a sampled proof block's
-    closure that is not itself drawn, ascending."""
+    closure that is not itself sampled, ascending."""
     drawn = set(units)
     return sorted({c for u in units for c in closure.get(u, ()) if c not in drawn})
 
 
 def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: int,
                closure: Mapping[int, Sequence[int]] | None = None) -> dict[str, Any]:
-    """A sample under a one-stage sampling design: the one-stage draw object over the positions [0, population) (`one_stage.draw`;
-    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` draws it from
+    """A sample under a one-stage sampling design: the one-stage sample object over the positions [0, population) (`one_stage.draw`;
+    `check_draw` holds it to the registration and the sampling design), as the Lean verifier's `Flock.Draw.drawWith` samples it from
     the same bytes: `subset` and `bernoulli` on one stream (`bernoulli` at the sampling design's NUM/DEN as written), `stratified`
     and `work` one stream per stratum, in order, each stratum's `subset k_s n_s` mapped to the stratum's proof blocks.  With the
     verifier's closure map (a work sampling design only, as `flock-verify draw --closure`), the sample carries its `closure`
@@ -403,5 +441,6 @@ def _nth(ranges: Sequence[Sequence[int]], j: int) -> int:
     raise IndexError(j)
 
 
-__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "OwnRandomness", "SEGMENT_FORM", "Segment",
-           "challenger_stream", "closure_of", "coins_reason", "draw_coins", "draw_first", "read_reason"]
+__all__ = ["COINS_FORM", "ChallengerCoins", "DRAW_FORM", "LIMITS", "Limits", "MAX_HELLOS", "MAX_LEDGER_LINES", "MAX_PATH",
+           "MAX_PINS", "OwnRandomness", "SEGMENT_FORM", "Segment", "challenger_stream", "closure_of", "coins_reason",
+           "coins_within", "draw_coins", "draw_first", "read_reason"]

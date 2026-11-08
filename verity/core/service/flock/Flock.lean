@@ -49,6 +49,10 @@ public import Flock.RecAlgebra
 public import Flock.RecResiduals
 public import Flock.RecOpening
 public import Flock.HmRow
+public import Flock.ReadNet.Sha
+public import Flock.ReadNet.RowSeg
+public import Flock.ReadNet.Leaf
+public import Flock.ReadNet.Select
 public import Flock.Desc
 public import Flock.RecVStar
 public import Flock.ProvedScope
@@ -76,8 +80,10 @@ public import Flock.DeriveCheck
 public import Flock.Rows
 public import Flock.Qword
 public import Flock.Program
+public import Flock.Gate
 public import Flock.Sigma
 public import Flock.Extract
+public import Flock.Evaluated
 public import Flock.Qcall
 public import Flock.Fuel
 public import Flock.Firewall
@@ -94,6 +100,8 @@ public import Flock.Firewall.Link
 public import Flock.Firewall.Level0
 public import Flock.Firewall.Hello
 public import Flock.Firewall.Session
+public import Flock.Firewall.Salts
+public import Flock.Firewall.Values
 public import Flock.Firewall.Skeleton
 public import Flock.Firewall.Drive
 public import Flock.Witness

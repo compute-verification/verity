@@ -244,7 +244,7 @@ def swa_requests(case: str, kind: str, seed: int) -> dict[str, Any]:
 def c128_edge_positions(case: str, n: int, rng) -> np.ndarray:
     """n int64 positions: each giving q = (position + 1) // 128 at the lane counts' edges (0, 1, the block and its neighbours, the
     row's last lanes, past the width where the row holds the width) at both ends of its R, the int64 ends (INT64_MAX - 1 and 2^40,
-    whose rows are full, where the row holds the width; INT64_MAX's position + 1 wraps negative), then draws."""
+    whose rows are full, where the row holds the width; INT64_MAX's position + 1 wraps negative), then samples."""
     st = statics(case, "edge")
     W, R, BS, NB = st["W"], st["R"], st["BS"], st["NB"]
     top = min(W, BS * NB)

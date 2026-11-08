@@ -67,7 +67,7 @@ def test_the_ports_own_merge_ports_the_lean_checked_added_below_it(world, tmp_pa
     main = _move_main(world, {"Lib/Old.lean": old, "Lib/lakefile.toml": 'name = "lib"\n'})
     world.gh.put(1, port)
     world.gh.put(2, world.change({"b.txt": "b2\n"}))
-    members, entries = world.queue(nonlean_first=False).sync()
+    members, entries = world.queue().sync()
     assert [m.pr for m in members] == [1, 2], {n: e.why for n, e in entries.items()}
     one = members[0].commit
     assert _show(world, one, "Lib/Old.lean") == _port(old)
@@ -101,6 +101,43 @@ def test_a_pr_adding_lean_made_before_the_port_above_a_ported_base_gets_it_porte
     assert _git(world.origin, "rev-parse", f"{one}^1", f"{one}^2").split() == [main, head]
     assert _git(world.origin, "log", "-1", "--format=%B", one) == f"Queue: #1 change 1\n\nPR: #1\nHead: {head}\nOwner: lane-1"
     assert _show(world, "refs/heads/next", "Lib/New.lean") == _port(new)
+
+
+def test_a_merge_changing_nothing_the_codemod_reads_onto_a_ported_base_runs_no_codemod(world, tmp_path):
+    """The codemod's run over the whole tree takes about 20 s on drive's control pod, and a sync merges hundreds of times: a
+    merge that changes no `.lean` file, Lake file or the port's tooling onto a tree on the module system takes that tree's
+    porting as it is, and only the merge that brings Lean runs the codemod."""
+    argv, runs = tmp_path / "argv", tmp_path / "runs"
+    _move_main(world, {**_tooling(argv, f"open({str(runs)!r}, 'a').write('x')\n"),
+                       "Lib/Old.lean": "module\n\npublic import Init\n"})
+    new = "import Lib.Old\n"
+    world.gh.put(1, world.change({"a.txt": "a1\n"}))
+    world.gh.put(2, world.change({"Lib/New.lean": new}))
+    members, entries = world.queue().sync()
+    assert [m.pr for m in members] == [1, 2], {n: e.why for n, e in entries.items()}
+    assert runs.read_text() == "x", world.logs
+    assert _show(world, members[1].commit, "Lib/New.lean") == _port(new)
+
+
+def test_a_merge_made_again_onto_the_same_tree_takes_its_recorded_porting_without_a_codemod_run(world, tmp_path):
+    """A rebuild of `next` in a later tick (a new process: no codemod run cached) merges each member again; one merged onto
+    the tree it had takes its recorded merge, its porting and pins too, and runs no codemod; the log names the ported files
+    as the merge did."""
+    from research import queue as Q
+
+    argv, runs = tmp_path / "argv", tmp_path / "runs"
+    _move_main(world, {**_tooling(argv, f"open({str(runs)!r}, 'a').write('x')\n"),
+                       "Lib/Old.lean": "module\n\npublic import Init\n"})
+    world.gh.put(1, world.change({"Lib/New.lean": "import Lib.Old\n"}))
+    members, _ = world.queue().sync()
+    said = [s for s in world.logs if "module system" in s]
+    assert runs.read_text() == "x" and said
+    Q._codemod.cache_clear()
+    _git(world.origin, "update-ref", "-d", "refs/heads/next")
+    again, _ = world.queue().sync()
+    assert runs.read_text() == "x" and [s for s in world.logs if "module system" in s] == said * 2
+    assert _git(world.origin, "rev-parse", f"{again[0].commit}^{{tree}}") == _git(world.origin, "rev-parse",
+                                                                                   f"{members[0].commit}^{{tree}}")
 
 
 def test_each_pin_recording_a_ported_file_records_its_ported_digest_and_keeps_every_other_byte(world, tmp_path):

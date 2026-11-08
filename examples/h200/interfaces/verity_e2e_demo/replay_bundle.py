@@ -14,8 +14,8 @@ in the payload and holds only public structure, hiding commitments and paths bes
 * ``target``: the card's binding of the templates' dot, ``{binding, card, dot}`` (`BINDINGS`: ``GEMM_SM90_S8`` for the
   H200's INT8 and ``GEMM_HOPPER`` for its BF16, ``GEMM_SM120_S8`` for the RTX PRO 6000; ``BOOLEAN_…`` the same cards' dots
   on bits, which the Boolean-profile templates bind). Every unit's template binds that dot, as circuits resolves the binding.
-* ``draw``: the sampled proof blocks (global indices), the law, and ``source``: ``live`` (the proof system's sample of record, with
-  ``receipt``, the challenger's live-coin receipt, which a live sample must carry) or ``fixture`` (chosen by hand). The law is
+* ``draw``: the sampled proof blocks (global indices), the sampling design, and ``source``: ``live`` (the proof system's sample of record, with
+  ``receipt``, the challenger's live-coin receipt, which a live sample must carry) or ``fixture`` (chosen by hand). The sampling design is
   the window's registered one, fixed before any coin, and a live sample's ``record`` (the verifier's sample object, when it
   carries one) is a sample under it over the registered population, of exactly the bundle's units (`check` against the
   registration).
@@ -1109,7 +1109,7 @@ def check(doc: Mapping[str, Any], payload: bytes, *, registration: Mapping[str, 
 #: a step's commit-slots roots registered before a coin selects its proof blocks (M3): the sample's population is
 #: every (slot, layout unit) of the step, and each sampled proof block is proved from a one-member window of its own. ``steps``
 #: (optional, `STEPS_KEY`) names the root of every step of the block a sampled proof block can read (attention's K and V rows at
-#: steps 0 .. the drawn step), ``[{step, root}]``; a registration without it holds every read to the drawn step
+#: steps 0 .. the sampled step), ``[{step, root}]``; a registration without it holds every read to the sampled step
 STEP_FORMAT = "verity/commit-slots-step-registration/v1"
 STEP_KEYS = {"format", "run", "program", "block", "step", "step_root", "slot_roots", "slots", "layout_digest", "context",
              "units_per_slot", "population", "law", "weights"}
@@ -1137,14 +1137,14 @@ def step_registration(com: Commitment, weights: Mapping[str, REG.Registered], la
     return reg
 
 
-def block_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
+def position_of(reg: Mapping[str, Any], index: int) -> tuple[int, int]:
     """A sampled proof block's ``(slot, layout unit)``: index ``slot * units_per_slot + unit``."""
     return divmod(int(index), int(reg["units_per_slot"]))
 
 
 def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], index: int, *,
                registration: Mapping[str, Any] | None = None) -> dict[str, str]:
-    """`check` of a sampled proof block's bundle, then the bundle held to the step registration ``reg`` at drawn ``index``:
+    """`check` of a sampled proof block's bundle, then the bundle held to the step registration ``reg`` at sampled ``index``:
     ``{key: why}``, empty when it holds. Its commitment is the registered step (root, slot roots, layout, context), it is
     one proof block whose outputs open in the layout unit ``index`` names, every row opens against the registered step
     or a registered value whose root ``reg`` names, and each step row's slot root is the registered one. A row made of
@@ -1174,7 +1174,7 @@ def check_step(doc: Mapping[str, Any], payload: bytes, reg: Mapping[str, Any], i
         bad["step:root"] = "its commitment does not hold the registered step root"
     if len(doc["units"]) != 1:
         return {**bad, "step:units": f"{len(doc['units'])} units, not the one drawn proof block"}
-    unit, (slot, lu) = doc["units"][0], block_of(reg, index)
+    unit, (slot, lu) = doc["units"][0], position_of(reg, index)
     c = unit["coords"]
     outs = {s["unit"] for r in unit["rows"] if r["kind"] == "out"
             for s in ([r["slot"]] if r["slot"] is not None else [q["slot"] for q in r.get("reads") or () if q["kind"] == "step"])}

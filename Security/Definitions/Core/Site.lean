@@ -2,7 +2,9 @@ module
 
 public import Definitions.Accounting.Device
 public import Definitions.Core.DeviceFigures
+public import Definitions.Core.Period
 public import Mathlib.Data.Finset.Lattice.Fold
+public import Definitions.Core.Compiler
 public import Mathlib.Data.List.Perm.Basic
 public import Mathlib.Data.List.Nodup
 public import Mathlib.Data.NNRat.Floor
@@ -28,13 +30,19 @@ counts are public.
   (`Site.Boundary`), and a link is certified when a certifier is at one of its ends (`Site.Certified`).
 
 The Site is folded from an append-only log, **the registration** (`Verity.Registration`), whose entries each have a
-kind (`Registration.Entry`): today the site entry (`Registration.Entry.site`), which adds sheets, locations and links
-(`Site.Entry`); θ and the builder `B` are the registration's other kinds of entry. Each entry names the head of the log
-it follows (`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the
-head is a digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), and a log is
-valid when each entry is valid against the Site and head of the prefix before it (`Registration.Valid`). An entry is
-checked as a whole (`Registration.Entry.Valid`, a site entry's own checks being `Site.Entry.Valid`), and refused by the
-first check it fails (`Registration.Entry.refusal`):
+kind (`Registration.Entry`): the site entry (`Registration.Entry.site`), which adds sheets, locations and links
+(`Site.Entry`), and the information entry (`Registration.Entry.information`), which registers items
+(`Registration.Item`): θ's values, each by its committed root (`Registration.Theta`), and the builder `B`, the registered
+compiler (`Registration.Builder`, holding `Verity.Compiler`), and the declaration (`Registration.Entry.declaration`),
+which declares a day's circuit (`Registration.Declared`: its program's digest and its block Definitions by descriptor
+key). The log's θ and builder are what its items register (`Registration.theta`, `Registration.builder?`), and the
+registered circuit reads both from it (`Verity.RegisteredCircuit`). Each entry names the head of the log it follows
+(`Registration.Entry.previous`): the digest of the log's last entry, which names its own predecessor, so the head is a
+digest of the whole prefix. The Site of a log is its entries' additions in order (`Site.ofLog`), and a log is valid when
+each entry is valid against the Site and head of the prefix before it, registers no item the prefix registers and
+declares no day the prefix declares (`Registration.Valid`). An entry is checked as a whole (`Registration.Entry.Valid`,
+a site entry's own checks being `Site.Entry.Valid`; an information entry and a declaration add no hardware, so they pass
+them), and refused by the first check it fails (`Registration.Entry.refusal`):
 
 | Refusal | The check |
 | --- | --- |
@@ -48,6 +56,17 @@ first check it fails (`Registration.Entry.refusal`):
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
 | `uncertified` | onsite: every boundary link is certified |
 | `challengerReach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
+
+What an entry registers is held to the log before it (`Registration.Entry.Once`): no information item is registered
+twice (`duplicateInformation`), and no day is declared twice (`duplicateDeclaration`). The log refuses its next entry by
+the entry's own refusal, else by these (`Registration.refusal`).
+
+**Days.** A day is a part of a cut of the monitoring period's span (`MonitoringPeriod`, `TickSpan.Cut`), and a
+declaration names its day by the part's index. The prover declares one circuit a day, before the day's first coin: the
+verifier reads the day's declaration from the log it holds when it samples (`Registration.declared`), and since a second
+declaration of the day is refused, that declaration is the day's for the rest of the log. A window runs its day's
+declared circuit when its span lies within the day's and its program is the one the day declares
+(`Registration.RunsDeclared`).
 
 The digests are parameters (`Registration.Digests`), SHA-512 in the deployed check. The auditor's data sheets, public
 and looked up by SKU, its tolerance around their figures and its keys are the check's own (`Registration.Auditor`). At
@@ -165,11 +184,38 @@ structure Site where
   links : List Site.Link
   deriving DecidableEq
 
+/-- **The builder `B`**, as the information entry registers it: its digest, the format of the advice it compiles, and
+the registered compiler it names (`Verity.Compiler`), whose advice cap `ℓa` is the builder's public cap. -/
+structure Registration.Builder where
+  digest : String
+  advice : String
+  B : Compiler
+
+/-- **An item of an information entry**: a registered value of θ, or the builder. -/
+inductive Registration.Item
+  | theta (t : Registration.Theta)
+  | builder (b : Registration.Builder)
+
+/-- What an item registers, which the log registers once: each θ value by its name, and one builder. -/
+def Registration.Item.key : Registration.Item → String
+  | .theta t => "theta " ++ t.value
+  | .builder _ => "builder"
+
+/-- **A day's declared circuit**: the day, by its index among the parts of the monitoring period's span cut into days
+(`Registration.RunsDeclared`), the digest of the circuit's program, and its block Definitions by descriptor key. -/
+structure Registration.Declared where
+  day : ℕ
+  program : String
+  blocks : List String
+  deriving DecidableEq
+
 /-- **An entry of the registration**, by its kind, naming the head of the log it follows: the site entry, which adds
-hardware to the Site. -/
+hardware to the Site, the information entry, which registers θ's values and the builder, and the declaration, which
+declares a day's circuit. -/
 inductive Registration.Entry
   | site (previous : String) (entry : Site.Entry)
-  deriving DecidableEq
+  | information (previous : String) (items : List Registration.Item)
+  | declaration (previous : String) (declared : Registration.Declared)
 
 /-- **The registration**: the log the Site is folded from, oldest entry first. It is append-only: an entry is checked
 against the log before it, and nothing after it changes it. -/
@@ -180,12 +226,57 @@ namespace Registration.Entry
 /-- The head of the log the entry follows. -/
 def previous : Entry → String
   | .site p _ => p
+  | .information p _ => p
+  | .declaration p _ => p
 
-/-- What the entry adds to the Site: a site entry's sheets, locations and links. -/
+/-- What the entry adds to the Site: a site entry's sheets, locations and links, and nothing for an information entry
+or a declaration. -/
 def added : Entry → Site.Entry
   | .site _ s => s
+  | .information _ _ => {}
+  | .declaration _ _ => {}
+
+/-- What the entry registers besides hardware: an information entry's items. -/
+def items : Entry → List Item
+  | .site _ _ => []
+  | .information _ is => is
+  | .declaration _ _ => []
+
+/-- The circuit the entry declares: a declaration's, and none for the other kinds. -/
+def declared? : Entry → Option Declared
+  | .declaration _ d => some d
+  | .site _ _ => none
+  | .information _ _ => none
 
 end Registration.Entry
+
+namespace Registration
+
+/-- The items the log registers, in the log's order. -/
+def items (log : Registration) : List Item := log.flatMap Entry.items
+
+/-- **θ**, the values the log registers. -/
+def theta (log : Registration) : List Theta := log.items.filterMap fun | .theta t => some t | .builder _ => none
+
+/-- **The builder** the log registers, which names the registered compiler. -/
+def builder? (log : Registration) : Option Builder := log.items.findSome? fun | .builder b => some b | .theta _ => none
+
+/-- The days the log's declarations declare, in the log's order. -/
+def days (log : Registration) : List ℕ := log.filterMap fun e => e.declared?.map (·.day)
+
+/-- **Day `j`'s declared circuit** in the log: the declaration that declares day `j`, the first when a log the check
+refuses declares it twice; `none` when the log declares no circuit for day `j`. -/
+def declared (log : Registration) (j : ℕ) : Option Declared :=
+  log.findSome? fun e => e.declared?.filter (·.day == j)
+
+/-- **A window runs its day's declared circuit**: the days are the cut `days` of the monitoring period `m`'s span into
+`n` consecutive spans, the window's span `w` lies within day `j`'s, and `program` is the program the log declares for
+day `j`. -/
+def RunsDeclared (log : Registration) (m : MonitoringPeriod) {n : ℕ} (cut : m.span.Cut n) (w : TickSpan)
+    (program : String) : Prop :=
+  ∃ j : Fin n, w.Within (cut.part j) ∧ ∃ d ∈ declared log j, d.program = program
+
+end Registration
 
 namespace Site
 
@@ -298,6 +389,8 @@ inductive Refusal
   | owner
   | uncertified
   | challengerReach
+  | duplicateInformation
+  | duplicateDeclaration
   deriving DecidableEq, Repr
 
 end Registration
@@ -422,22 +515,50 @@ variable (D : Digests) (A : Auditor) (c : Composite) (S : Site) (head : String)
 /-- `previous`: the entry follows the log's head. -/
 def Follows (e : Entry) : Prop := e.previous = head
 
-/-- The checks of the entry's kind, against the Site `S` of the log before it: a site entry's (`Site.Entry.Valid`). -/
+/-- The checks of the entry's kind, against the Site `S` of the log before it: a site entry's (`Site.Entry.Valid`). An
+information entry or a declaration adds no hardware, so the hardware checks hold of it whenever they held of the log
+before it. -/
 def Checks : Entry → Prop
   | .site _ s => s.Valid D A c S
+  | .information _ _ => True
+  | .declaration _ _ => True
 
 /-- **A valid entry** of a log for the composite `c`, against the Site `S` of the log before it and its head `head`: it
 follows the head, and passes its kind's checks. -/
 def Valid (e : Entry) : Prop := Follows head e ∧ Checks D A c S e
 
-/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`). -/
+/-- The refusal of the entry's kind: a site entry's (`Site.Entry.refusal`), and none for an information entry or a
+declaration. -/
 def kindRefusal : Entry → Option Refusal
   | .site _ s => s.refusal D A c S
+  | .information _ _ => none
+  | .declaration _ _ => none
+
+/-- `duplicateInformation`: no item the entry registers is one the log before it, `pre`, or the entry itself already
+registers (`Item.key`). -/
+def ItemsOnce (pre : Registration) (e : Entry) : Prop := ((pre.items ++ e.items).map Item.key).Nodup
+
+/-- `duplicateDeclaration`: the entry declares no day the log before it, `pre`, declares. -/
+def DayOnce (pre : Registration) (e : Entry) : Prop := ∀ d ∈ e.declared?, d.day ∉ days pre
+
+/-- What the entry registers is held to the log before it, `pre`: no information item twice, and no day twice. -/
+def Once (pre : Registration) (e : Entry) : Prop := ItemsOnce pre e ∧ DayOnce pre e
 
 instance instDecidableFollows (e : Entry) : Decidable (Follows head e) := by unfold Follows; infer_instance
 
 instance instDecidableChecks : ∀ e : Entry, Decidable (Checks D A c S e)
   | .site _ s => inferInstanceAs (Decidable (s.Valid D A c S))
+  | .information _ _ => inferInstanceAs (Decidable True)
+  | .declaration _ _ => inferInstanceAs (Decidable True)
+
+instance instDecidableItemsOnce (pre : Registration) (e : Entry) : Decidable (ItemsOnce pre e) := by
+  unfold ItemsOnce; infer_instance
+
+instance instDecidableDayOnce (pre : Registration) (e : Entry) : Decidable (DayOnce pre e) := by
+  unfold DayOnce; infer_instance
+
+instance instDecidableOnce (pre : Registration) (e : Entry) : Decidable (Once pre e) := by
+  unfold Once; infer_instance
 
 instance instDecidableValid (e : Entry) : Decidable (Valid D A c S head e) := by unfold Valid; infer_instance
 
@@ -448,13 +569,23 @@ def refusal (e : Entry) : Option Refusal :=
 
 end Entry
 
-/-- **A valid log** for the composite `c`: each entry is valid against the Site and head of the prefix before it. -/
+/-- **A valid log** for the composite `c`: each entry is valid against the Site and head of the prefix before it, and
+registers no item and declares no day the prefix registers or declares, so the log declares each day at most once. -/
 def Valid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) : Prop :=
-  ∀ i (h : i < log.length), log[i].Valid D A c (Site.ofLog (log.take i)) (head D c (log.take i))
+  ∀ i (h : i < log.length),
+    log[i].Valid D A c (Site.ofLog (log.take i)) (head D c (log.take i)) ∧ log[i].Once (log.take i)
 
 instance instDecidableValid (D : Digests) (A : Auditor) (c : Composite) (log : Registration) :
     Decidable (Valid D A c log) := by
   unfold Valid; infer_instance
+
+/-- **The log's refusal of its next entry** `e`: the entry's own (`Entry.refusal`) against the log's Site and head, else
+`duplicateInformation` when it registers an item the log or the entry already registers, else `duplicateDeclaration`
+when it declares a day the log declares, or `none` when the log with `e` is valid. -/
+def refusal (D : Digests) (A : Auditor) (c : Composite) (log : Registration) (e : Entry) : Option Refusal :=
+  (e.refusal D A c (Site.ofLog log) (head D c log)).or
+    (if ¬e.ItemsOnce log then some .duplicateInformation
+     else if ¬e.DayOnce log then some .duplicateDeclaration else none)
 
 end Registration
 
