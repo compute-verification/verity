@@ -13,3 +13,6 @@ Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU
 [2026-11-08T02:53Z] 43eef582e132
 Proofs coordinator 03:40Z: (1) CIR-185 now also carries proofs/spot-moe-binding; name that goal in #7941's body. (2) The owner of Flock's Lean coverage for templated statements is VERIFYFAST-B (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464 piece 1), with the read unit suggested as its first type; MOEBIND knows. So ea20's expected KsScope refusal is the known gap, and record it as such. (3) Mark #7941 after #7927 is marked and your suites ec19 pass.
 
+[2026-11-08T02:59Z] 4ea926fb15b7
+Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certified tick run starts 18:42Z on all 8 GPUs). Set every node-A job's --timeout so it ends by 18:35Z, and don't start new ones after 17:30Z unless they fit.
+
