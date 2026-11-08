@@ -337,7 +337,7 @@ The verifier holds the record to its own copies with R1 to R7 (`check`):
 - R3: the scheme, and each port's root, leaf count and domain;
 - R4: the leaf layer;
 - R5: the anchors;
-- R6: `previous`, one record a window, the window's stream and prover, and its seed salt;
+- R6: `previous`, one record a window, and the window's stream, prover and seed salt;
 - R7: the registered values.
 
 It then writes a receipt (`receipt`, `verity/registration-receipt/v1`), and only then samples. It also holds its own public
@@ -347,6 +347,12 @@ state what it accepts. `verity/core/service/spot/tests/test_difftest.py` holds t
 challenger's `service.WindowCommitmentRecord` is a record it admitted, with its receipt and its position in the
 stream. The format, each check's codes and the window domains (`window_domain`) are in `one_stage.registration`'s
 docstring.
+
+The window's seed salt, drawn before it serves (`Stream.seed_salt`), is the first coin of the challenger's `seed-salt`
+family after the window's open root: a certified input its circuits read, public as coins. The audit, the run and each
+interior read it from the challenger's log in their own evidence, never a parameter (`coins.seed_salt_of`,
+`seed_salt_in`; Lean `OneStage.seedSaltOf`, `Run.seedSaltOf`). R6 holds the window's `seed_salt` to it, null when none
+was read (`R6-seed-salt`, `Properties.Spot.SeedSaltNamed`, `tests/test_registered.py`).
 
 Pinned by `tests/test_one_stage.py`, and the window domain also by `integrations/vllm/tests/commit/test_serving_rows.py`.
 
@@ -561,14 +567,3 @@ session is a withheld one (`withheld_on`: the ledger's open says `withheld: true
 salt or path before it closed) and the bytes the sample read are those coins, after the registration's digest. Missing evidence and a registration without its
 window root are refused the same way, a reject failing `run`; a sample that read no coins takes no evidence. Pinned by `tests/test_challenger_coins.py` and the difftest's `challenger_read`,
 `challenger_draw_coins` and `run`.
-
-### The window's seed salt
-
-At the window's open, before it serves, the stream draws its seed salt (`Stream.seed_salt`, `coins.draw_seed_salt`): the
-first coin of the challenger's `seed-salt` family after the window's open root, a family no sample reads. The record
-names it (`window.seed_salt`), a certified input the window's circuits read in place of a value the server would choose,
-public as `coins` (`check_public`). The audit and the run read it from the challenger's log in their evidence, never
-from their parameters: the audit's `seed_salt` under its challenger's key (`coins.seed_salt_of`, Lean
-`OneStage.seedSaltOf`), the run's carrying the key (`coins.seed_salt_in`, `Run.seedSaltOf`), an interior registration
-its own. R6 refuses a window naming another salt, none, or a salt where the verifier read none (`R6-seed-salt`).
-Pinned by `tests/test_registered.py` and the difftest's `challenger_seed_salt`, `run` and protocol ports.
