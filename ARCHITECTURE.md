@@ -38,10 +38,10 @@ that crosses a proof-block boundary
 register the commitment roots   --------------->   check the registration
                                 <---------------   the challenger flips coins: the sample
 prove the sampled proof blocks  --------------->   verify the proofs (the Lean verifier)
-(Flock, through the ZK server)                     record the integrity profile
+(Flock prove --zk)                                 record the integrity profile
 ~~~
 
-The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace.
+The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace. Alone, as SPOT[Flock], sampled proofs have three roles (inference server, proof server, verifier) and no ZK server or recursion; the core protocols add both (`parties.SPOT_PROTOCOL`).
 
 ## Architecture
 
@@ -131,7 +131,7 @@ Code, docs, CLI help and output fields use these terms. When a term changes, thi
 - **Subprotocol**: one of the protocols the composite protocols are made of: sampled proofs, PoUW, PoUS, PoUB over a node's registered store and network certification. Onsite composes all five; remote composes sampled proofs and PoUW (`verity/core/protocols/composition`); the memory wipe, the bandwidth audit over PoUS's store and the inference-only policy are not subprotocols yet. Each goes by that name alone, with no alias ("integrity", "work", "space", "communication"); "leg" is retired.
 - **Phase**: each subprotocol runs in three, in order: the *commit phase*; the *challenge phase*, where the auditor's challenger device flips live coins; and the *response phase*, where the prover sends openings and proofs and the verifier checks them. Protocol soundness uses that order across the whole protocol: every commitment is bound before any challenge.
 - **Run**: one execution, of the protocol, a subprotocol or a circuit (a circuit's run is its trace). "Stage" for a step of a run survives only in "one-stage".
-- **Replay block**: a part of a Program the prover re-executes from the last committed state to build a sampled proof block's witness, a term of the plan optimizer's cost model (`ReplayDomain`) only. It is not a level of the claims' partition (`Claims.Sampling.Partition`), whose classes hold strata of proof blocks. "Unit" never names a subcircuit.
+- **Replay block**: a part of a Program the prover re-executes from the last committed state to build a sampled proof block's witness, a term of the plan optimizer's cost model (`ReplayGrain`) only. It is not a level of the claims' partition (`Claims.Sampling.Partition`), whose classes hold strata of proof blocks. "Unit" never names a subcircuit.
 - **Instrumented program**: the program plus what serving adds to measure it: a tap on every committed gate, and the leaf and tree hashing whose outputs are the roots. It is derived from the program, the partition and the commitment scheme, never authored, and no proof claims anything about it.
 - **Integrity profile**: the verification phase's output (`verity.core.protocols.profile.IntegrityProfile`): per-stratum bounds on how many proof blocks of a partition are incorrect (see Incorrect proof block), from the facts checked exhaustively, the verifier's sampling design and its failure probability δ. Consumers weight it (Confidence set).
 - **Incorrect proof block**: a proof block whose committed outputs differ from its gates applied to its committed inputs, in the trace the developer committed. A proof block fed wrong inputs that computes faithfully from them is correct; the values downstream of an incorrect proof block just differ from the honest evaluation, and have no term of their own. The trace's incorrect proof blocks are the **incorrect set** F.

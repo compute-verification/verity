@@ -357,15 +357,15 @@ def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) 
 
 /-- The sampling design `law`, refused when it is a Bernoulli one: the sampled audit's soundness statement covers none,
 at any `p`. -/
-def coveredLaw : Flock.Draw.Law → V Flock.Draw.Law
+def coveredDesign : Flock.Draw.Law → V Flock.Draw.Law
   | .bernoulli _ _ => throw Draw.BERNOULLI
   | law => pure law
 
 /-- The sample the coins `src` give over `population` units under the expanded `law` (`Select.select`'s for a sampling design rule):
-its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredLaw`). -/
+its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
 def drawnFrom (v : Registration.Verifier) (law : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveLaw v.program v.query v.law v.workTable
-  let l ← coveredLaw (derived.getD (← Draw.flockLaw law population))
+  let l ← coveredDesign (derived.getD (← Draw.flockLaw law population))
   Draw.drawUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `law` (`drawnFrom`), every coin opened read; none when it is. -/

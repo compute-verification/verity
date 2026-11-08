@@ -1,6 +1,6 @@
 # spot_figures
 
-The SPOT post's Figures 1-3 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
 plotted series.
@@ -10,6 +10,7 @@ uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # f
                                                        # [--request workload] [--workers N] [--points N]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
+uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -104,6 +105,14 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     bound at the budget (`optimize.two_stage_design`).
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
+  - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
+    are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
+    sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
+    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
+    its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
+    an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
+    layer (`verity/core/protocols/sampled_proofs/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -138,6 +147,12 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   card's series against hill-climbing effort, with each series' best so far. On the right, the model's serve-time
   cuts, priced from their bytes a token and the hash rate, beside the card's measured points for the model.
   `figure3.py card` writes the hash loop's card from its `hash-loop.json`.
+- **Figure 4** (`figure4.py`), for 'Randomness is powerful': the sampling rate that keeps the model's FP4 weights in at
+  δ = 2^-40, against a proof block's output bits. It is sampled in the simple form q = b ln(1/δ)/T and in the planner's
+  exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
+  total cost buys at each line's marginal proof overhead, counting proving alone.
+- The headline scope (`figure1.PRIMARY`, a datacenter year) gets the bare file names. Its exfiltration panel also
+  plots (A) over the stretch scope (`figure1.SECONDARY`, a world year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
 
