@@ -12,9 +12,19 @@ The design's links are the verifier's own, derived from the replay block's Defin
 difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
 
 Each statement's header is held to the reference header the auditor's params give its template (`Own.refs`, from
-``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run: the two
-the same with the run's fields blanked (`blank_run`, `RUN_FIELDS`), which ``second-population`` and ``second-roots``
-hold to the run instead (``second-header``).
+``proofs.templates``: `service.template_circuits`), the registered reference statement's, fixed before the run, placed
+in the run (`at_run`): its ``set`` the session's input set, ``served/<run>/m<k>`` (`set_name`, ``<run>`` the interior
+record's ``window.run`` and ``k`` its template's position among the parts, its member's in the interior window), and its
+``frame_v3.bindings`` each of its ``frame_v3.schemas`` ports' bindings in the run (`port_binding`, the window-domain rule
+over the interior record's program, partition and that port's leaves), both of which the verifier computes, so the
+prover chooses neither. The two are the same with the run's fields blanked (`blank_run`, `RUN_FIELDS`): ``instances``
+and ``units.indices``, which ``second-population`` holds, ``units.blocks``, the indices cut into blocks, which the
+session's verifier holds to them, ``frame_v3.roots`` and ``frame_v3.domain_ids``, which ``second-roots`` holds, and
+``registered``, whose reads ``second-read`` holds (``second-header``).
+
+The interior record names the replay sample it lays out (``window.replay_sample``, which the proof server writes), and
+``second-interior-order`` fails unless it is the verifier's own, in its order (`interior_order_ok`), checked before any
+statement is read.
 
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
@@ -29,6 +39,7 @@ from verity.ml.circuits.codec import canonical_json, definitions, descriptor_id
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.refs import Affine, Concat, Explicit
 from verity.ml.circuits.types import RecordType, Tuple
+from verity.ml.commitments.window import window_binding
 
 from .one_stage.verdict import Verdict, _Collect
 
@@ -43,10 +54,16 @@ REPORTED_WHY = ("the registered reads the verifiers of record report are not the
 LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other than through templates of the "
              "interior's parts, each called once and reading one parameter alone, returned alone, or returned whole as "
              "one field each")
+INTERIOR_ORDER_WHY = "the interior record's replay sample (window.replay_sample) is not the verifier's own, in its order"
 STMT_KEYS = ["draw", "header", "registered", "template"]
 #: The run's fields of a statement's header, each a path of keys: the only ones a header may differ from its template's
-#: reference in, which ``second-population`` and ``second-roots`` hold to the run instead (`SecondStage.RUN_FIELDS`).
-RUN_FIELDS = (("instances",), ("units", "indices"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"))
+#: reference placed in the run in, which other checks hold instead: ``second-population`` the first two, the session's
+#: verifier ``units.blocks``, the indices cut into blocks of ``vus_per_block`` (its header's ``units`` must be
+#: `Flock.HmRow.unitsEntry` of its indices), ``second-roots`` the next two, and ``second-read`` ``registered``, each
+#: read's root, domain and rows (`SecondStage.RUN_FIELDS`). A reference staged at other slots differs from the header
+#: only in the indices and their blocks.
+RUN_FIELDS = (("instances",), ("units", "indices"), ("units", "blocks"), ("frame_v3", "roots"), ("frame_v3", "domain_ids"),
+              ("registered",))
 
 
 @dataclass(frozen=True)
@@ -301,30 +318,71 @@ def _link_of(own: Own, t: str, port: str) -> Link | None:
     return next((x for x in own.links or () if x.template == t and x.port == port), None)
 
 
-def _blank_at(j: Any, path: Sequence[str]) -> Any:
-    """`SecondStage.blankAt`: `j` with the field at key path `path` None where its parent is an object, each key before
-    the last followed only to an object; anything else unchanged."""
+def _put_at(v: Any, j: Any, path: Sequence[str]) -> Any:
+    """`SecondStage.putAt`: `j` with the field at key path `path` set to `v` where its parent is an object, each key
+    before the last followed only to an object; anything else unchanged."""
     if not path or not isinstance(j, dict):
         return j
     k, rest = path[0], path[1:]
     if not rest:
-        return {**j, k: None}
+        return {**j, k: v}
     x = j.get(k)
-    return {**j, k: _blank_at(x, rest)} if isinstance(x, dict) else j
+    return {**j, k: _put_at(v, x, rest)} if isinstance(x, dict) else j
 
 
 def blank_run(h: Any) -> Any:
     """`SecondStage.blankRun`: header `h` with the run's fields (`RUN_FIELDS`) blanked, None."""
     for path in RUN_FIELDS:
-        h = _blank_at(h, path)
+        h = _put_at(None, h, path)
     return h
 
 
-def _header_ok(own: Own, t: str, h: Any) -> bool:
-    """`SecondStage.headerOk`: header `h` is template `t`'s reference header (`Own.refs`) but for the run's fields, the
-    two the same with those blanked; False for a template the params give no reference."""
+def _run_of(rec: Any) -> str | None:
+    """`SecondStage.runOf`: the run the interior record names (``window.run``)."""
+    run = _get(_get(rec, "window"), "run")
+    return run if isinstance(run, str) else None
+
+
+def set_name(run: str, k: int) -> str:
+    """`SecondStage.setName`: the input set of the `k`-th part's session in run `run`, as the served path names it."""
+    return f"served/{run}/m{k}"
+
+
+def port_binding(rec: Any, port: str, schema: str, run: str) -> str | None:
+    """`SecondStage.portBinding`: the binding, in run `run`, of record `rec`'s port `port` of row schema `schema`, under the
+    window-domain rule (`window_binding`) over the record's program and partition and the leaves it gives the port; None
+    when the record names no such port, or no program or partition."""
+    program, partition, e = _get(rec, "program"), _get(rec, "partition"), _by_port(rec).get(port)
+    leaves = _get(e, "leaves")
+    if not (isinstance(program, str) and isinstance(partition, str) and _nat(leaves)):
+        return None
+    return window_binding(program, partition, port, schema, leaves, run).hex()
+
+
+def at_run(own: Own, named: bool, k: int, t: str, r: Any) -> Any:
+    """`SecondStage.atRun`: template `t`'s reference header `r` placed in the run, for the session of the `k`-th part:
+    its ``set`` the run's input set (`set_name`) and its ``frame_v3.bindings`` the binding of each port of
+    its ``frame_v3.schemas`` (`port_binding`), which the verifier computes. None when the interior record names no run,
+    or a port the verifier can't bind."""
+    run = _run_of(own.interior)
+    if run is None:
+        return None
+    bindings = {}
+    for p, s in _entries(_get(_get(r, "frame_v3"), "schemas")):
+        b = port_binding(own.interior, _port_of(named, t, p), s, run) if isinstance(s, str) else None
+        if b is None:
+            return None
+        bindings[p] = b
+    return _put_at(bindings, _put_at(set_name(run, k), r, ("set",)), ("frame_v3", "bindings"))
+
+
+def _header_ok(own: Own, named: bool, k: int, t: str, h: Any) -> bool:
+    """`SecondStage.headerOk`: header `h` of a statement for the `k`-th part is template `t`'s reference header
+    (`Own.refs`) placed in the run (`at_run`) but for the run's fields, the two the same with those blanked; False for a
+    template the params give no reference, or one the verifier can't place in the run."""
     ref = next(((r,) for x, r in own.refs if x == t), None)
-    return ref is not None and _jeq(blank_run(h), blank_run(ref[0]))
+    placed = None if ref is None else at_run(own, named, k, t, ref[0])
+    return placed is not None and _jeq(blank_run(h), blank_run(placed))
 
 
 def _population_ok(q: int, p: Part, h: Any) -> bool:
@@ -416,9 +474,9 @@ def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
     return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
-def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
+def _stmt_codes(own: Own, named: bool, k: int, p: Part, s: Stmt) -> list[str]:
     q, reads = len(own.sample), _entries(_get(s.registered, "ports"))
-    checks = (("second-header", _header_ok(own, s.template, s.header)),
+    checks = (("second-header", _header_ok(own, named, k, s.template, s.header)),
               ("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
@@ -460,9 +518,29 @@ def _same_dict(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
     return len(a) == len(b) and all(k in b and _jeq(v, b[k]) for k, v in a.items())
 
 
+def interior_order_ok(own: Own) -> bool:
+    """`SecondStage.interiorOrderOk`: the replay sample the interior record names (``window.replay_sample``, which the
+    proof server writes) is the verifier's own, ``own.sample``, in its order, each entry a natural number, never a
+    boolean."""
+    bs = _get(_get(own.interior, "window"), "replay_sample")
+    return (isinstance(bs, list) and len(bs) == len(own.sample)
+            and all(_nat(b) and b == u for b, u in zip(bs, own.sample)))
+
+
+def _interior_failures(own: Own) -> list[tuple[str, Any]]:
+    """`SecondStage.interiorFailures`: ``second-interior-order`` unless `interior_order_ok`."""
+    return [] if interior_order_ok(own) else [("second-interior-order", INTERIOR_ORDER_WHY)]
+
+
+def _pos_of(ps: Sequence[Part], t: str) -> int:
+    """`SecondStage.posOf`: template `t`'s position among the parts `ps`, its first part's (its member's index in the
+    interior window); ``len(ps)``, no member's, for none."""
+    return next((k for k, p in enumerate(ps) if p.template == t), len(ps))
+
+
 def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
     named = _by_template(own.interior)
-    found: list[tuple[str, Any]] = []
+    found = _interior_failures(own)
     for i, j in enumerate(ss):
         s = _stmt(j)
         if s is None:
@@ -473,7 +551,7 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
         if p is None or s.template in _templates(ss[:i]):
             found.append(("second-template", detail))
         else:
-            found += [(c, detail) for c in _stmt_codes(own, named, p, s)]
+            found += [(c, detail) for c in _stmt_codes(own, named, _pos_of(ps, s.template), p, s)]
     found += _order_failures(ps, ss)
     covered = _templates(ss)
     found += [("second-cover", {"template": p.template}) for p in ps if p.template not in covered]
@@ -484,13 +562,13 @@ def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> l
 
 def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     """Round 2's statement check of `statements`, the two-stage form allowed when `allow` (`FORM` in a run): each code
-    once, with the detail it first failed with (`SecondStage.check`)."""
+    once, with the detail it first failed with (`SecondStage.check`), the interior record's order first."""
     if own.parts is None:
-        found = [("second-cells", CELLS_WHY)]
+        found = [*_interior_failures(own), ("second-cells", CELLS_WHY)]
     elif not _links_ok(own.parts, own.links):
-        found = [("second-links", LINKS_WHY)]
+        found = [*_interior_failures(own), ("second-links", LINKS_WHY)]
     elif statements is None:
-        found = [("second-statements", STATEMENTS_WHY)]
+        found = [*_interior_failures(own), ("second-statements", STATEMENTS_WHY)]
     else:
         found = _failures(allow, own, own.parts, list(statements))
     c = _Collect()
@@ -506,5 +584,5 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "replay_links",
-           "statement_reads"]
+__all__ = ["FORM", "Link", "Own", "Part", "at_run", "attach", "blank_run", "check", "interior_order_ok", "links_of",
+           "own_draw", "parts", "port_binding", "replay_links", "set_name", "statement_reads"]

@@ -26,11 +26,42 @@ from verity.core.protocols.spot import (challenger as C, coins as T, remote as R
 from verity.core.protocols.spot.one_stage import draw as D, partition as P
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
+from verity.ml.commitments.window import window_binding
 
 from test_challenger import HOST, entropy
 from test_remote import HOST_PINS, MAIN, SCHEME, WINDOW, Ledger, at, pinned_key
 
 LABEL = "positions"
+#: The row schema of a port the spec names no schema for.
+ROW_SCHEMA = "hm96-sha512/row/v2"
+
+
+def reference_header(t: str, lo: int, hi: int, schemas: Mapping[str, str]) -> dict[str, Any]:
+    """Template `t`'s reference header, fixed before the run, as its reference statement's file has it: the served path's
+    header (`flock_inputs.flock_input_files`) for its part's `hi - lo` slots from `lo` (its range, its units' blocks
+    and classes, its circuit) and its ports' row `schemas`, under the set the reference was staged in and that set's
+    bindings, and none of the run's fields."""
+    n, circuit = hi - lo, hashlib.sha512(t.encode()).hexdigest()
+    return {"format": "flock-circuit-inputs", "statement": "verity/flock-circuit", "scheme": S.SCHEME, "set": f"unit/{t}",
+            "subcircuit": f"unit/{t}", "range": [0, n], "circuit_sha512": circuit, "rows": False,
+            "units": {"vus_per_block": 1, "units_per_vu": 1, "blocks": [[u] for u in range(lo, hi)], "classes": [circuit] * n},
+            "frame_v3": {"frame": "frame-v3-sha512", "owner": -1, "schemas": dict(schemas),
+                         "bindings": {p: "00" * 64 for p in schemas}, "row_key_sha512": "ab" * 64}}
+
+
+def served_header(ref: Mapping[str, Any], rec: Mapping[str, Any], k: int, lo: int, hi: int,
+                  roots: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """The header the served path writes for the session of the interior's `k`-th member, the part of slots `[lo, hi)`:
+    its template's reference header `ref` in run ``rec["window"]["run"]``, the interior record `rec`'s, with that run's
+    input set, the slots' indices and count, and its ports' (`roots`, each by its bare name the record's root) roots,
+    domains and bindings in the run, each under the window-domain rule (`window_binding`) at its row schema."""
+    run, fv = rec["window"]["run"], ref["frame_v3"]
+    return {**ref, "set": f"served/{run}/m{k}", "instances": hi - lo,
+            "units": {**ref["units"], "indices": list(range(lo, hi))},
+            "frame_v3": {**fv, "roots": {p: r["root"] for p, r in roots.items()},
+                         "domain_ids": {p: r["domain"] for p, r in roots.items()},
+                         "bindings": {p: window_binding(rec["program"], rec["partition"], roots[p]["port"], s,
+                                                        roots[p]["leaves"], run).hex() for p, s in fv["schemas"].items()}}}
 
 
 class Challenger(T.ChallengerCoins):
@@ -134,36 +165,48 @@ class Stream(S.Stream):
             proofs = None if draw.replay_sample is None else self.proofs(draw)
         return super().outcome(draw, verdicts, statement, coins=coins, statements=statements, proofs=proofs, **kwargs)
 
+    def _roots(self, rec: Mapping[str, Any], t: str) -> dict[str, Any]:
+        """Template `t`'s ports of interior record `rec`, each its root there, by bare name (``<template>/<port>`` there
+        where the record names ports by template)."""
+        prefix = f"{t}/" if any("/" in r["port"] for r in rec["roots"]) else ""
+        return {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
+
+    def _references(self, second: S.Draw) -> list[tuple[str, int, int, dict[str, Any]]]:
+        """Each template of the interior program in the check's order, `(template, lo, hi, reference header)`: its
+        part's slots `[lo, hi)` and the header of its reference statement, fixed before the run (`reference_header`),
+        each port at the schema its value has in the spec."""
+        e = self._entries[second.registration.order]
+        schema = {v.name: v.schema for v in self.spec.values if v.schema}
+        return [(t, lo, hi, reference_header(t, lo, hi, {p: schema.get(r["port"], ROW_SCHEMA)
+                                                         for p, r in self._roots(second.registration.record, t).items()}))
+                for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query)]
+
     def proofs(self, second: S.Draw) -> dict[str, Any]:
         """The auditor's params for the second-stage sessions (`service.template_circuits`), each template of the
         interior program in the check's order: a stand-in for its circuit file's SHA-512, which nothing in this stream
-        reads, and the header of its reference statement, fixed before the run: the service's scheme, and none of the
-        run's fields (`second_stage.RUN_FIELDS`), which an honest statement's header is but for those."""
-        e = self._entries[second.registration.order]
-        return {"templates": [{"template": t, "circuit": hashlib.sha512(t.encode()).hexdigest(),
-                               "header": {"scheme": S.SCHEME, "units": {}, "frame_v3": {}}}
-                              for t, _ in P.strata(e.interior_program, self.spec.check.query)]}
+        reads, and the header of its reference statement, fixed before the run (`reference_header`), which an honest
+        statement's header is placed in the run (`second_stage.at_run`) but for the run's fields
+        (`second_stage.RUN_FIELDS`)."""
+        return {"templates": [{"template": t, "circuit": h["circuit_sha512"], "header": h}
+                              for t, _lo, _hi, h in self._references(second)]}
 
     def statements(self, second: S.Draw) -> list[dict[str, Any]]:
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
-        the interior program, its header over the template's slots of the interior registration at its roots (the ports
-        `<template>/<port>` there where the record names ports by template), its sample the second stage's units among
-        them, counted from its first, and its registered reads: each port the replay block's Definition links
-        (`second_stage.replay_links`) of the boundary port its link names, each slot the first row of its cell's replay
-        block, and each value the interior registration registers, under a port of its name (None when it reads
-        none)."""
+        the interior program, its header the one the served path writes for the template's slots of the interior
+        registration (`served_header`: the run's input set, the slots' indices, and its ports' roots, domains and
+        bindings there), its sample the second stage's units among them, counted from its first, and its registered
+        reads: each port the replay block's Definition links (`second_stage.replay_links`) of the boundary port its
+        link names, each slot the first row of its cell's replay block, and each value the interior registration
+        registers, under a port of its name (None when it reads none)."""
         e = self._entries[second.registration.order]
         rec, boundary = second.registration.record, second.replay_sample.registration.record
-        named = any("/" in r["port"] for r in rec["roots"])
         values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
                   for x in rec.get("registered", [])}
         at = {r["port"]: r for r in boundary["roots"]}
         links = SS.replay_links(e.program, descriptor_id(self.replay), boundary) or ()
         sample = D.proved(second.replay_sample.draw)
         out = []
-        for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query):
-            prefix = f"{t}/" if named else ""
-            roots = {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
+        for m, (t, lo, hi, ref) in enumerate(self._references(second)):
             units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
             n = (hi - lo) // len(sample)
             reads = {**values, **{x.port: {
@@ -171,8 +214,6 @@ class Stream(S.Stream):
                 "reads": [at[x.value]["leaves"] // boundary["population"] * sample[u // n] for u in range(hi - lo)]}
                 for x in links if x.template == t and x.value in at}}
             out.append({"template": t, "registered": {"ports": reads} if reads else None,
-                        "header": {"scheme": rec["scheme"], "instances": hi - lo, "units": {"indices": list(range(lo, hi))},
-                                   "frame_v3": {"roots": {p: r["root"] for p, r in roots.items()},
-                                                "domain_ids": {p: r["domain"] for p, r in roots.items()}}},
+                        "header": served_header(ref, rec, m, lo, hi, self._roots(rec, t)),
                         "draw": {"law": "subset", "population": hi - lo, "k": len(units), "units": units}})
         return out
