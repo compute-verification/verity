@@ -33,7 +33,7 @@ GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_token
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 N, Q, K, N_RHO = 6, 2, 1, 4
 INTERIOR = (("x", BR.SCHEMA), ("out", BR.SCHEMA))
-RULE = TS.Rule(f"subset:{Q}", K, INTERIOR, 60.0)
+RULE = TS.Rule(f"rate:{Q}/{N}", K, INTERIOR, 60.0)
 
 
 def _class() -> BR.Committed:
@@ -103,6 +103,8 @@ def test_the_second_stages_coins_follow_the_whole_first_stage():
 
 def test_a_rule_round_trips_and_its_spec_holds_the_boundary_values_then_the_interior_ones():
     assert TS.Rule.from_json(json.loads(json.dumps(RULE.to_json()))) == RULE
+    with pytest.raises(ValueError, match="rate law"):
+        TS.Rule(f"subset:{Q}", K, INTERIOR, 60.0)
     spec = TS.stream_of(_class().layout, RULE, FC.Challenger()).spec
     assert [(v.name, v.phase) for v in spec.values] == [("b.ingress", "serve"), ("b.egress", "serve"),
                                                         ("x", "interior"), ("out", "interior")]

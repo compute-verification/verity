@@ -23,7 +23,7 @@ Until the class's request Definition and two-stage over a window of templates la
 
 Usage::
 
-    two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay subset:Q --k K --interior FILE.json \\
+    two_stage.py first --boundary DIR [DIR ...] --check TEMPLATE --replay rate:NUM/DEN --k K --interior FILE.json \\
         --challenger local --main FILE --out OUT [--advice REGISTRATION.json] [--proof-deadline S]
 
 Each DIR a class's (``w<window>/p<P>-o<O>/``), every one of one window; FILE.json the interior values,
@@ -44,7 +44,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P
+from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.program import Program
 from verity.ml.windows import rows as CS
@@ -66,14 +66,19 @@ def interior_values(member: CS.Member) -> tuple[tuple[str, str], ...]:
 
 @dataclass(frozen=True)
 class Rule:
-    """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law or ``subset:Q``), the proof
-    blocks ``k`` the second stage samples in each sampled span, the interior values the replay side commits, and the
-    proof deadline."""
+    """A class's two-stage rule: the first stage's law over its spans (``replay``, a rate law ``rate:NUM/DEN[:T]``), the
+    proof blocks ``k`` the second stage samples in each sampled span, the interior values the replay side commits, and the
+    proof deadline. A fixed count ``subset:Q`` is refused: the serve sizes a class's N, and Q/N falls as it pads N."""
 
     replay: str
     k: int
     interior: tuple[tuple[str, str], ...]
     proof_deadline: float = PROOF_DEADLINE_S
+
+    def __post_init__(self) -> None:
+        if D.parse_rate(self.replay) is None:
+            raise ValueError("a two-stage rule's replay law is a rate law, rate:NUM/DEN or rate:NUM/DEN:T, "
+                             f"not {self.replay!r}")
 
     def to_json(self) -> dict[str, Any]:
         return {"replay": self.replay, "k": self.k, "interior": [list(v) for v in self.interior],
@@ -263,7 +268,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     f = sub.add_parser("first", help="every class's boundary registration and first stage")
     f.add_argument("--boundary", nargs="+", required=True, help="each class's directory (w<window>/p<P>-o<O>/), one window's")
     f.add_argument("--check", required=True, help="the check template's descriptor id (serving_templates.template)")
-    f.add_argument("--replay", required=True, help="the first stage's law over a class's spans: subset:Q or a rate law")
+    f.add_argument("--replay", required=True, help="the first stage's law over a class's spans, a rate law: rate:NUM/DEN or rate:NUM/DEN:T")
     f.add_argument("--k", type=int, required=True, help="proof blocks the second stage samples in each sampled span")
     f.add_argument("--interior", required=True, help="the interior values, a JSON list of [name, schema]")
     f.add_argument("--advice", help="the window's advice registration, whose binding the records' windows name")
