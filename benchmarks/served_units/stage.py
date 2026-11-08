@@ -268,7 +268,7 @@ def stage_part(name: str, part: Part, S: dict, tag: str, n: int, out: Path, t0: 
 
 def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t0: float) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record."""
-    from verity_vllm.pipeline.serving_templates import template
+    from verity_vllm.pipeline.serving_rows import template
 
     d = template(cen.name(S)).fn
     params, ret = d.signature()
