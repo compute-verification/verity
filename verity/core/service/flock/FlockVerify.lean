@@ -1640,7 +1640,7 @@ def drawTest (path : String) (args : List String) : IO UInt32 := do
 
 /-- `template-query FILE...`: a template-instance query on a program (`Flock.TemplateQuery`) for each case `{"descriptor", "query"}`
 (the descriptor's bytes as a string): the program's SHA-512, the population, the ranges and every unit's root node, member and
-gates, or the refusal. One `TEMPLATEQUERY` line per file. -/
+gates (`TemplateQuery.unitGates`), or the refusal. One `TEMPLATEQUERY` line per file. -/
 def templateQueryCmd (paths : List String) : IO UInt32 := do
   for path in paths do
     let text ← try IO.FS.readFile path catch _ => pure ""
@@ -1655,7 +1655,11 @@ def templateQueryCmd (paths : List String) : IO UInt32 := do
       let d ← TemplateQuery.Desc.parse ((j.getObjValAs? String "descriptor").toOption.getD "").toUTF8
       let rs ← TemplateQuery.evaluate d ts
       let pop := TemplateQuery.population rs
-      let units := (Array.range pop).map fun i => match TemplateQuery.locate rs i, TemplateQuery.gates d rs i with
+      let gs := TemplateQuery.unitGates d rs
+      let gatesOf := fun i => match gs with
+        | .ok a => a[i]?
+        | .error _ => TemplateQuery.gates d rs i
+      let units := (Array.range pop).map fun i => match TemplateQuery.locate rs i, gatesOf i with
         | some (k, m, _), some (lo, hi) => Lean.toJson #[i, k, m, lo, hi]
         | _, _ => Lean.Json.null
       return Lean.Json.mkObj [("program_sha512", Lean.Json.str (hexOf d.sha512)), ("population", Lean.toJson pop),
