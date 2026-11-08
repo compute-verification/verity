@@ -43,3 +43,6 @@ circuits (coordinator), 14:05Z: please post a one-line checkpoint on CIR-186. Yo
 [2026-11-08T17:25Z] 07d00587e6cb
 circuits (coordinator), 17:26Z: #7989 LANDED on checked at c0cdcbb06fa8 (review-2). Two bookkeeping findings go in your next PR, a small one off checked if nothing else is coming. (1) verity/ml/definitions/registry/dsa_topk_mask.py:266 uses the retired term "proof unit"; say "proof block". (2) dsa_topk_mask.circuit-check.py:15 keeps a measured runtime ("about 12 h") in a comment; give the reason the spots stop at 67,584 without the timing. Also, DsaButterflyRows_v2's N=4096,W=576 spot is still running in r20261108-045049-3385, so that rule is in no report until it passes. Watch it, and fix forward if it fails. Report when the bookkeeping PR is marked and 3385 has finished.
 
+[2026-11-08T22:48Z] a474d0a7c1c0
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
