@@ -45,7 +45,8 @@ all through `--policy`, `--policy --unrolled` and the Python reference, which mu
 summarised, wall seconds and peak RSS; `$OUT/ius/` has each verdict's inference blocks.
 
 ~~~sh
-research data fetch art:32c488d8ca7bb12f80b38e45ec5a97d95312bcb62974a4d776da0b58d1adec35 --to B1 \
+B1_BUILD=$(python3 -c 'import json; print(json.load(open("benchmarks/sampling_plan/glm53_blocks.json"))["build"])')
+research data fetch "$B1_BUILD" --to B1 \
   --path 'build/rank*/build_workload/descriptor.json.gz'    # the Build; its meta's rank_workload_digests are the pins
 research run --project verity --on vy-nebius-cpu-2 --source . --cwd clone --mem-gb 420 --mem-wait 3600 --timeout 6h \
   --send glm53-b1-pins.json $(for r in 0 1 2 3 4 5 6 7; do echo --send glm53-b1-rank$r.descriptor.json.gz; done) \
@@ -115,6 +116,22 @@ and function (ports, roots, milliseconds, peak RSS, codes).
 ~~~sh
 research run --as proofs --project verity --on vy-nebius-cpu-2 --source . --pool proofs --cwd clone -- \
   bash benchmarks/verifier_cost/registration.sh 1024 4096 12288 49152
+~~~
+
+`whole_run.sh run|desc SHAPE N...` times `Run.run`, the stream's whole run of one registration, against the population.
+`whole_run.py` writes, per N, an accepted `run` input (`run`: a stratified v1 audit on challenger coins with N/8 more
+ports) or the program and query alone (`desc`), over a template population of about N units: `toy`, the difftest's
+three templates, or `l5`, a GLM-5.3 MoE window's seven templates at the window's proportions (whose Python partition
+walks every gate, so `l5` takes `desc`). `whole_run/Main.lean` times the `run` piece and each of `Run.run`'s steps,
+`Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`; on
+a program alone, `Program.parse`, one `Desc.gates` and one `TemplateQuery.gates` per range, the input gates' count and,
+with `-- --unit-gates`, `Partition.unitGates`; `-- --unit-gates --ref` adds `Partition.unitGatesRef`, the walk unit by
+unit `unitGates` replaced, and fails unless the two give the same gates; `--pop-ok` adds `Slots.popOk` last, whose
+layout holds a proof block per input gate. `PERF_N` adds a `perf` profile at that N. `$OUT` gets whole_run.jsonl, one row per N and step (milliseconds, peak RSS).
+
+~~~sh
+research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
+  bash benchmarks/verifier_cost/whole_run.sh run toy 146 1000 10000 50000
 ~~~
 
 `flock_tmpl.sh K...` is the same unit in `flock-ir-tmpl/v2` (`Flock/Tmpl.lean`): `flock_read.py --circuit-only`
