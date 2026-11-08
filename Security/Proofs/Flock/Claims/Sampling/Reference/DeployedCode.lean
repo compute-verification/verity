@@ -70,7 +70,7 @@ At this code:
   with no unit named.
 * `N₀_of_shapes`, `sessIn_of_shapes`: `N₀` reads only the session's table sizes, so `SessIn`'s `N₀` clause holds when
   every session at `x` has the tables `shape x` fixes (`ShapesFixed`). Nothing the Lean verifier runs establishes it at
-  `sess`: its registration refusal (`Draw.countVaries`) fixes the sampled count only, and its outcome step takes the
+  `sess`: its registration refusal (`Draw.bernoulli`) fixes the sampled count only, and its outcome step takes the
   session's statement as an opaque object.
 * `shapeChecked`, `shapesFixed_checked`, `shapesFixed_iff_checked`, `sessIn_checked`: the shape check an outcome step
   would run (`sess` with every session refused whose tables aren't `shape x`) fixes the shapes, refuses nothing exactly
@@ -265,7 +265,7 @@ theorem sessionsIn_code_iff : SessionsIn (code c reg L bytes sr sess) ↔ SessIn
 /-! ## The sessions' table shapes -/
 
 /-- **The session's table shapes are the statement's**: whatever a run shows, the session's statement sets up tables of
-sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.countVaries`: `shapes`) fixes the sampled
+sizes `shape x`, in order. The sampled verifier's registration refusal (`Draw.bernoulli`: `bernoulli`) fixes the sampled
 count only, and its outcome step never reads the session's tables, so nothing in the Lean verifier establishes this at
 `sess`; at the session the shape check lets through it holds (`shapesFixed_checked`). -/
 def ShapesFixed (shape : Msg → List ℕ) : Prop :=

@@ -128,6 +128,12 @@
    "not": 281304,
    "xor": 3209215
   },
+  "token-select-combine/v154880-c64/bf16": {
+   "and": 401688,
+   "not": 339713,
+   "type": "7cc2b2915c00d85e93e37687ce57d91e5d68a126fa56fc70bf8f55b7e91e55142991b707ec7380f08dc1f70e451c784b364cf27ac4e6cbabe73b700e2455fa11",
+   "xor": 3876100
+  },
   "token-select-combine/v200-c64/bf16": {
    "and": 627,
    "not": 526,

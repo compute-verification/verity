@@ -30,7 +30,7 @@
   commitment; a sample session the gate opens plain is refused before any coin. The prover's record says only
   ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its coins is the prover's.
 * **In-process** (no address): `window.live_challenger` and `window.draw_challenger` in the serving process, on the
-  prover's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
+  developer's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
   certified)``.
 
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's

@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Properties.Nci
-public import Properties.NciDesc
+public import Properties.Nci.Desc
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
@@ -675,7 +675,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
       rw [hk] at h1
       obtain rfl := Option.some.inj h1
       obtain ⟨hlt, hinp⟩ := hcls k h2 _ hg
-      have hreg : IsRegistered P ((thetaGates P i.theta)[t]'(by omega)) := by
+      have hreg : IsBoundAtRegistration P ((thetaGates P i.theta)[t]'(by omega)) := by
         obtain ⟨p, ops, w, ⟨⟨sc, hgate⟩, -, -⟩, -⟩ := hgl _ hlt
         have hp := gate_input_fn P hlo hgate h2 ((hng _ _).1 hg) h3
         refine ⟨p, ops, sc, hgate, (isRegisteredId_iff _).1 ?_⟩
