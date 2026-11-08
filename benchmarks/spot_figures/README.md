@@ -1,15 +1,18 @@
 # spot_figures
 
-The SPOT post's Figures 1-3 for one model, derived from the sampled-proofs planner
+The SPOT post's Figures 1-4 for one model, derived from the sampled-proofs planner
 (`verity.core.protocols.sampled_proofs.optimize`) and the model's cards. A model, not a measurement: every input is a
 card marked measured or modeled with its source, and each figure's JSON carries every card it read beside every
-plotted series.
+plotted series. Lean checks every one-stage and request-level design the figures plot (`plancheck`, which builds
+`sampled-proofs-plancheck` with `lake` on first use; `--no-lean` plans without it): a point plots what Lean certifies,
+and a design Lean refuses is an error. The two-stage designs are the planner's alone.
 
 ~~~sh
 uv run python benchmarks/spot_figures/figures.py --model GLM-5.3 --out DIR   # figure{1,1_overhead,2,3}.json, PNGs, SVGs
-                                                       # [--request workload] [--workers N] [--points N]
+                                                       # [--request workload] [--workers N] [--points N] [--no-lean]
 uv run python benchmarks/spot_figures/total_cost.py render DIR/figure1.json  # Figure 1, from the JSON
 uv run python benchmarks/spot_figures/render.py DIR/figure1_overhead.json   # the bounds against proof overhead
+uv run python benchmarks/spot_figures/figure4.py DIR/figure1.json            # Figure 4 (figures.py writes it too)
 research data put --kind spot-figure/v1 --tree DIR --preserve                # for the console
 ~~~
 
@@ -37,7 +40,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   figures show the share in no proof block and the share modeled. Its `params`, the model's total parameters, scale
   the references that go as the model's size.
 
-  A `serve_tax` card gives each server configuration's serve tax, what its change to the production server costs on
+  A `serve_tax` card gives each server configuration's serve tax, what its change to the serving engine costs on
   every token against its `baseline`, as one number with its range, `priced` or `measured`, a lower bound or not, and
   its parts. `total_cost.py priced-card` prices one from the model's cards; a measured value replaces a priced one
   configuration by configuration, and the figure plots a priced tax hollow.
@@ -57,10 +60,12 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     proving (`computed_proving`), where a design that samples a few blocks of a type pays its statement's whole
     fixed cost, so a type small in the marginal can be much of the proving.
   - One line per server configuration (`CONFIGURATIONS`), each starting at its own tax, hollow while the tax is
-    priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at window
-    edges committed; a replay block is a request), (B) each layer's state (a replay block is one layer of one token),
-    and (C) every proof-block boundary (one-stage, dashed, its tax a lower bound from hashing alone, the only line
-    with skipped work). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
+    priced, with its range as a bar: (A) tokens only (the token ids, the schedule record and the KV cache at
+    replay-block edges committed; a sampled request replays its replay block, one machine's window, whole from its
+    edge), (B) each layer's state (a sampled layer of one token replays its engine step's whole batch at that layer),
+    and (C) every proof-block boundary (one-stage, dashed, its tax a lower bound from hashing alone, priced and not
+    measured, the only line with skipped work). (A) replayed alone, which needs batch-invariant kernels, is a dotted
+    comparison at one machine's registration that pays their measured tax (`REPLAYS`, `BATCH_INVARIANT`). (A′) is (A)'s serving and tax on the `partition` card `per-expert`'s cut (the MoE cut per
     expert), dash-dot, labelled with the card's `label` (what of the cut is built, checked, proved and served), a
     line only for a model with that card. A new configuration, such as another cut, is a new entry with its own line.
   - A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block, or of a
@@ -77,7 +82,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     sets' form (`card_influenceTwo_le_served_min`) at one machine's registration beside each, thin and dashed; (B) in
     the sets' form. Each is never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`,
     `card_influenceTwo_le_min`), the JSON saying which term binds at each β; (C) is in
-    `consumers.exfiltration_bound`'s form, at most the served bits by the same count. The caption names the lines
+    `consumers.exfiltration_bound`'s form, its count the bits Lean certifies, at most the served bits
+    (`audit_exfiltration_delivered`). The caption names the lines
     that at β = 1% are bounded only by everything the scope serves, the trivial bound, so that value isn't read as a
     result.
   - The break-even (`breakeven`, `breakeven.txt` and `figure1.json`'s `breakeven`): for each patterns'-form line and
@@ -91,7 +97,8 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   - Scopes are the world (rho's `world-h200` fleet, which computes the census's `world-inference-2027`) and a
     datacenter (the census's `dc-12500-machines-600s`), each over a week, a month and a year
     (`wipe_monitoring.PERIODS`).
-  - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times its request at serving's MFU,
+  - Costs are the scope's GPU-seconds: a replay costs the `replay` card's factor times what it re-runs at serving's
+    MFU (`total_cost.batch`: a machine's replay block, an engine step's batch at one layer, or one request),
     proving a proof block takes the marginal proof overhead (the x-axis) times its FLOP at the H200's dense FP8 peak
     plus its share of its statement's fixed cost, and hashing takes the `commitment` card's rate. A statement holds
     one replay block's sampled proof blocks of one Definition, up to the `proof_overhead` card's `statement_blocks`,
@@ -101,6 +108,14 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
     bound at the budget (`optimize.two_stage_design`).
   - Each design's serve-time hashing is in its caption and in the table at the vertical line: every proof block's
     outputs under one-stage, outside the budget; the token ids under two-stage and request-level, inside it.
+  - Every caption says who the deployment's parties are and what its bounds rest on (`ROLES`, `TRUST`). Its parties
+    are SPOT[Flock]'s three roles: the inference server serves and commits its values; the proof server replays each
+    sampled replay block and proves it with `flock-circuit prove --zk`, with no ZK server and no recursion (the
+    `proof_overhead` card's `dev` arm); and the verifier draws on the challenger's live coins and decides with the Lean
+    verifier. The network certifier, which stamps each request's release order and bucket at ingress, is a layer of
+    its own. The bounds are soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and
+    an honest verifier, and, where a bound reads the certifier's stamp, on the certifier's own assumptions, stated in its
+    layer (`verity/core/protocols/sampled_proofs/README.md`).
   - Each panel names the deployment it assumes (`DEPLOYMENT`: what serving commits, and the replay block) and shows
     its headline design solid and its comparisons thin, dash-dotted, dashed or dotted:
     - exfiltration: two-stage sampling (serving commits only token ids), width-stratified (the headline: the public
@@ -135,12 +150,20 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
   card's series against hill-climbing effort, with each series' best so far. On the right, the model's serve-time
   cuts, priced from their bytes a token and the hash rate, beside the card's measured points for the model.
   `figure3.py card` writes the hash loop's card from its `hash-loop.json`.
+- **Figure 4** (`figure4.py`), for 'Randomness is powerful': the sampling rate that keeps the model's FP4 weights in at
+  δ = 2^-40, against a proof block's output bits. It is sampled in the simple form q = b ln(1/δ)/T and in the planner's
+  exact one-stage form, which adds location bits, over the headline and stretch scopes. Beside it is the rate a 10%
+  total cost buys at each line's marginal proof overhead, counting proving alone.
+- The headline scope (`figure1.PRIMARY`, a datacenter year) gets the bare file names. Its exfiltration panel also
+  plots (A) over the stretch scope (`figure1.SECONDARY`, a world year).
 - A model's `workload` card comes from the block census of its served circuit, every Program row of its Commit's Build
   on every rank and step of one request, one stratum per proof-block Definition; its `source` names the census.
 
 Limits of the model:
-- A replay is priced at the `replay` card's factor; one that must reproduce the served batch's layout costs that
-  batch.
+- A replay re-runs its whole replay block from its edge at the `replay` card's factor. Each sampled request pays its
+  own block: right while a block holds far fewer than one sample, as at β = 1%; past that, samples sharing a block
+  share its replay, so the planner overprices them. Stopping at the last sampled step or starting from a nearer edge
+  is left out.
 - The one-stage curves leave serve-time hashing out of the budget.
 - The one-stage certificate counts location bits over every proof block of the scope.
 - The uncapped two-stage bound charges a wholly incorrect request every bit it commits, its interior included, not
@@ -155,6 +178,7 @@ Limits of the model:
 - The served bits count every token of a request as served, as the token select's output word alone: a circuit that
   returns more (logits, state) serves more, and the cap is then too low.
 - The two-stage write forms need a harm bound at the footprint, which no lemma states yet, and (B) replays a layer of
-  one token at its share of its request's replay, from state it retains.
+  one token with its step's batch, the requests in flight a request's lifetime over the window (`LIVE`), from state it
+  retains.
 - A type the `proof_overhead` card doesn't measure is priced from its staged witness bits, not measured, its
   statement's fixed cost included; the caption gives each line's share of it.

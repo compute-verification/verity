@@ -1,14 +1,14 @@
 /-
-A draw's coins from one family of the auditor's challenger, as the verifier replays them from the record (`coins.py`'s
+A sample's coins from one family of the auditor's challenger, as the verifier replays them from the record (`coins.py`'s
 `challenger_stream`, `read_reason` and `coins_reason`, which `tests/test_challenger_difftest.py` holds to this, the
-verifier of record).
+verifier).
 
-The record of a draw's coins is its segment `{after, label, openings, start}` (`Segment.to_json`): family `label`'s coins
+The record of a sample's coins is its segment `{after, label, openings, start}` (`Segment.to_json`): family `label`'s coins
 `start`, `start` + 1, ..., each opened after `after`, the prover's commitment. `challengerStream` is `challenger_stream`:
 the concatenation of the openings' coins, each checked against the challenger's commitment as the family's coin
 `start + i`, opened after the commitment the verifier holds (`liveReason`); with the family's roots as the challenger's
 signed release log shows it received them, the openings are exactly the coins it released after that commitment,
-consecutive, so the prover picked none of them. `readReason` is `read_reason`: the bytes the draw read are the start of
+consecutive, so the prover picked none of them. `readReason` is `read_reason`: the bytes the sample read are the start of
 that stream, and they read every coin opened.
 
 `coinsReason` is `coins_reason`: the commitment and the roots come from the code that already trusts them,
@@ -19,7 +19,7 @@ signed open of the registration's window, never from the record or the evidence)
 prover picks no window, and the session counts only from a commit the pins log records on main's first-parent line
 (`pinnedSession`): coins a session of another window released after the registration's digest are refused. The session
 must be a withheld one (`withheldOn`: every ledger open of the window says `withheld: true`), whose challenger released
-no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a draw from the challenger whose evidence is missing or gives a
+no root, salt or path before it closed, as `drawCoins` requires. `Run.run` refuses a sample from the challenger whose evidence is missing or gives a
 reason (`select`, code `coins`), its `after` the registration's digest.
 
 `withinAt` is `coins_within`: the sizes of what the evidence holds, each within its `Limits` (`LIMITS`, which v2 reads
@@ -51,7 +51,7 @@ def SEGMENT_FORM : String :=
 def COINS_FORM : String :=
   "a draw's coin evidence is {key, ledger, main, pins, segment, session}: the verifier's challenger key, the auditor's ledger, the verifier's copy of main's first-parent history, the host's pins log, the draw's coins (Segment.to_json) and the challenger session's files"
 
-/-- `challenger_stream` (module docstring): the draw's coins from `segment`, opened after `after`, checked against `c`
+/-- `challenger_stream` (module docstring): the sample's coins from `segment`, opened after `after`, checked against `c`
 and, with `roots`, against the family's roots the challenger's log shows. -/
 def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (roots : Option (List ByteArray)) :
     V ByteArray := do
@@ -72,7 +72,7 @@ def challengerStream (c : LiveCommitment) (segment : Json) (after : ByteArray) (
       throw s!"the draw's {label} coins are not the ones the challenger's log shows released after the prover's commitment"
   return out
 
-/-- `read_reason` (module docstring): why `read` is not the start of the draw's coins using every coin opened; `none`
+/-- `read_reason` (module docstring): why `read` is not the start of the sample's coins using every coin opened; `none`
 when it is. -/
 def readReason (c : LiveCommitment) (segment : Json) (after read : ByteArray) (roots : Option (List ByteArray)) :
     Option String :=
@@ -99,7 +99,7 @@ def withheldOn (ledger : Json) (window : String) : Bool :=
     | _ => []
   !opens.isEmpty && opens.all fun e => match getD e.body "withheld" with | .bool true => true | _ => false
 
-/-- `coins_reason` (module docstring): why `coins`, the evidence of a draw's coins, does not show `read` to be the coins
+/-- `coins_reason` (module docstring): why `coins`, the evidence of a sample's coins, does not show `read` to be the coins
 the session the auditor's ledger opens for window `window` (its open root) released after `after`; `none` when it
 does. The session must be a withheld one (`withheldOn`), as `drawCoins`'s. -/
 def coinsReason (coins : Json) (window : String) (after read : ByteArray) : Option String :=
@@ -127,7 +127,7 @@ def MAX_PINS : Nat := 2 ^ 20
 /-- The longest path a coin opening holds: the depth of a layout of `MAX_COINS` coins. -/
 def MAX_PATH : Nat := 20
 
-/-- Bounds on the sizes of a draw's coin evidence (module docstring, `withinAt`). -/
+/-- Bounds on the sizes of a sample's coin evidence (module docstring, `withinAt`). -/
 structure Limits where
   log : Nat
   hellos : Nat

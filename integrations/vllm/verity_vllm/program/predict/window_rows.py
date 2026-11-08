@@ -539,6 +539,28 @@ class Rows:
         """Each unit of ``tid``'s slot (its lowering's), -1 for a unit of no slot's."""
         return self._span(tid, 2)
 
+    def value(self, param: str, rows: int, empty: Sequence[int]) -> np.ndarray:
+        """Registered value ``param``'s ``rows`` rows as u16 words as the circuit's proof blocks make them: each row a read of
+        an output row ties (`interface.Read`), its unit's output row, and every other row ``empty`` (a row's words). Refused
+        where a read of ``param`` fills an input or reads past its rows, or two units make one row two ways."""
+        empty = np.asarray(empty, dtype=np.uint16)
+        out, made = np.tile(empty, (rows, 1)), np.zeros(rows, dtype=bool)
+        for r in self.circuit.registered.reads if self.circuit.registered else ():
+            if r.param != param:
+                continue
+            outs = [p for p, _ in self.lays[r.reader].outs]
+            if r.port not in outs or self.lays[r.reader].outs[outs.index(r.port)][1] != len(empty):
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} other than as an output row of {len(empty)} words")
+            leaf = r.source(np.arange(r.units))
+            at, got = leaf // len(empty), self.outs[r.reader][outs.index(r.port)][r.at:r.at + r.units]
+            if (leaf % len(empty)).any() or (at >= rows).any():
+                raise ValueError(f"{r.reader} {r.port} reads {param!r} off its {rows} rows of {len(empty)} words")
+            fresh = ~made[at]
+            out[at[fresh]], made[at] = got[fresh], True
+            if not np.array_equal(out[at], got):
+                raise ValueError(f"{param!r}: two units make one of its rows two ways")
+        return out
+
     def record(self, win: IF.Window) -> None:
         """Every unit into ``win``, template by template in unit order, in runs of one step, one slot and one form, each
         labelled ``{"step", "slot", "form"}`` (module docstring): each input by reference but an opening's ports, each port
@@ -607,9 +629,9 @@ def standin_state(program: str, cls: WindowClass, slots: Sequence[tuple[Sequence
 
 
 def index_salt(key: bytes, index: int) -> bytes:
-    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): drawn under the
+    """Window ``index``'s index salt (`interface.Window.write`'s ``index_salt``, `rows.index_leaf`): sampled under the
     committer's secret ``key`` at salt nonce `INDEX_NONCE` plus the window's ``index``, which no other value under ``key``
-    takes, so the committer draws it again from its key alone."""
+    takes, so the committer samples it again from its key alone."""
     if not 0 <= index < 1 << 32:
         raise ValueError(f"window {index}: a window's index is a u32")
     return H1R.salts(key, INDEX_NONCE + index, 1)

@@ -53,7 +53,7 @@ import Proofs.Accounting.Compose.ServiceBudget
 import Proofs.Accounting.Compose.ServiceCovers
 import Proofs.Accounting.Compose.SplitRateClosed
 import Proofs.Accounting.Compose.SplitRateExp
-import Proofs.Accounting.ComposePeriod
+import Proofs.Accounting.ComposeMonitoringPeriod
 import Proofs.Accounting.HMu
 import Proofs.Accounting.Headline.Luck
 import Proofs.Accounting.JointBridge.WorkOfCreditedWords
@@ -70,7 +70,7 @@ import Proofs.Pouw.Receipt
 import Proofs.Properties.Pouw.Check
 import Proofs.Properties.Pouw.Draw
 import Proofs.Properties.Pouw.Grid
-import Proofs.Properties.RemoteAudit.Sort
+import Proofs.Properties.Accounting.Remote.Sort
 import SampledProofs.Record
 
 /-!
@@ -108,7 +108,7 @@ namespace Accounting.SecurityProofs.Bridge.HonestH200
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 
 /-! ## The word count and the price -/
 
@@ -296,7 +296,7 @@ theorem meets (n : ℕ) (hn : 0 < n) {δs : ℝ} (hδs : 0 < δs) (sha fetch : �
     (HonestH1.period n).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer n) (checkedPlay n).game ∧
     (∀ w, prob (fun x => (HonestH1.layer n).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows n) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
+    RegisteredBeforeDraw (HonestH1.windows n) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows n) ∧
     ServiceSound HonestH1.prm (HonestH1.windows n) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := n)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period n).EveryWindow
@@ -351,7 +351,7 @@ namespace Accounting.SecurityProofs.Bridge
 
 open Properties.Pouw.Period Properties.Pouw.Period.SecurityProofs
 open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assumptions.Compose Pouw.RelativeSecurity
-open Accounting.SecurityProofs.ComposePeriod
+open Accounting.SecurityProofs.ComposeMonitoringPeriod
 open HonestH200
 
 /-- **`WorkOfH1CheckedCreditPeriodH200`'s honest witness**: its hypotheses hold at the honest period on the H200
@@ -382,7 +382,7 @@ theorem WorkOfH1CheckedCreditPeriodH200_honest :
     (HonestH1.period 1).EveryWindow (fun live _ => DeadConeDead Honest.scheme HonestH1.circuit 144 live) ∧
     PrefixOf (HonestH1.layer 1) (checkedPlay 1).game ∧
     (∀ w, prob (fun x => (HonestH1.layer 1).MovedIn x w) ≤ 0) ∧
-    RegisteredBeforeDraw (HonestH1.windows 1) ∧ DrawIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
+    RegisteredBeforeDraw (HonestH1.windows 1) ∧ SampleIsCoin HonestH1.hK24 HonestH1.prm (HonestH1.windows 1) ∧
     ServiceSound HonestH1.prm (HonestH1.windows 1) HonestH1.opened (stagedAt HonestH1.salt HonestH1.staged) 0 ∧
     SaltIsLiveCoin HonestH1.hr1 (HonestH1.salt (n := 1)) HonestH1.enc ∧ StagedPins HonestH1.staged HonestH1.flat ∧
     (HonestH1.period 1).EveryWindow

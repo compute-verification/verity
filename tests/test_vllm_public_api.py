@@ -48,17 +48,32 @@ PUBLIC = {
                                           "own Build without a trace",
     "verity_vllm.program.predict.window_weights": "I7: the window circuit's weights, the committer's registration and the "
                                                   "verifier's pins of it (VLLM-113)",
+    "verity_vllm.pipeline.expert_tables": "I7: the per-expert cut's tables, the committer's registration of a TP rank's and the "
+                                          "verifier's pin of it (tp-register-tables)",
     "verity_vllm.program.predict.window_rows": "I7: a window's rows, the window circuit's units filled from a served window's "
                                                "values (VLLM-125)",
     "verity_vllm.program.predict.scan_state": "I7: the network certifier's scan state as a window class's Programs read it: "
                                               "the registered value, its class, its words and a slot's bridge",
+    "verity_vllm.program.predict.window_class": "I7: a window class, and H1's tables as a window circuit reads them under H1's "
+                                                "tie (Tables)",
+    "verity_vllm.program.frontend.train_step": "I7: one training step's Program (step_program, step_report, export_step), its "
+                                               "layout and the primitives a census prices, which the grader "
+                                               "(benchmarks/training_slowdown/grader) reads",
     "verity_vllm.pipeline.workload_file": "I1: a workload file, fetched from the evidence store when absent and checked against "
                                           "its digest",
+    "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
+                                 "port's fields, and each carried request's, held to window_advice.follows",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
+    "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
+                                      "its record R and their log (W_FILE, R_FILE, LOG)",
     "verity_vllm.pipeline.tick_plugin": "I1: the certified tick (--admit tick) under vLLM's own OpenAI server: its general "
                                         "plugin (register) and ASGI middleware (TickFeed), configured by VERITY_TICK, which "
                                         "the trace corpus serves under",
+    "verity_vllm.protocols.pouw.h1.commit": "I1: a served H1 window's Commit: its registration W (registration), the audited "
+                                            "window's tables rebuilt as W's (reuse, reused) and the record H1 names (named)",
+    "verity_vllm.protocols.pouw.h1.words": "I1: the words H1 commits a call's rows and a step's input ids as (chunk_words, "
+                                           "ids_words)",
     "verity_vllm.protocols.pouw.h1.drawn": "I1: a served H1 window's drawn calls staged as C-Flock statements and checked as "
                                            "credit does (main), which benchmarks/pouw/h1_prove/drawn.py runs",
     "verity_vllm.protocols.pouw.h1.receipts": "I1: served H1's receipt producer, the zy receipts serve-openai's "

@@ -151,6 +151,9 @@
   "verity/ml/definitions/registry/marlin_moe.py": [
    "deepseek-ai/DeepSeek-V4-Pro"
   ],
+  "verity/ml/definitions/registry/merge_attn_states.py": [
+   "zai-org/GLM-5.3"
+  ],
   "verity/ml/definitions/registry/mhc.py": [
    "deepseek-ai/DeepSeek-V4-Pro"
   ],

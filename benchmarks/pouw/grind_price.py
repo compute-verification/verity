@@ -3,7 +3,7 @@
     uv run benchmarks/pouw/grind_price.py [--md OUT] [--json OUT]
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries
-draws T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
+samples T fresh seeds for a seed group and keeps the best (`Accounting.Guarantees.TS.GrindPremiumAt`). At exchange rate κ
 a scope's gain is L − κ·U (lucky and unlucky savings); outside δ every seed group realizes at most
 
     π* = ln(T·M/δ) / θ
@@ -38,7 +38,7 @@ and π* = min_θ (ln(T/δ) + Σ N·ln(…))/θ units (`LuckMoment` at κ = 0 wit
 `verity.core.protocols.pouw.grind`'s, which compile's seed-group check reads too). attn_noise's own form,
 log₂(T/δ)/(h·N) with h the least row's noise bits over the units reading it, leaves out which rows the cheater picks:
 it sits 0.5–8% below at decode and 10–21% below at prefill's QKᵀ, where the bound is smallest. Both are tabled, with
-the (query head, request) pairs a decode seed must cover. A seed over several query heads draws a KV head's K rows' and
+the (query head, request) pairs a decode seed must cover. A seed over several query heads samples a KV head's K rows' and
 V columns' noise once, read by its heads/kv query heads (GQA). At decode the query's rows bind, so that moves nothing and
 a decode seed's cover counts every (query head, request) pair; at prefill K's rows bind, so a call's floor divides by the
 KV heads, not the query heads, and a prefill seed's cover counts (KV head, request) pairs.
@@ -201,7 +201,7 @@ def h1_rows(shape: EB.Shape, regime: str, n: int, ctx: int, group: str | int = "
     seed a head and request (`head`, as deployed), one a call (`call`: the layer's heads and the step's whole batch),
     one over every layer's call of the kind in a step (`step`, which no seed binding the call's roots allows: see
     `decode_lever`), or an int g: g (query head, request) pairs of one layer under one seed, each reading its own K
-    rows. A call's or a step's seed draws a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
+    rows. A call's or a step's seed samples a KV head's K rows and V columns once, read by its shape.heads/shape.kv query
     heads."""
     if isinstance(group, int):
         return _h1_rows(regime, ctx, shape.d, group, 1)

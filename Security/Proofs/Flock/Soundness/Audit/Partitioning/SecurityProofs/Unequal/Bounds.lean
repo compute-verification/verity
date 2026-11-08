@@ -10,13 +10,13 @@ import Proofs.Flock.Soundness.Audit.Law
 `SecurityProofs.FreeCompute` proves `ConverseAsymptotic` and imports this file, so the lemmas here that need it take it
 as a hypothesis (`hCA`), and `FreeCompute` passes its proof.
 
-* `achievability`: independent draws with `q_u = min(1, Λ/C · w u)` rounded up to multiples of `1/den`. Rounding up
+* `achievability`: independent samples with `q_u = min(1, Λ/C · w u)` rounded up to multiples of `1/den`. Rounding up
   only lowers each escape, and `1 − q_u ≤ e^{−Λ w_u / C}`, so a set doing work at least `C` escapes with at most
   `e^{−Λ} = δ`.
 * `granularityOptimum`: the lower side is `ConverseAsymptotic` at `K = ⌈C/s⌉` (`granularity_arith`); the upper side is
   `achievability` at `ε/(n·c(s) + 1)`. `granularityChoice` composes the two.
 * `unequalDraws`: unit `u` is in class `⌊log_ρ (w u / a)⌋`, so it does work in `[aρ^j, aρ^{j+1})`. On each class,
-  `ConverseAsymptotic` at `K_j = ⌈C/(aρ^j)⌉` bounds its draws (`class_bound`), and the classes' bounds sum.
+  `ConverseAsymptotic` at `K_j = ⌈C/(aρ^j)⌉` bounds its samples (`class_bound`), and the classes' bounds sum.
 * `unequalCost_of_le`: the same per class, weighted by the class's cheapest unit, with `c(ρt) ≤ ρ·c(t)`. It assumes
   `a ≤ A`, which every `n ≥ 1` implies; without it the statement is false at `n = 0` (`unequalCost_needs_le`).
 -/
@@ -61,7 +61,7 @@ theorem cost_const {n : ℕ} (L : Law n) (c : ℝ) : cost L (fun _ => c) = meanD
   unfold cost meanDraws
   rw [Finset.sum_mul]
 
-/-- A law under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
+/-- A sampling design under which every set of at least `K` units escapes with at most `δ` misses `K` units with at most `δ`. -/
 theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 ≤ δ)
     (h : ∀ B : Finset (Fin n), K ≤ B.card → (L.escape B).toReal ≤ δ) : (L.miss K).toReal ≤ δ := by
   have hle : L.miss K ≤ ENNReal.ofReal δ := iSup₂_le fun B hB =>
@@ -71,7 +71,7 @@ theorem miss_toReal_le_of {n : ℕ} {L : Law n} {K : ℕ} {δ : ℝ} (hδ : 0 �
 
 /-! ## Achievability -/
 
-/-- **Achievability**, by independent draws with `q_u = min(1, Λ/C · w u)` rounded up to a multiple of
+/-- **Achievability**, by independent samples with `q_u = min(1, Λ/C · w u)` rounded up to a multiple of
 `1/(⌈1/ε⌉ + 1)`. -/
 theorem achievability : Guarantees.Achievability := by
   intro n w C δ ε hw hC hδ0 hδ1 hε
@@ -99,7 +99,7 @@ theorem achievability : Guarantees.Achievability := by
       calc (num u : ℝ) < q u * den + 1 := h1
         _ = (q u + (den : ℝ)⁻¹) * den := by field_simp
     linarith
-  refine ⟨bern num den, fun B hB => ?_, fun u => ?_⟩
+  refine ⟨Law.bernoulliOf num den, fun B hB => ?_, fun u => ?_⟩
   · rw [bern_escape_toReal hnum]
     calc ∏ u ∈ B, (1 - (num u : ℝ) / den) ≤ ∏ u ∈ B, Real.exp (-(Λ / C * w u)) := by
           refine Finset.prod_le_prod₀ (fun u _ => ?_) (fun u _ => ?_)
@@ -325,7 +325,7 @@ theorem class_arith {m t A C : ℝ} {K : ℕ} (ht : 0 < t) (hC : 0 < C) (hm : 0 
           nlinarith
   linarith
 
-/-- **One class's draws.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is drawn
+/-- **One class's samples.** A set `S` of units each doing work at least `t`, with `t ≤ A` when `S` has a unit, is sampled
 `Λ (1 − AΛ/(2C)) (|S|·t/C·(1 − A/C) − 1)` times in expectation, by `ConverseAsymptotic` on `L` restricted to `S` at
 `K = ⌈C/t⌉`. -/
 theorem class_bound (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (L : Law n) (w : Fin n → ℝ) {A C δ t : ℝ}
@@ -394,7 +394,7 @@ theorem sum_classes {n : ℕ} (w : Fin n → ℝ) {ρ a A : ℝ} (hρ : 1 < ρ) 
     rw [mem_range, Nat.lt_succ_iff]
     exact class_le hρ ha (hw u).1 (hw u).2) g
 
-/-- **The converse for unequal units, in draws.** -/
+/-- **The converse for unequal units, in samples.** -/
 theorem unequalDraws (hCA : Guarantees.ConverseAsymptotic) : Guarantees.UnequalDraws := by
   intro n w ρ a A C δ hρ ha hw hC hδ0 hδ1 hAΛ L hL
   have hρ0 : 0 < ρ := by linarith
@@ -553,7 +553,7 @@ theorem unequalCost_of_le (hCA : Guarantees.ConverseAsymptotic) {n : ℕ} (w : F
 
 /-- **`UnequalCost` needs `a ≤ A`**: the statement without it fails with no units. At `n = 0`,
 `∀ u, a ≤ w u ∧ w u ≤ A` is vacuous, so `A` may be negative and `c(A) = f + o·A` with it. At `ρ = 2`, `a = 1`, `A = −1`,
-`C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is `log 2 · (1 + log 2 / 2) > 0`, while every law on no units costs
+`C = 1`, `δ = 1/2`, `f = 0`, `o = 1`, the bound is `log 2 · (1 + log 2 / 2) > 0`, while every sampling design on no units costs
 `0`. -/
 theorem unequalCost_needs_le : ¬ ∀ (n : ℕ) (w : Fin n → ℝ) (ρ a A C δ f o : ℝ), 1 < ρ → 0 < a →
     (∀ u, a ≤ w u ∧ w u ≤ A) → 0 < C → 0 < δ → δ ≤ 1 → 0 ≤ f → 0 ≤ o → A * Real.log δ⁻¹ ≤ C →

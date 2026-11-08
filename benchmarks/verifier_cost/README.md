@@ -14,7 +14,7 @@ the way down (`ir="boolean"` can't derive Serve_v1; `lift.py`'s docstring says w
   circuit is small enough (`--unrolled-max`), the instance expanded gate by gate also goes through
   `nci-check --policy --unrolled` (`NciCheck.check`, the gate-by-gate reference), and the two verdicts must agree.
 * `partition`, the one-stage verifier's partition: `sampled-proofs-difftest`'s `partition` (`Partition.units`, `strata`,
-  the expanded law and the digest, as the verifier computes them) on Serve_v1 under the template query of its
+  the expanded sampling design and the digest, as the verifier computes them) on Serve_v1 under the template query of its
   Calls (`Q_template_instances`), under `Q_word` v1 and `Q_call` v1 at `X = 16` where its Calls' distinct Definitions are
   small enough (`--unrolled-max`), and on the served shape: the population program of Serve_v1's largest Definition at
   1 to 10⁶ instances under `Q_template_instance`, as a served window registers one. A template query must apply.
@@ -133,6 +133,25 @@ research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool
 `Sparse.ofRows`), the logical `Tmpl.unroll`, and `Net.parse` on the circuit's flat unit. Per K, `$OUT` gets unit-K.tmpl,
 unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time -v`.
 
+`flock_served.sh KIND [N]` measures the Lean verifier on a served statement: one kind of a saved served step
+(`one_stage/a11.py --save-values`, sent as a `.tar.gz`) staged as a11 stages it, flat, or with `--layout MODE` as a
+templated statement (with `--structural`, `struct_lower`'s template, the flat unit never built). With a recorded a11
+session of that kind sent (a `.tar` of its session directory), it times `archive-put` and `verify --zk --partition
+--program` as `a0.lean_verify` runs them, under `perf record` where the node has it, so the verify's own phase lines
+(`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's, since
+`verify` runs its session before refusing it. `--phases`, and every templated statement (which `verify`
+refuses last, `ProvedScope.servedForm`), add `flock_served/Main.lean`'s timing of verify's work before the session a step
+at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
+`KsScope.checkOf` and `Stmt.setupTablesOf` with the draw, each with its RSS. `build.json` has the unit's ANDs and matrix
+entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
+verifier would read.
+
+~~~sh
+research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
+  --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
+  [--layout iv/hybrid/4 [--structural]]
+~~~
+
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
 config's word-level descriptor: `flock-verify qcall-program` at each X, with the output's SHA-256 so two commits' outputs
 compare, a `perf` profile at the first X, and the one-stage `partition` piece under `Q_call` v1 at X = 16. Its header has
@@ -146,5 +165,5 @@ seconds, peak RSS and the population (null where the verifier refuses the query)
 an `evidence/v1` record naming the run and its commit; it runs where the store's keys are (a VM), since a node's shell
 has none.
 
-Apart from `nci_glm`'s inputs, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
+Apart from `nci_glm`'s inputs and `flock_served`'s saved step, nothing here is a served Program: `on_bits`'s output and `nci_glm`'s derived Programs are
 this benchmark's constructions, and nothing outside this directory reads them.

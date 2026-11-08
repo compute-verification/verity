@@ -2,7 +2,7 @@
 (each row-parallel reduction's partials, which rank 1 − r receives from rank r) are registered values, and whose reductions are
 transfer-gate units reading both ranks' partials through ``--registered`` ports, audited by `a5.audit` as each rank's
 window on that rank's `service.Stream`, on one local challenger session's coins (``--challenger local``), both ranks
-drawing at once as a TP step's do. No served window is TP2 with
+sampling at once as a TP step's do. No served window is TP2 with
 committed advice yet (the registered compiler's TP2 rank Programs, `b1_tp2`, bind a rank's peer input to the other rank's
 partial only by the host's Match, in the clear), so this step stands in for one.
 
@@ -22,12 +22,12 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's registration names each of its partials'
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
-* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the law ``work:2``: Q·K·T units of the transfer-gate
+* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the sampling design ``work:2``: Q·K·T units of the transfer-gate
   template, the registered `AllReduce2_v1{H}` itself (`b1_tp2.AllReduce2`), its input ``parts`` staged as two ports,
   ``part0`` and ``part1``, its rows ``parts[0]`` and ``parts[1]``: the ranks' partials in rank order (`PORT_PARAMS`), a
   chunk ``q<q>c<k>`` a request's collective, unit i
   of it token i; and the rest, ``--rest`` units of `WardenRowIdentity{128}` over rows of their own, standing in for the
-  compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's drawn
+  compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's sampled
   share. Each chunk's ``part<j>`` is a shared-row table of rank j's partial's rows under rank j's salts, so its ``b || c``
   is the registered value's, and its header names the value, the rows' positions and their paths
   (`registered.Registered.statement`); its ``o0``, the reduced row, is committed afresh. Both ranks prove the same sums:
@@ -46,7 +46,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   own, each refused by `source`; rank r's ports built before the peer's registration is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
   Lean's registered reads (`warden_rows.refusal`) by name.
-* **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, draw rank 1's q0c0 and be refused
+* **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, sample rank 1's q0c0 and be refused
   by Lean's registered reads by name: ``--altered``, rank 1's ``part0`` row 0 (rank 0's embedding partial of request 0 as
   rank 1 received it) one bit off, under rank 0's salt, the advice bit moved through the transfer, its sum computed from the
   altered row (the circuit holds) ("does not open"); ``--made-for swapped|other-collective|other-request|own``, that port's
@@ -59,7 +59,7 @@ rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``-
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -428,7 +428,8 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw both ranks on one local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true",

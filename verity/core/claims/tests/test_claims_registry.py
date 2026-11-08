@@ -126,7 +126,7 @@ def test_the_honest_clock_says_which_form_is_proved() -> None:
 
 
 def test_the_session_premises_state_their_scope() -> None:
-    """No served path verifies with --registered, and the window's law also needs the audit coins."""
+    """No served path verifies with --registered, and the window's sampling design also needs the audit coins."""
     live = get("accounting-ts-accepted-live")
     assert live.standing == "standard"
     assert all(s in live.name for s in ("plain flock-verify --zk", "only one_stage/a0.py passes --registered",
@@ -147,7 +147,7 @@ def test_counts_fixed_is_a_conjecture_and_modes_run_standard() -> None:
 
 
 def test_the_dc_headlines_claims_name_what_their_statements_assume() -> None:
-    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof system's named premises, as sm_120's."""
+    """The H200's and B200's headlines assume FOLD-OPT at π* and the proof system's assumptions, as sm_120's."""
     for e in ("accounting-ts-fold-opt", "accounting-ts-proofs-sound"):
         assert "the H200's and the B200's" in get(e).name, e
     assert "RT3-LOGIC-6" in get("accounting-ts-fold-opt").name

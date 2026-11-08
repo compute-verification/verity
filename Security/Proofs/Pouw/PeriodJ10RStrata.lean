@@ -32,16 +32,16 @@ import Mathlib.Tactic.NormNum.Parity
 import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Accounting.ComposePeriod
+import Proofs.Accounting.ComposeMonitoringPeriod
 import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `H1J10RCheckedCreditPeriodStrata`
 
 At each stratum `s ∈ S`, what `Proofs.Pouw.PeriodJ10R` applies to its one stratum:
-`Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
-(`pathsAt`). Its joint soundness comes from `StrataDrawIsCoin`'s half that puts stratum `s`'s drawn proof blocks among the
-proof blocks `Credit.window`'s draw demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
+`Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod` at `tileRun`, on stratum `s`'s view of the period's coins
+(`pathsAt`). Its joint soundness comes from `StrataSampleIsCoin`'s half that puts stratum `s`'s sampled proof blocks among the
+proof blocks `Credit.window`'s sample demands, with its `TileServiceSound` (`jointSound_strata`); its pins from the period's
 salt being its live coin, read on the view (`saltAt`). Its accepted prefix and live words are the period's
 (`prefixLen_eq`, `creditedLive_eq`, `stratumLive_symm`), and the view is a relabelling of the period's coins, so the
 bound holds on the period's coins (`stratum_bound`). An accepted period whose fixed words, summed over `S`, fall short of
@@ -91,16 +91,16 @@ theorem saltAt {C : Type} {r nB mB n : ℕ} (h : r = 1) (hr : 0 < r) (σ : Fin n
   show saltOf ws ((pathsAt C h σ s n).symm y) w = _
   rw [hs, coinAt_view h σ s y w, coinAt_atStratum_fst h σ s _ hr Nat.one_pos]
 
-/-- **Joint soundness at stratum `s`'s run**: a window whose drawn tile of stratum `s` has an opening failing its
-relation is one `Credit.window` credits with that tile's window proof block among the proof blocks its draw demanded, since
-`StrataDrawIsCoin` puts every stratum's drawn proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
+/-- **Joint soundness at stratum `s`'s run**: a window whose sampled tile of stratum `s` has an opening failing its
+relation is one `Credit.window` credits with that tile's window proof block among the proof blocks its sample demanded, since
+`StrataSampleIsCoin` puts every stratum's sampled proof blocks there, which stratum `s`'s `TileServiceSound` bounds. -/
 theorem jointSound_strata {ι C V : Type} [Fintype C] (Cd : Declared ι) (hr : 0 < Cd.rounds) {m nB mB n : ℕ}
     (hM : Cd.rounds = m) (σ : Fin nB → Fin mB) (k : Fin mB → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card)
     (S : Finset (Fin mB)) (s : Fin mB) (hsS : s ∈ S) (unitOf : Fin nB → ℕ) (ws : CreditWindows (StrataCoin C m σ) n)
     (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) {δks : ℝ}
-    (hD : StrataDrawIsCoin σ k hk S unitOf ws)
+    (hD : StrataSampleIsCoin σ k hk S unitOf ws)
     (hS : TileServiceSound σ s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile) δks) :
     (layerAt Cd hr hM σ k hk s unitOf ws opened enc place tile).JointSound δks := by
   intro w
@@ -142,7 +142,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
     (Wp : WindowPlay C (Coin C (Rest σ s) Cd.rounds σ s) (Fin (tileCount σ s)) Cd.rounds n)
     (Pl : Play (Coin C (Rest σ s) Cd.rounds σ s) n K T L U)
     (folded : Paths (Coin C (Rest σ s) Cd.rounds σ s) n → ℝ) (ρ δs δbind δks : ℝ)
-    (hDraw : StrataDrawIsCoin σ k hk S unitOf ws)
+    (hDraw : StrataSampleIsCoin σ k hk S unitOf ws)
     (hSalt : Properties.Pouw.Period.SaltIsLiveCoin Nat.one_pos (saltOf ws) enc)
     (hS : Scope Sc Cd δs) (hρ : 0 < ρ) (hρ1 : ρ ≤ 1)
     (hρN : ∀ t : Fin (tileCount σ s), ρ * (tileCount σ s) * shareCone Sc Cd (tileCount σ s) t ≤ 1)
@@ -165,7 +165,7 @@ theorem stratum_bound {ι K T L U C V : Type} [Fintype K] [Fintype T] [Fintype L
           (j10rRate (k s) ρ) δs) ≤ δs + n * (δbind + δks) := by
   obtain ⟨hMu, hRB, hGs⟩ := hLucks
   have hK0 : 0 < k s := hKd
-  have h := Accounting.SecurityProofs.ComposePeriod.CircuitCreditPeriod Sc Cd hn hN hr (hk s) Wp Pl
+  have h := Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod Sc Cd hn hN hr (hk s) Wp Pl
     (tileRun σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
       (rightAt hM hr σ s enc place tile))
     folded ρ (7 / 8) (1 / 2) 1 1 1 (j10rRate (k s) ρ) δs δbind δks hS hρ hρN hwmax hlk one_pos one_pos

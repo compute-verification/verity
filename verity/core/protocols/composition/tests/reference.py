@@ -72,7 +72,7 @@ def module(name: str, path: Path) -> ModuleType:
 
 
 #: Sampled proofs' one-stage difftest: `answer` is `one_stage` behind the decoders `OneStage` reads, `decode_params_v2`
-#: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies draw audits.
+#: and `_challenger_draw` v2's parameters and its challenger's coins, and its strategies sample audits.
 ONE_STAGE = module("one_stage_difftest", CORE.parents[1] / "verity/core/service/sampled_proofs/tests/test_difftest.py")
 #: PoUW's period difftest's cases: periods of the auditor's ledger and their windows, honest and with one mutation each.
 POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/check/tests/pouw_period_cases.py")
@@ -80,7 +80,7 @@ POUW_PERIOD_CASES = module("pouw_period_cases", CORE / "protocols/pouw/lean/chec
 #: period with one change.
 PERIOD = module("network_period_difftest", CORE / "protocols/network/tests/test_network_period_protocol.py")
 #: The inference-only policy's difftest: `reference` is the policy's Python check (`check_baseline`) behind the
-#: protocol's decoders, and `drawn` draws a declaration's case with one change.
+#: protocol's decoders, and `drawn` samples a declaration's case with one change.
 INFERENCE = module("inference_only_protocol_difftest", CORE / "protocols/network/tests/test_inference_only_protocol.py")
 #: The wipe protocol in Python: `answer`, its mirror under S1's LMS, and `case`, a signed wipe aimed at a kind (`KINDS`).
 WIPE_CASES = module("wipe_protocol_case", CORE / "devices/memory_challenger/lean/tests/wipe_protocol_case.py")
@@ -221,7 +221,7 @@ def _one_stage_evidence(rest: dict) -> dict:
 
 def _one_stage_check(p: dict, c: tuple[dict, bytes], e: dict, blobs: list[bytes]) -> tuple:
     """`OneStageZk.checkBlobs` on `blobs` up to its one session's coin tree: at the coins v1 reads from the challenger's
-    release (`_coins_of`), the evidence's one session (`oneSession`: the drawn units are proved in one session), its
+    release (`_coins_of`), the evidence's one session (`oneSession`: the sampled proof blocks are proved in one session), its
     record on the blobs and held to the coin trees that release log shows (`challenger.sessions_tree_reason`). So every
     case the mirror decides is refused: a session on a tree the challenger logged goes on to the population, the public
     file and `flock-verify`, outside the mirror."""
@@ -257,6 +257,20 @@ def _form_params(j: Any) -> dict:
     if form == "recursive":
         _recursive(rest, "parameters")
     raise Reject(f"the parameters' form {form} is not one-stage or recursive")
+
+
+def _covered(form_params: Callable[[Any], dict]) -> Callable[[Any], dict]:
+    """`OneStage.paramsOfJson` behind the form's split: `form_params`, and every bernoulli law refused at any p, as
+    `covered_params` refuses it (`service.bernoulli`)."""
+    def params(j: Any) -> dict:
+        p = form_params(j)
+        if ONE_STAGE.service.bernoulli(p["law"]):
+            raise Reject(ONE_STAGE.service.BERNOULLI)
+        return p
+    return params
+
+
+_form_params = _covered(_form_params)
 
 
 def _form_evidence(b: bytes) -> dict:

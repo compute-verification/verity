@@ -1,5 +1,5 @@
-"""The bounds against proof overhead as PNG and SVG for one scope, drawn from `figure1_overhead.json` alone, so anything
-holding the JSON draws the same figure: three panels (exfiltration, infiltration, skipped work) against proof overhead,
+"""The bounds against proof overhead as PNG and SVG for one scope, sampled from `figure1_overhead.json` alone, so anything
+holding the JSON samples the same figure: three panels (exfiltration, infiltration, skipped work) against proof overhead,
 a colour per share of compute
 spent on verification, the panel's headline design solid and thick, the uniform two-stage design solid and thin, the
 capped two-stage designs dash-dotted (`CAPPED`, `PATTERNS`; uniform thin), and the other comparisons dashed or dotted,
@@ -27,6 +27,8 @@ import matplotlib.pyplot as plt
 from matplotlib.ticker import FixedLocator, FuncFormatter, LogFormatterMathtext, NullLocator
 from matplotlib.transforms import offset_copy
 
+from figure1 import PRIMARY
+
 COLORS = ("#9ECAE1", "#3182BD", "#08306B")
 CAPPED, PATTERNS = (0, (7, 2.5, 1.5, 2.5)), (0, (7, 2.5, 1.5, 2.5, 1.5, 2.5))
 COMPARISON = {"one-stage": (0, (6, 3)), "request": (0, (1.2, 2.4)), "two-stage-uniform": "-",
@@ -45,7 +47,6 @@ NAMES = {"two-stage": "Two-stage, width-stratified", "two-stage-uniform": "Two-s
          "layer_of_token": "Deferred interiors, a layer of a token"}
 REFERENCE_STYLE = {"solid": "-", "dashed": (0, (4, 3))}
 VERTICAL = "#E69F00"
-PRIMARY = "world year"
 #: a reference line this far above the headline curves' top is named at the top of the axis instead of stretching it
 OFF_SCALE = 1e3
 #: reference lines within this relative distance coincide on the plot
@@ -205,7 +206,7 @@ def _save(fig, outdir: Path, name: str) -> list[Path]:
 
 
 def render(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Draw `scope`'s main figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
+    """Sample `scope`'s main figure from `out` into `outdir` as `stem(scope)`.png and .svg; returns their paths."""
     fig, axes = _figure(out, scope, 3, 27, .06)
     captions = out["scopes"][scope]["captions"]
     for ax, (panel, ylabel) in zip(axes, PANELS):
@@ -217,7 +218,7 @@ def render(out: dict, scope: str, outdir: Path) -> list[Path]:
 
 
 def render_appendix(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Draw `scope`'s appendix figure, the exfiltration panel with every design and the references the main figure
+    """Sample `scope`'s appendix figure, the exfiltration panel with every design and the references the main figure
     leaves out, into `outdir` as `appendix_stem(scope)`.png and .svg; returns their paths."""
     fig, (ax,) = _figure(out, scope, 1, 15, .1)
     p = out["panels"]["exfiltration"]

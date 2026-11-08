@@ -59,7 +59,7 @@ coins the openings open:
 * `Loop.swMsgAt_innerAt`: the switched session's message at rep `2j + r`'s inner round `e < 4`, where the coins below
   it show no refusal, is `innerCutBody` at the rep's switched source, tagged `0`.
 * `coinAt_inner`: the coins the frame's own inner round reads (`ε`, `β`) are the opened coins at their slots.
-* `ownFrames_one`, `ownFrames_three`: the firewall's own rounds 1 and 3 at a configuration on given pads.
+* `ownFrames_one`, `ownFrames_three`: the ZK server's own rounds 1 and 3 at a configuration on given pads.
 * `LeanRelease.ofLoop_start_at`: where the frame takes a rep's coins, the rep's frame starts.
 * **`LeanRelease.liveInner_withInner`**: `LiveInner` at `withInner`, at a `Live` statement the loop serves, on the rep's
   own tables (`Count.RealTabs`) and pads (`Loop.RepSrc`), where the worker's `final_c'` and `τ` commitment are `vs`'s
@@ -162,7 +162,7 @@ open _root_.Flock.Firewall.Frame (Cfg Masker INNER_ROUNDS labelFrame wordBytes w
 open _root_.Flock.Firewall.Finish (Tab)
 open FlockSoundness.Refine (Frame encs)
 
-/-! ### The cut session's inner bodies and the firewall's own rounds -/
+/-! ### The cut session's inner bodies and the ZK server's own rounds -/
 
 theorem innerCutBody_one (fc : F128) (s : FlockComplete.RepSrc) (N : ℕ) :
     FlockComplete.CutFree.innerCutBody fc s N 1 = encs [.vec [s.rhoIn, s.sigmaIn]] ++ (Frame.sq 2 N).enc :=
@@ -205,7 +205,7 @@ theorem dropDom_innerCutBody (fc : F128) (s : FlockComplete.RepSrc) (N : ℕ) :
       rw [List.mem_singleton.mp hf]
       trivial
 
-/-- **The firewall's own round 1 on the pads `P` at the layout `Ly`**: the pair's openings at `ε`. -/
+/-- **The ZK server's own round 1 on the pads `P` at the layout `Ly`**: the pair's openings at `ε`. -/
 theorem ownFrames_one {c : Cfg} {ε β : F128} {w t : ByteArray} {P : FlockComplete.PadsZk}
     {Ly : _root_.Flock.Zk.PadLayout} (hh : c.h = P.h) (hl : c.lay = Ly) :
     ownFrames c { eps := ε, beta := β } w t 1 = [.vec [ε * P.h[Ly.fa]! + P.h[Ly.tx]!, P.h[Ly.fb]! + P.h[Ly.ty]!]] := by
@@ -213,7 +213,7 @@ theorem ownFrames_one {c : Cfg} {ε β : F128} {w t : ByteArray} {P : FlockCompl
   rw [← hh]
   rfl
 
-/-- **The firewall's own round 3**: `Y`, each row's `h` plus `β` times its `μ`. -/
+/-- **The ZK server's own round 3**: `Y`, each row's `h` plus `β` times its `μ`. -/
 theorem ownFrames_three {c : Cfg} {ε β : F128} {w t : ByteArray} (hsz : c.rowMu.size = c.rowH.size) :
     ownFrames c { eps := ε, beta := β } w t 3 =
       [.vec ((Array.range c.rowH.size).map fun i => c.rowH[i]! + β * c.rowMu[i]!).toList] := by
