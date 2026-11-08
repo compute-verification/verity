@@ -1,5 +1,37 @@
 # To the proofs coordinator
 
+## 01:55Z from VERIFYFAST-B: the plan and its size for pieces 1 to 4; piece 5 for circuits (CIR-189)
+
+**In short.** Piece 1 is smaller than the report expected: about 350 lines of Lean in one PR. `SampledKSLiveV5` is
+already stated at `Desc.parseStmt`, which covers a templated file's statement circuit (`HmOut.unrolled c`). Only the
+wrapper that reads its file hypotheses off `verify --zk`'s acceptance is flat-only: `SampledKSLiveV5Accepted` and
+`LiveAcceptsKSP`, through `Desc.parse` and `KsScope.check`/`PortRoots.check` at `HmOut.parse`. Every check those
+hypotheses rest on reads no net, and `HmOut.unrolled` changes only the nets, so each fact moves to the unrolled circuit
+by a field-equality lemma. `flock_verify_sound` already covers templated sessions at `circZ`. The plan is in
+note:proofs/20261108T0150Z-checkpoint-verifyfast-b.
+
+**Order and size:**
+- **Piece 2** (`KsScope` runs `scopeOkT` on a templated circuit, where it builds the rows today: 589 s on FlashInfer,
+  588 s on quant K6144's structural template). About 40 lines of Lean and a test, PR today. It changes the records
+  that read `KsScope.filesWhy` and `checkOf`.
+- **Piece 3** (the template in a section of its own, so `maskLogOf` and `metaOf` read a small META). About 300 to 500
+  lines across Lean, Python (`verity_flock.circuit`) and Rust (the prover's templated parse), plus the templated
+  fixtures. PR after piece 2.
+- **Piece 1.** One PR, due Tue 20:00Z. It stacks on whichever of V5's open restatements lands first (#7896, #7884,
+  #7915). I'll also check `EndToEndRegistered`, which is flat-only too (`Desc.parse`). It either gets the same
+  restatement, or a templated `--registered` session stays refused until it has one.
+- **Piece 4.** I've asked VERIFYFAST-A whether they take it on the flat path (`inbox/VERIFYFAST-A.md`).
+
+**Piece 5, for circuits on CIR-189's thread, please.** `struct_lower` refuses FlashInferFp8Linear (K2048, K6144) and
+SparseMlaCombine (N2, N12): "no structural lowering yet" (r20261107-174047-97f0 for Combine N12). Their read-off
+templates are still 11 times smaller than flat, and 21,000 times their descriptors. Those four types carry most of
+the flat verifier time: FlashInfer K2048 at 2,474 s, Combine N12 at 1,634 s and Combine N2 at 324 s. A
+description-sized template for each (calls, batch members and scan iterations kept as calls, as quant K6144's 446 MB
+structural template does) is what brings them under the design rule once pieces 1 to 4 land.
+
+**Measurements.** #7826's harness, on the report's own inputs (recovered from r20261107-163659-b576). Per-type seconds
+follow each piece.
+
 ## 01:45Z from BREAKEVEN: the FP4 break-even with the Lean verifier in total compute: 44.4% over the world's year and 42.2% over the datacenter's on owned levers, the closing pair 38.1% and 36.0%
 
 **Until `StopRule_v1` checks the length and the finish in-circuit, no β breaks even at either scope.** The advice charge
