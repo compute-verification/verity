@@ -1,16 +1,27 @@
-import Proofs.Pouw.PearlC.DeviceRev1Gamma
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Proofs.Pouw.PearlC.TileGap
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGap
+import Proofs.Pouw.PearlC.DeviceRev1Gap
+import Proofs.Pouw.Prob
+public import Proofs.Pouw.PearlC.DeviceRev1Gap
 
 /-!
 # rev1's H100 rows are satisfiable
 
 Staged; nothing pinned. The pins proposed are `ttOutPearlCH100Rev1Witness`, `ttOutTilePearlCH100Rev1Witness` and
-`pearlCTilesDevRev1_total` (rev1's tiles cover each unit's words once, so `GγSampled`'s W is the layout's rev1 `W_ref`).
+`pearlCTilesDevRev1_total` (rev1's tiles cover each unit's words once, so `GGapSampled`'s W is the layout's rev1 `W_ref`).
 
 Each shows the named row (`TTOutPearlCH100Rev1`, `TTOutTilePearlCH100Rev1`) holding beside an honest reference whose cost
 fits rev1's `W_ref` (unit by unit, or tile by tile), on an in-domain workload (`wideWorkload`, one `1 × 1024 × 128` unit)
 whose unit, or first tile, is within the cap and has positive rev1 credit. The cost models are `witnessCM` and `witnessTileCM` at rev1's protocol and tiles; they show
 satisfiability only.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -184,7 +195,7 @@ theorem wide_inDomain {Q R S : Type} (P : Protocol Q R S) : wideWorkload.InDomai
   show 32 * 4 ∣ 128
   norm_num
 
-theorem wide_weightsOK {ρ : ℚ} : wideWorkload.WeightsOK (pearlCProtocolDevRev1 devH100 witnessSem ρ) :=
+theorem wide_weightsOK {ρ : ℚ} : wideWorkload.FixedOK (pearlCProtocolDevRev1 devH100 witnessSem ρ) :=
   fun _ _ j hj => ⟨fun l hl => (witness_operandOK 1024).1 j hj l hl, fun hj' => (witness_operandOK 1024).2 ⟨j, hj'⟩⟩
 
 theorem wide_gridTiles_length : (gridTiles 64 64 wideWorkload.layout).length = 16 := by decide
@@ -196,7 +207,7 @@ theorem ttOutPearlCH100Rev1Witness :
         (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) (fun _ => 0) ∧
       TTOutPearlCH100Rev1 (witnessCM (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
       wideWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
-      wideWorkload.WeightsOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
+      wideWorkload.FixedOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
       (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
       0 < ∑ u ∈ range wideWorkload.layout.N,
         (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () wideWorkload u (witnessAct u) := by
@@ -233,7 +244,7 @@ theorem ttOutPearlCH100Rev1Witness :
       exact ⟨rfl, rfl⟩
     · intro U _ T hT q _ A hA
       rw [Pouw.pr_eq_zero]
-      · unfold εPearlC
+      · unfold δPearlC
         positivity
       intro x hx
       have hsum := witness_sum_le P U x.1 x.2 A.online A.act (A.pre.eval x.1)
@@ -264,7 +275,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
     TTOutTilePearlCH100Rev1 (witnessTileCM (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400))
         (pearlCTilesDevRev1 devH100 witnessSem (1 / 400))) witnessSem (1 / 400) ∧
     wideWorkload.InDomain (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) (pearlCDomainDev devH100) ∧
-    wideWorkload.WeightsOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
+    wideWorkload.FixedOK (pearlCProtocolDevRev1 devH100 witnessSem (1 / 400)) ∧
     (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).capOK (fun _ => ()) () wideWorkload 0 (witnessAct 0) ∧
     0 < ∑ g ∈ range ((pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).tiling wideWorkload.layout).NT,
       (pearlCTilesDevRev1 devH100 witnessSem (1 / 400)).credit (fun _ => ()) () wideWorkload g (witnessAct 0) := by
@@ -316,7 +327,7 @@ theorem ttOutTilePearlCH100Rev1Witness :
       exact ⟨rfl, rfl⟩
     · intro U _ T hT q _ A hA
       rw [Pouw.pr_eq_zero]
-      · unfold εPearlC
+      · unfold δPearlC
         positivity
       intro x hx
       have hsum := witnessTile_sum_le P TR U x.1 x.2 A.online A.act (A.pre.eval x.1)

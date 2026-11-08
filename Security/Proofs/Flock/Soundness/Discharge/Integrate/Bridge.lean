@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecLookup
+import Proofs.Flock.Soundness.Refine.Setup
+import Proofs.Flock.Soundness.Refine.Walk
 
 /-!
 # The accepted statement `Placed.Accepted` reads is the one the refinement plays
@@ -16,8 +22,10 @@ import Proofs.Flock.Soundness.Discharge.Integrate.Sites
 * a compression-leaf range: `setupH`'s leaf is the default one, whose matrices are empty (`setupH_leaf`).
 
 `model_eq_stmtOf`: for a statement `Stmt.setupH` accepted on the untyped path, `Layout.model regs = stmtOf st hwf regs` at
-any regions. `table_stmtOf`, `tableAt_stmtOf`: a drawn table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
+any regions. `table_stmtOf`, `tableAt_stmtOf`: a sampled table of `sitesAt` is `stmtOf` of its statement at `regionsOf`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Integrate
 
@@ -147,6 +155,7 @@ theorem net_width {tags : Tags} {c : Circuit} (P : ParseFacts tags c) {n : ℕ} 
     exact ⟨ofRows_width ha, ofRows_width hb, fun lk h => by rw [hlk] at h; cases h⟩
   · exact build_width hb
 
+-- `walk_step` down `Stmt.setupH`'s unfolded do-block, a goal per branch
 set_option maxHeartbeats 2000000 in
 /-- **`Stmt.setupH`'s leaf is the default one**: an hm96 row statement has no compression leaf. -/
 theorem setupH_leaf {tags : Tags} {circuitFile publicFile : ByteArray} {coins : Coins}
@@ -282,13 +291,13 @@ theorem model_eq_stmtOf {tags : Tags} {cf pf : ByteArray} {coins : Coins} {table
     (setupH_layout ht h).model regs = stmtOf st hwf regs :=
   model_eq (parse_facts (setupH_spec ht h).1) (setupH_layout ht h) (setupH_leaf h) hwf regs
 
-/-- **A drawn table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
+/-- **A sampled table of `sitesAt` is `stmtOf` of its statement**, at the statement's own regions (`regionsOf`). -/
 theorem table_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) {S : Finset (Fin n)} {d : Lean.Json}
     (x : DrawSetup I mPts S d) : (x.table ht).T.S = stmtOf x.st x.wf.1 (regionsOf x.st) :=
   model_eq_stmtOf ht x.h x.wf.1 _
 
-/-- **`tableAt`'s table at a draw that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
-and the draw's JSON, with the same statement as any other setup of that draw. -/
+/-- **`tableAt`'s table at a sample that sets up is `stmtOf` of a statement `Stmt.setupH` accepted** on the session's inputs
+and the sample's JSON, with the same statement as any other setup of that sample. -/
 theorem tableAt_stmtOf {I : Exec.Inputs} {mPts n : ℕ} (ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} (x₀ : DrawSetup I mPts S₀ (dj S₀)) {S : Finset (Fin n)} (x : DrawSetup I mPts S (dj S)) :
     ∃ y : DrawSetup I mPts S (dj S), y.st = x.st ∧

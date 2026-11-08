@@ -1,30 +1,45 @@
-import Proofs.Flock.Recursive.HoloSched
-import Proofs.Flock.Recursive.HoloCoins
-import Proofs.Flock.Soundness.Assumptions.Inner
-import Proofs.Flock.Soundness.Discharge.PlaysCoin.Statements
+module
+
+public import Proofs.Flock.Recursive.HoloSched
+public import Proofs.Flock.Recursive.HoloCoins
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # Candidate 3's inner record map
 
 `Flock.Guarantees.holoMap`: the verifier's map of candidate 3's inner session (`InnerRecordMap` at the coins of their
-coin kinds, `holoCTs`), which says where the coin server's records hold each round of the history, read off the
+coin kinds, `holoCTs`), which says where the challenger's live-coin part's records hold each round of the history, read off the
 verifier's own inner shape (`RecVStar.Inner`) through the session's schedule (`HoloSched`):
 
-* the history lays the streams out in `holoStreams`' order, as `holoKinds` lays their coins: round 0 draws the link
+* the history lays the streams out in `holoStreams`' order, as `holoKinds` lays their coins: round 0 samples the link
   points, then rep 0's stream rounds, rep 1's, both sparse phases' and R's take theirs in turn (`roundAt`). A stream
-  round draws its coins as one history coin, but a sparse phase's draws one coin per history round
+  round flips its coins as one history coin, but a sparse phase's flips one coin per history round
   (`HoloStream.group`: ζ_c's six, ζ_p's `pLog` and ρ_t's `tLog`, each after the stream round's one message, as
   `sparseKinds` has them);
 * round `i` fixes row `x` of a value where the transcript holds that row at a stream round (`valueRound`) whose message
   round `i` commits: the history round of the stream round's first coin, or, at a round of no coins, of the next coin
-  the history draws (`sel`);
-* round `i` draws a stream round's coins where it is the last history round the stream round takes (`selC`), and they
+  the history samples (`sel`);
+* round `i` flips a stream round's coins where it is the last history round the stream round takes (`selC`), and they
   are the words of those history rounds' coins, in order (`coin`, at `coinWords`);
 * the session's link points are the first coin's words (`points`).
 
 The table's prefix `tbl` (`<table>/`, which names the reps' streams in the inner transcript) and the `b ‖ c` of a
 round's commitment at a value's row (`bc`, at the generic commitment type) are the map's parameters.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -36,8 +51,8 @@ def HoloStream.idx : HoloStream → Nat
   | .sparse x => 2 + x.val
   | .stacked => 4
 
-/-- **The history rounds a stream round of `n` coins takes**: a sparse phase's draws one coin per round, every other
-stream's draws its round's coins as one coin, and a round of no coins takes none. -/
+/-- **The history rounds a stream round of `n` coins takes**: a sparse phase's flips one coin per round, every other
+stream's flips its round's coins as one coin, and a round of no coins takes none. -/
 def HoloStream.group : HoloStream → Nat → Nat
   | .sparse _, n => n
   | _, n => min n 1
@@ -52,8 +67,8 @@ def roundIn : List (HoloStream × Array SchedRound) → HoloStream → Nat → N
   | (s', rs) :: L, s, k => if s'.idx = s.idx then heldBefore s rs k else heldBefore s' rs rs.size + roundIn L s k
 
 /-- **The history round of stream `s`'s round `k`** in the streams `L`: one past the history rounds before it
-(`roundIn`), round 0 drawing the link points. It draws the stream round's first coin or, at a round of no coins, the
-next coin the history draws; past the last coin, it is the last round, which draws none. -/
+(`roundIn`), round 0 sampling the link points. It samples the stream round's first coin or, at a round of no coins, the
+next coin the history samples; past the last coin, it is the last round, which samples none. -/
 def roundAt (L : List (HoloStream × Array SchedRound)) (s : HoloStream) (k : Nat) : Nat := 1 + roundIn L s k
 
 open Classical in
@@ -68,7 +83,7 @@ noncomputable def coinWords (C : Type) (c : C) : Array F128 :=
   else #[]
 
 /-- **The words of history round `j`'s coin** in the history's coins `cs`: coordinate `j` of its coin, the one round `j`
-draws (`schedSteps`); empty past `cs`. -/
+samples (`schedSteps`); empty past `cs`. -/
 noncomputable def roundWords {st : Flock.Stmt} {hp : HoloParams}
     (cs : List ((k : Fin (1 + (kindCoinTys (holoKinds (holoAt st hp))).length)) → holoCTs st hp k)) (j : Nat) :
     Array F128 :=
@@ -81,7 +96,7 @@ noncomputable def roundWords {st : Flock.Stmt} {hp : HoloParams}
 
 * round `i` fixes row `x` of `v` where the transcript holds it at a stream round (`valueRound`) of history round `i`
   (`roundAt`);
-* round `i` draws round `q` of the stream named `s` where that stream round draws coins and `i` is the last history
+* round `i` samples round `q` of the stream named `s` where that stream round flips coins and `i` is the last history
   round it takes;
 * a stream round's coins are the words of the history rounds it takes, in order (`roundWords`);
 * the link points are the first coin's words. -/

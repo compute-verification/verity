@@ -1,9 +1,20 @@
-import Mathlib.Data.BitVec
+module
+
+public import Mathlib.Data.BitVec
+public import Mathlib.Data.Nat.Notation
+public import Mathlib.Tactic.Attr.Core
+public import Mathlib.Tactic.Basic
+public import Mathlib.Tactic.ToAdditive
+public import Mathlib.Tactic.ToDual
+import Mathlib.Algebra.Group.Nat.Defs
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # `PouwH1Combine_v1{TILE}` on words (trusted)
 
-A drawn H1 leaf's combine statement (`verity/core/protocols/pouw/circuit/h1zy.py`, `PouwH1Combine`) reads the leaf's
+A sampled H1 leaf's combine statement (`verity/ml/protocols/pouw/circuit/h1zy.py`, `PouwH1Combine`) reads the leaf's
 lanes' committed partials, `L` rows of `nw` u32 words (`nw = 2 (KS + m)`), and the leaf's committed receipt, `nw` words,
 and returns one bit `ok`. Its body (`h1zy._combine_body`), on its primitives' word views:
 
@@ -16,6 +27,8 @@ and returns one bit `ok`. Its body (`h1zy._combine_body`), on its primitives' wo
 Python's loops read the first word of a non-empty list; a leaf has at least two lanes and `nw ≥ 2`, so the empty
 list's value (`tree`'s default: `0` for the XOR, `true` for the AND) is never read.
 -/
+
+@[expose] public section
 
 namespace Pouw.H1Zy
 

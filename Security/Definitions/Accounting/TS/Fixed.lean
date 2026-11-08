@@ -1,11 +1,44 @@
-import Definitions.Accounting.TS.Drawn
+module
+
+public import Definitions.Accounting.TS.Drawn
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # A fixed word (trusted)
 
 Option A, as ruled: a unit's words are **fixed** when each of its multiplicative operands is bound
 before the coin its noise reads, or is written by a unit that is always proved, or by one the service prices at its
-public fan-out. Pricing is a property of the draw (`Priced`): some draw lands on the writer with probability at least
+public fan-out. Pricing is a property of the sample (`Priced`): some sample lands on the writer with probability at least
 its late cone's weight over the mean round weight `N_w`, the unit `DrawnLayer.Covers` charges in. Additive operands
 don't decide fixedness: a computed unit's work reads its multiplicative operands and its noise only
 (`Accounting.Guarantees.TS.AdditiveFixed`, a lemma, not an assumption).
@@ -20,7 +53,7 @@ additive operands add (`acc`, which reads neither the noise nor a multiplicative
 
 * `Bound u k`: slot `k`'s position is committed no later than `u`'s coin, so its committed value is a function of the
   coins before that coin (σ_{<c}).
-* `AlwaysProved`, `Priced`, `Fixed`: every draw names the unit; some draw lands on it at its late cone's weight
+* `AlwaysProved`, `Priced`, `Fixed`: every sample names the unit; some sample lands on it at its late cone's weight
   (`DrawnLayer.coneWt`) over `N_w`; option A, per unit, a public property of the layer and the weights.
 * `MulLate`, `Steers`: a unit writes one of `u`'s multiplicative operands after `u`'s coin; a unit reaches such a
   writer along `DrawnLayer.Late`, additive edges included.
@@ -37,6 +70,8 @@ unit's words are fixed only when every unit steering it was computed too. `Drawn
 late cone, so a good unit that is `Fixed` has fixed words.
 -/
 
+@[expose] public section
+
 namespace Accounting.TS
 
 open Pouw.RelativeSecurity
@@ -50,7 +85,7 @@ inductive SlotRole
   | other
   deriving DecidableEq
 
-/-- **A drawn layer with its units' words** (option A): a `DrawnLayer` and, per unit `u`,
+/-- **A sampled layer with its units' words** (option A): a `DrawnLayer` and, per unit `u`,
 * `role u k`: slot `k`'s role;
 * `noise x u`: the noise `u`'s seed derives on `x`, in `N`;
 * `words x u`: the words the run wrote for `u` on `x`, in `W`;
@@ -80,7 +115,7 @@ def Bound (u : Fin S × J) (k : Q) : Prop :=
   (pf.cut (pf.pos u.1 u.2 k)).1 < u.1 ∨
     (pf.cut (pf.pos u.1 u.2 k)).1 = u.1 ∧ (pf.cut (pf.pos u.1 u.2 k)).2 ≤ (pf.coin u.1 u.2).castSucc
 
-/-- **Unit `u` is always proved**: every draw names it, so its proof is among its round's on every path. -/
+/-- **Unit `u` is always proved**: every sample names it, so its proof is among its round's on every path. -/
 def AlwaysProved (u : Fin S × J) : Prop := ∀ b, ∃ i, pf.draw b i = u.2
 
 section Priced
@@ -88,11 +123,11 @@ section Priced
 variable [Fintype B] [Fintype J]
 
 /-- **Unit `v` is priced at its public fan-out** under the weights `wt` (`wt w j`: unit `j`'s words in round `w`): some
-draw `i` lands on it with probability at least its late cone's weight (`DrawnLayer.coneWt`: itself and every unit it
+sample `i` lands on it with probability at least its late cone's weight (`DrawnLayer.coneWt`: itself and every unit it
 writes a value after that unit's coin, transitively, so every credited unit a wrong `v` spoils) over the mean round
 weight `N_w = Σ wt / S`, the unit `DrawnLayer.Covers` charges the game's deficiency in (not `v`'s own round's weight,
 which differs from it by `wt(v.1)/N_w`). A skipped `v` is then charged its cone, `F` in
-`skipped ≤ F·wt(B)/(1 − p) + slack`. A property of the draw, public.
+`skipped ≤ F·wt(B)/(1 − p) + slack`. A property of the sample, public.
 A reader composing it with `DrawnLayer.Covers` passes `Covers` the same `Nw = Σ wt / S` that it reads. -/
 def Priced (wt : Fin S → J → ℝ) (v : Fin S × J) : Prop :=
   ∃ i, pf.coneWt wt v ≤ prob (fun b : B => pf.draw b i = v.2) * ((∑ w, ∑ j, wt w j) / S)

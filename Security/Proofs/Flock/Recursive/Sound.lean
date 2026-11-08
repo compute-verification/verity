@@ -1,5 +1,9 @@
+module
+
+public import Proofs.Flock.Recursive.Fork
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Recursive.Compose
-import Proofs.Flock.Recursive.Fork
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # Recursion: soundness of the recursive audit under `cr/sha-512`
@@ -19,6 +23,8 @@ rewinding's loss. `recursive_sound_upto` is the same on `commit_and_prove_upto`:
 transfer bounds the decoded message not being `same k` as that.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.Recursion
 
 open Game Audit StrictCR
@@ -28,7 +34,7 @@ variable {n : ℕ} {L : Law n} {Reg : Type} {I : Inner} {Cm : Type} {β : Type}
   {outer : Reg → L.Ω → List (Cm × I.Coin) → Game β}
   {D : Type} {H : List UInt8 → D} {V Pos : Type} (ob : Openings H V)
 
-/-- **The recursive audit's fork finder** at stage `k`, the draw `ω` and position `pos`: `forkF` on the rounds after `ω`,
+/-- **The recursive audit's fork finder** at stage `k`, the sample `ω` and position `pos`: `forkF` on the rounds after `ω`,
 with the trial `T` at the outer session's start. -/
 noncomputable def forkAt (σ : Strategy (recGame L Reg I Cm outer)) (cmt : Cm → Pos → ob.Dg)
     (T : ∀ R ω t, Strategy (outer R ω t) → Pos → Finder (Finset ob.Op)) (k : ℕ) (ω : L.Ω) (pos : Pos) :

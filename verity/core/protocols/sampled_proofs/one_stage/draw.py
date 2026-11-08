@@ -1,16 +1,18 @@
-"""The sample: the verifier's own coins pick the proof blocks to prove, sent in the clear after registration and before the session.
+"""The sample: the challenger's coins pick the proof blocks to prove, sent in the clear after registration and before the session.
 
     {"law": "subset", "population": N, "k": K, "units": [<ascending proof block indices>]}
     {"law": "bernoulli", "population": N, "p": "NUM/DEN", "units": [...]}
     {"law": "stratified", "population": N, "k": K, "strata": [<stratum>, ...], "units": [...]}
     {"law": "work", "population": N, "k": K, "strata": [<work stratum>, ...], "units": [...], ["closure": [...]]}
 
-This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. The verifier samples it from the operating system's
-randomness (Lean `flock-verify draw`, or `flock-circuit serve --draw`, live); nothing here samples, and no sample is derived from a
-commitment. `check_draw` holds a sample to the registration and to the verifier's own sampling design, and `check_proved` holds the
-proved statement's proof blocks to the sample.
+This is the Lean verifier's `Flock.Draw` object and `flock-circuit`'s `unit_draw`. A stream samples it from the
+auditor's challenger's coins (`service.Stream.select`, Lean `Select.select`); `flock-verify draw` reads them too
+(`--stream`, `--stream-file`), and without them refuses any sample that reads coins: the verifier has no randomness of
+its own. Nothing here samples, and no sample is derived from a commitment. `check_draw` holds a sample to the
+registration and to the verifier's own sampling design, and `check_proved` holds the proved statement's proof blocks to
+the sample.
 
-**The stratified sampling design**: one stratum per template, a uniform k_s-subset drawn
+**The stratified sampling design**: one stratum per template, a uniform k_s-subset sampled
 without replacement inside each, independently.
 * **Strata** are derived by each verifier from its own program and query (`partition.strata`): one per template descriptor
   id, its proof blocks as ascending, disjoint half-open ranges `[lo, hi)`, the strata in the order of their first proof block. Defined for
@@ -23,12 +25,12 @@ without replacement inside each, independently.
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
 `FlockSoundness.Audit.Work.work_escape_le`): the stratified sampling design's strata and sampler, with each stratum's sample sized by the
 PoUW work its proof blocks do. The verifier's work table gives each template's work per proof block, a natural number in any fixed unit,
-and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s draws
+and its floor f_s >= 1 (`work_table`). With W = sum_s w_s n_s >= 1, stratum s samples
 k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is `{"template", "units", "work", "floor",
-"k"}`. A work draw may carry a `closure`: proof blocks proved with the drawn ones, none of them drawn.
+"k"}`. A work sample may carry a `closure`: proof blocks proved with the sampled ones, none of them sampled.
 * **What the table credits.** A proof block's work is what it is credited for, counted on the rows the Program declares, never on
   rows a kernel pads it with (the Pearl-C statement review, item 5). Filler is credited nothing: a proof block of filler only, or
-  one the prover declares uncredited before the sample, does work 0 (its floor still draws it for integrity, and missing it
+  one the prover declares uncredited before the sample, does work 0 (its floor still samples it for integrity, and missing it
   costs no work), and a proof block mixing real and filler rows is credited its real cells only. The sampling design weights by template, so
   every proof block of a template must be credited the same work: a template whose proof blocks are padded differently is split before
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
@@ -66,8 +68,8 @@ def digits(s: str) -> bool:
 def parse_law(text: str) -> dict[str, Any]:
     """`subset:K` or `bernoulli:NUM/DEN` (`flock-circuit serve --draw`'s syntax), or `stratified:K` or `work:K` (rules, which `derive`
     expands over a program and query, and for `work` a work table), as a sampling design object; numbers in ASCII digits, `K >= 1`.
-    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` draws
-    nothing, so its `P_a` is no miss probability."""
+    A design outside the sampling claims' scope (`Claims.Sampling.OneStage.WellFormed`) is refused: `subset:0` samples
+    nothing, so its `P_a` is no acceptance probability."""
     kind, _, arg = text.partition(":")
     if kind == "subset" and digits(arg) and int(arg) >= 1:
         return {"law": "subset", "k": int(arg)}
@@ -113,7 +115,7 @@ def stratum_k(k: int, size: int, population: int) -> int:
 
 
 def work_k(k: int, work: int, size: int, total: int, floor: int) -> int:
-    """A stratum's draw under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
+    """A stratum's sample under the work rule (Lean `Flock.Draw.workK`): ceil(k * work * size / total), at least `floor` and
     at most `size`."""
     return min(size, max(floor, (k * work * size + total - 1) // total))
 
@@ -201,7 +203,7 @@ def _nat(x: Any) -> bool:
     return _int(x) and x >= 0
 
 
-def same_law(a: Any, b: Any) -> bool:
+def same_design(a: Any, b: Any) -> bool:
     """Two sampling design objects are the same canonical bytes (so `true` is not `1`, as the Lean verifier reads them)."""
     try:
         return canonical_json(a) == canonical_json(b)
@@ -309,7 +311,7 @@ def check_draw(draw: Any, registration: Mapping[str, Any], law: Mapping[str, Any
     n, units = draw["population"], draw["units"]
     if (why := tables_problem(law_of(draw), tables)) is not None:
         c.fail("tables", why)
-    if not same_law(law_of(draw), dict(law)):
+    if not same_design(law_of(draw), dict(law)):
         c.fail("law", {"drawn": law_of(draw), "verifier": dict(law)})
     if n != registration["population"]:
         c.fail("population", {"drawn": n, "registered": registration["population"]})
@@ -359,5 +361,5 @@ def check_proved(draw: Mapping[str, Any], proved_units: Sequence[int], instances
 
 
 __all__ = ["TABLES_LAW", "check_draw", "check_proved", "derive", "digits", "fixed_count", "law_of", "parse_law", "parse_rate",
-           "proved", "rate_count", "same_law", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
+           "proved", "rate_count", "same_design", "strata_problem", "stratum_k", "tables_problem", "total_work", "work_k",
            "work_table"]

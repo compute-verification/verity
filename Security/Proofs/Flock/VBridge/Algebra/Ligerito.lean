@@ -1,5 +1,14 @@
-import Proofs.Flock.VBridge.Algebra.RingSwitch
-import Proofs.Flock.Soundness.Refine.Final
+module
+
+public import Proofs.Flock.Soundness.Refine.Final
+public import Proofs.Flock.VBridge.Algebra.Eval
+public import Proofs.Flock.VBridge.Algebra.RingSwitch
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # V*'s Ligerito residuals are zero only when Ligerito's final check passes
@@ -21,6 +30,8 @@ Ligerito.lean:165–277) computes over `F256`: a K value `(c0, c1)` is the word 
 * `finalProg_of` is `Refine.finalProg_ok`'s converse: on a state that meets the final check's conditions, the verifier's
   final check passes; `finalProg_of_finalOK` applies it to `FinalOK`.
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

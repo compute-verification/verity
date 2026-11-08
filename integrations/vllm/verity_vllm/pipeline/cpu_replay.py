@@ -9,9 +9,9 @@ consume are read from the checkpoint and OPENED against the committed weights ro
 (`weights_of_record.compose`, in its registered dtype) must hash to its tensor root in the committed tree, the tree must fold to the
 root of record, and a tensor that does not open fails the replay by name (`weights_check.equal` False).  The registered buffers and
 engine constants no checkpoint holds are the bundle's bytes, opened against the same root.  A tensor the checkpoint cannot compose is
-not served (a relation that reads it is not evaluated, named).  The tree is opened under the scheme its root of record was
-registered under (`tree_refusal`): rows-sha512's SHA-512 rows (`step_rows.tensor_root`), or, for a registration recorded under
-vllm-v1, its SHA-256 chunk leaves; a tree of the other scheme is refused by name.
+not served (a relation that reads it is not evaluated, named).  The tree is rows-sha512's, its tensors SHA-512 rows
+(`step_rows.tensor_root`) under a 64-byte root of record; a tree of another scheme, or under another root, is refused by name
+(`tree_refusal`).
 
 Then the same C2 as the in-process Commit (`pipeline.c2_replay.run`), and the run's verdict (`check.verdict.commit_verdict`): the
 row in `runs.jsonl`, `summary.json` and `verdict.json` are rewritten with the replay on the record and `commit.weights_attest`.
@@ -19,7 +19,7 @@ Exit 0 PASS, 3 FAIL, 2 refused (a bundle that is not this record's, or a pick to
 
 Before the record is rewritten, the decided replay leaves its SLIM KEEP beside the bundle, `<out>/replay_slim_p<pair>/` (`keep`): what a
 later replay of the same picks reads, so the bundle can go and the Commit can still be replayed on CPU, by other row kernels, without
-serving again (the sample is seeded from the run root, so it draws the same picks).  Not under other Definition bodies: the replay is
+serving again (the sample is seeded from the run root, so it makes the same picks).  Not under other Definition bodies: the replay is
 refused unless the Definitions its tree evaluates the picks by are the ones the Build of record bound (`check.replay.definitions`).
 
     store/            the bundle's store, slim (`commit.store_dump`, `touched=`): only the byte ranges and Merkle nodes the replay and the
@@ -34,8 +34,8 @@ refused unless the Definitions its tree evaluates the picks by are the ones the 
 
 BUNDLE may be that keep (`open_keep`): its files are checked against `slim.json`, and the record beside it, decided by a replay of the
 bundle the keep was cut from (the verdict's `replayed` names that bundle's manifest sha256), is read back in its deferred state
-(`undecided`), so the replay decides the run again from its own draw.  It is refused before anything is evaluated unless this code's
-draw is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
+(`undecided`), so the replay decides the run again from its own sample.  It is refused before anything is evaluated unless this code's
+sample is the keep's picks in order (`kept_draw`).  A replay from a keep writes no keep.
 """
 from __future__ import annotations
 
@@ -55,7 +55,7 @@ from typing import Any
 
 import numpy as np
 
-from verity_vllm.commit import scheme, step_rows
+from verity_vllm.commit import step_rows
 from verity_vllm.commit import store_dump as SD
 from verity_vllm.config import option
 from verity_vllm.pipeline import c2_replay as C2
@@ -84,7 +84,7 @@ class Options:
                                            help="the Commit's required manifest (default: its recorded path, else <row-dir>/manifest.json)")
     threads: int = option("--threads", type=int, default=8, help="threads opening the weights")
     replay_workers: int | None = option("--replay-workers", type=int, default=None,
-                                        help="the forked pool's workers (default: the Commit's own; the draw does not depend on it)")
+                                        help="the forked pool's workers (default: the Commit's own; the sample does not depend on it)")
     worker_peak_gb: float | None = option("--worker-peak-gb", type=float, default=None,
                                           help="a forked worker's measured peak memory beyond what the row evaluator states for its pick, "
                                                "GiB (default: the word replay's, admission commit.c2.replay_workers.small_vu): after the "
@@ -145,21 +145,14 @@ def undecided(c: dict[str, Any], bundle: str) -> None:
         vc["result"] = None
 
 
-def tensor_root(raw: np.ndarray, chunk: int) -> bytes:
-    """A vllm-v1 tree's tensor root: SHA-256 pos_leaf leaves over ``chunk``-byte pieces, folded."""
-    mv = memoryview(raw).cast("B")
-    return scheme.fold([scheme.pos_leaf(mv[o:o + chunk]) for o in range(0, len(mv), chunk)])
-
-
-def tree_scheme(tree: dict[str, Any]) -> str:
-    """The scheme a weights tree was registered under: its ``scheme``, vllm-v1 for a tree recorded before trees named one."""
-    return tree.get("scheme", scheme.NAME)
+def tree_scheme(tree: dict[str, Any]) -> str | None:
+    """The scheme a weights tree was registered under: its ``scheme``, None for a tree recorded before trees named one."""
+    return tree.get("scheme")
 
 
 def root_scheme(root_of_record: str | None) -> str | None:
-    """The scheme a committed weights root of record was registered under, by its size: 64 bytes rows-sha512's, 32 vllm-v1's."""
-    n = len(root_of_record or "") // 2
-    return step_rows.NAME if n == step_rows.ROOT_BYTES else scheme.NAME if n == 32 else None
+    """The scheme a committed weights root of record was registered under, by its size: rows-sha512 for 64 bytes, else None."""
+    return step_rows.NAME if len(root_of_record or "") // 2 == step_rows.ROOT_BYTES else None
 
 
 def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
@@ -172,21 +165,17 @@ def tensor_key_of(tree: dict[str, Any], i: int) -> bytes | None:
 
 
 def tensor_root_of(tree: dict[str, Any], i: int, raw: np.ndarray) -> bytes:
-    """Tensor ``i``'s root under the tree's scheme (`step_rows.keyed_tensor_root` under `tensor_key_of`, or vllm-v1's `tensor_root`)."""
-    if tree_scheme(tree) == step_rows.NAME:
-        ks = tensor_key_of(tree, i)
-        if ks is None:
-            raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
-        return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
-    return tensor_root(raw, int(tree["chunk"]))
+    """Tensor ``i``'s root (`step_rows.keyed_tensor_root` under `tensor_key_of`)."""
+    ks = tensor_key_of(tree, i)
+    if ks is None:
+        raise KeyError(f"registered tensor {i} ({tree['names'][i][0]}): the slim keep carries no salt key for it")
+    return step_rows.keyed_tensor_root(bytes.fromhex(tree["geo_digest"]), i, tree["names"][i], memoryview(raw).cast("B"), ks)
 
 
 def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
-    """The weights tree a slim keep carries, which is published: under rows-sha512 never the registration's ``Kw`` (every weights leaf's
-    salt derives from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened),
-    and the bundle's bytes of those alone; a vllm-v1 tree, unsalted, as the bundle carries it."""
-    if tree_scheme(tree) != step_rows.NAME:
-        return tree
+    """The weights tree a slim keep carries, which is published: never the registration's ``Kw`` (every weights leaf's salt derives
+    from it), only ``step_rows.tensor_key(Kw, t)`` of each tensor ``opened`` names (those the replay consumed and opened), and the
+    bundle's bytes of those alone."""
     at, keep_ = {e[0]: i for i, e in enumerate(tree["names"])}, set(opened)
     keys = {str(at[n]): tensor_key_of(tree, at[n]).hex() for n in sorted(keep_ & at.keys(), key=at.get)}
     return {k: v for k, v in tree.items() if k not in ("key", "tensor_keys", "extra")} | {
@@ -194,9 +183,9 @@ def slim_tree(tree: dict[str, Any], opened: Iterable[str]) -> dict[str, Any]:
 
 
 def folded_root(tree: dict[str, Any]) -> str:
-    """The root the tree's tensor roots fold to under its scheme."""
-    geo, nd, roots = bytes.fromhex(tree["geo_digest"]), scheme.names_digest(tree["names"]), [bytes.fromhex(r) for r in tree["tensor_roots"]]
-    return (step_rows.weights_root(geo, nd, roots) if tree_scheme(tree) == step_rows.NAME else scheme.weights_root(geo, nd, roots)).hex()
+    """The root the tree's tensor roots fold to."""
+    roots = [bytes.fromhex(r) for r in tree["tensor_roots"]]
+    return step_rows.weights_root(bytes.fromhex(tree["geo_digest"]), step_rows.names_digest(tree["names"]), roots).hex()
 
 
 def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str, int] | None = None, rw: Any = None,
@@ -211,7 +200,7 @@ def _open_one(bundle: Path, tree: dict[str, Any], i: int, ck: Any, tp: dict[str,
 
     name, dt, shape, nb = tree["names"][i]
     src = "bundle" if name in (tree.get("extra") or {}) else "checkpoint"
-    if tree_scheme(tree) == step_rows.NAME and tensor_key_of(tree, i) is None:
+    if tensor_key_of(tree, i) is None:
         return src, None, "the slim keep carries no salt key for it", False
     if src == "bundle":
         raw = np.fromfile(bundle / "weights" / "extra" / f"{i}.bin", dtype=np.uint8)
@@ -261,13 +250,16 @@ def opener(bundle: Path, tree: dict[str, Any], ck: Any, *, tp: dict[str, int] | 
 
 
 def tree_refusal(tree: dict[str, Any], root_of_record: str | None) -> tuple[str, str | None]:
-    """(the root the tree's tensor roots fold to, why the tree is not the committed weights root's tree: None when it is).  A tree is
-    read under the scheme the root of record was registered under (`root_scheme`), so a vllm-v1 tree is read only for a recorded
-    vllm-v1 registration, and refused by name under a SHA-512 root of record."""
+    """(the root the tree's tensor roots fold to, why the tree is not the committed weights root's tree: None when it is).  Only a
+    rows-sha512 tree under a rows-sha512 root of record (`root_scheme`) is read: a tree of another scheme, or one recorded before trees
+    named theirs, is refused by name before anything opens, and so is a root of record of another size."""
     have, want = tree_scheme(tree), root_scheme(root_of_record)
-    if want is not None and have != want:
-        return "", (f"the bundle's weights tree is {have}'s, and the committed weights root is {want}'s: a {have} tree is read only "
-                    f"for a registration recorded under {have}")
+    if have != step_rows.NAME:
+        named = "names no scheme" if have is None else f"is {have}'s"
+        return "", f"the bundle's weights tree {named}: only a {step_rows.NAME} tree is read"
+    if root_of_record is not None and want is None:
+        return "", (f"the committed weights root is {len(root_of_record) // 2} bytes, not a {step_rows.NAME} root: only a "
+                    f"{step_rows.NAME} registration is read")
     folded = folded_root(tree)
     return folded, ("the bundle's weights tree does not fold to its root" if folded != tree["root"] else
                     f"the bundle's weights root {tree['root'][:16]} is not the committed weights root {str(root_of_record)[:16]}"
@@ -287,7 +279,7 @@ def open_weights(bundle: Path, tree: dict[str, Any], root_of_record: str | None,
     servable = [i for i, (_n, dt, _s, _b) in enumerate(names) if dt in WORDS]
     open_one = opener(bundle, tree, ck, tp=tp, roles=roles)
     with ThreadPoolExecutor(max(1, threads)) as pool:
-        opened = list(pool.map(lambda i: (i, *open_one(i)), servable))
+        opened = list(pool.map(lambda i: (i, *open_one(i)), servable)) if tree_scheme(tree) == step_rows.NAME else []
     words: dict[str, np.ndarray] = {}
     mismatched, unopened, by_src = [], [], {"checkpoint": 0, "bundle": 0}
     for i, src, raw, why, read in opened:
@@ -425,7 +417,7 @@ def manifest_of(o: Options, ctx: dict[str, Any], args: SimpleNamespace) -> tuple
 
 def replay_args(o: Options, ctx: dict[str, Any]) -> SimpleNamespace:
     """The Commit's replay arguments, with its Programs read from this row dir (their digests are checked against the record).  No
-    serving rows: a Commit's window is committed at its C2 site (`c2_replay.serving_rows`), before any draw, never by its replay."""
+    serving rows: a Commit's window is committed at its C2 site (`c2_replay.serving_rows`), before sampling, never by its replay."""
     a = dict(ctx["args"])
     a["programs_root"] = o.row_dir if a.get("programs_root") else None
     a["program_dir"] = os.path.join(o.row_dir, "build_request") if a.get("program_dir") else None
@@ -510,7 +502,7 @@ def slim_path(out: str | os.PathLike, pair: int) -> Path:
 
 def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched, plan: dict[str, Any], c: dict[str, Any], *,
          opened: Iterable[str]) -> dict[str, Any] | None:
-    """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the draw's
+    """Writes the decided replay's slim keep (module docstring) and returns its `slim.json`; None, with nothing written, when the sample's
     reads were not all made in this process (`plan` is not a plan of as many picks as the replay picked).  ``opened``: the registered
     tensors the replay consumed and opened, the only ones whose salt keys and bundle bytes the keep's weights tree carries (`slim_tree`)."""
     ctx, bdir, pair = b["context"], Path(b["path"]), int(b["context"]["pair"])
@@ -549,9 +541,9 @@ def keep(out: Path, b: dict[str, Any], store: Any, run: Any, touched: SD.Touched
     return doc
 
 
-def kept_draw(s: C2.Site, slim: dict[str, Any]) -> None:
-    """Refused unless this code draws the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
-    so another draw (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
+def kept_draw(s: C2.ReplaySources, slim: dict[str, Any]) -> None:
+    """Refused unless this code samples the keep's picks from it, in order (`C2.plan`, read only).  A keep holds only its picks' reads,
+    so another sample (a sampler that changed, or a record's `replay_draw` this code does not make) would stop on a node it lacks."""
     try:
         got, why = json.loads(json.dumps(C2.plan(s)["replay"].get("picks"))), None
     except KeyError as e:
@@ -589,10 +581,10 @@ def replay(o: Options) -> bool | None:
           + (f" -- {wc['why']}" if wc["why"] else ""), flush=True)
     args.replay_worker_peak = worker_peak(o)
     vc, consumed, reads = row["commit"]["value_correspondence"], set(), {}
-    site = C2.Site(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
-                   manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
-                   components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
-                   weights_check=lambda: dict(wc), tl=tl, reads=reads)
+    site = C2.ReplaySources(args=args, out=out, pair=pair, com=store, rc=run, row=row, reqs=ctx["requests"], sampling=ctx["sampling"], tokens=ctx["tokens"],
+                            manifest=man, stop_of_record=ctx["stop_of_record"], ids_full=ctx["ids_full"], versions={"git_head": ctx.get("code")},
+                            components=vc.setdefault("components", {}), vc_result=ctx.get("vc_result"), weights_of=lambda p: provider(words, p, consumed),
+                            weights_check=lambda: dict(wc), tl=tl, reads=reads)
     if "keep" in b:
         kept_draw(site, b["keep"])
     with SD.touched(store) as touched:

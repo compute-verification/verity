@@ -1,15 +1,47 @@
-import Proofs.Flock.Claims.DeploySetup
-import Proofs.Flock.Claims.Deploy
-import Proofs.Flock.Claims.ZkCols
-import Proofs.Flock.Claims.DecodeFlock
-import Proofs.Flock.Claims.NumbersGamma
-import Proofs.Flock.Claims.NumbersNMin
-import Proofs.Flock.Claims.NumbersTable
-import Proofs.Flock.Claims.GS.RadiusDeploy
-import Proofs.Flock.Claims.Complete.Honest
-import Proofs.Flock.Claims.Complete.Zk.Honest
-import Proofs.Flock.Claims.Complete.Ready
-import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+module
+
+public import Proofs.Flock.Claims.DeploySetup
+public import Proofs.Flock.Claims.ZkCols
+public import Proofs.Flock.Claims.NumbersGamma
+public import Proofs.Flock.Claims.NumbersNMin
+public import Proofs.Flock.Claims.NumbersTable
+public import Proofs.Flock.Claims.GS.RadiusDeploy
+public import Proofs.Flock.Claims.Complete.ZkTables.Faithful
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import all Init.Data.Nat.Power2.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # Flock's deployed instances of `Claims.Flock.Deploy`
@@ -57,9 +89,11 @@ of trailing zeros (`FlockDeploy.deployPlainTrim`, `FlockDeploy.deployZkTrim`):
   the statements the verifier can accept against `H` (`FlockComplete.ready H`, `ZkTables.ready H`, at any number of
   tables), and `1` elsewhere (`FlockComplete.δc`, `ZkTables.δc`, in `Complete.Ready`, which states that set).
 
-One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): ruling 2's count
+One run opens fewer level-0 columns than `nMin` of every trace (`cols_length_lt_nMin_plain`, `_zk`): that count
 is reached only by `E^rep`'s columns, gathered over its accepted reruns.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -696,8 +730,8 @@ theorem cols_nodup_plain (rel : Readable.Parsed → Readable.Relation) (s : Clai
 theorem cols_nodup_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ) :
     (((deployZk rel).cols s j).map Prod.fst).Nodup := cols_nodup true s j
 
-/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
-reached by one run. -/
+/-- **A plain run opens fewer level-0 columns than `nMin`** of every trace, at every table: one run never reaches
+it. -/
 theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
     (M : Claims.Flock.PlainTrace) :
     ((deployPlain rel).cols s j).length < Claims.Flock.plainNMinD Claims.Flock.Numbers.agree₀ M := by
@@ -711,8 +745,8 @@ theorem cols_length_lt_nMin_plain (rel : Readable.Parsed → Readable.Relation) 
     · exact Claims.one_le_johnsonCount _ _
   · exact Claims.one_le_johnsonCount _ _
 
-/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace, at every table: ruling 2's count is never
-reached by one run. -/
+/-- **A masked run opens fewer level-0 columns than `nMin`** of every trace, at every table: one run never reaches
+it. -/
 theorem cols_length_lt_nMin_zk (rel : Readable.Parsed → Readable.Relation) (s : Claims.Seen) (j : ℕ)
     (M : Claims.Flock.ZkTrace) : ((deployZk rel).cols s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M := by
   show (cols true s j).length < Claims.Flock.zkNMinD Claims.Flock.zkAgree M

@@ -1,6 +1,44 @@
-import Mathlib
-import Definitions.Accounting.Guarantees.DeclaredCircuit
-import Proofs.Accounting.Stacking
+module
+
+public import Definitions.Accounting.Assumptions.Stacking
+public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Mathlib.Tactic.Continuity
+public import Proofs.Accounting.Stacking
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.Order.CompletePartialOrder
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Bandwidth.Chip
+import Proofs.Accounting.RateAudit.Windows
 
 /-! The first pieces of the proof of `Accounting.Guarantees.DeclaredCircuitRequirement`, whose theorem is in
 `DeclaredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs
@@ -9,6 +47,8 @@ function restricted along an injection is uniform (`pr_comp_embedding`), and key
 steered after the coins to
 uniform blocks at `2^a` times their likeliest summary's event, `δ` once, against an event that reads the summary as a
 device told it does (`KeyBinding.pr_steered_le`). -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch.Provenance
 

@@ -1,6 +1,8 @@
-import Mathlib.Data.Nat.Notation
-import Flock.Circuit
-import Flock.Net
+module
+
+public import Flock.Circuit
+public import Flock.Net
+public import Mathlib.Data.Nat.Notation
 
 /-!
 # Δ's source keys of a circuit's unit inputs
@@ -11,6 +13,8 @@ import Flock.Net
 `Proofs.Flock.Soundness.ExecFlatCopies` (`portBits`, `portOf`) and `Proofs.Flock.Soundness.Discharge.Aliased.Keys`;
 the lemmas about them stay there.
 -/
+
+@[expose] public section
 
 open Flock
 

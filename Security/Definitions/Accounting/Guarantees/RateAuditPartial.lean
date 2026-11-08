@@ -1,5 +1,7 @@
-import Definitions.Accounting.RateAuditPartial
-import Definitions.Accounting.Assumptions.RateAudit
+module
+
+public import Definitions.Accounting.Assumptions.RateAudit
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The rate audit with partial completion: what an accepted device held and read (trusted)
@@ -36,6 +38,8 @@ ruled), its price justified by no completion skipping the inner root. The mask c
 `WorkHardness` reads the codec only through `b`, `rounds` and `c_root`. Unmasked at `k = 2`, 512 bits rest on the
 reduction's operation-count floor, an estimate, not a measurement.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 

@@ -1,15 +1,17 @@
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Data.Fintype.Powerset
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.Linarith
-import Definitions.Pous
-import Definitions.Pous.Assumptions
-import Proofs.Pous.Statements
-import Proofs.Pous.Sanity
-import Proofs.Pous.Accounting.Numbers
-import Proofs.Pous.Thm1.Theorem1iTimed
+module
+
+public import Mathlib.Algebra.BigOperators.Ring.Finset
+public import Mathlib.Algebra.Order.BigOperators.Group.Finset
+public import Mathlib.Data.Fintype.Powerset
+public import Mathlib.Tactic.FieldSimp
+public import Mathlib.Tactic.GCongr
+public import Mathlib.Tactic.Linarith
+public import Definitions.Pous
+public import Definitions.Pous.Assumptions
+public import Proofs.Pous.Statements
+public import Proofs.Pous.Sanity
+public import Proofs.Pous.Accounting.Numbers
+public import Proofs.Pous.Thm1.Theorem1iTimed
 
 /-!
 # Report Theorem 1(ii), sequential: `PousProofs.theorem1_ii_seq`, as drafted
@@ -25,6 +27,8 @@ some history, the wrong predictions fit: `S + B + #wrong·ℓ ≤ β`.
    by counting) against `TimedINC` bounds the event by `π`. A union bound over the `B^j` histories of each
    length `j < k` (`pr_exists_le`) gives `Pr[E] ≤ (Σ_{j<k} B^j)·π`.
 -/
+
+@[expose] public section
 
 namespace PousThm1
 
@@ -275,7 +279,7 @@ predict each block from `(W, pp, state)` within `(D, Q)`. Then the wrong predict
 `S + B + #wrong·ℓ ≤ β`, with probability at most `π` under `TimedINC D Q β π`. -/
 theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ≥0∞) (hinc : TimedINC sch D Q β π)
     (W : Bits sch.n) (st : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S)
-    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ))
+    (pred : Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ))
     (hpred : ∀ W pp σ i, (pred W pp σ i).Bounded D Q) :
     pr (fun a : M.Ω × sch.Coins => S + sch.B + (Finset.univ.filter fun i =>
       ¬ (pred W (sch.enc W a.1 a.2).1 (st W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run
@@ -283,8 +287,8 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
   obtain ⟨c, d, hcd⟩ := exists_code (fits S sch.B sch.ℓ β) β (card_fits_le S sch.B sch.ℓ β)
   let cmp : Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits β :=
     fun W pp C ω => c (st W pp C ω, patch (fun i => (pred W pp (st W pp C ω) i).run (M.answer ω)) C)
-  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → Prog M (Bits sch.ℓ) :=
-    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) Prog.ret
+  let exp : Bits sch.n → Bits sch.t → Bits β → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
+    fun W pp w i => ((d w).2 i).elim (pred W pp (d w).1 i) OracleAlgorithm.ret
   have hexp : ∀ W pp w i, (exp W pp w i).Bounded D Q := by
     intro W pp w i
     cases h : (d w).2 i with
@@ -306,14 +310,14 @@ theorem pr_fits_le {M : IdealModel} (sch : Scheme M) (D Q β S : ℕ) (π : ℝ�
 
 /-- The state a sequential responder reaches after answering the history `h` from round `j` in state `σ`. -/
 def seqState {M : IdealModel} {ℓ S B : ℕ} (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) : ℕ → List (Fin B) → Bits S → Bits S
   | _, [], σ => σ
   | j, i :: is, σ => seqState f step (j + 1) is ((step j σ i).run f).2
 
 /-- **Chain rule for sequential audits.** If after every history of fewer than `k` indices a uniform next index is
 answered correctly with probability at most `c`, all `k` rounds are with probability at most `c^k`. -/
 theorem pr_seq_le {M : IdealModel} {ℓ S B : ℕ} [NeZero B] (f : M.Qry → M.Ans)
-    (step : ℕ → Bits S → Fin B → Prog M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
+    (step : ℕ → Bits S → Fin B → OracleAlgorithm M (Bits ℓ × Bits S)) (C : Fin B → Bits ℓ) (c : ℝ≥0∞) :
     ∀ (k j : ℕ) (σ : Bits S),
       (∀ h : List (Fin B), h.length < k →
         pr (fun i : Fin B => ((step (j + h.length) (seqState f step j h σ) i).run f).1 = C i) ≤ c) →
@@ -349,7 +353,7 @@ theorem theorem1_ii_seq {M : IdealModel} (sch : Scheme M) (D Q β S k : ℕ) (π
   -- the state after history `h`, and whether round `|h|` answers block `i` correctly from it
   let st : List (Fin sch.B) → Bits sch.n → Bits sch.t → sch.Code → M.Ω → Bits S :=
     fun h W pp C ω => seqState (M.answer ω) (A₂.step W pp) 0 h (A₁ W pp C ω)
-  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → Prog M (Bits sch.ℓ) :=
+  let pred : List (Fin sch.B) → Bits sch.n → Bits sch.t → Bits S → Fin sch.B → OracleAlgorithm M (Bits sch.ℓ) :=
     fun h W pp σ i => progMap Prod.fst (A₂.step W pp h.length σ i)
   let good : List (Fin sch.B) → M.Ω × sch.Coins → Fin sch.B → Prop := fun h a i =>
     (pred h W (sch.enc W a.1 a.2).1 (st h W (sch.enc W a.1 a.2).1 (sch.enc W a.1 a.2).2 a.1) i).run

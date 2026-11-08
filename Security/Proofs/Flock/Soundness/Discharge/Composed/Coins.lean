@@ -1,4 +1,19 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Coined
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Coined
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # The coin facts of `CoinedOK`, from `Admits`
@@ -11,6 +26,8 @@ checks:
 * `fOf_ne_zero`: `β ≠ 0` from `beta.isZero = false`.
 * `wr_bijective`: `W^r` bijective from `Zk.rhoIndependent`, the determinant of `(a, b) ↦ ρ₀·a + ρ₁·b` over F128.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed
 

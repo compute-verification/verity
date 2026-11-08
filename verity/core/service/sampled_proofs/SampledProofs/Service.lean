@@ -1,5 +1,5 @@
 /-
-The proof service's own checks (`service.py`), each with Python's codes, order and details:
+The proof system's own checks (`service.py`), each with Python's codes, order and details:
 
 * `checkPublic`: the public-items rule (`service.check_public`) on a one-stage registration record: each observable item
   is the service's own, a salted root of one of the given values, or an item the Spec declares. Codes: `keys` alone for a
@@ -12,9 +12,12 @@ The proof service's own checks (`service.py`), each with Python's codes, order a
   the first failure only: `pending` (no verdict of record, or one that hasn't run), `sessions` (verdicts of record about
   other sessions than the delivered ones) and `public` (the check's public outputs not reported alike).
 -/
-import SampledProofs.Registration
-import SampledProofs.PyJson
-import Std.Data.HashMap
+module
+
+public import SampledProofs.PyJson
+public import SampledProofs.Json
+
+@[expose] public section
 
 namespace SampledProofs.Service
 

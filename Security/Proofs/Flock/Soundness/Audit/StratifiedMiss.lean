@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Audit.Stratified
+module
+
+public import Proofs.Flock.Soundness.Audit.Stratified
+import Mathlib.Algebra.Order.BigOperators.Group.Finset
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Inv
+import Proofs.Flock.Soundness.Audit.Law
 
 /-!
 # The stratified law's count curve
@@ -16,6 +22,8 @@ likeliest set to escape fills the strata greedily, taking the largest factors fi
 * `stratum_exchange`, the step: within one stratum, `C(n_s − c, k_s) · τ^a ≤ C(n_s − a, k_s) · τ^c` for every
   `c ≤ n_s`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 

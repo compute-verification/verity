@@ -1,4 +1,7 @@
-import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+module
+
+public import Definitions.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # PoUB's per-period guarantee, from the bandwidth audit's (trusted)
@@ -14,6 +17,8 @@ Proved by `Accounting.SecurityProofs.Bridge.BandwidthOfAuditPerRunPeriod :
 Accounting.Guarantees.Bridge.BandwidthOfAuditPerRunPeriod` (`Proofs.Accounting.JointBridge.BandwidthOfAuditPerRunPeriod`),
 from `Accounting.SecurityProofs.BandwidthOfAuditPerRun`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Bridge
 

@@ -1,8 +1,7 @@
-import Definitions.Pouw.PearlC.Instance
-import Definitions.Pouw.PearlC.Tile
-import Definitions.Pouw.PearlC.Device
-import Definitions.Pouw.PearlC.DeviceRev1
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.DeviceRev1
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # TT_OUT at W1 (trusted; named assumptions, `Prop`s taken as hypotheses, never `axiom`s)
@@ -24,7 +23,7 @@ the salt; W1 charges it and the credit counts none of it, nor `qa·m·k` (in `W_
 The bound on guessing whole output words rests on exactly that.
 
 **Why `w1Priced`.** It charges at least what `w1` (with the operand refund) charges, so TT_OUT at `w1` implies it here:
-it is the weaker assumption. It is the cost model the compute audit reads (`GγPerCoin (w1Priced dv salt)`), and it does
+it is the weaker assumption. It is the cost model the compute audit reads (`GGapPerCoin (w1Priced dv salt)`), and it does
 not depend on the protocol, so a reader whose conclusion's protocol differs from its hypothesis' (the kernel `W_ref`
 variants) uses one cost model on both sides.
 
@@ -48,10 +47,12 @@ W1 charges only the path a run takes, so a strategy with unbounded text could ho
 (`Proofs.Pouw.PearlC.W1Tabulate.tree_not_code`).
 
 **The honest program** pays the weight side and the weight read, neither in `W_ref`, so `AdmitsRef (W1.w1Priced …)`
-fails at decode. No reader of these assumptions takes `AdmitsRef`: it is completeness, and γ bounds credited work.
+fails at decode. No reader of these assumptions takes `AdmitsRef`: it is completeness, and g bounds credited work.
 
 The rest (the credit, debit and cap, the second hole carried, the falsifiers) is `TTOut`'s and `TTOutPearlCDevRev1`'s.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 
@@ -59,53 +60,53 @@ open Finset
 
 variable {Q R S : Type}
 
-/-- **TT_OUT(γ₀) at W1**: `TTOut`'s game at `CM := W1.w1Priced dv salt`. With `K` the units whose ticket and useful
+/-- **TT_OUT(g₀) at W1**: `TTOut`'s game at `CM := W1.w1Priced dv salt`. With `K` the units whose ticket and useful
 words are correct and whose debit is within the cap, no W1 program bounded by `T` makes
-`∑_{u ∈ K} credit(u) > T / (1 − γ₀)` with probability over `(H, s)` more than `ε(q, N)`. -/
+`∑_{u ∈ K} credit(u) > T / (1 − g₀)` with probability over `(H, s)` more than `δ(q, N)`. -/
 def TTOutW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
+      T / (1 - g₀) < ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2),
         P.credit x.1 x.2 U u (actOf (A.transcript U x.1 x.2) u))
-      ≤ ε q U.layout.N
+      ≤ δ q U.layout.N
 
-/-- **TT_OUT(γ₀) per tile at W1**: `TTOutTile`'s game at `CM := W1.w1Priced dv salt`, the good tiles of `TR` in place of
+/-- **TT_OUT(g₀) per tile at W1**: `TTOutTile`'s game at `CM := W1.w1Priced dv salt`, the good tiles of `TR` in place of
 the correct units. -/
 def TTOutTileW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
-    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (γ₀ : ℝ) (ε : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (TR : TileRules Q R S) (D : Layout → Prop) (g₀ : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 →
     ∀ A : Adversary (W1.w1Priced dv salt : CostModel Q R S), A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
-      T / (1 - γ₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
+      T / (1 - g₀) < ∑ g ∈ goodTiles P TR U x.1 x.2 (A.transcript U x.1 x.2),
         TR.credit x.1 x.2 U g (actOf (A.transcript U x.1 x.2) ((TR.tiling U.layout).unit g)))
-      ≤ ε q U.layout.N
+      ≤ δ q U.layout.N
 
 /-- **TT_OUT(1/400) for Pearl-C at a device record `d`, at W1 on `dv`**: `TTOutPearlCDev` with its cost model the term
 `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) per audit tile at a device record `d`, at W1 on `dv`**: `TTOutTilePearlCDev` at
 `W1.w1Priced dv salt`. -/
 def TTOutTilePearlCDevW1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutTileW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutTileW1 dv salt (pearlCProtocolDev d sem ρ) (pearlCTilesDev d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) rev1 at a device record `d`, at W1 on `dv`**: `TTOutPearlCDevRev1` (every promotion into a +0 total
 out of the credit) at `W1.w1Priced dv salt`. -/
 def TTOutPearlCDevRev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device) (salt : S → List ℕ)
     (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
-  TTOutW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) εPearlC
+  TTOutW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400) δPearlC
 
 /-- **TT_OUT(1/400) rev1 per audit tile at a device record `d`, at W1 on `dv`**: `TTOutTilePearlCDevRev1` at
 `W1.w1Priced dv salt`. -/
 def TTOutTilePearlCDevRev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (dv : W1.W1Device)
     (salt : S → List ℕ) (d : PearlCDevice) (sem : PearlCSem Q R S) (ρ : ℚ) : Prop :=
   TTOutTileW1 dv salt (pearlCProtocolDevRev1 d sem ρ) (pearlCTilesDevRev1 d sem ρ) (pearlCDomainDev d) (1 / 400)
-    εPearlC
+    δPearlC
 
 /-- **`tt-out/pearl-c-h100-rev1` at W1**: rev1 at the H100 record on `W1Device.h100 sha fetch`. -/
 def TTOutPearlCH100Rev1W1 [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (sha fetch : ℚ) (salt : S → List ℕ)

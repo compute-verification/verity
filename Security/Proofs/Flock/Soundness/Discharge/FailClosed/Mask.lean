@@ -1,6 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.Composed.Base
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.LinkSound
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Base
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
@@ -14,6 +28,8 @@ every statement it passes (`avoidsMask_of_shapeOk`), and so at every `--zk` setu
 block, which differ only above bit `k_log − 7` of the word index, where the check reads no bit. `regionCellsOff` follows
 from the words: a region cell in the mask range has its word there, and the cell's fixed in-block bits are the region's.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.FailClosed
 

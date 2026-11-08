@@ -1,4 +1,8 @@
-import Proofs.Pouw.PearlC.RowCircuit
+module
+
+public import Proofs.Pouw.PearlC.RowCircuit
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.PearlC.Tile4Circuit
 
 /-!
@@ -23,6 +27,8 @@ These are word formulas on `ops` and on the units' own inputs. They are not yet 
 forming is on values: that needs core's primitives to agree with the protocol's word functions where both are defined,
 as `pc8`'s `Pc8OpsAgree` does.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

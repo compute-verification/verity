@@ -1,13 +1,13 @@
-"""Sampled VUs of a passing row: the draw, the evaluation tap, the subcircuit decomposition and the flat input sets
-(`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which runs the draw);
+"""Sampled VUs of a passing row: the sample, the evaluation tap, the subcircuit decomposition and the flat input sets
+(`vllm-vu-set/v1`) it writes.  The stored form is the hierarchical VU store (`verity_vllm.pipeline.vu_store`, which takes the sample);
 the flat input sets are its default extraction.
 
 Not on the record: the Commit stage calls `vu_store.after_replay` once pair 0's replay of record has passed and its value source
 is recorded (`--vu-export-dir`, env `VERITY_VU_EXPORT_DIR`; on by default under `verity-vllm row`).  `limits.json` (the `Limits`
-fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The draw is a
+fields) and `provenance.json` (extra provenance: the row, the research run) in that directory are read when present.  The sample is a
 stratified sample over the population the replay samples (every evaluable VU of the executed prefix, the replay's strata), keyed by
 `verity.ml.randomness.derive` from the run root.  It is a benchmark selection, not a verifier challenge: fixed by the commitment and
-independent of the replay's own sample, nothing more.  Each drawn VU is
+independent of the replay's own sample, nothing more.  Each sampled VU is
 evaluated exactly as the replay evaluates it (`check.replay.evaluate.replay_vu`: committed operands read through the binding map,
 registered weights, the family's row kernel), with an evaluation tap recording the operands and outputs of every row it
 evaluates, interior producers included.  A VU is exported only when it replays bit-exactly against its committed outputs.
@@ -16,7 +16,8 @@ Each evaluated row is decomposed into the subcircuit a backend proves, and every
 relation before it is written (a decomposition that does not reproduce the row's words is an error, never an instance):
 
   Gemm_v1{K,N} / Gemm_v2{K,N,DOT}  -> GemmCoordinate<K>: x[K], w[K] (one weight row), y[1]; `gemm-coordinate-<dot>-k<K>`
-  ScaledMmFp8Block_v1{K,N,G}       -> ScaledMmFp8BlockCoordinate<K,G>: x[K] e4m3, sx[K/G] f32, w[K] e4m3, sw[K/G] f32 (the weight row's
+  ScaledMmFp8BlockSharedScale_v1{K,N,G}
+                                   -> ScaledMmFp8BlockCoordinate<K,G>: x[K] e4m3, sx[K/G] f32, w[K] e4m3, sw[K/G] f32 (the weight row's
                                       block scales), y[1] bf16; `gemm-coordinate-fp8-block<G>-hopper-e4m3-k<K>`
   MoeExpertGemm_v1{E,K,N}          -> GemmCoordinate<K> over a row of the routed expert: x[K], w[K], y[1];
                                       `moe-expert-gemm-coordinate-ampere-bf16-k<K>`
@@ -33,7 +34,7 @@ Layout of a set `<out>/sets/<name>/`: flat little-endian arrays `<port>.<u8|u16|
 offsets).  `manifest.json` holds the relation, the ports, the sha256 of every file, the content digest (relation + ports + file
 digests, provenance excluded) and the provenance (row, model, run, commitment root, Program and manifest digests).  `index.json`
 has one row per instance (the VU it came from and the sub-index inside it).  `<out>/export.json` summarises the export and
-`<out>/vus.jsonl` lists every drawn VU with its operand identities and outcome.  `verify(<out>)` re-checks every file digest and
+`<out>/vus.jsonl` lists every sampled VU with its operand identities and outcome.  `verify(<out>)` re-checks every file digest and
 re-evaluates every instance.
 """
 from __future__ import annotations
@@ -70,13 +71,13 @@ _WORD = {1: ("u8", np.uint8), 2: ("u16", np.uint16), 4: ("u32", np.uint32), 8: (
 
 @dataclasses.dataclass
 class Limits:
-    per_family: int = 256                    # VUs drawn per family (round-robin across the replay's strata)
+    per_family: int = 256                    # VUs sampled per family (round-robin across the replay's strata)
     per_family_override: dict[str, int] = dataclasses.field(default_factory=dict)
     gemm_coords_per_row: int = 32            # GemmCoordinate inputs taken from one Gemm row
     heads_per_row: int = 4                   # attention / RoPE heads taken from one row
     max_instances_per_set: int = 8192
     max_row_words: int = 1 << 22             # a generic row whose operands exceed this is counted, not written
-    max_seconds: float = 600.0               # evaluation budget: the draw stops (named, per family) once it is spent
+    max_seconds: float = 600.0               # evaluation budget: the sampling stops (named, per family) once it is spent
     max_population_seconds: float = 900.0    # population-build budget when the replay's is not reused, checked between Programs
     workers: int = 8                         # > 1: a forked pool (host-retained stores only; a device-retained one runs serial)
 
@@ -113,7 +114,7 @@ def selection_key(run_root: bytes) -> Key:
 
 
 class _Picker:
-    """`k` of `n` sub-indices of one evaluated row (coordinates, heads), drawn from the selection key at the row's own index."""
+    """`k` of `n` sub-indices of one evaluated row (coordinates, heads), sampled from the selection key at the row's own index."""
 
     def __init__(self, key: Key, index: tuple) -> None:
         self.key, self.index = key, index
@@ -123,7 +124,7 @@ class _Picker:
 
 
 def select(pool: list[dict], limits: Limits, key: Key) -> list[dict]:
-    """Per family: `limits.for_family` VUs, drawn per stratum (`challenge.stratum_picks` under the family's shard of `key`) and emitted
+    """Per family: `limits.for_family` VUs, sampled per stratum (`challenge.stratum_picks` under the family's shard of `key`) and emitted
     round-robin across the family's strata, so a small cap still reaches every stratum it can.  The families are interleaved (one VU
     of each in turn), so a spent time budget truncates every family alike."""
     by_fam: dict[str, dict[str, list[dict]]] = {}
@@ -212,7 +213,7 @@ def _decompose_gemm(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
 
 def _coordinate_rows(w: Any, N: int, K: int, word: type, pick: Callable[[int, int], list[int]],
                      limits: Limits) -> tuple[np.ndarray, np.ndarray]:
-    """(coordinates n, their weight rows): a stored weight's sampled rows, else `gemm_coords_per_row` drawn from the whole [N, K] rows."""
+    """(coordinates n, their weight rows): a stored weight's sampled rows, else `gemm_coords_per_row` sampled from the whole [N, K] rows."""
     if isinstance(w, RowSample):
         return np.asarray(w.rows, dtype=np.int64), np.asarray(w.data, dtype=word)
     sel = np.asarray(pick(N, limits.gemm_coords_per_row), dtype=np.int64)
@@ -371,7 +372,7 @@ def _decompose_row(fam, st, ops, out, pick, limits) -> Iterator[Instance]:
 
 
 DECOMPOSE: dict[str, Callable[..., Iterator[Instance]]] = {"Gemm_v1": _decompose_gemm, "Gemm_v2": _decompose_gemm,
-                                                           "ScaledMmFp8Block_v1": _decompose_fp8_block,
+                                                           "ScaledMmFp8BlockSharedScale_v1": _decompose_fp8_block,
                                                            "MoeExpertGemm_v1": partial(_decompose_moe_expert, routed=False),
                                                            "MoeExpertGemmW_v1": partial(_decompose_moe_expert, routed=True),
                                                            "MoeExpertGemm_v2": partial(_decompose_moe_expert, routed=False),
@@ -394,7 +395,7 @@ def _expert_rows(g: int) -> Callable[[dict[str, Any], list], tuple[np.ndarray, d
 #: beside `DECOMPOSE`, keyed alike: the weight operand a coordinate cut reads rows of -> (operand index, its [N, K] rows and extra
 #: reference fields); the store keeps a fixed sample of those rows and the whole operand by checkpoint reference
 WEIGHT_ROWS_OF: dict[str, tuple[int, Callable[[dict[str, Any], list], tuple[np.ndarray, dict[str, Any]]]]] = {
-    "Gemm_v1": (1, _dense_rows(1, np.uint16)), "Gemm_v2": (1, _dense_rows(1, np.uint16)), "ScaledMmFp8Block_v1": (2, _dense_rows(2, np.uint8)),
+    "Gemm_v1": (1, _dense_rows(1, np.uint16)), "Gemm_v2": (1, _dense_rows(1, np.uint16)), "ScaledMmFp8BlockSharedScale_v1": (2, _dense_rows(2, np.uint8)),
     "MoeExpertGemm_v1": (2, _expert_rows(2)), "MoeExpertGemmW_v1": (3, _expert_rows(3)),
     "MoeExpertGemm_v2": (2, _expert_rows(2)), "MoeExpertGemmW_v2": (3, _expert_rows(3))}
 
@@ -422,7 +423,7 @@ def _rope_template(fam: str, st: dict[str, Any]) -> tuple[str, dict[str, Any], i
 
 #: beside `DECOMPOSE`, keyed alike: the template a Definition's Calls are cut into (every other Definition: the row itself)
 TEMPLATE_OF: dict[str, Callable[[str, dict[str, Any]], tuple[str, dict[str, Any], int]]] = {
-    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "ScaledMmFp8Block_v1": _fp8_block_template,
+    "Gemm_v1": _gemm_template, "Gemm_v2": _gemm_template, "ScaledMmFp8BlockSharedScale_v1": _fp8_block_template,
     "MoeExpertGemm_v1": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v1": partial(_moe_expert_template, "RoutedGemmCoordinate"),
     "MoeExpertGemm_v2": partial(_moe_expert_template, "GemmCoordinate"), "MoeExpertGemmW_v2": partial(_moe_expert_template, "RoutedGemmCoordinate"),
     "Attention_v3": _attention_template, "Attention_v2": _attention_template, "RoPE_v1": _rope_template}

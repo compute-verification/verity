@@ -1,6 +1,45 @@
+module
+
+public import Proofs.Flock.Claims.Recursion.DeployedR
+public import Proofs.Flock.Claims.Recursion.SlotsCommit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Recursion.ResLowerDeployed
 import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBAcc
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Recursive.VStarCheck
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.Hm.Commit
+import Proofs.Flock.Soundness.Discharge.Hm.Mask
 
 /-!
 # The extra calls' slots at any staged part (`MoreSlotsTrue`'s parts)
@@ -13,6 +52,8 @@ an output row's does wherever its unit's output group lies in the unit's slot (`
 every unit the parser built (`hin_of_check`: D11 in `Net.ofRows`, its group's bits within its words, and
 `HmRow.check`'s 16-bit returned outputs), so at every staged part (`slotOut_stagedG`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.MoreSlots
 
@@ -365,11 +406,13 @@ end Calls
 
 /-! ## Which ports the extra calls read -/
 
-theorem outputs_out_accOut (sv : VStar.Stmt) : ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" := by
-  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub]
+theorem outputs_named (sv : VStar.Stmt) :
+    ∀ nm ∈ sv.sub.outputs, nm = "out" ∨ nm = "acc_out" ∨ nm = "rin" ∨ nm = "rout" := by
+  cases sv <;> simp [VStar.Stmt.sub, VStar.recOpenSub, VStar.innerSub, VStar.sparseSub, VStar.capSub, VStar.linkSub]
 
-theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") : nm ∉ sv.sub.outputs :=
-  fun hm => (outputs_out_accOut sv nm hm).elim h1 h2
+theorem not_output {sv : VStar.Stmt} {nm : String} (h1 : nm ≠ "out") (h2 : nm ≠ "acc_out") (h3 : nm ≠ "rin")
+    (h4 : nm ≠ "rout") : nm ∉ sv.sub.outputs :=
+  fun hm => (outputs_named sv nm hm).elim h1 fun h => h.elim h2 fun h => h.elim h3 h4
 
 /-- A read of the chain at a port other than `acc` is an algebra part's `acc0` or `acc1`, at rep `u < 2`. -/
 theorem accRead_other {r : XR} {sv : VStar.Stmt} {nm : String} {u : ℕ} (ha : nm ≠ "acc")
@@ -485,7 +528,7 @@ theorem moreSlotsTrue {st : Stage} (hP : PastIn st) (hA : AccFits) :
           simp only [hq] at hp
           by_cases ha : nm = "acc"
           · subst ha
-            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide))
+            exact hmCallsG_true hS hck hr hss hsv hpc hq (not_output (by decide) (by decide) (by decide) (by decide))
               (Or.inl (hA r ss s sv hss hsv u hrd)) p hp
           · obtain ⟨hu, hnm⟩ := accRead_other ha hrd
             exact hmCallsG_true hS hck hr hss hsv hpc hq hnm (Or.inr hu) p hp

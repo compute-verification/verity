@@ -63,6 +63,7 @@ from verity_vllm.acquire import served_moe as SM
 from verity_vllm.acquire.inductor_templates import Unmodelled, bound
 from verity_vllm.acquire.sources.inductor_hooks import FLUSH
 from verity_vllm.config import UsageError, option, workload_arg
+from verity_vllm.program.frontend import targets as TG
 from verity.ml.definitions.registry import b1, cublas_bf16, cublas_gemv
 from verity.ml.definitions.registry import inductor as IR
 from verity_vllm.query.manifest.bind import split_name
@@ -522,17 +523,12 @@ def gemm_definition(route: dict[str, Any], K: int, N: int, dot: Any) -> dict[str
 
 
 def dispatch(n: int, uniform_decode: bool, capture_sizes: list[int], max_num_seqs: int) -> tuple[str, int]:
-    """vLLM's CUDA-graph dispatch of a step of n tokens: (FULL | PIECEWISE | NONE, the padded token count)."""
-    full = [s for s in capture_sizes if s <= max_num_seqs]
-    if uniform_decode and full and n <= max(full):
-        return "FULL", min(s for s in full if s >= n)
-    if capture_sizes and n <= max(capture_sizes):
-        return "PIECEWISE", min(s for s in capture_sizes if s >= n)
-    return "NONE", n
+    """vLLM's CUDA-graph dispatch of a step of n tokens: (FULL | PIECEWISE | NONE, the padded token count) (`targets.graph_launch`)."""
+    return TG.graph_launch(n, uniform_decode, capture_sizes, max_num_seqs)
 
 
 def step_plans(schedule: list[dict[str, Any]], steps: int, gemms: list[tuple[int, int]], logits_kn: tuple[int, int], heads: tuple[int, int, int],
-               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, device: SD.Device,
+               routes: dict[str, Any], *, capture_sizes: list[int], max_num_seqs: int, split_cap: int, device: SD.DeviceBindings,
                moe: Any = None) -> tuple[list[dict[str, Any]], list[list[int]]]:
     """Each engine step's batch, CUDA-graph mode and the Definitions it selects on `device` (`moe`(M): the fused-MoE expert GEMMs' at M
     rows, `served_moe.expert_plans`); and the (M, K, N) GEMM routes `routes` lacks."""
@@ -590,7 +586,7 @@ def identities_of(plans: list[dict[str, Any]], values: dict[str, dict[str, Any]]
 
 
 def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any], routes: dict[str, Any], schedule: list[dict[str, Any]],
-          steps: int, capture_sizes: list[int], max_num_seqs: int, device: SD.Device, split_cap: int = SPLIT_CAP, backbone: str = "model",
+          steps: int, capture_sizes: list[int], max_num_seqs: int, device: SD.DeviceBindings, split_cap: int = SPLIT_CAP, backbone: str = "model",
           lm_head: str = "lm_head.weight", rank: int = 0, moe: dict[str, Any] | None = None) -> dict[str, Any]:
     """The served Build (module docstring) on `device` (`served_device.device_of`); `moe` the serving process's fused-MoE record
     (`served_moe.expand`), required when a piece calls the fused-MoE op."""
@@ -623,7 +619,7 @@ def build(inductor_dir: str, *, split_graph: str, launch_configs: dict[str, Any]
 
 def assemble(wired: dict[str, Any], moe_plans: Any, final: dict[str, Any], kernels: dict[str, dict[str, Any]], won: dict[str, Any], *,
              source: dict[str, Any], schedule: list[dict[str, Any]], steps: int, routes: dict[str, Any], capture_sizes: list[int],
-             max_num_seqs: int, device: SD.Device, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
+             max_num_seqs: int, device: SD.DeviceBindings, split_cap: int, lm_head: str, rank: int) -> dict[str, Any]:
     """The Build of a wired Program (`wire`, `served_moe.expand`) with its kernel records and autotune winners `won`: its step plans,
     identities and artifact; `source` says what the Program was read from (the trace's wrappers, or `predict.compiled`'s pins)."""
     if not wired["attention"]:

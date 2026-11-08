@@ -1,4 +1,6 @@
-import Definitions.Core.Accel.Machine
+module
+
+public import Definitions.Core.Accel.Machine
 
 /-!
 # A device's period on the machine model (trusted)
@@ -17,6 +19,8 @@ What compute additivity on the machine model 𝓜 (`Verity.Accel.Machine`) is st
 𝓜 has no time inside a run, only the run's seconds, so a window it measures is a block of a period's runs back to back,
 which is a period itself.
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

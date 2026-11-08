@@ -13,7 +13,12 @@ its rows and calls past the input rows (`Tmpl.readsSure`): those are computed ro
 marks is read by a computed row of `Tmpl.rows`. Its cost is each Definition's rows and each call's bound inputs, never
 the unit's gates.
 -/
+module
+
+public import Flock.Tmpl
 import Flock.TmplOrder
+
+@[expose] public section
 
 namespace Flock.Tmpl
 

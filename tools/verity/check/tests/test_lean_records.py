@@ -22,6 +22,12 @@ spec = importlib.util.spec_from_file_location("check_for_lean_records", ROOT / "
 CHECK = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(CHECK)
 
+
+@pytest.fixture(autouse=True)
+def no_store(monkeypatch):
+    """No test asks this machine's store (`stored`, through `research`)."""
+    monkeypatch.setattr(LC, "stored", lambda *a, **k: None)
+
 #: `check.py` as far as `--records` sees it: its arguments, working directory, threads, Lean slot and the lock files it holds
 #: open logged; reports under `--out` as `--no-replay` leaves them (no replay time); `--update` writing a record
 FAKE_AUDIT = """\
@@ -113,7 +119,9 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     (deps / k / "dep" / "Dep.olean").write_text("olean")
     assert LC.audit_records("a", deps, tree) == 0
     (call,) = _calls(tmp_path)
-    assert _argv(call) == ["--build", "--no-replay", "--no-runs", "--out", "OUT", str(tree / "a")]
+    arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
+    assert _argv(call) == ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, "--out", "OUT",
+                           str(tree / "a")]
     assert (call["cwd"], call["threads"]) == (str(tree), "2")
     assert (tree / "a" / "Aa.lean").is_file() and (tree / "p" / "Pp.lean").is_file() and not (tree / "c").exists()
     copied, kept = tree / "a" / ".lake" / "packages" / "dep" / "Dep.olean", deps / k / "dep" / "Dep.olean"
@@ -123,7 +131,8 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     assert f"dependencies copied ({k[:12]})" in out and "lean-records: a: check.py exit 0" in out
 
     assert LC.audit_records("a", deps, tree, update=True) == 0
-    assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--update", "--out", "OUT", str(tree / "a")]
+    assert _argv(_calls(tmp_path)[0]) == ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, "--update",
+                                          "--out", "OUT", str(tree / "a")]
     assert (repo / "a" / "lean-audit.json").read_text() == '{"guarantees": {"A.t": {}}}', "the record comes back to the checkout"
     out = capsys.readouterr().out
     assert f"lean-records: wrote {repo / 'a' / 'lean-audit.json'}" in out
@@ -133,7 +142,7 @@ def test_the_audit_runs_without_the_replay_on_the_trees_own_copy_of_the_audits_d
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(tmp_path / "run"))
     moved = tmp_path / "moved.json"
     assert LC.audit_records("a", deps, tree, update=True, moved=moved, out=tmp_path / "reports") == 0
-    assert _calls(tmp_path)[0]["argv"][3:] == ["--update", "--moved", str(moved), "--out", str(tmp_path / "reports"),
+    assert _calls(tmp_path)[0]["argv"][7:] == ["--update", "--moved", str(moved), "--out", str(tmp_path / "reports"),
                                                str(tree / "a")]
     assert (repo / "a" / "lean-audit.json").read_text() == "{}", "a recorded run's source tree is shared by its commit's runs"
 
@@ -153,12 +162,14 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
     monkeypatch.setenv("RESEARCH_RUN_ID", "r1")
     assert LC.audit_records("p", tmp_path / "deps", tree) == 0
-    assert _calls(tmp_path)[0]["argv"][3:5] == ["--out", str(run / "lean-audit")]
+    assert _calls(tmp_path)[0]["argv"][5:9] == ["--artifacts", str((tmp_path / "lean-artifacts").resolve()), "--out",
+                                                str(run / "lean-audit")]
     doc = json.loads((run / "lean-audit" / "audit.json").read_text())
     assert doc["kind"] == LC.FAST_KIND == "lean-fast/v1" and [r["kind"] for r in doc["packages"]] == [LC.FAST_KIND]
     assert json.loads((run / "lean-audit" / "audit-x" / "report.json").read_text())["kind"] == LC.FAST_KIND
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "passed"
+    assert res.doc["outcome"] == LC.PASS and res.doc["records"]["p"]["outcome"] == LC.PASS
     assert res.doc["artifacts"] == ["lean-audit"] and res.doc["workload_fingerprint"]["replay"] is False
     assert LC.FAST_KIND in REFUSED_KINDS
     assert CHECK.lean_fast(run).startswith(f"refused: {tree / 'p'}: a lean-fast/v1 result")
@@ -167,6 +178,7 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert LC.audit_records("p", tmp_path / "deps", tree) == 1
     res = result.check(run, "r1")
     assert res.valid and res.doc["kind"] == LC.FAST_KIND and res.validation_status == "failed", "a failure has the kind too"
+    assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
@@ -252,9 +264,12 @@ def test_the_packages_whose_records_read_the_build_are_audited_after_it(repo, tm
     out = tmp_path / "reports"
     assert LC.audit_records("p", deps, tree, update=True, out=out) == 0
     calls = _calls(tmp_path)
+    arts = ["--artifacts", str((tmp_path / "lean-artifacts").resolve())]
     assert [c["argv"] for c in calls] == [
-        ["--build", "--no-replay", "--no-runs", "--update", "--out", str(out), str(tree / "p")],
-        ["--build", "--no-replay", "--no-runs", "--out", str(out / "requirer-a"), str(tree / "a")]]
+        ["--build", "--no-replay", "--no-runs", "--facts", "named", *arts, "--update", "--out", str(out), str(tree / "p")],
+        ["--build", "--no-replay", "--no-runs", "--facts", "none", *arts, "--out", str(out / "requirer-a"),
+         str(tree / "a")]], \
+        "only PKG's audit keeps its facts document, which `trusted_size.py --run` reads; a requirer's is read by nobody"
     assert json.loads((out / "requirer-a" / "audit.json").read_text())["kind"] == LC.FAST_KIND
     assert json.loads((tree / LC.LINKS).read_text()) == {"a": k}
     assert LC.audit_records("a", deps, tree) == 0 and len(_calls(tmp_path)) == 1, "nothing requires a"

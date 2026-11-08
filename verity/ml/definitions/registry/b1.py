@@ -156,7 +156,7 @@ ResidualAdd = CompositeDefinition("ResidualAdd", 1, ("N",),
 
 @composite("Bf16MulScalarTensor", 1, ["N"], lambda S: ((("x", Array(S.N, BF16)), ("s", Array(1, BF16))), Array(S.N, BF16)),
            conformance="exact-model-tested; G4 difftest vs aten.mul.Tensor(bf16 [1,N], bf16 0-d CUDA tensor) on the L40S "
-                       "and the wave-1 exhaustive probe: bf16(f32(x) * 48) "
+                       "and the exhaustive GPU probe: bf16(f32(x) * 48) "
                        "on all 65,282 non-NaN bf16 words (Gemma-2 normalizer)")
 def Bf16MulScalarTensor(B, S, x, s):
     """`aten.mul.Tensor(x bf16 [.., N], s bf16 0-d TENSOR)`: ATen's CUDA
@@ -295,8 +295,7 @@ FUSED_RMS_BLOCK = 1024  # `max_block_size = batch_invariant_launch ? 1024 : ...`
                       Tuple(Array(S.N, BF16), Array(S.N, BF16))),
            conformance="exact-model-tested; evidence: reproduces production on 2,340/2,340 fused-norm rows (1,347,840 words) of "
                        "the B0 store (SmolLM2-135M, N=576, incl. the 13 rows v1 misses; `verity.ml.definitions.registry.rmsnorm_fused_sweep`) "
-                       "and on the B1 (N=1536) L27/t=1 row that v1 missed ("
-                       "`results/TA1-typed-b1-20260907/corr-B1-L27t1-rmsv2.json`, 14/14 exact)")
+                       "and on the B1 (N=1536) L27/t=1 row that v1 missed (14/14 exact)")
 def RMSNormFusedCuda(B, S, x, res, w, eps=None):
     """vLLM `d9105ea80` `csrc/layernorm_kernels.cu` **generic** `fused_add_rms_norm_kernel<c10::BFloat16, 0, true>` —
     the kernel `fused_add_rms_norm` launches when `vllm_is_batch_invariant()` (the width-8 `_f16Vec` kernel is
@@ -358,7 +357,7 @@ def SiluMul(B, S, gu):
 
 
 # ---------------------------------------------------------------------------------------------------------
-# Attention — FlashAttention-2 forward, one (query position, head) row (attention-model.md §3)
+# Attention — FlashAttention-2 forward, one (query position, head) row
 # ---------------------------------------------------------------------------------------------------------
 
 BN = 64  # kBlockN of the FA2 kernel at HEAD DIM 128 (measured on Qwen2.5-1.5B) -- the hd-128 v2 record `ATTENTION_FA2`
@@ -941,9 +940,9 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
 #   GEMM       {"DOT": <prim>}                                   the linear layers' implementation record
 #   ATTENTION  {"BN": int, "DOT": <prim>, "INV": <prim>}         the attention kernel's implementation record
 #   NORM       {"L0": RMSNormTriton_v1{N,EPS}, "FUSED": RMSNormFusedCuda_v2{N,EPS}}   complete specialisations (a
-#              partially bound composite is not an encodable static value: descriptor-codec.md §5), built by `norm_bundle(C)`
+#              partially bound composite is not an encodable static value), built by `norm_bundle(C)`
 #
-# NOT lifted (named in composition.md §1, unchanged across the three profiles): F2fpBf16 (the bf16 store conversion),
+# NOT lifted (unchanged across the three profiles): F2fpBf16 (the bf16 store conversion),
 # the FA2 lane ownership `_lane`, the four-lane epilogue order, `scale_log2_bits`, GuardNegInfZero, the zero padding of
 # partial blocks, the RMSNorm reduction trees (RMSNormTriton's 128x8 / 1024-chunk, RMSNormFusedCuda's cub BlockReduce),
 # BiasAdd / RoPE / SiluMul / Embedding / TokenSelect.
@@ -956,7 +955,7 @@ ALL_COMPOSITES = [DotBf16, GemmCoordinate, Gemm, BiasAdd, ResidualAdd, RMSNormTr
            conformance="exact-model-tested")
 def AttnBlockV2(B, S, q, k, v, m_prev, l_prev, o_prev, scale_log2=None):
     """`AttnBlock_v1` with kBlockN (`BN`) and the tensor-core step (`DOT`) as statics: one BN-key block of the flash online softmax
-    for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma: hopper-profile.md §4).  `scale_log2`: `AttnBlock_v12`'s input."""
+    for one query row (FA2 with BN=64/mma.sync; FA3 with BN=128/wgmma).  `scale_log2`: `AttnBlock_v12`'s input."""
     D, NVIS, FIRST, BN, DOT = S.D, S.NVIS, S.FIRST, S.BN, S.DOT
     dot = bind(DotBf16V2, K=D, DOT=DOT)
     s = [B.call(dot, q, k[c]) for c in range(NVIS)]  # A: S = Q K^T, chained k-steps, acc 0 per block

@@ -2,8 +2,8 @@
 window per rank in ``<dir>/rank<r>/``, which the rank's own process commits (`rank_rows`, through the collective RPC) from its
 committed store, its registered weight shards and its Programs of record with `pipeline.serving_rows.after_commit`, and ``<dir>/tp.json``
 over the world.  The driver calls `commit` in the first instrumented run once every rank's root is final and the TP run root is fixed,
-and before any draw: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
-deferred (`require`), since an in-process replay draws its seed inside finalize.
+and before sampling: the challenge, the population openings and the cross-rank picks all come after it, and every rank's C2 replay is
+deferred (`require`), since an in-process replay samples its seed inside finalize.
 
 Rank ``r``'s window binds ``run = <TP run root hex>/rank<r>`` (`run_of`): the TP run root fixes every rank's rows-sha512 root, and the rank
 keeps two ranks' ports, whose population, partition and leaf counts can coincide, in distinct domains.  A rank that writes no window,
@@ -17,13 +17,13 @@ workload the record served.  Neither side evaluates a row, so the Definitions th
 one-stage proof is over the verifier's own template.  `source` holds a registration's window to it: ``served``, its run ``<TP run root>/rank<r>`` under a
 SHA-512 TP run root, its ``tp`` the record's and its served Programs the ones the verifier loaded.  A served window names a SHA-512
 commitment, as `deferred_rows.source` holds a deferred Commit's: a TP Commit's run root is SHA-512 (``verity/tp-run-root/v2``), and a
-record under the SHA-256 v1 root (an old record, or ``--commit-scheme vllm-v1``) passes no window as served (``sha512``).
+record under the SHA-256 v1 root (an old record) passes no window as served (``sha512``).
 
 A TP Commit that deferred its ranks' replay to sealed bundles and wrote no window has its windows from those bundles afterwards
 (``verity-vllm tp-serving-rows COMMIT_OUT --partition F --out O``, `from_bundle`): rank ``r``'s bundle opened against the record as
 its CPU replay opens it (`commit_replay._of_record`: pending or passed, a failed rank refused), its Programs of record, its weight
 shards opened against its committed weights root, and the window `pipeline.serving_rows.after_commit` writes under the same run and
-``tp``.  Its rows are a fresh commitment, made after the Commit and before any draw, so the window is a ``stand-in`` whose link to
+``tp``.  Its rows are a fresh commitment, made after the Commit and before sampling, so the window is a ``stand-in`` whose link to
 the rank's rows-sha512 root is provenance (`stand_in`: ``of`` the TP run root, the rank, its root, the bundle's manifest digest and
 this command, and ``link``).  `source` takes a stand-in only for a rank whose bundle the record names (``replay_deferred.json``) and
 whose replay did not fail, with that ``of`` and ``link``."""
@@ -34,12 +34,13 @@ import hashlib
 import json
 import os
 import traceback
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from verity_vllm import config as C
 from verity_vllm.config import option
+from verity_vllm.pipeline.tp import run_root as RT
 
 SCHEMA = "verity-vllm/tp-serving-rows/v1"
 ROWS_SCHEME = "rows-sha512"
@@ -49,7 +50,7 @@ LINK = ("provenance, not proof: verity-vllm tp-serving-rows opened the rank's se
 
 
 def require(args: Any, replay_cfg: dict[str, Any] | None) -> None:
-    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before every draw."""
+    """Refuse a ``--serving-rows`` TP Commit whose windows could not be written before sampling."""
     if args.serving_rows and (replay_cfg is None or not args.replay_deferred or args.only_arm == "control"):
         raise SystemExit("--serving-rows on a TP Commit needs --required-manifest with a --build-rank per rank (each rank reads its Programs of "
                          "record from the replay config), --replay-deferred at a world that defers (no rank draws its replay seed before "
@@ -68,11 +69,11 @@ def stand_in(tp: dict[str, Any], bundle_manifest_sha256: str) -> dict[str, Any]:
                    "bundle_manifest_sha256": bundle_manifest_sha256, "rows": ROWS}, "link": LINK}
 
 
-def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int, root_tag: bytes) -> dict[str, Any]:
-    """Every rank's window under the TP run root ``root`` (tagged ``root_tag``) of the ranks' roots ``claimed`` (rank -> hex), and
+def commit(llm: Any, args: Any, root: bytes, claimed: dict[str, str], world: int) -> dict[str, Any]:
+    """Every rank's window under the SHA-512 TP run root ``root`` of the ranks' roots ``claimed`` (rank -> hex), and
     ``tp.json``."""
     req = json.loads(Path(args.serving_rows).read_text())
-    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": root_tag.decode()}
+    tp = {"world": world, "tp_run_root": root.hex(), "roots": {str(r): claimed[str(r)] for r in range(world)}, "root_tag": RT.TP_ROOT_TAG.decode()}
     got = llm.collective_rpc(rank_rows, timeout=args.rpc_timeout, args=(dict(req, row=args.label), tp))
     return gather(req["dir"], tp, got)
 
@@ -114,6 +115,7 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
     of record (`rank_replay.load`: refused unless of record and this rank's), from the worker's commit state."""
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.check.replay import driver as SR
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import rank_replay as RR
 
@@ -127,7 +129,8 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
                            committed=OC.OpenedReader(st["com"], rc), weights=SR.model_weights_provider(st["weights"], p.index.prefix),
                            manifest=RR.manifest_of_rank(st.get("manifest_doc"), rank), run_root=run_of(bytes.fromhex(tp["tp_run_root"]), rank),
                            run=request.get("run"), row=request.get("row"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
-                           committer=request.get("committer"), workers=1,   # vLLM's TP workers are daemonic: no process pool under them
+                           committer=request.get("committer"), tables=EX.of_request(request.get("tables"), rank),
+                           workers=1,   # vLLM's TP workers are daemonic: no process pool under them
                            tp={"world": world, "rank": rank, "tp_run_root": tp["tp_run_root"], "run_root": rc.run_root.hex(), "root_tag": tp["root_tag"]},
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
@@ -136,7 +139,8 @@ def write(st: dict[str, Any], request: dict[str, Any], tp: dict[str, Any]) -> di
 def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | os.PathLike, out_dir: str | os.PathLike, *, pair: int = 0,
                 build_root: str | os.PathLike | None = None, checkpoint: Any = None, weights: Any = None,
                 required_manifest: str | None = None, workers: int | None = None, programs: Any = None,
-                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = ()) -> dict[str, Any]:
+                binding: dict[str, Any] | None = None, transfer_gates: Sequence[str] = (),
+                tables: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """Rank ``rank``'s ``stand-in`` window into ``out_dir`` from its sealed replay bundle of pair ``pair`` (module docstring): the
     bundle opened against the record (`commit_replay._of_record`), the required manifest, the rank's Programs of record
     (`rank_replay.load`; ``build_root``'s ``rank<r>/`` instead of the record's dirs, its digests held either way; ``programs``, the
@@ -144,11 +148,13 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
     ``transfer_gates`` proved whole, `pipeline.advice_windows`), its weight shards
     opened against the committed weights root from the bundle's tensors and ``checkpoint`` (a `weights_of_record.CheckpointIndex`;
     without one, only the tensors the bundle carries; ``weights``, tests, replaces them), each on the window's first read of it
-    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root."""
+    (`cpu_replay.OnRead`), and every value read through an opening verified against the rank's root.  ``tables``: the per-expert
+    cut's tables committed under the committer's key and registration (`expert_rows.of_request`)."""
     from types import SimpleNamespace
 
     from verity_vllm.check import oracle_compare as OC
     from verity_vllm.pipeline import cpu_replay as CPU
+    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import replay_bundle as RB
     from verity_vllm.pipeline import serving_rows as SRW
     from verity_vllm.pipeline.tp import c2 as C2
@@ -190,7 +196,7 @@ def from_bundle(commit_dir: str | os.PathLike, rank: int, partition_file: str | 
                            row=ctx.get("label"), arrivals=p.arrivals, program_dirs=p.dirs, digests=p.digs,
                            committer={"from": "replay bundle", "pair": pair, "source": ctx.get("code")}, workers=workers, tp=tp,
                            index={"attention_paths": p.attn_paths, "tp": p.tp}, reuse=(p.index,), stand_in=stand_in(tp, b["manifest_sha256"]),
-                           binding=binding, transfer_gates=transfer_gates)
+                           binding=binding, transfer_gates=transfer_gates, tables=EX.of_request(tables, rank))
     return {k: res.get(k) for k in ("run", "population", "partition_digest", "registration_digest", "seconds")}
 
 
@@ -202,7 +208,6 @@ def record(commit_dir: str | os.PathLike) -> dict[str, Any]:
     v2, or an old record's v1, which `source` refuses as served), and any other tag is refused.  ``bundles``: the manifest sha256 of
     each rank's sealed pair-0 bundle whose replay did not fail (``replay_deferred.json``; none when nothing was deferred)."""
     from verity_vllm.pipeline.tp import c2 as C2
-    from verity_vllm.pipeline.tp import run_root as RT
 
     d = Path(commit_dir)
     rows = [json.loads(x) for x in (d / "runs.jsonl").read_text().splitlines() if x.strip()]
@@ -314,6 +319,9 @@ class Options:
                                     help="skip the shard sha256 (each tensor read is still held to the committed weights root)")
     required_manifest: str | None = option("--required-manifest", default=None, help="the Commit's required manifest (default: its recorded path)")
     workers: int | None = option("--workers", type=int, default=None, help="processes hashing the rows (default: min(16, CPUs))")
+    tables_key: str | None = option("--tables-key", default=None, help="the committer's key file its per-expert tables are registered under")
+    tables: str | None = option("--tables", default=None,
+                                help="the per-expert tables' registration (records.expert_tables), {rank} its rank's")
 
 
 def main(o: Options) -> int:
@@ -328,7 +336,8 @@ def main(o: Options) -> int:
         world = int(record(o.commit_out)["world"])
         for r in [int(x) for x in o.ranks.split(",")] if o.ranks else range(world):
             got = from_bundle(o.commit_out, r, o.partition, Path(o.out) / f"rank{r}", build_root=o.build_root, checkpoint=ck,
-                              required_manifest=o.required_manifest, workers=o.workers)
+                              required_manifest=o.required_manifest, workers=o.workers,
+                              tables={"key": o.tables_key, "registration": o.tables} if o.tables else None)
             print(f"[tp-serving-rows] rank {r}: stand-in window of {got['population']} units, run {got['run'][:16]} rank {r}, registration "
                   f"{str(got['registration_digest'])[:16]}", flush=True)
     except (CR.Refused, LookupError, ValueError, RuntimeError) as e:

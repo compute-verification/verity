@@ -1,7 +1,7 @@
 """`remote_bandwidth.opening`: check 3 by the opening unit's reference on a small p512/k2 store. An honest window is
-accepted; the same window over a store that lost its first drawn block is rejected on codec at that draw; an uncertified
+accepted; the same window over a store that lost its first sampled block is rejected on codec at that draw; an uncertified
 plan row fails the plan link and a public row not the verifier's own is malformed. A plan row's ``b || c`` is the proof
-system's (pinned from C-Flock's commit strings)."""
+system's (pinned from Flock's commit strings)."""
 
 from __future__ import annotations
 
@@ -11,39 +11,18 @@ from types import SimpleNamespace
 
 import pytest
 
+from remote_bandwidth_fakes import Clock, Entropy
 from verity.core.protocols.remote_bandwidth import audit, codec, coins, opening as O, receipts
 from verity.core.protocols.remote_bandwidth.receipts import Plan
 
 N, L = 32, 16
 NODE, SOURCE = b"opening-node", b"the verifier's secret"
 P512 = codec.Codec(codec.P512, 2, False)
-#: C-Flock's ``b || c`` (`verity_flock.circuit._commit_strings`) of the plan row 64..127 of 1,024 bits under `SALT`
+#: Flock's ``b || c`` (`verity_flock.circuit._commit_strings`) of the plan row 64..127 of 1,024 bits under `SALT`
 PLAN_BC = ("12f7869e085f13e475ea68ff04f83289655b686aa1c56da778cc299af82f355882e4e6870600f12fa17ba27a530593488ad2df0e5745cf04c3"
            "f28e1caf352a9f425fcf1a31e3f75bce33b749894811a7b0ded5eed561fc3e18dee59b0f24f0806e3369646067a9612ea4ff35315e63e53bf4"
            "fbe9f2bce4d0b79f9cffa203ecd4")
 SALT = hashlib.shake_256(b"verity/remote-bandwidth/opening/test plan salt").digest(receipts.SALT_BYTES)
-
-
-class Clock:
-    def __init__(self) -> None:
-        self.now = 0
-
-    def __call__(self) -> int:
-        return self.now
-
-
-class Entropy:
-    """A deterministic stand-in for the operating system's generator: SHA-512 in counter mode under `label`."""
-
-    def __init__(self, label: bytes) -> None:
-        self.label, self.count = label, 0
-
-    def __call__(self, n: int) -> bytes:
-        out = b""
-        while len(out) < n:
-            out += hashlib.sha512(self.label + self.count.to_bytes(8, "big")).digest()
-            self.count += 1
-        return out[:n]
 
 
 def payload(j: int) -> bytes:
@@ -61,7 +40,7 @@ def store() -> O.Store:
 
 
 def window(store: O.Store) -> SimpleNamespace:
-    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and drawn; the same coins every call, so
+    """One window of N / L passes, pass i the stripe of L blocks from L i, closed and sampled; the same coins every call, so
     the same draws over any store of the same registration."""
     reg = store.registration
     p = audit.Params(blocks=N, deadline_ns=10**6, windows=1, samples=4, delta=1e-3, window_ns=10, codec=P512)

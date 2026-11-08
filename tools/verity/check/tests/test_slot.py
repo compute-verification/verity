@@ -33,14 +33,17 @@ def any_core(monkeypatch):
 
 @pytest.fixture(autouse=True)
 def roomy_disk(monkeypatch, tmp_path):
-    """The machine's own /workspace never blocks a slot in these tests."""
+    """The machine's own /workspace and check cache never block a slot in these tests."""
     monkeypatch.setattr(SLOT, "DISK", tmp_path / "no-disk")
+    monkeypatch.setattr(SLOT, "cache_disk", lambda: tmp_path / "no-disk")
 
 
 def test_a_disk_short_of_inodes_or_bytes_blocks_every_slot(monkeypatch, tmp_path):
     """A check that starts on a disk at 97-99% of its inodes dies mid-build with ENOSPC, so no slot starts one there."""
     slot = SLOT.parse("a 0-1")[0]
     monkeypatch.setattr(SLOT, "DISK", tmp_path)
+    monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 0)
+    monkeypatch.setattr(SLOT, "DISK_MIN_GB", 0)
     assert SLOT.blocked(slot, NOW) is None
     monkeypatch.setattr(SLOT, "DISK_MIN_INODES", 2**62)
     assert SLOT.blocked(slot, NOW).startswith(f"{tmp_path} has ") and "inodes free" in SLOT.blocked(slot, NOW)
@@ -739,7 +742,7 @@ def test_ranked_priority_waiters_go_by_rank_then_arrival_and_ahead_of_unranked_o
     low, lo = SLOT.join(tmp_path, priority=True, rank=15)                   # the lowest train, resent later
     lane, la = SLOT.join(tmp_path)
     assert SLOT.ahead(low) == 0 and SLOT.ahead(high) == 1 and SLOT.ahead(unranked) == 2 and SLOT.ahead(lane) == 3
-    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the post-landing run of `main`
+    post, p = SLOT.join(tmp_path, priority=True, rank=0)                    # the after-landing run of `main`
     assert SLOT.ahead(post) == 0 and SLOT.ahead(low) == 1
     waits = SLOT.waiting(tmp_path / SLOT.LINE, datetime(2026, 10, 19, tzinfo=UTC))
     assert [w["priority"] for w in waits] == [True, True, True, True, False]
@@ -799,7 +802,7 @@ def test_a_trains_slot_is_taken_only_by_a_priority_waiter(tmp_path, monkeypatch,
     assert ran["slot"] == "d"
     assert SLOT.status(SLOT.parse("d 0 only=trains\n"), tmp_path, NOW)[0].startswith("d  cores 0  trains only  ")
     (tmp_path / "slots").write_text("d 0 only=trains\n")
-    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on vy-nebius-cpu-K"):
+    with pytest.raises(SystemExit, match="every slot in .* is for train checks.* drive's full check decides what reaches `main`.*research run --on auto"):
         SLOT.main(["--", "check.py"], now=lambda: NOW, sleep=free)
 
 
@@ -846,7 +849,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     monkeypatch.setattr(SLOT.os, "sched_getaffinity", lambda pid: {0, 1, 2})
     with pytest.raises(SystemExit) as e:
         SLOT.main(["--", "check.py"], now=lambda: NOW)
-    assert "a lane check runs on another machine" in str(e.value) and "research run --on vy-nebius-cpu-K" in str(e.value)
+    assert "a lane check runs on another machine" in str(e.value) and "research run --on auto" in str(e.value)
     for name, text in (("gpu", "g 1\n"), ("trains", "t 2 only=trains\n"), ("gpu.bak-20261024", "b 2\n")):
         (tmp_path / name).mkdir()
         (tmp_path / name / "slots").write_text(text)
@@ -855,7 +858,7 @@ def test_an_all_trains_pool_names_the_lane_pools_beside_it_and_another_machine_o
     msg = str(e.value)
     assert f"CHECK_SLOTS={tmp_path / 'gpu' / 'slots'} python3 tools/verity/check/slot.py" in msg
     assert "another machine" not in msg and "trains/slots" not in msg and ".bak-" not in msg
-    assert "research run --on vy-nebius-cpu-K" in msg
+    assert "research run --on auto" in msg
 
 
 def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(monkeypatch):
@@ -881,7 +884,8 @@ def test_priority_reaches_slot_py_from_record_and_unknown_options_are_refused(mo
 
 def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_and_through_the_runs_environment(monkeypatch):
     """`research merge` reads a check's command, so the slot memory a train needs travels as `research run --env`, never as a
-    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps alone need no train slot."""
+    slot.py option; a lane's check, a pooled one, a combine and a train's shard of Lean steps without lean-suites need no train
+    slot."""
     spec2 = importlib.util.spec_from_file_location("repo_check_min_mem", ROOT / "tools" / "verity" / "check" / "check.py")
     check = importlib.util.module_from_spec(spec2)
     spec2.loader.exec_module(check)
@@ -900,7 +904,9 @@ def test_record_asks_for_a_train_slot_only_for_a_trains_tests_or_circuit_check_a
     assert not sent("--on", "vy-nebius-1")
     assert check.train_gb(True, "research", None, False) is None
     assert check.train_gb(True, None, ["lean-build", "lean-audit:Security"], False) is None
-    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # a post-landing run of the suites
+    assert check.train_gb(True, None, ["pytest"], False) == check.TRAIN_GB                  # an after-landing run of the suites
+    assert check.train_gb(True, None, ["lean-build", "lean-audit", "lean-suites"], False) == check.TRAIN_GB   # its Lean shard
+    assert check.train_gb(True, None, ["lean-suites:verity-flock"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, ["flock-circuit-build", "circuit-check"], False) == check.TRAIN_GB
     assert check.train_gb(True, None, None, True) is None
     assert check.TRAIN_GB == 300 and SLOT.MIN_MEM_ENV not in " ".join(calls[-1][calls[-1].index("--") + 1:])
@@ -1128,9 +1134,9 @@ def test_a_slot_with_mem_counts_what_live_reservations_hold_but_dont_use_yet(tmp
 def test_a_train_check_counts_only_other_train_checks_reservations_and_a_lane_check_counts_every_one(tmp_path, monkeypatch, capsys):
     """A free train slot (mem=300) would read a negative net behind pool checks that reserve 279 GB each and use 25 and 5,
     and wait until someone shrank their reservations by hand. A
-    `--priority` waiter (a train's check, drive's post-landing run) counts another job at what it holds, already out of
+    `--priority` waiter (a train's check, drive's after-landing run) counts another job at what it holds, already out of
     memory_gb, and another priority check's reservation in full; a lane's check still counts every reservation. Each check's own
-    reservation is its slot's whole mem= in research.mem's GB: the post-landing run's 601.3 GB on n2 was slot a's mem=560."""
+    reservation is its slot's whole mem= in research.mem's GB: the after-landing run's 601.3 GB on n2 was slot a's mem=560."""
     proc = tmp_path / "proc"
     for pid, gib in ((100, 25), (300, 5), (200, 50)):                          # a research run, pool check p0, another train
         (proc / str(pid)).mkdir(parents=True)

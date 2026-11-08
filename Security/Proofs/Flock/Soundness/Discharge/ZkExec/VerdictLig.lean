@@ -1,8 +1,33 @@
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
-import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
-import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictStatements
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysInner
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysLig
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysRep
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysReplay
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsFrames
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsReplay
 import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictLigMain
+import Proofs.Flock.Soundness.Refine.Basis
+import Proofs.Flock.Soundness.Refine.Opening
+import Proofs.Flock.Soundness.Refine.Plays
 
 /-!
 # `ZkRepAccepts`'s Ligerito half: a `--zk` rep's Ligerito verdict accepts the proof's rows
@@ -21,6 +46,8 @@ it through the rep as `zk_rep_plays` builds the rep's run, at the opening's batc
 `basis` is the model's `bHat` at the opening's `b`), and a run has one result (`plays_det`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.ZkExec
 
 open Flock Refine Exec Game Model DecodeZL Transcript
@@ -28,7 +55,7 @@ open Flock Refine Exec Game Model DecodeZL Transcript
 local notation "𝔽" => FlockLevel3.GF128
 local notation "𝕂" => FlockLevel3.GF256
 
-/-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, PROTOCOL.md §13). Under `ZkRepAccepts`'s
+/-- **A `--zk` rep's Ligerito verdict accepts** (live PROTOCOL.md §7, `Flock.Ligerito`). Under `ZkRepAccepts`'s
 hypotheses, every result of the compiled rep, played with the rep's messages and the rounds' coins, has a Ligerito
 verdict that accepts the openings whose rep-`r` rows are the proof's. -/
 def ZkLigAccepts : Prop :=

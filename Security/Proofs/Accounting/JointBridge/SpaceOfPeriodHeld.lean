@@ -1,5 +1,11 @@
-import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
-import Proofs.Pous.Period
+module
+
+public import Proofs.Pous.Period
+public import Properties.Accounting.JointBridge.SpaceOfPeriodHeld
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
 /-!
@@ -10,6 +16,8 @@ fewer than `S · len` bit-ticks) maps, through `RealizesSpaceOfPeriodHeld`'s coi
 at the other coins `other ξ`, whose probability `Pous.Period.SecurityProofs.periodHeld` bounds by `δ + ε_max`. The
 bound holds at the challenge times PoUS grades (`Definitions.Accounting.JointBridge.SpaceOfPeriodHeld`'s header).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.Bridge
 

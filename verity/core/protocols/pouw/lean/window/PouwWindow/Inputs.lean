@@ -1,23 +1,26 @@
-import PouwWindow.Side
-import PouwWindow.Record
-import Identity.Domains
+module
+
+public import PouwWindow.Side
+public import PouwWindow.Record
 
 /-!
 # The tile instances' public inputs (`window.py`, "The tile instances' public inputs")
 
-A window's K′ drawn tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
-instance s is tile `drawn[σ·cap + s]`, or N − 1 past the draw (`instanceTs?`). `publicInputs?` is F_σ, the verifier's own
-`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the window
+An execution phase's K′ sampled tiles are proved in S fixed-shape sessions of `cap` instances (`sessionCap?`, `sessions?`); session σ's
+instance s is tile `drawn[σ·cap + s]`, or N − 1 past the sample (`instanceTs?`). `publicInputs?` is F_σ, the verifier's own
+`--public-inputs` file of the session: a header line, then each instance's ports (`PUBLIC_PORTS`: t as a u128, the execution phase
 root, its domain, side A's and side B's domains, the pass's -h3 domain), little-endian, instance-major. The registration is
 one-stage's record as JSON, read as Python reads it.
 -/
+
+@[expose] public section
 
 namespace PouwWindow
 
 open Lean (Json)
 
 def PUBLIC_INPUTS_FORMAT : String := Domains.FLOCK_PUBLIC_INPUTS
-/-- `M_MAX`: C-Flock's largest session, m = k_log + nbl ≤ 35. -/
+/-- `M_MAX`: Flock's largest session, m = k_log + nbl ≤ 35. -/
 def mMax : Nat := 35
 
 /-- `PUBLIC_PORTS`: (port, words, seed, derivation). -/
@@ -34,7 +37,7 @@ def sessionCap? (kLog perBlock : Int) : Except String Nat :=
   if 1 ≤ kLog && kLog ≤ (mMax : Int) - 3 && 1 ≤ perBlock then .ok (perBlock.toNat * 2 ^ (mMax - kLog.toNat))
   else .error s!"a block of 2^{kLog} bits does not fit a session of m <= {mMax}"
 
-/-- `sessions`: S, the sessions of `cap` instances that hold K′ = `k` drawn tiles. -/
+/-- `sessions`: S, the sessions of `cap` instances that hold K′ = `k` sampled tiles. -/
 def sessions? (k cap : Int) : Except String Nat :=
   if 1 ≤ k && 1 ≤ cap then .ok ((k.toNat + cap.toNat - 1) / cap.toNat)
   else .error s!"K′ and the cap are positive, not {k} and {cap}"

@@ -1,17 +1,45 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Statements
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Defs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
 import Proofs.Flock.Soundness.Discharge.DecodeZLJ.Reps
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Integrate.Bridge
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Coins
+import Proofs.Flock.Soundness.Discharge.PlaysCoin.Decodes
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The decoder is right at `J` tables
 
 `decodesOnJ_exec`: `DecodesOnJ` at `planJ`, table by table. At an outcome flock-verify accepts, at table `j`:
 
-* `RecordsLiveJ` gives the record's draw `dj S`, the proof files, the link points, and table `j`'s root and streams.
+* `RecordsLiveJ` gives the record's sample `dj S`, the proof files, the link points, and table `j`'s root and streams.
 * `accepts_tables` sets table `j` up with setupH under `tagsAt` at `partDraw` of part `j`, which is `partJson (dj S)`;
   `DrawOkJ` gives its link points. So a `SetupJ` exists, and `planJ`'s table `j` is `stmtOf` of setupH's statement
   (`tableJ_of`, `model_eq_stmtOf`), with its `fast100` schedule and `PT_LOCAL`.
 * `accepts_reps_at` gives each rep's run and rounds and the salted verdict; `repRun_at` (at `op_carries`,
   `lig_carries`) makes each run a `RepRun` for `decJ`, and `playsT_of_repRun` a run on its tape `repTapeJ`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.DecodeZLJ
 

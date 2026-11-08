@@ -1,4 +1,24 @@
+module
+
+public import Proofs.Properties.Nci.BodiesOk.Decode
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Properties.Nci.BodiesOk
+import Proofs.Properties.Nci.BodiesOk.Basic
 
 /-!
 # What `ReadsExact` reads of the decoder and of `BodiesOk`
@@ -12,6 +32,8 @@ wherever `Prog.orderViolation` passes. `reached` marks the root and the callees 
 (`reached_spec`), so it marks only Definitions of `order_closed`'s call-closed set; a composite of that set is
 `body_ok`'s, and a primitive's body is empty.
 -/
+
+@[expose] public section
 
 namespace NciCheck.Properties.SecurityProofs.BodiesOk
 open Flock.Program

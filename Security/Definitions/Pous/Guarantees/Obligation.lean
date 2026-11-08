@@ -1,5 +1,7 @@
-import Definitions.Pous.P2.Mutable
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Pous.P2.Mutable
+public import Definitions.Pous.Assumptions.P2
 
 /-!
 # PoUS as an obligation: the mutable store's audit window reduces to P2's audit of its snapshot (trusted)
@@ -13,13 +15,16 @@ a payload and a responder fixed by the other tags' keys pass with probability at
 count (`ObligationOfStatic`, no premise), so within P2's graded bound wherever `P2RingRoundSecure` gives it, from `2^19`
 to `2^25` blocks (`ObligationOfRoundSecure`), and to `2^27` under the widened conjecture `P2RingRoundSecureWide`
 (`ObligationOfRoundSecureWide`). `ObligationDemo` is the demo's memory term at `1038·2^16` blocks, outside the first
-range, and `ObligationDemoWide` its 105-read window's bound under the widened one. Over a uniform offset a block's
-code has one distribution for every content fixed before the offset is drawn (`P2ContentAbsorbs`).
+range, and `ObligationDemoWide` its 105-read window's bound under the widened one; `ObligationWide320` bounds a
+320-read window by `2^-20` at every block count of the widened range. Over a uniform offset a block's code has one
+distribution for every content fixed before the offset is sampled (`P2ContentAbsorbs`).
 
 The game has one snapshot per window: a store that changes between a window's rounds is outside every statement here.
 A window certifies the state bound at some boundary, not at each: below `S₀` at `m` of its `k` boundaries passes with
 probability at most `(1 − p)^m + k·ε₀`.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 
@@ -40,7 +45,7 @@ def SnapshotFresh : Prop :=
 /-- **A block's offset absorbs its content.** In P2's ring model, for every labeling `φ`, mask `K` and contents `v`,
 `v₀`, some bijection `σ` of the offsets carries each offset `τ` to one under which `v₀`'s code is `v`'s:
 `encBlock φ K τ v = encBlock φ K (σ τ) v₀`. So over a uniform offset, a block's code has the same distribution for every
-content fixed before the offset is drawn.
+content fixed before the offset is sampled.
 
 Frozen (no-function): an identity of the abstract P2 encoder in the ring model, not the deployed code. -/
 def P2ContentAbsorbs : Prop :=
@@ -82,7 +87,7 @@ snapshot (`snap`) are correct with probability at most `(1 − p)^m + k·ε₀`,
 is at most `S₀ = ⌊ρ·|C|⌋` bits.
 
 What the other tags' keys stand for: earlier versions of the snapshot's blocks and blocks it doesn't hold, so this
-covers the weights as a payload fixed before the ring is drawn, and a prover that uses everything it saw of earlier
+covers the weights as a payload fixed before the ring is sampled, and a prover that uses everything it saw of earlier
 versions' keys. The range is the conjecture's.
 
 Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
@@ -188,5 +193,44 @@ def ObligationDemoWide : Prop :=
                 varPassesOn _ 105 105 (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
                   (snap tag y.1, y.2.1, y.2.2)) ≤
               ENNReal.ofReal Params.δ + ((2⁻¹ : ℝ≥0∞) ^ 129 + (2⁻¹ : ℝ≥0∞) ^ 130)
+
+/-- **A `k`-read window's bound from P2's per-round floor**: `(1 − p)^k + k·ε₀ ≤ c`, the graded bound
+`ObligationOfRoundSecure` gives a window whose state is at most `S₀` at each of its `k` challenge times, at most `c`. -/
+def RoundsBound (p ε₀ : ℝ≥0∞) (k : ℕ) (c : ℝ≥0∞) : Prop := (1 - p) ^ k + k * ε₀ ≤ c
+
+/-- **A block count of the widened range**: `2^19 ≤ N ≤ 2^27`, where `P2RingRoundSecureWide` bounds P2's rounds. -/
+def WideBlockCount (N : ℕ) : Prop := 2 ^ 19 ≤ N ∧ N ≤ 2 ^ 27
+
+/-- **Distinct tags**: the snapshot's blocks have pairwise different tags, so each block's key pair is the oracle's value
+at a tag of its own. -/
+def TagsInjective {N : ℕ} {T : Type} (tag : Fin N → T) : Prop := Function.Injective tag
+
+/-- **A state schedule within `S` at a window's `k` challenge times**: `Sz j ≤ S` for each `j < k`. -/
+def StateWithin (Sz : ℕ → ℕ) (k S : ℕ) : Prop := ∀ j < k, Sz j ≤ S
+
+/-- **A 320-read window at `2^-20`, from the widened per-round floor.** If `P2RingRoundSecureWide p ε₀ D Q L` and
+`RoundsBound p ε₀ 320 2^-20`, `(1 − p)^320 + 320·ε₀ ≤ 2^-20` (which `p = 0.043`, `ε₀ = 2^-137` meet,
+`PousP2Rounds.floor_043_eps_320`: `0.957^320 ≈ 7.8·10^-7`), then at every block count `N` from `2^19` to `2^27`
+(`WideBlockCount N`; the registered point's `2^19` and the demo's `1038·2^16` among them), for every injective snapshot
+(`TagsInjective tag`), every schedule at most `S₀ = ⌊ρ·N·16448⌋` bits at each of a window's 320 challenge times
+(`StateWithin Sz 320 S₀`), and every payload, preprocessor and responder chosen from the other tags' key pairs, the
+window passes with probability at most `2^-20`. At the demo's `N`, `S₀` is `ObligationDemo`'s 1,060,008,348,186 bits.
+
+Frozen (no-function, hash): it bounds P2's ring-model audit at a snapshot of a mutable store, not the PoUS code, and
+rests on the open conjecture Pous.P2.Assumptions.P2RingRoundSecureWide, unchecked in `N` above `2^25`. -/
+def ObligationWide320 : Prop :=
+  ∀ (p ε₀ : ℝ≥0∞) (D Q L : ℕ), RoundsBound p ε₀ 320 ((2⁻¹ : ℝ≥0∞) ^ 20) →
+    Pous.P2.Assumptions.P2RingRoundSecureWide p ε₀ D Q L →
+    ∀ (N : ℕ) [NeZero N], WideBlockCount N →
+      ∀ (T : Type) [Fintype T] [DecidableEq T] (tag : Fin N → T), TagsInjective tag →
+        ∀ (Sz : ℕ → ℕ), StateWithin Sz 320 ((p2ring N 16448 (2 ^ 16448 - 21065) 16432).stateBound Params.ρ) →
+          ∀ (W : RestKeys tag 16448 (2 ^ 16448 - 21065) → Bits (p2ring N 16448 (2 ^ 16448 - 21065) 16432).n)
+            (A₁ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              Preprocessor (p2ring N 16448 (2 ^ 16448 - 21065) 16432) (Sz 0))
+            (A₂ : RestKeys tag 16448 (2 ^ 16448 - 21065) →
+              VarResponderOn (p2ring N 16448 (2 ^ 16448 - 21065) 16432) Sz D Q L),
+            pr (fun y : Oracle 16448 (2 ^ 16448 - 21065) T × Unit × (Fin 320 → Fin N) =>
+                varPassesOn _ 320 320 (W (rest tag y.1)) (A₁ (rest tag y.1)) (A₂ (rest tag y.1))
+                  (snap tag y.1, y.2.1, y.2.2)) ≤ (2⁻¹ : ℝ≥0∞) ^ 20
 
 end Pous.Guarantees

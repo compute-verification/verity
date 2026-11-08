@@ -1,27 +1,35 @@
+module
+
+public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Soundness.Refine.Exec
-import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckMasked
 
 /-!
 # `Zk.replay`'s zerocheck constraints are the `ZerocheckMasked` terms
 
 `replay_zerocheck`: when `Zk.replay` succeeds from the transcript `t`, its first two constraints are
 `zerocheck c_eval = computedC + fc` and `zerocheck final a·b = running (m − 6) + prod` on the proof's (masked) zerocheck,
-at the coins it draws from `t`: the outer coins `rOuterAt t` (round `t.k + 1`; `r = pinned ++ rOuterAt t`), the skip
+at the coins it samples from `t`: the outer coins `rOuterAt t` (round `t.k + 1`; `r = pinned ++ rOuterAt t`), the skip
 coin `zAt t` (round `t.k + 2`) and the residual coins `rhoAt t (m − 6)` (rounds `t.k + 3 …`, the loop's pushed coins).
 Its `c` claim sits at `(L_s(z), r)` and its `c` value is the form `fc`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Composed.ZerocheckMasked
 
 open Flock Flock.Zk FlockSoundness.Refine
 
-/-- The zerocheck's outer coins `r_outer`, drawn at round `t.k + 1` of the transcript the replay starts on. -/
+/-- The zerocheck's outer coins `r_outer`, sampled at round `t.k + 1` of the transcript the replay starts on. -/
 def rOuterAt (t : Transcript) : Array F128 := (t.rounds[t.k + 1]!).coins
 
-/-- The skip coin `z`, drawn at round `t.k + 2`. -/
+/-- The skip coin `z`, sampled at round `t.k + 2`. -/
 def zAt (t : Transcript) : F128 := (t.rounds[t.k + 2]!).coins.getD 0 0
 
-/-- The `n` residual coins `ρ`, drawn at rounds `t.k + 3 + i`, in the order the loop pushes them. -/
+/-- The `n` residual coins `ρ`, sampled at rounds `t.k + 3 + i`, in the order the loop pushes them. -/
 def rhoAt (t : Transcript) (n : ℕ) : Array F128 :=
   ((List.range n).map fun i => (t.rounds[t.k + 3 + i]!).coins.getD 0 0).toArray
 
@@ -49,7 +57,7 @@ theorem fold_rounds (lay : PadLayout) (zc : ZerocheckProof) (r : Array F128) (z 
         List.foldl_nil, running, roundL_eq, hR n (by omega)]
       simp [List.range_succ]
 
-/-- **The replay's zerocheck constraints are `ZerocheckMasked`'s terms**, at the coins it draws. -/
+/-- **The replay's zerocheck constraints are `ZerocheckMasked`'s terms**, at the coins it samples. -/
 theorem replay_zerocheck (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) {t t' : Transcript}
     {rp : Replayed} (hm : 14 ≤ st.m) (h : Zk.replay st lay p root t = .ok (rp, t')) :
     rp.cons[0]! = ("zerocheck c_eval", (computedC lay p.zerocheck (zAt t)).add (fcL lay p.zerocheck)) ∧

@@ -1,5 +1,11 @@
-import Definitions.Flock.Defs
-import Proofs.Flock.Soundness.Accounting.Numbers
+module
+
+public import Definitions.Flock.Defs
+public import Definitions.Flock.Session
+public import Proofs.Flock.Soundness.Accounting.Numbers
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.IntervalCases
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Shared definitions of the soundness statement
@@ -7,6 +13,8 @@ import Proofs.Flock.Soundness.Accounting.Numbers
 The arithmetic facts the proof uses (`Arith.Correct`), the committed values at the level-0
 radius (`Committed`), and the doomed start of a rep (`RepDoomed`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

@@ -1,10 +1,52 @@
-import Proofs.Flock.Claims.Recursion.RestReadsAt
-import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
-import Proofs.Flock.Claims.Recursion.VerdictRowG
-import Proofs.Flock.Claims.Recursion.NextRTables
+module
+
+public import Proofs.Flock.Claims.Recursion.NextRHonest
+public import Proofs.Flock.Claims.Recursion.NextRTables
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+public import Proofs.Flock.Claims.Recursion.RestReadsAt
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Shaped
-import Proofs.Flock.Claims.Recursion.NextRFits
+import Proofs.Flock.Claims.Recursion.NextRRows
+import Proofs.Flock.Claims.Recursion.NextRSetup
+import Proofs.Flock.Claims.Recursion.RestFinal
 import Proofs.Flock.Claims.Recursion.RestFitsLift
+import Proofs.Flock.Claims.Recursion.VerdictRowG
+import Proofs.Flock.Recursive.ExecClass
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # `ElemFramed` and `OpenedShaped` at the deployed last message `elemR`
@@ -28,6 +70,8 @@ sizes (`openedFit_of`): the honest proof fits its own rows (`repFits`), and a fi
 sizes (`RestRead.fitsLift`), so it is enough that the opened rounds have an honest rep's sizes (`OpenedSized`).
 `readsAt_elemR'` takes that one.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.RestElem
 
@@ -82,7 +126,11 @@ def readTail : Rd RecX := do
   let recInner ← rdBytes
   let registration ← rdOpt rdBytes
   let parts ← rdList PartX.read
-  pure ⟨inner, recInner, registration, parts⟩
+  let links ← rdOpt (do
+    let t ← rdBytes
+    let n ← rdNat
+    pure (t, n))
+  pure ⟨inner, recInner, registration, parts, links⟩
 
 theorem read_eq : RecX.read = (do
     if (← rdStr) ≠ XFORMAT then failure
@@ -95,6 +143,7 @@ theorem tail_inner_lt {s s' : Msg} {w : RecX} (h : readTail.run s = some (w, s')
   obtain ⟨_, s₃, -, h⟩ := rd_bind h
   obtain ⟨_, s₄, -, h⟩ := rd_bind h
   obtain ⟨_, s₅, -, h⟩ := rd_bind h
+  obtain ⟨_, s₆, -, h⟩ := rd_bind h
   rw [StateT.run_pure] at h
   obtain ⟨rfl, -⟩ := Prod.mk.inj (Option.some.inj h)
   show inner.length < 2 ^ 64

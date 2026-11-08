@@ -111,7 +111,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
 
     `request_rows[step]` = [(request_id, row_lo, row_hi)] splits the leading (token/row) dimension of a batched member between the requests of that step
     (the scheduler's row order, recorded by the engine wrapper; a `padded` member, the step-input port's, has rows past the step's tokens); else the whole member binds `request_id`.
-    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason.
+    A MoE block plane whose rows are not a token multiple binds no request: its entry is request `*` with `refused`, the reason; a request-owned value (`Binder.owners`) is its request's whole.
     Entries are compact (one per tensor x request); `digest` is over the canonical JSON of the entries -- recorded in the Commit record and
     mixed into the challenge, so the map cannot be chosen after the openings.
     `binder` (`query.manifest.bind.Binder`, from the required manifest): each tensor's identity, a call boundary's under each request's
@@ -130,12 +130,13 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             for m in metas:
                 bound.append((*split_name(m.name), seen[m.name], "label"))
                 seen[m.name] += 1
-        for m, (op, member, k, how) in zip(metas, bound):
+        owners = binder.owners(step, bound, (request_rows or {}).get(step)) if binder is not None else [None] * len(bound)
+        for m, (op, member, k, how), owner in zip(metas, bound, owners):
             numel = _numel(m.shape)
             if chunk is not None and int(chunk) != int(m.chunk):
                 raise ValueError(f"build_binding_map: chunk={chunk} but {m.name} (step {step}) has {m.chunk}-byte leaves; pass the committer's or none")
             off = m.stream_off if m.stream_off is not None and m.stream_off >= 0 else m.first_leaf * m.chunk
-            rr = (request_rows or {}).get(step)
+            rr = None if owner else (request_rows or {}).get(step)
             splits: list[tuple[str, int, int, int]] = []            # (request, request-local lo, request-local hi, global element offset)
             refused = None
             if rr and m.shape and numel > 0 and not op.startswith(HIDDEN_FAMILIES):
@@ -166,7 +167,7 @@ def build_binding_map(layouts: dict[int, list], steps: list, run_root: bytes, pr
             elif rr and op.startswith(HIDDEN_FAMILIES):
                 splits = [(rid, 0, numel, 0) for rid, _lo, _hi in rr]
             if not splits:
-                splits = [(request_id, 0, numel, 0)]
+                splits = [(owner or request_id, 0, numel, 0)]
             spelt = binder.spellings(step, (op, member, k)) if binder is not None and how == "port" else {}
             for rid, lo, hi, goff in splits:
                 (op_r, member_r, k_r), hi, goff, why = runtime_place(binder, step, spelt.get(rid, (op, member, k)), rid, lo, hi, goff, m)
@@ -736,11 +737,10 @@ def composition_check(man_hdr: dict[str, Any], bmap: dict[str, Any], *, max_repo
 # ---------------------------------------------------------------------- sampling from the expected population
 
 def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_root: bytes, k: int, *, salt: bytes = b"",
-                         forced_late_step: bool = True, legacy: bool = CH.LEGACY,
-                         source: bytes | None = None) -> list[tuple[tuple, dict[str, Any], int]]:
-    """Draw `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
-    (run_root, map digest, salt); map each to one committed leaf of its binding (a leaf chosen by the same picker inside the entry's
-    leaf range).  Forced picks: the
+                         forced_late_step: bool = True, source: bytes | None) -> list[tuple[tuple, dict[str, Any], int]]:
+    """Sample `k` identities from the EXPECTED population (not from the leaves that exist) with `challenge.identity_picker` over
+    (source, run_root, map digest, salt), `source` the run's identities coin; map each to one committed leaf of its binding
+    (a leaf chosen by the same picker inside the entry's leaf range).  Forced picks: the
     last step and one identity of every op class family present.  Returns [(identity, entry, leaf_index)]; an identity WITHOUT a
     binding is returned with entry None (the opening then fails -- coverage and openings are both fail-closed)."""
     pop = sorted(p for p in set(population) if p[2] >= 0)      # leaf-bound identities only (registered inputs open by digest, not by leaf)
@@ -748,7 +748,7 @@ def challenge_identities(population: Iterable[tuple], bmap: dict[str, Any], run_
         return []
     idx = {kk: [e for e in es if e.get("kind") == "leaf"] for kk, es in map_index(bmap).items()}
     idx = {kk: es for kk, es in idx.items() if es}
-    pick = CH.identity_picker(run_root, bmap["digest"], salt, legacy=legacy, source=source)
+    pick = CH.identity_picker(run_root, bmap["digest"], salt, source=source)
 
     chosen: list[tuple] = [pop[pick(i, len(pop))] for i in range(k)]
     if forced_late_step:

@@ -1,5 +1,40 @@
-import Proofs.Flock.Claims.Recursion.LastSharedR
-import Proofs.Flock.Claims.Recursion.LastBindsR
+module
+
+public import Proofs.Flock.Claims.Recursion.LastBindsR
+public import Proofs.Flock.Claims.Recursion.LastSharedR
+import Flock.With.SimVerify
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
 
 /-!
 # The columns half of the deployed reader's last-message binding (`RecDeploy.RColsBind`)
@@ -16,6 +51,8 @@ messages (`nextR_shared`), and each verdict reads the proofs' files `filesAt` at
 
 So `RColsBind` holds at SHA-512 with no premise (`RecDeploy.rColsBind_sha512`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -88,7 +125,7 @@ theorem filesJ_tied {s : Ins} {spec : SessionSpec} {sts : Array Stmt} {x : Claim
   have hr₂s : verifyRepWith (hashesIn (L₂.map Prod.fst)) spec st sch sess (k / 2) (k % 2) F'[k]! = .ok c' := by
     rw [With.verifyRepWith_erase With.Sim.liftMap_V _ spec st sch _ hy hy' hyy hP (by rw [hB])]
     exact hr₂
-  have hpure : ∀ {L : List Claims.Msg} {sess₀ : Session} {bs c₀ : ByteArray},
+  have hpure : ∀ {L : List Claims.Msg} {sess₀ : RunRecord} {bs c₀ : ByteArray},
       verifyRepWith (hashesIn L) spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ →
         verifyRep spec st sch sess₀ (k / 2) (k % 2) bs = .ok c₀ := by
     intro L sess₀ bs c₀ h

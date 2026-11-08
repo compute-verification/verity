@@ -1,6 +1,8 @@
-import Definitions.Accounting.Memory
-import Definitions.Pous.P2.Cost
-import Definitions.Pous.Assumptions.P2
+module
+
+public import Definitions.Accounting.Memory
+public import Definitions.Pous.Assumptions.P2
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Memory adds, by counting (trusted)
@@ -36,6 +38,8 @@ The probability is over `z`, uniform over `q` bits, and PoUS's outcome (the prim
 challenges), independently: `z` is fixed before setup, as `W` is, and `W` does not depend on it. The proofs are in
 `Security/Proofs/Accounting/Memory/`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.Memory
 

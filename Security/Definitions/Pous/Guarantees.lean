@@ -1,28 +1,30 @@
-import Mathlib.Combinatorics.SimpleGraph.Clique
-import Mathlib.Combinatorics.SimpleGraph.Finite
-import Mathlib.Data.ZMod.Basic
-import Definitions.Pous.Accounting.LemmaA
-import Definitions.Pous.Accounting.Params
-import Definitions.Pous.Accounting.PubMeets
-import Definitions.Pous.Accounting.GradedMeets
-import Definitions.Pous.Accounting.Rebuild
-import Definitions.Pous.Assumptions
-import Definitions.Pous.Model.HashChain
-import Definitions.Pous.Model.Dense
-import Definitions.Pous.Model.Inc
-import Definitions.Pous.Model.Invertible
-import Definitions.Pous.Model.Labelling
-import Definitions.Pous.Model.M1
-import Definitions.Pous.Model.P3Chain
-import Definitions.Pous.Model.BandChain
-import Definitions.Pous.Model.Pebbling
-import Definitions.Pous.Model.SampledAudit
-import Definitions.Pous.Guarantees.P2
-import Definitions.Pous.Guarantees.Obligation
-import Definitions.Pous.Guarantees.StreamedWipe
-import Definitions.Pous.Model.BandGraph
-import Definitions.Pous.Model.SegLift
-import Definitions.Pous.Model.Continuous
+module
+
+public import Mathlib.Combinatorics.SimpleGraph.Clique
+public import Mathlib.Combinatorics.SimpleGraph.Finite
+public import Mathlib.Data.ZMod.Basic
+public import Definitions.Pous.Accounting.LemmaA
+public import Definitions.Pous.Accounting.Params
+public import Definitions.Pous.Accounting.PubMeets
+public import Definitions.Pous.Accounting.GradedMeets
+public import Definitions.Pous.Accounting.Rebuild
+public import Definitions.Pous.Assumptions
+public import Definitions.Pous.Model.HashChain
+public import Definitions.Pous.Model.Dense
+public import Definitions.Pous.Model.Inc
+public import Definitions.Pous.Model.Invertible
+public import Definitions.Pous.Model.Labelling
+public import Definitions.Pous.Model.M1
+public import Definitions.Pous.Model.P3Chain
+public import Definitions.Pous.Model.BandChain
+public import Definitions.Pous.Model.Pebbling
+public import Definitions.Pous.Model.SampledAudit
+public import Definitions.Pous.Guarantees.P2
+public import Definitions.Pous.Guarantees.Obligation
+public import Definitions.Pous.Guarantees.StreamedWipe
+public import Definitions.Pous.Model.BandGraph
+public import Definitions.Pous.Model.SegLift
+public import Definitions.Pous.Model.Continuous
 
 /-!
 # Guarantees
@@ -38,6 +40,8 @@ are stated under the same names in `Security/Proofs/Pous/Statements.lean`.
 hypotheses of the pinned `Prop`, never as axioms. "Pinned as drafted" means the binders and conclusion are the draft's,
 verbatim.
 -/
+
+@[expose] public section
 
 namespace Pous.Guarantees
 
@@ -73,7 +77,7 @@ of `220·2384` bits (64 KB) per segment, 14.4 MB. The salt is 24 bytes, and segm
 
 Scope: the ideal two-permutation model only. Lean does not prove anything about a concrete permutation (no Keccak or
 other instantiation of `P` or `Π₂`), decode cost, the wall-clock-to-`Q` calibration, authentication, accounting or
-fresh setup. As for every `Meets` here, `W` is fixed before the primitives are drawn. -/
+fresh setup. As for every `Meets` here, `W` is fixed before the primitives are sampled. -/
 
 /-- **Unconditional (no hypothesis): P3 with a concrete `H`, 64 KB labels, one segment (14.4 MB).**
 `p3SchemeC 2384 B(220, 12)` meets the requirement with sequential reveal, `D = 10` rounds, `Q = 2^20` queries per
@@ -127,7 +131,7 @@ ways, so `D` and `Q` count `Π₂^{±1}` calls. `H` is the overwrite chain on `�
 
 Scope: the ideal-permutation model only. Lean does not prove anything about a concrete permutation, decode cost, the
 wall-clock-to-`Q` calibration, authentication, accounting or fresh setup. As for every `Meets` here, `W` is fixed
-before `Π₂` is drawn, and the salt is a parameter every statement quantifies over. The band needs in-degree `d ≥ D`:
+before `Π₂` is sampled, and the salt is a parameter every statement quantifies over. The band needs in-degree `d ≥ D`:
 with `d + 1 ≤ D` it is broken (`BandGapAttack`, proved as `band_gap_attack`). -/
 
 /-- **Unconditional: the band scheme at 64 KiB.** For every in-degree `d ≥ 5` and salt, `chainBand (2^9) d` (512
@@ -519,18 +523,18 @@ def BackgroundRebuildExcluded : Prop :=
     Pous.Rebuild.gradedRoundSpan 5 D_late tk.2 tk.1 ≤ 1479) ∧
   ∀ d : ℕ, 5 ≤ d → ∀ dom : ℕ → Bits 512, Function.Injective (fun i : Fin (2 ^ 9) => dom i) →
     ∀ (W : Bits (2 ^ 9 * 524288)) (Q : ℕ), Q ≤ 2 ^ 128 → ∀ T : ℕ, T ≤ Pous.Rebuild.auditCap →
-    ∀ A : Fin (2 ^ 9) → Prog (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
+    ∀ A : Fin (2 ^ 9) → OracleAlgorithm (Pous.Sponge.idealPerm (524288 + (524288 + 512))) (Bits 524288),
       (∀ i, (A i).Bounded T Q) →
       pr (fun π : Equiv.Perm (Bits (524288 + (524288 + 512))) =>
           ∀ i, (A i).run ((Pous.Sponge.idealPerm (524288 + (524288 + 512))).answer π) =
             ((Pous.BandChain.chainBand (2 ^ 9) d 524288 512 dom).enc W π ()).2 i)
         ≤ (2⁻¹ : ℝ≥0∞) ^ 128
 
-/-! ### The continuous audit, time-averaged, with arrivals drawn by the memory challenger
+/-! ### The continuous audit, time-averaged, with arrivals sampled by the memory challenger
 
 Red team: needed. The memory challenger of `ContinuousAudit`,
-unchanged, run on arrivals it draws itself: one coin per slot of one unit
-(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals drawn by the memory challenger"). Arrivals queue
+unchanged, run on arrivals it samples itself: one coin per slot of one unit
+(`Security/Definitions/Pous/Model/Continuous.lean`, "Arrivals sampled by the memory challenger"). Arrivals queue
 behind an open round (rule 1). The memory is read at every idle slot, not only at send times, and the bound is
 normalized by the expected number of challenges `λT`, not the realized one. -/
 

@@ -18,13 +18,15 @@ import random
 
 import pytest
 
-from verity_vllm.commit import binding as B
+from verity_vllm.commit import binding as B, step_rows
 from verity_vllm.commit.committer.native_host import NativeHostCommitter
 
-CHUNK = 64
+CHUNK = step_rows.ROW_BYTES
 PD = hashlib.sha256(b"program").hexdigest()
 LAYERS = 2
 STEPS = 3
+#: the run's identities coin, as the auditor host's challenger would open it after the run's root
+COIN = b"identities coin"
 
 
 def structure() -> dict:
@@ -56,11 +58,11 @@ def step_names() -> list[str]:
 
 def produce(seed: int = 7, steps: int = STEPS) -> list[list[tuple[str, bytes]]]:
     rng = random.Random(seed)
-    return [[(n, rng.randbytes(300 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
+    return [[(n, rng.randbytes(6000 + 17 * i)) for i, n in enumerate(step_names())] for _ in range(steps)]
 
 
 def committer(program: bytes = b"program") -> NativeHostCommitter:
-    return NativeHostCommitter(None, run_id="run", chunk=CHUNK, hash_threads=1, program_digest=hashlib.sha256(program).digest())
+    return NativeHostCommitter(None, run_id="run", hash_threads=1, program_digest=hashlib.sha256(program).digest())
 
 
 def commit(stream, program: bytes = b"program", **map_kw):
@@ -83,7 +85,7 @@ def reference(stream) -> dict[str, bytes]:
 
 
 def open_population(c, run, bmap, pop, k: int = 16, salt: bytes = b"t"):
-    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt)
+    picks = B.challenge_identities(pop, bmap, run.run_root, k, salt=salt, source=COIN)
     assert picks, "no identities drawn"
     bound = [(ident, e, leaf) for ident, e, leaf in picks if e is not None]
     unbound = [ident for ident, e, _ in picks if e is None]
@@ -121,23 +123,23 @@ def test_honest_run_covers_population_and_openings_correspond():
     # the map is fixed before the challenge: its digest is over the entries, and the challenge changes with it
     assert bmap["digest"] == hashlib.sha256(__import__("json").dumps(bmap["entries"], sort_keys=True, separators=(",", ":"), default=str).encode()).hexdigest()
     other = dict(bmap, digest="00" * 32)
-    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t") != picks
-    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never drawn as a leaf
+    assert B.challenge_identities(pop, other, run.run_root, 16, salt=b"t", source=COIN) != picks
+    # registered inputs (weights): required by the population when registered, covered by the map's registered-input entry, never sampled as a leaf
     st_w = dict(structure(), weights_registered=True)
     pop_w = list(B.expected_population(st_w, workload()))
     assert not B.coverage_check(pop_w, bmap)["ok"]                      # this run registered no weights -> missing
     bmap_w = B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=CHUNK, weight_registration={"root": "ab" * 32})
     assert B.coverage_check(pop_w, bmap_w)["ok"]
-    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40))
+    assert all(e is not None and e["kind"] == "leaf" for _, e, _ in B.challenge_identities(pop_w, bmap_w, run.run_root, 40, source=COIN))
 
 
 def test_map_leaves_are_the_committers_leaves():
     """A map built without `chunk`, as the TP worker builds it, indexes the committer's own leaves. rows-sha512 commits 4 KiB rows, and a
-    map in 256 B units sent its population draws past each step's stream: `identity_of` raised IndexError on every
+    map in 256 B units sent its population samples past each step's stream: `identity_of` raised IndexError on every
     rank."""
-    rows = 1024
     stream = produce()
-    c = NativeHostCommitter(None, run_id="run", chunk=rows, hash_threads=1, program_digest=hashlib.sha256(b"program").digest())
+    c = committer()
+    rows = c.chunk
     run = c.commit_offline(stream)
     bmap = B.build_binding_map(c._layouts, run.steps, run.run_root, PD)
     leaves = [e for e in bmap["entries"] if e["kind"] == "leaf"]
@@ -147,7 +149,7 @@ def test_map_leaves_are_the_committers_leaves():
     assert not unbound and all(c.verify(run, o) for o in ops)
     vc = B.value_correspondence(ops, [e for _, e, _ in bound], lookup(reference(stream)), chunk=rows)
     assert vc["ok"] and vc["checked"] == len(ops), vc
-    with pytest.raises(ValueError, match="1024-byte leaves"):
+    with pytest.raises(ValueError, match=f"{rows}-byte leaves"):
         B.build_binding_map(c._layouts, run.steps, run.run_root, PD, chunk=256)
 
 
@@ -186,8 +188,8 @@ def test_omitted_step_is_rejected():
     c, run, bmap = commit(produce(steps=STEPS - 1))
     cov = B.coverage_check(list(B.expected_population(structure(), workload(steps=STEPS))), bmap)
     assert not cov["ok"] and {m["step"] for m in cov["missing"]} == {STEPS - 1}
-    # and openings drawn from the expected population reach the missing late step: they cannot be opened
-    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8)
+    # and openings sampled from the expected population reach the missing late step: they cannot be opened
+    picks = B.challenge_identities(list(B.expected_population(structure(), workload(steps=STEPS))), bmap, run.run_root, 8, source=COIN)
     assert any(e is None and ident[2] == STEPS - 1 for ident, e, _ in picks)
 
 

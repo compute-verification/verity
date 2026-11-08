@@ -1,6 +1,9 @@
-import Proofs.Flock.Soundness.TmplLayOk
-import Proofs.Flock.Soundness.TmplWf
-import Flock.TmplAt
+module
+
+public import Flock.TmplAt
+public import Proofs.Flock.Soundness.TmplLayOk
+public import Proofs.Flock.Soundness.TmplPosMap
+public import Proofs.Flock.Soundness.TmplWf
 
 /-!
 # A templated unit's committed net exists, checked on its description
@@ -19,6 +22,8 @@ committed net exists without building it.
 - `unitNet_eq`: the net the verifier carries (`Tmpl.unitNet`, its header from the description and its rows built only
   when read) is `unrollAt`'s, so a read templated unit's net is its template's committed net (`TmplUnit.unrolled`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl Flock.TmplApart
 

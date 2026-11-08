@@ -1,4 +1,22 @@
-import Proofs.Flock.VBridge.Family.Join
+module
+
+public import Proofs.Flock.VBridge.Family.Join
+public import Proofs.Flock.VBridge.Family.Commits
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Defs
 
 /-!
 # `TranscriptIs` after the runs
@@ -20,6 +38,8 @@ outer proof) and `HLeaf`. `decOf` is the decoder `wmsgOf` reads: round `i`'s mes
 the table's round `i` at any accepted outer proof that reads them, so `hmsg` is a theorem (`decOf_spec`) wherever the
 table's round `i` is read from stage `i`'s commit strings (`MsgsRead`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 

@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.SessionSoundL
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Lock
 
 /-!
 # Off the table without a self-clash
@@ -9,6 +15,8 @@ session's outputs that implies the table accepts, and any level-0 table `T`,
 (`session_sound_of_table_accL_sc`). `ε_c⁻` already counts the self-clash, so a bad run that self-clashes is charged
 there (`bad_pointwise_ofL_sc`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Exec
 

@@ -1,7 +1,21 @@
-import Properties.Pous.PeriodAt
-import Proofs.Pous.Period
+module
+
+public import Proofs.Properties.Pous.RunAt
+public import Properties.Pous.PeriodAt
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Accounting.Capacity
+import Proofs.Accounting.Prob
 import Proofs.Pous.EndToEndAt
-import Proofs.Properties.Pous.RunAt
+import Proofs.Pous.Obligation
+import Proofs.Pous.Period
+import Proofs.Pouw.Prob
+import VCVio.Prelude.Core
 
 /-!
 # Proof of PoUS's per-period guarantee at any point and block count
@@ -11,6 +25,8 @@ import Proofs.Properties.Pous.RunAt
 (`Pous.EndToEnd.SecurityProofs.endToEndRingOfRoundSecureWide`) in place of the deployed ones. `periodHeldDemo` is its
 instance at Demo B's `N`, with the state bound `Pous.SecurityProofs.stateBound_p2ring_demo` gives.
 -/
+
+@[expose] public section
 
 namespace Pous.Period.SecurityProofs
 

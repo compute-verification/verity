@@ -6,12 +6,12 @@ them) at T slots, each call's first M_c slot rows random s8 and admitted, the re
 at SERVE-H1's static positions (step s, `serve.static_layout`), a random salt and random roots.  Calls alternate M_c between
 two counts, so some calls have a dead row tile.
 
-    gate     per version, h1r into an output poisoned with 0xA5, against `served_h1/receipts.gated_receipts` (served_h1's
-             torch path, its noise through served_h1's `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
+    gate     per version, h1r into an output poisoned with 0xA5, against `pouw_h1_receipts.gated_receipts` (vllm's
+             torch chain, its noise through `pouw_cuda`'s `noise.cu`, computed once) on every unit of every call; `h1tile.reference`
              (`receipts.gated_reference`) on chosen units (K = 4096 and 14336, first and last, a dead one); a no-write control
              (nowrite: the poison must survive and be refused); the launch captured as a CUDA graph and replayed into a fresh
              poison, then under a second salt written into the same device buffer (as a served step does), each against
-             receipts.py on sampled units
+             receipts.py on sampled proof blocks
     time     each version's graph, replayed in turn REPS times between CUDA events: the step's receipts, per live unit, at
              T = 64 and T = 256
 
@@ -32,12 +32,11 @@ import torch
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
-sys.path.insert(0, str(ROOT / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(ROOT))
 
-import receipts as RC  # noqa: E402
-
 from h1r import H1R, Call, words  # noqa: E402
+
+from verity_vllm.protocols.pouw.h1 import receipts as RC  # noqa: E402
 
 PIN = "/workspace/hf/hub/models--verity-int8--Llama-3.1-8B-INT8/snapshots/723d342ac443b040931242c768df342b0f6f15a7"
 LAYERS = 32

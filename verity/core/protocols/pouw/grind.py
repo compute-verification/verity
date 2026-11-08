@@ -1,9 +1,9 @@
 """Hashed seeds' grinding premium (GRIND, `Accounting.Guarantees.TS.GrindPremiumAt`), where a row's noise is
-visible once its seed is drawn: the formula `circuit.compile`'s seed-group check and
+visible once its seed is sampled: the formula `circuit.compile`'s seed-group check and
 `benchmarks/pouw/grind_price.py`'s table share.
 
 A unit's seed is SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B)) with a live salt, so a cheater with T hash queries in a
-salt's epoch draws T seeds for a seed group and keeps the best. In H1's attention forms one operand row whose noise is
+salt's execution phase samples T seeds for a seed group and keeps the best. In H1's attention forms one operand row whose noise is
 matched collapses the floor of every unit reading it, and that is visible after the seed, so the cheater picks the matched
 rows: over a group's rows, N of them of b noise bits each read by u units, each row's moment is 1 − 2^{-b} + 2^{-b}e^{θu}
 (`LuckMoment` at κ = 0, multiplied over rows by `PrivateMoment`), and outside δ the group realizes at most
@@ -18,9 +18,11 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable
 
+from verity.core.protocols.profile import WINDOW_DELTA
+
 LN2 = math.log(2)
-DELTA_BITS = 40                      # δ = 2⁻⁴⁰, the grind's own failure probability (outside ε)
-T_BITS = 128                         # the cheater's hash queries a salt's epoch, at which compile checks a seed group
+DELTA_BITS = WINDOW_DELTA.denominator.bit_length() - 1  # δ = 2^-DELTA_BITS, the grind's own failure probability (outside ε)
+T_BITS = 128                         # the cheater's hash queries a salt's execution phase, at which compile checks a seed group
 FLAG = 1e-3                          # a grind term over 0.1% is flagged, and compile refuses its seed group
 
 

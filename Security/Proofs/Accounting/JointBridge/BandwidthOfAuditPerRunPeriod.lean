@@ -1,7 +1,40 @@
-import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
-import Definitions.Accounting.Guarantees.BandwidthAudit
-import Proofs.Pouw.Prob
+module
+
+public import Definitions.Accounting.Guarantees.JointBridge.BandwidthOfAuditPerRunPeriod
+public import Definitions.Accounting.Guarantees.BandwidthAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.BandwidthAudit
+import Proofs.Pouw.Prob
 
 /-!
 # Proof that PoUB's per-period guarantee is the bandwidth audit's
@@ -14,6 +47,8 @@ are the period's at `ξ` with PoUB's coordinate replaced. That run realizes the 
 equivalence keep their probabilities (`Pouw.pr_equiv`), so the same bound holds over PoUB's coordinate.
 -/
 
+@[expose] public section
+
 namespace Accounting.SecurityProofs.Bridge
 
 open Accounting
@@ -21,7 +56,7 @@ open Accounting
 variable {G N b h s : ℕ} {ι : Type} [Fintype ι] {d : Device ι} {α : Type} [Fintype α] {C : Verity.Circuit}
   {I : Type} [DecidableEq I] {Ω : I → Type} {r : PeriodRun d α C Ω}
 
-/-- The joint run a period is at the coins `ξ`, with PoUB's coordinate drawn as the bandwidth audit's coins. -/
+/-- The joint run a period is at the coins `ξ`, with PoUB's coordinate sampled as the bandwidth audit's coins. -/
 def bandwidthRun (real : RealizesBandwidthOfAuditPerRunPeriod G (N := N) (b := b) (h := h) (s := s) r)
     (ξ : (i : I) → Ω i) : Run d α Unit (BandwidthCoins N b h s) Unit where
   acct := r.acct

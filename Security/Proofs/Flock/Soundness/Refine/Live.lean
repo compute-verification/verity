@@ -1,11 +1,13 @@
-import Proofs.Flock.Soundness.Refine.Tapes
+module
+
+public import Proofs.Flock.Soundness.Refine.Tapes
 
 /-!
 # The live session, and simulating it in the model
 
-The transfer (R11) compares two interactions. The **live** one is the challenger's session as the executable sees it:
-the prover sends framed bytes, the server draws coins, and at the end the executable checks what the server recorded.
-The **model** one is the compiled game the soundness theorems bound.
+The transfer (the refinement `ExecRefines`) compares two interactions. The **live** one is the challenger's session as
+the executable sees it: the prover sends framed bytes, the server flips coins, and at the end the executable checks what
+the server recorded. The **model** one is the compiled game the soundness theorems bound.
 
 * `Sim pL pg L g` is a simulation of a live interaction `L` by a model interaction `g`. It is data: how the model answers
   each live move, bijections between their coins, and a strategy for the model wherever no live run can succeed. With it
@@ -13,6 +15,8 @@ The **model** one is the compiled game the soundness theorems bound.
   plays against a live one, and `Sim.prob_le` compares the two probabilities.
 * `liveTable` is one table's live session on the Blake3 unsalted path, whose server retains every round's bytes.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Game
 
@@ -25,7 +29,7 @@ At every live move it says what the model does:
 * `ret`: both end, and a live acceptance is a model acceptance;
 * `model`: the model sends `m` first;
 * `live`: the live prover sends, and the model answers each message its own way;
-* `coin`: both draw a coin, matched by a bijection;
+* `coin`: both flip a coin, matched by a bijection;
 * `dead`: no live run from here is accepted, and the model plays a given strategy. -/
 inductive Sim (pL : β → Prop) (pg : α → Prop) : Game β → Game α → Type 1 where
   | ret {b : β} {a : α} : (pL b → pg a) → Sim pL pg (.ret b) (.ret a)
@@ -102,11 +106,11 @@ open Flock FlockLevel3 Game
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- The round the server records for framed bytes `b` and their `n` coins: the coin count, the bytes' digest `dg b`, the
-coins, and the bytes themselves, which the unsalted path's server retains (PROTOCOL.md §6.2, §7.1). -/
+coins, and the bytes themselves, which the unsalted path's server retains (`Flock.Transcript`, `Tags.coinScheme`). -/
 def roundOf (dg : ByteArray → ByteArray) (b : ByteArray) (n : ℕ) (c : Fin n → 𝔽) : Round :=
   { n, sha := dg b, coins := Array.ofFn fun i => (c i).val, bytes := some b }
 
-/-- A round the prover submits to the challenger (PROTOCOL.md §7.1): its stream (rep `0` or `1`), the framed bytes,
+/-- A round the prover submits to the challenger (`Tags.coinScheme`): its stream (rep `0` or `1`), the framed bytes,
 and the coin count. -/
 structure Submit where
   rep : Fin 2
@@ -117,8 +121,8 @@ structure Submit where
 def addRound (acc : List Round × List Round) (r : Fin 2) (rd : Round) : List Round × List Round :=
   if r = 0 then (acc.1 ++ [rd], acc.2) else (acc.1, acc.2 ++ [rd])
 
-/-- **The challenger's rounds** (PROTOCOL.md §7.1). The prover submits a round on either rep's stream, or stops, at
-most `N` times; the server draws the round's `n` coins uniformly once its bytes are fixed, and appends the round to that
+/-- **The challenger's rounds** (`Tags.coinScheme`). The prover submits a round on either rep's stream, or stops, at
+most `N` times; the server samples the round's `n` coins uniformly once its bytes are fixed, and appends the round to that
 stream. The output is the two streams' rounds, in order. -/
 def liveRounds (dg : ByteArray → ByteArray) : ℕ → List Round × List Round → Game (List Round × List Round)
   | 0, acc => .ret acc
@@ -134,7 +138,7 @@ structure LiveOut (mPts : ℕ) where
   rep1 : List Round
   proofs : Array ByteArray
 
-/-- **One table's live session** (PROTOCOL.md §5, §7): `Commit` sends the root `root_B`, the server draws the two link
+/-- **One table's live session** (`Flock.Record`, `Flock.Draw`): `Commit` sends the root `root_B`, the server samples the two link
 points, the prover runs its rounds on the two reps' streams, then sends the two proof files. -/
 def liveTable (dg : ByteArray → ByteArray) (mPts N : ℕ) : Game (LiveOut mPts) :=
   .send ByteArray fun rootB =>

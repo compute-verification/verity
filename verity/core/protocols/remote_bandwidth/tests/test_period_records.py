@@ -10,7 +10,8 @@ import json
 
 import pytest
 
-from test_verifier_party import COINS, Clock, Entropy
+from remote_bandwidth_fakes import Clock, Entropy
+from test_verifier_party import COINS
 from verity.core.protocols.pous import period as pous_period
 from verity.core.protocols.remote_bandwidth import period as P
 from verity.core.protocols.sampled_proofs import challenger as C
@@ -125,7 +126,7 @@ def test_the_bandwidth_session_accepts_the_cut_store_as_the_whole(tmp_path):
         (p.relative_to(tmp_path).as_posix(), p.read_bytes()) for p in sorted(tmp_path.rglob("*")) if p.is_file()))
     blocks = {}
     for name, store in (("whole", whole), ("cut", P.records(tmp_path))):
-        c = Clock()
+        c = Clock(10 ** 9, 1_000)
         got = P.run("n0", store, COINS, clock=c, sleep_until=c.sleep_until, entropy=Entropy(name.encode()))
         assert got.verdict == "accept", got.answer
         blocks[name] = len(P.payloads(store))

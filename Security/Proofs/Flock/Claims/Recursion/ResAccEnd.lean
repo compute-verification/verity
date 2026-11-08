@@ -1,5 +1,7 @@
-import Proofs.Flock.Claims.Recursion.ResNextW
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Claims.Recursion.ResNextW
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # Some algebra part reads `acc1` (`AccEndHeldW`)
@@ -18,6 +20,8 @@ port, at every shape it accepts:
 
 With it, `NextHeldW` (`nextHeldW_of`), StepsW and P3 at KS's brings hold with no hypothesis (`accPorts_deployed`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy.AccEnd
 
@@ -749,7 +753,7 @@ open FlockDeploy (Coin FinalP)
 /-- **Some algebra part reads `acc1`**, at every dense shape the reader reads. -/
 theorem accEndHeldW : AccEndHeldW := by
   intro x r _ hh hsp ss hss
-  obtain ⟨A, K, n0, hA, -, rfl⟩ := OpenLower.statements_dense hss hsp
+  obtain ⟨A, K, L, n0, hA, -, -, rfl⟩ := OpenLower.statements_dense hss hsp
   rw [hh] at hA
   obtain ⟨sch, sp, ps, -, hsp', hps, rfl⟩ := FlockVBridge.Family.statementsOf_eq hA
   have hsp'' : VStar.Algebra.spec ⟨r.shape.m, r.shape.kLog, r.shape.claims⟩ = .ok sp := by
@@ -761,17 +765,6 @@ theorem accEndHeldW : AccEndHeldW := by
   refine ⟨_, j, _, ps[j]!, AccEnd.inner_at hj, ?_⟩
   rw [getElem!_pos ps j hj]
   exact List.mem_map.2 ⟨_, hacc, rfl⟩
-
-/-- **`StepsWG` at `XsW … AccV` at KS's brings**, with no hypothesis. -/
-theorem stepsWV_deployedA (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)
-    (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ) (hd : Msg → _root_.Flock.RecRecord.Record)
-    (rest : Msg → List (Msg × Claims.Out) → List UInt8) (cmt : Msg → ℕ → Msg → Msg) :
-    StepsWG DeployedR.rdR key wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-      Claims.Recursion.Form.Dense recRead cmt
-      (XsW DeployedR.rdR wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-        (AccV DeployedR.rdR wE DeployedR.finalR w (DecompBR.bB (deployedB b) aux nOf hd rest) OpenRows.elemR
-          Claims.Recursion.Form.Dense recRead cmt)) :=
-  stepsWV_deployedE key wE w b aux nOf hd rest cmt accEndHeldW
 
 /-- **P3 at KS's brings**, with no hypothesis. -/
 theorem accPorts_deployed (key : ℕ → ℕ → ℕ → ℕ → ℕ × ℕ × ℕ × ℕ) (wE w : Msg → ℝ) (b : Brings)

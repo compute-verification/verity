@@ -47,6 +47,8 @@
   research merge --train A B C [--on MACHINE --project P]                # several refs as one candidate, one check, a fast-forward
   research queue status|sync|land|eject|ready|judge|review [--shadow] [--dry-run]  # the merge queue: ready PRs on `next`, `checked`
                                                  # fast-forwarded to its reviewed prefix, `main` to what passed the gated steps (research/queue.py)
+  research goals show|set|confirm|done|remove|replace|priority ...   # the Goals page, written with this agent's Cursor identity
+                                                 # (research/goals.py)
   research jobs add|list|show|cancel|events ...  # the Job queue: batch work on pods, on the control app (research/jobs/cli.py)
   research worker --dispatch --pods A,B [--name rc]   # stage 1's dispatcher: claims jobs, runs each with `run --on` on a free pod
   research git old2new|remap|check|build ...     # after a history rewrite: an old commit's image, a clone's local work moved onto the
@@ -71,6 +73,8 @@
   research usage hourly [--node nebius-1|nebius-2|all] [--hours H] [--json] | wasters --day YYYY-MM-DD [--top 3] [--json]
                                                  # GPU-h held, busy and useful per node and UTC hour, and the holdings that held GPUs
                                                  # idle: `cluster usage` (infra/cluster usage.py) over the console's record on vy-nebius-1
+  research lean-times [--hours 24] [--until T] [--over 15] [--json]   # each Lean task's wall time, from the store's attempts: records
+                                                 # runs and checks' Lean steps, p50/p95/max per kind and package (research/lean_times.py)
   research pods ssh TARGET [--print] [-- CMD...]  # TARGET = machines.toml name | pod id | pod name; the port is looked up, never hard-coded
   research pods sync TARGET [SRC] [--dest DIR]    # rsync the worktree's git-visible files (default /workspace/src), prune what it shipped before
   research notes checkpoint LANE STATE TEXT...   # CHECKPOINT <sha> (<HH:MM>Z) [open|blocked|final|superseded] line atop the report
@@ -261,7 +265,7 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                         "allocation runs at a GPU job's weight (node 1: not CPUWeight=idle)")
     q.add_argument("--quiet", action="store_true", help="a timed job: the node is kept quiet while it runs (the node's owner only)")
     q.add_argument("--gpu-ids", default=None, metavar="LIST", help="the GPU indices it must get, comma-separated")
-    ap.add_argument("--id", default=None, help="use this run id instead of allocating one")
+    ap.add_argument("--id", default=None, help="use this run id (rYYYYMMDD-HHMMSS-xxxx) instead of allocating one")
     ap.add_argument("--claimed", action="store_true", help=argparse.SUPPRESS)          # machine side: the dir was created by launch-request
     ap.add_argument("--cost-json", default=None, help=argparse.SUPPRESS)
     ap.add_argument("--remote-json", default=None, help=argparse.SUPPRESS)
@@ -277,8 +281,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
     ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
-                                                                       "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
+                                                                       "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
+                                                                       "6h needs it, and one the --timeout outlives is refused)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -299,6 +304,14 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
     ap.add_argument("--source-identity", default=None, help=argparse.SUPPRESS)   # machine side: JSON {commit, tree, dirty} of the shipped source
     ns, harness_opts = ap.parse_known_args(opts)
     ns.started = started
+    if ns.id is not None and not ns.claimed:
+        from .store import ids as store_ids
+
+        if not store_ids.is_run_id(ns.id):
+            print(f"research run: --id {ns.id!r} is not a run id (rYYYYMMDD-HHMMSS-xxxx, x hex): the store refuses its "
+                  "attempt, so nothing the run writes, its coins included, would be preserved; omit --id to get one",
+                  file=sys.stderr)
+            return 2
     if ns.wait_max is not None:
         try:
             if not ns.wait:
@@ -597,7 +610,7 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the default key's lifetime without an explicit ``--custody-ttl`` (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -608,9 +621,13 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
         return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
     timeout = _harness_timeout(harness_opts)
-    if not custody_ttl and timeout is not None and timeout > ttl:
+    if timeout is not None and timeout > ttl:
+        hours = -(-int(timeout) // 3600) + 1
+        if custody_ttl:
+            return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
+                    f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
         return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
-                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run")
+                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
     return None
 
 
@@ -1776,6 +1793,11 @@ def hand_to_ops(cmd: str, rest: list[str]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # A test's `python -m research` runs its tree's code, and doesn't read at_main.py, which suites don't declare.
+    if argv is None and not os.environ.get("PYTEST_CURRENT_TEST"):
+        from .at_main import reexec
+
+        reexec(sys.argv[1:])
     argv = list(sys.argv[1:] if argv is None else argv)
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip())
@@ -1867,6 +1889,10 @@ def main(argv: list[str] | None = None) -> int:
         from .queue import main as queue_main
 
         return queue_main(rest)
+    if cmd == "goals":
+        from .goals import main as goals_main
+
+        return goals_main(rest)
     if cmd == "jobs":
         from .jobs.cli import main as jobs_main
 
@@ -1887,6 +1913,10 @@ def main(argv: list[str] | None = None) -> int:
         return slack_main(rest, prog="research msg")
     if cmd == "usage":
         return cmd_usage(rest)
+    if cmd == "lean-times":
+        from .lean_times import main as lean_times_main
+
+        return lean_times_main(rest)
     if cmd == "agents":
         from .agents import main as agents_main
 

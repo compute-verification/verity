@@ -1,7 +1,8 @@
 """One-stage audit, run A5, on a TP2 transfer-gate stand-in: a synthetic two-rank Llama TP2 step whose cross-rank transfers
 (each row-parallel reduction's partials, which rank 1 − r receives from rank r) are registered values, and whose reductions are
 transfer-gate units reading both ranks' partials through ``--registered`` ports, audited by `a5.audit` as each rank's
-window on that rank's `service.Stream`, on the verifier's own coins (``--coins verifier``). No served window is TP2 with
+window on that rank's `service.Stream`, on one local challenger session's coins (``--challenger local``), both ranks
+sampling at once as a TP step's do. No served window is TP2 with
 committed advice yet (the registered compiler's TP2 rank Programs, `b1_tp2`, bind a rank's peer input to the other rank's
 partial only by the host's Match, in the clear), so this step stands in for one.
 
@@ -21,12 +22,12 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   its domain binding the TP run root (`ROOT`) and the TP step (`PROGRAM`). Rank r's registration names each of its partials'
   entries (``of.partials``) and each peer partial's it reads (``of.peers``), by value, before any rank's coin. Synthetic:
   each rank's f32 activations, rounded to bf16.
-* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the law ``work:2``: Q·K·T units of the transfer-gate
+* **The window** (`window`), one a rank under ``<ROOT>/rank<r>`` and the sampling design ``work:2``: Q·K·T units of the transfer-gate
   template, the registered `AllReduce2_v1{H}` itself (`b1_tp2.AllReduce2`), its input ``parts`` staged as two ports,
   ``part0`` and ``part1``, its rows ``parts[0]`` and ``parts[1]``: the ranks' partials in rank order (`PORT_PARAMS`), a
   chunk ``q<q>c<k>`` a request's collective, unit i
   of it token i; and the rest, ``--rest`` units of `WardenRowIdentity{128}` over rows of their own, standing in for the
-  compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's drawn
+  compiled model steps. The verifier's work table proves every transfer-gate unit (selection All) beside the rest's sampled
   share. Each chunk's ``part<j>`` is a shared-row table of rank j's partial's rows under rank j's salts, so its ``b || c``
   is the registered value's, and its header names the value, the rows' positions and their paths
   (`registered.Registered.statement`); its ``o0``, the reduced row, is committed afresh. Both ranks prove the same sums:
@@ -45,7 +46,7 @@ partial only by the host's Match, in the clear), so this step stands in for one.
   own, each refused by `source`; rank r's ports built before the peer's registration is read, refused by `reads`; and the
   receiving port of request 0's c0 opened by the statement of each `TRANSFERS` kind, each refused by the host's read of
   Lean's registered reads (`warden_rows.refusal`) by name.
-* **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, draw rank 1's q0c0 and be refused
+* **Refused runs**, each to pass every check before the sample on both ranks, accept rank 0, sample rank 1's q0c0 and be refused
   by Lean's registered reads by name: ``--altered``, rank 1's ``part0`` row 0 (rank 0's embedding partial of request 0 as
   rank 1 received it) one bit off, under rank 0's salt, the advice bit moved through the transfer, its sum computed from the
   altered row (the circuit holds) ("does not open"); ``--made-for swapped|other-collective|other-request|own``, that port's
@@ -54,11 +55,11 @@ partial only by the host's Match, in the clear), so this step stands in for one.
 
 The run exits 0 when it is as expected: both ranks accepted with every negative refused, or (``--altered``, ``--made-for``)
 rank 0 accepted and rank 1 refused by Lean's registered reads by its reason. ``--out`` holds the windows as committed
-(``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``summary.json``).
+(``window/rank<r>/``, their private files too) and a5's records (``rank<r>/``, ``challenger/``, ``summary.json``).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_tp_gates.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --coins verifier [--altered | --made-for KIND] --out DIR
+        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -67,6 +68,7 @@ import hashlib
 import json
 import shutil
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -204,7 +206,7 @@ def bc(row: np.ndarray, salt: bytes) -> bytes:
 
 # --- the window ------------------------------------------------------------------------------------------------------------
 
-def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Window:
+def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Binding:
     """Rank r's window: a chunk of `tokens` transfer-gate units for each request's collective, then the rest."""
     tg, other = templates(hidden)
     units = len(sites(requests)) * tokens
@@ -217,11 +219,11 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Win
                             schemas=tuple((p, V2) for p in (*ports, "o0"))) for u, (q, k) in enumerate(sites(requests)))
     w = REST_BYTES // 2
     others = (CS.Member(rid, rows=(("row", w),), outs=(("o0", w),), n=rest, base=units, schemas=(("row", V2), ("o0", V2))),)
-    return CS.Window(program, query, law, f"{ROOT}/rank{r}", gates + others,
+    return CS.Binding(program, query, law, f"{ROOT}/rank{r}", gates + others,
                      work_table=SRW.work_table_of(law, {tid: units, rid: rest}, [tid]))
 
 
-def chunks(mine: CS.Window) -> list[tuple[int, int, CS.Member]]:
+def chunks(mine: CS.Binding) -> list[tuple[int, int, CS.Member]]:
     """The transfer-gate chunks, q<q>c<k> request q's collective k's, with their request and collective."""
     gates = [m for m in mine.members if m.template == mine.members[0].template]
     return [(q, k, m) for (q, k), m in zip(sites(len(gates) // len(COLLECTIVES)), gates, strict=True)]
@@ -245,7 +247,7 @@ def rest_rows(m: CS.Member) -> np.ndarray:
     return np.asarray([WR.words(hashlib.shake_256(b"a5-tp-gates/rest/%d" % i).digest(2 * w)) for i in range(m.n)], np.uint16)
 
 
-def commit(out: Path, mine: CS.Window, parts: dict, r: int, altered: bool = False, made: str | None = None) -> CS.Committed:
+def commit(out: Path, mine: CS.Binding, parts: dict, r: int, altered: bool = False, made: str | None = None) -> CS.Committed:
     """Rank r's window committed into ``out`` as serving would commit it: each chunk's ``part<j>`` table rank j's partial's rows
     under rank j's salts, its header naming the value, positions and paths, its ``o0`` the sums of the rows it read, and the
     rest under fresh salts. ``altered`` / ``made``: chunk q0c0's port of the sender's partial (``part<1 − r>``) made for
@@ -281,7 +283,7 @@ def registrations(windows: Path) -> dict[int, dict]:
     return {r: json.loads((windows / f"rank{r}" / "registration.json").read_text()) for r in RANKS}
 
 
-def reads(mine: CS.Window, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def reads(mine: CS.Binding, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """The verifier's own ``--registered`` file of each of rank r's chunks: ``part<j>`` at the root rank j's registration names
     for its partial of collective k for request q, unit i (from the chunk's first) reading row i. Refused while any rank's
     registration is unread: a rank's ports read every rank's registered partials, so every registration comes before any
@@ -300,7 +302,7 @@ def reads(mine: CS.Window, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     return out
 
 
-def source_of(mine: CS.Window, r: int, regs: dict[int, dict]):
+def source_of(mine: CS.Binding, r: int, regs: dict[int, dict]):
     """The verifier's check of rank r's registration's window: a stand-in of rank r's run, of this step at the TP run root, its
     partials each the verifier's own shape and domain (any root), and its peers exactly the partials rank 1 − r registered."""
     gates = chunks(mine)
@@ -328,7 +330,7 @@ def source_of(mine: CS.Window, r: int, regs: dict[int, dict]):
     return source
 
 
-def transfer_refusals(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def transfer_refusals(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's q0c0 port of the sender's partial (``part<1 − r>``) opened by the statement of each `TRANSFERS` kind, read as
     Lean's registered reads read it (`warden_rows.refusal`) against the verifier's own port: each refused by its reason."""
     j, (q, k, m) = 1 - r, chunks(mine)[0]
@@ -347,7 +349,7 @@ def transfer_refusals(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict
     return out
 
 
-def negatives(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
+def negatives(mine: CS.Binding, parts: dict, r: int, regs: dict[int, dict]) -> dict[str, dict]:
     """Rank r's registration naming its peer's partial under another root, its own partial as its peer's, another request's
     partial as its peer's, a partial under another TP run's domain, and the other rank's registration as its own, each
     refused by `source`; its ports built before the peer's registration is read, refused by `reads`; and the receiving port's
@@ -373,7 +375,7 @@ def negatives(mine: CS.Window, parts: dict, r: int, regs: dict[int, dict]) -> di
                                                                    "before any rank's coin")} | transfer_refusals(mine, parts, r, regs)
 
 
-def gate_rows(mine: CS.Window, regs: dict[int, dict]) -> list[dict]:
+def gate_rows(mine: CS.Binding, regs: dict[int, dict]) -> list[dict]:
     """Each chunk's request, collective, units and the registered partial each port opens: unit base + i reads row i of both."""
     return [{"chunk": m.key, "request": q, "collective": COLLECTIVES[k], "units": [m.base, m.base + m.n],
              "ports": {f"part{j}": {"value": value_name(j, q, k), "rank": j,
@@ -426,8 +428,10 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
-    ap.add_argument("--coins", choices=["verifier"], required=True, help="draw each rank on the verifier's own live coins")
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
+    ap.add_argument("--challenger", choices=["local"], required=True, help="draw both ranks on one local challenger session's coins")
+    ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true",
                     help="rank 1 receives rank 0's embedding partial of request 0's row 0 one bit off")
     ap.add_argument("--made-for", choices=sorted(MADE_FOR), help="rank 1's port of rank 0's embedding partial of request 0: "
@@ -443,6 +447,7 @@ def main(argv=None) -> int:
     if a.requests < 2:
         ap.error("--requests ≥ 2: the gates bind each request's peer reads to its own partials, and not another request's")
     import a5
+    import a5_coins as AC
 
     out = a.out
     parts = partials(a.hidden, a.tokens, a.requests, a.seed)
@@ -454,17 +459,29 @@ def main(argv=None) -> int:
     defs = dict(zip((tg, rid), templates(a.hidden)))
     sets = {tg: (composer(defs[tg], a.hidden, a.compose_cache), defs[tg]), rid: (row_composer(defs[rid], 8 * REST_BYTES), defs[rid])}
     a.rule, a.window_root, a.compose_cache, a.transfer_gate = RULE, ROOT, None, [tg]
-    a.verifier_coins, a.coins = True, None
     port = a.port or free_ports(a5.RANK_PORTS * len(RANKS))
-    ranks: dict[int, dict] = {}
-    for r in RANKS:
-        s, ok = a5.audit(a, sets, out / f"rank{r}", mine[r], out / "window" / f"rank{r}", source_of(mine[r], r, regs),
-                         port + a5.RANK_PORTS * r, {"rank": r, "standin": step(r, a.hidden, a.tokens, a.requests)},
-                         more_negatives=negatives(mine[r], parts, r, regs), rank=r, registered=reads(mine[r], r, regs))
-        ranks[r] = {"ok": ok, **{x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts",
-                                                      "negatives", "coins")}}
+    manager, a.coins, finisher = AC.start("local", ROOT, list(RANKS), out / "challenger", a.main)
+
+    def rank(r: int) -> dict:
+        try:
+            s, ok = a5.audit(a, sets, out / f"rank{r}", mine[r], out / "window" / f"rank{r}", source_of(mine[r], r, regs),
+                             port + a5.RANK_PORTS * r, {"rank": r, "standin": step(r, a.hidden, a.tokens, a.requests)},
+                             more_negatives=negatives(mine[r], parts, r, regs), rank=r, registered=reads(mine[r], r, regs))
+        finally:
+            a.coins.skip(r)
+        return {"ok": ok, **{x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts",
+                                                   "negatives", "coins")}}
+
+    try:
+        with ThreadPoolExecutor(len(RANKS)) as ex:
+            ranks = dict(zip(RANKS, ex.map(rank, RANKS)))
+    finally:
+        finisher.join()
+        published = a.coins.evidence()
+        manager.shutdown()
     o0 = {r: [committed[r].rows[m.port("o0")] for _q, _k, m in chunks(mine[r])] for r in RANKS}
-    summary = {"root": ROOT, "program": PROGRAM, "coins": "verifier", "altered": a.altered, "made_for": a.made_for,
+    summary = {"root": ROOT, "program": PROGRAM, "coins": "challenger", "session": (published.get("plan") or {}).get("session"),
+               "challenger": {x: published.get(x) for x in ("trusted", "error")}, "altered": a.altered, "made_for": a.made_for,
                "receiver": RECEIVER, "hidden": a.hidden, "requests": a.requests, "tokens": a.tokens,
                "collectives": list(COLLECTIVES),
                "registrations_before_coins": sorted(regs),
@@ -472,7 +489,7 @@ def main(argv=None) -> int:
                "window": {"population": mine[0].population, "transfer_gates": [tg], "work_table": mine[0].work_table,
                           "members": [{"key": m.key, "template": m.template, "n": m.n, "base": m.base} for m in mine[0].members]},
                "gates": {r: gate_rows(mine[r], regs) for r in RANKS}, "ranks": ranks,
-               "accepted": all(x["ok"] for x in ranks.values())}
+               "accepted": all(x["ok"] for x in ranks.values()) and not published.get("error")}
     summary["as_expected"] = expected(a, ranks)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
     print("A5-TP-GATES " + json.dumps({x: summary[x] for x in ("accepted", "as_expected", "altered", "made_for", "coins", "sums_agree")}

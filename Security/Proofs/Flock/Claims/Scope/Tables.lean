@@ -1,6 +1,8 @@
-import Proofs.Flock.Claims.Scope.System
-import Proofs.Flock.Soundness.ExecPlacement
-import Proofs.Flock.Soundness.Refine.Regions
+module
+
+public import Proofs.Flock.Claims.Scope.System
+public import Proofs.Flock.Soundness.ExecPlacement
+public import Proofs.Flock.Soundness.Refine.Regions
 
 /-!
 # The verifier's tables as the readable relation
@@ -19,6 +21,8 @@ the pin, the level-0 matrices `placedA`, `placedB`, the regions `regionsOf`). `T
 * `toModel_ofStmt`: at a table whose statement has the verifier's layout, the model statement is `Layout.model` at
   `regionsOf`, the one the soundness proof reads.
 -/
+
+@[expose] public section
 
 namespace Flock.Readable
 
@@ -151,9 +155,6 @@ theorem tab_iff (t : Tab) (h : t.Ok) (z : Model.Witness t.m) (x : ℕ → ℕ �
 verifier's layout. -/
 theorem toModel_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) (h : (ofStmt st).Ok) :
     (ofStmt st).toModel h = L.model (Refine.regionsOf st) := rfl
-
-theorem ok_ofStmt {st : Stmt} (L : FlockSoundness.Layout st) : (ofStmt st).Ok :=
-  ⟨L.kLog6, by rw [show (ofStmt st).m = st.m from rfl, L.m]; exact Nat.le_add_right _ _, L.pin_lt⟩
 
 end Tab
 

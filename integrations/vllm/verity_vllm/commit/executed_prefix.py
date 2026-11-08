@@ -224,7 +224,7 @@ def facts_accepted_by(fn, facts: dict[str, dict[str, Any]]) -> dict[str, dict[st
     return {rid: {k: v for k, v in f.items() if k in keep} for rid, f in facts.items()}
 
 
-#: the activity a PADDED record's binding map (`padded-binding-map/1`, padding_steps) stamps on every entry:
+#: the activity a PADDED record's binding map (`padded-binding-map/1`, from the retired padded Commit) stamps on every entry:
 #: `bot-by-enablement` = the REQUIRED padding of a not-executed row (its value is tau(e) = bot by rule, NOT_EXECUTED_SCOPE verbatim), `active` =
 #: an executed row's committed value, `registered-input` = a named input.  An UNPADDED record's entries carry no `activity` (= active).
 ACTIVITY_PADDING = "bot-by-enablement"
@@ -408,7 +408,7 @@ def reconcile_not_executed(commit_class: dict[str, Any] | None, population: dict
                            manifest_identities: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """ONE mechanism, checked on the record: the Commit's classification of the manifest
     identities (binding coverage, `commit_class` = load_required_manifest's header `not_executed_by_rule`) and the population's third bucket
-    (`population["not_executed_by_rule"]`: identities at request-relative steps >= n_exec leave the pool before any draw) must
+    (`population["not_executed_by_rule"]`: identities at request-relative steps >= n_exec leave the pool before sampling) must
     name the SAME identities.  Per request: the population's n_exec == the Commit's executed_prefix_len (`epr` = executed_prefix_of_record).
     Per ROW family (kind `row`): the Commit's count == the population's N_excluded.  A NAMED-INPUT family (a per-request family
     by the executed-prefix rule; `kind_by_family[fam] = named-input`): the Commit's count == the population's N_excluded, exactly as

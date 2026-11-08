@@ -1,6 +1,6 @@
 """Dither-a's units launch on one GPU, as served (`-hbr -aomn`): each call's noise (`kh_one_noise`, h1s_noise into its
 workspace), then its units (`kh_one_units` of a receipts-only build: h1k where the call's live units fit, h1u past
-H1K_MAXU), at Llama-3.1-8B's four linears, a window of T rows with M live (decode B32 at T = 64: one live row tile of
+H1K_MAXU), at Llama-3.1-8B's four linears, an execution phase of T rows with M live (decode B32 at T = 64: one live row tile of
 two). Each build in `--lib NAME=PATH` (the first is the base, today's) is gated, then timed against the others:
 
     python unitsbench.py --lib base=h1u_kr.so --lib NAME=h1u_x.so ... --out OUT [--t 64] [--m 32] [--reps 7]
@@ -8,7 +8,7 @@ two). Each build in `--lib NAME=PATH` (the first is the base, today's) is gated,
 
 Gates before any timing, on every build and linear (a failed gate exits 4 and its build is not timed):
   * 0xA5 over the receipts and the workspace, then seeds, noise and units: the receipts of sampled live units (first,
-    last and random) against served_h1/receipts.py's call_receipts, every dead unit's receipt zero, no poison left, the
+    last and random) against `pouw_h1_receipts.call_receipts`, every dead unit's receipt zero, no poison left, the
     seeds against seeds.py;
   * a variant's receipts equal the base build's on every unit and word (the units compute what they computed);
   * the no-write control (the units launched over zero rows, under the same poison) refused;
@@ -58,16 +58,15 @@ import numpy as np
 import torch
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "benchmarks" / "pouw" / "served_h1"))
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 import j10r_units as J10R
 import j10r_ws as JWS
-import receipts as RC
 from h1bench import auto_j
 from h1ubench import call_data, digest
 from hb_kbench import LINEARS, POISON, Clock, capture, inputs, one_call_ms, w_seed, x_seed
 
-from verity.core.protocols.pouw.circuit import seeds as SD
+from verity.ml.protocols.pouw.circuit import seeds as SD
+from verity_vllm.protocols.pouw.h1 import receipts as RC
 
 ORDER = ("qkv", "o", "gate_up", "down")
 
@@ -512,7 +511,7 @@ def main() -> int:
     rng = random.Random(0x55A17)
     doc = {"schema": "dither-a/units/v1", "device": clock.name, "sms": sms, "t": args.t, "m": args.m, "libs": paths,
            **({"smq": args.smq} if args.j10r_sm else {}),
-           "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "served_h1/receipts.py",
+           "started": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "reference": "verity_vllm.protocols.pouw.h1.receipts",
            "probes": args.probe, "linears": {}}
     T, M = args.t, args.m
     linears = [x for x in ORDER if x in args.linears.split(",")]

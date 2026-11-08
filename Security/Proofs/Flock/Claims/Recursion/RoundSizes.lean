@@ -1,12 +1,55 @@
-import Proofs.Flock.Claims.Recursion.VerdictTargetL
-import Proofs.Flock.VBridge.Family.Setup
-import Proofs.Flock.C3.Compose.HoloStreamSizes
+module
+
+public import Proofs.Flock.C3.Compose.HoloStreamSizes
+public import Proofs.Flock.Claims.Recursion.NonVacuous
+public import Proofs.Flock.Claims.Recursion.VerdictTargetL
+public import Proofs.Flock.VBridge.Family.Setup
+import all Init.Data.Array.Basic
+import all Init.Data.Range.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.DeployK
+import Proofs.Flock.Claims.Recursion.VerdictLoop
+import Proofs.Flock.Claims.Recursion.VerdictRowG
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Algebra.RingSwitch
+import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # The schedule's coin counts are the rounds `verifierRows` takes
 
 `roundSizes sh` is the one list of round sizes at which `verifierRows sh` returns (`verifierRows_schedule`). It is the
-list `run` draws: the zerocheck's, the lincheck's and ring switching's (`headSz`, from `zerocheck_coins`,
+list `run` samples: the zerocheck's, the lincheck's and ring switching's (`headSz`, from `zerocheck_coins`,
 `lincheck_coins`, `ringSwitch_spec`), then Ligerito's up to its final check (`ligSz`, `ligeritoRun_sz`, step by step
 as `ligeritoRun_k` counts them), at a schedule of the seams (`roundSizes_eq`). The deployed schedule `repRounds` lists
 the same counts (`repRounds_sz`): its head's at every `k_log` and claim count (`repHead_sz`), and its tail, which
@@ -15,6 +58,8 @@ neither reaches (`repRounds_tail`), by evaluating it at each `m` below 36.
 So at a decision's table `i`, the schedule's coin counts are `roundSizes` at the table's shape (`DecAt.hsched`), and
 row R's `hsz` holds wherever `structureOf` returns at that shape (`Top.hsz`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Family
 
@@ -27,7 +72,7 @@ consistency coins, one coin. -/
 def qSz (sch : Flock.Schedule) (i : ℕ) : List ℕ :=
   [(sch.levels.getD i default).q, Nat.log2 ((sch.levels.getD i default).q - 1) + 1, 1]
 
-/-- The coin counts `levelsLoop` draws, `fuel` levels from level `i` at the split dimension `split`
+/-- The coin counts `levelsLoop` samples, `fuel` levels from level `i` at the split dimension `split`
 (RecAlgebra.lean:419–436). -/
 def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
   | 0, _, _ => []
@@ -37,7 +82,7 @@ def loopSz (sch : Flock.Schedule) (R : ℕ) : ℕ → ℕ → ℕ → List ℕ
         [split - 4 + 1, 1] ++ ([split - 4 + 1, 1] ++ (qSz sch (i + 1) ++ loopSz sch R fuel (i + 1) (split - 4 + 1)))
       else qSz sch R ++ loopSz sch R fuel (i + 1) split
 
-/-- **The coin counts Ligerito draws up to its final check** (`ligeritoRun`, RecAlgebra.lean:440–454). -/
+/-- **The coin counts Ligerito samples up to its final check** (`ligeritoRun`, RecAlgebra.lean:440–454). -/
 def ligSz (sch : Flock.Schedule) : List ℕ :=
   [sch.n, 1] ++ (List.replicate sch.k0 2 ++ ([sch.n - sch.k0 + 1, 1] ++ ([sch.n - sch.k0 + 1, 1] ++
     (qSz sch 0 ++ loopSz sch (sch.levels.size - 1) (sch.levels.size - 1) 0 (sch.n - sch.k0 + 1)))))
@@ -100,7 +145,7 @@ theorem sizes {l : List ℕ} (h : SzAt w 0 l) (hs : w.size = l.length) : w.toLis
 
 end SzAt
 
-/-! ## Ligerito's draws -/
+/-! ## Ligerito's samples -/
 
 section Lig
 
@@ -199,7 +244,7 @@ theorem levelsLoop_sz {sch : Flock.Schedule} {R : ℕ} (hq : ∀ i ≤ R, (sch.l
       refine ⟨?_, SzAt.app s₁ (SzAt.app s₄ s₅ ?_) ?_⟩
       all_goals simp [qSz] <;> omega
 
-/-- **Ligerito up to its final check draws `ligSz`'s rounds**, at a schedule of the seams. -/
+/-- **Ligerito up to its final check samples `ligSz`'s rounds**, at a schedule of the seams. -/
 theorem ligeritoRun_sz {sch : Flock.Schedule} {st₀ : Flock.RecAlgebra.LSt F128} {k₀ k' : ℕ}
     {out : Array F256 × Array (Array F256) × ℕ} {stV : Flock.RecAlgebra.LSt F128} (hdim : DimSeam sch)
     (hlv : ∀ i < sch.levels.size, LevelSeam (sch.levels.getD i default))
@@ -310,7 +355,7 @@ theorem repHead_sz {m : ℕ} (hm : 6 ≤ m) (kLog claims : ℕ) :
   simp only [FlockC3.Compose.repHead, headSz, show m + 6 - 5 = m + 1 by omega, show m + 6 - 6 = m by omega]
   simp [List.map_replicate, List.replicate_succ']
 
-/-- **`repRounds` lists the counts `run` draws**: its head's (`repHead_sz`) at every `k_log` and claim count, and
+/-- **`repRounds` lists the counts `run` samples**: its head's (`repHead_sz`) at every `k_log` and claim count, and
 Ligerito's after it, which neither reaches (`repRounds_tail`), by evaluating `repRounds` at each `m` below 36 at
 `k_log = 6` and one claim. -/
 theorem repRounds_sz {m kLog claims : ℕ} {out : Array RecVStar.SchedRound} {sch : Flock.Schedule}

@@ -4,7 +4,7 @@ The kernels take a setup's key prefix, so one arm runs either framing, both on v
 
 - `V1` (`p2-v1-gpu`): the v4 spec as `reference.py` states it, audited by `memory_challenger.py`'s own loop.
 - `V3` (`p2-16448/v4`, `p2-v3-gpu`): `verity`'s registered scheme, whose commitment, 24-byte salt, key prefix and leaves are
-  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `band_gpu/memory_challenger.py --strict`, which
+  the protocol's (`schemes.p2`, `setup`, `verifier`), audited by `protocol.TimedAudit` through `verity/core/devices/memory_challenger/timed_audit.py --strict`, which
   refuses any `k` or `Δ + RTT` the certificate does not cover.  Its extra gate (`codec`) decodes segment 0 of the device's `C`
   with the scheme's own codec back to `W`'s, when that segment is wholly encoded.  A joint run's `--bandwidth-salt GPU` sets
   `C` up under the bandwidth audit's salt for that GPU instead (`V3.bind_device`), so the bandwidth verifier audits the same `C`.
@@ -112,11 +112,11 @@ class V1:
 class V3(V1):
     """`p2-16448/v4` (`verity.core.protocols.pous.schemes.p2`): `protocol.commit`'s commitment to `W` under the
     scheme's manifest, `protocol.draw_salt`'s 24-byte salt, its key prefix (which frames that salt and no commitment) and `vk`'s
-    leaves, audited by `protocol.TimedAudit` (`band_gpu/memory_challenger.py --strict`), which refuses any `k` or `Δ + RTT` the
+    leaves, audited by `protocol.TimedAudit` (`verity/core/devices/memory_challenger/timed_audit.py --strict`), which refuses any `k` or `Δ + RTT` the
     certificate does not cover.  `research` (the CPU tests' widths, where P2 has no certificate) audits anyway and lists
     the gaps."""
 
-    impl, live = "p2-v3-gpu", HERE.parent / "band_gpu" / "memory_challenger.py"
+    impl, live = "p2-v3-gpu", H.MEMORY_CHALLENGER
 
     def __init__(self, P: R.Params, w_host: bytes, research: bool = False) -> None:
         from verity.core.protocols.pous import protocol, schemes
@@ -495,7 +495,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
         return {"implementation": {"name": fr.impl, "commit": a.impl_commit, "harness": "benchmarks/pous/p2_v1/harness.py",
                                    "kernels": f"p2v1.cu: p2dec.cu's tuned decode with {fr.scheme} keys expanded by p2keys4.cuh (counter-mode "
                                               "SHA-512 from the key prefix's midstate); encode by an addition-chain root on CGBN's generic squaring",
-                                   "memory_challenger": str(fr.live.relative_to(HERE.parent)), "memory_challenger_args": list(fr.memory_challenger_args)},
+                                   "memory_challenger": str(fr.live.relative_to(H.ROOT)), "memory_challenger_args": list(fr.memory_challenger_args)},
                 "device": facts, "segments": segments, "segments_of_weight_set": total, "blocks": blocks, "weight_bytes": used,
                 "setup": {"scheme": fr.scheme, "manifest": fr.manifest(), "w_commitment": fr.model.hex(), "salt": fr.salt.hex(),
                           "salt_from": "pous" if fr.device is None else "bandwidth",
@@ -578,7 +578,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
                                     "note": "memory_challenger.SCHEMES accepts no test-signed session: no session is "
                                             "accepted, honest or not, and no storage profile is issued"}
     allowance = honest.get("rtt_allowance_ns")
-    point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.MAX_RTT_ALLOWANCE_NS,
+    point = {"k": k == R.K_AUDIT, "rtt_allowance": allowance is not None and allowance <= R.RTT_ALLOWANCE_CAP_NS,
              "deadline": honest.get("deadline_ns") == R.DELTA_NS, "blocks": 1 << 8 <= blocks <= 1 << 23}
     gates["operating_point"] = {"passed": all(point.values()), **point}
     gaps = tuple(f"operating point: {name} is not the frozen value" for name, ok in point.items() if not ok)
@@ -591,7 +591,7 @@ def run(a: Any, ws: dict[str, Any], out: Path, *, w_segment: Callable[[str, int,
     deadline = {"limit_ns": limit, "limit_fixed_before_load": bool(honest.get("limit_fixed_before_load")),
                 "allowance_kind": honest.get("allowance_kind"), "rtt_allowance_ns": honest.get("rtt_allowance_ns"),
                 "honest_margin_min_s": (honest.get("margin_s") or {}).get("min"),
-                "spec_rtt_allowance_max_ns": R.MAX_RTT_ALLOWANCE_NS}
+                "spec_rtt_allowance_max_ns": R.RTT_ALLOWANCE_CAP_NS}
     metrics = {"encode_s": encode_s, "encode_cache": cache.record if cache else None, "encoded_blocks": encoded,
                "encode_GBps": encoded * payload / encode_s / 1e9,
                "encode_stored_GBps": encoded * nb / encode_s / 1e9, "decode_pass_s": decode_s, "ewb": used / decode_s,

@@ -1,5 +1,10 @@
-import Definitions.Pouw.NCP.Relation
-import Definitions.Pouw.Assumptions.NCP.GamePinned
+module
+
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Definitions.Pouw.Assumptions.NCP.GamePinned
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.NCP.Relation
+public import Definitions.Pouw.NCP.Witness
 
 /-!
 # The chain end to end: the wrap link and the lead with independence (trusted)
@@ -17,6 +22,8 @@ running sum is at most `3k·64²`) and for int7 inputs for `k ≤ 2^16` (`Int7In
 `LeadIndWitness` is `LeadWitness` with `IsLeadInd` in place of `IsLead`.
 -/
 
+@[expose] public section
+
 namespace Pouw.NCP.Chain
 
 open Finset Pouw.NCP.Relation
@@ -25,7 +32,7 @@ open Finset Pouw.NCP.Relation
 `blockEnd d (3k) t`. -/
 def ParamsYLink : Prop :=
   ∀ {Q R S : Type} (P : Params Q R S) (H : Q → R) (s : S) (U : Workload) (u : ℕ) (A : Mat) (t i j : ℕ),
-    P.Y H s U u A t i j = wrap32 (ck (U.layout.shape u).k A (U.weight (U.layout.wid u)) (P.e1 H s U u A)
+    P.Y H s U u A t i j = wrap32 (ck (U.layout.shape u).k A (U.fixed (U.layout.fixedId u)) (P.e1 H s U u A)
       (P.wtNoise H s U u).1 (P.wtNoise H s U u).2 i j (D1.blockEnd P.d (3 * (U.layout.shape u).k) t))
 
 /-- At `d = 16` and `16 ∣ k`, block `p / (m n)` of position `p` ends at `Relation.checked`'s depth. -/
@@ -52,14 +59,14 @@ def WrapFinalOnlyInd : Prop :=
 
 /-- **The floor for the protocol's checked values**, under independence, in the int32-exact range. -/
 def WrapWordFloorInd : Prop :=
-  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (γ₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
-    0 ≤ γ₀ → γ₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
+  ∀ (k m n N : ℕ) (R : Mat) (A B : ℕ → Mat) (adv : Word.Adversary) (g₀ : ℝ), 16 ∣ k → CheckpointIndependent k 16 R →
+    0 ≤ g₀ → g₀ < 1 → Word.Valid (fun _ => positions k m n) adv →
     (∀ (ω : Noise N m n k) (u p : ℕ), u < N → p < positions k m n → InInt32 (checked k m n N R A B ω u p)) →
     Word.NzNCP (fun _ => positions k m n) (wrapped k m n N R A B) →
-    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - γ₀) <
+    pr (fun ω => (Word.cost (fun _ => positions k m n) N adv : ℝ) / (1 - g₀) <
         16 * ∑ _u ∈ Word.correctSet (fun _ => positions k m n) (wrapped k m n N R A B) N adv ω,
           (positions k m n : ℝ)) ≤
-      N * (2 : ℝ) ^ (-((m * n : ℕ) * (γ₀ * (3 * k / 16 : ℕ) - 1)))
+      N * (2 : ℝ) ^ (-((m * n : ℕ) * (g₀ * (3 * k / 16 : ℕ) - 1)))
 
 /-- **The int32 range at zero input**: for a signed-permutation `R` and `k ≤ 2^16`, every checked value is at most
 `3k·64² ≤ 805,306,368 < 2^31` in magnitude. -/
@@ -90,8 +97,8 @@ def LeadIndWitness : Prop :=
     (∀ (L : Layout) (u : ℕ), P.Wref L u = 3 * (L.shape u).Wmm) ∧
     P.toProtocol.Complete leadDomain ∧
     AdmitsRef (outputPriced3 Unit Unit Salt) P.toProtocol leadDomain (fun _ => 0) ∧
-    (∀ γ₀ : ℝ, 0 ≤ γ₀ → γ₀ < 1 →
-      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain γ₀ (fun _ _ => 0)) ∧
+    (∀ g₀ : ℝ, 0 ≤ g₀ → g₀ < 1 →
+      Assumptions.TTNCP (outputPriced3 Unit Unit Salt) P.toProtocol P.d leadDomain g₀ (fun _ _ => 0)) ∧
     (⟨Lay, fun _ => 0⟩ : Workload).InDomain leadDomain ∧ 0 < Lay.N ∧ ∀ u < Lay.N, P.d ∣ (Lay.shape u).k
 
 end Pouw.NCP.Chain

@@ -1,8 +1,54 @@
-import Proofs.Flock.Claims.Recursion.VStarPartsHolo
-import Proofs.Flock.Claims.Recursion.VStarPartsSparse
-import Proofs.Flock.Claims.Recursion.VStarCross
+module
+
+public import Proofs.Flock.Claims.Recursion.VStarPartsHolo
+public import Proofs.Flock.Claims.Recursion.VStarPartsSparse
+public import Proofs.Flock.Claims.Recursion.VStarCross
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.DeploySessions
+import Proofs.Flock.Claims.Scope.InScope
+import Proofs.Flock.Claims.Scope.Setup
 import Proofs.Flock.Recursive.VStarCheck
-import Proofs.Flock.Claims.Recursion.DeployLayout
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.VBridge.OpeningUnit
+import Proofs.Flock.VBridge.Pinned
+import Proofs.Flock.VBridge.Sparse.Unit
+import Std.Tactic.BVDecide.Normalize.BitVec
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # V*'s part links, shared across the shapes
@@ -73,6 +119,8 @@ that link once for every kind and every shape, with what is the circuit's own pr
   call is a copy's climb call and that the layout records the copies' gadgets (`LevelLogReads`,
   `stmtReadsTo_levelLogs`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 
@@ -421,13 +469,14 @@ theorem resPartAny_of_resPart {c : Flock.Circuit} {S : Flock.RecOpen.GfS} {ns : 
 
 /-- **The circuit's unit is one of V*'s, its copies' outputs at what their inputs read being `K`**: a level under
 either name (`LevelOuts`), a table of residuals (`ResOuts`), the RecSparse unit (`SparseReadOuts`), or RecCap
-(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level), of whose outputs nothing is stated (`K` true). -/
+(`rec-cap/n<N>` at level 0, `rec-cap/n<N>-l<l>` at a later level) or RecLink (`rec-link/u<UB>-p<PB>`), of whose outputs
+nothing is stated (`K` true). -/
 def UnitOuts (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   (∃ LANES H : ℕ, (Flock.RecOpen.params c.unit.name = some (LANES, H) ∨
     Flock.RecOpen.stackedParams c.unit.name = some (LANES, H)) ∧ K = fun v => LevelOuts v LANES H) ∨
   (∃ (S : Flock.RecOpen.GfS) (ns : List ℕ) (nv : ℕ), ResPartAny c S ns nv ∧ K = ResOuts S ns nv) ∨
   (∃ sh : Flock.RecSparse.Shape, Flock.RecSparse.params c.unit.name = some sh ∧ K = SparseReadOuts sh) ∨
-  ∃ l N : ℕ, c.unit.name = VStar.capName l N ∧ K = fun _ => True
+  ∃ l N : ℕ, (c.unit.name = VStar.capName l N ∨ c.unit.name = VStar.linkName l N) ∧ K = fun _ => True
 
 /-- **The output tie from `Flock.check`**: at the deployed parser, wherever the outer relation holds at an untyped
 statement without public input words, every copy of a V* unit holds its outputs at the values its input columns read
@@ -640,7 +689,8 @@ theorem checkPart_inner {j : ℕ} {nm : String} {pt : VStar.Part} {c : Flock.Cir
 /-- **A table of V\*'s statement `sv`, its copies' outputs at what their inputs read being `K`** (`UnitOuts`), at
 `sv`'s own numbers: a level's climb at `sv`'s `LANES` and `H` (`.recOpen`, `.recOpenStacked`), the residuals of the
 algebra's part the unit's name, shape and META give (`.inner`), of R's opening's part at `sv`'s `m`, claims and `j`
-(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's, of which nothing is stated (`.cap`). -/
+(`.opening`), the RecSparse unit's at `sv`'s shape (`.sparse`), or RecCap's or RecLink's, of which nothing is stated
+(`.cap`, `.link`). -/
 def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop) : Prop :=
   UnitOuts c K ∧
     match sv with
@@ -654,6 +704,7 @@ def StmtUnit (sv : VStar.Stmt) (c : Flock.Circuit) (K : (ℕ → Bool) → Prop)
         RecOpening.shape? m cl = some sh ∧ RecOpening.part sh j = .ok (S, ns, nv) ∧ K = ResOuts S ns nv
     | .sparse sh _ => K = SparseReadOuts sh
     | .cap .. => K = fun _ => True
+    | .link .. => K = fun _ => True
 
 /-- **A table named as V\*'s statement `sv` that the parser and the part check accepted is a table of `sv`**: the
 unit's own check (`ParseFacts`) reads the name back at `sv`'s numbers (`params_of_check`, `stackedParams_of_check`,
@@ -675,7 +726,9 @@ theorem stmtUnit_of_check {tags : Flock.Tags} {pre : Array (String × Flock.Net)
   | sparse sh hRound =>
     exact ⟨_, Or.inr (Or.inr (Or.inl ⟨sh, sparseParams_of_check P.recSparse hn, rfl⟩)), rfl⟩
   | cap l N =>
-    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, hn, rfl⟩)), rfl⟩
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨l, N, Or.inl hn, rfl⟩)), rfl⟩
+  | link UB PB N =>
+    exact ⟨_, Or.inr (Or.inr (Or.inr ⟨UB, PB, Or.inr hn, rfl⟩)), rfl⟩
   | opening m cl j S ports nv =>
     have hq := openingParams_of_check P.recOpening hn
     obtain ⟨sh, hsh⟩ := openingShape_of_check P.recOpening hq
@@ -1630,15 +1683,14 @@ theorem agrees_layoutOf_of_ownPorts_nil {x : Msg} {r : XR} (hr : readX x = some 
 file. -/
 theorem rawIns_fields {w : FlockDeploy.Raw} {i : FlockDeploy.Ins} (h : w.ins = .ok i) :
     i.read.zk = w.zk ∧ i.read.I.circuitFile = w.circuit ∧ i.read.I.tables = w.tables ∧ i.read.I.count = w.count ∧
-      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags.withCoins
-        (if w.zk then .tree (Flock.Zk.coinSpec (tags.tableNames w.count)) else if w.osCoins then .os else .seed) := by
+      ∃ tags, Flock.Tags.byName? w.statement = some tags ∧ i.read.I.tags = tags := by
   unfold FlockDeploy.Raw.ins at h
   simp only [bind, Except.bind, pure, Except.pure] at h
   repeat' split at h
   all_goals first | (cases h; done) | skip
   all_goals
     cases h
-    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, by dsimp only; split_ifs; simp_all⟩
+    exact ⟨rfl, rfl, rfl, rfl, _, by assumption, rfl⟩
 
 /-- **A raw statement with its public file swapped reads the same tags, circuit file and tables.** -/
 theorem rawIns_publicFile {w : FlockDeploy.Raw} {pf : ByteArray} {i i' : FlockDeploy.Ins} (h : w.ins = .ok i)

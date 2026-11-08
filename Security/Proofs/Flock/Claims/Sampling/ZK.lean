@@ -1,6 +1,41 @@
-import Proofs.Flock.Claims.ZK.Hypotheses
-import Proofs.Flock.Claims.Sampling.Deployed
-import Proofs.Flock.Claims.ZK.Indexed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+public import Proofs.Flock.Claims.ZK.Hypotheses
+public import Proofs.Flock.Claims.ZK.Indexed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.Congr
+import Proofs.Flock.Soundness.CROnly.Hiding
 
 /-!
 # Sampling's zero knowledge from a committed-coin protocol
@@ -8,7 +43,7 @@ import Proofs.Flock.Claims.ZK.Indexed
 `Claims.Sampling.ZK` is `ZKmalRx` at the sampled verifier's rounds, `ZKmalR` at a record masked at one tape
 (`zkmalRx_const_of`), of the masked record's reference prover and at its simulator, on the honest pairs whose published
 leaf layer is `l x`, with the simulator given `l x`. Its binding term is `γ` times `Fork` of the sampled prover's own two
-runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it draws (the
+runs on one nonce, so it is the Goldreich–Kahan theorem at the sampled protocol itself, with every coin it samples (the
 selection's and each checked unit's session's) committed at its `Hello`.
 The route of record is the other: Flock's zero knowledge at each session composes to it in turn
 (`SamplingDeploy.zk_seq`, `Sampling/Seq.lean`), since the composed tape guesses which session's `Fork` to charge
@@ -36,6 +71,8 @@ whole sampled run, reads models of that protocol (`Proto.TMsgLink` and the rest)
   prover on the masked tape is the protocol's (`Honest`); and `SamplingDeploy.sampling_deployed_models`,
   `sampling_deployed` with its zero knowledge from them.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling
 

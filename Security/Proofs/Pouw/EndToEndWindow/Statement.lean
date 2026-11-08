@@ -1,14 +1,16 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.Assumptions
-import Proofs.Flock.Soundness.Audit.Extraction
-import Proofs.Flock.Soundness.Audit.RegDraw
-import Proofs.Flock.Soundness.Audit.Window
+module
+
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.Assumptions
+public import Proofs.Flock.Soundness.Audit.Extraction
+public import Proofs.Flock.Soundness.Audit.RegDraw
+public import Proofs.Flock.Soundness.Audit.Window
 
 /-!
 # PoUW's work bound at the window audit (trusted)
 
-`EndToEndWindow` is `Pouw.Guarantees.EndToEnd` with the window audit in place of its ideal audit, at the service's draw
+`EndToEndWindow` is `Pouw.Guarantees.EndToEnd` with the window audit in place of its ideal audit, at the service's sample
 and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` of `window.sampling`: main serves 0.1% at
 `δ = 2^-40` and 1% at `δ = 2^-128`). Its cost `T` is the cost of the prover that is audited:
 
@@ -19,17 +21,17 @@ and decision 107's units, for the window's share `ε` (`0 < ε ≤ 1`, the `ε` 
   sessions' (`ProverModel.sessCalls`).
 * **PoUW's adversary is extracted from the registration** (`WindowWork.StraightLineExtraction`, the one random-oracle
   premise): from every prover within `(T, q)`, an adversary of PoUW's game within `(T + T_ext, q + q_ext)` whose
-  transcript is the transcript the registration's commitments bind (`Ccom`) on every run received before the draw
+  transcript is the transcript the registration's commitments bind (`Ccom`) on every run received before the sampling
   coin's cutoff, except with probability `ε_id(q, N)` over the oracle and the salt. The extraction reads none of the
-  sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the link term inside
+  sessions' queries, and a session that opens the registered roots to anything but `Ccom` is the binding error inside
   `WindowBound`'s `β`. `q` counts the sessions' calls too (`ProverModel.sessCalls`), so that `β`'s state terms, which
   a session state holding a collision of `H` makes about 1, can be bounded on average over the oracle by the counted
   queries on the random-oracle claim, as `ε_id` is. That bound holds only where the sessions are one oracle program's
   run at `H`, counted by that program's calls. `sessCalls` is a model field, not yet tied to an oracle program (see
   `ProverModel`), so no card reads a number for `E[β]` from it until that tie is stated.
-* **The acceptance is the service's at the draw coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
-  challenger received the registration before it released the epoch's draw coin, in its record's order (a window
-  received after the draw coin is refused, `late-registration`). The bound is that order, not a time. The wall-clock
+* **The acceptance is the service's at the sampling coin's cutoff** (`WindowWork.AcceptsBy`): the sessions accept and the
+  challenger received the registration before it released the epoch's sampling coin, in its record's order (a window
+  received after the sampling coin is refused, `late-registration`). The bound is that order, not a time. The wall-clock
   deadline (`Check.registration_deadline`, counted from the salt coin's release) is the challenger's, which waits on
   its record's `released_at`; what it refuses as late is refused on top of the cutoff, so the service accepts only
   runs inside the event. The extraction is claimed only on runs received before the cutoff.
@@ -49,31 +51,34 @@ a GEMM unit spans audit units the closures don't tie together.
 
 **The work step's instance.** `TileWork` is stated at `coordDomain` only, so TT's instances, whose carded domains
 (`Shape.InDefaultDomain`, `m1Domain`, `NCP.leadDomain`) all have `16 ∣ m`, `m > 0` and `n ≥ 2^10` and hold no coordinate
-layout, are no instances of it. `WindowWork.tileWork_metered` exhibits one: the metered model (`meteredModel P γ`), a
-device that pays `(1 − γ)·W_ref(u)` for every coordinate it commits, satisfies `TileWork` at `γ_u = γ` with error `0`,
-for every protocol and every `γ ≤ 1`, on a domain that holds a workload (`coordDomain_inhabited`). Its programs reach
+layout, are no instances of it. `WindowWork.tileWork_metered` exhibits one: the metered model (`meteredModel P g`), a
+device that pays `(1 − g)·W_ref(u)` for every coordinate it commits, satisfies `TileWork` at `γ_u = g` with error `0`,
+for every protocol and every `g ≤ 1`, on a domain that holds a workload (`coordDomain_inhabited`). Its programs reach
 the oracle only through counted queries (`meteredModel_queries`). The deployed device's instance is EPS1's: compute
 accounting's per-unit credit at its `ε` (`Accounting.Guarantees.Compose.CircuitCredit`, on `cursor/compose-stmt-ea24`, not
 on main), through a bridge from its play to PoUW's cost model, which is PoUW's gap (3) and is stated when that module
 lands.
 
-**The window's law** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
-(`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, drawn after the receipt,
-each drawn unit proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
-term the subset law's own escape, which is 0 where `K′ = N`. PoUW's PROTOCOL.md (Lifecycle, step 5) describes
-`Sampled(t)`, `t` independent work-weighted draws with replacement, not the code's draw.
+**The window's sampling design** is the service's (decision 102, `window.py`): one uniform `K′`-subset of the `n` padded units
+(`subset:K′`, `Law.subset`), the `N_real` real tiles padded with fillers to `pad(N_real + 1)`, sampled after the receipt,
+each sampled proof block proved alone (no closures). `WindowWork.WindowBoundOfService` discharges `WindowBound` there, its first
+term the subset sampling design's own escape, which is 0 where `K′ = N`. The clear audit's
+`Sampled(t)` (`benchmarks/pouw/clear/clear_audit.py`) is `t` independent work-weighted samples with replacement, not the
+code's sample.
 
-Gap (6)'s `Pouw.Guarantees.Window.WindowEps` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
-gap (6)'s copy of the game (`Pouw.Window`), with the window's knowledge and link terms composed from its calls'. The
-bridge that makes it a discharge of `WindowBound` is named there (`Pouw.Window.FlockBridge`).
+Gap (6)'s `Pouw.Guarantees.Window.WindowDelta` (branch `cursor/pouw-window-eps-stmt2-c7a9`) bounds the same event in
+core's game (`Verity.Game`), with the window's knowledge and binding errors composed from its calls'. The bridge that makes
+it a discharge of `WindowBound` is named there (`Proofs.Pouw.Window.FlockBridge`).
 
 **Pearl-C is out of scope**: it has its own game and premises (`TTOutTile`, `TileProofSound`,
 `Pouw.Guarantees.PearlCSampledByDeadline`).
 
-C-Flock's audit definitions are still in the proofs package, so this module imports them, as `Flock.Guarantees.EndToEnd`'s
-statement does C-Flock's; `Models.lean`, which the `security` package builds without `security_proofs`, does not import
-it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
+Flock's audit definitions are still in the proofs package, so this module imports them, as `Flock.Guarantees.EndToEnd`'s
+statement does Flock's; `Definitions.lean`, which the `security` package builds without `security_proofs`, does not
+import it. `TileWork` and `StraightLineExtraction` are named premises awaiting their card.
 -/
+
+@[expose] public section
 
 namespace Pouw.WindowWork
 
@@ -96,47 +101,47 @@ def coordinates (L : Layout) : Prop := ∀ u < L.N, (L.shape u).m = 1 ∧ (L.sha
 def coordDomain (L : Layout) : Prop := coordinates L ∧ ∀ u < L.N, 0 < (L.shape u).k
 
 /-- **The work step at coordinate units, TileWork(γ_u)** (a named premise, open), for a cost model `CM`, a protocol `P`,
-a gap `γ_u` and an error `η(q, N)`, on decision 107's domain `coordDomain`. A correct unit was paid for: the prover
+a gap `γ_u` and an error `δ(q, N)`, on decision 107's domain `coordDomain`. A correct unit was paid for: the prover
 spent at least `(1 − γ_u)·W_ref(u)` on it. A cost model prices a whole run, not a unit, so it is stated summed over the
-window, in `G_γ`'s game (the same adversaries, budgets and oracle-call bounds). For every adversary within `(T, q)`,
+window, in `G_g`'s game (the same adversaries, budgets and oracle-call bounds). For every adversary within `(T, q)`,
 $$\Pr_{H,s}\Big[T < (1-\gamma_u)\sum_{u \in K} W_{ref}(u)\Big] \le \eta(q, N),$$
-`K` being the correct units (`correctSet`: checked values and useful output correct). It is `G_γ` at `γ = γ_u` with
+`K` being the correct units (`correctSet`: checked values and useful output correct). It is `G_g` at `g = γ_u` with
 the gap multiplied out, so it needs no `γ_u < 1`: at `γ_u ≥ 1` its event is empty.
 
 It is stated at coordinates only, so no tile-unit premise (TT, TT_NCP) instantiates it: none of their carded domains
-holds a coordinate layout. Its instance in Lean is the metered model (`tileWork_metered`, at `γ_u = γ` with error `0`,
+holds a coordinate layout. Its instance in Lean is the metered model (`tileWork_metered`, at `γ_u = g` with error `0`,
 on a domain that holds a workload, `coordDomain_inhabited`). The deployed device's is EPS1's, from compute accounting's
 per-unit credit (`Accounting.Guarantees.Compose.CircuitCredit`) through gap (3)'s bridge to PoUW's cost model. -/
 def TileWork [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S)
-    (P : Protocol Q R S) (γu : ℝ) (η : ℕ → ℕ → ℝ) : Prop :=
+    (P : Protocol Q R S) (γu : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
   ∀ U : Workload, U.InDomain coordDomain → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM,
     A.Bounded U T q →
     pr (fun x : (Q → R) × S =>
       T < (1 - γu) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ))
-      ≤ η q U.layout.N
+      ≤ δ q U.layout.N
 
-/-- **The metered model at `γ`**, `TileWork`'s instance: its programs are adaptive oracle programs (one for each
+/-- **The metered model at `g`**, `TileWork`'s instance: its programs are adaptive oracle programs (one for each
 workload, activation input, state and salt), a run outputs what its program returns, makes the program's queries, and
-costs `(1 − γ)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
-declared work at the discount `γ` and can't commit one for less. -/
-noncomputable def meteredModel (P : Protocol Q R S) (γ : ℝ) : CostModel Q R S where
+costs `(1 − g)·W_ref(u)` for every unit `u < N` it commits. It is a device that pays each committed coordinate's
+declared work at the discount `g` and can't commit one for less. -/
+noncomputable def meteredModel (P : Protocol Q R S) (g : ℝ) : CostModel Q R S where
   Prog := Workload → (ℕ → Pouw.Mat) → Pouw.State → S → QTree Q R Pouw.Transcript
   run p H U act st s := (p U act st s).eval H
-  cost p H U act st s := (1 - γ) * ∑ u ∈ (range U.layout.N).filter (fun u => ((p U act st s).eval H u).isSome),
+  cost p H U act st s := (1 - g) * ∑ u ∈ (range U.layout.N).filter (fun u => ((p U act st s).eval H u).isSome),
     (P.Wref U.layout u : ℝ)
   calls p H U act st s := (p U act st s).calls H
 
 /-- The metered model's programs reach the oracle only through counted queries (the form of `CostModel.Queries`). -/
-theorem meteredModel_queries (P : Protocol Q R S) (γ : ℝ) : (meteredModel P γ).Queries :=
+theorem meteredModel_queries (P : Protocol Q R S) (g : ℝ) : (meteredModel P g).Queries :=
   fun p U act st s => ⟨p U act st s, fun _ => ⟨rfl, rfl⟩⟩
 
-/-- **`TileWork` holds at the metered model**, at `γ_u = γ` with error `0`, for every protocol and every `γ ≤ 1`: a
+/-- **`TileWork` holds at the metered model**, at `γ_u = g` with error `0`, for every protocol and every `g ≤ 1`: a
 correct unit is a committed one, so the work of the correct units at the discount is at most what the run costs. -/
-theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) {γ : ℝ}
-    (hγ : γ ≤ 1) : TileWork (meteredModel P γ) P γ fun _ _ => 0 := by
+theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) {g : ℝ}
+    (hg : g ≤ 1) : TileWork (meteredModel P g) P g fun _ _ => 0 := by
   intro U _ T _ q _ A hA
   have hempty : ∀ x : (Q → R) × S,
-      ¬ T < (1 - γ) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) := by
+      ¬ T < (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) := by
     intro x hlt
     have hsub : correctSet P U x.1 x.2 (A.transcript U x.1 x.2) ⊆
         (range U.layout.N).filter (fun u => ((A.online U A.act (A.pre.eval x.1) x.2).eval x.1 u).isSome) := by
@@ -149,8 +154,8 @@ theorem tileWork_metered [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P 
       rfl
     have hle := Finset.sum_le_sum_of_subset_of_nonneg hsub fun u _ _ => (Nat.cast_nonneg (P.Wref U.layout u) : (0 : ℝ) ≤ _)
     have hcost := (hA x.1 x.2).1
-    have : (1 - γ) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
-      (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hγ)).trans hcost
+    have : (1 - g) * ∑ u ∈ correctSet P U x.1 x.2 (A.transcript U x.1 x.2), (P.Wref U.layout u : ℝ) ≤ T :=
+      (mul_le_mul_of_nonneg_left hle (sub_nonneg.2 hg)).trans hcost
     exact absurd hlt (not_lt.2 this)
   simp only [pr, hempty, Finset.filter_false, Finset.card_empty, Nat.cast_zero, zero_div, le_refl]
 
@@ -160,13 +165,13 @@ theorem coordDomain_inhabited : ∃ U : Workload, U.InDomain coordDomain ∧ U.l
     fun _ _ => by norm_num⟩, fun _ _ _ _ _ _ => ⟨by norm_num, by norm_num⟩⟩, rfl⟩
 
 /-- **A window prover's model**: its programs, and for each a whole strategy in the window audit at every oracle and
-salt (`play`: the registration, then the sessions on every draw), with what the model charges for it. `cost` is the
+salt (`play`: the registration, then the sessions on every sample), with what the model charges for it. `cost` is the
 work of its online phase, from the salt's release to the registration's receipt, in PoUW's cost units; `received` and
 `cutoff` are places in the challenger's record of the epoch's coins, which logs each root's receipt and then its coin's
 release (`LiveRecord.log`; that the challenger keeps that order is `trusted-host`'s): the registration's
-receipt, and the release of the epoch's draw coin (`pouw/draw`); `calls` is the registration's oracle calls, the
+receipt, and the release of the epoch's sampling coin (`pouw/draw`); `calls` is the registration's oracle calls, the
 commitments', which `RegQueries` ties to the queries of the program that computes it; `sessCalls` is the sessions'
-oracle calls, the most over every draw and every coin of the sessions. The extraction reads none of the sessions'
+oracle calls, the most over every sample and every coin of the sessions. The extraction reads none of the sessions'
 queries, but `Bounded` counts them: a session state that holds a collision of `H` makes the window's state terms about
 1, and only a count of the queries that found it bounds them on average over the oracle. The model fixes all five, as it
 fixes the cost; a prover only picks a program.
@@ -183,7 +188,7 @@ counted by that program's calls:
 the card states one, `sessCalls` is tied to the play, with `CollCounted`'s restatement and one definition for both: the
 sessions as an oracle strategy of the window's game, one `QTree` per prover move with `H` only in the verdict, and
 `sessCalls` its calls (as `RegQueries` does for the registration). The window audit is `auditReg Lr (session H s)`:
-`n` audit units, the law `Lr R` at the registration `R`, and the session at the oracle `H` and the salt `s`. -/
+`n` audit units, the sampling design `Lr R` at the registration `R`, and the session at the oracle `H` and the salt `s`. -/
 structure ProverModel (Q R S : Type) {n : ℕ} (Reg : Type) (Lr : Reg → Law n)
     (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool) where
   Prog : Type
@@ -224,7 +229,7 @@ def Prover.play {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Wor
 def Prover.received {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) : ℕ :=
   PM.received B.online H U B.act (B.pre.eval H) s
 
-/-- **The draw coin's cutoff**: the place of the epoch's draw coin's release in the challenger's record. -/
+/-- **The sampling coin's cutoff**: the place of the epoch's sampling coin's release in the challenger's record. -/
 def Prover.cutoff {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S) : ℕ :=
   PM.cutoff B.online H U B.act (B.pre.eval H) s
 
@@ -235,11 +240,11 @@ def Prover.Bounded {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : 
     B.pre.calls H + PM.calls B.online H U B.act (B.pre.eval H) s +
       PM.sessCalls B.online H U B.act (B.pre.eval H) s ≤ q
 
-/-- **The service's acceptance at the draw coin's cutoff**, for an outcome `o` of the window audit against `B`'s play
+/-- **The service's acceptance at the sampling coin's cutoff**, for an outcome `o` of the window audit against `B`'s play
 at `H` and `s`: the sessions accept (`o.1`), and the challenger received the registration before it released the
-epoch's draw coin (`received < cutoff`, in its record's order). A window received after the draw coin is refused
-(`late-registration`), whatever it holds: its registration may depend on the draw, which the window audit's game, the
-registration and then the draw coin, doesn't model. The bound is an order, not a time. The wall-clock deadline
+epoch's sampling coin (`received < cutoff`, in its record's order). A window received after the sampling coin is refused
+(`late-registration`), whatever it holds: its registration may depend on the sample, which the window audit's game, the
+registration and then the sampling coin, doesn't model. The bound is an order, not a time. The wall-clock deadline
 (`Check.registration_deadline`, counted from the salt coin's release) is the challenger's, which waits on its record's
 `released_at` and refuses a registration past it too, so the service accepts only runs this event holds of. -/
 def AcceptsBy {PM : ProverModel Q R S Reg Lr session} (B : Prover PM) (U : Workload) (H : Q → R) (s : S)
@@ -254,7 +259,7 @@ claim id `random-oracle`), for a prover model `PM`, PoUW's cost model `CM`, a do
 read at the registration alone), the extractor's cost `T_ext` and calls `q_ext`, and an error `ε_id(q, N)`. For every
 in-domain workload and every prover `B` within `(T, q)` there is an adversary `A` of PoUW's game within
 `(T + T_ext, q + q_ext)` whose transcript is the one `B`'s registration binds, on every run whose registration the
-challenger received before the draw coin's cutoff (`AcceptsBy`'s order), except with probability `ε_id(q, N)` over the
+challenger received before the sampling coin's cutoff (`AcceptsBy`'s order), except with probability `ε_id(q, N)` over the
 oracle and the salt:
 $$\Pr_{H,s}\big[\mathrm{received}_B(H, s) < \mathrm{cutoff}_B(H, s) \wedge
   \mathrm{Ccom}(H, s, \mathrm{reg}\,B.\mathrm{play}(H, s)) \ne A.\mathrm{transcript}(H, s)\big]
@@ -271,8 +276,8 @@ and the noise, the registration's transcript differs from the decoded one only i
 registration hold a collision or the registration holds a node that none of them answered, so
 `ε_id(q, N) ≈ (q² + q·N)/2^512` is the expected instance. Its other content is a cost-model fact: `CM` runs `PM`'s
 online programs at their cost. It is claimed only on runs received before the cutoff, the runs the service accepts: a
-registration received after the draw coin may depend on the draw, which the window audit's game, the registration and
-then the draw coin, doesn't model.
+registration received after the sampling coin may depend on the sample, which the window audit's game, the registration and
+then the sampling coin, doesn't model.
 
 It is stated for models whose registration is an oracle program's output with its queries counted
 (`ProverModel.RegQueries`, its antecedent); the sessions' calls are counted in `q` too (`Prover.Bounded`), which can only
@@ -301,11 +306,11 @@ filler, which is no PoUW unit, adds nothing to it.
 
 Its discharges:
 * `WindowBoundOfService`, at the service's law;
-* gap (6)'s `Pouw.Guarantees.Window.WindowEps` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
+* gap (6)'s `Pouw.Guarantees.Window.WindowDelta` at `𝓑 = harmSets W_ref ε ∧ CopyClosed`, with the service's
   sessions as its calls at `η = 0` (`ServiceEscapes`), gives it at `β(H, s)` its right side at the play, through the
-  bridge to C-Flock's game in `Proofs.Pouw.Window.FlockBridge` (`Pouw.Window.prob_ofFlock`, `CallAnalysis.ofFlock`, and
-  its premise `FlockKnowledgeSound`; branch `cursor/pouw-window-eps-stmt2-c7a9`), with the deployed wrong sets
-  copy-closed (`Pouw.Window.WrongCopyClosed`) and `Realizes` at them. -/
+  bridge to Flock's game in `Proofs.Pouw.Window.FlockBridge` (`Pouw.PearlC.FlockTile.prob_ofVerity`,
+  `CallAnalysis.ofFlock`, and its premise `FlockKnowledgeSound`; branch `cursor/pouw-window-eps-stmt2-c7a9`), with the
+  deployed wrong sets copy-closed (`Pouw.Window.WrongCopyClosed`) and `Realizes` at them. -/
 def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : Type} {Lr : Reg → Law n}
     {session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool}
     (Ccom : (Q → R) → S → Reg → Pouw.Transcript)
@@ -315,18 +320,18 @@ def WindowBound (P : Protocol Q R S) (U : Workload) (ε : ℝ) {n : ℕ} {Reg : 
       (fun o => o.1 = true ∧ ε * totalWref P U.layout ≤ incorrectWork P U H s (Ccom H s (σ' H s).1))
       (auditReg Lr (session H s)) (σ' H s) ≤ β H s
 
-/-- **The window realizes PoUW's units** at the oracle `H` and the salt `s`, for the wrong units `wrong` of an
+/-- **The window realizes PoUW's units** at the oracle `H` and the salt `s`, for the incorrect proof blocks `wrong` of an
 analysis's transcripts and the map `tx` from them to PoUW transcripts: at every transcript `X`, the incorrect work of
-`tx X` is at most the window's unsound work at `X`'s wrong units,
+`tx X` is at most the window's unsound work at `X`'s incorrect proof blocks,
 $$\sum_{u < N,\ u \notin K(tx\,X)} W_{ref}(u) \le \mathrm{unsoundWork}_w(cl, \mathrm{wrong}\,X).$$
-At the service's draw the closures are empty (`fun _ => ∅`, each drawn unit proved alone), and the unsound work is the
-wrong units' own. At coordinate units it holds by construction (`realizes_of_coordinates`). -/
+At the service's sample the closures are empty (`fun _ => ∅`, each sampled proof block proved alone), and the unsound work is the
+incorrect proof blocks' own. At coordinate units it holds by construction (`realizes_of_coordinates`). -/
 def Realizes (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) {n m : ℕ} (σ : Fin n → Fin m) (w : Fin m → ℕ)
     (cl : Fin n → Finset (Fin n)) {Tr : Type} (wrong : Tr → Finset (Fin n)) (tx : Tr → Pouw.Transcript) : Prop :=
   ∀ X : Tr, incorrectWork P U H s (tx X) ≤ (Law.unsoundWork σ w cl (wrong X) : ℝ)
 
 /-- **Each PoUW unit is one template instance** (what the compiler gives at decision 107's coordinate units), at the
-oracle `H` and the salt `s`, for the audit units' strata `σ` and work `w`, the wrong units `wrong` of the analysis's
+oracle `H` and the salt `s`, for the audit units' strata `σ` and work `w`, the incorrect proof blocks `wrong` of the analysis's
 transcripts, the map `tx` to PoUW transcripts and the instance `a u` of each PoUW unit `u`:
 * distinct PoUW units are distinct instances;
 * an instance's work is at least its unit's `W_ref` (the work table at coordinates);
@@ -341,8 +346,8 @@ def CoordinateInstances (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S
     ∀ (X : Tr) (u : ℕ), u < U.layout.N → u ∉ correctSet P U H s (tx X) → a u ∈ wrong X
 
 /-- **`Realizes` by construction at coordinate units** (proved, `realizes_of_coordinates`): if each PoUW unit is one
-template instance, the window realizes PoUW's units, whatever the closures. The incorrect units' `W_ref` sum to at most
-their instances' work, which is in the wrong units' work, which is in the unsound work. -/
+template instance, the window realizes PoUW's units, whatever the closures. The incorrect proof blocks' `W_ref` sum to at most
+their instances' work, which is in the incorrect proof blocks' work, which is in the unsound work. -/
 def RealizesOfCoordinates : Prop :=
   ∀ (Q R S : Type) (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (n m : ℕ) (σ : Fin n → Fin m)
     (w : Fin m → ℕ) (cl : Fin n → Finset (Fin n)) (Tr : Type) (wrong : Tr → Finset (Fin n))
@@ -367,26 +372,26 @@ theorem realizes_of_coordinates : RealizesOfCoordinates := by
   exact_mod_cast hN
 
 /-- **`WindowBound` at the service's law** (statement, no proof yet; to be proved as `windowBound_of_service`). The
-service (decision 102, `window.py`) draws one uniform `K′`-subset of the window's `N` units after the receipt
+service (decision 102, `window.py`) samples one uniform `K′`-subset of the window's `N` units after the receipt
 (`subset:K′`), `N` the real units padded to the grid with fillers (`pad(N_real + 1)`), each proved alone (no closures).
 If every audit unit does at most `w_max` (fillers included), the window realizes PoUW's units, the window's one analysis
-at each oracle and salt has knowledge and link terms at the prover's state, and its committed transcript is the
+at each oracle and salt has knowledge and binding errors at the prover's state, and its committed transcript is the
 registration's (`tx ∘ committed` reads the registration alone, `Ccom`), then `WindowBound` holds at the share `ε` at
 $$\beta(H, s) = \mathrm{miss}_{K'}(b) + \varepsilon_{ks}(H, s, R, \tau) + \delta_{link}(H, s, R, \tau),\qquad
   b = \lceil \varepsilon W / w_{max} \rceil,$$
 `(R, τ)` the play's registration and state. A wrong set holding `ε·W` of incorrect work holds at least `b` units, and
-the first term is the subset law's own escape of `b` units (`Law.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
+the first term is the subset sampling design's own escape of `b` units (`Law.miss`), `C(N − b, K′)/C(N, K′)` for `b ≤ N` by
 `FlockSoundness.Audit.Law.subset_miss` and `0` past it, the exact hypergeometric miss, so it needs no work table (over
 main's served levels it is at most `2^-40.6` at `(ε, δ) = (0.1%, 2^-40)` and `2^-128.5` at `(1%, 2^-128)`,
 the recheck's probe 2):
-* where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is drawn and the first term is `0`
+* where `K′ = N` (`k_prime`'s answer when no `K < N` reaches `δ`), every unit is sampled and the first term is `0`
   (`b ≥ 1`);
 * where `K′ < N`, it is at most the binomial `(1 − ε·W/(N·w_max))^{K′}`, which `k_prime` makes at most its `δ`, since
   `W` is at least the credited work.
 A session that opens the registered roots to anything but `Ccom` is in `δ_link`.
 
-The service's draw is one law for the whole window; the window's `ε_ks` and `δ_link` composed from its sessions' are
-gap (6)'s (`WindowEps`). -/
+The service's sample is one sampling design for the whole window; the window's `ε_ks` and `δ_link` composed from its sessions' are
+gap (6)'s (`WindowDelta`). -/
 def WindowBoundOfService : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (P : Protocol Q R S) (U : Workload)
     (ε : ℝ), 0 < ε → ε ≤ 1 →
@@ -397,7 +402,7 @@ def WindowBoundOfService : Prop :=
     (∀ H s R' τ, tx H s ((An H s).committed R' τ) = Ccom H s R') →
     (∀ H s, Realizes P U H s σ w (fun _ => ∅) (An H s).wrong (tx H s)) →
     ∀ εks δlink : (H : Q → R) → (s : S) → (R' : Reg) → Cont (Law.subset N K hK) Reg (session H s) R' → ℝ≥0∞,
-    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).LinkSound (δlink H s)) →
+    (∀ H s, (An H s).KnowledgeSound (εks H s)) → (∀ H s, (An H s).BindSound (δlink H s)) →
     ∀ σ' : (H : Q → R) → (s : S) →
       FlockSoundness.Game.Strategy (auditReg (fun _ : Reg => Law.subset N K hK) (session H s)),
       WindowBound P U ε Ccom σ' fun H s =>
@@ -413,17 +418,17 @@ open Finset FlockSoundness.Audit
 open scoped ENNReal
 
 /-- **PoUW's work bound at the window audit** (statement only, no proof yet), at the window's share `ε`
-(`0 < ε ≤ 1`). A prover that passes the window audit, its registration received before the epoch's draw coin, spent at
+(`0 < ε ≤ 1`). A prover that passes the window audit, its registration received before the epoch's sampling coin, spent at
 least a `(1 − γ_u)(1 − ε)` share of the window's declared work between the salt's release and the registration's
 receipt, less the extractor's cost, except with probability `E[β] + ε_id(q, N) + η(q + q_ext, N)`.
 
 **What it bounds.** The prover `B` is a program of the prover model `PM` (`WindowWork.Prover`), and the audit runs
 against its play. Its work `T` bounds the cost of its online phase, from the salt's release to the registration's
 receipt, in the cost model's units, which the model fixes, not the prover; an accepted registration is received before
-the draw coin's release, so that is work between the salt coin and the draw coin. `q` counts its oracle calls, the
+the sampling coin's release, so that is work between the salt coin and the sampling coin. `q` counts its oracle calls, the
 sessions' among them. Its work is compared with the window's declared work `W = ∑_{u < N} W_ref(u)` in `CM`'s units,
 `W_ref(u)` being the honest reference's cost of unit `u` without hash calls, on decision 107's coordinate units
-(`WindowWork.coordDomain`). Averaged over the oracle `H` and the salt `s`, the service accepts the play at the draw
+(`WindowWork.coordDomain`). Averaged over the oracle `H` and the salt `s`, the service accepts the play at the sampling
 coin's cutoff (`WindowWork.AcceptsBy`) while `T + T_ext < (1 − γ_u)(1 − ε)·W` with probability at most
 $$\mathbb{E}_{H,s}\Pr[\text{accept before the draw coin} \wedge T + T_{ext} < (1-\gamma_u)(1-\varepsilon)\,W] \le
   \mathbb{E}_{H,s}\,\beta(H, s) + \varepsilon_{id}(q, N) + \eta(q + q_{ext}, N).$$
@@ -438,12 +443,12 @@ The audit is `FlockSoundness.Audit.auditReg` at the service's law, one uniform `
   the metered model, `WindowWork.tileWork_metered`; the deployed device's is EPS1's, gap (3));
 * `WindowWork.StraightLineExtraction` at `(T_ext, q_ext, ε_id)` (the named random-oracle premise): from `B`, a PoUW
   adversary within `(T + T_ext, q + q_ext)` whose transcript is the registration's (`Ccom`) on every run received
-  before the draw coin's cutoff, except with probability `ε_id`; with its antecedent, that the model's registrations
+  before the sampling coin's cutoff, except with probability `ε_id`; with its antecedent, that the model's registrations
   are oracle programs' outputs with their queries counted (`ProverModel.RegQueries`);
 * `WindowWork.WindowBound` at `ε` for `B`'s play at `β(H, s)` (discharged by `WindowBoundOfService`, or gap (6)'s
-  `WindowEps` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
+  `WindowDelta` through its bridge, each from `WindowWork.Realizes`, which holds by construction at coordinate units).
 
-**What it composes**, at every oracle and salt: either the registration was received after the draw coin, which the
+**What it composes**, at every oracle and salt: either the registration was received after the sampling coin, which the
 service refuses; or the registration's transcript isn't the extracted adversary's (on average at most `ε_id`); or the
 work step's event holds for that adversary at budget `T + T_ext` (on average at most `η`); or the units correct in the
 registration's transcript are worth at most `(T + T_ext)/(1 − γ_u) < (1 − ε)·W`, so its incorrect work exceeds `ε·W`,
@@ -452,9 +457,9 @@ def EndToEndWindow : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S]
     (CM : CostModel Q R S) (P : Protocol Q R S) (γu : ℝ) (η : ℕ → ℕ → ℝ),
     WindowWork.TileWork CM P γu η →
-    -- the window's share, the `ε` its draw was sized at
+    -- the window's share, the `ε` its sample was sized at
     ∀ ε : ℝ, 0 < ε → ε ≤ 1 →
-    -- the window audit at the service's draw: `n` padded units, `K` of them drawn uniformly, the session at each
+    -- the window audit at the service's sample: `n` padded units, `K` of them sampled uniformly, the session at each
     -- oracle and salt, and the transcript a registration's commitments bind, read as PoUW's transcript
     ∀ (n K : ℕ) (hK : K ≤ n) (Reg : Type)
       (session : (Q → R) → S → Finset (Fin n) → Reg → FlockSoundness.Game Bool)

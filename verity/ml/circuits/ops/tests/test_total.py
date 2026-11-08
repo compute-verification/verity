@@ -17,7 +17,7 @@ import pytest
 
 from verity.ml.circuits.silicon.cast import f32_to_bf16_word
 from verity.ml.circuits.silicon.errors import InvalidArtifact
-from verity.ml.circuits.silicon.silicon import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
+from verity.ml.circuits.silicon.models import AMPERE_BF16_M16N8K16, HOPPER_BF16_M16N8K16, tc_dot
 from verity.ml.circuits.silicon.total import (
     AMPERE_BF16_DOT16_TOTAL,
     FP32_CANONICAL_NAN,

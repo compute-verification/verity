@@ -1,7 +1,7 @@
 """One table of domain separators: every versioned string a protocol hashes, derives from or commits under, or names its
 records, schemes and protocols by. The Lean is `Identity.Domains`
-(`verity/core/primitives/identity/Identity/Domains.lean`), beside the tagged SHA-512 most of them key; this module mirrors
-it beside `identity.tagged_sha512`.
+(`verity/core/primitives/identity/Identity/Domains.lean`); this module mirrors it, beside `identity.tagged_sha512`, the
+tagged SHA-512 most of them key.
 
 A constant's name is in today's words. Its bytes are what committed formats, pinned vectors and recorded runs carry, so
 they keep the words of their version: a PoUW period's tags say "window", its sampling's say "draw", the network
@@ -13,7 +13,7 @@ Code reads a separator from here or from the Lean, never as a literal of its own
 module and the Lean equal, entry for entry; refuses a literal of the table in the code of a protocol that reads it (its
 ``READERS``, PoUW first); and refuses an entry that nothing reads and whose bytes appear nowhere else. The entries under
 "Not yet read from here" are other protocols' separators, listed so that each has one name before its owner's code
-switches to reading it. C-Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
+switches to reading it. Flock's statement versions keep their tags in `Flock.Tags`, one structure per version.
 """
 
 # PoUW: the protocol and its identifier
@@ -70,7 +70,7 @@ POUW_H1_ROUND_A = "verity/pouw/h1/round-a/v1"
 POUW_H1_COMMIT = "verity/pouw/h1/commit/v1"
 POUW_H1_REQUEST_IDS = "verity/pouw/h1/requests/ids/v1"
 POUW_H1_WEIGHTS = "verity/pouw/h1/weights/v1"
-POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v0"
+POUW_H1_OK_ROW_SALT = "verity/pouw/h1-prove/ok-row-salt/v1"
 
 # PoUW: noise, seeds and receipts
 POUW_SEED = "verity/pouw/seed/v2"
@@ -168,7 +168,7 @@ RANDOMNESS_SHARD = "verity/randomness/shard/v2"
 RANDOMNESS_DERIVE_V1 = "verity/randomness/derive/v1"
 RANDOMNESS_STREAM_V1 = "verity/randomness/stream/v1"
 
-# Shared: sampled proofs' one-stage statement, registrations and partitions; C-Flock's public inputs and descriptors
+# Shared: sampled proofs' one-stage statement, registrations and partitions; Flock's public inputs and descriptors
 ONE_STAGE_PROTOCOL = "verity/sampled-proofs/one-stage/v1"
 ONE_STAGE_PROTOCOL_V2 = "verity/sampled-proofs/one-stage/v2"
 ONE_STAGE_SERVED_DOMAIN = "verity/one-stage/served-domain/v1"
@@ -187,7 +187,6 @@ VLLM_PEARL_C_RUN_CERTIFIED = "verity-vllm/pouw-pearl-c-run/v3"
 # Not yet read from here: the commitments' own (`verity.ml.commitments`)
 BLAKE3_KEYED_ROW_NVFP4 = "blake3-keyed/row-nvfp4/v1"
 BLAKE3_KEYED_ROW = "blake3-keyed/row/v2"
-POSEIDON2_BABYBEAR_W24_ROW = "poseidon2-babybear-w24/row/v2h"
 SHA256_ROW_NVFP4_DIGEST = "sha256/row-nvfp4/v1"
 SHA256_ROW_DIGEST = "sha256/row/v1"
 VLLM_EMPTY = "verity-vllm/empty/v1"
@@ -214,11 +213,9 @@ WORD_CODEC_KV = "verity/word-codec/kv/v0"
 # Not yet read from here: signatures and AEAD (`verity.ml.crypto`, `Lms`)
 LMS_I = "verity/lms/v0/I"
 
-# Not yet read from here: sampled proofs and the proof service's challenger
+# Not yet read from here: sampled proofs and the proof system's challenger
 CHALLENGER_KEY = "challenger-key/v1"
 COIN_TREE_HM96_SHA512 = "coin-tree/hm96-sha512/v2"
-IR_OBLIGATION = "verity-ir/obligation/v0"
-SAMPLED_PROOFS_VERIFICATION_PLAN = "verity-sampled-proofs/verification-plan/v3"
 CHALLENGER_AUDITOR_RECORD = "verity/challenger-auditor-record/v1"
 CHALLENGER_AUDITOR_ENTRY_V1 = "verity/challenger-auditor/entry/v1"
 CHALLENGER_AUDITOR_ENTRY_V2 = "verity/challenger-auditor/entry/v2"
@@ -231,8 +228,8 @@ CHALLENGER_COMMITMENT = "verity/challenger/commitment/v1"
 CHALLENGER_RELEASE_LOG = "verity/challenger/release-log/v1"
 INTEGRITY_PROFILE = "verity/integrity-profile/v1"
 ONE_STAGE_AUDIT = "verity/one-stage/audit/v0"
-ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v0"
-ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v0"
+ONE_STAGE_REGISTERED_DOMAIN = "verity/one-stage/registered-domain/v1"
+ONE_STAGE_SUPPLIED_SALT = "verity/one-stage/supplied-salt/v1"
 ONE_STAGE_PERIOD_SALT = "verity/one-stage/window-salt/v1"
 PROOF_SERVICE_OUTCOME = "verity/proof-service/outcome/v0"
 PROOF_SERVICE_STREAM = "verity/proof-service/stream/v0"
@@ -241,7 +238,7 @@ REGISTERED_READS_V1 = "verity/registered-reads/v1"
 REGISTRATION_RECEIPT = "verity/registration-receipt/v1"
 REGISTRATION_PRODUCED = "verity/registration/produced/v1"
 
-# Not yet read from here: C-Flock and the firewall
+# Not yet read from here: Flock and the ZK server
 COIN_COMMIT_SHA256 = "coin-commit/sha256/v1"
 FIREWALL_RECORD = "firewall/v0"
 FLOCK_CIRCUIT_BLOCK_COVER = "flock-circuit/unit-cover/v0"
@@ -263,6 +260,8 @@ FLOCK_ZK_TAU = "verity/flock-zk/tau/v1"
 LAYOUT = "verity/layout/v1"
 REC_COINS = "verity/rec-coins/v1"
 REC_INNER = "verity/rec-inner/v1"
+REC_V1_VERIFIER_SALT = "verity/rec-v1/verifier-salt/v1"
+REC_V1_ZERO_RESIDUAL_SALT = "verity/rec-v1/zero-residual-salt/v1"
 
 # Not yet read from here: PoUS, the wipe and the memory challenger
 CHAIN_DENSE_H = "chain-dense-H/v1"
@@ -357,10 +356,12 @@ CERTIFIER_PAIR_MAC = "verity-network-certifier/pair/v1/mac"
 CERTIFIER_PARAMETERS_V1 = "verity-network-certifier/parameters/v1"
 CERTIFIER_PERIOD_SAMPLING = "verity-network-certifier/period-draw/v1"
 CERTIFIER_PERIOD = "verity-network-certifier/period/v0"
+CERTIFIER_RECORD_SHA512 = "verity-network-certifier/record-sha512/v1"
 CERTIFIER_RECORD_V2 = "verity-network-certifier/record/v2"
 CERTIFIER_RECORDS = "verity-network-certifier/records/v2"
 CERTIFIER_REVEAL_REQUEST = "verity-network-certifier/reveal-request/v1"
 CERTIFIER_REVEAL_RESPONSE = "verity-network-certifier/reveal-response/v1"
+CERTIFIER_ROW_SHA512 = "verity-network-certifier/row-sha512/v1"
 CERTIFIER_SERVICE_SPEC = "verity-network-certifier/service-spec/v0"
 CERTIFIER_SESSION = "verity-network-certifier/session/v0"
 CERTIFIER_STATEMENT = "verity-network-certifier/statement/v0"
@@ -372,9 +373,7 @@ NETWORK_COIN_LINK_PARAMETERS = "verity-network-coin-link/parameters/v1"
 CERTIFIER_CELLS_DOMAIN = "verity-network-warden/cells-domain/v2"
 CERTIFIER_CELLS = "verity-network-warden/cells/v2"
 CERTIFIER_PARAMETERS_V3 = "verity-network-warden/parameters/v3"
-CERTIFIER_RECORD_V1 = "verity-network-warden/record/v1"
 CERTIFIER_REGISTRATION = "verity-network-warden/registration/v2"
-CERTIFIER_ROW = "verity-network-warden/row/v1"
 CERTIFIER_BLOCKS = "verity-network-warden/units/v1"
 CERTIFIER_WIRING = "verity-network-warden/wiring/v1"
 ADVICE = "verity/advice/v0"
@@ -390,9 +389,8 @@ NETWORK_CERTIFICATE = "verity/network-certificate/v4"
 NETWORK_RECORDS = "verity/network-records/v3"
 PERIOD_CIRCUIT = "verity/window-circuit/v1"
 
-# Not yet read from here: composition (onsite, remote, product)
+# Not yet read from here: composition (onsite, remote)
 ONSITE_PROTOCOL = "verity/onsite/v0"
-PRODUCT_PROTOCOL = "verity/product/v0"
 REMOTE_PROTOCOL = "verity/remote/v0"
 
 # Not yet read from here: served periods (`verity.ml.windows`, the bytes say window)

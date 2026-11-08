@@ -5,7 +5,12 @@ compression circuit, chunk runs then (for a port of several chunks) a keyed pare
 port's row digest. Regions: every compression's counter, block length and flags; every chain start's chaining value
 (the key); every digest (the public row digests; pinned padding values for padding instances).
 -/
-import Flock.RowLeaf
+module
+
+public import Flock.RowLeaf
+public import Flock.FV3
+
+@[expose] public section
 
 namespace Flock
 

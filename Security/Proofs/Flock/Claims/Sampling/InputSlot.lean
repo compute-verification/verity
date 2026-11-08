@@ -1,12 +1,48 @@
-import Proofs.Flock.SamplingBoundary
+module
+
+public import Definitions.Claims.Sampling
+public import Proofs.Flock.SamplingBoundary
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Input slots
 
 The deployed verifier lays an input class after the population (`Slots.layout`): one stratum of a one-gate proof
-block per input gate, in gate order, which `Slots.checked` lists on every draw. No run opens an input row on its own:
-the session proves the drawn units (`HmRow.drawn`), and registration opens no row, so an input row is opened only
-through a drawn unit that reads it.
+block per input gate, in gate order, which `Slots.checked` lists on every sample. No run opens an input row on its own:
+the session proves the sampled proof blocks (`HmRow.drawn`), and registration opens no row, so an input row is opened only
+through a sampled proof block that reads it.
 
 * `faulty_input_iff`: at a slot whose proof block is `[p]`, `p` an input gate, the slot is faulty exactly when the
   witness opens no value at `p`. An input's computed value is its committed value, so an opened input
@@ -14,10 +50,12 @@ through a drawn unit that reads it.
 * `withInputs P C`: `P`'s classes, then the input class of `C` (`inputClass`). `P`'s slots keep their indices
   (`withInputs_getElem?_of_lt`), slot `|P| + i` is the `i`th input gate's (`withInputs_getElem?_input`), and it is
   faulty exactly when that gate's value is unopened (`faulty_withInputs_iff`).
-* `InScope`'s input clause: every input gate of `C` is in a proof unit of `withInputs P C` (`input_mem_withInputs`), so
+* `InScope`'s input clause: every input gate of `C` is in a proof block of `withInputs P C` (`input_mem_withInputs`), so
   where `P` covers every other gate but the constants, `withInputs P C` covers every gate but the constants
-  (`covers_withInputs`), `Partitions`' covering clause.
+  (`covers_withInputs`), which gives `Partitions`' covering clause.
 -/
+
+@[expose] public section
 
 namespace Claims.Sampling.InputSlot
 
@@ -97,7 +135,7 @@ theorem faulty_withInputs_iff {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s 
     Faulty H Cm s (withInputs P s.prog) w (P.blocks.length + i) ↔ w.val H Cm s g = none :=
   faulty_input_iff (withInputs_getElem?_input P s.prog hi) (mem_inputsAt.1 (List.mem_of_getElem? hi))
 
-/-- **`InScope`'s input clause**: every input gate of `C` is in a proof unit of `withInputs P C`. -/
+/-- **`InScope`'s input clause**: every input gate of `C` is in a proof block of `withInputs P C`. -/
 theorem input_mem_withInputs (P : Partition) {C : Prog} {g : ℕ} (hg : C.gates[g]? = some .input) :
     g ∈ (withInputs P C).gates := by
   unfold Partition.gates
@@ -105,8 +143,8 @@ theorem input_mem_withInputs (P : Partition) {C : Prog} {g : ℕ} (hg : C.gates[
   exact List.mem_flatten.2 ⟨[g], List.mem_append_right _ (List.mem_map.2 ⟨g, mem_inputsAt.2 hg, rfl⟩),
     List.mem_singleton_self _⟩
 
-/-- **`Partitions`' covering clause at `withInputs P C`**, where `P` covers every gate but the constants and the
-inputs. -/
+/-- **`withInputs P C` covers every gate but the constants**, where `P` covers every gate but the constants and the
+inputs, which gives `Partitions`' covering clause. -/
 theorem covers_withInputs (P : Partition) (C : Prog)
     (h : ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → C.gates[g]? ≠ some .input → g ∈ P.gates) :
     ∀ g < C.gates.length, (∀ b, C.gates[g]? ≠ some (.const b)) → g ∈ (withInputs P C).gates := by

@@ -1,5 +1,28 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
-import Proofs.Flock.Soundness.Discharge.ZkHidden.PublicJ
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindInst
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Composed.DrawnJ
+import Proofs.Flock.Soundness.Discharge.Composed.PublicJ
+import Proofs.Flock.Soundness.Discharge.Tables.Headline
+import Proofs.Flock.Soundness.Discharge.ZkLink.Count
+import Proofs.Flock.Soundness.Game.Prob
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -9,7 +32,7 @@ set_option Elab.async false
 `zk_session_soundHJ`, `zk_session_soundHJ_custody`, `zk_session_soundHJ_custody_reg` and
 `zk_session_soundHJ_custody_drawn_reg` at `instProg c n` in place of `Placed.keyProg c hU n`: the units are those of
 the whole template instance's program, partitioned at the output words' bits (`outsOfI`), each read at its site in the
-hidden-output table it is drawn into (`placeZHJI`) and bound to the rows it commits, input or output (`rsZHJI`).
+hidden-output table it is sampled into (`placeZHJI`) and bound to the rows it commits, input or output (`rsZHJI`).
 
 In place of `scopeOkH` and `pub.tables = none`, the circuit conditions are the rows' fit (`hrf`), the unit's reads
 (`hpr`) and the wires' order (`hw`): none on the unit's input groups, on where the outputs are returned (the live
@@ -53,12 +76,12 @@ theorem zk_session_soundHJI
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hrf : Hidden.Any.RowsFitS c) (hpr : Layout.PortReads c hU) (hw : ProvedScope.wiresAcyclic c = true)
-    -- the law (the live subset draw) and A3
+    -- the sampling design (the live subset sample) and A3
     (kd : ℕ) (hkd : kd ≤ n) {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the coin server's draw at each of the law's draws
+    -- the challenger's live-coin part's sample at each of the sampling design's samples
     (hDraw : ∀ ω, DrawOkZKHJ I dj mPts ((Law.execOS (n := n) src (.subset kd) n).draw ω))
-    -- the verify command's tags and the coin server's record of the live session
+    -- the verify command's tags and the challenger's live-coin part's record of the live session
     (hTags : TagsOkZHJ I) (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -95,7 +118,7 @@ theorem zk_session_soundHJI
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the coin server's custody, at `instProg`.**
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the challenger's live-coin part's custody, at `instProg`.**
 `zk_session_soundHJ_custody` with the template instance's program. -/
 theorem zk_session_soundHJ_custodyI
     (I : Inputs) (ht : I.tags.typed = false)
@@ -110,7 +133,7 @@ theorem zk_session_soundHJ_custodyI
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the coin server's custody of the record and its draw file
+    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -153,7 +176,7 @@ theorem rsZHJI_wrongRegZ (dj : Finset (Fin n) → Lean.Json) {I : Inputs} {S₀ 
   intro p
   rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the coin server's
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound against the registration, at the challenger's live-coin part's
 custody, at `instProg`.** `zk_session_soundHJ_custody_reg` with the template instance's program: "wrong" is
 `wrongRegZ` at the prover's registration `reg σ`, read through the rows' value binding (`rsZHJI`). -/
 theorem zk_session_soundHJ_custody_regI
@@ -208,9 +231,9 @@ theorem zk_session_soundHJ_custody_regI
   exact add_le_add (add_le_add (Tables.execOS_subset_miss_le kd hkd Lb src hA3 K₀)
     (ksAvgZC_le_strict execArith hs512 (planZHJ dj y₀) k (reg σ) (cont σ) hCR)) le_rfl
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it draws, at `instProg`.**
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound at the units it samples, at `instProg`.**
 `zk_session_soundHJ_custody_drawn_reg` with the template instance's program: the executable verifier accepts and some
-unit the session drew is in `wrongRegZ`. The draw is the session's, so no law over it is assumed. -/
+unit the session drew is in `wrongRegZ`. The sample is the session's, so no sampling design over it is assumed. -/
 theorem zk_session_soundHJ_custody_drawn_regI
     (I : Inputs) (ht : I.tags.typed = false)
     {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)

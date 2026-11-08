@@ -189,6 +189,8 @@ class Layout:
         def hit(pats, p):
             return any(fnmatch.fnmatchcase(p, pat) or (pat.startswith("**/") and fnmatch.fnmatchcase(p, pat[3:]))
                        for pat in pats)
+        if MOVES in paths:              # each move's old paths, kept as they were: rewritten, a rerun would record it again
+            return True
         if any(hit(self.include, p) for p in paths if p):
             return False
         return any(hit(self.exclude, p) for p in paths if p)

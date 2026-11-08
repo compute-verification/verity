@@ -1,7 +1,14 @@
+module
+
+public import Mathlib.Basic.Real.Basic
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.Real.Basic
-import Mathlib.Tactic.Linarith
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.Linarith.Frontend
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
 
 /-!
 # The cover theorem: per-block bounds, summed over a division
@@ -11,6 +18,8 @@ the NCI policy bounds each `k_u` by `α σ_u`, where `σ_u ≤ Γ` is the IU's s
 `c f_u ≤ k_u² + c k_u` (`intensity`'s at `c = b`) adds up to `c Σ f_u ≤ (α² Γ + c α) Σ σ_u`: each block's
 `k_u² ≤ α² σ_u² ≤ α² Γ σ_u` (`sum_area_le`).
 -/
+
+@[expose] public section
 
 namespace Nci.Cover.SecurityProofs
 

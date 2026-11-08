@@ -1,8 +1,13 @@
-import Proofs.Flock.Soundness.ZK.GK.Rand
-import Proofs.Flock.Soundness.ZK.GK.Extract
+module
+
+public import Proofs.Flock.Soundness.ZK.GK.Rand
+public import Proofs.Flock.Soundness.ZK.GK.Extract
+import Mathlib.Algebra.CharP.Defs
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
-# Zero knowledge: the Goldreich–Kahan simulator for C-Flock ZK
+# Zero knowledge: the Goldreich–Kahan simulator for Flock ZK
 
 The simulator of `backends/flock/live/PROTOCOL.md` §9 (`gk_simulate` in `backends/flock/live/src/bin/flock-circuit.rs`),
 as a finite uniform program (`Rand`). It plays one dummy run, the protocol with a dummy witness, against the verifier `V*`.
@@ -10,7 +15,7 @@ If `V*` does not complete it (it aborts, or its coin openings fail), that view i
 
 * **estimation** (`estimate`): fresh dummy runs until `t` of them complete, at most `M` runs; `N` is the number of runs,
   so `p̃ = t/N` estimates the completion rate. Reaching the cap first is a failure (`Out.fail`).
-* **rewinding** (`rewinds`): at most `4N = 4t/p̃` runs from the coins `V*` opened in the first run (`rw`, which draws fresh
+* **rewinding** (`rewinds`): at most `4N = 4t/p̃` runs from the coins `V*` opened in the first run (`rw`, which samples fresh
   dummy openings for those coins), until one completes, whose view is the output. A rewound run in which `V*` opens a coin
   differently from the first run (`bad`) is a break of the coin commitment, `Out.bind`; running out of rewinds is
   `Out.fail`.
@@ -22,6 +27,8 @@ If `V*` does not complete it (it aborts, or its coin openings fail), that view i
 probability of `bind`) and `ev_rewinds_real` (rewinding with real runs reaches a completed view with probability
 `1 − (1 − p)^n`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK.GK
 

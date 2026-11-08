@@ -1,6 +1,6 @@
 """A window's row tables on the verifier's side (`serving_rows.RowTable`): its linked members' public strings tied to the tables'
 roots, the segments' roots and the registered ``row-table`` root (`check_row_tables`); each linked member's ``--registered`` file
-for the Lean verifier of record (`registered_reads`); and the audit record's account of what each drawn member's verdict reported
+for the Lean verifier (`registered_reads`); and the audit record's account of what each sampled member's verdict reported
 reading (`reported_reads`).  Everything here reads the window, the members' public bodies and the roots, never what a table's
 names or row keys mean.
 """
@@ -16,7 +16,7 @@ from verity.ml.windows import rows as CS
 __all__ = ["check_row_tables", "registered_reads", "reported_reads"]
 
 
-def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Mapping[str, str | bytes],
+def check_row_tables(window: CS.Binding, publics: Mapping[str, bytes], roots: Mapping[str, str | bytes],
                      segment_roots: Mapping[int, bytes] | None = None) -> dict[str, str]:
     """The verifier's tie between the row tables, their linked members and the recorded segment roots: each segment's root
     recomputed from the linked members' public ``x`` strings (``publics[member]``, their public bodies, which the leaf layer
@@ -53,7 +53,7 @@ def check_row_tables(window: CS.Window, publics: Mapping[str, bytes], roots: Map
     return bad
 
 
-def registered_reads(window: CS.Window, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
+def registered_reads(window: CS.Binding, publics: Mapping[str, bytes], *, registered: Any) -> dict[str, dict[str, Any]]:
     """The Lean verifier's ``--registered`` file of each linked member (``registered-reads/v1``, in the format of ``registered``,
     core's ``one_stage.registered``, by member key): its ``x`` port reads its one row table, under the table's root recomputed
     from the members' public strings (the root ``check_row_tables`` ties to the registration and the segment roots, so call it
@@ -80,8 +80,8 @@ def registered_reads(window: CS.Window, publics: Mapping[str, bytes], *, registe
 
 
 def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
-    """The audit record's ``registered_reads``: for each drawn member with registered reads (``verdicts[key]``, its Lean
-    verifier of record's verdict), the value each registered port reads (a linked member's ``x``, its row table) and the root
+    """The audit record's ``registered_reads``: for each sampled member with registered reads (``verdicts[key]``, its Lean
+    verifier's verdict), the value each registered port reads (a linked member's ``x``, its row table) and the root
     the verifier's own ``--registered`` file named (``reads[key]``: `registered_reads`, or an outside value's), beside the
     ``registered`` finding the verdict reports opening the member's rows against.  ``ok`` when every member's verdict accepted
     it and reports exactly its file's ports, values and roots."""
@@ -93,7 +93,7 @@ def reported_reads(reads: Mapping[str, Mapping[str, Any]], verdicts: Mapping[str
     return {"ok": all(c["ok"] for c in chunks.values()), "chunks": chunks}
 
 
-def _linked_strings(window: CS.Window, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:
+def _linked_strings(window: CS.Binding, publics: Mapping[str, bytes]) -> tuple[list[list[bytes | None]], dict[str, str]]:
     """Each row table's strings as the linked members' public ``x`` strings give them (None where no member links a row), and
     ``{key: why}`` for a member whose body is short or a table two members' strings disagree on."""
     strings: list[list[bytes | None]] = [[None] * t.n for t in window.row_tables]

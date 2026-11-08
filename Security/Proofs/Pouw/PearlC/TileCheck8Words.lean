@@ -1,6 +1,16 @@
-import Proofs.Pouw.PearlC.TileCheck8
-import Proofs.Pouw.PearlC.TileProtocol
-import Proofs.Pouw.PearlC.TileGamma
+module
+
+public import Definitions.Pouw.PearlC.Device
+public import Definitions.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.PeelExactProofsP
+public import Proofs.Pouw.PearlC.RowCircuit
+public import Proofs.Pouw.PearlC.Tile4Circuit
+public import Proofs.Pouw.PearlC.TileCheck8
+public import Proofs.Pouw.PearlC.TileValues
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+public import Proofs.Pouw.PearlC.TileGap
 
 /-!
 # `pc8`'s tile check computes the words (proofs)
@@ -12,7 +22,7 @@ protocol's word functions agree only conditionally:
   `F32Neg`, `F2fpBf16`, `F32Fabs`, `SelectI32`) agree with the protocol's word functions where both are defined. At
   core's instance `coreOps` they follow from core's definitions (`CoreOps.pc8OpsAgree_coreOps`);
 * `Row8OK`: a row's words are finite and its `α` and `β` step words, with `β > 0` (`Stats8OK`). It is no hypothesis
-  of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the check's own `weightOK`
+  of L3: a credited row's follows from `PearlCSem.RowOK`, and a weight's from the check's own `fixedOK`
   (`TileCheck.Accepts`), by magnitudes (`RowStats`, `TileCheckWords`). The table reads a `−0` word, and a word's bits
   above 32, as `pc8Sem` reads them (`ZeroSign`): `|−0| = |+0|`, `fma(−0, −0, ·) = fma(+0, +0, ·)`, and the step reads
   `α·(−0)` and `α·(+0)` alike (`alpha8_zeroSign`, `beta8_zeroSign`, `form8_zeroSign`);
@@ -38,6 +48,8 @@ multiple of 64 (`tileSide_dvd_iff`). `D_dev` (`pearlCDomainDev`) gives `Shape8`'
 (`shape8_of_pearlCDomainDev`). A last tile narrower than the others (`m = 80`) is outside the Program. The cap is not
 part of it: its verdict is a separate conjunct, decided by units of its own.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.WholeCircuit
 

@@ -20,9 +20,9 @@ ROWS = {0: [("runner-a", 0, 3, 0, 3), ("runner-b", 3, 5, 0, 2), ("warmup", 5, 6,
 NAMES = {"runner-a": "alice", "runner-b": "cmpl-2"}
 
 
-def _ledgers() -> dict[str, sc.Ledger]:
-    return {"alice": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
-            "cmpl-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
+def _ledgers() -> dict[str, sc.LiveRequest]:
+    return {"alice": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 4}}, "alice", streamed=[7, 9]),
+            "cmpl-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, None, streamed=[8])}
 
 
 def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
@@ -37,10 +37,8 @@ def test_a_windows_requests_are_named_by_user_with_their_rows_and_first_step():
 def _sealed(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
 
-    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]},
-                           commit_scheme=step_rows.NAME)
+    com, rc = commit_steps({0: [("model.embed_tokens", bytes(range(256)) * 2)], 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     leds = _ledgers()
     reqs, rows = ss.window_requests(ROWS, NAMES.get, leds.get)
@@ -87,7 +85,7 @@ def _interior_window(tmp_path, gap=None):
     for i, (name, nb) in enumerate(spec):
         tensors.append((name, bytes(stream[off:off + nb].numpy()), i, "int32" if ".m1/" in name else "bfloat16", (nb // 2,)))
         off += nb
-    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]}, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps({0: tensors, 1: [("runner.sampler", b"\x01\x02\x03\x04")]})
     assert com.chunk == C
     (lo, hi, fam), = HR._excluded_chunk_ranges(com._layouts[0], HR.HIDDEN_M1_FAMILIES, C)
     blk, used = com._gpu_blocks[0]
@@ -174,7 +172,6 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
     """`_sealed_parts`' window, committed, and how to seal it: ``seal(by)`` gives its row dir and what ``by`` returned."""
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
 
     fx = json.loads(PARTS.read_text())
@@ -192,15 +189,15 @@ def _parts_window(tmp_path, with_manifest: bool, port=None, embed_ids=None, name
                     continue
                 raw = b"".join(int(x).to_bytes(4, "little") for x in embed_ids[int(s)])
             steps[int(s)].append((m["name"], raw, m["ordinal"], m["dtype"], shape))
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     if port:
         com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
         com.sources[1].rows = SERVED_ROWS if kept is None else kept
     if with_manifest:
         com.required_manifest = {k: fx[k] for k in ("identities", "op_path_aliases", "program_digest", "populations")}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / (name or ("w5" if with_manifest else "w5-raw"))
 
@@ -326,7 +323,7 @@ def test_the_committer_commits_the_steps_ids_once_as_the_ports():
     torch = pytest.importorskip("torch")
     from tests.check.opened import committer
 
-    com = committer(commit_scheme="rows-sha512")
+    com = committer()
     com.plan_inputs = {"model.embed_tokens", "model.layers.0.mlp.act_fn"}
     emb = torch.nn.Embedding(4, 2)
     assert com._acquires_input("model.embed_tokens", emb)
@@ -399,25 +396,24 @@ def test_a_steps_stream_starts_with_its_input_ids_then_positions_padded_to_the_t
 def test_a_sealed_windows_context_carries_its_served_rows_and_the_port_its_streams_start_with(tmp_path):
     torch = pytest.importorskip("torch")
     from tests.check.opened import commit_steps
-    from verity_vllm.commit import step_rows
     from verity_vllm.commit.served_record import PORT_NAMES, SamplerInputsSource, StepInputPort
     from verity_vllm.pipeline import deferred_rows as DR
 
     def i64(xs, T):
         return b"".join(int(x).to_bytes(8, "little") for x in [*xs, *[0] * (T - len(xs))])
 
-    com0, _ = commit_steps({0: [("x", b"\0")]}, commit_scheme=step_rows.NAME)
+    com0, _ = commit_steps({0: [("x", b"\0")]})
     T = com0.chunk // 8
     steps = {0: [(PORT_NAMES[0], i64([1, 2, 3, 4, 5], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([0, 1, 2, 0, 1], T), 1, "int64", (T,)),
                  ("model.embed_tokens/in", i64([1, 2, 3, 4, 5], 5), 2, "int64", (5,))],
              1: [(PORT_NAMES[0], i64([7, 8], T), 0, "int64", (T,)), (PORT_NAMES[1], i64([3, 2], T), 1, "int64", (T,))]}
-    com, rc = commit_steps(steps, commit_scheme=step_rows.NAME)
+    com, rc = commit_steps(steps)
     com.weights_tree, com.model = {"root": (rc.weight_registration or {}).get("root"), "names": []}, torch.nn.Module()
     com.sources = [StepInputPort(com, T), SamplerInputsSource(com)]
     com.sources[1].rows = SERVED_ROWS
     served = {"digest": "ab" * 64, "statics": {"R": 4, "P": 2}}
-    leds = {"b0-1": sc.Ledger("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
-            "b0-2": sc.Ledger("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
+    leds = {"b0-1": sc.LiveRequest("cmpl-1", "e1", [1, 2, 3], {"params": {"max_tokens": 2}}, "b0-1", streamed=[7, 9]),
+            "b0-2": sc.LiveRequest("cmpl-2", "e2", [4, 5], {"params": {"max_tokens": 2}}, "b0-2", streamed=[8, 6])}
     reqs, rows = ss.window_requests(SERVED_ROWS, SERVED_NAMES.get, leds.get)
     d = tmp_path / "windows" / "w2"
     s = ss.seal_window(com, rc, d, rec={"window": 2, "run_id": "t/w2", "steps": 2, "passed": True, "served_rows": served}, reqs=reqs,
@@ -503,7 +499,7 @@ def test_the_registered_compiler_is_prove_paths_capped_compiler():
     assert isinstance(c, AW.Capped) and c.name == AW.CAPPED and c.digest == want
     assert c.digest == "2f470d2b6aadc53b707b0bd65820da4c55583eb18667eb3dce128aabb9dddab855473d52af758a630a2958e3555f7cafbc68e9238c0188cd9f8ef551abca2a9a"
     assert ADV.registered_compiler("inner-compiler", "cd" * 64, cap_bits=8192).digest != want
-    assert ADV.registered_compiler("inner-compiler").cap_bits == ADV.CAP_BITS
+    assert ADV.registered_compiler("inner-compiler", "cd" * 64).cap_bits == ADV.CAP_BITS
 
 
 @pytest.mark.parametrize("cap", [0, 7, True, "8"])

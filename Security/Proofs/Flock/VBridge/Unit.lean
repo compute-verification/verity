@@ -1,5 +1,29 @@
-import Proofs.Flock.VBridge.Net
+module
+
+public import Proofs.Flock.VBridge.Net
+public import Properties.Flock.Circuit.Rows
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.ExecRows
+import Proofs.Flock.Soundness.SparseRows
+import VCVio.Prelude.Core
 
 /-!
 # V*'s opening in a unit of a partition
@@ -14,6 +38,8 @@ So copy `j` of a unit whose rows are a stack of V*'s laid-out opening computes `
 at the unit's local evaluation (`unit_recOpen`, over `copyVal`). The copy's input columns read the transcript
 (`copyVal_input`), and so does every committed column of a correct unit (`copyVal_committed`).
 -/
+
+@[expose] public section
 
 namespace FlockVBridge
 
@@ -213,7 +239,7 @@ theorem inWords_recOpen {LANES H : ℕ} {p : Ports} {outBits : Array ℕ} {name 
 the verifier build `net` from `recOpenLaid` (`netOf`), and let unit `u` be an instance of `k` stacked copies of the
 net's rows (`Rows.ofNet`), the transcript `X` carrying 1 at the stack's constant. Then at copy `j`'s column values
 (`copyVal`), `laid_recOpen` holds: if the copy's input columns hold the row, `acc`, the coefficients, the siblings and
-the position's bits, its output columns from `outStart` hold the verifier of record's climb and 64 zero bytes, then the
+the position's bits, its output columns from `outStart` hold the verifier's climb and 64 zero bytes, then the
 consistency term at `k = 0, 1` and the rest of `acc`. -/
 theorem unit_recOpen {C : Audit.Circuit} {n : ℕ} {P : Partition C n} {u : Fin n} {net : Flock.Net} (hB : Built net)
     {k : ℕ} (I : P.IsRowsUnit u ((Rows.ofNet hB).stack k)) (X : Fin C.N → Bool) {j : ℕ} (hj : j < k)

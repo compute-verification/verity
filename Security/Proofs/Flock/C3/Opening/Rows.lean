@@ -1,4 +1,21 @@
-import Proofs.Flock.C3.Opening.Read
+module
+
+public import Proofs.Flock.C3.Opening.Read
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.Sizes
 
 /-!
@@ -18,6 +35,8 @@ begins with the opening's steps on w's ring switches.
 * `run_shift`: over F, raising each claim's value raises its ring switch's residual by as much; the rest is unchanged.
 * `run_of_inline`: `RecCoins.opening`'s run, which also returns Ligerito's points, is `RecOpening.run`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Opening
 

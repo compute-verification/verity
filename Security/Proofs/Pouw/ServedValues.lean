@@ -1,5 +1,7 @@
-import Properties.Pouw.ServedValues
-import Proofs.Pouw.PeriodJ10R
+module
+
+public import Properties.Pouw.ServedValues
+public import Proofs.Pouw.PeriodJ10R
 
 /-!
 # Proof of `RightValues`
@@ -12,6 +14,8 @@ live in a credited window (`good_live`, through `credited_iff`), so the size the
 `(1 − ε_skip)₊·S` right size (`creditFloor_le`).
 -/
 
+@[expose] public section
+
 namespace Properties.Pouw.ServedValues.SecurityProofs
 
 open Properties.Pouw.PeriodJ10R Properties.Pouw.PeriodJ10R.SecurityProofs Properties.Pouw.ServedValues
@@ -19,8 +23,8 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 
 /-- **The blocks' sizes sum to at most the credit** of the registered declaration under its pinned lowering: the
 blocks are disjoint, so their AND gates outside the ledger are among `lower D`'s AND gates. -/
-theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.Declaration → Verity.Circuit}
-    {D : Verity.Declaration} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
+theorem sum_size_le_creditSize {ι : Type} {Cd : Declared ι} {Np : ℕ} {lower : Verity.RegisteredCircuit → Verity.Circuit}
+    {D : Verity.RegisteredCircuit} (M : BlockMap Cd Np lower D) (ledger : Finset (Fin (lower D).N)) :
     ∑ t, M.size ledger t ≤ Verity.creditSize lower D := by
   classical
   unfold BlockMap.size Verity.creditSize Verity.Circuit.andSize
@@ -53,7 +57,7 @@ theorem size_le_sizePerWord {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np
   rwa [div_le_iff₀ (Nat.cast_pos.mpr (Nat.pos_of_ne_zero h))] at hle
 
 theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditLive Sc Cd Wp ws x := by
   unfold creditLive
   refine Finset.sum_nonneg fun w _ => ?_
@@ -61,7 +65,7 @@ theorem creditLive_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {
   exacts [Finset.sum_nonneg fun t _ => Nat.cast_nonneg _, le_rfl]
 
 theorem creditedSize_nonneg {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) : 0 ≤ creditedSize Sc Cd Wp ws sz x := by
   unfold creditedSize
   refine Finset.sum_nonneg fun w _ => ?_
@@ -79,7 +83,7 @@ theorem rightSize_nonneg {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n 
 /-- **The size the right blocks miss is at most `σ` times the words they miss**, when every right block is live in a
 credited window. -/
 theorem creditedSize_sub_le {ι K C B : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ}
-    (Wp : Period C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
+    (Wp : WindowPlay C (Paths C Cd.rounds × B) (Fin Np) Cd.rounds n) (ws : CreditWindows (Paths C Cd.rounds × B) n)
     (sz : Fin Np → ℕ) (x : Paths (Paths C Cd.rounds × B) n) (good : Fin n → Fin Np → Prop)
     (hgood : ∀ w t, good w t → ws.AcceptedUpTo x w ∧ Wp.liveAt x w t = true) :
     creditedSize Sc Cd Wp ws sz x - rightSize Sc Cd sz good ≤
@@ -141,7 +145,7 @@ theorem good_live {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ} (hr : 0 
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (x : Paths (Coin C Ξ Cd.rounds σ sT) n) (w : Fin n) (t : Fin (tileCount σ sT))
     (hg : (tileLayer Cd hr σ k hk sT unitOf ws opened rel right).Good
       (periodMode Cd Wp (tileRun σ k hk sT unitOf ws opened rel right)) x w t) :

@@ -1,9 +1,9 @@
-import Definitions.Flock.Accounting.Bound
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.GCongr
+module
+
+public import Definitions.Flock.Accounting.Bound
+public import Mathlib.Tactic.IntervalCases
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # Rational upper bounds for `fast100`'s error, term by term
@@ -14,6 +14,8 @@ and the folds, the level pairs and the last level; `ligUp`, `repUp` and `linkUp`
 `Stmt.InRange` are the levels and statements the bound covers. The bounds themselves are proved in
 `Proofs.Flock.Soundness.Accounting.Fast100`.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Accounting
 
@@ -75,7 +77,7 @@ def piopNumMax (m L₀ : ℕ) : ℕ :=
 /-- The rational bound on one rep over the covered statements. -/
 def repUp (s : Schedule) : ℚ := (piopNumMax s.m s.listBound₀ : ℚ) / 2 ^ 128 + ligUp s.levels
 
-/-- The rational bound on the link term over the covered statements. -/
+/-- The rational bound on the binding error over the covered statements. -/
 def linkUp (s : Schedule) : ℚ := s.listBound₀ * 1024 * (64 / 2 ^ 128) ^ 2
 
 end FlockSoundness.Accounting

@@ -1,38 +1,38 @@
-"""run.py: one recorded H1 window's drawn tile units through sampled proofs, the challenger's and the verifier's side.
+"""run.py: one recorded H1 execution phase's sampled tile units through sampled proofs, the challenger's and the verifier's side.
 
     python run.py prepare --work W --stage SW --lean FLOCK_VERIFY --layer L1.npz --layer2 L2.npz [--draw 8] [--k K] [--cols N]
     python run.py summarize --work W --out OUT
 
-``prepare`` runs one epoch of the window and plans its proofs, the prover's steps by `window.py` (a subprocess: the
+``prepare`` runs one execution phase of the execution phase and plans its proofs, the prover's steps by `window.py` (a subprocess: the
 challenger and the verifier never hold a row, a salt or a served value):
 
-1. the challenger (`pouw.coins.Challenger`) commits to the epoch's salt and flip coins; the prover commits each call's
-   tables, as a served round commits them before its coin (`h1window.table`): its A table a/<K>@<c> (the window's A
+1. the challenger (`pouw.coins.Challenger`) commits to the execution phase's salt and flip coins; the prover commits each call's
+   tables, as a served round commits them before its coin (`h1window.table`): its A table a/<K>@<c> (the execution phase's A
    rows, each with its s_a) and its z table zy@<c> (its tiles' z/y records: z = A Bᵀ exact and y its served dequant,
    what ``scaled_mm_zy`` writes), and the calls' B rows (each with its s_w) as the weights' b/<K> (`window.py commit`),
    and the salt coin opens after those roots are recorded;
 2. the prover serves every tile's receipt under the unit salt, PoUW's window salt (`h1unit.unit_salt`: `pouw_salt` of the
-   coin's stand-in for the certifier's reveal, the epoch as the window, a stand-in stream and prover) and commits them
-   (`window.py serve`); the registration (the window's commitment and its receipt root) is recorded, and the sampling coin
-   opens after it. The verifier builds the window's public Program and its template-instance partition from the
+   coin's stand-in for the certifier's reveal, the execution phase as the execution phase, a stand-in stream and prover) and commits them
+   (`window.py serve`); the registration (the execution phase's commitment and its receipt root) is recorded, and the sampling coin
+   opens after it. The verifier builds the execution phase's public Program and its template-instance partition from the
    commitment's public shape (`window_program`: WORK/verifier/program.json and partition.json, Lean's ``--program`` and
    ``--partition``), holds the commitment's registration to them (`check_registration`), and the stager builds its
    statement bound to them;
-3. the verifier registers the window's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
-   u's public salt), draws ``--draw`` units of the window's tiles by Lean ``flock-verify draw`` on the coin's stream,
+3. the verifier registers the execution phase's ok rows itself (`ok_registration`: value ``ok``, row u the one word 1 under unit
+   u's public salt), samples ``--draw`` units of the execution phase's tiles by Lean ``flock-verify draw`` on the coin's stream,
    groups them by call (a registered port reads one value, and a call's units read its own tables, so a statement holds
    one call's units), and writes each call's ``--registered`` file (`registered_file`: `h1unit.registered_reads` from
-   its own Program under the window's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
+   its own Program under the execution phase's roots and its own ``ok``, the ok port o1 beside the A, B and record ports,
    WORK/verifier/w1-c<c>.registered.json);
 4. the prover opens the sampled proof blocks call by call (`window.py open`), and the verifier checks each opened row is the one
    the Program's unit reads (`h1unit.unit_reads`) with a path to its root (its call's A table's and z table's and
-   b/<K>'s registered roots under the Program's digest, the receipt's under the window's), and builds its own public
+   b/<K>'s registered roots under the Program's digest, the receipt's under the execution phase's), and builds its own public
    file of each call's units (`h1unit.verifier_pub`: a shared-row file, each registered port's table the registered rows
    its units read, at the positions its Program reads and the opened paths) from the opened ``b || c``, its own public
    and ok rows and the units' indices;
-5. the stager (`stage.py`, building the circuit once the window's shape is known) stages each call's sampled proof blocks as one
+5. the stager (`stage.py`, building the circuit once the execution phase's shape is known) stages each call's sampled proof blocks as one
    shared-row statement on the prover's rows at their indices (``honest``, the first sampled proof block's call, and
-   ``honest-c<c>`` each other drawn call), and each prover's pub.bin must be the verifier's byte for byte: every unit's
+   ``honest-c<c>`` each other sampled call), and each prover's pub.bin must be the verifier's byte for byte: every unit's
    ok is 1, its record the tile's product and dequant. Lean (``verify --zk --registered``) derives each instance's unit
    from its own Program, and an accepted check must say so (``units: derived``), and opens each A row, B row, record and
    ok row against its registered root at the position its Program reads, so ok is bound through the verifier's
@@ -42,15 +42,15 @@ The negatives are on ``honest``'s units, the sampled proof blocks of the first s
 
 The planted negatives, each checked by Lean against the verifier's own file:
 
-* ``flipped-zy``: a window registered with the first sampled proof block's record word 0 flipped (`window.py tamper --zy-word`,
-  every salt kept). Its openings pass their paths (a consistent window), so the verifier's file holds the flipped leaf
-  and its registered file the window's z table root; the only proof of those rows the unit admits is the honest one,
+* ``flipped-zy``: an execution phase registered with the first sampled proof block's record word 0 flipped (`window.py tamper --zy-word`,
+  every salt kept). Its openings pass their paths (a consistent execution phase), so the verifier's file holds the flipped leaf
+  and its registered file the execution phase's z table root; the only proof of those rows the unit admits is the honest one,
   which Lean must reject against them.
 * ``wrong-receipt``: the same with that unit's receipt from another salt.
-* ``other-window``: the first sampled proof block's tile, opened from a second window (other tokens, its own epoch and salt) and
-  proved as a statement of its own: its opening fails window 1's roots, and Lean must reject its proof against the
-  verifier's file of window 1's unit. ``other-window-own`` (its own window's file) must accept: the proof is sound for
-  the window it came from.
+* ``other-window``: the first sampled proof block's tile, opened from a second execution phase (other tokens, its own execution phase and salt) and
+  proved as a statement of its own: its opening fails execution phase 1's roots, and Lean must reject its proof against the
+  verifier's file of execution phase 1's unit. ``other-window-own`` (its own execution phase's file) must accept: the proof is sound for
+  the execution phase it came from.
 
 Those three fail at binding (the proof's statement is not the verifier's). ``tampered-a`` passes binding and fails the
 registered reads:
@@ -64,17 +64,17 @@ registered reads:
 Two more pass binding against their own public files and fail the ok row's registered read, each a proof Lean would
 accept were ok bound only through the public file:
 
-* ``ok-zero``: the base statement of ``in-z`` (`OK_ZERO`: the sampled proof blocks on the tampered window's committed rows, the
+* ``ok-zero``: the base statement of ``in-z`` (`OK_ZERO`: the sampled proof blocks on the tampered execution phase's committed rows, the
   unit computing ok = 0 at the moved record, `stage.py`'s outputs), whose public file states that 0 under the public
   ok salt: its o1 table row opens no root of the verifier's ``ok``, and Lean must say so.
 * ``ok-unregistered``: the honest units staged with their ok rows committed afresh (`window.py open --unregistered-ok`),
   so the statement names no o1 registered read: Lean must refuse the o1 port of its ``--registered`` file as committed
   with no path to its registered root.
 
-The in-proof negatives (`IN_PROOF`) pass both and carry a wrong witness instead. Each is a window registered with one
+The in-proof negatives (`IN_PROOF`) pass both and carry a wrong witness instead. Each is an execution phase registered with one
 value of the first sampled proof block changed (`window.py tamper`, every salt kept), opened and checked like the honest one under
-its own registered file, and a statement of it whose committed rows are all the window's (`forge`: the sampled proof blocks'
-statement staged on the window's rows, each output row the circuit computes but the window does not commit replaced with
+its own registered file, and a statement of it whose committed rows are all the execution phase's (`forge`: the sampled proof blocks'
+statement staged on the execution phase's rows, each output row the circuit computes but the execution phase does not commit replaced with
 the committed one, `h1unit.forge_statement`). The prover's pub.bin is then the verifier's, and some output row is not
 what the circuit computes on its unit's inputs. A changed record makes the unit compute ok = 0 where the verifier's file
 holds 1:
@@ -90,24 +90,24 @@ holds 1:
 * ``in-z-only``: a record of z alone, its y zeroed (``--z-only``).
 * ``in-xa`` (``H1_TILE=v3`` only): the record's z computed with one entry's X wrap bit xa = [A = 127] ∧ b flipped
   (``--xa-flip``: the first set one, else the first clear one; the receipt the honest one), as a prover that skipped (or
-  invented) the activation-wrap correction would serve it. Its tampered window's served.json says whether the flipped
+  invented) the activation-wrap correction would serve it. Its tampered execution phase's served.json says whether the flipped
   bit was set and how many record words moved.
 
 Each is proved like the honest statement, whose prover stops on the failing witness before it sends a proof, and again as
 ``<tag>-skip`` with ``FC_ZK_SELF_CHECK=skip`` (Flock's negative-control prover, which sends its proofs anyway), so the
 in-session verifier and Lean judge a proof. ``summarize`` records which layer refused each (the prover, the in-session
-verifier, Lean) and with what message. A registration of z alone (``z-only-registration``: the window's z table entries
+verifier, Lean) and with what message. A registration of z alone (``z-only-registration``: the execution phase's z table entries
 rows of 2 R C words, no y) is refused by the verifier's own check of the registration (`check_registration`) before any
-draw.
+sample.
 
-Every per-window registered value (each call's A table and z table, and ``ok``) is registered under the window's open root
+Every per-execution-phase registered value (each call's A table and z table, and ``ok``) is registered under the execution phase's open root
 (`h1unit.open_root`, a stand-in, as this harness has no auditor's ledger), and only the weights' b/<K> under none;
 the verifier computes the root itself and refuses a commitment that registers its tables without it
-(``unrooted-registration``). Window credit's last two steps (`credit_registration`: the layout of the descriptor, each
+(``unrooted-registration``). Execution phase credit's last two steps (`credit_registration`: the layout of the descriptor, each
 session's ok held to the verifier's own, `credit._ok_held`, one accepted outcome per sampled proof block, and
-`credit._registration`) take the window's evidence: in ``prepare`` with each sampled proof block's finding the ports of its
+`credit._registration`) take the execution phase's evidence: in ``prepare`` with each sampled proof block's finding the ports of its
 call's ``--registered`` file, and refused for entries without the root, sessions that opened ``ok`` at its rows
-registered without the root (``ok-unrooted``: credit reads no entry of ``ok``, the verifier's own) and another window's
+registered without the root (``ok-unrooted``: credit reads no entry of ``ok``, the verifier's own) and another execution phase's
 root; in ``summarize`` on Lean's own VERDICT findings.
 
 ``summarize`` reads the job's proving and Lean records into OUT/summary.json: the unit and statement counts, proving
@@ -153,6 +153,8 @@ BINDING = {"flipped-zy": "--zy-word", "wrong-receipt": "--receipt"}
 OK_ZERO = "in-z"
 #: a statement tag's suffix whose prover runs with FC_ZK_SELF_CHECK=skip (job.sh), sending its proof though the witness fails
 SKIP = "-skip"
+#: flock-verify's last refusal of the selftest build's statement (`ProvedScope.servedForm`), once every check has passed
+SELFTEST = "refused: verity/flock-circuit+seed-injection, a selftest build's statement"
 
 
 def log(msg: str) -> None:
@@ -175,8 +177,8 @@ def digest(*parts: bytes) -> bytes:
 
 
 def tamper_flag(flag: str, units: list[int], call: tuple[int, int]) -> list[str]:
-    """`window.py tamper`'s ``FLAG U`` on the first of one call's drawn ``units`` (``call``: the call's first unit and how
-    many), and ``--swap``'s U and V another unit of the call: the next drawn one when there is one, so both swapped
+    """`window.py tamper`'s ``FLAG U`` on the first of one call's sampled ``units`` (``call``: the call's first unit and how
+    many), and ``--swap``'s U and V another unit of the call: the next sampled one when there is one, so both swapped
     records are in the statement."""
     if flag != "--swap":
         return [flag, str(units[0])]
@@ -187,17 +189,17 @@ def tamper_flag(flag: str, units: list[int], call: tuple[int, int]) -> list[str]
     return [flag, str(units[0]), str(v)]
 
 
-# -- the verifier's view of a window ----------------------------------------------------------------------------------------
+# -- the verifier's view of an execution phase ----------------------------------------------------------------------------------------
 
 def program_of(k: int, calls, slot: int) -> SimpleNamespace:
-    """The public Program of a window shape (`h1unit.Shape.window`: its calls' names and B rows, its slot), its
+    """The public Program of an execution phase shape (`h1unit.Shape.window`: its calls' names and B rows, its slot), its
     template-instance query and partition (``tp`` as core evaluates it, ``obj`` the `verity/partition/v1` object)."""
     program, query = U.Shape(k, R, C).window(calls, slot)
     return SimpleNamespace(program=program, query=query, tp=P.evaluate(program, query), obj=P.partition(program, query))
 
 
 def window_program(com: dict) -> SimpleNamespace:
-    """The verifier's own `program_of` a window commitment's shape."""
+    """The verifier's own `program_of` an execution phase commitment's shape."""
     win = program_of(com["unit"]["k"], *U.window_shape(com))
     if win.tp.population != com["tiles"]:
         raise SystemExit(f"the window's Program has {win.tp.population} units, its commitment {com['tiles']} tiles")
@@ -205,11 +207,11 @@ def window_program(com: dict) -> SimpleNamespace:
 
 
 def check_registration(win: SimpleNamespace, com: dict) -> list[str]:
-    """Why a window commitment's registration is not of the verifier's own Program (``win``): it registers under the
+    """Why an execution phase commitment's registration is not of the verifier's own Program (``win``): it registers under the
     Program's digest, and its values are the weights' b/<K> (the calls' B rows) and each call's A table (the slot's rows)
     and z table (its tiles' records), the tables the verifier's Program names (`h1unit.program_tables`), each its own
     width of 16-bit leaves (`h1unit.value_words`), under that digest's domains (`h1unit.registered_domain`), each table's
-    binding the window's open root, which the verifier computes itself (`h1unit.window_open_root`) and the commitment
+    binding the execution phase's open root, which the verifier computes itself (`h1unit.window_open_root`) and the commitment
     records, and b/<K>'s none, with the commitment's roots."""
     k, prog, why = com["unit"]["k"], win.obj["program"], []
     if com.get("program_sha512") != prog:
@@ -237,18 +239,18 @@ def z_only(com: dict) -> dict:
 
 
 def unrooted(com: dict) -> dict:
-    """``com`` as a prover that registers its per-window values with no window root states it (the form
-    before window roots): every entry's domain the registered domain of its value with no window bound."""
+    """``com`` as a prover that registers its per-execution-phase values with no execution phase root states it (the form
+    before execution phase roots): every entry's domain the registered domain of its value with no execution phase bound."""
     return dict(com, registered=[dict(e, domain=G.domain(com["program_sha512"], e["value"], e["words"],
                                                          e["leaves"]).domain_id.hex()) for e in com["registered"]])
 
 
 def check_opening(win: SimpleNamespace, com: dict, served: dict, op: dict, u: int) -> list[str]:
-    """Why unit ``u``'s opening ``op`` is not the registered window's (``win`` its Program, ``com`` its commitment, held to
+    """Why unit ``u``'s opening ``op`` is not the registered execution phase's (``win`` its Program, ``com`` its commitment, held to
     the Program by `check_registration`, ``served`` its receipt root): each committed row is the one the Program's unit
     ``u`` reads (`h1unit.unit_reads`), and its path reaches that value's registered root: its call's A table's and z
     table's and b/<K>'s under the verifier's own Program digest (`h1unit.verify_registered`), the receipt's under the
-    window's domain. The ok row is the verifier's own."""
+    execution phase's domain. The ok row is the verifier's own."""
     w, T, why = com["window"], com["tiles"], []
     trees = U.registered_of(com) | {"receipt": (T, served["receipt_root"])}
     if op.get("unit") != u:
@@ -286,14 +288,14 @@ def unit_bcs(shape: U.Shape, com: dict, salt: bytes, op: dict) -> dict[str, byte
 
 
 def ok_registration(win: SimpleNamespace, com: dict) -> "U.G.Registered":
-    """The verifier's own registration of a window's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
-    salt), under its own Program's digest and the window's open root (`h1unit.window_open_root`, the verifier's own), from
-    the window's name, its b/<K> root and the Program's population alone."""
+    """The verifier's own registration of an execution phase's ok rows (`h1unit.register_ok`: the one word 1 under each unit's public
+    salt), under its own Program's digest and the execution phase's open root (`h1unit.window_open_root`, the verifier's own), from
+    the execution phase's name, its b/<K> root and the Program's population alone."""
     return U.register_ok(win.obj["program"], com["window"], win.tp.population, U.window_open_root(com))
 
 
 def roots_of(com: dict, okr) -> dict[str, tuple[int, str]]:
-    """Every registered value a statement of the window reads, each its rows and root: the commitment's (the prover's), and
+    """Every registered value a statement of the execution phase reads, each its rows and root: the commitment's (the prover's), and
     the verifier's own ``ok`` (``okr``, `ok_registration`)."""
     return U.registered_of(com) | {U.OK_VALUE: (okr.leaves, okr.root.hex())}
 
@@ -311,8 +313,8 @@ def unit_registered(win: SimpleNamespace, k: int, op: dict, u: int, okr) -> dict
 
 def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, units: list[int], okr) -> tuple[dict, dict]:
     """The verifier's ``--registered`` file of a statement over call ``call``'s units (`h1unit.registered_reads`, under
-    its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 window's own reads
-    (`h1unit.unit_reads`) at the drawn ``units``. Returns what it wrote and the file."""
+    its commitment's roots and its own ``ok``, ``okr``), written to ``path``, held to the h1 execution phase's own reads
+    (`h1unit.unit_reads`) at the sampled ``units``. Returns what it wrote and the file."""
     k, t = com["unit"]["k"], time.time()
     reg = {*U.Shape(k).in_rows, "o1"}
     doc = U.registered_reads(win.program, win.tp, call, {v: r for v, (_n, r) in roots_of(com, okr).items()},
@@ -332,7 +334,7 @@ def registered_file(path: Path, win: SimpleNamespace, com: dict, call: int, unit
 def registered_opens(pub: bytes, ports: list, port: str, row: int, win: SimpleNamespace, roots: dict, window_root: str
                      ) -> bool:
     """Whether table row ``row`` of registered port ``port`` in a shared-row public file opens its value's registered root
-    (``roots``, `roots_of`, of the window whose open root is ``window_root``) at the position and through the path its
+    (``roots``, `roots_of`, of the execution phase whose open root is ``window_root``) at the position and through the path its
     header states: the check flock-verify ``--registered`` makes of each table row (`h1unit.verify_registered`)."""
     nl = pub.index(b"\n") + 1
     head, body, names = json.loads(pub[:nl]), pub[nl:], [p.name for p in ports]
@@ -360,7 +362,7 @@ def ok_known_root(path: Path, win: SimpleNamespace, com: dict, doc: dict, unit: 
 
 
 def credit_descriptor(win: SimpleNamespace) -> bytes:
-    """The window Program's descriptor as a period's ``circuit`` hashes it and `credit.layout_of` reads it: canonical JSON
+    """The execution phase Program's descriptor as a period's ``circuit`` hashes it and `credit.layout_of` reads it: canonical JSON
     without annotations (`codec.program_digest`'s bytes, so its SHA-512 is the Program's digest)."""
     return canonical_json({k: v for k, v in encode_program(win.program).items() if k != "annotations"})
 
@@ -373,16 +375,16 @@ def findings_of(doc: dict) -> dict:
 
 def credit_registration(descriptor: bytes, drawn: list[int], entries: list, findings: dict[int, dict], window_root: str,
                         ok: dict) -> list | None:
-    """Window credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
+    """Execution phase credit's last two steps (`credit.window`'s 5 and 6) on h1_prove's evidence, ``[code, why]`` of the first
     that refuses, or None: the layout of ``descriptor`` (`credit.layout_of`, `credit.strata`), each session's ok rows
     held to the verifier's own (`credit._ok_held`, step 5's rule: each sampled proof block's finding opened ``o1`` at ``ok``,
     the value and root of the verifier's ``ok``, `ok_registration`), one accepted outcome per sampled proof block
-    (`credit._proved`, ``drawn`` h1_prove's own draw, not credit's work-law draw), and the registration
-    (`credit._registration`): the window's registered ``entries`` (the commitment's: no entry registers ``ok``), each
+    (`credit._proved`, ``drawn`` h1_prove's own sample, not credit's work-law sample), and the registration
+    (`credit._registration`): the execution phase's registered ``entries`` (the commitment's: no entry registers ``ok``), each
     proof's ``registered`` the finding of the session that proved the unit (``findings``, unit -> `findings_of`), under
     the open root ``window_root``, each call a step of its own (`h1unit.steps`). Each proof's ``program`` is the
     descriptor's SHA-512, the Program Lean was given. The
-    steps before them (the challenger's log, the credit bits, the round roots) need a served window's ledger, which this
+    steps before them (the challenger's log, the credit bits, the round roots) need a served execution phase's ledger, which this
     harness has none of."""
     layout, why = CR.layout_of(descriptor)
     if why is None:
@@ -400,9 +402,9 @@ def credit_registration(descriptor: bytes, drawn: list[int], entries: list, find
 
 
 def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
-    """The window's ok rows as `ok_registration` registers them, the same rows and salts, but under the registered domain
-    of ``ok`` with no window root: the ok a session opens when its ``--registered`` file states ok's domain without the
-    window's open root (flock-verify roots known rows at the domain the file gives)."""
+    """The execution phase's ok rows as `ok_registration` registers them, the same rows and salts, but under the registered domain
+    of ``ok`` with no execution phase root: the ok a session opens when its ``--registered`` file states ok's domain without the
+    execution phase's open root (flock-verify roots known rows at the domain the file gives)."""
     n = int(win.tp.population)
     return G.Registered.commit(win.obj["program"], U.OK_VALUE, np.tile(U.OK, (n, 1)).tolist(),
                                [U.ok_salt(com["window"], u) for u in range(n)], G.WORD_BITS, U.V2, None)
@@ -410,8 +412,8 @@ def unrooted_ok(win: SimpleNamespace, com: dict) -> G.Registered:
 
 def forge(base: Path, out: Path, pub: bytes, outs: dict, rows: dict, circuit: Path) -> list[dict]:
     """`h1unit.forge_statement` at every output row (port, instance) where ``base``'s staged outputs (``outs``, its
-    outs.npz) are not the window's committed ones (``rows``, its rows.npz), into ``out``: a statement whose committed
-    rows are all the window's. Refused as vacuous where none differs."""
+    outs.npz) are not the execution phase's committed ones (``rows``, its rows.npz), into ``out``: a statement whose committed
+    rows are all the execution phase's. Refused as vacuous where none differs."""
     diffs = [(p, i) for p in U.OUT_PORTS.values() for i in range(len(rows["units"]))
              if not np.array_equal(outs[p][i], rows[f"w_{p}"][i])]
     if not diffs:
@@ -439,7 +441,7 @@ def wait_for(path: Path, what: str, pid: int | None) -> None:
 
 def epoch(work: Path, name: str, layer: str, number: int, a, record: dict,
           program: str = "") -> tuple[dict, dict, bytes, Challenger]:
-    """One window's epoch to its registration: commit (``program``: the window Program's digest, when known), the salt
+    """One execution phase's execution phase to its registration: commit (``program``: the execution phase Program's digest, when known), the salt
     coin, serve. Returns its commitment, served root, the unit salt and the challenger (its sampling coin still closed)."""
     ch = Challenger(number, verifier.coins)
     rec = record.setdefault("windows", {}).setdefault(name, {})
@@ -485,8 +487,8 @@ def lean_draw(lean: str, n: int, k: int, src: bytes) -> list[int]:
 
 
 def draw_units(lean: str, coin: bytes, window: str, registration: str, population: int, k: int) -> list[int]:
-    """The `k` units of `population` a window's sampling coin selects, after its registration (hex) was recorded: Lean
-    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the window's name and its registration."""
+    """The `k` units of `population` an execution phase's sampling coin selects, after its registration (hex) was recorded: Lean
+    ``flock-verify draw`` on the coin's stream under `DRAW_DOMAIN`, bound to the execution phase's name and its registration."""
     key = derive(coin, DRAW_DOMAIN, {"window": window, "registration": registration})
     return sorted(lean_draw(lean, population, k, key.stream("draw", 2 * k * CC.width(population) + 64)))
 
@@ -498,7 +500,7 @@ def cmd_prepare(a) -> int:
     record: dict = {"schema": "verity/pouw/h1-prove/record/v1", "draw_k": a.draw}
     w1, w2 = f"{a.name}-w1", f"{a.name}-w2"
     com1, served1, salt1, ch1 = epoch(work, w1, a.layer, 1, a, record)
-    # the window's public Program and partition: the verifier's own copies, and the shape the stager binds its statement to
+    # the execution phase's public Program and partition: the verifier's own copies, and the shape the stager binds its statement to
     t = time.time()
     win = window_program(com1)
     calls, slot = U.window_shape(com1)
@@ -534,7 +536,7 @@ def cmd_prepare(a) -> int:
         by_call.setdefault(U.HW.call_of(win.program, u)[0], []).append(u)
     c0 = U.HW.call_of(win.program, u0)[0]
     units0 = by_call[c0]
-    # one statement a drawn call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
+    # one statement a sampled call: "honest" the first sampled proof block's (the negatives'), "honest-c<c>" each other's
     honest = {c: "honest" if c == c0 else f"honest-c{c}" for c in by_call}
     record["windows"][w1].update(registration=reg.hex(), draw_opening=do.to_json())
     record["draw"] = {"population": T, "k": a.draw, "units": units, "by": "flock-verify draw (Lean)",
@@ -548,7 +550,7 @@ def cmd_prepare(a) -> int:
         record["registered_reads"][f"w1-c{c}"], docs1[c] = registered_file(regs1[c], win, com1, c, us, ok1)
     log(f"the verifier's registered reads of {w1}: {record['registered_reads']}")
 
-    # the honest openings, a drawn call's units each, and each negative's tampered window's on the first drawn call's
+    # the honest openings, a sampled call's units each, and each negative's tampered execution phase's on the first sampled call's
     # units (every salt kept, one value of them changed), each checked against its own registration and the honest one,
     # with its own registered file where its z table moved
     opened, reads, regs = {}, {}, {honest[c]: regs1[c] for c in by_call}
@@ -593,7 +595,7 @@ def cmd_prepare(a) -> int:
     prover("open", str(work / w1), salt1.hex(), ",".join(map(str, units0)), str(work / "open-ok-unregistered"),
            "--unregistered-ok")
 
-    # the second window, its first sampled proof block's tile presented as window 1's
+    # the second execution phase, its first sampled proof block's tile presented as execution phase 1's
     com2, served2, salt2, _ch2 = epoch(work, w2, a.layer2, 2, a, record, win.obj["program"])
     if U.window_shape(com2) != U.window_shape(com1) or com2["tiles"] != T:
         raise SystemExit("the second window's shape (its slot and calls) is not the first's, so its Program is another")
@@ -609,10 +611,10 @@ def cmd_prepare(a) -> int:
                                           "against_own_window": check_opening(win, com2, served2, op2, u0)}
     log(f"opening other-window: refused against window 1 for {len(record['openings']['other-window']['refused'])} rows")
 
-    # window credit's registration step on this window's evidence, each sampled proof block's finding the ports of its call's
+    # execution phase credit's registration step on this execution phase's evidence, each sampled proof block's finding the ports of its call's
     # --registered file (what a session verified against it states; `summarize` repeats it on Lean's own findings), and
-    # refused for entries without the window root, sessions that opened ok at its rows registered without it, and
-    # another window's root
+    # refused for entries without the execution phase root, sessions that opened ok at its rows registered without it, and
+    # another execution phase's root
     descriptor_c = credit_descriptor(win)
     (vp / "descriptor.json").write_bytes(descriptor_c)
     wr1, entries1, okv = U.window_open_root(com1), com1["registered"], {"value": U.OK_VALUE, "root": ok1.root.hex()}
@@ -637,9 +639,9 @@ def cmd_prepare(a) -> int:
     if kr["honest"] is not None or not kr["refused"]:
         raise SystemExit(f"the known-content check does not hold ok's root to its known rows: {kr}")
 
-    # the statements: each drawn call's units on the honest rows, the other window's unit, the tampered A row, and each
-    # in-proof negative's base (the first drawn call's units on its window's rows) where its records are not the honest
-    # window's
+    # the statements: each sampled call's units on the honest rows, the other execution phase's unit, the tampered A row, and each
+    # in-proof negative's base (the first sampled call's units on its execution phase's rows) where its records are not the honest
+    # execution phase's
     sets, set_o = {c: f"{w1}-draw-c{c}" for c in by_call}, f"{w1}-u{u0}"
     set_h = sets[c0]
     req = lambda rows, set_, out, idx: {"rows": str(rows), "set": set_, "out": str(out), "indices": idx}  # noqa: E731
@@ -713,8 +715,8 @@ def cmd_prepare(a) -> int:
     if (not all(record["ok_negatives"]["honest_rows_open"]) or record["ok_negatives"]["ok_zero"]["table_row_opens"]
             or "o1" in heads["ok-unregistered"]["registered"] or "o1" not in heads["honest"]["registered"]):
         raise SystemExit(f"the ok row is not bound through the verifier's registration: {record['ok_negatives']}")
-    # the in-proof negatives: the first drawn call's statement on the tampered window's rows with every output row the
-    # window's, under the verifier's own file of that window, so binding holds and the witness is wrong
+    # the in-proof negatives: the first sampled call's statement on the tampered execution phase's rows with every output row the
+    # execution phase's, under the verifier's own file of that execution phase, so binding holds and the witness is wrong
     for t in IN_PROOF:
         rows_t, outs = dict(np.load(work / f"open-{t}" / "rows.npz")), dict(np.load(base[t] / "outs.npz"))
         moved = {units0.index(u) for u in record["tampered"][t]["records"] if u in units0}
@@ -856,9 +858,9 @@ def refused_by(lay: dict, lean: str, why: str) -> list[str]:
 
 
 def lean_credit(work: Path, out: Path, record: dict) -> dict:
-    """`credit_registration` of the first window on Lean's own findings: each sampled proof block's the ``registered`` of the
+    """`credit_registration` of the first execution phase on Lean's own findings: each sampled proof block's the ``registered`` of the
     VERDICTs of the honest check of its call (every session of a check the same), under the verifier's own descriptor,
-    the window's public commitment and ``ok``, and the open root the verifier computes. Not run (``ran`` false) when an
+    the execution phase's public commitment and ``ok``, and the open root the verifier computes. Not run (``ran`` false) when an
     honest check has no VERDICT (``--only``)."""
     cr = record.get("credit_registration")
     if not cr:
@@ -898,7 +900,10 @@ def cmd_summarize(a) -> int:
     if firewall and not proofs.get("honest", {}).get("firewall_timed"):
         print("FAIL: H1_FIREWALL=1 but the honest prover's records carry no firewall times")
         ok = False
-    for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "ACCEPT" if x == "honest" else "REJECT"}
+    # the selftest build's controls: its honest record passes every check and is refused last, for its statement
+    # (`ProvedScope.servedForm`); a forged one is refused before that, by the check it breaks
+    for c in plan["checks"] + [{"tag": f"st-{x}", "statement": "honest", "expect": "REJECT",
+                                **({"why": SELFTEST} if x == "honest" else {"not_why": SELFTEST})}
                                for x in a.controls.split()]:
         v = _verdict(out / "lean" / f"{c['tag']}.out")
         word = _verdict_word(v, out / "lean" / f"{c['tag']}.err")
@@ -921,7 +926,8 @@ def cmd_summarize(a) -> int:
         else:
             # an accepted unit's index binds its rows only as far as Lean derived it from the verifier's own Program
             good = (word == c["expect"] and (word != "ACCEPT" or (v or {}).get("partition", {}).get("units") == "derived")
-                    and c.get("why", "") in (v or {}).get("why", ""))
+                    and c.get("why", "") in (v or {}).get("why", "")
+                    and not ("not_why" in c and c["not_why"] in (v or {}).get("why", "")))
             extra = {"why_expected": c["why"]} if c.get("why") else {}
         ok &= good
         checks.append({"tag": c["tag"], "expect": c["expect"], "verdict": word, "pass": good,

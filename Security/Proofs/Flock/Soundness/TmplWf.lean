@@ -1,4 +1,6 @@
-import Flock.Tmpl
+module
+
+public import Flock.Tmpl
 
 /-!
 # What `Tmpl.wellFormed` gives the template fold's proof
@@ -9,6 +11,8 @@ of `fold_eq_foldRef_layout` that read the template: each call's binding is as lo
 (`wf_small`), the root a Definition with no inputs and a constant (`wf_root`), and every row at one of its Definition's
 columns (`wf_fit`).
 -/
+
+@[expose] public section
 
 open Flock Flock.Tmpl
 

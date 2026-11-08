@@ -1,4 +1,6 @@
-import VStar.Algebra
+module
+
+public import VStar.Algebra
 
 /-!
 # F6's menu: a session's shape to the inner session V* is staged over
@@ -12,6 +14,8 @@ among them, each slot has the most positions among them, and its type table hold
 `sessions` lists each shape's inner session; `vstar menu` runs V* over them, which is how `Menu.Staged` is checked at
 the pinned menus.
 -/
+
+@[expose] public section
 
 namespace VStar.Menu
 

@@ -1,9 +1,12 @@
-import Proofs.Flock.Soundness.LigeritoRes
-import Proofs.Flock.Soundness.LigeritoLevels
-import Proofs.Flock.Soundness.ListSize
+module
+
+public import Proofs.Flock.Soundness.LigeritoFolds
+public import Proofs.Flock.Soundness.LigeritoLevels
+public import Proofs.Flock.Soundness.LigeritoMCA
+public import Proofs.Flock.Soundness.LigeritoRes
 
 /-!
-# Decoding a fold near a codeword (PROTOCOL.md §13.4, §13.5)
+# Decoding a fold near a codeword (`Flock.Ligerito`)
 
 A level's queries check the fold of its table against the next level's claimed fold. When the
 folds were no MCA event (`MCAGood`) and the fold agrees with the encoding of a `K` message `G` on
@@ -13,6 +16,8 @@ fold of a message `δ`-close to the table (`decode`). Three facts carry it: ever
 the limbs `K = F ⊕ F·u` (`poly_limbs`) and the novel basis spanning (`xP_span`); and the `K`
 encoding is injective on that many positions (`encK_eq_zero`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness
 

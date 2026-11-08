@@ -1,4 +1,10 @@
-import Proofs.Flock.Claims.Bridge.Dead
+module
+
+public import Proofs.Flock.Claims.Bridge.Dead
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import VCVio.Prelude.Core
 
 /-!
 # The simulation's returns are the decoded live outcomes
@@ -14,6 +20,8 @@ So with the dead branches answering the openings with `nul`, a model event `Q` t
 satisfies is no likelier, against the simulated strategy, than a live outcome that passes the live verdict and whose
 decoded model outcome is in `Q` (`prob_le_decoded`): the model's escapes arise only on runs the live verdict accepts.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge
 

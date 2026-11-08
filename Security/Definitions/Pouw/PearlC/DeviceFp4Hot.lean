@@ -1,19 +1,23 @@
-import Definitions.Pouw.PearlC.DeviceFp4ChainOnly
+module
+
+public import Definitions.Pouw.PearlC.DeviceFp4
 
 /-!
 # Pearl-C4 v2's accounting at an FP4 record (definitions only, staged)
 
 Pearl-C4 v2 is T1: the hot word's H is removed before the clean-up by one exact FP32 add per word, credited as forced
-clean-up (`pearlc4-domain-gamma.py`'s `hot = "credited"`). The v2 protocol isn't staged, so
+clean-up. The v2 protocol isn't staged, so
 these definitions fix only what its price twins read:
 * **The credit** (`creditFp4Hot d a s`): `creditFp4` plus the removal, `a` per word in FP4 units (`a = 2·FADD`). The
   cap is on this credit.
 * **`W_ref`** (`wrefFp4Hot`): the credit plus the A-only forming `qa`.
-* **γ** (`gammaFp4Hot`), and the chain-only reading (`creditFp4HotChainOnly`, `gammaFp4HotChainOnly`: the credit less
+* **The gap** (`gapFp4Hot`), and the chain-only reading (`creditFp4HotChainOnly`, `gapFp4HotChainOnly`: the credit less
   `fs·m·k`, the removal kept, the cap on the full credit).
 * **The accounting a v2 protocol and its tiles must meet** to give them: `Fp4HotUnitAccounting`, `Fp4HotTileAccounting`
   and their chain-only forms.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 
@@ -28,13 +32,13 @@ def wrefFp4Hot (d : Fp4Device) (a : ℚ) (s : Shape) : ℚ := creditFp4Hot d a s
 /-- **Pearl-C4 v2's chain-only credit**: `creditFp4Hot` less the credited forming `fs·m·k`. -/
 def creditFp4HotChainOnly (d : Fp4Device) (a : ℚ) (s : Shape) : ℚ := creditFp4Hot d a s - d.prices.fs * s.m * s.k
 
-/-- **Pearl-C4 v2's γ** at the cap `ρ`: `1 − (399/400)/ω` with `ω = wrefFp4Hot/((1 − ρ)·creditFp4Hot)`. -/
-def gammaFp4Hot (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
+/-- **Pearl-C4 v2's gap** at the cap `ρ`: `1 − (399/400)/ω` with `ω = wrefFp4Hot/((1 − ρ)·creditFp4Hot)`. -/
+def gapFp4Hot (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
   1 - (1 - 1 / 400) / (wrefFp4Hot d a s / ((1 - ρ) * creditFp4Hot d a s))
 
-/-- **Pearl-C4 v2's chain-only γ** at the cap `ρ`, on the full credit: `ω = wrefFp4Hot/(creditFp4HotChainOnly −
+/-- **Pearl-C4 v2's chain-only gap** at the cap `ρ`, on the full credit: `ω = wrefFp4Hot/(creditFp4HotChainOnly −
 ρ·creditFp4Hot)`. -/
-def gammaFp4HotChainOnly (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
+def gapFp4HotChainOnly (d : Fp4Device) (a ρ : ℚ) (s : Shape) : ℚ :=
   1 - (1 - 1 / 400) / (wrefFp4Hot d a s / (creditFp4HotChainOnly d a s - ρ * creditFp4Hot d a s))
 
 /-- **The per-unit accounting a Pearl-C4 v2 protocol meets** on the one-shape domain at `s`, with the credited bound

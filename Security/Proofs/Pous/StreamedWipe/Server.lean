@@ -1,4 +1,9 @@
-import Definitions.Pous.Guarantees.StreamedWipeServer
+module
+
+public import Definitions.Pous.Guarantees.StreamedWipeServer
+import Mathlib.Analysis.Complex.ExponentialBounds
+import Proofs.Pous.StreamedWipe.Bound
+import Proofs.Pous.StreamedWipe.Deployed
 import Proofs.Pous.StreamedWipe.Family
 
 /-!
@@ -18,6 +23,8 @@ each `(r − 1)^k · 2^129 ≤ r^k` and each `B(n, r, k, R) ≤ 4·10^10` decide
 `StreamedWipe.Accepts`, whose `winRealBy` and `wipeDistinguisherBy` are `winReal` and `wipeDistinguisher` by
 definition. The claims' witnesses are `Security/Proofs/Pous/StreamedWipe/Witnesses.lean`.
 -/
+
+@[expose] public section
 
 namespace PousStreamedWipe
 

@@ -1,5 +1,38 @@
-import Proofs.Flock.Bridge.Defs
-import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+module
+
+public import Proofs.Flock.Bridge.Defs
+public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The registration's population is the game's units, in order (`Bridge.PopMatches`)
@@ -14,13 +47,17 @@ unit `u`'s lowered gates needs the descriptor-to-circuit-file lowering, which is
 * `popMatches_iff`: `PopMatches` is that the parse and the layout succeed and the population's units are
   `0, …, n - 1`, in order.
 * `popOf_size`, `popOf_unit`: at `PopMatches`, the population has `n` slots, and slot `u` is unit `u`.
+* `nsOf desc q`: the sizes of the population's strata, one per template in the order of its first unit, at the layout
+  `PopMatches` reads; `nsOf_sum`: at `PopMatches`, they sum to `n`.
 * `popCount Pt`: the number of proof blocks in a claims partition's first class, its population.
 * `popCount_slotPartition`: the claims' partition of a layout (`slotPartition`) has `popOf`'s slots as its population.
-* `popCount_partOf`: at `PopMatches`, that population has as many slots as the game's partition `partOf P κ`'s population
-  (`popCount_partOf_eq`): N = n.
+* `popCount_partOf`: at `PopMatches`, that population has as many slots as the game's partition `partOf P κ ns`'s
+  population (`popCount_partOf_eq`): N = n.
 * `popCount_regMatches`: where `RegMatches` names a statement's registration and `PopMatches` holds at the statement's
-  descriptor and the registration's query, the statement's partition has `popCount (partOf P κ)` population slots.
+  descriptor and the registration's query, the statement's partition has `popCount (partOf P κ ns)` population slots.
 -/
+
+@[expose] public section
 
 namespace Flock.Bridge
 
@@ -87,6 +124,37 @@ theorem popOf_size {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledPro
   have := congrArg List.length (popOf_units h hp hl)
   simpa only [List.length_map, List.length_range] using this
 
+/-- **The registration's strata**: the sizes of the strata of the population, the first class of the layout the deployed
+verifier evaluates on `desc` under the query `q`, in slot order; none where the parse or the layout fails. -/
+def nsOf (desc : Claims.Msg) (q : Lean.Json) : List ℕ :=
+  match SampledProofs.Program.parse ⟨desc.toArray⟩ with
+  | .error _ => []
+  | .ok p =>
+    match SampledProofs.Slots.layout p q with
+    | .error _ => []
+    | .ok l => (l.classes.toList.headD #[]).toList.map Array.size
+
+theorem nsOf_eq {desc : Claims.Msg} {q : Lean.Json} {p : SampledProofs.Program} {l : SampledProofs.Slots.Layout}
+    (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l) :
+    nsOf desc q = (l.classes.toList.headD #[]).toList.map Array.size := by
+  unfold nsOf
+  rw [hp]
+  show (match SampledProofs.Slots.layout p q with
+    | .error _ => []
+    | .ok l => (l.classes.toList.headD #[]).toList.map Array.size) = _
+  rw [hl]
+
+/-- A layout's strata sizes sum to its population's slots. -/
+theorem sum_strata_popOf (l : SampledProofs.Slots.Layout) :
+    ((l.classes.toList.headD #[]).toList.map Array.size).sum = (popOf l).length := by
+  simp only [popOf, List.length_flatten, List.map_map]
+  congr 1
+
+/-- **The strata sum to `n`**: at `PopMatches`, the registration's strata cover the population's `n` slots. -/
+theorem nsOf_sum {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} (h : PopMatches desc q n) : (nsOf desc q).sum = n := by
+  obtain ⟨p, l, hp, hl, -⟩ := popMatches_iff.1 h
+  rw [nsOf_eq hp hl, sum_strata_popOf, popOf_size h hp hl]
+
 /-- **Slot `u` is unit `u`**: at `PopMatches`, the population's proof block at slot `u` is the population's unit `u`. -/
 theorem popOf_unit {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
@@ -106,31 +174,35 @@ theorem popCount_slotPartition (l : SampledProofs.Slots.Layout) : popCount (slot
   | nil => rfl
   | cons c cs => simp [popCount, slotPartition, popOf, List.length_flatten, Function.comp_def]
 
-/-- `partOf P κ`'s population has one slot per unit. -/
+/-- `partOf P κ ns`'s population has one slot per unit, at strata that sum to `n`. -/
 theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
-    (κ : Fin C.N → Option Bool) : popCount (partOf P κ) = n := by
-  simp [popCount, partOf]
+    (κ : Fin C.N → Option Bool) {ns : List ℕ} (hns : ns.sum = n) : popCount (partOf P κ ns) = n := by
+  show (ns.splitLengths ((List.finRange n).map (blockOf P κ))).flatten.length = n
+  rw [List.flatten_splitLengths ((List.finRange n).map (blockOf P κ)) ns (by simp [hns]), List.length_map,
+    List.length_finRange]
 
 /-- **N = n**: at `PopMatches`, the claims' partition of the deployed layout has as many population slots as the
-game's partition `partOf P κ` has population slots. -/
+game's partition `partOf P κ ns` has population slots, at strata that sum to `n`. -/
 theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : SampledProofs.Program}
     {l : SampledProofs.Slots.Layout} (h : PopMatches desc q n)
     (hp : SampledProofs.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : SampledProofs.Slots.layout p q = .ok l)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) :
-    popCount (slotPartition l) = popCount (partOf P κ) := by
-  rw [popCount_slotPartition, popOf_size h hp hl, popCount_partOf_eq]
+    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    {ns : List ℕ} (hns : ns.sum = n) :
+    popCount (slotPartition l) = popCount (partOf P κ ns) := by
+  rw [popCount_slotPartition, popOf_size h hp hl, popCount_partOf_eq P κ hns]
 
 /-- **N = n at the registration**: where `RegMatches` names the statement's registration, and `PopMatches` holds at
 the statement's descriptor and that registration's query, the statement's partition has as many population slots as
-`partOf P κ` has population slots. -/
+`partOf P κ ns` has population slots, at strata that sum to `n`. -/
 theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Option SamplingDeploy.Reg}
     (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.AuditStatement}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool) :
-    popCount Pt = popCount (partOf P κ) := by
+    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    {ns : List ℕ} (hns : ns.sum = n) :
+    popCount Pt = popCount (partOf P κ ns) := by
   obtain ⟨g, l, hg, hd, hl, hPt, -⟩ := hreg x s Pt hx hP
   rw [hPt]
-  exact popCount_partOf (hpop g hg) hd hl P κ
+  exact popCount_partOf (hpop g hg) hd hl P κ hns
 
 end Flock.Bridge

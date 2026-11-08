@@ -1,12 +1,46 @@
-import Proofs.Flock.Claims.ZK.SimLig
-import Proofs.Flock.Claims.ZK.FrameOpen
+module
+
+public import Proofs.Flock.Claims.ZK.SimLig
+public import Proofs.Flock.Claims.ZK.FrameOpen
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.ZK.SimZerocheck
 
 /-!
 # Level 0's masked rounds of the opening, cut round by round
 
 The masked Ligerito (`FlockComplete.ligeritoPZk`), answered by `asksCut` from a log `l` and cut `j` rounds on, stops
 past the openings having sent exactly level 0's first `j + 1` bodies, for every `j` up to `ρ_1`'s squeeze, at any pads
-`h` and grinding nonces: the rep's (`h` its pads) and the firewall's live opening's (`openLive`, zero pads) alike.
+`h` and grinding nonces: the rep's (`h` its pads) and the ZK server's live opening's (`openLive`, zero pads) alike.
 Its bodies are the rounds `FrameOpen` releases (`oodFr`, `pairFr`), at the values SimLig's `LigHyp` reads, the coins
 those of rounds `l.size`, `l.size + 1`, …:
 
@@ -21,6 +55,8 @@ those of rounds `l.size`, `l.size + 1`, …:
 * **The cut opening** (`ligeritoPZk_cutL0`): cut `j < k_0 + 4` rounds on, the opening stops past the openings having
   sent `l0BodyAt`'s first `j + 1` bodies after `l`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.LigLock
 

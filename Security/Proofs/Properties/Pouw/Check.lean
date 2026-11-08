@@ -1,5 +1,8 @@
-import Properties.Pouw
-import Properties.Pouw.Check
+module
+
+public import Properties.Pouw
+public import Properties.Pouw.Check
+import all Lean.Data.Json.Basic
 import Proofs.Properties.Pouw.Grid
 
 /-!
@@ -11,6 +14,8 @@ composes them; the rest follow. `acceptedInRange_of_grid` proves `AcceptedInRang
 converse of `AcceptMeans`, and `serviceReject_rejects` what `AcceptedIsTheService's` and `UndecidedOnlyFromService`
 leave: the service's reject is the check's.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Check
 
@@ -203,7 +208,7 @@ theorem acceptMeans_iff (p : Params) (c : Registration) (e : Evidence) (pub : Pu
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
 
 /-- Completeness of `AcceptMeans`: a registration that keeps PoUW's rule, which the service accepted as the rule fixes
-with the window's salt, is accepted, publishing the rule's items and the service's draw. -/
+with the window's salt, is accepted, publishing the rule's items and the service's sample. -/
 theorem acceptMeans_complete (p : Params) (c : Registration) (e : Evidence) (f : Fixed) (prof : Core.Integrity)
     (draw : UnitDraw) (hk : RegistrationKeeps p c f) (hs : ServiceAccepted p c f e prof draw) (hw : SaltKept p c e) :
     protocol.check p c e = .accept ⟨p.check, f.work, f.sampling, p.maxTokens, f.rootW, draw.units⟩ prof :=

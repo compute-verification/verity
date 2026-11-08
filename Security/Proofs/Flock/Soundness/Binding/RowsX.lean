@@ -1,5 +1,8 @@
-import Proofs.Flock.Soundness.Binding.Rows
-import Proofs.Flock.Soundness.Binding.RowSeg
+module
+
+public import Proofs.Flock.Soundness.Binding.Rows
+public import Proofs.Flock.Soundness.Binding.RowSeg
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # Rows whose bytes need not be injective: `hm96-sha512/row/v1`, `/row/v2` and `/row-seg/v1` rows together
@@ -12,6 +15,8 @@ hashes chosen per commit string (`enc p`), and an extractor for two different va
 fact follows from `Assumptions.HmRowComputes` as for `HmRows` (`HmRowsX.registered`). `HmRows.toX` is an `HmRows` as one,
 its extractor never needed.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Binding
 
@@ -49,7 +54,7 @@ variable {lay : Layout P plan tab decode} (rs : HmRowsX lay)
 def scheme (p : lay.Pos) : ExplicitLeaf lay.Val :=
   if rs.isRow p then ExplicitLeaf.hm96X (rs.enc p) (rs.ext p) (rs.ext_spec p) else rs.other p
 
-/-- **`HmRowComputes` at the drawn units' rows**, each under its own encoding: at each wire of a drawn unit held by a
+/-- **`HmRowComputes` at the sampled proof blocks' rows**, each under its own encoding: at each wire of a sampled proof block held by a
 row, in a satisfying witness of the unit's table, the `b ‖ c` the row's `hm96` slot outputs is the commit string of the
 row's bytes there and the salt the witness holds. -/
 def Computes : Prop :=

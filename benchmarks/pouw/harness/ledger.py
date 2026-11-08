@@ -4,10 +4,10 @@ prose.
 
 A record's meta is everything the run knows, numbers included: the kernel variant (`verity.core.protocols.pouw.serving.KernelVariant`'s
 id, ``{family}-{device}/{source_sha256[:12]}``), the parent attempt, the tier, the harness commit and gate version, the
-metrics and the per-step time split, γ at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
+metrics and the per-step time split, the gap at both FP32 prices, the verifier's lines, and the one-line hypothesis. Judgments
 that change after the run are labels on it (`KERNEL_OUTCOME`, `KERNEL_REASON`), since a record is immutable.
 
-γ is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
+The gap is never typed. It is looked up (`price_twins.lookup`) from the Lean-pinned price twins of the attempt's statement (its
 panel line and version) on the priced path it ran (the gate's ``prices``, from the variant's), at both FP32 prices, and the
 larger is published. An arm whose lineage declares ``gamma`` gets no record (`typed_gamma`); the arm's own `Work.gamma`
 is kept as ``arm_claim`` and never published.
@@ -162,11 +162,12 @@ def variant_record(*, family: str, device: str, schemes: Iterable[str], sources:
     return rec
 
 
-# ---- γ at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------------
+# ---- the gap at both FP32 prices, from the Lean-pinned price twins ------------------------------------------------------------
 
 
 def typed_gamma(result: dict) -> dict[str, str]:
-    """The arms whose build record types γ in (a lineage ``gamma``): they get no record, since γ comes from the pins."""
+    """The arms whose build record types the gap in (a lineage ``gamma``): they get no record, since the gap comes from
+    the pins."""
     out = {}
     for name, arm in (result.get("arms") or {}).items():
         lineage = ((arm or {}).get("build") or {}).get("lineage") or {}
@@ -193,7 +194,7 @@ def _scheme_conflict(scheme: str | None, statement: str | None) -> str | None:
 
 def gamma(twins: list[dict] | None, panel: dict | None, scheme: str | None, gate: dict, shape: dict,
           arm_claim: Any) -> dict:
-    """γ as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
+    """The gap as the record keeps it: the forming-credited twins at both FP32 prices and the larger published, the chain-only
     reading beside it, every pin with its status (pinned in the Lean store, or staged), and the arm's own derivation kept
     as ``arm_claim``, never published."""
     stmt = P.statement((panel or {}).get("line"), (panel or {}).get("version"))
@@ -253,7 +254,8 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
     arm at the shape passed (``exact``), the transcript the harness dumped from poisoned buffers verified
     (``poisoned_accepted``: an arm that dumps its own gets False), every control of the arm rejected (the harness's
     known-bad variants and the verifier's negative control), the SASS gate held. ``schedules_equal`` holds trivially for a
-    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise."""
+    variant with one schedule; the harness doesn't compare schedules, so it is None otherwise. ``fold_bound`` is None: the
+    harness's exact check holds every output, none left past a fold's bound."""
     keys = [g for g in result.get("gates") or [] if len(g.get("key", [])) > 2 and g["key"][0] in ("arm", "chain")
             and g["key"][1] == shape["label"] and g["key"][2] == arm]
     negs = [x for x in result.get("negative_controls") or [] if arm in (x.get("key") or [])]
@@ -268,7 +270,8 @@ def _gate(result: dict, arm: str, shape: dict, variant: dict | None, verdict: di
             "poisoned_accepted": bool(verdict.get("accepted")) and poisoned,
             "controls_rejected": bool(negs) and all(x.get("rejected") for x in negs) and bool(verdict.get("negative_control")),
             "schedules_equal": True if len(schedules) <= 1 else None,
-            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices")}
+            "sass_ok": bool(sass.get("ok")), "toolkit": ",".join(toolkits) or None, "prices": (variant or {}).get("prices"),
+            "fold_bound": None}
 
 
 def _metrics(r: dict, p: dict) -> dict:
@@ -310,7 +313,7 @@ def records(result: dict, *, run_id: str, commit: str | None, tier: str = "2a", 
             time: str | None = None, twins: list[dict] | None | str = "table") -> list[dict]:
     """One record per arm row of every shape in a verified result (`verify.py`'s rewritten RESULT_JSON): ``kind``,
     ``meta``, ``refs`` and the ``labels`` to assert. `hypothesis`, `parent`, `outcome` and `reason` (the run's, from
-    verify.py's flags) win over the arm's lineage. An arm that types γ in (`typed_gamma`) gets none. `twins` is the
+    verify.py's flags) win over the arm's lineage. An arm that types the gap in (`typed_gamma`) gets none. `twins` is the
     price-twin table (default: `price_twins.json`)."""
     if tier not in TIERS:
         raise LedgerError(f"tier {tier!r} is not one of {TIERS}")

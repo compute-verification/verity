@@ -94,7 +94,7 @@ def test_the_templated_statement_is_the_flat_one_with_its_unit_as_its_template(m
     """The toy's templated statement: format and statement the templated ones, META the flat statement's but for ``format``,
     ``statement``, ``template`` (the unit's template, which `tmpl.unroll` takes to the flat file's unit section line for line)
     and ``layout``; its sections the flat file's but the unit's; its unit range's slot the laid-out unit's (a layout one
-    column past the flat unit's slot moves ``unit_log`` and the range to the next); and a unit class's ``definition`` is
+    column past the flat unit's slot moves ``unit_log`` and the range to the next); and a size class's ``definition`` is
     refused."""
     args, _rows, _kw = _toy(0)
     flat, tm = CS.UnitStager(*args), CS.UnitStager(*args, layout=MODE)

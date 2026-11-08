@@ -1,7 +1,27 @@
-import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundBind
+module
+
+public import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Hidden.Facts
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
 import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
-import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
-import Proofs.Flock.Soundness.Discharge.Hidden.Unrolled
+import Proofs.Flock.Soundness.ParseStmt
+import Proofs.Flock.Soundness.TmplUnitNet
+
+@[expose] public section
 
 set_option Elab.async false
 
@@ -128,7 +148,7 @@ theorem loadPublic_unrolled {tags : Tags} {cf : ByteArray} {tables : List (Strin
   rw [he]
   rfl
 
-/-- **The site fact at a drawn table**, at the session's statement circuit (`tableH_bcSiteS` at `TableH.accS`). -/
+/-- **The site fact at a sampled table**, at the session's statement circuit (`tableH_bcSiteS` at `TableH.accS`). -/
 theorem tableH_bcSiteSt {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Flock.Circuit}
     (hcS : HmOut.parseStmt I.tags I.circuitFile I.tables = .ok c) (hv1 : Hidden.Any.RowsFitS c)
     (hscope : Layout.scopeOkH c = true) (dj : Finset (Fin n) → Lean.Json) (hU : Built c.unit) {pub : Public}
@@ -231,7 +251,7 @@ theorem rsShHSt_computes : (rsShHSt dj y₀ ht hcS hv1 hscope hU hpub (Reg := Re
     (sitesShHSt_bcSite dj y₀ ht hcS hv1 hscope hU hpub)
     (Hidden.keysRow_stmt (zkTyped ht) hcS (Layout.scopeOkH_spec hU hscope).1 (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **Each drawn unit's place in its `--zk` table**, at the statement circuit (`placeZH`). -/
+/-- **Each sampled proof block's place in its `--zk` table**, at the statement circuit (`placeZH`). -/
 noncomputable def placeZHSt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProg c hU n).partition (Layout.outsOf c hU n))
       (tabOfZ (planAtZKH dj y₀) (tabAtZKH dj y₀) S R u).S u :=
@@ -370,7 +390,7 @@ theorem rsShHJSt_computes : (rsShHJSt dj y₀ ht hcS hv1 hscope hU hpub (Reg := 
     (sitesShHJSt_bcSite dj y₀ ht hcS hv1 hscope hU hpub)
     (Hidden.keysRow_stmt (zkTyped ht) hcS (Layout.scopeOkH_spec hU hscope).1 (Layout.scopeOkH_spec hU hscope).2.2)
 
-/-- **Each drawn unit's place in its `--zk` table** at `J` tables, at the statement circuit (`placeZHJ`). -/
+/-- **Each sampled proof block's place in its `--zk` table** at `J` tables, at the statement circuit (`placeZHJ`). -/
 noncomputable def placeZHJSt (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProg c hU n).partition (Layout.outsOf c hU n))
       (tabOfZ (planZHJ dj y₀) (tabZHJ dj y₀) S R u).S u :=

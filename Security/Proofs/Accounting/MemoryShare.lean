@@ -1,5 +1,12 @@
-import Definitions.Accounting.JointBlocks
-import Proofs.Pous.Obligation
+module
+
+public import Definitions.Accounting.JointBlocks
+public import Definitions.Pous.P2.Cost
+public import Proofs.Pous.Obligation
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The demo's memory share is PoUS's
@@ -9,6 +16,8 @@ PoUS certifies for a block's store, times the device's memory. The demo's share,
 one `Pous.Guarantees.ObligationDemo` proves for the demo's store on the demo's device
 (`demoMemoryShare_obligationDemo`).
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

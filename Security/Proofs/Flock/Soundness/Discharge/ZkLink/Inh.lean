@@ -1,4 +1,8 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
+public import Proofs.Flock.Soundness.Refine.LiveSim
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Refine.LiveCompiled
 
 /-!
@@ -8,6 +12,8 @@ import Proofs.Flock.Soundness.Refine.LiveCompiled
 can still play. `allInh_repZCAt` gives it for `repZCAt`, `Refine.modelTable`'s `G` for the compiled `--zk` table, from
 `AllInh` of each game a masked rep is built from.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 

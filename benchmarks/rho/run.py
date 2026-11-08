@@ -119,7 +119,7 @@ def rests_md(r: Result, terms: list[analysis.Term]) -> str:
 
 
 def certified(s: Scenario) -> dict | None:
-    """Where a certifier sets the serving cut's link term: the certified prompt ingress into a location (bit/s), as an
+    """Where a certifier sets the serving cut's binding error: the certified prompt ingress into a location (bit/s), as an
     intake (a multiple of `α Φ`), and with `declared` a server's declared inputs and outputs."""
     regime = operating._inner(s.regime)
     cert = getattr(regime, "certifier", None)
@@ -166,8 +166,8 @@ def operating_md(points: list[operating.Point]) -> list[str]:
 
 def incorrect_md(reg: Registry, inc: operating.Row) -> list[str]:
     if math.isinf(inc.capacity):
-        return ["Incorrect outputs: no sampled proofs, so nothing detects them.", ""]
-    drawn = "every unit proved" if inc.q >= 1 else f"steps the sampled proofs draw at q = {fmt(inc.q)} a step"
+        return ["Incorrect outputs: no SPOT, so nothing detects them.", ""]
+    drawn = "every unit proved" if inc.q >= 1 else f"steps SPOT samples at q = {fmt(inc.q)} a step"
     head = (f"Incorrect outputs ({drawn}): {fmt(inc.capacity)} bits before the first detection, except with chance "
             f"δ = {fmt(inc.delta)}.")
     out = [head, "", "| reference | bits | chance of detection |", "|---|---|---|"]
@@ -216,7 +216,7 @@ def scenario_md(r: Result, by_status: dict[str, float], terms: list[analysis.Ter
     prf = ", the wipe's PRF" if "wipe" in delta.by else ""
     unencumbered = operating.human(s.reference / (c.fleet.mfu_train * s.total_phi))
     setting = (f"{s.regime.name} regime, {c.fleet.count:g} × {c.location.name} (Φ = {c.location.phi:.3g} gate/s, "
-               f"ε_dark {c.fleet.eps_dark:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
+               f"ε_dark {c.fleet.eps_unreg:g}), policy {c.policy.name} (c = {c.c:.3g} gates, k = {c.policy.k:.3g} bit), "
                f"{c.period.name}, {c.units.gates_per_flop:g} gates a FLOP ({c.units.basis}); target {s.run.name} "
                f"(T_0 = {s.reference:.3g} gates; the reference at the training MFU takes {unencumbered}).")
     st = s.structure

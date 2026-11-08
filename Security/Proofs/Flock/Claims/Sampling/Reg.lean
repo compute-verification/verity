@@ -1,0 +1,133 @@
+module
+
+public import SampledProofs.Registration
+public import Proofs.Flock.Claims.Sampling.Code
+public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+
+/-!
+# The registrations the samples of record read, and the code's round order
+
+What the deployed sampled verifier's samples read of a registration, and the code with its checked units and rounds set
+from them, with no proof module beneath: `Reg`, the registration `SampledProofs.Run.run` hands `Select.select`, and its
+sample of record (`Reg.checked`); `RegTwo`, a two-stage registration, its replay sample, the second stage's proof
+blocks and its checked units (`RegTwo.sample`, `RegTwo.blockAt`, `RegTwo.checked`); `codeTwo`, the code with those
+checked units, and `replayTwo`, the replay sample of record; and `Code.atOrder`, the code at its round order (`Order`):
+its second stage the rounds after the first stage's coin, and its sessions' rounds those after the second stage's, and
+`codeTwoAt`, the two-stage code at its round order, each stage's bytes read off its own coin (`bytesFirst`,
+`bytesSecond`).
+-/
+
+@[expose] public section
+
+namespace SamplingDeploy
+
+open Claims Claims.Sampling Finset Properties.SampledProofs
+open Lean (Json)
+
+/-! ## The registrations and their samples -/
+
+/-- **A registration as the sample of record reads it**, what `SampledProofs.Run.run` passes to `Select.select`: the
+verifier's own copies (`Run.Input.params.verifier`, whose program, query and work table the sample reads), the selection
+rule and the challenger's closure map. -/
+structure Reg where
+  verifier : SampledProofs.Registration.Verifier
+  rule : SampledProofs.Select.Rule
+  closure : Option (Array (Int × Array Int))
+
+def Reg.program (g : Reg) : SampledProofs.Program := g.verifier.program
+
+def Reg.query (g : Reg) : Json := g.verifier.query
+
+def Reg.table (g : Reg) : Option Json := g.verifier.workTable
+
+/-- The registration's layout (`Slots.layout`), empty where its query doesn't apply. -/
+def Reg.layout (g : Reg) : SampledProofs.Slots.Layout :=
+  match SampledProofs.Slots.layout g.program g.query with
+  | .ok l => l
+  | .error _ => default
+
+/-- **The sample of record's checked units** on the bytes `src`: `Slots.select`'s, and every slot of the layout where it
+is refused (`drawChecked`). -/
+def Reg.checked (g : Reg) (src : ByteArray) : List ℕ :=
+  (drawChecked g.rule g.program g.query g.table g.closure g.layout src).toList
+
+/-- **A two-stage registration as the samples of record read it**: the boundary registration the first stage samples on
+(`first`), the proof blocks in each replay block (`n`) and the second stage's count in each (`k`), the statement's
+proof block at position `p` of replay block `ρ` (`blockOf ρ p`), and the proof blocks checked whatever the stages sample
+(`always`). -/
+structure RegTwo where
+  first : Reg
+  n : ℕ
+  k : ℕ
+  blockOf : ℕ → ℕ → ℕ
+  always : ℕ → Bool
+
+/-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
+hands the second stage; none where it is refused. -/
+def RegTwo.sample (g : RegTwo) (src : ByteArray) : Array ℕ :=
+  match SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure src with
+  | .ok (_, proved, _) => proved
+  | .error _ => #[]
+
+/-- Interior unit `j`'s proof block: position `j % n` of replay block `sample[j / n]`. -/
+def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ := g.blockOf (sample.getD (j / g.n) 0) (j % g.n)
+
+/-- **The checked proof blocks** below `N`, at first-stage bytes `src₁` and second-stage bytes `src₂`: those the second
+stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
+is refused. -/
+def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
+  match SampledProofs.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
+  | .ok (draw, _) => (List.range N).filter fun v =>
+      g.always v || (SampledProofs.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
+  | .error _ => List.range N
+
+/-- **The two-stage sampled verifier's code with its Lean samples**: `c` with `checked` the two stages' on the
+registration `reg x`, over the bytes `bytes₁ x` and `bytes₂ x` of the coins. -/
+def codeTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ)
+    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256)
+    (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256) : Code :=
+  { c with
+    checked := fun x r =>
+      ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x r))).getD [] }
+
+/-- **The replay sample of record**: the first stage's checked slots on the replay layout (`Reg.checked`). -/
+def replayTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ : Msg → ℕ)
+    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256) (x : Msg)
+    (r : Fin (c.V.k x) → FlockDeploy.Coin) : List ℕ :=
+  ((reg x).map fun g => g.first.checked (bytesOf (bytes₁ x r))).getD []
+
+/-! ## The round order -/
+
+/-- **The deployed round order** of a statement's `k` rounds: the coin the first stage reads (`first`) comes before the
+coin the second stage reads (`second`). -/
+structure Order (k : ℕ) where
+  first : Fin k
+  second : Fin k
+  lt : first < second
+
+/-- **The code at its round order**: `c` with its second stage the rounds after the first stage's coin, and each
+session's rounds those of `c`'s after the second stage's coin. -/
+def Code.atOrder (c : Code) (j : (x : Msg) → Order (c.V.k x)) : Code :=
+  { c with
+    stage2 := fun x => univ.filter fun t => (j x).first < t
+    rounds := fun x u => (c.rounds x u).filter fun t => (j x).second < t }
+
+section At
+
+variable (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ) (j : (x : Msg) → Order (c.V.k x))
+  (b₁ : (x : Msg) → FlockDeploy.Coin → Fin (L₁ x) → Fin 256) (b₂ : (x : Msg) → FlockDeploy.Coin → Fin (L₂ x) → Fin 256)
+
+/-- The first stage's bytes: `b₁ x` on the first stage's coin. -/
+def bytesFirst : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256 :=
+  fun x r => b₁ x (r (j x).first)
+
+/-- The second stage's bytes: `b₂ x` on the second stage's coin. -/
+def bytesSecond : (x : Msg) → (Fin ((c.atOrder j).V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256 :=
+  fun x r => b₂ x (r (j x).second)
+
+/-- **The two-stage sampled verifier's code at its round order.** -/
+abbrev codeTwoAt : Code := codeTwo (c.atOrder j) reg L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂)
+
+end At
+
+end SamplingDeploy

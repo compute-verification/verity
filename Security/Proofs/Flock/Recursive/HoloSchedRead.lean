@@ -1,4 +1,6 @@
-import Proofs.Flock.Recursive.HoloSched
+module
+
+public import Proofs.Flock.Recursive.HoloSched
 
 /-!
 # Where `fixedRow` reads, by the schedule
@@ -11,6 +13,8 @@ neither of the reps' or the sparse phases': `innerCommits` holds the reps' round
 checks only a sparse stream's count of `c_k`. `RepsCommitsAt`, `SparseCommitsAt` and `StackedAt` name what the
 verifier's checks of the three give, and `ClaimReadsAt` what its check of the claim ports' reads gives.
 -/
+
+@[expose] public section
 
 namespace Flock.Guarantees
 
@@ -51,7 +55,7 @@ def ClaimReadsAt (s : VStar.Stmt) (own : Array Registered.Port) : Prop :=
     | _ => False
 
 /-- The `c_k` the verifier holds of stream `s`, each with its round: a rep's from the prover's record
-(`InnerCommits.reps`), a sparse phase's and R's from the coin server's (`InnerCommits.streams`). -/
+(`InnerCommits.reps`), a sparse phase's and R's from the challenger's live-coin part's (`InnerCommits.streams`). -/
 def heldCommits (cs : InnerCommits) : HoloStream → Option (Array (Nat × ByteArray))
   | .rep x => cs.reps[x.val]?
   | .sparse x => (cs.stream? s!"{SPARSE}/rep{x.val}").map (·.commits)

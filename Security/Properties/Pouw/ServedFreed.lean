@@ -1,5 +1,7 @@
-import Definitions.Pouw.Dither
-import Properties.Pouw.ServedWork
+module
+
+public import Definitions.Pouw.Dither
+public import Properties.Pouw.ServedWork
 
 /-!
 # The served PoUW protocol's freed compute, in the onsite form
@@ -23,8 +25,8 @@ capacity at the period's dual price (`Pouw.Dither.Period.FreedWithin`). It compo
 `ε` is the period's own: an accepted period's credit (`creditPrefix`) depends on its prefix, so the bound reads
 `ε(x) C = max(0, C − (p · creditPrefix(x) − Σ_w lam_w) + β K)`.
 
-**Non-vacuity rests on the fixed model.** `ServedWork`'s `SAKServed` is false on 𝓜 as written, so this statement says
-something only on a model that charges the free register reductions that falsify it.
+**Non-vacuity is open,** as `ServedWork`'s: whether its `SAKServed` holds on 𝓜 as written, which prices register
+reductions, is open.
 
 **The coins stay in the boundary.** `OutsourceWithinEgressServed` is claimed where a window's salt
 reaches a machine outside the registered devices only through a bit their programs exchange (`CoinsConfidential`).
@@ -34,6 +36,8 @@ provider is `trusted-host`.
 
 The proof is `Proofs.Pouw.ServedFreed`; `Proofs.Pouw.ServedFreed.Honest` has its honest and nontrivial lemmas.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Served
 
@@ -96,7 +100,7 @@ def ServedFreed : Prop :=
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V) (enc : C → ByteArray)
     (place : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ sT) → (ℕ → V) → Prop)
-    (Wp : Period C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
+    (Wp : WindowPlay C (Coin C Ξ Cd.rounds σ sT) (Fin (tileCount σ sT)) Cd.rounds n)
     (Pl : Play (Coin C Ξ Cd.rounds σ sT) n K T L U)
     (folded : Paths (Coin C Ξ Cd.rounds σ sT) n → ℝ) (ρ δs δbind δks : ℝ)
     (G : Pouw.Dither.Accel) (μ : G.Res → ℝ) (Reg : Set I) (hon : I → C → Fin (tileCount σ sT) → W) (p : ℝ) (lam : I → ℝ)
@@ -116,7 +120,7 @@ def ServedFreed : Prop :=
       (j10rAtCoin hr enc place tile)) Pl.game →
     (∀ w, prob (fun x => (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)
       (j10rAtCoin hr enc place tile)).MovedIn x w) ≤ δbind) →
-    RegisteredBeforeDraw ws → TileDrawIsCoin σ k hk sT unitOf ws →
+    RegisteredBeforeDraw ws → TileSampleIsCoin σ k hk sT unitOf ws →
     TileServiceSound σ sT unitOf ws opened (pinnedAt (saltOf ws) place tile) δks →
     Properties.Pouw.Period.SaltIsLiveCoin hr (saltOf ws) enc → SharedNoiseLucks Sc Cd Wp →
     UnitFixed Pl (tileLayer Cd hr σ k hk sT unitOf ws opened (pinnedAt (saltOf ws) place tile)

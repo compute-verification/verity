@@ -1,6 +1,8 @@
-import CertifierDevice.Device
-import World
-import Std.Sync.Channel
+module
+
+public import CertifierDevice.Device
+public import World
+public import Std.Sync.Channel
 
 /-!
 # The driver that runs the device in the world
@@ -16,9 +18,11 @@ link's backlog; when both are due, ingress first (`active.TICK_ORDER`). It perfo
 it: a write with `drain` is delivered once the write returns, as is each salt frame's write on the salt connection,
 which `connectSalt` opens with `connect`. It closes a stream's connection when it takes the read that ends it, as
 `active.py` closes its writer then, and when both grids have run all their ticks it closes the connections still open
-and the link, as `Proxy.run` does, and returns. With the salt on, it draws every PoUW window's salt from the world's
+and the link, as `Proxy.run` does, and returns. With the salt on, it samples every PoUW window's salt from the world's
 coins before its first tick; the device reads one only once its frame is released.
 -/
+
+@[expose] public section
 
 namespace CertifierDevice
 

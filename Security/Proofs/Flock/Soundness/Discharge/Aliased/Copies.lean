@@ -1,5 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Aliased.Rows
-import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+module
+
+public import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+public import Proofs.Flock.Soundness.Discharge.Hm.SatEx
+public import Proofs.Flock.Soundness.ExecFlatCopies
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # `Layout.Aliased` from Δ's copy positions (`pp.aliased`)
@@ -20,6 +25,8 @@ statement alone: two inputs an instance puts on one gate can copy different sour
 a forced-zero row. `setupH_aliased` and `setupH_unitPlace` instantiate it at the untyped statement `Stmt.setupH`
 accepted.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 
@@ -283,7 +290,7 @@ theorem setupH_aliased (ht : tags.typed = false)
     (setupH_layout ht h).Aliased regs inst o hg :=
   aliased_of_copies _ regs _ inst hg hcp o
 
-/-- **A drawn unit's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): template
+/-- **A sampled proof block's place, from the executable's accept step** (`unitPlace_of_setupH` with `setupH_aliased`): template
 instance `g`'s stacked unit slots in block `o`, for an instance that wires their inputs as Δ copies them. -/
 noncomputable def setupH_unitPlace (ht : tags.typed = false)
     (h : Stmt.setupH tags cf pf coins tables draw partition program = .ok st)
