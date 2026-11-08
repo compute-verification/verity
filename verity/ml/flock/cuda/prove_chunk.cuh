@@ -12,6 +12,7 @@
 
 #include <chrono>
 #include "pure_sha256.cuh"
+#include "zerocheck_fused.cuh"
 
 #define CKI(x) do { int e_ = (x); if (e_) return e_; } while (0)
 
@@ -690,15 +691,21 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
                           : (C->comp_slots > 64 || (k_log != 20 && k_log != 21)))
              : (C->n_comp_log + 14 != m || k_log <= sub_log || k_log - sub_log > 8)) { printf("FFI chunk: bad shape\n"); return 201; }
     const size_t packed_witness_bytes = (size_t)len * sizeof(F128);
-    // the zerocheck's second fold pair (d_amn, d_bmn) holds at most a quarter of round 2's tables, which the tail's first lookahead
-    // writes there, or half when the lookahead loop doesn't run and the fold after it writes there
-    const long long zc_out = 1LL << (m - 6), zc_next = (m - 7 >= 3 && zc_out / 16 > ZT_FINISH_OP) ? zc_out / 4 : zc_out / 2;
-    // the arena's peak: the zerocheck's two fold pairs beside 5.5 witness sizes (z, a and b, level 0's codeword and tree), or the
-    // lincheck's seven K-length vectors (2^k_log words each, which dominate at small m) beside 6.5 (the same and z's transpose,
-    // with a kept rep 0 holding a and b through it); half a witness size and 64 MiB over that hold the small buffers beside them
+    // the zerocheck's two fold pairs, words per array: on the packed path (zf_packed) round 2's tables are never written, the
+    // tail's first lookahead writes a quarter of them into d_amn/d_bmn, and every later fold into d_am/d_bm reads d_amn/d_bmn
+    // and writes at most half of it; otherwise d_am/d_bm are round 2's tables and the fold after them writes half into d_amn/d_bmn
+    const bool zc_packed = zf_packed(m);
+    const long long zc_out = 1LL << (m - 6), zc_first = zc_packed ? zc_out / 8 : zc_out, zc_next = zc_packed ? zc_out / 4 : zc_out / 2;
+    // level 0's commitment under M1 (fc_commit_l0_zk) holds, beside d_cw0 and its tree, its 4 extra lanes and the witness's and
+    // extra lanes' codewords before it interleaves them into d_cw0: words
+    const long long l0_l = len >> P->initial_k, l0_zk = (l0_l << P->log_inv_rates[0]) * ((1LL << P->initial_k) + 4) + 4 * l0_l;
+    // the arena's peak: 5.5 witness sizes (z, a and b, level 0's codeword and tree) beside the largest of the zerocheck's two fold
+    // pairs, level 0's M1 lanes, and the lincheck's seven K-length vectors (2^k_log words each, which dominate at small m) with
+    // z's transpose (a kept rep 0 holding a and b through it); half a witness size and 64 MiB over that hold the small buffers
+    // beside them
     const size_t arena_bytes = packed_witness_bytes / 2 * 12 +
-                               std::max(2 * (size_t)(zc_out + zc_next) * sizeof(F128),
-                                        packed_witness_bytes + ((size_t)7 << k_log) * sizeof(F128)) + (64ull << 20);
+                               std::max({2 * (size_t)(zc_first + zc_next) * sizeof(F128), (size_t)l0_zk * sizeof(F128),
+                                         packed_witness_bytes + ((size_t)7 << k_log) * sizeof(F128)}) + (64ull << 20);
     CK(device_arena.begin(arena_bytes));
     // ================= witness: host-given compression inputs ================
     F128 *df, *d_a, *d_b; uint8_t* d_zlin;
@@ -902,7 +909,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
     FfiWriter W;
     W.hashes(l0_cap);
 
-    // ================= zerocheck (unchanged) =================================
+    // ================= zerocheck (round 2 from the packed witness: zerocheck_fused.cuh) ====
     vector<F128> zc_r1ab(64), zc_r1c(64), zc_m1s, zc_mis;
     F128 zc_z, zc_fa, zc_fb, zc_fc;
     vector<F128> zc_r(m), mlv_rhos;
@@ -919,7 +926,7 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         CK(ffi_malloc(&d_eq, (1LL << (m - 13)) * sizeof(F128)));
         CK(ffi_malloc(&d_r1ab, 64 * sizeof(F128))); CK(ffi_malloc(&d_r1c, 64 * sizeof(F128)));
         CK(ffi_malloc(&d_ft, 8 * 256 * sizeof(F128)));
-        CK(ffi_malloc(&d_am, n_out * sizeof(F128))); CK(ffi_malloc(&d_bm, n_out * sizeof(F128)));
+        CK(ffi_malloc(&d_am, zc_first * sizeof(F128))); CK(ffi_malloc(&d_bm, zc_first * sizeof(F128)));
         CK(ffi_malloc(&d_amn, zc_next * sizeof(F128))); CK(ffi_malloc(&d_bmn, zc_next * sizeof(F128)));
         CK(ffi_malloc(&d_p1, ZT_MAX_BLOCKS * sizeof(F128))); CK(ffi_malloc(&d_pinf, ZT_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_m1d, sizeof(F128))); CK(ffi_malloc(&d_mid, sizeof(F128)));
@@ -985,9 +992,13 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         F128 *d_part8, *d_out8;
         CK(ffi_malloc(&d_part8, 8 * ZT_MAX_BLOCKS * sizeof(F128)));
         CK(ffi_malloc(&d_out8, 8 * sizeof(F128)));
-        launch_zerocheck_second_round_fold_with_lookahead((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft,
-                                   d_eqlo, d_eqhi, zt_lobits, n_out, d_am, d_bm,
-                                   S[0], d_part8, d_out8);
+        if (zc_packed)
+            launch_zerocheck_second_round_message((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft, d_eqlo, d_eqhi, zt_lobits, n_out,
+                                                  S[0], d_part8, d_out8);
+        else
+            launch_zerocheck_second_round_fold_with_lookahead((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft,
+                                       d_eqlo, d_eqhi, zt_lobits, n_out, d_am, d_bm,
+                                       S[0], d_part8, d_out8);
         CK(cudaGetLastError());
         auto observe_message = [&](F128 m1, F128 mi) {
             zc_m1s.push_back(m1); zc_mis.push_back(mi);
@@ -1007,9 +1018,14 @@ int flock_cuda_prove_chunk(const FlockCudaProveParams* P, const FlockChunkParams
         observe_message(interp3(h[2], h[3], h[4], rho0), interp3(h[5], h[6], h[7], rho0));
         int k = 2;
         while (k + 1 <= n_tail && L / 16 > ZT_FINISH_OP) {
-            launch_zerocheck_tail_lookahead(cA, cB, nA, nB, d_eqlo, d_eqhi, k, zt_lobits, L / 16,
-                                mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
-                                S[k - 1], S[k], d_part8, d_out8);
+            if (k == 2 && zc_packed)
+                launch_zerocheck_tail_lookahead_packed((const uint8_t*)d_a, (const uint8_t*)d_b, d_ft, nA, nB, d_eqlo, d_eqhi, k,
+                                                       zt_lobits, L / 16, mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
+                                                       S[k - 1], S[k], d_part8, d_out8);
+            else
+                launch_zerocheck_tail_lookahead(cA, cB, nA, nB, d_eqlo, d_eqhi, k, zt_lobits, L / 16,
+                                    mlv_rhos[mlv_rhos.size() - 2], mlv_rhos.back(),
+                                    S[k - 1], S[k], d_part8, d_out8);
             CK(cudaGetLastError());
             { F128* t; t = cA; cA = nA; nA = t; t = cB; cB = nB; nB = t; }
             L /= 4;
