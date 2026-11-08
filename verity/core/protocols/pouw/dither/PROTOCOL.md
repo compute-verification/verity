@@ -6,7 +6,7 @@ accepted monitoring period is credited at the public best price of that noised w
 work the developer could have done instead is bounded by ε_skip·W_reg. This is v3.2: v3.1 with the pooling fixes,
 written in the shared notation.
 
-This document credits at pub(μ°) against W_reg. The Glossary's credit is a sampling block's size in AND gates
+This document credits at pub(μ°) against W_reg. The Glossary's credit is an execution phase's size in AND gates
 (tentative), a statement about values, with 𝓜's resources only inside the slowdown lower bound, and Dither is not yet
 restated in it (`GLOSSARY.md`, "Size, credit and the slowdown lower bound").
 
@@ -14,14 +14,14 @@ The protocol is experimental. Its Lean headlines are `Pouw.Guarantees.Dither.Wor
 `Pouw.Guarantees.DitherInstance.WorkSoundAt`, over the ACCEL model `Accel`, with the clocks of `Timed`. The only round
 protocols the Lean defines are the no-fold round's (`noFoldRound`), so they don't cover v3.2's proof block, which no
 guarantee states yet. The change whose
-Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise periods NOFOLD-OPT's (see
-"The segment and the noise period").
+Lean covers this document deletes it. The numbers are D6 v1.1's, and the segment and noise repeat lengths NOFOLD-OPT's (see
+"The segment and the noise repeat length").
 
 **Names.** Dither is the protocol, PoUW's no-fold design, and the ACCEL model is the physical model 𝓜 it is proved over
 (the Lean's `Accel`).
 
 **The receipt is no-fold.** Each segment's 16-bit noised prefix sums are committed as SHA-512
-hiding leaves before the check coin, and the sampled cells are opened after it; no word is folded into a keyed receipt.
+hiding leaves before the check coin, and the sampled output cells are opened after it; no word is folded into a keyed receipt.
 The served PoUW moves to this receipt, and `SharedNoiseLucks`, the assumption its folds' detection rests on, has no
 place in Dither: detection rests on the value root's binding before the coin, SHA-512's extraction and the proved
 sampling rate.
@@ -29,36 +29,36 @@ sampling rate.
 Under "One proof system" (`AGENTS.md`), Dither owns what is committed, which proof blocks need proofs, the public Program
 each must pass, and what it does with the outcome. Coins, selection, timing, proving, verifying and the record are the
 service's. The second half of this document states what Dither needs from the service, each need as a requirement on the
-challenger, the certifier or the firewall, with the premise it makes true.
+challenger, the certifier or the ZK server, with the premise it makes true.
 
 ## Terms
 
 The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
 
 - **Runs.** Dither is part of PoUW, one of the Glossary's subprotocols, and each of its runs goes through the Glossary's
-  three phases: commit, challenge (the challenger draws live coins) and response. Every commitment is bound before any
-  challenge. Each of Dither's sampling blocks takes two runs: a dither run, whose response
+  three phases: commit, challenge (the challenger flips live coins) and response. Every commitment is bound before any
+  challenge. Each of Dither's execution phases takes two runs: a dither run, whose response
   is the block's value roots, and a check run, whose commitment they are.
 - **The ACCEL model 𝓜**: a period's devices as the Lean's `Accel` reads them: their resources (tensor cores, issue
   slots, shared-memory and register ports, device memory, links), each at its rate on the card, and each run's use of
   each. On the H200 and the RTX PRO 6000 it is read at each card's table (`Accel.H200.card`, `Accel.Sm120.card`: each
   resource's rate at its clock's ceiling). A price μ ≥ 0 is per unit of each resource; a run's cost at μ is Σ_r μ_r u_r.
-- **pub_μ(b)**: the least cost at μ of sampling block b's credited work (see "What is credited") over D5 v2.1's menu
+- **pub_μ(b)**: the least cost at μ of execution phase b's credited work (see "What is credited") over D5 v2.1's menu
   of public methods, which holds the named matmul
   programs (with route (iii) on the RTX PRO 6000) and the pinned SHA-512 schedules (the Lean's `PubBest`).
 - **μ°**: the honest served period's dual prices, which follow from the period's public shapes.
-- **Sampling block**: the proof blocks of a set of independent calls (none reads another's output), which go through
-  their runs together. Unlike the Glossary's default, its draw is not stratified by subcircuit (see "The sampling
+- **Execution phase**: the proof blocks of a set of independent calls (none reads another's output), which go through
+  their runs together. Unlike the Glossary's default, its sample is not stratified by subcircuit (see "The sampling
   design").
 - **Proof block**: what one check proves with Flock `--zk`: one segment of one output cell of a call, the Glossary's
   proof block in Dither's partition.
-- **W_b and W_p**: sampling block b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
+- **W_b and W_p**: execution phase b's and proof block p's public cost, the honest cost at μ° from the public shape. W_b
   is the sum of its proof blocks' W_p. W is work at the period's prices, as in the Glossary's W_cert.
 - **W_reg**: a replica's budget for a monitoring period, registered before its first coin.
 - **W_F, W_cap and W_S**: a fleet's registered total, or its registered cap, and the total of its accepted replicas'
   W_reg (see "The fleet").
-- **k**: the number of a replica's sampling blocks in a period, about 1e8 to 1e9 a week.
-- **q**: the expected number of a replica's sampling blocks selected in a period. The service's draw sets it.
+- **k**: the number of a replica's execution phases in a period, about 1e8 to 1e9 a week.
+- **q**: the expected number of a replica's execution phases selected in a period. The service's sample sets it.
 - **Replica**: the devices serving one copy of the model, behind one network certifier boundary, whose runs the challenger
   puts in one sequence. **G** is the number of replicas a claim registers.
 - **W_ans**: the honest cost at μ° of the period's answers, the selected proof blocks' proofs.
@@ -68,7 +68,7 @@ The Glossary's terms (`ARCHITECTURE.md`), the shared notation, and these:
   replica.
 - **F**: the adversary resource model's total over a period: census `world-inference-2027`, 9.36e30 FP8 FLOP a year.
 
-The Lean predates these names. Its round is a sampling block, and its word is a proof block's committed value. Its `k`
+The Lean predates these names. Its round is an execution phase, and its word is a proof block's committed value. Its `k`
 and `nsb` are k, and `k_draw` is q. Its `C` is W_reg, `H` is W_b, `H_o` is W_ans and `δ` is δ_coin. Its fleet's unit is
 a replica, and θ is 𝓜. A rename is to follow. Two premises have new names, which the Lean is to take: SHA-512's
 premise is SAK for SHA, `SAKSha` (the Lean's `ShaSpeed`), and the proof system's premise, "the proof system is sound", is
@@ -82,8 +82,8 @@ weights (for PV, A is P and B is the value cache).
 **Noise.** The live coins give each call its dithers d_A ∈ {0,1}^{m×K} and d_B ∈ {0,1}^{N×K}, and HYB noise:
 - U is N×L′ and V is m×L′, both uniform on ±80, periodic along K with period L′.
 - U's columns are permuted afresh (π_τ) in every noise tile τ.
-- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word a cell every L inner indices), and L′,
-  the noise period, are separate parameters (see "The segment and the noise period").
+- A segment is t noise tiles, so L = t·L′. L, the word interval (one 16-bit word an output cell every L inner indices), and L′,
+  the noise repeat length, are separate parameters (see "The segment and the noise repeat length").
 
 **The tensor operands** are X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), tile by tile, with wrap indicators
 w_X and w_W.
@@ -94,25 +94,25 @@ w_X and w_W.
   Z_X = Σ_τ (A + d_A + V)_τ π_τᵀ, Y_W = Σ_τ (B + d_B)_τ, and T_S is taken at full width.
 
 T_S is implied by O, not committed: the s = S proof block, which opens the whole rows, derives it from O by that
-identity (it takes no premise). At L ≥ K a cell commits O alone. So segment S earns no credit, and a call at L ≥ K
-earns none (see "What is credited").
+identity (it takes no premise). At L ≥ K an output cell commits O alone. So segment S earns no credit, and a call
+at L ≥ K earns none (see "What is credited").
 
 **Leaves and roots.** Every root is a binary frame-v3-sha512 tree of hm96-sha512/row/v2 rows of 16 KiB, hiding leaves
 under the prover's salts (`verity.ml.commitments`: `rowleaf`, `hm96`, `merkle`). A 16 KiB row costs 8.6 SHA-512
 compressions a KiB, against 8.9 for an 8-chunk leaf in a 16-ary tree, so Dither has no leaf format of its own.
-- Each call has an operand root, bound in its sampling block's dither run's commit phase, and a value root holding its
-  T_s and O, bound in that run's response phase (see "A sampling block's runs"), both before the block's check coin.
-  The sampled cells are opened after it.
-- The weights are in the period's weight root, bound once a period, before any of the period's coins.
+- Each call has an operand root, bound in its execution phase's dither run's commit phase, and a value root holding its
+  T_s and O, bound in that run's response phase (see "An execution phase's runs"), both before the block's check coin.
+  The sampled output cells are opened after it.
+- The weights are in the period's weight root, bound once a period, before any coin of the period is flipped.
 
 **The value root's layout**, pinned for kernels. It is the `v31.py` layout at 16 KiB rows,
 under Dither's tag and without segment S's rows:
-- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's cells row-major
+- A call's m × N output is cut into 128 × 128 tiles, tile t = t_m·(N/128) + t_n, each tile's output cells row-major
   (c = 128 r + col). m and N are multiples of 128, and L′ a multiple of 32 dividing K.
 - A tile's words of segment s, for s = 1..S − 1, are its 16,384 T_s as little-endian u16 (32 KiB, two rows). Its O
   values are 16,384 little-endian u32 (64 KiB, four rows). So a tile takes P = 2(S − 1) + 4 rows, and no row is padded:
   - row t·P + 2(s − 1) + r, for r = 0, 1, is bytes [16,384 r, 16,384 (r + 1)) of tile t's segment-s words;
-  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's cells 4,096 h to 4,096 h + 4,095.
+  - row t·P + 2(S − 1) + h, for h = 0..3, is the O of tile t's output cells 4,096 h to 4,096 h + 4,095.
 - A row's leaf is hm96's leaf over the row's `sha512/row/v2` digest (131,072 bits), salted with `prf_salt(Ks, off + pos)`:
   192 bytes of commit_gpu's PRF (`benchmarks/pouw/commit_gpu/reference.py`), keyed by the prover's private Ks, at the
   call's salt offset off plus the row's position pos. No coin feeds a salt. frame-v3-sha512's leaf prefix (the domain id
@@ -127,7 +127,7 @@ under Dither's tag and without segment S's rows:
 0.49 tensor-times of the RTX PRO 6000's GDDR7 at L = 1,024, and hashing them from DRAM doubles that. An opened row is
 recomputed on demand rather than stored.
 
-**Each call class's operands.** Every operand a credited call reads is bound before its sampling block's seeds: in the
+**Each call class's operands.** Every operand a credited call reads is bound before its execution phase's seeds: in the
 weight root, in an earlier block's value root, or in the call's own operand root.
 
 | call class | A | where A is bound |
@@ -155,22 +155,22 @@ matmuls and attention's PV, with O bound and a fresh dither bit on P, and of eac
   the prover can choose). So committing T_S noised would force no work beyond O's: a prover computes O on the dithered
   operands by any route and derives T_S.
 - **A call at L ≥ K earns none.** It has one segment and commits O alone (see "S = 1").
-- **A cell's credit is K − L MACs.** T_0 = 0 and T_S, which O gives, fix T_1 .. T_{S−1} from any S − 1 of the S
+- **An output cell's credit is K − L MACs.** T_0 = 0 and T_S, which O gives, fix T_1 .. T_{S−1} from any S − 1 of the S
   segment sums, so a prover holding O can skip any one segment, the longest of length L. That is the MACs of segments
-  s < S when L divides K, and L − r fewer when the last segment is short (r = K − (S − 1)L < L). A sampling block's
+  s < S when L divides K, and L − r fewer when the last segment is short (r = K − (S − 1)L < L). An execution phase's
   pub_μ°(b) prices only these MACs of its calls.
-- **The s = S block is still drawn**, at its W_p, and checks O for O's consumers: the calls whose A is bound in this
+- **The s = S block is still sampled**, at its W_p, and checks O for O's consumers: the calls whose A is bound in this
   call's value root, and the served output.
 
 QKᵀ and V4's indexer are served plain and uncredited.
 
-**The segment and the noise period** per class of sampling block follow one rule. The pair (L, L′) maximizes
-credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class, with credited value at a cell's
-K − L MACs (see "What is credited"): a pair at L ≥ K credits nothing, and a smaller L credits more of each call. A class
-with no pair at γ ≤ 10 is credited at its least-γ pair only where that adds credited value per honest second; otherwise
-it is served plain. NOFOLD-OPT's picks, all with T_S implied by O and 16 KiB rows, γ being the call's time over the
-plain s8 GEMM's at η 0.85 with the hashing overlapped, counted every MAC of a call as credited, and are to be re-picked
-at K − L:
+**The segment and the noise repeat length** per class of execution phase follow one rule. The pair (L, L′) maximizes
+credited value per honest second, pub_μ°/T_honest, subject to γ ≤ 10 for that class, with credited value at an output
+cell's K − L MACs (see "What is credited"): a pair at L ≥ K credits nothing, and a smaller L credits more of each call.
+A class with no pair at γ ≤ 10 is credited at its least-γ pair only where that adds credited value per honest second;
+otherwise it is served plain. NOFOLD-OPT's picks, all with T_S implied by O and 16 KiB rows, γ being the call's time
+over the plain s8 GEMM's at η 0.85 with the hashing overlapped, counted every MAC of a call as credited, and are to be
+re-picked at K − L:
 - static, RTX PRO 6000: L = 1,024 with L′ = 128 (t = 8), at γ 1.10 / 1.05 / 1.15 for 8B / 70B / V4, when registration
   pins B (the weight root is a published checkpoint's, or the weights expand from a public seed). It credits
   1 − 1,024/K of a call's MACs, 3/4 at K = 4,096. The credit can't rest on that pin: a pinned checkpoint's weights are
@@ -191,24 +191,24 @@ at K − L:
 
 ε_skip is the same at every L.
 
-## A sampling block's runs
+## An execution phase's runs
 
-Before any of a period's coins, the replica registers (see "Registration") and binds the weight root. The certifier
-signs its registration receipt of both, and the challenger draws the period's weight-side coins from it. Then the
-replica's sampling blocks follow in one sequence, each through two runs.
+Before any coin of the period is flipped, the replica registers (see "Registration") and binds the weight root. The certifier
+signs its registration receipt of both, and the challenger flips the period's weight-side coins from it. Then the
+replica's execution phases follow in one sequence, each through two runs.
 
 **Block b's dither run.**
 - **Commit phase.** It starts at block b − 1's value-root receipt (at the registration receipt for the first block). The
   replica sends b's public shape (its calls, their classes and shapes, and W_b) and each call's operand root. The
   certifier signs the operand-root receipt.
-- **Challenge phase.** The challenger draws b's seeds from the operand-root receipt (see "Coins"), and they enter the
+- **Challenge phase.** The challenger samples b's seeds from the operand-root receipt (see "Coins"), and they enter the
   boundary at t_b. No seed of b exists before that receipt, and none goes out before block b − 1's value-root receipt.
 - **Response phase.** The replica runs b's calls on the noised operands and sends their value roots, due within Δ:
   arrive_b ≤ t_b + Δ. A late root fails the period. The certifier signs the value-root receipt.
 
 **Block b's check run.**
 - **Commit phase**: the value roots, bound by the value-root receipt.
-- **Challenge phase.** The challenger draws b's check coin from the value-root receipt, so tc_b ≥ arrive_b. The coin
+- **Challenge phase.** The challenger flips b's check coin from the value-root receipt, so tc_b ≥ arrive_b. The coin
   carries either "not selected", with probability 1 − π_b, or the one proof block of b to prove (see "The sampling
   design"). One coin carries both, so the answer is timed from the coin `Timed` reads as tc.
 - **Response phase**, if b is selected: the proof of its proof block, which reaches the certifier within τ_ans of the
@@ -223,7 +223,7 @@ Block b + 1's dither run starts at b's value-root receipt, beside b's check run.
 
 ## The proof block and its Program
 
-**A proof block** is one cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
+**A proof block** is one output cell (i, j) and one segment s of a call. Its Program opens these from their hiding leaves,
 inside the proof:
 - A's and B's row segments s (for s = S, the whole rows A[i,·] and B[j,·]), each from where its class binds it;
 - T_{s−1} (with T_0 = 0), and T_s for s < S or O for s = S, from the call's value root.
@@ -240,17 +240,17 @@ mod 2^16, from the whole rows, their wraps and the coins, and also checks O ≡ 
 
 Flock `--zk` proves it on the committed values. The Definition and its circuit-check sidecar are not written yet.
 
-O is checked only in its cell's last segment, never in a proof block of its own. That block derives T_S from O, so given
+O is checked only in its output cell's last segment, never in a proof block of its own. That block derives T_S from O, so given
 T_{S−1} it passes exactly when O is right, at any S. A constant O is therefore a free guess of the block:
-- At A = B = 0, O = d_A d_Bᵀ is Bin(K, 1/4) in each cell, and its mode passes with probability 0.1145 at K = 64, 0.0470
+- At A = B = 0, O = d_A d_Bᵀ is Bin(K, 1/4) in each output cell, and its mode passes with probability 0.1145 at K = 64, 0.0470
   at K = 384 and 0.0144 at K = 4,096. The block earns no credit (see "What is credited"), so this guess bounds its
   check of O, and the credit's η needn't price it (see "The outcome").
-- Where registration pins B, the prover knows c = B + d_B (d_B is a weight-side coin), so O's variance a cell at A = 0
+- Where registration pins B, the prover knows c = B + d_B (d_B is a weight-side coin), so O's variance an output cell at A = 0
   is Σ_ℓ c_{jℓ}²/4 and the guess passes at about 1/√(2π Σ_ℓ c_{jℓ}²/4). On `LLAMA31_8B_INT8` the least such row
   (gate-up, layer 18: one entry at ±126, rms 2.58 elsewhere) gives 4.83e-3, and 0.34–1.33% of each linear's rows give
   more than 1e-3.
 
-**S = 1.** Where L ≥ K, a cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
+**S = 1.** Where L ≥ K, an output cell commits O alone, and its one proof block checks O alone. With O right, the T_S it derives
 passes whatever U, V and π are, so the noise does nothing there: the call is un-noised, and earns no credit (see "What
 is credited"). Its block still checks O for O's consumers, and the credit takes no premise on it:
 - `SAKMatmul` for the dithered product (A + d_A)(B + d_B)ᵀ itself, with the dithers as its only coins, would be a bound
@@ -267,17 +267,17 @@ is credited"). Its block still checks O for O's consumers, and the credit takes 
 
 Otherwise the period is refused. A failed proof is a visible failure and is never retried.
 
-**Credit.** An accepted period credits Σ_b pub_μ°(b) over its sampling blocks, each pub_μ°(b) pricing only its calls'
-noised segments, K − L MACs a cell (see "What is credited"). It publishes W_reg, q and ε_skip at δ_coin,
-which is what its draw established, and a fleet's W_F or W_cap beside W_S.
+**Credit.** An accepted period credits Σ_b pub_μ°(b) over its execution phases, each pub_μ°(b) pricing only its calls'
+noised segments, K − L MACs an output cell (see "What is credited"). It publishes W_reg, q and ε_skip at δ_coin,
+which is what its sample established, and a fleet's W_F or W_cap beside W_S.
 
 **The bound.** Except with probability δ_coin + δ_crypto + k(κ_dmm + κ_dsha), the credited work plus any other work the
 replica's devices did in the period, valued at μ°, is at most the honest optimum plus ε_skip·W_reg (`WorkSound`). Here:
-- δ_coin is the draw's failure probability;
+- δ_coin is the sample's failure probability;
 - δ_crypto = κ_S + κ_x(A) + κ_sha(A): the proof system's soundness error, and SHA-512's as a random oracle in the
   extraction and in `SAKSha`;
 - κ_dmm and κ_dsha are `SAKMatmul`'s and `SAKSha`'s degenerate-dither terms at the prover's advice B_adv(A), paid once
-  per sampling block.
+  per execution phase.
 
 **Its budget.** For a fleet of G replicas to keep these terms within δ_coin in total, each replica's are at most
 δ_coin/G, and each block's κ_dmm + κ_dsha at most δ_coin/(G·k).
@@ -293,15 +293,15 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
 
 ε_skip = (ε_S + ε_net)(1 + W_ans/W_reg), with:
 - ε_S = ln(G/δ_coin)/(ηq), each replica at δ_coin/G, with G the claim's registered replicas. Here η = 1 − p, where p is
-  the most predictable credited proof block's free-guess rate, at A = B = 0. A cell's last block passes a constant O at
-  Bin(K, 1/4)'s mode (see "The proof block and its Program"), while a segment word is guessed far more rarely
-  (measured: p ≤ 2.79e-5 on the H200, T_1 at L = 64, and 2.02e-5 on the RTX PRO 6000, T_1 at L = 384). The last block
-  earns no credit (see "What is credited"), so p is a segment word's, and η = 1 − 2.8e-5 on both cards. The figures
-  below, P26's and the headline's, predate that rule: they take p as O's mode at the least K they credit, PV's at 64
-  attended keys on the H200 and 384 on the RTX PRO 6000, so η = 0.8855 on the H200's rows and 0.9530 on the RTX PRO
-  6000's.
+  the most predictable credited proof block's free-guess rate, at A = B = 0. An output cell's last block passes a
+  constant O at Bin(K, 1/4)'s mode (see "The proof block and its Program"), while a segment word is guessed far more
+  rarely (measured: p ≤ 2.79e-5 on the H200, T_1 at L = 64, and 2.02e-5 on the RTX PRO 6000, T_1 at L = 384). The last
+  block earns no credit (see "What is credited"), so p is a segment word's, and η = 1 − 2.8e-5 on both cards. The
+  figures below, P26's and the headline's, predate that rule: they take p as O's mode at the least K they credit, PV's
+  at 64 attended keys on the H200 and 384 on the RTX PRO 6000, so η = 0.8855 on the H200's rows and 0.9530 on the RTX
+  PRO 6000's.
 - ε_net = β(k_infil + k_exfil)/W_reg ≤ β·E/W_reg (P18), the channel term priced at β a bit while credit is work at μ°.
-  β = n_max·W_mac, where W_mac is the honest cost of one MAC of the sampling block (hashing included), and n_max = N, 128,256 for
+  β = n_max·W_mac, where W_mac is the honest cost of one MAC of the execution phase (hashing included), and n_max = N, 128,256 for
   the Llamas and 129,280 for V4. E = E_in + E_out:
   - tokens crossing the replica's boundary at 4 bytes a token (4,500-token requests; about 6.5 times that if HTTP/SSE
     crosses it);
@@ -315,26 +315,26 @@ replica's devices did in the period, valued at μ°, is at most the honest optim
 
 ### The sampling design
 
-Each sampling block b is selected independently with probability π_b = q·W_b/W_reg, drawn live after b's value roots.
-Inside a selected block, its proof block p is drawn with probability W_p/W_b.
+Each execution phase b is selected independently with probability π_b = q·W_b/W_reg, sampled live after b's value roots.
+Inside a selected block, its proof block p is sampled with probability W_p/W_b.
 - Each proof block is then checked with probability q·W_p/W_reg. That is `SAKMatmul`'s rate condition
   η·pub ≤ π·s·(1 − p) at s = 1, given W at μ° (pub ≤ W for each proof block), with p the block's own free-guess rate,
-  so one η for the claim takes the largest p of a credited block. A cell's last block earns no credit and has no rate
-  condition: it is drawn at its W_p and checks O for O's consumers.
+  so one η for the claim takes the largest p of a credited block. An output cell's last block earns no credit and has
+  no rate condition: it is sampled at its W_p and checks O for O's consumers.
 - Uniform weighting inside the block fails the condition: a prover would skip the proof blocks whose share of cost
   exceeds their share of checks. So this weighting is required. The Lean's `NoFold.cells` takes any rule, and
   `SAKMatmul` holds only at this one.
 - π_b ≤ 1 needs W_b ≤ W_reg/q (see "Registration").
 - q is the service's. D6 takes q = 13,816 a replica-week on average. The count is random, about √q = 118 either side,
-  and 14,378 at the 1 − 1e-6 quantile on the H200. Dither surfaces ε_skip at δ_coin for whatever q the draw sets.
+  and 14,378 at the 1 − 1e-6 quantile on the H200. Dither surfaces ε_skip at δ_coin for whatever q the sample sets.
 
 **This is a sampling design main doesn't have**, proposed name `poisson:Q`:
-- `bernoulli:NUM/DEN` and `rate:NUM/DEN[:T]` give every sampling block one flat rate (`rate` as a subset of size ⌈qN⌉), not a
+- `bernoulli:NUM/DEN` and `rate:NUM/DEN[:T]` give every execution phase one flat rate (`rate` as a subset of size ⌈qN⌉), not a
   rate proportional to its cost.
-- `work:K` and `stratified:K` draw a fixed-size subset per template stratum once, over the whole registration. Dither
-  has no strata, a random count, and a draw interleaved with serving.
+- `work:K` and `stratified:K` sample a fixed-size subset per template stratum once, over the whole registration. Dither
+  has no strata, a random count, and a sample interleaved with serving.
 
-It needs a law object beside `draw.parse_law`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
+It needs a sampling-design object beside `draw.parse_law`'s and the Lean verifier's `Flock.Draw`. Its acceptance probability bound
 is `WorkSound`'s sampling term, a moment bound at rate ηq/W_reg a unit of cost, rather than `work_escape_le`. The
 integrity profile has no field for a cost-weighted moment bound; that field is sampled proofs', which produce the
 profile.
@@ -342,8 +342,8 @@ profile.
 ### Registration
 
 - **W_reg is a budget**, registered before the period's first coin. Each block's W_b is fixed in its dither run's
-  commit phase, before its seeds, with W_b ≤ W_reg/q. The challenger draws no seeds for a sampling block that would take Σ_b W_b past W_reg.
-  Sampling blocks follow live traffic, so their shapes needn't be known when the period starts.
+  commit phase, before its seeds, with W_b ≤ W_reg/q. The challenger samples no seeds for an execution phase that would take Σ_b W_b past W_reg.
+  Execution phases follow live traffic, so their shapes needn't be known when the period starts.
 - An unspent budget only raises ε_skip against the credit: the bound is ε_skip·W_reg whatever share of W_reg is served.
 
 **The fleet.** A claim over several replicas registers its fleet before any member's first coin, in one of two forms:
@@ -357,20 +357,20 @@ cap, it multiplies δ_coin by up to the harmonic number H_G, ×16.8 at H200 V4.
 ### Coins
 
 The challenger issues every live coin, in each replica's one sequence of runs; under the MVP it runs on the replica's
-certifier device (see "The boundary"). Before the monitoring period it draws a random coin c for each draw and commits
-to them in one root (see "The coin commitment"). Once the receipt a draw follows is in, it opens that draw's c against
-the root and derives the draw's coins from c and the receipt, inside the challenger,
+certifier device (see "The boundary"). Before the monitoring period it flips a random coin c for each sample and commits
+to them in one root (see "The coin commitment"). Once the receipt a sample follows is in, it opens that sample's c against
+the root and derives the sample's coins from c and the receipt, inside the challenger,
 as `derive(c, "verity/pouw/dither/<kind>/v1", ctx)` (`verity.ml.randomness`: SHA-512 over the domain tag, the coin and
 the receipt, under tags distinct from PoUW's noise-seed tags), where:
 - c's opening is checked by the certifiers against the root they hold privately. The prover gets no Merkle path and no
-  root before its last root, and receives the paths and the root at close (the withheld mode): opening draw j to it
+  root before its last root, and receives the paths and the root at close (the withheld mode): opening sample j to it
   early would hand it the root before later blocks' roots;
 - kind is `weights` (the weight-side coins), `seeds` (a block's dither and noise seeds) or `check` (its check coin);
-- ctx = {period, replica, sampling block index, receipt}, where receipt is the digest of the certifier's signed receipt
+- ctx = {period, replica, execution phase index, receipt}, where receipt is the digest of the certifier's signed receipt
   of what the coin follows: the registration for `weights`, the block's operand roots for `seeds`, and its value roots
   for `check`.
 
-So a derived coin never has to open against the root; its c does. No c serves two draws, no context repeats, and no
+So a derived coin never has to open against the root; its c does. No c serves two samples, no context repeats, and no
 coin can be computed before the receipt it reads. Derived from roots alone, a
 repeated junk root would repeat its "not selected", and repeated operands would repeat their dither: either raises
 ε_skip to the credited share. This is the premise the pooled bound's `IndependentCoins` rests on, with SHA-512 as the
@@ -383,13 +383,13 @@ fail.
 **The coin commitment.** The challenger
 commits to its coins c before the monitoring period, and the commitment reaches the prover only after the prover has
 committed, so no soundness statement takes a hiding premise on it.
-- The public configuration names each replica's drawing challenger, its identity and LMS key, and never its coin root.
+- The public configuration names each replica's sampling challenger, its identity and LMS key, and never its coin root.
 - Before the monitoring period, the challenger sends its committed root to the network certifiers over their private
   links (`WitnessPathPrivate`), never to the prover first.
-- A draw's c opens against the root, to the certifiers, only after the receipt the draw follows, and the draw's coins
+- A sample's c opens against the root, to the certifiers, only after the receipt the sample follows, and the sample's coins
   are derived from c and that receipt (see above). So the challenger can't choose a block's seeds after seeing its roots, and the prover
   can't know them before it sends the roots.
-- A multi-server replica has one draw, from the challenger on its lowest-numbered server. Each server's certifier exempts
+- A multi-server replica has one sample, from the challenger on its lowest-numbered server. Each server's certifier exempts
   from k_infil only the coin frames derived from a c that opened against that root, with the receipt they name, and
   counts everything else as ingress. Each
   certifier re-clocks the forwarded coins on its own ingress grid, with the certifiers' clocks synced under the
@@ -400,7 +400,7 @@ least 1/N_max unpredictable bits a credited MAC. That is 0.97 to 2.38 GB/s a GPU
 - Each replica's seeds are its own: no stream is broadcast across replicas.
 - Dither takes no Fiat–Shamir exception: its seeds are live coins, not main's per-matmul noise seeds.
 
-**Weight-side coins** (d_B, U and the permutations) are drawn per replica from the registration receipt, after the
+**Weight-side coins** (d_B, U and the permutations) are sampled per replica from the registration receipt, after the
 weight root is bound, and never shared between replicas. They are reused across the period's calls as part of the registered instance (P14, P17).
 
 ### The boundary
@@ -429,14 +429,14 @@ k_exfil. Dither needs these of the challenger and the certifier:
     - `OneClock`: the challenger's release times and the certifier's ingress and receipt times are read on one clock,
       and a challenger on a device of its own keeps its clock within 1.03 s of the certifier's (the one clock below).
       It is a spec premise: the Lean reads every time on one axis and names no Prop for it.
-  - Without it an outside machine reads the dither on the path and serves the sampling block, and ε_skip rises to the credited
+  - Without it an outside machine reads the dither on the path and serves the execution phase, and ε_skip rises to the credited
     share. The replica imports only its roots: at H200 V4, E leaves 27.1 MB a check against 0.46 MB for a V4 decode
     call's activations.
-- **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the drawing server's coins are made
+- **The exclusion is exact** (what makes `CertifierSeesImports` true). Under the MVP the sampling server's coins are made
   on its certifier's device and are never imports there. Every other server's certifier, and any certifier whose
   challenger has a device of its own, excludes them only so:
-  - k_infil leaves out only a coin frame derived from a c that opened against the drawing challenger's committed root,
-    with the receipt it names, and carrying its expected (period, replica, sampling block, kind, sequence number) once,
+  - k_infil leaves out only a coin frame derived from a c that opened against the sampling challenger's committed root,
+    with the receipt it names, and carrying its expected (period, replica, execution phase, kind, sequence number) once,
     at its expected length.
   - Every other byte counts: malformed, unverifiable, duplicate, replayed or late messages into k_infil, and the
     stream's reverse traffic (acknowledgements, flow control) into k_exfil.
@@ -448,9 +448,9 @@ k_exfil. Dither needs these of the challenger and the certifier:
 - **One clock.** The certifier stamps the coins' entry into the boundary (t_b, tc_b) and every receipt and arrival
   (the operand roots, arrive_b, ansAt_b) on its own clock, which under the MVP is the challenger's too. A challenger of
   its own would have to keep its clock within 1.03 s of the certifier's, and so does every other certifier of a
-  multi-server replica against the drawing server's.
+  multi-server replica against the sampling server's.
 - **Receipts are authenticated.** The challenger learns that roots are in only from the certifier's signed receipts,
-  whose digests are in the coins' contexts and messages. A forged receipt would draw a check coin before the roots.
+  whose digests are in the coins' contexts and messages. A forged receipt would flip a check coin before the roots.
 - **A multi-node replica has one boundary**, carried by certifier-to-certifier traffic on auditor-private links under
   `WitnessPathPrivate`, never through the developer's network, with the replica's certifiers keeping one count, each
   stamping its own server's ingress on its synced clock. Everything else crossing between its nodes counts.
@@ -458,7 +458,7 @@ k_exfil. Dither needs these of the challenger and the certifier:
   would fail honest replicas, and excluding that traffic by address would let an outside machine join as a node.
 
 **What each device signs.**
-- The challenger, per coin message: the period, replica, sampling block, kind, sequence number, issue time and the
+- The challenger, per coin message: the period, replica, execution phase, kind, sequence number, issue time and the
   payload's digest. A check coin's message also carries the value-root receipt's digest. It signs them with LMS in Merkle
   batches, one signature per batch root. A challenger of its own is checked live by the certifier with HMAC-SHA-512.
   It signs its committed coin root once, for the certifiers (see "Coins").
@@ -469,12 +469,12 @@ k_exfil. Dither needs these of the challenger and the certifier:
 ### Timing
 
 - T = 1 week and Δ = 30 s.
-- **Answers.** Each selected sampling block's answer is one outer proof, which the firewall releases on its own. Its
+- **Answers.** Each selected execution phase's answer is one outer proof, which the ZK server releases on its own. Its
   statement, the proof block's Program on the call's committed values, is fixed by the value-root receipt and the check
   coin before its run's challenge phase. A replica's answers are a stream of one-statement batches, run concurrently
-  beside its later sampling blocks and never serialized. τ_ans includes the wait for the firewall's release slot.
-- **No q(Δ + τ_ans) ≤ T.** `Timed` covers any number of sampling blocks, with answers beside later ones: their
-  sampling periods telescope to T. Selections arrive about every 43.8 s a replica (T/q).
+  beside its later execution phases and never serialized. τ_ans includes the wait for the ZK server's release slot.
+- **No q(Δ + τ_ans) ≤ T.** `Timed` covers any number of execution phases, with answers beside later ones: their
+  execution and verification phases telescope to T. Selections arrive about every 43.8 s a replica (T/q).
 - **τ_ans isn't set.** v3.1's 10 s on an "8 s latency floor" rested on no measured Dither proof block. τ_ans is to be
   set from a passing `--zk` run of the proof block with live coins, the release slot included, with a wide margin.
   - One late answer refuses the week. An honest week fails 76.3% of the time if 1e-4 of answers are late and 1.43% at
@@ -488,9 +488,9 @@ k_exfil. Dither needs these of the challenger and the certifier:
 
 The H200 at measured hashing (4.79 G/s), the RTX PRO 6000 at 7.13 G/s, credit at μ°, ε_skip at δ_coin = 1e-6 for one
 period, with η counting the constant-O pass (0.8855 on the H200, 0.9530 on the RTX PRO 6000; see "The outcome").
-It predates the rule that credits only noised segments, K − L MACs a cell (see "What is credited"): its credited shares,
-and the per-period table's credited column, count segment S and every call at L ≥ K, and its η prices O's constant
-guess. Neither table is restated at that rule yet.
+It predates the rule that credits only noised segments, K − L MACs an output cell (see "What is credited"): its credited
+shares, and the per-period table's credited column, count segment S and every call at L ≥ K, and its η prices O's
+constant guess. Neither table is restated at that rule yet.
 
 | card, model | GPUs a replica | ε_skip | γ | coverage | perplexity | credited share at μ° |
 |---|---|---|---|---|---|---|
@@ -513,12 +513,12 @@ Notes on the headline:
   - ε_S is 0.232–0.249%, at G of 1.15e7–3.68e7 replicas;
   - ε_net is 0.0058–0.0546%;
   - W_ans/W_reg is 0.16–0.48%.
-- Without the registration (P21's variant, the draw normalised by wall-clock time), ε_skip would be 0.282–0.471%.
+- Without the registration (P21's variant, the sample normalised by wall-clock time), ε_skip would be 0.282–0.471%.
 - Every row's least credited K is a PV class, 0.001–0.09% of its credited MACs. With η at T_1's rate alone, as D6 v1.1
   took it and as crediting only noised segments gives it (1 − 2.8e-5), ε_skip would be 0.225–0.282%.
 - Coverage counts V4's 48.85e9 static MACs a token at their own shapes. With mHC's F32 GEMMs uncredited, V4's coverage
   is 96.4% on the H200 and 95.7% on the RTX PRO 6000.
-- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise period"), the static calls' γ is
+- The γ column is D6 v1.1's. At NOFOLD-OPT's picks (see "The segment and the noise repeat length"), the static calls' γ is
   1.05–1.15 on the RTX PRO 6000 with B pinned and 1.40–2.15 on the H200; the headline isn't restated at them yet.
 - What v3.2 changes and D6 v1.1 doesn't price:
   - E with the answers' proofs raises ε_net by at most 0.0006%.
@@ -561,29 +561,29 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
   - the budget registration: `reg` adapted, fixed before each round's coins, with k padded to a fixed maximum by empty
     rounds;
   - RP20 (the answers' oracle calls under one budget), the joint outsourcing premise over the period's programs, and
-    `SAKMatmul`'s reuse form over the challenger's draw for the weight-side coins (P17's κ_re). The coin stream's exact
+    `SAKMatmul`'s reuse form over the challenger's sample for the weight-side coins (P17's κ_re). The coin stream's exact
     exclusion and the multi-node boundary are stated in `CertifierSeesImports` (RP5, RP9);
-  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words,
-    η is priced at the free guess of "The outcome", a segment word's, since a cell's last block earns no credit, and so
-    is POOL-THM's ζ, whose share z ≤ 0.01% needs N ≈ 3.6e5 proof blocks a sampling block at a word's 2^-16. At O's
-    constant guess, which the headline's figures take:
-    - from the exact binomial tail at L = ln(2m/δ) (51.5 at H200 V4), ζ's share z at N proof blocks a sampling block
+  - the Lean's word is 32 bits, while a proof block checks a 16-bit T_s. Until the Lean is restated at v3.2's words, η
+    is priced at the free guess of "The outcome", a segment word's, since an output cell's last block earns no credit,
+    and so is POOL-THM's ζ, whose share z ≤ 0.01% needs N ≈ 3.6e5 proof blocks an execution phase at a word's 2^-16. At
+    O's constant guess, which the headline's figures take:
+    - from the exact binomial tail at L = ln(2m/δ) (51.5 at H200 V4), ζ's share z at N proof blocks an execution phase
       is 0.355% at N = 1e6 at PV's guess at K = 64 (0.1145). That is above tier A's 0.1% until N ≈ 1.25e7, so
       pooling by `SAKCheck` gains nothing at D6 v1.1's rows;
     - where every O-only block is a pinned-B call's, the guess is the 4.83e-3 above, and z ≤ 0.01% needs N ≈ 4.7e7.
-- **Keeping η near 1** needs no protocol change: a cell's last block earns no credit, so η takes a segment word's rate.
-  Neither change proposed for it is needed: selecting each proof block with probability proportional to W_p/(1 − p_p),
-  or committing T_S (16 bits) beside O. A committed T_S would not earn segment S's credit either: T_S follows from O at
-  a small share of the call's MACs, so a noised T_S forces no work beyond O's.
-- **What a noised call's work is worth over weights the prover chose.** The credit can't take it from registration's
-  pin of B (see "The segment and the noise period"). It is the least work a noised segment forces at the worst operands
-  the prover can choose, `SAKMatmul` stated over the noised operands alone, and it has no value yet.
+- **Keeping η near 1** needs no protocol change: an output cell's last block earns no credit, so η takes a segment
+  word's rate. Neither change proposed for it is needed: selecting each proof block with probability proportional to
+  W_p/(1 − p_p), or committing T_S (16 bits) beside O. A committed T_S would not earn segment S's credit either: T_S
+  follows from O at a small share of the call's MACs, so a noised T_S forces no work beyond O's.
+- **What a noised call's work is worth over weights the prover chose.** The credit can't take it from registration's pin
+  of B (see "The segment and the noise repeat length"). It is the least work a noised segment forces at the worst
+  operands the prover can choose, `SAKMatmul` stated over the noised operands alone, and it has no value yet.
 - **The challenger's and the certifier's specs** (network-accounting, infra and proofs): the challenger on the
   certifier's device (the MVP), the exact exclusion, re-clocking, one clock and the multi-node private links, as
   implemented.
 - **Keyed transport**, in place of `WitnessPathPrivate`'s private links (pre-shared keys, ML-KEM for transport only, or
   keys set at provisioning), and whether ML-KEM may bend the one-hash rule.
-- **The firewall** (with Flock's ZK server):
+- **The ZK server** (with Flock's ZK server):
   - that it proves a replica's answers concurrently, and its release schedule. If it can't, queued check coins are the
     fix, and `Timed` must then read the check coin's time apart from the selection's;
   - main's batch rule fixes every staged statement before any run's challenge phase. Dither's statements are staged
@@ -592,10 +592,10 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
 - **τ_ans**, from a passing measured run (see "Timing").
 - **The coin root** (see "Coins"): how a certifier checks a forwarded frame's derivation from its opened c is the
   challenger's spec.
-- **Credit becomes size** (the Glossary's Size): a sampling block's credit becomes its size. Then ε_skip is a
+- **Credit becomes size** (the Glossary's Size): an execution phase's credit becomes its size. Then ε_skip is a
   share of the registered size, and the channel term stays in bits, k_infil and k_exfil, without ε_net's β.
 - **μ° or a fixed published price.**
-  - At μ°, plain int8 tensor work beside the credited sampling blocks is valued at little or nothing. Let x be its plain MACs
+  - At μ°, plain int8 tensor work beside the credited execution phases is valued at little or nothing. Let x be its plain MACs
     for each credited MAC. At x = 0.25 it is 5.1–7.3% of the claim on the H200 and 10.8–13.0% on the RTX PRO 6000, and
     neither ε_skip·W_reg nor the uncredited column bounds it.
   - μ¹, the honest period's duals at x = 1, published as a parameter, removes 37–40% of that on the H200 and 78–80% on
@@ -613,8 +613,8 @@ week and 4.76e26 a year at H200 V4, and 1.70e26 and 7.32e26 at RTX PRO 6000 V4.
   - There is no `SharedNoiseLucks` and no `UnitFixed` (NOFOLD-OPT): a segment word's 2^-16 guess sits in SAK-LB's λ,
     and O's constant guess bounds only the check of O, in a block that earns no credit.
   - `PeriodInventory` is held open: whether host CPUs and DPUs are devices of the period.
-- **The RTX PRO 6000's cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
+- **The RTX PRO 6000's output cells at x > 0 are upper bounds.** 𝓜's sm_120 joint issue rows are closed rows (A36), and they
   stay bounds until a calibration moves them to a current vector.
 - **Perplexity** isn't run for V4, or for 70B at 8K.
 - **Not written yet:** the proof block's Definition and its sidecar, the within-block weighting in Lean, the
-  `poisson:Q` law, and D6 v2's prices of the operand roots' hashing.
+  `poisson:Q` sampling design, and D6 v2's prices of the operand roots' hashing.

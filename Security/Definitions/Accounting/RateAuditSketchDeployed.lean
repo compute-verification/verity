@@ -5,10 +5,10 @@ public import Definitions.Accounting.RateAuditSketch
 /-!
 # A deployed session of verbatim sketch receipts (trusted)
 
-This is the session form of `RateSketch.Prover`, the verbatim-sector model. A window draws one tensor-sketch signs
+This is the session form of `RateSketch.Prover`, the verbatim-sector model. A window samples one tensor-sketch signs
 matrix, then runs `P` causal passes. Each pass may grind among `G` independent oracle candidates; its device may depend
 on the earlier passes' coins and on the candidate, while the pick may also depend on the store, the signs and the whole
-candidate family. After all passes the window draws `d` receipts from its `P·N` receipts. A session has `n` causal
+candidate family. After all passes the window samples `d` receipts from its `P·N` receipts. A session has `n` causal
 windows on one store.
 
 The model keeps the restriction proved by `RateAuditTensorSketchRank`: device memory, on-chip state, the side link and
@@ -36,8 +36,8 @@ def Data.ofParts {N m ρ : ℕ} (E : SketchStore N m) (R : SketchStream ρ) : Da
   | .inl p => E p
   | .inr i => R i
 
-/-- One pass's fresh coins: its certified stream and `G` candidate random oracles. The window's signs and pooled draw
-are drawn once outside the passes. -/
+/-- One pass's fresh coins: its certified stream and `G` candidate random oracles. The window's signs and pooled sample
+are sampled once outside the passes. -/
 abbrev SketchPassCoins (N ρ h ks G : ℕ) : Type :=
   SketchStream ρ × (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)))
 

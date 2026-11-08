@@ -1,5 +1,5 @@
 """sbench's side of PoUB beside its arms (`sbench.py --bw-passes GIB`): `Side` runs `dbw_side.py`
-(the audit's verifier, and its prover on sbench's GPU) and starts each session as sbench needs it; `report` reads both
+(the audit's verifier, and its prover on sbench's GPU) and starts each run as sbench needs it; `report` reads both
 timelines, sbench's decode rows and the audit's passes, on the host's monotonic clock.
 
 Each `--bw-prover-args` entry is a side of its own, one after another (the first registered, used and closed before the
@@ -8,11 +8,11 @@ next prover starts), each with its prover's own options (the default side none: 
     registration        the prover's calibration, and so the allowance A and the pace's pass, beside the dither arms'
                         decode ops, run back to back from the side's start to its `ready` (`registered`), as
                         `node.py` calibrates beside its engines' served load
-    session 0           idle: the arms built and gated, nothing generating (the passes' latency without Dither)
-    rep r, off block    every arm's ops as without --bw-passes, no session running
-    rep r, on block     session 1 + r started first (paced to outlast the block, `paced`), the same ops once its first
+    run 0               idle: the arms built and gated, nothing generating (the passes' latency without Dither)
+    rep r, off block    every arm's ops as without --bw-passes, no run in progress
+    rep r, on block     run 1 + r started first (paced to outlast the block, `paced`), the same ops once its first
                         coin is out, then its verdict awaited
-    session 1 + reps    a tampered prover (skip:0.0625, 1/16 of its blocks dropped) beside one decode op of each dither
+    run 1 + reps        a tampered prover (skip:0.0625, 1/16 of its blocks dropped) beside one decode op of each dither
                         arm: refused
 
 A pass's latency is its coin's release to its root's arrival at the verifier (`windows_seen`: K = 1, so a group is a
@@ -76,14 +76,14 @@ class Side:
         self.p.stdin.flush()
 
     def start(self, k: int, paced: str) -> dict:
-        """Session k, its first coin sent once the prover is armed (after its untimed warm-up passes)."""
+        """Run k, its first coin sent once the prover is armed (after its untimed warm-up passes)."""
         self.send({"op": "session", "k": k, "paced": paced})
         return self.expect("started")
 
     def end(self, k: int) -> dict:
         ev = self.expect("ended")
         if ev["k"] != k:
-            raise SideError(f"session {ev['k']} ended, not {k}")
+            raise SideError(f"run {ev['k']} ended, not {k}")
         return ev | {"passes_at_ns": self.passes_at.get(k)}
 
     def stop(self) -> dict:
@@ -122,15 +122,15 @@ def plan(reps: int) -> list[str]:
 
 
 def paced(block_s: float, cover: float, stretch_s: float = T_MS / 1000) -> str:
-    """A K = 1 session whose passes outlast `cover` times a block of `block_s` seconds, a stretch taking `stretch_s`
-    (`window_s` of an earlier session; T_MS before any): W stretches of T_MS's groups (and the closing one), DRAWS
-    openings a stretch, as the audit's 1 s sessions (`run.sh`'s, gate run 7's)."""
+    """A K = 1 run whose passes outlast `cover` times a block of `block_s` seconds, a stretch taking `stretch_s`
+    (`window_s` of an earlier run; T_MS before any): W stretches of T_MS's groups (and the closing one), DRAWS
+    openings a stretch, as the audit's 1 s runs (`run.sh`'s, gate run 7's)."""
     return f"1:{T_MS}:{DRAWS}:{max(1, math.ceil(cover * block_s / stretch_s) + 1)}"
 
 
 def window_s(session: dict) -> float:
     """The seconds a stretch of `session` took on the verifier's clock: its passes' span over its W stretches and the
-    closing one. A stretch's groups are counted at the calibration's bare pass, so a session's passes, slower than
+    closing one. A stretch's groups are counted at the calibration's bare pass, so a run's passes, slower than
     that, take longer than T_MS a stretch, and more so beside the arms."""
     p = session["passes_ns"]
     if not p:
@@ -192,10 +192,10 @@ def tpot_gamma(dec: list[dict], arms: list[str]) -> dict:
 
 def report(rows: list[dict], sides: list[dict], arms: list[str]) -> dict:
     """The run's numbers beside the passes: each arm's TPOT off and on and each dither arm's γ (`tpot_gamma`), over
-    every side's blocks and each side's own, each side's pass latency idle and by what ran beside it, its sessions'
-    verdicts, whether every on block lay inside its session's passes, what served beside its calibration
+    every side's blocks and each side's own, each side's pass latency idle and by what ran beside it, its runs'
+    verdicts, whether every on block lay inside its run's passes, what served beside its calibration
     (`calibrated_beside`: the decode ops from the side's start to its `ready`, the share of that span they decoded, and
-    their TPOT), and the memory lines. An on row counts only when its whole decode op lies inside its session's passes
+    their TPOT), and the memory lines. An on row counts only when its whole decode op lies inside its run's passes
     (`uncovered`, those that don't): one whose passes end in it times its N1 and N2 runs under different loads, and its
     TPOT is noise (negative even)."""
     dec = [x for x in rows if x["op"] == "decode" and "bw" in x]

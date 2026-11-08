@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.SamplingGeneric.Masked
-public import Definitions.Claims.SamplingTwo
+public import Proofs.Flock.SamplingGeneric.OpensTwo
 import Proofs.Flock.Masked
 import Proofs.Flock.SamplingGeneric
 import Proofs.Flock.SamplingGeneric.Two
@@ -24,43 +24,19 @@ The contract's clauses that read only the sampled verifier's code are named Prop
   and are in the two-stage scope;
 * `Code.InteriorFixed` and `Code.DrawFixed` (`interior`, `fixed`), as at one stage.
 
-`SessionOpensTwo` (`opens`) is `SessionOpens` read at a replay block: a checked unit's Flock witness makes its proof
-block correct on its replay block's values, under the interior roots the run shows for that replay block.
+`SessionOpensTwo` (`opens`, `Claims.Sampling.OpensTwo`) is `SessionOpens` read at a replay block: a checked unit's
+Flock witness makes its proof block correct on its replay block's values, under the interior roots the run shows for
+that replay block.
 
 * `sessionsTwo_compiled`: the contract from those, with the sessions' runs and numbers (`fixed_ofDeploy`,
   `runs_ofDeploy`).
 * `ksTwo_compiled`: `CompiledTwo.KS` from Flock's KS at `F` and its decoder's list bound, the commitment's binding and
   the contract (`compilerKSTwo` over `flockArgKS`).
-* `ksTwo_masked`: at C-Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
+* `ksTwo_masked`: at Flock's masked record and SHA-512, with Flock's KS, the list bound and the binding proved
   (`MaskedKS`, `listWithin_deployZk`, `commit_binds`), as `ks_masked`.
 -/
 
 @[expose] public section
-
-namespace Claims.SamplingGeneric
-
-open Claims.Sampling (InScopeTwo replayOf)
-
-/-- **A checked unit's Flock witness makes it correct on its replay block**: on a statement in the two-stage scope,
-at an accepted run that checks slot `u` and shows its session, a Flock witness in the session's relation reveals
-openings such that any values `val` and interior values `ι` agreeing with those that pass (under the statement's roots
-and the interior roots the run showed for `u`'s replay block `ρ`) make the proof block at `u` correct on `ρ`'s values
-(`Prog.refIn` at `ρ`). -/
-def SessionOpensTwo {Coin Col T : Type} [Inhabited Coin] (H : Msg → Msg) (D : Claims.Sampling.Deploy Coin Col T)
-    (two : Claims.Sampling.AuditStatement → Option Claims.Sampling.Design.Two)
-    (iroots : Msg → Seen → ℕ → List Msg) : Prop :=
-  ∀ x s Pt d (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
-    D.parse x = some s → D.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
-    (run H P D.V x ω r).out = .acc → (∃ p : Fin (Claims.Sampling.nPU D x), (D.checked x r)[p.val]? = some u) →
-    D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Claims.Flock.check D.flock.parse xS wF = true →
-    ∃ b ρ rb, Pt.blocks[u]? = some b ∧ replayOf Pt d.part u = some ρ ∧ d.part.blocks[ρ]? = some rb ∧
-      ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
-        (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
-          (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
-          (q.1 = iroots x (run H P D.V x ω r).seen ρ → ι q.2.pos = q.2.val)) →
-        s.prog.Correct (s.prog.refIn rb val ι) b
-
-end Claims.SamplingGeneric
 
 namespace SamplingDeploy
 
@@ -69,14 +45,14 @@ open Claims.Sampling (AuditStatement InScopeTwo forkOn cell escCell)
 
 /-! ## The sampled verifier's two-stage code facts -/
 
-/-- **Replay draws**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- **Replay samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.ReplayDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
     ∀ T ⊆ Finset.range d.part.blocks.length,
       Pr (fun r : Fin (c.V.k x) → FlockDeploy.Coin => ∀ ρ ∈ rs x r, ρ ∉ T) ≤ d.replay.Pa d.part T
 
-/-- **Second draws**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
+/-- **Second samples**: a fact about the sampled verifier's code, for a Lean verifier to discharge. -/
 def Code.SecondDraws (c : Code) (two : AuditStatement → Option Claims.Sampling.Design.Two)
     (rs : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → List ℕ) : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
@@ -137,7 +113,7 @@ theorem ksTwo_compiled (H : Msg → Msg) (hKS : Claims.Flock.KS H F)
 
 end CompiledTwo
 
-/-- **The deployed two-stage sampled verifier over C-Flock's masked record is knowledge sound at SHA-512**:
+/-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512**:
 `ksTwo_compiled` at `deployZk`, with Flock's KS by `MaskedKS`, the list bound by `listWithin_deployZk`, binding by
 `commit_binds` and the inner numbers by `innerNumbers_deploy`. It takes the sampled verifier's two-stage code facts and
 its sessions' runs, scope (`SessionsIn`) and openings at a replay block. -/

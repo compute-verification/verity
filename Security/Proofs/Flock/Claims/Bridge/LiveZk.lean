@@ -45,7 +45,7 @@ The live session (`Live.liveV`) decided by flock-verify `--zk`'s verdict on the 
 written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
 
 * `verdictZK I t`: `AcceptsZK`'s steps as an `OC` program: the session's statement set up from `zkInputs I` and the
-  record's draw, every table's shape check, then `Zk.verifyWithM Hashes.oc`. `verdictZK_eval`: against `H`, it accepts
+  record's sample, every table's shape check, then `Zk.verifyWithM Hashes.oc`. `verdictZK_eval`: against `H`, it accepts
   exactly when `Zk.verifyWith (hOf H)` does; `verdictZK_sha`: against SHA-512 (`shaH`), exactly when `AcceptsZK` holds.
 * `Pr_acc_zk`: `Claims.run`'s acceptance with an event `Q` of the outcome, against SHA-512, is `liveSession`'s
   probability of `AcceptsZK I (wr x o) ∧ Q o`, the event the old theorems bound.
@@ -53,12 +53,12 @@ written as, every SHA-512 call an oracle query (`Hashes.oc`, `DeployOC`):
   simulated strategy, whenever every table's decoder is right on the outcomes flock-verify accepts (`hdec`; at the
   deployed decoders and the writer `Custody.wrD`, `Custody.decodesOnZKJ_wrD`).
 
-The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the draw of the
-record `wr x o`, and a drawn statement's digest covers its draw (`HmRow.drawn`'s public statement), so it is a function
-of `x` only where that draw is. `Deploy.V`'s checks pin the record's draw to the statement's whatever its key order
+The setup's SHA-512 (`setupOf`'s statement digest and Σ) is not an oracle query. It reads `I x` and the sample of the
+record `wr x o`, and a sampled statement's digest covers its sample (`HmRow.drawn`'s public statement), so it is a function
+of `x` only where that sample is. `Deploy.V`'s checks pin the record's sample to the statement's whatever its key order
 (`Custody.checks_draw`), and where the two are equal as values the setup of a record it accepts is the one it made of
-`x` before the first message (`Custody.setupOf_record`). At an equivalent draw with its keys in another order the setup
-is another value (its `unitDraw` is the record's draw), and its digests agree only through `canon`.
+`x` before the first message (`Custody.setupOf_record`). At an equivalent sample with its keys in another order the setup
+is another value (its `unitDraw` is the record's sample), and its digests agree only through `canon`.
 -/
 
 @[expose] public section

@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import pytest
 HERE = Path(__file__).resolve().parent
 spec = importlib.util.spec_from_file_location("rename_move_under_test", HERE.parent / "rename.py")
 M = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = M      # `--jobs` hands its workers `M._rewrite`, which pickle finds by its module's name
 spec.loader.exec_module(M)
 
 MAP = HERE / "fixtures" / "rename_map.toml"
@@ -233,6 +235,20 @@ def test_a_read_definition_is_renamed_as_its_modules_file_renames_it(tmp_path):
     assert M.lock_moves(tmp_path, words, files) == {"Compose.Declared": "Compose.RegisteredCircuit"}
 
 
+def test_a_lock_under_tests_fixtures_is_a_tests_data_and_never_read(tmp_path):
+    """A fixture lock holds what its test needs (`unread`'s holds `reads` of lists) and is no package's record: under a map
+    that excludes no fixture, the moves are the package lock's alone."""
+    words = M.Words({"words": {"Warden": "NetworkCertifier"}})
+    locks = {"Security/lean-audit.json": {"guarantees": {"NetTiming.SecurityProofs.W1": {}},
+                                          "reads": {"M": {"definitions": {"Warden.Obs": "00"}}}},
+             "tools/verity/lean/tests/fixtures/unread/Security/lean-audit.json": {
+                 "guarantees": {"NetTiming.Warden.spec": {}}, "reads": {"NetTiming.Warden.spec": ["NetTiming.Warden.helper"]}}}
+    for path, lock in locks.items():
+        (tmp_path / path).parent.mkdir(parents=True, exist_ok=True)
+        (tmp_path / path).write_text(json.dumps(lock))
+    assert M.lock_moves(tmp_path, words, list(locks)) == {"Warden": "NetworkCertifier"}
+
+
 def test_a_module_that_shares_a_namespaces_name_moves_where_it_is_one():
     """`Properties.RemoteAudit.Line` and `.Line.Record` are modules, a namespace and a structure: a whole import line or
     quoted string names the module, and everywhere else the name stands."""
@@ -394,6 +410,19 @@ def test_the_move_on_a_toy_tree(toy, toy_map, capsys):
     assert git(toy, "status", "--porcelain") == "" and git(toy, "rev-parse", "HEAD:") == head
 
 
+def test_the_move_in_many_processes_is_the_move_in_one(toy, toy_map, tmp_path_factory, capsys, monkeypatch):
+    """`--jobs` splits the rewriting among forked processes: the staged tree and the report are one process's."""
+    monkeypatch.setattr(M, "CHUNK", 2)
+    other = tmp_path_factory.mktemp("other")
+    git(other, "clone", "-q", str(toy), ".")
+    got = {}
+    for root, jobs in ((toy, "1"), (other, "4")):
+        capsys.readouterr()
+        assert M.main(["--map", str(toy_map), "--root", str(root), "--jobs", jobs]) == 0
+        got[jobs] = (git(root, "write-tree"), capsys.readouterr().out)
+    assert got["1"] == got["4"] and "files rewritten: 0" not in got["1"][1]
+
+
 def test_the_record_of_the_moves_keeps_their_old_paths_whatever_the_map_excludes(toy, tmp_path_factory):
     """research's `moves.json` records each move's old paths: renamed in it, they'd be lost, and a second run would rename
     the entry the first appended."""
@@ -463,6 +492,40 @@ def test_a_json_pin_follows_a_manifest_the_move_rewrites(toy, toy_map):
     assert moved == manifest.replace("w/warden", "w/certifier")
     assert json.loads((toy / "fix/vec.json").read_text()) == {
         "inputs": {"README.md": sha(readme), "Sec/Proofs/lake-manifest.json": sha(moved)}, "out": [1]}
+
+
+def test_a_sorted_json_object_gets_a_renamed_key_in_its_sorted_place(toy, tmp_path_factory, capsys):
+    """An object whose keys were sorted comes back sorted, as its writer (`unread.py`'s caps) writes it, its lines otherwise
+    as they were; one that wasn't sorted keeps its order, and a file on one line or with a key twice keeps the words alone.
+    A second run changes nothing."""
+    def caps(areas: list[str]) -> str:
+        return json.dumps({"schema": "caps/v1", "areas": {a: [f"{a}.x", f"{a}.y"] for a in areas}}, indent=1) + "\n"
+    files = {"Sec/caps.json": caps(["Proofs/Core", "Proofs/Population", "Proofs/Rest"]),
+             "Sec/order.json": json.dumps({"Zeta": 1, "Population": 2, "Core": 3}, indent=1) + "\n",
+             "Sec/line.json": json.dumps({"Core": 1, "Population": 2, "Rest": 3}) + "\n",
+             "Sec/twice.json": '{\n "Core": 1,\n "Core": 2,\n "Population": 3,\n "Rest": 4\n}\n'}
+    for p, t in files.items():
+        (toy / p).write_text(t)
+    git(toy, "add", "-A")
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "json")
+    words = tmp_path_factory.mktemp("map") / "map.toml"
+    words.write_text('[words]\n"Population" = "SampledProofs"\n')
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert (toy / "Sec/caps.json").read_text() == caps(["Proofs/Core", "Proofs/Rest", "Proofs/SampledProofs"])
+    for p in ("Sec/order.json", "Sec/line.json", "Sec/twice.json"):
+        assert (toy / p).read_text() == files[p].replace("Population", "SampledProofs"), p
+    git(toy, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "move")
+    capsys.readouterr()
+    assert M.main(["--map", str(words), "--root", str(toy)]) == 0
+    assert "files rewritten: 0" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("path", ["Sec/lean-audit.json", "Sec/Proofs/lake-manifest.json", M.MOVES, "Sec/caps.toml"])
+def test_a_lock_a_manifest_moves_json_or_a_file_not_json_keeps_the_words_alone(path):
+    old = json.dumps({"Core": 1, "Population": 2, "Rest": 3}, indent=1) + "\n"
+    new = old.replace("Population", "SampledProofs")
+    assert M.resorted(old, new, path) == new
+    assert M.resorted(old, new, "Sec/caps.json") == json.dumps({"Core": 1, "Rest": 3, "SampledProofs": 2}, indent=1) + "\n"
 
 
 def test_it_refuses_a_dirty_worktree(toy, toy_map):
@@ -556,6 +619,19 @@ def test_a_prose_map_renames_only_words_in_prose(path, old, new):
     a string, backticks, a link target, a fence, a heredoc or a data file, nor as part of a name, a path, a flag, a call or a
     constant; and a word whose new word is a name (`zk_served`) stays."""
     assert PROSE.sub(old, path) == new
+
+
+def test_a_data_file_under_a_prose_map_is_left_as_it_is():
+    """A file with no prose (a data file, a lock) keeps its bytes and its words go uncounted, while a file with prose counts
+    a word its literal keeps as left standing."""
+    words = M.Words({"scope": "prose", "words": {"draw": "sample", "firewall": "ZK server"},
+                     "keep": {"patterns": [r'"draw"']}})
+    text = '{"draw": "a draw by the firewall", "unit_draw": 1}\n'
+    kept, counts = M.Counter(), M.Counter()
+    assert words.sub(text, "x.json", counts=counts, kept=kept) == text
+    assert not kept and not counts
+    assert words.sub("# a draw\nx = 'a draw by the firewall'\n", "y.py", kept=kept) == "# a sample\nx = 'a draw by the firewall'\n"
+    assert kept == {"draw": 1, "firewall": 1}
 
 
 def test_a_prose_move_moves_nothing_and_leaves_what_a_json_pin_records(toy, capsys):

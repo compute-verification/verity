@@ -3,6 +3,9 @@ module
 public import Proofs.Flock.ZkAny.Generic
 public import Proofs.Flock.ZkAny.Table
 public import Proofs.Flock.ZkAny.Unswitched
+public import Proofs.Flock.ZkAny.Deferred
+public import Proofs.Flock.ZkAny.UnswitchedZk
+public import Proofs.Flock.ZkAny.RealLeaves
 public import Proofs.Flock.ZkAny.Tables
 public import Proofs.Flock.ZkAny.Gate
 public import Proofs.Flock.ZkAny.Refused
@@ -74,10 +77,14 @@ public import Proofs.Flock.ZkAny.RelayRankSched
 public import Proofs.Flock.ZkAny.RelayFreshStart
 public import Proofs.Flock.ZkAny.RelayWorker
 public import Proofs.Flock.ZkAny.RelayAuditor
+public import Proofs.Flock.ZkAny.Finish
 
 /-! Zero knowledge at any values: the generic forms, a table's and a release of `J` tables behind the ZK server's
 checks, the ZK server's check as the gate a table's file leaves behind, a release at coins it refuses, the release
-before the `Finish` held to the unswitched prover, the deployed relay's release held to the session's schedule, its
+before the `Finish` held to the unswitched prover, the deferred release per outcome at its `Finish` verdict, the
+unswitched prover's zero knowledge at any values, the go prover's one-sided zero knowledge and the release split at
+the `Finish` on both outcomes, the release with real hm96 leaves on both branches, the deployed relay's release held
+to the session's schedule, its
 model frames held to the model's messages, what it reads at the model's `Hello` and `Commit` as the model's, its
 release per outcome, read through `ZKOut`, and the loop's frames between a session's requests: each rep's frame
 written by its own rounds and coins alone, its session's entry and salts kept, each round at `placeOf`'s place, the
@@ -110,7 +117,7 @@ its schedule so far gives and the frame after it keeping that schedule; and `Env
 the deployed loop against the model's run, the model's messages the slots took one more than the openings the
 auditor answered, given its step at the `Commit`, each frame round and the `Finish` and an invariant of the loop kept
 at every other slot, the step at the `Hello` and at every other slot proved; and the step at the `Commit`, where the
-firewall's own link is at the level 0 the loop drew for the session, and at the `Finish`, where the session's stop is
+ZK server's own link is at the level 0 the loop drew for the session, and at the `Finish`, where the session's stop is
 whether an earlier round of the model's run failed; and a frame round at its slot before a stop, which the session
 lets through, and the step at it, given what the loop's frames and the model hold there and the invariant kept; and
 the session's reps and labels the setup's rep streams' once its `Hello` left, so a round's rep its stream's own and no
@@ -142,8 +149,8 @@ before its rank stop, which a frame releasing an opening round passes; and so th
 frame round's history, from what the loop took, a rep's first-round state and the rank stop at the opening round the
 frame releases; and that first-round state a masking state at the deployed loop on a `Live` statement, where the rep's
 frame starts at its table's statement, the placeholder's table of the shape of the loop's and its algebraic phase one
-as the loop's; and the deployed worker, a device's rounds at the frame rounds and the firewall's own message at every
-other round, the honest workers among them, answering the link and the `Finish` with the firewall's own message; and
+as the loop's; and the deployed worker, a device's rounds at the frame rounds and the ZK server's own message at every
+other round, the honest workers among them, answering the link and the `Finish` with the ZK server's own message; and
 Rust's checks the worker's, so `CrossPasses` by definition at the release without them beside the frame; and the
 relay's auditor as `V*`, which answers as `V*` does at the `Hello`, the `Commit` and each frame round; and so, from the
 session's first request, at the release without Rust's checks and the model's run of the deferred server at the

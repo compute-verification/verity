@@ -1,5 +1,5 @@
 """Dither's served unit: the Definitions a sampled proof block's proof passes, the layout of a call's
-committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled cells.
+committed values, and the CPU reference a units kernel's values and hiding leaves are checked against on sampled output cells.
 The protocol is Dither v3.2 (`verity/core/protocols/pouw/dither/PROTOCOL.md`), as the v31 prover implements it
 (`benchmarks/pouw/accel_v31/v31.py`). No guarantee states its proof block yet: `Pouw.Guarantees.Dither.WorkSoundNoFold`
 is stated for the no-fold round, whose committed values are 32-bit prefix sums, not v3.2's 16-bit T_s and 32-bit O.
@@ -7,14 +7,14 @@ is stated for the no-fold round, whose committed values are 32-bit prefix sums, 
 **A call** is O = (A + d_A)(B + d_B)ᵀ over the integers: A (m × K int8) is the call's activations, committed in the call's
 operand root (`operand_tree`), and B (n × K int8) a published checkpoint's s8 weights, which registration pins by the
 checkpoint's digest (`checkpoint_digest`: B is pinned). Its noised operands are
-X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), τ = k div L′, and per cell (i, j) its values are
+X = wrap8(A + d_A + V) and W′ = wrap8(B + d_B + U π_τ), τ = k div L′, and per output cell (i, j) its values are
 
     T_s = sum over k < min(s L, K) of X_ik W′_jk  mod 2^16   (s = 1 .. S = ceil(K / L)),   O_ij mod 2^32,
 
 with L = t L′ (by default L = 1,024 and L′ = 128, t = 8: `Shape`). It commits T_1 .. T_{S−1} and O:
-T_S is implied by O, and at L ≥ K a cell commits O alone. Only the noised segments s < S are credited, K − L MACs a
-cell: segment S is checked through O, the un-noised product of operands the prover chose, so its block checks O for
-O's consumers and earns nothing, and neither does a call at L ≥ K. A filler call
+T_S is implied by O, and at L ≥ K an output cell commits O alone. Only the noised segments s < S are credited, K − L
+MACs an output cell: segment S is checked through O, the un-noised product of operands the prover chose, so its block
+checks O for O's consumers and earns nothing, and neither does a call at L ≥ K. A filler call
 may take its A from the per-call pad instead (`fill_seeds`, `pad_rows`); it commits no O, so it commits T_S (`Shape.o`).
 
 **The coins** are each stream's 512-bit seed, expanded as v31 expands them:
@@ -25,14 +25,14 @@ receipt ‖ be64(call) ‖ x), the receipt being the digest of the certifier's s
 * ``dA``, ``dB``: d[i, k] is bit k mod 512 (least significant first) of block i ceil(K / 512) + k div 512.
 * ``V``, ``U``: row r's entry c is ((w 161) >> 32) - 80 for w the little-endian u32 word r L′ + c of the stream.
 * ``P``: π_τ is Fisher–Yates over L′ with words τ L′ + c: c from L′ - 1 down to 1, x = (w (c + 1)) >> 32, swap c and x.
-* ``pad`` (a filler's only): seed_x = SHA-512(`FILL_SEEDS_TAG` ‖ window salt ‖ call coin ‖ x) for every stream, and
+* ``pad`` (a filler's only): seed_x = SHA-512(`FILL_SEEDS_TAG` ‖ execution phase's salt ‖ call coin ‖ x) for every stream, and
   A[i, k] is byte k of the pad stream's blocks i ceil(K / 64) .., as an int8. A fixed public pad lets a prover table A's
   subset sums once a period.
 
 A proof block reads the noise per inner index k: ``na = d_A + V[k mod L′]`` and ``nb = d_B + U[π_τ(k mod L′)]``, each in
 [-80, 81] (`noise_a`, `noise_b`), public inputs the verifier computes from the coins, so no circuit holds a permutation.
 
-**The Definitions.** A proof block is one cell (i, j) and one segment s:
+**The Definitions.** A proof block is one output cell (i, j) and one segment s:
 
 * s < S, `PouwDitherBlock_v1{L, FIRST}`: ``(a, na, b, nb: Array<L, i8>, [t0: u16,] t1: u16) -> ok``, 1 exactly when
   t1 ≡ t0 + sum_k (a_k + na_k)(b_k + nb_k) mod 2^16, each operand wrapped to int8 (FIRST: s = 1, T_0 = 0).
@@ -49,15 +49,15 @@ Every row is private but the coins' (na, nb, da, db), and the only output is the
 a step through `segment.PouwSegDot0_v2` and `PouwSegDot_v2`, the s8 tensor-core step on each card (`DEVICES`, `dot_steps`).
 
 **The leaves** (`Shape`) are the value root's layout the kernels write:
-v31's at 16 KiB rows, without segment S's rows. Output tiles of 128 × 128 cells (tile tm (n / 128) + tn), a tile's
-cells row-major (c = 128 r + col); per tile, its tile-segments' 16,384 T_s for s = 1 .. S − 1 as little-endian u16
+v31's at 16 KiB rows, without segment S's rows. Output tiles of 128 × 128 output cells (tile tm (n / 128) + tn), a tile's
+output cells row-major (c = 128 r + col); per tile, its tile-segments' 16,384 T_s for s = 1 .. S − 1 as little-endian u16
 (32 KiB each) and then its O as little-endian u32 (64 KiB), cut into rows of `row` bytes, so a tile is `Shape.lpt`
 consecutive leaves. Each row is an ``hm96-sha512/row/v2`` leaf (`leaf_h`) in one binary frame-v3-sha512 tree a call,
 salted by the prover with ``prf_salt(Ks, off + pos)`` (`salts`, commit_gpu's PRF of its private Ks at the call's salt
 offset); no coin feeds a salt. A block (i, j, s) opens T_s's row (s < S), T_{s−1}'s (s > 1), and at s = S O's.
 
-The reference: `values` gives a call's T (S × m × n) and O; `cell_values` one cell's from its two rows alone;
-`values_buffer`, `row_bytes` and `leaf_row` the leaf rows, the last from only the cells it holds; `tree` and `opens` the
+The reference: `values` gives a call's T (S × m × n) and O; `cell_values` one output cell's from its two rows alone;
+`values_buffer`, `row_bytes` and `leaf_row` the leaf rows, the last from only the output cells it holds; `tree` and `opens` the
 commitments; and `block_inputs` a proof block's inputs to its Definition (`block_definition`), which `check_block` and
 `check_last` evaluate in the clear.
 """
@@ -197,11 +197,11 @@ class Shape:
                                 RangeIndexedDomain(0, self.leaves), hash="sha512")
 
     def tile_of(self, i: int, j: int) -> tuple[int, int]:
-        """(tile, cell index in it) of cell (i, j)."""
+        """(tile, output cell index in it) of output cell (i, j)."""
         return (i // TILE) * (self.n // TILE) + j // TILE, (i % TILE) * TILE + j % TILE
 
     def word_leaf(self, i: int, j: int, s: int) -> tuple[int, int]:
-        """(leaf position, byte offset in its row) of T_s at cell (i, j), for a committed T_s (s ≤ `W`)."""
+        """(leaf position, byte offset in its row) of T_s at output cell (i, j), for a committed T_s (s ≤ `W`)."""
         self.seg(s)
         if s > self.W:
             raise ValueError(f"T_{s} is implied by O, not committed")
@@ -210,7 +210,7 @@ class Shape:
         return t * self.lpt + (s - 1) * self.row_w + c // per, 2 * (c % per)
 
     def o_leaf(self, i: int, j: int) -> tuple[int, int]:
-        """(leaf position, byte offset in its row) of O at cell (i, j)."""
+        """(leaf position, byte offset in its row) of O at output cell (i, j)."""
         if not self.o:
             raise ValueError("this call commits no O")
         t, c = self.tile_of(i, j)
@@ -218,7 +218,7 @@ class Shape:
         return t * self.lpt + self.W * self.row_w + c // per, 4 * (c % per)
 
     def leaf_of(self, pos: int) -> tuple[int | None, list[tuple[int, int]]]:
-        """(s, or None for an O row; the cells (i, j) in value order) of leaf `pos`."""
+        """(s, or None for an O row; the output cells (i, j) in value order) of leaf `pos`."""
         if not 0 <= pos < self.leaves:
             raise ValueError(f"leaf {pos} is not one of the call's {self.leaves}")
         t, r = divmod(pos, self.lpt)
@@ -264,7 +264,7 @@ def seeds(coin: bytes, receipt: bytes, call: int) -> dict[str, bytes]:
 
 
 def fill_seeds(salt: bytes, coin: bytes) -> dict[str, bytes]:
-    """A filler call's seeds, from its live coin `coin` after its window's salt `salt`: SHA-512(`FILL_SEEDS_TAG` ‖ salt ‖
+    """A filler call's seeds, from its live coin `coin` after its execution phase's salt `salt`: SHA-512(`FILL_SEEDS_TAG` ‖ salt ‖
     coin ‖ x) for each stream x and the pad."""
     head = FILL_SEEDS_TAG + _digest("the window's salt", salt) + _digest("the call's coin", coin)
     return {x: hashlib.sha512(head + _x(x)).digest() for x in (PAD, *STREAMS)}
@@ -376,7 +376,7 @@ def _cells(sh: Shape, seeds: Mapping[str, bytes], A: Mapping[int, Sequence[int]]
 
 
 def _words(sh: Shape, x: Sequence[int], w: Sequence[int], upto: int) -> list[int]:
-    """T_1 .. T_upto of one cell from its X row and W′ row."""
+    """T_1 .. T_upto of one output cell from its X row and W′ row."""
     out, acc = [], 0
     for s in range(1, upto + 1):
         a, b = sh.seg(s)
@@ -403,14 +403,14 @@ def values(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]],
 
 def cell_values(sh: Shape, seeds: Mapping[str, bytes], a_i: Sequence[int], b_j: Sequence[int], i: int,
                 j: int) -> tuple[list[int], int | None]:
-    """T_1 .. T_S and O of cell (i, j) from A's row i, B's row j and the coins alone."""
+    """T_1 .. T_S and O of output cell (i, j) from A's row i, B's row j and the coins alone."""
     c = _cells(sh, seeds, {i: a_i}, {j: b_j}, [i], [j])
     return _words(sh, c.X[0], c.W[0], sh.S), (_out(c.Ad[0], c.Bd[0]) if sh.o else None)
 
 
 def values_buffer(sh: Shape, T: Sequence[Sequence[Sequence[int]]], O: Sequence[Sequence[int]] | None = None) -> bytes:
     """The call's leaf rows end to end: per tile, its tile-segments' committed T_s (u16, s ≤ `Shape.W`) and then its O
-    (u32), cells row-major, little-endian."""
+    (u32), output cells row-major, little-endian."""
     if sh.o and O is None:
         raise ValueError("this call commits O: pass it")
     w16, w32 = struct.Struct(f"<{TILE}H").pack, struct.Struct(f"<{TILE}I").pack
@@ -435,7 +435,7 @@ def row_bytes(sh: Shape, buf: bytes, pos: int) -> bytes:
 
 def leaf_row(sh: Shape, seeds: Mapping[str, bytes], A: Sequence[Sequence[int]], B: Sequence[Sequence[int]],
              pos: int) -> bytes:
-    """Leaf `pos`'s row from only the cells it holds: their rows of A and of B and the coins."""
+    """Leaf `pos`'s row from only the output cells it holds: their rows of A and of B and the coins."""
     s, cells = sh.leaf_of(pos)
     ii, jj = sorted({i for i, _ in cells}), sorted({j for _, j in cells})
     c = _cells(sh, seeds, {i: A[i] for i in ii}, {j: B[j] for j in jj}, ii, jj)
@@ -538,7 +538,7 @@ def checkpoint_digest(B: Sequence[Sequence[int]]) -> bytes:
 
 
 def word_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int, s: int) -> int:
-    """T_s of cell (i, j) from its opened value rows (`rows` by position); T_0 = 0."""
+    """T_s of output cell (i, j) from its opened value rows (`rows` by position); T_0 = 0."""
     if s == 0:
         return 0
     p, o = sh.word_leaf(i, j, s)
@@ -546,7 +546,7 @@ def word_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int, s: int) -> int
 
 
 def out_at(sh: Shape, rows: Mapping[int, bytes], i: int, j: int) -> int:
-    """O of cell (i, j) from its opened O row."""
+    """O of output cell (i, j) from its opened O row."""
     p, o = sh.o_leaf(i, j)
     return int.from_bytes(rows[p][o:o + 4], "little")
 
@@ -830,7 +830,7 @@ def check_block(ins: Sequence[Sequence[int]]) -> int:
 
 
 def check_last(sh: Shape, seeds: Mapping[str, bytes], i: int, j: int, ins: Sequence[Sequence[int]]) -> int:
-    """v3.2's checks of cell (i, j)'s last-segment block on `block_inputs`, in the clear, as its Program states them:
+    """v3.2's checks of output cell (i, j)'s last-segment block on `block_inputs`, in the clear, as its Program states them:
     T_S taken from O by the binding identity O = T_S + 256(w_X W′ᵀ + X w_Wᵀ + 256 w_X w_Wᵀ) − Z_X Uᵀ − V Y_Wᵀ over the
     whole rows, with V = na − da and U π = nb − db (so Z_X Uᵀ = Σ (A + d_A + V) U π and V Y_Wᵀ = Σ V (B + d_B)), then
     T_S − T_{S−1} against the segment's X W′ᵀ (mod 2^16) and O against (A + d_A)(B + d_B)ᵀ (mod 2^32). The noise past

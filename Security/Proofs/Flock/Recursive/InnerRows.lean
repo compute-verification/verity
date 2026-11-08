@@ -74,7 +74,7 @@ file's (`bc_pinned'`).
 * `bitAt`: table `j`'s share of the hidden values, block by block (`Readable.zOf`);
 * `rowBytes`, `salt`: unit `i`'s row `q`, at template instance `i % g` of block `i / g` (`Circuit.instOf`);
 * `commitString_data`: `Binding.commitString` is the executable's `Hm96.Default512.commitString` of the row's SHA-512;
-* `pub_digest_size`: every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes, drawn or not;
+* `pub_digest_size`: every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes, sampled or not;
 * `unit_commit`: the same at one accepted statement, for any satisfying witness of its block R1CS;
 * `outRows_le`: where the statement check passes, each table's output rows are among its ports, so an output row's port
   `nIn + o` is a port.
@@ -130,7 +130,7 @@ theorem commitString_data (r : List UInt8) (salt : ByteArray) :
   rw [← Refine.data_append Hm96.Default512.saltPrefix salt, Refine.bytes_of_list]
   exact (Refine.data_append _ _).symm
 
-/-- **Every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes**, drawn or not, with or without
+/-- **Every unit's `b ‖ c` in a hidden-output statement's public file is 128 bytes**, sampled or not, with or without
 shared rows. -/
 theorem pub_digest_size {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Lean.Json} {program : Option ByteArray} {st : Stmt}

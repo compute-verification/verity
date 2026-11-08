@@ -4,12 +4,13 @@ public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoDeployed
 public import Proofs.Flock.Claims.Sampling.Reference.DeployedCode
 public import Proofs.Flock.Claims.Sampling.Select
+public import Proofs.Flock.Claims.Sampling.Reg
 
 /-!
-# The two-stage sampled verifier's code from its Lean draws
+# The two-stage sampled verifier's code from its Lean samples
 
 `SamplingDeploy.codeTwo c reg L₁ L₂ bytes₁ bytes₂`: the record's code (`SamplingDeploy.Code`) with its checked units
-the two stages the Lean sampled verifier draws (`SampledProofs.Run.run` under `Select.Rule.twoStage`), on the
+the two stages the Lean sampled verifier samples (`SampledProofs.Run.run` under `Select.Rule.twoStage`), on the
 registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
 
 * the first stage is `Select.select` on the boundary registration (`RegTwo.first`, a `Reg` whose rule is the resolved
@@ -25,7 +26,7 @@ registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
 the design's replay partition and first stage; the layout's population slot `ρ` is unit `ρ`, and that replay block's
 proof blocks are `blockOf ρ` on `[0, n)`, one cell, in a stratum of which the design samples `k`; an input slot's cells
 are always checked. So the deployed second stage, one uniform `k`-subset per sampled replay block, is the contract's
-draw of each cell.
+sample of each cell.
 
 * `replayDraws_code`: `Code.ReplayDraws` from `RegMatchesTwo` and uniform first-stage bytes (`BytesUniform`), by
   `drawMisses`.
@@ -35,7 +36,7 @@ draw of each cell.
   (`prod_second_le`).
 * `drawFixed_codeTwo`: `Code.DrawFixed` from `BytesFixedTwo` (the sessions' rounds are second-stage, and neither stage's
   bytes read them).
-* `ksTwo_code`: `CompiledTwo.KS` at C-Flock's masked record and SHA-512 (`ksTwo_masked`) with those three facts
+* `ksTwo_code`: `CompiledTwo.KS` at Flock's masked record and SHA-512 (`ksTwo_masked`) with those three facts
   proved. It takes the code's refusals and interior roots, and its sessions' runs, scope and openings at a replay
   block.
 -/
@@ -46,53 +47,6 @@ namespace SamplingDeploy
 
 open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
 open Lean (Json)
-
-/-! ## The registration and its draws -/
-
-/-- **A two-stage registration as the draws of record read it**: the boundary registration the first stage draws on
-(`first`), the proof blocks in each replay block (`n`) and the second stage's count in each (`k`), the statement's
-proof block at position `p` of replay block `ρ` (`blockOf ρ p`), and the proof blocks checked whatever the stages draw
-(`always`). -/
-structure RegTwo where
-  first : Reg
-  n : ℕ
-  k : ℕ
-  blockOf : ℕ → ℕ → ℕ
-  always : ℕ → Bool
-
-/-- **The replay sample** on the bytes `src`: the units the first stage proves (`Select.select`'s), which `Run.run`
-hands the second stage; none where it is refused. -/
-def RegTwo.sample (g : RegTwo) (src : ByteArray) : Array ℕ :=
-  match SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table g.first.closure src with
-  | .ok (_, proved, _) => proved
-  | .error _ => #[]
-
-/-- Interior unit `j`'s proof block: position `j % n` of replay block `sample[j / n]`. -/
-def RegTwo.blockAt (g : RegTwo) (sample : Array ℕ) (j : ℕ) : ℕ := g.blockOf (sample.getD (j / g.n) 0) (j % g.n)
-
-/-- **The checked proof blocks** below `N`, at first-stage bytes `src₁` and second-stage bytes `src₂`: those the second
-stage proves (`Select.selectSecond` on the replay sample) and those always checked; all of them where the second stage
-is refused. -/
-def RegTwo.checked (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) : List ℕ :=
-  match SampledProofs.Select.selectSecond (g.sample src₁) g.n g.k src₂ with
-  | .ok (draw, _) => (List.range N).filter fun v =>
-      g.always v || (SampledProofs.Draw.proved draw).any fun j => g.blockAt (g.sample src₁) j.toNat == v
-  | .error _ => List.range N
-
-/-- **The two-stage sampled verifier's code with its Lean draws**: `c` with `checked` the two stages' on the
-registration `reg x`, over the bytes `bytes₁ x` and `bytes₂ x` of the coins. -/
-def codeTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ L₂ : Msg → ℕ)
-    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256)
-    (bytes₂ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₂ x) → Fin 256) : Code :=
-  { c with
-    checked := fun x r =>
-      ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x r))).getD [] }
-
-/-- **The replay sample of record**: the first stage's checked slots on the replay layout (`Reg.checked`). -/
-def replayTwo (c : Code) (reg : Msg → Option RegTwo) (L₁ : Msg → ℕ)
-    (bytes₁ : (x : Msg) → (Fin (c.V.k x) → FlockDeploy.Coin) → Fin (L₁ x) → Fin 256) (x : Msg)
-    (r : Fin (c.V.k x) → FlockDeploy.Coin) : List ℕ :=
-  ((reg x).map fun g => g.first.checked (bytesOf (bytes₁ x r))).getD []
 
 theorem RegTwo.checked_length_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) :
     (g.checked N src₁ src₂).length ≤ N := by
@@ -125,7 +79,7 @@ theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw
   rw [Bool.or_eq_true, Array.any_eq_true']
   exact Or.inr ⟨j, hj, by simp⟩
 
-/-- A nonempty replay sample is the first stage's accepted draw. -/
+/-- A nonempty replay sample is the first stage's accepted sample. -/
 theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[]) :
     ∃ draw read, SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table
       g.first.closure src = .ok (draw, g.sample src, read) := by
@@ -290,8 +244,8 @@ theorem prod_second_le {Pt : Claims.Sampling.Partition} {d : Claims.Sampling.Des
 
 /-! ## The stages' miss probabilities -/
 
-/-- **The first stage misses `T` with probability at most `P_a(T)`**: the draw of record's checked slots on uniform
-bytes (`drawMisses`); a refused draw checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
+/-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
+bytes (`drawMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
 theorem replay_le (g : Reg) (l : SampledProofs.Slots.Layout) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
     (hl : SampledProofs.Slots.layout g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
@@ -492,9 +446,9 @@ theorem drawFixed_codeTwo (h : BytesFixedTwo c L₁ L₂ bytes₁ bytes₂) : (c
     ((reg x).map fun g => g.checked (units c x) (bytesOf (bytes₁ x r)) (bytesOf (bytes₂ x r))).getD []
   rw [((h x u).2 r d).1, ((h x u).2 r d).2]
 
-/-- **The deployed two-stage sampled verifier over C-Flock's masked record is knowledge sound at SHA-512** with its
-Lean draws: `ksTwo_masked` at `codeTwo`, with its replay and second-stage draws (`replayDraws_code`,
-`secondDraws_code`) and its draw's fixedness (`drawFixed_codeTwo`) proved from the registration's match and its bytes'
+/-- **The deployed two-stage sampled verifier over Flock's masked record is knowledge sound at SHA-512** with its
+Lean samples: `ksTwo_masked` at `codeTwo`, with its replay and second-stage samples (`replayDraws_code`,
+`secondDraws_code`) and its sample's fixedness (`drawFixed_codeTwo`) proved from the registration's match and its bytes'
 facts. It takes the code's refusals and interior roots, and its sessions' runs, scope and openings at a replay
 block. -/
 theorem ksTwo_code (iroots : Msg → Seen → ℕ → List Msg) (hreg : RegMatchesTwo c reg two)

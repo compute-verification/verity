@@ -8,11 +8,11 @@ import Proofs.Flock.Soundness.Game.Prob
 /-!
 # Two laws for the free-compute proofs
 
-* `bern num den` draws unit `u` independently with probability `num u / den`. A set escapes with
-  `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is drawn with `num u / den` (`bern_incl_toReal`).
+* `Law.bernoulliOf num den` samples unit `u` independently with probability `num u / den`. A set escapes with
+  `∏_{u ∈ B} (1 − num u / den)` (`bern_escape_toReal`), and unit `u` is sampled with `num u / den` (`bern_incl_toReal`).
   `Law.bernoulli` is its case of one `num` for every unit.
 * `restrict L S` is `L` seen on the units of `S` alone, numbered in increasing order. Its escape of `B` is `L`'s escape
-  of `B`'s image (`restrict_escape`), so its expected number of draws is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
+  of `B`'s image (`restrict_escape`), so its expected number of samples is `∑_{u ∈ S} incl(u)` (`meanDraws_restrict`).
 -/
 
 @[expose] public section
@@ -38,12 +38,7 @@ theorem meanDraws_nonneg (L : Law n) : 0 ≤ meanDraws L := sum_nonneg fun _ _ =
 theorem cost_nonneg (L : Law n) {c : Fin n → ℝ} (hc : ∀ u, 0 ≤ c u) : 0 ≤ cost L c :=
   sum_nonneg fun u _ => mul_nonneg ENNReal.toReal_nonneg (hc u)
 
-/-! ## Independent draws with per-unit probabilities -/
-
-/-- Each unit `u` drawn independently with probability `num u / den`. -/
-abbrev bern (num : Fin n → ℕ) (den : ℕ) [NeZero den] : Law n where
-  Ω := Fin n → Fin den
-  draw ω := univ.filter fun u => (ω u).val < num u
+/-! ## Independent samples with per-unit probabilities -/
 
 theorem prCoin_fin_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
     (prCoin fun x : Fin den => x.val < k).toReal = (k : ℝ) / den := by
@@ -62,9 +57,9 @@ theorem prCoin_fin_not_lt (den k : ℕ) [NeZero den] (hk : k ≤ den) :
 
 /-- **The per-unit Bernoulli escape**: `∏_{u ∈ B} (1 − num u / den)`. -/
 theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den)
-    (B : Finset (Fin n)) : ((bern num den).escape B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
+    (B : Finset (Fin n)) : ((Law.bernoulliOf num den).escape B).toReal = ∏ u ∈ B, (1 - (num u : ℝ) / den) := by
   classical
-  have h : (bern num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
+  have h : (Law.bernoulliOf num den).escape B = ∏ u ∈ B, prCoin (fun x : Fin den => ¬ x.val < num u) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) B (fun u x => ¬ x.val < num u)]
     unfold Verity.Law.escape
     refine congrArg prCoin (funext fun ω => propext ?_)
@@ -74,9 +69,9 @@ theorem bern_escape_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum 
   exact Finset.prod_congr rfl fun u _ => prCoin_fin_not_lt den (num u) (hnum u)
 
 theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : ∀ u, num u ≤ den) (u : Fin n) :
-    ((bern num den).incl u).toReal = (num u : ℝ) / den := by
+    ((Law.bernoulliOf num den).incl u).toReal = (num u : ℝ) / den := by
   classical
-  have h : (bern num den).incl u = ∏ i ∈ {u}, prCoin (fun x : Fin den => x.val < num i) := by
+  have h : (Law.bernoulliOf num den).incl u = ∏ i ∈ {u}, prCoin (fun x : Fin den => x.val < num i) := by
     rw [← prCoin_pi_forall (Ω := fun _ : Fin n => Fin den) {u} (fun i x => x.val < num i)]
     unfold Verity.Law.incl
     refine congrArg prCoin (funext fun ω => propext ?_)
@@ -84,7 +79,7 @@ theorem bern_incl_toReal {num : Fin n → ℕ} {den : ℕ} [NeZero den] (hnum : 
   rw [h, Finset.prod_singleton]
   exact prCoin_fin_lt den (num u) (hnum u)
 
-/-! ## A law restricted to some of its units -/
+/-! ## A sampling design restricted to some of its units -/
 
 /-- `L` on the units of `S` alone, numbered in increasing order. -/
 def restrict (L : Law n) (S : Finset (Fin n)) : Law S.card where

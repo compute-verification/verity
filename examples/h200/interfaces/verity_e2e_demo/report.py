@@ -22,7 +22,7 @@ block's server, reject when one rejected, pending otherwise, with their errors s
 **The guarantee** cites ``Flock.Guarantees.JointStratified`` when ``JOINT_LOCKED`` is true (it is in the lock), else
 the per-subcircuit bound, with the joint figure labelled unlocked.
 
-**The draw** is a handful: k = `HANDFUL` units drawn uniformly over the whole partition by
+**The sample** is a handful: k = `HANDFUL` units sampled uniformly over the whole partition by
 the live coins, never sized to a proving budget; a block that drew another k says so in the caveats.
 
 **Part 3's H and B** are proofs' planner's (``benchmarks/sampling_plan/demo_a.py``), read from a recorded run
@@ -36,11 +36,11 @@ deployment's beside it.
 **Stubs.** Each of `STUBS` is a caveat until the measurements file's ``fixed`` names it, with the run that shows it
 fixed.
 
-**Visible failures**: the draw stays uniform over every unit, and a drawn unit that can't be proved (one
-landing in a PoUW tile lane) is a failure with no redraw. The measurements file's ``visible_failures`` names each, with
+**Visible failures**: the sample stays uniform over every unit, and a sampled proof block that can't be proved (one
+landing in a PoUW tile lane) is a failure with no resample. The measurements file's ``visible_failures`` names each, with
 its subcircuit, unit id, step, slot, why and run; part 1 lists them beside the verdict, and Demo A's verdict on the
 block counts them as failures, not skips. Left out, the list renders as ``⟨VISIBLE_FAILURES⟩``; an empty list says
-every drawn unit was proved.
+every sampled proof block was proved.
 
 **Gathers** are wire references, not proof blocks: a measured subcircuit named for one is refused.
 
@@ -54,9 +54,9 @@ and no block record is needed. Each section row is one number with its run, its 
 (``{"op": "<=", "value": 0.95}``, or ``{"none": "why"}``); `render` computes its ratio and whether it met the target,
 and lists every miss under visible failures. ``proved`` is the drawn-block proving run of record:
 ``{"run", "drawn": [the coin's indices], "lines": [its output's VERDICT and PROVEBUNDLE lines, verbatim], "text",
-"rows"}``, rendered as the first section, one row per drawn proof block, then ``rows`` (section rows: the guarantee the
-draw certifies). The first line is `M3_STATUS` only when all `HANDFUL`
-drawn proof blocks have a VERDICT line that says accepted (Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
+"rows"}``, rendered as the first section, one row per sampled proof block, then ``rows`` (section rows: the guarantee the
+sample certifies). The first line is `M3_STATUS` only when all `HANDFUL`
+sampled proof blocks have a VERDICT line that says accepted (Flock ``--zk``, M0 and Lean) and the final PROVEBUNDLE
 line is ok with every negative refused; until then it is `FALLBACK_STATUS` (the file's ``status``, which may say
 nothing else), and each block not accepted is a visible failure.
 
@@ -98,14 +98,14 @@ MEASUREMENTS = "verity/demo-a-measurements/v1"
 DELTA = block_record.DELTAS[0]
 #: the share of compute spent on proving in part 3
 BUDGET = Fraction(1, 100)
-#: M3's draw: k units over the whole partition
+#: M3's sample: k units over the whole partition
 HANDFUL = 8
 #: part 3's sampling block, in H200-seconds
 SAMPLING_BLOCK_S = 7 * 86400
 WORLD_LABEL = "world-inference-2027"
-#: the first line of M3's report while its drawn H200 proof blocks aren't all proved and accepted
+#: the first line of M3's report while its sampled H200 proof blocks aren't all proved and accepted
 FALLBACK_STATUS = "M3 fallback: live-drawn, opened, replayed (Python); not proved in C-Flock"
-#: the first line once every drawn H200 proof block is proved in Flock and accepted by the Lean verifier
+#: the first line once every sampled H200 proof block is proved in Flock and accepted by the Lean verifier
 M3_STATUS = f"M3: {HANDFUL} live-drawn H200 proof blocks, each proved in C-Flock --zk and accepted by the Lean verifier"
 #: what keeps the CPU demo's ACCEPT from being "no stubs", until the measurements file's ``fixed`` names it
 STUBS = {
@@ -125,7 +125,7 @@ STUBS = {
                        "demo's ACCEPT isn't yet \"no stubs\".",
 }
 DEMO_A = ("integrity", "pouw", "certifier")
-PROTOCOL_NAMES = {"integrity": "sampled proofs", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
+PROTOCOL_NAMES = {"integrity": "SPOT", "pouw": "PoUW", "certifier": "network certifier", "pous": "PoUS",
                   "bandwidth": "the bandwidth audit", "wipe": "the wipe"}
 PERIODS = block_record.PERIODS
 #: retired words, and the old names of the six subprotocols; a code span (a field or a quoted verdict line) is exempt
@@ -147,7 +147,7 @@ M3_TEMPLATE = Path(__file__).parent / "m3.template"
 ROW_FIELDS = ("what", "value", "run", "verdict", "target")
 RUN_ID = re.compile(r"\b(r\d{8}-\d{6}-[0-9a-f]{4}|art:[0-9a-f]{8,})")
 TARGET_OPS = {"<=": "≤", ">=": "≥", "==": "="}
-#: what names a visible failure: the drawn unit, why it wasn't proved, and the run that shows it
+#: what names a visible failure: the sampled proof block, why it wasn't proved, and the run that shows it
 FAILURE_FIELDS = ("subcircuit", "unit", "step", "slot", "why", "source")
 
 #: read from the first block record: {NAME: the record's field}
@@ -155,7 +155,7 @@ RECORD: dict[str, str] = {
     "RECORD_RUN": "run",
     "BLOCK_SERVER": "server",
     "BLOCK_STEPS": "server_time's steps [lo, hi)",
-    "DEMO_A_VERDICT": "sampled proofs', PoUW's and the network certifier's answer.verdict on the block's server",
+    "DEMO_A_VERDICT": "SPOT's, PoUW's and the network certifier's answer.verdict on the block's server",
     "DRAWN_UNITS": "`integrity` › quantity.drawn",
     "UNITS_TOTAL": "`integrity` › quantity.of",
     "LEAN_VERDICT": "`integrity` › answer.verdict (the Lean verifier's audit)",
@@ -576,8 +576,8 @@ def _caveats(records: Sequence[Mapping[str, Any]], values: Mapping[str, V], extr
     r = records[0]
     if (k := values.get("DRAWN_UNITS")) is not None and k.value != HANDFUL:
         lines.append(f"This block drew k = {_fmt(k.value)}, not M3's handful of {HANDFUL}.")
-    lines.append("The challenger and the network certifier run on the prover's node for the demo, not on a machine the "
-                 "prover doesn't control: the demo assumes the prover leaves them alone.")
+    lines.append("The challenger and the network certifier run on the developer's node for the demo, not on a machine the "
+                 "developer doesn't control: the demo assumes the developer leaves them alone.")
     for p in DEMO_A:
         lg = r["legs"].get(p)
         if lg is None or lg["server"] != r["server"]:
@@ -714,7 +714,7 @@ def vocabulary(text: str) -> None:
     for n, line in enumerate(text.splitlines(), 1):
         if m := BANNED.search(CODE_SPAN.sub("", line)):
             raise ValueError(f"the report says {m[0]!r} (line {n}: {line.strip()!r}): name each of the six "
-                             f"subprotocols (sampled proofs, PoUW, PoUS, the bandwidth audit, the network certifier, "
+                             f"subprotocols (SPOT, PoUW, PoUS, the bandwidth audit, the network certifier, "
                              f"the wipe), and say 'proof block', 'sampling block', 'server-time block' and 'subcircuit'")
 
 
@@ -773,8 +773,8 @@ def _line(lines: Sequence[str], head: str) -> list[tuple[str, dict[str, Any]]]:
 
 
 def proved_section(proved: Mapping[str, Any]) -> tuple[dict[str, Any], bool]:
-    """The drawn-block proving run as a section, one row per drawn proof block and one for the bundle's verdict, and whether every
-    drawn proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't draw."""
+    """The drawn-block proving run as a section, one row per sampled proof block and one for the bundle's verdict, and whether every
+    sampled proof block was proved and accepted (module docstring); refuses a VERDICT for a block the coin didn't sample."""
     run, drawn, lines = proved.get("run"), proved.get("drawn"), proved.get("lines")
     if not RUN_ID.search(str(run or "")) or not isinstance(lines, list) or not isinstance(drawn, list) or not drawn:
         raise ValueError("measurements: proved needs its run id, the coin's drawn indices and the run's output lines")

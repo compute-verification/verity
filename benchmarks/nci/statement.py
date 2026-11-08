@@ -299,7 +299,7 @@ def substitutes() -> list[dict]:
 
 def floor() -> list[dict]:
     """The floor's limits as the verdict lag goes to 0, with ε_W and ε′ (at r̂ = 0 all of C is certified, so the deficit
-    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum law held,
+    is ε_W C) and as they go to 0 too, and what evaluate would give at zero lag, ε_W and ε′ if the partial-sum rule held,
     where with no residual to relay through it binds below nu."""
     p = T.DEFAULTS
     eps_w = (p | FLOOR)["eps_w"]
@@ -437,7 +437,7 @@ def exposures(th: dict) -> list[dict]:
 
 
 def holes() -> dict:
-    """The known holes: the cheating share at today's sparse draws and at 512 draws per statement, the T5 ladder at
+    """The known holes: the cheating share at today's sparse samples and at 512 samples per statement, the T5 ladder at
     each, and the holes' other numbers."""
     p = T.DEFAULTS
     C = capacity(p)

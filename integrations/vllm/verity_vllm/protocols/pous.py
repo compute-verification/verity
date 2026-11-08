@@ -1,6 +1,7 @@
 """POUS as a protocol option: the served model's linear weights held only as ``C* = P2-Enc(W, salt)`` at P2's registered
 point (``p2-16448/v4``), decoded at every use, and each period's audit of what is held (`verity.core.protocols.pous.period`),
-with the memory challenger a party of its own on the challenger host (`verity.core.protocols.pous.challenger_party`).
+with the memory challenger a party of its own on the challenger host
+(`verity.core.devices.memory_challenger.challenger_party`).
 
 * **W** is the weight of every ``LinearBase`` layer as the engine holds it (int8 [N, K] on the ``int8_exact`` target),
   deduplicated by storage, in module order and named by its first holder, in the store's frozen layout
@@ -17,14 +18,14 @@ with the memory challenger a party of its own on the challenger host (`verity.co
   and the root over that table (`VerifierKey.from_row_digests`).  Then, through the option's tagged `Hooks`: the
   plaintext released (a service whose stop restores ``W`` decoded from ``C*``), each layer's ``quant_method.apply``
   wrapped (the layer's weight decoded from ``C*`` into a fresh buffer, by the staging decode
-  `p2_stage.stage.Store.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
+  `p2_stage.stage.EncodedRows.decode_into` on the GPU, refusing what the reference refuses, or the scheme's codec on the CPU,
   and the inner ``apply`` called with a proxy layer holding it), and the prover started last.  Uninstall runs newest
   first: prover, wrappers, then ``W`` restored; ``C*`` is freed after.
 * **The period** (`PousOption.audit`, `PousOption.leg`): `period.audit` of what setup published, the prover answering
   each index from ``C*`` where it is held, and the verifier's answer: setup's own inputs tied to the run (`period.tie`,
   the public-encoder check of ``C*``), the run's check, and the bits an accepted run certifies (`period.certify`: 0 at a
   point no certificate covers).  In `PousOption.leg` the memory challenger runs at ``period.json``'s ``challenger_host``
-  (`challenger_party.side_of`) and the Lean answers where the period's tools name it.
+  (`challenger_session.side_of`) and the Lean answers where the period's tools name it.
 * **Composition:** installed after PoUW and around it, so PoUW's GEMM consumes the decoded weight.  An option that
   keeps a weight-derived copy resident across forwards is the selector's to refuse (``keeps_weight_copy``); POUS keeps
   only ``C*``.
@@ -378,7 +379,7 @@ def _decoder(store: _Store, lib: str | None) -> Callable[[Any, Any], None]:
         from verity.core.protocols.pous.schemes.p2 import expand_prefix
 
         St = _p2("stage")
-        store.staged = St.Store(St.L.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
+        store.staged = St.EncodedRows(St.L.StoreLayout(store.params, (), expand_prefix(store.params, store.salt)), store.rows, 0,
                                 str(lib))
 
         def decode(p: Any, out: Any) -> None:
@@ -436,20 +437,20 @@ class PousOption(Option):
     def leg(self, period_dir: str | Path, node: str, out: str | Path, *, schemes: Mapping[str, Any] | None = None,
             protocol: str | None = None) -> dict[str, Any]:
         """One period's PoUS of what this option holds, as `period.leg` runs it for a node's records: the memory
-        challenger at ``period.json``'s ``challenger_host`` (`challenger_party.side_of`, its side's key and session log
+        challenger at ``period.json``'s ``challenger_host`` (`challenger_session.side_of`, its side's key and session log
         in ``pous-challenger`` beside the periods when it is this node), fresh coins, and the Lean's answer where the
         period's tools name ``pous-run-protocol`` (and, at the first period, ``pous-setup``), which must agree with the
         Python's.  Writes ``out/pous.case.json``, ``out/pous.json`` and, at the first period, ``out/pous-setup.case.json``;
-        returns the answer, its profile carrying where each party ran (`challenger_party.placement`).  ``schemes`` and
+        returns the answer, its profile carrying where each party ran (`challenger_session.placement`).  ``schemes`` and
         ``protocol`` are the signatures the verifier accepts and the id it answers under (a test signer's in tests)."""
-        from verity.core.protocols.pous import challenger_party as CP
+        from verity.core.protocols.pous import challenger_session as CS
         from verity.core.protocols.pous import memory_challenger as mc
         from verity.core.protocols.pous import period
 
         doc = json.loads((Path(period_dir) / "period.json").read_text())
         tools = doc.get("tools", {})
-        party = CP.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
-        where = CP.placement(node, party.host)
+        party = CS.side_of(doc, node, Path(period_dir).parent / "pous-challenger")
+        where = CS.placement(node, party.host)
         fresh, answered = self.periods == 0, self.answered
         t = time.monotonic()
         got = self.audit(node, secrets.token_bytes(64), party=party, schemes=mc.SCHEMES if schemes is None else schemes,

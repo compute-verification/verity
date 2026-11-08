@@ -7,9 +7,9 @@ public import Definitions.Core.Partition
 # The tile check as a circuit, and what it computes (trusted; L3's statement)
 
 A proof system's accepted run on a tile (`TileGame.good_of_accept`) has to end on a good or blank tile of `τ`. Sampled
-proofs gives less: every drawn proof unit of the tile-check Program is correct in the witness `X`, and `X` holds the
+proofs gives less: every sampled proof block of the tile-check Program is correct in the witness `X`, and `X` holds the
 registered values. L3 is the step between: the tile check computes the good-tile predicate. It is stated here over a
-**tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof units
+**tile check** (`TileCheck`), the Program as a core circuit for each unit shape (`Verity.Circuit`, cut into proof blocks
 by a `Verity.Partition`), with
 
 * `out sh rows cols`: the wires a tile is checked at, its words' C̃ and U (under hiding, its tile digest). The tile's
@@ -19,7 +19,7 @@ by a `Verity.Partition`), with
   the verifier derives from public seeds and so never reads from the prover. That the verifier's public inputs are
   these is L8, outside L3;
 * `anchorsOK H s U u act`: the verifier's own check of those anchors, before it reads the witness. `pc8`'s refuses a
-  noise line with a NaN code, as Python's verifier does (`fp8_to_f32` refuses one); the honest draw never makes one,
+  noise line with a NaN code, as Python's verifier does (`fp8_to_f32` refuses one); the honest sample never makes one,
   which is completeness, not L3;
 * `reg sh`, the registered wires, at `rowsOf U u c`: the values unit `u`'s commitment `c` gives them, its activation
   rows, its weight's rows and its tiles' checked words (under hiding, their digests). These are `valueAt`, the values
@@ -29,7 +29,7 @@ by a `Verity.Partition`), with
   plain Program, whose checked words are registered wires. The hiding Program registers a tile by its TurboSHAKE128 leaf
   (`pouw/tile-h0/v1`), so there it is the circuit's words differing from `c`'s under the same leaf.
 
-The check also asks each of the tile's weight rows to pass the protocol's `weightOK`, as `check_tile`'s `admissible`
+The check also asks each of the tile's weight rows to pass the protocol's `fixedOK`, as `check_tile`'s `admissible`
 does and as `TileGood` asks. It decides that on the rows it opens against the weight's root, which are `U`'s, so no
 prover supplies it.
 
@@ -37,7 +37,7 @@ The cap, `TileGood`'s first conjunct, reads only the committed activations; its 
 own last conjunct; the words read the circuit's outputs. So L3 is the cap and the words (`TileCheck.Computes`,
 `TileCheck.ComputesCap`, `TileCheck.ComputesWords`). L3 is exact: the Program
 recomputes A′, B̃, P_A, P_B, C̃ and U from the anchors and checks no projection, so the tile check has no soundness error
-of its own (L7). `εPearlC` stays TT_OUT's, and a proof system's error stays in its `η`.
+of its own (L7). `δPearlC` stays TT_OUT's, and a proof system's error stays in its `δzk` (`GGapHidden`).
 
 A tile check says something only when it is the deployed Program: a circuit nobody tied to the Program meets L3 with
 any `op`s. The tie is the Program's descriptor digest and a test against `verity.ir`, beside the instance.
@@ -51,7 +51,7 @@ open Finset Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-- A tile check: the tile-check Program as a core circuit for each unit shape, its partition into proof units, the
+/-- A tile check: the tile-check Program as a core circuit for each unit shape, its partition into proof blocks, the
 wires a tile is checked at, the public wires with the anchors the verifier derives and its check of them, the registered
 wires with the values a commitment gives them, and the event outside which those values bind the circuit's words (see
 the module docstring). -/
@@ -78,7 +78,7 @@ def TileCheck.valueAt (TC : TileCheck Q R S) (U : Workload) (τ : Transcript) (u
 /-- **Tile `g`'s check accepts `X`** for the commitment `c` of its unit: every unit of the cone of the tile's checked
 wires is correct in `X`, `X` holds the anchors on the public wires, the anchors pass the verifier's check
 (`TC.anchorsOK`), `X` holds `c`'s values on the registered wires, and each of the tile's weight rows passes the rules
-(`P.weightOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
+(`P.fixedOK`). The check decides the anchors' check from the public seeds and the last from the weight rows it opens,
 which are `U`'s, never from `X`. -/
 def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRules Q R S) (H : Q → R) (s : S)
     (U : Workload) (g : ℕ) (c : Commit) (X : (TC.C (U.layout.shape ((TR.tiling U.layout).unit g))).Transcript) : Prop :=
@@ -88,7 +88,7 @@ def TileCheck.Accepts (TC : TileCheck Q R S) (P : Protocol Q R S) (TR : TileRule
     TC.anchorsOK H s U ((TR.tiling U.layout).unit g) c.act ∧
     (∀ w ∈ TC.reg _, X w = TC.rowsOf U ((TR.tiling U.layout).unit g) c w) ∧
     ∀ j ∈ (TR.tiling U.layout).cols g,
-      P.weightOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.weight (U.layout.wid ((TR.tiling U.layout).unit g))) j
+      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g)) (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j
 
 /-- The words of a good tile: each ticket and useful word of a credited row has the reference value. `TileGood` is the
 cap, the tile's weight rows and these. -/
