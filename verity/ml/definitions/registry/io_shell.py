@@ -61,6 +61,13 @@ that state, the entry alone. Each is Calls of those Definitions, no gate of its 
 ROUND}` is v1 at a round no gate reads: where a window holds a position's select to a row of a round's input-ids table, each
 round's collectors are a template of their own, so a sample stratified by template has a reader of every round's table.
 
+`StopRule_v1{L, STOP, FINISH}` (ids: L i32) -> bit is the length rule a request Program returns as one of its checks: 1
+exactly when none of its first L − 1 outputs is one of the stop ids STOP, and its last is one exactly when FINISH is
+``eos`` (FINISH ``length``: no stop id among the L). vLLM's `check_stop` tests a response's last output against its stop
+ids before its length cap, so a response that ends on a stop id at its cap finished on it. It is `StopRuleStep_v1{STOP}`'s
+scan over the first L − 1, carrying one bit, then the last's test, so its description is the same size at any L.
+`stop_reference` is its function.
+
 Registered functions:
   IngressPrompt{MODEL,LP,V}  (body: N u8) -> (ok: bit, LP i32, max_tokens: i32)
   TokenFeed{NP,FIRST}        (slot: NP + 1 i32[, sel: i32]) -> (tok: i32, slot: NP + 1 i32)
@@ -74,6 +81,8 @@ Registered functions:
                              v2: v1's, ROUND read by no gate
   SelectEntry{V,C,KO,FIRST,IDB,NP,STOP}
                              (x0: bf16, best: n bf16, idx: n i32, head | state, occ: i32) -> SlotEntry's entry
+  StopRuleStep{STOP}         (alive: bit, x: i32) -> (alive: bit, alive: bit)
+  StopRule{L,STOP,FINISH}    (ids: L i32) -> bit
 """
 from __future__ import annotations
 
@@ -519,4 +528,60 @@ def SelectEntry(B, S, x0, best, idx, a, occ):
     return B.call(bind(SlotEntry, KO=S.KO, IDB=S.IDB, NP=S.NP, STOP=S.STOP), occ, state)
 
 
-IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2]
+#: how a request's outputs end (`StopRule_v1`'s FINISH): on a stop id, or with none among them
+FINISHES = ("eos", "length")
+
+
+def stop_refuse(S: dict) -> str | None:
+    """A binding with no rule: L outside [1, 2^31), STOP not increasing u32 ids with at least one, or FINISH not one of
+    `FINISHES`.  Only the statics bound so far."""
+    n, stop, fin = S.get("L", 1), S.get("STOP", (0,)), S.get("FINISH", "eos")
+    if not (type(n) is int and 1 <= n < 1 << 31 and isinstance(stop, tuple) and stop
+            and all(type(s) is int and 0 <= s <= M32 for s in stop) and list(stop) == sorted(set(stop)) and fin in FINISHES):
+        return (f"L must be in [1, 2^31), STOP increasing u32 ids (at least one) and FINISH one of {FINISHES} (got L={n!r}, "
+                f"STOP={stop!r}, FINISH={fin!r})")
+    return None
+
+
+def _stop_hit(B, o, x, STOP: tuple[int, ...]):
+    """1 exactly when the i32 ``x`` is one of the ids STOP."""
+    hit = None
+    for s in STOP:
+        e = B.call(I32Eq, x, o.word(s))
+        hit = e if hit is None else o.bnot(o.band(o.bnot(hit), o.bnot(e)))
+    return hit
+
+
+def stop_reference(ids, STOP: tuple[int, ...], FINISH: str) -> int:
+    """`StopRule_v1`'s function on i32 encodings."""
+    hits = [int(x) & M32 in STOP for x in ids]
+    return int(not any(hits[:-1]) and hits[-1] == (FINISH == "eos"))
+
+
+@composite("StopRuleStep", 1, ["STOP"], lambda S: ((("alive", WORDS.BIT), ("x", WORDS.I32)), Tuple(WORDS.BIT, WORDS.BIT)),
+           refuse=stop_refuse, conformance="model-untested: StopRule_v1's step")
+def StopRuleStep(B, S, alive, x):
+    """``alive`` carried past the output ``x``: 1 while no output so far is one of the stop ids STOP, as the carry and the
+    step's output both."""
+    o = word_ops(B)
+    nxt = o.band(alive, o.bnot(_stop_hit(B, o, x, S.STOP)))
+    return tuple_of(nxt, nxt)
+
+
+@composite("StopRule", 1, ["L", "STOP", "FINISH"], lambda S: ((("ids", Array(S.L, WORDS.I32)),), WORDS.BIT),
+           refuse=stop_refuse,
+           conformance="model-untested: vLLM's `check_stop` over stop token ids (`vllm/v1/core/sched/utils.py`): a response "
+                       "ends at its first stop id, that id kept, before its length cap ends it; a served request's output ids "
+                       "and finish reason would hold it")
+def StopRule(B, S, ids):
+    """1 exactly when the L outputs ``ids`` end as vLLM ends a response under the stop ids STOP: none of the first L − 1 is a
+    stop id, and the last is one exactly when FINISH is ``eos`` (`StopRuleStep_v1`'s scan over the first L − 1, then the
+    last's test)."""
+    o, one = word_ops(B), B.call(const(1, 1))
+    alive = B.scan(bind(StopRuleStep, STOP=S.STOP), one, xs=(ids[0:S.L - 1],))[0] if S.L > 1 else one
+    last = _stop_hit(B, o, ids[S.L - 1], S.STOP)
+    return o.band(alive, last if S.FINISH == "eos" else o.bnot(last))
+
+
+IO_SHELL_COMPOSITES = [IngressPrompt, TokenFeed, OutCollect, SlotEntry, SelectCollect, SelectEntry, SelectCollectV2, StopRuleStep,
+                       StopRule]

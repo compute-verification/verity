@@ -1,5 +1,6 @@
 """circuit-check's bindings of `verity.ml.definitions.registry.io_shell`'s `TokenFeed_v1`, `OutCollect_v1`, `SlotEntry_v1`,
-`SelectCollect_v1`, `SelectCollect_v2` and `SelectEntry_v1`, in `circuit_check.targets`' forms (`circuit_check.sidecars`)."""
+`SelectCollect_v1`, `SelectCollect_v2`, `SelectEntry_v1`, `StopRuleStep_v1` and `StopRule_v1`, in `circuit_check.targets`'
+forms (`circuit_check.sidecars`)."""
 from __future__ import annotations
 
 from collections.abc import Callable
@@ -14,7 +15,8 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     (128001); `SelectCollect_v1` and `SelectEntry_v1` at TINY's select (V 256, groups of 16) and small class, and at
     Llama-3.2-1B's (V 128,256) at 4 outputs and 32 prompt ids with its stop id, `SelectEntry_v1` also at the class of
     record's (64 outputs, 1,024 prompt ids); `SelectCollect_v2` at TINY's select and at Llama-3.2-1B's 4 outputs, at a
-    later round."""
+    later round; `StopRuleStep_v1` and `StopRule_v1` under GLM-5.3's three stop ids (154820, 154827, 154829), the rule at
+    one output, at two, and at 4,096 on each finish, and under Llama-3.2-1B's one at 64 outputs."""
     from verity.ml.circuits.defs import bind
     from verity.ml.definitions.registry import io_shell as X
 
@@ -38,4 +40,14 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
             ("SelectEntry_v1:4", lambda: bind(X.SelectEntry, V=128256, C=16, KO=4, FIRST=False, IDB=17, NP=32,
                                               STOP=(128001,))),
             ("SelectEntry_v1:64", lambda: bind(X.SelectEntry, V=128256, C=16, KO=64, FIRST=False, IDB=17, NP=1024,
-                                               STOP=(128001,)))]
+                                               STOP=(128001,))),
+            ("StopRuleStep_v1:glm", lambda: bind(X.StopRuleStep, STOP=GLM)),
+            ("StopRule_v1:1:eos", lambda: bind(X.StopRule, L=1, STOP=GLM, FINISH="eos")),
+            ("StopRule_v1:2:length", lambda: bind(X.StopRule, L=2, STOP=GLM, FINISH="length")),
+            ("StopRule_v1:4096:eos", lambda: bind(X.StopRule, L=4096, STOP=GLM, FINISH="eos")),
+            ("StopRule_v1:4096:length", lambda: bind(X.StopRule, L=4096, STOP=GLM, FINISH="length")),
+            ("StopRule_v1:64:llama", lambda: bind(X.StopRule, L=64, STOP=(128001,), FINISH="eos"))]
+
+
+#: GLM-5.3's stop ids, its config's ``eos_token_id``
+GLM = (154820, 154827, 154829)

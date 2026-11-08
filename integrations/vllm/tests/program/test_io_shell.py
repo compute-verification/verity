@@ -3,7 +3,8 @@
 Boolean Definition against its word, `TokenFeed_v1` down a class Program's positions, and the network certifier's scan
 state read (`ScanSlots_v2`), output collection (`OutCollect_v1`) and entry (`SlotEntry_v1`, the scan's entry bit for
 bit), and those two inside the token select's combine (`SelectCollect_v1`, `SelectEntry_v1`; `SelectCollect_v2` v1 at a
-round)."""
+round), and the length rule (`StopRule_v1`: its reference, the streams it refuses and passes, and one description at any
+length)."""
 from __future__ import annotations
 
 import json
@@ -310,3 +311,49 @@ def test_the_boolean_definition_is_its_word(st):
     arr = np.frombuffer(b"".join(bodies), dtype=np.uint8).reshape(len(bodies), -1).astype(np.uint32)
     got = np.asarray(evaluate_words(target, arr), dtype=np.uint64).reshape(len(bodies), -1)
     assert np.array_equal(got, _ref(st, bodies))
+
+
+GLM_STOP = (154820, 154827, 154829)
+
+
+def _stop(L: int, STOP: tuple[int, ...], FINISH: str, rows: list[list[int]]) -> list[int]:
+    fn = bind(X.StopRule, L=L, STOP=STOP, FINISH=FINISH)
+    got = np.asarray(evaluate_batch(fn, np.array(rows, dtype=np.uint32), kernel="reference")).reshape(len(rows), -1)
+    return [int(b) for b in got[:, 0]]
+
+
+@pytest.mark.parametrize("L", [1, 2, 3, 5])
+@pytest.mark.parametrize("FINISH", X.FINISHES)
+def test_the_stop_rule_is_its_reference(L, FINISH):
+    """`StopRule_v1` against `stop_reference` on every stream of L outputs over two stop ids and two others, the top of
+    the u32 range among them."""
+    words = [0, 3, 7, 0xFFFFFFFF]
+    rows = [[words[k // 4 ** i % 4] for i in range(L)] for k in range(4 ** L)]
+    assert _stop(L, (3, 7), FINISH, rows) == [X.stop_reference(r, (3, 7), FINISH) for r in rows]
+
+
+def test_the_stop_rule_refuses_a_stream_cut_short_or_run_past_its_stop_and_passes_an_honest_finish():
+    """Under GLM-5.3's stop ids, on one served stream whose first stop id is output 4: the honest ``eos`` finish (5 outputs)
+    and the honest ``length`` finish at a cap of 4 pass; the stream cut short before its stop and called ``eos`` (3 outputs),
+    run past it to a later stop (8), or run past it on its length (6, a cap of 6) is refused."""
+    s = [11, 12, 13, 14, 154827, 15, 16, 154820]
+    cases = {"honest eos": (5, "eos", 1), "honest length": (4, "length", 1), "cut short": (3, "eos", 0),
+             "run past to a later stop": (8, "eos", 0), "run past on its length": (6, "length", 0)}
+    got = {k: _stop(n, GLM_STOP, fin, [s[:n]])[0] for k, (n, fin, _) in cases.items()}
+    assert got == {k: ok for k, (_, _, ok) in cases.items()}
+
+
+@pytest.mark.parametrize("bad", [{"L": 0}, {"L": 1 << 31}, {"STOP": ()}, {"STOP": (7, 3)}, {"STOP": (3, 3)}, {"STOP": (1 << 32,)},
+                                 {"STOP": [3]}, {"FINISH": "abort"}])
+def test_the_stop_rule_refuses_statics_with_no_rule(bad):
+    with pytest.raises(ValueError, match="refuses this binding"):
+        bind(X.StopRule, **{"L": 2, "STOP": (3,), "FINISH": "eos", **bad})
+
+
+def test_the_stop_rule_is_described_once_whatever_its_length():
+    """`StopRule_v1`'s description doesn't grow with L: one scan of `StopRuleStep_v1` over the first L − 1 outputs."""
+    def shape(L):
+        d = bind(X.StopRule, L=L, STOP=GLM_STOP, FINISH="eos")
+        return [(n.form, n.fn.id) for n in d.body.nodes]
+
+    assert shape(8) == shape(4096) and sum(f == "scan" for f, _ in shape(8)) == 1

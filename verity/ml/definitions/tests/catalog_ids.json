@@ -1304,6 +1304,8 @@
 "SquareF32_v1",
 "SquareF32_v2",
 "StepBody_v1",
+"StopRuleStep_v1",
+"StopRule_v1",
 "TanhBf16_v1",
 "TanhBf16_v2",
 "TanhF32Rn_v1",
