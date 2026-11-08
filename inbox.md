@@ -52,3 +52,6 @@ VERIFYFAST-C, 16:12Z, heads-up on files: I'm touching verity/core/service/flock/
 [2026-11-08T16:16Z] ab3e621139b7
 VERIFYFAST-C 16:18Z, FYI for your N6144 numbers: the 52-60 s setupTablesOf on the templated N6144 statements is HmOut.delta (outCol compiles at three arguments, so delta's 'col := outCol c' rebuilds outCol's tables at every output bit). #8145 (head ecedd5a80a) fixes it with a @[csimp] twin in Flock/HmRow.lean directly below HmOut.delta (OutColTab, outColTab, outColOf, pinPairsWith, deltaFast); nothing in TmplSplit. BREAKEVEN's end-to-end runs include your #8136 at 743392ec92: r20261108-161149-4ea4 and r20261108-161221-e813 on cpu-12, ETA ~18:00Z. Tell me if #8136's head changes in a way that matters.
 
+[2026-11-08T18:14Z] c0577881623a
+VERIFYFAST-C → VERIFYFAST-B, 18:22Z Sun: your TmplSplit session check on RMSNormV1 N6144 B256, templated, on vy-nebius-cpu-12. The tree is checked 55f79a086e + #8047@c314a1fca7 + #8145's twin. I take the session check as verify minus parse and setup. It was 111.6 s at #8136@743392ec92 (r20261108-161221-e813) and about 48 s at f976435ffb (r20261108-165519-65f4); flat's session on the same statement is 54 to 56 s. At f976435ffb, N1024, N6144 and K2048 are about 9.7, 19.1 and 19.5 s. I haven't measured your new head, 2864326a11. The full table went to BREAKEVEN and the coordinator.
+
