@@ -3,6 +3,7 @@ module
 public import Lean.Data.Json
 public import Flock.JsonParse
 public import SampledProofs.PlanCheck
+public import SampledProofs.TwoStageCheck
 
 /-!
 # `sampled-proofs-plancheck`: the planner's designs, checked
@@ -14,6 +15,11 @@ number is a string, a natural number or a rational `"num/den"`, so none passes t
   `PlanCheck.leakBound` certifies, or `{"bound": null}` when it refuses;
 * `{"kind": "work", "strata": [["work", "num"], ...], "den", "target", "delta"}` answers `{"ok": bool}`,
   `PlanCheck.checkWork`;
+* `{"kind": "two", "form": "sets" | "patterns" | "capped", "q", "theta", "delta", "S", "p", "classes": [{"count",
+  "cells": [{"k", "parts": [["count", "bits"], ...]}, ...], "reads": [[["count", "bits"], ...], ...], "N"}, ...]}`,
+  optionally with
+  `"search": {"span", "n", "p"}`, answers `{"bits": "num/den", "theta": "num/den"}`, what `TwoStageCheck.checkTwoStage`
+  certifies at `theta`, or at the `θ` `TwoStageCheck.searchTheta` finds from it (`{"bits": null}` when it refuses);
 
 and a line it can't read answers `{"error": "..."}`.
 -/
@@ -49,6 +55,37 @@ def rat (s : String) : Except String Rat := do
 
 def str (j : Json) (k : String) : Except String String := j.getObjValAs? String k
 
+/-- `[["count", "bits"], ...]`. -/
+def parts (j : Json) : Except String (List (Nat × Nat)) := do
+  let rows : Array (Array String) ← Lean.fromJson? j
+  rows.toList.mapM fun r => match r.toList with
+    | [c, b] => return (← nat c, ← nat b)
+    | _ => throw "a part is [count, bits]"
+
+def twoClass (j : Json) : Except String TwoStageCheck.ReplayClass := do
+  let cells ← (← j.getObjValAs? (Array Json) "cells").toList.mapM fun c => do
+    return ({ k := ← nat (← str c "k"), parts := ← parts (← c.getObjVal? "parts") } : FactorUpper.Cell)
+  let reads ← (← j.getObjValAs? (Array Json) "reads").toList.mapM parts
+  return { count := ← nat (← str j "count"), cells, reads, N := ← nat (← str j "N") }
+
+def two (j : Json) : Except String Json := do
+  let form ← match ← str j "form" with
+    | "sets" => pure TwoStageCheck.Form.sets
+    | "patterns" => pure .patterns
+    | "capped" => pure .capped
+    | f => throw s!"no form {f}"
+  let classes ← (← j.getObjValAs? (Array Json) "classes").toList.mapM twoClass
+  let D : TwoStageCheck.Point := { form, q := ← rat (← str j "q"), θ := ← rat (← str j "theta"),
+                                    δ := ← rat (← str j "delta"), S := ← nat (← str j "S"), classes,
+                                    p := ← nat (← str j "p") }
+  let θ ← match j.getObjVal? "search" with
+    | .ok s => do
+      pure (TwoStageCheck.searchTheta D D.θ (← nat (← str s "span")) (← nat (← str s "n")) (← nat (← str s "p")))
+    | .error _ => pure D.θ
+  return Json.mkObj [("bits", match TwoStageCheck.checkTwoStage { D with θ := θ } with
+      | some v => Json.str (ratStr v)
+      | none => Json.null), ("theta", Json.str (ratStr θ))]
+
 def answer (j : Json) : Except String Json := do
   match ← str j "kind" with
   | "leak" =>
@@ -67,6 +104,7 @@ def answer (j : Json) : Except String Json := do
     let d : Work := { strata, den := ← nat (← str j "den"), target := ← rat (← str j "target"),
                       delta := ← rat (← str j "delta") }
     return Json.mkObj [("ok", Json.bool (checkWork d))]
+  | "two" => two j
   | k => throw s!"no kind {k}"
 
 def respond (line : String) : String :=
