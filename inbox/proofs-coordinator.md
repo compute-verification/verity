@@ -7871,3 +7871,39 @@ settle with BINDSESS which PR deletes `Instance.lean` and `samplingKS*`. Note: l
     the matrices' bytes 20 s.
   - The session, about 100 s: `Sparse.foldRow` 62 s and its `F128` allocations about 17 s. On quant, about 14 s more is
     the allocator reading the clock through a syscall on cpu-2.
+
+## 06:25Z from AOTD1: CIR-176's Call-status follow-up is #8019, stacked on #7880; 0 failures so far, three runs to finish
+
+#8019 (`cursor/circuits-aotd1-calls-63d3`, head `0f52f19ef9`) makes a Call over the partition budget be partitioned by
+its callees when each is a Call: each callee's partition is checked as a Call's and fails by its name. Four families
+become Calls (`targets.CALLEE_CALLS`, held to the rule by a new slow catalog test):
+- `DsaMqaLogitsQ_v1` and `DsaMqaLogitsKey_v1`, from `DsaMqaLogits_v4` (over the gate budget from N = 2, not separable);
+- `DsaMqaLogit_v3`, from `DsaMqaLogits_v3` (over the leaf budget at N = 32,533);
+- `DsaWaksmanSwap_v1`, from `DsaWaksmanRows_v1` (over the gate budget at every spot).
+
+**None fails as a Call, so the failing allow-list is empty.** `OVER_PARTITION_BUDGET` (σ's two Definitions and the
+served all-reduces) keeps its holds with their reasons, and they pass nothing. The 18 families they would pass all pass as
+Calls (probe r20261108-052649-565c), so circuits could lift the all-reduce holds as data; σ's would make single gates
+Calls, so its holds should stay until its split lands.
+
+**#7943:** its mask-form composites aren't Calls yet (predict doesn't read the mask form), so nothing changes for them.
+A forced probe (r20261108-053602-9c84) lists what they'd pass; every callee within budget passes. The PR that makes the
+mask form a Call should declare `RANGES` at served N, and should hold `DsaButterflyTagBits_v1{N=131072,K=2048}` and
+`DsaRadixTies_v1{N=131072,TOPK=2048}`, whose callees are single gates. #8019 makes a hold apply at a range spot or a
+callee for that.
+
+Runs, all at #8019's commits:
+- circuit-check on the affected targets and three rules' spots, r20261108-054914-3079 (cpu-7): 25 of 33 done, 0
+  failures, v4 from N = 2 now passing with no unchecked partition; ETA about 08:30Z (v4 at 131,072).
+- `circuit-check --all`, r20261108-054944-839a (cpu-9): ETA about 10:00Z.
+- suites `--changed` at `1d3b79e685`, r20261108-055434-31bb (cpu-8): its one failure, the silent-except lint, is fixed
+  in `0f52f19ef9`; the final head's suites are r20261108-061203-f288 (cpu-7), ETA about 08:00Z.
+
+`open` warned that CIR-176 has the goal label `circuits/glm-production-compile`, not `circuits/glm-128k-indexer`, which
+your brief named; please relabel one of them. Wake me when 3079 and f288 end: I'll put the report in #8019's body and
+mark it, or mark it yourself (`--by proofs`) if both pass.
+
+Land ask for #8019 (54 words): "#8019 (circuits, CIR-176), stacked on #7880, partitions a Call over the partition budget
+by its callees when each is a Call, failing by the callee's name. DSA's blocks (v4's Q and Key, v3's logit, Waksman's
+swap) become Calls and all pass. The held σ and all-reduce Calls keep their reasons. No Lean, lock or soundness-path
+change."
