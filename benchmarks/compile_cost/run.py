@@ -204,7 +204,11 @@ def main() -> int:
     ap.add_argument("--profile", action="store_true", help="cProfile the compile (profile.pstats, profile.txt)")
     ap.add_argument("--no-phases", action="store_true", help="no phase instrumentation")
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
+    ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
+                    "long_prefill_token_threshold)")
     a = ap.parse_args()
+    if a.engine:
+        ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
     if (a.window is None) == (a.requests is None):
         ap.error("one of --window and --requests")
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
@@ -234,7 +238,7 @@ def main() -> int:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
-    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers,
+    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}
