@@ -489,7 +489,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
 }
 
 /// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
-/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+/// the prover's tables after it each keep their own, never the other's; every other caller builds its own ([`Stmt::drawn`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side { Fresh, Verifier, Prover }
 
@@ -499,7 +499,7 @@ fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, St
     match side {
         Side::Verifier if stmt_cache_on() => VERIFIER.drawn(st, n, id),
         Side::Prover if stmt_cache_on() => PROVER.drawn(st, n, id),
-        _ => Stmt::new(st.c.clone(), n, id).map(Arc::new),
+        _ => st.drawn(n, id).map(Arc::new),
     }
 }
 
@@ -4771,7 +4771,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let Some(&(_, q)) = region_shared_columns(&st.regions).first() else {
             return json!({"case": name, "pass": true, "skipped": "no partial region: every region covers whole words"});
         };
-        let mut c = st.c.clone();
+        let mut c = (*st.c).clone();
         let r = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)).cloned().expect("a slot holds the column");
         let Kind::Net(i) = r.kind else {
             return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
