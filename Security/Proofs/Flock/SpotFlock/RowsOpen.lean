@@ -11,13 +11,13 @@ import Proofs.Flock.Claims.Scope.Sizes
 /-!
 # A session row's commit string is the table row its registered read opens
 
-`rows_open`: at a run's statement and template `t`'s session statement as the verifier's check passes it (`stmtOkAt`),
-in Flock's scope with hidden outputs (`ScopedHidden`), and a Flock witness its relation accepts, row `q` of unit `n` of
-each table, as the witness holds it, commits to the table row that the registered read of `q`'s port opens. The commit
+`rows_open`: at a session statement that sets up as a masked Flock statement with registered ports `own`, in Flock's
+scope with hidden outputs (`ScopedHidden`), and a Flock witness its relation accepts, row `q` of unit `n` of each
+table, as the witness holds it, commits to the table row that the registered read of `q`'s port opens. The commit
 string (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the row hash reads (`InnerRows.rowBytes`), under the
 salt the `hm96` slot reads (`InnerRows.salt`), opens the port's root at the position and through the path the session
 gives the unit (`Registered.opens`). It is `InnerRows.rows_commit_check` (the circuit computes the commit string and the
-public file pins it) after `opens_of_stmtOkAt` (the registered reads open the public file's rows).
+public file pins it) after `opens_of_setup` (the registered reads open the public file's rows).
 
 `decOf_bitAt`: a layout's decoder at table `j`'s column `y` of the unit's block is the witness's bit there, as
 `InnerRows.bitAt` reads it, the bit `rowBytes` and `salt` read.
@@ -27,9 +27,10 @@ public file pins it) after `opens_of_stmtOkAt` (the registered reads open the pu
 so `rows_open` applies at every session statement the check passes.
 
 `reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from one premise on the registration,
-`FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's block, and the
-frame's reveal holds an opening of the witness's bit there that passes wherever the registered read of the row holding
-it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds` and `FrameRows`.
+`FrameRows`: the unit's session statement has registered reads, and for each value a checked unit needs, the layout's
+wire is a column of a table in the unit's block, and the frame's reveal holds an opening of the witness's bit there that
+passes wherever the registered read of the row holding it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from
+`Embeds` and `FrameRows`.
 -/
 
 @[expose] public section
@@ -105,38 +106,34 @@ theorem decOf_bitAt {L : Layout} {x m₁ xS : Msg} {S : Claims.Flock.Stmt} {u β
 
 variable (h : Held)
 
-/-- **A session row's commit string is the table row its registered read opens**: at a run's statement and template
-`t`'s session statement as the verifier's check passes it, in Flock's scope with hidden outputs, and a Flock witness its
-relation accepts, the session sets up with the registered ports `own` (`opens_of_stmtOkAt`), and at each table `j`, for
-each port `reg` of `own`, the table's port `q` named like it and each unit `n`: the commit string of row `q` of unit
-`n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens `reg` at the position its reads give
-for the unit, through the path the session gives there. -/
-theorem rows_open {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ} {s : AuditStatement} {w : Claims.Flock.Wit}
-    (hx : parse h x = some s) (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) (hsc : ScopedHidden xS)
+/-- **A session row's commit string is the table row its registered read opens**: at a session statement that sets up as
+a masked Flock statement with registered ports `own`, in Flock's scope with hidden outputs, and a Flock witness its
+relation accepts, at each table `j`, for each port `reg` of `own`, the table's port `q` named like it and each unit `n`:
+the commit string of row `q` of unit `n`, as the witness holds it (`InnerRows.rowBytes` under `InnerRows.salt`), opens
+`reg` at the position its reads give for the unit, through the path the session gives there. -/
+theorem rows_open {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {own} {w : Claims.Flock.Wit}
+    (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts)) (hown : ins.registered = some own)
+    (hsc : ScopedHidden xS)
     (hck : Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS w = true) :
-    ∃ it ins spec sts own, interiorsOf m₁ = some it ∧ FlockDeploy.setupOf true xS = some (ins, spec, sts) ∧
-      ins.registered = some own ∧
-      (FlockDeploy.jsonOf "registered reads" (h.registered t s.roots it.roots) >>=
-        _root_.Flock.Registered.ofJson) = .ok own ∧
-      ∀ j (hj : j < sts.size), ∃ tb idx, sts[j].pub.tables = some tb ∧
-        _root_.Flock.Registered.unitIndices sts[j].pub = .ok idx ∧
-        ∀ reg ∈ own, ∃ q positions paths,
-          (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
-          _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) ∧ ∀ n < sts[j].pub.n,
-            _root_.Flock.Registered.ref tb sts[j].c.ports.size q n < tb.counts.getD q 0 ∧
-            reg.reads[idx.getD n 0]? =
-              some (some (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)) ∧
-            _root_.Flock.Registered.opens reg
-              (_root_.Flock.Hm96.Default512.commitString
-                (_root_.Flock.Sha512.hash ⟨(_root_.Flock.InnerRows.rowBytes { ins.read with sts } w j n q).toArray⟩)
-                (_root_.Flock.InnerRows.salt { ins.read with sts } w j n q))
-              (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)
-              (paths.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) ByteArray.empty) = true := by
-  obtain ⟨it, ins, spec, sts, own, hit, hset, hown, hjson, hall⟩ := opens_of_stmtOkAt h hx hok
+    ∀ j (hj : j < sts.size), ∃ tb idx, sts[j].pub.tables = some tb ∧
+      _root_.Flock.Registered.unitIndices sts[j].pub = .ok idx ∧
+      ∀ reg ∈ own, ∃ q positions paths,
+        (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
+        _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) ∧ ∀ n < sts[j].pub.n,
+          _root_.Flock.Registered.ref tb sts[j].c.ports.size q n < tb.counts.getD q 0 ∧
+          reg.reads[idx.getD n 0]? =
+            some (some (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)) ∧
+          _root_.Flock.Registered.opens reg
+            (_root_.Flock.Hm96.Default512.commitString
+              (_root_.Flock.Sha512.hash ⟨(_root_.Flock.InnerRows.rowBytes { ins.read with sts } w j n q).toArray⟩)
+              (_root_.Flock.InnerRows.salt { ins.read with sts } w j n q))
+            (positions.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) 0)
+            (paths.getD (_root_.Flock.Registered.ref tb sts[j].c.ports.size q n) ByteArray.empty) = true := by
   obtain ⟨hc, hh⟩ := hsc ins spec sts hset
   obtain ⟨hP, hR⟩ := relS_setupOf hset hck
-  refine ⟨it, ins, spec, sts, own, hit, hset, hown, hjson, fun j hj => ?_⟩
-  obtain ⟨tb, idx, ht, hidx, hregs⟩ := hall sts[j] (Array.getElem_mem hj)
+  intro j hj
+  obtain ⟨tb, idx, ht, hidx, hregs⟩ := opens_of_setup hset hown sts[j] (Array.getElem_mem hj)
   refine ⟨tb, idx, ht, hidx, fun reg hreg => ?_⟩
   obtain ⟨q, positions, paths, hq, hent, hn⟩ := hregs reg hreg
   have hqlt : q < sts[j].c.ports.size := List.mem_range.1 (List.mem_of_find?_eq_some hq)
@@ -164,17 +161,17 @@ theorem sessionScoped : SessionScoped h := fun _ _ _ _ _ _ hok =>
   scopedHidden_of_checks (scoped_of_stmtOkAt h hok).1 (scoped_of_stmtOkAt h hok).2
 
 /-- **The frame reveals each value a checked unit needs at its session row**: at the statements `Reveals` reads and the
-session's setup, with registered ports `own`, for each gate `g` the unit's correctness reads, the layout's wire for `g`
-is column `y` of table `j` in the unit's block `β`, and the reveal holds an opening at `g` of the witness's bit there,
-under the roots `Reveals` names, that passes wherever the registered read of `reg`, at table `j`'s port `q` named like
-it, opens the commit string of row `q` of a unit `n` of the table. -/
+session's setup, it has registered ports `own`, and for each gate `g` the unit's correctness reads, the layout's wire
+for `g` is column `y` of table `j` in the unit's block `β`, and the reveal holds an opening at `g` of the witness's bit
+there, under the roots `Reveals` names, that passes wherever the registered read of `reg`, at table `j`'s port `q` named
+like it, opens the commit string of row `q` of a unit `n` of the table. -/
 def FrameRows (L : Layout) : Prop :=
-  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts own,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
     stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
     Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
-    FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) → ins.registered = some own →
+    FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) → ∃ own, ins.registered = some own ∧
     ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
       y < 2 ^ sts[j].c.kLog ∧ L.wire x m₁ (unitStmt h m₂ u) u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧
       reg ∈ own ∧
@@ -201,9 +198,13 @@ theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decO
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
   have hokU := stmtOkAt_unit h hx hok hu
   have hsx := sessionScoped h x m₁ (unitStmt h m₂ u) c₀ c₁ _ hokU
-  obtain ⟨_it, ins, spec, sts, own, -, hset, hown, -, hall⟩ := rows_open h hx hokU hsx hck
-  obtain ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot, hopen⟩ :=
-    hf x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
+  have hs := sessionOk_of_stmtOkAt h hokU
+  simp only [sessionOk, Bool.and_eq_true] at hs
+  obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
+  obtain ⟨own, hown, hfg⟩ :=
+    hf x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset
+  have hall := rows_open hset hown hsx hck
+  obtain ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot, hopen⟩ := hfg g hg
   obtain ⟨tb, _idx, ht, -, hregs⟩ := hall j hj
   obtain ⟨q', positions, paths, hq', hent, hrows⟩ := hregs reg hreg
   obtain rfl : q' = q := Option.some.inj (hq'.symm.trans hq)

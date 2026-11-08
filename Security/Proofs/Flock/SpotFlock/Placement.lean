@@ -240,7 +240,7 @@ theorem embeds_of_placesAt {L : SpotFlock.Layout}
   obtain ⟨j, hj, hpl⟩ := hL x s m₁ m₂ c₀ c₁ u hx hok hu p hpb t ht (hT t ht).2.1 k hut
   obtain ⟨T, a, hst, hk, hcirc, hsat⟩ := accepted_check hpp hc hh hj
   have hparse : HmOut.unrolled a.st.c = h.ms[t].1 := by
-    obtain ⟨-, -, w, w₀, -, -, hw, hw₀, he, -⟩ := pin_of_stmtOkAt h hokAt
+    obtain ⟨w, w₀, hw, hw₀, he⟩ := pin_of_stmtOkAt h hokAt
     obtain ⟨r₀, hr₀, hstmt⟩ := Option.map_eq_some_iff.1 (hT t ht).1
     rw [htu] at hw₀
     rw [← hcirc, ← hstmt]

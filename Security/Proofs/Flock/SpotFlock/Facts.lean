@@ -89,7 +89,7 @@ theorem run_fst_take {Coin Ω : Type} [Inhabited Coin] (H : Msg → Msg) (P : Pr
 /-- The interior roots of replay block `ρ` the round-1 message states, from a run's prover messages. -/
 def irootsAt (ms : List Msg) (ρ : ℕ) : List Msg :=
   match ms with
-  | _ :: m₁ :: _ => ((interiorsOf m₁).bind fun it => (it.roots.find? (·.1 == ρ)).map (·.2)).getD []
+  | _ :: m₁ :: _ => irootsOf m₁ ρ
   | _ => []
 
 /-- **The interior roots are read off the first two prover messages.** -/

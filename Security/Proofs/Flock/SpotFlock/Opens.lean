@@ -137,15 +137,12 @@ theorem run_seenAt {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω :
   rfl
 
 /-- **Template `t`'s session statement as the verifier's check passes it is the template's reference one** (`pinOk`)
-but for its sample, its public file and its registered reads, which are the auditor's for `t` at the run's roots and the
-round-1 interior roots. -/
+but for its sample, its registered reads and its public file. -/
 theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ}
     (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
-    ∃ s it w w₀, parse h x = some s ∧ interiorsOf m₁ = some it ∧ FlockDeploy.decode xS = some w ∧
-      FlockDeploy.decode (h.xS₀ t) = some w₀ ∧
+    ∃ w w₀, FlockDeploy.decode xS = some w ∧ FlockDeploy.decode (h.xS₀ t) = some w₀ ∧
       { w with draw := none, registered := none, publicFile := .empty } =
-        { w₀ with draw := none, registered := none, publicFile := .empty } ∧
-      w.registered.map ByteArray.data = some (h.registered t s.roots it.roots).data := by
+        { w₀ with draw := none, registered := none, publicFile := .empty } := by
   unfold stmtOkAt at hok
   cases hs : parse h x with
   | none => simp [hs] at hok
@@ -153,27 +150,26 @@ theorem pin_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : �
     simp only [hs, Bool.and_eq_true] at hok
     have hr := hok.2
     unfold readsOk at hr
-    cases hit : interiorsOf m₁ with
-    | none => simp [hit] at hr
-    | some it =>
-      cases hdr : secondDraw h c₀ c₁ with
-      | none => simp [hit, hdr] at hr
-      | some draw =>
-        cases hset : FlockDeploy.setupOf true xS with
-        | none => simp [hit, hdr, hset] at hr
-        | some p =>
-          obtain ⟨ins, spec, sts⟩ := p
+    cases hd : decode x with
+    | none => simp [hd] at hr
+    | some st =>
+      cases hm : jsonMsg m₁ with
+      | none => simp [hd, hm] at hr
+      | some rec =>
+        cases hdr : secondDraw h c₀ c₁ with
+        | none => simp [hd, hm, hdr] at hr
+        | some draw =>
           cases hw : FlockDeploy.decode xS with
-          | none => simp [hit, hdr, hset, hw] at hr
+          | none => simp [hd, hm, hdr, hw] at hr
           | some w =>
-            simp only [hit, hdr, hset, hw, Bool.and_eq_true, beq_iff_eq] at hr
-            obtain ⟨⟨⟨-, -⟩, hreg⟩, hpin⟩ := hr
+            simp only [hd, hm, hdr, hw, Bool.and_eq_true] at hr
+            have hpin := hr.2
             unfold pinOk at hpin
             cases hw₀ : FlockDeploy.decode (h.xS₀ t) with
             | none => simp [hw₀] at hpin
             | some w₀ =>
               simp only [hw₀, Bool.and_eq_true, decide_eq_true_eq] at hpin
-              exact ⟨s, it, w, w₀, rfl, rfl, rfl, rfl, hpin.1.1, hreg⟩
+              exact ⟨w, w₀, rfl, rfl, hpin.1.1⟩
 
 /-- **The checked units** of a run whose statement decodes: the second stage's on the coins of rounds 0 and 1. -/
 theorem checked_eq (x : Msg) {st : Roots} (hst : decode x = some st) (r : Fin ((code h).V.k x) → FlockDeploy.Coin) :
