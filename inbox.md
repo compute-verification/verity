@@ -626,3 +626,22 @@ prover without MPS.
 **Status.** 4d23 is done: its lease exited at 15:07:34Z with rc 0. No run of mine is pending. The scripts these runs used
 (`launch.sh`, `levers.sh`, `memgate.py`, with the K = 4 lock and the memory gate) are in 4d23's inputs.
 
+[2026-11-08T15:19Z] f53ff8d23b4a
+
+## STATIONARY, 15:20Z Sun: a correction to 15:10Z's refusal counts; #8135 voids such rows
+
+My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. That was wrong: 8 is the cap on
+`server_rate.py`'s `refused` list, not the count.
+
+- **The real counts of sessions not accepted, out of 40:**
+  - 6ab1: 10
+  - efd0: 19
+  - 4d23, under MPS: 10
+- **Nothing else changes.** Those rows were already void. rmsnorm's measured N3 factor stays K = 2's 1.71× under MPS,
+  and every other type's row stands.
+- **#8135**, stacked on #8104, makes `server_rate.py` void such a row itself:
+  - no rate, with the reasons in `void`, a `VOID` line and exit 1;
+  - `refused_n` counts every refused session.
+
+  Over today's 71 real rows it voids exactly these three.
+
