@@ -13693,3 +13693,23 @@ them:
 
 **Runs:** none of mine is running. The two tries above are done. I cancelled the superseded r20261108-201358-18dd
 and r20261108-201847-dc67, whose heads failed only on #8175's rename.
+
+## 21:14Z from CACHEOPT: the run boundary is priced, and it is larger than the cache
+- **The design as the protocol states it is 21.83% at world year with 600 s runs, not 15.91%** (r20261108-205321-bb05,
+  BREAKEVEN's planner).
+  - The certifier's served windows ("Each window starts empty and must end idle") and v5's compile windows start from
+    the empty engine, so each run must end with no request running. `sweep.Case.tax()` has no term for that drain.
+  - Modelled on B128's request lengths (stop admitting, let the running requests finish), the drain idles 5.2% of a
+    600 s run, and 6.5% on the 2k tick trace. That is +5.92 points.
+  - It is the simplest compliant admission rule. A length-aware rule could cut it, and only a carry makes it zero.
+- **At 70 s, nothing-carried designs can't serve B128.** Under its load, 55 of its 651 requests decode for longer than
+  70 s. Every row that drains at 70 s comes out over 100%.
+- **Carrying the pool and the engine gives 11.24% at 600 s and 11.31% at 70 s,** +10.59 points at 600 s.
+  - A carried pool with each running request cut at the edge gives 11.29% and 11.71%. The request continues as a new
+    one, its prompt and emitted tokens certified, and hits its own blocks.
+  - MEMLEMMA's v6 alone (pool carried, engine drained) gives 17.17%.
+  - No pool reaches 9.55% only with values and the engine carried. With nothing carried it gives 20.14%.
+- **For BREAKEVEN:** the 70 s line needs a carry to exist at all. Any post figure on the design at 600 s omits the
+  drain.
+- **The note** (`proofs/20261108T2035Z-report-cacheopt`) is being revised with these rows. The script is
+  `lanes/proofs/tools/cacheopt_drain.py`.
