@@ -86,8 +86,19 @@ On DeepSeek-V4-Pro's 8 x H200 node, served TP8 eager with the plugin loaded from
 research run --on NODE --project verity --cwd source -- gpu-lease 8 --wait --mem-gb 64 -- bash benchmarks/moe_align/served.sh
 ~~~
 
-`served.py` builds one engine and refuses to go on unless every rank's Marlin experts call `moe_align.wrapper`. It then
-runs three phases:
+On a node without the checkpoint, `DUMMY_LAYERS=N` serves its first N layers with dummy weights. The config and tokenizer
+come from the hub at the manifest's revision, each held to the manifest's sha256. Any tensor-parallel size works, for
+example two GPUs:
+
+~~~text
+research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/moe_align/served.sh
+~~~
+
+The expert count, top-k and widths are the checkpoint's, but the routing is not, so the run's figures are labelled
+`weights: dummy`. N = 5 keeps DeepSeek-V4-Pro's three hash-routed layers and two score-routed ones; it has no dense layer.
+
+`served.py` builds one engine and refuses to go on unless every rank's Marlin experts call `moe_align.wrapper`, as their
+module's global (the guard `moe_align.install` holds, read back from each rank). It then runs three phases:
 
 - **`check.json`.** A wrap over each rank's `moe_align_block_size` holds every call to `moe_align.reference`, by MoE
   layer, through the prefill and decode of one request and of eight. It counts each rank's calls by step kind and

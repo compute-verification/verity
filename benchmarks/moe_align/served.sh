@@ -6,16 +6,20 @@
 # 1,16,64,256), PAIRS (default 3), TP (default 8), VENV (default /workspace/cp/venv312), GPU_UTIL (default 0.92). LOCAL_CK: a
 # verified copy of the checkpoint (it holds .verified), bind-mounted on the path manifests/checkpoints.json names when nothing is
 # mounted there. The integration's vLLM plugin loads from a site directory declaring its entry points (stress.py site).
+# DUMMY_LAYERS=N: no checkpoint; the first N layers with dummy weights (served.py --dummy-layers), e.g. TP2 on a node without it:
+#   research run --on NODE --project verity --cwd source -- gpu-lease 2 --wait -- env TP=2 DUMMY_LAYERS=5 bash benchmarks/moe_align/served.sh
 # Out: $OUT (research run sets it): versions.json, check.json, decode.jsonl, host.json, summary.json.
 set -euo pipefail
 TREE=$PWD
 OUT=${OUT:?set OUT}
 ROW=${ROW:-dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager}
 FS_CK=/workspace/fs/dsv4/b5968e9190ef611bbf34a7229255be88a0e937c1
-if [ -n "${LOCAL_CK:-}" ] && [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK"; then
-  sudo -n mkdir -p "$FS_CK" && sudo -n mount --bind "$LOCAL_CK" "$FS_CK"
+if [ -z "${DUMMY_LAYERS:-}" ]; then
+  if [ -n "${LOCAL_CK:-}" ] && [ -e "$LOCAL_CK/.verified" ] && ! mountpoint -q "$FS_CK"; then
+    sudo -n mkdir -p "$FS_CK" && sudo -n mount --bind "$LOCAL_CK" "$FS_CK"
+  fi
+  [ -e "$FS_CK/config.json" ] || { echo "no checkpoint at $FS_CK (LOCAL_CK names a verified copy to mount there)"; exit 3; }
 fi
-[ -e "$FS_CK/config.json" ] || { echo "no checkpoint at $FS_CK (LOCAL_CK names a verified copy to mount there)"; exit 3; }
 unset NCCL_P2P_DISABLE VLLM_USE_DEEP_GEMM VLLM_PLUGINS
 export HF_HOME=/workspace/cp/hf HF_HUB_OFFLINE=1
 TMPDIR=$(mktemp -d /tmp/moe-align-served.XXXXXX)
@@ -30,4 +34,5 @@ mkdir -p "$OUT"
 cd "$TREE/integrations/vllm"
 nvidia-smi --query-gpu=index,name,driver_version,memory.used --format=csv,noheader | tee "$OUT/gpus.csv"
 python -u -m moe_align.served --workload "workloads/$ROW.json" --tp "${TP:-8}" --check-batches "${CHECK_BATCHES:-1,8}" \
-  --batches "${BATCHES:-1,16,64,256}" --pairs "${PAIRS:-3}" --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.92}" --out "$OUT"
+  --batches "${BATCHES:-1,16,64,256}" --pairs "${PAIRS:-3}" --engine-arg "gpu_memory_utilization=${GPU_UTIL:-0.92}" \
+  --dummy-layers "${DUMMY_LAYERS:-0}" --out "$OUT"
