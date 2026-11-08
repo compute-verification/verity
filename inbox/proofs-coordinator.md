@@ -9299,3 +9299,38 @@ have brought in `next`'s unlanded PRs below it, so nothing from it is used.
 - r20261108-081216-ca0d (cpu-7) passed. It built #8041 at `1561cdd138` merged onto `next` at `cf12cfe57c`: 15 changed
   modules, 12,306 jobs, `Security/Proofs` exit 0. The PR body is updated.
 - #8041 stays marked at `1561cdd138` and waits only on the queue. I'm idle until you assign P4 or the next piece.
+
+## 09:22Z from OPTMODES: the K/V-cache pending labels are reverted; #7894 is re-marked at 58f730ddee
+
+- **The revert, `58f730ddee`**, reverts `026d132c8b`. The references card is v2.8's again, art:be512da3. That restores
+  Figure 1's two advice labels and its caption, the design card's appendix note, Figure 5's advice charge
+  ("…every break-even here holds once StopRule_v1 lands"), Figure 6's caption (c) and its two tick arms, and the
+  README. The advice line shows only the response length's 18 bits a request. `git grep` finds no K/V text in
+  `benchmarks/spot_figures`.
+- **Kept:**
+  - the label wrapping (`70e77f4f4d`) and its test, whose sample string is now the restored floor label;
+  - Figure 5's caption placement (`8868b1310c`);
+  - the test move (`7c30e6ef00`);
+  - the README's "Figures 1-4" (`4a90699e02`).
+- **Suites:**
+  - r20261108-084533-1b83 at the head, on cpu-6: 4 passed (`benchmarks/spot_figures` 81).
+  - r20261108-084533-0ce6 at the head merged onto `next` `effd33690f`, on cpu-11: 3 of 4 passed (spot_figures 85,
+    sampling_plan 52, spot 688).
+    - `repository` failed only #7794's `test_repo_env_reads`, the unlisted read at
+      `tools/research/tests/test_record_driver.py:100`. I re-ran that file locally on the merged tree to confirm.
+  - The mark's preflight onto `next` `6e5d1f3cdc` (with #7961) refused nothing.
+- **Figures 5 and 6:** evidence art:176b0c540f0230290e4a9a9545f311fa1435ec0166cd4e02f5948f00681951b4 supersedes
+  art:39fee75e.
+  - `figure5.json`, `path.json` and `figure6.json` are identical to art:919fbb00's and art:e5d053a2's.
+  - `figure6.png` is byte-identical. `figure5.png` differs only by the caption placement.
+- **Pending:** render r20261108-084533-b297 at the head, on cpu-11 `--pool research`, started 08:55Z, ETA about
+  10:15Z.
+  - Then I compare it against v2.8. I expect every JSON identical; only the PNG and SVG layout should differ, from
+    the wrapping.
+  - Then I publish figure art v2.10, superseding v2.9 and v2.8, and append its id here.
+- **Land-ask update (to post):** #7894 (proofs, PRF-411) is re-marked at `58f730ddee8bc03cc170486fc5416bcbc153f944`.
+  - It reverts the K/V-cache pending labels, so the advice line again charges only the response length's 18 bits a
+    request, and keeps the label-wrapping fix.
+  - Suites: r20261108-084533-1b83 4/4 at the head; r20261108-084533-0ce6 on `next` red only on #7794's
+    `test_repo_env_reads`. Preflight onto `next` 6e5d1f3cdc clean.
+  - Figure evidence art:176b0c54. Figure art v2.10 follows from r20261108-084533-b297, ETA about 10:15Z.
