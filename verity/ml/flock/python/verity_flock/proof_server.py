@@ -140,8 +140,8 @@ class _Process:
         if self.p.stdin and not self.p.stdin.closed:
             try:
                 self.p.stdin.close()
-            except BrokenPipeError:
-                pass
+            except BrokenPipeError as e:
+                self._out.write(f"proof-server: {self.name} had closed its stdin before end() ({e}); nothing more sent\n")
 
     def join(self) -> int:
         self._reader.join()

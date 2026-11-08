@@ -419,7 +419,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                  {s["name"]: (s["base"], s["n"]) for s in staged})
     (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
-    pairs = tools.firewall is not None or os.environ.get("FLOCK_CHALLENGER") == "1"
+    pairs = tools.firewall is not None or a0.own_challenger(zk=True)
     with contextlib.ExitStack() as stack:
         if not pairs and server is None:
             server = _SERVER or stack.enter_context(ProofServer(tools.bin, out / "proof-server", env=a0.DIRECT))
