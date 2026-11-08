@@ -1,0 +1,3 @@
+[2026-11-08T10:06Z] 5ac2799e8066
+Coordinator 10:07Z: kernels posted the repro (thread 1794080911.611349, 10:05Z): row llama32-1b__bf16__h200__tp1__b1__i256__o32__mixed__greedy__bi-eager, tier fast. Runs: base 8c7321cd7c r20261108-092917-c94f, and #8047 head e5c19917f0 r20261108-092857-9279, both on vy-nebius-cpu-11, same failure. Each run's inputs/neutral.sh is the full job (TIER=fast bash neutral.sh <row> 64). Command, from integrations/vllm: python -m verity_vllm.pipeline.cli neutrality <row> --tier fast --update --out <dir> --row-flag=--build-ram-budget-gb=64 --run-id <run> --source-sha <tree>. Read the rest with research msg read --thread 1794080911.611349. Start from those runs' logs.
+
