@@ -22,12 +22,18 @@
 
 Writes DIR/rate.json (a row a type and K, as each ends) and DIR/<type>-k<K>/ (the server's logs and session records; no
 circuit, prover file or proof). A type whose server fails at some K is recorded with its error, and the next goes on.
+
+A row is **void** when any session was refused (a refused session files fast, so it would raise the rate), any of the
+server's processes exited nonzero, or a prover's log reports the device out of memory: it has no rate
+(``statements_per_s`` is null), ``void`` lists the reasons, and a ``VOID`` line says so. The run exits 1 when any row is
+void or failed.
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
+import re
 import shutil
 import statistics
 import subprocess
@@ -44,6 +50,8 @@ from verity_flock.proof_server import ProofServer, Statement
 
 STATEMENT_ID = "verity/flock-circuit"
 PAGE_KB = os.sysconf("SC_PAGE_SIZE") // 1024
+# the CUDA prover prints the runtime's error string ("FFI CUDA error out of memory at ...") before it fails the session
+DEVICE_OOM = re.compile(r"out of memory", re.IGNORECASE)
 
 
 def cpu_s(pids) -> tuple[float, list[int]]:
@@ -131,6 +139,19 @@ class Host:
         gib = lambda kb: round(kb / 2**20, 2)  # noqa: E731
         return {"provers_gib": gib(self.provers_kb), "verifiers_gib": gib(self.verifiers_kb),
                 "each_gib": {k: gib(v) for k, v in sorted(self.peak.items())}, "exited_while_sampled": sorted(self.gone)}
+
+
+def void_reasons(refused: int, sessions: int, exits: dict[str, int], out: Path) -> list[str]:
+    """Why a row's rate can't stand (empty when it can): a refused session, a server process that exited nonzero, or a
+    prover whose log (``out/prover-*.log``) reports the device out of memory."""
+    why = []
+    if refused:
+        why.append(f"{refused} of {sessions} sessions refused")
+    if bad := sorted(f"{k} rc {v}" for k, v in exits.items() if v != 0):
+        why.append("exited nonzero: " + ", ".join(bad))
+    if oom := sorted(p.stem for p in out.glob("prover-*.log") if DEVICE_OOM.search(p.read_text(errors="replace"))):
+        why.append("out of device memory: " + ", ".join(oom))
+    return why
 
 
 def throttled() -> dict:
@@ -282,6 +303,8 @@ def one(a, dev: str, t: str, K: int) -> dict:
                                 "prover": r["s"].prover, "error": r["error"], "live": live}, default=str) + "\n")
     with open(out / "device.tsv", "w") as f:
         f.writelines(f"{x - t_start:.3f}\t{u:g}\t{m:g}\n" for x, u, m in gpu.samples)
+    if why := void_reasons(len(bad), len(done), rec["exits"], out):
+        rec |= {"void": why, "statements_per_s": None}
     return rec
 
 
@@ -315,8 +338,13 @@ def main() -> int:
             rows.append(r)
             (out / "rate.json").write_text(json.dumps(rows, indent=1, default=str))
             print("RATE " + json.dumps({k: r.get(k) for k in ("type", "provers", "statements_per_s", "busy", "device_peak_mib",
-                                                              "host", "accepted", "median", "lean", "error")}, default=str),
-                  flush=True)
+                                                              "host", "accepted", "median", "lean", "void", "error")},
+                                       default=str), flush=True)
+            if r.get("void"):
+                print(f"VOID {t} K={K}: " + "; ".join(r["void"]), flush=True)
+    if failed := [f"{r['type']} K={r['provers']}" for r in rows if r.get("void") or r.get("error")]:
+        print(f"server_rate: no rate for {', '.join(failed)} (void or failed: rate.json says why)", file=sys.stderr)
+        return 1
     return 0
 
 

@@ -181,7 +181,8 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
   peak, each prover's and verifier's peak RSS, the provers' CPU seconds a statement, the median phase times (the front is
   `e2e_s − prove_total_s`), and the cgroup's throttling and load. With `--lean`, the last sessions at
   K = 1 also get the Lean verdict inside the server's verdict pool, with its CPU seconds and peak RSS. A proof block's
-  verdict is the `NO_PROGRAM` refusal, as in `served_units`.
+  verdict is the `NO_PROGRAM` refusal, as in `served_units`. A row with a refused session, a server process that exited
+  nonzero, or a prover out of device memory is void: no rate, its reasons in `void`, a `VOID` line, and the run exits 1.
 - `zk_cost_cpu.sh`: the same sessions on a CPU node (`zk_cost.py prove --cpu`), proved by the CPU prover that
   `prove_path/run.sh` builds, with the ZK server's send check. It runs in a proofs slot, one point at a time. Each session's
   record carries its wall time and its summed peak memory (prover, live verifier and ZK server), which is what a CPU node
