@@ -276,6 +276,15 @@ def test_write_routes_writes_the_table_the_loader_reads(tmp_path) -> None:
         X.main(["--write-routes", *paths, "--out", str(tmp_path)])
 
 
+def test_a_scan_with_no_case_is_refused_before_it_starts(tmp_path) -> None:
+    """DeepSeek-V4-Pro has no absorb bmm: a scan process of that model and phase alone is refused, rather than writing a
+    scan of no case that the route writer then refuses as not ok."""
+    with pytest.raises(SystemExit):
+        X.main(["--scan-run", "--served-default", "--models", "dsv4-pro", "--only", "bmm", "--out",
+                str(tmp_path / "s")])
+    assert not (tmp_path / "s").exists()
+
+
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
     for M in X.LINEAR_M:
         assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})

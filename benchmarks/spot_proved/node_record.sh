@@ -11,7 +11,8 @@
 # libs.sha256    every shared object under the venv's site-packages
 # caches/*.sha256  each JIT, autotune and compile cache the engine reads, file by file: TensorRT-LLM's kernels, vLLM's FlashInfer
 #                autotune choices and torch.compile cache, FlashInfer's JIT, DeepGEMM's, Triton's, and the driver's PTX JIT cache
-#                (empty when no kernel was compiled from PTX, so the driver's own compiler reached no bits)
+#                (empty when no kernel was compiled from PTX, so the driver's own compiler reached no bits); not the caches' logs.
+#                A cache only grows as kernels are compiled, so two records of one node differ by added entries alone
 # checkpoint.txt with CK and PINS (benchmarks/ppl/pins/glm-5.3.json): each pinned file's sha256 against the pin, OK or its digest
 # topo.txt       the NVLink topology, which reaches the bits only through the tree
 set -uo pipefail
@@ -35,7 +36,7 @@ for kv in "tensorrt_llm:$HOME/.tensorrt_llm/cache" "flashinfer_autotune:$VC/flas
           "deep_gemm:${DG_JIT_CACHE_DIR:-$HOME/.deep_gemm}" "triton:${TRITON_CACHE_DIR:-$HOME/.triton/cache}" \
           "driver_ptx_jit:${CUDA_CACHE_PATH:-$HOME/.nv/ComputeCache}"; do
   d=${kv#*:}
-  if [ -d "$d" ]; then (cd "$d" && find . -type f ! -name '*.lock' -print0 | xargs -0 -r -P 16 -n 64 sha256sum | sort -k2)
+  if [ -d "$d" ]; then (cd "$d" && find . -type f ! -name '*.lock' ! -name '*.log' -print0 | xargs -0 -r -P 16 -n 64 sha256sum | sort -k2)
   else echo "absent $d"; fi > "$O/caches/${kv%%:*}.sha256"
 done
 if [ -n "${CK:-}" ] && [ -n "${PINS:-}" ]; then

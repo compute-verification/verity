@@ -115,14 +115,13 @@ commitments' salts and the ZK server's tape.
 - **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
   Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
   theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't about `IO.getRandomBytes`, its
-  tie to the verifier, its scope (the masks included), what is outside it, why no test runs, and where it is used,
-  salts included.
+  tie to the verifier, its scope (masks included), what is outside it, why no test runs, and where it is used.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The challenger's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
 coins.
 
-- **Statement.** Each round's coins are uniform field elements, independent of every earlier round's and sampled after the
+- **Statement.** Each round's coins are uniform field elements, independent of every earlier round's, sampled after the
   prover's message of that round. The model's session flips its coins exactly so (the games' coin nodes), so A6 is what
   makes the model's coins the run's.
 - **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a byte source for the coins it could be a

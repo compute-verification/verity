@@ -14795,17 +14795,23 @@
    "signature": ["Flock.SecurityProofs.SampledKSLiveV5 : Flock.Guarantees.SampledKSLiveV5"],
    "assumptions": [],
    "premises": {
-    "assumptions": [
-     "FlockSoundness.Assumptions.SHA512CRExpected",
-     "FlockSoundness.Assumptions.SHA512CRStrict",
-     "FlockSoundness.Assumptions.UniformRandomBytes"
-    ],
+    "assumptions": [],
     "domain": [],
-    "open": ["FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw"],
-    "reads": ["FlockSoundness.Assumptions.HmRowComputes"]
+    "open": [
+     "FlockSoundness.Assumptions.UniformRandomBytes",
+     "FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw",
+     "FlockSoundness.Discharge.ZkHidden.TagsOkZHJ",
+     "FlockSoundness.Discharge.ZkLink.LinkCRZC",
+     "FlockSoundness.Discharge.ZkLink.SessCRZ"
+    ],
+    "reads": [
+     "FlockSoundness.Assumptions.HmRowComputes",
+     "FlockSoundness.Assumptions.SHA512CRExpected",
+     "FlockSoundness.Assumptions.SHA512CRStrict"
+    ]
    },
    "type_hash": "1da5c430cbb43b0232626e9ac21f59025a435c8829d4500927b3bd052f108f35",
-   "unfolded_hash": "0703084001aa7b82799a0ef362416061f85e44ea073af25e1c57a88eaada9f17"
+   "unfolded_hash": "e8931a524eb1910c4f8dabd603fba7120726856113dede6cf66b2076f14acdf8"
   },
   "Flock.SecurityProofs.SampledKSLiveV5Honest": {
    "owner": "@proofs",
@@ -26316,7 +26322,10 @@
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.tables Option.none": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq pub.n n": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.SampledKSLiveV5": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -44332,11 +44341,11 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "5acfb6c91e3c5a113d691c97e1055d977d00e30a93ea0662639d3d158c2bfc8e",
+   "digest": "9a1e5f49e17a985e6076e539fa2e16e071b2490b69d9f03fe9a28ab47b77b945",
    "definitions": {
     "Flock.Bridge.LiveAcceptsKSP": "ddcc86cf03014a67623db82ecc9436ea7a8c1794ef1a45f8bfc0f322c6cfaa02",
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
-    "Flock.Guarantees.SampledKSLiveV5": "4bebbba6c0af9645a2d1b3a73fa3f32a0b974019551e4a946632643dc2c4a1fe"
+    "Flock.Guarantees.SampledKSLiveV5": "e19488d58e4d4efd7b29f80cc37fa284f2301c116aa9f90d5368a8fba1177a4c"
    }
   },
   "Proofs.Flock.Bytes": {
