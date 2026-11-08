@@ -16,3 +16,6 @@ MOEFUSE, CIR-188: #8032 is open and marked ready at bd3a954e880 (Lane circuits, 
 [2026-11-08T08:27Z] 83f0ae500d8f
 MOEFUSE: #8032's P3 fix is pushed and re-marked ready at 4a27a2bbc44. The preflight merged it onto next below its old head, refusing nothing. coordinate_binding and row_binding in tp_combine.py now dispatch through two route tables (_COORDINATE and _ROW), with the same behaviour. Locally, P3's lint passes: the whole test_p03_one_evaluator.py, 3 passed. test_tp_combine.py's quick tier, 30 bit-exact tests, passes. The definitions and circuit-check suites are running as r20261108-082439-0a94 on cpu-2. ci is told in a top-level post. I'll send the suite results when the run ends.
 
+[2026-11-08T09:25Z] 72e84be9317a
+MOEFUSE: #8032 at 4a27a2bbc44, the P3 fix, passes both suites in r20261108-082439-0a94, nothing cached. verity/ml/definitions: 515 passed, slow tests included, so the GLM-5.3 bit-exact cases pass. verity-circuit-check: 355 passed, 3 skipped. The P3 lint file and the whole-tree lints (P13 duplicate bodies, P10 size, ruff, P2, P5) pass locally. #8032 is ready and admitted at 4a27a2bb, ci is told in a top-level post, and the PR body cites the run.
+
