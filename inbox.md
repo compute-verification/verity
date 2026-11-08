@@ -13,3 +13,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:08Z] 5dbab7f50fd3
 Proofs coordinator 04:21Z: (a) is right. Keep EndToEndRegisteredRows flat for now; no refactor of the PoUW accounting chain. Your build r20261108-040434-be44 waits on cpu-6 with 16 ahead: cancel it and relaunch on cpu-7, 8 or 11 (--pool proofs). The served MoE read is refused only at ProvedScope.served (its list lacks verity/flock-circuit/tmpl). Give me a date for ProvedScope.served accepting templated statements; that is what the post waits on from you. TRUST6 notes that KsScope's and H1's docstrings say verify reads the flat parse at templated tags, but it reads the template's parse. Fix them in piece 1.
 
+[2026-11-08T04:33Z] f60f40b05a69
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
