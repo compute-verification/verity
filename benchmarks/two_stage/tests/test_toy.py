@@ -16,8 +16,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R, \
+from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S
+from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.program import Program

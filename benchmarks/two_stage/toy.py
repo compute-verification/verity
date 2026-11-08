@@ -33,8 +33,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.sampled_proofs import service as S
-from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R
+from verity.core.protocols.spot import service as S
+from verity.core.protocols.spot.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.program import Program

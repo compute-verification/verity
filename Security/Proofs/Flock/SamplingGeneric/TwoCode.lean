@@ -10,7 +10,7 @@ public import Proofs.Flock.Claims.Sampling.Reg
 # The two-stage sampled verifier's code from its Lean samples
 
 `SamplingDeploy.codeTwo c reg L₁ L₂ bytes₁ bytes₂`: the record's code (`SamplingDeploy.Code`) with its checked units
-the two stages the Lean sampled verifier samples (`SampledProofs.Run.run` under `Select.Rule.twoStage`), on the
+the two stages the Lean sampled verifier samples (`Spot.Run.run` under `Select.Rule.twoStage`), on the
 registration the statement names (`reg x`, a `RegTwo`), and the rest `c`'s:
 
 * the first stage is `Select.select` on the boundary registration (`RegTwo.first`, a `Reg` whose rule is the resolved
@@ -46,7 +46,7 @@ of a sampled replay block, is the contract's sample of each cell.
 
 namespace SamplingDeploy
 
-open Claims Claims.Sampling Finset Properties.SampledProofs Properties.SampledProofs.SecurityProofs
+open Claims Claims.Sampling Finset Properties.Spot Properties.Spot.SecurityProofs
 open Lean (Json)
 
 theorem RegTwo.checked_length_le (g : RegTwo) (N : ℕ) (src₁ src₂ : ByteArray) :
@@ -64,15 +64,15 @@ theorem RegTwo.always_mem (g : RegTwo) {N v : ℕ} (src₁ src₂ : ByteArray) (
   · exact List.mem_range.2 hv
 
 theorem RegTwo.error_mem (g : RegTwo) {N v : ℕ} {src₁ src₂ : ByteArray} {e : String}
-    (h : SampledProofs.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .error e) (hv : v < N) :
+    (h : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .error e) (hv : v < N) :
     v ∈ g.checked N src₁ src₂ := by
   unfold RegTwo.checked
   rw [h]
   exact List.mem_range.2 hv
 
 theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw : Json} {read : ℕ}
-    (h : SampledProofs.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read))
-    (hj : (j : Int) ∈ SampledProofs.Draw.proved draw) (hv : g.blockAt (g.sample src₁) j < N) :
+    (h : Spot.Select.selectSecond (g.sample src₁) g.ns g.ks src₂ = .ok (draw, read))
+    (hj : (j : Int) ∈ Spot.Draw.proved draw) (hv : g.blockAt (g.sample src₁) j < N) :
     g.blockAt (g.sample src₁) j ∈ g.checked N src₁ src₂ := by
   unfold RegTwo.checked
   rw [h]
@@ -82,7 +82,7 @@ theorem RegTwo.ok_mem (g : RegTwo) {N j : ℕ} {src₁ src₂ : ByteArray} {draw
 
 /-- A nonempty replay sample is the first stage's accepted sample. -/
 theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[]) :
-    ∃ draw read, SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table
+    ∃ draw read, Spot.Select.select g.first.rule g.first.program g.first.query g.first.table
       g.first.closure src = .ok (draw, g.sample src, read) := by
   unfold RegTwo.sample at h ⊢
   split
@@ -92,22 +92,22 @@ theorem RegTwo.sample_ok (g : RegTwo) {src : ByteArray} (h : g.sample src ≠ #[
     rw [hs] at h
     exact absurd rfl h
 
-theorem slots_select_of (rule : SampledProofs.Select.Rule) (p : SampledProofs.Program) (query : Json)
-    (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) {l : SampledProofs.Slots.Layout}
-    {draw : Json} {proved : Array ℕ} {read : ℕ} (hl : SampledProofs.Slots.layout p query = .ok l)
-    (hs : SampledProofs.Select.select rule p query table cm src = .ok (draw, proved, read)) :
-    SampledProofs.Slots.select rule p query table cm src = .ok (l, SampledProofs.Slots.checked l proved) := by
-  unfold SampledProofs.Slots.select
+theorem slots_select_of (rule : Spot.Select.Rule) (p : Spot.Program) (query : Json)
+    (table : Option Json) (cm : Option (Array (Int × Array Int))) (src : ByteArray) {l : Spot.Slots.Layout}
+    {draw : Json} {proved : Array ℕ} {read : ℕ} (hl : Spot.Slots.layout p query = .ok l)
+    (hs : Spot.Select.select rule p query table cm src = .ok (draw, proved, read)) :
+    Spot.Slots.select rule p query table cm src = .ok (l, Spot.Slots.checked l proved) := by
+  unfold Spot.Slots.select
   rw [hl]
-  show (SampledProofs.Select.select rule p query table cm src >>= _) = _
+  show (Spot.Select.select rule p query table cm src >>= _) = _
   rw [hs]
   rfl
 
 /-- A checked population slot is a proved unit. -/
-theorem mem_slots_checked {l : SampledProofs.Slots.Layout} {proved : Array ℕ} {ρ : ℕ}
-    {b : SampledProofs.Slots.ProofBlock} (h : ρ ∈ SampledProofs.Slots.checked l proved) (hb : l.blocks[ρ]? = some b)
+theorem mem_slots_checked {l : Spot.Slots.Layout} {proved : Array ℕ} {ρ : ℕ}
+    {b : Spot.Slots.ProofBlock} (h : ρ ∈ Spot.Slots.checked l proved) (hb : l.blocks[ρ]? = some b)
     (hu : b.unit = some ρ) : ρ ∈ proved := by
-  unfold SampledProofs.Slots.checked at h
+  unfold Spot.Slots.checked at h
   simp only [Array.mem_map, Array.mem_filter] at h
   obtain ⟨⟨b', i⟩, ⟨hmem, hb'⟩, rfl⟩ := h
   rw [Array.mem_zipIdx_iff_getElem?, hb] at hmem
@@ -129,7 +129,7 @@ theorem pairwise_of_zip_tail : ∀ l : List ℕ,
 
 /-- **An accepted second stage's sample** is one or more replay blocks, each once. -/
 theorem selectSecond_sample {sample ns ks : Array ℕ} {src : ByteArray} {r : Json × ℕ}
-    (h : SampledProofs.Select.selectSecond sample ns ks src = .ok r) : sample ≠ #[] ∧ sample.toList.Nodup := by
+    (h : Spot.Select.selectSecond sample ns ks src = .ok r) : sample ≠ #[] ∧ sample.toList.Nodup := by
   obtain ⟨draw, read⟩ := r
   obtain ⟨hne, hz⟩ := secondProblem_sample (selectSecond_ok h).1
   refine ⟨fun h0 => by simp [h0] at hne, (pairwise_of_zip_tail _ ?_).imp (fun h => (Nat.ne_of_lt h))⟩
@@ -274,8 +274,8 @@ theorem prod_second_le {T N : ℕ} {cellF : ℕ → ℕ → Finset ℕ} {kOf : �
 
 /-- **The first stage misses `T` with probability at most `P_a(T)`**: the sample of record's checked slots on uniform
 bytes (`drawMisses`); a refused sample checks every slot, and a well-formed design has `P_a(∅) = 1`. -/
-theorem replay_le (g : Reg) (l : SampledProofs.Slots.Layout) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
-    (hl : SampledProofs.Slots.layout g.program g.query = .ok l)
+theorem replay_le (g : Reg) (l : Spot.Slots.Layout) (Dd : Claims.Sampling.Design) (L : ℕ) (T : Finset ℕ)
+    (hl : Spot.Slots.layout g.program g.query = .ok l)
     (hds : slotDesign g.rule g.program g.query g.table = .ok Dd) (hwf : Dd.WellFormed (slotPartition l))
     (hT : T ⊆ range (slotPartition l).blocks.length) :
     Pr (fun src : Fin L → Fin 256 => ∀ ρ ∈ g.checked (bytesOf src), ρ ∉ T) ≤ Dd.Pa (slotPartition l) T := by
@@ -307,10 +307,10 @@ theorem replay_le (g : Reg) (l : SampledProofs.Slots.Layout) (Dd : Claims.Sampli
 always-checked proof block is in `B`, the miss probability is `0`; otherwise `secondMisses`'s product over the sample's
 cells, each entry one replay block of `rl` (`prod_second_le`). -/
 theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims.Sampling.Design.Two)
-    (l : SampledProofs.Slots.Layout) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
+    (l : Spot.Slots.Layout) (src₁ : ByteArray) (rl : List ℕ) (B : Finset ℕ) (L₂ : ℕ)
     (hlen : d.part.blocks.length = l.blocks.size)
-    (hrl : ∀ draw proved read, SampledProofs.Select.select g.first.rule g.first.program g.first.query g.first.table
-      g.first.closure src₁ = .ok (draw, proved, read) → rl = (SampledProofs.Slots.checked l proved).toList)
+    (hrl : ∀ draw proved read, Spot.Select.select g.first.rule g.first.program g.first.query g.first.table
+      g.first.closure src₁ = .ok (draw, proved, read) → rl = (Spot.Slots.checked l proved).toList)
     (hT : g.ns.size = Pt.strata.length) (hk : ∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0)
     (hblocks : ∀ ρ b, l.blocks[ρ]? = some b →
       (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
@@ -342,12 +342,12 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
       _ ≤ _ := hR0
   push Not at hB
   let E₂ : (Fin L₂ → Fin 256) → Prop := fun src₂ =>
-    (SampledProofs.Select.selectSecond sample g.ns g.ks (bytesOf src₂)).isOk = true ∧
+    (Spot.Select.selectSecond sample g.ns g.ks (bytesOf src₂)).isOk = true ∧
       ∀ j ∈ secondX B N g sample,
-        (j : Int) ∉ secondOf (SampledProofs.Select.selectSecond sample g.ns g.ks (bytesOf src₂))
+        (j : Int) ∉ secondOf (Spot.Select.selectSecond sample g.ns g.ks (bytesOf src₂))
   have hmono : Pr (fun src₂ : Fin L₂ → Fin 256 => ∀ u ∈ g.checked N src₁ (bytesOf src₂), u ∉ B) ≤ Pr E₂ := by
     refine Pr_mono fun src₂ hm => ?_
-    cases hs : SampledProofs.Select.selectSecond sample g.ns g.ks (bytesOf src₂) with
+    cases hs : Spot.Select.selectSecond sample g.ns g.ks (bytesOf src₂) with
     | error e => exact absurd hv₀X (hm v₀ (g.error_mem hs hv₀N))
     | ok p =>
       obtain ⟨draw, read⟩ := p
@@ -360,8 +360,8 @@ theorem secondDraws_le (g : RegTwo) (Pt : Claims.Sampling.Partition) (d : Claims
   · rw [Pr_congr fun src₂ => iff_false_intro fun h => hex ⟨src₂, h⟩, Pr_false] at hmono
     exact hmono.trans hR0
   obtain ⟨src0, hok0, -⟩ := hex
-  obtain ⟨⟨draw0, read0⟩, h0⟩ : ∃ p, SampledProofs.Select.selectSecond sample g.ns g.ks (bytesOf src0) = .ok p := by
-    cases h : SampledProofs.Select.selectSecond sample g.ns g.ks (bytesOf src0) with
+  obtain ⟨⟨draw0, read0⟩, h0⟩ : ∃ p, Spot.Select.selectSecond sample g.ns g.ks (bytesOf src0) = .ok p := by
+    cases h : Spot.Select.selectSecond sample g.ns g.ks (bytesOf src0) with
     | error e => rw [h] at hok0; exact absurd hok0 (by simp [Except.isOk, Except.toBool])
     | ok p => exact ⟨p, rfl⟩
   obtain ⟨hne, hnd⟩ := selectSecond_sample h0
@@ -404,7 +404,7 @@ layout's population slot `ρ` is unit `ρ`, whose cell of stratum `t` in the sta
 `[0, n_t)`, injectively; and every proof block in an input slot's cells is always checked. -/
 def RegMatchesTwo : Prop :=
   ∀ x s Pt d, c.parse x = some s → c.partition s = some Pt → two s = some d → InScopeTwo Pt d s →
-    ∃ g l, reg x = some g ∧ SampledProofs.Slots.layout g.first.program g.first.query = .ok l ∧
+    ∃ g l, reg x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
       d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
       g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
       ∀ ρ b, l.blocks[ρ]? = some b →

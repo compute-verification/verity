@@ -10,13 +10,13 @@ import Mathlib.Data.String.Basic
 # Sampled proofs' link: the message the challenger opened the link points after
 
 The challenger opens a `--zk` session's link points, its coin tree's `session` stream at round 0, after the SHA-512 of
-the link's `root_F` and every `link.root_b` entry (`SampledProofs.Challenger.linkAfter`), and v2 holds the session's
-record to the openings the challenger logged (`SampledProofs.OneStageZk.treesHeld`). `Flock.Record.decode` reads
+the link's `root_F` and every `link.root_b` entry (`Spot.Challenger.linkAfter`), and v2 holds the session's
+record to the openings the challenger logged (`Spot.OneStageZk.treesHeld`). `Flock.Record.decode` reads
 `link.root_b` only at the session's tables (S5); v2 refuses a record whose `link.root_b` keys are not exactly its
-session's tables (`SampledProofs.Challenger.LINK_TABLES`), so the two read one message. The message carries no length
+session's tables (`Spot.Challenger.LINK_TABLES`), so the two read one message. The message carries no length
 prefix, and v2 refuses, before it hashes the message, a `root_B` of any length but the one the session's statement
-fixes, its table's level-0 cap of `2^cap₀` digests (`SampledProofs.Challenger.LINK_ROOT_LEN`, at the lengths
-`SampledProofs.OneStageZk.rootBTables` reads off the session v2 sets up). That fixed length is what makes the message
+fixes, its table's level-0 cap of `2^cap₀` digests (`Spot.Challenger.LINK_ROOT_LEN`, at the lengths
+`Spot.OneStageZk.rootBTables` reads off the session v2 sets up). That fixed length is what makes the message
 parse one way: the `root_B`s are its last bytes, of their tables' lengths in table order, and `root_F` is the rest.
 
 * `checkBlobsAt_link`: where v2's check accepts, the challenger's log shows one coin tree, and the challenger opened
@@ -29,7 +29,7 @@ parse one way: the `root_B`s are its last bytes, of their tables' lengths in tab
 The steps: what v2's check held of its one session's record (`checkBlobsAt_trees`, `treesHeld_one`,
 `sessionsTreeReason_one`), what a record `sessionTreeReason` accepts shows of its link (`sessionTreeReason_link`), the
 one table of the session v2 sets up (`setupAt_tables`), the one entry of a JSON object with one key (`keys?_single`,
-`get?_mem`), and `Flock.Record`'s readers against `SampledProofs.getD` (`fld_getD`, `str_getD`, `str_get?`).
+`get?_mem`), and `Flock.Record`'s readers against `Spot.getD` (`fld_getD`, `str_getD`, `str_get?`).
 `checkBlobsAt_link` reads that table's `root_B` length off `rootBTables` at the schedule `zk_verify_ok` gives.
 -/
 
@@ -66,20 +66,20 @@ theorem get?_mem {kvs : Std.TreeMap.Raw String Json} {k : String} {v : Json} (h 
 
 /-- An object whose sorted keys are one key `x` has one entry, at `x`. -/
 theorem keys?_single {kvs : Std.TreeMap.Raw String Json} {x : String}
-    (h : SampledProofs.keys? (.obj kvs) = some #[x]) : ∃ w, kvs.toArray = #[(x, w)] := by
-  simp only [SampledProofs.keys?, Option.some.injEq] at h
+    (h : Spot.keys? (.obj kvs) = some #[x]) : ∃ w, kvs.toArray = #[(x, w)] := by
+  simp only [Spot.keys?, Option.some.injEq] at h
   have hp := FlockSoundness.Audit.StrataExec.qsort_perm (· < ·) (kvs.toArray.map (·.1))
-  rw [show (kvs.toArray.map (·.1)).qsort (· < ·) = SampledProofs.sortStrings (kvs.toArray.map (·.1)) from rfl, h]
+  rw [show (kvs.toArray.map (·.1)).qsort (· < ·) = Spot.sortStrings (kvs.toArray.map (·.1)) from rfl, h]
     at hp
   have hl : (kvs.toArray.map (·.1)).toList = [x] := List.perm_singleton.1 hp.symm
   rw [Array.toList_map, List.map_eq_singleton_iff] at hl
   obtain ⟨⟨k, w⟩, hkw, rfl⟩ := hl
   exact ⟨w, Array.toList_inj.1 hkw⟩
 
-/-- A field `Flock.Record.fld` reads is the one `SampledProofs.getD` reads. -/
-theorem fld_getD {j v : Json} {k : String} (h : Flock.Record.fld j k = .ok v) : SampledProofs.getD j k = v := by
+/-- A field `Flock.Record.fld` reads is the one `Spot.getD` reads. -/
+theorem fld_getD {j v : Json} {k : String} (h : Flock.Record.fld j k = .ok v) : Spot.getD j k = v := by
   unfold Flock.Record.fld at h
-  unfold SampledProofs.getD SampledProofs.field?
+  unfold Spot.getD Spot.field?
   split at h
   · rename_i v' hv
     cases h
@@ -87,8 +87,8 @@ theorem fld_getD {j v : Json} {k : String} (h : Flock.Record.fld j k = .ok v) : 
     rfl
   · cases h
 
-/-- A string field `Flock.Record.str` reads is the one `SampledProofs.getD` reads. -/
-theorem str_getD {j : Json} {k s : String} (h : Flock.Record.str j k = .ok s) : SampledProofs.getD j k = .str s := by
+/-- A string field `Flock.Record.str` reads is the one `Spot.getD` reads. -/
+theorem str_getD {j : Json} {k s : String} (h : Flock.Record.str j k = .ok s) : Spot.getD j k = .str s := by
   unfold Flock.Record.str at h
   obtain ⟨v, hv, h⟩ := ebind_ok h
   rw [fld_getD hv]
@@ -99,7 +99,7 @@ theorem str_getD {j : Json} {k s : String} (h : Flock.Record.str j k = .ok s) : 
 theorem str_get? {kvs : Std.TreeMap.Raw String Json} {k s : String} (h : Flock.Record.str (.obj kvs) k = .ok s) :
     kvs.get? k = some (.str s) := by
   have hg := str_getD h
-  unfold SampledProofs.getD SampledProofs.field? at hg
+  unfold Spot.getD Spot.field? at hg
   simp only [Json.getObjVal?] at hg
   split at hg
   · rename_i v hv
@@ -110,13 +110,13 @@ theorem str_get? {kvs : Std.TreeMap.Raw String Json} {k s : String} (h : Flock.R
 /-! ## What v2's check held of its session's record -/
 
 /-- **Where v2's check accepts, it held the evidence's sessions to the challenger's trees.** -/
-theorem checkBlobsAt_trees {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
-    ∃ ts, _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok ts ∧
-      _root_.SampledProofs.OneStageZk.treesHeld p.own ts e bs = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
+theorem checkBlobsAt_trees {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+    ∃ ts, _root_.Spot.OneStageZk.treesOf p.base e.base = .ok ts ∧
+      _root_.Spot.OneStageZk.treesHeld p.own ts e bs = .ok () := by
+  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
   · cases h
@@ -129,37 +129,37 @@ theorem checkBlobsAt_trees {p : _root_.SampledProofs.OneStageZk.Params} {c : _ro
 
 /-- **`treesHeld` on one session**: its record, read as `Record.decode` reads it, is held to the trees at the
 statement's tables, each with the `root_B` length the session it sets up fixes (`rootBTables`). -/
-theorem treesHeld_one {p : _root_.SampledProofs.OneStageZk.Own} {ts : Array _root_.SampledProofs.Challenger.LoggedTree}
-    {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {rs : _root_.SampledProofs.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
+theorem treesHeld_one {p : _root_.Spot.OneStageZk.Own} {ts : Array _root_.Spot.Challenger.LoggedTree}
+    {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {rs : _root_.Spot.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
     (hb : bs.get rs.record s!"session {rs.name}'s record" = .ok recB) (hr : String.fromUTF8? recB = some record)
-    (h : _root_.SampledProofs.OneStageZk.treesHeld p ts e bs = .ok ()) :
-    _root_.SampledProofs.Challenger.sessionsTreeReason ts
-      #[(rs.name, _root_.SampledProofs.OneStageZk.rootBTables p bs record,
+    (h : _root_.Spot.OneStageZk.treesHeld p ts e bs = .ok ()) :
+    _root_.Spot.Challenger.sessionsTreeReason ts
+      #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
         (Flock.JsonParse.parse record).toOption.getD Json.null)] = none := by
-  unfold _root_.SampledProofs.OneStageZk.treesHeld at h
+  unfold _root_.Spot.OneStageZk.treesHeld at h
   rw [hs] at h
   simp only [← Array.forIn_toList, List.forIn_cons, List.forIn_nil, hb, hr, bind, Except.bind, pure, Except.pure]
     at h
-  rw [show (#[].push (rs.name, _root_.SampledProofs.OneStageZk.rootBTables p bs record,
+  rw [show (#[].push (rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null) : Array (String × Array (String × Option ℕ) × Json)) =
-    #[(rs.name, _root_.SampledProofs.OneStageZk.rootBTables p bs record,
+    #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null)] from rfl] at h
   revert h
-  cases _root_.SampledProofs.Challenger.sessionsTreeReason ts
-    #[(rs.name, _root_.SampledProofs.OneStageZk.rootBTables p bs record,
+  cases _root_.Spot.Challenger.sessionsTreeReason ts
+    #[(rs.name, _root_.Spot.OneStageZk.rootBTables p bs record,
       (Flock.JsonParse.parse record).toOption.getD Json.null)] with
   | none => intro _; rfl
   | some w => intro h; cases h
 
 /-- **`sessionsTreeReason` on one session**: its record's coins are a logged tree's, and the log shows one tree. -/
-theorem sessionsTreeReason_one {trees : Array _root_.SampledProofs.Challenger.LoggedTree}
+theorem sessionsTreeReason_one {trees : Array _root_.Spot.Challenger.LoggedTree}
     {tables : Array (String × Option ℕ)} {n : String} {J : Json}
-    (h : _root_.SampledProofs.Challenger.sessionsTreeReason trees #[(n, tables, J)] = none) :
-    _root_.SampledProofs.Challenger.sessionTreeReason trees tables J = none ∧ trees.size = 1 := by
-  unfold _root_.SampledProofs.Challenger.sessionsTreeReason at h
+    (h : _root_.Spot.Challenger.sessionsTreeReason trees #[(n, tables, J)] = none) :
+    _root_.Spot.Challenger.sessionTreeReason trees tables J = none ∧ trees.size = 1 := by
+  unfold _root_.Spot.Challenger.sessionsTreeReason at h
   simp only [← Array.forIn_toList, List.forIn_cons, List.forIn_nil] at h
-  cases hr : _root_.SampledProofs.Challenger.sessionTreeReason trees tables J with
+  cases hr : _root_.Spot.Challenger.sessionTreeReason trees tables J with
   | some w => simp [hr, Id.run] at h
   | none =>
     refine ⟨rfl, ?_⟩
@@ -173,15 +173,15 @@ theorem sessionsTreeReason_one {trees : Array _root_.SampledProofs.Challenger.Lo
 `t`, the record's `link.root_b` an object whose one entry is `x`'s, a string naming bytes `rb`, `n?`'s length where it
 is one (`LINK_ROOT_LEN`, refused before the hash), and the tree's `session` round 0 opened after the SHA-512 of the
 link's `root_F` bytes, then `rb`. -/
-theorem sessionTreeReason_link {trees : Array _root_.SampledProofs.Challenger.LoggedTree} {x : String}
-    {n? : Option ℕ} {J : Json} (h : _root_.SampledProofs.Challenger.sessionTreeReason trees #[(x, n?)] J = none) :
+theorem sessionTreeReason_link {trees : Array _root_.Spot.Challenger.LoggedTree} {x : String}
+    {n? : Option ℕ} {J : Json} (h : _root_.Spot.Challenger.sessionTreeReason trees #[(x, n?)] J = none) :
     ∃ t kvs s rb sf rootF o, t ∈ trees ∧
-      SampledProofs.getD (SampledProofs.getD J "link") "root_b" = .obj kvs ∧ kvs.toArray = #[(x, .str s)] ∧
+      Spot.getD (Spot.getD J "link") "root_b" = .obj kvs ∧ kvs.toArray = #[(x, .str s)] ∧
       Flock.unhex s = .ok rb ∧ (∀ n, n? = some n → rb.size = n) ∧
-      SampledProofs.getD (SampledProofs.getD J "link") "root_f" = .str sf ∧
-      Flock.unhex sf = .ok rootF ∧ t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 = some o ∧
+      Spot.getD (Spot.getD J "link") "root_f" = .str sf ∧
+      Flock.unhex sf = .ok rootF ∧ t.opening _root_.Spot.Challenger.TREE_SESSION 0 = some o ∧
       o.after = Flock.hexOf (Flock.Sha512.hash (rootF ++ rb)) := by
-  unfold _root_.SampledProofs.Challenger.sessionTreeReason at h
+  unfold _root_.Spot.Challenger.sessionTreeReason at h
   simp only [Id.run] at h
   split at h
   · rename_i t htf
@@ -200,14 +200,14 @@ theorem sessionTreeReason_link {trees : Array _root_.SampledProofs.Challenger.Lo
                 · rename_i o hlink
                   split at h
                   · rename_i hok
-                    have hrb : SampledProofs.getD (SampledProofs.getD J "link") "root_b" = .obj kvs := by
+                    have hrb : Spot.getD (Spot.getD J "link") "root_b" = .obj kvs := by
                       simp only [Prod.mk.injEq] at hm
                       exact hm.2.1
                     rw [hrb] at hk hsz hlen hok
                     simp only [List.map_toArray, List.map_cons, List.map_nil] at hk
-                    rw [show SampledProofs.sortStrings #[x] = #[x] from qsort_single _ x, beq_iff_eq] at hk
+                    rw [show Spot.sortStrings #[x] = #[x] from qsort_single _ x, beq_iff_eq] at hk
                     obtain ⟨w, hw⟩ := keys?_single hk
-                    simp only [SampledProofs.entries, hw] at hsz hlen hok
+                    simp only [Spot.entries, hw] at hsz hlen hok
                     have h1 := congrArg Prod.fst hm2
                     simp only at h1
                     split at h1
@@ -227,9 +227,9 @@ theorem sessionTreeReason_link {trees : Array _root_.SampledProofs.Challenger.Lo
                             subst hn
                             rw [List.all_toArray, List.all_cons, List.all_nil, Bool.and_true] at hlen
                             simpa [hus, Except.toOption] using hlen
-                          have hla : SampledProofs.Challenger.linkAfter rootF #[(x, rb)] =
+                          have hla : Spot.Challenger.linkAfter rootF #[(x, rb)] =
                               Flock.Sha512.hash (rootF ++ rb) := by
-                            unfold SampledProofs.Challenger.linkAfter
+                            unfold Spot.Challenger.linkAfter
                             rw [qsort_single]
                             rfl
                           exact ⟨t, kvs, s, rb, sf, rootF, o, Array.mem_of_find?_eq_some htf, hrb, hw, hus, hn, hsf,
@@ -250,18 +250,18 @@ theorem sessionTreeReason_link {trees : Array _root_.SampledProofs.Challenger.Lo
 
 /-- **The session v2 sets up has one table**: `setupAt` at one table's inputs (`inputsOf`'s count) sets up a
 one-table spec (`SetupTablesOkAny`). -/
-theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {draw : Option Json}
+theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {draw : Option Json}
     {spec : SessionSpec} {tabs : Array Flock.Setup} {rest : Json × Json} (hc : I.count = 1)
-    (h : _root_.SampledProofs.OneStageZk.setupAt I rd draw = .ok (spec, tabs, rest)) : ∃ y, spec.tables = #[y] := by
-  unfold _root_.SampledProofs.OneStageZk.setupAt at h
+    (h : _root_.Spot.OneStageZk.setupAt I rd draw = .ok (spec, tabs, rest)) : ∃ y, spec.tables = #[y] := by
+  unfold _root_.Spot.OneStageZk.setupAt at h
   obtain ⟨⟨spec', sts⟩, hs, h⟩ := ebind_ok h
-  have hs' : _root_.SampledProofs.OneStageZk.sessionAt I rd draw = .ok (spec', sts) := by
-    cases hx : _root_.SampledProofs.OneStageZk.sessionAt I rd draw <;> rw [hx] at hs <;> cases hs
+  have hs' : _root_.Spot.OneStageZk.sessionAt I rd draw = .ok (spec', sts) := by
+    cases hx : _root_.Spot.OneStageZk.sessionAt I rd draw <;> rw [hx] at hs <;> cases hs
     rfl
   obtain ⟨_, -, h⟩ := ebind_ok h
   simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at h
   obtain ⟨rfl, -⟩ := h
-  unfold _root_.SampledProofs.OneStageZk.sessionAt at hs'
+  unfold _root_.Spot.OneStageZk.sessionAt at hs'
   obtain ⟨_, -, hs'⟩ := ebind_ok hs'
   obtain ⟨_, -, hs'⟩ := ebind_ok hs'
   obtain ⟨r, hb, hs'⟩ := ebind_ok hs'
@@ -269,7 +269,7 @@ theorem setupAt_tables {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.One
   obtain ⟨_, -, hs'⟩ := ebind_ok hs'
   obtain ⟨_, -, hs'⟩ := ebind_ok hs'
   cases hs'
-  unfold _root_.SampledProofs.OneStageZk.buildSessionOf at hb
+  unfold _root_.Spot.OneStageZk.buildSessionOf at hb
   obtain ⟨_, -, hb⟩ := ebind_ok hb
   obtain ⟨x, hx, hb⟩ := ebind_ok hb
   have hset : Flock.Stmt.setupTables (Flock.Witness.zkTags I) I.circuitFile I.publicFile (Flock.Witness.zkCoins I)
@@ -295,18 +295,18 @@ record as `sess` with one table's `root_B`, `rb`, of the length the session's ta
 level-0 cap of `2^cap₀` digests), the challenger's log shows one coin tree `t`, and the challenger opened `t`'s
 `session` round 0, the link points, after the SHA-512 of the link's message `linkMsg record spec.tables`: the
 statement's `Σ`, then `rb`. The message has no length prefix; v2 refuses any other length of `rb` before it hashes the
-message (`SampledProofs.Challenger.LINK_ROOT_LEN` in `sessionTreeReason`, at the lengths
-`SampledProofs.OneStageZk.rootBTables` reads off the session it sets up), and that fixed length is what makes the
+message (`Spot.Challenger.LINK_ROOT_LEN` in `sessionTreeReason`, at the lengths
+`Spot.OneStageZk.rootBTables` reads off the session it sets up), and that fixed length is what makes the
 message parse one way, as `Σ` then `rb`. So the prover fixed that table's `root_B` before the link's coins. -/
-theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+theorem checkBlobsAt_link {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs sess t o rb st, V2Verified p e bs record spec tabs rest proofs ∧
       Flock.Record.decode spec record = .ok sess ∧ sess.rootB = #[rb] ∧
-      tabs[0]? = some st ∧ _root_.SampledProofs.OneStageZk.rootBLen st = .ok rb.size ∧
-      _root_.SampledProofs.OneStageZk.treesOf p.base e.base = .ok #[t] ∧
-      t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 = some o ∧
+      tabs[0]? = some st ∧ _root_.Spot.OneStageZk.rootBLen st = .ok rb.size ∧
+      _root_.Spot.OneStageZk.treesOf p.base e.base = .ok #[t] ∧
+      t.opening _root_.Spot.Challenger.TREE_SESSION 0 = some o ∧
       linkMsg record spec.tables = some (spec.sigma ++ rb).data.toList ∧
       o.after = Flock.hexOf ⟨(sha512Msg (spec.sigma ++ rb).data.toList).toArray⟩ := by
   obtain ⟨record, spec, tabs, rest, proofs, hv⟩ := checkBlobsAt_verified h
@@ -320,17 +320,17 @@ theorem checkBlobsAt_link {p : _root_.SampledProofs.OneStageZk.Params} {c : _roo
     | error _ => rw [hg] at hrec; cases hrec
     | ok recB => rw [hg] at hrec; exact ⟨recB, rfl, hrec⟩
   obtain ⟨ts, hts, hth⟩ := checkBlobsAt_trees h
-  have htab : _root_.SampledProofs.OneStageZk.sessionTables = #[tags0.table] := by
-    simp only [_root_.SampledProofs.OneStageZk.sessionTables, ht, Option.map_some, Option.getD_some]
+  have htab : _root_.Spot.OneStageZk.sessionTables = #[tags0.table] := by
+    simp only [_root_.Spot.OneStageZk.sessionTables, ht, Option.map_some, Option.getD_some]
     rfl
   obtain ⟨-, sess, schs, hd, -, h0, -, -, hsch⟩ := FlockSoundness.Discharge.ZkExec.zk_verify_ok _ _ _ _ hver
   obtain ⟨_, -, hsch0, -⟩ := hsch 0 h0
-  obtain ⟨n, hn⟩ : ∃ n, _root_.SampledProofs.OneStageZk.rootBLen tabs[0] = .ok n := by
-    unfold _root_.SampledProofs.OneStageZk.rootBLen
+  obtain ⟨n, hn⟩ : ∃ n, _root_.Spot.OneStageZk.rootBLen tabs[0] = .ok n := by
+    unfold _root_.Spot.OneStageZk.rootBLen
     rw [hsch0]
     exact ⟨_, rfl⟩
-  have hrt : _root_.SampledProofs.OneStageZk.rootBTables p.own bs record = #[(tags0.table, some n)] := by
-    unfold _root_.SampledProofs.OneStageZk.rootBTables
+  have hrt : _root_.Spot.OneStageZk.rootBTables p.own bs record = #[(tags0.table, some n)] := by
+    unfold _root_.Spot.OneStageZk.rootBTables
     simp only [htab, ht, hc, hpb, hrd, hst, bind, Except.bind, pure, Except.pure, Except.toOption,
       Array.mapIdx_singleton, Option.bind_some, Array.getElem?_eq_getElem h0, hn]
   have h1 := treesHeld_one hs hb hr hth

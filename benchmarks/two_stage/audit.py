@@ -55,7 +55,7 @@ sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 import a5_coins as AC  # noqa: E402
 import toy as T  # noqa: E402
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S  # noqa: E402
+from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
@@ -214,10 +214,10 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
     """Round 2's statement check of the sessions (`second_stage.check`, the form allowed), where the tree has it: over the
     design's ``links`` and the reads the audit record's verdicts of record report."""
     try:
-        from verity.core.protocols.sampled_proofs import second_stage as SS
+        from verity.core.protocols.spot import second_stage as SS
     except ImportError:
         return None
-    from verity.core.protocols.sampled_proofs.one_stage import audit as A, partition as P
+    from verity.core.protocols.spot.one_stage import audit as A, partition as P
 
     own = SS.Own(tuple(sample), SS.parts(len(sample), P.strata(window.program, window.query)), irec, brec, tuple(drawn),
                  SS.links_of(links), A.session_registered(record.get("verdicts") or {}))
