@@ -43,12 +43,13 @@ open FlockDeploy (Coin)
 open Verity.Recursive.BaseSetup (bind_ok)
 
 /-- **v2's draw under `lawAt`'s law**: where the verifier's law derives `lawJ` and `lawAt` reads the law `L` over `n`
-units, v2's draw over `n` units (`SampledProofs.OneStage.drawnFrom`) is `SampledProofs.Draw.drawUnits` under `L`. -/
+units, v2's draw over `n` units (`SampledProofs.OneStage.drawnFrom`), where it draws, is `SampledProofs.Draw.drawUnits`'s
+under `L`: it refuses a Bernoulli `L` (`SampledProofs.OneStage.coveredDesign`) and draws under any other. -/
 theorem drawnFrom_eq {v : _root_.SampledProofs.Registration.Verifier} {lawJ : Json} {n : ℕ} {L : Flock.Draw.Law}
-    (src : ByteArray)
+    (src : ByteArray) {r : Array ℕ × ℕ}
     (hder : _root_.SampledProofs.Draw.derive v.program v.query v.law v.workTable = .ok lawJ)
-    (hlaw : lawAt v n = .ok L) :
-    _root_.SampledProofs.OneStage.drawnFrom v lawJ n src = _root_.SampledProofs.Draw.drawUnits L n src := by
+    (hlaw : lawAt v n = .ok L) (h : _root_.SampledProofs.OneStage.drawnFrom v lawJ n src = .ok r) :
+    _root_.SampledProofs.Draw.drawUnits L n src = .ok r := by
   unfold lawAt at hlaw
   obtain ⟨lawJ', hJ', hlaw⟩ := bind_ok hlaw
   rw [hder] at hJ'
@@ -56,9 +57,18 @@ theorem drawnFrom_eq {v : _root_.SampledProofs.Registration.Verifier} {lawJ : Js
   obtain ⟨derived, hd, hlaw⟩ := bind_ok hlaw
   obtain ⟨fl, hf, hlaw⟩ := bind_ok hlaw
   have hL : derived.getD fl = L := Except.ok.inj hlaw
-  unfold _root_.SampledProofs.OneStage.drawnFrom
-  rw [hd, hf]
-  exact congrArg (fun L => _root_.SampledProofs.Draw.drawUnits L n src) hL
+  unfold _root_.SampledProofs.OneStage.drawnFrom at h
+  rw [hd, hf] at h
+  change (_root_.SampledProofs.OneStage.coveredDesign (derived.getD fl) >>= fun l =>
+    _root_.SampledProofs.Draw.drawUnits l n src) = _ at h
+  rw [hL] at h
+  revert h
+  cases L
+  case bernoulli a b =>
+    intro h
+    change Except.error _ = _ at h
+    cases h
+  all_goals intro h; exact h
 
 /-- **v2's acceptance keeps the run's draw file's units**: where v2 accepts evidence it parsed at the coins `ξ`, reading
 `A`'s and `o`'s inputs (`Names`), with the verifier's law read over `A`'s population as `A`'s (`lawAt`) and `ξ` the
@@ -80,7 +90,7 @@ theorem units_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sample
   have hpop := _root_.Properties.SampledProofs.Credited.population_of_checkBlobsAt hacc hpB A.hpub
   rw [hn', A.hn] at hpop
   obtain rfl := Option.some.inj hpop
-  rw [drawnFrom_eq ξ hder hlaw] at hd
+  replace hd := drawnFrom_eq ξ hder hlaw hd
   obtain ⟨t, ht⟩ := hξ
   have hd' := _root_.Properties.SampledProofs.SecurityProofs.drawUnits_append (t := t) hd
   rw [← ht] at hd'
@@ -117,7 +127,7 @@ theorem drawUnits_of_accepts (A : Live) (o : Own) {b : ByteArray} {p : _root_.Sa
   have hpop := _root_.Properties.SampledProofs.Credited.population_of_checkBlobsAt hacc hpB A.hpub
   rw [hn', A.hn] at hpop
   obtain rfl := Option.some.inj hpop
-  rw [drawnFrom_eq ξ hder hlaw] at hd
+  replace hd := drawnFrom_eq ξ hder hlaw hd
   obtain ⟨t, ht⟩ := hξ
   have hd' := _root_.Properties.SampledProofs.SecurityProofs.drawUnits_append (t := t) hd
   rw [← ht] at hd'

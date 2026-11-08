@@ -19,14 +19,14 @@ public import Std.Data.String.ToNat
   class, at most one stratum. The population's strata have the sizes of the layout's first class.
 * **The registration is v2's parameters'** (`regIs_of_setsUp`): at a session v2 sets up, the statement's descriptor
   parses as the parameters' verifier's program and its query is their verifier's (`SetsUp.params`).
-* **`parseLaw` reads a law's text back** (`parseLaw_count`, `parseLaw_bernoulli`): `kind:K` at `K ≥ 1`, for a `subset`,
+* **`parseDesign` reads a law's text back** (`parseDesign_count`, `parseDesign_bernoulli`): `kind:K` at `K ≥ 1`, for a `subset`,
   `stratified` or `work` law, is `{law: kind, k: K}`, and `bernoulli:NUM/DEN` at `0 < DEN` and `NUM ≤ DEN` is
   `{law: bernoulli, p: "NUM/DEN"}`, each number in `Nat.repr`'s digits.
 * **The population is `PopMatches`' count** (`units_of_popMatches`): where the descriptor parses and its layout under
   the query is laid out, `Partition.units` of the program and query is the `n` of `PopMatches`.
 * **The design at the law's text is the law the draw reads** (`slotDesign_lawText`, `slotDesign_designSlots`): over the
   verifier's program and query of `n` units, where `lawAt` reads the law `L`, `slotDesign` under the rule
-  `law (lawText L)` is `L`'s one-stage design and then `all`, at a subset law of at least one unit. `parseLaw` names a
+  `law (lawText L)` is `L`'s one-stage design and then `all`, at a subset law of at least one unit. `parseDesign` names a
   law that `deriveLaw` and `flockLaw` read as they read the verifier's (`deriveLaw_congr`, `deriveLaw_none`,
   `deriveLaw_some`, `flockLaw_subset_text`, `flockLaw_bernoulli_text`).
 -/
@@ -123,24 +123,24 @@ theorem toNat!_repr (K : ℕ) : (Nat.repr K).toNat! = K := by
     exact Option.some.inj h
   · exact absurd h (by simp)
 
-/-- **`parseLaw` reads `kind:K` back**: a `subset`, `stratified` or `work` law of `K ≥ 1`, its count in `Nat.repr`'s
+/-- **`parseDesign` reads `kind:K` back**: a `subset`, `stratified` or `work` law of `K ≥ 1`, its count in `Nat.repr`'s
 digits, is `{law: kind, k: K}`. -/
-theorem parseLaw_count (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : ℕ)
+theorem parseDesign_count (kind : String) (hk : kind = "subset" ∨ kind = "stratified" ∨ kind = "work") (K : ℕ)
     (h1 : 1 ≤ K) :
-    _root_.SampledProofs.Select.parseLaw (kind ++ ":" ++ Nat.repr K) =
+    _root_.SampledProofs.Select.parseDesign (kind ++ ":" ++ Nat.repr K) =
       .ok (Json.mkObj [("law", Json.str kind), ("k", Lean.toJson K)]) := by
   have hka : ':' ∉ kind.toList := by rcases hk with rfl | rfl | rfl <;> decide
-  unfold _root_.SampledProofs.Select.parseLaw
+  unfold _root_.SampledProofs.Select.parseDesign
   rw [split1_colon kind (Nat.repr K) hka (not_mem_repr (by decide) K)]
   simp only [digits_repr, toNat!_repr, Bool.and_true, decide_eq_true h1]
   rcases hk with rfl | rfl | rfl <;> rfl
 
-/-- **`parseLaw` reads `bernoulli:NUM/DEN` back**: at `0 < DEN` and `NUM ≤ DEN`, each in `Nat.repr`'s digits, it is
+/-- **`parseDesign` reads `bernoulli:NUM/DEN` back**: at `0 < DEN` and `NUM ≤ DEN`, each in `Nat.repr`'s digits, it is
 `{law: bernoulli, p: "NUM/DEN"}`. -/
-theorem parseLaw_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
-    _root_.SampledProofs.Select.parseLaw ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
+theorem parseDesign_bernoulli (a b : ℕ) (hb : 0 < b) (hab : a ≤ b) :
+    _root_.SampledProofs.Select.parseDesign ("bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b)) =
       .ok (Json.mkObj [("law", "bernoulli"), ("p", Json.str s!"{a}/{b}")]) := by
-  unfold _root_.SampledProofs.Select.parseLaw
+  unfold _root_.SampledProofs.Select.parseDesign
   rw [show "bernoulli:" ++ (Nat.repr a ++ "/" ++ Nat.repr b) =
     "bernoulli" ++ ":" ++ (Nat.repr a ++ "/" ++ Nat.repr b) from rfl, split1_colon _ _ (by decide) ?_]
   · dsimp only
@@ -369,10 +369,10 @@ theorem slotDesign_lawText {v : _root_.SampledProofs.Registration.Verifier} {n :
   cases derived with
   | none =>
     rcases flockLaw_cases _ _ _ hf with ⟨k, rfl, hkn, -⟩ | ⟨a, b, rfl, hb, hab⟩ | hs | hw
-    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseLaw_count "subset" (Or.inl rfl) k (hk k rfl))
+    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_count "subset" (Or.inl rfl) k (hk k rfl))
         (deriveLaw_none _ _ _ (by rw [kindOf_count]; decide) (by rw [kindOf_count]; decide))
         (flockLaw_subset_text k n hkn)
-    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseLaw_bernoulli a b hb hab)
+    · exact slotDesign_law _ _ _ _ n _ none _ hne hu (parseDesign_bernoulli a b hb hab)
         (deriveLaw_none _ _ _ (by rw [kindOf_bernoulli]; decide) (by rw [kindOf_bernoulli]; decide))
         (flockLaw_bernoulli_text a b n hb hab)
     · rcases deriveLaw_cases _ _ _ _ _ hd with ⟨-, h, -⟩ | ⟨_, _, _, -, h, -⟩
@@ -383,10 +383,10 @@ theorem slotDesign_lawText {v : _root_.SampledProofs.Registration.Verifier} {n :
       · cases h
   | some L' =>
     obtain ⟨k, hnat, h1, ⟨hs, S, rfl⟩ | ⟨hw, S, rfl⟩⟩ := deriveLaw_some hd
-    · refine slotDesign_law _ _ _ _ n _ _ _ hne hu (parseLaw_count "stratified" (Or.inr (Or.inl rfl)) k h1) ?_ hf
+    · refine slotDesign_law _ _ _ _ n _ _ _ hne hu (parseDesign_count "stratified" (Or.inr (Or.inl rfl)) k h1) ?_ hf
       rw [← hd]
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hs (by decide)).symm (by rw [hnat]; exact nat_toJson k)
-    · refine slotDesign_law _ _ _ _ n _ _ _ hne hu (parseLaw_count "work" (Or.inr (Or.inr rfl)) k h1) ?_ hf
+    · refine slotDesign_law _ _ _ _ n _ _ _ hne hu (parseDesign_count "work" (Or.inr (Or.inr rfl)) k h1) ?_ hf
       rw [← hd]
       exact deriveLaw_congr _ _ _ (getD_law_of_kindOf hw (by decide)).symm (by rw [hnat]; exact nat_toJson k)
 
