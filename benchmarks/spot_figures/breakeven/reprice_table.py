@@ -117,11 +117,13 @@ def cells(rows, case, scopes=SCOPES, beta=True):
 
 def total(rows, case, pool=("sampled", "walked"), delta=None):
     """Each scope's total FP4 compute at `case`: serve tax + proving + verifying + compiling at COMPILE[0] + the pool,
-    plus `delta`'s points where given; None where the case never breaks even or wasn't run."""
+    plus `delta`'s points where given; None where the case never breaks even, and no entry where it wasn't run."""
     out = {}
     for s in ALL_SCOPES:
         r = rows.get((case, s))
-        if r is None or "pool" not in r or r["beta"]["FP4"] is None:
+        if r is None:
+            continue
+        if "pool" not in r or r["beta"]["FP4"] is None:
             out[s] = None
             continue
         out[s] = (r["tax"] + r["beta"]["FP4"] + r["compile"]["share"][COMPILE[0]] + r["pool"][pool[0]][pool[1]]
@@ -157,23 +159,15 @@ def served(rows, data):
         c = [pct(rows[(last, s)]["pool"][how][load]) if "pool" in rows.get((last, s), {}) else "–" for s in ALL_SCOPES]
         print(f"| pool | + the memory-checked KV pool, {what} | measured ANDs, --zk rate; verifier assumed | MEMPOOL | "
               + " | ".join(c) + " |")
-    delta = PATH["deltas"][0]
-    print(f"| delta | {delta['label']}, {delta['base']}'s points | {delta['status']} | {delta['owner']} | "
-          + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
+    for delta in PATH["deltas"]:
+        print(f"| delta | {delta['label']}: points on {delta['base']}, not in the totals | {delta['status']} | "
+              f"{delta['owner']} | " + " | ".join(f"{delta['delta'][s] * 100:+.2f} pt" for s in ALL_SCOPES) + " |")
     measured = PATH["served_measured"][0]["cases"]["two-stage"]
-    final = PATH["path"][-1]["cases"]["two-stage"]
-    totals = [(f"{last} total", last, ("sampled", "walked"), None,
-               f"{last} + compiling at {COMPILE[0]} core-h + the pool sampled, as built"),
-              (f"{measured} total", measured, ("sampled", "walked"), None,
-               f"{measured} + compiling + the pool sampled, as built: the measured levers alone"),
-              (f"{final} total", final, ("sampled", "memo"), delta,
-               f"{final} + compiling + the pool sampled with the memo + {delta['label'].split(' ')[0]}'s delta")]
-    for name, case, pool, d, what in totals:
-        t = total(rows, case, pool, d)
-        data[name] = {"case": case, "compile_core_h": COMPILE[0], "pool": " ".join(pool),
-                      "delta": d["label"] if d else None, "cells": t}
-        print(f"| {name} | {what} | | | " + " | ".join(pct(t[s]) if t[s] is not None else "–" for s in ALL_SCOPES)
-              + " |")
+    for case in [last, measured] + [x["cases"]["two-stage"] for x in PATH["path"]]:
+        t = total(rows, case)
+        data[f"{case} total"] = {"case": case, "compile_core_h": COMPILE[0], "pool": "sampled walked", "cells": t}
+        print(f"| {case} total | {case} + compiling at {COMPILE[0]} core-h + the pool sampled, as built | | | "
+              + " | ".join(pct(t[s]) if s in t else "–" for s in ALL_SCOPES) + " |")
     entries(rows, data, PATH["path"], head, f"The path from {last} to 10% (total FP4; each step adds to the one above "
             "it, but P3 and P4 each add to P2):")
     entries(rows, data, PATH["extras"], head, f"Extras on {last}, each alone (total FP4 before compiling and the pool):")
