@@ -15,7 +15,7 @@ windows so wired). The first window's ``pin`` is the empty pool's root, `genesis
 chain, and the next starts again from `genesis`, as the first does. The window pays for its activity as CompileSlice_v5
 does: its keys are the ragged row's blocks, its RB run the addresses its calls touch.
 
-**The pool row**, field-major, each element least significant bit first: the free queue's ``head`` and ``tail`` (NW bits
+**The pool row** (`verity.ml.commitments.pool_row`), field-major, each element least significant bit first: the free queue's ``head`` and ``tail`` (NW bits
 each), then per block b = 1 … NB − 1 its links ``prev``, ``next``, ``cprev``, ``cnext`` (B's), ``mlast`` (the key's
 last copy where b is its first copy, else 0) and ``key``, the 512-bit BlockKey_v1 key b is cached under (`Digest`
 layout, 0 for none). It holds no count, owner or stamp: a pool between windows holds no block (every ref 0), and owners
@@ -79,7 +79,7 @@ units' rows, `run_compile` and `run_pool` their verdicts.
 from __future__ import annotations
 
 from types import SimpleNamespace
-from typing import NamedTuple, Sequence
+from typing import Sequence
 
 from verity.ml.circuits.boolean import memcheck as MC
 from verity.ml.circuits.boolean.forms import ONE, ZERO, and_reduce, const_bits, or_reduce
@@ -87,7 +87,7 @@ from verity.ml.circuits.boolean.gf128 import mul_forms
 from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
-from verity.ml.commitments import rowleaf as RL
+from verity.ml.commitments import pool_row as PR
 from verity.ml.commitments.gates import block_key as BK, rowleaf as RG
 from verity.core.protocols.certifier import cache_step as CST, compile_slice as CS, replay_chain as RC
 from verity.core.protocols.certifier import replay_step as RS
@@ -110,10 +110,10 @@ PADDED = tuple(r for r in CLASSES if CLASSES[r] == "registered")
 IDS_STATICS = ("K", "IW")
 COUNTS_STATICS = ("K", "CU")
 REC_STATICS = ("K", "CU")
-LINKS = ("prev", "next", "cprev", "cnext")
+LINKS = PR.LINKS
 #: the close's record tag, past the memories'
 COPIES = 5
-NOKEY = bytes(64)
+NOKEY = PR.NOKEY
 T3 = V3S.TAGS
 F = V5.F
 COINS = V5.COINS
@@ -126,8 +126,7 @@ def _bitlen(v: int) -> int:
 
 def row_fields(S) -> list[tuple[str, int, int]]:
     """The pool row's fields (name, count, bits)."""
-    NW, n = V5.shape(S).Z3.NW, S.NB - 1
-    return [("head", 1, NW), ("tail", 1, NW)] + [(f, n, NW) for f in LINKS + ("mlast",)] + [("key", n, 512)]
+    return PR.fields(S.NB)
 
 
 def fields(S) -> dict[str, list[tuple[str, int, int]]]:
@@ -601,50 +600,32 @@ def demo_async() -> tuple[dict, CS.Slice]:
 # --- the specification ---------------------------------------------------------------------------------------------------
 
 
-class PoolRow(NamedTuple):
-    """The pool between windows (`row_fields`), block b's fields at index b − 1."""
-    head: int
-    tail: int
-    prev: tuple[int, ...]
-    next: tuple[int, ...]
-    cprev: tuple[int, ...]
-    cnext: tuple[int, ...]
-    mlast: tuple[int, ...]
-    key: tuple[bytes, ...]
+PoolRow = PR.PoolRow
 
 
 def empty_row(S) -> PoolRow:
     """The empty pool: every block free, in order, nothing cached (`cache_step_v3.empty_pool`'s)."""
-    n = S.NB - 1
-    return PoolRow(1, n, tuple(range(n)), tuple(b + 1 if b < n else 0 for b in range(1, S.NB)), (0,) * n, (0,) * n,
-                   (0,) * n, (NOKEY,) * n)
+    return PR.empty(S.NB)
 
 
 def encode_row(S, row: PoolRow) -> list[int]:
     """The row's bits (`row_fields`)."""
-    NW, bits = V5.shape(S).Z3.NW, CS._bits
-    out = bits(row.head, NW) + bits(row.tail, NW)
-    for f in LINKS + ("mlast",):
-        out += [b for v in getattr(row, f) for b in bits(v, NW)]
-    return out + [b for k in row.key for b in RG.digest_bits(k)]
+    return PR.encode(row)
 
 
 def decode_row(S, bits: Sequence[int]) -> PoolRow:
     """The row whose bits (`encode_row`) are ``bits``."""
-    f = RC._split(list(bits), row_fields(S))
-    val = [CS._int(e) for e in f["head"] + f["tail"]]
-    return PoolRow(*val, *(tuple(CS._int(e) for e in f[k]) for k in LINKS + ("mlast",)),
-                   tuple(RG.digest_bytes(e) for e in f["key"]))
+    return PR.decode(S.NB, bits)
 
 
 def root(S, row: PoolRow) -> bytes:
     """The row's root: its unsalted `Sha512RowSeg_v1` digest."""
-    return RL.sha512_row_seg_digest(*RL.bit_row((encode_row(S, row), 1)))
+    return PR.root(row)
 
 
 def genesis(S) -> bytes:
     """The empty pool's root: a chain's first window's input root, and the one after a failed window."""
-    return root(S, empty_row(S))
+    return PR.genesis(S.NB)
 
 
 def heads(S, row: PoolRow, delta: int) -> dict[int, int]:
