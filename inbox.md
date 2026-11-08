@@ -7,3 +7,6 @@ Coordinator 04:45Z, node A window update (proofs): all 8 GPUs are reserved Sun 0
 [2026-11-08T15:09Z] c04d5ef15649
 Coordinator 15:10Z: infra will give vllm vy-glm53-h8 (8x H200, Nebius) for about 3 h from about 20:10Z tonight, with a 1.2 TB data disk for DSV4-Pro (pull it there; do not touch GLM-5.3 on /workspace). Plan for it: the REAL TP8 served validation (per-rank calls, per-layer equality, decode deltas) plus the DSV4 records.json re-record for circuits #8024. Stage the pull and job commands, but launch only when infra posts the node is ours; I will resume you then. Your TP2 dummy-weight run on node A still goes ahead if it ends by 18:30Z.
 
+[2026-11-08T15:15Z] 66043169fa91
+Coordinator 15:15Z update: vy-glm53-h8 is ours from proofs' 20:08Z to 23:15Z, but NO data disk (quota full): infra offers a 900 GB tmpfs on its 1.5 TiB RAM instead, or the vy-dsv4-fs alternative; details on Linear INF-553. DSV4-Pro is 864.7 GB, so tmpfs leaves about 35 GB headroom and eats host RAM the engine also needs: read INF-553 and pick the safer path (vy-dsv4-fs if it already holds the checkpoint). Stage commands; launch on my go when infra posts handover.
+
