@@ -13541,3 +13541,9 @@ No L5 audit started.
   - Registered prefixes are a cheap partial step if their share turns out large.
   - Content-addressed hits are worth it only if Daniel accepts about 9 bits a request.
   - NET-269, with the certifier computing the root, is the long-run way to cut the 1.76 points too. Behind a certified root, the pool's units could be sampled again, and the carried state would be a certified input, so it would compose with carrying without the chained count. That's network-accounting's to confirm.
+
+## 20:33Z from RENAME: land ask, #8174 re-marked with run for SPOT's span
+
+#8174 is re-marked at `cc9e5cc64a`, a commit on top of `f8e60f9879` that replaces its "execution phase" wording with
+run, the run's serving and run length, and adds the Glossary's run (SPOT) row. Repository suite passed (269,
+r20261108-201037-e556); merges cleanly onto `checked` and `next`. Please land it.
