@@ -72,6 +72,11 @@ def RMSNormCudaVector8(B, S, x, w):
     from +0.  CUB reduces the thread partials; the epilogue is
     ``bf16_rn((f32(x) * rsqrtf(var / N + EPS)) * f32(w))``.
     """
+    return _out(B, x, w, _pure_scale(B, S, x))
+
+
+def _pure_scale(B, S, x):
+    """`RMSNormCudaVector8_v1`'s ``rsqrtf(var / N + EPS)``: each thread's FMA chain, then CUB's reduce."""
     N, block = _check(S, fused=False)
     vectors = N // VECTOR
     partials = []
@@ -82,7 +87,7 @@ def RMSNormCudaVector8(B, S, x, w):
         for z in xf[1:]:
             acc = B.call(P.F32Fma, z, z, acc)
         partials.append(acc)
-    return _out(B, x, w, _arg_scale(B, S, _cub(B, partials)))
+    return _arg_scale(B, S, _cub(B, partials))
 
 
 def _vector_sum(B, rf):
@@ -114,8 +119,15 @@ def RMSNormFusedCudaVector8(B, S, x, res, w):
     CUB then reduces the active partials.  Threads beyond ``N / 8`` hold +0; their
     additions are identities for these square partials and are omitted.
     """
-    N, block = _check(S, fused=True)
+    _check(S, fused=True)
     r = B.batch(P.Bf16AddF2fp, x, res, axes=(0, 0))
+    return tuple_of(_out(B, r, w, _fused_scale(B, S, r)), r)
+
+
+def _fused_scale(B, S, r):
+    """`RMSNormFusedCudaVector8_v1`'s ``rsqrtf(var / N + EPS)`` over its residual sum ``r``: the vector partials, then CUB's
+    reduce."""
+    N, block = _check(S, fused=True)
     rf = B.batch(P.Bf16ToF32, r, axes=(0,))
     vectors = N // VECTOR
     partials = []
@@ -125,8 +137,7 @@ def RMSNormFusedCudaVector8(B, S, x, res, w):
             part = _vector_sum(B, [rf[VECTOR * v + j] for j in range(VECTOR)])
             acc = part if acc is None else B.call(P.F32Add, acc, part)
         partials.append(acc)
-    scale = _arg_scale(B, S, _cub(B, partials))
-    return tuple_of(_out(B, r, w, scale), r)
+    return _arg_scale(B, S, _cub(B, partials))
 
 
 from verity.ml.definitions.registry import boolean_norms as _boolean_norms  # noqa: E402
