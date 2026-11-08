@@ -209,7 +209,7 @@ def test_a_gate_session_is_refused_as_coins_unless_the_hosts_pins_log_and_the_ve
                        f"{PIN}, which the host's pins log records but which is not on main's first-parent line in the "
                        "verifier's copy (`git rev-list --first-parent origin/main`): a branch commit merged into main "
                        "is in main's history but no tree main's check ran on; repin the challenger host to a commit "
-                       "on main's first-parent line (vy-challenger-pin) and rerun the window there"),
+                       "on main's first-parent line (with its pin command) and rerun the window there"),
         "no-pins": ("the auditor's session is not readable: the challenger gate answered pins with exit 3: "
                     '{"refused": "usage"}')}[case]
 
@@ -311,7 +311,7 @@ def test_an_honest_paced_session_closes_complete_and_a_dropper_does_not(host, tm
 def gate_run(host: Host, out: Path, plan: str, defer_openings: bool,
              peer: str = "cpu-node", groups_per_coin: int = 1) -> tuple[list[dict], dict, bytes]:
     """A gate run of `plan`'s sessions in period p-1, which committed the descriptor of the verifier that ran them, its
-    verifier at the challenger host as `peer`, each session's windows drawn `groups_per_coin` a coin: the sessions,
+    verifier at the challenger host as `peer`, each session's windows sampled `groups_per_coin` a coin: the sessions,
     their registration and that descriptor."""
     desc = al.descriptor("ab" * 20)
     host.period(circuit=hashlib.sha512(desc).hexdigest())
@@ -480,7 +480,7 @@ def test_the_line_credits_a_session_only_when_credited_complete_accepted_by_the_
 def test_a_session_drawn_four_windows_a_coin_is_credited_by_the_line_of_record_and_a_skipper_is_not(
         host, tmp_path, monkeypatch):
     """`--groups-per-coin 4` at two windows in flight: `auditor_line`'s line of record over a gate run of an honest
-    session and a prover that skips half its reads, each paced in twelve windows drawn on three openings coins, which
+    session and a prover that skips half its reads, each paced in twelve windows sampled on three openings coins, which
     the gate reserves and releases (⌈12/4⌉). The period closes complete; the honest session, which the Lean accepts
     and whose record names g, is credited, its twelve windows' last roots read on the challenger's clock off its
     three openings coins and the challenges after them (`auditor_seen`), its pooled bound over its three draws
@@ -540,15 +540,15 @@ def test_a_session_whose_pin_isnt_a_logged_commit_on_mains_first_parent_line_ear
                "window on a host whose gate seals its pins log in each open")
     elif sealed != PINS:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log doesn't record as a commit of main's "
-               "history: repin the challenger host to a commit origin/main contains (vy-challenger-pin) and rerun the "
-               "window there")
+               "history: repin the challenger host to a commit origin/main contains (with its pin command) and "
+               "rerun the window there")
     elif main is None:
         why = NO_MAIN
     else:
         why = (f"session {sid} ran commit {PIN}, which the host's pins log records but which is not on main's "
                "first-parent line in the verifier's copy (`git rev-list --first-parent origin/main`): a branch commit "
                "merged into main is in main's history but no tree main's check ran on; repin the challenger host to a "
-               "commit on main's first-parent line (vy-challenger-pin) and rerun the window there")
+               "commit on main's first-parent line (with its pin command) and rerun the window there")
     assert s["credit"]["complete"]["ok"]
     assert s["credit"]["credited"]["ok"] is False and s["credit"]["credited"]["reason"] == why
     assert s["credit"]["pinned"] == {"commit": PIN, "seal": None if sealed is None else pins_seal(sealed), "ok": False,

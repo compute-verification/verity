@@ -21,7 +21,7 @@ Each of the recursion's claims (`Definitions.Claims.Recursion`) fails at a toy r
   inner protocol whose relation and scope hold everywhere. `Complete_fails`: its reference prover fails at its
   error `δ_c = 0`. `Nontrivial_fails`: a recorded run is rejected.
 * `effR`: the run always accepts, but its one V* session's view never does, so the outer extractor's wait reruns all
-  `K = 2` of its draws where `Efficient`'s expected count allows `k = 1`. `Efficient_fails`: `E*` reruns `3` times on
+  `K = 2` of its samples where `Efficient`'s expected count allows `k = 1`. `Efficient_fails`: `E*` reruns `3` times on
   every coin, above the expected bound `N_I · (1 + m′·k) = 2`. The worst-case conjunct holds at every record (each
   wait reruns at most `K`); the expected one also needs a session's view to accept wherever the run does, which the
   record's `session` doesn't promise.
@@ -108,7 +108,7 @@ def recStmt : Recursion.CompiledStatement where
 `recStmt`. -/
 def compR (Coin : Type) : Recursion.Deploy Coin := { ksR Coin with V := rejV Coin, parse := fun _ => some recStmt }
 
-/-- The numbers of an outer session of one wait over `K = 2` draws, at `N₀ = e/4`, so `k = 1`. -/
+/-- The numbers of an outer session of one wait over `K = 2` samples, at `N₀ = e/4`, so `k = 1`. -/
 noncomputable def nums1 : Nums := ⟨0, Real.exp 1 / 4, 0, 0, 1, 2, 0, 0⟩
 
 /-- The toy record of `Efficient`: the run always accepts, and its one V* session's view never does. -/
@@ -475,7 +475,7 @@ theorem RP.reruns_bind (H : Msg → Msg) (run : R → Trace) (p : RP R α) (f : 
   | hash q k ih => simp only [RP.bind, RP.eval, ih]
   | rerun r k ih => simp only [RP.bind, RP.eval, ih]; omega
 
-/-- A wait whose every rerun is seen rejected reruns at each of its draws. -/
+/-- A wait whose every rerun is seen rejected reruns at each of its samples. -/
 theorem reruns_waitAcc_rej (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (hf : ∀ v, (f v).out ≠ .acc)
     (k : ℕ) (hk : 0 < k) (rs : List R) : ((serve (viewing f) (waitAcc k rs [])).eval H run).2.2 = rs.length := by
   induction rs with
@@ -533,7 +533,7 @@ theorem nums1_k : nums1.k = 1 := by
     rw [div_eq_iff (Real.exp_pos 1).ne']; push_cast; ring
   simp only [Nums.k, nums1, h, Nat.ceil_natCast]
 
-/-- At `effR`, the outer extractor reruns `3` times: the judged run, which accepts, then both draws of its one V*
+/-- At `effR`, the outer extractor reruns `3` times: the judged run, which accepts, then both samples of its one V*
 session's wait, whose views are rejected. -/
 theorem effR_EO_reruns (H : Msg → Msg) (decO : List (ℕ × Unit) → List Unit) {Ω : Type} (P : Prover Ω) (x : Msg)
     (ω : Ω) (r₀ : Fin ((effR Coin).V.k x) → Coin) (c : (EO (effR Coin) (accI Coin) (Flock.ksD Coin) decO).C x) :
@@ -609,8 +609,8 @@ theorem zk_εzk (D : Recursion.Deploy Coin) (hk : D.kS [] = 0) (hn : D.nS [] = 0
   simp [zeroI, hk]
 
 theorem interact_one (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) (hist : List (Msg × Msg)) :
-    ZKMal.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
-  simp only [ZKMal.interact]
+    Claims.interact ask pm 1 hist = [(pm hist, ask (hist.map Prod.fst ++ [pm hist]))] := by
+  simp only [Claims.interact]
   split <;> simp_all
 
 /-- The transcript of one zero commit string under the salt `y`, against `V*`'s answers `ask`. -/

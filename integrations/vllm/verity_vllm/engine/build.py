@@ -32,7 +32,7 @@ def case_of(workload: dict | None, case: str | None = None) -> str:
 @dataclass
 class Engine:
     llm: Any
-    runner: Any
+    runner: Any          # the in-process model runner and its model; None at a tensor-parallel world, whose ranks hold them
     model: Any
     cp: dict
     kwargs: dict
@@ -78,6 +78,10 @@ def effective_execution_doc(llm: Any, model: Any = None) -> dict:
         doc["enable_prefix_caching"] = bool(getattr(cc, "enable_prefix_caching", None)) if getattr(cc, "enable_prefix_caching", None) is not None else None
         doc["enable_chunked_prefill"] = bool(getattr(sc, "enable_chunked_prefill", None)) if getattr(sc, "enable_chunked_prefill", None) is not None else None
         doc["max_num_batched_tokens"] = int(getattr(sc, "max_num_batched_tokens")) if getattr(sc, "max_num_batched_tokens", None) is not None else None
+        doc["long_prefill_token_threshold"] = (int(getattr(sc, "long_prefill_token_threshold"))
+                                               if getattr(sc, "long_prefill_token_threshold", None) is not None else None)
+        tp = getattr(getattr(vc, "parallel_config", None), "tensor_parallel_size", None)
+        doc["tensor_parallel_size"] = int(tp) if tp is not None else None
         doc["max_num_seqs"] = int(getattr(sc, "max_num_seqs")) if getattr(sc, "max_num_seqs", None) is not None else None
         doc["max_model_len"] = int(getattr(mc, "max_model_len")) if getattr(mc, "max_model_len", None) is not None else None
         doc["dtype"] = str(getattr(mc, "dtype", None))
@@ -158,7 +162,8 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
                       engine_args: dict[str, Any] | None = None, target: Any = None, execution: str | None = None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
     """The exact `LLM(**kw)` keyword set `build_engine` would build from these inputs (+ the env flags it applies and the
     checkpoint record), WITHOUT building: a hot worker compares it with its live engine's `kwargs` to decide reuse vs restart.  Applies the
-    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager) are the same."""
+    same environment knobs as `build_engine` (idempotent).  Refusals (unknown execution, contradicting enforce_eager, an Inductor that
+    read a fixed switch otherwise: `engine_env.require_inductor`) are the same."""
     from verity_vllm.engine import engine_profile as prof
 
     if execution is not None and execution not in EXECUTION_ENFORCE_EAGER:
@@ -189,6 +194,7 @@ def engine_kwargs_for(checkpoints: str | Path = "manifests/checkpoints.json", *,
     if getattr(target, "int8_exact", None) is not None and kw.get("enforce_eager") is not True:
         # Inductor would fuse (and may re-round) the quantizer and dequantization, and replay the linears' call counters as constants
         raise RuntimeError(f"int8_exact {target.int8_exact!r} runs eagerly only; the engine args request enforce_eager={kw.get('enforce_eager')!r}")
+    engine_env.require_inductor(kw)
     return kw, env_flags, cp
 
 
@@ -215,13 +221,17 @@ def build_engine(checkpoints: str | Path = "manifests/checkpoints.json", *, max_
     if verify_weights:
         prof.verify_local_weights(cp)
     want_eager = bool(kw["enforce_eager"])
+    world = int(kw.get("tensor_parallel_size") or 1)
+    if target is not None and world > 1:
+        raise RuntimeError(f"a declared TargetProfile is checked on the in-process model, and at tensor_parallel_size {world} the "
+                           "model is in the ranks' processes: declare none")
     if kw.get("enforce_eager") is False:
         prepare_compiled_process_cache()
     t0 = time.perf_counter()
     llm = LLM(**kw)
     build_s = time.perf_counter() - t0
-    runner = handle.model_runner(llm)
-    model = runner.get_model()
+    runner = handle.model_runner(llm) if world == 1 else None
+    model = runner.get_model() if runner is not None else None
     eng = Engine(llm, runner, model, cp, kw, env_flags, build_s, case, target, execution, None, engine_env.set_since(env0))
     eng.effective = effective_execution_doc(llm, model)      # read back from vllm_config: what this engine really executes
     if execution is not None and eng.effective.get("enforce_eager") is not None and bool(eng.effective["enforce_eager"]) != want_eager:
@@ -284,8 +294,8 @@ def target_mismatches(engine: Engine) -> list[str]:
     if fav != tp.effective_flash_attn_version() and (fav is not None or flash_attn_versions(engine.model)):
         bad.append(f"flash_attn_version declared {tp.flash_attn_version!r} (effective {tp.effective_flash_attn_version()}), layers report {fav!r}")
     # the engine must realise the declared EXECUTION: eager profile -> enforce_eager True; `piecewise` -> torch.compile
-    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config (an eager engine labelled compiled, or a compiled one
-    # labelled eager, is refused here before anything is recorded)
+    # (VLLM_COMPILE) + CUDAGraphMode PIECEWISE read back from the built vllm_config; `breakable` -> mode NONE, breakable CUDA graphs at the
+    # declared capture sizes (an eager engine labelled compiled, or a compiled one labelled eager, is refused here before anything is recorded)
     comp = compilation_facts(engine.llm)
     if comp:
         want = tp.COMPILATIONS.get(tp.compilation) if tp.compilation else None
@@ -296,8 +306,14 @@ def target_mismatches(engine: Engine) -> list[str]:
                 bad.append(f"profile declares compilation {tp.compilation!r}, engine built with enforce_eager={comp.get('enforce_eager')!r}")
             if comp.get("cudagraph_mode") != want["cudagraph_mode"]:
                 bad.append(f"profile declares cudagraph_mode {want['cudagraph_mode']!r}, engine runs {comp.get('cudagraph_mode')!r}")
-            if comp.get("mode") not in (want["mode"], "3"):
+            if comp.get("mode") not in ((want["mode"], "3") if want["mode"] == "VLLM_COMPILE" else (want["mode"],)):
                 bad.append(f"profile declares CompilationMode {want['mode']!r}, engine runs {comp.get('mode')!r}")
+            if bool(comp.get("breakable_cudagraph")) != bool(want.get("breakable")):
+                bad.append(f"profile declares breakable CUDA graphs {bool(want.get('breakable'))}, engine runs "
+                           f"VLLM_USE_BREAKABLE_CUDAGRAPH={comp.get('breakable_cudagraph')!r} (vLLM turns it on for the architectures in "
+                           f"DEFAULT_BREAKABLE_CUDAGRAPH_ARCHITECTURES: their compiled target is 'breakable')")
+            if "capture_sizes" in want and comp.get("capture_sizes") != list(want["capture_sizes"]):
+                bad.append(f"profile declares capture sizes {want['capture_sizes']}, engine captures {comp.get('capture_sizes')!r}")
             if bool(comp.get("emulate_precision_casts", False)) != bool(want.get("emulate_precision_casts", False)):
                 bad.append(f"profile declares Inductor emulate_precision_casts={want.get('emulate_precision_casts')!r}, engine compiled with "
                            f"{comp.get('emulate_precision_casts')!r} (inductor_compile_config {comp.get('inductor_compile_config')!r})")
@@ -337,6 +353,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
     (name; the pinned vLLM's IntEnum str() is the number, recorded too), CUDAGraphMode, capture sizes, inductor graph partition, enforce_eager,
     compile-cache switch.  Written into the run header's `compilation` block beside the profile's `effective_compilation` (the global match's G1
     compares a compiled Program's declared facts against it) and into commit_delta's versions.json (control and treatment must agree)."""
+    from verity_vllm.engine import engine_profile as prof
     out: dict[str, Any] = {}
     try:
         vc = llm.llm_engine.vllm_config
@@ -352,6 +369,7 @@ def compilation_facts(llm: Any) -> dict[str, Any]:
         out["use_inductor_graph_partition"] = bool(getattr(cc, "use_inductor_graph_partition", False))
         out["backend"] = str(getattr(cc, "backend", None) or ("inductor" if out["mode_value"] == 3 else None))
         out["enforce_eager"] = bool(vc.model_config.enforce_eager)
+        out["breakable_cudagraph"] = prof.breakable_cudagraph()
         out["compile_cache"] = "disabled" if os.environ.get("VLLM_DISABLE_COMPILE_CACHE") == "1" else "enabled"
         # the Inductor config the pieces were compiled with: emulate_precision_casts makes the compiled kernels
         # perform the bf16 roundings the Program specifies at every module/op boundary (Inductor otherwise carries fp32 through fused

@@ -2,14 +2,51 @@ module
 
 public import Proofs.Accounting.TS.Session.Checked.Guarantees
 public import Proofs.Accounting.TS.SessionSound
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.SoundAtBridge
+import Proofs.Flock.Soundness.Discharge.Exec.LawDraw
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# A checked unit's proof layer is sound through its C-Flock sessions (the proof)
+# A checked unit's proof layer is sound through its Flock sessions (the proof)
 
 `Accounting.SecurityProofs.TS.CheckedSessionSound`. `AcceptedLive` holds by the layer's definition. `ServedChecksHold`
 takes the value layer itself as the relation's assignment: `RowsSession.RowsAt` says the circuit's evaluation agrees
-with it on each drawn unit's wires. `ServedRootsLinked` at `0` is the window's law at an event of probability `0` in
-every session's game: under `kd = n` the draw is every unit (`RowsSession.draw_full`, from `subset_spec`), so at an
+with it on each sampled proof block's wires. `ServedRootsLinked` at `0` is the window's sampling design at an event of probability `0` in
+every session's game: under `kd = n` the sample is every unit (`RowsSession.draw_full`, from `subset_spec`), so at an
 accepted outcome whose units are right `Flock.SecurityProofs.ServedRowsLinked` makes every registered read of the
 value layer the committed row (`RowsSession.servedEv_false`). `SoundAt δ` is then
 `Accounting.SecurityProofs.TS.SessionSoundAt` at `δs = 0`.
@@ -22,7 +59,7 @@ a token, so `Proofs/Accounting.lean` imports it.
 
 namespace FlockSoundness.Audit.Law
 
-/-- **A `subset` live draw that runs is `Flock.Draw.subset` on its stream.** -/
+/-- **A `subset` live sample that runs is `Flock.Draw.subset` on its stream.** -/
 theorem runOS_subset {L : Fin 1 → ℕ} {f : (i : Fin 1) → Fin (L i) → Fin 256} {k n : ℕ} {d : Flock.Draw.UnitDraw}
     (hd : runOS f (.subset k) n = some d) : Flock.Draw.subset k n (streamOf (f 0)) = some d.units := by
   unfold runOS at hd
@@ -85,7 +122,7 @@ theorem perm_onto_range (π : Equiv.Perm ℕ) {n : ℕ} (hπ : ∀ t < n, π t <
   exact ⟨i, Finset.mem_range.1 hi, he⟩
 
 /-- **The live audit's event of probability `0`** (`auditLive`, unfolded): an event whose probability is `0` in the
-live session at every registration `R` and draw coin `ω` has probability `0` at every strategy. -/
+live session at every registration `R` and sampling coin `ω` has probability `0` at every strategy. -/
 theorem prob_audit_eq_zero {n : ℕ} (L : Law n) (Reg : Type)
     (live : Finset (Fin n) → Reg → Game Discharge.Exec.Transcript)
     (p : Reg × Finset (Fin n) × Discharge.Exec.Transcript → Prop)
@@ -103,8 +140,8 @@ namespace RowsSession
 
 variable (s : RowsSession)
 
-/-- **Under full checking the draw is every unit**: at `kd = n` the subset draw, when it runs, is `n` distinct units
-below `n` (`subset_spec`), and when it doesn't the law draws every unit. -/
+/-- **Under full checking the sample is every unit**: at `kd = n` the subset sample, when it runs, is `n` distinct units
+below `n` (`subset_spec`), and when it doesn't the sampling design samples every unit. -/
 theorem draw_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ := by
   show (match Law.runOS (s.src ω) (.subset s.kd) s.n with
     | some d => Finset.univ.filter fun u : Fin s.n => u.val ∈ d.units
@@ -117,12 +154,12 @@ theorem draw_full (hk : s.kd = s.n) (ω : s.L.Ω) : s.L.draw ω = Finset.univ :=
     exact perm_onto_range π hπ u.val u.isLt
   · rfl
 
-/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every drawn unit is right at its owned reads,
+/-- **`ServedRootsLinked`'s event at a session**: flock-verify accepts, every sampled proof block is right at its owned reads,
 and the value layer's registered reads aren't the committed rows. -/
 def ServedEv (o : s.Out) : Prop :=
   LiveAcceptsZKR s.I s.own o ∧ (∀ u ∈ o.2.1, ¬ s.WrongAt u ∧ s.RowsAt o u) ∧ rowsReg s s.Xv ≠ openedReg s
 
-/-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is drawn, so `Flock.SecurityProofs.ServedRowsLinked` puts the
+/-- **No outcome of the audit meets `ServedEv`** under full checking, at every unit's served roots registered: every unit is sampled, so `Flock.SecurityProofs.ServedRowsLinked` puts the
 committed row at each of its registered reads. -/
 theorem servedEv_false (hk : s.kd = s.n)
     (hS : ∀ u, s.ServedRegistered u) (R : s.Reg) (ω : s.L.Ω)
@@ -166,7 +203,7 @@ end RowsSession
 end Flock.SoundAtBridge
 
 open Accounting.TS Accounting.TS.Checked Flock.SoundAtBridge FlockSoundness.Discharge.ZkReg in
-/-- **A checked unit's proof layer is sound at `δ` through its C-Flock sessions**
+/-- **A checked unit's proof layer is sound at `δ` through its Flock sessions**
 (`Accounting.Guarantees.TS.CheckedSessionSound`). -/
 theorem Accounting.SecurityProofs.TS.CheckedSessionSound : Accounting.Guarantees.TS.CheckedSessionSound := by
   intro Ω _ S nπ sess out ok right δ hCR hLaw hk hS hok hδ hδ0

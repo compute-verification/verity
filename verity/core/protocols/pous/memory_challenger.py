@@ -1,13 +1,13 @@
 """The memory challenger: PoUS's timed rounds, run by an auditor-trusted device beside the network certifier, which signs
-its rounds.  It is the auditor's hardware, on a machine the prover doesn't control at the prover's site (the auditor's
-own VM or box, under the auditor's account), never a process on the prover's node.  On the deployed path it replaces
+its rounds.  It is the auditor's hardware, on a machine the developer doesn't control at the developer's site (the auditor's
+own VM or box, under the auditor's account), never a process on the developer's node.  On the deployed path it replaces
 `audit.UnsignedRounds`, the same rounds unsigned.
 
 A session has four steps:
 
 1. **Commit.** The session id is the auditor's, designated for one audit, and the memory challenger runs at most one
    session under it: its `SessionLog` refuses an id already used and records the new one, fsynced, before the
-   session's first challenge.  Before the session the memory challenger draws its `k` indices from its own secret
+   session's first challenge.  Before the session the memory challenger samples its `k` indices from its own secret
    (`verity.ml.randomness`, `COIN_DOMAIN`) and commits to them in a coin tree.  It publishes the coin tree's
    root and hm96 key together with the session's id and parameters and the root the setup published for the `C*` it
    audits (`SessionCommitment`).
@@ -25,7 +25,7 @@ A session has four steps:
 under a trusted key and an accepted scheme, the header against the commitment, every revealed index against its coin
 opening, every `H(block)` against the expected digest of that block of `C`, and every round on time within `Δ + RTT`.
 Its public output is the verdict alone (`Verdict.public`); the per-round on-time bits and the reasons stay in the
-signed record.  The guarantee of the sequential draw is the coin tree's: an index is fixed before the session
+signed record.  The guarantee of the sequential sample is the coin tree's: an index is fixed before the session
 (binding) and unknown to the server until its round reveals it (hiding).
 
 **Coin tree** (`COIN_TREE`): hm96-sha512/v1 hiding leaves in a frame-v3-sha512 tree, core's helpers
@@ -86,7 +86,7 @@ from verity.ml.crypto import lms
 from verity.ml.randomness import derive
 
 from .params import SALT_BITS
-from .protocol import Certificate, Scheme
+from .protocol import CapacityBound, Scheme
 from .verifier import DIGEST_BYTES
 
 PROTOCOL = "verity-pous/memory-challenger/v1"
@@ -364,7 +364,7 @@ class SignedSession:
                    doc["scheme"], bytes.fromhex(doc["public_key"]), bytes.fromhex(doc["signature"]))
 
 
-def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> Certificate:
+def covering_certificate(scheme: Scheme, k: int, limit_ns: int, *, experimental: bool = False) -> CapacityBound:
     """The first of `scheme`'s certificates that covers `k` rounds within `limit_ns`, as `protocol.TimedAudit` picks it;
     `ValueError` when none does, or when the scheme is experimental and `experimental` is not set."""
     if scheme.experimental and not experimental:
@@ -433,11 +433,11 @@ _SALT_ENTRY = re.compile(rb"([0-9a-f]{128}) ([0-9a-f]{128}) ([0-9a-f]{%d})" % (2
 
 
 class SaltLog:
-    """The setup salts a memory challenger has drawn, one an audit, in a file of its own beside its `SessionLog` that
+    """The setup salts a memory challenger has sampled, one an audit, in a file of its own beside its `SessionLog` that
     fails closed as that log does. The file is `SALT_LOG`'s line, then one entry a line: the audit's 64-byte binding, the
-    64-byte commitment to `W` the salt was drawn after, and the salt, each in lowercase hex. `record` takes the file's
+    64-byte commitment to `W` the salt was sampled after, and the salt, each in lowercase hex. `record` takes the file's
     lock, reads it again, refuses an audit already in it and appends the entry, fsynced, before it returns, so an audit
-    has one salt and a retry never redraws one. On the deployed party an audit's session id is derived from its binding,
+    has one salt and a retry never resamples one. On the deployed party an audit's session id is derived from its binding,
     commitment and salt (`challenger_party.session_id`), so the `SessionLog` refuses its second session. It rests on
     `trusted-host` as the session log does: its host never restores an earlier copy of it."""
 
@@ -447,7 +447,7 @@ class SaltLog:
 
     @staticmethod
     def create(path: str | os.PathLike) -> None:
-        """A new log, with no salt drawn; refused when the file exists."""
+        """A new log, with no salt sampled; refused when the file exists."""
         _create_log(Path(path), SALT_LOG, "a salt log")
 
     def _read(self) -> dict[bytes, tuple[bytes, bytes]]:
@@ -465,7 +465,7 @@ class SaltLog:
         return self._read().get(audit)
 
     def record(self, audit: bytes, commitment: bytes, salt: bytes) -> None:
-        """Log `salt`, drawn after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
+        """Log `salt`, sampled after `commitment` for `audit`, fsynced, before this returns; refused when the audit has one."""
         if (len(audit), len(commitment), len(salt)) != (64, 64, SALT_BYTES):
             raise ValueError(f"an audit's binding and a commitment to W are 64 bytes, a salt {SALT_BYTES}")
 

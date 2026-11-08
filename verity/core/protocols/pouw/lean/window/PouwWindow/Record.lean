@@ -2,7 +2,6 @@ module
 
 public import PouwWindow.Entry
 public import PouwCommit.Py
-public import Lean.Data.Json
 
 /-!
 # A call's record (`window.py`, `record_digest` and `record_problem`)

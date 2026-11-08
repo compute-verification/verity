@@ -1,13 +1,11 @@
 module
 
-public import Mathlib.Tactic.IntervalCases
 public import Proofs.Pous.P3.Column.BandWeights
 public import Proofs.Pous.P3.Column.TwoWay
-public import Definitions.Pous
-public import Definitions.Pous.Assumptions
-public import Proofs.Pous.Statements
-public import Proofs.Pous.Sanity
-public import Proofs.Pous.Accounting.Numbers
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.IntervalCases
 
 /-!
 # The band-graph certificate for the two-directional column game

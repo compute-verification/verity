@@ -1,9 +1,59 @@
 module
 
-public import Proofs.Flock.Claims.ZK.Split
-public import Proofs.Flock.Claims.ZK.SentE
-public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
 public import Proofs.Flock.Claims.ZK.HiSalts
+public import Proofs.Flock.Claims.ZK.PiopSrcSv
+public import Proofs.Flock.Claims.ZK.Split
+import Flock.With.SimWalk
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.Goals
+import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+import Proofs.Flock.Claims.Complete.Replay.Trace
+import Proofs.Flock.Claims.Complete.Shaped
+import Proofs.Flock.Claims.Complete.Zk.RingSwitch
+import Proofs.Flock.Claims.Complete.ZkTables.LaneRows
+import Proofs.Flock.Claims.Complete.ZkTables.Scope
+import Proofs.Flock.Claims.Complete.ZkTables.Stmt
+import Proofs.Flock.Claims.Complete.ZkTables.Trace
+import Proofs.Flock.Claims.ZK.SentE
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.LookupRows
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # A rep's Ligerito opening from the cut (`SimLig`)
@@ -1146,7 +1196,7 @@ theorem simLig_of_fields (hood : LigOodE) (hmsg : LigMsgE) (hsum : LigSumsE) (hy
 /-! ### The out-of-domain sample
 
 The deployed source's masked value at `lgOod 0` is the cut's clear value there plus the tape's pad
-(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the drawn point `z` (`Composed.honestAt_lgOod`),
+(`srcE_masked_pad_L`). The clear value is `Σ_y eqAt(z, y)·word(y)` at the sampled point `z` (`Composed.honestAt_lgOod`),
 which is the executable's `mleF` of the packed trace at `zS` (`ligOodE`). -/
 
 section Ood

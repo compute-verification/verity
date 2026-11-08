@@ -1,7 +1,39 @@
 module
 
-public import Proofs.Flock.Bridge.KSLive
 public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
+public import Proofs.Flock.Bridge.Canon
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Bridge.KSLive
 
 /-!
 # `SampledKSLiveV2` with a public error
@@ -11,12 +43,12 @@ public import Proofs.Flock.Soundness.Discharge.FailClosed.ZkHiddenM1
 `Q_s = Σ_c |Ω_c|/|Ω|` (`ΩcZ`), at its binding. Neither depends on the prover in value, and each is at most a number read
 off the public parameters:
 
-* `ε_ks ≤ ksClosedM1 k qF qS / (1 − ρ)`: every table of `planZHJ` is at C-Flock ZK's parameters (`planZHJ_M1W`, from
+* `ε_ks ≤ ksClosedM1 k qF qS / (1 − ρ)`: every table of `planZHJ` is at Flock ZK's parameters (`planZHJ_M1W`, from
   what `verify --zk` checks at setup, at every registration: `planZHJ` reads none), so `ksAvgStrictZ_planZHJ_le_closed`
   applies, and its rate `2^23/(ek)` is at most `ρ`;
 * `Q_s ≤ W`, `W = Σ_u |io u|` (`Bridge.ioSum`) the committed wires each unit of the circuit's partition computes or
-  reads: a draw reads a commit string only through such a wire of a drawn unit (`qs_le_io`). It is `Σ_u`, not
-  `k_d · max_u`, because the live subset draw on finite bytes draws every unit when it runs out (`Law.execOS`).
+  reads: a sample reads a commit string only through such a wire of a sampled proof block (`qs_le_io`). It is `Σ_u`, not
+  `k_d · max_u`, because the live subset sample on finite bytes samples every unit when it runs out (`Law.execOS`).
 
 So `SampledKSLivePub` is `SampledKSLiveV2` with its error `Bridge.deltaPub`:
 $$\binom{n-K_0}{k_d}\Big/\binom{n}{k_d} + \frac{\mathrm{ksClosedM1}(k,q_F,q_S)}{1-\rho}
@@ -39,13 +71,13 @@ open FlockSoundness.Discharge.Tables (LiveOutJ)
 open scoped ENNReal
 
 /-- **The committed wires the units read or write, summed over the units**: `Σ_u |io u|`, a bound on the commit strings
-any draw reads. -/
+any sample reads. -/
 noncomputable def _root_.Flock.Bridge.ioSum {C : FlockSoundness.Audit.Circuit} {n : ℕ}
     (P : FlockSoundness.Audit.Partition C n) : ℕ :=
   ∑ u, (P.io u).card
 
-/-- **The sampled audit's public error**: the draw's miss, the knowledge term at C-Flock ZK's parameters
-(`ksClosedM1`), and the link term at `W` commit strings with the link finders charged `t'` per run, each over `1 − ρ`
+/-- **The sampled audit's public error**: the sample's miss, the knowledge term at Flock ZK's parameters
+(`ksClosedM1`), and the binding error at `W` commit strings with the link finders charged `t'` per run, each over `1 − ρ`
 where `SampledKSLiveV2` has it. -/
 noncomputable def _root_.Flock.Bridge.deltaPub (n kd K₀ k : ℕ) (qF qS t' : ℝ) (M Rw W : ℕ) (ρ : ℝ) : ℝ :=
   ((n - K₀).choose kd : ℝ) / (n.choose kd : ℝ) + ksClosedM1 k qF qS / (1 - ρ) +
@@ -122,8 +154,8 @@ def SampledKSLivePub : Prop :=
         (auditLive L Reg (liveOfZJ dg (planZHJ dj y₀) N wr)) τ ≤
       ENNReal.ofReal (Bridge.deltaPub n kd K₀ k (2 * (t' + v)) (t' + v) (t' + v) M Rw (Bridge.ioSum P) ρ)
 
-/-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its draw term is `deltaPub`'s first, its knowledge term at most
-the second (`ksAvgStrictZ_planZHJ_le_closed`), and its link term at most the third (`qs_le_io`). -/
+/-- **`SampledKSLiveV2`'s error is at most `deltaPub`**: its sample term is `deltaPub`'s first, its knowledge term at most
+the second (`ksAvgStrictZ_planZHJ_le_closed`), and its binding error at most the third (`qs_le_io`). -/
 theorem sampledKSLivePub_of (h : SampledKSLiveV2) : SampledKSLivePub := by
   intro n Reg I ht D hD hU pub hpub hpt hscope hrows hdup hroots desc qr hpop kd hkd hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src
     hA3 hTags hCust k Rw M hk hRw hM ρ hρ hρk t' ht' K₀ hK₀ τ v hv q L P vb σ Xr δ Cc rows roots Cd κ hCR hLink

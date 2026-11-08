@@ -1,7 +1,10 @@
 module
 
+public import Definitions.Flock.Extract
 public import Proofs.Flock.Soundness.CompiledTable
 public import Proofs.Flock.Soundness.Extract
+public import Proofs.Flock.Soundness.Game.Runs
+import Proofs.Flock.Soundness.Game.Expect
 
 /-!
 # Knowledge soundness of one table (README.md §1.3)

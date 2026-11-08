@@ -1,7 +1,7 @@
 """One-stage audit, run A11: GLM-5.3 TP8 B1 (row ``glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager``), rank 0, through
 the one-stage audit A6 ran on stand-in coordinates: each Definition kind (family) whose unit M0 lowers (`a11_kinds.py`'s table)
-is a template, its units staged from the step's own values, sampled by the stratified law in one audit, proved by M0 under
-``--zk`` and held by the Lean verifier of record.
+is a template, its units staged from the step's own values, sampled by the stratified sampling design in one audit, proved by M0 under
+``--zk`` and held by the Lean verifier.
 
     PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a11.py --values DIR --kinds kinds.json --roles derive-report.json --bin flock-circuit \\
@@ -19,7 +19,7 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
   `check.weights_of_record.compose` and the Build's load-time ue8m0 rewrite (`check.fp8_ue8m0`, roles from ``--roles``), the
   composition whose per-field digests the Commit's weights pin held equal to the served parameters; the rotary table is the
   capture's ``cos_sin_cache.npy``. A Call reading another rank's values (``peers``) has none here and is not staged.
-* **Units.** The Call is evaluated gate by gate (`circuits.evaluate`) on those operands and held to the capture's output
+* **Units.** The Call is evaluated gate by gate (`circuits.evaluation.reference`) on those operands and held to the capture's output
   snapshot (the twin; for a kernel whose write lands after its own event's snapshot, the first later one before another
   writer that holds it, `call_twin`); its first ``--per-kind`` unit calls (the kind's unit, `a11_kinds.chain`) give each
   unit's arguments and returns. Each is packed into the unit's rows (`a11_kinds.rows_of`, an output row per output port,
@@ -40,6 +40,9 @@ token equality, provenance and not proof.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import fcntl
+import gc
 import hashlib
 import json
 import re
@@ -62,7 +65,7 @@ import a11_kinds as K  # noqa: E402
 import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.defs import PrimitiveDefinition  # noqa: E402
-from verity.ml.circuits.evaluate import evaluate_region  # noqa: E402
+from verity.ml.circuits.evaluation.reference import evaluate_region  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
@@ -641,7 +644,40 @@ def stage_tampered(st, rows: dict, out_dir: Path, salt_key: bytes, indices, set_
     FC.write(st.text, iset, 0, n, out_dir / "inst.bin", out_dir / "pub.bin", salt_key,
              rows={r: np.asarray(rows[r], dtype=np.uint16) for r, *_ in st.in_rows}, outs=outs, salts=salts, public_words={},
              digests=(st.pin, st.class_sha512), indices=[int(u) for u in indices])
-    return {"meta": json.loads(st._meta), "tampered": "o0", "word": 0, "bit": 0}
+    return {"meta": st.meta, "tampered": "o0", "word": 0, "bit": 0}
+
+
+#: `--lock-dir` and `--slots`, which `slot` reads
+SLOTS: dict = {"dir": None, "n": {}}
+
+
+@contextlib.contextmanager
+def slot(phase: str):
+    """With --lock-dir DIR, at most N of the audits sharing DIR in `phase` at once (--slots session=1,lean=3, 1 a phase it
+    doesn't name): a session's prover takes every core, and side by side the sessions' ZK servers and provers, or the Lean
+    verifiers, outgrow the host."""
+    d = SLOTS["dir"]
+    if not d:
+        yield
+        return
+    n = SLOTS["n"].get(phase, 1)
+    Path(d).mkdir(parents=True, exist_ok=True)
+    files = [open(Path(d) / f"{phase}.{i}", "a") for i in range(n)]
+    try:
+        while not any(_try_lock(f) for f in files):
+            time.sleep(5)
+        yield
+    finally:
+        for f in files:
+            f.close()
+
+
+def _try_lock(f) -> bool:
+    try:
+        fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return True
+    except BlockingIOError:
+        return False
 
 
 def session_port(base: int, j: int) -> int:
@@ -671,7 +707,7 @@ def save_values(d: Path, staged: dict, rows_of_kind: dict, weights_notes, a) -> 
 # TODO: once its `tail_pieces.FAMILIES` lowers `GatherE4m3x{V}_v1` and `MoeSelectBf16x{E}_v1` in a fresh process, lower
 # through those pieces and keep this only for the decoded units' builders.
 LAZY = {r"GatherE4m3x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_e4m3"),
-        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_fp8_moe", "gather_f32")}
+        r"GatherF32x(\d+)_v2": ("verity.ml.definitions.registry.boolean_gather", "gather_f32")}
 
 
 def live(fn, registry):
@@ -697,9 +733,9 @@ def live(fn, registry):
     return registry[name].bind(**{k: static(v) for k, v in fn.bindings.items()})
 
 
-def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
+def load_values(d: Path, lowers: list[str], per_kind: int | None = None) -> tuple[dict, dict, dict]:
     """`save_values`' directory read back: the staged kinds among ``lowers``, each unit decoded from ``units.json`` and bound
-    again from the registry, refused unless it encodes as the decoded one."""
+    again from the registry, refused unless it encodes as the decoded one; ``per_kind``: each kind's first that many units."""
     from verity.ml.circuits.codec import decode_program
     from verity.ml.definitions.registry.catalog import load as load_registry
     registry = load_registry()[0]
@@ -715,9 +751,10 @@ def load_values(d: Path, lowers: list[str]) -> tuple[dict, dict, dict]:
         if unit.id != s["unit"] or enc(unit) != enc(defs[s["unit"]]):
             raise SystemExit(f"{f}: the registry's {unit.id} is not the saved {s['unit']}")
         z = np.load(d / f"{f}.npz")
-        rows_of_kind[f] = {**s, "unit": unit, "rows_spec": K.rows_of(unit),
-                           "rows": {k[2:]: z[k] for k in z.files if k.startswith("i.")},
-                           "outs": {k[2:]: z[k] for k in z.files if k.startswith("o.")}}
+        n = min(s["n"], per_kind or s["n"])
+        rows_of_kind[f] = {**s, "n": n, "unit": unit, "rows_spec": K.rows_of(unit),
+                           "rows": {k[2:]: z[k][:n] for k in z.files if k.startswith("i.")},
+                           "outs": {k[2:]: z[k][:n] for k in z.files if k.startswith("o.")}}
     return staged, rows_of_kind, {"from": {x: doc.get(x) for x in ("values", "steps", "layers", "per_kind")}, "weights": doc["weights"]}
 
 
@@ -746,7 +783,11 @@ def main() -> int:
     ap.add_argument("--delta", type=float, default=2.0 ** -20)
     ap.add_argument("--port", type=int, default=0, help="the sessions' base port (default: a free port each)")
     ap.add_argument("--values-only", action="store_true", help="stop after staging values (no registration or proofs)")
+    ap.add_argument("--lock-dir", default=None, help="a directory the audits sharing this host lock their sessions and Lean "
+                                                     "verifies in (`slot`)")
+    ap.add_argument("--slots", default="", help="with --lock-dir, how many at once a phase: session=1,lean=4 (1 a phase unnamed)")
     a = ap.parse_args()
+    SLOTS.update(dir=a.lock_dir, n={k: int(v) for k, v in (x.split("=") for x in a.slots.split(",") if x)})
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     summary: dict = {"row": ROW, "rank": 0, "steps": a.steps, "layers": a.layers, "per_kind": a.per_kind}
@@ -761,7 +802,7 @@ def main() -> int:
     lowers = [f for f, r in kinds.items() if (r.get("outcome") == "lowers" or f in tries) and (not a.only or f in a.only.split(","))]
     summary["tried"] = sorted(tries & set(lowers))
     if a.load_values:
-        staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers)
+        staged, rows_of_kind, notes = load_values(Path(a.load_values), lowers, a.per_kind)
         summary["values_from"] = {"dir": a.load_values, **notes["from"]}
         weights_notes = notes["weights"]
         print(f"A11 values loaded: {sorted(rows_of_kind)}", flush=True)
@@ -825,7 +866,7 @@ def main() -> int:
         with K.no_cyclic_gc():
             st = CS.UnitStager(tpl["defn"], f"unit/a11-{tag}", kv0["rows_spec"], K.out_rows(len(kv0["outs"])),
                                circuit=sdir / "circuit.txt", bind=bound)
-        tpl["stager"], t_build = st, round(time.time() - t0, 1)
+        t_build = round(time.time() - t0, 1)
         cap = a6.chunk_cap(st.meta)
         salt_key = hashlib.sha256(f"verity/one-stage/a11/salts\0{uid}".encode()).digest()
         lo = 0
@@ -848,10 +889,13 @@ def main() -> int:
                   "unit_nnz": got["unit_nnz"], "seconds": {"build": t_build if lo == 0 else 0.0, "stage": round(time.time() - t1, 1)},
                   "partition_file": out / "partition.json", "program_file": out / "program.json"}
             members.append({"name": f, "kind": f, "n": n, "base": base + lo, "defn": tpl["defn"], "st": ms,
-                            "header": a0.public_header(d, n), "salt_key": salt_key, "stager": st, "rows": kv["rows"]})
+                            "header": a0.public_header(d, n), "salt_key": salt_key, "rows": kv["rows"]})
             print(f"A11 staged {f}: {n} units of {uid} from {base + lo} (cap {cap}), {got['ands']} ANDs, k_log {st.meta.get('k_log')}, "
                   f"unit twin {agree}, Call twin {kv['twin']}, {ms['seconds']}", flush=True)
             lo += n
+        # the built circuit is on disk; holding every template's stager would keep tens of GB a template through the sessions
+        del st, got
+        gc.collect()
     summary["members"] = [{"name": m["name"], "template": P.template_id(m["defn"]), "n": m["n"], "base": m["base"], "set": m["st"]["set"],
                            "cap": m["st"]["cap"], "ands": m["st"]["ands"], "unit_nnz": m["st"]["unit_nnz"],
                            "k_log": m["st"]["meta"].get("k_log"), "pin": m["st"]["pin"], "class": m["st"]["class"],
@@ -886,9 +930,10 @@ def main() -> int:
         print("A11 " + json.dumps({"refused_before_draw": summary["checks_before_draw"]}, default=str))
         return 1
 
-    # the verifier's stratified sample, by its own Lean over its own program and partition object; each member serves its share
-    p = a0.run([a.lean, "draw", "--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
-                "--stratified", str(k)], out / "draw.log")
+    # the verifier's stratified sample, by its own Lean over its own program and partition object on a development
+    # challenger's coins; each member serves its share
+    p = a0.challenger_draw(a.lean, ["--program", str(out / "program.json"), "--partition", str(out / "partition.json"),
+                                    "--stratified", str(k)], rec["law"], n_all, R.digest(rec), out / "draw.log")
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     (out / "draw.json").write_text(json.dumps(lean_draw, sort_keys=True))
     served, proved, instances, verdicts, statement, sessions, counts, session_roots = [], [], 0, {}, {}, [], {}, {}
@@ -900,9 +945,11 @@ def main() -> int:
         sdir = out / f"session-{m['name']}"
         sdir.mkdir(parents=True, exist_ok=True)
         (sdir / "draw.json").write_text(json.dumps({"law": "subset", "population": m["n"], "k": len(local), "units": local}, sort_keys=True))
-        t = time.time()
-        record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir, draw_file=sdir / "draw.json", zk=True)
-        session_s = round(time.time() - t, 1)
+        with slot("session"):
+            t = time.time()
+            record, live = a0.session(a.bin, m["st"], m["n"], f"subset:{len(local)}", session_port(a.port, j), sdir,
+                                      draw_file=sdir / "draw.json", zk=True)
+            session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": m["n"]}, {"law": "subset", "k": len(local)})
         served += [m["base"] + u for u in draw_t.get("units", [])]
@@ -915,8 +962,9 @@ def main() -> int:
                                                 and (live or {}).get("roots") == m["header"]["frame_v3"]["roots"] and v.ok,
                                                 "why": ((record or {}).get("verdict") or {}).get("why"), "draw_check": v.to_json()}
         verdicts[f"lean-draw/{m['name']}"] = {"accepted": bool(lean_u) and all(c["ok"] for c in lean_u), "detail": lean_u}
-        verdicts[f"lean-verify/{m['name']}"] = {**a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True),
-                                                "tool": "flock-verify verify --zk --archive --partition --program"}
+        with slot("lean"):
+            lean_v = a0.lean_verify(a.lean, m["st"], m["n"], sdir, zk=True)
+        verdicts[f"lean-verify/{m['name']}"] = {**lean_v, "tool": "flock-verify verify --zk --archive --partition --program"}
         statement[m["name"]] = {"session_s": session_s, **{x: (live or {}).get(x) for x in ("circuit_sha512", "statement_digest", "sigma")},
                                 "timing": {x: (live or {}).get(x) for x in ("e2e_s", "witness_s", "prove_total_s", "k_log", "units", "proof_bytes")},
                                 "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
@@ -995,7 +1043,8 @@ def main() -> int:
                                                    "first output word flipped before commitment"},
                         leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
         tcheck = V.check(trec, tprog, tq, tlaw, a0.SCHEME, twant, leaf_layer=a0.sha512_file(d / f"pub-{tn}.bin"))
-        trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
+        with slot("session"):
+            trecord, tlive = a0.session(a.bin, tst_d, tn, "subset:2", session_port(a.port, len(members) + 1), tdir / "session", zk=True)
         tlean = a0.lean_verify(a.lean, tst_d, tn, tdir / "session", zk=True)
         tm0 = ((trecord or {}).get("verdict") or {})
         neg[f"wrong-output-word ({tm['kind']})"] = {

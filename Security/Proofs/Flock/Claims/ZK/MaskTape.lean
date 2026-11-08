@@ -6,7 +6,7 @@ public import Proofs.Flock.Claims.Complete.ZkTables.MaskFree
 /-!
 # The deployed masked session's mask tape
 
-`flock-circuit --zk` draws each table's mask-slot words from its tape (`TapeZk.mask`, `STREAM_MASK`: word `k` of table
+`flock-circuit --zk` samples each table's mask-slot words from its tape (`TapeZk.mask`, `STREAM_MASK`: word `k` of table
 `i`'s slot, in `maskWordsOf` order, is `mask i k`), and `ZkTables.honestPR` runs the masked session on the witness with
 those words in the slots (`maskWOf`). The tables' randomness carries each table's slot as bits (`ZkView.Base`'s first
 component, `Fin nMask → Fin 128 → ZMod 2`), which the tables read through `Composed.zWith`.
@@ -57,10 +57,6 @@ noncomputable def maskOf {C : Tabs} (x₀ : Msg) (r : Rand C x₀) (c k : ℕ) :
 masked prover's tape `z` with `TapeZk.mask` set to `maskOf`. -/
 noncomputable def TapePlan.atMask {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) : TapePlan C :=
   TapePlan.at x₀ fun r => { z r with mask := maskOf x₀ r }
-
-theorem TapePlan.atMask_mask {C : Tabs} (x₀ : Msg) (z : Rand C x₀ → FlockComplete.TapeZk) (r : Rand C x₀) :
-    ((TapePlan.atMask x₀ z).tapeZk r).mask = maskOf x₀ r :=
-  rfl
 
 /-- **Table `j`'s share of `honestPR`'s witness at the mask tape is the tables' `zWith`**: the share of `w` (`wtOf`)
 with the slot's word `k` set to the base's bits `k`. -/

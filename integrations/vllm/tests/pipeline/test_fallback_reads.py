@@ -48,6 +48,10 @@ def test_code_version_falls_back_to_git_past_an_unusable_export_json(tmp_path: P
 
 
 def test_code_version_is_unknown_when_git_cannot_run(tmp_path: Path, monkeypatch):
+    def no_tree(cmd, **kw):
+        raise FileNotFoundError(2, "No such file or directory", str(kw["cwd"]))
+
+    monkeypatch.setattr(EXP.subprocess, "run", no_tree)
     assert EXP.code_version(tmp_path / "no-such-tree") == {"source": "unknown"}
 
     def timeout(cmd, **kw):

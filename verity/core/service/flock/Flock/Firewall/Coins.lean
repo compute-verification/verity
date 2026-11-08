@@ -22,7 +22,6 @@ module
 
 public import Flock.CoinTree
 public import Flock.Hm96
-public import Flock.JsonParse
 
 @[expose] public section
 
@@ -33,7 +32,7 @@ open Lean (Json)
 /-- The prefix of a refusal: the prover stops there, before it uses any coin of the round (`coin_tree::Checked`). -/
 def STOP : String := "PROVER-STOPPED: "
 
-/-- The stream of the session's own round: the link points, drawn at `Commit` (`coin_tree::SESSION`). -/
+/-- The stream of the session's own round: the link points, sampled at `Commit` (`coin_tree::SESSION`). -/
 def SESSION : String := "session"
 
 /-- `SHA-512(ν ‖ m)`. -/

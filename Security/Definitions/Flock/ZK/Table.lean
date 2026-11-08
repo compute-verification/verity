@@ -1,22 +1,10 @@
 module
 
-public import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-public import Mathlib.Algebra.BigOperators.Ring.Finset
-public import Mathlib.Algebra.CharP.Defs
-public import Mathlib.Algebra.Group.Basic
-public import Mathlib.Algebra.Order.BigOperators.Group.Finset
-public import Mathlib.Basic.Finite.Prod
-public import Mathlib.Data.Finset.Card
-public import Mathlib.Data.Fintype.Card
-public import Mathlib.Data.Fintype.Pi
-public import Mathlib.Data.Fintype.Prod
 public import Mathlib.Data.Fin.VecNotation
 public import Mathlib.Data.ZMod.Basic
-public import Mathlib.Logic.Function.Basic
-public import Mathlib.Logic.Function.Iterate
-public import Mathlib.Tactic.Abel
-public import Mathlib.Tactic.FinCases
-public import Mathlib.Tactic.Ring
+public import Mathlib.Algebra.Field.Defs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: one masked table, its reference prover and `S_shvzk`, at fixed verifier coins
@@ -342,7 +330,7 @@ def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) 
   ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
 
 /-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
-where `X_L + κ` vanishes at none; `pad_onto_M1` for C-Flock ZK's code). -/
+where `X_L + κ` vanishes at none; `pad_onto_M1` for Flock ZK's code). -/
 def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
 
 /-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most

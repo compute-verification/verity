@@ -14,7 +14,7 @@ coin flipped (85's ``inner-neg-challenge``); and the honest one with one bit of 
 check (an input `verify` refuses before any session) is `flock-verify`'s exit 2 at every part.
 
 The refusals the compiled check adds to `flock-verify`'s per-part path are each held to a refusal by both: the inner
-statement under Flock's plain verifier (`innerOk`, here an inner draw that does not parse), and plain SHA-512 leaves under
+statement under Flock's plain verifier (`innerOk`, here an inner sample that does not parse), and plain SHA-512 leaves under
 `--zk` (`verifyCmd`'s message, which `partVerdict` gives word for word; its statement is the constant
 `verity/flock-circuit`, so only `flock-verify`'s side is driven). `fits`' bound, `2^56` bytes, is past any file a test can
 stage; `statementFits`, the same bound on the whole statement the inputs name, is driven at a limit of the honest
@@ -50,8 +50,8 @@ def sha(p: Path) -> str:
 # --- what the verifier holds and what the prover sends, from a recursive session's files -----------------------------------
 
 class Inner:
-    """The inner statement's files (85's ``stage/``) and the inner session (``inner/s<k>``: ``session/`` and the coin
-    server's transcript ``public.json``)."""
+    """The inner statement's files (85's ``stage/``) and the inner session (``inner/s<k>``: ``session/`` and the challenger's
+    live-coin part's transcript ``public.json``)."""
 
     def __init__(self, stage: Path, session: Path):
         (self.pub,) = sorted(stage.glob("pub-*.bin"))
@@ -63,7 +63,7 @@ class Inner:
         return ["--rec-inner-circuit", str(self.circuit), "--rec-inner-public", str(self.pub), "--rec-inner-partition",
                 str(self.partition), "--rec-inner-program", str(self.program),
                 "--rec-inner-statement", "verity/flock-circuit+plain-leaves",
-                "--rec-inner-statement-coins", "os", "--rec-inner-draw", str(self.draw), "--rec-inner-session",
+                "--rec-inner-draw", str(self.draw), "--rec-inner-session",
                 str(self.session), "--rec-inner-transcript", str(self.transcript)]
 
 
@@ -361,7 +361,7 @@ def test_a_rep_file_one_bit_off_is_refused_at_its_part(session, tmp_path):
 @pytest.mark.slow
 @DEPLOYED
 def test_an_inner_draw_that_does_not_parse_is_refused_by_both(session, tmp_path):
-    """The inner statement's draw cut short: the compiled check refuses the whole check at Flock's plain verifier on the
+    """The inner statement's sample cut short: the compiled check refuses the whole check at Flock's plain verifier on the
     inner statement (`innerOk`), and `flock-verify` accepts no part."""
     inner = copy.copy(session.inner)
     inner.draw = tmp_path / "draw.json"

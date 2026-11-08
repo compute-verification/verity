@@ -1,21 +1,34 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkBind.At
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
-public import Proofs.Flock.Soundness.Discharge.ZkLink.Compiled
 import all Init.Data.Array.Basic
 import all Init.Data.Range.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
-# The planned rate of the `--zk` plan, at every draw
+# The planned rate of the `--zk` plan, at every sample
 
 `rateZ ts j k = 2^{logLen₀}/(e·k)` reads only level 0's codeword length of table `j`'s schedule. Every table the one-table
-`--zk` plan `planZAt dj y₀ S R` holds, at every draw `S` (a `DrawSetupZK`'s table, or `y₀`'s refused one), carries a
+`--zk` plan `planZAt dj y₀ S R` holds, at every sample `S` (a `DrawSetupZK`'s table, or `y₀`'s refused one), carries a
 schedule `Zk.schedule` returned (`DrawSetupZK.hz`). So a cap `L` on level 0's `logLen` over everything `Zk.schedule`
-returns (`ZkLogLenCap L`) bounds the rate at every draw, and the count curve's `∀ S' R' i, rateZ … ≤ ρ` follows from
+returns (`ZkLogLenCap L`) bounds the rate at every sample, and the count curve's `∀ S' R' i, rateZ … ≤ ρ` follows from
 `2^L ≤ ρ·e·k`:
 
-* `logLen_tableAtZK_le`, `rateZ_planZAt_le`: the table's `logLen₀ ≤ L`, and its rate `≤ 2^L/(e·k)`, at every draw.
+* `logLen_tableAtZK_le`, `rateZ_planZAt_le`: the table's `logLen₀ ≤ L`, and its rate `≤ 2^L/(e·k)`, at every sample.
 * `hr_planZAt`: `2^L ≤ ρ·(e·k)` gives `rateZ (planZAt dj y₀ S R) i k ≤ ρ` at every `dj`, `y₀`, `S`, `R`, `i`.
 * `zkLogLenCap_23`: `Zk.schedule` accepts `m` from 25 to 35 only (`schedule_spec`), and fast100's level 0 there has rate
   1 and `m − 7 − k0` columns, so `logLen₀ = m − 6 − k0 ≤ 23` (checked by `decide +kernel` at each `m`).
@@ -56,7 +69,7 @@ theorem zkLogLenCap_23 : ZkLogLenCap 23 := by
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (y₀ : DrawSetupZK I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The `--zk` table's `logLen₀` is under the cap at every draw**: the draw's `DrawSetupZK`'s schedule, or `y₀`'s,
+/-- **The `--zk` table's `logLen₀` is under the cap at every sample**: the sample's `DrawSetupZK`'s schedule, or `y₀`'s,
 is one `Zk.schedule` returned. -/
 theorem logLen_tableAtZK_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) :
     (lvOf (tableAtZK dj y₀ S).sch 0).logLen ≤ L := by
@@ -73,7 +86,7 @@ theorem planZAt_get (S : Finset (Fin n)) (R : Reg) (i : Fin (planZAt (Reg := Reg
   subst h0
   rfl
 
-/-- **The planned rate at every draw is at most `2^L/(e·k)`.** -/
+/-- **The planned rate at every sample is at most `2^L/(e·k)`.** -/
 theorem rateZ_planZAt_le {L : ℕ} (hL : ZkLogLenCap L) (S : Finset (Fin n)) (R : Reg)
     (i : Fin (planZAt (Reg := Reg) dj y₀ S R).length) (k : ℕ) :
     rateZ (planZAt (Reg := Reg) dj y₀ S R) i k ≤ 2 ^ L / (Real.exp 1 * k) := by
@@ -94,7 +107,7 @@ theorem cap_div_le {L k : ℕ} {ρ : ℝ} (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.e
   rw [div_le_iff₀ hpos]
   exact hkρ
 
-/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every draw
+/-- **The count curve bounds every planned rate**: under a cap `L`, `2^L ≤ ρ·(e·k)` gives `rateZ … ≤ ρ` at every sample
 `S`, registration `R` and table `i`. `ZkHidden.hr_planZHJ` is the same at the hidden-output plan of `J` tables, which
 the recursive audit's `_hr` reads. -/
 theorem hr_planZAt {L k : ℕ} {ρ : ℝ} (hL : ZkLogLenCap L) (hkρ : (2 : ℝ) ^ L ≤ ρ * (Real.exp 1 * k))

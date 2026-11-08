@@ -80,7 +80,7 @@ class Plan:
     """One (m, n, k): D [M, N] s32 row-major = (W [N, K]) (X [M, K])^T in cuBLASLt's column-major terms: A = W as K x N, op T;
     B = X as K x M, op N; C = D as N x M."""
 
-    def __init__(self, m: int, n: int, k: int):
+    def __init__(self, m: int, n: int, k: int) -> None:
         L, _ = lib()
         self.m, self.n, self.k = m, n, k
         self.desc, self.a, self.b, self.c, self.pref = (C.c_void_p() for _ in range(5))
@@ -116,7 +116,7 @@ class Plan:
                              C.byref(self.beta), z.data_ptr(), self.c, z.data_ptr(), self.c, C.byref(h.algo), ws.data_ptr(),
                              WORKSPACE, torch.cuda.current_stream().cuda_stream), "cublasLtMatmul")
 
-    def __del__(self):
+    def __del__(self) -> None:
         try:
             L, _ = lib()
             L.cublasLtMatmulPreferenceDestroy(self.pref)

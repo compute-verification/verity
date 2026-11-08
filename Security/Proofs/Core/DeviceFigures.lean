@@ -1,6 +1,10 @@
 module
 
 public import Definitions.Core.DeviceFigures
+public import Mathlib.Algebra.Field.Rat
+import Mathlib.Algebra.Order.Field.Rat
+import Mathlib.Algebra.Order.Ring.NNRat
+import Mathlib.Data.Finset.Attr
 
 /-!
 # The figures a bound reads

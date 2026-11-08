@@ -1,13 +1,49 @@
 module
 
-public import Definitions.Core.Boolean
-public import Proofs.Core.Circuit
+public import Batteries.Data.ByteArray
 public import Proofs.Flock.Bridge.Count
-public import Proofs.Flock.Soundness.Discharge.Layout.Outs
+public import Proofs.Flock.Bridge.Defs
 public import Properties.Flock.Circuit.CircuitOf
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Core.Circuit
+import Proofs.Flock.Bridge.Lowers
+import Proofs.Flock.SamplingBoundary
+import Proofs.Flock.Soundness.Audit.Circuit
+import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!
-# The parsed circuit file as core's circuit, and the sampling relation as its wrong units
+# The parsed circuit file as core's circuit, and the sampling relation as its incorrect proof blocks
 
 The definitions are `Properties.Flock.Circuit.CircuitOf`'s: `Verity.Circuit.ofAudit` and `Verity.Partition.ofAudit` (a
 game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (the key program of the parsed file
@@ -16,14 +52,14 @@ game circuit and partition as core's), `circuitOf D hU n` and `partsOf D hU n` (
 
 * `Verity.Circuit.ofAudit_eq_toCircuit`: `Circuit.ofAudit C` is the Boolean profile's circuit of `C`
   (`FlockSoundness.Audit.Circuit.toCircuit`). `Verity.Circuit.ofBits xs` is a transcript of bits, and
-  `Verity.Partition.wrong_ofAudit` says the wrong units are the game's, so every statement about the game's wrong units
+  `Verity.Partition.wrong_ofAudit` says the incorrect proof blocks are the game's, so every statement about the game's incorrect proof blocks
   is one about core's.
 * `circuitOf_eq` and `partsOf_eq` restate the key program's circuit and partition as the ones `circuitOf` and `partsOf`
-  embed (by definition), and `partsOf_wrong` its wrong units as theirs.
-* The wrong-units bridge, the converse of `Flock.Claims.WrongUnits` (faulty ⇒ wrong): a unit wrong in the wire values a
-  witness opens (`openedOf`) is faulty in the sampling statement (`wrong_subset_faulty`), because a unit that is not faulty
-  is correct on its openings (`correct_of_progCorrect`), under any design and strata. So `RelS` at
-  `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` wrong units (`card_wrong_lt_of_relS`), at every
+  embed (by definition), and `partsOf_wrong` its incorrect proof blocks as theirs.
+* The wrong-units bridge: a unit wrong in the wire values a witness opens (`openedOf`) is faulty in the sampling
+  statement (`wrong_subset_faulty`), because a unit that is not faulty is correct on its openings
+  (`correct_of_progCorrect`), under any design and strata. So `RelS` at
+  `δ = C(n − K₀, kd)/C(n, kd)` under `subset kd` leaves fewer than `K₀` incorrect proof blocks (`card_wrong_lt_of_relS`), at every
   circuit, every witness and every strata, with no side condition, and at the parsed file's circuit
   (`card_wrong_partsOf_lt`).
 * At the committed files: `parsedOf_eq` and `parse_of_parsedOf` relate `parsedOf` to the verifier's parse
@@ -96,7 +132,7 @@ theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin
       (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
 
-/-- **The wrong units are the game's**: core's partition of a game circuit has the game partition's wrong units, on
+/-- **The incorrect proof blocks are the game's**: core's partition of a game circuit has the game partition's incorrect proof blocks, on
 the same bits. -/
 theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
     (Partition.ofAudit P).wrong (Circuit.ofBits xs) = P.wrong xs := by
@@ -269,7 +305,7 @@ theorem card_wrong_le_faulty {n : ℕ} (P : FlockSoundness.Audit.Partition C n) 
     (by intro u hu; exact Finset.mem_filter.2 ⟨wrong_subset_faulty P κ hns r desc q roots H Cm w hu, u.isLt⟩)
     (by intro a _ b _ h; exact Fin.ext h)
 
-/-- **The sampling relation bounds the wrong units**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` under
+/-- **The sampling relation bounds the incorrect proof blocks**: a witness in `RelS` at `δ = C(n − K₀, kd)/C(n, kd)` under
 `subset kd` leaves fewer than `K₀` of the circuit's units wrong in the wire values it opens, whatever the strata. -/
 theorem card_wrong_lt_of_relS {n : ℕ} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) (kd K₀ : ℕ) (desc : Claims.Msg) (q : Query) (roots : List Claims.Msg)
@@ -311,7 +347,7 @@ theorem partsOf_eq : partsOf D hU n =
     .ofAudit ((FlockSoundness.Discharge.Placed.keyProg D.unroll hU n).partition
       (FlockSoundness.Discharge.Layout.outsOf D.unroll hU n)) := rfl
 
-/-- **`partsOf`'s wrong units are the key program's**, on the same bits. -/
+/-- **`partsOf`'s incorrect proof blocks are the key program's**, on the same bits. -/
 theorem partsOf_wrong (xs : Fin (keyCircuit D hU n).N → Bool) :
     (partsOf D hU n).wrong (Verity.Circuit.ofBits xs) = (keyPartition D hU n).wrong xs :=
   Verity.Partition.wrong_ofAudit _ xs

@@ -1,15 +1,51 @@
 module
 
 public import Definitions.NetworkCertifier.Guarantees.Pooled
-public import Proofs.NetworkCertifier.PeriodSum
-public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Prob
+import Proofs.NetworkCertifier.PeriodSum
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# The wrong units over a monitoring period: the escapes multiply
+# The incorrect proof blocks over a monitoring period: the escapes multiply
 
 A uniform `k`-subset of `n` units misses a set of `f` units with probability `C(n - f, k) / C(n, k)`, at most
 `(1 - k/n)^f` (`choose_sub_le`, `pr_disjoint_le`). Over windows on independent coins, each with its wrong
-set fixed before its own draw, every draw missing its window's set while the sets hold `F` units in total has
+set fixed before its own sample, every sample missing its window's set while the sets hold `F` units in total has
 probability at most `r^F` when each window's miss has probability at most `r` to the power of its set's size
 (`pr_adaptive_le`, by induction over the windows: the first window's coins, then the rest's at each of them). With
 each window's soundness error added by a union bound, that is `horizonWrongUnits`.
@@ -150,7 +186,7 @@ theorem pr_disjoint_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {n : ℕ} (draw : 
     have hqk : q ≤ k / n := (le_div_iff₀ hn').2 hq
     exact pow_le_pow_left₀ (by linarith) (by linarith) _
 
-/-- The draw's hypotheses are satisfiable: the coins that are the `k`-subsets themselves. -/
+/-- The sample's hypotheses are satisfiable: the coins that are the `k`-subsets themselves. -/
 theorem drawUniform_val (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.val.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
@@ -223,7 +259,7 @@ theorem pr_adaptive_le {Ω : Type} [Fintype Ω] [Nonempty Ω] {r : ℝ} (hr0 : 0
 
 /-! ### The monitoring period -/
 
-/-- **The wrong units over a monitoring period**: `Guarantees.PooledWrongUnitsLe`. -/
+/-- **The incorrect proof blocks over a monitoring period**: `Guarantees.PooledWrongUnitsLe`. -/
 theorem horizonWrongUnits : Guarantees.PooledWrongUnitsLe := by
   intro m Ω _ _ n k draw hcard hunif W hW acc ε hsound q hq0 hq1 hq F
   refine ⟨?_, fun δ hδ hlog => ?_⟩

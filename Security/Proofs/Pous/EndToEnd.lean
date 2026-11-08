@@ -1,8 +1,13 @@
 module
 
-public import Properties.Pous.EndToEnd
+public import Mathlib.Logic.Equiv.PartialEquiv
 public import Proofs.Pous.Sanity
 public import Proofs.Pous.Thm1.Theorem1iiSeq
+public import Properties.Pous.EndToEnd
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Combinatorics.SimpleGraph.Init
+import Mathlib.Data.Sym.Sym2.Init
+import Proofs.Pous.Thm1.Theorem1iTimed
 
 @[expose] public section
 
@@ -49,7 +54,7 @@ theorem uniformOn_eq (x : Bytes 4096) :
   simp only [h88]
   split_ifs <;> first | omega | simp only [Option.map_some, Option.some.injEq]; omega
 
-/-- The bytes a draw leaves unread at `2^19`: all but bytes 8, 9 and 10, and the top five bits of byte 8. -/
+/-- The bytes a sample leaves unread at `2^19`: all but bytes 8, 9 and 10, and the top five bits of byte 8. -/
 abbrev Rest : Type :=
   Fin 32 × ({k : {j : {j : Fin 4096 // j ≠ 8} // j ≠ ⟨9, by decide⟩} // k ≠ ⟨⟨10, by decide⟩, by decide⟩} → Fin 256)
 
@@ -147,7 +152,7 @@ theorem pr_slice_le {Ω C I V : Type} [Fintype Ω] [Fintype C] [Fintype I] [None
 
 /-! ### From the streams to uniform indices -/
 
-/-- The game's draw as the indices it reads and the bytes it leaves. -/
+/-- The game's sample as the indices it reads and the bytes it leaves. -/
 def splitAll : Streams ≃ (Fin 105 → Fin (2 ^ 19)) × (Fin 105 → Rest) :=
   (Equiv.piCongrRight fun _ => split).trans (Equiv.arrowProdEquivProdArrow _ _ _)
 
@@ -180,7 +185,7 @@ theorem passes_iff {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n
   · rintro ⟨v, hv, hs⟩
     exact ⟨_, v, (hI _).2 rfl, hv, hs⟩
 
-/-- The streams' draw is the uniform indices' (`ε_rs = 0`). -/
+/-- The streams' sample is the uniform indices' (`ε_rs = 0`). -/
 theorem pr_passes {S D Q L : ℕ} (session binding : ByteArray) (W : Bits sch.n) (A : Server S D Q L) :
     pr (Passes session binding W A) =
       pr fun x : (ringRO (2 ^ 19) 16448 (2 ^ 16448 - 21065)).Ω × HmCoins × (Fin 105 → Fin (2 ^ 19)) =>

@@ -1,26 +1,30 @@
 module
 
-public import Proofs.Flock.Soundness.Game.Basic
-public import Proofs.Flock.Soundness.Assumptions
+public import Definitions.Core.Game
+public import Definitions.Flock.Game
+public import Mathlib.Data.Fintype.Pi
+public import Mathlib.Data.Fintype.Prod
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
-# Interactions with committed coins (live/PROTOCOL.md §9, C-Flock ZK)
+# Interactions with committed coins (live/PROTOCOL.md §9, Flock ZK)
 
-Under C-Flock ZK the challenger draws every round's block of coins, and a salt for each, at Hello, and sends a
+Under Flock ZK the challenger samples every round's block of coins, and a salt for each, at Hello, and sends a
 commitment to all of them before the prover's first message: round `i`'s block `b` is chained into a digest `dig i b`,
 its leaf is the hm96 leaf `H(dig i b ⊕ M·y ‖ c y)` under the round's salt `y` (`c y = H(sp ‖ y)`), and the leaves go
 under a SHA-512 tree. Round `i`'s coins, `T_n`, the salt and the path are opened only when the prover's round-`i`
 message arrives.
 
 `TGame I Blk α` is the verifier's side of such an interaction, as Lean defines the protocol: `Game`'s `ret` and `send`;
-`coin i k`, which opens committed round `i`'s block `b : Blk` and continues as `k b`; and `fresh C k`, a live coin drawn
+`coin i k`, which opens committed round `i`'s block `b : Blk` and continues as `k b`; and `fresh C k`, a live coin flipped
 when it is reached (a round the commitment does not hold). The blocks and salts `ω : I → Blk × Salt` are uniform and
-independent (the server's OS randomness), drawn before anything else.
+independent (the server's OS randomness), sampled before anything else.
 
 A committed prover (`CStrat`) sees, before its first message, every round's leaf (`leaf`), which is more than the root
 and the paths it receives; at round `i`'s opening it sees the whole block and the salt, more than the `n` coins and
 `T_n`. `probC` is the probability that the verifier's output satisfies `p`, over `ω`. `erase` is the same interaction
-with every committed round drawn live, as a `Game`, and `Distinct` says that no path opens a round twice (the server
+with every committed round sampled live, as a `Game`, and `Distinct` says that no path opens a round twice (the server
 answers each round once).
 -/
 
@@ -42,7 +46,7 @@ namespace TGame
 
 variable {I Blk α β : Type}
 
-/-- **The interaction with every committed round drawn live**: each `coin i k` becomes a uniform block drawn when the
+/-- **The interaction with every committed round sampled live**: each `coin i k` becomes a uniform block sampled when the
 round is reached. -/
 def erase [Fintype Blk] [Nonempty Blk] : TGame I Blk α → Game α
   | .ret a => .ret a
