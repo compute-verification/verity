@@ -211,8 +211,6 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
     eq_k = log_n // 2
     yield a("d_eq_lo", (1 << eq_k) * F128)
     yield a("d_eq_hi", (1 << (log_n - eq_k)) * F128)
-    yield r("d_eq_hi")
-    yield r("d_eq_lo")
     yield a("region2", ln * F128)
     yield a("region3", ln * F128)
     n1 = log_n - ik
@@ -225,6 +223,9 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
     # the first fold's copies of the levels' hm96 salts (cuda_sha512_patch.py's copy_salts_ahead)
     for lvl, (bl, _) in enumerate(levels, 1):
         yield a(f"salts{lvl}", bl * SALT)
+    # the first fold adds level 0's last OOD glue over the eq tables (ligerito_folds.cuh), then releases them
+    yield r("d_eq_hi")
+    yield r("d_eq_lo")
     if s.zk:
         yield a("d_r", max(ik, 1) * F256)
         yield a("d_ybar", max(s.t_pad, 1) * F256)
