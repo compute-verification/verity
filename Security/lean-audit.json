@@ -3828,11 +3828,10 @@
    "Claims.Recursion.decOK": "the decoders a claim quantifies over (`Flock.ListWithin` at the deployment), a domain, no claim",
    "Claims.Rel.L": "a helper the claims read: a relation's language",
    "Claims.Rel.ext": "a helper the claims read: a relation at an extractor's optional witness",
-   "Claims.Sampling.BoundaryFaulty": "a helper the claims read: a faulty unit on the boundary trace, which `FaultyBoundary` reads",
+   "Claims.Sampling.BoundaryFaulty": "the relation's form of a faulty unit on the boundary trace, which `Faulty` is on a topologically ordered program (`Claims.Sampling.faultyBoundary`), no claim",
    "Claims.Sampling.Design.WellFormed": "a helper the claims read: a well-formed design, one well-formed rule per class",
    "Claims.Sampling.ExtractOwnLe": "a helper the claims read: an extractor's own calls, at most a bound, which the sampling `Efficient` reads",
    "Claims.Sampling.Faulty": "a helper the claims read: a faulty unit, which the sampling relation reads",
-   "Claims.Sampling.FaultyBoundary": "proved of every program (`Claims.Sampling.faultyBoundary`), not of a deployment",
    "Claims.Sampling.InScope": "a helper the claims read: the programs and partitions the sampling scope takes",
    "Claims.Sampling.LogColl": "a helper the claims read: a collision in a log of `H` calls",
    "Claims.Sampling.OneStage.WellFormed": "a helper the claims read: a well-formed one-stage design",
@@ -15339,7 +15338,7 @@
     "reads": []
    },
    "type_hash": "12704b348a183d81be9329792dcc639f4deafa21e0fc0227ff7b0b23ccb3bf9b",
-   "unfolded_hash": "3c7a3c9d0fdf15619397212469e31b384e7bb1af251f26dc5cdcb4a783a11023"
+   "unfolded_hash": "eaa1ffeef532c2db42f747b09da6d53b538d74128aec99273cc9077dd8661b18"
   },
   "Flock.SecurityProofs.ServedRowsLinked": {
    "owner": "@proofs",
@@ -31638,7 +31637,7 @@
    }
   },
   "Definitions.Claims.Sampling": {
-   "digest": "0ee59b1af321189a9ab1f5bd5c89ada7c37d64a66d6e6573b526fd0517bc3c4d",
+   "digest": "191a5043d7e8c4525e822ac1a9025058f3dbb014c8215fb309d8d7a838aa9029",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.design": "91e2b9592fce2faa8cd2c622f9b00f2a3a45f4a39d15b8793549795948ce108d",
@@ -31661,7 +31660,6 @@
     "Claims.Sampling.Binding": "0bd48abf74d29412972210378926b0968b6359be458a97aced7ba0f75620ae05",
     "Claims.Sampling.Bits": "32127d04d1abb75b3b4b6338f14750f5b6108b2f69d3cbd8b969c35e07cfed91",
     "Claims.Sampling.BitsLin": "59fcc8398851d24cd00b590a816eb79bf9648936871642b9454bcf93f8ceed21",
-    "Claims.Sampling.BoundaryFaulty": "df548114fb099f7b1fe0ec4a1f684fcdd419a3ebae3eb0d8de71c8ca2494d80e",
     "Claims.Sampling.CommitmentScheme": "f16d42f6cd8b9ee922f24a2204f69509e7537e3892abff5873b1e225db7fd5f2",
     "Claims.Sampling.CommitmentScheme.Binds": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
     "Claims.Sampling.CommitmentScheme.Opens": "cb6c70071ce8f35ef6b9d2772bd372dafc39c7a1400526e7986f32af3248ed3d",
@@ -31707,7 +31705,6 @@
     "Claims.Sampling.Efficient": "b6e5684a2911db50f9f716c3552178feb6e181769a61cf7cc6466f27b45b9757",
     "Claims.Sampling.ExtractOwnLe": "9abf735ecc02071f8d189bcc216e95e565c61115cf3f2933e7787ae3ba96f0f6",
     "Claims.Sampling.Faulty": "5ba34c79566d772b9fabfa657a1d5a1228cf558b0788f69793993fd346f7334a",
-    "Claims.Sampling.FaultyBoundary": "2d7d9c96d6f06d47da143a445b28728b5da45398bf64fc320600db2317cb8127",
     "Claims.Sampling.InScope": "e9ce0f984e182875fb1c4d7e79fc2a89130881c245150293e81c9b6a2986e7c9",
     "Claims.Sampling.KS": "33b65996171d0478084ebb76475db9a2763cd9a1ac2ed40bd46d75dd3ce0f3e2",
     "Claims.Sampling.KSAt": "04fe1e51dbb3cf1622dc096a134663dbc77981153b9da5c8486179f783056d30",
@@ -33761,9 +33758,9 @@
    }
   },
   "Definitions.Flock.Guarantees.SamplingClaims": {
-   "digest": "71217a013a9ecd56f1f171d658c6fdda412e08ec7c3cd2be87af27a796f38858",
+   "digest": "4535885df4516bdee22dfe3d8637388c3ffefd71eac3d6483380aed06acdb297",
    "definitions": {
-    "Flock.Guarantees.SamplingClaimsStated": "d8cd6de39a7dae15e189b083b00c9a1c1db9386de45269b767a13ab9cd3e275e"
+    "Flock.Guarantees.SamplingClaimsStated": "e9e78ac55731e2ad4fc401c0b19632b81ebdbefc52bb58cfec52d0f265ad6d27"
    }
   },
   "Definitions.Flock.Ligerito": {
