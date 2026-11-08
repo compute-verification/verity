@@ -231,11 +231,11 @@ theorem flags_eq (z : Var → Bool) (x : List Lin) (n : ℕ) (fl : List Lin) (hn
 
 /-! ## The selection -/
 
-theorem sound_select (fl : List Lin) (layouts : List (List Word)) : Sound (select fl layouts) fun z out =>
+theorem sound_select (fl : List Lin) (layouts : List (List Word)) : Sound (Frame.select fl layouts) fun z out =>
     out.length = (layouts.headD []).length ∧ ∀ i < out.length, (out.getD i []).length = 64 ∧
       ∀ j < 64, ∀ k s : ℕ, evs z fl = List.replicate k true ++ List.replicate s false → k < layouts.length →
         ev z ((out.getD i []).getD j Lin.zero) = ev z (((layouts.getD k []).getD i []).getD j Lin.zero) := by
-  unfold select
+  unfold Frame.select
   refine Sound.mono (sound_mapM_getD [] _ (fun z i w => w.length = 64 ∧ ∀ j < 64, ∀ k s : ℕ,
       evs z fl = List.replicate k true ++ List.replicate s false → k < layouts.length →
         ev z (w.getD j Lin.zero) = ev z (((layouts.getD k []).getD i []).getD j Lin.zero)) (fun i => ?_) _) ?_
