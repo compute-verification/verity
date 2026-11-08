@@ -52,14 +52,17 @@ discharge there:
 
 * `DrawFixed`: a checked unit's session is in the second stage, and the checked units don't read its coins.
 * `SessionRuns`: at a run that checks `u`, `u`'s session is a Flock run, on its own rounds (an order embedding of
-  Flock's), of a Flock prover fixed by the run's coins off them; the session decides the run; and the sampled verifier
-  makes the Flock verifier's `H` calls. The session's view needs only the coins before its first round.
+  Flock's), of a Flock prover fixed by the run's coins off them; the session accepts where the run does; and the sampled
+  verifier makes the Flock verifier's `H` calls. The session's view needs only the coins before its first round. Only
+  that direction of acceptance: the run's other sessions may reject what this one accepts, so a run with several
+  sessions meets it.
 * `InnerNumbers`: the inner numbers (`innerWaits`, `innerCap`, `innerN₀`) are Flock's at every session's statement, and
   its `ε_table` and weight at most the inner ones.
 
 At first-stage coins `(ω, r)`, the selected unit's rounds are a set that resampling keeps (`Ex_resample`), so the second
-stage's coins average over the session's coins with the coins off it fixed, and there the sampled run is the Flock
-prover's (`firstWait_map` for the inner `E^rep`, `Ex_comp_inj` for its coins). `β(ω, r)` is `B`'s collision
+stage's coins average over the session's coins with the coins off it fixed, and there the session's view of the
+sampled run, which the inner `E^rep` reruns against (`unitExt`), is the Flock prover's run (`firstWait_map` for the
+inner `E^rep`, `Ex_comp_inj` for its coins). `β(ω, r)` is `B`'s collision
 probability at `(ω, r)`: a collision of the Flock verifier's calls in its `B` is one of the sampled verifier's at the
 fork on the same round, and Flock's `γ` at its `k_F ≤ k` rounds, times the `k/k_F` that guessing among the sampled
 rounds costs, is at most `γ_F` (`γFlock_mul_le`).
@@ -315,16 +318,16 @@ def DrawFixed (D : Deploy Coin Col T) : Prop :=
 
 /-- **A checked unit's session is a Flock run**: at coins `r` that check `u`, the session's statement `xS`, an order
 embedding `emb` of Flock's rounds onto `u`'s, and a Flock prover `P'` (the sampled prover with `r`'s coins off `u`'s
-rounds), such that at coins `r'` agreeing with `r` off `u`'s rounds the sampled run accepts exactly when `P'`'s run on
-`r'`'s session coins does (the session decides the run), and at coins agreeing with `r` on the rounds outside `u`'s
-before its first, `u`'s session is `P'`'s run and the sampled verifier makes its `H` calls. -/
+rounds), such that at coins `r'` agreeing with `r` off `u`'s rounds `P'`'s run on `r'`'s session coins accepts where
+the sampled run does, and at coins agreeing with `r` on the rounds outside `u`'s before its first, `u`'s session is
+`P'`'s run and the sampled verifier makes its `H` calls. -/
 def SessionRuns (H : Msg → Msg) (D : Deploy Coin Col T) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : ℕ),
     (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
     ∃ (xS : Msg) (emb : Fin (D.flock.V.k xS) → Fin (D.V.k x)) (P' : Prover Unit),
       StrictMono emb ∧ (∀ t, t ∈ D.rounds x u ↔ ∃ i, emb i = t) ∧
       (∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, r' t = r t) →
-        ((run H P D.V x ω r').out = .acc ↔ (run H P' D.flock.V xS () fun i => r' (emb i)).out = .acc)) ∧
+        (run H P D.V x ω r').out = .acc → (run H P' D.flock.V xS () fun i => r' (emb i)).out = .acc) ∧
       ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, (∀ i, t < emb i) → r' t = r t) →
         D.session x u (run H P D.V x ω r').seen = some (xS, (run H P' D.flock.V xS () fun i => r' (emb i)).seen) ∧
           ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
@@ -358,7 +361,7 @@ def SessionRunsSlots (H : Msg → Msg) (D : Deploy Coin Col T) (S : Msg → ℕ)
     ∃ (xS : Msg) (emb : Fin (D.flock.V.k xS) → Fin (D.V.k x)) (P' : Prover Unit),
       StrictMono emb ∧ (∀ t, t ∈ D.rounds x u ↔ ∃ i, emb i = t) ∧
       (∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, r' t = r t) →
-        ((run H P D.V x ω r').out = .acc ↔ (run H P' D.flock.V xS () fun i => r' (emb i)).out = .acc)) ∧
+        (run H P D.V x ω r').out = .acc → (run H P' D.flock.V xS () fun i => r' (emb i)).out = .acc) ∧
       ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, (∀ i, t < emb i) → r' t = r t) →
         D.session x u (run H P D.V x ω r').seen = some (xS, (run H P' D.flock.V xS () fun i => r' (emb i)).seen) ∧
           ∀ q ∈ (run H P' D.flock.V xS () fun i => r' (emb i)).vLog, q ∈ (run H P D.V x ω r').vLog
@@ -486,28 +489,34 @@ theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Floc
     intro σ ρ0 h1 h2
     have he : (fun i => forkOn (D.rounds x u) R0 σ (emb i)) = fun i => σ (emb i) :=
       funext fun i => by simp [forkOn, hS i]
-    have ha := (hacc _ (hag0 σ)).1 h1
+    have ha := hacc _ (hag0 σ) h1
     rw [he] at ha
     refine ⟨ha, ?_⟩
     have hsess := (hview _ fun t ht _ => hag0 σ t ht).1
     unfold unitWit at h2
     rw [hsess] at h2
-    simp only at h2
+    simp only [eval_sessView] at h2
     let g : (Fin (D.V.k x) → Coin) → Fin (D.flock.V.k xS) → Coin := fun R i => R (emb i)
     let Ls : List (List (Fin (D.V.k x) → Coin)) := (List.finRange (D.innerWaits x)).map fun i =>
       (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) (forkOn (D.rounds x u) R0 σ) (ρ0 i j)
     have hcorr : ∀ rs ∈ Ls, ∀ r ∈ rs,
-        ((run H P D.V x ω r).seen.out = .acc ↔ (run H P' D.flock.V xS () (g r)).seen.out = .acc) ∧
-          ((run H P D.V x ω r).seen.out = .acc →
-            D.sessionCols x u (run H P D.V x ω r).seen = [D.flock.cols (run H P' D.flock.V xS () (g r)).seen]) := by
+        ((D.sessRun x u (run H P D.V x ω) r).seen.out = .acc ↔
+            (run H P' D.flock.V xS () (g r)).seen.out = .acc) ∧
+          ((D.sessRun x u (run H P D.V x ω) r).seen.out = .acc →
+            [D.flock.cols (D.sessRun x u (run H P D.V x ω) r).seen] =
+              [D.flock.cols (run H P' D.flock.V xS () (g r)).seen]) := by
       intro rs hrs r hr
       obtain ⟨i, -, rfl⟩ := List.mem_map.1 hrs
       obtain ⟨j, -, rfl⟩ := List.mem_map.1 hr
       have hag : ∀ t ∉ D.rounds x u,
           forkOn (D.rounds x u) (forkOn (D.rounds x u) R0 σ) (ρ0 i j) t = R0 t := fun t ht => by simp [forkOn, ht]
-      refine ⟨hacc _ hag, fun _ => ?_⟩
-      unfold Deploy.sessionCols
-      rw [(hview _ fun t ht _ => hag t ht).1]
+      have hv : (D.sessRun x u (run H P D.V x ω)
+            (forkOn (D.rounds x u) (forkOn (D.rounds x u) R0 σ) (ρ0 i j))).seen =
+          (run H P' D.flock.V xS () (g (forkOn (D.rounds x u) (forkOn (D.rounds x u) R0 σ) (ρ0 i j)))).seen := by
+        rw [sessRun_seen, Deploy.sessView, (hview _ fun t ht _ => hag t ht).1]
+        rfl
+      rw [hv]
+      exact ⟨Iff.rfl, fun _ => rfl⟩
     have hL : ((List.finRange (D.flock.waits xS)).map fun i => (List.finRange (D.flock.cap xS)).map
         fun j t => ρ0 (Fin.cast hw i) (Fin.cast hc j) (emb t)) = Ls.map (List.map g) := by
       refine (finRange_map_cast hw (fun i' => (List.finRange (D.flock.cap xS)).map
@@ -519,9 +528,9 @@ theorem fiber_bound {H : Msg → Msg} {D : Deploy Coin Col T} (hKS : Claims.Floc
       refine List.map_congr_left fun j _ => ?_
       funext t
       simp [g, forkOn, hS t]
-    have hfw := firstWait_map H (run H P D.V x ω) (run H P' D.flock.V xS ()) g (D.sessionCols x u)
-      (fun v => [D.flock.cols v]) (D.innerK x) (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS)
-      (Flock.check D.flock.parse xS) Ls hcorr
+    have hfw := firstWait_map H (D.sessRun x u (run H P D.V x ω)) (run H P' D.flock.V xS ()) g
+      (fun v => [D.flock.cols v]) (fun v => [D.flock.cols v]) (D.innerK x)
+      (Flock.assemble D.flock.parse D.flock.table decode D.flock.read xS) (Flock.check D.flock.parse xS) Ls hcorr
     have ha' : (run H P' D.flock.V xS () fun i => σ (emb i)).seen.out = .acc := ha
     simp only [Extractor.eval, Claims.Flock.E, ERep, RP.eval]
     rw [ite_eq_left ha', hk, hL, ← hfw, h2]

@@ -235,8 +235,8 @@ end SessionSteps
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
 /-- **`SessionRuns` from the step structure**: at coins that check a unit, its session is Flock's run on the rounds after
 the prefix, of the prover that plays the sampled prover's messages after the prefix's transcript (or, where the prefix
-refused, of a prover whose first message Flock refuses at `xR x`), and it decides the run, is the session the run shows,
-and makes only `H` calls the run makes. -/
+refused, of a prover whose first message Flock refuses at `xR x`), and it accepts exactly where the run does, is the
+session the run shows, and makes only `H` calls the run makes. -/
 theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : Msg → Msg) : SessionRuns H D := by
   intro x Ω P ω r u _
   have hrun : ∀ r' : Fin (D.V.k x) → Coin, run H P D.V x ω r' =
@@ -293,7 +293,7 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
       exact this
     refine ⟨S.stmt x (ms.map Prod.fst), S.emb x hk, P', S.emb_strictMono x hk, S.mem_rounds_iff x u hk,
       fun r' hr' => ?_, fun r' hr' => ?_⟩
-    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), iff_self]
+    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), imp_self]
     · rw [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega) fun i => show t.val < S.pre x + i.val by omega]
       exact ⟨S.session_pass x u ms _ _ _ m hlen (by simp) hms hm, fun _ hq => hq⟩
   · have hk : D.flock.V.k (S.xR x) = S.kS x := S.k_xR x
@@ -311,7 +311,7 @@ theorem sessionRuns_of_steps {D : Deploy Coin Col T} (S : SessionSteps D) (H : M
       rw [hrun r', h0]
     refine ⟨S.xR x, S.emb x hk, P', S.emb_strictMono x hk, S.mem_rounds_iff x u hk, fun r' hr' => ?_,
       fun r' hr' => ?_⟩
-    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), hflock, iff_self]
+    · simp only [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega), hflock, imp_self]
     · rw [hcomp r' fun t ht => hr' t (by rw [S.rounds_iff]; omega) fun i => show t.val < S.pre x + i.val by omega,
         hflock]
       exact ⟨S.session_refused x u ms a hlen hms, fun _ hq => by simp at hq⟩

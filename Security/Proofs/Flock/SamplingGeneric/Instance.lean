@@ -421,7 +421,7 @@ theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
       (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
     rw [hw, hc, hcard', hN]
   have hsessL : (ofDeploy D iroots).session x u (run H P D.V x ω r).seen = _ := hsess
-  have ha' : (run H P' D.flock.V xS () fun i => r (emb i)).seen.out = .acc := (hacc r fun _ _ => rfl).1 hr
+  have ha' : (run H P' D.flock.V xS () fun i => r (emb i)).seen.out = .acc := hacc r (fun _ _ => rfl) hr
   have hviewL : ∀ r' : Fin (D.V.k x) → Coin, (∀ t ∉ D.rounds x u, (∀ t' ∈ D.rounds x u, t < t') → r' t = r t) →
       (ofDeploy D iroots).session x u (run H P (ofDeploy D iroots).V x ω r').seen =
         some (xS, (run H P' (Arg.ofFlock D.flock).V xS ()
@@ -433,23 +433,30 @@ theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
   rw [hsess, hsessL]
   dsimp only
   rw [dite_eq_left hshape]
-  refine Agree.bind' (Agree.of_noHash (Claims.Sampling.NoHash.firstWait _ _ _ _ _)
-    (Claims.Recursion.noHash_serve (fun _ => Claims.Recursion.noHash_viewing _ _)
+  refine Agree.bind' (Agree.of_noHash
+    (Claims.Sampling.NoHash.serve (fun _ => Claims.Sampling.NoHash.viewing _ _)
+      (Claims.Sampling.NoHash.firstWait _ _ _ _ _))
+    (Claims.Sampling.NoHash.serve (fun _ => Claims.Sampling.NoHash.viewing _ _)
       (noHash_ext _ xS _ _)) ?_) fun o => ?_
   · let g : (Fin (D.V.k x) → Coin) → Fin (D.flock.V.k xS) → Coin := fun R i => R (emb i)
     let Ls : List (List (Fin (D.V.k x) → Coin)) := (List.finRange (D.innerWaits x)).map fun i =>
       (List.finRange (D.innerCap x)).map fun j => forkOn (D.rounds x u) r (ρ i j)
     have hcorr : ∀ rs ∈ Ls, ∀ r' ∈ rs,
-        ((run H P D.V x ω r').seen.out = .acc ↔ (run H P' D.flock.V xS () (g r')).seen.out = .acc) ∧
-          ((run H P D.V x ω r').seen.out = .acc →
-            D.sessionCols x u (run H P D.V x ω r').seen = [D.flock.cols (run H P' D.flock.V xS () (g r')).seen]) := by
+        ((D.sessRun x u (run H P D.V x ω) r').seen.out = .acc ↔
+            (run H P' D.flock.V xS () (g r')).seen.out = .acc) ∧
+          ((D.sessRun x u (run H P D.V x ω) r').seen.out = .acc →
+            [D.flock.cols (D.sessRun x u (run H P D.V x ω) r').seen] =
+              [D.flock.cols (run H P' D.flock.V xS () (g r')).seen]) := by
       intro rs hrs r' hr'
       obtain ⟨i, -, rfl⟩ := List.mem_map.1 hrs
       obtain ⟨j, -, rfl⟩ := List.mem_map.1 hr'
       have hag : ∀ t ∉ D.rounds x u, forkOn (D.rounds x u) r (ρ i j) t = r t := fun t ht => by simp [forkOn, ht]
-      refine ⟨hacc _ hag, fun _ => ?_⟩
-      unfold Claims.Sampling.Deploy.sessionCols
-      rw [(hview _ fun t ht _ => hag t ht).1]
+      have hv : (D.sessRun x u (run H P D.V x ω) (forkOn (D.rounds x u) r (ρ i j))).seen =
+          (run H P' D.flock.V xS () (g (forkOn (D.rounds x u) r (ρ i j)))).seen := by
+        rw [Claims.Sampling.sessRun_seen, Claims.Sampling.Deploy.sessView, (hview _ fun t ht _ => hag t ht).1]
+        rfl
+      rw [hv]
+      exact ⟨Iff.rfl, fun _ => rfl⟩
     have hL : ((List.finRange (D.flock.waits xS)).map fun i => (List.finRange (D.flock.cap xS)).map
         fun j t => g' (Fin.cast hw i) (Fin.cast hc j) (Fin.cast hcard' t)) = Ls.map (List.map g) := by
       refine (finRange_map_cast hw (fun i' => (List.finRange (D.flock.cap xS)).map
@@ -462,8 +469,8 @@ theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
       funext t
       show g' i j (Fin.cast hcard' t) = forkOn (D.rounds x u) r (ρ i j) (emb t)
       rw [show forkOn (D.rounds x u) r (ρ i j) (emb t) = ρ i j (emb t) from ite_eq_left (hS t), hemb t, hρ]
-    have hfw := Claims.Sampling.firstWait_map H (run H P D.V x ω) (run H P' D.flock.V xS ()) g
-      (D.sessionCols x u) (fun v => [D.flock.cols v]) (D.innerK x)
+    have hfw := Claims.Sampling.firstWait_map H (D.sessRun x u (run H P D.V x ω)) (run H P' D.flock.V xS ()) g
+      (fun v => [D.flock.cols v]) (fun v => [D.flock.cols v]) (D.innerK x)
       (Claims.Flock.assemble D.flock.parse D.flock.table D.flock.decode D.flock.read xS)
       (Claims.Flock.check D.flock.parse xS) Ls hcorr
     have e3 : (((Claims.Flock.E D.flock D.flock.decode).ext xS (fun i => r (emb i)) fun i j t =>
@@ -481,7 +488,7 @@ theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
         (ofFlock_ext_cast D.flock (W := D.innerWaits x) (C := D.innerCap x) (K := (D.rounds x u).card)
           hshape hw hc hcard' g' _)
     refine Eq.trans ?_ ((ofDeploy D iroots).served_eval H P ω P' r r hcard hviewL (fun _ _ => rfl) _).symm
-    exact hfw.trans (e3.symm.trans e4.symm)
+    exact (Claims.Sampling.eval_sessView H D x u _ _).trans (hfw.trans (e3.symm.trans e4.symm))
   · rcases o with _ | w
     · exact Agree.refl _
     · exact Agree.flatMap_singleton (fun u' => Claims.Sampling.checkRevealed (ofDeploy D iroots).commit
@@ -500,9 +507,12 @@ theorem unitExt_big (hrefuse : Claims.Sampling.Refuses H D) (hopens : Claims.Sam
   rcases hsess : D.session x u (run H P D.V x ω r).seen with _ | ⟨xS, vS⟩
   · exact Agree.refl _
   · dsimp only
-    refine Agree.bind_left (a := none) (Claims.Sampling.NoHash.firstWait _ _ _ _ _)
+    refine Agree.bind_left (a := none)
+      (Claims.Sampling.NoHash.serve (fun _ => Claims.Sampling.NoHash.viewing _ _)
+        (Claims.Sampling.NoHash.firstWait _ _ _ _ _))
       (Option.eq_none_iff_forall_ne_some.2 fun wF hwF => hbig ?_)
-    have hchk := Claims.firstWait_some H _ _ _ _ _ _ wF hwF
+    have hchk := Claims.firstWait_some H _ _ _ _ _ _ wF
+      ((Claims.Sampling.eval_sessView H D x u _ _).symm.trans hwF)
     obtain ⟨s', Pt, hs', hPt, hin⟩ := hrefuse x Ω P ω r hr
     obtain ⟨b, hb, -⟩ := hopens x s' Pt Ω P ω r u xS vS wF hs' hPt hin hr hu hsess hchk
     rw [Claims.Sampling.nPU_eq hs' hPt]

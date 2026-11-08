@@ -260,7 +260,7 @@ theorem runs_ofDeploy (H : Msg → Msg) (hruns : Claims.Sampling.SessionRuns H D
     rw [hcard]
     gcongr
   · rw [hco]
-    exact (hacc r' hr').mp
+    exact hacc r' hr'
   · rw [hco]
     exact hsess r' fun t ht hlt => hr' t ht fun t' ht' => by
       obtain ⟨i, rfl⟩ := (hrange t').1 ht'

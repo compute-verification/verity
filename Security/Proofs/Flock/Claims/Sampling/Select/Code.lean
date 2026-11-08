@@ -38,15 +38,15 @@ theorem slotsCover_code : SlotsCover (deploy rel (code c reg L bytes sr sess)) (
   slotsCover_one _ (fun _ _ _ => rfl) (fun _ _ _ => rfl)
 
 /-- **`SessionRuns` at one session**: at coins that check some unit, the session is a Flock run on `sr x`, of a Flock
-prover fixed by the coins off it, and decides the run. -/
+prover fixed by the coins off it, that accepts where the run does. -/
 def SessionRunsOne (H : Msg → Msg) : Prop :=
   ∀ x (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (c.V.k x) → FlockDeploy.Coin),
     (code c reg L bytes sr sess).checked x r ≠ [] →
     ∃ (xS : Msg) (emb : Fin ((FlockDeploy.deployZk rel).V.k xS) → Fin (c.V.k x)) (P' : Prover Unit),
       StrictMono emb ∧ (∀ t, t ∈ sr x ↔ ∃ i, emb i = t) ∧
       (∀ r' : Fin (c.V.k x) → FlockDeploy.Coin, (∀ t ∉ sr x, r' t = r t) →
-        ((run H P c.V x ω r').out = .acc ↔
-          (run H P' (FlockDeploy.deployZk rel).V xS () fun i => r' (emb i)).out = .acc)) ∧
+        (run H P c.V x ω r').out = .acc →
+          (run H P' (FlockDeploy.deployZk rel).V xS () fun i => r' (emb i)).out = .acc) ∧
       ∀ r' : Fin (c.V.k x) → FlockDeploy.Coin, (∀ t ∉ sr x, (∀ i, t < emb i) → r' t = r t) →
         sess x (run H P c.V x ω r').seen =
             some (xS, (run H P' (FlockDeploy.deployZk rel).V xS () fun i => r' (emb i)).seen) ∧
