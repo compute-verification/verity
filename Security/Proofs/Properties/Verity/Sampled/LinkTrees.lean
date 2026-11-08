@@ -21,7 +21,7 @@ v2 holds a `--zk` session's record to the coin trees the release log shows sampl
 namespace Verity.Sampled.LinkTrees
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 /-! ## One tree a session -/
 
@@ -84,10 +84,10 @@ theorem sessions_size {trees : Array LoggedTree} {records : Array (String × Arr
     exact .inr ⟨_, hs.symm⟩
 
 /-- **The trees `treesHeld` holds the evidence's sessions to are one a session.** -/
-theorem treesHeld_size {p : SampledProofs.OneStageZk.Own} {ts : Array LoggedTree}
-    {e : SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    (h : SampledProofs.OneStageZk.treesHeld p ts e bs = .ok ()) : ts.size = e.sessions.size := by
-  unfold SampledProofs.OneStageZk.treesHeld at h
+theorem treesHeld_size {p : Spot.OneStageZk.Own} {ts : Array LoggedTree}
+    {e : Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    (h : Spot.OneStageZk.treesHeld p ts e bs = .ok ()) : ts.size = e.sessions.size := by
+  unfold Spot.OneStageZk.treesHeld at h
   dsimp only at h
   obtain ⟨named, hn, hrest⟩ := Trees.bind_ok h
   rw [← Array.forIn_toList] at hn

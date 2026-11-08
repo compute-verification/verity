@@ -42,7 +42,7 @@ A read unit is a unit of the circuit that returns one row of a registered table.
 tree of hm96 row leaves (`Hash.RowLeaf`), one leaf per row, and the unit opens the leaf at the index its index gates
 hold. In the wired flattening those gates are its picker's outputs: an expert router picks each expert weight table's
 row, a sparse-attention indexer picks key and value rows, and a request's token picks its embedding row. A read whose
-wired index row is not its picker's output row is incorrect in the wired flattening (`SampledProofs.Wires.Summary.drawnOk`
+wired index row is not its picker's output row is incorrect in the wired flattening (`Spot.Wires.Summary.drawnOk`
 holds the wires of the sampled proof blocks), so the index a correct read uses is its picker's. The read's reference is
 `Hash.EmbeddingRead`: below the table's count it returns the witness row and accepts where the row's leaf opens at the
 index; at or past the count it returns the fill row and accepts.
