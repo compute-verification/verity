@@ -56,34 +56,6 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def reads_run(net, keys: int) -> bool:
-    """Whether `net`'s rows of up to `keys` keys read a value the served run decides (a DSA row past TOPK: `dsa.Net.reads_run`)."""
-    return bool(getattr(net, "reads_run", None) and net.reads_run(keys))
-
-
-def wrapper_keys(wrapper: str, M: int, LP: int | None, T: int | None) -> int:
-    """The most keys a row of the wrapper reads: a step's M rows attend among themselves, a request's last decode its LP + T."""
-    return int(M) if wrapper == "step" else int(LP) + int(T)
-
-
-def run_input(net, params: list, keys: int):
-    """`derive`'s `run` parameter (`registration.RunInputs`), declared at the end of `params`, where `net`'s rows of up to `keys`
-    keys read a value the served run decides (`reads_run`), else None."""
-    if not reads_run(net, keys):
-        return None
-    from verity_vllm.program.frontend.registration import RunInputs
-    return RunInputs.declare(params)
-
-
-def finish_run(run, params: tuple, B) -> tuple:
-    """The parameters once `run`'s record holds every field the forward read (`RunInputs.finish`), the Builder's too."""
-    if run is None:
-        return params
-    run.finish(final := list(params))
-    B.params = tuple(final)
-    return B.params
-
-
 def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
     verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next

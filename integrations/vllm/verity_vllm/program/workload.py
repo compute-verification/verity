@@ -339,9 +339,8 @@ class WorkloadRequest:
 # request-LOCAL wrapper parameter groups: a component's own inputs, positions may differ per component (TP rank Programs carry
 # `peers_<k>` = the received collective values, one per site x step, so K differs per (LP, T) shape); a stochastic
 # wrapper's `seed` is its request's own, like the prompt, and so are a warm request's cached `prefix` (on the
-# sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), a resumed request's `last_token` and its
-# `run` (the Waksman settings of its rows past INDEX_TOPK, `predict.dsa.run_field`, whose checks fix them by its own logits)
-_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "prefix", "prefix_ik", "prefix_iks", "last_token", "run")
+# sparse-attention decoder with its index-K slots `prefix_ik` and scales `prefix_iks`), and a resumed request's `last_token`
+_REQUEST_LOCAL_GROUPS = ("prompt", "seed", "prefix", "prefix_ik", "prefix_iks", "last_token")
 _REQUEST_LOCAL_PREFIXES = ("peers",)
 
 
@@ -573,7 +572,7 @@ class WorkloadProgram:
         uniform = len(set(idx)) == 1
         if not uniform:
             # the shared group may sit at different positions per component ONLY when what precedes/follows it is
-            # request-local by construction (prompt, seed, run, peers_*: a TP rank Program's received collective values, K per shape); any other
+            # request-local by construction (prompt, seed, peers_*: a TP rank Program's received collective values, K per shape); any other
             # group at a shifting position is still refused -- it would mean the components disagree on what the model's inputs are
             foreign = sorted({g for r in requests for g in r.component.groups if g != shared and not _is_request_local(g)})
             if foreign:

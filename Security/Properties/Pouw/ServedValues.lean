@@ -29,10 +29,10 @@ which adds SAK to H1.
 * `liveSize`, `creditedSize`: the credited size `S`, the size of each live block of credited words over the windows
   before the first refusal: `creditLive` with each block's size in place of its words. It is public, read off the
   registration, the live tiles and the verdict.
-* `rightSize`: the size of the blocks the run computed with their late cones, `DrawnLayer.Good`: the blocks whose
+* `rightSize`: the size of the blocks the run computed with their late cones, `SampledLayer.Good`: the blocks whose
   values are right. E1(c) (`accounting-ts-unit-fixed`) says a good block's words are its own right values: its unit
   and every unit that writes it a value after its coin are computed, none skipped and guessed. "Right" is the
-  accounting model's `DrawnLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
+  accounting model's `SampledLayer.Good`: nothing yet ties it to the committed values `Credit.window` checks.
 * `sizePerWord`, `epsSkip`, `creditFloor`: the most size a credited word carries, `σ = max_t size_t / words_t` over the
   blocks of credited words. Then `ε_skip = σ·ε(j)·N_live/S`, and the right values must cover `(1 − ε_skip)₊·S` AND
   gates. When every block of credited words carries the same size per word, `S = σ·N_live` and `ε_skip = ε(j)`.
@@ -96,7 +96,7 @@ noncomputable def creditedSize {ι K C B : Type} (Sc : Scheme K) (Cd : Declared 
 
 open Classical in
 /-- **The right blocks' size**: the size of every block of credited words that `right` names in each window. At
-`DrawnLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
+`SampledLayer.Good` it is the size whose values the period certifies right: a good block is live in a credited window
 (`periodMode` skips every other block whole). -/
 noncomputable def rightSize {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) {Np n : ℕ} (sz : Fin Np → ℕ)
     (right : Fin n → Fin Np → Prop) : ℝ :=
@@ -128,7 +128,7 @@ function of the period's coins. Add the registered declaration `D`, the lowering
 except with probability `δ_s + n·(δ_bind + δ_ks)` (δ_coin plus δ_crypto), an accepted period's right blocks have total
 credit size at least `(1 − ε_skip)₊·S` AND gates. Here `S` is the credited size of the windows before the first
 refusal (`creditedSize`) and `ε_skip = σ·ε(j)·N_live/S` (`epsSkip`, at H1's `ε(j)` and live words). A block is right
-(`DrawnLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
+(`SampledLayer.Good` under `periodMode`) when the run computed it and every block that writes it a value after its coin.
 E1(c) (`accounting-ts-unit-fixed`) reads that as its words being its own right values.
 
 It is a statement about values, not a compute claim: right values aren't work. It needs no

@@ -6,6 +6,7 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
     AllReduceResidualMnnvlAt_v1{WORLD,N,C,AT,SHOT}
                             (parts: Array<WORLD, Array<C, bf16>>, res: Array<N, bf16>) -> r: Array<C, bf16>
                                                                               (chunk AT of AllReduceResidualMnnvl_v1's r)
+    RowChunks_v1{N,C}       (x: Array<N, bf16>) -> Tuple<Array<C, bf16>, ...>   (x's N / C chunks, each an output row)
     AllReduceMultimemRow_v1{WORLD,N,ROWS,ROW,TREES,FTZ}
                             (parts: Array<WORLD, Array<N, bf16>>) -> Array<N, bf16>   (row ROW of AllReduceMultimem_v1)
     AllReduceCustomRow_v1{WORLD,N,ROWS,ROW,STAGE}
@@ -29,18 +30,22 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   a chunk of one token's elements: a fused MNNVL call is one token, and its chunk AT of C elements is
   `AllReduceResidualMnnvlAt_v1`, which reads the residual row whole, as `rmsnorm_fused_split.RMSNormFusedCudaAdd_v1` does, so a
   residual written as one row (the MoE's) is read without being cut.
+* A producer's whole row. A wire reads its writer's output row whole, so a rank's partial written as one row of N elements (the
+  MoE's `ResidualAdd_v2{N=6144}`) reaches the chunk units through `RowChunks_v1{N,C}`, a copy of it as N / C output rows.
+  Unchunked, a token's row of 6,144 is past one C-Flock block: the fused call's unit by its ANDs alone, and every all-reduce of
+  it with its rows' slots (verity/ml/definitions/tests/test_tp_combine.py).
 """
 from __future__ import annotations
 
 from verity.ml.circuits.defs import bind, composite
-from verity.ml.circuits.refs import array_of, coll_concat
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import tp_allreduce as TA
 from verity.ml.definitions.registry.prims import BF16
 
 __all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlAt", "AllReduceResidualMnnvlCoordinate",
-           "coordinate_binding", "row_binding"]
+           "RowChunks", "coordinate_binding", "row_binding"]
 
 
 @composite("AllReduceResidualMnnvlCoordinate", 1, ["WORLD", "SHOT"],
@@ -77,6 +82,26 @@ def AllReduceResidualMnnvlAt(B, S, parts, res):
     width on those columns)."""
     at = bind(TA.AllReduceResidualMnnvl, WORLD=S.WORLD, N=S.C, SHOT=TA.strategy(S.SHOT))
     return B.call(at, parts, res[S.AT * S.C:(S.AT + 1) * S.C])
+
+
+def _chunks_refuse(S: dict) -> str | None:
+    """Why `RowChunks_v1`'s statics bound so far cut no row into whole chunks, or None."""
+    N, C = S.get("N"), S.get("C")
+    if None in (N, C):
+        return None
+    if not (type(N) is int and type(C) is int and C >= 1 and N % C == 0):
+        return f"C={C!r} elements a chunk does not cut a row of N={N!r} into whole chunks"
+    return None
+
+
+@composite("RowChunks", 1, ["N", "C"],
+           lambda S: ((("x", Array(S.N, BF16)),), Tuple(*[Array(S.C, BF16)] * (S.N // S.C))),
+           conformance="protocol-defined: the combine's own copy of a producer's row as chunk rows, no gate; no served kernel "
+                       "computes it", refuse=_chunks_refuse)
+def RowChunks(B, S, x):
+    """``x``'s N / C chunks of C elements in order, chunk j its elements [j·C, (j+1)·C): each a return field, so each its own
+    output row, which a chunk unit's cut row reads whole. A copy: no gate."""
+    return tuple_of(*(x[j * S.C:(j + 1) * S.C] for j in range(S.N // S.C)))
 
 
 def _row(S) -> tuple[int, int, int]:

@@ -42,9 +42,8 @@ from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.inputs import check_params
 from verity_vllm.program.prune import dead_free as dead_free_form
 
-from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, finish_run, in_launch, kind,
-                     launch_batch, launch_rows, launch_seqlen_q, request_passes, run_input, select_token, served_class, with_checks,
-                     with_edge, wrapper_keys)
+from .common import (Unexpressible, _arr, _arr_shape, _Peers, _ptypes, _Stochastic, drive, edge_config, in_launch, kind,
+                     launch_batch, launch_rows, launch_seqlen_q, request_passes, select_token, served_class, with_checks, with_edge)
 from .domain import check_phi
 from .phi import Phi
 
@@ -415,7 +414,6 @@ class BuildResult:
     n_root_nodes: int
     timings: dict = field(default_factory=dict)
     named: Any = None     # what a `build_program` `finish` says beside the Program (`naming.Named`)
-    run: dict | None = None      # its `run` parameter's layout (`RunInputs.layout`), where a row reads a value the served run decides
     checks: dict | None = None   # its checks output, as `derive`'s provenance states it (`common.with_checks`)
 
     def summary(self) -> dict:
@@ -731,7 +729,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         # nothing gathers no logits, the last of `peer_shapes`
         shapes = [s for r, smp in zip(passes, sampled) for s in net.peer_shapes(r)[:None if smp else -1] for _ in range(world - 1)]
         params += [(f"peers_{k}", _arr(s, 16)) for k, s in enumerate(shapes)]
-    n_peers, run = len(params) - n_user, run_input(net, params, wrapper_keys(wrapper, M, LP, T))
+    n_peers = len(params) - n_user
     params = check_params((*params, ("weights", wrec)))
     B = Builder(params, Value(1))
     inputs = [Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)]
@@ -744,7 +742,6 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
                              top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
-    model.run = run
     batch = (launch_batch(phi, LP, T) if batch is None else batch) if wrapper == "request" else None
     in_launch(model, batch, net.model_class, chunks, T)
     if wrapper == "request" and isinstance(model, _Model):
@@ -757,7 +754,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
-    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, B, stop)
+    out, checks = with_checks(model, out, B, stop)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
@@ -771,7 +768,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         src_class = f"verity-vllm/with-peers/v1[{src_class}]"
     name = f"{derive_name}[{net.model_class}]"
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
-                  "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
+                  "inputs": [list(_arr_shape(t)) for _, t in params[:-1]],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
                                                                   **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
@@ -790,4 +787,4 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
         timings["encode_digest_s"] = round(time.time() - t2, 3)
     timings["total_s"] = round(time.time() - t0, 3)
     return BuildResult(wrapper=wrapper, program=program, digest=digest or "", desc=desc, function=sd.id, timings=timings, named=names,
-                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, run=run and run.layout(), checks=checks)
+                       n_root_nodes=len(program.fn.body.nodes) if hasattr(program.fn, "body") else -1, checks=checks)
