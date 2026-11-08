@@ -86,7 +86,7 @@ class SideH1R:
 
 def install(win, path: str) -> SideH1R:
     if win.rc_mode != "side":
-        raise ValueError(f"dither-hb replaces the side receipts; the window's receipts mode is {win.rc_mode!r}")
+        raise ValueError(f"dither-hb replaces the side receipts; the execution phase's receipts mode is {win.rc_mode!r}")
     units = Units(path, win.plans, torch.cuda.get_device_properties(win.dev).multi_processor_count)
     win.r = SideH1R(win.r, units, win)
     return win.r
