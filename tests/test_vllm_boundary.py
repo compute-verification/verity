@@ -38,8 +38,6 @@ ALLOWED = {
     # stock engines a benchmark builds and drives beside the integration's
     "benchmarks/harness/verity_bench/vllm/runner.py": "benchmarks: verity-bench's vLLM arms, each a stock engine's requests",
     "benchmarks/served_commit/tp_decode.py": "circuits: a stock vllm.LLM at TP8 against a Commit arm in the same engine",
-    "benchmarks/replay_determinism/replay_det.py": "vllm: a served window replayed under its recorded schedule by an "
-                                                    "in-process LLMEngine",
     "benchmarks/pouw/np_kernel/stock_decode.py": "compute-accounting: a stock vllm.LLM step, T2's denominator",
     **dict.fromkeys(("benchmarks/pouw/pearl_c_vllm/e2e.py", "benchmarks/pouw/pearl_c_vllm/profile_decode.py",
                      "benchmarks/pouw/pearl_c_vllm/served_passes.py"),
