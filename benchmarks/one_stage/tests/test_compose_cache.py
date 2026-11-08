@@ -3,7 +3,8 @@ can be made before its timed audit (`a5.warm`). A circuit composed bound to one 
 another (`restamp`) is byte for byte, with compose's line, the circuit composed bound to that one, its caller never composing,
 whatever the reads' chunks split; taken bound to the same one it is the kept file, linked and never read, and a sampled proof
 block's copy that changed is refused before a prover reads it (`a5.held`); a cache key moves with what the compose reads (the
-template, the reads' layout, the Definition's program, the composer's inputs), any composing file, compose_circuit's own and
+template, the reads' layout, the Definition's program, the composer's inputs, a table read's verifier executable), any
+composing file, compose_circuit's own and
 the composer's among them, any data file of the packages and a lowering flag, and with nothing else; a circuit whose reads are
 in slots gets its MUFU tables beside it whether composed or restamped; and a kept circuit that changed, a binding not in the
 file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
@@ -11,6 +12,7 @@ file once, or a binding that is not two SHA-512 digests is refused, writing noth
 from __future__ import annotations
 
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -126,6 +128,21 @@ def test_a_cache_key_moves_with_what_the_compose_reads_and_nothing_else(tmp_path
     with pytest.raises(SystemExit) as e:
         CC.main()
     assert e.value.code == 2
+
+
+def test_a_table_reads_key_holds_the_verifiers_executable(monkeypatch):
+    """A ``--template`` compose's ``what`` (`template_inputs`) is the template and its statement's form and, for a table read,
+    the digest of the executable whose template its unit is (`read_tmpl.digest`), so a rebuilt verifier's read is composed
+    afresh; no other template's asks for it."""
+    read = SimpleNamespace(fn=SimpleNamespace(base_id=CC.RT.READ))
+    stmt = {"layout": "iv/hybrid/4", "structural": True}
+    monkeypatch.setattr(CC.RT, "digest", lambda: "d1")
+    k = CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt)
+    assert k == ["unit/serving-rows", "EmbeddingRead_v1{V=7,H=3}", json.dumps(stmt, sort_keys=True), "d1"]
+    monkeypatch.setattr(CC.RT, "digest", lambda: "d2")
+    assert CC.template_inputs("EmbeddingRead_v1{V=7,H=3}", read, stmt) != k
+    monkeypatch.setattr(CC.RT, "digest", lambda: pytest.fail("a template reading no table asked for the verifier's executable"))
+    assert CC.template_inputs("Toy", SimpleNamespace(fn=TOY), {"reads": "slots"}) == ["unit/serving-rows", "Toy", "slots"]
 
 
 def test_an_own_composers_key_moves_with_its_inputs_its_definition_and_its_file(tmp_path):
