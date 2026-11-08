@@ -994,3 +994,44 @@ has the pieces), so use today's column.
   - Next: a Moonlight shape-only replay with zero- and NaN-filled batch-mates through `rebuild.py`, about one GPU-hour,
     then GLM-5.3 TP8.
   - Note: `note:proofs/20261108T0151Z-report-replay-options`.
+
+## 2026-11-08T03:00Z from LIFETIME: row 5 (shape-only replay) is bit-exact on Moonlight with zero-filled batch-mates
+
+- 03:00Z (LIFETIME): **Row 5's status is now "bit-exact on Moonlight", so row 5 dominates rows 3 and 4 there.**
+  - **The test:** I replayed one request R with every batch-mate a dummy of its shape: substitute tokens, zero K/V never
+    loaded, hits and finishes forced from the record.
+  - **The result:** R's tokens, its logprob bits and the whole schedule up to its last step match serving bit for bit
+    on 11 of 11 targets. Setup: Moonlight, one H200, vLLM d9105ea80, seeded sampling.
+  - **What the targets cover:** an edge start with two preemptions and resume hits; mid-block starts; a first-step hit
+    on another request's pages; a recompute resume; and 8 random targets, one preempted three times.
+  - **The control:** one extra 64-token dummy row changes R's logprob bits. Shapes reach R; values don't.
+  - **Row 5's numbers stay as in the table:**
+    - the same replay GPU-s and β as rows 3 and 4: 13.24% without the verifier's CPU and 42.46% with it, world year;
+      totals 43.34%, 43.72% and 44.38% over the world's week, month and year;
+    - hold 0.001× (whole requests) to 0.013× (spans), against 0.12–2.44×;
+    - copy at most 1 MB/s a rank.
+- 03:00Z (LIFETIME): **Batch-mates must be finite.**
+  - FA3's varlen prefill weights the next packed sequence's V by zero in R's last partial key tile. So a NaN dummy makes
+    R NaN (1 of 3 targets in NaN mode), while any finite value leaves R exact; random values were bit-identical to zeros
+    in a 24-case micro-test.
+  - The replay uses zeros. A served batch-mate with Inf or NaN V would fail R visibly, a completeness failure, never a
+    false pass.
+- 03:00Z (LIFETIME): **Under #7895, what the replay took from the run:**
+  - **Shapes:** the start state's requests and lengths, the arrivals, every step's forced hit lengths, the dummies'
+    served finishes and page equality.
+  - **Counts:** none.
+  - **R's own pages:** prefix blocks at the start and hit pages, from serving's bytes; 0 unavailable.
+  - **Untested:** a hit on a page a batch-mate writes after the start, which needs that page's committed bytes held until
+    the coin. None of the 11 targets had one.
+- 03:00Z (LIFETIME): **Corrections to the 01:55Z entry for GLM-5.3:**
+  - The sparse attention is FA3's (`FLASH_ATTN_MLA_SPARSE`), not FlashMLA's.
+  - There are 75 MoE layers, not 78, so per-expert counts would be about 256 × 75 × ⌈log₂(M+1)⌉ bits a step.
+  - Nothing on the served path reads them: TritonExperts ignores `expert_tokens_meta`. DeepGEMM's MoE, the batched EP
+    layouts, DeepEP, mori, NIXL and EPLB would.
+- 03:00Z (LIFETIME): **What GLM-5.3 TP8 needs:**
+  - **The per-kernel audit:** all shapes, given TOPK's plugin and finite dummies. Only a run decides the NVSwitch order,
+    the FA3 sparse path and the unseeded sampler.
+  - **The harness:** `rebuild.py`'s dummies through `collective_rpc`.
+  - **The run:** about 90 minutes of node A.
+  - **Running now:** the unseeded sampler on Moonlight, r20261108-025750-8122, ETA about 03:20Z.
+  - Note: `note:proofs/20261108T0245Z-report-shape-replay`. Code: `cursor/proofs-shape-replay-5d2e` at ef8f21c244.

@@ -5902,3 +5902,46 @@ premise. Records that move:
     pass; the mark at 6dbe67a0ce lapsed with the push.
   - the render of record r20261108-021119-d449 on cpu-1, ETA about 03:31Z. Its Figures 1–4 hold for the new head.
 - Note: lanes/proofs/20261108T0258Z-report-optmodes.
+
+## 03:00Z from LIFETIME: shape-only replay on Moonlight is bit-exact with zero-filled batch-mates, so row 5 dominates rows 3 and 4
+- **Result:** I replayed one request with every batch-mate a dummy of its shape: substitute tokens, zero K/V never loaded,
+  hits and finishes forced from the record. Its tokens, its logprob bits and the whole schedule up to its last step match
+  serving bit for bit on 11 of 11 targets. Setup: Moonlight, one H200, vLLM d9105ea80, seeded sampling.
+  - **P**, held at edge 1 and preempted twice (9,733 and 9,738), resumed on hits of 208 and 320 tokens: 250 tokens over
+    255 steps, 66 of them with preemptions and 42 with hits.
+  - **H**, whose first step is a 32-token hit on pages another request wrote, from a mirror start at step 9,807: 256 tokens.
+  - **Q**, preempted at 9,850 and resumed by recompute: 64 tokens.
+  - **8 targets drawn at random** from 9,807: all exact. They include T5, preempted three times and resumed on hits of 272 and 544 tokens, and six that start on hits of 64 to 512 tokens.
+- **With NaN-filled dummies, P and H are exact; Q is NaN from its first token.**
+  - FA3's varlen prefill weights the next packed sequence's V by zero in a request's last partial key tile. 0 × NaN is
+    NaN, while 0 × any finite value is exactly 0.
+  - A micro-test on the same kernel shows it: random neighbour values give bits identical to zero ones in all 24 cases.
+    FA2 doesn't leak.
+  - So the dummies must be finite, and zero is now `--dummy`'s default.
+  - If a served batch-mate's V were Inf or NaN, R would fail visibly (completeness), never pass a wrong output.
+- **The control isn't vacuous:** one extra 64-token dummy row changes P's logprob bits from step 9,758, and 228 of 255
+  schedule steps.
+- **What the replay took from the run:**
+  - **Shapes:** the start state's requests with their lengths, the arrivals up to R's end, every step's forced hit lengths
+    (86 to 90 lookups cut), the dummies' served finishes and which pages are equal.
+  - **Counts:** none.
+  - **Its own pages:** P's 40 prefix blocks and 33 resume-hit pages, and H's 2 hit pages, all from serving's bytes. Q
+    needed none. No run had an unavailable page.
+- **What GLM-5.3 TP8 needs:**
+  - **The per-kernel audit (table in the note):** every served kernel reads only shapes, given TOPK's plugin and finite
+    dummies. The audit corrects one fact: the sparse attention is FA3's, not FlashMLA's. Only a run decides three things:
+    the NVSwitch order, the FA3 sparse path, and the unseeded sampler.
+  - **Per-expert counts:** nothing on the served path reads them; TritonExperts ignores `expert_tokens_meta`. DeepGEMM's
+    MoE, the batched expert-parallel layouts, DeepEP, mori, NIXL and EPLB would. Then the counts are about
+    256 × 75 × ⌈log₂(M+1)⌉ bits a step, or a counting block's outputs. There are 75 MoE layers, not 78.
+  - **The harness:** `rebuild.py`'s dummies go through `collective_rpc` at TP8.
+  - **The run:** about 90 minutes of node A.
+- **Runs:**
+  - r20261108-020539-9406: the served arm and its all-real control, which is exact;
+  - r20261108-022433-3d76: P, H, Q and the control;
+  - r20261108-024019-99ee: the FA micro-test;
+  - r20261108-024350-5ded: the breadth check.
+- **Code:** `cursor/proofs-shape-replay-5d2e` at ef8f21c244, stacked on #7889. No PR yet; say if you want one.
+- **Notes:** `note:proofs/20261108T0245Z-report-shape-replay`, and `note:proofs/20261108T0151Z-report-replay-options` with
+  row 5 updated.
+- **Running:** r20261108-025750-8122 on `vy-spot-shape`, the same replay under production sampling: the `restore-unseeded` arm (no seeds), P, H and Q, zero dummies. ETA about 03:20Z. I'll append its verdict here. The pod's lease ends no sooner than 04:01Z.
