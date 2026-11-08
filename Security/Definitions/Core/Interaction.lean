@@ -347,7 +347,7 @@ noncomputable def PrB {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin]
   if hk : 0 < V.k x then (B H V P x hk).Pr H else 0
 
 /-- **`B` declared at `q` SHA-512 calls**: `B`'s outcome, its cost the budget `q` for its two runs' whole SHA-512 work,
-the prover's own included, which the reader computes from the prover's time (`Claims.KSAt`). -/
+the prover's own included, which the reader computes from the prover's time (`Claims.Sampling.KSAt`). -/
 def BAt {Ω Coin : Type} [Fintype Ω] [Nonempty Ω] [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (H : Msg → Msg)
     (V : Verifier Coin) (P : Prover Ω) (x : Msg) (hk : 0 < V.k x) (q : ℕ) : Finder :=
   { B H V P x hk with cost := fun _ => q }
