@@ -265,7 +265,7 @@ def _theta(scores: tuple, TOPK: int) -> int:
 
 def threshold(N: int, TOPK: int) -> tuple[PrimitiveDefinition, PrimitiveDefinition]:
     """`DsaTopKThresholdKey{N}x{TOPK}_v1` and `DsaTopKThresholdIndex{N}x{TOPK}_v1`: the TOPK-th largest ext over a row of N f32
-    scores as its key and its index, one 32-bit word each (a proof unit's output is one gate of at most 32 bits)."""
+    scores as its key and its index, one 32-bit word each (a proof block's output is one gate of at most 32 bits)."""
     check_statics(N, TOPK)
     p = _THRESHOLDS.get((N, TOPK))
     if p is None:
