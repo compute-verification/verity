@@ -54,7 +54,7 @@ namespace Verity.Sampled
 
 open Verity.Game
 open Lean (Json)
-open SampledProofs.Challenger
+open Spot.Challenger
 open Claims.Bridge.Custody (decode_ok DecStream forall₂_find? forall₂_mem_left)
 open FlockSoundness.Refine (roundOf)
 open FlockSoundness.Discharge.Tables (LiveOutJ SubmitJ addRoundJ)
@@ -92,9 +92,9 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
     {σ : Strategy (V.game θ F c)} {D : Decoders A.rounds A.Reg} {BL : LinkHold A.mP} {B : RoundHold}
     {label : String} {after : ByteArray} {m : ℕ} {κ : A.Ω → Fin m → Fin 512 → Bool}
     (hA : SetsUp V θ F A) (ht : PopTied θ A) (hR : DrawReadAll k coinsRead) (hH : DrawHeld k)
-    (hrd : PicksOpenings rd) (hm : _root_.SampledProofs.Challenger.MAX_COINS ≤ m)
-    (hsrc : ∀ ω, _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (κ ω) 0))
+    (hrd : PicksOpenings rd) (hm : _root_.Spot.Challenger.MAX_COINS ≤ m)
+    (hsrc : ∀ ω, _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (κ ω) 0))
     {o : A.Out × CoinTape (V.game θ F c) σ}
     (h : ReachesOff V θ F c A rd σ D (sampleMap e V θ F c A rd σ label after κ) BL B o)
     (hv : V.Verdict k .sampled (CoinTape.run (V.game θ F c) σ o.2))
@@ -125,7 +125,7 @@ theorem ReachesOff.recordDraw (e : 𝔽 ≃ (Fin 128 → Bool)) {V : Vocab d α}
 theorem recordRounds_decode {spec : Flock.SessionSpec} {record : String} {sess : Flock.RunRecord} {J : Json}
     {name : String} {y : Flock.StreamRec} (hd : Flock.Record.decode spec record = .ok sess)
     (hJ : Flock.JsonParse.parse record = .ok J)
-    (hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false)
+    (hn : (name == _root_.Spot.Challenger.TREE_SESSION) = false)
     (hy : sess.streams.find? (·.name == name) = some y) : recordRounds J name = y.rounds.size := by
   obtain ⟨j, l, recs, hp, -, hrecs, -, -, hstr⟩ := decode_ok hd
   rw [hJ] at hp
@@ -186,7 +186,7 @@ theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     (hans : ∀ {pre post : List Release} {y : Release} {i s n : ℕ} {name : String} {st : Flock.StreamRec},
       lr = pre ++ y :: post → y.frame = .opening i s n →
       ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
-      (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false →
+      (name == _root_.Spot.Challenger.TREE_SESSION) = false →
       sess.streams.find? (·.name == name) = some st → openedOf pre i s < st.rounds.size →
       y.answers = st.rounds[openedOf pre i s]!.sha) :
     ∃ st, sess.streams.find? (·.name == repStreamName spec.tables[0]! r.val) = some st ∧
@@ -252,7 +252,7 @@ theorem stop_round {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
   subst hwb
   have hbits : Verity.bitsOfBytes b' = roundBits fieldEnc cs := by
     by_cases hc : y.coins = []
-    · have hrc : _root_.SampledProofs.Challenger.recordCoins? (.arr cs') = some b' := hrr'.symm.trans hb'
+    · have hrc : _root_.Spot.Challenger.recordCoins? (.arr cs') = some b' := hrr'.symm.trans hb'
       have hlen := congrArg List.length (bits_of_coins hf' hrc)
       rw [← hyc, hc, length_chunks, List.length_nil, Array.length_toList] at hlen
       have hmem : st ∈ sess.streams.toList := Array.mem_toList_iff.2 (Array.mem_of_find?_eq_some hst')
@@ -344,7 +344,7 @@ theorem rep_rounds {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {c : 
     (hans : ∀ {pre post : List Release} {y : Release} {i s n : ℕ} {name : String} {st : Flock.StreamRec},
       lr = pre ++ y :: post → y.frame = .opening i s n →
       ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
-      (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false →
+      (name == _root_.Spot.Challenger.TREE_SESSION) = false →
       sess.streams.find? (·.name == name) = some st → openedOf pre i s < st.rounds.size →
       y.answers = st.rounds[openedOf pre i s]!.sha) :
     as.foldl (fun rs a => addRoundJ rs a.2.1.tab a.2.1.rep (roundOf A.dg a.2.1.bytes a.2.1.n a.2.2))
@@ -471,7 +471,7 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     (hnd : ∀ sp ∈ helloSpecs (CoinTape.run (V.game θ F c) σ o.2).log, sp.streams.toList.Nodup)
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
-        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
+        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.Spot.Challenger.TREE_SESSION)
     {label' : String} {after' ξ : ByteArray} {lines : List String} {lr : List Release} {trees : Array LoggedTree}
     {Jr : Json}
     (hV : List.Forall₂ Binding.Read.Of (lr.map Binding.Read.ofV2) (CoinTape.run (V.game θ F c) σ o.2).log)
@@ -492,7 +492,7 @@ theorem firstStop_reps {V : Vocab d α} {θ : ByteArray} {F : Array ByteArray} {
     (hans : ∀ {pre post : List Release} {y : Release} {i s n : ℕ} {name : String} {st : Flock.StreamRec},
       lr = pre ++ y :: post → y.frame = .opening i s n →
       ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
-      (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false →
+      (name == _root_.Spot.Challenger.TREE_SESSION) = false →
       sess.streams.find? (·.name == name) = some st → openedOf pre i s < st.rounds.size →
       y.answers = st.rounds[openedOf pre i s]!.sha) :
     ∃ reps : Fin (A.J ((A.extend M.widening).L.draw ω) (regOf V θ F c A rd σ D)) → Fin 2 → List Flock.Round,
@@ -535,11 +535,11 @@ of a stream of it named `name` gives coins (`recordCoins?`) and is a round `t` s
 after the round's `msg_sha512`. -/
 theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option ℕ)} {record : Json}
     (h : sessionTreeReason trees tables record = none) :
-    ∃ t ∈ trees, recordTree record = t.root ∧ ∃ streams, _root_.SampledProofs.getD record "streams" = .arr streams ∧
-      ∀ s ∈ streams, ∀ name rounds, _root_.SampledProofs.getD s "stream" = .str name →
-        _root_.SampledProofs.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
-          (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
-            ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after := by
+    ∃ t ∈ trees, recordTree record = t.root ∧ ∃ streams, _root_.Spot.getD record "streams" = .arr streams ∧
+      ∀ s ∈ streams, ∀ name rounds, _root_.Spot.getD s "stream" = .str name →
+        _root_.Spot.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
+          (recordCoins? (_root_.Spot.getD x.1 "coins")).isSome ∧
+            ∃ o, t.opening name x.2 = some o ∧ _root_.Spot.getD x.1 "msg_sha512" = .str o.after := by
   unfold sessionTreeReason at h
   dsimp only [Id.run] at h
   split at h
@@ -560,7 +560,7 @@ theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option
   rename_i rootF points streams htri
   simp only [Prod.mk.injEq] at htri
   refine ⟨streams, htri.2.2, ?_⟩
-  rcases hlo : t.opening _root_.SampledProofs.Challenger.TREE_SESSION 0 with _ | o
+  rcases hlo : t.opening _root_.Spot.Challenger.TREE_SESSION 0 with _ | o
   · simp only [hlo, Bool.false_eq_true, ↓reduceIte] at h
     all_goals (split at h <;> (try split at h) <;> cases h)
   simp only [hlo] at h
@@ -570,18 +570,18 @@ theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option
   case isFalse => cases h
   split at h
   case isFalse => cases h
-  refine Trees.ret_held (P := fun s => ∀ name rounds, _root_.SampledProofs.getD s "stream" = .str name →
-    _root_.SampledProofs.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
-      (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
-        ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after) ?_
+  refine Trees.ret_held (P := fun s => ∀ name rounds, _root_.Spot.getD s "stream" = .str name →
+    _root_.Spot.getD s "rounds" = .arr rounds → ∀ x ∈ rounds.zipIdx,
+      (recordCoins? (_root_.Spot.getD x.1 "coins")).isSome ∧
+        ∃ o, t.opening name x.2 = some o ∧ _root_.Spot.getD x.1 "msg_sha512" = .str o.after) ?_
     (fun w _ hw => by cases hw) h
   intro s u res hres
   split at hres
   case h_2 => exact .inl ⟨_, _, hres.symm⟩
   rename_i name rounds hsr
   refine Or.imp id ?_ (Trees.step_held (P := fun x : Json × ℕ =>
-    (recordCoins? (_root_.SampledProofs.getD x.1 "coins")).isSome ∧
-      ∃ o, t.opening name x.2 = some o ∧ _root_.SampledProofs.getD x.1 "msg_sha512" = .str o.after) ?_ ?_ ?_ hres)
+    (recordCoins? (_root_.Spot.getD x.1 "coins")).isSome ∧
+      ∃ o, t.opening name x.2 = some o ∧ _root_.Spot.getD x.1 "msg_sha512" = .str o.after) ?_ ?_ ?_ hres)
   · rintro ⟨u', hy, hrs⟩
     refine ⟨u', hy, fun name' rounds' hn hr' => ?_⟩
     simp only [Prod.mk.injEq] at hsr
@@ -609,7 +609,7 @@ theorem rounds_held {trees : Array LoggedTree} {tables : Array (String × Option
 
 /-- A record's stream named `name`, as `recordRound` and `recordRounds` find it. -/
 def streamNamed (name : String) (x : Json) : Bool :=
-  match _root_.SampledProofs.getD x "stream" with
+  match _root_.Spot.getD x "stream" with
   | .str n => n == name
   | _ => false
 
@@ -620,7 +620,7 @@ theorem recordRound_isSome {trees : Array LoggedTree} {tabsB : Array (String × 
     (h : sessionTreeReason trees tabsB J = none) (name : String) :
     ∀ k < recordRounds J name, (recordRound J name k).isSome := by
   intro k hk
-  by_cases hn : (name == _root_.SampledProofs.Challenger.TREE_SESSION) = true
+  by_cases hn : (name == _root_.Spot.Challenger.TREE_SESSION) = true
   · have h1 : recordRounds J name = 1 := by rw [recordRounds, ite_eq_left hn]
     rw [h1] at hk
     obtain rfl := Nat.lt_one_iff.1 hk
@@ -778,7 +778,7 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
     (hl : Binding.Logged Binding.readsV2 (CoinTape.run (V.game θ F c) σ o.2))
     (hfirst : ∀ pre r post, (CoinTape.run (V.game θ F c) σ o.2).log = pre ++ r :: post → ∀ i s n,
       r.frame = .opening i s n → (∀ q ∈ pre, ∀ i' s' n', q.frame ≠ .opening i' s' n') →
-        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.SampledProofs.Challenger.TREE_SESSION)
+        ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some _root_.Spot.Challenger.TREE_SESSION)
     (hO : ∀ text Jr, sentRecord (CoinTape.run (V.game θ F c) σ o.2).sent = some text →
       Flock.JsonParse.parse text = .ok Jr → OpenedRecorded Jr (CoinTape.run (V.game θ F c) σ o.2).log)
     (hans : ∀ {label : String} {after : ByteArray} {J : Json} {ξ : ByteArray} {lines : List String}
@@ -787,7 +787,7 @@ theorem firstStop_reps_verdict {V : Vocab d α} {θ : ByteArray} {F : Array Byte
       readLog label after [J] ξ lines = some (pre ++ y :: post) → coinTreesOf lines = .ok trees →
       trees.size = 1 → ∀ {tabsB : Array (String × Option ℕ)}, sessionTreeReason trees tabsB J = none →
       y.frame = .opening i s n → ((helloSpecs pre)[i]?.bind fun sp => sp.streams[s]?) = some name →
-      (name == _root_.SampledProofs.Challenger.TREE_SESSION) = false →
+      (name == _root_.Spot.Challenger.TREE_SESSION) = false →
       Flock.Record.decode spec record = .ok sess → Flock.JsonParse.parse record = .ok J →
       spec.sha512Digests = true → sess.streams.find? (·.name == name) = some st →
       openedOf pre i s < st.rounds.size → y.answers = st.rounds[openedOf pre i s]!.sha) :

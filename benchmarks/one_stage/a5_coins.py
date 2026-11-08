@@ -1,5 +1,5 @@
 """A5's sample from the auditor's challenger (`a5.py --challenger`): one challenger session for the TP step, opened on its TP run root
-of record, from whose coins each rank's registration samples once (`sampled_proofs.coins.ChallengerCoins` over a
+of record, from whose coins each rank's registration samples once (`spot.coins.ChallengerCoins` over a
 `remote.RemoteChallenger`), and the evidence its verifier checks every sample's coins against once the session has ended.
 
 * **The session.** ``local``: a development session on this machine, run by the auditor host's own service
@@ -64,8 +64,8 @@ from multiprocessing.managers import BaseManager
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, remote as R, service as S
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, verifier as V
+from verity.core.protocols.spot import challenger as Ch, coins as CC, remote as R, service as S
+from verity.core.protocols.spot.one_stage import draw as D, verifier as V
 from verity.ml.circuits.program import Program
 from verity.ml.crypto import lms
 
