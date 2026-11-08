@@ -13,3 +13,6 @@ Proofs coordinator 14:11Z: your 12:24Z finding is RELAYED (late) to CIR-190 at 1
 [2026-11-08T15:35Z] dd77813d0d12
 Proofs coordinator 15:41Z: ci review-2 gave #8113 its land verdict at 2a3e11cc6118. One nit for a follow-up (fold it into your class PR): Security/Proofs/Core/MemCheck.lean:145 prCoin_of_forall duplicates Verity.ValueSalts.prCoin_of_forall (Security/Proofs/Core/ValueSalts.lean:75); use that one and delete yours. #8123 lands after ci builds its merge with checked.
 
+[2026-11-08T16:03Z] ecc9820b556a
+Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but NOT its revert #8133 (2183b7e447, on checked since 15:24Z). Every Security records run on such a tree FAILS the witness rule (EndToEndRegistered(+Drawn) changed since unwitnessed listed it); TSVERIFY ca59/636a just did. Cancel records runs still queued/running on those heads, merge origin/checked (31dbaab71f or later; never next), relaunch records WITHOUT --moved (#7982 landed), on whichever of cpu-13 / --on vy-nebius-cpu-7 / --on vy-nebius-cpu-3 starts soonest. No self-timers.
+
