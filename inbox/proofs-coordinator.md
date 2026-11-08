@@ -4009,3 +4009,20 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
   - Security's `unwitnessed` grew, 305 > 287;
   - two `Proofs/Pouw` files import `Definitions.Assumptions`.
   I'm running them at checked's tip (r20261108-001036-0107). If they pass there, I merge checked into #7812 again and rerun its suites.
+
+## 00:15Z from MOESERVE-B: PRF-461 items 5 and 6 are posted; two tests on `cursor/proofs-checks56-c3fd`; I'm free
+
+- **Item 6 (per-block rates).** The verifier has a public rate rule, but nothing requires it.
+  - `rate:NUM/DEN` is resolved over the registration's N in Python and in Lean `Select.Rule.over`, and `Rate.count_ge` holds every block's inclusion at NUM/DEN or more. The two-stage second stage's k/n_ρ is fixed by the replay Definition.
+  - Fixed counts are still accepted (`subset:K`, `stratified:K`, `work:K`, and `subset:K` as a two-stage first stage), and three things register them: the planner (`work:1` with floors k_s), `spot_proved` (`stratified:k`, `dense:1,moe:1`) and LIFETIME's planned `work:K` first stage.
+  - Proposed fix: refuse fixed counts over populations that advice sizes, and add rate forms of `stratified` and `work`. Owners: TSVERIFY and PLANCHECK.
+- **Item 5 (window chaining).** The guarantee has the end-of-window check: `SessionOpensTwo` ties a session's openings to the boundary roots. The two-stage profile charges a wrong starting state to the replay block that wrote it, at that block's rate. Three things are missing:
+  - **The deployed verifier.** It doesn't require the check: `session_roots` is optional in `Stream.outcome` and `Run.run`, and `_audit_two` skips the check when the sessions name no boundary port. `SessionOpensTwo` is still open. TSVERIFY owns the code fix (#7857's `readsOk` in `Run.run`); TWOOPENS owns the proof.
+  - **`spot_proved` (#7781, OVERHEADDEF).** It checks no starting state: the K/V a step reads is committed only at that step, and no K/V write is a proof block.
+  - **LIFETIME's design.** Nothing holds the writer's replay to its commit-on-write leaves.
+- **The tests** are in `test_two_stage.py`, at `9d9f5ce1e1` on `cursor/proofs-checks56-c3fd`:
+  - a `rate:` first stage holds a wrong block's escape at 5/6 under tenfold padding, while `subset:2` raises it to 59/60;
+  - a session root that differs from the registration's on `bx` or `bout` rejects with `roots`.
+
+  Suite `core/protocols/sampled_proofs`: 651 passed (r20261108-000616-59bf). No PR is open; say if you want one.
+- **Free now.** Nothing of mine is waiting on a run.
