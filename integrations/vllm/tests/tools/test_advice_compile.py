@@ -67,6 +67,29 @@ def test_the_registration_takes_the_engines_world_at_the_rank_and_the_engine_arg
         AC.engine_of({"engine_record": {"engine_kwargs": kw}}, 8)
 
 
+def test_the_registration_states_the_dsa_top_k_environment_the_engines_build_set():
+    """A run whose engine record has the environment its build set states the DSA top-k's, set or not, and nothing else of it:
+    `predict.dsa` compiles a row past INDEX_TOPK only under the canonical row, and refuses it for an engine built without."""
+    from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.program.predict import build
+
+    kw = {"tensor_parallel_size": 8, "max_model_len": 131072}
+    flags = {"VLLM_USE_V2_MODEL_RUNNER": "1", "VERITY_DSA_TOPK": "canonical"}
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw, "env_flags": flags}}, 0)[1] == {
+        "max_model_len": 131072, "env": {"VERITY_DSA_TOPK": "canonical"}}
+    hf = json.loads(pinned_hf_config(*GLM53).read_text())
+
+    def decoder(env_flags: dict):
+        meta = {"model": GLM53[0], "revision": GLM53[1], "target": H200, "execution": "eager",
+                "engine_record": {"engine_kwargs": kw, "env_flags": env_flags}}
+        return build.decoder(AC.phi_of(meta, hf, 0))
+
+    assert decoder(flags).long_rows is None
+    assert AC.engine_of({"engine_record": {"engine_kwargs": kw, "env_flags": {"VLLM_USE_V2_MODEL_RUNNER": "1"}}}, 0)[1] == {
+        "max_model_len": 131072, "env": {}}
+    assert "VERITY_DSA_TOPK=None, not {'VERITY_DSA_TOPK': 'canonical'}" in decoder({"VLLM_USE_V2_MODEL_RUNNER": "1"}).long_rows
+
+
 GLM53 = ("zai-org/GLM-5.3", "aca966e4e02791568aa6a4ced368624b3d897f42")
 H200 = {"compute_capability": [9, 0], "num_sms": 132, "batch_invariant": False, "device_name": "NVIDIA H200", "moe_backend": "triton"}
 

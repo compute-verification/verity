@@ -73,7 +73,7 @@ programs = "art:db4499e73020f5d761b55a801bc4d926eaad36c15099d90f170ffe00928aaaf7
 [rows."llama32-1b__bf16__l40s__tp1__b64__i1024__o128__mixed__greedy__bi-eager"]
 row = 23
 class = "GREEN"
-# Under v2 acquisition (ACQUIRE_ENGINE=v2) GM-01 over Build art:ee33269aab289e33 (Match art:d39b5ef8816334b4, impl fast) PASSes:
+# Under v2 acquisition (ACQUIRE_ENGINE=v2) GM-01 over a v2 Build and Match (impl fast) PASSes:
 # G1..G8, X-09, alternate `sequence`.  Its global_match_checks lift equals this row's except fold_record_pins (a new fold record);
 # decomp_hashes equal except oracle.digest (the Build epoch).  It takes about 340 s at 32 workers and 880 s at 1.
 selection = "green"
@@ -388,7 +388,7 @@ programs = "art:d3fa83361d58c702318733f7382fc41b47800ebe401c6d772e6caaad6ed72737
 [rows."olmoe-1b-7b__bf16__l40s__tp2__b8__i1024__o128__mixed__greedy__bi-eager"]
 row = 70
 class = "FAIL"
-# Expected FAIL under v2 as well: a fresh Commit (verdict art:501019cb3cbc3cde) over Build art:962a12b3165b496f / Match art:7ecab74a6a319ff2.
+# Expected FAIL under v2 as well: a fresh Commit over a v2 Build and Match.
 # Every compared value is equal (match oracle, sampled replay, weights pins, TP-12 picks 154/154).  The named cause is the AllGather2
 # collective sites (manifest of record ede1ad81, 357,796): query_population False, per rank 25,408 replay VUs outside Q(P) (first
 # model.layers.0.self_attn.all_gather2_165/out) and 25,408 Q(P) identities without rows (first model.layers.0.self_attn/out);
@@ -442,7 +442,7 @@ expected = { identities = 311739, program_digest = "357b965dca2497df1cc97c6b45b5
 
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".local]
 
-# records: the epoch records tree art:da7b7474 (25 GB) less match/capture/values/**, commit/binding_map_p0.json,
+# records: the epoch records tree (25 GB) less match/capture/values/**, commit/binding_map_p0.json,
 # match/{capture,control}/cos_sin_cache.npy and match/capture/snapshots.json (19 MB); programs: the epoch Build tree, as stored
 [rows."qwen3-4b__bf16__h100__tp1__b8__i1024__o128__mixed__greedy__bi-eager".artifacts]
 records = "art:b25d4b29b446c8e610398fba3ca9ab94bb855a5045d59d52ddab033bca12dbb6"

@@ -28,6 +28,124 @@ index 6db94da..515a584 100644
          .build_global()
      {
          Ok(()) => Some(n),
+diff --git a/crates/flock-core/src/lincheck.rs b/crates/flock-core/src/lincheck.rs
+index 0030fd7..e0ee027 100644
+--- a/crates/flock-core/src/lincheck.rs
++++ b/crates/flock-core/src/lincheck.rs
+@@ -373,7 +373,7 @@ impl<'a> LincheckCircuit for SparseMatrixCircuit<'a> {
+ /// Construction costs one pass over the nonzeros (~4 ms / ~40 ms for the
+ /// above) — do it once at setup, e.g. via
+ /// [`crate::r1cs::BlockR1cs::csc_lincheck_circuit`].
+-#[derive(Clone)]
++#[derive(Clone, PartialEq, Eq)]
+ pub struct CscCircuit {
+     n_cols: usize,
+     a_col_ptr: Vec<u32>,
+@@ -388,20 +388,31 @@ pub struct CscCircuit {
+ /// `rows_flat[col_ptr[c] as usize .. col_ptr[c+1] as usize]`.
+ fn csc_from_rows(m: &SparseBinaryMatrix) -> (Vec<u32>, Vec<u32>) {
+     assert!(m.num_rows <= u32::MAX as usize);
+-    assert!(m.num_cols <= u32::MAX as usize);
+-    let mut col_ptr = vec![0u32; m.num_cols + 1];
+-    for row in m.rows.iter() {
+-        for &c in row {
++    csc_of_rows(m.rows.len(), m.num_cols, |r| m.rows[r].iter().copied())
++}
++
++/// [`csc_from_rows`] of `n_rows` rows over `n_cols` columns, row `r`'s columns
++/// `row(r)` (read twice).
++fn csc_of_rows<I: IntoIterator<Item = usize>>(
++    n_rows: usize,
++    n_cols: usize,
++    row: impl Fn(usize) -> I,
++) -> (Vec<u32>, Vec<u32>) {
++    assert!(n_rows <= u32::MAX as usize);
++    assert!(n_cols <= u32::MAX as usize);
++    let mut col_ptr = vec![0u32; n_cols + 1];
++    for r in 0..n_rows {
++        for c in row(r) {
+             col_ptr[c + 1] += 1;
+         }
+     }
+-    for c in 0..m.num_cols {
++    for c in 0..n_cols {
+         col_ptr[c + 1] += col_ptr[c];
+     }
+     let mut next = col_ptr.clone();
+     let mut rows_flat = vec![0u32; *col_ptr.last().unwrap() as usize];
+-    for (r, row) in m.rows.iter().enumerate() {
+-        for &c in row {
++    for r in 0..n_rows {
++        for c in row(r) {
+             rows_flat[next[c] as usize] = r as u32;
+             next[c] += 1;
+         }
+@@ -436,6 +447,28 @@ impl CscCircuit {
+         }
+     }
+ 
++    /// [`CscCircuit::from_matrices`] of two matrices of `n_rows` rows over
++    /// `n_cols` columns given by their rows: row `r`'s columns `a(r)` and
++    /// `b(r)`, each read twice. The same circuit as of them followed by any
++    /// number of empty rows, so no padded copy of the rows is made.
++    pub fn from_rows<IA: IntoIterator<Item = usize>, IB: IntoIterator<Item = usize>>(
++        n_rows: usize,
++        n_cols: usize,
++        a: impl Fn(usize) -> IA,
++        b: impl Fn(usize) -> IB,
++    ) -> Self {
++        let (a_col_ptr, a_rows) = csc_of_rows(n_rows, n_cols, a);
++        let (b_col_ptr, b_rows) = csc_of_rows(n_rows, n_cols, b);
++        Self {
++            n_cols,
++            a_col_ptr,
++            a_rows,
++            b_col_ptr,
++            b_rows,
++            const_pin: None,
++        }
++    }
++
+     /// Set the constant-wire pin column (see `docs/const-wire-pin.md`).
+     pub fn with_const_pin(mut self, const_pin: Option<usize>) -> Self {
+         self.const_pin = const_pin;
+@@ -2396,6 +2429,36 @@ mod tests {
+         SparseBinaryMatrix::new(k, k, rows)
+     }
+ 
++    #[test]
++    fn csc_from_rows_is_from_matrices() {
++        let mut s = 0x51edu64;
++        let mut next = |m: usize| {
++            s ^= s << 13;
++            s ^= s >> 7;
++            s ^= s << 17;
++            (s % m as u64) as usize
++        };
++        for (n, k) in [(1usize, 1usize), (37, 64), (300, 512), (1000, 1024)] {
++            let mut side = || -> Vec<Vec<usize>> {
++                (0..n).map(|_| (0..next(5)).map(|_| next(k)).collect()).collect()
++            };
++            let (a, b) = (side(), side());
++            let pad = |rows: &Vec<Vec<usize>>| {
++                let mut r = rows.clone();
++                r.resize(k, Vec::new());
++                SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
++            };
++            let want = super::CscCircuit::from_matrices(&pad(&a), &pad(&b));
++            let got = super::CscCircuit::from_rows(
++                n,
++                k,
++                |r| a[r].iter().copied(),
++                |r| b[r].iter().copied(),
++            );
++            assert!(got == want, "{n} rows over {k} columns");
++        }
++    }
++
+     // ---- Unit tests for the kernels ----
+ 
+     /// `build_eq_table` produces eq(point, i) for all boolean i.
 diff --git a/crates/flock-core/src/pcs.rs b/crates/flock-core/src/pcs.rs
 index c3362dc..c36ce18 100644
 --- a/crates/flock-core/src/pcs.rs
