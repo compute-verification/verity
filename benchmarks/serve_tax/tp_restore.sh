@@ -4,7 +4,7 @@
 #   [MODEL_ID=glm53] [RATE=10] [SPAN_S=240] [EDGES_AT=120,170,220] [PLAN_FILE=PLAN.jsonl] [UNSEEDED_SHARE=0.5]
 #     [ARMS="mixed unseeded"] [BUDGET_MIN=90] [SAMPLING=production] [LONG_SHARE=0.03] [LONG_TOKENS=8192,32768]
 #     [MAX_MODEL_LEN=40960] [FLASHINFER=0] [LDCONFIG=1] (--send fi_smoke.py: run it first) [SAVER=boundary:save_edge]
-#     [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150] [DUMP=1] [RESTORE=0] [THEN=SCRIPT]
+#     [LOADER=boundary:load_edge] [PERMUTE=1] [KEEP=1] [MAX_MIN=150] [DUMP=1] [NUM_GPU_BLOCKS=N] [RESTORE=0] [THEN=SCRIPT]
 #     bash benchmarks/serve_tax/tp_restore.sh
 # PLAN_FILE, a ready plan (the replay ladder's production plan: ShareGPT, multi-turn and long prompts, each request greedy
 # or sampled), is served as it is in each of ARMS: ``mixed``, each request with its own sampling and UNSEEDED_SHARE of the
@@ -15,10 +15,10 @@
 # replays to the second into OUT/ARM/restore (its verdict OUT/ARM/restore/restore.json). An arm after the first starts only
 # if the minutes used so far and the last arm's fit in BUDGET_MIN (OUT/arms.txt says which ran). PERMUTE=1 restores again
 # with the GPUs in reverse order into OUT/ARM/restore-permuted; RESTORE=0 restores nothing. The first DUMP edges' blocks
-# (tens of GB at TP8) go to a scratch directory outside the run's, removed at the end unless KEEP=1. THEN, a script, runs
-# under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM` (PY and HERE, this directory, set),
-# logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has it. VENV's vLLM must be d9105ea80,
-# the integration's pin.
+# (tens of GB at TP8; NUM_GPU_BLOCKS caps the pool) go to a scratch directory outside the run's, removed at the end
+# unless KEEP=1. THEN, a script, runs under the same lease after each arm as `bash SCRIPT OUT/ARM/serve SCRATCH/ARM ARM`
+# (PY and HERE, this directory, set), logging to OUT/ARM/then.log. The GPUs are held under gpu-lease where the node has
+# it. VENV's vLLM must be d9105ea80, the integration's pin.
 # MODEL_ID=moonlight (8,192 tokens of context: LONG_TOKENS=4096,7680 MAX_MODEL_LEN=8192) is a smoke of the same path
 # on one GPU, TP=2 on two ranks.
 set -uo pipefail
@@ -106,7 +106,7 @@ if [ "${1:-}" = leased ]; then
     "$PY" "$here/tp_restore.py" serve --model-id "$MODEL_ID" --checkpoint "$CK" --c4 "$C4" "${plan[@]}" --docs "$DOCS" \
       --rate "$RATE" --span-s "$SPAN_S" --edges-at "$EDGES_AT" \
       ${MAX_MODEL_LEN:+--max-model-len "$MAX_MODEL_LEN"} ${TP:+--tp "$TP"} ${SAVER:+--saver "$SAVER"} --dump "$DUMP" \
-      --out "$OUT/$arm/serve" --scratch "$SCRATCH/$arm/serve" \
+      ${NUM_GPU_BLOCKS:+--num-gpu-blocks "$NUM_GPU_BLOCKS"} --out "$OUT/$arm/serve" --scratch "$SCRATCH/$arm/serve" \
       || { echo "== $arm serve failed $(date -u +%FT%TZ)" | tee -a "$OUT/arms.txt"; exit 1; }
     restores=(); [ "$RESTORE" = 1 ] && restores=(restore ${PERMUTE:+restore-permuted})
     for r in "${restores[@]}"; do

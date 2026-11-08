@@ -5,7 +5,7 @@ its second and compared. GLM-5.3 at TP8 is the case it is for; any `serve_tax` m
     tp_restore.py serve --model-id glm53 --c4 C4 --out OUT --scratch DIR [--rate 10] [--span-s 240]
                         [--edges-at 120,170,220] [--plan-file PLAN.jsonl] [--unseeded-share 0.5] [--sampling own]
                         [--max-model-len 40960] [--tp N] [--long-share 0.05] [--long-tokens 8192,32768]
-                        [--saver MODULE:FUNCTION ...] [--dump 1]
+                        [--saver MODULE:FUNCTION ...] [--dump 1] [--num-gpu-blocks N]
     tp_restore.py restore --served OUT --scratch DIR --out OUT2 --loader MODULE:FUNCTION [--no-fill] [--rank-map-free]
 
 ``serve`` runs `serve_tax`'s ``record`` arm (vLLM's OpenAI server with the scheduler's step trace), with `tp_edge` as a
@@ -193,8 +193,8 @@ def lengthen(plan: list[dict], share: float, lo: int, hi: int, seed: int) -> lis
 
 
 def served_argv(a: argparse.Namespace, checkpoint: Path, port: int) -> list[str]:
-    """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context and tensor-parallel size."""
-    return S.server_argv(S.ARMS["record"], S.MODELS[a.model_id], checkpoint, port) \
+    """`serve_tax`'s ``record`` arm's server argv for ``a``'s model, with ``a``'s context, tensor-parallel size and pool."""
+    return S.server_argv(S.ARMS["record"], S.MODELS[a.model_id], checkpoint, port, getattr(a, "num_gpu_blocks", None)) \
         + (["--max-model-len", str(a.max_model_len)] if a.max_model_len else []) \
         + (["--tensor-parallel-size", str(a.tp)] if a.tp else [])
 
@@ -782,6 +782,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--tp", type=int, help="the tensor-parallel size, when not the model's own")
     s.add_argument("--saver", action="append", default=[])
     s.add_argument("--dump", type=int, default=1, help="how many of the first edges write their blocks")
+    s.add_argument("--num-gpu-blocks", type=int, help="the KV pool's blocks (vLLM's --num-gpu-blocks-override), each dump's size")
     s.add_argument("--startup-s", type=float, default=3600.0)
     s.add_argument("--drain-s", type=float, default=600.0)
     s.add_argument("--run-out", action="store_true",
