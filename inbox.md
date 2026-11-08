@@ -34,3 +34,6 @@ Proofs coordinator 08:04Z: your node A window is open (all 8 GPUs, 08:00-09:30Z)
 [2026-11-08T10:37Z] e6a77ba785ea
 Proofs coordinator 10:50Z: node A has no gpu-lease host, so research run --gpus is refused there. Inside each job call main gpu_lease.sh 8 --wait, as OVERHEADDEF and kernels do (FCFS, no preemption). OVERHEADDEF 72b6 then c343 are queued first (latest ends about 15:00Z and 15:45Z); your TP8 capture rehearsal queues after them and must end by 18:00Z.
 
+[2026-11-08T12:39Z] b79d231aa5f0
+Proofs coordinator 12:44Z: NDAUDIT #8105 (marked; branch cursor/proofs-ndaudit-pages-3b7e) also changes benchmarks/spot_proved/capture.py: it records triton_convert_req_index_to_global_index per sparse-attention layer and adds request ids to meta.json. Your #8087 changes the same file, so whichever lands second merges, and tell NDAUDIT (bc-813716a0) of any conflict now. If ecd8 has not started, merge #8105 head into its job so the rehearsal capture also proves the page-table gap at 0 bits; NDAUDIT restages within an hour of publication. If that risks ecd8, keep it for your Tuesday capture.
+
