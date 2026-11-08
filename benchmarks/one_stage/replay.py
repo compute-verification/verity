@@ -637,6 +637,15 @@ def coins_why(rec: dict, mine: dict, draw: dict, src: bytes) -> str | None:
     return None
 
 
+def derived(program, p: dict) -> dict | P.QueryRefused | ValueError:
+    """The sampling design the verifier derives from the case's params (`draw.derive`), or why it doesn't, which R1-law
+    refuses (`OneStage.coinsWhy` reads no coins under a design that doesn't derive, and leaves the refusal to `check`)."""
+    try:
+        return DR.derive(program, p["query"], p["law"], p["work_table"])
+    except (P.QueryRefused, ValueError) as refused:
+        return refused
+
+
 def python(c: Case) -> dict:
     """Today's Python on the case, as `OneStage.check` writes its outcome (`test_difftest.check`, with Lean's reasons): on
     the challenger's coins (the params' `challenger`), their evidence read first (`challenger_coins`, `coins_why`), then
@@ -654,11 +663,9 @@ def python(c: Case) -> dict:
         coins = challenger_coins(p, digest, e)
     except Ch.CoinError as err:
         return out("reject", f"coins: {err}")
-    if coins is not None:
-        try:
-            why = coins_why(rec, DR.derive(program, p["query"], p["law"], p["work_table"]), e["draw"], coins)
-        except (P.QueryRefused, ValueError):
-            why = None
+    law = derived(program, p) if coins is not None else None
+    if coins is not None and isinstance(law, dict):
+        why = coins_why(rec, law, e["draw"], coins)
         if why is not None:
             return out("reject", f"draw: coins: {why}")
     try:
@@ -670,10 +677,9 @@ def python(c: Case) -> dict:
                     schemas=p.get("schemas"), window_root=p.get("window_root"), seed_salt=salt).codes
     if codes:
         return out("reject", f"registration: {', '.join(codes)}")
-    try:
-        mine = DR.derive(program, p["query"], p["law"], p["work_table"])
-    except (P.QueryRefused, ValueError) as err:
-        return out("reject", f"registration: R1-law: {err}")
+    mine = law if law is not None else derived(program, p)
+    if not isinstance(mine, dict):
+        return out("reject", f"registration: R1-law: {mine}")
     dv = DR.check_draw(e["draw"], rec, mine)
     if not dv.ok:
         return out("reject", f"draw: {', '.join(dv.codes)}")
