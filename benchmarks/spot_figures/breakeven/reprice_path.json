@@ -38,13 +38,16 @@
  {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
   "cases": {"two-stage": "R6x4+all+4perH200+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
  {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "R6x4+all+4perH200+host+hash4"},
-  "note": "no owner: in-proof hashing at a half share of the marginal, cut 4x"}
+  "note": "in-proof hashing at a half share of the marginal, cut 4x; its magnitude is being scoped"}
 ],
  "unpriced": [
   {"label": "compiling each sampled request's Programs", "status": "measured a step",
    "cases": {"two-stage": "N5"},
    "note": "135 s a Program a rank; a 256-step span 3.1-3.8 core-hours over 8 ranks until a one-layer template; its share at the plan's sampled requests, beside the total"},
+  {"label": "the memory-checked KV pool, proved every window", "status": "measured ANDs; the verifier's rate assumed",
+   "cases": {"two-stage": "N5"},
+   "note": "MemCheck_v1 + BlockKey_v1 under CacheStep_v3, inside CompileSlice_v4: the busiest window's ANDs (POOL_WINDOW_ANDS, walked as built or with the head-of-line memo) on every window, since its carry chain binds only proved blocks; proving at the --zk rate (1e12 ANDs take 10% of a machine's window), verifying at the line's median rate an AND; beside the total, at the same share in every scope; it charges no advice, so prefix caching stays on"},
   {"label": "the advice charge", "status": "charged",
    "cases": {"two-stage": "N5+hits"},
-   "note": "with the length closed in-circuit, the advice is the prefix-cache hits (about 5,200 bits a machine's window) and the small rest; while the hits are advice no year scope and no world scope breaks even; prefix caching off removes them at +13.86% FLOPs (N5+prefixoff)"}
+   "note": "with the length closed in-circuit and without the pool, the advice is the prefix-cache hits (about 5,200 bits a machine's window) and the small rest; while the hits are advice no year scope and no world scope breaks even; the pool removes them at its line above, prefix caching off at +13.86% FLOPs (N5+prefixoff)"}
  ]}
