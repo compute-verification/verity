@@ -102,7 +102,8 @@ before any coin. In the remote protocol the coins come from the auditor's challe
 
 **The proof system** (`service`) runs these steps for a protocol, on the challenger's side. A protocol states a `Spec`:
 - what it commits;
-- its selection rule;
+- its selection rule; a `Law` or a two-stage first stage is a rate, never a fixed count (`rate:`, `stratified-rate:`,
+  `work-rate:`), each proof block sampled at least at it however the prover pads `N` (`Spot.Rate`);
 - the check, as a public Program;
 - its public items, each with its reason.
 
@@ -110,21 +111,14 @@ Everything the auditor observes must be a function of those items. A `Stream` pe
 rule and then to one-stage's checks, samples once, binds the delivered proof to its outcome, and counts failures against a
 public budget.
 
-**The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` proof blocks, and `bernoulli:NUM/DEN` takes each proof block
+**The sampling designs.** `subset:K` is a uniform `K`-subset of the `N` proof blocks, and `bernoulli:NUM/DEN` takes each
 independently with probability `NUM/DEN`.
-`stratified:K` has one stratum per subcircuit, and inside each an independent uniform sample
-without replacement of `k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, that is `K n_s / N` rounded half up and never fewer
-than one, so every subcircuit is exercised in every audit. `work:K` keeps those strata and that sampler
-but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
+`stratified:K` has one stratum per subcircuit, and inside each an independent uniform sample without replacement of
+`k_s = max(1, ⌊(2 K n_s + N) / (2N)⌋)` proof blocks, so every subcircuit is exercised in every audit. `work:K` keeps those
+strata and that sampler but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s w_s n_s`, stratum `s` samples
 `k_s = min(n_s, max(f_s, ⌈K w_s n_s / W⌉))`, where `w_s` and the floor `f_s ≥ 1` come from the verifier's own work table.
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
 soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
-
-**A Spec states a rate.** The prover sizes `N`, so a `Spec`'s rule is a rate, `0 < NUM ≤ DEN`: `rate:NUM/DEN[:T]` is
-`subset:⌈NUM·N/DEN⌉` rounded up to a multiple of `T`, and `stratified-rate:` and `work-rate:` are `work:1` at work one and
-`work:⌈NUM·N/DEN⌉` on the verifier's work table, each stratum's floor raised to `⌈NUM·n_s/DEN⌉`. Each proof block's
-inclusion is then at least `NUM/DEN` however `N` is padded (`Rate.count_ge`, `Rate.workK_ge`), not `K/N` as under a fixed
-count, which both verifiers refuse as a rule or a two-stage first stage.
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -274,7 +268,7 @@ from verity.core.protocols.spot.costfit import fit
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is sampled once by a `stratified-rate:` or `work-rate:` rule, a stratum per subcircuit.
+    and the window is sampled once, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
@@ -423,8 +417,6 @@ core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_
 `tests/test_one_stage.py` replays, with the object's refusals and digest.
 
 ### Sampling designs as text and as registered
-
-Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
   --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
