@@ -882,6 +882,38 @@ def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_i
         f"partition/gate-recomputed {pair.id} (1 gate(s) between node members)"]
 
 
+def test_a_call_over_the_budget_fails_all_by_the_name_of_a_callee_that_breaks_q_word(monkeypatch):
+    """``--all`` takes a Call's callees as Calls from `targets.CALLEE_CALLS` (through `targets.call_families`, as every task
+    does), checks each callee's partition inside the Call's check and fails by the callee's name, and its summary reads the
+    Call partitioned by its callees.  Without the entries the Call is an unchecked warning, which fails nothing: ``--all``
+    passes a value computed in two proof blocks."""
+    from circuit_check import cli
+
+    top, twice, mul, opts = _two_callees()
+    monkeypatch.setattr(TG, "load_registries", lambda: None)
+    monkeypatch.setattr(TG, "suite", lambda: {top.id: top})
+    monkeypatch.setattr(TG, "templates", lambda: [])
+    monkeypatch.setattr(TG, "word_call_families", lambda: {TG.family(top)})
+    monkeypatch.setattr(TG, "boolean_call_families", lambda words, found=None: set())
+    monkeypatch.setattr(TG, "_CALLS", set())
+
+    def everything(callee_calls):
+        monkeypatch.setattr(TG, "CALLEE_CALLS", callee_calls)
+        TG._CALLS.clear()
+        return cli.run([], opts, everything=True, log=None, isolate=False)
+
+    rep = everything({})
+    (unchecked,) = rep["targets"]
+    assert rep["summary"]["ok"] and unchecked["partition"]["checked"] is False and not unchecked["failures"]
+    assert [w["code"] for w in unchecked["warnings"] if w["check"] == "partition"] == ["unchecked"]
+    rep = everything({TG.family(twice): (TG.family(top),), TG.family(mul): (TG.family(top),)})
+    (target,) = rep["targets"]
+    assert [f["name"] for f in target["failures"] if f["check"] == "partition"] == [
+        f"partition/gate-recomputed {twice.id} (1 gate(s))"]
+    assert not [w for w in target["warnings"] if w["check"] == "partition"] and target["partition"]["checked"]
+    assert not rep["summary"]["ok"] and rep["summary"]["by_callees"] == {top.id: sorted([twice.id, mul.id])}
+
+
 #: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
