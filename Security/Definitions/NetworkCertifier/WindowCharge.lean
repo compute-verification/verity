@@ -11,7 +11,7 @@ each Python name in its docstring: `ChargeCount_v2{N, H, O}`'s charge, the lengt
 the whole window, counted by advice v1's counting encoder (`AdviceV1.countStep` and `AdviceV1.finish`, from
 `arith_encode.py`'s references).
 
-A window sends its decisions, its hits (v1's sent shortfalls, in hit units) and its order entries (each deviating
+A window's advice is its decisions, its hits (in hit units; advice v1 sends none) and its order entries (each deviating
 arrival's position and rank). Its symbols, in `window_code.code_window`'s order, all in one segment with one finish:
 1. n_arrived, then each decision at the book's KT estimate for its context `min(run, 2)`, as in v1;
 2. n_hits, then each hit's value;
@@ -25,9 +25,10 @@ that used the coder. The carry is the decisions' (`AdviceV1.Carry`) and the last
 `+ 1` (0 before the session's first entry), chained from window to window under `window-charge`
 (`window_charge.check_chain`).
 
-**Scope.** Every advice v1 window: v1 sends hits and order entries, and never resumes or lag bits (`v1.py` refuses a
-window that sends either), so the two are coded as 0. With no hits and no order entries the symbols are
-`ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its `zeros`.
+**Scope.** Every advice v1 window: v1 sends order entries, and never hits, resumes or lag bits (every hit is the
+replay's block pool's, and `advice_code.codec` refuses a window that sends any), so the three are coded as 0. With no
+order entries the symbols are `ChargeCount_v1`'s, with the n_hits, n_resumes, n_order and n_lag tables' bin 0 for its
+`zeros`.
 
 **What is left.** That `ChargeCount_v2`'s circuit computes `window` is not proved in Lean. circuit-check holds the
 circuit to the Python reference, and these definitions are held to that reference by the window charge's difftest
