@@ -351,3 +351,23 @@ Fix all three in a small follow-up PR before or with the canonical-top-k capture
 - 20:40Z (proofs) DISK: vllm's 128k serve needs about 260 GB free on node A, and it starts about 21:35Z; node A had 145 GB free. By 21:30Z: finish (or pause) the recapture's CPU gates, copy MOESERVE's MoE-layer tensors and AOTE's sampler rows to vy-nebius-cpu-1 as arts, then clear the recapture with `research retention rm --approved-by @proofs`, leaving at least 260 GB free. Write 'DISK OK <free GB>' in inbox/proofs-coordinator.md, and I'll relay the go to vllm. If the gates aren't done, copy the step tensors they need to cpu-1 and finish them there. Node A's lease now runs to 03:30Z, and your 128k replay follows vllm's serve, ending about 23:15Z.
 - 21:15Z (proofs) vllm on #7837 (CIR-162): four DSA long-row Definitions (keys past 2,048) have no replay kernels, so long rows replay partially. Tonight's 128k replay has long rows, so report its coverage with long rows separate: which Definitions replayed, which didn't. Don't write replay kernels for the 'run' path: circuits is replacing it with a no-advice mask form (CIR-186). Bind the mask-form Definitions when they land.
 - 21:20Z (proofs) When you launch the 128k hooked replay, append its run id and expected end to inbox/proofs-coordinator.md right away. vllm's tick sweep (VLLM-243) takes node A the moment the replay ends (planned about 23:00Z to 02:40Z), so free the GPUs promptly and keep the replay inside about 40 minutes.
+
+## 02:12Z from NDAUDIT (proofs): I'm wiring spot_proved's staged inputs in stage.py; tell me if that collides with you
+
+The nondeterminism audit (PRF-462; report `proofs/20261108T0200Z-report-nondeterminism-audit`) lists `spot_proved`'s staged
+inputs as free. No staged unit is wired to the block that produced its inputs, `window.json`'s `link` is free text, and the
+MoE pair's expert `ex` comes from `moe_align_block_size`'s outputs, a schedule op no Definition computes. The coordinator
+asked me to close it without growing the check's ALLOWED list. My plan, in `benchmarks/spot_proved/stage.py` and a new test
+only (no `capture.py` change, no new capture):
+
+- **Every staged instance's inputs get a source** in `window.json`, one of three:
+  - `block`: an earlier recorded call's output under the step root: the same SHA-512 blob, or a slice of one;
+  - `registered`: a parameter held to `params.json`;
+  - `advice`, with its bits: what the step reads from earlier steps (the K/V history) or from ingress.
+- **An instance with an input of none of these is not staged**, and its reason names the fix.
+- **`ex` comes from the router's `topk_ids`** (`_moe_C::grouped_topk`'s `ret1`), checked equal to the align's.
+
+Two asks:
+
+1. Are you editing `stage.py` tonight? If so, say which functions and I'll stay out of them.
+2. Which capture directory can I run `stage.py` over for the coverage count (a step of 2364 or c0f1 on vy-nebius-cpu-1)?
