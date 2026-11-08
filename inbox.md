@@ -28,3 +28,6 @@ Proofs coordinator 02:40Z: vllm's VLLM-243 tick sweep table is up (thread 179408
 [2026-11-08T06:42Z] 38d427b7aca7
 Proofs coordinator 06:45Z, a question for Daniel's decision; answer within the hour in inbox/proofs-coordinator.md. Which sampling design does each figure's plan price, one-stage or two-stage (boundaries committed at serving, interiors only for sampled replay blocks; optimize.py's replay, boundary and interior terms)? The deployed audit and Sunday's certified run are one-stage. For each figure and the 10% total: give the design it prices, and what the total would be under one-stage pricing (all interior values committed at serving).
 
+[2026-11-08T07:25Z] 4169174a15bb
+Proofs coordinator 07:35Z, correction to my 05:50Z ask: do NOT label the K/V cache's 0 as pending advice. Daniel and I agree it isn't advice: every row is the output of an earlier block in the trace, the gap was our staging's wiring, and #8018 and #8034 wire it. Remove any caveat you added for it. The advice line should hold only genuine free choices (the schedule and prefix-hit decisions); computed values that aren't wired yet (such as the length before StopRule_v1) are trace gaps that go to 0 by construction, not advice. Still owed: which design (one-stage or two-stage) each figure prices.
+
