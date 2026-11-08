@@ -797,11 +797,9 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
 
     server = proof_server(a, out, [mm for mm, _ in drawn])
 
-    def member_session(i: int, mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s `--zk` session on its proved units ``local`` (sampled, and a work sample's closure): submitted to
-        the audit's proof server, Lean's verify its verdict of record, else (`proof_server`) on port ``port + i`` (``i``
-        its place among the members with proved units, `port_refusal`), behind the ZK server under ``--firewall``;
-        `member_checks` adds Lean's verdicts on it."""
+    def staged(mm: dict, local: list[int]) -> dict:
+        """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
+        and its prover's file."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -811,15 +809,22 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
-        staged_s = time.time() - t
+        return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
+                "session_law": session_law}
+
+    def member_session(i: int, s: dict) -> dict:
+        """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
+        of record, else (`proof_server`) on port ``port + i`` (``i`` its place among the members with proved units,
+        `port_refusal`), behind the ZK server under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
+        mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
+        m = mm["m"]
         if server is not None:
             st = mm["st"]
             h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
                                         instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin"),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
                               verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
-            return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "handle": h, "session_draw": session_draw,
-                    "session_law": session_law}
+            return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
@@ -827,8 +832,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
-        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
-                "draw_t": draw_t, "draw_check": v}
+        return {**s, "session_s": session_s, "record": record, "live": live, "draw_t": draw_t, "draw_check": v}
 
     def collected(s: dict) -> dict:
         """Server session ``s`` (`member_session`) once both sides have recorded it, as a process pair's: a session the
@@ -877,12 +881,14 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
                 "challenger": (live or {}).get("challenger"), "handle": s.get("handle")}
 
-    # outer proofs run one at a time (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one
-    # prover or each as its own process pair, and only Lean's checks, outside any ZK server, overlap the next member's
-    # session. A server's challengers audit its sessions at its close, each member's audit then a verdict.
+    # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
+    # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
+    # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
+    # its sessions at its close, each member's audit then a verdict.
     try:
+        statements = [staged(mm, local) for mm, local in drawn]
         with ThreadPoolExecutor(1) as lean:
-            checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
+            checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
             done = [c.result() for c in checks]
     finally:
         if server is not None:
