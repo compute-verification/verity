@@ -5,10 +5,11 @@ history the next window reads is what this window computed, and the next window 
   its instance sequence says where each field's leaves come from: ``edge``, by port, the leaf width ``bits`` and the field's
   ``runs`` as argument items (`compact.runs_from_file_items`). Cut into rows of the port's words, each row is one Program row's
   committed member, whole: a **writer**, the window's unit for that row, whose output port is the row (`wiring`); or whole
-  rows of the request's history parameter: a **held** row, the last window's row at the request's field there. Any other row
-  is refused by name: a row whose words two blocks output (GLM-5.3's latent row, the kv norm's output then the kv rope's)
-  has no one output string, and a row of a template whose unit is not one Program row (a head, a chunk, a coordinate) is not
-  one unit's output row.
+  rows of the request's history parameter: a **held** row, the last window's row at the request's field there. A port takes
+  its writer's grain: where two blocks output one row's words, each block's part is a port of its own (the sparse-attention
+  decoder's latent row is `edge.kv_c`, the kv norm's output, and `edge.kv_pe`, the kv rope's). Any other row is refused by
+  name: a row whose words two blocks output has no one output string, and a row of a template whose unit is not one Program
+  row (a head, a chunk, a coordinate) is not one unit's output row.
 - **The commitment.** The prover commits each port as a registered value (core's ``registered.Registered``) whose row r is
   committed under its source's salt (`commit`): a writer's output row's, or the last window's for a held row, so the row's
   ``b || c`` is its source's string. Its domain binds the window's program, the port and the window's open root (`ports`),

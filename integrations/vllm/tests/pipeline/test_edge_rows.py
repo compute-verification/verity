@@ -1,5 +1,6 @@
 """A window's edge (`pipeline.edge_rows`): each edge row is its writer's output row, committed through the served Commit and carried
-into the next window's registration, and a root over anything else is refused by name, by the full check and when drawn."""
+into the next window's registration, and a root over anything else is refused by name, by the full check and when drawn; on the
+toy (`edge.kv`, one writer) and on GLM-5.3's latent row, two ports each at its own writer's grain (`edge.kv_c`, `edge.kv_pe`)."""
 from __future__ import annotations
 
 import json
@@ -18,12 +19,21 @@ from tests.pipeline import served_edge as SE
 NOT_TREE = "its root is not the tree over its rows' sources' strings"
 
 
-@pytest.fixture(scope="module")
-def served(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+def _serve(root: Path, shape: SE.Shape) -> dict[str, Any]:
     pytest.importorskip("torch")
-    w0, w1 = SE.run(tmp_path_factory.mktemp("edge"))
+    w0, w1 = SE.run(root, shape)
     v0 = SE.verify(w0)
     return {"w0": w0, "w1": w1, "v0": v0, "v1": SE.verify(w1, w0, v0["strings"])}
+
+
+@pytest.fixture(scope="module")
+def served(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    return _serve(tmp_path_factory.mktemp("edge"), SE.TOY)
+
+
+@pytest.fixture(scope="module")
+def glm(tmp_path_factory: pytest.TempPathFactory) -> dict[str, Any]:
+    return _serve(tmp_path_factory.mktemp("edge-glm"), SE.GLM)
 
 
 def _private(c: dict[str, Any], port: str) -> tuple[np.ndarray, list[bytes]]:
@@ -77,6 +87,10 @@ def test_a_running_requests_edges_go_from_one_served_window_into_the_next_ones_r
                                                         (1, "edge.kv", 2, 9)])
 def test_an_edge_row_one_bit_off_its_writers_output_is_refused_by_name(served: dict[str, Any], k: int, port: str, row: int,
                                                                        bit: int) -> None:
+    _refused(served, k, port, row, bit)
+
+
+def _refused(served: dict[str, Any], k: int, port: str, row: int, bit: int) -> None:
     c, v = served[f"w{k}"], served[f"v{k}"]
     last, held = (None, None) if k == 0 else (served["w0"], served["v0"]["strings"])
     rec, doc = _forged(c, v, port, row, bit)
@@ -93,15 +107,55 @@ def test_an_edge_row_one_bit_off_its_writers_output_is_refused_by_name(served: d
         assert SE.verify(c, last, held, units=others, record=rec, doc=doc)["edge_drawn"] == {}
 
 
+def test_glm_s_latent_row_is_two_edge_values_each_its_writers_output_rows(glm: dict[str, Any]) -> None:
+    """GLM-5.3's latent row: `edge.kv_c` the kv norm's output rows and `edge.kv_pe` the kv rope's, each wired to its own writer
+    in window 0, held into window 1 under window 0's roots, and checked there with window 1's own rows."""
+    w0, w1, v0, v1 = glm["w0"], glm["w1"], glm["v0"], glm["v1"]
+    for v in (v0, v1):
+        assert v["registration"].ok, v["registration"].to_json()
+        assert v["edge"] == {} and v["edge_drawn"] == {}
+    assert [(p.name, len(p.sources)) for p in v0["ports"]] == [("edge.kv_c", 8), ("edge.kv_pe", 8), ("edge.last", 2)]
+    assert [(p.name, len(p.sources), sum(u is None for u, _s in p.sources)) for p in v1["ports"]] == [
+        ("edge.kv_c", 12, 8), ("edge.kv_pe", 12, 8), ("edge.last", 2, 0)]
+    roots0 = {r["port"]: r["root"] for r in v0["record"]["roots"]}
+    assert {e["value"]: e["root"] for e in v1["record"]["registered"]} == {p: roots0[p] for p in ("edge.kv_c", "edge.kv_pe", "edge.last")}
+    for port, words in (("edge.kv_c", SE.KV_C), ("edge.kv_pe", SE.KV_PE)):
+        writers = [r["i"] for r in w0["inst"]["rows"] if r["spec"] == SE.GLM.writers[port]]
+        rows0, _ = _private(w0, port)
+        assert rows0.tolist() == [np.asarray(w0["world"].values[(rid, i)], dtype=np.uint64).ravel()[:words].tolist()
+                                  for rid in SE.PROMPTS for i in writers]
+        rows1, _ = _private(w1, port)
+        held = [k for k, (unit, _s) in enumerate(next(p for p in v1["ports"] if p.name == port).sources) if unit is None]
+        assert rows1[held].tolist() == rows0.tolist() and [v1["strings"][port][k] for k in held] == v0["strings"][port]
+
+
+@pytest.mark.parametrize(("k", "port", "row", "bit"), [(0, "edge.kv_c", 5, 0), (0, "edge.kv_pe", 3, 7), (1, "edge.kv_c", 4, 3),
+                                                        (1, "edge.kv_pe", 4, 11), (1, "edge.kv_c", 2, 9), (1, "edge.kv_pe", 1, 2)])
+def test_a_glm_latent_edge_row_one_bit_off_its_writers_output_is_refused_by_name(glm: dict[str, Any], k: int, port: str, row: int,
+                                                                                 bit: int) -> None:
+    _refused(glm, k, port, row, bit)
+
+
+def test_glm_s_latent_row_as_one_edge_value_is_refused_by_name() -> None:
+    """The unsplit latent row, the kv norm's 512 words then the kv rope's 64, has no one writer: refused by name."""
+    pytest.importorskip("torch")
+    inst, _ = SE.program(0, SE.GLM)
+    norms, ropes = ([r["i"] for r in inst["rows"] if r["spec"] == t] for t in (SE.NORM, SE.PE))
+    joined = {"edge.kv": {"bits": 16, "runs": [run for a, b in zip(norms, ropes) for run in (["n", a, 0, SE.KV_C], ["n", b, 0, SE.KV_PE])]},
+              "edge.last": inst[ER.HEADER]["edge.last"]}
+    with pytest.raises(ValueError, match=r"edge\.kv of request r0: row 0 is not one run of 576 leaves"):
+        _wired(joined, words={"edge.kv": SE.KV_C + SE.KV_PE, "edge.last": 1}, shape=SE.GLM)
+
+
 def _wired(header: dict[str, Any] | None = None, words: dict[str, int] | None = None, templates: list[str] | None = None,
-           order: tuple[str, ...] = tuple(SE.PROMPTS), C: int = 0, before: dict | None = None) -> Any:
-    inst, _woff = SE.program(C)
+           order: tuple[str, ...] = tuple(SE.PROMPTS), C: int = 0, before: dict | None = None, shape: SE.Shape = SE.TOY) -> Any:
+    inst, _woff = SE.program(C, shape)
     if header is not None:
         inst[ER.HEADER] = header
     programs = {rid: inst for rid in SE.PROMPTS}
-    window, rows = SRW.population(programs, {"templates": templates or SE.TEMPLATES, "law": SE.LAW}, SE.OPEN[0],
+    window, rows = SRW.population(programs, {"templates": templates or shape.templates, "law": SE.LAW}, SE.OPEN[0],
                                   values=ER.values(before))
-    spec = ER.of_request({"window": SE.OPEN[0], "words": words or SE.WORDS, "order": list(order), "last": None})
+    spec = ER.of_request({"window": SE.OPEN[0], "words": words or shape.words, "order": list(order), "last": None})
     return ER.wiring(window, rows, programs, spec, before)
 
 
