@@ -113,25 +113,15 @@ def _stages(stream: S.Stream, row=0) -> tuple[S.Draw, S.Draw]:
     return first, stream.select(stream._entries[reg.order].interior)
 
 
-def _statement(second: S.Draw, **change) -> dict:
-    """The second-stage session's statement (`second_stage`): PAIR's, its public file's header over the interior
-    registration's Q·n_rho slots at its roots, and its sample the second stage's units."""
-    rec, m = second.registration.record, Q * N_RHO
-    (template, _), = P.strata(P.population_program(PAIR, m), QUERY)
-    roots = {r["port"]: r for r in rec["roots"]}
-    header = {"scheme": rec["scheme"], "instances": m, "units": {"indices": list(range(m))},
-              "frame_v3": {"roots": {v: r["root"] for v, r in roots.items()},
-                           "domain_ids": {v: r["domain"] for v, r in roots.items()}}}
-    units = D.proved(second.draw)
-    return {"template": template, "header": header, "registered": None,
-            "draw": {"law": "subset", "population": m, "k": len(units), "units": units}, **change}
-
-
 def _two_stage_outcome(stream: S.Stream, statements) -> S.Outcome:
+    """The run's outcome with the second-stage statements `statements` gives: a function of the honest prover's one
+    (`fake_challenger.Stream.statements`, PAIR's) and the second stage's sample, or as given."""
     _, second = _stages(stream)
     stream.deliver(second, [SESSION])
+    if callable(statements):
+        statements = statements(stream.statements(second)[0], second)
     return stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
-                          statements=statements(second) if callable(statements) else statements)
+                          statements=statements)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -153,8 +143,12 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert second.replay_sample == first and second.law == S.second_law(first.units, N_RHO, K)
     assert [u // N_RHO for u in second.units] == list(range(Q))
     assert stream.deliver(second, [SESSION]) is None
+    statements = stream.statements(second)
+    (template, _), = P.strata(P.population_program(PAIR, Q * N_RHO), QUERY)
+    assert [(s["template"], s["draw"]["units"], s["header"]["units"]["indices"]) for s in statements] == \
+        [(template, D.proved(second.draw), list(range(Q * N_RHO)))]
     out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
-                         statements=[_statement(second)])
+                         statements=statements)
     assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
     assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
 
@@ -179,7 +173,7 @@ def test_the_run_of_record_holds_the_form_switch(monkeypatch):
     round 2's check passes and the Python would accept, and the run of record, still refusing the form, disagrees."""
     monkeypatch.setattr(SS, "FORM", True)
     stream = _stream()
-    out = _two_stage_outcome(stream, lambda second: [_statement(second)])
+    out = _two_stage_outcome(stream, lambda s, second: [s])
     checks = stream.records[0]["audit"]["checks"]
     assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
     assert {"interior", "public", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
@@ -197,11 +191,8 @@ def _link(second: S.Draw, shift: int = 0) -> dict:
 
 
 def _restated(**change):
-    """The session's statement with `change`, each a field or a function of the honest field's value."""
-    def statements(second):
-        s = _statement(second)
-        return [{**s, **{k: f(s[k]) if callable(f) else f for k, f in change.items()}}]
-    return statements
+    """The honest statement with `change`, each a field or a function of the honest field's value."""
+    return lambda s, second: [{**s, **{k: f(s[k]) if callable(f) else f for k, f in change.items()}}]
 
 
 def _header(**change):
@@ -213,13 +204,12 @@ def _frame(key: str, f):
 
 
 @pytest.mark.parametrize("statements, codes", [
-    (lambda second: [_statement(second, registered=_link(second))], ["two-stage-form"]),
+    (lambda s, second: [{**s, "registered": _link(second)}], ["two-stage-form"]),
     (None, ["second-statements"]),
     ([], ["second-cover"]),
-    (lambda second: [_statement(second)] * 2, ["second-template"]),
+    (lambda s, second: [s, s], ["second-template"]),
     (_restated(template="TwoStageTestOther_v0"), ["second-template", "second-cover"]),
-    (lambda second: [{k: v for k, v in _statement(second).items() if k != "registered"}],
-     ["second-statement", "second-cover"]),
+    (lambda s, second: [{k: v for k, v in s.items() if k != "registered"}], ["second-statement", "second-cover"]),
     (_restated(header=None), ["second-statement", "second-cover"]),
     (_header(instances=Q * N_RHO + 1), ["second-population"]),
     (_header(units={"indices": list(range(1, Q * N_RHO + 1))}), ["second-population"]),
@@ -229,8 +219,8 @@ def _frame(key: str, f):
     (_frame("domain_ids", lambda d: {**d, "out": d["x"]}), ["second-roots"]),
     (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
     (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
-    (lambda second: [_statement(second, registered=_link(second, shift=1))], ["second-link"]),
-    (lambda second: [_statement(second, registered={"ports": {"x": _link(second)["ports"]["y"]}})], ["second-roots"]),
+    (lambda s, second: [{**s, "registered": _link(second, shift=1)}], ["second-link"]),
+    (lambda s, second: [{**s, "registered": {"ports": {"x": _link(second)["ports"]["y"]}}}], ["second-roots"]),
 ])
 def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, a boundary port read at each slot's cell's replay
