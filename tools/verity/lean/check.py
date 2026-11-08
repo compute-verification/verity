@@ -1358,6 +1358,8 @@ def read_cached_facts(cache: Path, key: str) -> dict | None:
         meta = json.loads(side.read_text())
     except (OSError, ValueError) as e:
         raise RuntimeError(f"the facts sidecar {side} can't be read ({e!r}); the document is refused")
+    if not isinstance(meta, dict):
+        raise RuntimeError(f"the facts sidecar {side} is not an object; the document is refused")
     if meta.get("schema") != FACTS_SCHEMA:
         raise RuntimeError(f"the facts document {doc_path} is {meta.get('schema')!r}, not {FACTS_SCHEMA}; refused")
     if meta.get("key") != key:

@@ -1308,6 +1308,10 @@ def test_the_facts_cache_reads_a_document_only_by_its_key_and_refuses_a_tampered
     (cache / f"{key}.json").write_text(json.dumps(side | {"schema": "lean-facts/v0"}))
     with pytest.raises(RuntimeError, match="refused"):
         A.read_cached_facts(cache, key)
+    for garbage in ("[]", "{not json"):
+        (cache / f"{key}.json").write_text(garbage)
+        with pytest.raises(RuntimeError, match="refused"):
+            A.read_cached_facts(cache, key)
 
     A.store_cached_facts(cache, key, doc)
     (cache / f"{key}.json").unlink()
