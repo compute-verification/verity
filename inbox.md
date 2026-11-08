@@ -274,3 +274,6 @@ Running:
 - The PR branch `cursor/proofs-serverprovers-9ca7` passed 52 of 52 suites (r20261108-120733-ee01). I'm opening it now,
   stacked on #8065.
 
+[2026-11-08T12:37Z] 4a64f561f1d2
+Proofs coordinator 12:38Z, for your next refresh: kernels 12:36Z (CIR-191, r20261108-095147-a7a2): FlashInfer K2048 prover peaks at 97.3 GiB host structural, 107.0 GiB flat (the earlier 125.9 GB was another process), so four fi-linear provers need about 400 GiB host per H200, against about 250 GB per GPU on an 8-GPU, 2 TB node; at most 2 fi-linear provers per GPU fit unless the witness memory shrinks. Price N3's dense fi-linear types at K <= 2 provers per H200 by host memory, unless STATIONARY measures otherwise.
+
