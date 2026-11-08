@@ -31,15 +31,18 @@ owns one that `expert_map` sends to -1. vLLM's op writes the same buffers, excep
 call and still allocates the buffers. `Align` runs Triton kernels (`moe_align_kernels.py`) on the inputs' stream, with no
 atomics and no host sync:
 
-- A call of at most `SMALL_MAX` pairs runs as one program, `align_one`. It histograms the pairs by expert, takes the
-  padded prefix sum, sorts the keys `expert × PB + p`, and writes each pair at its sorted position plus its expert's
-  shift.
-- A longer call runs in three launches over chunks of `CHUNK` pairs. `count_chunks` takes each chunk's histogram.
-  `scan_chunks` turns the histograms into each (chunk, expert)'s first slot and writes the padding. `place_chunks` sorts
-  each chunk and writes its pairs.
+A pair's slot is `base[e]`, plus its expert's pairs before its tile of `TILE` pairs, plus its rank in the tile: the
+tile's earlier pairs on its expert, counted by comparing the tile's pairs with each other, `COLS` at a time. Each program
+places one tile, and the program that places an expert's last pair writes that expert's pad slots.
 
-Pads and pairs never share a slot, so no barrier orders them. Every slot vLLM's kernel writes is written. The long path
-allocates a workspace through PyTorch's allocator, so both paths can be captured in a CUDA graph.
+- A call of at most `SMALL_MAX` pairs is one launch, `align_small`, with a program a tile. Each program histograms all
+  the call's pairs for `base` and the pairs before its tile for its offsets.
+- A longer call is three launches over chunks of `CHUNK` pairs. `count_chunks` takes each chunk's histogram.
+  `scan_chunks` turns them into each (chunk, expert)'s pairs in earlier chunks and each expert's total. `place_chunks`
+  runs a program a tile, which adds its chunk's pairs before the tile.
+
+The stores' slots are disjoint, so no barrier orders them, and every slot vLLM's kernel writes is written. The long path
+allocates its workspace through PyTorch's allocator, so both paths can be captured in a CUDA graph.
 
 `python moe_align.py site DIR` writes the plugin's entry point into `DIR`, and a server or replay with `DIR` on its
 `PYTHONPATH` loads it. `VERITY_MOE_ALIGN_LOG=DIR` keeps each process's calls on each path in `DIR/moe_align.PID.json`.

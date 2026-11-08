@@ -284,11 +284,12 @@ def host_us(fn, iters: int) -> float:
 
 
 def variant(spec: str):
-    """``SMALL_MAX:CHUNK:TILE:COLS[:slow]`` (``slow``: Triton's own launch on every call), or ``default``."""
+    """``SMALL_MAX:CHUNK:TILE:COLS:HIST[:slow]`` (``slow``: Triton's own launch on every call), or ``default``."""
     if spec == "default":
         return MA.Align()
-    small, chunk, tile, cols, *slow = spec.split(":")
-    return MA.Align(small_max=int(small), chunk=int(chunk), tile=int(tile), cols=int(cols), fast_launch=not slow)
+    small, chunk, tile, cols, hist, *slow = spec.split(":")
+    return MA.Align(small_max=int(small), chunk=int(chunk), tile=int(tile), cols=int(cols), hist=int(hist),
+                    fast_launch=not slow)
 
 
 def timed(fn, iters: int) -> dict:
@@ -408,9 +409,9 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=100)
-    p.add_argument("--variants", default="default,4096:1024:64:32:slow,1024:1024:64:32,2048:1024:64:32,"
-                                         "8192:1024:64:32,4096:512:64:32,4096:2048:64:32,4096:1024:128:32,"
-                                         "4096:1024:32:32,4096:1024:64:16",
+    p.add_argument("--variants", default="default,4096:512:32:32:512:slow,4096:512:32:32:8192,4096:512:32:32:256,"
+                                         "4096:512:32:32:1024,4096:512:64:32:512,2048:512:32:32:512,"
+                                         "8192:512:32:32:512,4096:256:32:32:256,4096:512:32:16:512",
                    help="stress.py time: `Align`'s parameters (`variant`), by comma")
     args = p.parse_args()
     if args.mode == "plugin":

@@ -219,7 +219,7 @@ def interpreted(monkeypatch):
 def test_kernels_write_the_reference_in_interpreter(monkeypatch, path):
     torch = interpreted(monkeypatch)
     small = 1 << 20 if path == "one" else 0
-    align = moe_align.Align(small_max=small, chunk=64, tile=32, cols=16)
+    align = moe_align.Align(small_max=small, chunk=64, tile=16, cols=16, hist=32)
     rng = random.Random(path)
     cases = [([2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3], 5, 4, None), ([1, 3, 1, 1, 1], 4, 2, None), ([5, 0], 8, 4, None),
              ([-1, 2, 3, 7, -9, 1], 3, 2, None), ([0, 1, 2, 1], 3, 2, [-1, 0, 2]), ([2, 0, 2, 2, 0], 3, 1, None)]
