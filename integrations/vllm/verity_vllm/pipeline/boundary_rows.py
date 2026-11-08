@@ -56,8 +56,8 @@ from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.windows import rows as CS
+from verity_vllm.records.boundary_commit import FILE as COMMIT, SCHEMA as FORMAT, BoundaryCommit
 
-FORMAT = "verity-vllm/boundary-rows/v0"
 SCHEMA = CS.SCHEMA_HM96_SHA512_ROW_V2
 INGRESS, EGRESS = "b.ingress", "b.egress"
 PORTS = (INGRESS, EGRESS)
@@ -71,7 +71,14 @@ SAMPLING = tuple(k for k, _ in FIELDS if k not in ("lp", "seeded"))
 HEAD_U32 = sum(2 if t == "u64" else 1 for _, t in FIELDS)
 #: `b.egress`'s finish codes; 0 is a request still running when the serve stopped
 FINISH = ("stop", "length", "abort", "error")
-COMMIT, INDEX, SALTS = "commit.json", "index.json", "salts.bin"
+INDEX, SALTS = "index.json", "salts.bin"
+
+
+def check_template(t: str) -> SpecializedDefinition:
+    """The check template a serving template's descriptor id ``t`` names (`serving_templates.template`)."""
+    from verity_vllm.pipeline import serving_templates as ST
+
+    return ST.template(t).fn
 
 
 def cap(n: int) -> int:
@@ -249,10 +256,11 @@ class Committed:
 
     def public(self) -> dict[str, Any]:
         L, ports = self.layout, self.layout.ports()
-        return {"format": FORMAT, "window": self.window, "run": L.run, **L.provenance(), "spans": L.spans,
-                "replay": P.template_id(L.replay), "program": L.partition["program"], "partition": P.digest(L.partition),
-                "schema": SCHEMA, "values": {p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in PORTS},
-                "index": self.index_leaf, "index_rule": CS.INDEX_RULE, "seconds": round(self.seconds, 3)}
+        return BoundaryCommit(
+            window=self.window, run=L.run, **L.provenance(), spans=L.spans, replay=P.template_id(L.replay),
+            program=L.partition["program"], partition=P.digest(L.partition), schema=SCHEMA,
+            values={p: {"root": self.roots[p].hex(), "words": L.words(p), **ports[p]} for p in PORTS},
+            index=self.index_leaf, index_rule=CS.INDEX_RULE, seconds=round(self.seconds, 3)).dump()
 
     def record(self, law: Mapping[str, Any], previous: str | None = None,
                window: Mapping[str, Any] | None = None) -> dict[str, Any]:
@@ -261,10 +269,12 @@ class Committed:
 
 def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
     """The class's `Layout` from its ``commit.json`` (``pub``) and the check template it names: the challenger's own copy,
-    from public items alone. ValueError when ``check`` isn't the one it names."""
-    if pub.get("format") != FORMAT or pub.get("check") != P.template_id(check):
-        raise ValueError(f"not a {FORMAT} commitment of check {P.template_id(check)}")
-    return Layout(check, pub["per_prompt"], pub["per_output"], pub["prompt"], pub["outputs"], pub["spans"], pub["run"])
+    from public items alone. ValueError (`BoundaryCommit.of`'s by field) when ``pub`` isn't one, or ``check`` isn't the one
+    it names."""
+    c = BoundaryCommit.of(pub, COMMIT)
+    if c.check != P.template_id(check):
+        raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {P.template_id(check)}")
+    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run)
 
 
 def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
@@ -273,10 +283,10 @@ def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[st
     `Layout.grain` at ``law`` (the first stage's, `service.selection_law`), each value's root, and its window: served, the
     run, the window's index as its row, the class, the check and the index's leaf, with ``window``'s items (the advice's
     binding)."""
-    L = layout_of(pub, check)
+    L, c = layout_of(pub, check), BoundaryCommit.of(pub, COMMIT)
     ports = L.ports()
-    roots = [{"port": p, "root": pub["values"][p]["root"], **ports[p]} for p in PORTS]
-    w = {"kind": "served", "run": L.run, "row": pub["window"], **L.provenance(), "index": pub["index"], "boundary": FORMAT,
+    roots = [{"port": p, "root": c.values[p]["root"], **ports[p]} for p in PORTS]
+    w = {"kind": "served", "run": L.run, "row": c.window, **L.provenance(), "index": c.index, "boundary": FORMAT,
          **(window or {})}
     return R.record(L.program, L.grain, law, CS.SCHEME, roots, w, previous=previous)
 
@@ -311,18 +321,18 @@ def reopen(directory: Path, check: SpecializedDefinition) -> Committed:
     """The class's commitment from its files, recommitted and held to ``commit.json``'s roots and index leaf: what the
     replay opens its spans' boundary rows from. ValueError when they differ, or ``check`` isn't the one it names."""
     d = Path(directory)
-    pub = json.loads((d / COMMIT).read_text())
-    layout = layout_of(pub, check)
+    pub = BoundaryCommit.of(json.loads((d / COMMIT).read_text()), str(d / COMMIT))
+    layout = layout_of(pub.dump(), check)
     spans = [Span.from_json(s) for s in json.loads((d / INDEX).read_bytes())["spans"]]
     raw, n = (d / SALTS).read_bytes(), CS.SALT_BYTES * layout.spans
     if len(raw) != n * len(PORTS):
         raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(PORTS)} values' {n}")
-    c = commit(spans, layout, pub["window"], salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
+    c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
                index_salt=(d / CS.INDEX_SALT).read_bytes())
-    got = c.public()
+    got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
-        if got[k] != pub[k]:
-            raise ValueError(f"{d}: its files recommit to another {k} than commit.json's")
+        if getattr(got, k) != getattr(pub, k):
+            raise ValueError(f"{d}: its files recommit to another {k} than {COMMIT}'s")
     return c
 
 
@@ -368,16 +378,11 @@ class BoundaryWindows:
 
     @classmethod
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None) -> BoundaryWindows:
-        """From a serve's configuration: ``check``, a serving template's descriptor id (`serving_templates.template`), and
+        """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
         ``per_prompt``, ``per_output``, ``window_s`` and ``drained``."""
-        t = cfg["check"]
-
-        def check() -> SpecializedDefinition:
-            from verity_vllm.pipeline import serving_templates as ST
-
-            return ST.template(t).fn
-        return cls(out, check, int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)), float(cfg.get("window_s", 600)),
-                   drained=bool(cfg.get("drained", True)), sink=sink)
+        t = str(cfg["check"])
+        return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
+                   float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)), sink=sink)
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -498,5 +503,5 @@ class BoundaryWindows:
 
 
 __all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "SALTS", "SCHEMA",
-           "BoundaryWindows", "Committed", "Layout", "Span", "cap", "classes", "commit", "egress_row", "ingress_row",
-           "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]
+           "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit", "egress_row",
+           "ingress_row", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]

@@ -212,9 +212,7 @@ def resume(stage1: Mapping[str, Any], check: SpecializedDefinition, then: CC.Cha
 
 
 def template_fn(t: str) -> SpecializedDefinition:
-    from verity_vllm.pipeline import serving_templates as ST
-
-    return ST.template(t).fn
+    return BR.check_template(t)
 
 
 def _first_all(a: argparse.Namespace, pubs: list[dict], check: SpecializedDefinition, rule: Rule,
