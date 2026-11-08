@@ -1,8 +1,6 @@
 module
 
-public import Flock.Hm96
 public import Flock.HmRow
-public import Randomness
 public import Attest.FrameV3Sha512
 
 /-!
@@ -41,7 +39,7 @@ def LATE : String := "late"
 def CLOCK : String := "CLOCK_MONOTONIC ns"
 
 /-- The stream a coin index reads, in bytes: `Randomness.uniform` reads a bounded prefix of the Python's unbounded stream.
-A draw over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
+A sample over fewer than 2^64 blocks takes 16-byte words, so this is 256 words, each rejected with probability below
 2^-64. -/
 def DRAW_BYTES : Nat := 4096
 

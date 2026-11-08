@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.HMu
 public import Proofs.Accounting.Tag.LittlewoodOfford
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B, and (H-μ) from the coins

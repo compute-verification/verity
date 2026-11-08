@@ -3,13 +3,46 @@ module
 public import Proofs.Flock.Claims.Complete.Zk.ConsRingSwitch
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.ZerocheckReplay
 public import Proofs.Flock.Soundness.Discharge.Composed.Inner.LincheckReplay
+public import Proofs.Flock.Claims.Complete.Zk.ConsLincheck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Zk.ConsZerocheck
 
 /-!
 # The masked replay's rows vanish wherever the plain checks pass at its coins
 
 `Zk.replay` hands `verifyInner` five message-dependent rows: its own three (`zerocheck c_eval`,
 `zerocheck final a·b`, `lincheck final`) and the opening's two (`ring switch ab`, `ring switch c`, `Zk.verify`'s
-`abValue + ⟨w_ab, ŝ_ab⟩` and `cValue + ⟨w_c, ŝ_c⟩`). Live coins make the masked run draw plain's coins at plain's
+`abValue + ⟨w_ab, ŝ_ab⟩` and `cValue + ⟨w_c, ŝ_c⟩`). Live coins make the masked run flip plain's coins at plain's
 sends, so each row is a plain check on the clear proof at the replay's coins, moved by the pads:
 
 * `replay_rows_zero`: on a proof that is the clear one masked by the pads (`ZerocheckMasked.Masks`, `LcMasks`) at

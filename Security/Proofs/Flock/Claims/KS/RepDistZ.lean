@@ -1,19 +1,52 @@
 module
 
+public import Batteries.Data.ByteArray
 public import Proofs.Flock.Claims.KS.RepDist
-public import Proofs.Flock.Claims.KS.SlotLead
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Shape
+public import Proofs.Flock.Soundness.Discharge.ZkLink.LockRep
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.SlotLead
 
 /-!
 # A masked rep's level caps, at a distance fixed by the statement and the schedule
 
 A masked rep's lockstep (`lockRepZ`) meets its level-`ℓ + 1` cap's table node, `slotOf r (ℓ + 1)` moved four up, after
 the same number of coins on every path that meets it: the masked zerocheck's, lincheck's and opening's coins (the
-non-ZK session's shapes), level 0's two first coins, its `k0` masked lane rounds and its `e` extra draws, then, per
+non-ZK session's shapes), level 0's two first coins, its `k0` masked lane rounds and its `e` extra samples, then, per
 level passed, plain's count (`RepDist`). The pads root and `τ`'s commitment sit at slots below four, and a path whose
 opening rejects goes to the inner proof and meets no cap.
 
-* `coinsK_foldShapeZ`, `coinsK_replicate_coin`: the masked lane rounds' and the extra draws' coins;
+* `coinsK_foldShapeZ`, `coinsK_replicate_coin`: the masked lane rounds' and the extra samples' coins;
 * `noSlot_lockQueryZ`, `noSlot_lockFoldZK`, `noSlot_lockQuery0Z`, `noSlot_lockInnerZ`: the phases between caps, and
   the inner proof, have no level table node;
 * `dist_lockRecZ`, `dist_lockLigTailZ`, `dist_lockLigPadZ`, `dist_lockRestZ`, `dist_lockMaskedZ`: each cap's distance
@@ -225,7 +258,7 @@ theorem dist_lockLigTailZ (A : Arith F K) (r : ℕ) (hr : r < 2) (sch : Schedule
         omega
 
 /-- The coins from the masked level 0's start to its level-`ℓ + 1` cap: its two first coins, its `k0` lane rounds,
-its `e` extra draws, then `ligSlotDist`. -/
+its `e` extra samples, then `ligSlotDist`. -/
 def ligPadSlotDist (sch : Schedule) (e ℓ : ℕ) : ℕ :=
   ligSlotDist sch.levels.tail ℓ + e + sch.k0 + 1 + 1
 

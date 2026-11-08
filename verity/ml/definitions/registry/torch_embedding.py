@@ -90,6 +90,7 @@ from verity.ml.circuits.types import Array, Tuple
 
 from . import boolean_gather as BGA
 from .torch_attention import GPU_SHAPES, GPU_STEP, ON_GPU, transpose, transposes
+from .torch_clip import _refusal
 
 __all__ = ["EmbeddingBackwardEntry", "EmbeddingBackwardFeature", "EmbeddingBackwardFeatureChunk", "EmbeddingBackwardKey",
            "EmbeddingBackwardMove", "EmbeddingBackwardRoute", "EmbeddingBackwardSegmentRun", "EmbeddingBackwardSegmentStep",
@@ -164,12 +165,6 @@ def _feature_chunk(C, S, acc, v, *w):
         s = mux(C, hit, mux(C, have, _add(C, s, gf), gf), s)
         have = OR(C, have, hit)
     return mux(C, have, _bf16(C, _add(C, fp.bf16_to_f32(acc), fp.bf16_to_f32(_bf16(C, s)))), acc)
-
-
-def _refusal(k: str, v: Any, lo: int, hi: int) -> str | None:
-    if isinstance(v, bool) or not isinstance(v, int) or not lo <= v <= hi:
-        return f"{k} = {v!r} is outside {lo}..{hi}, the range of the kernel this is"
-    return None
 
 
 def _refuse(k: str, lo: int, hi: int):

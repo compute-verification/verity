@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Accounting.Guarantees.HMu
+public import Proofs.Accounting.Lemmas.HMu
 
 /-!
 # Lemma B′ for a persistent pattern, one word a unit

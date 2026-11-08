@@ -1,8 +1,7 @@
 module
 
 public import Definitions.Pouw.Basic.Mat
-public import Mathlib.Logic.Equiv.Defs
-public import Mathlib.Data.Fintype.Basic
+import Mathlib.Tactic.Bound.Init
 
 /-!
 # Noise that cancels inside one checked product: definitions (trusted)

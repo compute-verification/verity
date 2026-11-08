@@ -134,7 +134,7 @@ def kind_sequence(i: int, H: int = 256, D: int = 64, L: int = 32) -> dict:
         e = np.exp(sc - sc.max(1, keepdims=True))
         P = bf16((e / e.sum(1, keepdims=True)).astype(np.float32))
     elif kind in ("wide", "unit", "tiny"):
-        def centre(n):
+        def centre(n: int) -> np.ndarray:
             if kind == "wide":
                 return rng.integers(1, 255, size=n)
             if kind == "unit":
@@ -174,7 +174,7 @@ def kind_sequence(i: int, H: int = 256, D: int = 64, L: int = 32) -> dict:
     return dict(Q=Q, K=K, V=V, P=P)
 
 
-def build(name: str):
+def build(name: str) -> tuple[dict[str, np.ndarray], int]:
     """The case's inputs: random normal Q, K and V, P uniform in [0, 1), specials in the live words of every n-th sequence
     (with exact cancellations and overflows), or kinds_d64's generators; and junk wherever the kernels must not read."""
     B, H, Hkv, D, Lcap, lens_f, nq_f, frac, every = CASES[name]
@@ -234,7 +234,7 @@ def coordinate(x: np.ndarray, w: np.ndarray, kernel: str = "auto") -> np.ndarray
     return out
 
 
-def pairs(lens: np.ndarray, nq: np.ndarray):
+def pairs(lens: np.ndarray, nq: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """Every live (sequence, query) with its length."""
     bi, qi, li = [], [], []
     for b in range(len(lens)):
@@ -243,7 +243,8 @@ def pairs(lens: np.ndarray, nq: np.ndarray):
     return np.array(bi), np.array(qi), np.array(li)
 
 
-def _pick(kind: str, x: np.ndarray, w: np.ndarray, words: np.ndarray, live: np.ndarray, rng: np.random.Generator, n: int = 24):
+def _pick(kind: str, x: np.ndarray, w: np.ndarray, words: np.ndarray, live: np.ndarray, rng: np.random.Generator,
+          n: int = 24) -> tuple[str, np.ndarray, np.ndarray, np.ndarray]:
     """Up to ``n`` live rows with a special operand word and ``n`` random live ones, for `reference_sample`."""
     idx = np.flatnonzero(live)
     if not idx.size:
@@ -254,7 +255,7 @@ def _pick(kind: str, x: np.ndarray, w: np.ndarray, words: np.ndarray, live: np.n
     return kind, x[p], w[p], words[p]
 
 
-def expected(inp: dict, D: int, sample: list, rng: np.random.Generator):
+def expected(inp: dict, D: int, sample: list, rng: np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
     """S and O as the kernels must leave them, with a sample of their words' operand rows appended to ``sample``."""
     Q, K, V, P, lens, nq = (inp[k] for k in ("Q", "K", "V", "P", "lens", "nq"))
     kpv = int(inp["kpv"])

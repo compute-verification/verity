@@ -1,15 +1,20 @@
 #!/usr/bin/env bash
 # The recorded honest session `tests/test_honest_reqs.py` holds to Lean's `honestReqs`: 80-rec-inner.sh's inner session
 # alone (RoPE d64 staged at N instances, proved on the CPU by the unmodified prover, FC_COINS=os, against rec_live under
-# Lean's `flock-firewall live`), with the firewall's stdin and stdout kept as they pass through a tee around the binary
+# Lean's `flock-firewall live`), with the ZK server's stdin and stdout kept as they pass through a tee around the binary
 # (rec_live unchanged): the schedule and every request rec_live relayed, in order, one hex line each, and each answer with
-# the salts the firewall drew for it, after the schedule's line and answer of serve's load check, which starts the binary
+# the salts the ZK server drew for it, after the schedule's line and answer of serve's load check, which starts the binary
 # once before the session. Run from the verity tree (research run --cwd source). Outputs under out/: fixture/
-# (the tree to put as fixture/v1: firewall-in.txt, firewall-out.txt, and rec_live's public.json, the coin server's record),
+# (the tree to put as fixture/v1: firewall-in.txt, firewall-out.txt, and rec_live's public.json, the challenger's live-coin part's record),
 # inner/ (rec_live's session), stage.json, statement.txt, schedule.json, proxy.log, prove.txt/.err, summary.json.
 # Pins its own slices where it can take slice locks (node 1); on a vy-cpu pod, run it in a check slot (--pool), which pins it.
 # env: N=1 (RoPE heads: 1 to 8 are m=25, the smallest fast100 takes)  CPUS=32  FLOCK_WORK (as 80-rec-inner.sh; where neither
 #      /workspace nor /workspace/jobs is writable, /workspace/cache/flock, as 71-gemm-slowdown.sh's)
+# Refused: the prover has no per-round OS coins (FC_COINS is tree, or unset for the seed), and `flock-firewall live`'s
+# inner session takes a Hello that names no coins (`Flock.Firewall.step`), so no honest session can be recorded until the
+# ZK server's inner session takes the challenger's coin tree.
+echo "93-rec-honest-session: refused: the prover has no FC_COINS=os, and flock-firewall live's inner Hello names no coins" >&2
+exit 2
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
 set -uxo pipefail
 if [ -z "${RI_PINNED:-}" ]; then

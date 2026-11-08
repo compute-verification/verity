@@ -1,12 +1,49 @@
 module
 
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.ResLowerD
 public import Proofs.Flock.Claims.Recursion.ResSiteD
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.ResLowerDA
+import Proofs.Flock.Claims.Recursion.ResTieVV
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Claims.Recursion.VVTieOf
 
 /-!
 # `ResLoweredPD` at the deployed constants (`resLowered_D`)
 
 The site facts need part `s`'s own decision at its staged statement (`PartDec`: table 0 labels its instances `0..n-1`
-only at a full draw, which only the decision checks), and a joint acceptance at arbitrary witnesses carries none. So the
+only at a full sample, which only the decision checks), and a joint acceptance at arbitrary witnesses carries none. So the
 decision travels beside the staged statement, in what each part shows (`showsDec`: `showsPart` and `PartDec` wherever
 the statement sets up). The chain's commit ties between two parts read both parts' setups and a collision with the
 verifier's own evaluations there (`accCommit_eq`), so `ResLoweredPD` is `ResLoweredP` at `JointV` over `showsDec` (the

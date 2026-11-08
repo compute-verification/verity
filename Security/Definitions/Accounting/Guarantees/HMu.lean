@@ -7,18 +7,12 @@ public import Definitions.Accounting.HMu
 
 The statements, over `Definitions/Accounting/HMu.lean`. The proofs are in `Security/Proofs/Accounting/HMu/`.
 
-* `LemmaB`: under (H-μ⁺) at `(μ, Z)` (`SkipRound.HMuPlus`), a round is lucky with probability at most `Z·μ` times its
-  probability of being deficient. This is (L)'s per-round form (`Accounting.TS.RoundGame.LuckAt`) at `p = Z·μ`, for a
-  check that passes only when the committed receipt is the honest one.
 * `CoinPointMass`: a skipped value `a + Σ_j [e_j]·v_j` with `u` fresh uniform bits `e` and nonzero integer weights has
   probability at most `C(u, ⌊u/2⌋)/2^u` at any value, given any view that doesn't read `e` (Erdős's Littlewood–Offord
   bound): `1/2` at `u = 1`, `0.140` at `u = 32`.
 * `CoinPointMassHalf`: in any additive group (`Z/2³²` included), one nonzero weight gives at most `1/2`.
 * `ReceiptLuckOfCoins` and `ReceiptLuckOfCoin`: the two together with Lemma B, on a `CoinRound`: its luck is at most
   `Z·C(u, ⌊u/2⌋)/2^u`, or `Z/2`, times its probability of being deficient.
-* `PersistentOneWord`: Lemma B′ for a persistent pattern, one word a unit. For a fold whose step is injective in the
-  state and in the word, if the pattern's first word is its only word before a committed checkpoint, the checkpoint's
-  state is injective in the skipped value: (Inj) with `Z = 1`, and no differential term.
 
 What the coins can't give, and so what stays a premise:
 
@@ -31,7 +25,7 @@ What the coins can't give, and so what stays a premise:
 * The skip decision must be in the view, with no leak: a cheater that learns one bit about the fresh coins can skip
   exactly when that bit pins the skipped value, and is then lucky on every deficient round. So a leak of `ℓ` bits costs
   a factor `2^ℓ` on the absolute luck, but no bound relative to the deficiency survives.
-* The fold's keys are drawn with σ, so a bound may not average over the start state. For a pattern with two or more
+* The fold's keys are sampled with σ, so a bound may not average over the start state. For a pattern with two or more
   words in the first unit it reaches (two copies of one entry in a unit, a rank-1 skip across a unit's words, the served
   `y ⊕ rotl(z, 16)` projection), Lemma B′ needs a fibre bound at the start state the cheater knows. (Inj) alone gives
   none, and an all-state no-kernel statement isn't one.
@@ -42,12 +36,6 @@ What the coins can't give, and so what stays a premise:
 namespace Accounting.Guarantees.HMu
 
 open Accounting.HMu Pouw.RelativeSecurity
-
-/-- **Lemma B (blind luck).** Under (H-μ⁺) at `(μ, Z)`, a round is lucky (deficient, with the honest receipt
-committed) with probability at most `Z·μ` times its probability of being deficient. -/
-def LemmaB : Prop :=
-  ∀ (Ω O α β : Type) [Fintype Ω] (R : SkipRound Ω O α β) (μ : ℝ) (Z : ℕ), R.HMuPlus μ Z →
-    prob R.lucky ≤ Z * μ * prob (fun ω => 0 < R.d (R.view ω))
 
 /-- **(H-μ) from fresh coins (Erdős's Littlewood–Offord bound).** On coins `Ω₀ × (J → Bool)`, uniform, a skipped
 value `a ω₀ + Σ_j [e_j]·v_j ω₀` whose `u = |J|` weights are nonzero integers takes any value `t` with probability at
@@ -84,14 +72,5 @@ def ReceiptLuckOfCoin : Prop :=
     (Z : ℕ),
     prob (fun ω : Ω₀ × (J → Bool) => R.Inj Z ω.1 ∧ (∃ j, R.weight ω.1 j ≠ 0) ∧ R.lucky ω) ≤
       Z * (1 / 2) * prob (fun ω : Ω₀ × (J → Bool) => 0 < R.d ω.1)
-
-/-- **Lemma B′ for a persistent pattern, one word a unit.** For a fold whose step is injective in the state for every
-word and in the word for every state, a pattern `P` whose first position `i` is its only position before the checkpoint
-`c > i`: the state at `c` of the words with `X` added at every position of `P` determines `X`. -/
-def PersistentOneWord : Prop :=
-  ∀ (S W : Type) [AddCommGroup W] (step : ℕ → S → W → S) (s₀ : S) (w : ℕ → W) (P : Finset ℕ) (i c : ℕ),
-    (∀ n x, Function.Injective (fun s => step n s x)) → (∀ n s, Function.Injective (step n s)) →
-    i ∈ P → i < c → (∀ n ∈ P, n ≠ i → c ≤ n) →
-    Function.Injective (fun X : W => chain step s₀ (persist w P X) c)
 
 end Accounting.Guarantees.HMu

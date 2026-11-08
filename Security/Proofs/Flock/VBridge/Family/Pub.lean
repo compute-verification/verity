@@ -1,9 +1,28 @@
 module
 
 public import Proofs.Flock.VBridge.Family.Rounds
-public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-public import Proofs.Flock.Verifier.Registered
 import all Init.Data.Array.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.Layout.QSort
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 
 /-!
 # The family's public files at accepting sessions: `PubCommits` up to a SHA-512 collision
@@ -11,16 +30,16 @@ import all Init.Data.Array.Basic
 The prover writes each session's `pub.bin` (`rec_residuals.write`, `rec_residuals.py:468`); the verifier builds the
 reads file's `rec-c<k>` entries from the `c_k` alone (`rec_vstage.messages`, `rec_vstage.py:156-168`;
 `rec_residuals.commits_entry`, `rec_residuals.py:402-410`): two leaves, the frame-v3 tree over the `c_k`'s `b ‖ c`.
-At an accepting session `Registered.check` opens each drawn instance's table row against that root, so the row's leaf is
+At an accepting session `Registered.check` opens each sampled instance's table row against that root, so the row's leaf is
 the `c_k`'s, or the verifier's opening and the honest one collide:
 
 * `commitsRoot`, `commitsSib`: the verifier's entry's root over two `b ‖ c`, and the honest opening's sibling;
   `opens_commitsRoot`: the honest opening is accepted; `treeLeaf_eq_or_collides`: an accepted opening at the same
   position has the `c_k`'s leaf, or `openPair` collides (`Flock.Registered.opensLeaf_binding`);
-* `opens_of_acceptsZKR`: at a transcript the session accepts, a drawn unit's row of a port of `own` opens the port's root
-  at the position `own` gives (`checked_of_acceptsHJ`, without a registrant), at the table the unit is drawn into;
+* `opens_of_acceptsZKR`: at a transcript the session accepts, a sampled proof block's row of a port of `own` opens the port's root
+  at the position `own` gives (`checked_of_acceptsHJ`, without a registrant), at the table the unit is sampled into;
 * `HOwnRoots`, `RowsDrawn`, `PortNamesUnique`: what the family's sessions must be for that: the verifier's reads files'
-  roots are `commitsRoot` over the history's `c_k`, an accepted transcript draws every unit that reads a round's
+  roots are `commitsRoot` over the history's `c_k`, an accepted transcript samples every unit that reads a round's
   commitment and labels it itself, and a circuit's port names are distinct;
 * `pubCommits_or_collides`: at every history and accepting session, each row of `Sk i j` registers `cmtOf (bc cOf)`'s
   digest of `t`'s stage-`i` commitment (`VCommits` at the row), or `openPair` collides;
@@ -95,8 +114,8 @@ theorem treeLeaf_eq_or_collides {reg : Registered.Port} {c0 c1 : ByteArray} (hl 
 
 /-! ## A session's accepted rows -/
 
-/-- **An accepted transcript opens a drawn unit's registered row** (`checked_of_acceptsHJ`, at a port of `own` rather
-than a registrant's read): where the transcript's draw `d` draws unit `u` into its table (`partOf`), that table's drawn
+/-- **An accepted transcript opens a sampled proof block's registered row** (`checked_of_acceptsHJ`, at a port of `own` rather
+than a registrant's read): where the transcript's sample `d` samples unit `u` into its table (`partOf`), that table's sampled
 statement (`HmOut.drawn` at `drawJ`) labels it `idx`, and `reg ∈ own` is the circuit's port `q` by name and gives
 position `x` for `u`'s label, the public file's `b ‖ c` of `u`'s row `q` opens `reg`'s root at `x` through the header's
 path. -/
@@ -191,10 +210,10 @@ def HOwnRoots (cOf : Cm → List UInt8) : Prop :=
     reg.schema = HmRow.ROW_SCHEMA ∧ ∃ c₀ c₁, reg.root = commitsRoot reg.domain c₀ c₁ ∧ ∀ x < 2, ∀ e : Cm × (ℐ).Coin, t[x * F.n₀ + F.kc k]? = some e →
       commitAt c₀ c₁ x = ⟨(cOf e.1).toArray⟩
 
-/-- **An accepted transcript draws the units that read a round's commitment, and labels them itself**: at every
-history, each transcript session `j` accepts has a draw that draws every unit some round-commitment port of `own`
-reads into its table (`partOf`, at the table's draw `drawJ`), and that table's drawn statement (`HmOut.drawn`) labels
-the unit with the unit. U4 (`checkFull` at the record's draw, which `flock-verify --registered --draw` runs) draws those
+/-- **An accepted transcript samples the units that read a round's commitment, and labels them itself**: at every
+history, each transcript session `j` accepts has a sample that samples every unit some round-commitment port of `own`
+reads into its table (`partOf`, at the table's sample `drawJ`), and that table's sampled statement (`HmOut.drawn`) labels
+the unit with the unit. U4 (`checkFull` at the record's sample, which `flock-verify --registered --draw` runs) samples those
 units in full; the labels are the verifier's own where its partition derives the units (`Registered.derived`, which
 `Registered.check` requires). -/
 def RowsDrawn : Prop :=

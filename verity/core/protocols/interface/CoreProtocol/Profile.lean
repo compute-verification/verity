@@ -1,16 +1,15 @@
 /-
 The integrity profile: what an accepted check established, as `verity.core.protocols.profile.IntegrityProfile`
 records it. These are the facts checked exhaustively, the verifier's law over named levels of a partition hierarchy
-(coarse to fine; the finest level is the checked one), the members drawn at each level, and δ. The JSON is
+(coarse to fine; the finest level is the checked one), the members sampled at each level, and δ. The JSON is
 `IntegrityProfile.to_json`'s, except that δ is an exact ratio string (`Core.Ratio`) and not a float.
 
-A protocol whose acceptance is not a sampling law over proof units (a timed storage audit, a certificate check) declares
+A protocol whose acceptance is not a sampling design over proof blocks (a timed storage audit, a certificate check) declares
 its own profile type; this one is shared by the protocols that sample. `Integrity.ofJson` reads it back, for a protocol
 that consumes another's answer.
 -/
 module
 
-public import Lean.Data.Json
 public import Flock.Canon
 public import CoreProtocol.Ratio
 
@@ -29,8 +28,8 @@ structure Stratum where
   k : Nat
   deriving BEq, DecidableEq, Repr
 
-/-- How a level is drawn: each member independently with probability `p`, exactly `k` members uniformly, or uniform
-draws inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
+/-- How a level is sampled: each member independently with probability `p`, exactly `k` members uniformly, or uniform
+samples inside disjoint strata of the checked level (`profile.Bernoulli`, `Subset`, `Stratified`). -/
 inductive Draw where
   | bernoulli (p : Ratio)
   | subset (k : Nat)
@@ -52,11 +51,11 @@ structure Integrity where
   prescribed : Array String
   /-- Every other `Input` equals a committed output of an earlier Program in the transcript. -/
   linked : Bool
-  /-- Gate families proved on every audit, outside the draws. -/
+  /-- Gate families proved on every audit, outside the samples. -/
   covered : Array String
   levels : Array Level
   delta : Ratio
-  /-- Members actually drawn at each level, all passed, in level order. -/
+  /-- Members actually sampled at each level, all passed, in level order. -/
   drawn : Array (String × Nat)
   deriving BEq, DecidableEq, Repr
 

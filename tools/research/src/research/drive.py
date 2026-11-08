@@ -6,100 +6,90 @@ drives `queue-shadow`: it lands nothing, launches nothing and posts nothing, and
 
 What only a PR's owner acts on goes to that owner alone (`tell`).  Each tick applies the stale rule (`research.stale`, drive.toml's
 `stale_days` and `stale_close_days`: `_stale`): a PR unmarked at its head and idle `stale_days` rings its owner once a day, and
-at `stale_close_days` drive closes it, its branch kept.  After a landing, the owner of each unmarked open PR whose head contains
+at `stale_close_days` drive closes it, its branch kept.  Each hour it applies the unlandable rule (drive.toml's
+`close_unlandable`: `_unlandable`): an unmarked open PR based on `main` that nothing will land as it is, its head carried by a
+landed PR of the same owner or its change on `checked` already, is closed, its branch kept, with a comment saying which
+and how to keep it open (or, with "log", only logged).  After a landing, the owner of each unmarked open PR whose head contains
 a landed PR's head hears once that its base landed and to merge `main` (`_stacked`).
 
 What a sync leaves out of `next` is told once per root cause instead of once per PR and head: the PR that didn't merge or isn't
-admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).
+admitted, why, and every marked PR it takes out, their owners tagged once, and again only when that changes (`tell_out`).  What
+a warn gate (drive.toml's `warn_gates`: a Markdown file over its cap) says of a PR's merge onto `next` keeps nothing out: the PR
+lands, and its owner and `CI` hear it once a head, for the owner to fix in their next PR (`tell_warned`).
 
 The low-risk lane (drive.toml's `lowrisk_lane`, `land_lowrisk`): after the reviewed prefix, a tick lands up to `lowrisk_per_tick`
-members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict, no Lean check and no wait in
-`next`, each whose merge onto `checked`'s tip changes no file `lowrisk_excludes` names (`queue.lowrisk`: no Lean, lock or
-soundness-path Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.
-The after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.
-Its landing rebuilds `next` on `checked`, and each Lean check of `next` that runs or passed moves to the commit of the same
-member, as its trees differ in no file `lowrisk_excludes` names (`_keep_lean`).  Above the prefix such a check holds, the
-lane also lands a member with a land verdict whose change is no Lean change and touches nothing a Lean check reads,
-whatever `lowrisk_excludes` say (`_reviewed_below`: a reviewed fix doesn't wait hours for the Lean checks below it), and the
-check moves across it as its trees differ in that member's files alone, none read by a Lean check (a moved check whose
-records then don't hold on its new commit by `merge.rekey_refusal` is checked again); the lane waits only while one can't move, and
-even then lands each fix of a red on `checked` above every such check's prefix whose change touches nothing a Lean check reads
-(`_land_fixes`), onto `checked`'s tip without rebuilding `next`: the next sync rebuilds it, and the check's verdict moves with its
-prefix (`_rekey_lean`, across trees that differ in no file `lowrisk_excludes` names).
+members of `next`, in its order, onto `checked` on their ready mark alone, with no land verdict and no wait in `next`, each
+whose merge onto `checked`'s tip changes no file `lowrisk_excludes` names (`queue.lowrisk`: no Lean, lock or soundness-path
+Python), merges with no conflict, contains no PR not landed, and passes the landing gates and the compile gate.  The
+after-landing run checks them with the rest, and `main` follows only a checked commit; never with `land_into = "main"`.  The
+next sync rebuilds `next` on what it landed.
 
 Review landing, of every change the low-risk lane (above) doesn't take.  `main` holds only fully checked commits: PRs land
 on a review onto the
 landing branch, drive.toml's `land_into` (`checked`: `Queue.into`), drive runs the full check on its tip, and `main` is
 fast-forwarded only to a commit of it whose after-landing run passed every step on the merge gate (`_promote`: not
-circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red reverts its culprit on `checked`); with `land_into = "main"` they
-land on `main` and are checked after.  A tick
+circuit-check, off it by drive's policy, policy.toml's `off_gate`, whose red is named on `checked` as any red is); beside the
+tick, without its lock or a write to its state, `research queue promote` moves it there as soon as that run ends (a loop on
+drive's host runs it: `queue.promote`), and ci's `research queue baseline SHA` to a commit ci knows passed them, each tick
+taking a `main` so moved as verified (`_main_moved`); with `land_into = "main"` they land on `main` and are checked after.  A tick
 syncs `next` (`Queue.sync`: admit and drop PRs, rebuild on a moved `checked`), then lands its longest prefix whose every member has a land verdict at its head and no hold
 (`research queue review N --land|--hold`, a `reviewed` label on `pr:N@HEAD`; one by its owner, the owner's handle or its ready
 mark's author doesn't count: `queue.unreviewed`), a fast-forward of `checked` (`_land`); once `main` reaches it, `merge.caught_up`
 (the spec DM, node 1's mirror, the post-train regression, the Lean cache publish, the landing post) and the sweep (`_on_main`).
-While `next`'s lowest member waits at its head for a land verdict, unheld, holding every landing above it, `BOTTOM_WAIT_S`
-since it became the lowest or since its ready mark, whichever is later, `CI` (who staffs the reviewers) and `TOP` are rung,
-and again every `BOTTOM_WAIT_S` while it waits (`_bottom`).
+While `next`'s lowest member waits at its head for a land verdict, unheld, holding every landing above it, drive.toml's
+`bottom_wait_min` minutes (by default `BOTTOM_WAIT_S`) since it became the lowest or since its ready mark, whichever is later,
+the handles of its `bottom_ring` are rung (by default `CI`, who staffs the reviewers, and `TOP`), and again every
+`bottom_wait_min` while it waits (`_bottom`).
 A layout move lands from `next` like any PR, regenerated by the sync on the tip below it and certified (`queue`'s "Moves"),
-and the members above it are restacked across it; once `main` reaches a move or a restacked PR, drive closes it and deletes
+and the members above it are restacked across it, in the background, each waiting off `next` meanwhile with no ring; once
+`main` reaches a move or a restacked PR, drive closes it and deletes
 its head branch (`_close_carried`, `_delete_head`); the sweep after a landing (`merge.sweep`) deletes the head branch of each
-PR that landed or was closed unmerged, but a stale one's.  A `main` pushed outside drive is merged into `checked` (`_absorb`).
+PR that landed or was closed unmerged, but one drive closed as stale or unlandable.  A `main` pushed outside drive is merged
+into `checked` (`_absorb`).
 Drive takes a tip of `checked` only when it wrote it (a landing, a revert, `_absorb`'s merge; each recorded in its state
 before its push: `_push_into`) or ci accepted it (`research queue accept-checked`); on any other tick it holds, landing
 nothing, syncing no `next` and moving no `main`, and rings `CI` and `TOP` once naming the commit and its author
-(`_unwritten`).  Two gates cut the prefix
-first.  A Lean change (a member whose own change touches a lock, `lean-audit.json`, the spec, `Security/`'s Definitions and
-Models and its package's Lake files, or a Lean source outside `Security/` of a package that has one, Lean that runs as code:
-`queue.lean_change`, whatever its PR's title; Lean proofs alone land on the verdict, checked by the
-after-landing run) lands only once a lean-audit passed on a commit of `next` at or above it: drive's own Lean
-check (`train.sh TOP MACHINES --deferred lean-audit`, of the prefix's top, while `next` stays on its base for it), or any
-recorded run of the store whose lean-audit passed there; one that regenerated locks lands exactly at its commit, or at the
-commit a rekey moved it to across trees that differ in no file a Lean check reads (`_rekey_refusal`), the locks on top, and
-`next` is rebuilt on that lock commit at once, each member above with its merge's tree and those records
-no merge above changed (`_carry`), so `main` stays a commit of `next` and the Lean checks above move with their commits: one
-covers its new commit when it regenerated the records they differ in, the tree that lands being the one it checked with its
-own.  While one runs, a Lean change above it, reviewed or not, gets a check stacked at `next`'s top, below what came this tick
-(`lean_stack`, at most `max_lean_checks` running), so it doesn't wait for the lower one to pass and then for a whole check of
-its own; the lower one runs on.  Each Lean check launched or stacked stops at a cut point, just below the Lean
-change after the first ceil(n / f) of the n it would hold, f the Lean checks still free (`lean_cut`), lowest first: a failure
-holds only what's above it, and the lower ones land without waiting for the rest.  `next` is built non-Lean first (drive.toml's
-`nonlean_first`, `queue.Queue._nonlean_order`: what a sync adds), and each sync moves the members with a land verdict below
-those waiting for one (`verdict_first`), those that change no Lean first (`_lift`, which passes over a held member), where
-they land that tick, so a reviewed member seldom waits above an unreviewed member, or above a Lean change for its check.
-While a Lean check of `next` runs or passed, it moves only the members above the prefix those checks keep in place, and none
-in it, so it rebuilds nothing a check covers; one that gains its verdict goes after those already moved, so none below it is
-merged again.  With `verdict_first` off, `reviewed_first` does this only while no Lean check of `next` runs or passed.  And every sync moves each member held by a verdict at its head, with every PR that
-contains it, to the top of `next` (`_park`), so a hold holds only itself and what contains it, and the prefix that lands
-reaches past where it was; it stays at the top until a land verdict at that head (then it lands in its place) or a new head.
-A PR with a hold label, an ejected one or one the sync refuses leaves `next` instead (a refused one is tried again at its top).
-The park moves no member below the lowest held one, so no Lean check below it is cancelled; one that holds a held member is
-(its prefix can't land), and no check is stacked above a held member.  A Lean check lost or failed by its
-machine (killed, out of disk or memory: `_machine_fault`) runs again once on the other machines.  A failed Lean check is run
-again on the Lean change's own commit, and only a failure there is told to its owner; nothing at or above a failed commit lands until it leaves `next`, unless a passed Lean check
-of a reviewed commit above it checked the tree that lands (`_past_failed`).  No Lean check is stacked or cut above a failed
-one that would hold every Lean change of its prefix still on `next`, though a sync that rebuilds `next` above a running
-check's prefix (a `--first` fix) took the failed commit off it, until one of its members is held, ejected or pushed, or a
-Lean check that holds them all passes (`_live_failures`).  And every .py file the
-landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  While any Lean check of a
-commit of `next` runs, drive's or a hand one of its run registry (`_running_lean`), the members up to it keep their place
-and their merges (`--first` and each PR admitted meanwhile go above them, one a member contains too: `Queue.order`); only one
-of them ejected, unmarked at its head or held rebuilds `next` from it, logged with why, and its check runs again on the
-rebuilt prefix.  So do they keep it under a passed one of drive's whose every
-member up to it has its ready mark and a land verdict (`_landable`), until it lands.  Up to the highest commit of any of drive's
-Lean checks that runs or passed, `next` is kept (`queue.lean_hold`, `--first` above it too), though a member under a passed one
-alone that is pushed or loses its mark leaves, and `next` is rebuilt from it.  ci's hand Lean check goes through drive
-(`/data/infra/drive.sh queue lean-check COMMIT`, `Driver.hand_lean`): recorded in drive's state at its launch, it holds `next`
-from its first second and counts, is followed and covers as drive's own.  Each landing awaits the after-landing run, one at a
-time of `checked`'s tip (`train.sh TIP MACHINES --deferred STEPS --base VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
+(`_unwritten`).  A member whose own change touches Lean, a lock or the spec lands on its verdict like any other.  And
+every .py file the landing leaves must compile (`py_compile`): the PR that last changed one that doesn't is ejected.  And
+every sync moves each member held by a verdict at its head, with every PR that contains it, to the top of `next` (`_park`),
+so a hold holds only itself and what contains it, and the prefix that lands reaches past where it was; it stays at the top
+until a land verdict at that head (then it lands in its place) or a new head.  A PR with a hold label, an ejected one or one
+the sync refuses leaves `next` instead (a refused one is tried again at its top).  With drive.toml's `verdict_first`, each
+sync moves the members with a land verdict below those waiting for one (`_lift`, which passes over a held member), where
+they land that tick, so a reviewed member seldom waits above an unreviewed one; one that gains its verdict goes after those
+already moved, so none below it is merged again.
+
+Lock records are regenerated after landing (drive.toml's `regenerate_locks`).  While what `checked` holds since its newest
+commit whose records are the regenerated ones (`postland["fresh"]`, `_fresh`) changes Lean, a lock or the spec
+(`queue.lean_change`: a lock, the spec, `Security/`'s Definitions and its package's Lake files, or a Lean source
+outside `Security/` of a package that has a lock; Lean proofs alone don't), drive launches one lock run of `checked`'s tip
+(`train.sh TIP MACHINES --deferred lean-audit`, which regenerates them: `_start_locks`), ahead of the rest of the
+after-landing check, one at a time, and not again on a tip whose lock run failed.  Passed, the records it regenerated are
+committed on its tip as `Lock records regenerated for #N...` (`Checked:` the run, `Regenerated:` the files), which the merge
+gate vouches for against the run (`merge.regenerated_parent`), and that commit goes onto `checked`: a fast-forward while
+`checked` is still at the run's tip, else a merge onto `checked`'s tip, under the same subject, taking each record no landing
+since changed (one that did is the next lock run's) (`_commit_locks`).  That commit is `fresh`, or the run's tip when it
+regenerated nothing.  Failed, each step it judges (`LOCKS_JUDGED`: lean-audit and the preflights) is named red as an
+after-landing run's is (`_red`): its culprit, unless fixed forward in time, is reverted on `checked` with the lock commits
+that go with it (`_lock_commits`), and a lock run follows the revert while what it leaves still differs from `fresh` in Lean,
+a lock or the spec (as it does once a lock commit was reverted with it).  A lock run lost or failed by its machine (killed,
+out of disk or memory: `_machine_fault`) runs again once on the other machines.  Each landing awaits the after-landing run, one at a
+time, of the newest commit on `checked`'s first-parent line that no Lean, lock or spec change separates from `fresh`
+(`_target`: the tip, unless records of a lock run are still to come; `train.sh COMMIT MACHINES --deferred STEPS --base
+VERIFIED`) with every ci.toml job (`AFTER_LANDING`),
 circuit-check and ratchet-gate among them, which `_promote` doesn't wait for (policy.toml's `off_gate`: `_gating`), its base the last
 verified `checked` commit, below the tip, for ratchet-gate to judge the
 landings above, or above ratchet-gate's own base (`--ratchet-base JUDGED`, `_ratchet_base`): the tip of the newest run whose
 ratchet-gate ended with a verdict (`postland["ratchet_judged"]`: passed, or failed naming each change it fails,
-`_ratchet_judged`), once a revert undid each of those, so a red step elsewhere, which holds `verified`, doesn't make each run
-re-judge every landing since; while one stands, the base that run judged above; the last verified commit when none was
-judged or the judged tip left the tip's history (a revert or reset); with drive.toml's `after_landing_shards` N, as N runs at
+`_ratchet_judged`), so a red step elsewhere, which holds `verified`, doesn't make each run re-judge every landing since, and
+a merge the gate failed, never reverted while ratchet-gate is a warn step (drive.toml's `warn_steps`), is judged and rung
+once; were it not one, only once a revert undid each change it failed, and while one stands the base that run judged above;
+the last verified commit when none was judged or the judged tip left the tip's history (a revert or reset); with drive.toml's
+`after_landing_shards` N, as N runs at
 once (`--shard K/N` each, on machines of `on` no other
-shard has while there are N: `shard_machines`), passed once every shard passed, launched once circuit-check's records step
+shard has while there are N: `shard_machines`), passed once every shard passed, a step more than one shard holds (lean-audit's
+packages, lean-suites' suites and lean-build beside them) passed, for `main` and for its green, only once each of those passed
+it (`shard_steps`, each shard's plan its live record's), launched once circuit-check's records step
 (`_records`: `train.sh TIP MACHINES --cc-records`) passed, each shard given its artifact (`--cc-records-from ART@SHA256`) so no
 shard builds the bindings' records; with "auto" (or "auto:MAX"), N is the shard planner's, its plan made once beside the
 records step (`_plan`: `check.py --shard-plan`) and each shard `--shard auto:K/N --shard-plan-file PLAN`; a run ci launched in
@@ -107,21 +97,34 @@ place of a shard's twin counting once `/data/infra/drive.sh queue drive-shard-ad
 (`queue.drive_shard_add`: only a run whose own record is shard K/N of TIP's commit, of the run's auto plan when it has one;
 cancel the twin after);
 `--no-cache --circuit-cache` while `after_landing_no_cache` (no pass reused but circuit-check's per-target ones), and
-`--no-regenerate` (a lock record difference fails it).  Nothing lands before one such run of `checked`
-itself ended (its baseline, verifying the steps it passed; `/data/infra/drive.sh queue baseline SHA --by ci` records a green one
-by hand).  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
+`--no-regenerate` (a lock record difference fails it).  So `main` moves only to a commit whose records are the regenerated
+ones and whose gated steps all passed on it.  Nothing lands before one such run of `checked`
+itself ended (its baseline, verifying the steps it passed), or `main` moved to a green commit of it
+(`/data/infra/drive.sh queue baseline SHA --by ci`, which the next tick takes as verified).  The tick that reads a run's end
+launches the next before its sync, once its reverts are pushed, and a tick that
+launched none then launches it after its landings (`start_postland`); what lands in a tick after its run launched waits for
+the run after.  While a red on `checked` has a low-risk fix marked under `FIX_WAIT_S` ago and not landed, the run waits for it
 (`_fix_wait`), as one without it would go red again.  A red run runs on, so every red suite is named, and is cancelled only once its `TAIL` is all it has left (a cancel
-earlier in a ~4 h run leaves the rest unknown).  Each failed suite or step (`_red`, `postland["red"]`) gets a culprit
-among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked` never verified whole still names
-one): for ratchet-gate, the merge the gate's log says it fails; else the landing whose own diff touches what the failure
-names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`), else its declared inputs
-(`_input_rule`); several are bisected by landing, each step a run of one landing's commit judged by that suite alone, while
-landing goes on.  The ring (`_ring`) quotes the run, the first error line
-(`first_error`) and what a cancel stopped (`not_run`, "not run"), to the culprit's lane and the owner of what failed in one
-post (`_red_owners`: the suite's in the registry, else the step's in ci.toml); the culprit is
-reverted on `checked`, never on `main`, `FIX_WINDOW_S` after it (`_red_clock`), and the same two told, unless a fix is marked (`_fix`); a red
-circuit-check's culprit at once (`CIRCUIT_RED`), and while circuit-check is red on `checked` no PR whose own change touches
-its inputs lands (`_circuit_held`), every other one landing on.  A red run moves nothing on `main`.  The runners report each
+earlier in a ~4 h run leaves the rest unknown).  A shard that passed nowhere and whose every failure names nothing (no
+failing test, no read outside its inputs, no error line: a kill, a hang, a crash with no output) is not red yet: it is
+stopped and runs again once on the machines of `on` it didn't run on, `INFRA` rung with its run and what failed
+(`_rerun_nameless`), and failing so again it is red.  Each failed suite or step (`_red`, `postland["red"]`) names its culprit
+by what the failure names, among the landings since it last passed (`postland["green"]`, per suite or step, so a `checked`
+never verified whole still names one): for ratchet-gate, the merge the gate's log says it fails (each one, while it is a warn
+step); else the landing whose own
+diff touches what the failure names (`suite_paths`: failing tests, its log's failures, the read guard's `outside`; of a Lean
+failure, the files declaring each declaration it names: `_lean_declared`), else the declared inputs of the suite or step it
+names (`_input_rule`).  Nothing is bisected.  The ring (`_ring`) quotes the run, the first error line (`first_error`) and what
+a cancel stopped (`not_run`, "not run").  One culprit: its lane and the owner of what failed are rung in one post
+(`_red_owners`: the suite's in the registry, else the step's in ci.toml) to fix it forward by `FIX_FORWARD_S` after the red was
+named (`named_at`), by marking a fix (`_fixes`: a new head of it, a PR whose body names it or says `fixes suite NAME`, or one
+whose change touches what failed); drive reverts it on `checked`, never on `main`, only once that passed with no fix marked
+ready at its head (`_revert_reds`), and the same two told.  A warn step's red (drive.toml's `warn_steps`: ratchet-gate) is
+never reverted: each culprit's lane and the owner of what failed are rung once, saying so, to fix it forward in their next PR
+(`_warns`).  Several: each one's lane, `CI` and `TOP` are rung, naming them all, and none is reverted (`_several`); none: the
+owner of what failed is rung.  While circuit-check is red on `checked`
+(`CIRCUIT_RED`) no PR whose own change touches its inputs lands (`_circuit_held`), every other one landing on.  A red run
+moves nothing on `main`.  The runners report each
 failure as it is; a failure an unexpired allowance of the tip's policy covers (policy.toml's `allow`, `research.policy`:
 `_allowed`) is not red: it names no culprit, reverts nothing and holds no promotion, and a run that failed only on such failures
 verifies its tip (`_only_allowed`).  An expired allowance is as if absent, and the ring of the red it no longer covers names it
@@ -130,16 +133,17 @@ and rings its owner.  While the oldest landing no run verified is
 nothing red explains it.  A run with no readable state `LOST_AFTER_S` after its launch is lost.
 
 Alarms (`_alarms`) ring the owner of what is past its bound, once per subject and bound and again every `ALARM_EVERY_S` while
-it stays past it (`drive["alarms"]`): a step of drive's after-landing run or of its Lean checks running past
-`SLOW_STEP_FACTOR` times its median rings its ci.toml job's owner (`_slow_steps`; the medians are of drive's own runs'
+it stays past it (`drive["alarms"]`): a step of drive's after-landing run or of its lock run running past
+`SLOW_STEP_FACTOR` times its median and `STEP_FLOOR_S` rings its ci.toml job's owner (`_slow_steps`, a shard's open
+step spans: `running_steps`; the medians are of drive's own runs'
 uncached passes, from their steps.jsonl: `_timed`, lean-audit's of the same machine's when it has enough: `_median_of`), and a member of `next` marked ready `STUCK_S` ago and not landed rings the
-owner of what holds it (`_stuck`): the member below it where the reviewed prefix stops, the reviewer (`CI`) for a missing land
-verdict, or a Lean check still running.
+owner of what holds it (`_stuck`): the member below it where the reviewed prefix stops, or the reviewer (`CI`) for a missing
+land verdict.
 
-The Lean checks and the post-landing runs (the after-landing run and its bisection's) are launched detached (`detach`), so no tick
-waits on train.sh, which takes minutes to print a Lean check's run ids.  A later
-tick reads the ids from its log (`launched`, `_resolve`); until then the launch counts as running for every rule that counts
-running checks (the hold on `next`, `max_lean_checks`, the waits), and a train.sh that exits without them registered no run:
+The lock run, the after-landing run and the sync's restacks across a move (`queue.Queue._launch_restack`) are launched
+detached (`detach`), so no tick waits on train.sh, which takes minutes to print a run's ids, or on `restack.py`, which
+rewrites a whole tree.  A later tick reads a train.sh's ids from its log (`launched`,
+`_resolve`); until then the launch counts as running, and a train.sh that exits without them registered no run:
 drive rings `CI` and `TOP` at once with its reason's last line (`_launch_failed`), the same reason at the same commit again only
 every `LAUNCH_RING_EVERY_S` while each tick launches it again, and the behind-ring counts those failures.
 
@@ -150,7 +154,6 @@ import concurrent.futures
 import contextlib
 import functools
 import json
-import math
 import os
 import re
 import shutil
@@ -167,8 +170,9 @@ from typing import Callable, Iterable
 from . import policy
 from .executor import (AFTER_LANDING_PRIORITY, FAIL, PASS, PENDING, SHADOW_WAIT_S, Executor, QueueTransport, compare,
                        old_verdicts)
-from .queue import (IDENTITY, PR, Entry, Member, Queue, QueueError, StoreLabels,
-                    _git, _out, built_on, changed, forces_cold, hold, lean_change, lean_hold, move_of, unreviewed)
+from .gates import git_env
+from .queue import (CHECK_STEPS, IDENTITY, LANDED_WINDOW, PR, RESTACKING, Entry, Member, Queue, QueueError, StoreLabels, _brought, _git,
+                    _out, _who, built_on, changed, forces_cold, lean_change, move_of, on_first_parents, queue_commit, unreviewed)
 from .queue_stats import ts
 from .store import vocab
 
@@ -182,8 +186,8 @@ CHECKED_TIPS = 32
 GIT_MIN, OLD_GIT_EVERY_S, INFRA = (2, 40), 3600, "@infra"
 #: a pytest location (`tests/test_x.py:503: NameError`) or a traceback frame (`File "/.../x.py", line 12`) in a suite's log
 TRACE_RE = re.compile(r'^\s*([\w./+-]+\.py):\d+:|File "([^"]+\.py)", line \d+', re.M)
-#: a repository path a pytest failure report names (`E   tools/x/README.md: 48 KB > 48 KB`: a lint's offender is in
-#: its assertion, not its traceback); relative, with a directory
+#: a repository path a pytest failure report names (`E   tools/x/status.md`: a lint's offender is in its assertion, not its
+#: traceback); relative, with a directory
 NAMED_RE = re.compile(r"(?<![\w./-])((?:[\w+-]+/)+[\w+.-]*\w\.\w+)")
 #: pytest's failing tests in its short summary
 FAILED_RE = re.compile(r"^FAILED ([^\s:]+)::", re.M)
@@ -199,8 +203,6 @@ LEAN_ORPHAN_RE = re.compile(r"^\s+orphan: (\S+?\.lean) is not imported")
 LEAN_LAYERS_RE = re.compile(r"^\s+layers: ([A-Za-z][\w.]*) imports ")
 #: a run's or a step's exit that a kill gave, not a failure of what it checked: SIGHUP, SIGKILL, SIGTERM as 128+N, or a signal
 KILLED_RC = (129, 137, 143)
-#: the Lean check's own code, which its verdict reads beside `LEAN_INPUTS`
-LEAN_TOOLING = "tools/verity/lean/"
 #: what the Lean check says of a process of its own that was killed (`tools/verity/lean/check.py`: the replay, `--fresh`)
 KILLED_SAYS = "not a kernel verdict"
 #: a failed step's log saying its machine ran out of disk or memory: the machine's fault, not the change's (`Driver._machine_fault`)
@@ -211,18 +213,18 @@ CIRCUIT_FAIL_RE = re.compile(r"^FAIL (\S+)", re.M)
 CIRCUIT_KILLED = "circuit-check/killed"
 #: how often drive sweeps the repository's branches (`merge.sweep_branches`)
 BRANCH_SWEEP_S = 86400
-#: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR: its rings are daily
+#: how often drive applies the stale rule (`Driver._stale`), which reads the labels of every idle PR (its rings are daily), and
+#: the unlandable rule (`Driver._unlandable`), which walks `checked`'s landings and every open head's own commits
 STALE_EVERY_S = 3600
+#: what drive's unlandable rule says on a PR it closes (`Driver._unlandable`): why, and how its owner keeps it open
+UNLANDABLE_COMMENT = ("Closed by drive: {why}, so nothing would land it as it is. Its branch stays: reopen the PR (one click) and "
+                      "drive leaves it open at this head, or mark it ready (`research queue ready {n} --mark`) and it queues again.")
 #: Lean's own inputs, for a Lean step that failed with no file named
 LEAN_INPUTS = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: states `research status` reports for a run that may still publish an attempt
 ACTIVE = ("submitted", "waiting", "running", "unknown")
 #: check.py's exit for a twin that never took a slot
 NOT_STARTED = 75
-#: the steps of a check (`tools/verity/check/check.py`)
-CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-changed", "flock-circuit-build", "lean-build",
-               "lean-unit-cut", "lean-agreement", "lean-audit", "lean-suites", "pytest", "circuit-check", "flock-rust-tests",
-               "ratchet-gate")
 #: the check step that runs the vLLM integration's ratchet gate on the merges above the check's base
 RATCHET_STEP = "ratchet-gate"
 #: the ratchet gate's line for a change it fails (`ratchet_gate.render`): its name (`#N`, or a range of commits), its top
@@ -230,35 +232,49 @@ RATCHET_STEP = "ratchet-gate"
 RATCHET_FAILED_RE = re.compile(r"^  (\S+) \(([0-9a-f]{12})\): failed: (.*)$", re.M)
 #: what a review landing's verdict says
 REVIEWED = "a land verdict at each head"
-#: the keys of drive's state that only train landing kept, dropped from a state that has them
-TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm")
+#: the keys of drive's state that nothing reads (train landing's, the Lean checks of `next`'s), dropped from a state that has them
+TRAIN_STATE = ("launched", "deferred", "resent", "base", "bisect", "orphans", "per_pr", "prewarm", "lean", "lean_failed", "marks",
+               "tick")
 #: the after-landing run of a review landing: every ci.toml job (`--deferred` takes jobs; the preflights are none), those off the
 #: merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate) among them, which no check before landing runs
 AFTER_LANDING = tuple(s for s in CHECK_STEPS if not s.startswith("preflight-"))
 #: the after-landing steps a run may skip by name: lean-agreement when nothing it checks changed, lean-changed under --no-cache
 AFTER_LANDING_OPTIONAL = ("lean-agreement", "lean-changed")
+#: the after-landing steps whose tasks run test suites, so a `suite NAME` red record may be either's (`Driver._unit_states`)
+SUITE_STEPS = ("lean-suites", "pytest")
 #: the after-landing steps train.sh still checks with `executor = "on"`: a run of them alone beside the executor's check of each
-#: tip (`Driver._start_slim`), which `main` waits for as for the executor's tasks on the gate, lean-agreement unless that run
-#: skips it by name; the executor's tasks of them count for nothing
+#: tip (`Driver._start_slim`), whose steps on the merge gate `main` waits for as for the executor's tasks on it: lean-agreement
+#: unless that run skips it by name, not ratchet-gate (policy.toml's `off_gate`); the executor's tasks of them count for nothing
 SLIM_STEPS = ("lean-agreement", RATCHET_STEP)
 #: what the run of `SLIM_STEPS` judges of its records (`Driver._follow_slim`): those steps, and the preflights no graph/v2 task
 #: runs; the steps they need (lean-build) are the executor's tasks' to judge
 SLIM_JUDGED = (*SLIM_STEPS, *(s for s in CHECK_STEPS if s.startswith("preflight-")))
-#: ticks a member must keep its head on `next` before the review landing's Lean check reaches it (`Driver._lean_check`): one
-#: of a prefix capped below recent churn isn't taken off `next` by the next re-mark
-LEAN_SETTLE_TICKS = 1
 #: how long `next`'s lowest member may wait at its head with no land verdict and no hold, holding every landing above it,
-#: before drive rings the reviewers (`CI`, who staffs them) and `TOP`, and how often again while it waits (`Driver._bottom`)
+#: before drive rings its `bottom_ring`, and how often again while it waits (`Driver._bottom`), unless drive.toml's
+#: `bottom_wait_min` sets another
 BOTTOM_WAIT_S = 1800
 #: how long a run may show no readable state (`unknown`) before drive takes it as lost (`Driver._lost`)
 LOST_AFTER_S = 3 * 3600
-#: how long the owners rung for a red suite or step have to mark a fix before drive reverts its culprit (`Driver._red_clock`;
-#: without it PRs keep landing on a `main` no after-landing run passed, and its failures reach only `CI`)
-FIX_WINDOW_S = 3600
 #: how long after its mark a low-risk fix of a red on `checked` holds the after-landing run for it to land (`Driver._fix_wait`)
 FIX_WAIT_S = 45 * 60
-#: the red record reverted at once, with no `FIX_WINDOW_S`, and while it stands no PR touching what it reads lands
-#: (`Driver._circuit_held`): circuit-check runs only after landing, so every landing on its red would go unchecked
+#: how long a red's culprit has from when the red was named (its record's `named_at`) for its lane to fix it forward: drive
+#: reverts it only once this passed with no fix marked ready at its head (`Driver._revert_reds`), and never a warn step's
+#: (`Driver._warns`)
+FIX_FORWARD_S = 2 * 3600
+#: the declarations a Lean failure names (`Driver._lean_declared`): a dotted or plain Lean name in quotes or backticks
+#: (`unknown identifier 'Foo.bar'`), or the guarantee a Lean check's failure is about (`guarantees: Foo.bar's statement changed`)
+LEAN_NAMED_RE = re.compile(r"[`'‘]([A-Za-z_][\w.]*\w)[`'’]|^\s*guarantees: ([A-Za-z_][\w.]*\w)", re.M)
+#: the commands that declare a Lean name, as `Driver._lean_declared` greps for `KIND NAME`
+LEAN_DECLARES = ("theorem", "lemma", "def", "abbrev", "structure", "class", "instance", "inductive", "opaque")
+#: a Lean line declaring a name (`LEAN_DECLARES`), and the name as declared
+LEAN_DECL_RE = re.compile(rf"(?<![\w.])(?:{'|'.join(LEAN_DECLARES)})\s+([^\s:({{\[]+)")
+#: the most names of one failure `Driver._lean_declared` looks up
+LEAN_NAMES = 32
+#: the steps whose failure may name a Lean declaration (lean-suites' by its suites), whose declaring files a culprit's own
+#: change may touch (`Driver._name`)
+LEAN_NAMING = ("lean-audit", "lean-build", "lean-suites")
+#: the red record while which no PR touching what it reads lands (`Driver._circuit_held`): circuit-check runs only after
+#: landing, so every landing on its red would go unchecked
 CIRCUIT_RED = "step circuit-check"
 #: the ci.toml job a graph/v2 task's kind checks (`verity graph`'s families, tools/verity/graph/tasks.toml), by which drive's
 #: policy takes it off the merge gate (`off_gate`) and its red is named `step JOB` (a test-file task's `suite NAME`); a kind
@@ -283,9 +299,10 @@ POSTLAND_RUN_S = 5 * 3600
 TAIL = ("circuit-check", "flock-rust-tests")
 #: who the alarm on a `main` long unverified rings beside `CI` while nothing red explains it (`Driver._behind`)
 TOP = "@top"
-#: a step of a check of drive's still running this many times its median rings the step's owner (`Driver._slow_steps`); the
-#: median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and needs `STEP_MIN_PASSES` of them
-SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES = 1.5, 10, 3
+#: a step of a check of drive's still running this many times its median, and `STEP_FLOOR_S` at least, rings the step's owner
+#: (`Driver._slow_steps`); the median is of its newest `STEP_PASSES` uncached passes in drive's own runs of that kind, and
+#: needs `STEP_MIN_PASSES` of them.  The floor keeps a step whose passes take seconds from ringing within its first minutes.
+SLOW_STEP_FACTOR, STEP_PASSES, STEP_MIN_PASSES, STEP_FLOOR_S = 1.5, 10, 3, 600
 #: how long a member of `next` marked ready may go unlanded before drive rings the owner of what holds it (`Driver._stuck`)
 STUCK_S = 2 * 3600
 #: how often an alarm rings again while its subject stays past its bound (`Driver._due`)
@@ -294,9 +311,12 @@ ALARM_EVERY_S = 3600
 LAUNCH_RING_EVERY_S = 3600
 #: the note `Driver._resolve` puts after a detached train.sh's output's tail: where its whole log is
 LOG_NOTE_RE = re.compile(r" \(log (\S+)\)$")
-#: the step a Lean change's Lean check before a review landing runs (`train.sh TOP MACHINES --deferred lean-audit`)
+#: the step drive's lock run runs after a landing that changes Lean, a lock or the spec (`train.sh TIP MACHINES --deferred
+#: lean-audit`, `Driver._start_locks`), which regenerates the lock records it left stale
 LEAN_STEP = "lean-audit"
-#: a Lake package's lock, which a Lean check may regenerate (`merge.LOCK`)
+#: what a lock run's records are judged on (`Driver._follow_locks`): lean-audit, and the preflights every run runs before it
+LOCKS_JUDGED = (*(s for s in CHECK_STEPS if s.startswith("preflight-")), LEAN_STEP)
+#: a Lake package's lock, which a lock run may regenerate (`merge.LOCK`)
 LOCK = "lean-audit.json"
 #: a run stopped by SIGTERM (128 + 15): a cancel, or a twin whose sibling won the slot
 SIGTERM_RC = 143
@@ -343,23 +363,35 @@ def authed(auth: tuple[str, ...]):
                 os.environ[k] = v
 
 
+def takes_bookkeeping(repo: Path) -> bool:
+    """Whether ``repo``'s train.sh, which the lock run launches from, takes `--bookkeeping-warn` (the lock run repairs bookkeeping
+    and warns); one that predates it would refuse every lock run."""
+    try:
+        return "--bookkeeping-warn" in (repo / "tools" / "verity" / "check" / "train.sh").read_text()
+    except OSError:
+        return False
+
+
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: tuple[str, ...] = (),
                  deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
                  detached: bool = False, circuit_cache: bool = False, shard: str | None = None,
                  base: str | None = None, cc_records: bool = False,
                  cc_records_from: str | None = None, shard_plan: str | None = None,
-                 ratchet_base: str | None = None, rank: int | None = None) -> tuple[list[str], str] | dict:
+                 ratchet_base: str | None = None, rank: int | None = None,
+                 bookkeeping_warn: bool = False) -> tuple[list[str], str] | dict:
     """`train.sh COMMIT MACHINE [--agreement] [--base BASE] [--ratchet-base RBASE] [--shard [auto:]K/N [--shard-plan-file PLAN]]
     [--cc-records[-from ART@SHA256]]` from the queue's clone (``cc_records``, circuit-check's records step alone): (the run ids it printed,
     its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh, which reads nothing by its
     own path (``$0`` only for its usage) and finds the tree from its working directory, and returned at once as the record
     `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch would wait on a
-    password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one."""
+    password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked one.
+    ``bookkeeping_warn`` (the lock run) has its lean-audit repair the locks' bookkeeping and warn (`--bookkeeping-warn`)."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--cc-records"] if cc_records else [])]
     if not cc_records:
         argv += [*(["--agreement"] if agreement else []),
                  *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
                  *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
+                 *(["--bookkeeping-warn"] if bookkeeping_warn else []),
                  *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else []),
                  *(["--shard", shard] if shard else []),
                  *(["--shard-plan-file", shard_plan] if shard_plan else []),
@@ -373,8 +405,10 @@ def train_launch(repo: Path, commit: str, machine: str, agreement: bool, auth: t
     return (m[1].split() if m else []), (r.stdout + r.stderr).strip()[-600:]
 
 
-#: the check slot rank (`slot.py --rank`) of every part of the after-landing run and of its bisects: a ranked priority waiter
-#: takes the next free check slot ahead of the unranked ones, the Lean checks of `next`, so `main` never waits on a slot for them
+#: how many bookkeeping warnings of a lock run (`_put_locks`) its post lists; the lock commit lists them all
+BOOKKEEPING_SHOWN = 12
+#: the check slot rank (`slot.py --rank`) of every part of the after-landing run and of the lock run: a ranked
+#: priority waiter takes the next free check slot ahead of the unranked ones, so `main` never waits on a slot for them
 POSTLAND_SLOT_RANK = 0
 #: how long a sharded after-landing run waits for circuit-check's records step (`_records`, about 8 min cold) before its shards
 #: launch without it, each building the records itself, so a lost step never holds the run
@@ -512,6 +546,11 @@ def _no_run(failed: dict) -> str:
     return f"registered no run {n} time{'s' * (n != 1)} since {datetime.fromtimestamp(failed['since'], UTC):%H:%M}Z"
 
 
+def _hhmm(t: float) -> str:
+    """Time ``t`` (seconds since the epoch) as a ring gives a deadline within the day: `HH:MM UTC`."""
+    return f"{datetime.fromtimestamp(t, UTC):%H:%M} UTC"
+
+
 def launched(launch: dict) -> tuple[list[str] | None, str]:
     """(the run ids a detached train.sh (`detach`) printed, [] once it exited without them or its process is gone without an
     exit, None while it runs; its output's tail)."""
@@ -539,6 +578,8 @@ def launched(launch: dict) -> tuple[list[str] | None, str]:
 PROGRESS = ("steps.jsonl", "suites.failed.json", "suites-lean.failed.json")
 #: a check's trace/v1 spans (`tools/verity/check/spans.py`), whose root span opens as the check starts its steps
 SPANS = "spans.jsonl"
+#: a check's live record (`tools/verity/check/live.py`): each step it planned, pending until it starts and running until it ends
+LIVE = "check-live.json"
 #: the steps a check runs first, one after another, before its groups start (check.py's `preflight`)
 PREFLIGHT = tuple(s for s in CHECK_STEPS if s.startswith("preflight-"))
 
@@ -557,54 +598,30 @@ def _machine(state: tuple | None) -> str | None:
     return state[4] if state and len(state) > 4 else None
 
 
-def started_at(run_dir: Path) -> float | None:
-    """When a check started its steps: its root span's start (`SPANS`), or None while it has none."""
-    try:
-        lines = (run_dir / SPANS).read_text().splitlines()
-    except OSError:
-        return None
-    for line in lines:
-        with contextlib.suppress(ValueError):
-            if isinstance(span := json.loads(line), dict) and span.get("parent_span_id") is None:
-                return _epoch(span.get("start_utc"))
-    return None
-
-
-def running_steps(recs: list[dict], steps: list[str], jobs: list[dict], start: float) -> dict[str, float]:
-    """{step: when it started} of each of ``steps`` a check started at ``start`` still runs, from the records of the steps
-    that ended (``recs``, its steps.jsonl) and ci.toml's job tables (``jobs``, `merge.declared`): the preflights run one after
-    another (`PREFLIGHT`), then every group at once, each group's steps one after another in ci.toml's order.  A group's
-    first step not ended runs since the step before it ended, or the preflights did, and with an `after` waits until that
-    one ended; a group stops at a step that failed or was stopped, and no group starts after a preflight that didn't pass."""
-    ended = {r.get("step"): (r.get("status"), _epoch(r.get("ended_utc"))) for r in recs}
-
-    def first(names: list[str], since: float) -> tuple[str | None, float | None]:
-        for s in names:
-            if s not in ended:
-                return s, since
-            status, at = ended[s]
-            if status in ("failed", "stopped") or at is None:
-                return None, None
-            since = max(since, at)
-        return None, since
-
-    pre, since = first(list(PREFLIGHT), start)
-    if pre or since is None or any(ended.get(s, ("",))[0] != "passed" for s in PREFLIGHT):
-        return {pre: since} if pre and since is not None else {}
-    groups: dict[object, list[dict]] = {}
-    for t in jobs:
-        if t["name"] in steps:
-            groups.setdefault(t.get("group"), []).append(t)
-    out = {}
-    for g in groups.values():
-        step, at = first([t["name"] for t in g], since)
-        if step is None or at is None:
-            continue
-        if after := next((t.get("after") for t in g if t["name"] == step), None):
-            if after in steps and after not in ended:
-                continue
-            at = max(at, ended.get(after, (None, None))[1] or at)
-        out[step] = at
+def running_steps(run_dir: Path) -> dict[str, float]:
+    """{step: when it started} of each step a check still runs: its step spans (`SPANS`, check.py's `spans.py`) that opened
+    as the step started and that no later line has completed.  A shard opens only its own steps, so a step another shard
+    runs, or one still waiting on another, is not running here."""
+    opened: dict[str, tuple[str, float]] = {}
+    done: set[str] = set()
+    with contextlib.suppress(OSError):
+        for line in (run_dir / SPANS).read_text().splitlines():
+            with contextlib.suppress(ValueError):
+                span = json.loads(line)
+                if not isinstance(span, dict) or span.get("parent_span_id") is None:
+                    continue
+                attrs, sid = span.get("attributes"), span.get("span_id")
+                step = attrs.get("step") if isinstance(attrs, dict) else None
+                if not isinstance(step, str) or not sid:
+                    continue
+                if span.get("end_utc"):
+                    done.add(sid)
+                elif (at := _epoch(span.get("start_utc"))) is not None:
+                    opened.setdefault(sid, (step, at))
+    out: dict[str, float] = {}
+    for sid, (step, at) in opened.items():
+        if sid not in done:
+            out[step] = min(at, out.get(step, at))
     return out
 
 
@@ -633,11 +650,22 @@ def failing(run_dir: Path) -> str | None:
     return "; ".join(out) or None
 
 
+def gating(repo: Path, commit: str) -> list[str]:
+    """The after-landing steps `main` waits for at ``commit`` (`Driver._promote`, `queue.baseline`): every step but those a run
+    skips by name (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own drive policy takes off the merge gate (policy.toml's
+    `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every such
+    step when that ci.toml or policy can't be read."""
+    from .merge import declared_jobs
+
+    jobs = declared_jobs(repo, commit)
+    return [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and (isinstance(jobs, str) or s in jobs)]
+
+
 def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
     """Each run's (state, rc, ended_utc, what has failed so far while it runs: `failing`, the machine it runs on) from `research
-    status RUN --json`, which fetches `PROGRESS` with its records (a check waiting in its machine's slot line reads `waiting`); a run
-    it can't read is ("unknown", None, None, None)."""
-    also = [x for n in PROGRESS for x in ("--also", n)]
+    status RUN --json`, which fetches `PROGRESS` and a check's live record (`LIVE`) with its records, so those of a run that ended
+    are its last (a check waiting in its machine's slot line reads `waiting`); a run it can't read is ("unknown", None, None, None)."""
+    also = [x for n in (*PROGRESS, LIVE) for x in ("--also", n)]
 
     def one(rid: str) -> tuple:
         r = subprocess.run([sys.executable, "-m", "research", "status", rid, "--json", *also], cwd=repo, capture_output=True, text=True)
@@ -650,37 +678,6 @@ def run_states(repo: Path, ids: list[str]) -> dict[str, tuple]:
             return ("unknown", None, None, None)
 
     return dict(zip(ids, _each(one, ids)))
-
-
-#: how far back `lean_runs` reads drive's run registry: a Lean check waits in a slot line and runs well inside it
-LEAN_RUN_WINDOW_S = 12 * 3600
-RUN_ID_RE = re.compile(r"^r\d{8}-\d{6}-[0-9a-f]{4}$")
-
-
-def lean_runs(commits: set[str], since: float, root: Path | None = None) -> dict[str, list[str]]:
-    """{commit: [run id, ...]} of the runs of this machine's run registry launched since ``since`` that check one of ``commits``
-    with lean-audit among their steps (`check.py` with lean-audit in its `--deferred`, or a whole check), and that haven't ended
-    by their local records: a hand `train.sh COMMIT MACHINES --deferred lean-audit` on the control pod registers here as drive's
-    own launches do.  The store has no such run before it ends (its README, §10).
-    Reads one listing and the records of the runs it names since ``since``."""
-    from . import runs as R
-
-    root = R.runs_root(root)
-    cut = time.strftime("r%Y%m%d-%H%M%S", time.gmtime(since))
-    out: dict[str, list[str]] = {}
-    for d in sorted(root.iterdir()) if root.is_dir() else ():
-        if not RUN_ID_RE.match(d.name) or d.name < cut:
-            continue
-        rec = R._read(d / "remote.json") or {}
-        job = R._read(d / "job.json") or {}
-        cmd = [str(x) for x in rec.get("command") or (job.get("execution") or {}).get("command") or ()]
-        commit = rec.get("source_sha") or (job.get("computation") or {}).get("tree_sha")
-        if commit not in commits or not any(x.endswith("check/check.py") for x in cmd) or "--shard" in cmd:
-            continue
-        steps = cmd[cmd.index("--deferred") + 1].split(",") if "--deferred" in cmd[:-1] else [LEAN_STEP]
-        if LEAN_STEP in steps and R.summarize(d)["state"] in R.ACTIVE:
-            out.setdefault(commit, []).append(d.name)
-    return out
 
 
 #: how many runs drive reads at once: each `research status` is an ssh round trip to the run's node (reading
@@ -732,13 +729,14 @@ def _merge_thread() -> str:
 
 
 def _docs(run_dir: Path, *names: str) -> list[dict]:
+    """The objects the JSON files ``names`` of ``run_dir`` hold: a list's, or the file's own; none of one missing or unreadable."""
     out = []
     for name in names:
         try:
             doc = json.loads((run_dir / name).read_text())
         except (OSError, ValueError):
             continue
-        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else []
+        out += [x for x in doc if isinstance(x, dict)] if isinstance(doc, list) else [doc] if isinstance(doc, dict) else []
     return out
 
 
@@ -757,10 +755,10 @@ def _fetch(repo: Path, rid: str, names: list[str]) -> Path | None:
 
 
 def evidence(repo: Path, ids: list[str]) -> list[Path]:
-    """The local run dirs of ``ids`` with their steps, spans, suite reports and failed suites' logs fetched (`research status
-    --also`)."""
+    """The local run dirs of ``ids`` with their steps, live records, spans, suite reports and failed suites' logs fetched
+    (`research status --also`)."""
     def one(rid: str) -> Path | None:
-        if (d := _fetch(repo, rid, [*PROGRESS, SPANS, "suites.json", "suites-lean.json"])) is None:
+        if (d := _fetch(repo, rid, [*PROGRESS, SPANS, LIVE, "suites.json", "suites-lean.json"])) is None:
             return None
         logs = [f"suites/{Path(s['log']).name}" for s in failed_suites(d) if s.get("log")]
         logs += [Path(st["log"]).name for st in failed_steps(d) if st.get("log") and st.get("step") not in ("pytest", "lean-suites")]
@@ -966,7 +964,7 @@ def implicated(run_dir: Path) -> set[str] | None:
     return paths
 
 
-#: the step whose suites each report of a check holds: what a bisection of one suite runs
+#: the step whose suites each report of a check holds, which a suite's red record keeps as its `step`
 SUITE_REPORTS = {"suites.failed.json": "pytest", "suites-lean.failed.json": "lean-suites", "suites.json": "pytest",
                  "suites-lean.json": "lean-suites"}
 #: pytest's failure line, and a tool's error line, in a log: what a ring quotes of it
@@ -993,15 +991,80 @@ def step_records(run_dir: Path) -> list[dict]:
     return out
 
 
+def live_steps(run_dir: Path) -> list[dict]:
+    """The steps a check's live record (`LIVE`) names, each with its `state`: `stopped` for one still pending or running in the
+    record of a check that ended (a group that stopped on a failure never starts the rest); none without one."""
+    doc = next(iter(_docs(run_dir, LIVE)), {})
+    over, steps = doc.get("state") in ("passed", "failed", "stopped"), doc.get("steps")
+    return [{**s, "state": "stopped"} if over and s.get("state") in ("pending", "running") else s
+            for s in steps if isinstance(s, dict)] if isinstance(steps, list) else []
+
+
+#: what a shard's twin says of a step against its other twin, for the shard both run (`shard_steps`): a pass answers for the
+#: shard, a step one still has to run may yet pass, and a stop (a cancel's, or a step its ended check never started) says least
+RANK = {"passed": 4, None: 3, "failed": 2, "skipped": 1, "stopped": 0}
+
+
+def shard_steps(groups: list[list[Path]], done: list[bool]) -> list[dict[str, str | None]] | None:
+    """Each shard's steps, from its twins' run dirs (``groups``): {step: the status its twins give it, the highest by `RANK`, None
+    while one has it pending or running and none passed it}, a twin's by its steps.jsonl (`stopped` for a step a cancel stopped,
+    `not_run`), else its live record (`live_steps`), which names every step the check planned.  None, of more than one shard,
+    while a shard's plan isn't known: no twin's live record names a step past the preflight, and none exited 0 (``done``), as a
+    check does only once every step it planned ended."""
+    out = []
+    for dirs, known in zip(groups, done):
+        got: dict[str, str | None] = {}
+        for d in dirs:
+            live = live_steps(d)
+            known = known or any(s.get("step") not in PREFLIGHT for s in live)
+            mine = {s.get("step") or "": s.get("state") for s in live}
+            mine.update({st.get("step") or "": "stopped" if not_run(st) else st.get("status") or "failed" for st in step_records(d)})
+            for step, v in mine.items():
+                v = None if v in ("pending", "running", None) else v
+                if step not in got or RANK.get(v, RANK["failed"]) > RANK.get(got[step], RANK["failed"]):
+                    got[step] = v
+        if len(groups) > 1 and not known:
+            return None
+        out.append(got)
+    return out
+
+
+def shard_passed(view: list[dict[str, str | None]] | None, allowed: set[str] = frozenset()) -> set[str]:
+    """The steps a run passed (``view``, `shard_steps`'): passed in a shard, or failed there only on what an allowance covers
+    (``allowed``, `Driver._allowed_steps`), and so, or skipped, in every shard that holds them."""
+    def ok(s: str, x: str | None) -> bool:
+        return x == "passed" or (x == "failed" and s in allowed)
+    return {s for v in view or () for s, x in v.items() if ok(s, x) and all(ok(s, w[s]) or w[s] == "skipped" for w in view if s in w)}
+
+
+def shard_ended(view: list[dict[str, str | None]] | None) -> set[str]:
+    """The steps every shard that holds them has ended (``view``, `shard_steps`')."""
+    return {s for v in view or () for s in v if all(w[s] is not None for w in view if s in w)}
+
+
+def suite_passed(rows: list[dict]) -> bool:
+    """Whether a suite's rows from a run's dirs (`suite_rows`') make its pass: none failed, and one passed whole or the passed ones
+    are every part of one partition (`part`: parts `ks` of `m`, of the partition `digest`), as a sharded run's shards run a suite
+    that declares parts (`suites.py SUITE:K/M`)."""
+    if any(r.get("status") == "failed" for r in rows):
+        return False
+    ok = [r for r in rows if r.get("status") == "passed"]
+    if any(not isinstance(r.get("part"), dict) for r in ok):
+        return True
+    of = {(r["part"].get("m"), r["part"].get("digest")) for r in ok}
+    m = next(iter(of))[0] if len(of) == 1 else None
+    return isinstance(m, int) and {k for r in ok for k in r["part"].get("ks") or ()} == set(range(1, m + 1))
+
+
 def not_run(st: dict) -> bool:
     """A step that found nothing: stopped (check.py's `stopped`, a cancel's), or killed by a SIGTERM before check.py marked it
     so (it reads `failed` with an empty log)."""
     return st.get("status") == "stopped" or (st.get("status") == "failed" and st.get("rc") in (-15, SIGTERM_RC))
 
 
-def first_error(run_dir: Path, rec: dict) -> str:
-    """What a ring quotes of a failed suite or step: its failed test ids, or the paths the read guard caught it reading outside
-    its inputs, and its log's first error line."""
+def named_failure(run_dir: Path, rec: dict) -> str:
+    """What a failed suite or step names of its failure: its failed test ids, or the paths the read guard caught it reading
+    outside its inputs, and its log's first error line; "" when it names none of them."""
     tests = rec.get("failed_tests") or []
     reads = sorted({*(rec.get("outside") or {}), *(f for fs in (rec.get("child_outside") or {}).values() for f in fs)})
     what = (f"failed {', '.join(tests[:3])}" + (f" and {len(tests) - 3} more" if len(tests) > 3 else "") if tests else
@@ -1009,18 +1072,18 @@ def first_error(run_dir: Path, rec: dict) -> str:
             if reads else "")
     log = _suite_log(run_dir, rec) if "suite" in rec or "name" in rec else _step_log(run_dir, rec)
     line = m[0].strip()[:240] if (m := ERROR_LINE_RE.search(log)) else ""
-    return "; ".join(x for x in (what, f"`{line}`" if line else "") if x) or rec.get("detail") or "its log has no error line"
+    return "; ".join(x for x in (what, f"`{line}`" if line else "") if x)
+
+
+def first_error(run_dir: Path, rec: dict) -> str:
+    """What a ring quotes of a failed suite or step: what it names of its failure (`named_failure`), else its record's detail."""
+    return named_failure(run_dir, rec) or rec.get("detail") or "its log has no error line"
 
 
 def touches(files: set[str], paths: set[str]) -> set[str]:
     """The ``files`` (repository paths) among ``paths``, an absolute path matching the file it ends in when that file is under a
     directory (a bare `conftest.py` would match every conftest an installed package has)."""
     return {f for f in files for p in paths if p == f or ("/" in f and p.startswith("/") and p.endswith("/" + f))}
-
-
-def lean_reads(files: Iterable[str]) -> list[str]:
-    """The ``files`` a Lean check reads (`LEAN_INPUTS`, `LEAN_TOOLING`), sorted."""
-    return sorted(f for f in files if f.endswith(LEAN_INPUTS) or f.startswith(LEAN_TOOLING))
 
 
 def py_errors(repo: Path, base: str, top: str) -> list[tuple[str, str]]:
@@ -1036,31 +1099,95 @@ def py_errors(repo: Path, base: str, top: str) -> list[tuple[str, str]]:
     return bad
 
 
-def lean_cut(chain: list[Member], lo: int, top: int, is_lean: Callable[[Member], bool], slots: int) -> int:
-    """The index in ``chain`` to check the Lean changes (``is_lean``) of ``chain[lo:top + 1]`` up to, when ``slots`` Lean checks
-    may share them: just below the Lean change after the first ceil(n / ``slots``) of its n, or ``top``.  Spaced cut points
-    each hold only what's above them when one fails, and the lower ones land without waiting for the rest."""
-    at = [j for j in range(lo, top + 1) if is_lean(chain[j])]
-    per = math.ceil(len(at) / max(slots, 1)) if at else 0
-    return at[per] - 1 if 0 < per < len(at) else top
+def landed_carriers(repo: Path, ref: str, prs: Iterable[PR], n: int = LANDED_WINDOW) -> dict[int, Member]:
+    """{number: the landing that carries it} of each of ``prs`` whose head the head of a PR of the same owner (`PR.owner`)
+    contains, where that PR landed on ``ref``: its queue commit (`queue_commit`) is one of ``ref``'s last ``n`` first-parent
+    commits, and no revert among them undid it.  The lowest such landing, and none when that is the PR's own (it landed at
+    that head).  One `log` of ``ref``, one `rev-list --parents` of that window, and one walk of it per owner (`_brought`)."""
+    prs = [p for p in prs if p.owner]
+    recs = [x.strip() for x in _out(repo, "log", "--first-parent", f"-n{n}", "--format=%H%x00%P%x00%B%x1e", ref).split("\x1e")
+            if x.strip()] if prs else []
+    if not recs:
+        return {}
+    landed, undone = [], set()
+    for rec in reversed(recs):
+        commit, parents, body = rec.split("\x00", 2)
+        undone |= set(REVERTS_RE.findall(body))
+        if m := queue_commit(commit, parents, body):
+            landed.append(m)
+    bottom = recs[-1].split("\x00", 1)[0]
+    window = {c: ps for c, *ps in map(str.split, _out(repo, "rev-list", "--parents", ref, f"^{bottom}").splitlines())}
+    out: dict[int, Member] = {}
+    for who in {_who(p.owner) for p in prs if p.head in window}:
+        mine = [m for m in landed if m.commit not in undone and _who(m.owner) == who]
+        at = _brought(window, enumerate(m.head for m in mine))
+        for p in prs:
+            if _who(p.owner) == who and p.head in at and (m := mine[at[p.head]]).pr != p.number:
+                out[p.number] = m
+    return out
 
 
-def lean_stack(chain: list[Member], lean: dict, is_lean: Callable[[Member], bool], churned: Callable[[Member], bool],
-               most: int) -> int | None:
-    """The index in ``chain`` (`next`'s members) of the commit to stack a review-landing Lean check on, or None: `next`'s top,
-    capped below the lowest member above the checks of ``lean`` (`drive["lean"]`) that came onto `next` just now
-    (``churned``), and cut to share the Lean changes up to it with the checks still free (`lean_cut`), when a Lean change
-    (``is_lean``) at or below it is above every check of `next` that runs or passed, one runs (only lower ones, then), none
-    failed, and fewer than ``most`` run, so members that come above a running check's commit don't wait for it to pass, then
-    for a whole check of their own."""
-    pos = {m.commit: i for i, m in enumerate(chain)}
-    on = {pos[c]: rec.get("state") for c, rec in lean.items() if c in pos}
-    running = sum(rec.get("state") is None for rec in lean.values())
-    if None not in on.values() or "failed" in on.values() or running >= most:
-        return None
-    hi = max(on)
-    top = next((j for j in range(hi + 1, len(chain)) if churned(chain[j])), len(chain)) - 1
-    return lean_cut(chain, hi + 1, top, is_lean, most - running) if any(is_lean(m) for m in chain[hi + 1:top + 1]) else None
+def applied_on(repo: Path, ref: str, prs: Iterable[PR]) -> dict[int, tuple[list[str], str | None]]:
+    """{number: (the files its change touches, the commit of ``ref``'s first-parent line since which each is there, as `#N's
+    landing COMMIT` when the queue made it, else `COMMIT (subject)`)} of each of ``prs`` whose change ``ref`` has already,
+    though not its head: each file one of its own commits changes (those its head has and ``ref`` doesn't, a merge's by its
+    combined diff), one at least, is on ``ref`` as its head has it, and merging the head onto ``ref`` (`git merge-tree`, no
+    renames) changes nothing.  One `rev-list --parents` of every head (`queue.above`), two `log`s of their own commits, and
+    one `cat-file` that stops at a PR's first file ``ref`` has otherwise."""
+    from .queue import above
+
+    prs, env = list(prs), git_env(GIT_TERMINAL_PROMPT="0")
+    reach = above(repo, ref, (p.head for p in prs))
+    own = {p.number: reach[p.head][0] for p in prs if reach[p.head][0]}
+    if not own:
+        return {}
+    files: dict[str, list[str]] = {}
+    tops = "".join(f"{p.head}\n" for p in prs if p.number in own) + f"^{ref}\n"
+    for how in (("--no-merges",), ("--merges", "--cc")):
+        r = subprocess.run(["git", "log", "--stdin", "-z", "--no-renames", "--format=%x01%H", "--name-only", *how], cwd=repo,
+                           input=tops, capture_output=True, text=True, errors="surrogateescape", env=env)
+        if r.returncode:
+            raise QueueError(f"git log --name-only {' '.join(how)} ^{ref}: {(r.stderr or r.stdout).strip()[-400:]}")
+        for rec in r.stdout.split("\x01")[1:]:
+            sha, _, rest = rec.partition("\0")
+            files[sha] = [x for x in rest.lstrip("\0\n").split("\0") if x]
+    on_ref = {path: meta.split()[2] for meta, _, path in (x.partition("\t") for x in _out(repo, "ls-tree", "-r", "-z", ref).split("\0")
+                                                          if x)}
+    tree = _out(repo, "rev-parse", f"{ref}^{{tree}}")
+    out: dict[int, tuple[list[str], str | None]] = {}
+    cat = subprocess.Popen(["git", "cat-file", "--batch-check=%(objectname)"], cwd=repo, stdin=subprocess.PIPE,
+                           stdout=subprocess.PIPE, text=True, errors="surrogateescape", env=env)
+    try:
+        for p in prs:
+            if p.number not in own:
+                continue
+            touched = list(dict.fromkeys(f for c in own[p.number] for f in files.get(c, ())))
+            same = bool(touched)
+            for f in touched:
+                if "\n" in f:
+                    same = False
+                else:
+                    cat.stdin.write(f"{p.head}:{f}\n")
+                    cat.stdin.flush()
+                    got = cat.stdout.readline().strip()
+                    same = (None if got.endswith(" missing") else got) == on_ref.get(f)
+                if not same:
+                    break
+            r = _git(repo, "merge-tree", "--write-tree", "--no-messages", "-Xno-renames", ref, p.head, check=False) if same else None
+            if r is not None and not r.returncode and r.stdout.split()[:1] == [tree]:
+                out[p.number] = (touched, None)
+    finally:
+        cat.stdin.close()
+        cat.wait()
+    for n, (touched, _) in out.items():
+        r = subprocess.run(["git", "--literal-pathspecs", "log", "--stdin", "--first-parent", "-1", "--format=%H%x00%P%x00%B"],
+                           cwd=repo, input="".join(f"{x}\n" for x in [ref, "--", *touched]), capture_output=True, text=True,
+                           errors="surrogateescape", env=env)
+        if not r.returncode and (rec := r.stdout.strip()):
+            commit, parents, body = rec.split("\x00", 2)
+            m, subject = queue_commit(commit, parents, body), body.partition("\n")[0]
+            out[n] = (touched, f"#{m.pr}'s landing {commit[:12]}" if m else f"{commit[:12]} ({subject})")
+    return out
 
 
 class Driver:
@@ -1071,11 +1198,14 @@ class Driver:
                  executor: str = "off", tasks: Executor | None = None,
                  evidence: Callable[[Path, list[str]], list[Path]] = evidence, regenerate_locks: bool = False,
                  after_landing_no_cache: bool = False, reviews: Callable[[int, str], list] | None = None,
-                 ready_by: Callable[[int, str], str | None] | None = None, max_lean_checks: int = 2,
-                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (),
+                 ready_by: Callable[[int, str], str | None] | None = None,
+                 stale_days: int = 0, stale_close_days: int = 0, stale_keep: tuple[int, ...] = (), close_unlandable: str = "off",
                  after_landing_shards: int | str = 1, lowrisk_lane: bool = False, lowrisk_per_tick: int = 20,
-                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = ()):
+                 lowrisk_excludes: tuple[str, ...] = (), executor_enqueue: tuple[str, ...] = (), warn_steps: tuple[str, ...] = (),
+                 bottom_ring: tuple[str, ...] = (CI, TOP), bottom_wait_min: int = BOTTOM_WAIT_S // 60):
         self.q, self.on = q, on
+        #: drive.toml's `warn_steps`: the check's steps whose red is never reverted (`_warns`)
+        self.warn_steps = warn_steps
         #: drive.toml's `executor`: "off", "shadow" (beside the after-landing run: `_follow_shadow`) or "on" (in its place, but
         #: for `SLIM_STEPS`, a run of them alone beside it: `_follow_tasks`, `_follow_slim`); ``tasks``, the executor (default:
         #: infra's queue, `QueueTransport` running ``executor_enqueue``)
@@ -1087,19 +1217,24 @@ class Driver:
         self.after_landing_shards = after_landing_shards
         self.plan_shards: Callable[..., dict] = plan_shards
         self.planned: Callable[[dict], tuple[dict | None, str | None]] = planned
-        #: the review landing's Lean checks that may run at once, a lower one and those stacked above it (`lean_stack`)
-        self.max_lean_checks = max_lean_checks
         #: drive.toml's stale rule (`research.stale`, `_stale`): ring a stale PR's owner once a day, close it at the second
         self.stale_days, self.stale_close_days, self.stale_keep = stale_days, stale_close_days, stale_keep
-        #: each member lands on `checked` on a reviewer's verdict, a Lean change once a Lean check passed, and the full check of
-        #: `checked` decides what reaches `main` (`_review`, `_promote`), reusing no pass with ``after_landing_no_cache`` but
-        #: circuit-check's per-target ones (`--circuit-cache`)
+        #: drive.toml's bottom ring (`_bottom`): who is rung while `next`'s lowest member waits for a land verdict, and the
+        #: minutes it waits before each ring
+        self.bottom_ring, self.bottom_wait_min = bottom_ring, bottom_wait_min
+        #: drive.toml's unlandable rule (`_unlandable`): close each open PR nothing will land as it is ("on"), only log each it
+        #: would close ("log"), or neither ("off")
+        self.close_unlandable = close_unlandable
+        #: each member lands on `checked` on a reviewer's verdict, and the full check of `checked` decides what reaches `main`
+        #: (`_review`, `_promote`), reusing no pass with ``after_landing_no_cache`` but circuit-check's per-target ones
+        #: (`--circuit-cache`)
         self.after_landing_no_cache = after_landing_no_cache
         #: the `reviewed` labels on a PR's head (`StoreLabels.reviews`)
         self.reviews: Callable[[int, str], list] = reviews or (lambda pr, head: StoreLabels(q.store, q.log).reviews(pr, head))
         #: who wrote the ready mark on a PR's head (`StoreLabels.ready_by`), one of those whose verdict doesn't count (`_owners`)
         self.ready_by: Callable[[int, str], str | None] = ready_by or (lambda pr, head: StoreLabels(q.store, q.log).ready_by(pr, head))
-        #: commit the locks a Lean check regenerated onto its commit as it lands
+        #: after a landing that changes Lean, a lock or the spec, run the lock run and commit the records it regenerated
+        #: (`_start_locks`, `_commit_locks`)
         self.regenerate_locks = regenerate_locks
         #: the after-landing run on the landing branch's tip (`postland`): `train.sh COMMIT MACHINE --deferred STEPS`, detached
         #: (`_started`), its check at `POSTLAND_SLOT_RANK`; an injected `launch` launches it too
@@ -1113,15 +1248,15 @@ class Driver:
             if launch is train_launch else (lambda repo, commit, machine, steps, **_: self.launch(repo, commit, machine, False)))
         #: the artifact of circuit-check's records step (`records_artifact`, `_records`) a sharded after-landing run gives its shards
         self.records_artifact: Callable[[str], str | None] = lambda rid: records_artifact(q.store, rid)
-        #: a Lean change's Lean check before a review landing: `train.sh TOP MACHINES --deferred lean-audit`, detached
-        self.launch_lean: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
+        #: the lock run of the landing branch's tip (`_start_locks`): `train.sh TIP MACHINES --deferred lean-audit`, detached,
+        #: its check at `POSTLAND_SLOT_RANK`
+        self.launch_locks: Callable[[Path, str, str], tuple[list[str], str] | dict] = (
             (lambda repo, commit, machine: train_launch(repo, commit, machine, False, auth=q.auth, deferred=LEAN_STEP,
-                                                        detached=True))
+                                                        detached=True, rank=POSTLAND_SLOT_RANK,
+                                                        bookkeeping_warn=takes_bookkeeping(repo)))
             if launch is train_launch else (lambda repo, commit, machine: self.launch(repo, commit, machine, False)))
         #: what a detached launch has printed so far (`launched`, `_resolve`)
         self.launched: Callable[[dict], tuple[list[str] | None, str]] = launched
-        #: the running Lean checks of drive's run registry, its own and hand ones (`lean_runs`), which hold `next` as its own do
-        self.lean_runs: Callable[[set[str], float], dict[str, list[str]]] = lean_runs
         if launch is train_launch:
             launch = functools.partial(train_launch, auth=q.auth)
         self.launch, self.states, self.post, self.now, self.cancel, self.evidence = launch, states, post, now, cancel, evidence
@@ -1145,7 +1280,7 @@ class Driver:
 
     @staticmethod
     def _started(got: tuple[list[str], str] | dict) -> tuple[dict | None, str]:
-        """A launch record's fields from what `launch_lean` or `launch_postland` returned: {"ids"} of a launch that printed
+        """A launch record's fields from what `launch_locks` or `launch_postland` returned: {"ids"} of a launch that printed
         them, {"ids": [], "launch"} of one still running detached (`detach`), which `_resolve` reads on later ticks and which
         counts as running until then; None, with train.sh's output's tail, of one that registered no run."""
         if isinstance(got, dict):
@@ -1254,13 +1389,15 @@ class Driver:
         return text
 
     def _lock_commits(self, base: str, tip: str, reverted: list[Member]) -> list[str]:
-        """The `Lock records regenerated for #N...` commits in ``base``..``tip`` (`regenerate_locks`) that go with ``reverted``: one
-        naming any of them that regenerated a lock in a package a reverted PR's change touches.  Left in place, it rewrites the lean-audit.json the PR's own revert restores, which then conflicts,
-        or keeps records of reverted Lean."""
+        """The `Lock records regenerated for #N...` commits on the landing branch's line in ``base``..``tip`` (`_commit_locks`: the
+        lock commit, or its merge onto a moved tip) that go with ``reverted``: one naming any of them that regenerated a lock in a
+        package a reverted PR's change touches.  Left in place, it rewrites the lean-audit.json the PR's own revert restores,
+        which then conflicts, or keeps records of reverted Lean."""
         prs = {x.pr for x in reverted}
         touched = set().union(*(changed(self.repo, f"{x.commit}^1", x.commit) for x in reverted)) if reverted else set()
         out = []
-        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--format=%H%x00%B%x1e", f"{base}..{tip}").split("\x1e"))):
+        for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--first-parent", "--format=%H%x00%B%x1e",
+                                                          f"{base}..{tip}").split("\x1e"))):
             c, body = rec.split("\x00", 1)
             named = {int(n) for n in re.findall(r"#(\d+)", body.split("\n")[0])}
             if not body.startswith("Lock records regenerated for ") or not prs & named:
@@ -1284,29 +1421,25 @@ class Driver:
         return not _git(self.repo, "merge-base", "--is-ancestor", a, b, check=False).returncode
 
     def landed_since(self, base: str, tip: str) -> list[Member]:
-        """The PRs the queue landed in ``base``..``tip``, oldest first: each merge of a PR onto `next` (`Queue: #N`, with its
-        `PR`, `Head` and `Owner` trailers), and each move drive regenerated (one commit, with a `Move:` trailer too:
-        `queue.Queue._regenerate`), that `main` reached, but those a revert in that range undid.  Nothing else: never a lander's
-        commit."""
-        from .queue import MOVE_TRAILER_RE, TRAILER_RE
-
+        """The PRs the queue landed in ``base``..``tip``, oldest first: each of its merges onto `next` and each move drive
+        regenerated (`queue.queue_commit`; never a lander's commit), that `main` reached, but those a revert in that range
+        undid."""
         out, undone = [], set()
         for rec in filter(None, (x.strip() for x in _out(self.repo, "log", "--reverse", "--topo-order", "--format=%H%x00%P%x00%B%x1e",
                                                           f"{base}..{tip}").split("\x1e"))):
             commit, parents, body = rec.split("\x00", 2)
             undone |= set(REVERTS_RE.findall(body))
-            t = dict(TRAILER_RE.findall(body))
-            if ((len(parents.split()) > 1 or MOVE_TRAILER_RE.search(body)) and body.startswith("Queue: #")
-                    and {"PR", "Head", "Owner"} <= set(t)):
-                out.append(Member(int(t["PR"].lstrip("#")), t["Head"], t["Owner"], commit))
+            if m := queue_commit(commit, parents, body):
+                out.append(m)
         return [x for x in out if x.commit not in undone]
 
     def follow_postland(self, drive: dict) -> None:
-        """The post-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
+        """The after-landing run, once it ends: passed, its tip is verified; failed, `_postland_failed`; never started (every twin
         exited 75, or was stopped), the next `start_postland` launches it again.  One already failing under `--keep-going` is
-        named red at once (`_red`), and cancelled once only its `TAIL` is left.  A pass verifies its tip only when every step it
-        ran passed in it (`_unrun`).  One still launching (`_resolve`) runs; one whose train.sh registered no run rings `CI` and
-        `TOP` (`_launch_failed`), and is launched again."""
+        named red at once (`_red`), and cancelled once only its `TAIL` is left; a shard of it whose failures name nothing runs
+        again once first (`_rerun_nameless`).  A pass verifies its tip only when every step it ran passed in it (`_unrun`).  One
+        still launching (`_resolve`) runs; one whose train.sh registered no run rings `CI` and `TOP` (`_launch_failed`), and is
+        launched again."""
         if not (pl := drive.get("postland")) or not (run := pl.get("run")):
             return
         if "tasks" in run:
@@ -1333,6 +1466,8 @@ class Driver:
                            f"state read {LOST_AFTER_S // 3600} h after its launch): it launches again once")
                 return
             states = {r: ("lost", -1) for r in states}
+        elif self._rerun_nameless(drive, pl, run, states):
+            return
         early = next((s[3] for s in states.values() if len(s) > 3 and s[0] in ACTIVE and s[3]), None)
         if early and self._only_allowed(run):
             early = None
@@ -1355,6 +1490,9 @@ class Driver:
                                                       f"passed without passing {', '.join(unrun)} (skipped, or absent from its "
                                                       "steps.jsonl): it verified nothing and reverted nothing. Find why; "
                                                       f"the next landing's run checks `{self.q.into}` again")
+                return
+            if (v := pl.get("verified")) and v != tip and self._ancestor(tip, v):
+                self._red(drive, pl, run, ended=True)       # `main` moved past it beside drive (`_main_moved`): `verified` stays
                 return
             pl["verified"], pl["verified_run"] = tip, " ".join(run["ids"])
             # a step it skipped by name (`start_postland`) still holds from the run that verified `main` before
@@ -1395,8 +1533,9 @@ class Driver:
     #    shadow mode; in "on" mode the after-landing run's record is {"tip", "at", "tasks": {"check", "graph": its graph/v2's
     #    id once labelled}, ...}: the graph itself is read from the store each tick, never kept in the state; and
     #    `postland["slim"]` is the run of `SLIM_STEPS` beside it, a run's record ({"ids" or "launch", "tip", "at", "steps",
-    #    "skip", "ratchet_base", "baseline", "resend"}) with "relaunch" while it must launch again, and once it ended "ok" and
-    #    "passed" (the steps it passed), dropped with the check's record
+    #    "skip", "ratchet_base", "baseline", "resend"}) with "relaunch" while it must launch again, and once it ended "ok",
+    #    "passed" (the steps it passed) and "gate" (whether it passed those it judges on the merge gate), dropped with the
+    #    check's record
 
     def _shadow_enqueue(self, drive: dict, tip: str) -> None:
         """`executor = "shadow"`: put ``tip``'s after-landing check on the executor's queue beside its run, once, with no graph:
@@ -1515,11 +1654,12 @@ class Driver:
         the tip's policy covers is not red (`_task_allowed`); each other is named red at once with its culprit, by the units a
         run would name (`_task_units`: a test-file's suite, each failed suite a lean-suites task's report names, else its kind's
         job; `_name_tasks`), each unit allowed on its own.  Once every task on the merge gate (its job not in policy.toml's
-        `off_gate`) passed or is covered and the run passed its steps, ratchet-gate's though it is off the gate, the tip is
-        `gated`.  Once no task is pending and the run ended, the tip is verified when every task passed or is covered and the
-        run passed, each red record at or below it ending, and `_promote` moves `main` there; else it is failed, `main` stays,
-        and each red record whose unit a task passed here ends (`_unit_states`).  A runner that ran nothing (a skip) gives an
-        error, no result, so its task stays pending and `main` with it.  The check stands for the jobs its graph has tasks of
+        `off_gate`) passed or is covered and the run ended, passing each of its preflights and steps on that gate too (its
+        `gate`: ratchet-gate is off it, as in a run of every step), the tip is `gated`.  Once no task is pending and the run
+        ended, the tip is verified when every task passed or is covered and the run passed, each red record at or below it
+        ending, and `_promote` moves `main` there; else it is failed, `main` going there only if it is `gated`, and each red
+        record whose unit a task passed here ends (`_unit_states`).  A runner that ran nothing (a skip) gives an error, no
+        result, so its task stays pending and `main` with it.  The check stands for the jobs its graph has tasks of
         (`_job`) and the run's steps, and no others: a graph with no task of a job `main` waits for (`_gating`) gates nothing
         and verifies only the jobs it has, so `main` stays, and `CI` is told which it lacks.  A failed baseline check is
         verified with the jobs whose every task passed and the steps the run passed, as a red baseline run is
@@ -1569,7 +1709,8 @@ class Driver:
         off = set(self._policy(tip).off_gate)
         jobs = {self._job(x) for x in tasks.values()}
         lacks = [s for s in self._gating(tip) if s not in jobs and s not in SLIM_STEPS]
-        if slim and not lacks and all(ok(i) for i, x in tasks.items() if self._job(x) not in off) and not (
+        gate = slim is not None and pl["slim"]["gate"]
+        if gate and not lacks and all(ok(i) for i, x in tasks.items() if self._job(x) not in off) and not (
                 (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip))):
             pl["gated"], pl["gated_run"], pl["gated_by"] = tip, "", t["check"]
         if slim is None or any(s == PENDING for s, _ in states.values()):
@@ -1663,10 +1804,13 @@ class Driver:
         after-landing run is (`follow_postland`).  None while it launches or runs, or once it launches again: none of the tip
         yet, its train.sh registered no run, it never ran or was stopped, or it was lost or killed (once: again, it failed).
         Once it ended, whether it passed each of its steps (or failed only on what an allowance covers), kept in it with the
-        steps it passed.  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
+        steps it passed and whether it passed each it judges on the merge gate (`gate`, by which `_follow_tasks` gates the tip:
+        its preflights, which no graph/v2 task runs, and its steps but those policy.toml's `off_gate` takes off it, as for a run
+        of every step).  It judges only `SLIM_JUDGED` of its records (`_red`): each such step it failed is named red with its
         culprit as a run's is, ratchet-gate's the change its gate's log fails (`_name`), at once while it runs and once it
-        ended, its revert waiting for its owners' fix (`_red_clock`); a baseline's failure is named nothing.  One whose
-        records name no failure of those steps, that passed without passing one, or that was killed again is told to `CI`."""
+        ended, and its culprit fixed forward, or reverted unless it is a warn step's (`_revert_reds`); a baseline's failure is
+        named nothing.  One whose records name no failure of those steps, that passed without passing one, or that was killed
+        again is told to `CI`."""
         tip, base = run["tip"], bool(run.get("baseline"))
         slim = pl.get("slim")
         if not slim or slim["tip"] != tip or slim.get("relaunch"):
@@ -1711,14 +1855,18 @@ class Driver:
             self._start_slim(drive, pl, tip, base)
             return None
         self._timed(drive, "postland", ids)
-        unrun = self._unrun(ids, slim["steps"], tip)
-        slim.update(ok=passed and not unrun, passed=[s for s in slim["steps"] if s not in unrun])
+        missed = self._unrun(ids, [s for s in SLIM_JUDGED if s in slim["steps"] or s not in SLIM_STEPS], tip)
+        unrun = [s for s in slim["steps"] if s in missed]
+        off = self._policy(tip).off_gate
+        slim.update(ok=passed and not unrun, passed=[s for s in slim["steps"] if s not in unrun],
+                    gate=passed and not unrun or not [s for s in missed if s not in off])
         if base:
             return slim["ok"]
         if passed and unrun:
             self.refuse(drive, f"postland:slim:{tip}", f"{what}, {' '.join(ids)}, passed without passing {', '.join(unrun)} "
-                                                       "(skipped, or absent from its steps.jsonl): `main` stays below it, and "
-                                                       f"nothing is reverted. Find why; the next landing's check runs it again")
+                                                       "(skipped, or absent from its steps.jsonl): it verifies nothing, `main` "
+                                                       "stays below it unless each is off the gate, and nothing is reverted. Find "
+                                                       "why; the next landing's check runs it again")
         elif passed:
             self._red(drive, pl, slim, ended=True, steps=SLIM_JUDGED)
         elif killed_:
@@ -1798,12 +1946,12 @@ class Driver:
         since it last passed (`_base_of`): the one whose own change touches a file one of them depends on (`task_files`: their
         inputs and envs' spec files, and those of each task they read, transitively).  A lean-suites task, whose inputs are the
         whole tree, stands for suite ``key`` by its report row, as a run's suite does (`_name`): its failed test files, else,
-        touching none, the suite's declared inputs (`suite_inputs`).  The executor's check bisects nothing, so several, or none,
-        are rung and nothing is reverted.  The ring (`_ring`), the record, the expired allowances and the revert (`_red_clock`)
-        are a run's red's (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left
-        as it is."""
+        touching none, the suite's declared inputs (`suite_inputs`).  The ring (`_ring`), the record, the several (`_several`),
+        the expired allowances and the revert after `FIX_FORWARD_S` with no fix marked (`_revert_reds`) are a run's red's
+        (`_name`); a key already named for this tip, or whose culprit is still on `checked` unreverted, is left as it is, but a
+        warn step's at a newer tip is named afresh (`_warns`)."""
         red, tip = pl.setdefault("red", {}), run["tip"]
-        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted")
+        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not self._warns(key)
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip
@@ -1818,7 +1966,7 @@ class Driver:
         first = "; ".join(task_error(i, states[i][1] or {}, name if i in coarse else None) for i in ids[:2])
         r = {"tip": tip, "ids": [run["tasks"]["check"]], "first": first + (f"; {len(ids) - 2} more task(s) failed" if len(ids) > 2 else ""),
              "step": self._job(task), "culprit": None, "owner": self._path_owner(suite) if suite else None, "not_run": [],
-             "tasks": ids[:20]}
+             "tasks": ids[:20], "named_at": self.now()}
         if expired:
             r["expired"], r["allowed_by"] = [a.text() for a in expired], sorted({a.owner for a in expired})
         red[key] = r
@@ -1840,48 +1988,55 @@ class Driver:
             why = f"which is under {key}'s declared inputs"
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
         if len(hits) == 1:
-            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], rung=self.now(),
+            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit],
                      why=f"its change touches {', '.join(r['paths'][:4])}, {why}")
             self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({r['why']}), of the {since}")
         elif hits:
-            self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch what it depends on ({since}), and the "
-                                      "executor's check bisects nothing. Reverted nothing; find the culprit by hand")
+            self._several(drive, r, key, hits, f"each touch what it depends on ({since})")
         else:
             self._ring(drive, r, key, f"none of the {since} touches what it depends on, so it was red before them or its runner "
                                       "failed. Reverted nothing")
 
     def _gating(self, commit: str) -> list[str]:
-        """The after-landing steps `main` waits for at ``commit`` (`_promote`): every step but those a run skips by name
-        (`AFTER_LANDING_OPTIONAL`) and the jobs ``commit``'s own drive policy takes off the merge gate (policy.toml's
-        `off_gate`: circuit-check, `merge.declared_jobs`), which still run there and revert their culprit on `checked`; every
-        such step when that ci.toml or policy can't be read."""
-        from .merge import declared_jobs
-
+        """`gating` at ``commit``, read once a drive."""
         cache = self.__dict__.setdefault("_gating_of", {})
         if commit not in cache:
-            jobs = declared_jobs(self.repo, commit)
-            cache[commit] = [s for s in AFTER_LANDING if s not in AFTER_LANDING_OPTIONAL and (isinstance(jobs, str) or s in jobs)]
+            cache[commit] = gating(self.repo, commit)
         return cache[commit]
 
     def _gate_passed(self, pl: dict, run: dict) -> None:
         """An after-landing run, ended or still running, that passed every step `main` waits for at its tip (`_gating`), or
-        failed it only on failures an allowance covers (`_allowed_steps`), whatever a step off the gate does or did
-        (circuit-check, pending or red): its tip is `gated` (with "gated_run", its ids), a commit `_promote` may move `main` to."""
+        failed it only on failures an allowance covers (`_allowed_steps`), in every shard that holds it (`shard_passed`: none
+        has it still to run), whatever a step off the gate does or did (circuit-check, pending or red): its tip is `gated`
+        (with "gated_run", its ids), a commit `_promote` may move `main` to."""
         tip, ids = run["tip"], " ".join(run["ids"])
         if (g := pl.get("gated")) and (g == tip or not self._ancestor(g, tip)):
             return
-        dirs = self._evidence(Verdict("failed", ids))
-        passed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "passed"}
-        if set(self._gating(tip)) <= passed | self._allowed_steps(tip, dirs):
+        view, dirs = self._shard_steps(run), [d for ds in self._shards(run) for d in ds]
+        if view is not None and set(self._gating(tip)) <= shard_passed(view, self._allowed_steps(tip, dirs)):
             pl["gated"], pl["gated_run"] = tip, ids
             pl.pop("gated_by", None)
+
+    def _shards(self, run: dict) -> list[list[Path]]:
+        """The run dirs of each shard of ``run`` (``groups``, its twins', by run id; an unsharded run is one), fetched once a
+        tick."""
+        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        return [[d for d in dirs if d.name in g] for g in run["groups"]] if run.get("groups") else [dirs]
+
+    def _shard_steps(self, run: dict) -> list[dict[str, str | None]] | None:
+        """`shard_steps` of ``run``'s shards, one whose twin exited 0 known by its steps.jsonl."""
+        groups = run.get("groups") or [run["ids"]]
+        states = self._states(run["ids"]) if len(groups) > 1 else {}
+        return shard_steps(self._shards(run), [any(r in states and states[r][1] == 0 for r in g) for g in groups])
 
     def _shards_launched(self, drive: dict, pl: dict, run: dict) -> bool:
         """Whether every shard of a sharded after-landing run (`start_postland`) has its run ids, which then become the run's own
         (``ids``, ``groups``: each shard's twins).  One whose train.sh registered no run stops the others and is told, as an
-        unsharded one is, and the next `start_postland` launches the run again."""
+        unsharded one is, and the next `start_postland` launches the run again.  A shard still printing nothing `LAUNCH_LOST_S`
+        after the run's launch registered none."""
         shards, n = run["shards"], len(run["shards"])
         for k, rec in enumerate(shards, 1):
+            rec.setdefault("at", run["at"])
             if (tail := self._resolve(rec, f"shard {k}/{n} of the post-landing run of `{self.q.into}` {run['tip'][:12]}")) is None:
                 continue
             if (got := [r for x in shards for r in x.get("ids") or ()]) and not (self.dry_run or self.q.shadow):
@@ -1911,6 +2066,65 @@ class Driver:
         groups = run.get("groups") or [run["ids"]]
         missed = [g for g in groups if all(states[r][1] in never for r in g if r in states)]
         return bool(missed) and all(g in missed or any(states[r][1] == 0 for r in g if r in states) for g in groups)
+
+    def _rerun_nameless(self, drive: dict, pl: dict, run: dict, states: dict) -> bool:
+        """Run a shard of a sharded after-landing run again once, on the machines of `on` it didn't run on (`_elsewhere`), as
+        `_follow_locks` does a lock run its machine failed, when no twin of it passed and each of its failures no allowance
+        covers names nothing (`_nameless`: a kill, a hang or a crash with no output, which its machine may have caused): its
+        twins still running are stopped, and the new run's take their place (``shards`` while it launches, `_shards_launched`),
+        launched with the keywords the shards were (``kw``), the old ones kept in ``reran``, which makes it once; `INFRA` is
+        rung with them, their machines and what failed.  Failing so again, the shard is red (`_red`).  Whether a shard was
+        found so: the run is judged on a later tick."""
+        if not (groups := run.get("groups")) or "kw" not in run:
+            return False
+        tip, steps, again, found = run["tip"], ",".join(pl.get("steps") or AFTER_LANDING), {}, False
+        for k, g in enumerate(groups, 1):
+            sts = {r: states[r] for r in g if r in states}
+            if str(k) in run.get("reran", {}) or any(s[1] == 0 for s in sts.values()) or not any(
+                    (len(s) > 3 and s[3]) if s[0] in ACTIVE else s[1] not in (NOT_STARTED, SIGTERM_RC) for s in sts.values()):
+                continue
+            if not (keys := self._nameless(tip, [d for d in self._evidence(Verdict("failed", " ".join(run["ids"])))
+                                                 if d.name in g])):
+                continue
+            found, spec, where, ran = True, shard_spec(run, k), self._elsewhere(sts), self._ran_on(sts)
+            what = (f"{', '.join(keys)} failed in shard {spec} of the after-landing run of `{self.q.into}` {tip[:12]} (run "
+                    f"{' '.join(g)}{' on ' + ', '.join(ran) if ran else ''}) naming nothing: no failing test, no error line")
+            if self.dry_run or self.q.shadow:
+                self.q.log(f"research queue drive: {what}: it would run again, once, on {where}")
+                continue
+            got, tail = self._started(self.launch_postland(self.repo, tip, where, steps, **run["kw"], shard=spec))
+            if got is None:
+                self._launch_failed(drive, "postland", tip, f"train.sh {tip[:12]} {where} --deferred {steps} --shard {spec}", tail)
+                continue
+            if live := [r for r, s in sts.items() if s[0] in ACTIVE]:
+                self.cancel(self.repo, live, f"drive: shard {spec} of the post-landing run of {tip[:12]} failed naming nothing: "
+                                             f"it runs again on {where}")
+            again[k] = got
+            run.setdefault("reran", {})[str(k)] = g
+            self.tell(drive, [f"rerun:{' '.join(g)}"], f"{what}, so its machine may have failed it. It runs again, once, on "
+                                                       f"{where}: {_ids(got)}; failing so again, it is red", INFRA.lstrip("@"))
+        if again:
+            run["shards"] = [again.get(k) or {"ids": g} for k, g in enumerate(run.pop("groups"), 1)]
+            run["ids"], run["at"] = [r for x in run["shards"] for r in x["ids"]], self.now()
+            self.q.save_state({**self.q.load_state(), "drive": drive})
+        return found
+
+    def _nameless(self, tip: str, dirs: list[Path]) -> list[str]:
+        """The failed suites and steps in ``dirs``, one shard's records, keyed as `_red` keys them, that no allowance of ``tip``'s
+        policy covers (`_allowed`), when each names nothing of its failure (`named_failure`, nor for ratchet-gate a merge it
+        fails); [] when one names what failed, or none failed."""
+        keys: list[str] = []
+        for d in dirs:
+            rows = {f"suite {n}": s for n, s in suite_rows(d).items() if s["status"] == "failed"}
+            steps = {f"step {st.get('step')}": st for st in step_records(d) if st.get("status") == "failed" and not not_run(st)
+                     and not any(s["step"] == st.get("step") for s in rows.values())}
+            for key, rec in {**rows, **steps}.items():
+                if self._allowed(tip, key, d, rec).covered:
+                    continue
+                if named_failure(d, rec) or (rec.get("step") == RATCHET_STEP and ratchet_failures(d, rec)):
+                    return []
+                keys.append(key)
+        return sorted(set(keys))
 
     def _unrun(self, ids: list[str], steps: list[str], tip: str | None = None) -> list[str]:
         """The ``steps`` no run among ``ids`` records as passed in its steps.jsonl, nor (with ``tip``, the commit it checked)
@@ -1975,16 +2189,16 @@ class Driver:
     def _only_allowed(self, run: dict) -> bool:
         """Whether ``run`` failed only on failures its tip's allowances cover: some step failed, and each failed step is
         `_allowed_steps`'."""
-        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
+        dirs = [d for ds in self._shards(run) for d in ds]
         failed = {st.get("step") for d in dirs for st in step_records(d) if st.get("status") == "failed" and not not_run(st)}
         return bool(failed) and failed <= self._allowed_steps(run["tip"], dirs)
 
     def _postland_failed(self, drive: dict, pl: dict, run: dict, why: str, signalled: bool = False) -> None:
-        """A post-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
+        """An after-landing run of ``run["tip"]`` that failed.  Killed by the machine (``signalled``: by a signal or 128+N, or a
         failure that names no file and was a kill: `implicated`, `killed`), it runs again once, on `main`'s tip then, and killed
         again is told to `CI`.  A baseline run's failure is `_red_baseline`'s.  Else each failed suite or step is named red with
-        its culprit (`_red`), whose revert waits for its owners' fix (`_red_clock`); a run whose records name none is told to
-        `CI`.  The next run checks `main`'s tip."""
+        its culprit (`_red`), to be fixed forward or reverted, a warn step's never reverted (`_revert_reds`); a run whose
+        records name none is told to `CI`.  The next run checks `main`'s tip."""
         tip, ids, base = run["tip"], " ".join(run["ids"]), pl["verified"]
         members = self.landed_since(base, tip)
         was_killed = signalled or (bool(members) and any(implicated(d) is None and killed(d, why)
@@ -2027,27 +2241,28 @@ class Driver:
                                               f"run of `{self.q.into}` passes {', '.join(unrun) or 'them'}, their failure reverts nothing. "
                                               f"Fix `{self.q.into}`")
 
-    def _failing(self, run: dict) -> list[str]:
-        """The steps a post-landing run's steps.jsonl records as failed."""
-        return sorted({s for d in self.evidence(self.repo, run["ids"]) for st in failed_steps(d) if (s := st.get("step"))})
-
     def _revert_landed(self, drive: dict, pl: dict, tip: str, base: str, one: Member, head: str, key: str, blame: str,
                        to: tuple[str | None, ...]) -> bool:
         """Revert ``one``, landed in ``base``..``tip``, on the landing branch with the lock commits that go with it
-        (`_lock_commits`), and tell ``to`` (`_red_owners`), and `CI` beside them when it must be reverted by hand: only
-        drive's operator can.  False when the revert's push lost a race: the next tick tries again."""
+        (`_lock_commits`, up to the branch's tip: a lock run's records may have been committed since ``tip``), and tell ``to``
+        (`_red_owners`), and `CI` beside them when it must be reverted by hand: only drive's operator can.  A pushed revert
+        awaits the after-landing run as a landing does (`_after_landing`): ``tip`` may be verified by then, `main` past it.
+        False when the revert's push lost a race: the next tick tries again."""
         into = self.q.into
         if self.dry_run or self.q.shadow:
             self.q.log(f"research queue drive: would revert #{one.pr} on `{into}`: {head}")
             return True
-        locks = self._lock_commits(base, tip, [one])
-        commits = self._newest_first(base, tip, [one.commit, *locks])
+        now = _out(self.repo, "rev-parse", self.q.base)
+        locks = self._lock_commits(base, now, [one])
+        commits = self._newest_first(base, now, [one.commit, *locks])
         got = self._revert(commits)
         if got == "refused":
             self.q.log(f"research queue drive: reverting #{one.pr} lost a race to `{into}`'s push; the next tick tries again")
             return False
         if got == "conflict":
             pl["failed"] = tip
+        elif got == "pushed":
+            self._after_landing(drive, drive["checked_tips"][-1], pl["verified"])
         undo = f"`git revert {' '.join(c[:12] for c in commits)}` (`-m 1` for a merge)"
         with_locks = f", with the lock commit {' '.join(c[:12] for c in locks)} regenerated for it" if locks else ""
         lead = {"pushed": f"#{one.pr} reverted on `{into}`{with_locks}", "undone": f"#{one.pr} was reverted on `{into}` already",
@@ -2061,28 +2276,28 @@ class Driver:
 
     # -- a red after-landing run (review landing): each failed suite and step is its own record in `postland["red"]`, keyed
     #    `suite NAME` or `step NAME`: {"tip", "ids": the run's, "first": its first error line, "base": where it last passed,
-    #    "culprit": [pr, head, owner, commit] or None, "cands": the landings a bisection decides among, "rung": when its
-    #    culprit was rung, "fix": what holds its revert, "reverted"}.  `postland["green"]`: {key: the newest tip a run passed it at}
+    #    "named_at": when it was named, "culprit": [pr, head, owner, commit] or None, "candidates": the landings it names when
+    #    more than one, "reverted"}.  `postland["green"]`: {key: the newest tip a run passed it at}
 
     def _red(self, drive: dict, pl: dict, run: dict, ended: bool = False, steps: tuple[str, ...] | None = None) -> int:
         """Read an after-landing run's records, still running or ``ended``: each suite and step it passed is green at its tip
-        (`_green`), and each it failed is named (`_name`): a step a cancel stopped is `not run`, never failed.  pytest and
-        lean-suites are named by their suites, and only as a step when no suite of theirs failed (a timeout, a kill).  A
-        failure an unexpired allowance of the tip's policy covers (`_allowed`) is not red: it is named nothing, and once the run
-        ended its red record ends as a pass's would; one whose allowance expired is named with it, so its ring says which.  With
-        ``steps``, only those of its steps are read, and none of its suites (`_follow_slim`).  The number of failed suites and
-        steps not covered."""
+        (`_green`): a suite once the run ended, failed in no shard and passed whole or in every part (`suite_passed`), a step
+        once every shard that holds it passed it (`shard_passed`); and each it failed is named (`_name`): a step a cancel stopped
+        is `not run`, never failed.  pytest and lean-suites are named by their suites, and only as a step when no suite of theirs
+        failed (a timeout, a kill).  A failure an unexpired allowance of the tip's policy covers (`_allowed`) is not red: it is
+        named nothing, and once the run ended its red record ends as a pass's would; one whose allowance expired is named with
+        it, so its ring says which.  With ``steps``, only those of its steps are read, and none of its suites (`_follow_slim`).
+        The number of failed suites and steps not covered."""
         tip = run["tip"]
-        dirs = self._evidence(Verdict("failed", " ".join(run["ids"])))
         fails: dict[str, tuple[Path, dict]] = {}
         stopped: set[str] = set()
         judged: tuple[Path, dict] | None = None
-        for d in dirs:
+        rows: dict[str, list[dict]] = {}
+        for d in (d for ds in self._shards(run) for d in ds):
             for name, s in (suite_rows(d) if steps is None else {}).items():
+                rows.setdefault(name, []).append(s)
                 if s["status"] == "failed":
                     fails[f"suite {name}"] = (d, s)
-                elif s["status"] == "passed" and ended:
-                    self._green(pl, f"suite {name}", tip)
             for st in step_records(d):
                 step = st.get("step") or ""
                 if steps is not None and step not in steps:
@@ -2094,8 +2309,10 @@ class Driver:
                 elif st.get("status") == "failed":
                     if step not in ("pytest", "lean-suites") or not any(s["step"] == step for _, s in fails.values()):
                         fails[f"step {step}"] = (d, st)
-                elif st.get("status") == "passed":
-                    self._green(pl, f"step {step}", tip)
+        for name in sorted(n for n, rs in rows.items() if ended and suite_passed(rs)):
+            self._green(pl, f"suite {name}", tip)
+        for step in sorted(s for s in shard_passed(self._shard_steps(run)) if steps is None or s in steps):
+            self._green(pl, f"step {step}", tip)
         expired: dict[str, tuple[policy.Allowance, ...]] = {}
         for key, (d, rec) in list(fails.items()):
             v = self._allowed(tip, key, d, rec)
@@ -2108,21 +2325,18 @@ class Driver:
         if not (self.dry_run or self.q.shadow):
             for key, (d, rec) in fails.items():
                 self._name(drive, pl, run, key, d, rec, sorted(stopped), expired.get(key, ()))
-            self._start_bisect(pl)
         if judged:
             self._ratchet_judged(pl, run, *judged)
         return len(fails)
 
     def _green(self, pl: dict, key: str, tip: str, how: str = "passed") -> None:
         """``key`` passed at ``tip`` (or ``how`` it was not red there): its newest green, and its red record at or below ``tip``
-        (and a bisection of it) ends."""
+        ends."""
         green = pl.setdefault("green", {})
         if green.get(key) != tip and (key not in green or self._ancestor(green[key], tip)):
             green[key] = tip
         if (r := (pl.get("red") or {}).get(key)) and self._ancestor(r["tip"], tip):
             del pl["red"][key]
-            if (pl.get("bisect") or {}).get("key") == key:
-                del pl["bisect"]
             self.q.log(f"research queue drive: {key} {how} on `{self.q.into}` {tip[:12]}; its red record of {r['tip'][:12]} ends")
 
     def _base_of(self, pl: dict, key: str, step: str, tip: str) -> str | None:
@@ -2135,9 +2349,10 @@ class Driver:
 
     def _ratchet_judged(self, pl: dict, run: dict, d: Path, st: dict) -> None:
         """``run``'s ratchet-gate step ended with a verdict at its tip: passed, or failed naming each change it fails
-        (`ratchet_failures`, whose culprit `_name` takes).  The tip becomes `postland["ratchet_judged"]` ({"tip", "base": the
-        commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base` reads it.  A
-        failure that names no change, or one this clone doesn't hold, is no verdict."""
+        (`ratchet_failures`, whose merges `_name` takes as culprits).  The tip becomes `postland["ratchet_judged"]` ({"tip",
+        "base": the commit its gate judged above, "failed": the commits it failed}) unless a newer tip is: `_ratchet_base`
+        reads it, so the next run's gate judges only the merges above it.  A failure that names no change, or one this clone
+        doesn't hold, is no verdict."""
         failed: list[str] = []
         if st.get("status") == "failed":
             named = [c for _, c, _ in ratchet_failures(d, st)]
@@ -2151,12 +2366,14 @@ class Driver:
 
     def _ratchet_base(self, pl: dict, tip: str, below: str | None) -> str | None:
         """ratchet-gate's base in an after-landing run of ``tip`` (`train.sh --ratchet-base`): the newest tip whose run's
-        ratchet-gate gave a verdict (`ratchet_judged`) once a revert at or below ``tip`` undid each change it failed, so a
-        reverted culprit's revert lies above the base and is judged; while one stands, the base that run's gate judged above,
-        so the gate fails it again.  Either only strictly below ``tip`` and at or above ``below`` (the run's `--base`); else,
-        none judged or a revert or reset that left it off ``tip``'s history, ``below``."""
+        ratchet-gate gave a verdict (`ratchet_judged`), the changes it failed standing or not while ratchet-gate is a warn step
+        (`_warns`), which no revert undoes: a merge it failed is judged and rung once.  Not one, only once a revert at or below
+        ``tip`` undid each change it failed, so a reverted culprit's revert lies above the base and is judged; while one
+        stands, the base that run's gate judged above, so the gate fails it again until it is reverted.  Either only strictly
+        below ``tip`` and at or above ``below`` (the run's `--base`); else, none judged or a revert or reset that left it off
+        ``tip``'s history, ``below``."""
         j = pl.get("ratchet_judged") or {}
-        undone = all(self._undone(c, tip) for c in j.get("failed") or ())
+        undone = self._warns(f"step {RATCHET_STEP}") or all(self._undone(c, tip) for c in j.get("failed") or ())
         for c in (j.get("tip") if undone else None, j.get("base")):
             if c and c != tip and self._ancestor(c, tip) and (not below or self._ancestor(below, c)):
                 return c
@@ -2200,31 +2417,57 @@ class Driver:
         except (KeyError, TypeError, AttributeError):
             return None
 
+    def _lean_declared(self, log: str, refs: tuple[str, ...]) -> set[str]:
+        """The Lean files that declare a name Lean failure ``log`` names (`LEAN_NAMED_RE`), at any of ``refs`` (the red's tip, and
+        where it last passed, which still holds what its culprit removed or renamed): each with a line `KIND NAME`
+        (`LEAN_DECLARES`, found by `git grep`) that declares the full name, or its last part in a file opening the namespace
+        the part before it ends in."""
+        names = sorted({m[1] or m[2] for m in LEAN_NAMED_RE.finditer(log)})[:LEAN_NAMES]
+        if not names:
+            return set()
+        wanted = sorted({*names, *(n.rpartition(".")[2] for n in names)})
+        pats = [x for w in wanted for k in LEAN_DECLARES for x in ("-e", f"{k} {w}")]
+        r = _git(self.repo, "grep", "-I", "-w", "-F", *pats, *dict.fromkeys(refs), "--", "*.lean", check=False)
+        out: set[str] = set()
+        for line in r.stdout.splitlines():
+            ref, path, text = (line.split(":", 2) + ["", ""])[:3]
+            if path in out or not (m := LEAN_DECL_RE.search(text)):
+                continue
+            spaces = [re.escape(n[:-len(m[1]) - 1].rpartition(".")[2]) for n in names if n.endswith(f".{m[1]}")]
+            if m[1] in names or (spaces and re.search(rf"^\s*namespace\s+(?:\S+\.)?(?:{'|'.join(spaces)})\s*$",
+                                                      _git(self.repo, "show", f"{ref}:{path}", check=False).stdout, re.M)):
+                out.add(path)
+        return out
+
     def _name(self, drive: dict, pl: dict, run: dict, key: str, d: Path, rec: dict, stopped: list[str],
               expired: tuple[policy.Allowance, ...] = ()) -> None:
-        """Name the culprit of failed ``key`` among the PRs landed since it last passed (`_base_of`): the one whose change
-        touches a file the failure points at (its failing tests, the files its log names, what the read guard caught it reading
-        and the test modules that read it), else the one that touches its declared inputs (`_input_rule`); for ratchet-gate,
-        the oldest whose merge the gate's log says it fails (`ratchet_failures`) before either; several, a bisection
-        by landing decides (`_start_bisect`).  Ring the culprit's lane and the owner of what failed (`_ring`): drive
-        reverts the culprit `FIX_WINDOW_S` after unless a fix is marked (`_red_clock`).  The ``expired`` allowances that covered
-        it are kept with the record (``expired``: each one's text, ``allowed_by``: its owner), so the ring names them and rings
-        their owners too.  A key already named for this tip, or whose culprit is still on `main` unreverted, is left as it is."""
-        red, tip = pl.setdefault("red", {}), run["tip"]
-        if (old := red.get(key)) and (old["tip"] == tip or (pl.get("bisect") or {}).get("key") == key
-                                      or (old.get("culprit") and not old.get("reverted") and not self._undone(old["culprit"][3]))):
+        """Name the culprit of failed ``key`` among the PRs landed since it last passed (`_base_of`), by what the failure names:
+        the one whose change touches a file it points at (its failing tests, the files its log names, what the read guard caught
+        it reading and the test modules that read it, and of a Lean failure, `LEAN_NAMING`'s, the files declaring each
+        declaration it names: `_lean_declared`), else the one touching the declared inputs of the suite or step it names
+        (`_input_rule`); for ratchet-gate, before either, the merge the gate's log says it fails (`ratchet_failures`): the
+        oldest, or each one, all culprits (`culprits`), while it is a warn step (`_warns`).  The culprit is rung with the owner
+        of what failed (`_ring`), to be fixed forward within `FIX_FORWARD_S` of the red's `named_at` or reverted then
+        (`_revert_reds`), a warn step's in its lane's next PR, never reverted; several a failure only touches are each rung,
+        none reverted (`_several`).  The ``expired`` allowances that covered it are kept with the record (``expired``: each
+        one's text, ``allowed_by``: its owner), so the ring names them and rings their owners too.  A key already named for
+        this tip, or whose culprit is still on `main` unreverted, is left as it is; a warn step's red at a newer tip is named
+        afresh, since no revert ends it and the gate judges only the merges above the tip it last judged (`_ratchet_base`)."""
+        red, tip, warn = pl.setdefault("red", {}), run["tip"], self._warns(key)
+        if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not warn
+                                                            and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
-                old["seen"] = tip                       # red again here: a fix that landed below this tip didn't fix it (`_fix`)
+                old["seen"] = tip                       # red again here (`_behind`)
             return
         step = rec.get("step") or ""
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
-             "owner": self._path_owner(rec["suite"]) if rec.get("suite") else None, "not_run": stopped}
+             "owner": self._path_owner(rec["suite"]) if rec.get("suite") else None, "not_run": stopped, "named_at": self.now()}
         if expired:
             r["expired"], r["allowed_by"] = [a.text() for a in expired], sorted({a.owner for a in expired})
         red[key] = r
         gate = ratchet_failures(d, rec) if step == RATCHET_STEP else []
         if gate:
-            r["first"] = f"`{gate[0][0]} ({gate[0][1]}): failed: {gate[0][2][:200]}`"
+            r["first"] = "; ".join(f"`{n} ({c}): failed: {w[:200]}`" for n, c, w in (gate if warn else gate[:1]))
         # the gate judges every merge above its base (at or above the verified tip) and names the one it fails, wherever the step
         # last passed
         if (base := self._base_of(pl, key, step, tip) or (pl.get("verified") if gate else None)) is None:
@@ -2233,149 +2476,139 @@ class Driver:
             return
         r["base"] = base
         members = self.landed_since(base, tip)
-        paths = suite_paths(d, rec) if key.startswith("suite ") else step_paths(d, rec)
+        suite = key.startswith("suite ")
+        paths = suite_paths(d, rec) if suite else step_paths(d, rec)
+        if step in LEAN_NAMING and (declared := self._lean_declared(_suite_log(d, rec) if suite else _step_log(d, rec),
+                                                                    (tip, base))):
+            paths = (paths or set()) | declared
         hits = [x for x in members if touches(self._own(x), paths)] if paths else []
         why = f"its change touches {', '.join(sorted({f for x in hits for f in touches(self._own(x), paths)})[:4])}"
         r["paths"] = sorted(paths or ()) + sorted({f for x in hits for f in touches(self._own(x), paths)})
-        if gate and (named := [x for x in members if x.commit[:12] in {c for _, c, _ in gate}][:1]):
-            hits, why = named, "the ratchet gate fails its merge"
+        named = [x for x in members if x.commit[:12] in {c for _, c, _ in gate}][:None if warn else 1]
+        if named:
+            hits = named
+            why = "the ratchet gate fails its merge" if len(named) == 1 else "the ratchet gate fails each one's merge"
         if not hits and (rule := self._input_rule(key, d, rec, tip)):
             label, ok = rule
             hits, why = [x for x in members if any(ok(f) for f in self._own(x))], f"its change touches {label}"
             r["paths"] += sorted({f for x in hits for f in self._own(x) if ok(f)})
         since = f"{len(members)} landing(s) since `{self.q.into}` {base[:12]}, where it last passed"
-        if len(hits) == 1:
-            r.update(culprit=[hits[0].pr, hits[0].head, hits[0].owner, hits[0].commit], why=why, rung=self.now())
-            self._ring(drive, r, key, f"Culprit: #{hits[0].pr} ({why}), of the {since}")
-        elif hits and REVERTS_RE.search(_out(self.repo, "log", "--format=%B", f"{base}..{tip}")):
-            self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch it ({since}), and a revert lies in "
-                                      f"{base[:12]}..{tip[:12]}, so bisecting could blame the wrong PR. Reverted nothing; find "
-                                      "the culprit by hand")
+        if len(hits) == 1 or named:
+            culprits = [[x.pr, x.head, x.owner, x.commit] for x in hits]
+            r.update(culprit=culprits[0], why=why, **({"culprits": culprits} if len(culprits) > 1 else {}))
+            self._ring(drive, r, key, f"{'Culprits' if len(hits) > 1 else 'Culprit'}: {', '.join(f'#{x.pr}' for x in hits)} "
+                                      f"({why}), of the {since}")
         elif hits:
-            r["cands"] = [[x.pr, x.head, x.owner, x.commit] for x in hits]
-            self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} each touch it ({since}): drive bisects them by "
-                                      "landing, and rings the one it finds")
+            self._several(drive, r, key, hits, f"each touch it ({since})")
         else:
             self._ring(drive, r, key, f"none of the {since} touches it or its declared inputs, so it was red before them or the "
                                       "machine failed. Reverted nothing")
 
-    def _ring(self, drive: dict, r: dict, key: str, what: str, tag: str = "") -> None:
-        """Ring who acts on red ``key`` (`_red_owners`: its culprit's lane and the owner of what failed, in one post) with what
-        failed, the run, its first error line and what drive does next, once per key and culprit."""
+    def _several(self, drive: dict, r: dict, key: str, hits: list[Member], how: str) -> None:
+        """Red ``key``'s failure names several landings (``hits``, ``how``), its `candidates`: none is its culprit, so none is
+        reverted, and each one's lane is rung, with `CI` and `TOP` (`_red_owners`)."""
+        r["candidates"] = [[x.pr, x.head, x.owner, x.commit] for x in hits]
+        self._ring(drive, r, key, f"{' '.join(f'#{x.pr}' for x in hits)} {how}, so drive names no culprit and reverts none of "
+                                  "them: find which broke it, and fix it forward")
+
+    def _ring(self, drive: dict, r: dict, key: str, what: str) -> None:
+        """Ring who acts on red ``key`` (`_red_owners`: its culprit's lane, or each candidate's, and the owner of what failed, in
+        one post) with what failed, the run, its first error line and what drive does next, once per key and culprit: a
+        culprit's lane fixes it forward by `FIX_FORWARD_S` after the red was named, or drive reverts it then (`_revert_reds`);
+        a warn step's culprits' lanes fix it forward in their next PR, and no revert comes (`_warns`)."""
         c = r.get("culprit")
         nr = f" Not run (a cancel stopped them): {', '.join(r['not_run'])}." if r.get("not_run") else ""
         if r.get("expired"):
             nr += (f" Its allowance in policy.toml expired, so it is red again: {'; '.join(r['expired'])}. Fix it, or extend "
                    "the allowance in a reviewed change.")
-        clock = ("" if not c else
-                 f" Drive reverts #{c[0]} now, and lands no PR touching circuit-check's inputs until it passes on "
-                 f"`{self.q.into}`" if key == CIRCUIT_RED else
-                 f" Drive reverts #{c[0]} at {time.strftime('%H:%MZ', time.gmtime(r['rung'] + FIX_WINDOW_S))} unless a fix is "
-                 f"marked by then: a ready PR whose body names #{c[0]} or says `fixes {key}`, or whose change touches what "
-                 f"failed, or a new head of #{c[0]}")
-        self.tell(drive, [f"red:{key}:{c[3] if c else r['tip']}{tag}"],
+        if c and self._warns(key):
+            then = (f" No revert is coming: drive never reverts {key}'s red (drive.toml's `warn_steps`), so "
+                    f"{'each culprit' if r.get('culprits') else f'#{c[0]}'}'s lane fixes it forward in its next PR.")
+        elif c:
+            then = (f" Fix it forward by {_hhmm(r.get('named_at', self.now()) + FIX_FORWARD_S)}: mark a fix (a new head of "
+                    f"#{c[0]}, a PR whose body names #{c[0]} or says `fixes {key}`, or one whose change touches what failed), or "
+                    f"drive reverts #{c[0]} then.")
+        else:
+            then = ""
+        if key == CIRCUIT_RED:
+            then += f" No PR touching circuit-check's inputs lands until it passes on `{self.q.into}`."
+        self.tell(drive, [f"red:{key}:{x[3]}" for x in r.get("culprits") or [c]] if c else [f"red:{key}:{r['tip']}"],
                   f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}. {what[:1].upper()}{what[1:]}."
-                  f"{clock}{nr}", *self._red_owners(key, r))
+                  f"{then}{nr}", *self._red_owners(key, r))
 
     def _red_owners(self, key: str, r: dict) -> tuple[str | None, ...]:
-        """Who red record ``r`` of ``key`` rings, first the one who acts: its culprit's lane (`_owner`), then the owner of
-        what failed, its suite's (the registry's, `r["owner"]`) else its step's (ci.toml's at its tip), then the owner of each
-        allowance of it that expired (`r["allowed_by"]`); (None,) (`CI`) when none is known."""
-        c = r.get("culprit")
+        """Who red record ``r`` of ``key`` rings, first who acts: its culprit's lane (`_owner`), each culprit's of a warn step's
+        (`culprits`), or each candidate's, then the owner of what failed, its suite's (the registry's, `r["owner"]`) else its
+        step's (ci.toml's at its tip), then the owner of each allowance of it that expired (`r["allowed_by"]`), and `CI` and
+        `TOP` beside candidates; (None,) (`CI`) when none is known."""
+        c, cands = r.get("culprit"), r.get("candidates") or ()
         what = r.get("owner") or self._step_owner(r.get("step") or key.split(" ", 1)[-1], r["tip"])
-        return tuple(dict.fromkeys(h for h in (self._owner(Member(*c)) if c else None, what, *(r.get("allowed_by") or ()))
-                                   if h)) or (None,)
+        lanes = [self._owner(Member(*x)) for x in (r.get("culprits") or [c] if c else cands)]
+        also = (CI[1:], TOP[1:]) if cands and not c else ()
+        return tuple(dict.fromkeys(h for h in (*lanes, what, *(r.get("allowed_by") or ()), *also) if h)) or (None,)
 
-    def _start_bisect(self, pl: dict) -> None:
-        """Bisect the first red record with candidates and no culprit (`_bisect_step`), when no bisection runs: its failed
-        suite (or step) alone decides each landing, with the step that runs it."""
-        if pl.get("bisect"):
-            return
-        for key, r in (pl.get("red") or {}).items():
-            if r.get("cands") and not r.get("culprit") and not r.get("bisected"):
-                cands = r["cands"]
-                r["bisected"] = True
-                pl["bisect"] = {"tip": r["tip"], "base": r["base"], "steps": [r["step"]], "why": r["first"], "key": key,
-                                "suite": key.split(" ", 1)[1] if key.startswith("suite ") else None,
-                                "no_cache": self.after_landing_no_cache, "cands": cands, "good": -1,
-                                "bad": len(cands) - 1 if cands[-1][3] == r["tip"] else len(cands), "run": None}
-                self.q.log(f"research queue drive: bisecting {key}, red on `{self.q.into}` {r['tip'][:12]}, among "
-                           f"{' '.join(f'#{c[0]}' for c in cands)}")
-                return
+    def _warns(self, key: str) -> bool:
+        """Whether red ``key`` is a warn step's (drive.toml's `warn_steps`): drive names its culprits and rings their lanes,
+        which fix it forward in their next PR, and never reverts one (`_revert_reds`)."""
+        return key.startswith("step ") and key[len("step "):] in self.warn_steps
 
-    def _suite_status(self, ids: list[str], suite: str) -> str | None:
-        """``suite``'s status in the reports of run ``ids``: passed, failed, or None when none names it."""
-        got = {s["status"] for d in self.evidence(self.repo, ids) for n, s in suite_rows(d).items() if n == suite}
-        return "failed" if "failed" in got else "passed" if "passed" in got else None
-
-    def _red_clock(self, drive: dict) -> None:
-        """Revert each red record's culprit `FIX_WINDOW_S` after its ring, unless a fix is marked (`_fix`) or `main` undid it
-        already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its owner told.  A red circuit-check's culprit
-        (`CIRCUIT_RED`) is reverted at once, a marked fix or not."""
+    def _revert_reds(self, drive: dict) -> None:
+        """Revert each red record's culprit once `FIX_FORWARD_S` passed since the red was named (its `named_at`; one without it is
+        taken as named now) with no open PR that fixes it marked ready at its head (`_marked_fix`), unless the landing branch
+        undid it already: `git revert -m 1` of its merge onto `next` (`_revert_landed`), its culprit's lane and the owner of
+        what failed told (`_red_owners`).  Why a revert waits is logged.  A warn step's red (`_warns`) is never reverted, at
+        `FIX_FORWARD_S` or later: its culprits' lanes fix it forward in their next PR."""
         pl = drive.get("postland") or {}
         if self.dry_run or self.q.shadow:
             return
+        now = self.now()
         for key, r in list((pl.get("red") or {}).items()):
-            now = key == CIRCUIT_RED
-            if not (c := r.get("culprit")) or r.get("reverted") or not now and self.now() - r["rung"] < FIX_WINDOW_S:
+            if not (c := r.get("culprit")) or r.get("reverted") or self._warns(key):
                 continue
             one = Member(*c)
             if self._undone(one.commit):
                 r["reverted"] = "undone"
                 continue
-            if not now and (fix := self._fix(key, r)):
-                if r.get("fix") != fix:
-                    r["fix"] = fix
-                    self.q.log(f"research queue drive: not reverting #{one.pr} for {key}: a fix is marked, {fix}")
+            due = r.setdefault("named_at", now) + FIX_FORWARD_S
+            wait = (f"{(due - now) / 60:.0f} min are left to fix it forward, until {_hhmm(due)}" if now < due else
+                    f"{fix}, which fixes it, is marked ready at its head" if (fix := self._marked_fix(key, r)) else None)
+            if wait:
+                self.q.log(f"research queue drive: {key}'s culprit #{one.pr} isn't reverted: {wait}")
                 continue
-            r.pop("fix", None)
             head = f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}"
-            blame = (f"#{one.pr} is its culprit ({r['why']}), and a red circuit-check is reverted at once" if now else
-                     f"#{one.pr} is its culprit ({r['why']}), and no fix was marked within {FIX_WINDOW_S // 60} min of the "
-                     "ring")
-            if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}", blame,
-                                   self._red_owners(key, r)):
-                r["reverted"] = self.now()
+            if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}",
+                                   f"#{one.pr} is its culprit ({r['why']}), and {FIX_FORWARD_S // 3600} h after it was named no "
+                                   "fix of it is marked", self._red_owners(key, r)):
+                r["reverted"] = now
 
-    def _fix(self, key: str, r: dict) -> str | None:
-        """A marked fix of red ``key``: an open PR marked ready at its head that is a new head of the culprit, or whose body names
-        the culprit (`#N`) or says `fixes suite NAME` (case aside), or whose diff touches a path the failure named (`r["paths"]`,
-        those the culprit was named by).  A body that merely mentions the suite doesn't count: `research` or `check` is in
-        almost any body, and would hold the revert for good.  A fix that landed on `main` after the last tip a run found it red
-        at (`seen`, else the record's tip) counts too, by its merge's title or its change: once landed it is no open PR, and
-        drive would otherwise ask for a revert of a culprit whose fix already landed.  None when there is none."""
-        pr = r["culprit"][0]
-        says = self._says_fix(key, r)
+    def _marked_fix(self, key: str, r: dict) -> str | None:
+        """An open PR, unheld, that fixes red ``key`` (`_fixes`, by its change since it forked off the landing branch: `_pr_files`)
+        and is marked ready at its head, which the newest run ``key`` was red in didn't hold (`seen`, else `tip`: a fix that
+        landed below it fixed nothing): what keeps the red's culprit from being reverted; None when there is none."""
+        hold, red = self.q.rules().hold_label, r.get("seen") or r["tip"]
         for p in sorted(self._open().values(), key=lambda p: p.number):
-            if self.q.ready(p.number, p.head) and (why := self._fixes(key, r, p, lambda p=p: self._pr_files(p))):
-                return why
-        main, since = self.q.base, r.get("seen") or r["tip"]
-        if not self._ancestor(since, main):
-            return None
-        for m in self.landed_since(since, main):
-            if m.pr == pr:
+            if hold in p.labels or not (fix := self._fixes(key, r, p, lambda p=p: self._pr_files(p))):
                 continue
-            if says.search(_out(self.repo, "log", "-1", "--format=%s", m.commit)):
-                return f"#{m.pr}, landed at {m.commit[:8]}"
-            if r.get("paths") and (hit := touches(changed(self.repo, f"{m.commit}^1", m.commit), set(r["paths"]))):
-                return f"#{m.pr}, landed at {m.commit[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
+            if self.q.ready(p.number, p.head) and not self._ancestor(p.head, red):
+                return fix
         return None
 
-    @staticmethod
-    def _says_fix(key: str, r: dict) -> re.Pattern:
-        """What a body or a merge's title says to fix red ``key``: `#N` of its culprit, or `fixes suite NAME` (`_fix`)."""
-        name = key.split(" ", 1)[1]
-        pr = rf"#{r['culprit'][0]}\b|" if r.get("culprit") else ""
-        return re.compile(rf"{pr}\bfixes\s+(?:suite|step)\s+`?{re.escape(name)}(?![\w/.-])", re.I)
+    def _pr_files(self, p: PR) -> set[str]:
+        """The files open PR ``p``'s head changes since it forked off the landing branch; none while its head isn't in the clone
+        (the sync fetches it)."""
+        mb = _git(self.repo, "merge-base", self.q.base, p.head, check=False)
+        return changed(self.repo, mb.stdout.strip(), p.head) if not mb.returncode else set()
 
     def _fixes(self, key: str, r: dict, p: PR, files: Callable[[], set[str]]) -> str | None:
-        """Why open PR ``p`` at its head is a fix of red ``key`` by `_fix`'s rule for an open PR (a new head of the culprit, its
-        body naming the culprit or saying `fixes suite NAME`, or ``files``, its change, touching a path the failure named), or
-        None; its ready mark is the caller's to ask."""
+        """Why open PR ``p`` at its head is a fix of red ``key``: a new head of the culprit, a body naming the culprit (`#N`) or
+        saying `fixes suite NAME` (case aside; one that merely mentions the suite doesn't count: `research` or `check` is in
+        almost any body), or ``files``, its change, touching a path the failure named (`r["paths"]`, those the culprit was
+        named by); else None.  Its ready mark is the caller's to ask."""
         pr, head = (r.get("culprit") or (None, None))[:2]
         if p.number == pr:
             return None if p.head == head else f"#{p.number} at {p.head[:8]}, a new head of the culprit"
-        if self._says_fix(key, r).search(p.body or ""):
+        names = rf"#{pr}\b|" if pr else ""
+        if re.search(rf"{names}\bfixes\s+(?:suite|step)\s+`?{re.escape(key.split(' ', 1)[1])}(?![\w/.-])", p.body or "", re.I):
             return f"#{p.number} at {p.head[:8]}"
         if r.get("paths") and (hit := touches(files(), set(r["paths"]))):
             return f"#{p.number} at {p.head[:8]}, whose change touches {', '.join(sorted(hit)[:3])}"
@@ -2389,8 +2622,8 @@ class Driver:
     def _fix_wait(self, drive: dict, tip: str) -> str | None:
         """Why the after-landing run of ``tip`` waits (`start_postland`), or None: a red suite or step on `checked`, not reverted,
         has a fix (`_red_fix`) on `next`, marked ready at its head under `FIX_WAIT_S` ago and not landed, whose merge onto
-        ``tip`` is low-risk, so the low-risk lane lands it even under a running Lean check (`land_lowrisk`): a run without it
-        would go red again, for hours.  A mark whose time can't be read holds nothing."""
+        ``tip`` is low-risk, so the low-risk lane lands it on its mark alone (`land_lowrisk`): a run without it would go red
+        again, for hours.  A mark whose time can't be read holds nothing."""
         from .merge import CHECKED
         from .queue import lowrisk
         from .stale import _ts
@@ -2416,66 +2649,25 @@ class Driver:
                     f"launches once that lands, or {FIX_WAIT_S // 60} min after its mark")
         return None
 
-    def _land_fixes(self, drive: dict, entries: dict[int, Entry], running: set[str], dry_run: bool,
-                    chain: list[Member]) -> list[Member]:
-        """The low-risk lane while a Lean check of `next` can't move across its landing (`land_lowrisk`): land, by the lane's
-        rules, each member of ``chain`` that is a fix of a red on `checked`, not reverted (`_red_fix`), unless it lies in the
-        prefix of a Lean check that passed, or runs and isn't stacked (`_stack_lean`, which reaches `next`'s top and is
-        cancelled by any change to its prefix), which lands it and which its landing would rebuild, or its change touches what
-        a Lean check reads (`LEAN_INPUTS`, `LEAN_TOOLING`), which `lowrisk_excludes` should have kept off the lane; each such
-        refusal is logged.  The landed members."""
-        lean = drive.get("lean") or {}
-        held = (running - set(lean)) | {c for c, rec in lean.items()
-                                        if rec.get("state") == "passed" or rec.get("state") is None and not rec.get("stacked")}
-        low = {m.pr for m in chain[:max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0)]}
-        fixes: list[Member] = []
-        refused: list[str] = []
-        for m in chain:
-            if (p := self._open().get(m.pr)) is None or (key := self._red_fix(drive, p, lambda m=m: self._own(m))) is None:
-                continue
-            if m.pr in low:
-                refused.append(f"#{m.pr} (a fix of {key}, in the prefix of a Lean check of `{self.q.branch}`, which lands it)")
-            elif read := lean_reads(self._own(m)):
-                refused.append(f"#{m.pr} (a fix of {key}, but its change touches what a Lean check reads: {', '.join(read[:3])})")
-            else:
-                fixes.append(m)
-        if refused:
-            self.q.log(f"research queue drive: low-risk lane, for fixes of reds only, skipped {', '.join(refused)}")
-        if not fixes or not (landed := self.land_lowrisk(drive, entries, running, dry_run, fixes)):
-            return []
-        self.q.log(f"research queue drive: low-risk lane landed {' '.join(f'#{m.pr}' for m in landed)}, each a fix of a red on "
-                   f"`{self.q.into}`, without rebuilding `{self.q.branch}`: the next sync rebuilds it, and each Lean check of it "
-                   "moves with its prefix")
-        return landed
-
-    def _pr_files(self, p) -> set[str]:
-        """The files an open PR's head changes against `main` (from their merge base), read once per tick; none when its head
-        can't be fetched."""
-        cache = self.__dict__.setdefault("_own_files", {})
-        if (k := f"pr:{p.head}") not in cache:
-            if _git(self.repo, "cat-file", "-e", f"{p.head}^{{commit}}", check=False).returncode:
-                _git(self.repo, "fetch", "-q", "origin", f"+refs/pull/{p.number}/head:refs/queue/fix/{p.number}", check=False)
-            mb = _git(self.repo, "merge-base", "origin/main", p.head, check=False)
-            cache[k] = changed(self.repo, mb.stdout.strip(), p.head) if not mb.returncode and mb.stdout.strip() else set()
-        return cache[k]
-
     def _tail_left(self, run: dict) -> bool:
-        """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended, by its steps.jsonl, and,
-        while no step `main` waits for (`_gating`) failed, those of `TAIL` too: a red only off the gate (circuit-check) cancels
-        nothing that could still let `_promote` move `main` to its tip."""
-        recs = [st for d in self._evidence(Verdict("failed", " ".join(run["ids"]))) for st in step_records(d)]
-        ended = {st.get("step") for st in recs}
-        gating = self._gating(run["tip"])
-        held = any(st.get("step") in gating and st.get("status") == "failed" for st in recs)
+        """Whether every step of an after-landing run but `TAIL` (and those it skips by name) has ended in every shard that holds
+        it (`shard_ended`: by its steps.jsonl, and its live record for what it has still to run), and, while no step `main` waits
+        for (`_gating`) failed, those of `TAIL` too: a red only off the gate (circuit-check) cancels nothing that could still let
+        `_promote` move `main` to its tip."""
+        if (view := self._shard_steps(run)) is None:
+            return False
+        ended, gating = shard_ended(view), self._gating(run["tip"])
+        held = any(v.get(s) == "failed" for v in view for s in gating)
         return all(s in ended for s in AFTER_LANDING
                    if s not in run.get("skip", ()) and (s not in TAIL or (not held and s in gating)))
 
     def _behind(self, drive: dict) -> None:
         """Ring, every `BEHIND_EVERY_S`, while the oldest landing no after-landing run has verified landed more than `BEHIND_S`
-        ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` with nothing red and no launch of it that
-        registered no run (`_launch_failed`, which the ring then counts): then verification is only under way (a cold run is
-        ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
-        culprit's lane and the owner of what failed), else `CI` and `TOP`.  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
+        ago, unless a run that started under `POSTLAND_RUN_S` ago checks `main` (or, with none, the lock run whose records it
+        waits for: `_target`) with nothing red and no launch of it that registered no run (`_launch_failed`, which the ring
+        then counts): then verification is only under way (a cold run is ~4 h).  While something unreverted is red it rings who acts on each red (`_red_owners`: the
+        culprit's lane and the owner of what failed), else `CI` and `TOP`, as it does for a warn step's red, whose culprits were
+        rung once (`_warns`).  Drive's tick, not top's hourly sweep, rings it: drive holds the last verified
         `main`, its landings since and what is red."""
         if not (pl := drive.get("postland")) or self.dry_run or self.q.shadow:
             return
@@ -2487,11 +2679,13 @@ class Driver:
         at = pl.setdefault("landed_at", {})
         since = min(at.get(p) or int(_out(self.repo, "log", "-1", "--format=%ct", p)) for p in pending)
         run, red, now = pl.get("run"), pl.get("red") or {}, self.now()
+        locks = pl.get("locks") if not run and (pl.get("locks") or {}).get("state", "") is None else None
         # a launch that keeps registering no run is no run under way, however recently the last one started
         failed = (drive.get("launch_failed") or {}).get("postland")
         if not failed or failed["tip"] != (run["tip"] if run else main) or (run and run.get("ids")):
             failed = None
-        if now - since < BEHIND_S or (run and not red and not failed and now - run.get("at", now) < POSTLAND_RUN_S):
+        going = run or locks
+        if now - since < BEHIND_S or (going and not red and not failed and now - going.get("at", now) < POSTLAND_RUN_S):
             return
         if now - pl.get("rang_behind", 0) < BEHIND_EVERY_S:
             return
@@ -2504,10 +2698,12 @@ class Driver:
                         f"{culprit[k].replace(' (', ', ', 1) or ')'}" for k, r in red.items() if k not in ours)
         state = (f"its launch {_no_run(failed)}: {failed['why']}" if failed else
                  f"its run {_ids(run)} of {run['tip'][:12]} has run {(now - run.get('at', now)) / 3600:.1f} h" if run else
+                 f"no after-landing run is going: it waits for the lock run {_ids(locks)} of {locks['tip'][:12]}, which has run "
+                 f"{(now - locks.get('at', now)) / 3600:.1f} h" if locks else
                  "no after-landing run is going")
         text = (f"`{self.q.into}`'s last verified commit {pl['verified'][:12]} is {(now - since) / 3600:.1f} h behind its tip {main[:12]} "
                 f"({len(pending)} landing(s) unverified); {state}; red: {reds}")
-        holders = [h for k, r in red.items() if not r.get("reverted") for h in self._red_owners(k, r)]
+        holders = [h for k, r in red.items() if not r.get("reverted") and not self._warns(k) for h in self._red_owners(k, r)]
         to = tuple(dict.fromkeys(f"@{h}" if h else CI for h in holders)) or (CI, TOP)
         if self.post(f"{' '.join(to)} queue: {text}", to):
             pl["rang_behind"] = now
@@ -2517,8 +2713,8 @@ class Driver:
         """An after-landing run of ``tip``'s (`launch_postland`'s keywords, the steps it skips by name, ratchet-gate's base, its
         flags as a message gives them), the baseline's when ``base``.  It sends the upstream build when the landings since the
         last verified `main` change what lean-agreement checks (as check.py finds against that base), and skips lean-agreement
-        else; lean-changed has no cache to compare with under --no-cache; lean-audit fails on a record difference, since
-        nothing commits a regenerated record after landing; circuit-check reuses its per-target passes all the same, since a
+        else; lean-changed has no cache to compare with under --no-cache; lean-audit fails on a record difference, since the
+        records it checks are the ones the lock run regenerated (`_target`); circuit-check reuses its per-target passes all the same, since a
         cold `--all` (~4 h) outlasts an after-landing run.  ratchet-gate judges the landings above the run's `--base` and fails
         one at or above the tip: the baseline's tip is the verified `main` itself, so its base is the tip's first parent; above
         it, the last tip its gate judged (`_ratchet_base`), `--ratchet-base` when that isn't the `--base`."""
@@ -2536,10 +2732,14 @@ class Driver:
         return {"base": below, **rb, **extra}, skip, ratchet, flags
 
     def start_postland(self, drive: dict) -> None:
-        """Launch the one post-landing run, on the landing branch's tip (`Queue.into`), when none runs, a landing awaits it, that
-        tip is neither verified nor one whose run failed with nothing drive could revert, and no fresh low-risk fix of a red is
-        about to land (`_fix_wait`).  With `executor = "on"`, the tip's check goes on the executor's queue (`_start_tasks`)
-        and the run is of `SLIM_STEPS` alone, beside it (`_start_slim`)."""
+        """Launch the one after-landing run, on the landing branch's tip (`Queue.into`), or below it while a lock run's records
+        are still to come (`_target`), when none runs, a landing awaits it, that commit is neither verified (nor below it) nor
+        one whose run failed with nothing drive could revert, and no fresh low-risk fix of a red is about to land
+        (`_fix_wait`).  With `executor = "on"`, the commit's check goes on the executor's queue (`_start_tasks`) and the run
+        is of `SLIM_STEPS` alone, beside it (`_start_slim`).  `_review` asks twice a tick, before the sync once the reverts
+        are pushed and again after the landings: a run launched, or launching (`detach`), is ``pl["run"]``, which the second
+        ask finds, and a records step or a plan still being made is followed, not launched again, so a tick launches no two
+        runs of a commit."""
         if not (pl := drive.get("postland")) or pl.get("run"):
             return
         q = self.q
@@ -2547,10 +2747,11 @@ class Driver:
         n = self.after_landing_shards
         building = next((b for b, on in ((pl.get("records"), n != 1), (pl.get("plan"), isinstance(n, str)))
                          if on and b and "art" not in b and "made" not in b), None)
-        main = building["tip"] if building else _out(self.repo, "rev-parse", q.base)
         pl["pending"] = [p for p in pl["pending"] if not self._ancestor(p, pl["verified"])]
         base = not self._baselined(pl)                            # the first run: `main` itself (`_unbaselined`)
-        if not base and (not pl["pending"] or main == pl.get("failed") or main == pl["verified"]):
+        tip = _out(self.repo, "rev-parse", q.base)
+        main = building["tip"] if building else tip if base else self._target(pl, tip)
+        if not base and (not pl["pending"] or main == pl.get("failed") or self._ancestor(main, pl["verified"])):
             return
         if why := self._fix_wait(drive, main):
             q.log(f"research queue drive: the after-landing run of `{q.into}` {main[:12]} waits: {why}")
@@ -2577,16 +2778,16 @@ class Driver:
         cc = {"cc_records_from": art} if records and art else {}
         if auto:
             n = plan["n"] if plan else 1
-        shard = (lambda k: {"shard": f"auto:{k}/{n}", "shard_plan": plan["file"]}) if plan else (lambda k: {"shard": f"{k}/{n}"})
         if n == 1 and not plan:
             rec, tail = self._started(self.launch_postland(self.repo, main, self.on, steps, **kw))
         else:
             if len(self.on.split(",")) < n:
                 q.log(f"research queue drive: {n} shards of the post-landing run of {main[:12]} on {self.on}, fewer machines than "
                       "shards: they share them")
-            got = [self._started(self.launch_postland(self.repo, main, on, steps, **kw, **cc, **shard(k)))
+            each = {**kw, **cc, **({"shard_plan": plan["file"]} if plan else {})}
+            got = [self._started(self.launch_postland(self.repo, main, on, steps, **each, shard=f"{'auto:' * bool(plan)}{k}/{n}"))
                    for k, on in enumerate(shard_machines(self.on, n), 1)]
-            rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
+            rec, tail = {"ids": [], "shards": [r for r, _ in got], "kw": each}, next((t for r, t in got if r is None), "")
             if any(r is None for r, _ in got):
                 if ids := [i for r, _ in got if r for i in r.get("ids") or ()]:
                     self.cancel(self.repo, ids, f"drive: a shard of the post-landing run of {main[:12]} registered no run")
@@ -2602,6 +2803,7 @@ class Driver:
         self._shadow_enqueue(drive, main)
         q.log(f"research queue drive: post-landing run of `{self.q.into}` {main[:12]} ({steps}): {_ids(rec)}; "
               f"{len(pl['pending'])} landing(s) since {pl['verified'][:12]}"
+              + (f"; those above it, to {tip[:12]}, wait for a lock run's records" if not building and main != tip else "")
               + (f"; ratchet-gate judges those above {ratchet[:12]}" if "ratchet_base" in kw else "")
               + (f"; circuit-check's records {cc['cc_records_from']}" if cc else "") + _of_plan(plan, "; shards"))
 
@@ -2693,45 +2895,286 @@ class Driver:
 
         return self._handle(m.pr) or self.q.handle(PR(m.pr, m.head, body=f"Lane {m.owner}"))
 
-    # -- landing
+    # -- the lock run (`regenerate_locks`, the module's docstring).  `postland["locks"]`: {"ids" ([] with "launch", `detach`'s
+    #    record, while its train.sh runs detached: `_resolve`), "tip", "at", "resend" on its one resend after a machine's fault,
+    #    "state": None while it runs, else "passed" (with "run", the id that passed) until its records are committed, then
+    #    "committed", or "failed" (with "why")}.  `postland["fresh"]`: the lock commit `_commit_locks` made on the tip of the
+    #    last lock run that passed, or that tip when it regenerated nothing
+
+    def _lean_since(self, base: str, tip: str) -> bool:
+        """Whether ``base``..``tip`` changes Lean, a lock or the spec (`queue.lean_change`), read once a tick."""
+        cache = self.__dict__.setdefault("_lean_diff", {})
+        if (base, tip) not in cache:
+            cache[base, tip] = base != tip and lean_change(self.repo, tip, base)
+        return cache[base, tip]
+
+    def _fresh(self, pl: dict, tip: str) -> str:
+        """The newest commit at or below ``tip`` whose lock records are the regenerated ones: the last lock run's
+        (`postland["fresh"]`) or the last verified commit (whose lean-audit failed on any record difference), whichever is
+        newer; ``tip`` itself when neither is below it."""
+        got = [c for c in (pl.get("fresh"), pl.get("verified")) if c and self._ancestor(c, tip)]
+        return max(got, key=lambda c: sum(self._ancestor(o, c) for o in got)) if got else tip
+
+    def _target(self, pl: dict, tip: str) -> str:
+        """The commit the after-landing run checks (`start_postland`): ``tip``, unless what it holds above `fresh` (`_fresh`)
+        changes Lean, a lock or the spec, whose lock run's records aren't committed yet; then the newest commit on the
+        landing branch's line above `fresh` that no such change separates from it, else `fresh` itself."""
+        if not self.regenerate_locks:
+            return tip
+        fresh = self._fresh(pl, tip)
+        return next((c for c in _out(self.repo, "rev-list", "--first-parent", f"{fresh}..{tip}").split()
+                     if not self._lean_since(fresh, c)), fresh)
+
+    def _start_locks(self, drive: dict) -> None:
+        """Launch the lock run of the landing branch's tip (`launch_locks`: `train.sh TIP MACHINES --deferred lean-audit`, which
+        regenerates each lock record it finds stale) when drive commits regenerated records (`regenerate_locks`), the branch has
+        a baseline (`_baselined`), no lock run runs or waits to commit its records, the last one didn't fail on this tip, and
+        what the branch holds above `fresh` (`_fresh`) changes Lean, a lock or the spec (`queue.lean_change`).  One whose
+        train.sh registers no run rings `CI` and `TOP` (`_launch_failed`), and the next tick launches it again."""
+        pl = drive.get("postland") or {}
+        rec = pl.get("locks")
+        if not self.regenerate_locks or not self._baselined(pl) or rec and rec.get("state") in (None, "passed"):
+            return
+        q = self.q
+        tip = _out(self.repo, "rev-parse", q.base)
+        if rec and rec.get("state") == "failed" and rec["tip"] == tip or not self._lean_since(self._fresh(pl, tip), tip):
+            return
+        what = f"train.sh {tip[:12]} {self.on} --deferred {LEAN_STEP}"
+        if self.dry_run or q.shadow:
+            q.log(f"research queue drive: would launch {what}, the lock run of `{q.into}` {tip[:12]}")
+            return
+        got, tail = self._started(self.launch_locks(self.repo, tip, self.on))
+        if got is None:
+            self._launch_failed(drive, "locks", tip, what, tail)
+            return
+        pl["locks"] = {**got, "tip": tip, "at": self.now(), "state": None}
+        q.log(f"research queue drive: the lock run of `{q.into}` {tip[:12]}: {_ids(got)}; the after-landing run checks the "
+              "landings above `fresh` once its records are committed")
+        q.save_state({**q.load_state(), "drive": drive})
+
+    def _follow_locks(self, drive: dict) -> None:
+        """The lock run (`_start_locks`), once it ends.  Passed (a twin exited 0 with lean-audit passed in its steps.jsonl): each
+        step it judges (`LOCKS_JUDGED`) is green at its tip (`_red`), and the records it regenerated are committed
+        (`_commit_locks`, tried again each tick until they are).  Never started (every twin exited 75, or was stopped): the
+        next `_start_locks` launches it again.  Lost or failed by its machine (killed, out of disk or memory:
+        `_machine_fault`): run again once on the other machines of `on` (`_elsewhere`).  Else failed (`_locks_failed`): each
+        step it judges is named red as an after-landing run's is (`_red`), its culprit fixed forward or reverted on `checked`
+        (`_revert_reds`).  One whose train.sh registered no run rings `CI` and `TOP` (`_launch_failed`), and is launched
+        again."""
+        pl = drive.get("postland") or {}
+        if not (rec := pl.get("locks")) or rec.get("state") not in (None, "passed"):
+            return
+        q, tip = self.q, rec["tip"]
+        what = f"the lock run of `{q.into}` {tip[:12]}"
+        if rec["state"] == "passed":
+            self._commit_locks(drive, pl, rec)
+            return
+        if (tail := self._resolve(rec, what)) is not None:
+            if rec.get("resend"):
+                self._locks_failed(drive, pl, rec, f"its resend registered no run: {tail}", 0)
+            else:
+                del pl["locks"]
+                self._launch_failed(drive, "locks", tip, f"train.sh {tip[:12]} {self.on} --deferred {LEAN_STEP}", tail)
+            return
+        if "launch" in rec:
+            return
+        (drive.get("launch_failed") or {}).pop("locks", None)
+        states = self._states(rec["ids"])
+        lost = self._lost(rec, states)
+        if not lost and any(st in ACTIVE for st, *_ in states.values()):
+            return
+        self._timed(drive, "lean", rec["ids"])
+        rcs = [rc for _, rc, *_ in states.values()]
+        fault = None
+        if rec.get("resend") or self.dry_run or q.shadow:
+            pass
+        elif lost:
+            fault = "lost"
+        elif 0 in rcs or all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
+            pass
+        elif any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC)) for rc in rcs):
+            fault = "killed"
+        else:
+            fault = self._machine_fault(rec["ids"])
+        if fault:
+            where = self._elsewhere(states)
+            again, tail = self._started(self.launch_locks(self.repo, tip, where))
+            if again is None:
+                self._locks_failed(drive, pl, rec, f"it was {fault}, and its resend registered no run: {tail}", 0)
+                return
+            rec.update(**again, at=self.now(), resend=True)
+            q.log(f"research queue drive: {what} was {fault}, a machine's fault: again, once, on {where}: {_ids(again)}")
+            q.save_state({**q.load_state(), "drive": drive})
+            return
+        run = {"tip": tip, "ids": rec["ids"]}
+        if lost:
+            why = f"{' '.join(rec['ids'])} lost on its resend"
+        elif ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
+            if not self._unrun(ran, [LEAN_STEP]):
+                rec.update(state="passed", run=ran[0])
+                q.log(f"research queue drive: {what} passed ({ran[0]})")
+                self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED)
+                self._commit_locks(drive, pl, rec)
+                return
+            why = f"{' '.join(ran)} exited 0 without passing {LEAN_STEP}"
+        elif all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
+            del pl["locks"]
+            q.log(f"research queue drive: {what} ({_ids(rec)}) never ran or was stopped: it launches again")
+            return
+        else:
+            why = ", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items())
+        self._locks_failed(drive, pl, rec, why, 0 if lost else self._red(drive, pl, run, ended=True, steps=LOCKS_JUDGED))
+
+    def _locks_failed(self, drive: dict, pl: dict, rec: dict, why: str, named: int) -> None:
+        """Lock run ``rec`` failed (``why``), with ``named`` of the steps it judges named red (`_red`): no lock run runs on its
+        tip again, and `CI` is told when it named none, since the landings above `fresh` that change Lean, a lock or the spec
+        then wait with no culprit to revert."""
+        rec.update(state="failed", why=why)
+        q, tip = self.q, rec["tip"]
+        q.log(f"research queue drive: the lock run {_ids(rec)} of `{q.into}` {tip[:12]} failed: {why}")
+        if not named:
+            self.refuse(drive, f"locks:{tip}", f"the lock run {_ids(rec)} of `{q.into}` {tip[:12]} failed ({why}), and named "
+                                               f"nothing red: the landings above {self._fresh(pl, tip)[:12]} that change Lean, a "
+                                               f"lock or the spec reach no after-landing run until a lock run passes, which "
+                                               f"launches once `{q.into}` moves. Find why")
+
+    def _commit_locks(self, drive: dict, pl: dict, rec: dict) -> None:
+        """Commit the records passed lock run ``rec`` regenerated onto its tip, as `Lock records regenerated for #N...` (the PRs
+        landed above `fresh`, `_fresh`; `Checked:` the run, `Regenerated:` the files), which the merge gate vouches for against
+        the run (`_unvouched`), and put that commit on the landing branch: a fast-forward while the branch is at the run's tip,
+        else a merge onto the branch's tip under the same subject, taking each record no landing since changed (one that did
+        is the next lock run's).  The lock commit, or the run's tip when it regenerated nothing, is `postland["fresh"]`, which
+        the after-landing run may check (`_target`) and `main` may move to whether or not it is on the branch's first-parent
+        line.  Held, `CI` told once, while its records can't be read (`_locks`) or the gate refuses the commit, and tried again
+        each tick; dropped once its tip left the branch (a reset)."""
+        q, tip, rid = self.q, rec["tip"], rec["run"]
+        into, base = q.into, q.base
+        if not self._ancestor(tip, base):
+            del pl["locks"]
+            q.log(f"research queue drive: the lock run {rid} is of {tip[:12]}, no longer on `{into}`: its records are dropped")
+            return
+        if self.dry_run or q.shadow:
+            q.log(f"research queue drive: would commit the records {rid} regenerated on `{into}` {tip[:12]}")
+            return
+        from .merge import REPAIRED
+
+        q._drive_only(into, "once", False)
+        files: list[str] = []
+        scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
+        try:
+            locks, held = self._locks(rid, scratch)
+            if locks and not held:
+                _git(self.repo, "checkout", "-q", "-B", into, tip)
+                for pkg, src in sorted(locks.items()):
+                    dst = pkg if pkg in REPAIRED else f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
+                    (self.repo / dst).parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copyfile(src, self.repo / dst)
+                    files.append(dst)
+                _git(self.repo, "add", "--", *files)
+        finally:
+            shutil.rmtree(scratch, ignore_errors=True)
+        if held:
+            self.refuse(drive, f"locks-held:{tip}", f"the lock run {rid} of `{into}` {tip[:12]} passed, but {held}: its records "
+                                                    "aren't committed, and the landings above it wait for them. Find why; drive "
+                                                    "commits them once they can be read (the store has them when the run ends)")
+            return
+        fresh = tip
+        if files and _git(self.repo, "diff", "--cached", "--quiet", check=False).returncode:
+            if (fresh := self._put_locks(drive, pl, tip, rid, files)) is None:
+                return
+        elif files:
+            _git(self.repo, "reset", "-q", "--hard", base)
+        pl["fresh"], rec["state"] = fresh, "committed"
+        if fresh == tip:
+            q.log(f"research queue drive: the lock run {rid} of `{into}` {tip[:12]} regenerated no record: its records are the "
+                  "regenerated ones")
+
+    def _put_locks(self, drive: dict, pl: dict, tip: str, rid: str, files: list[str]) -> str | None:
+        """Commit ``files``, the records lock run ``rid`` regenerated, staged on its ``tip``, and push that lock commit onto the
+        landing branch, or its merge onto the branch's tip when the branch moved (`_commit_locks`).  The bookkeeping the run
+        repaired (`merge.bookkeeping_warnings`: it warns, and the next PR fixes it) is listed in the commit and
+        told to the Lean lane and each owner a warning names, once per lock commit.  The lock commit; None when the gate refused it
+        (`CI` told once) or the push lost a race (the next tick tries again)."""
+        from .merge import bookkeeping_warnings
+
+        q = self.q
+        into, base = q.into, q.base
+        prs = " ".join(f"#{x.pr}" for x in self.landed_since(self._fresh(pl, tip), tip)) or f"`{into}` {tip[:12]}"
+        subject = f"Lock records regenerated for {prs}"
+        checked = f"Checked: {rid} (the lock run of `{into}` {tip[:12]}, passed by regenerating them"
+        warned = bookkeeping_warnings(q.store, rid, self.fetch)
+        repairs = ("Bookkeeping the lock run repaired, each a warning for the next PR to fix:\n" +
+                   "".join(f"  {w}\n" for w in warned) + "\n") if warned else ""
+        _git(self.repo, "commit", "-q", "-m", f"{subject}\n\n{repairs}{checked})\nRegenerated: {', '.join(files)}\n",
+             env=IDENTITY)
+        if why := self._unvouched(rid):
+            _git(self.repo, "reset", "-q", "--hard", base)
+            self.refuse(drive, f"lock-gate:{tip}", f"the lock run {rid} of `{into}` {tip[:12]} passed, but {why}: its records "
+                                                    "aren't committed, and the landings above it wait for them. Find why")
+            return None
+        lock, now = _out(self.repo, "rev-parse", "HEAD"), _out(self.repo, "rev-parse", base)
+        take = files
+        if now != tip:
+            moved = changed(self.repo, tip, now)
+            take = [f for f in files if f not in moved]
+            _git(self.repo, "checkout", "-q", "-B", into, now)
+            r = _git(self.repo, "merge", "-q", "--no-ff", "--no-commit", "-s", "ours", lock, check=False, env=IDENTITY)
+            if r.returncode:
+                _git(self.repo, "merge", "--abort", check=False)
+                _git(self.repo, "reset", "-q", "--hard", base)
+                q.log(f"research queue drive: the lock commit {lock[:12]} doesn't merge onto `{into}` {now[:12]} "
+                      f"({(r.stderr or r.stdout).strip()[-200:]}); the next tick tries again")
+                return None
+            if take:
+                _git(self.repo, "checkout", lock, "--", *take)
+            _git(self.repo, "commit", "-q", "-m", f"{subject}\n\n{checked}; merged onto {now[:12]} with each record no landing "
+                 "since changed)\n" + (f"Regenerated: {', '.join(take)}\n" if take else ""), env=IDENTITY)
+        if (p := self._push_into(drive, into)).returncode:
+            _git(self.repo, "reset", "-q", "--hard", base)
+            q.log(f"research queue drive: pushing `{into}` with the lock commit {lock[:12]} was refused "
+                  f"({p.stderr.strip()[-200:]}); the next tick tries again")
+            return None
+        _git(self.repo, "update-ref", base, "HEAD")
+        q.log(f"research queue drive: committed the records the lock run {rid} of {tip[:12]} regenerated ({', '.join(files)}) "
+              f"as {lock[:12]}" + (f", merged onto `{into}` {now[:12]} with {', '.join(take) or 'none of them'}"
+                                   if now != tip else f" on `{into}`"))
+        if warned:
+            owners = sorted({h for w in warned for h in re.findall(r"\(@([\w-]+)\)", w)} - {"lean"})
+            shown = "; ".join(warned[:BOOKKEEPING_SHOWN]) + (f"; and {len(warned) - BOOKKEEPING_SHOWN} more in the commit"
+                                                            if len(warned) > BOOKKEEPING_SHOWN else "")
+            self.tell(drive, [f"bookkeeping:{lock}"], f"the lock run {rid} of `{into}` {tip[:12]} repaired bookkeeping that "
+                      f"{prs} brought, in {lock[:12]}, each a warning for the next PR to fix: {shown}", "lean", *owners)
+        return lock
 
     def _chain(self) -> tuple[str, list[Member]]:
         """(the base `next` was built on, its members oldest first), whether or not the landing branch has moved since."""
         return built_on(self.repo, f"refs/remotes/origin/{self.q.branch}", self.q.base)
 
-    def _locks(self, v: Verdict, scratch: Path) -> tuple[str, dict[str, Path], str | None]:
-        """(the check that regenerated them, {package: its regenerated lock, fetched under ``scratch`` or from its node}, why the
-        landing is held instead) of a passed Lean check, when drive commits regenerated locks; ("", {}, None) when its check
-        regenerated none.  Read from the check's files in the store, else from its run dir on its node (`merge.live_records`).  Held, never landed without them, when its Lean report names records neither
-        holds, or can't be read at all unless its lean-audit step was skipped (`_lean_audit_ran`)."""
-        if not self.regenerate_locks:
-            return "", {}, None
+    def _locks(self, rid: str, scratch: Path) -> tuple[dict[str, Path], str | None]:
+        """({package: its regenerated lock, fetched under ``scratch`` or from its node}, why its records can't be committed
+        instead) of passed lock run ``rid``; ({}, None) when it regenerated none.  Read from the run's files in the store, else
+        from its run dir on its node (`merge.live_records`).  Held, never committed without them, when its Lean report names
+        records neither holds, or can't be read at all unless its lean-audit step was skipped (`_lean_audit_ran`)."""
         from .merge import AUDIT, live_records, regenerated_records
 
-        for rid in v.attempt.split():
-            try:
-                recs = regenerated_records(self.q.store, rid, scratch / rid)
-                if recs is None:
-                    recs = live_records(rid, self.fetch)
-            except Exception as e:  # noqa: BLE001  (a guard never fails open: `merge.Unreadable`, or the store failing)
-                return rid, {}, f"its regenerated lock records can't be read: {type(e).__name__}: {e}"
-            if recs is None and self._lean_audit_ran(rid):
-                return rid, {}, (f"its {AUDIT}, which says whether its Lean check regenerated lock records, can't be read "
-                                 "from the store or from its run dir on its node")
-            if recs:
-                return rid, {pkg: path for pkg, (_, path) in recs.items() if path is not None}, None
-        return "", {}, None
+        try:
+            recs = regenerated_records(self.q.store, rid, scratch / rid)
+            if recs is None:
+                recs = live_records(rid, self.fetch)
+        except Exception as e:  # noqa: BLE001  (a guard never fails open: `merge.Unreadable`, or the store failing)
+            return {}, f"its regenerated lock records can't be read: {type(e).__name__}: {e}"
+        if recs is None and self._lean_audit_ran(rid):
+            return {}, (f"its {AUDIT}, which says whether it regenerated lock records, can't be read from the store or from its "
+                        "run dir on its node")
+        return {pkg: path for pkg, (_, path) in (recs or {}).items() if path is not None}, None
 
-    def _unvouched(self, rid: str, ran: str | None = None, rekeyed_from: str | None = None) -> str | None:
+    def _unvouched(self, rid: str) -> str | None:
         """Why the merge gate refuses the lock commit at HEAD (`merge.regenerated_parent`, reading the records itself: from the
-        store, else from ``rid``'s run dir on its node), or None when it vouches for it.  ``ran``: the commit ``rid`` checked,
-        when `_carry` rebuilt it below HEAD; ``rekeyed_from``: the commit ``rid`` checked, when a rekey moved it to HEAD's
-        parent (`_rekey_lean`, `_move_lean`), which the gate holds to the low-risk rule with `lowrisk_excludes`."""
+        store, else from ``rid``'s run dir on its node), or None when it vouches for it."""
         from .merge import declared_command, produced, regenerated_parent
 
         if regenerated_parent(self.repo, "HEAD", self.q.store, tool="check", kinds=produced(self.repo, "check"),
-                              command=declared_command(self.repo, "check"), deferred=rid, fetch=self.fetch, ran=ran,
-                              rekeyed_from=rekeyed_from, excludes=self.lowrisk_excludes):
+                              command=declared_command(self.repo, "check"), deferred=rid, fetch=self.fetch):
             return None
         return (f"the merge gate refuses its lock commit: its records aren't byte for byte the ones {rid} regenerated "
                 "(`merge.regenerated_parent`, on the live run)")
@@ -2761,58 +3204,28 @@ class Driver:
                             return rec.get("status") != "skipped"
         return True
 
-    def _land(self, drive: dict, m: Member, members: list[Member], prs: str, v: Verdict, main: str,
-              scratch: Path) -> Member | None:
+    def _land(self, drive: dict, m: Member, members: list[Member], prs: str, main: str) -> Member | None:
         """Fast-forward the landing branch (`Queue.into`: `checked`, or `main`) to ``m``, the top of `next`'s reviewed prefix
-        (`land_reviewed`), with the locks its Lean check regenerated committed on top (`regenerate_locks`).  The after-steps
-        (`_stacked`, `merge.caught_up`, the sweep) are a landing on `main`'s, so on `checked` they wait for `_promote`.  Off drive
-        it refuses before anything (`queue.Queue._drive_only`)."""
+        (`land_reviewed`).  The after-steps (`_stacked`, `merge.caught_up`, the sweep) are a landing on `main`'s, so on `checked`
+        they wait for `_promote`.  Off drive it refuses before anything (`queue.Queue._drive_only`)."""
         q = self.q
         into, base = q.into, q.base
         q._drive_only(into, "once", False)
-        rid, locks, held = self._locks(v, scratch)
-        if held:
-            self.refuse(drive, f"locks:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {held}. Find why; "
-                                                     "drive lands it once they can be read (the store has them when the check "
-                                                     "ends)", *(self._owner(x) for x in members))
-            q.log(f"research queue drive: {prs} held: {rid} {held}")
-            return None
         _git(self.repo, "checkout", "-q", "-B", into, base)
         r = _git(self.repo, "merge", "-q", "--ff-only", m.commit, check=False)
         if r.returncode:
             _git(self.repo, "merge", "--abort", check=False)
             _git(self.repo, "reset", "-q", "--hard", base)
-            self.refuse(drive, f"land:{m.commit}", f"{prs} passed ({v.attempt}) but doesn't merge onto `{into}` {main[:12]}: "
+            self.refuse(drive, f"land:{m.commit}", f"{prs}, reviewed, doesn't merge onto `{into}` {main[:12]}: "
                                                     f"{(r.stderr or r.stdout).strip()[-200:]}")
             return None
-        if locks:
-            files = []
-            for pkg, src in sorted(locks.items()):
-                dst = f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK
-                shutil.copyfile(src, self.repo / dst)
-                files.append(dst)
-            _git(self.repo, "add", "--", *files)
-            rec = (drive.get("lean") or {}).get(m.commit) or {}
-            mine = rec.get("run") == rid
-            ran = (rec.get("carried") or {}).get("from") if mine else None
-            moved = rec.get("rekeyed_from") if mine and not rec.get("carried") else None
-            _git(self.repo, "commit", "-q", "--allow-empty", "-m",
-                 f"Lock records regenerated for {prs}\n\nChecked: {rid} (the Lean check of {(ran or moved or m.commit)[:12]}, "
-                 f"passed by regenerating them)\nRegenerated: {', '.join(files)}\n", env=IDENTITY)
-            if why := self._unvouched(rid, ran, moved):
-                _git(self.repo, "reset", "-q", "--hard", base)
-                self.refuse(drive, f"lock-gate:{m.commit}", f"{prs} passed ({v.attempt}) but is held, not landed: {why}")
-                return None
-            if _out(self.repo, "rev-parse", "HEAD^{tree}") == _out(self.repo, "rev-parse", "HEAD^^{tree}"):
-                _git(self.repo, "reset", "-q", "--hard", "HEAD^")   # a commit `_carry` built holds them already
         p = self._push_into(drive, into)
         if p.returncode:
             _git(self.repo, "reset", "-q", "--hard", base)
             q.log(f"research queue drive: pushing `{into}` was refused ({p.stderr.strip()[-200:]}); the next tick tries again")
             return None
         tip = _out(self.repo, "rev-parse", "HEAD")
-        q.log(f"research queue drive: landed {prs} on `{into}` at {tip[:12]} (check {v.attempt})"
-              + (f", with the locks it regenerated for {', '.join(sorted(locks))}" if locks else ""))
+        q.log(f"research queue drive: landed {prs} on `{into}` at {tip[:12]} ({REVIEWED})")
         self._after_landing(drive, tip, main)
         for x in members:
             if mp := move_of(self.repo, x.commit):
@@ -2828,7 +3241,7 @@ class Driver:
                                                              f"at {now[:12]}, its head now, so {now[:12]} rejoins `{q.branch}` "
                                                              "above and lands later", self._owner(x))
         if into == "main":
-            self._on_main(drive, members, main, tip, v.attempt)
+            self._on_main(drive, members, main, tip, "")
         return m
 
     def _on_main(self, drive: dict, members: list[Member], since: str, tip: str, attempt: str) -> None:
@@ -2901,9 +3314,10 @@ class Driver:
               f"research queue drive: kept {p.branch}, #{n}'s head: {(r.stderr or r.stdout).strip()[-200:]}")
 
     def _promotable(self, pl: dict) -> list[tuple[str, str]]:
-        """The commits of `checked` `main` may move to, each with the run that passed it ("" for ci's baseline): `verified` when
-        its steps (`verified_as`: its run's, ci's baseline, `--steps` too, or a red baseline's) cover every step `main` waits
-        for there (`_gating`), and `gated`, whose run passed those though a step off the gate (circuit-check) was red."""
+        """The commits of `checked` `main` may move to, each with the run that passed it ("" when none is known): `verified`
+        when its steps (`verified_as`: its run's, a red baseline's, or the gate's of a `main` taken there, `_main_moved`) cover
+        every step `main` waits for there (`_gating`), and `gated`, whose run passed those though a step off the gate
+        (circuit-check) was red."""
         out = []
         if (v := pl.get("verified")) and set(self._gating(v)) <= set((pl.get("verified_as") or {}).get("steps") or ()):
             out.append((v, pl.get("verified_run") or ""))
@@ -2911,14 +3325,31 @@ class Driver:
             out.append((g, pl.get("gated_run") or ""))
         return out
 
+    def not_promotable(self, run: dict) -> str | None:
+        """Why ``run``, the after-landing run in drive's state, moves no `main` beside drive (`queue.promote`), or None once each
+        of its runs (every shard's twins) has ended and its tip is one the tick takes as `gated` (`_gate_passed`).  The
+        executor's check (`executor = "on"`) moves `main` only through drive's own tick."""
+        if "tasks" in run:
+            return "it is the executor's check, which only drive's tick follows"
+        if run.get("shards") or "launch" in run or not run.get("ids"):
+            return "it is still launching"
+        if running := [r for r, (st, *_) in self._states(run["ids"]).items() if st in ACTIVE]:
+            return f"{' '.join(running)} still {'runs' if len(running) == 1 else 'run'}"
+        judged: dict = {}
+        self._gate_passed(judged, run)
+        return None if "gated" in judged else "it didn't pass every step on the merge gate"
+
     def _promote(self, drive: dict) -> None:
         """When drive lands on `checked` (drive.toml's `land_into`), fast-forward `main` to the newest commit of `checked` whose
         after-landing run passed every step on the merge gate (`_promotable`), and run what a landing on `main` runs for what it
-        brings (`_on_main`).  A step off the gate (circuit-check) holds nothing here: its red reverts its culprit on `checked`,
-        and `main` follows the revert.  With `executor = "on"`, a tip is `gated` or verified only once the executor's tasks on
-        the gate and the run of `SLIM_STEPS` beside them passed, ratchet-gate's red holding `main` there until its revert
-        (`_follow_tasks`).  `main` never moves to a commit no such run passed, and never back; one that isn't below it (pushed
-        outside drive) waits for `_absorb`."""
+        brings (`_on_main`).  A step off the gate (circuit-check, ratchet-gate) holds nothing here: its red's culprit is fixed
+        forward, or reverted on `checked` unless the step is a warn step (ratchet-gate: `_revert_reds`), and `main` follows.
+        With `executor = "on"`, a tip is `gated` once the executor's tasks on the gate passed and the run of `SLIM_STEPS`
+        beside them passed its preflights and its steps on
+        the gate, by the same `off_gate`, and verified once both passed everything (`_follow_tasks`).  `main` never moves to a
+        commit no such run passed, and never back; one that isn't below it (pushed outside drive) waits for `_absorb`.  A push
+        refused because `main` already holds the commit, moved there beside this tick (`queue.baseline`, `queue.promote`), is
+        no failure: `main` stays, and the next tick takes it (`_main_moved`)."""
         q = self.q
         pl = drive.get("postland") or {}
         if q.into == "main" or self.dry_run or q.shadow:
@@ -2932,16 +3363,63 @@ class Driver:
         q._drive_only("main", "once", False)
         p = q._remote(self.repo, "push", "-q", "--no-verify", "origin", f"{v}:refs/heads/main", ok=None)
         if p.returncode:
+            now = q._remote(self.repo, "ls-remote", "origin", "refs/heads/main", ok=None).stdout.split()[:1]
+            if now and self._ancestor(v, now[0]):
+                q.log(f"research queue drive: `main` is at {now[0][:12]} already, which holds {v[:12]}: moved beside this "
+                      "tick; the next tick takes it")
+                return
             q.log(f"research queue drive: moving `main` to {v[:12]} was refused ({p.stderr.strip()[-200:]}); the next tick "
                   "tries again")
             return
+        pl["main"] = v
         members = self.landed_since(main, v)
         ex = ((pl.get("verified_as") or {}).get("executor") if v == pl.get("verified") else None) or (
             pl.get("gated_by") if v == pl.get("gated") else None)
-        by = run or (f"(the executor's {ex})" if ex else "(ci baseline)")
+        by = run or (f"(the executor's {ex})" if ex else "(no run recorded)")
         q.log(f"research queue drive: `main` fast-forwarded to {v[:12]}, which its after-landing run {by} "
               f"passed on every step on the merge gate: {' '.join(f'#{x.pr}' for x in members) or 'no PR'} since {main[:12]}")
         self._on_main(drive, members, main, v, run)
+
+    def _main_moved(self, drive: dict) -> None:
+        """At the start of each tick, take `main` as drive's own promotion leaves it, once it moved beside drive
+        (`queue.baseline`, `queue.promote`: neither takes the tick's lock or writes drive's state) or to `gated`.  On `checked`'s
+        first-parent chain above `verified`, it becomes `verified`, as passing every step on the merge gate there (`gating`),
+        each step the old `verified` passed beyond those keeping it as its newest green (`_green`); the red records at or below
+        it of the steps on the gate (a `suite` one once they cover `SUITE_STEPS`) end, and the landings and the failed tip at or
+        below it no longer wait.  What a move beside drive brought follows as a landing on `main` does (`_on_main`), once:
+        ``postland["main"]`` is the `main` drive last moved or took.  One pushed outside drive, off that chain, is only
+        recorded; `_absorb` brings it into `checked`."""
+        q = self.q
+        if q.into == "main" or self.dry_run or q.shadow or not (pl := drive.get("postland")):
+            return
+        main = _out(self.repo, "rev-parse", "refs/remotes/origin/main")
+        seen, pl["main"] = pl.get("main") or main, main
+        if not on_first_parents(self.repo, main, q.base):
+            return
+        attempt = next((pl.get(f"{k}_run") or "" for k in ("verified", "gated") if pl.get(k) == main), "")
+        if (old := pl.get("verified")) and old != main and self._ancestor(old, main):
+            steps = self._gating(main)
+            for s in (pl.get("verified_as") or {}).get("steps") or ():
+                if s not in steps:
+                    self._green(pl, f"step {s}", old)
+            for key in [f"step {s}" for s in steps] + [k for k in pl.get("red") or {}
+                                                       if k.startswith("suite ") and set(SUITE_STEPS) <= set(steps)]:
+                self._green(pl, key, main)
+            pl["verified"], pl["verified_as"] = main, {"steps": steps, "no_cache": None, "by": "main"}
+            if attempt:
+                pl["verified_run"] = attempt
+            else:
+                pl.pop("verified_run", None)
+            pl["pending"] = [p for p in pl.get("pending", []) if not self._ancestor(p, main)]
+            pl["landed_at"] = {p: t for p, t in (pl.get("landed_at") or {}).items() if p in pl["pending"]}
+            if pl.get("failed") and self._ancestor(pl["failed"], main):
+                del pl["failed"]
+            q.log(f"research queue drive: `{q.into}` {main[:12]} verified: `main` is there, past every step on the merge gate")
+        if main != seen and self._ancestor(seen, main):
+            members = self.landed_since(seen, main)
+            q.log(f"research queue drive: `main` moved beside drive to {main[:12]}: "
+                  f"{' '.join(f'#{x.pr}' for x in members) or 'no PR'} since {seen[:12]}")
+            self._on_main(drive, members, seen, main, attempt)
 
     def _absorb(self, drive: dict) -> None:
         """When drive lands on `checked`, bring into it a `main` that moved outside drive (`research merge --push` on its own
@@ -3051,9 +3529,9 @@ class Driver:
         return statistics.median(x[1] for x in use), f"runs {', '.join(x[0] for x in use)}{on}"
 
     def _slow_steps(self, drive: dict) -> None:
-        """Ring the owner of each step that a check of drive's still running (its after-landing run, its Lean checks) has run
-        past `SLOW_STEP_FACTOR` times its median (`_timed`, once it has `STEP_MIN_PASSES`): which step runs and since when is
-        read from what the run's steps.jsonl says ended and its spans' start (`running_steps`, `started_at`), and its owner is
+        """Ring the owner of each step that a check of drive's still running (its after-landing run, its lock run) has run
+        past both `SLOW_STEP_FACTOR` times its median (`_timed`, once it has `STEP_MIN_PASSES`) and `STEP_FLOOR_S`: which steps
+        run and since when are the run's open step spans (`running_steps`), a shard's own steps only, and a step's owner is
         its ci.toml job's at the commit checked (`CI` for a preflight).  Its alarm stands while its run does.  The run of
         `SLIM_STEPS` beside the executor's check (`_start_slim`) is one too, its steps those and the jobs they need."""
         pl = drive.get("postland") or {}
@@ -3066,9 +3544,8 @@ class Driver:
             runs.append(("postland", f"the run of {', '.join(slim['steps'])} beside the executor's check of `{self.q.into}` "
                                      f"{slim['tip'][:12]}", slim["tip"], slim["ids"],
                          [s for s in AFTER_LANDING if s in slim["steps"] or s in needs]))
-        for c, rec in (drive.get("lean") or {}).items():
-            if rec.get("state") is None and rec.get("ids"):
-                runs.append(("lean", f"the Lean check of {c[:12]}", c, rec["ids"], [LEAN_STEP]))
+        if (locks := pl.get("locks")) and locks.get("state") is None and locks.get("ids"):
+            runs.append(("lean", f"the lock run of `{self.q.into}` {locks['tip'][:12]}", locks["tip"], locks["ids"], [LEAN_STEP]))
         times = drive.get("step_s") or {}
         for kind, what, commit, ids, steps in runs:
             states = self._states(ids)
@@ -3077,11 +3554,13 @@ class Driver:
             if not (live := [rid for rid, (st, *_) in states.items() if st == "running"]):
                 continue
             for d in self._evidence(Verdict("running", " ".join(live))):
-                if d.name not in live or (start := started_at(d)) is None:
+                if d.name not in live:
                     continue
-                for step, since in running_steps(step_records(d), steps, self._jobs(commit), start).items():
+                for step, since in running_steps(d).items():
+                    if step not in steps and step not in PREFLIGHT:
+                        continue
                     med = self._median_of(step, times.get(f"{kind} {step}") or [], _machine(states.get(d.name)))
-                    if med is None or (took := self.now() - since) <= SLOW_STEP_FACTOR * med[0]:
+                    if med is None or (took := self.now() - since) <= max(SLOW_STEP_FACTOR * med[0], STEP_FLOOR_S):
                         continue
                     if self._due(drive, key := f"slow:{d.name}:{step}"):
                         self._ring_alarm(drive, [key], f"step {step} of {what} (run {d.name}) has run {took / 60:.0f} min, past "
@@ -3092,14 +3571,12 @@ class Driver:
         """Ring the owner of what holds each member of `next` marked ready `STUCK_S` ago or more (`Queue.marked_at`) that hasn't
         landed, one post per owner: the member at or below it where the reviewed prefix stops (`_reviewed`), whose missing
         land verdict is the reviewer's (`CI`), whose hold or withdrawn mark is its owner's, and whose wait on a red
-        circuit-check is that red's culprit's lane (`_red_owners`); with every member up to it reviewed, a Lean check of drive's still running
-        at or above it, its step's owner (ci.toml's), else `CI` with what the tick's landing said (``why``)."""
+        circuit-check is that red's culprit's lane (`_red_owners`); with every member up to it reviewed, `CI` with what the
+        tick's landing said (``why``)."""
         q = self.q
         if q.marked_at is None:
             return
         now, chain = self.now(), self._chain()[1]
-        lean = drive.get("lean") or {}
-        pos = {m.commit: i for i, m in enumerate(chain)}
         say: dict[str | None, dict[str, list[tuple[str, str]]]] = {}
         try:
             k, stop = self._reviewed(chain)
@@ -3112,8 +3589,6 @@ class Driver:
                     who = (None if (stop or "").startswith("no land verdict") else
                            self._red_owners(CIRCUIT_RED, red)[0] if red and self._circuit_held(h) else self._owner(h))
                     held = f"#{h.pr} at {h.head[:8]}: {stop}"
-                elif c := next((c for c, rec in lean.items() if rec.get("state") is None and pos.get(c, -1) >= i), None):
-                    who, held = self._step_owner(LEAN_STEP, c), f"the Lean check {_ids(lean[c])} of {c[:12]} still runs"
                 else:
                     who, held = None, why or "nothing lands"
                 if self._due(drive, key := f"stuck:{m.pr}@{m.head}:{who}"):
@@ -3127,12 +3602,12 @@ class Driver:
                              f"marked ready {STUCK_S // 3600} h ago or more and not landed on `{q.into}`: "
                              + "; ".join(f"{', '.join(x for _, x in xs)}, held by {h}" for h, xs in held.items()), who)
 
-    # -- launches that registered no run.  `drive["launch_failed"]`: {"postland" | "lean:COMMIT" | "bisect:COMMIT": {"tip",
+    # -- launches that registered no run.  `drive["launch_failed"]`: {"postland" | "locks": {"tip",
     #    "n": how often since "since", "last", "why": the latest reason's last line, "rang": {reason: when it last rang}}}, a
     #    record dropped once its launch registers a run, and a day after its last failure
 
     def _launch_failed(self, drive: dict, key: str, tip: str, what: str, tail: str) -> None:
-        """``what``, a post-landing run's or a Lean check's train.sh at ``tip``, registered no run (``tail``, its output's tail):
+        """``what``, an after-landing run's or a lock run's train.sh at ``tip``, registered no run (``tail``, its output's tail):
         count it under ``key`` and ring `CI` and `TOP` at once with the reason's last line, the behind-ring's path, not
         `refuse`'s once-to-`CI`; the same reason at the same ``tip`` rings again only `LAUNCH_RING_EVERY_S` later, as each
         tick launches it again.  With --shadow or --dry-run, only log it."""
@@ -3192,7 +3667,8 @@ class Driver:
         it); another is named with what admits it, or its commits dropped from them, or it closed.  A root is told again only
         when its head, its set of dependants or its reason changes (`drive["out"]`: {PR: [head, dependants, reason]}, a closed
         PR's record dropped), so one PR that many contain is one post a change, not one per PR and head; `research queue
-        status` still gives each PR its own reason."""
+        status` still gives each PR its own reason.  A PR waiting while it is restacked across a move (`queue.RESTACKING`) is
+        told nothing: a later sync merges it, or refuses it with the restack's failure."""
         q = self.q
         conflicts = {int(n): c["why"] for n, c in state.get("conflicts", {}).items()
                      if int(n) in entries and entries[int(n)].pr.head == c["head"]}
@@ -3223,7 +3699,7 @@ class Driver:
             h, why = b.pr.head, conflicts.get(m, b.why)
             own = m in conflicts or waits(b)
             said = [h, sorted(deps), why]
-            if (not deps and not own) or told.get(str(m)) == said:
+            if (not deps and not own) or told.get(str(m)) == said or why.startswith(RESTACKING):
                 continue
             unmarked = (not own and b.state == "waiting" and b.pr.owner is not None and hold not in b.pr.labels
                         and not q.ready(m, h))
@@ -3250,6 +3726,13 @@ class Driver:
                     text += f". Fix: {admit}, drop #{m}'s commits from {f'#{min(deps)}' if one else 'them'}, or ask {TOP} to close #{m}"
             if self._say(text, (q.handle(b.pr), *(q.handle(entries[n].pr) for n in sorted(deps)))):
                 told[str(m)] = said
+
+    def tell_warned(self, drive: dict, state: dict) -> None:
+        """Tell each PR's owner, and `CI`, once a head what a warn gate (drive.toml's `warn_gates`) said of its merge onto `next`
+        (the sync's `warned`): the PR lands all the same, and its owner fixes it in their next PR."""
+        for n, w in sorted((state.get("warned") or {}).items(), key=lambda x: int(x[0])):
+            self.tell(drive, [f"warn:{n}@{w['head']}"], f"#{n} at {w['head'][:8]} lands all the same, as a warn gate keeps no PR "
+                                                         f"out: {w['why']}. Fix it in your next PR", w.get("handle"), CI[1:])
 
     def _handle(self, pr: int) -> str | None:
         if self._prs is None:
@@ -3282,8 +3765,8 @@ class Driver:
 
     def _eject(self, drive: dict, key: str, head: str, m: Member, prs: str, v: Verdict, xs: list[Member], because: str) -> None:
         """Eject ``xs`` from ``m``'s failed prefix of `next`, and tell `CI` and their owners why (``because``).  A PR pushed since the head
-        its member merged is not ejected: `eject` marks the PR's current head, often the owner's fix, and a running check kept
-        the old one on `next` (`queue.frozen`); the next sync checks the new head in its place."""
+        its member merged is not ejected: `eject` marks the PR's current head, often the owner's fix; the next sync checks the
+        new head in its place."""
         ejected, why, pushed = [], because, []
         for x in xs:
             if (now := self._head(x.pr)) not in (None, x.head):
@@ -3312,108 +3795,69 @@ class Driver:
         self.refuse(drive, key, f"{head}. Not ejected: {why}. Eject the PR that broke it (`research queue eject N --reason ...`); "
                                 f"the next sync rebuilds without it{also}", *(self._handle(x.pr) for x in xs))
 
-    # -- the review landing (the module's docstring).  `drive["lean"]`: {the commit of `next` a Lean
-    #    check ran on: {"ids" ([] with "launch", `detach`'s record, while its train.sh runs detached: `_resolve`), "at",
-    #    "members": [[PR, head], ...] up to it, "tree", "stacked" or "hand" and "by" (`hand_lean`) when it is either,
-    #    "rekeyed_from" (`_rekey_lean`, `_move_lean`: the commit it ran on, kept across a chain of rekeys) or "carried"
-    #    (`_carry`: {"from": the commit it ran on, "files" that commit's tree and
-    #    this one's differ in, "ok" once `_carried_ok` judged it}) when it moved there, "state": None while it runs, else
-    #    "passed" (with "run", the id that passed) or "failed" (with "why")}}, each dropped once its commit leaves `next`.
-    #    `drive["lean_failed"]`: each failed one by its members, kept past that until it is resolved (`_live_failures`).
-    #    `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of the run that verified `verified`, or ci's
-    #    `research queue baseline`), "verified_run" (the ids of the run that verified it; none for ci's baseline), "gated" and
-    #    "gated_run" (the newest tip whose run passed every step on the merge gate, red off it or not: `_gate_passed`; with
-    #    "gated_by", the executor's check, when its tasks did: `_follow_tasks`),
-    #    "ratchet_judged" (the newest tip whose run's ratchet-gate ended with a verdict: `_ratchet_judged`) and "bisect" (a failed
-    #    after-landing run's implicated landings, being bisected: `_bisect_step`)
+    # -- the review landing (the module's docstring).  `drive["postland"]` also keeps "verified_as" ({"steps", "no_cache"} of
+    #    the run that verified `verified`, or the gate's steps, "by": "main", once `main` was there: `_main_moved`),
+    #    "verified_run" (the ids of the run that verified it, when known), "gated" and "gated_run" (the newest tip whose run
+    #    passed every step on the merge gate, red off it or not: `_gate_passed`; with "gated_by", the executor's check, when
+    #    its tasks did: `_follow_tasks`), "main" (the `main` drive last moved or took: `_promote`, `_main_moved`),
+    #    "ratchet_judged" (the newest tip whose run's ratchet-gate ended with a verdict: `_ratchet_judged`), and the lock run's
+    #    "locks" and "fresh"
 
     def _review(self, state: dict, drive: dict, dry_run: bool) -> str:
-        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): move `main` to a fully checked `checked`
-        (`_promote`) and bring a `main` pushed
-        outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its reviewed ones
-        above what a Lean check keeps to its bottom: `_lift`; held on its base
-        while a Lean check of it runs, drive's or a hand one: `_running_lean`, kept in place up to a passed one that lands: `_landable`, and kept up to any passed one:
-        `lean_hold`), judge again the Lean checks that ended while it ran (`_reread_lean`), land its reviewed prefix (`land_reviewed`) once the landing branch has a baseline (`_unbaselined`),
-        stacking a Lean check above a running one (`_stack_lean`), and launch the after-landing run, or the next run of a
-        bisection (`_bisect_step`); then ring what is past its bound (`_behind`, `_alarms`)."""
+        """One tick of the review landing, its low-risk lane after it (`land_lowrisk`): take a `main` moved beside the tick
+        (`_main_moved`), follow the lock run (`_follow_locks`), move `main` to a fully checked `checked` (`_promote`) and bring
+        a `main` pushed outside drive into `checked` (`_absorb`), sync `next` (its held members moved to its top: `_park`, its
+        reviewed ones to its bottom: `_lift`), land its reviewed prefix (`land_reviewed`) once the landing branch has a
+        baseline (`_unbaselined`), and launch the lock run (`_start_locks`) and the after-landing run, once each red's culprit
+        due a revert is reverted (`_revert_reds`); then ring what is past its bound (`_behind`, `_alarms`).  The lock run and
+        the after-landing run are launched before the sync, once the reverts are pushed, so the sync, most of a tick, doesn't
+        delay them, and else after the landings."""
         q = self.q
         what: list[str] = []
-        self._regen: dict[str, set[str] | None] = {}
-        self._lean_of: dict[str, bool] = {}
-        drive["tick"] = drive.get("tick", 0) + 1
-        self._follow_lean(drive)
-        self._bisect_step(drive)
-        self._red_clock(drive)
+        self._main_moved(drive)
+        self._follow_locks(drive)
+        self._revert_reds(drive)
         self._promote(drive)
         self._absorb(drive)
-        running = self._running_lean(drive)
-        # an ejection from a Lean check's prefix (`queue.lean_running`) rebuilds `next` only the tick after that check ends, so
-        # the landing uses the check before the rebuild takes its commit off `next`; a stacked one (`_stack_lean`) reaches up
-        # to `next`'s top, so one ejection anywhere on `next` would hold every sync for its whole run
-        waits = next((c for c, rec in drive["lean"].items()
-                      if not rec.get("stacked") and (c in running or rec.get("ended") == drive["tick"])
-                      if any(not q.ready(n, h) for n, h in rec.get("members") or ())), None)
-        entries: dict[int, Entry] | None = None
-        if why := hold(self.repo, q.branch, lambda c, base: c in running, q.base):
-            what.append(why)
-        elif waits:
-            what.append(f"`{q.branch}` waits for the Lean check of {waits[:12]} to end before an ejection rebuilds it")
-        else:
-            chain = q.chain()
-            frozen = max(max((i + 1 for i, m in enumerate(chain) if m.commit in running), default=0), self._landable(drive, chain))
-            # a passed check whose prefix doesn't land yet holds `next` too, or a `--first` fix goes below it and its pass is lost;
-            # a member under it that is pushed or loses its mark still leaves, or it would wait at its old head for a verdict
-            q.hold = max(frozen, lean_hold({"drive": drive}, chain))
-            q.frozen = {m.pr for m in chain[:frozen]}
-            if q.prefetch is not None:
-                q.prefetch([(m.pr, m.head) for m in chain])     # one pull of every member's labels, not three per member
-            q.park = self._park(chain)
-            q.lift = self._lift(drive, chain, q.hold) if not (q.hold or running) or q.flag("verdict_first") else []
-            entries = q.sync(dry_run)[1]
-            state = {**q.load_state(), "drive": drive}
-            self.tell_out(drive, entries, state)
-            running = self._reread_lean(drive)
+        self._start_locks(drive)
+        self.start_postland(drive)
+        chain = q.chain()
+        if q.prefetch is not None:
+            q.prefetch([(m.pr, m.head) for m in chain])     # one pull of every member's labels, not three per member
+        q.park = self._park(chain)
+        q.lift = self._lift(chain)
+        entries = q.sync(dry_run)[1]
+        state = {**q.load_state(), "drive": drive}
+        self.tell_out(drive, entries, state)
+        self.tell_warned(drive, state)
         landed, why, lane = None, self._unbaselined(drive), []
         if why is None:
             landed, why = self.land_reviewed(drive, dry_run)
-            self._stack_lean(drive, dry_run)
-            lane = self.land_lowrisk(drive, entries, running, dry_run)
+            lane = self.land_lowrisk(drive, entries, dry_run)
         what.insert(0, f"landed #{landed.pr}" if landed else why)
         if lane:
             what.append(f"landed {' '.join(f'#{m.pr}' for m in lane)} on the low-risk lane")
         self._sweep(drive, dry_run)
         self._stale(drive, dry_run)
+        self._unlandable(drive, dry_run)
+        self._start_locks(drive)
         self.start_postland(drive)
         self._behind(drive)
         self._alarms(drive, why or "the landing stops below it (drive's log says why)")
         if not dry_run:
             state["ejected"] = {**state.get("ejected", {}), **q.load_state().get("ejected", {})}
+            q._keep_merges(state)                   # the low-risk lane's merges, made after the sync saved its own
             q.save_state(state)
         q.log(f"research queue drive: {'; '.join(what)}")
         return "; ".join(what)
-
-    def _reread_lean(self, drive: dict) -> set[str]:
-        """After the sync, which takes most of a tick, judge again the Lean checks that ended while it ran (`_follow_lean`), so
-        the landing and the alarms read them as they are, not as they were at the tick's start (`next` was synced, held and
-        frozen on that view): the store's attempts are refreshed, and each run read this tick as still going is read again,
-        the after-landing run's too.  `_follow_lean` holds a second time in a tick: a check it judged keeps its verdict, a
-        machine's fault is run again once (``resend``), and a launch that registered no run is rung once and dropped.  The
-        commits a Lean check runs at now (`_running_lean`)."""
-        self._refresh_attempts()
-        live = {rid for rid, (st, *_) in self._seen.items() if st in ACTIVE}
-        self._seen = {rid: s for rid, s in self._seen.items() if rid not in live}
-        self._ev = {a: d for a, d in self._ev.items() if live.isdisjoint(a.split())}
-        self._follow_lean(drive)
-        return self._running_lean(drive)
 
     def _park(self, chain: list[Member]) -> list[int]:
         """The members the sync moves to the top of `next` (`queue.Queue.park`, which takes with each the PRs that contain it):
         each held by a verdict at the head `next` holds (`queue.unreviewed`; a hold by anyone counts, its owner's too), so it
         holds only itself and what contains it, and the members that were above it land.  It stays at the top until a land
         verdict at that head (then it lands by the normal order) or a new head.  A PR with a hold label, an ejected one or one a
-        sync refuses leaves `next` instead, and a refused one is tried again at its top.  Asked every sync, a Lean check of
-        `next` running or not: a check that holds one of them is of a prefix that can't land, and what a check covers below the
-        lowest of them keeps its place.  A member whose labels can't be read stays where it is."""
+        sync refuses leaves `next` instead, and a refused one is tried again at its top.  A member whose labels can't be read
+        stays where it is."""
         out: list[int] = []
         unread: list[tuple[int, QueueError]] = []
         for m in chain:
@@ -3429,79 +3873,37 @@ class Driver:
                        f"(#{unread[0][0]}: {unread[0][1]})")
         return out
 
-    def _lift(self, drive: dict, chain: list[Member], low: int = 0) -> list[int]:
-        """The members the sync moves to the bottom of `next` above ``chain[:low]`` (`queue.Queue.lift`, which keeps each after the
-        PRs it contains), in this order: those with their ready mark and a land verdict at their head (`_reviewed`'s rule), below the members
-        waiting for one or for circuit-check to pass (`_circuit_held`) (drive.toml's `verdict_first` or `reviewed_first`: one waiting for its review would hold every reviewed member above it),
-        and of those, the ones whose own change is no Lean change first (`nonlean_first`), so they land this tick instead of
-        waiting for a Lean change's check.  A held member is passed over, as the sync moves it to the top (`_park`); nothing
-        moves past a member whose labels can't be read, nor a Lean change whose own check failed (it waits for its owner's fix
-        or hold, not a check again on every lift).  Nothing moves in ``chain[:low]``, what a Lean check of `next` that runs or
-        passed keeps in place (`queue.Queue.hold`): `_review` asks every sync under `verdict_first`, else only while no Lean
-        check runs.  Nor does anything move while a Lean check passed on a commit above it, or a recorded run passed lean-audit on a
-        commit the lift would move (`_cover`): a rebuild takes those commits off `next`.  A member that gains its verdict goes
-        after those already moved (one that changes no Lean, after those that change none), so no member below it is merged
-        again."""
-        nonlean = self.q.flag("nonlean_first")
-        reviewed = self.q.flag("verdict_first") or self.q.flag("reviewed_first")
-        on, lean = {m.commit for m in chain[low:]}, drive["lean"]
-        if not (nonlean or reviewed) or any(rec.get("state") == "passed" for c, rec in lean.items() if c in on):
+    def _lift(self, chain: list[Member]) -> list[int]:
+        """The members the sync moves to the bottom of `next` (`queue.Queue.lift`, which keeps each after the PRs it contains),
+        under drive.toml's `verdict_first`: those with their ready mark and a land verdict at their head (`_reviewed`'s rule),
+        below the members waiting for one or for circuit-check to pass (`_circuit_held`), as one waiting for its review would
+        hold every reviewed member above it.  A held member is passed over, as the sync moves it to the top (`_park`); nothing
+        moves past a member whose labels can't be read.  A member that gains its verdict goes after those already moved, so no
+        member below it is merged again."""
+        if not self.q.flag("verdict_first"):
             return []
-        landing: list[tuple[Member, bool]] = []                 # each member below the first one nothing moves past
-        for m in chain[low:]:
+        lift: list[Member] = []
+        for m in chain:
             try:
                 why = unreviewed(self.reviews(m.pr, m.head), self._owners(m)) if self.q.ready(m.pr, m.head) else "withdrawn"
             except QueueError as e:                             # its verdict unknown, nothing moves past it
                 self.q.log(f"research queue drive: the lift stops below #{m.pr}: {e}")
                 break
-            if why and why.startswith("held"):
-                continue
-            if (lean.get(m.commit) or {}).get("state") == "failed" and self._lean_change(m):
-                break
-            landing.append((m, why is None and not self._circuit_held(m)))
-        if reviewed:
-            lift = [m for m, ok in landing if ok]
-        else:
-            i = next((j for j, (m, _) in enumerate(landing) if self._lean_change(m)), len(landing))
-            lift = [m for m, ok in landing[i + 1:] if ok]
-        if nonlean:
-            lift = [m for m in lift if not self._lean_change(m)] + [m for m in lift if self._lean_change(m)]
-        p = next((low + j for j, m in enumerate(lift) if chain[low + j] != m), None)
-        if p is None or self._cover(drive, chain, p, len(chain)) is not None:
-            return []
-        return [m.pr for m in lift]
-
-    def _running_lean(self, drive: dict) -> set[str]:
-        """The commits of `next` a Lean check runs at, which the sync keeps in place with the members below them (`queue.hold`,
-        `frozen`; `--first` goes above them): drive's own (`drive["lean"]`), and any other run of its run registry whose steps
-        include lean-audit (`lean_runs`: a hand `train.sh COMMIT MACHINES --deferred lean-audit`) while `research status` reads
-        it live (a `--first` rebuild of `next` would throw away hand checks).  A registry that can't be read
-        adds none."""
-        running = {c for c, rec in drive["lean"].items() if rec.get("state") is None}
-        mine = {r for rec in drive["lean"].values() for r in rec.get("ids") or ()}
-        try:
-            found = self.lean_runs({m.commit for m in self._chain()[1]} - running, self.now() - LEAN_RUN_WINDOW_S)
-        except Exception as e:  # noqa: BLE001  (holds nothing: drive's own Lean checks still hold `next`)
-            self.q.log(f"research queue drive: the run registry's Lean checks can't be read ({type(e).__name__}: {e}); taken as none")
-            return running
-        held = {c: live for c, ids in found.items()
-                if (live := [r for r, (st, *_) in self._states([r for r in ids if r not in mine]).items()
-                             if st in ACTIVE and st != "unknown"])}
-        if held:
-            self.q.log("research queue drive: Lean checks drive didn't launch hold `next` up to them: "
-                       + ", ".join(f"{c[:12]} ({' '.join(ids)})" for c, ids in held.items()))
-        return running | set(held)
+            if why is None and not self._circuit_held(m):
+                lift.append(m)
+        return [m.pr for m in lift] if any(chain[j] != m for j, m in enumerate(lift)) else []
 
     def _baselined(self, pl: dict) -> bool:
         """Whether `verified` ran the after-landing run as the review landing runs it, under `after_landing_no_cache`
-        (`verified_as`: the steps it passed, every step when green, fewer when `main` was red then, `_red_baseline`), or ci
-        recorded it green (`research queue baseline`, either flag)."""
+        (`verified_as`: the steps it passed, every step when green, fewer when `main` was red then, `_red_baseline`), or `main`
+        was there (`_main_moved`, either flag)."""
         vs = pl.get("verified_as")
         return bool(vs) and vs.get("no_cache") in (None, self.after_landing_no_cache)
 
     def _unbaselined(self, drive: dict) -> str | None:
         """Why no review landing happens now, or None: `main` has no baseline (`_baselined`), so a failure after a landing couldn't be told from one `main` had before it.  The
-        first run is then of `main` itself (`start_postland`), once any post-landing run still going has ended; ci records a green `main` by hand with `/data/infra/drive.sh queue baseline SHA --by ci`."""
+        first run is then of `main` itself (`start_postland`), once any after-landing run still going has ended; with `land_into = "checked"`, ci moves `main` to a green commit of
+        it by hand (`/data/infra/drive.sh queue baseline SHA --by ci`), which the next tick takes as verified (`_main_moved`)."""
         into = self.q.into
         main = _out(self.repo, "rev-parse", self.q.base)
         pl = drive.setdefault("postland", {"verified": main, "pending": [], "run": None})
@@ -3512,106 +3914,12 @@ class Driver:
                     f"after-landing run of `{into}` itself has run (its baseline)")
         return f"nothing lands before an after-landing run of `{into}` {main[:12]} itself has run (its baseline)"
 
-    def _bisect_step(self, drive: dict) -> None:
-        """Bisect the landings a failed after-landing run implicates (`_postland_failed`, `postland["bisect"]`): check the commit
-        of the middle one not yet judged with the failed steps alone (`--deferred STEPS`, the run's flags, `--base` where they
-        last passed, below every landing it judges), each that passes clearing it and those below, each that fails blaming it
-        and those above, until one fails and the one below it passes (or `verified` did): that PR is reverted
-        (`_revert_landed`).  When even the newest passes, none of them broke it: nothing is reverted, `CI` is told.  A run
-        fails a landing only when it failed one of those steps; one never started or stopped runs again, and one that ends
-        otherwise (killed, lost, exit 0 without their records, a failure elsewhere) runs once more, then ends the bisection
-        with nothing reverted."""
-        if not (pl := drive.get("postland")) or not (b := pl.get("bisect")):
-            return
-        cands, tip, base = [Member(*x) for x in b["cands"]], b["tip"], b["base"]
-        key, steps = f"postland:{tip}", ", ".join(b["steps"])
-        head = (f"the after-landing run of `main` {tip[:12]} failed ({b['why']}) in {steps}; bisected "
-                f"{' '.join(f'#{x.pr}' for x in cands)}, landed since {base[:12]}")
-        if run := b.get("run"):
-            c = cands[run["i"]].commit
-            if (tail := self._resolve(run, f"bisecting `main` {tip[:12]}'s failed {steps}: #{cands[run['i']].pr}'s landing "
-                                           f"{c[:12]}")) is not None:
-                b["run"] = None
-                self._launch_failed(drive, f"bisect:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])}", tail)
-                return
-            if "launch" in run:
-                return
-            (drive.get("launch_failed") or {}).pop(f"bisect:{c}", None)
-            states = self._states(run["ids"])
-            lost = self._lost(run, states)
-            if not lost and any(st in ACTIVE for st, *_ in states.values()):
-                return
-            b["run"] = None
-            rcs = [rc for _, rc, *_ in states.values()]
-            suite = self._suite_status(run["ids"], b["suite"]) if b.get("suite") and not lost else None
-            if suite == "passed":
-                b["good"] = run["i"]
-            elif suite == "failed":
-                b["bad"] = run["i"]
-            elif b.get("suite") and not lost and all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
-                pass
-            elif b.get("suite") and not b.get("unclear"):
-                b["unclear"] = True
-            elif b.get("suite"):
-                self._bisected(drive, pl, b, None, f"its run {' '.join(run['ids'])} of {c[:12]} ended twice "
-                                                   f"({'lost' if lost else ', '.join(map(str, rcs))}) neither passing nor "
-                                                   f"failing {b['suite']}")
-                return
-            elif not lost and any(rc == 0 for rc in rcs) and not self._unrun(run["ids"], b["steps"]):
-                b["good"] = run["i"]
-            elif not lost and all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
-                pass
-            elif not lost and not any(rc == 0 for rc in rcs) and set(self._failing(run)) & set(b["steps"]):
-                b["bad"] = run["i"]
-            elif not b.get("unclear"):
-                b["unclear"] = True                     # killed, lost, or no failed step of its own read: once more
-            else:
-                pl["failed"] = tip
-                del pl["bisect"]
-                self.refuse(drive, key, f"{head}: its run {' '.join(run['ids'])} of {cands[run['i']].commit[:12]} ended twice "
-                                        f"neither passing nor failing {steps} ({'lost' if lost else ', '.join(map(str, rcs))}). "
-                                        "Reverted nothing; find the culprit by hand")
-                return
-        if b["bad"] - b["good"] == 1:
-            one = cands[b["bad"]] if b["bad"] < len(cands) else None
-            below = f"#{cands[b['good']].pr}'s landing" if b["good"] >= 0 else f"`main` {base[:12]}"
-            self._bisected(drive, pl, b, one, f"it fails from #{one.pr}'s landing {one.commit[:12]} on and passes on {below}"
-                           if one else f"each of {' '.join(f'#{x.pr}' for x in cands)}'s landings passes it")
-            return
-        mid = (b["good"] + b["bad"]) // 2
-        c = cands[mid].commit
-        extra = {"agreement": "lean-agreement" in b["steps"], "no_cache": b["no_cache"], "circuit_cache": b["no_cache"],
-                 "no_regenerate": True}
-        if self.dry_run or self.q.shadow:
-            self.q.log(f"research queue drive: would launch train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])} to bisect")
-            return
-        rec, tail = self._started(self.launch_postland(self.repo, c, self.on, ",".join(b["steps"]), base=base, **extra))
-        if rec is None:
-            self._launch_failed(drive, f"bisect:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {','.join(b['steps'])}", tail)
-            return
-        b["run"] = {**rec, "i": mid, "at": self.now()}
-        self.q.log(f"research queue drive: bisecting `main` {tip[:12]}'s failed {steps}: #{cands[mid].pr}'s landing "
-                   f"{c[:12]}: {_ids(rec)}")
-        self.q.save_state({**self.q.load_state(), "drive": drive})
-
-    def _bisected(self, drive: dict, pl: dict, b: dict, one: Member | None, why: str) -> None:
-        """End a bisection of red record ``b["key"]``: ``one`` is its culprit, rung now with its revert's clock started, or
-        None, rung as unnamed; then the next red record with candidates is bisected."""
-        del pl["bisect"]
-        if (r := (pl.get("red") or {}).get(b["key"])) is not None:
-            if one is not None:
-                r.update(culprit=[one.pr, one.head, one.owner, one.commit], why=why, rung=self.now())
-                self._ring(drive, r, b["key"], f"Culprit: #{one.pr}, by bisection: {why}")
-            else:
-                self._ring(drive, r, b["key"], f"Bisected {' '.join(f'#{c[0]}' for c in b['cands'])}: {why}, so none of them is "
-                                               "named. Reverted nothing; find the culprit by hand", tag=":bisected")
-        self._start_bisect(pl)
-
     def land_reviewed(self, drive: dict, dry_run: bool) -> tuple[Member | None, str]:
         """Land `next`'s longest prefix whose every member has a land verdict at its head and no hold (`queue.unreviewed`, by none
-        of `_owners`), cut below a Lean change no passed Lean check holds (`_lean_gate`) and below a member whose Python doesn't
-        compile (`_compiles`), the gate run again on what is left below any cut, until it lands what it ran on: a fast-forward
-        of `main` to its top, through `_land`.  (the member landed or None, what the tick did)"""
+        of `_owners`), cut below a member whose Python doesn't compile (`_compiles`, run again on what is left below a cut): a
+        fast-forward of the landing branch to its top, through `_land`.  A member whose change touches Lean, a lock or the spec
+        lands as any other: the lock run after it regenerates the records it leaves stale (`_start_locks`).  (the member landed
+        or None, what the tick did)"""
         q = self.q
         base, chain = self._chain()
         if not chain:
@@ -3620,58 +3928,33 @@ class Driver:
         if main != base:
             return None, (f"`{q.into}` {main[:12]} moved off `{q.branch}`'s base {base[:12]}: it lands once a sync rebuilds "
                           f"`{q.branch}`")
-        self._note_marks(drive, chain)
         k, why = self._reviewed(chain)
         stop = f"#{chain[k].pr} at {chain[k].head[:8]}: {why}" if k < len(chain) else ""
         self._bottom(drive, chain[0], None if k else why)
         if not k:
             return None, f"nothing reviewed lands: {stop}"
-        g, ok = k, -1
-        t, rid = self._lean_gate(drive, chain, g, dry_run)
-        t = self._past_failed(drive, chain, t)
-        while t >= 0 and (cut := t if t == ok else self._compiles(drive, chain, base, t)) < g - 1:
-            # the gate's cover read the trees of `chain[:g]`: a Lean check above what lands covers it only while no Lean change
-            # lies between them, so whatever cut the landing below `g` runs the gate again on what lands (else a compile cut
-            # could land #1 alone on a check of #1 + #2, both changing one lock, and so could a failed Lean check)
-            ok, below = (-1, True) if cut < t else (cut, False)
-            t, rid = self._lean_gate(drive, chain, g := cut + 1, dry_run, k) if cut >= 0 else (-1, "")
-            t = self._past_failed(drive, chain, t)
-            if below:
-                self._drop_passed_above(drive, chain, cut)
+        t = k - 1
+        while t >= 0 and (cut := self._compiles(drive, chain, base, t)) < t:
+            t = cut
         if t < 0:
-            return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} waits (see above)"
+            return None, f"nothing lands: #{chain[0].pr} at {chain[0].head[:8]} doesn't compile (see above)"
         m, members = chain[t], chain[: t + 1]
         prs = " ".join(f"#{x.pr}" for x in members)
-        v = Verdict("passed", rid, REVIEWED + (f"; its Lean changes' Lean check {rid}" if rid else ""))
         if dry_run or q.shadow:
-            q.log(f"research queue drive: would land {prs} ({m.commit[:12]}, {v.why})" + (" [shadow]" if q.shadow else ""))
+            q.log(f"research queue drive: would land {prs} ({m.commit[:12]}, {REVIEWED})" + (" [shadow]" if q.shadow else ""))
             return m, f"would land #{m.pr}"
-        scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
-        try:
-            got = self._land(drive, m, members, prs, v, main, scratch)
-        finally:
-            shutil.rmtree(scratch, ignore_errors=True)
-        if got and (lock := _out(self.repo, "rev-parse", q.base)) != m.commit and chain[t + 1:]:
-            self._carry(drive, chain, t, lock)
+        got = self._land(drive, m, members, prs, main)
         return got, "" if got else f"{prs} reviewed but not landed (see above)" + (f"; {stop}" if stop else "")
 
-    def land_lowrisk(self, drive: dict, entries: dict[int, Entry] | None, running: set[str], dry_run: bool,
-                     fixes: list[Member] | None = None) -> list[Member]:
+    def land_lowrisk(self, drive: dict, entries: dict[int, Entry] | None, dry_run: bool) -> list[Member]:
         """The low-risk lane (drive.toml's `lowrisk_lane`): after the reviewed prefix lands, or when nothing does, land up to
         `lowrisk_per_tick` members of `next`, in its order, onto `checked`'s tip (never `main`) on their ready mark alone, each
-        as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`; above the prefix a Lean
-        check of `next` that runs or passed holds, also a member with a land verdict whose change is no Lean change and whose
-        merge touches nothing a Lean check reads, whatever `lowrisk_excludes` say (`_reviewed_below`), so it doesn't wait for
-        that check, and the check moves across it (`_keep_lean`'s (b) takes its files).  Each still needs its ready
+        as one `Queue: #N` merge, when the files that merge changes against that tip are `lowrisk`.  Each still needs its ready
         mark at its PR's head, no hold label or hold verdict, no red circuit-check on its inputs (`_circuit_held`), a merge
         with no conflict at all, every PR whose commits it contains (`Entry.after`) on the tip, the landing gates
         (`landing_gates`) and every .py file the landing leaves compiling (`py_errors`); each is judged on the tip the one
         before it left.  The after-landing run of `checked` checks them as it checks reviewed landings, and a red one reverts
-        its culprit (`_red`).  A landing off `next` moves `checked` off its base, so a Lean check of `next` that runs or passed
-        moves to the rebuilt `next` (`_keep_lean`); the lane waits only while one can't, and while no sync ran this tick (no
-        ``entries``).  While one can't, it still lands the ``fixes`` of reds on `checked` `_land_fixes` picks, onto `checked`'s
-        tip without rebuilding `next`: the next sync rebuilds it, as after any landing, and the check's verdict moves with its
-        prefix (`_rekey_lean`), as a fix changes nothing it reads.  The landed members."""
+        its culprit (`_red`).  Nothing lands while no sync ran this tick (no ``entries``).  The landed members."""
         from .merge import CHECKED
         from .queue import _message, gate_refusal, gates_at, lowrisk
 
@@ -3683,21 +3966,13 @@ class Driver:
         hold_label = q.rules().hold_label
         landed: list[tuple[Member, str]] = []
         skipped: list[str] = []
-        chain = self._chain()[1]
-        lean = drive.get("lean") or {}
-        held = {c for c, rec in lean.items() if rec.get("state") in (None, "passed")}
-        low = max((i + 1 for i, m in enumerate(chain) if m.commit in held), default=0) if fixes is None else 0
-        above = {m.pr for m in chain[low:]} if low else set()
-        reviewed: set[str] = set()              # the files the merges `_reviewed_below` let land change
-        byrev: set[int] = set()
-        for m in chain if fixes is None else fixes:
+        for m in self._chain()[1]:
             if len(landed) >= self.lowrisk_per_tick:
                 break
             if (head := self._merged_head(m)) is None:
                 skipped.append(f"#{m.pr} and those above it (a move, which lands on its review, at its place in `{q.branch}`)")
                 break
-            rev = m.pr in above and self._reviewed_below(m)
-            if not (rev or lowrisk(self._own(m), self.lowrisk_excludes)) or self._ancestor(head, tip):
+            if not lowrisk(self._own(m), self.lowrisk_excludes) or self._ancestor(head, tip):
                 continue
             if why := self._lowrisk_held(m, entries, hold_label, tip):
                 skipped.append(f"#{m.pr} ({why})")
@@ -3707,17 +3982,9 @@ class Driver:
             if tree is None:
                 skipped.append(f"#{m.pr} ({why})")
                 continue
-            files = set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split())
-            if not lowrisk(files, self.lowrisk_excludes):
-                if not rev:
-                    skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
-                    continue
-                if read := lean_reads(files):
-                    skipped.append(f"#{m.pr} (reviewed, but its merge onto `{q.into}`'s tip changes what a Lean check reads: "
-                                   f"{', '.join(read[:3])})")
-                    continue
-                reviewed |= files
-                byrev.add(m.pr)
+            if not lowrisk(set(_out(self.repo, "diff", "--name-only", "--no-renames", tip, tree).split()), self.lowrisk_excludes):
+                skipped.append(f"#{m.pr} (its merge onto `{q.into}`'s tip is no low-risk change)")
+                continue
             commit = _git(self.repo, "commit-tree", tree, "-p", tip, "-p", head, "-m", _message(p), env=IDENTITY).stdout.strip()
             refused, unjudged = gate_refusal(self.repo, tip, commit, gates, onto=q.into) if gates else ([], [])
             if refused or unjudged:
@@ -3732,17 +3999,10 @@ class Driver:
             q.log(f"research queue drive: low-risk lane skipped {', '.join(skipped)}")
         if not landed:
             return []
-        gone = {m.pr for m, _ in landed}
-        top, moves = self._keep_lean(drive, chain, gone, tip, running, reviewed) if fixes is None else ("", {})
-        if top is None:
-            return self._land_fixes(drive, entries, running, dry_run, chain)
-        lowtag = "(low-risk lane: no Lean, lock or soundness-path change)"
-        revtag = (f"(low-risk lane: reviewed, no Lean change and nothing a Lean check reads, above the prefix a Lean check of "
-                  f"`{q.branch}` holds)")
-        tag = {m.pr: revtag if m.pr in byrev else lowtag for m, _ in landed}
+        tag = "(low-risk lane: no Lean, lock or soundness-path change)"
         if dry_run or q.shadow:
             for m, commit in landed:
-                q.log(f"research queue drive: would land #{m.pr} on `{q.into}` {tag[m.pr]}" + (" [shadow]" if q.shadow else ""))
+                q.log(f"research queue drive: would land #{m.pr} on `{q.into}` {tag}" + (" [shadow]" if q.shadow else ""))
             return []
         q._drive_only(q.into, "once", False)
         if (r := self._push_into(drive, tip)).returncode:
@@ -3752,121 +4012,10 @@ class Driver:
         _git(self.repo, "update-ref", q.base, tip)
         below = start
         for m, commit in landed:
-            q.log(f"research queue drive: landed #{m.pr} on `{q.into}` at {commit[:12]} {tag[m.pr]}")
+            q.log(f"research queue drive: landed #{m.pr} on `{q.into}` at {commit[:12]} {tag}")
             self._after_landing(drive, commit, below)
             below = commit
-        if moves:
-            self._move_lean(drive, gone, tip, top, moves)
         return [m for m, _ in landed]
-
-    def _keep_lean(self, drive: dict, chain: list[Member], gone: set[int], tip: str, running: set[str],
-                   reviewed: set[str] = frozenset()) -> tuple[str, dict[str, tuple[str, list[list]]]] | tuple[None, None]:
-        """For the low-risk lane's landing of ``gone`` onto ``tip``: (the tip of `next` rebuilt on ``tip``, its other members
-        merged again in its order as a sync merges them; {the commit of each Lean check of `next` that runs or passed: (the
-        commit there of its highest member left, the members up to it)}, those whose trees differ in ``reviewed`` also in
-        `_across_reviewed`, for `_move_lean`'s log), ("", {}) when there is no such check (the next sync
-        rebuilds `next`), or (None, None), told to the log, when the lane waits for one that can't move: a check drive didn't
-        launch runs (`_running_lean`: its run is of its commit), a passed one regenerated lock records or they can't be read
-        (they land at its commit before the lane moves it: `_lean_gate`), or (a) the members up to the commit it moves to aren't its
-        own less ``gone`` (one doesn't merge cleanly again, or its record isn't `next`'s), or (b) that commit's tree and its own
-        differ in a file `lowrisk_excludes` names, but one of ``reviewed`` (what a reviewed member's merge `_reviewed_below`
-        lets land changes) that no Lean check reads (`lean_reads`).  A check of PRs in ``gone`` alone covers nothing left, and
-        isn't moved."""
-        from .queue import lowrisk
-
-        q, lean = self.q, drive.get("lean") or {}
-        self._across_reviewed: set[str] = set()
-        keep = {c: rec for c, rec in lean.items() if rec.get("state") in (None, "passed")}
-        pos = {m.commit: i for i, m in enumerate(chain)}
-        why = None
-        if hand := sorted(running - set(lean)):
-            why = (f"the Lean check of {', '.join(c[:12] for c in hand)}, which drive didn't launch, runs, and its run is of "
-                   "that commit")
-        elif off := [c for c in keep if c not in pos]:
-            why = f"the Lean check {_ids(keep[off[0]])} of {off[0][:12]} is of no commit of `{q.branch}` this tick reads"
-        elif regen := next((c for c, rec in keep.items()
-                            if rec.get("state") == "passed" and self._regenerated_files(drive, rec["run"]) != set()), None):
-            why = (f"the passed Lean check {_ids(keep[regen])} of {regen[:12]} regenerated lock records (or they can't be read), "
-                   "which land at its commit before the lane moves it")
-        top, images, broke, moves = tip, {}, "", {}
-        for m in chain if keep and not why else ():
-            if m.pr in gone:
-                continue
-            if (head := self._merged_head(m)) is None:
-                broke = f"#{m.pr} is a move, which the next sync regenerates on what lies below it"
-                break
-            tree, err = self._clean_merge(top, head)
-            if tree is None or self._ancestor(head, top):
-                broke = f"#{m.pr} doesn't merge again ({err or 'already merged'})"
-                break
-            top = _git(self.repo, "commit-tree", tree, "-p", top, "-p", head, "-m",
-                       _out(self.repo, "log", "-1", "--format=%B", m.commit), env=IDENTITY).stdout.strip()
-            images[m.commit] = top
-        for c, rec in sorted(keep.items(), key=lambda x: (x[1].get("state") != "passed", -pos.get(x[0], 0))) if not why else ():
-            members, left = [list(x) for x in rec.get("members") or ()], [m for m in chain[:pos[c] + 1] if m.pr not in gone]
-            if members != [[m.pr, m.head] for m in chain[:pos[c] + 1]]:
-                why = f"(a) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: its members aren't `{q.branch}`'s up to it"
-            elif not left:
-                q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} holds only PRs the low-risk lane lands: "
-                      "it isn't moved")
-            elif (new := images.get(left[-1].commit)) is None:
-                why = f"(a) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: {broke} onto `{q.into}` {tip[:12]}"
-            elif any(new == x for x, _ in moves.values()):
-                q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} isn't moved: another one holds {new[:12]}")
-            elif bad := sorted(f for f in changed(self.repo, c, new) if not lowrisk([f], self.lowrisk_excludes)
-                               and (f not in reviewed or lean_reads([f]))):
-                why = (f"(b) can't be shown for the Lean check {_ids(rec)} of {c[:12]}: its tree and that of {new[:12]} on "
-                       f"`{q.into}` {tip[:12]} differ in {', '.join(bad[:3])}, which `lowrisk_excludes` names")
-            else:
-                moves[c] = (new, [[m.pr, m.head] for m in left])
-                if reviewed & changed(self.repo, c, new):
-                    self._across_reviewed.add(c)
-            if why:
-                break
-        if why:
-            q.log(f"research queue drive: low-risk lane waits: a landing off `{q.branch}` rebuilds it, and {why}")
-            return None, None
-        return (top, moves) if moves else ("", {})
-
-    def _move_lean(self, drive: dict, gone: set[int], tip: str, top: str, moves: dict[str, tuple[str, list[list]]]) -> None:
-        """Push `next` rebuilt on the low-risk lane's landing ``tip`` (`_keep_lean`), and move each Lean check in ``moves`` to its
-        new commit, one log line each: its Lean inputs are the ones it checked.  A refused push leaves them, and the next
-        sync rebuilds `next` without them."""
-        q, lean = self.q, drive["lean"]
-        old = _out(self.repo, "rev-parse", f"refs/remotes/origin/{q.branch}")
-        p = q._remote(self.repo, "push", "-q", "--no-verify", f"--force-with-lease=refs/heads/{q.branch}:{old}", "origin",
-                      f"{top}:refs/heads/{q.branch}", ok=None)
-        if p.returncode:
-            q.log(f"research queue drive: pushing `{q.branch}` rebuilt on `{q.into}` {tip[:12]} was refused "
-                  f"({p.stderr.strip()[-200:]}); the next sync rebuilds it, without the Lean checks of "
-                  f"{', '.join(c[:12] for c in moves)}")
-            return
-        _git(self.repo, "update-ref", f"refs/remotes/origin/{q.branch}", top)
-        prs = " ".join(f"#{n}" for n in sorted(gone))
-        across = getattr(self, "_across_reviewed", set())
-        for c, (new, members) in moves.items():
-            reviewed = c in across
-            rec = lean.pop(c)
-            lean[new] = {**rec, "members": members, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
-            q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} ({rec.get('state') or 'running'}) holds "
-                  f"{new[:12]} of `{q.branch}` rebuilt on `{q.into}` {tip[:12]}: the same PRs up to #{members[-1][0]} at the "
-                  f"same heads less {prs} (the low-risk lane's), and trees that differ in "
-                  + ("no file a Lean check reads, and in no file `lowrisk_excludes` names but a reviewed landing's"
-                     if reviewed else "no file `lowrisk_excludes` names"))
-
-    def _reviewed_below(self, m: Member) -> bool:
-        """Whether the low-risk lane lands ``m``, a member above the prefix a Lean check of `next` that runs or passed holds,
-        whatever `lowrisk_excludes` say: it has a land verdict at its head (`unreviewed`, by none of `_owners`), its own change
-        is no Lean change (`_lean_change`) and touches nothing a Lean check reads (`lean_reads`), so that check moves across its
-        landing (`_keep_lean`) and it doesn't wait for the check to land with the prefix.  Its merge onto `checked`'s tip is
-        held to the same, and to the lane's other rules (`_lowrisk_held`, the landing gates, the compile gate)."""
-        try:
-            if unreviewed(self.reviews(m.pr, m.head), self._owners(m)) is not None:
-                return False
-        except QueueError as e:
-            self.q.log(f"research queue drive: #{m.pr}'s verdicts can't be read, so it lands only as a low-risk change: {e}")
-            return False
-        return not self._lean_change(m) and not lean_reads(self._own(m))
 
     def _lowrisk_held(self, m: Member, entries: dict[int, Entry], hold_label: str, tip: str) -> str | None:
         """Why the low-risk lane doesn't land ``m`` onto ``tip`` before merging it, or None: its PR closed or pushed past the head
@@ -3899,28 +4048,18 @@ class Driver:
         return parents[2] if len(parents) > 2 else None
 
     def _clean_merge(self, tip: str, head: str) -> tuple[str | None, str]:
-        """(the tree of ``head`` merged onto ``tip``, "") when it merges as `Queue._merge` merges, with ``tip``'s merge drivers
-        and a merge whose every conflict is in a pin or in Lean one side deletes that the other only ported kept, each pin
-        rebuilt from the merged tree (`repinned`) and each such file deleted (`port_deletions`), and the merged tree's Lean
-        on the Lean module system once the tree has it (`ported`), else (None, why).  A git without
-        `--attr-source` merges without the drivers, which conflicts more."""
-        from .queue import port_deletions, ported, repinned
-
-        args = ("merge-tree", "--write-tree", "--name-only", "--no-messages", tip, head)
-        r = _git(self.repo, f"--attr-source={tip}", *args, check=False)
-        if r.returncode == 129 and "attr-source" in r.stderr:
-            r = _git(self.repo, *args, check=False)
-        if r.returncode == 1:
-            files = list(dict.fromkeys(r.stdout.splitlines()[1:]))
-            tree, rest = port_deletions(self.repo, r.stdout.split()[0], tip, head, files)
-            if rest and not (tree := repinned(self.repo, tree, tip, head, rest)):
-                return None, f"conflict in {', '.join(rest) or 'a file'}"
-        elif r.returncode:
-            return None, f"doesn't merge: {(r.stderr or r.stdout).strip()[-200:]}"
-        else:
-            tree = r.stdout.split()[0]
-        tree, _, _, why = ported(self.repo, tree, base=tip)
-        return tree, why
+        """(the tree of ``head`` merged onto ``tip``, "") when it merges, else (None, why): the sync's merge (`Queue._recorded`,
+        as `Queue._merge` makes it), with ``tip``'s merge drivers, each conflicted pin rebuilt and each `.lean` file one side
+        deletes that the other only ported deleted, and the merged tree's Lean on the module system once the tree has it, taken
+        from its record when the sync or an earlier tick made it onto ``tip``'s tree."""
+        rec = self.q._recorded(tip, head)
+        if "conflict" in rec:
+            return None, f"conflict in {', '.join(rec['conflict']) or 'a file'}"
+        if "err" in rec:
+            return None, f"doesn't merge: {rec['err']}"
+        if "why" in rec:
+            return None, rec["why"]
+        return (_out(self.repo, "rev-parse", f"{tip}^{{tree}}") if rec.get("merged") else rec["tree"]), ""
 
     def _reviewed(self, chain: list[Member]) -> tuple[int, str | None]:
         """(how many members at the bottom of ``chain`` land on their verdicts, why the next one doesn't): each has its ready mark
@@ -3936,31 +4075,32 @@ class Driver:
         return len(chain), None
 
     def _bottom(self, drive: dict, m: Member, why: str | None) -> None:
-        """Ring `CI`, who staffs the reviewers, and `TOP` while ``m``, `next`'s lowest member, has waited at its head with no land
-        verdict and no hold (``why``, `_reviewed`'s, says no land verdict) `BOTTOM_WAIT_S` since it became the lowest
-        (`drive["bottom"]`: {"pr", "head", "since", "rang"}, restarted by a new member or head) or since its ready mark
-        (`Queue.marked_at`), whichever is later, and again every `BOTTOM_WAIT_S` while it waits: it holds every landing above it."""
+        """Ring `bottom_ring` (drive.toml's; by default `CI`, who staffs the reviewers, and `TOP`) while ``m``, `next`'s lowest
+        member, has waited at its head with no land verdict and no hold (``why``, `_reviewed`'s, says no land verdict)
+        `bottom_wait_min` minutes since it became the lowest (`drive["bottom"]`: {"pr", "head", "since", "rang"}, restarted by a
+        new member or head) or since its ready mark (`Queue.marked_at`), whichever is later, and again every `bottom_wait_min`
+        while it waits: it holds every landing above it."""
         rec = drive.get("bottom") or {}
         if (rec.get("pr"), rec.get("head")) != (m.pr, m.head):
             rec = drive["bottom"] = {"pr": m.pr, "head": m.head, "since": self.now()}
         if not (why or "").startswith("no land verdict"):
             return
-        start, now = rec["since"], self.now()
+        start, now, wait, to = rec["since"], self.now(), self.bottom_wait_min * 60, " ".join(self.bottom_ring)
         if self.q.marked_at is not None and (at := self.q.marked_at(m.pr, m.head)):
             with contextlib.suppress(ValueError):
                 start = max(start, ts(at).timestamp())
-        if now - start < BOTTOM_WAIT_S or now - rec.get("rang", 0) < BOTTOM_WAIT_S:
+        if now - start < wait or now - rec.get("rang", 0) < wait:
             return
         text = (f"#{m.pr} (owner {m.owner}) at {m.head[:8]}, `{self.q.branch}`'s lowest member above `{self.q.into}`, has waited "
                 f"{(now - start) / 60:.0f} min with no land verdict, and nothing above it lands until it has one: review it "
                 f"(`research queue review {m.pr} --land|--hold REASON --by LANE`)")
         if self.q.shadow or self.dry_run:
-            self.q.log(f"research queue drive: would ring {CI} {TOP}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
-        elif self.post(f"{CI} {TOP} queue: {text}", (CI, TOP)):
+            self.q.log(f"research queue drive: would ring {to}: {text} [{'shadow' if self.q.shadow else 'dry run'}]")
+        elif self.post(f"{to} queue: {text}", self.bottom_ring):
             rec["rang"] = now
-            self.q.log(f"research queue drive: rang {CI} {TOP}: {text}")
+            self.q.log(f"research queue drive: rang {to}: {text}")
         else:
-            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {CI} {TOP}: {text}")
+            self.q.log(f"research queue drive: could not post to the merge thread (the next tick retries): {to}: {text}")
 
     def _circuit_held(self, m: Member) -> str | None:
         """Why ``m`` waits while circuit-check is red on `checked` (`CIRCUIT_RED`): its own change touches circuit-check's inputs
@@ -3973,528 +4113,13 @@ class Driver:
             return None
         return f"circuit-check is red on `{self.q.into}`, and its change touches circuit-check's inputs: it lands once that passes"
 
-    def _landable(self, drive: dict, chain: list[Member]) -> int:
-        """How many members at the bottom of ``chain`` a passed Lean check of drive's keeps in place for the sync, as a running one
-        does (`queue.hold`, `frozen`): up to the highest one of a commit whose every member up to it has its ready mark and a land
-        verdict (`_reviewed`), which `land_reviewed` lands after the sync.  A check's end freed `next` to the sync before the
-        landing ran (a new head below it rebuilds `next`, and the
-        reviewed PRs it covered would land nothing).  An ejection withdraws a mark, a hold is a verdict: either ends it."""
-        passed = {c for c, rec in drive["lean"].items() if rec.get("state") == "passed"}
-        top = max((i + 1 for i, m in enumerate(chain) if m.commit in passed), default=0)
-        if not top:
-            return 0
-        k = self._reviewed(chain[:top])[0]
-        return max((i + 1 for i, m in enumerate(chain[:k]) if m.commit in passed), default=0)
-
-    def _drop_passed_above(self, drive: dict, chain: list[Member], cut: int) -> None:
-        """Drop the passed Lean checks of commits above ``chain[cut]``, which a member that doesn't compile keeps from landing
-        (`_compiles`): `_landable` would keep that member frozen at its old head for them, though its owner pushed the fix that
-        `_eject` leaves for the next sync to take ("nothing lands: #2 waits" every tick)."""
-        for x in chain[cut + 1:]:
-            if (drive["lean"].get(x.commit) or {}).get("state") == "passed":
-                del drive["lean"][x.commit]
-                self.q.log(f"research queue drive: the passed Lean check of {x.commit[:12]} is dropped: what lands stops below it "
-                           f"(#{chain[cut + 1].pr} doesn't compile), and the next sync takes what was pushed since")
-
-    def _past_failed(self, drive: dict, chain: list[Member], t: int) -> int:
-        """The highest index at or below ``t`` a landing may reach past drive's failed Lean checks: below the highest failed commit
-        at or below it unless a passed Lean check of a commit above that one, at or below ``t``, checked a tree the landing holds."""
-        lean, pos = drive["lean"], {m.commit: i for i, m in enumerate(chain)}
-        while True:
-            failed = [pos[c] for c, rec in lean.items() if rec.get("state") == "failed" and pos.get(c, t + 1) <= t]
-            if not failed or any(max(failed) < pos.get(c, -1) <= t for c, rec in lean.items()
-                                 if rec.get("state") == "passed" and (rec.get("carried") or {"ok": True}).get("ok")):
-                return t
-            t = max(failed) - 1
-
     def _owners(self, m: Member) -> set[str | None]:
         """Whose verdict on ``m`` doesn't count (`queue.review_owners`): its merge's `Owner`, that owner's handle (`_owner`), and
         who wrote its ready mark."""
         return {m.owner, self._owner(m), self.ready_by(m.pr, m.head)}
 
-    def _lean_change(self, m: Member) -> bool:
-        """Whether ``m`` waits for a Lean check before it lands: its own change is a Lean change (`queue.lean_change`), whatever
-        its PR's title says, since Lean that runs as code, a lock or the spec landed unchecked leaves a record the after-landing
-        lean-audit (`--no-regenerate`) finds stale."""
-        if m.commit not in self._lean_of:
-            self._lean_of[m.commit] = lean_change(self.repo, m.commit)
-        return self._lean_of[m.commit]
-
-    def _lean_gate(self, drive: dict, chain: list[Member], k: int, dry_run: bool, reviewed: int | None = None) -> tuple[int, str]:
-        """(the highest index of ``chain[:k]`` that may land, the Lean check whose regenerated locks land with it or another that
-        holds its Lean changes, or ""): every Lean change below it (`queue.lean_change`) has a passed lean-audit of a commit of
-        `next` at or above it (`_cover`) whose Lean is the Lean of what may land; one whose check regenerated locks lands exactly
-        at that commit, its locks on top (`_land`), a check a rekey moved there included unless `_rekey_refusal` says its
-        records don't hold there (then it is checked again).  For the lowest Lean change without one, a Lean check is launched, or waited
-        for (`_lean_check`).  Nothing at or above a commit whose Lean check failed lands, but for one below a passed check of
-        ``chain[:k]``, which checked the tree that lands (`_past_failed`), and when no Lean change's own commit is that one, `CI`
-        is told.  ``reviewed``: the reviewed prefix's length, when a cut below it (`land_reviewed`) runs the gate on ``k``."""
-        lean = drive["lean"]
-        self._rekey_lean(drive, chain)
-        pos = {m.commit: i for i, m in enumerate(chain)}
-        for c in [c for c, rec in lean.items() if c not in pos and rec.get("state") is not None]:
-            del lean[c]                                         # of a `next` the sync rebuilt (a running one holds it)
-        over = max((pos[c] for c, rec in lean.items() if rec.get("state") == "passed" and pos.get(c, k) < k), default=-1)
-        bad = min((pos[c] for c, rec in lean.items() if rec.get("state") == "failed" and over < pos.get(c, -1)), default=k)
-        t, rid = min(k, bad) - 1, ""
-        # nothing at or above `bad` lands, so a check above it covers only across no Lean change from `bad` up (else #1 could
-        # land on a pass of #1..#4, #3 changing its lock, though the check of #1 + #2, #1's Lean, failed)
-        top, cut = min(k, bad), min(k, bad) < (reviewed or k)
-        for i in range(k):
-            if i > bad:
-                break
-            if not self._lean_change(chain[i]):
-                continue
-            if (got := self._cover(drive, chain, i, top)) is None:
-                self._lean_check(drive, chain, top, i, dry_run, cut)
-                return min(i - 1, t), rid
-            commit, run = got
-            if (regen := self._regenerated(drive, run)) is None:
-                return min(i - 1, t), rid
-            if lean.get(commit, {}).get("run") == run and not (ok := self._carried_ok(drive, commit)):
-                if ok is None:
-                    return min(i - 1, t), rid
-                del lean[commit]                    # what it checked and what lands differ by records it didn't regenerate
-                self._lean_check(drive, chain, top, i, dry_run, cut)
-                return min(i - 1, t), rid
-            if regen and lean.get(commit, {}).get("run") == run and (why := self._rekey_refusal(lean[commit], commit)):
-                self.q.log(f"research queue drive: the Lean check {_ids(lean[commit])} moved to {commit[:12]} regenerated lock "
-                           f"records, which don't hold there ({why}): it is checked again")
-                del lean[commit]
-                self._lean_check(drive, chain, top, i, dry_run, cut)
-                return min(i - 1, t), rid
-            if regen:
-                if pos[commit] > t:
-                    if bad == k:
-                        self._lean_check(drive, chain, k, i, dry_run, cut)
-                    return min(i - 1, t), rid
-                return pos[commit], run
-            rid = run
-        if bad < k and not self._lean_change(chain[bad]):
-            c, rec = chain[bad].commit, lean[chain[bad].commit]
-            hi = max((j for j, m in enumerate(chain[:bad]) if self._lean_change(m)), default=-1)
-            if hi < 0 or any(hi <= pos[x] < bad for x, r in lean.items() if r.get("state") == "passed" and x in pos):
-                del lean[c]                 # every Lean change below it passed below it: what broke is the after-landing run's
-                for x in [x for x, f in (drive.get("lean_failed") or {}).items() if f["members"] == rec.get("members")]:
-                    del drive["lean_failed"][x]
-                self.refuse(drive, f"lean-dropped:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} "
-                                                     f"(#{chain[bad].pr}'s merge, which changes no Lean) failed ({rec.get('why')}), "
-                                                     "and each Lean change below it passed a Lean check below it: drive drops it, "
-                                                     "and the after-landing run checks the rest")
-                return self._lean_gate(drive, chain, k, dry_run, reviewed)
-            self.refuse(drive, f"lean-next:{c}", f"the Lean check {_ids(rec)} of `{self.q.branch}` {c[:12]} (#{chain[bad].pr}"
-                                                 f"'s merge, which changes no Lean) failed ({rec.get('why')}), and each Lean change "
-                                                 "below it has a passed Lean check: it and every PR above it wait until it leaves "
-                                                 f"`{self.q.branch}`. Find the PR that broke it and hold it (`research queue review "
-                                                 "N --hold REASON`)")
-        return t, rid
-
-    def _cover(self, drive: dict, chain: list[Member], i: int, k: int) -> tuple[str, str] | None:
-        """(a commit of `next` at or above ``chain[i]``, its passed lean-audit's run), for a landing within ``chain[:k]``: drive's
-        own Lean checks first (one of ``chain[:k]``, the highest, else the lowest above it with no Lean change from ``chain[k]``
-        up to it), then any recorded run in the store whose lean-audit passed on a commit of ``chain[i:k]`` (a full check, or a
-        hand `train.sh COMMIT MACHINES --deferred lean-audit`).  A store that can't be read covers nothing."""
-        pos = {m.commit: j for j, m in enumerate(chain)}
-        ok = sorted(((pos[c], c, rec["run"]) for c, rec in drive["lean"].items() if rec.get("state") == "passed" and pos.get(c, -1) >= i
-                     and not any(self._lean_change(m) for m in chain[k:pos[c] + 1])),      # what lands is the tree it checked
-                    key=lambda x: (x[0] >= k, -x[0] if x[0] < k else x[0]))
-        if ok:
-            return ok[0][1], ok[0][2]
-        from .merge import step_status
-
-        try:
-            for j in range(k - 1, i - 1, -1):
-                rows = self.q.store.index.sql("SELECT id FROM attempts WHERE source_commit = ? AND source_dirty = 0 AND state = 'done' "
-                                              "AND rc = 0 ORDER BY start_utc DESC", (chain[j].commit,))
-                if rid := next((r[0] for r in rows if step_status(self.q.store, r[0], LEAN_STEP) == "passed"), None):
-                    return chain[j].commit, rid
-        except Exception as e:  # noqa: BLE001  (not covered: drive's own Lean check settles it)
-            self.q.log(f"research queue drive: the store's Lean checks of #{chain[i].pr} can't be read ({type(e).__name__}: {e}); "
-                       "taken as none")
-        return None
-
-    def _regenerated(self, drive: dict, run: str) -> bool | None:
-        """Whether Lean check ``run`` regenerated lock records (`_locks`), None when that can't be read (told to `CI`)."""
-        return None if (files := self._regenerated_files(drive, run)) is None else bool(files)
-
-    def _regenerated_files(self, drive: dict, run: str) -> set[str] | None:
-        """The lock files Lean check ``run`` regenerated (`_locks`), None when that can't be read (told to `CI`)."""
-        if not self.regenerate_locks:
-            return set()
-        if run in self._regen:
-            return self._regen[run]
-        scratch = Path(tempfile.mkdtemp(prefix="drive-locks-"))
-        try:
-            _, locks, held = self._locks(Verdict("passed", run), scratch)
-        finally:
-            shutil.rmtree(scratch, ignore_errors=True)
-        if held:
-            self.refuse(drive, f"lean-locks:{run}", f"the Lean check {run} holds lock changes on `{self.q.branch}`, which wait: {held}")
-        self._regen[run] = None if held else {f"{pkg}/{LOCK}" if pkg not in ("", ".") else LOCK for pkg in locks}
-        return self._regen[run]
-
-    def _carried_ok(self, drive: dict, c: str) -> bool | None:
-        """Whether the passed Lean check of ``c`` covers it: true unless `_carry` moved it there from the commit it ran on, whose
-        tree differs from ``c``'s by lock records a landing below committed; then only when it regenerated each of those files
-        too, so the tree that lands is the one it checked with its records.  None when its records can't be read."""
-        rec = drive["lean"][c]
-        if not (carried := rec.get("carried")) or carried.get("ok"):
-            return True
-        if (files := self._regenerated_files(drive, rec["run"])) is None:
-            return None
-        carried["ok"] = set(carried["files"]) <= files
-        return carried["ok"]
-
-    def _rekey_refusal(self, rec: dict, c: str) -> str | None:
-        """Why the lock records a passed Lean check that a rekey moved to ``c`` (`_rekey_lean`, `_move_lean`) regenerated can't
-        land on ``c`` (`_land`'s lock gate would refuse them), or None: they can when the commit it ran on, its `rekeyed_from`,
-        and ``c`` differ in no file but those the low-risk rule allows (`merge.rekey_refusal`), as the gate checks.  A check
-        `_carry` moved too isn't one the gate takes: its lock commit is taken against the commit it was carried from."""
-        from .merge import rekey_refusal
-
-        if not (origin := rec.get("rekeyed_from")):
-            return None
-        if rec.get("carried"):
-            return f"it moved across a lock commit too, from {rec['carried'].get('from', '')[:12]}"
-        return rekey_refusal(self.repo, origin, c, self.lowrisk_excludes)
-
-    def _carry(self, drive: dict, chain: list[Member], t: int, lock: str) -> None:
-        """After ``chain[:t + 1]`` landed with the lock commit ``lock`` on top, rebuild `next` on it, so `main` is again a commit
-        of `next` and the next sync keeps what is above (else a sync after a lock commit
-        merges every member again, and the passed and running Lean checks above go with their commits).  Each member above is made again on the one below
-        it: the same message, its PR's head as second parent, and its merge's tree with each of ``lock``'s records that no merge
-        from the landing up to it changed (one that did keeps its own record, which a Lean check above regenerates).  Each Lean
-        check that runs or passed on a rebuilt commit moves to its image, `carried` from the commit it ran on with the files they
-        differ in, and covers it only when it regenerated those (`_carried_ok`); a failed one is dropped, and its commit checked
-        again."""
-        q, lean = self.q, drive.setdefault("lean", {})
-        records = {f: _out(self.repo, "ls-tree", lock, "--", f).split("\t")[0].split()
-                   for f in changed(self.repo, chain[t].commit, lock)}
-        top, images = lock, {}
-        with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
-            index = {"GIT_INDEX_FILE": str(Path(tmp, "index"))}
-            for m in chain[t + 1:]:
-                parents = _out(self.repo, "rev-list", "--parents", "-n", "1", m.commit).split()[1:]
-                for f in changed(self.repo, parents[0], m.commit) & set(records):
-                    del records[f]
-                _git(self.repo, "read-tree", m.commit, env=index)
-                for f, (mode, _, blob) in records.items():
-                    _git(self.repo, "update-index", "--add", "--cacheinfo", f"{mode},{blob},{f}", env=index)
-                tree = _git(self.repo, "write-tree", env=index).stdout.strip()
-                top = _git(self.repo, "commit-tree", tree, "-p", top, *(x for p in parents[1:] for x in ("-p", p)), "-m",
-                           _out(self.repo, "log", "-1", "--format=%B", m.commit), env=IDENTITY).stdout.strip()
-                images[m.commit] = top
-        if not images:
-            return
-        old = _out(self.repo, "rev-parse", f"refs/remotes/origin/{q.branch}")
-        p = q._remote(self.repo, "push", "-q", "--no-verify", f"--force-with-lease=refs/heads/{q.branch}:{old}", "origin",
-                      f"{top}:refs/heads/{q.branch}", ok=None)
-        if p.returncode:
-            q.log(f"research queue drive: pushing `{q.branch}` rebuilt on the lock commit {lock[:12]} was refused "
-                  f"({p.stderr.strip()[-200:]}); the next sync rebuilds it")
-            return
-        moved, above = [], [[x.pr, x.head] for x in chain[t + 1:]]
-        for n, (c, new) in enumerate(images.items(), 1):
-            if (rec := lean.pop(c, None)) is None or rec.get("state") == "failed":
-                continue
-            ran = (rec.get("carried") or {}).get("from", c)
-            lean[new] = {**rec, "members": above[:n], "tree": self._tree(new),
-                         "carried": {"from": ran, "files": sorted(changed(self.repo, ran, new))}}
-            moved.append(f"{c[:12]} to {new[:12]}")
-        q.log(f"research queue drive: `{q.branch}` rebuilt on the lock commit {lock[:12]}: {len(images)} member(s) above it "
-              "kept, each with its merge's tree and the records no merge above changed"
-              + (f"; Lean checks moved: {', '.join(moved)}" if moved else ""))
-
-    def _lean_check(self, drive: dict, chain: list[Member], k: int, i: int, dry_run: bool, cut: bool = False) -> None:
-        """A Lean check for ``chain[i]``, the lowest Lean change no passed one holds: wait for a running one of a commit at or
-        above it (after a ``cut`` below the reviewed prefix's top, only one whose pass `_cover` would take for ``chain[:k]``);
-        after a failed one of its own commit, tell `CI` and the owner, and wait for that commit to leave `next` (a new
-        head, a hold, an ejection); after a failed one above it, check its own commit, so a PR is blamed only on its own
-        check; else launch one of the reviewed prefix's top, ``chain[k - 1]``, capped below the lowest member above ``chain[i]``
-        that came onto `next` within `LEAN_SETTLE_TICKS` ticks (`_churned`), so churn above doesn't take it off `next`, and cut
-        to share the Lean changes up to it with the Lean checks still free (`lean_cut`), lowest first, but at its own commit
-        when that cut would hold every Lean change left of a failed check not resolved (`_failure_under`), as after a failed
-        one above it.  One running below stays; `_stack_lean` stacks one above it for the Lean changes it doesn't hold."""
-        q, m, lean = self.q, chain[i], drive["lean"]
-        pos = {x.commit: j for j, x in enumerate(chain)}
-        mine = {c: rec for c, rec in lean.items() if pos.get(c, -1) >= i and not (
-            cut and rec.get("state") is None and any(self._lean_change(x) for x in chain[k:pos[c] + 1]))}
-        if c := next((c for c, rec in mine.items() if rec.get("state") is None), None):
-            q.log(f"research queue drive: #{m.pr}'s Lean change waits for the Lean check {_ids(lean[c])} of {c[:12]}")
-            return
-        if (rec := lean.get(m.commit)) and rec.get("state") == "failed":
-            self.refuse(drive, f"lean:{m.commit}", f"#{m.pr} at {m.head[:8]} changes Lean, and the Lean check {_ids(rec)} "
-                        f"of its own commit {m.commit[:12]} on `{q.branch}` failed ({rec.get('why')}): it and every PR above it wait. "
-                        f"Push a fix (a new head checks again), or hold it (`research queue review {m.pr} --hold REASON`)",
-                        self._owner(m))
-            return
-        cap = next((j for j in range(i + 1, k) if self._churned(drive, chain[j])), k)
-        free = self.max_lean_checks - sum(rec.get("state") is None for rec in lean.values())
-        t = i if any(rec.get("state") == "failed" for rec in mine.values()) else lean_cut(chain, i, cap - 1, self._lean_change, free)
-        if t > i and self._failure_under(drive, chain, t, set(q.park or ())):
-            t = i
-        self._launch_lean(drive, chain, t, f"#{m.pr}'s Lean change", dry_run)
-
-    def _stack_lean(self, drive: dict, dry_run: bool) -> None:
-        """While a Lean check runs, stack one above it on `next`, reviewed or not, for the Lean changes it doesn't hold
-        (`lean_stack`, at most `max_lean_checks` running), so they don't wait for it to pass and then for a check of their own.
-        The lower one runs on.  An ejection from a stacked check's prefix rebuilds `next` at once (`_review`), cancelling it.
-        It stops below a held member (`_park`) as below churn: that one can't land, and each PR a sync adds goes below it,
-        taking the commits from it up off `next`.  And none is stacked while a failed Lean check isn't resolved whose Lean
-        changes left on `next` it would hold (`_failure_under`), its commit on `next` or not: it would fail as that one did."""
-        base, chain = self._chain()
-        held = set(self.q.park)
-        self._live_failures(drive, chain, held)
-        if not chain or base != _out(self.repo, "rev-parse", self.q.base):
-            return
-        self._rekey_lean(drive, chain)
-        self._note_marks(drive, chain)
-        t = lean_stack(chain, drive["lean"], self._lean_change, lambda m: m.pr in held or self._churned(drive, m),
-                       self.max_lean_checks)
-        if t is None:
-            return
-        if got := self._failure_under(drive, chain, t, held):
-            f, left = got
-            self.q.log(f"research queue drive: stacks no Lean check above the running one: the Lean check {_ids(f)} of "
-                       f"{' '.join(f'#{pr}' for pr, _ in f['members'])} failed ({f.get('why')}), and a check up to "
-                       f"#{chain[t].pr} would hold its Lean changes still on `{self.q.branch}` "
-                       f"({' '.join(f'#{m.pr}' for m in left)}), one of them what broke it; it stacks again once one is held, "
-                       "ejected or pushed, or a Lean check that holds them all passes")
-            return
-        self._launch_lean(drive, chain, t, f"the Lean changes up to #{chain[t].pr}, above the running one", dry_run,
-                          stacked=True)
-
-    def _note_failed(self, drive: dict) -> None:
-        """Remember each failed Lean check of `next` by its members (`drive["lean_failed"]`: {the commit it failed on: {"members",
-        "ids", "why"}}), past its record in `drive["lean"]`, which a sync that rebuilds `next` above a running check's prefix
-        (a `--first` fix, a lift) drops with its commit, though what broke it is still on `next` (`_live_failures`)."""
-        failed = drive.setdefault("lean_failed", {})
-        seen = [f["members"] for f in failed.values()]
-        for c, rec in (drive.get("lean") or {}).items():
-            if rec.get("state") == "failed" and (members := rec.get("members")) and members not in seen:
-                failed[c] = {"members": members, "ids": rec.get("ids") or [], "why": rec.get("why")}
-                seen.append(members)
-
-    def _live_failures(self, drive: dict, chain: list[Member], held: set[int]) -> list[tuple[dict, list[Member]]]:
-        """Each failed Lean check of `next` (`_note_failed`) not yet resolved, with the Lean changes of its prefix still on
-        `next`, one of which broke it: every member it held is on `next` at that head and not held (``held``, `_park`'s), or
-        landed.  One is dropped, with why, once one of its members is held, ejected or pushed (the walk, `_lean_check`, found
-        what broke it, or its owner acted), none of its Lean changes is left on `next`, or a Lean check that passed holds them
-        all at their heads (it failed by a fault no check saw)."""
-        self._note_failed(drive)
-        failed, at = drive["lean_failed"], {(m.pr, m.head): m for m in chain}
-        heads = {m.pr: m.head for m in chain}
-        passed = [(rec, {tuple(x) for x in rec.get("members") or ()}) for rec in (drive.get("lean") or {}).values()
-                  if rec.get("state") == "passed"]
-        out = []
-        for c, f in list(failed.items()):
-            left, why = [], None
-            for pr, head in f["members"]:
-                if (m := at.get((pr, head))) is not None and pr not in held:
-                    left += [m] if self._lean_change(m) else []
-                elif m is not None:
-                    why = f"#{pr} is held"
-                elif heads.get(pr, head) != head:
-                    why = f"#{pr} was pushed to {heads[pr][:8]}"
-                elif not self._ancestor(head, self.q.base):
-                    why = f"#{pr} left `{self.q.branch}`"
-                if why:
-                    break
-            if why is None and not left:
-                why = f"none of its Lean changes is left on `{self.q.branch}`"
-            if why is None and (ok := next((rec for rec, ms in passed if {(m.pr, m.head) for m in left} <= ms), None)):
-                why = f"the Lean check {_ids(ok)} that holds its Lean changes on `{self.q.branch}` passed"
-            if why:
-                del failed[c]
-                self.q.log(f"research queue drive: the failed Lean check {_ids(f)} of "
-                           f"{' '.join(f'#{pr}' for pr, _ in f['members'])} no longer holds a Lean check back from stacking "
-                           f"above it: {why}")
-            else:
-                out.append((f, left))
-        return out
-
-    def _failure_under(self, drive: dict, chain: list[Member], t: int, held: set[int]) -> tuple[dict, list[Member]] | None:
-        """A failed Lean check not yet resolved (`_live_failures`) whose Lean changes left on `next` a Lean check of ``chain[t]``
-        would hold every one of, (it, them), or None: that check would fail as it did."""
-        below = {(m.pr, m.head) for m in chain[: t + 1]}
-        return next(((f, left) for f, left in self._live_failures(drive, chain, held)
-                     if {(m.pr, m.head) for m in left} <= below), None)
-
-    def _launch_lean(self, drive: dict, chain: list[Member], t: int, what: str, dry_run: bool, stacked: bool = False,
-                     by: str | None = None) -> None:
-        """Launch the Lean check of ``chain[t]``, for ``what``, and save it at once, so a tick that fails after it doesn't launch
-        it again.  ``by``: a hand check's (`hand_lean`), recorded with `hand` and who asked, and refused to its caller."""
-        q, top = self.q, chain[t]
-        if dry_run or q.shadow:
-            q.log(f"research queue drive: would launch train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP} for {what}")
-            return
-        # a running check below stays: its prefix is on `next`, and it may land it
-        rec, tail = self._started(self.launch_lean(self.repo, top.commit, self.on))
-        if rec is None:
-            what = f"train.sh {top.commit[:12]} {self.on} --deferred {LEAN_STEP}"
-            if by:
-                raise QueueError(f"lean-check: {what} registered no run: {tail}")
-            self._launch_failed(drive, f"lean:{top.commit}", top.commit, what, tail)
-            return
-        drive["lean"][top.commit] = {**rec, "at": self.now(), "members": [[x.pr, x.head] for x in chain[: t + 1]],
-                                     "tree": self._tree(top.commit), "state": None, **({"stacked": True} if stacked else {}),
-                                     **({"hand": True, "by": by} if by else {})}
-        q.log(f"research queue drive: the Lean check of {top.commit[:12]} for {what}: {_ids(rec)}")
-        q.save_state({**q.load_state(), "drive": drive})
-
-    def hand_lean(self, commit: str, by: str, again: bool = False) -> dict:
-        """`research queue lean-check COMMIT`: a Lean check of a commit of `next` that ``by`` chose, launched as drive's own
-        (`_launch_lean`, detached) and in `drive["lean"]` from its launch, marked `hand`, so the hold on `next`,
-        `max_lean_checks`, the cut points, `_follow_lean` and `_cover` take it as drive's own before its train.sh registers a
-        run (a tick in those minutes could reorder `next` and throw the hand check away).  Refused for a commit that isn't a member's merge on `next`, one a running Lean check at or above it
-        holds, or, unless ``again`` (a deliberate rerun, which replaces the record), one whose recorded check passed.  Run
-        between ticks, under drive's tick lock (`/data/infra/drive.sh queue lean-check COMMIT`); returns the record."""
-        q = self.q
-        if q.shadow:
-            raise QueueError("lean-check: the shadow launches nothing")
-        q._clone()
-        q.fetch()
-        full = _git(self.repo, "rev-parse", "--verify", "-q", f"{commit}^{{commit}}", check=False).stdout.strip()
-        base, chain = self._chain()
-        pos = {m.commit: i for i, m in enumerate(chain)}
-        if full not in pos:
-            raise QueueError(f"lean-check: {commit} is not a commit of `{q.branch}` (a member's merge above {base[:12]}): "
-                             f"`git log --first-parent origin/{q.into}..origin/{q.branch}` lists them")
-        state = q.load_state()
-        drive = state.setdefault("drive", {})
-        lean = drive.setdefault("lean", {})
-        self._rekey_lean(drive, chain)
-        if c := next((c for c, rec in lean.items() if rec.get("state") is None and pos.get(c, -1) >= pos[full]), None):
-            raise QueueError(f"lean-check: the running Lean check {_ids(lean[c])} of {c[:12]} (#{chain[pos[c]].pr}) already "
-                             f"holds {full[:12]} (#{chain[pos[full]].pr}): its pass covers it")
-        if (rec := lean.get(full)) and rec.get("state") == "passed" and not again:
-            raise QueueError(f"lean-check: the Lean check of {full[:12]} (#{chain[pos[full]].pr}) already passed: run "
-                             f"{rec.get('run')} (run ids {_ids(rec)}); a deliberate rerun takes --again")
-        self._launch_lean(drive, chain, pos[full], f"{by}'s hand check", False, by=by)
-        return lean[full]
-
-    def _tree(self, commit: str) -> str | None:
-        return _git(self.repo, "rev-parse", "-q", "--verify", f"{commit}^{{tree}}", check=False).stdout.strip() or None
-
-    def _rekey_lean(self, drive: dict, chain: list[Member]) -> None:
-        """Move each Lean check whose commit left `next` to the commit of the rebuilt `next` that holds the same PRs at the same
-        heads in the same order up to it, when that commit's tree is the one it checked (the same heads merged onto the same
-        `main`), or differs from it in no file `lowrisk_excludes` names (`next` rebuilt on a `checked` the low-risk lane moved,
-        `land_lowrisk`): it still covers them, and a running one keeps running (a re-mark low on `next` rebuilds it, which would
-        otherwise cancel its checks mid-audit)."""
-        from .queue import lowrisk
-
-        lean, pos = drive.get("lean") or {}, {m.commit for m in chain}
-        for c, rec in list(lean.items()):
-            n = len(rec.get("members") or ())
-            if c in pos or not n or n > len(chain) or [[m.pr, m.head] for m in chain[:n]] != [list(x) for x in rec["members"]]:
-                continue
-            new = chain[n - 1].commit
-            if new in lean or not (tree := rec.get("tree") or self._tree(c)):
-                continue
-            if tree == self._tree(new):
-                why = "the same tree"
-            elif lowrisk(files := changed(self.repo, tree, new), self.lowrisk_excludes):
-                why = f"trees that differ in no file `lowrisk_excludes` names ({', '.join(sorted(files)[:3])})"
-            else:
-                continue
-            rec = lean.pop(c)
-            lean[new] = {**rec, "tree": self._tree(new), "rekeyed_from": rec.get("rekeyed_from", c)}
-            self.q.log(f"research queue drive: the Lean check {_ids(rec)} of {c[:12]} holds {new[:12]} of the "
-                       f"rebuilt `{self.q.branch}`: the same PRs at the same heads, {why}")
-
-    def _note_marks(self, drive: dict, chain: list[Member]) -> None:
-        """Record the tick each member of `next` was first seen at its head (`drive["marks"]`), for `_churned`; on drive's first
-        tick of the review landing, every member counts as settled."""
-        old, tick = drive.get("marks"), drive.get("tick", 0)
-        drive["marks"] = {str(m.pr): (old[str(m.pr)] if old and (old.get(str(m.pr)) or [None])[0] == m.head
-                                      else [m.head, tick if old is not None else tick - LEAN_SETTLE_TICKS]) for m in chain}
-
-    def _churned(self, drive: dict, m: Member) -> bool:
-        """Whether ``m`` came onto `next` at its head within the last `LEAN_SETTLE_TICKS` ticks (`_note_marks`)."""
-        seen = (drive.get("marks") or {}).get(str(m.pr))
-        return bool(seen) and seen[0] == m.head and drive.get("tick", 0) - seen[1] < LEAN_SETTLE_TICKS
-
-    def _follow_lean(self, drive: dict) -> None:
-        """Judge each Lean check that ended: passed when a twin exited 0 with lean-audit passed in its steps.jsonl, gone (launched
-        again) when none started, run again once on the other machines of `on` (`_elsewhere`) when lost or failed by its
-        machine (killed, out of disk or memory: `_machine_fault`), else failed.  A check whose commit is no longer on `next`, nor a commit of it with the same
-        prefix and tree (`_rekey_lean`), is dropped, and cancelled, once its train.sh has printed its run ids (`_resolve`); one
-        whose train.sh registered no run is dropped, rung to `CI` and `TOP` (`_launch_failed`), and launched again."""
-        lean = drive.setdefault("lean", {})
-        chain = self._chain()[1]
-        self._rekey_lean(drive, chain)
-        on_next = {m.commit for m in chain}
-        for c, rec in list(lean.items()):
-            if rec.get("state") is None and (tail := self._resolve(rec, f"the Lean check of {c[:12]}")) is not None:
-                if rec.get("resend"):
-                    rec.update(state="failed", why=f"its resend registered no run: {tail}")
-                else:
-                    del lean[c]
-                    self._launch_failed(drive, f"lean:{c}", c, f"train.sh {c[:12]} {self.on} --deferred {LEAN_STEP}", tail)
-                continue
-            if "launch" in rec:
-                continue
-            (drive.get("launch_failed") or {}).pop(f"lean:{c}", None)
-            if c not in on_next:
-                if rec.get("state") is None and not (self.dry_run or self.q.shadow):
-                    if live := [rid for rid, (st, *_) in self._states(rec["ids"]).items() if st in ACTIVE]:
-                        self.cancel(self.repo, live, f"drive: the Lean check of {c[:12]} is of a commit no longer on `{self.q.branch}`")
-                del lean[c]
-                continue
-            if rec.get("state") is not None:
-                continue
-            states = self._states(rec["ids"])
-            lost = self._lost(rec, states)
-            if not lost and any(st in ACTIVE for st, *_ in states.values()):
-                continue
-            self._timed(drive, "lean", rec["ids"])
-            rcs = [rc for _, rc, *_ in states.values()]
-            fault = None
-            if rec.get("resend") or self.dry_run or self.q.shadow:
-                pass
-            elif lost:
-                fault = "lost"
-            elif 0 in rcs or all(rc in (NOT_STARTED, SIGTERM_RC) for rc in rcs):
-                pass
-            elif any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC)) for rc in rcs):
-                fault = "killed"
-            else:
-                fault = self._machine_fault(rec["ids"])
-            if fault:
-                where = self._elsewhere(states)
-                again, tail = self._started(self.launch_lean(self.repo, c, where))
-                if again:                               # a machine's fault: once more, as `follow_postland`
-                    rec.update(**again, at=self.now(), resend=True)
-                    rec.pop("carried", None)
-                    self.q.save_state({**self.q.load_state(), "drive": drive})
-                    self.q.log(f"research queue drive: the Lean check of {c[:12]} was {fault}, a machine's fault: again, once, "
-                               f"on {where}: {_ids(again)}")
-                    continue
-                rec.update(state="failed", why=f"its resend registered no run: {tail}")
-                continue
-            rec["ended"] = drive.get("tick")
-            if lost:
-                rec.update(state="failed", why=f"{' '.join(rec['ids'])} lost on its resend")
-            elif ran := [rid for rid, (_, rc, *_) in states.items() if rc == 0]:
-                if self._unrun(ran, [LEAN_STEP]):
-                    rec.update(state="failed", why=f"{' '.join(ran)} exited 0 without passing {LEAN_STEP}")
-                else:
-                    rec.update(state="passed", run=ran[0])
-                    self.q.log(f"research queue drive: the Lean check {ran[0]} of {c[:12]} passed")
-                    if self._carried_ok(drive, c) is False:
-                        del lean[c]
-                        self.q.log(f"research queue drive: {ran[0]} ran on {rec['carried']['from'][:12]} and didn't regenerate "
-                                   f"{', '.join(rec['carried']['files'])}, which {c[:12]} holds from a lock commit below it: it "
-                                   f"covers nothing, and {c[:12]} is checked again")
-            elif all(rc in (NOT_STARTED, SIGTERM_RC) for _, rc, *_ in states.values()):
-                del lean[c]
-            else:
-                rec.update(state="failed", why=", ".join(f"{rid} {st} rc={rc}" for rid, (st, rc, *_) in states.items()))
-        self._note_failed(drive)
-
     def _machine_fault(self, ids: list[str]) -> str | None:
-        """What says a Lean check that failed failed by its machine rather than by the Lean it checked, or None: a step killed
+        """What says a lock run that failed failed by its machine rather than by the Lean it checked, or None: a step killed
         (`killed`), a failed step's log saying its machine ran out of disk or memory (`FAULT_RE`), or lean-audit passed in a run
         that failed anyway (a disk that fills after every audit passed is no failure of the change)."""
         for d in self.evidence(self.repo, ids):
@@ -4509,10 +4134,15 @@ class Driver:
                     return f"failed in {st.get('step')} by its machine ({m[0]})"
         return None
 
+    @staticmethod
+    def _ran_on(states: dict) -> list[str]:
+        """The machines the runs of ``states`` ran on: none for a twin that never started or was stopped for a sibling."""
+        return sorted({s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)})
+
     def _elsewhere(self, states: dict) -> str:
-        """`on` without the machines the runs of ``states`` ran on, for a check run again after a machine's fault; all of `on`
-        when that leaves none (`auto`, or one machine)."""
-        ran = {s[4] for s in states.values() if len(s) > 4 and s[4] and s[1] not in (NOT_STARTED, SIGTERM_RC)}
+        """`on` without the machines the runs of ``states`` ran on (`_ran_on`), for a check run again after a machine's fault;
+        all of `on` when that leaves none (`auto`, or one machine)."""
+        ran = self._ran_on(states)
         return ",".join(m for m in self.on.split(",") if m not in ran) or self.on
 
     def _compiles(self, drive: dict, chain: list[Member], base: str, t: int) -> int:
@@ -4550,7 +4180,7 @@ class Driver:
     def _tick(self, dry_run: bool) -> str:
         q = self.q
         self.dry_run, self._seen, self._prs, self._ev = dry_run, {}, None, {}
-        self._reg, self._own_files, self._jobs_at = None, {}, {}
+        self._reg, self._own_files, self._jobs_at, self._lean_diff = None, {}, {}, {}
         q._clone()
         if why := self._old_git():
             return why
@@ -4613,7 +4243,7 @@ class Driver:
             q.log(f"research queue drive: branch sweep: {deleted} deleted (on main), {archived} archived (unmerged, idle)"
                   + (f"; at its limit of {SWEEP_LIMIT}, so the next tick sweeps again" if more else ""))
 
-    # -- what only a PR's owner acts on: a stale PR, a stacked PR whose base landed
+    # -- what only a PR's owner acts on: a stale PR, one nothing will land, a stacked PR whose base landed
 
     def _open(self) -> dict[int, PR]:
         if self._prs is None:
@@ -4639,7 +4269,8 @@ class Driver:
         """The stale rule (`research.stale`): ring each stale PR's owner once a UTC day (`idle:N@DAY`), one post per owner, and
         close each PR `stale_close_days` idle with `stale.close_comment`, but not one on `next` or a draft that says "keep open"
         (`stale.keep_open`); a closed PR's branch is kept (`stale_closed`, which `_sweep` never archives).  Ring keys of other
-        days, and the stacked-PR keys (`_stacked`) of PRs no longer open, leave `told`.  At most once in `STALE_EVERY_S`."""
+        days, and the stacked-PR keys (`_stacked`) and warn keys (`tell_warned`) of PRs no longer open, leave `told`.  At most
+        once in `STALE_EVERY_S`."""
         q, now = self.q, self.now()
         if not self.stale_days or now - drive.get("stale_judged", 0) < STALE_EVERY_S:
             return
@@ -4654,7 +4285,8 @@ class Driver:
             q.log(f"research queue drive: stale PRs not judged this tick: {e}")
             return
         drive["told"] = [k for k in drive["told"] if not (k.startswith("idle:") and not k.endswith(f"@{day}"))
-                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)]
+                         and not (k.startswith("stacked:") and int(k[len("stacked:"):].partition("<")[0]) not in prs)
+                         and not (k.startswith("warn:") and int(k[len("warn:"):].partition("@")[0]) not in prs)]
         if not (dry_run or q.shadow):
             drive["stale_judged"] = now
         on_next = {m.pr for m in q.chain()}
@@ -4677,6 +4309,7 @@ class Driver:
                     continue
                 if p.branch:
                     drive.setdefault("stale_closed", {})[p.branch] = n
+                del prs[n]
                 q.log(f"research queue drive: closed #{n}: {days} days unmarked and idle")
                 closed.setdefault(who, []).append(f"#{n}")
             elif f"idle:{n}@{day}" not in drive["told"]:
@@ -4693,10 +4326,74 @@ class Driver:
                             f"{', '.join(closed[who])}")
             self.tell(drive, keys.get(who, []), "; ".join(said), who)
 
+    def _unlandable(self, drive: dict, dry_run: bool) -> None:
+        """The unlandable rule (drive.toml's `close_unlandable`): close each open PR based on `main` that nothing will land as
+        it is, with `UNLANDABLE_COMMENT` saying why and telling its owner, one post per owner: one whose head a PR of the same
+        owner contains that landed on the landing branch (`landed_carriers`), or one whose change is on it already, each file
+        it changes as its head has it (`applied_on`).  Never one marked ready at its head, on `next`, held, a draft that
+        says "keep open" (`stale.keep_open`) or in `stale_keep`, a move, one whose head is on another repository, nor one
+        drive closed at this head that was reopened (`unlandable_closed`).  "log", --shadow and --dry-run only log `would
+        close #N: why`.  A closed PR's branch is kept, as a stale one's (`stale_closed`).  At most once in `STALE_EVERY_S`."""
+        q, now = self.q, self.now()
+        if self.close_unlandable == "off" or now - drive.get("unlandable_judged", 0) < STALE_EVERY_S:
+            return
+        from .stale import keep_open, pull_refs
+
+        reopened = drive.get("unlandable_closed", {})
+        try:
+            prs, held, on_next = self._open(), q.rules().hold_label, {m.pr for m in q.chain()}
+            judged = [p for p in prs.values() if p.base == "main" and p.head_repo == q.slug and not p.move and held not in p.labels
+                      and not keep_open(p) and p.number not in self.stale_keep and p.number not in on_next
+                      and reopened.get(str(p.number)) != p.head]
+            refs = pull_refs(q, judged)
+            judged = [p for p in judged if refs.get(p.number) == p.head]
+            carried = landed_carriers(self.repo, q.base, judged)
+            applied = applied_on(self.repo, q.base, [p for p in judged if p.number not in carried])
+        except QueueError as e:
+            q.log(f"research queue drive: unlandable PRs not judged this tick: {e}")
+            return
+        if not (dry_run or q.shadow):
+            drive["unlandable_judged"] = now
+        why = {n: f"#{m.pr}, of the same owner, contains its head {prs[n].head[:12]} and landed on `{q.into}` at {m.commit[:12]}"
+               for n, m in carried.items()}
+        for n, (files, since) in applied.items():
+            which = "the one file" if len(files) == 1 else f"each of the {len(files)} files"
+            why[n] = (f"its change is on `{q.into}` already: {which} it changes is there as its head {prs[n].head[:12]} has it"
+                      + (f", since {since}" if since else ""))
+        if why and q.prefetch is not None:
+            q.prefetch([(n, prs[n].head) for n in sorted(why)])
+        closed: dict[str | None, list[str]] = {}
+        for n in sorted(why):
+            p = prs[n]
+            try:
+                if q.ready(n, p.head):
+                    continue
+            except QueueError as e:
+                q.log(f"research queue drive: #{n}'s ready mark can't be read, so it isn't closed now: {e}")
+                continue
+            if self.close_unlandable != "on" or dry_run or q.shadow:
+                q.log(f"research queue drive: would close #{n}: {why[n]}")
+                continue
+            who = self._handle(n)
+            try:
+                q.github.close(n, UNLANDABLE_COMMENT.format(why=why[n], n=n))
+            except QueueError as e:
+                q.log(f"research queue drive: closing #{n} ({why[n]}) failed; the next judging tries again: {e}")
+                continue
+            drive.setdefault("unlandable_closed", {})[str(n)] = p.head
+            if p.branch:
+                drive.setdefault("stale_closed", {})[p.branch] = n
+            del prs[n]
+            q.log(f"research queue drive: closed #{n}: {why[n]}")
+            closed.setdefault(who, []).append(f"#{n}")
+        for who, ns in closed.items():
+            self.tell(drive, [], f"closed {', '.join(ns)}: nothing would land {'them as they stand' if len(ns) > 1 else 'it as it stands'}"
+                      " (each PR's comment says why), branches kept; reopen one and drive leaves it open at that head", who)
+
     def _stacked(self, drive: dict, members: list[Member], tip: str) -> None:
         """After a landing at ``tip``, tell the owner of each open PR based on `main` or on a landed member's branch whose head
         contains that member's head (a PR stacked on it) that its base landed, once per (PR, base) (`stacked:P<Q`): not one
-        marked ready at its head, which lands from `next` as it is, and whose merge of `main` would need a new mark.  A PR based
+        marked ready at its head, which lands from `next` as it is.  A PR based
         on another branch (a long-lived one, as the remote demo's) takes `main` through that branch, and isn't told."""
         from .stale import pull_refs
 

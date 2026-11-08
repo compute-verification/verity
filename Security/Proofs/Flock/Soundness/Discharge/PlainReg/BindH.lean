@@ -1,6 +1,20 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.HeadlineExec
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
 
 @[expose] public section
 
@@ -10,7 +24,7 @@ set_option Elab.async false
 # The rows at the hidden tables, with or without shared rows
 
 `HiddenExec.rsAtH` takes `pub.tables = none`, which `verify --registered F` does not give (its registered check accepts
-only a shared-row public file), and reads it nowhere: `sitesAtH_bcSite` is `tableH_bcSiteS` at every drawn table. So
+only a shared-row public file), and reads it nowhere: `sitesAtH_bcSite` is `tableH_bcSiteS` at every sampled table. So
 here are `sitesAtH_bcSiteS`, `rsAtHS` and `rsAtHS_computes`, the same without it, at the layout `HiddenExec.layAtH`.
 -/
 
@@ -25,8 +39,8 @@ variable {n : ℕ} {I : Inputs} {mPts : ℕ} (ht : I.tags.typed = false) {c : Fl
   {pub : Public} (hpub : HmOut.loadPublic I.tags c I.publicFile = .ok pub) {Reg : Type}
 
 include hU hpub in
-/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan, with or without shared rows: at a draw
-flock-verify sets up by `tableH_bcSiteS`; at a refused draw no message satisfies the table (`tableAtH_unsat`). -/
+/-- **`BcSiteH` at every satisfiable site** of the one-table hidden plan, with or without shared rows: at a sample
+flock-verify sets up by `tableH_bcSiteS`; at a refused sample no message satisfies the table (`tableAtH_unsat`). -/
 theorem sitesAtH_bcSiteS :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planAtH dj x₀) (tabAtH dj x₀) S R u), Binding.Sat (planAtH dj x₀) (tabAtH dj x₀) S R u M →

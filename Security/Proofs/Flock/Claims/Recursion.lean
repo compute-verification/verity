@@ -25,7 +25,7 @@ public import Proofs.Flock.Claims.Recursion.FlockKSAbort
 public import Proofs.Flock.Claims.Recursion.FlockKSAcc
 public import Proofs.Flock.Claims.Recursion.FlockKSDeploy
 public import Proofs.Flock.Claims.Recursion.FlockKSRecord
-public import Proofs.Flock.Claims.Recursion.FlockKSOnAcc
+public import Proofs.Flock.Claims.KS.PlainAcc
 public import Proofs.Flock.Claims.Recursion.KSStated
 public import Proofs.Flock.Claims.Recursion.Scope
 

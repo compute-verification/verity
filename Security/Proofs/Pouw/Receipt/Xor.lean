@@ -1,7 +1,11 @@
 module
 
-public import Proofs.Pouw.Receipt.DuoReceipt
-public import Proofs.Pouw.Receipt.Fx1
+public import Definitions.Pouw.Receipt.Fx1
+import Mathlib.Data.BitVec
+import Mathlib.Tactic.LinearCombination
+import Proofs.Pouw.Receipt.Duo
+import Proofs.Pouw.Receipt.DuoReceipt
+import Proofs.Pouw.Receipt.Fx1
 
 /-!
 # Two duo words have no all-state XOR kernel

@@ -16,7 +16,7 @@ N2-ZK's audit path (`benchmarks/network_traces/n2_zk.py`: its stager, ZK server 
 * **build**: a class's unit at G steps built as a Definition, and each Definition it calls, with seconds and peak RSS.
 * **prove**: the window and the rows as `served_tie_window` opens and binds them natively (``bindings``). Statements of
   one template, block j of G steps a unit:
-  - ``window-i``: the honest window's blocks, each once (Selection All: every unit drawn), at most ``--per`` a statement;
+  - ``window-i``: the honest window's blocks, each once (Selection All: every unit sampled), at most ``--per`` a statement;
     ``--blocks executed`` takes only the blocks holding the window's executed steps;
   - ``cases``: the start, short, id and other cases' blocks (`served_tie_window.cases`), each case's rows registered
     consistently under the run root, and honest blocks to the statement's least shape.
@@ -51,7 +51,8 @@ sys.path[:0] = [str(HERE), str(REPO / "benchmarks/network_traces")]
 
 import leak_scan as LS  # noqa: E402
 import served_tie_window as STW  # noqa: E402
-from verity.core.protocols.certifier import served_rows as SR, served_tie as ST  # noqa: E402
+from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
+from verity.ml.protocols.certifier import served_tie as ST  # noqa: E402
 
 CLASSES = {
     "slice": dict(R=2, P=7, IW=6, L=4096, T=256, IB=8, PB=8),

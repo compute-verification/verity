@@ -69,6 +69,10 @@ QUERY_FAMILY_MECHANISM: dict[str, str] = {
     "scale_products": ("additive (query.scale_products): a shared-scale FP8 GEMM's scale products per token row -- interior to "
                        "ScaledMmFp8BlockSharedScale_v1 (the scale-products source, F32Mul_v1 of the Call's own scale operands through the IR): "
                        "no VU row of its own under Q_module_body_v1; C1 / C3 here"),
+    RM.RUN_FAMILY: ("request input the run decides (a `run` field `<op_path>/<member>`: a DSA row's Waksman settings past INDEX_TOPK) + "
+                    "C1 / C3; CONSUMED BY the exact replay of the Calls that read it (DsaWaksmanOrder_v1, DsaWaksmanRows_v1: the committed "
+                    "words of the reader's step are their `run` operand) and by the Program's checks (`check.replay.checks`: every check, "
+                    "DsaTopKLongRow_v1 on the routed order, evaluated from committed inputs and required to be 1)"),
 }
 #: the query families whose identities ARE produced by Program rows (a VU or a named non-evaluable row must address each of them)
 QUERY_FAMILIES_WITH_ROWS = ("instance_outputs", "sampled_token_ids", "moe_block_stream", "tp_rank_partials", "call_boundaries")

@@ -232,11 +232,13 @@ import json, sys
 from verity_flock import rec_compose as RC
 a = sys.argv[1:]
 assert a[0] == "rec-compose", a
-flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows", "--rec-run")}
+flags = {a[i]: a[i + 1] for i in range(1, len(a) - 1) if a[i] in ("--rec-inner", "--rec-rows", "--rec-run", "--rec-links")}
 logs = [x for i, x in enumerate(a[1:], 1) if x not in flags and x not in flags.values()]
 inner = open(flags["--rec-inner"], "rb").read()
+links = flags.get("--rec-links")
+links = None if links is None else (bytes.fromhex(links.split(":")[0]), int(links.split(":")[1]))
 ok, why = RC.check(json.loads(inner)["n"], RC.digest(open(flags["--rec-rows"], "rb").read()), RC.digest(inner),
-                   open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs])
+                   open(flags["--rec-run"]).read(), [(f, open(f).read()) for f in logs], links)
 print("REC-COMPOSE " + json.dumps({"accepted": ok, "why": why, "parts": len(logs)}))
 sys.exit(0 if ok else 1)
 '''
@@ -274,21 +276,25 @@ def _record(d: Path, digest: str, parts: list[tuple[str, int]], session: str = "
     r.write(d / "rec-run.json")
 
 
-def _shared(d: Path, inner: str | None, session: str, transcript: str) -> dict:
+def _shared(d: Path, inner: str | None, session: str, transcript: str, links: str | None = None) -> dict:
+    """The shared set a part reads; its link table ``links`` (``ROOT:N``), else DIR's ``rec-links.txt`` when it has one."""
     rec_inner = inner.encode() if inner is not None else (d / "rec-inner.json").read_bytes()
+    if links is None and (d / "rec-links.txt").exists():
+        links = (d / "rec-links.txt").read_text().strip()
+    root, _, rows = (links or "").partition(":")
     return RC.shared(rec_inner=rec_inner, inner_circuit=b"c", inner_public=b"p", inner_partition=b"{}",
                      inner_session=session.encode(), inner_transcript=transcript.encode(), inner_statement="i",
-                     inner_statement_coins="os", inner_tables=[])
+                     inner_tables=[], rec_links=(bytes.fromhex(root), int(rows)) if links else None)
 
 
 def _vpart(d: Path, name: str, j: int, digest: str, rc: int = 0, accepted: bool = True, inner: str | None = None,
-           session: str = "s", transcript: str = "t", key: str | None = None) -> None:
+           session: str = "s", transcript: str = "t", key: str | None = None, links: str | None = None) -> None:
     """A V* part 85 gave V*'s inputs (``own-PART.txt``): its log's VERDICT names its part, the rows it checked, the
-    inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, and at
-    the inner session record ``session`` and transcript ``transcript``), ``--zk`` and its coin key (``key``'s, else its
-    own name's)."""
+    inputs every part shares (at DIR's ``rec-inner.json`` unless ``inner`` is another inner shape file's bytes, at
+    the inner session record ``session`` and transcript ``transcript``, and at the link table ``links``, else DIR's),
+    ``--zk`` and its coin key (``key``'s, else its own name's)."""
     v = {"session": f"/s/{name}", "accepted": accepted, "why": "" if accepted else "x", "rec_part": j,
-         "rec_rows_sha512": digest, "rec_shared": _shared(d, inner, session, transcript), "zk": True,
+         "rec_rows_sha512": digest, "rec_shared": _shared(d, inner, session, transcript, links), "zk": True,
          "coin_key": _key(key or name)}
     (d / f"{name}.log").write_text(f"VERDICT {json.dumps(v)}\n")
     (d / f"time-{name}.txt").write_text(f"\tExit status: {rc}\n")
@@ -346,7 +352,7 @@ def _challenger(d: Path, opens: list[tuple[str, int]], session: str = "s", close
 
 def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tmp_path, capsys):
     """The run's record is the challenger's ``rec-run.jsonl``, event for event: oprove's staging, each part's open as its
-    coin server logged it at the Hello, the close; the parts compose over it."""
+    challenger logged it at the Hello, the close; the parts compose over it."""
     binary, h = _composer(tmp_path, 3)
     parts = {"L0": 0, "alg-p0": 1, "cap": 2}
     for p, j in parts.items():
@@ -358,8 +364,32 @@ def test_a_firewalled_oprove_composes_over_the_record_its_coin_servers_logged(tm
     assert json.loads((tmp_path / "rec-run.json").read_text()) == {"events": evs, "kind": C.RUN_KIND}
 
 
+def test_the_staged_shared_set_names_the_inner_program_and_the_link_table(tmp_path):
+    """85 stages the record's shared set from the parts' own flags (`rec_compose.shared_of_args`, as
+    `FlockVerify.recSharedInput` reads them), the inner statement's program (``--rec-inner-program``) and the link table
+    (``--rec-links``) among them, so a wired run's staging is what its parts read."""
+    names = ("inner", "circuit", "public", "partition", "program", "draw")
+    for k in names:
+        (tmp_path / k).write_bytes(k.encode())
+    (tmp_path / "s").mkdir()
+    (tmp_path / "s" / "session.json").write_bytes(b"session")
+    root = "ab" * 64
+    args = ["--rec-inner", str(tmp_path / "inner"), "--rec-inner-circuit", str(tmp_path / "circuit"),
+            "--rec-inner-public", str(tmp_path / "public"), "--rec-inner-partition", str(tmp_path / "partition"),
+            "--rec-inner-program", str(tmp_path / "program"), "--rec-inner-statement",
+            "verity/flock-circuit+plain-leaves", "--rec-inner-draw",
+            str(tmp_path / "draw"), "--rec-inner-session", str(tmp_path / "s"), "--rec-links", f"{root}:3"]
+    want = RC.shared(rec_inner=b"inner", inner_circuit=b"circuit", inner_public=b"public", inner_partition=b"partition",
+                     inner_session=b"session", inner_statement="verity/flock-circuit+plain-leaves",
+                     inner_tables=[], inner_draw=b"draw",
+                     rec_links=(bytes.fromhex(root), 3), inner_program=b"program")
+    assert RC.shared_of_args(args) == want and want["inner_program"] == RC.digest(b"program")
+    assert RC.shared_of_args([a for a in args if a not in ("--rec-inner-program", str(tmp_path / "program"))]) == {
+        **want, "inner_program": None}
+
+
 def test_a_second_session_logged_for_a_part_does_not_compose(tmp_path, capsys):
-    """A part's coin server that answered two Hellos logged both, and the composition refuses the retry."""
+    """A part's challenger that answered two Hellos logged both, and the composition refuses the retry."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "cap": 1}
     for p, j in parts.items():
@@ -424,7 +454,7 @@ def test_a_part_given_other_shared_files_than_the_staged_ones_does_not_compose(t
 
 
 def test_a_forgery_is_composed_over_its_own_coin_servers_opens_in_its_parts_place(tmp_path, capsys):
-    """A forgery's coin server logs into a record of its own, so the honest run's stays one session a part; its
+    """A forgery's challenger logs into a record of its own, so the honest run's stays one session a part; its
     composition is over the run's record with its part's opens replaced by the forgery's, so it is refused by the
     forgery's own verdict, not by a session the record lacks."""
     binary, h = _composer(tmp_path, 2)
@@ -443,8 +473,44 @@ def test_a_forgery_is_composed_over_its_own_coin_servers_opens_in_its_parts_plac
     assert "forged-sum-L0.log: a session is not accepted" in LV.why_of(forged_line.split(": ", 1)[1])
 
 
+def test_a_wired_run_composes_at_its_link_table_and_its_forged_table_row_is_refused(tmp_path, capsys):
+    """85's REC_LINKS=1: every part, the link table's included, read the run's ``--rec-links`` (``rec-links.txt``), which
+    the composition is given as its own, so the parts compose. The forgery ``forged-link-links`` (a table row naming a writer
+    whose output is not its reader's row) was verified at a table of its own, which its part refuses, and its composition
+    in the link part's place is refused."""
+    binary, h = _composer(tmp_path, 3)
+    table, forged_table = "ab" * 64 + ":2", "cd" * 64 + ":2"
+    (tmp_path / "rec-links.txt").write_text(table + "\n")
+    parts = {"L0": 0, "links": 1, "cap": 2}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h)
+    _vpart(tmp_path, "forged-link-links", 1, h, rc=1, accepted=False, links=forged_table)
+    _challenger(tmp_path, list(parts.items()))
+    _challenger(tmp_path, [("forged-link-links", 1)], name="rec-run-forged-link-links.jsonl")
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts, "forged-link-links"])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 0, out
+    assert 'lean compose: REC-COMPOSE {"accepted": true, "why": "", "parts": 3}' in out
+    line = next(ln for ln in out if ln.startswith("lean compose forged-link-links: REC-COMPOSE "))
+    assert not line.endswith("<- FAILS") and '"accepted": false' in line, out
+    assert any(ln.startswith("lean forged-link-links (forgery link:") for ln in out), out
+
+
+def test_a_wired_run_without_its_link_table_does_not_compose(tmp_path, capsys):
+    """Parts verified at a link table compose only at that table: without ``rec-links.txt`` the composition is given
+    none, and refuses them."""
+    binary, h = _composer(tmp_path, 2)
+    parts = {"L0": 0, "links": 1}
+    for p, j in parts.items():
+        _vpart(tmp_path, p, j, h, links="ab" * 64 + ":2")
+    _challenger(tmp_path, list(parts.items()))
+    rc = LV.main(["--compose", binary, str(tmp_path), *parts])
+    out = capsys.readouterr().out.splitlines()
+    assert rc == 1 and out[-2].endswith("<- FAILS") and "not the composition's own --rec-links none" in out[-2], out
+
+
 def test_a_forged_inner_keeps_its_parts_honest_opens(tmp_path, capsys):
-    """A forged inner (85's NEG_INNER) is verified over each part's honest session, with no coin server of its own: its
+    """A forged inner (85's NEG_INNER) is verified over each part's honest session, with no challenger of its own: its
     composition is over the challenger's record as logged, and Lean refuses it for the part that reads the coin."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "alg-p0": 1}
@@ -464,7 +530,7 @@ def test_a_forged_inner_keeps_its_parts_honest_opens(tmp_path, capsys):
 
 
 def test_a_staged_forgery_without_its_own_record_fails(tmp_path, capsys):
-    """A staged forgery proved on its own coin server must have that server's record: without it there is nothing to
+    """A staged forgery proved on its own challenger must have that challenger's record: without it there is nothing to
     compose it over, which is no refusal by Lean, and the step fails."""
     binary, h = _composer(tmp_path, 2)
     parts = {"L0": 0, "cap": 1}

@@ -3,7 +3,7 @@
 
 Every hm96 row leaf whose `b ‖ c` or root goes public is the ZK server's. The serving stack hands the server each row's
 unsalted 64-byte digest `x`, and the server derives the leaf's 192-byte salt from its own 64-byte key `k`, the commit
-session `s` it draws once every digest of the session is in, the table `j` and the leaf index `i` (`saltOf`):
+session `s` it samples once every digest of the session is in, the table `j` and the leaf index `i` (`saltOf`):
 
     y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ 0) ‖ SHA-512(… ‖ 1) ‖ SHA-512(… ‖ 2),   L = SHA-512("verity/zk-server/value-salt/v1\0")
 
@@ -13,23 +13,41 @@ domain, leaf count, schema and root, by which the server knows a table it commit
 Every salt message is 205 bytes and every tag message 333, under different constants, so no two share an input.
 
 * `parseCommit`, `commitAnswer`: a commit request's tables, and their leaves, roots and tags at the session `s`.
+* `interiorKey`, `interiorAnswer`, `Held`: an interior commit's (below).
 * `parseRefs`, `saltsAnswer`: the salts of the rows a refs file names, every table ref's tag checked (`TableRef.valid`).
 * `Epoch`, `recordOf`: the commit sessions the service opened since its last registration, and a registration's
-  record: the number `m` of them, the registered session's table refs and a record tag under `k` over both
-  (`recordTagOf`). A registration closes the epoch, so the stack registers one session of the `m` it had and no other.
-* `parseRecords`, `checkStatement`: every hm96 tree of a statement's public file is a table of a registration whose
-  record tag is the server's. The session loop serves no statement whose value commitments the server did not register
-  (`Session.run`, `--salt-key`, `--commitments`).
+  record: its number `n` on the ZK server's record, the number `m` of sessions its epoch opened, the registered
+  session's table refs and a record tag under `k` over all three (`recordTagOf`; an interior session's under its own
+  key). A registration closes the epoch, so the stack registers one session of the `m` it had and no other; the
+  service of record opens one an epoch, so `m` is 1 (`Values.answer`). The number is the record's: registrations are
+  numbered 0, 1, 2, … in the order the ZK server's record holds them, with no gap (`core-firewall values`).
+* `treesOfFile`, `readsOf`: a statement's hm96 trees, and the registrations they read: for each tree, the first
+  registration on the record that holds a table at its domain, leaf count, schema and root, its record tag checked. The
+  release side admits each registration once, oldest first, at the first statement that reads it, and a statement none of
+  whose trees a registration of the server's holds is refused (`Core.Firewall.admitReads`, `core-firewall session
+  --salt-key`).
 * `loadKey`: the key file.
 
+**Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
+sample (`Values.answer`'s `interior`). Its leaves' salts are not derived from `k`: they are drawn from the operating
+system, 192 bytes a leaf, once the request is whole, and held by session while the service runs (`Held`). Its tags and
+its record tag are under the session's own key `interiorKey k s = SHA-512(k ‖ L' ‖ s)`,
+`L' = SHA-512("verity/zk-server/interior-key/v1\0")`, which the release side derives from `k` and the record's session
+(`RegistrationRecord.valid`). So nothing made under `k` reads a value or a root that may follow the sample: `k` meets
+the interior only at `s`.
+
 No request takes a salt from the stack: a commit request's body is its digests and nothing else (`commitBody`). A
-statement whose leaves were made under salts of the stack's has roots no record of the server's holds, so the loop
-refuses it. A prover's witness salts must then be the server's for its proof to pass, since each leaf's `c` is the
+statement whose leaves were made under salts of the stack's has roots no record of the server's holds, so the release
+side refuses it. A prover's witness salts must then be the server's for its proof to pass, since each leaf's `c` is the
 SHA-512 of its salt.
 
 **Grinding.** A stack that commits its values in `m` sessions and registers the one whose public roots it likes chooses
-among `m` outcomes, so it leaks at most `log₂ m` bits through the choice. The record makes `m` public, so the term is
-computable from what the verifier sees (`Verity.ValueSalts`, `Verity.Guarantees.RegisteredLeakage`).
+among `m` outcomes, so it leaks at most `log₂ m` bits through the choice (`Verity.ValueSalts`,
+`Verity.Guarantees.RegisteredLeakage`). The service of record fixes `m` at 1: it refuses a commit while its epoch's
+session is not yet registered, so the stack chooses neither `m` nor a session, the record's `m` says so, and the term is
+0. A stack that registers more than once and passes over a registration chooses which ones it uses: each one passed over
+is a failure on its stream's budget, so across a stream the choice is among the patterns of at most `b` passed over
+(`Verity.Guarantees.RegisteredStreamLeakage`, every `m i` 1).
 
 **The key is the ZK server's alone** (`zk-server-own-user`, `Verity.Assumptions.ZkServerOwnUser`): the value service and
 the session loop run under the ZK server's own OS user, which no worker and no serving stack shares, so nothing the stack
@@ -67,6 +85,7 @@ private def label (s : String) : ByteArray := Sha512.hash (s.toUTF8.push 0)
 
 def SALT_LABEL : ByteArray := label "verity/zk-server/value-salt/v1"
 def TAG_LABEL : ByteArray := label "verity/zk-server/value-commitment/v1"
+def INTERIOR_LABEL : ByteArray := label "verity/zk-server/interior-key/v1"
 
 /-- **The salt of leaf `i` of table `j` of the commit session `s`** under the key `k`: three SHA-512 blocks in counter mode,
 each `Hash.Keyed`'s keyed digest `H(k ‖ L ‖ top)` with `top = s ‖ be32 j ‖ be64 i ‖ ctr`. -/
@@ -86,6 +105,11 @@ def Table.schemaName (t : Table) : String := Registered.SCHEMAS.getD t.schema ""
 /-- **The tag of table `j` of the commit session `s`**, of root `root`, under the key `k`. -/
 def tagOf (k s : ByteArray) (j : Nat) (t : Table) (root : ByteArray) : ByteArray :=
   Sha512.hash (k ++ TAG_LABEL ++ s ++ be32 j.toUInt32 ++ t.dom ++ be64 t.n.toUInt64 ++ ByteArray.mk #[t.schema.toUInt8] ++ root)
+
+/-- **The key of the interior commit session `s`** under the key `k`, its tags' and its record tag's:
+`SHA-512(k ‖ L ‖ s)`, `L = SHA-512("verity/zk-server/interior-key/v1\0")`, a 192-byte message, the length of no salt,
+tag or record tag message. -/
+def interiorKey (k s : ByteArray) : ByteArray := Sha512.hash (k ++ INTERIOR_LABEL ++ s)
 
 /-- Whether `a` and `b` are equal, every byte compared whatever the first difference. -/
 def ctEq (a b : ByteArray) : Bool :=
@@ -120,20 +144,41 @@ where
 /-- The bytes a commit request's body is, after its line: every table's digests, 64 bytes a leaf, and nothing else. -/
 def commitBody (ts : Array Table) : Nat := DIGEST_BYTES * ts.foldl (· + ·.n) 0
 
+/-- Table `j` of the commit session `s`, leaf `i`'s salt `salt i` and its tag under the key `tk`, its digests from byte
+`o` of `xs`: its root, its tag and its leaves' `b ‖ c` in leaf order. -/
+def commitTableWith (salt : Nat → ByteArray) (tk s : ByteArray) (j : Nat) (t : Table) (xs : ByteArray) (o : Nat) :
+    ByteArray × ByteArray × ByteArray :=
+  let bcs := (Array.range t.n).map fun i =>
+    Hm96.Default512.commitString (xs.extract (o + DIGEST_BYTES * i) (o + DIGEST_BYTES * (i + 1))) (salt i)
+  let leaves := (Array.range t.n).map fun i => FV3.Sha512.leafAs t.schemaName t.dom i (Hm96.Default512.treeLeaf bcs[i]!)
+  let root := FV3.root t.dom leaves Sha512.hash
+  (root, tagOf tk s j t root, bcs.foldl (· ++ ·) .empty)
+
 /-- Table `j` of the commit session `s` under the key `k`, its digests from byte `o` of `xs`: its root, its tag and its
 leaves' `b ‖ c` in leaf order. -/
 def commitTable (k s : ByteArray) (j : Nat) (t : Table) (xs : ByteArray) (o : Nat) : ByteArray × ByteArray × ByteArray :=
-  let bcs := (Array.range t.n).map fun i =>
-    Hm96.Default512.commitString (xs.extract (o + DIGEST_BYTES * i) (o + DIGEST_BYTES * (i + 1))) (saltOf k s j i)
-  let leaves := (Array.range t.n).map fun i => FV3.Sha512.leafAs t.schemaName t.dom i (Hm96.Default512.treeLeaf bcs[i]!)
-  let root := FV3.root t.dom leaves Sha512.hash
-  (root, tagOf k s j t root, bcs.foldl (· ++ ·) .empty)
+  commitTableWith (saltOf k s j) k s j t xs o
+
+/-- Each table's first leaf among its session's leaves, table-major, and the session's leaf count. -/
+def leafOffsets (ts : Array Table) : Array Nat × Nat :=
+  ts.foldl (fun (acc : Array Nat × Nat) t => (acc.1.push acc.2, acc.2 + t.n)) (#[], 0)
 
 /-- **A commit session's tables** `ts` at the session `s`, their digests `xs` table-major: each table's root, tag and
 leaves' `b ‖ c`, in table order. -/
 def commitAnswer (k s : ByteArray) (ts : Array Table) (xs : ByteArray) : Array (ByteArray × ByteArray × ByteArray) :=
-  let offs := (ts.foldl (fun (acc : Array Nat × Nat) t => (acc.1.push acc.2, acc.2 + DIGEST_BYTES * t.n)) (#[], 0)).1
-  (Array.range ts.size).map fun j => commitTable k s j ts[j]! xs offs[j]!
+  let lo := (leafOffsets ts).1
+  (Array.range ts.size).map fun j => commitTable k s j ts[j]! xs (DIGEST_BYTES * lo[j]!)
+
+/-- The salt `ys` holds for leaf `i` of the table whose first leaf is `lo` among its session's. -/
+def heldSalt (ys : ByteArray) (lo i : Nat) : ByteArray := ys.extract (SALT_BYTES * (lo + i)) (SALT_BYTES * (lo + i + 1))
+
+/-- **An interior commit session's tables** `ts` at the session `s`, their digests `xs` and their leaves' salts `ys`,
+both table-major: each table's root, its tag under the session's own key (`interiorKey k s`) and its leaves' `b ‖ c`, in
+table order. -/
+def interiorAnswer (k s ys : ByteArray) (ts : Array Table) (xs : ByteArray) : Array (ByteArray × ByteArray × ByteArray) :=
+  let lo := (leafOffsets ts).1
+  (Array.range ts.size).map fun j =>
+    commitTableWith (heldSalt ys lo[j]!) (interiorKey k s) s j ts[j]! xs (DIGEST_BYTES * lo[j]!)
 
 /-! ### Refs and salts -/
 
@@ -175,80 +220,104 @@ def parseRefs (b : ByteArray) : Except String (Array TableRef × Array (Nat × N
   if let some (t, i) := rs.find? past then throw s!"a row ref to leaf {i} of table ref {t}, past it"
   return (ts, rs)
 
-/-- **The salts of the rows a refs file names**, in its row refs' order, under the key `k`; refused whole where any table
-ref's tag is not the server's. -/
-def saltsAnswer (k refs : ByteArray) : Except String ByteArray := do
+/-- An interior commit session's salts, which the service holds while it runs: its session, each table's first leaf
+among the session's leaves, and the leaves' salts, table-major. -/
+structure Held where
+  s : ByteArray
+  lo : Array Nat
+  ys : ByteArray
+  deriving Inhabited
+
+/-- **The salts of the rows a refs file names**, in its row refs' order, under the key `k`: a table whose tag is the
+server's under `k` takes the salts derived from `k`, and one whose tag is under its interior session's own key
+(`interiorKey`) the salts `held` holds for that session. Refused whole where any table ref's tag is the server's under
+neither, or is an interior session's whose salts `held` does not hold. -/
+def saltsAnswer (k : ByteArray) (held : Array Held) (refs : ByteArray) : Except String ByteArray := do
   let (ts, rs) ← parseRefs refs
-  if let some t := (List.range ts.size).find? fun t => !(ts[t]!.valid k) then
-    throw s!"table ref {t}: its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
-  return rs.foldl (fun acc (t, i) => let r := ts[t]!; acc ++ saltOf k r.s r.j i) .empty
+  let src ← (Array.range ts.size).mapM fun t => show Except String (Option (ByteArray × Nat)) from do
+    let r := ts[t]!
+    if r.valid k then return none
+    unless r.valid (interiorKey k r.s) do
+      throw s!"table ref {t}: its tag is not the ZK server's for its session, table, domain, leaf count, schema and root"
+    let some h := held.find? (·.s == r.s)
+      | throw s!"table ref {t}: an interior session's, whose salts the service holds only while it runs"
+    return some (h.ys, h.lo[r.j]!)
+  return rs.foldl (fun acc (t, i) => let r := ts[t]!; acc ++ match src[t]! with
+    | none => saltOf k r.s r.j i
+    | some (ys, lo) => heldSalt ys lo i) .empty
 
 /-! ### Registrations -/
 
 def REG_LABEL : ByteArray := label "verity/zk-server/registration/v1"
 
-/-- A registration record's bytes before its table refs: `be64 m ‖ be32 T`. -/
-def RECORD_HEAD_BYTES : Nat := 12
+/-- A registration record's bytes before its table refs: `be64 n ‖ be64 m ‖ be32 T`. -/
+def RECORD_HEAD_BYTES : Nat := 20
 def RECORD_TAG_BYTES : Nat := 64
 
 /-- A table ref's bytes, `TableRef.parse`'s layout. -/
 def TableRef.bytes (r : TableRef) : ByteArray :=
   r.s ++ be32 r.j.toUInt32 ++ r.t.dom ++ be64 r.t.n.toUInt64 ++ ByteArray.mk #[r.t.schema.toUInt8] ++ r.root ++ r.tag
 
-/-- A commit session the service opened: its draw, and each of its tables with the root it answered, in table order. -/
+/-- A commit session the service opened: its sample, each of its tables with the root it answered, in table order, and
+whether it is an interior session. -/
 structure Opened where
   s : ByteArray
   tables : Array (Table × ByteArray)
+  interior : Bool := false
   deriving Inhabited
 
+/-- The key the session `o`'s tags and record tag are under: its own (`interiorKey k o.s`) where it is an interior
+session, else `k`. -/
+def Opened.key (k : ByteArray) (o : Opened) : ByteArray := if o.interior then interiorKey k o.s else k
+
 /-- **The value service's epoch**: the commit sessions it opened since its last registration, or since it started, in the
-order it drew them. A registration closes it, so a session registers only in the epoch that opened it, and only once. -/
+order it drew them, one at most where it numbers registrations (`Values.answer`). A registration closes it, so a session
+registers only in the epoch that opened it, and only once. -/
 structure Epoch where
   opened : Array Opened := #[]
   deriving Inhabited
 
-/-- **The record tag** of a registration whose epoch opened `m` commit sessions, over its `T` table refs' bytes `trefs`,
-under the key `k`. -/
-def recordTagOf (k : ByteArray) (m T : Nat) (trefs : ByteArray) : ByteArray :=
-  Sha512.hash (k ++ REG_LABEL ++ be64 m.toUInt64 ++ be32 T.toUInt32 ++ trefs)
+/-- **The record tag** of registration `n`, whose epoch opened `m` commit sessions, over its `T` table refs' bytes
+`trefs`, under the key `k`. -/
+def recordTagOf (k : ByteArray) (n m T : Nat) (trefs : ByteArray) : ByteArray :=
+  Sha512.hash (k ++ REG_LABEL ++ be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 T.toUInt32 ++ trefs)
 
-/-- **The registration record** of the session `o`, of an epoch that opened `m` commit sessions, under the key `k`:
-`be64 m ‖ be32 T ‖` the session's `T` table refs, each with its tag, `‖` the record tag. `m` is public: it is the number of
-sessions among which the stack chose the one it registers. -/
-def recordOf (k : ByteArray) (m : Nat) (o : Opened) : ByteArray :=
+/-- **The record of registration `n`**, the session `o` of an epoch that opened `m` commit sessions, under the key `k`:
+`be64 n ‖ be64 m ‖ be32 T ‖` the session's `T` table refs, each with its tag, `‖` the record tag, the tags and the
+record tag under the session's key (`Opened.key`). `n` and `m` are public: `n` is the registration's place among the ZK
+server's, and `m` the number of sessions among which the stack chose the one it registers. -/
+def recordOf (k : ByteArray) (n m : Nat) (o : Opened) : ByteArray :=
+  let tk := o.key k
   let trefs := (Array.range o.tables.size).foldl (fun acc j =>
     let (t, root) := o.tables[j]!
-    acc ++ ({ s := o.s, j, t, root, tag := tagOf k o.s j t root } : TableRef).bytes) .empty
-  be64 m.toUInt64 ++ be32 o.tables.size.toUInt32 ++ trefs ++ recordTagOf k m o.tables.size trefs
+    acc ++ ({ s := o.s, j, t, root, tag := tagOf tk o.s j t root } : TableRef).bytes) .empty
+  be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 o.tables.size.toUInt32 ++ trefs ++ recordTagOf tk n m o.tables.size trefs
 
-/-- A registration record as a records file holds it: its epoch's session count, its table refs, their bytes and its
-record tag. -/
+/-- A registration's record: its number, its epoch's session count, its table refs, their bytes and its record tag. -/
 structure RegistrationRecord where
+  n : Nat
   m : Nat
   tables : Array TableRef
   trefs : ByteArray
   tag : ByteArray
   deriving Inhabited
 
-/-- Whether `r`'s record tag is the server's for its session count and table refs, under the key `k`. -/
-def RegistrationRecord.valid (k : ByteArray) (r : RegistrationRecord) : Bool := ctEq r.tag (recordTagOf k r.m r.tables.size r.trefs)
+/-- Whether `r`'s record tag is the server's for its number, session count and table refs, under the key `k` or, for an
+interior session, under that session's own key (`interiorKey k s`, `s` its first table ref's session). -/
+def RegistrationRecord.valid (k : ByteArray) (r : RegistrationRecord) : Bool :=
+  let tag := fun k => recordTagOf k r.n r.m r.tables.size r.trefs
+  ctEq r.tag (tag k) || ctEq r.tag (tag (interiorKey k r.tables[0]!.s))
 
-/-- **A records file**: registration records one after another, each `be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at
-least one. -/
-def parseRecords (b : ByteArray) : Except String (Array RegistrationRecord) := go b.size 0 #[]
-where
-  go : Nat → Nat → Array RegistrationRecord → Except String (Array RegistrationRecord)
-    | 0, o, acc => if o == b.size then pure acc else throw s!"a records file of {b.size} bytes, past its records at byte {o}"
-    | fuel + 1, o, acc => do
-      if o == b.size then return acc
-      if b.size < o + RECORD_HEAD_BYTES then throw s!"a records file whose record at byte {o} is shorter than its counts"
-      let T := beAt b (o + 8) 4
-      if T == 0 then throw s!"a records file whose record at byte {o} holds no table"
-      let e := o + RECORD_HEAD_BYTES + TABLE_REF_BYTES * T + RECORD_TAG_BYTES
-      if b.size < e then throw s!"a records file whose record at byte {o}, of {T} table refs, runs {e - b.size} bytes past its end"
-      let tables ← (Array.range T).mapM fun t => TableRef.parse b (o + RECORD_HEAD_BYTES + TABLE_REF_BYTES * t)
-      go fuel e (acc.push { m := beAt b o 8, tables, trefs := b.extract (o + RECORD_HEAD_BYTES) (e - RECORD_TAG_BYTES),
-                            tag := b.extract (e - RECORD_TAG_BYTES) e })
+/-- **A registration's record**, exactly `be64 n ‖ be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at least one. -/
+def RegistrationRecord.parse (b : ByteArray) : Except String RegistrationRecord := do
+  if b.size < RECORD_HEAD_BYTES then throw s!"a registration record of {b.size} bytes, shorter than its counts"
+  let T := beAt b 16 4
+  if T == 0 then throw "a registration record that holds no table"
+  let e := RECORD_HEAD_BYTES + TABLE_REF_BYTES * T + RECORD_TAG_BYTES
+  if b.size != e then throw s!"a registration record of {b.size} bytes, where {T} table refs take {e}"
+  let tables ← (Array.range T).mapM fun t => TableRef.parse b (RECORD_HEAD_BYTES + TABLE_REF_BYTES * t)
+  return { n := beAt b 0 8, m := beAt b 8 8, tables, trefs := b.extract RECORD_HEAD_BYTES (e - RECORD_TAG_BYTES),
+           tag := b.extract (e - RECORD_TAG_BYTES) e }
 
 /-! ### A statement's value commitments -/
 
@@ -276,30 +345,41 @@ def treesOf (header : Json) : Except String (Array (String × Table × ByteArray
     out := out.push (name, { dom, n := count, schema }, root)
   return out
 
-/-- **Whether a statement's value commitments are the server's registrations**: every record of the records file
-`records` carries the server's record tag under the key `k`, and every hm96 tree of the public file `publicFile`
-(`treesOf`) is a table one of them holds, at its domain, leaf count, schema and root. -/
-def checkStatement (k records publicFile : ByteArray) : Except String Unit := do
-  let rs ← parseRecords records
-  if let some r := (List.range rs.size).find? fun r => !(rs[r]!.valid k) then
-    throw s!"record {r}: its tag is not the ZK server's for its session count and table refs"
+/-- The hm96 trees of the public file `publicFile` (`treesOf` on its header line). -/
+def treesOfFile (publicFile : ByteArray) : Except String (Array (String × Table × ByteArray)) := do
   let some nl := findByte publicFile 10 | throw "public file: no header line"
   let some text := String.fromUTF8? (publicFile.extract 0 nl) | throw "public file: its header is not UTF-8"
-  let trees ← treesOf (← JsonParse.parse text)
+  treesOf (← JsonParse.parse text)
+
+/-- **The registrations a statement reads**, in order and each once: for each of its hm96 trees `trees`, the first of the
+registrations `regs` (their records, registration `n` at `n`) that holds a table at the tree's domain, leaf count, schema
+and root, its record tag checked under the key `k` or its interior session's own (`RegistrationRecord.valid`). Refused
+where a record does not read as one, where no registration holds a tree (the stack committed it under salts of its own,
+or never registered it), or where the one that holds it does not carry the server's record tag. -/
+def readsOf (k : ByteArray) (regs : Array ByteArray) (trees : Array (String × Table × ByteArray)) :
+    Except String (Array Nat) := do
+  let rs ← (Array.range regs.size).mapM fun n => (RegistrationRecord.parse regs[n]!).mapError (s!"registration {n}: {·}")
+  let mut reads : Array Nat := #[]
   for (name, t, root) in trees do
-    unless rs.any fun r => r.tables.any fun x => x.t.dom == t.dom && x.t.n == t.n && x.t.schema == t.schema && x.root == root do
-      throw s!"row {name}: its root is no value commitment of the ZK server's (no table of a registration of its domain, leaf count, schema and root)"
+    let holds := fun (r : RegistrationRecord) =>
+      r.tables.any fun x => x.t.dom == t.dom && x.t.n == t.n && x.t.schema == t.schema && x.root == root
+    let some n := (List.range rs.size).find? (holds rs[·]!)
+      | throw s!"row {name}: its root is no value commitment of the ZK server's (no registration on its record holds a table of its domain, leaf count, schema and root)"
+    unless rs[n]!.valid k do
+      throw s!"registration {n}: its record tag is not the ZK server's for its number, session count and table refs"
+    unless reads.contains n do reads := reads.push n
+  return reads.qsort (· < ·)
 
 /-! ### The key -/
 
-/-- **The salt key in `path`**, exactly its 64 bytes. With `create`, where `path` does not exist, 64 bytes drawn from the
+/-- **The salt key in `path`**, exactly its 64 bytes. With `create`, where `path` does not exist, 64 bytes sampled from the
 operating system, in a file created there that its owner alone may read and write, set so before the key is written. -/
 def loadKey (path : System.FilePath) (create : Bool) : IO (Except String ByteArray) := do
   if (← path.pathExists) then
     let b ← IO.FS.readBinFile path
     if b.size != KEY_BYTES then return .error s!"--salt-key {path}: {b.size} bytes, where a salt key is {KEY_BYTES}"
     return .ok b
-  if !create then return .error s!"--salt-key {path}: no such file (`flock-firewall values` creates it)"
+  if !create then return .error s!"--salt-key {path}: no such file (`core-firewall values` creates it)"
   let k ← IO.getRandomBytes KEY_BYTES.toUSize
   let h ← IO.FS.Handle.mk path .writeNew
   IO.setAccessRights path { user := { read := true, write := true } }

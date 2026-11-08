@@ -1,9 +1,27 @@
 module
 
 public import Proofs.Properties.Nci
-public import Properties.NciDesc
-import all Lean.Data.Json.Basic
+public import Properties.Nci.Desc
 import all Init.Data.Ord.String
+import all Lean.Data.Json.Basic
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.Measurability.Init
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Std.Data.HashSet.Lemmas
 
 /-!
 # `NciCheck.Desc.evaluate` agrees with `NciCheck.evaluate`
@@ -657,7 +675,7 @@ theorem descAgrees_of (hG : GatesLocated) (hN : NovelExact) : Properties.DescAgr
       rw [hk] at h1
       obtain rfl := Option.some.inj h1
       obtain ⟨hlt, hinp⟩ := hcls k h2 _ hg
-      have hreg : IsRegistered P ((thetaGates P i.theta)[t]'(by omega)) := by
+      have hreg : IsBoundAtRegistration P ((thetaGates P i.theta)[t]'(by omega)) := by
         obtain ⟨p, ops, w, ⟨⟨sc, hgate⟩, -, -⟩, -⟩ := hgl _ hlt
         have hp := gate_input_fn P hlo hgate h2 ((hng _ _).1 hg) h3
         refine ⟨p, ops, sc, hgate, (isRegisteredId_iff _).1 ?_⟩

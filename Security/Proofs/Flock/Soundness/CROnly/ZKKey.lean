@@ -1,12 +1,22 @@
 module
 
-public import Proofs.Flock.Soundness.CROnly.ZK
+public import Definitions.Core.Game
+public import Definitions.Flock.ZK.Cut
+public import Proofs.Flock.Soundness.CROnly.Hm96Defs
+public import Proofs.Flock.Soundness.ZK.Adaptivity
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.CROnly.Hiding
+import Proofs.Flock.Soundness.CROnly.Hm96Sha512
+import Proofs.Flock.Soundness.CROnly.ZK
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # Lemma C at a uniform hm96 key
 
 `adaptive_prefinal_gap` bounds Lemma C's gap at a fixed key by `2·|L|·δ₁(κ)`, with `δ₁(κ)` the hiding gap of the leaves'
-salt hashes under key `κ`. Here the key is drawn uniformly, first and independently of the salts, and everything else
+salt hashes under key `κ`. Here the key is sampled uniformly, first and independently of the salts, and everything else
 (the witnesses, the table, the prover, the verifier `V*`, the event and the leaf hash) may depend on it: the gap is then
 `2·|L|` times the gap's mean over the key (`adaptive_prefinal_key`), and for `hm96-sha512` that mean is at most `2^-257`
 (`adaptive_prefinal_hm96_sha512`). The leaf hash depends on the key because hm96-sha512's leaves are
@@ -55,7 +65,7 @@ variable {F K W Salt B D Hi VL : Type} [Field F] [Field K] [CharP F 2] [AddCommG
   [AddCommGroup Hi] [Fintype F] [DecidableEq F] [Fintype Salt] [DecidableEq Salt] [Fintype B] [DecidableEq B]
   [Fintype Hi] [DecidableEq Hi] {J : ℕ}
 
-/-- **Lemma C at a uniform key**: `adaptive_prefinal_gap` with the key `κ` that hashes the leaves' salts (`My κ`) drawn
+/-- **Lemma C at a uniform key**: `adaptive_prefinal_gap` with the key `κ` that hashes the leaves' salts (`My κ`) sampled
 uniformly and independently of the prover's coins, the salts and the verifier's tape. The witnesses `w κ`, `w' κ`, the
 table, the prover, the verifier `V*`, the event and the leaf hash `H κ` may all depend on the key, which is public. The
 gap is `2·|L|` times the hiding gap's mean over the key. -/

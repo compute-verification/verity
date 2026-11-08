@@ -26,11 +26,14 @@ MODULES = ("Sec/Definitions.lean", "Sec/Definitions/A.lean", "Sec/Proofs/B.lean"
 AT = {"public": ("olean",), "code": ("olean", "ir.sig", "ir"), "all": ("olean", *lean_module.PARTS)}
 
 
-def manifest(name: str, *paths: tuple[str, str], fetched: tuple[str, ...] = ()) -> str:
+def manifest(name: str, *paths: tuple[str, str], fetched: tuple[str, ...] = (), inherited: tuple[str, ...] = (),
+             revs: dict[str, str] | None = None) -> str:
     return json.dumps({"version": "1.1.0", "packagesDir": ".lake/packages", "name": name, "lakeDir": ".lake",
-                       "packages": [*({"type": "git", "scope": "leanprover-community", "name": n, "rev": "0" * 40,
-                                      "url": f"https://github.com/leanprover-community/{n}", "inputRev": "v4.34.0",
-                                      "manifestFile": "lake-manifest.json", "inherited": False, "configFile": "lakefile.lean"}
+                       "packages": [*({"type": "git", "scope": "leanprover-community", "name": n,
+                                       "rev": (revs or {}).get(n, "0" * 40),
+                                       "url": f"https://github.com/leanprover-community/{n}", "inputRev": "v4.34.0",
+                                       "manifestFile": "lake-manifest.json", "inherited": n in inherited,
+                                       "configFile": "lakefile.lean"}
                                      for n in fetched),
                                     *({"type": "path", "scope": "", "name": n, "manifestFile": "lake-manifest.json",
                                        "inherited": False, "dir": d, "configFile": "lakefile.toml"} for n, d in paths)]})
@@ -196,6 +199,22 @@ def test_a_lock_the_audit_refuses_is_listed_for_its_own_task_to_fail(tmp_path):
     assert len({r["task"] for r in ts["lean-lock:Sec/Proofs"]["reads"]}) == 7, "a proved_in outside the tree adds no package"
 
 
+def test_the_listers_share_one_reading_of_the_imports_while_every_file_it_read_is_unchanged(tmp_path):
+    tree = toy_tree(tmp_path / "tree", (ROOT / graph.SPEC).read_text(), FILES)
+    files = graph.tracked(tree)
+    first = lean_module.imports(tree, files)
+    assert lean_module.imports(tree, files) is first, "lean-module, lean-lock and lean-env read the headers once a listing"
+    (tree / "Sec/Proofs/C.lean").write_text("module\n\npublic import Definitions\n")
+    edited = lean_module.imports(tree, files)
+    assert "Sec/Proofs/D.lean" not in edited[2]["Sec/Proofs/C.lean"], "a header edited under the same files is read again"
+    assert edited == lean_module._imports(tree, files)
+    (tree / "Sec/Proofs/lean-audit.json").write_text(json.dumps({"guarantees": [], "roots": ["Proofs.G"]}))
+    rooted = lean_module.imports(tree, files)
+    assert "Sec/Proofs/H.lean" not in rooted[2] and "Sec/Proofs/H.lean" in edited[2], \
+        "and so is the tree after a lock's `roots` change"
+    assert rooted == lean_module._imports(tree, files)
+
+
 def test_one_env_per_toolchain_and_fetched_packages_each_module_reading_its_package_s(tmp_path):
     ts = listed(tmp_path, **OTHER_ENVS)
     assert sorted(i for i in ts if i.startswith("lean-env:")) == ["lean-env:Ext", "lean-env:Old", "lean-env:Sec"], \
@@ -205,16 +224,54 @@ def test_one_env_per_toolchain_and_fetched_packages_each_module_reading_its_pack
     assert sec["vars"] == {"package": "Sec", "scope": "whole"}
     assert sec["inputs"] == sorted(["Sec/lake-manifest.json", "Sec/lean-toolchain", *ENV_TOOLS,
                                     *graph.runner_sources("lean-env")])
-    assert sec["reads"] == [] and sec["key"] is not None, "an env reads nothing, so it is keyed when listed"
-    assert sec["outputs"] == [{"name": "axioms", "path": "out/lean-env/axioms.json"}]
+    assert sec["reads"] == [] and sec["key"] is not None, "the toolchain's env reads nothing, so it is keyed when listed"
+    assert sec["outputs"] == [{"name": "axioms", "path": "out/lean-env/Sec/axioms.json"}]
     assert sec["about"] == "make Sec's lean env and kernel-replay its modules (scope whole)" and sec["env"] == "lean"
-    assert ts["lean-env:Ext"]["inputs"][:2] == ["Ext/lake-manifest.json", "Ext/lean-toolchain"]
+    ext = ts["lean-env:Ext"]
+    assert ext["inputs"][:2] == ["Ext/lake-manifest.json", "Ext/lean-toolchain"]
+    assert ext["reads"] == [{"task": "lean-env:Sec", "output": "axioms"}] and ext["key"] is None, \
+        "Ext's env is layered on the toolchain's, Sec's, and keyed once that one's record is"
+    assert ext["outputs"] == [{"name": "axioms", "path": "out/lean-env/Ext/axioms.json"}]
+    assert ts["lean-env:Old"]["reads"] == [], "no env of Old's toolchain fetches less than Old's"
     envs = {i: [r for r in t["reads"] if r["task"].startswith("lean-env:")] for i, t in ts.items()
             if i.startswith("lean-module:")}
     of = {"lean-module:Ext/Ext.lean": "Ext", "lean-module:Ext/More/More.lean": "Ext", "lean-module:Old/Old.lean": "Old"}
     assert envs == {i: [{"task": f"lean-env:{of.get(i, 'Sec')}", "output": "axioms"}] for i in envs}, \
         "each module's task reads its own package's env, once"
     assert {"task": "lean-module:Ext/Ext.lean", "output": "axioms"} in ts["lean-module:Ext/More/More.lean"]["reads"]
+
+
+def fetching(name: str, lib: str, **pins) -> dict[str, str]:
+    """A package at ``lib`` of one module, ``lib``, whose manifest is `manifest(name, **pins)`."""
+    return {f"{lib}/lakefile.toml": f'name = "{name}"\ndefaultTargets = ["{lib}"]\n\n[[lean_lib]]\nname = "{lib}"\n',
+            f"{lib}/lake-manifest.json": manifest(name, **pins), f"{lib}/lean-toolchain": TOOLCHAIN,
+            f"{lib}/{lib}.lean": "import Mathlib.Logic.Basic\n"}
+
+
+#: beside `OTHER_ENVS`: Props pins Mathlib as Ext does but through a requirement's manifest (`inherited`), Big pins ArkLib
+#: too, and Fork pins ArkLib and another Mathlib
+LAYERED = {**fetching("props", "Props", fetched=("mathlib",), inherited=("mathlib",)),
+           **fetching("big", "Big", fetched=("mathlib", "arklib")),
+           **fetching("fork", "Fork", fetched=("mathlib", "arklib"), revs={"mathlib": "1" * 40})}
+
+
+def test_packages_pinning_the_same_packages_share_an_env_and_one_pinning_more_is_layered_on_it(tmp_path, monkeypatch):
+    ts = listed(tmp_path / "whole", **OTHER_ENVS, **LAYERED)
+    assert {i: t["reads"] for i, t in ts.items() if i.startswith("lean-env:")} == {
+        "lean-env:Big": [{"task": "lean-env:Ext", "output": "axioms"}],
+        "lean-env:Ext": [{"task": "lean-env:Sec", "output": "axioms"}],
+        "lean-env:Fork": [{"task": "lean-env:Sec", "output": "axioms"}],
+        "lean-env:Old": [], "lean-env:Sec": []}, \
+        "Props shares Ext's env, `inherited` aside; Big's is layered on Ext's, the largest it holds; Fork's Mathlib isn't " \
+        "Ext's, so its env is layered on the toolchain's alone; Old's toolchain is its own"
+    assert {"task": "lean-env:Ext", "output": "axioms"} in ts["lean-module:Props/Props.lean"]["reads"]
+    assert {"task": "lean-env:Big", "output": "axioms"} in ts["lean-module:Big/Big.lean"]["reads"]
+    assert len({t["outputs"][0]["path"] for i, t in ts.items() if i.startswith("lean-env:")}) == 5, \
+        "each env's record has a path of its own, as one layered on another reads that one's"
+    monkeypatch.setattr(lean_env, "SCOPE", "imports")
+    ts = listed(tmp_path / "imports", **OTHER_ENVS, **LAYERED)
+    assert all(t["reads"] == [] for i, t in ts.items() if i.startswith("lean-env:")), \
+        "the imports scope layers no env, since `--closure-of` walks an import into the env below"
 
 
 def test_the_whole_scope_keys_an_env_on_its_files_and_the_imports_scope_on_the_headers(tmp_path, monkeypatch):
