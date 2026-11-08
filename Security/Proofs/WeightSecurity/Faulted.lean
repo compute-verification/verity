@@ -22,7 +22,8 @@ incorrect units' writes fixed (`runOf_faultsOf`), whose pattern names exactly it
 So a release the network certifier ties to a trace is a faulted run of the population's faulted function
 (`Served.faithful_of_tie`). When every unit reads each slot through an idempotent clamp fixed in advance, the run with a
 pattern differs from the run with the pattern clamped only on the faulted slots, each by its clamp (`runOf_clamp`). With
-the clamp the identity on the egress, every pattern releases what an in-range one does (`runOf_clamp_egress`), so
+the clamp the identity on the egress, every pattern releases what an in-range one does (`runOf_clamp_egress`): the
+faulted function at a pattern is the faulted function at its clamp, which names the same units (`faultedOut_clamp`), so
 `FaultedUseHard` need cover only in-range faults.
 
 The witnesses are proved at the toy deployment with faults. -/
@@ -161,6 +162,19 @@ theorem runOf_clamp_egress [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → 
   rw [P.runOf_clamp h f κ hκ hσ hτ]
   dsimp only
   split_ifs <;> simp [ht]
+
+/-- **The reduction to in-range faults.** In a checked population whose units read through the clamp `κ`, with `κ` the
+identity on the egress slots, the faulted function at any fault pattern is the faulted function at its clamp, which
+names the same units (`faultSet_clampFaults`) and writes only clamped values: a model claim about the faulted circuit
+need only cover in-range faults. -/
+theorem faultedOut_clamp [Finite U] (h : P.Checked) (f : P.Fns V) (κ : S → V → V) (hκ : ∀ t v, κ t (κ t v) = κ t v)
+    {O : Type} (eg : O → S) (heg : ∀ o v, κ (eg o) v = v) (a : S → V) (φ : (u : U) → Option (P.writes u → V)) :
+    P.faultedOut h (P.clampFns f κ) eg a φ = P.faultedOut h (P.clampFns f κ) eg a (P.clampFaults κ φ) := by
+  obtain ⟨σ, hσ⟩ := P.runOf_exists h (P.clampFns f κ) a φ
+  obtain ⟨τ, hτ⟩ := P.runOf_exists h (P.clampFns f κ) a (P.clampFaults κ φ)
+  rw [P.faultedOut_eq h _ eg hσ, P.faultedOut_eq h _ eg hτ]
+  funext o
+  exact (P.runOf_clamp_egress h f κ hκ hσ hτ (heg o)).symm
 
 end Population.Dataflow
 
