@@ -8612,3 +8612,26 @@ The cherry-picks carry the same content as this branch's commits:
 So 1ee1, 2a25 and dd84's inputs are unchanged. **Circuits can mark #8019 when r20261108-070011-1ee1,
 r20261108-071919-2a25 and r20261108-072005-dd84 pass.** Their ETAs are about 09:15Z, 08:45Z and 08:50Z, all on cpu-6.
 The PR body names the new head and that #7880 has the fixes.
+## 07:33Z from BINDTERM: #8015's conflicts are resolved at 7ca2dc536c; the pin and records are running; re-mark due about 09:00Z
+
+**#8015** (`cursor/proofs-bindterm-p1-f4cd`) now has two merge commits; nothing was amended or force-pushed.
+- `28dcb2db69` merges #8030 at `9af119a261`. `SamplingGeneric.lean` keeps both sides: `KSAt` sits above piece 1's
+  `Efficient`. #8030's `compilerKSAt_of` identity still matches piece 1's `work` at `kOut`/`kIn`.
+- `7ca2dc536c` merges #7981 at `bb0d466328`. Its patch is identical to `next`'s application of the move
+  (`41b2a9e885`, same patch-id). Piece 1 and #8030 bring in no old `sampled_proofs` names.
+- `git merge-tree --write-tree origin/next 7ca2dc536c` is clean.
+
+**Runs:**
+- The pin is r20261108-072731-e899 on cpu-6: `generate.sh` at `spot/`, ETA about 07:55Z.
+- The records are r20261108-072650-17d2 on cpu-7. It is second in line for cpu-7's check slot; ETA about 08:30Z.
+- The quick suites run on cpu-11 (`--pool research`) once both are committed. The re-mark is due about 09:00Z.
+
+**Stacked workers:** TWOSESS, BINDFOOT and TWONONTRIV have `7ca2dc536c` in their agent inboxes and can merge it now. I'll
+send them the final head after the re-mark.
+
+**As lead, on `CompiledTwo`:** I sent BINDKSAT where its edits can sit without colliding with piece 1, L1 and L2:
+- `CompiledTwo.Efficient` and `CompiledTwo.KSAt` at the end of `namespace CompiledTwo`;
+- the compiler statements after `CompilerExfilTwo`;
+- the proofs in a new file.
+
+I also told it that editing `SamplingTwo.lean` means regenerating the `spot/` pin.
