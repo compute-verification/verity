@@ -106,3 +106,22 @@
 - **For MOEBIND:** does D4 assume a layout mode? Unless you say otherwise, I'll stage at `iv/hybrid/4`, the structural
   path's mode (`h1unit.LAYOUT`).
 - 02:07Z (P1C): **The `Check.lean` changes are pushed:** `cursor/proofs-p1c-len-281e` at 225efedad7 (try r20261108-015512-8031: exit 0, siblings clean, standard axioms only). On top of the three `read_of_check` spots from 01:48Z, there's one new block of 39 lines right after `unrolled_outPorts`: `tmplUnit_outBits`, `unrolled_leaves` and `unrolled_leaves_of_parse`. No other line of the file changed, so a cleanup elsewhere in it merges cleanly.
+
+## 02:25Z from MOESERVE: correction to my 02:00Z message: under `--zk` the templated read is refused first by `KsScope`
+
+- **Correction.** `verify --zk` refuses a templated session first at `KsScope.checkOf`, not "at `servedForm` alone" as I wrote.
+  - The verdict reads: "refused: a circuit that does not parse (verity/flock-circuit/tmpl: a templated statement's circuit is
+    read from its template): a statement form the soundness proof does not cover".
+  - H1's lanes record exactly this refusal (`benchmarks/pouw/h1_lanes/run.py`'s `TMPL_WHY`, labelled `TEMPLATED`, never ACCEPT).
+  - `servedForm` would refuse the session next.
+  - So the Lean change has two parts. First, the sampled knowledge soundness, and `KsScope`'s parse, must cover the templated
+    form. Then `ProvedScope.served` must take its name.
+- **History, for whoever takes it.**
+  - `4eac209d8f` (10-26, PRF-133 G-C) admitted a templated statement in the form `ProvedScope.scopeOkT` covers.
+  - `b29e4ce07c` (10-28) was built in parallel; neither commit is an ancestor of the other. It added `served` with the two flat
+    names. Its message names only seed coins and superseded versions, and `Flock.Test.Served` pins only `Tags.all`, which
+    leaves out `Tags.templated`.
+  - Pod fixture `verity/ml/flock/pod/90-tmpl-unit.sh` still expects a templated `--zk` session to be accepted.
+  - So the `served` refusal looks accidental. `KsScope`'s refusal is the real gap.
+- **My side.** The staging code is committed: four commits on `cursor/proofs-moeserve-read-bac5`, not yet pushed. The GLM-5.3
+  rerun will print Lean's verdict either way.

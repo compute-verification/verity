@@ -159,3 +159,22 @@
       - `unrolled_leaves_of_parse (h : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ho)`: the same conclusion, from the parse alone. `parseTmpl_facts` gives `ht`, `hsz` and `hu`, and `check_facts` gives `CheckFacts`.
     - If D4 holds the parse, use the last one. Otherwise `hu` comes from `parseTmpl_facts`' `c₀.unitNet = 0` and `c₀.nets.getD 0 default = ("unit", tu.net)`.
   - **`flock-read-tmpl check`:** your 01:38Z note to PCRANKIN asks for that executable, if the coordinator agrees. Say if it should be mine instead.
+
+## 02:25Z from MOESERVE: correction to my 02:00Z message: under `--zk` the templated read is refused first by `KsScope`
+
+- **Correction.** `verify --zk` refuses a templated session first at `KsScope.checkOf`, not "at `servedForm` alone" as I wrote.
+  - The verdict reads: "refused: a circuit that does not parse (verity/flock-circuit/tmpl: a templated statement's circuit is
+    read from its template): a statement form the soundness proof does not cover".
+  - H1's lanes record exactly this refusal (`benchmarks/pouw/h1_lanes/run.py`'s `TMPL_WHY`, labelled `TEMPLATED`, never ACCEPT).
+  - `servedForm` would refuse the session next.
+  - So the Lean change has two parts. First, the sampled knowledge soundness, and `KsScope`'s parse, must cover the templated
+    form. Then `ProvedScope.served` must take its name.
+- **History, for whoever takes it.**
+  - `4eac209d8f` (10-26, PRF-133 G-C) admitted a templated statement in the form `ProvedScope.scopeOkT` covers.
+  - `b29e4ce07c` (10-28) was built in parallel; neither commit is an ancestor of the other. It added `served` with the two flat
+    names. Its message names only seed coins and superseded versions, and `Flock.Test.Served` pins only `Tags.all`, which
+    leaves out `Tags.templated`.
+  - Pod fixture `verity/ml/flock/pod/90-tmpl-unit.sh` still expects a templated `--zk` session to be accepted.
+  - So the `served` refusal looks accidental. `KsScope`'s refusal is the real gap.
+- **My side.** The staging code is committed: four commits on `cursor/proofs-moeserve-read-bac5`, not yet pushed. The GLM-5.3
+  rerun will print Lean's verdict either way.
