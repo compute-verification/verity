@@ -4,6 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkHidden.DefsJ
 public import Proofs.Flock.Soundness.Discharge.Composed.DefsJA
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.SetupP
 public import Proofs.Flock.Soundness.Discharge.HiddenExec.RowsAtHP
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
 
 @[expose] public section
 
@@ -21,7 +22,8 @@ ports, so the acceptance is its own event (`AcceptsZKP`, which at `none` is `Acc
 * `setupTables_partsHP`, `setupOf_tableJHP`: `setupTables_partsH`, `setupOf_tableJH` at `own`.
 * `DrawSetupZHJP`, `tableZHJP`, `planZHJP`, `tabZHJP`: `DrawSetupZHJ`, … with a `DrawSetupHP` at table `j`'s inputs.
 * `tableShHJP`, `planShHJP`, `tabShHJP`, `sitesShHJP`: the public tables (`HiddenExec.TableHP`) and their sites
-  (`SitesHP`).
+  (`SitesHP`), at the session's statement circuit `c` (`HmOut.parseStmt`, a templated file's committed circuit
+  unrolled).
 * `placeZHJP`, `layZHJP`, `rsZHJP`, `rsZHJP_computes`: `keyPlaceHP`, `keyLayoutHP` and `keyRowsHP` (the program
   `Placed.keyProgP`, its outputs `Layout.outsOfP`, the registration the population's public file `HmIn.loadPublic`,
   with or without shared rows), moved to the `--zk` tables.
@@ -124,7 +126,7 @@ theorem setupTables_partsHP (hh : tags.hiddenOutputs = true) (hc1 : 1 < count)
 
 end Parts
 
-/-- **`verify --zk --public-inputs` sets table `j` up under its tags at its draw** (`setupOf_tableJH` at `own`). -/
+/-- **`verify --zk --public-inputs` sets table `j` up under its tags at its sample** (`setupOf_tableJH` at `own`). -/
 theorem setupOf_tableJHP {I : Inputs} {own : Option ByteArray} {record : String} {d : Lean.Json}
     {spec : SessionSpec} {sts : Array Flock.Stmt}
     (hh : I.tags.hiddenOutputs = true) (hd : recordDraw record = some d)
@@ -279,7 +281,7 @@ variable {I : Inputs} {own : Option ByteArray} (dj : Finset (Fin n) → Lean.Jso
   {d₀ : Lean.Json} (y₀ : DrawSetupZHJP (inputsJ I 0) own mPts S₀ d₀)
 
 open Classical in
-/-- **Table `j` at draw `S`, at `own`** (`tableZHJ`): the table `verify --zk` sets up at table `j`'s inputs and draw
+/-- **Table `j` at sample `S`, at `own`** (`tableZHJ`): the table `verify --zk` sets up at table `j`'s inputs and sample
 when it sets one up, and otherwise the reference setup `y₀`'s refused table. -/
 noncomputable def tableZHJP (S : Finset (Fin n)) (j : Fin (nTab I)) : TabZK 𝔽 mPts :=
   if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
@@ -292,7 +294,7 @@ noncomputable def planZHJP : Finset (Fin n) → Reg → List (TabZK 𝔽 mPts) :
 theorem planZHJP_length (S : Finset (Fin n)) (R : Reg) : (planZHJP (Reg := Reg) dj y₀ S R).length = nTab I :=
   List.length_ofFn
 
-/-- Each drawn unit is in the table it is drawn into (`partOf`). -/
+/-- Each sampled proof block is in the table it is sampled into (`partOf`). -/
 noncomputable def tabZHJP : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZHJP (Reg := Reg) dj y₀ S R).length :=
   fun S R u => Fin.cast (planZHJP_length dj y₀ S R).symm (partOf I (dj S) u.val)
 
@@ -302,7 +304,7 @@ theorem tabOfZHJP_eq (S : Finset (Fin n)) (R : Reg) (u : Fin n) :
   rfl
 
 open Classical in
-/-- **The public hidden-output table at table `j`'s draw, at `own`**, with the inputs it is set up on. -/
+/-- **The public hidden-output table at table `j`'s sample, at `own`**, with the inputs it is set up on. -/
 noncomputable def tableShHJP (S : Finset (Fin n)) (j : Fin (nTab I)) :
     (I' : Inputs) × TableHP I' own mPts (partS I (dj S) S j) :=
   if h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j)) then
@@ -333,7 +335,7 @@ theorem tableZHJP_S (S : Finset (Fin n)) (j : Fin (nTab I)) :
     rw [dite_eq_right_of_eq_false (eq_false h)]
     rfl
 
-/-- The public plan at the same draws. -/
+/-- The public plan at the same samples. -/
 noncomputable def planShHJP : Finset (Fin n) → Reg → List (TabSpec mPts) :=
   fun S _ => List.ofFn fun j => (tableShHJP dj y₀ S j).2.T
 
@@ -367,18 +369,18 @@ theorem tableShHJP_typed (S : Finset (Fin n)) (j : Fin (nTab I)) :
   · rw [tableShHJP_refused dj y₀ h]
     exact typedJ ht 0
 
-variable {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c)
+variable {c : Flock.Circuit} (hcS : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c)
 
-include ht hc in
-/-- **One circuit per session, at every table** (`tableShHJ_parse`). -/
+include ht hcS in
+/-- **One statement circuit per session, at every table** (`tableShHJ_parseStmt`). -/
 theorem tableShHJP_parse (S : Finset (Fin n)) (j : Fin (nTab I)) :
-    HmOut.parse (tableShHJP dj y₀ S j).1.tags (tableShHJP dj y₀ S j).1.circuitFile (tableShHJP dj y₀ S j).1.tables =
-      .ok c := by
+    HmOut.parseStmt (tableShHJP dj y₀ S j).1.tags (tableShHJP dj y₀ S j).1.circuitFile
+      (tableShHJP dj y₀ S j).1.tables = .ok c := by
   by_cases h : Nonempty (DrawSetupZHJP (inputsJ I j) own mPts (partS I (dj S) S j) (drawJ I (dj S) j))
   · rw [tableShHJP_set dj y₀ h]
-    exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
+    exact (parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hcS
   · rw [tableShHJP_refused dj y₀ h]
-    exact (parseH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hc
+    exact (parseStmtH_tagsAt ((zkTags_typed I).trans ht) _ _ _ _).trans hcS
 
 /-- A hidden-output acceptance at `own` at `T`, as one at `T' = T`. -/
 def recastAccHP {T T' : Model.Statement} (a : AcceptedHP T) (e : T = T') : AcceptedHP T' :=
@@ -386,23 +388,23 @@ def recastAccHP {T T' : Model.Statement} (a : AcceptedHP T) (e : T = T') : Accep
 
 variable (hscope : Layout.scopeOkH c = true)
 
-/-- **The public plan's sites at `own`**: each drawn unit's acceptance, VU and block are its table's public table's. -/
+/-- **The public plan's sites at `own`**: each sampled proof block's acceptance, VU and block are its table's public table's. -/
 noncomputable def sitesShHJP : SitesHP (planShHJP (Reg := Reg) dj y₀) (tabShHJP dj y₀) where
   acc S R u _ := recastAccHP ((tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.acc
-    (tableShHJP_typed dj y₀ ht S _) (tableShHJP_parse dj y₀ ht hc S _)
-      (rowsFit_of_scopeH (zkTyped ht) hc hscope))
+    (tableShHJP_typed dj y₀ ht S _) (tableShHJP_parse dj y₀ ht hcS S _)
+      (rowsFit_of_stmt (zkTyped ht) hcS hscope))
     (congrArg TabSpec.S (tabOfShHJP_eq dj y₀ S R u)).symm
   vu S _ u h := (tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.vu u (mem_partS h)
   hvu S _ u h := (tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.hvu u (mem_partS h)
   o S R u h := Fin.cast (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJP_eq dj y₀ S R u)).symm
     ((tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.o u (mem_partS h))
 
-/-- **One circuit per session**: every site's acceptance parses the session's one circuit file to `c`. -/
+/-- **One statement circuit per session**: every site's committed circuit unrolls to the session's `c`. -/
 theorem sitesShHJP_parse :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S),
-      HmRow.parse ((sitesShHJP dj y₀ ht hc hscope).acc S R u h).tags ((sitesShHJP dj y₀ ht hc hscope).acc S R u h).cf
-        ((sitesShHJP dj y₀ ht hc hscope).acc S R u h).tables = .ok c :=
-  fun S _ _ _ => (Hidden.parse_untyped (tableShHJP_typed dj y₀ ht S _) (tableShHJP_parse dj y₀ ht hc S _)).1
+      HmOut.unrolled ((sitesShHJP dj y₀ ht hcS hscope).acc S R u h).st.c = c :=
+  fun S _ u _ => (tableShHJP dj y₀ S (partOf I (dj S) u.val)).2.unrolled_eq (tableShHJP_typed dj y₀ ht S _)
+    (tableShHJP_parse dj y₀ ht hcS S _)
 
 variable (hU : Built c.unit) {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi) {pop : Public}
   (hpub : HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pop)
@@ -416,10 +418,10 @@ theorem bcSiteHP_recast {T T' : Model.Statement} (a : AcceptedHP T) (e : T = T')
 include hU hpi hpub in
 /-- `BcSiteHP` at a table set up at table `j`'s inputs at `own` (`tableHP_bcSite` at `inputsJ I j`). -/
 theorem tableShHJP_bcSite {S' : Finset (Fin n)} (Tb : (I' : Inputs) × TableHP I' own mPts S')
-    (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parse Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
+    (p₁ : Tb.1.tags.typed = false) (p₂ : HmOut.parseStmt Tb.1.tags Tb.1.circuitFile Tb.1.tables = .ok c)
     (hX : ∃ (j : ℕ) (d : Lean.Json) (x : DrawSetupHP (inputsJ I j) own mPts S' d), Tb = ⟨inputsJ I j, x.table⟩)
     {u : Fin n} (h : u ∈ S') :
-    BcSiteHP (Tb.2.acc p₁ p₂ (rowsFit_of_scopeH p₁ p₂ hscope)) pop (Tb.2.o u h) (Tb.2.vu u h) u.val := by
+    BcSiteHP (Tb.2.acc p₁ p₂ (rowsFit_of_stmt p₁ p₂ hscope)) pop (Tb.2.o u h) (Tb.2.vu u h) u.val := by
   obtain ⟨j, d, x, rfl⟩ := hX
   exact tableHP_bcSite p₁ p₂ hscope (fun _ => d) hU hpi ((loadPublicIn_tagsAt _ _ _ _ _ _).trans hpub) x h
 
@@ -429,8 +431,8 @@ theorem sitesShHJP_bcSite :
     ∀ (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S)
       (M : Binding.Msg (planShHJP dj y₀) (tabShHJP dj y₀) S R u),
       Binding.Sat (planShHJP dj y₀) (tabShHJP dj y₀) S R u M →
-        BcSiteHP ((sitesShHJP dj y₀ ht hc hscope).acc S R u h) pop ((sitesShHJP dj y₀ ht hc hscope).o S R u h)
-          ((sitesShHJP dj y₀ ht hc hscope).vu S R u h) u.val := by
+        BcSiteHP ((sitesShHJP dj y₀ ht hcS hscope).acc S R u h) pop ((sitesShHJP dj y₀ ht hcS hscope).o S R u h)
+          ((sitesShHJP dj y₀ ht hcS hscope).vu S R u h) u.val := by
   intro S R u h M hM
   refine bcSiteHP_recast _ (congrArg TabSpec.S (tabOfShHJP_eq dj y₀ S R u)).symm _ _
     (congrArg (fun T : TabSpec mPts => 2 ^ T.S.nbl) (tabOfShHJP_eq dj y₀ S R u)).symm _ _ ?_
@@ -448,44 +450,44 @@ noncomputable abbrev layShHJP :
     Binding.Layout ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planShHJP (Reg := Reg) dj y₀)
       (tabShHJP dj y₀)
       (((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).placeDecoder (planShHJP dj y₀) (tabShHJP dj y₀)
-        (keyPlaceHP (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi))) :=
-  keyLayoutHP (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
-    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOutP_outsOfP c hU n pi)
+        (keyPlaceHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi))) :=
+  keyLayoutHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_stmt (zkTyped ht) hcS hscope) (Layout.outsOutP_outsOfP c hU n pi)
 
-include ht hc hscope in
-/-- **`KeysRowP` from `scopeOkH`** at the session's circuit. -/
+include ht hcS hscope in
+/-- **`KeysRowP` from `scopeOkH`** at the session's statement circuit (`Hidden.keysRow_stmt`). -/
 theorem keysRowP_of_scopeZ : Layout.KeysRowP c hU pi (Layout.portRowW c) :=
-  Layout.keysRowP_of_keysRow (Layout.keysRow_of_parse (Hidden.parse_untyped (zkTyped ht) hc).1
-    (Layout.scopeOkH_spec hU hscope).1 (Layout.scopeOkH_spec hU hscope).2.2)
+  Layout.keysRowP_of_keysRow (Hidden.keysRow_stmt (zkTyped ht) hcS (Layout.scopeOkH_spec hU hscope).1
+    (Layout.scopeOkH_spec hU hscope).2.2)
 
 /-- **`rs` at the public plan at `own`**: `keyRowsHP` at `sitesShHJP`, with `hsite` from `sitesShHJP_bcSite`. -/
-noncomputable abbrev rsShHJP : Binding.HmRowsX (layShHJP dj y₀ ht hc hscope hU hpi (pop := pop) (Reg := Reg)) :=
-  keyRowsHP (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
-    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOutP_outsOfP c hU n pi)
-    (sitesShHJP_bcSite dj y₀ ht hc hscope hU hpi hpub)
-    (keysRowP_of_scopeZ ht hc hscope hU)
+noncomputable abbrev rsShHJP : Binding.HmRowsX (layShHJP dj y₀ ht hcS hscope hU hpi (pop := pop) (Reg := Reg)) :=
+  keyRowsHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_stmt (zkTyped ht) hcS hscope) (Layout.outsOutP_outsOfP c hU n pi)
+    (sitesShHJP_bcSite dj y₀ ht hcS hscope hU hpi hpub)
+    (keysRowP_of_scopeZ ht hcS hscope hU)
 
-theorem rsShHJP_computes : (rsShHJP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Computes :=
-  keyRowsHP_computes (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
-    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_scopeH (zkTyped ht) hc hscope) (Layout.outsOutP_outsOfP c hU n pi)
-    (sitesShHJP_bcSite dj y₀ ht hc hscope hU hpi hpub)
-    (keysRowP_of_scopeZ ht hc hscope hU)
+theorem rsShHJP_computes : (rsShHJP dj y₀ ht hcS hscope hU hpi hpub (Reg := Reg)).Computes :=
+  keyRowsHP_computes (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi) (fun _ => pop)
+    (Layout.scopeOkH_spec hU hscope).2.1 (rowsFit_of_stmt (zkTyped ht) hcS hscope) (Layout.outsOutP_outsOfP c hU n pi)
+    (sitesShHJP_bcSite dj y₀ ht hcS hscope hU hpi hpub)
+    (keysRowP_of_scopeZ ht hcS hscope hU)
 
-/-- **Each drawn unit's place in its hidden-output `--zk` table at `own`**: `keyPlaceHP`'s place in the public table,
+/-- **Each sampled proof block's place in its hidden-output `--zk` table at `own`**: `keyPlaceHP`'s place in the public table,
 along `planZHJP_S`. -/
 noncomputable def placeZHJP (S : Finset (Fin n)) (R : Reg) (u : Fin n) (h : u ∈ S) :
     UnitPlace ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi))
       (tabOfZ (planZHJP dj y₀) (tabZHJP dj y₀) S R u).S u :=
   placeCast (planZHJP_S dj y₀ S R u)
-    (keyPlaceHP (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi) S R u h)
+    (keyPlaceHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi) S R u h)
 
 /-- **The decoders agree**: the `--zk` places and the public places read one witness alike. -/
 theorem decAgreeHJP :
     DecAgree (P := (keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP_S (Reg := Reg) dj y₀)
       (decZ := decodeOfPlace execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
-        (tabZHJP dj y₀) (placeZHJP dj y₀ ht hc hscope hU hpi))
+        (tabZHJP dj y₀) (placeZHJP dj y₀ ht hcS hscope hU hpi))
       (decS := ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)).placeDecoder (planShHJP dj y₀)
-        (tabShHJP dj y₀) (keyPlaceHP (sitesShHJP_parse dj y₀ ht hc hscope) hpi (Layout.outsOfP c hU n pi))) := by
+        (tabShHJP dj y₀) (keyPlaceHP (sitesShHJP_parse dj y₀ ht hcS hscope) hpi (Layout.outsOfP c hU n pi))) := by
   intro S R u hu M' M hM _ g _
   simp only [decodeOfPlace, Partition.placeDecoder, hu, ↓reduceDIte, placeZHJP, decode_placeCast]
   exact congrArg (fun z => UnitPlace.decode _ z g) hM.symm
@@ -495,25 +497,25 @@ noncomputable abbrev layZHJP :
     LayoutZ execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP (Reg := Reg) dj y₀)
       (tabZHJP dj y₀)
       (decodeOfPlace execArith ((keyProgP c pi hU n).partition (Layout.outsOfP c hU n pi)) (planZHJP dj y₀)
-        (tabZHJP dj y₀) (placeZHJP dj y₀ ht hc hscope hU hpi)) :=
-  LayoutZ.ofShadow (planZHJP_S dj y₀) (layShHJP dj y₀ ht hc hscope hU hpi (pop := pop))
-    (decAgreeHJP dj y₀ ht hc hscope hU hpi)
+        (tabZHJP dj y₀) (placeZHJP dj y₀ ht hcS hscope hU hpi)) :=
+  LayoutZ.ofShadow (planZHJP_S dj y₀) (layShHJP dj y₀ ht hcS hscope hU hpi (pop := pop))
+    (decAgreeHJP dj y₀ ht hcS hscope hU hpi)
 
 /-- **`rs` at the hidden-output `--zk` tables of `J` tables at `own`**: `rsShHJP` moved along `planZHJP_S`. -/
-noncomputable abbrev rsZHJP : HmRowsZX (layZHJP dj y₀ ht hc hscope hU hpi (pop := pop) (Reg := Reg)) :=
-  HmRowsZX.ofShadow (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hc hscope hU hpi)
-    (rsShHJP dj y₀ ht hc hscope hU hpi hpub)
+noncomputable abbrev rsZHJP : HmRowsZX (layZHJP dj y₀ ht hcS hscope hU hpi (pop := pop) (Reg := Reg)) :=
+  HmRowsZX.ofShadow (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hcS hscope hU hpi)
+    (rsShHJP dj y₀ ht hcS hscope hU hpi hpub)
 
 /-- **`hHm` at the hidden-output `--zk` tables' rows at `own`** (`rsShHJP_computes`, moved along). -/
-theorem rsZHJP_computes : (rsZHJP dj y₀ ht hc hscope hU hpi hpub (Reg := Reg)).Computes :=
-  HmRowsZX.ofShadow_computes (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hc hscope hU hpi) _
-    (rsShHJP_computes dj y₀ ht hc hscope hU hpi hpub)
+theorem rsZHJP_computes : (rsZHJP dj y₀ ht hcS hscope hU hpi hpub (Reg := Reg)).Computes :=
+  HmRowsZX.ofShadow_computes (planZHJP_S dj y₀) (decAgreeHJP dj y₀ ht hcS hscope hU hpi) _
+    (rsShHJP_computes dj y₀ ht hcS hscope hU hpi hpub)
 
 end Shadow
 
-/-! ## The coin server's draws, and the openings, at `own` -/
+/-! ## The challenger's live-coin part's samples, and the openings, at `own` -/
 
-/-- **The coin server's draw at `S`, at `J` hidden-output tables at `own`** (`DrawOkZKHJ` with `setupHidden … own`). -/
+/-- **The challenger's live-coin part's sample at `S`, at `J` hidden-output tables at `own`** (`DrawOkZKHJ` with `setupHidden … own`). -/
 def DrawOkZKHJP (I : Inputs) (own : Option ByteArray) (dj : Finset (Fin n) → Lean.Json) (mPts : ℕ)
     (S : Finset (Fin n)) : Prop :=
   ∀ j : Fin (nTab I),

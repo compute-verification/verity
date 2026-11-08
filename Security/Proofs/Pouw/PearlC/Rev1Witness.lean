@@ -1,6 +1,12 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Proofs.Pouw.PearlC.TileGamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGamma
+import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Proofs.Pouw.Prob
 
 /-!
 # rev1's H100 rows are satisfiable

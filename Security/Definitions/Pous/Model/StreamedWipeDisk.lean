@@ -7,7 +7,7 @@ public import Definitions.Pous.Model.StreamedWipeServer
 
 What the disk statements of the streamed-label wipe read (`Security/Definitions/Pous/Guarantees/StreamedWipeDisk.lean`).
 A server's disks are tiers of its assumed memory capacity `M_s` like its HBM and host RAM, so they are wiped in the
-same session: the memory challenger streams one label sequence over every tier and draws its reads over all of it. A
+same session: the memory challenger streams one label sequence over every tier and samples its reads over all of it. A
 session of its own would leave every other tier in its `R`, and two sessions don't compose.
 
 On a disk the fill writes its free space: raw devices whole, and a mounted filesystem's free space in a fill file

@@ -2,10 +2,49 @@ module
 
 public import Proofs.Flock.Claims.Recursion.CapOpens
 public import Proofs.Flock.Claims.Recursion.FinOpen
-public import Proofs.Flock.Claims.Recursion.BoundAccepts
+public import Proofs.Flock.Claims.Recursion.RecRecord
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.C3.Reps.AtList
+import Proofs.Flock.C3.VStarList.Accepts
+import Proofs.Flock.Claims.Recursion.BoundAccepts
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.OpensReads
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Claims.Scope.Setup
 
 /-!
-# `PartOpensB` at `layoutBTops` and the coin server's record
+# `PartOpensB` at `layoutBTops` and the challenger's live-coin part's record
 
 `partOpensB_layoutBTops` reduces `PartOpensB` at `cmtTr recRead` to the pieces of the stream rounds that commit tops.
 Such a round `j` is rep `j / R`'s round `k = j % R` (`SchedMatches`), and its message in the record is its tops' nodes,
@@ -23,7 +62,7 @@ then its `c_k` (`Record.msgs`). Its pieces are its tops at their caps, then its 
 So `PartOpensB` holds at `layoutBTops` and `cmtTr recRead` wherever the inner verifier's rounds are the V\* schedule's
 (`partOpensB_recRead`), and `ksLin2_deployed_recRead` and `bitsLin2_deployed_recRead` are `ksLin2_deployed_open` and
 `bitsLin2_deployed_open` at `recRead` with `PartOpensB` dropped. What they still take: `PartChecksBV`, `DecompB`, the
-readers' `ReadersTrue`, and `recRead` reading the coin server's transcript back (`ReadsBackB`).
+readers' `ReadersTrue`, and `recRead` reading the challenger's live-coin part's transcript back (`ReadsBackB`).
 -/
 
 @[expose] public section
@@ -49,7 +88,7 @@ open Claims (Msg)
 open FlockDeploy (Coin)
 open Lean (Json)
 
-/-! ## The coin server's nodes are 128 bytes -/
+/-! ## The challenger's live-coin part's nodes are 128 bytes -/
 
 theorem linkForIn_inv {α σ ε : Type} (l : List α) (init : σ) (f : α → σ → Except ε (ForInStep σ))
     (P : σ → Prop) (h0 : P init) (hf : ∀ a ∈ l, ∀ s s', P s → f a s = .ok s' → P s'.value) {r : σ}
@@ -303,7 +342,7 @@ theorem repCommits_seg {r : RecRecord.Record} {P A Q : List RecRecord.Round} {s 
 
 /-- **What a staged part's record holds at rep `rep`'s round `k`**: the round `y` whose message, round
 `rep · R + k + 1` as `cmtTr recRead` reads it, is its tops' nodes then its `c_k`; its tops have the schedule's sizes,
-each the coin server's top of rep `rep` the link holds at `topsBefore rs k + e`, of 128-byte nodes; and at a commit
+each the challenger's live-coin part's top of rep `rep` the link holds at `topsBefore rs k + e`, of 128-byte nodes; and at a commit
 round its `c_k` is the commits the setup holds. -/
 theorem round_view {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) {r : XR} (hr : readX x = some r)
     {rs : Array RecVStar.SchedRound} (hrs : repSched r.shape = some rs) :
@@ -704,7 +743,7 @@ theorem topsPieces_opens {st : Stage} {s : ℕ} {x xO : Msg} {w : Claims.Flock.W
 
 /-! ## `PartOpensB` at `layoutBTops` and `recRead` -/
 
-/-- **`PartOpensB` at `layoutBTops` and the coin server's record**, at every shape whose statements the deployment's
+/-- **`PartOpensB` at `layoutBTops` and the challenger's live-coin part's record**, at every shape whose statements the deployment's
 reader reads (`hD`) and where the inner verifier's rounds are the V\* schedule's (`SchedMatches`): every round a part
 holds whole is the record's (`partOpensB_layoutBTops`), and each piece of a stream round that commits tops reads the
 record's message at its offset (`topsPieces_opens`). -/
@@ -719,10 +758,10 @@ theorem partOpensB_recRead (fin : Msg → List (ℕ × List (Msg × List HmNets.
   have hL : layoutOf.rounds x = 2 + 2 * rs.size := hK
   exact topsPieces_opens hS hck hr hrs (by omega) hpp hps
 
-/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's record**:
+/-- **`KSLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's record**:
 `ksLin2_deployed_open` at `recRead`, with `PartOpensB` from `partOpensB_recRead` at `schedMatches_dense`. What stays
 open at the dense form is `PartChecksBV` at `showsPart recRead` and `DecompB`; then the readers' `ReadersTrue` and
-`recRead` reading the coin server's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
+`recRead` reading the challenger's live-coin part's transcript back (`ReadsBackB`). This bounds no number by itself: those premises are
 open. -/
 theorem ksLin2_deployed_recRead (b : Brings)
     (rest : (r : XR) → List (Fin r.w.parts.length × List (Msg × List HmNets.Lin))) (wE : Msg → ℝ)
@@ -747,7 +786,7 @@ theorem ksLin2_deployed_recRead (b : Brings)
   obtain ⟨chk, hPC, hDc⟩ := hP _ hsh
   exact ⟨chk, hPC, fun _ => partOpensB_recRead (finOpen rest) b (fun _ _ h => h) schedMatches_dense, hDc⟩
 
-/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the coin server's
+/-- **`BitsLin2` at the deployment's dense statements, at `layoutBTops (finOpen rest)` and the challenger's live-coin part's
 record**: `bitsLin2_deployed_open` at `recRead`, with `PartOpensB` from `partOpensB_recRead`. It reads `StrictBirthday`
 and `ExpectedCR`, the named SHA-512 collision assumptions, and `ksLin2_deployed_recRead`'s open premises: a bound on a
 number under named premises, not a proved security level. -/

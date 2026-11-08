@@ -1,11 +1,51 @@
 module
 
-public import Proofs.NetworkCertifier.SampledAuditInstance
-public import Proofs.NetworkCertifier.Pooled
 public import Proofs.Flock.Claims.Witnesses.Sampling
-public import Proofs.Flock.Claims.Witnesses.Meets
-public import Proofs.Flock.Claims.KS.ZkExtend
-public import Definitions.NetworkCertifier.Guarantees.SampledCharge
+public import Definitions.NetworkCertifier.Guarantees.SampledAudit
+public import Definitions.NetworkCertifier.SampledCharge
+public import Definitions.NetworkCertifier.SampledReg
+public import Proofs.Flock.Claims.DeployCode
+public import Proofs.Flock.Claims.Sampling.Leaf
+public import Proofs.Flock.Claims.Sampling.Select.Scope
+public import Proofs.Flock.Claims.Sampling.Session
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ZkExtend
+import Proofs.Flock.Claims.Prob
+import Proofs.Flock.Claims.Witnesses.Meets
+import Proofs.NetworkCertifier.SampledAuditAccepted
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # The honest and nontrivial lemmas of the network certifier's acceptance guarantees
@@ -17,13 +57,13 @@ whose verifier accepts everything.
 * `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `Claims.Sampling.KS` holds at
   SHA-512 at a sampling record over the masked Flock record at the deployed relation, under the assembled record's
   hypotheses (`ks_deployed`: `KS_of` at `sampling_assembled_of`'s, Flock's KS `FlockDeploy.KS.zk_KS_untrim`). So do
-  the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible faulty set's
+  the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible incorrect set's
   committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at
   the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no
   witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
-  trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `PooledWrongUnitsLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
+  trace carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
+* `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
@@ -61,7 +101,7 @@ theorem ks_deployed
     (SessionKS_of (by rw [hflock]; exact FlockDeploy.KS.zk_KS_untrim) hfixed hsessions hnum hε) hopens hfix
     (drawLaw_of_slots D hslots) (refuses_of shaD D (scopeMatches_of D hslots hprog) hchecks) hε
 
-/-- **A charge bounds every possible faulty set**, at every deployment and `δ`: each statement's partition's units'
+/-- **A charge bounds every possible incorrect set**, at every deployment and `δ`: each statement's partition's units'
 committed bits, all of them. -/
 theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (δ : ℝ) :
     ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
@@ -94,7 +134,7 @@ theorem SampledAuditAccepted_honest
 
 set_option synthInstance.maxSize 1024 in
 /-- **`SampledLeakAccepted`'s hypotheses at the deployed record**: `SampledAuditAccepted`, `KS`, the record's decoder
-within Flock's radius (`Sampling.decoder_meets_zk`), and at every `δ` a charge bounding every possible faulty set
+within Flock's radius (`Sampling.decoder_meets_zk`), and at every `δ` a charge bounding every possible incorrect set
 (`charge_bounds`). -/
 theorem SampledLeakAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
@@ -146,10 +186,10 @@ def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
 
-/-- The program, drawn `all`. -/
+/-- The program, sampled `all`. -/
 def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
 
-/-- One class of one stratum of one proof unit, `{0, 1}`. -/
+/-- One class of one stratum of one proof block, `{0, 1}`. -/
 def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
@@ -232,7 +272,7 @@ theorem leakD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit)
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **No witness is in `RLeak`** at `leakD`, at one step at `δ = 0`, whatever the inputs `As` admits: the step the
 trace carries has no frame, where the circuit, the negation of the ingress the trace carries, holds one, and the only
-possible faulty set is empty, since the one unit is drawn `all`. -/
+possible incorrect set is empty, since the one unit is sampled `all`. -/
 theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (x : Msg)
     (w : Claims.Sampling.Wit) :
     ¬ RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As 1
@@ -359,7 +399,7 @@ end Toy
 
 /-! ## The monitoring period -/
 
-/-- **`PooledWrongUnitsLe`'s draw hypotheses at the honest instance**: the uniform `k`-subset draw draws `k` units
+/-- **`PooledWrongUnitsLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
 and each `k`-subset with share `1 / C(n, k)`. -/
 theorem uniform_draw (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
@@ -372,8 +412,8 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset draw
-(`uniform_draw`) with no unit wrong, every acceptance event meets a wrong unit with probability `0`, so `ε = 0`. -/
+/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
+(`uniform_draw`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
 theorem PooledWrongUnitsLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by

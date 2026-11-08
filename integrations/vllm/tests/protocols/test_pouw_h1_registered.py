@@ -16,9 +16,15 @@ PROGRAM, WINDOW = "ab" * 64, "cd" * 64
 KEY = bytes(range(32))
 
 
-def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, schema=G.SCHEMA_V2, later=False, **binding):
-    salts = ([hm96_salt(key, nonce, j) for j in range(len(words))] if row_salts is None
-             else [row_salts[192 * j:192 * (j + 1)] for j in range(len(words))])
+def _core(program, value, words, key, nonce, keep_rows=False, row_salts=None, schema=G.SCHEMA_V2, later=False, rows=None,
+          also=None, **binding):
+    assert also is None, "core commits the value alone"
+    words = NR._host(words)
+    n = len(words)
+    assert rows is None or np.array_equal(np.asarray(rows[:]), words)
+    salts = ([hm96_salt(key, nonce, j) for j in range(n)] if row_salts is None
+             else [row_salts[j] for j in range(n)] if isinstance(row_salts, NR.PublicSalts)
+             else [row_salts[192 * j:192 * (j + 1)] for j in range(n)])
     return G.Registered.commit(program, value, np.asarray(words).tolist(), salts, schema=schema, **binding)
 
 
@@ -111,7 +117,7 @@ def test_given_salts_are_the_rows_salts_and_one_reused_is_refused():
 
 
 def test_a_windows_rows_arent_kept_unless_asked():
-    """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still drawn on read."""
+    """Without ``keep_rows`` the tree is the same and a read of a row is refused; the salts are still sampled on read."""
     words = np.arange(12, dtype=np.uint16).reshape(3, 4)
     got, ref = NR.commit(PROGRAM, "v", words, KEY, 9, window=WINDOW), _core(PROGRAM, "v", words, KEY, 9, window=WINDOW)
     assert got.entry() == ref.entry() and got.levels == ref.levels and len(got.rows) == 3

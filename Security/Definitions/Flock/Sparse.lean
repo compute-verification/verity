@@ -1,6 +1,8 @@
 module
 
 public import Definitions.Flock.Piop
+import Mathlib.Algebra.Order.Module.Field
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Hidden unit circuits: L4′ with h, and the sparse phase H1–H4
@@ -40,7 +42,7 @@ structure HoloLcOut (F : Type) (m n : ℕ) where
   ts : Fin n → F
   h : Fin 64 → F
 
-/-- **The lincheck with hidden units** (§10 with L4′): `lincheck` on the public part `S`, with the prover's `h` after
+/-- **The lincheck with hidden units** (`Flock.Piop` with L4′): `lincheck` on the public part `S`, with the prover's `h` after
 `z_partial` and the check `Σ_s (folded[s] + h[s])·z_partial[s] = claim`. -/
 def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
     Game (Option (HoloLcOut F S.m (S.kLog - 6))) := do
@@ -61,7 +63,7 @@ def holoLincheck (A : Arith F K) (S : Statement) (zc : ZcOut F S.m) :
 
 /-! ## Rounds in coefficient form -/
 
-/-- `n` coins, one draw each. -/
+/-- `n` coins, one sample each. -/
 def drawFin : (n : ℕ) → Game (Fin n → F)
   | 0 => pure Fin.elim0
   | n + 1 => do
@@ -74,7 +76,7 @@ def drawFin : (n : ℕ) → Game (Fin n → F)
 def degNext {k : ℕ} (claim : F) (c : F × (Fin k → F)) (r : F) : F :=
   c.1 + (claim + ∑ i, c.2 i) * r + ∑ i, c.2 i * r ^ (i.val + 2)
 
-/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier draws the round's
+/-- `n` rounds of degree `k + 1`: per round the prover sends `(c₀, c₂ … c_{k+1})` and the verifier flips the round's
 coin. Returns the coins in round order and the last claim. -/
 def degRounds (k : ℕ) : (n : ℕ) → F → Game ((Fin n → F) × F)
   | 0, claim => pure (Fin.elim0, claim)

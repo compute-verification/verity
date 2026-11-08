@@ -1,9 +1,12 @@
 module
 
-public import Proofs.Pouw.PearlC.DeviceRev1Gamma
-public import Definitions.Pouw.PearlC.DevicePrices
 public import Definitions.Pouw.Guarantees.PearlC
-public import Proofs.Pouw.PearlC.TTOutW1
+public import Proofs.Pouw.PearlC.DeviceRev1Gamma
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Pouw.PearlC.DeviceGamma
+import Proofs.Pouw.PearlC.TTOutW1
+import Proofs.Pouw.Prob
 
 /-!
 # The unpromoted record, the cap, and γ at sm_120's prices

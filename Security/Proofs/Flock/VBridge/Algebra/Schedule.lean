@@ -1,13 +1,20 @@
 module
 
 public import Proofs.Flock.VBridge.Algebra.Sizes
+public import Proofs.Flock.VBridge.Algebra.Ligerito
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.VBridge.Algebra.RunSkel
+import Proofs.Flock.VBridge.Algebra.Zerocheck
+import VCVio.Prelude.Core
 
 /-!
 # The rounds `verifierRows` asks for
 
-At the zero coins `run` (RecAlgebra.lean:532–539) draws some list `ns` of round sizes. At a record of zero rounds of
-those sizes it draws the same coins and returns the same residuals, and at any record of zero coins where it succeeds
-it has drawn rounds of those sizes, and every round of the record (`run_z`, `run_e`). With `residualLins_sizes`,
+At the zero coins `run` (RecAlgebra.lean:532–539) samples some list `ns` of round sizes. At a record of zero rounds of
+those sizes it flips the same coins and returns the same residuals, and at any record of zero coins where it succeeds
+it has sampled rounds of those sizes, and every round of the record (`run_z`, `run_e`). With `residualLins_sizes`,
 `verifierRows` returns, whenever `structureOf` does, exactly at the records whose rounds have the sizes `ns`, with the
 statement's number of extra claims (`verifierRows_schedule`).
 -/
@@ -74,9 +81,9 @@ theorem ofRounds_get? {rounds : Array (Array F128)} (hne : NoEmpty rounds) {k n 
     · simp only [hn, ↓reduceIte] at h
       cases h
 
-/-- `x` at the zero coins and at records of zero coins: whenever it succeeds at the zero coins, drawing the sizes `ns`
+/-- `x` at the zero coins and at records of zero coins: whenever it succeeds at the zero coins, sampling the sizes `ns`
 (none of them 0) from round `k`, it succeeds alike at every record of zero rounds of those sizes holding `t` rounds
-more, and wherever it succeeds at a record of zero coins it returns alike, having drawn rounds of the sizes `ns`; both
+more, and wherever it succeeds at a record of zero coins it returns alike, having sampled rounds of the sizes `ns`; both
 at records with no round of no coins (`NoEmpty`). -/
 def Z {A : Type} (t : Nat) (x : CM A) : Prop :=
   ∀ k a j, x k CoinSource.zeros = .ok (a, j) → ∃ ns : List Nat, j = k + ns.length ∧ (∀ n ∈ ns, n ≠ 0) ∧
@@ -85,7 +92,7 @@ def Z {A : Type} (t : Nat) (x : CM A) : Prop :=
     ∀ rounds b j', NoEmpty rounds → Zero rounds → x k (CoinSource.ofRounds rounds) = .ok (b, j') →
       b = a ∧ j' = j ∧ FitsSz rounds k ns
 
-/-- `x` draws no coin and reads no source. -/
+/-- `x` flips no coin and reads no source. -/
 def NZ {A : Type} (x : CM A) : Prop :=
   ∀ k a j, x k CoinSource.zeros = .ok (a, j) → j = k ∧ ∀ src, x k src = .ok (a, j)
 
@@ -123,7 +130,7 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → NZ x₁) 
 
 end NZ
 
-/-- `x` draws no coin, at any source. -/
+/-- `x` flips no coin, at any source. -/
 def ND {A : Type} (x : CM A) : Prop := ∀ k src b j, x k src = .ok (b, j) → j = k
 
 namespace ND
@@ -163,7 +170,7 @@ theorem guard_eq {A : Type} {err : String} {rest : CM A} (k : Nat) (src : CoinSo
       if (!s.drawnAll k) = true then (throw err : CM A) else rest) k src =
       (if (!src.drawnAll k) = true then (throw err : CM A) else rest) k src := rfl
 
-/-- Whenever `x` succeeds at a record with no round of no coins, it has drawn every round of the record. -/
+/-- Whenever `x` succeeds at a record with no round of no coins, it has sampled every round of the record. -/
 def E {A : Type} (x : CM A) : Prop :=
   ∀ rounds k b j, NoEmpty rounds → x k (CoinSource.ofRounds rounds) = .ok (b, j) → rounds.size = j
 
@@ -192,7 +199,7 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → E x₁) (
   · rename_i hc; exact h₁ hc
   · rename_i hc; exact h₂ hc
 
-/-- The check that every recorded round was drawn (RecAlgebra.lean:513), before a tail that draws nothing. -/
+/-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
 theorem guardDrawn {err : String} {rest : CM A} (h : ND rest) :
     E (read >>= fun s : CoinSource => get >>= fun k : Nat =>
       if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
@@ -266,7 +273,7 @@ theorem ite' {c : Prop} [Decidable c] {x₁ x₂ : CM A} (h₁ : c → Z t x₁)
   · rename_i hc; exact h₁ hc
   · rename_i hc; exact h₂ hc
 
-/-- The check that every recorded round was drawn (RecAlgebra.lean:513), before a tail that draws nothing. -/
+/-- The check that every recorded round was sampled (RecAlgebra.lean:513), before a tail that samples nothing. -/
 theorem guardDrawn {err : String} {rest : CM A} (h : NZ rest) :
     Z 0 (read >>= fun s : CoinSource => get >>= fun k : Nat =>
       if (!s.drawnAll k) = true then (throw err : CM A) else rest) := by
@@ -544,7 +551,7 @@ theorem sizes_filter_ne {rounds : Array (Array F128)} :
   exact noEmpty_filter rounds r (Array.mem_toList_iff.mp hr)
 
 /-- **The rounds `verifierRows` returns at** (RecAlgebra.lean:824–829, 915–921): whenever `structureOf` does, there is
-one list `ns` of round sizes, none of them 0, those `run` draws at the zero coins, such that `verifierRows` returns at a
+one list `ns` of round sizes, none of them 0, those `run` samples at the zero coins, such that `verifierRows` returns at a
 record, extra claims and comb exactly when the record's rounds of some coins have the sizes `ns` (`CoinSource.ofRounds`
 skips a round of none) and the extra claims are the statement's number. -/
 theorem verifierRows_schedule {sh : Shape} {S : GfS} (hS : structureOf sh = .ok S) :

@@ -6,7 +6,9 @@ public import Definitions.Pouw.Assumptions.OnsiteFreed
 # The onsite PoUW protocol's freed compute (trusted)
 
 `OnsiteFreed`: an accepted onsite period frees at most `ε C` of the registered devices' capacity at the period's dual
-price (`Pouw.Dither.FreedSound`), for any work check over a round protocol. It composes:
+price (`Pouw.Dither.FreedSound`), for any work check over a round protocol. The only round protocols the Lean defines
+are Dither's no-fold round's, so it doesn't cover Dither v3.2's proof block, which no guarantee states yet. It
+composes:
 
 * the remote form's floor (`RemoteWorkFloor`): an accepted period of a prover whose whole inventory is the registered
   devices spent at least `F` of priced timed work on them, but with probability `κ`;
@@ -32,9 +34,11 @@ namespace Pouw.Guarantees
 
 open Pouw.RelativeSecurity Pouw.Dither Pouw.Assumptions
 
-/-- **An accepted onsite period frees at most `ε C`**. In every accelerator model `G` at its
+/-- **An accepted onsite period frees at most `ε C`**. Like `Pouw.Guarantees.Dither.WorkSound`, it is stated over
+any round protocol, and the only ones the Lean defines are Dither's no-fold round's, so it doesn't cover Dither v3.2's
+proof block, which no guarantee states yet. In every accelerator model `G` at its
 device premises (G1, G2, P1, P2), for every round protocol `P` over a period of `k` sampling blocks, every work check
-`vw` on the transcript (the proof service's, which reads no device), every network certifier's check `vn` on the
+`vw` on the transcript (the proof system's, which reads no device), every network certifier's check `vn` on the
 transcript and the devices' readings `dev`, every period `Pd` of the registered devices and every price `μ` that is
 the period's dual price at one credit (`Period.DualOpt μ 1`), with `C = μ · hon > 0` the credited work's honest cost
 there and `β ≥ 0`: if
@@ -50,9 +54,9 @@ then for every prover, the probability over the oracle and the verifier's coins 
 period (`onsiteVerdict vw vn`: both checks) and some other work `z` fits on the registered devices beside its sampling
 blocks' timed work with `rv + W_other(z) > OPT_honest + ε C` is at most `κ + δ`, where `ε C = max(0, C − F + β K)`.
 
-**Non-vacuity rests on the fixed model.** On 𝓜 as `Definitions.Core.Accel` writes it, SAK for matrix products is
-false, and so is `RemoteWorkFloor` at any useful `F` for a check that credits matrix products. This statement says
-something only on a model that charges the free register reductions that falsify them.
+**Non-vacuity is open.** 𝓜 as `Definitions.Core.Accel` writes it prices register reductions, but SAK for matrix
+products as written (`SAKMatmul`) still fails there at a dual price that leaves the CUDA-core pipes cheap. Whether
+`RemoteWorkFloor` holds on 𝓜 at a useful `F`, for a check that credits matrix products, is open.
 
 Open (stated so the red team can aim at them):
 * `RemoteWorkFloor` is the remote form's conclusion taken as a premise. At the served check it isn't needed:

@@ -275,7 +275,7 @@ theorem ind_conflictSucc (acc : β → Prop) (op : β → P → Option V) (a : �
   | some bs =>
       by_cases ha : acc a <;> by_cases hc : PairConflict op (a :: bs) <;> simp [ConflictSucc, ind, h, ha, hc]
 
-/-- **The conflict finder's success** is the law of `k + 1` runs, weighted by their acceptance, having a conflicting
+/-- **The conflict finder's success** is the sampling design of `k + 1` runs, weighted by their acceptance, having a conflicting
 pair, times the waits' `geom ε R ^ k`. -/
 theorem expect_conflictSucc (g : Game β) (s : Strategy g) (acc : β → Prop) (op : β → P → Option V) (R k : ℕ) :
     expect (ind (ConflictSucc acc op)) (conflictG g R k) (conflictStrat g s R k) =
@@ -329,10 +329,6 @@ theorem conflict_succ_ge (g : Game β) (s : Strategy g) (acc : β → Prop) (op 
 noncomputable def waitCostC (acc : β → Prop) (c : β → ℝ) : List β → ℝ
   | [] => 0
   | b :: bs => c b + (1 - ind acc b) * waitCostC acc c bs
-
-theorem waitCostC_nonneg (acc : β → Prop) (c : β → ℝ) (hc : ∀ b, 0 ≤ c b) : ∀ bs, 0 ≤ waitCostC acc c bs
-  | [] => le_rfl
-  | b :: bs => add_nonneg (hc b) (mul_nonneg (by linarith [ind_le_one acc b]) (waitCostC_nonneg acc c hc bs))
 
 /-- **A wait costs `geom ε R` runs** in expectation. -/
 theorem expectN_waitCostC (g : Game β) (s : Strategy g) (acc : β → Prop) (c : β → ℝ) : ∀ R : ℕ,

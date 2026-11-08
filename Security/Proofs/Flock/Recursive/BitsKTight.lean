@@ -1,7 +1,46 @@
 module
 
-public import Proofs.Flock.Recursive.BitsK
-public import Proofs.Flock.Claims.Recursion.CallsClosed
+public import Proofs.Flock.Claims.Recursion.DeployedBrings
+public import Proofs.Flock.Claims.Recursion.InnerSetupCount
+public import Proofs.Flock.Claims.Recursion.KappaEpsDeployed
+public import Proofs.Flock.Claims.Recursion.OpenRowsDeployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.AcceptedScope
+import Proofs.Flock.Claims.Recursion.CallsClosed
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Recursion.DeployedCounts
+import Proofs.Flock.Claims.Recursion.SlotsCheck
+import Proofs.Flock.Recursive.BitsK
 
 /-!
 # `Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts
@@ -66,7 +105,7 @@ noncomputable abbrev bdKS :=
     (FlockDeploy.deployPlainTrimR _root_.Flock.Readable.relation DeployedR.rdR).cols DeployedR.wER FlockDeploy.joinR
     rowInDeployed DeployedR.finalR DeployedR.wR
 
-/-- **The compiled record** `Flock.Guarantees.RecursiveKSAt` is stated at, at the brings `b` and the coin server's
+/-- **The compiled record** `Flock.Guarantees.RecursiveKSAt` is stated at, at the brings `b` and the challenger's live-coin part's
 record, its inner view running `bdKS`'s `IVStar`. -/
 noncomputable abbrev recKS (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)
     (hd : Msg → _root_.Flock.RecRecord.Record) (recRest : Msg → List (Msg × Out) → List UInt8) :
@@ -75,7 +114,7 @@ noncomputable abbrev recKS (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecR
     (DeployedR.layR OpenRows.elemR)).record bdKS.IVStar
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the brings
-`b` and the coin server's record (`aux`, `nOf`, `hd`, `recRest`): for every inner and outer decoder meeting the
+`b` and the challenger's live-coin part's record (`aux`, `nOf`, `hd`, `recRest`): for every inner and outer decoder meeting the
 list-decoding spec (`decOK`), every dense statement `x`, every prover `P` making at most `t ≥ 1` SHA-512 calls per run,
 under `StrictBirthday` at `B` and `ExpectedCR` at `B_I`, `Fdev`, `FCI` and `F0I`, each charged `|S(x_I)|` and the
 verifier's own calls at `n = nR` and `v = 2^32`. -/
@@ -121,7 +160,7 @@ def RecursiveBitsKTightAt (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRe
       2 ^ (-(167.7 : ℝ)) + t * 2 ^ (-(174.95 : ℝ))
 
 /-- **`Pr[acc ∧ ¬R] ≤ 2^{−167.7} + t·2^{−174.95}` at every statement the compiled verifier accepts**, at the deployed
-brings `deployedB b`, every other field of the brings and every record the coin server keeps: `recursiveBitsK` at
+brings `deployedB b`, every other field of the brings and every record the challenger's live-coin part keeps: `recursiveBitsK` at
 `n = nR` and `v = 2^32`, whose call premises `lamLin2_R_ge_in` and `setupCalls_deployedB_le_32` prove at a run the
 compiled verifier accepts, with `kappa_eps_deployed` at the sizes that run gives (`sizesAt_of_run_acc`). -/
 theorem recursiveBitsK_tight (b : Brings) (aux : Msg → ℕ → _root_.Flock.RecRecord.Round) (nOf : Msg → ℕ → ℕ)

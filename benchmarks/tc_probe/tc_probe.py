@@ -1,5 +1,5 @@
 """Hardware probe for one tensor-core instruction: one ``mma.sync`` (or ``wgmma``) per tile, arbitrary accumulators, captures in
-the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.silicon`` model of that instruction.
+the golden-record format, compared bit for bit against the pinned ``verity.ml.circuits.silicon.models`` model of that instruction.
 
 Provenance: ported from veritor ``gpu/tensor-core-semantics/`` (``mma_tiles.cu``, ``tcs_gpu.py``,
 ``validate_tiles.py``: the BF16 kernel, encodings, finite-sweep families, per-element records, multiprocess model comparison,
@@ -108,7 +108,7 @@ from typing import Any
 import numpy as np
 
 from verity.ml.circuits.silicon import models as TCM
-from verity.ml.circuits.silicon import silicon as S
+from verity.ml.circuits.silicon import models as S, term as TM
 from verity.ml.circuits.silicon import total as T
 
 HERE = Path(__file__).resolve().parent
@@ -265,7 +265,7 @@ def _fp8_positive_table(fmt: Format) -> tuple[np.ndarray, np.ndarray]:
 # --- the instruction table -----------------------------------------------------------------------------------------------------------
 
 
-def _e5m2_product(a: int, b: int) -> S.Term:
+def _e5m2_product(a: int, b: int) -> TM.Term:
     """HYPOTHESIS: exact product of two E5M2 bytes as a 25-bit-scaled :class:`Term`, formed like :func:`silicon.e4m3_product`
     (3x3-bit significands -> 6 bits, shifted by 19; subnormals keep their unnormalised significand at exponent -14).  Exponent
     field 31 (infinities and NaN) is outside the finite model and raises.  The canonical product is silicon-p0's to add."""
@@ -277,27 +277,27 @@ def _e5m2_product(a: int, b: int) -> S.Term:
     sb = (b & 0x3) | (0x4 if eb else 0)
     magnitude = (sa * sb) << 19
     if magnitude == 0:
-        return S.ZERO
-    return S.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
+        return TM.ZERO
+    return TM.Term(((a ^ b) >> 7) & 1 == 1, (ea or 1) + (eb or 1) - 30, magnitude)
 
 
-PRODUCTS: dict[str, Callable[[int, int], S.Term]] = {"e4m3": S.e4m3_product, "e5m2": _e5m2_product}
+PRODUCTS: dict[str, Callable[[int, int], TM.Term]] = {"e4m3": TM.e4m3_product, "e5m2": _e5m2_product}
 
 
-def tc_dot_with_product(pipeline: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def tc_dot_with_product(pipeline: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int, a, b) -> int:
     """:func:`silicon.tc_dot` with the products formed by ``product`` instead of the pipeline's own (hypothesis models)."""
 
     if len(a) != pipeline.k or len(b) != pipeline.k:
         raise S.InvalidArtifact(f"{pipeline.name} takes {pipeline.k} operand pairs")
-    acc = S.fp32_term(acc_bits)
+    acc = TM.fp32_term(acc_bits)
     start = 0
     for size in pipeline.groups:
         terms = [acc, *(product(a[i], b[i]) for i in range(start, start + size))]
         acc = S.group_sum(terms, width=pipeline.width, zero_exponent=pipeline.zero_exponent)
-        if acc.magnitude and acc.exponent > S.FP32_MAX_EXPONENT:
-            return S.pack_fp32(acc)
+        if acc.magnitude and acc.exponent > TM.FP32_MAX_EXPONENT:
+            return TM.pack_fp32(acc)
         start += size
-    return S.pack_fp32(acc)
+    return TM.pack_fp32(acc)
 
 
 def fp32_add_bits(x: int, y: int) -> int:
@@ -319,7 +319,7 @@ _SM90_LOW_K = [k for k in range(32) if k % 4 in (0, 1)]
 _SM90_HIGH_K = [k for k in range(32) if k % 4 in (2, 3)]
 
 
-def sm90_fp8_mma_lowered(pipeline16: S.Pipeline, product: Callable[[int, int], S.Term], acc_bits: int, a, b) -> int:
+def sm90_fp8_mma_lowered(pipeline16: S.GroupSum, product: Callable[[int, int], TM.Term], acc_bits: int, a, b) -> int:
     if len(a) != 32 or len(b) != 32:
         raise S.InvalidArtifact("the sm_90a FP8 mma.sync lowering takes 32 operand pairs")
     low = tc_dot_with_product(pipeline16, product, 0, [a[k] for k in _SM90_LOW_K], [b[k] for k in _SM90_LOW_K])
@@ -335,7 +335,7 @@ class Model:
     (:func:`verity.ml.circuits.silicon.total.tc_dot_total`: NaN, infinities and saturation included), so the ``specials`` family is asserted
     too.  ``declared`` models fail validation on any mismatch; the others are HYPOTHESES whose agreement counts are reported."""
 
-    pipeline: S.Pipeline
+    pipeline: S.GroupSum
     product: str | None = None
     declared: bool = True
     lowering: str | None = None
@@ -626,7 +626,7 @@ def host_identity() -> dict:
 
 def families(rng, n_random, fmt: Format, M: int, K: int):
     """Yield (name, A (n,M,K), Bt (n,8,K), C (n,M,8), meta) -- the nine families of the Ada validation (unchanged for BF16: the
-    same draws in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
+    same samples in the same order), the zero-exponent family (BF16) and the FP8-specific families."""
 
     def cast(x):
         return fmt.from_f32(x.astype(np.float32))
@@ -726,7 +726,7 @@ def families(rng, n_random, fmt: Format, M: int, K: int):
         yield "zero_acc_tiny_cancellation", a, b, acc, None
 
     # 11-14: the accumulator / adder families of tc-probe-fp8, for every format (pin-bf16 extended them to BF16 with the
-    # format's own parameters; the FP8 draws are the same, in the same order, as before).
+    # format's own parameters; the FP8 samples are the same, in the same order, as before).
     yield from probe_families(rng, fmt, M, K)
 
     if fp8:
@@ -1239,8 +1239,9 @@ def layout_check(probe: Probe, ins: Instruction) -> dict:
 
 
 def special_all_finite_records(path: Path) -> list[dict]:
-    """The all-finite records (finite acc, finite a and b words) of a ``tc-total-2026-09-07/<device>/mma_special.reduced.json.gz``
-    file, in the golden-record shape: the ``cases`` list and the ``pos`` list (one measured word each)."""
+    """The all-finite records (finite acc, finite a and b words) of a device's ``mma_special.reduced.json.gz`` from the
+    A100 and RTX 4090 special-value campaign, in the golden-record shape: the ``cases`` list and the ``pos`` list (one
+    measured word each)."""
 
     import gzip
 
@@ -1263,8 +1264,8 @@ def special_all_finite_records(path: Path) -> list[dict]:
 
 
 def hopper_capture_records(path: Path) -> list[dict]:
-    """Every record of veritor's H100 BF16 wgmma capture (``tc-hopper-2026-09-07/special.reduced.json.gz``: 14 families, the
-    non-finite ones included), in the golden-record shape with ``family`` set."""
+    """Every record of veritor's H100 BF16 wgmma capture (its ``special.reduced.json.gz``: 14 families, the non-finite
+    ones included), in the golden-record shape with ``family`` set."""
 
     import gzip
 
@@ -1486,7 +1487,7 @@ def sweep(probe: Probe, ins: Instruction, args, out: Path, identity: dict) -> tu
                 C = np.zeros_like(C)
             n_sample = min(args.golden_per_family, A.shape[0] * M * N)
             if only is not None and name not in only:
-                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling draw: --families leaves the others' tiles unchanged
+                rng.choice(A.shape[0] * M * N, size=n_sample, replace=False)  # the skipped family's sampling sample: --families leaves the others' tiles unchanged
                 continue
             t0 = time.time()
             D = probe.tiles(A, Bt, C)

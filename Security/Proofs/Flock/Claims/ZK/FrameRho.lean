@@ -7,7 +7,7 @@ import all Init.Data.Range.Basic
 /-!
 # The frames refuse dependent `ρ₀, ρ₁` (`FrameUnrefused`'s `ρ` fault)
 
-The firewall's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
+The ZK server's own masked Ligerito (`Finish.ligeritoPZk`), which the rep's schedule runs live (`Drive.openStep`, through
 `Loop.schedSoFar`), stops at `ρ₀, ρ₁` dependent over F128, right after `ρ₁`'s squeeze. So a schedule that runs to its
 end on the stream's coins was answered independent `ρ₀, ρ₁`, at Ligerito's rounds `k₀ + 2` and `k₀ + 3`, past the ring
 switch's:
@@ -130,10 +130,6 @@ theorem ow_mono {α : Type} {A A' : Got → Hist → Prop} {B B' : α → Got �
 theorem ow_pure {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist → Prop} (a : α)
     (h : ∀ g hs, A g hs → B a g hs) : OW A B (pure a : TMW OpenM α) :=
   fun _ got hs hA => h got hs hA
-
-theorem ow_throw {α : Type} {A : Got → Hist → Prop} {B : α → Got → Hist → Prop} (e : String) :
-    OW A B (throw e : TMW OpenM α) :=
-  fun _ _ _ _ => trivial
 
 /-- A property of the answers that more answers keep holds wherever any program ends. -/
 theorem ow_any {α : Type} (R : Hist → Prop) (hR : ∀ hs cs, R hs → R (hs ++ [cs])) (p : TMW OpenM α) :
@@ -315,13 +311,13 @@ theorem ow_run_bind {α β : Type} {A : Got → Hist → Prop} {B : α → Got �
     (hf : ∀ a, OW (B a.1) C (f a)) : OW A C (p.run st >>= f) :=
   ow_bind (hp st) hf
 
-theorem spw_run' {α : Type} {p : TMW OpenM α} {t : Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
+theorem spw_run' {α : Type} {p : TMW OpenM α} {t : Flock.Transcript} {s : Got} {R : Hist → Prop} {hs : Hist}
     (h : SPW (fun _ hs' => R hs') ((p.run t).run s) hs) : SPW (fun _ hs' => R hs') ((p.run' t).run' s) hs := by
   refine spw_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _
     (spw_bind (Q := fun _ hs' => R hs') (fun _ _ h => ?_) _ _ h) <;> exact h
 
-theorem spw_getThe_bind {β : Type} {R : β × Transcript × Got → Hist → Prop} {f : Got → TMW OpenM β}
-    {t : Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
+theorem spw_getThe_bind {β : Type} {R : β × Flock.Transcript × Got → Hist → Prop} {f : Got → TMW OpenM β}
+    {t : Flock.Transcript} {got : Got} {hs : Hist} (h : SPW (fun r => R (r.1.1, r.1.2, r.2)) (((f got).run t).run got) hs) :
     SPW (fun r => R (r.1.1, r.1.2, r.2)) (((getThe Got >>= f).run t).run got) hs := h
 
 open _root_.Flock.Firewall.Finish (sendMsg powP) in

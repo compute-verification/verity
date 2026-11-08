@@ -1,0 +1,15 @@
+{
+ "schema": "spot-card/v1",
+ "slot": "replay",
+ "model": "GLM-5.3",
+ "status": "modeled",
+ "provisional": true,
+ "source": "a replay re-runs its request at serving's MFU on the scope's GPUs; GLM-5.3 reproduces its served tokens only in the served batch layout, so a replay may cost its whole batch, which the replay-determinism measurement settles",
+ "runs": [],
+ "owner": "@proofs",
+ "value": {
+  "factor": 1.0,
+  "batch_layout": "served",
+  "deterministic": null
+ }
+}

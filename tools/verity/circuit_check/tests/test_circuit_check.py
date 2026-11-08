@@ -1,15 +1,15 @@
-"""circuit-check over every registered Definition and subcircuit template, a served workload's request Program, and the checks' own
-negatives (each check fires by name on a circuit built to break it).
+"""circuit-check's coverage of every registered Definition and subcircuit template, a served workload's request Program, and the
+checks' own negatives (each check fires by name on a circuit built to break it).  `circuit-check --all`, which `check` runs, is
+where every target is checked.
 
 A failure is a correctness or invariant violation, and fails its test: whether one may stay red is drive's policy
 (`research.policy`), never the checker's.  Redundant and dead gates are warnings: counted in the report, never a test failure
 here.
-The per-target tests are marked `circuit_suite` and collected only under `-m circuit_suite` (see conftest.py): `check` runs the
-same checks as `circuit-check --all`.
 
 The tests that read the suite (the `suite` fixture) or the Calls it gives (`targets.call_families`) are marked slow: the process
-that runs one builds circuit-check's catalog first (conftest.py), in about 8 minutes from `check`'s records and in about an
-hour without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+that runs one builds circuit-check's catalog first (conftest.py), from the bindings' records when they count and binding by
+binding without them, and only the whole suite shows what they hold (every registered family checked, every Call partitioned).
+A test that selects targets by family reads the family off the catalog (`Catalog.reached`), so it makes only those.
 """
 from __future__ import annotations
 
@@ -41,12 +41,12 @@ def _clean(entry: dict) -> None:
 # --- coverage -----------------------------------------------------------------------------------------------------------------
 
 @pytest.mark.slow
-def test_every_registered_definition_is_checked(suite):
+def test_every_registered_definition_is_checked(catalog):
     """Every registered Definition family is checked at a binding the catalog reaches, and every catalog root builds: a new
     Definition without one fails here by name (add its binding to its module's sidecar, `circuit_check.sidecars`)."""
     assert not TG.ROOT_ERRORS, TG.ROOT_ERRORS
     assert len(TG.REGISTERED) > 200
-    checked = {TG.family(fn) for fn in suite.values()}
+    checked = {catalog.reached[fid][0] for fid in catalog.suite}
     missing = sorted(set(TG.REGISTERED) - checked)
     assert not missing, f"registered Definitions no circuit-check binding reaches: {missing}"
 
@@ -68,13 +68,14 @@ def test_the_registries_import_every_module_with_a_sidecar_and_key_the_task_list
 
 
 @pytest.mark.slow
-def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(suite):
+def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(catalog):
     """The guard does not visit an operation (`verity.ml.circuits.operations`), so a table an operation reached would be hidden: every
     listed operation has a specialization here, and none reaches a primitive that holds a table the library does not list."""
     from verity.ml.circuits import constants as K
     from verity.ml.circuits import operations as O
 
-    ops = [fn for fn in suite.values() if O.is_operation(fn)]
+    suite = catalog.suite
+    ops = [fn for fid in suite if catalog.reached[fid][0] in O.OPERATIONS and O.is_operation(fn := suite[fid])]
     assert {fn.base_id for fn in ops} == O.OPERATIONS
     for fn in ops:
         held = sorted(p.id for p in TG.reachable([fn]).values() if K.held_tables(p, O.is_library_table))
@@ -82,7 +83,7 @@ def test_every_operation_is_checked_and_reaches_no_table_outside_the_library(sui
 
 
 def test_every_template_is_checked():
-    from verity_numerical.bench import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     assert {sub.template.id for sub, _ in TEMPLATES.values()} == set(TM.TEMPLATES)
 
@@ -141,7 +142,7 @@ def _without_the_catalog(monkeypatch) -> None:
 
 
 @pytest.mark.slow
-def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, suite):
+def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, catalog):
     """`is_call` decides without the catalog by a superset of the Boolean Calls (`boolean_call_candidates`, the Boolean table's
     links) and a subset of them (`certified_boolean_calls`, the catalog's roots), and refuses the rest (`Undecided`) rather than
     build the catalog: on every family the suite checks, every registered one and every Call, each one it decides it decides as
@@ -150,7 +151,7 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
     words = TG.word_call_families()
     assert TG.certified_boolean_calls(words) <= calls
     _without_the_catalog(monkeypatch)
-    fams = set(TG.REGISTERED) | {TG.family(fn) for fn in suite.values()} | calls
+    fams = set(TG.REGISTERED) | {catalog.reached[fid][0] for fid in catalog.suite} | calls
     decided: dict[str, bool] = {}
     undecided: dict[str, str] = {}
     for f in fams:
@@ -163,14 +164,15 @@ def test_is_call_holds_a_family_exactly_when_call_families_does(monkeypatch, sui
 
 
 @pytest.mark.slow
-def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(suite):
+def test_the_boolean_call_candidates_drop_only_families_boolean_version_refuses(catalog):
     """`boolean_call_candidates`, narrowed to the statics a binding of the word Call family could give, drops only Boolean
     families `boolean_version` refuses: on the real catalog, the Boolean version `boolean_version` accepts for each suite
     Definition of a word Call family (`boolean_call_families`) is a candidate, unless its family is a word Call family itself,
     which is decided as one first.  `units.call_families` looks for ``--all``'s Boolean Calls only among the candidates, and
     `is_call` says a family outside them is no Call, so a family dropped here would leave both short of `call_families`."""
     words = TG.word_call_families()
-    accepted = TG.boolean_call_families(words, suite) - words
+    suite = catalog.suite
+    accepted = TG.boolean_call_families(words, {fid: suite[fid] for fid in suite if catalog.reached[fid][0] in words}) - words
     assert accepted, "the served word Calls have Boolean versions"
     missing = sorted(accepted - TG.boolean_call_candidates(words))
     assert not missing, f"Boolean versions boolean_version accepts that the candidates drop: {missing}"
@@ -321,24 +323,7 @@ def test_a_target_with_a_record_static_parses_as_its_id_prints_it(suite):
         TG.definition("StepBody_v1{C={000000000000},T=4}")
 
 
-# --- the suite ----------------------------------------------------------------------------------------------------------------
-
-@pytest.mark.circuit_suite
-def test_definition(fid, suite, results):
-    e = CK.check_definition(suite[fid], OPTS, memo=MEMO, pins=PINS)
-    results.append({**e, "kind": "definition", "target": fid})
-    _clean(e)
-
-
-@pytest.mark.circuit_suite
-@pytest.mark.parametrize("label", sorted(TEMPLATES))
-def test_template(label, results):
-    sub, sts = TEMPLATES[label]
-    r = CK.check_subcircuit(sub, OPTS, instance_statics=sts, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "template", "target": label})
-    assert all(low["lowered"] or low.get("reason") for low in r["lowering"])
-    _clean(r)
-
+# --- a served workload ----------------------------------------------------------------------------------------------------------
 
 def _request_program(tmp_path: Path, **kw) -> Path:
     """The vLLM tests' synthetic request Program (per token Embedding -> RMSNorm -> Gemm -> RoPE -> SiluMul -> Gemm -> RMSNorm, per
@@ -354,9 +339,8 @@ def _request_program(tmp_path: Path, **kw) -> Path:
 
 
 @pytest.mark.slow
-def test_row(tmp_path, results):
+def test_row(tmp_path):
     r = CK.check_row(_request_program(tmp_path, rope=True), OPTS, memo=MEMO, pins=PINS)
-    results.append({**r, "kind": "row", "target": "synthetic request Program"})
     assert r["calls"] == 42 and len(r["definitions"]) >= 8
     _clean(r)
 
@@ -481,8 +465,103 @@ def test_a_parameter_over_the_input_budget_without_a_probe_fails_by_name():
     e = CK.check_definition(_table_read(), TABLE_OPTS, memo={}, pins=PINS)
     assert e["conformance"] == "not-yet-established"
     assert [f["name"] for f in e["failures"]] == [
-        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget 1024, and no "
-        "registered table probes it (`circuit_check.targets.TABLE_PROBES`)"]
+        "correspondence/unprobed-table CircuitCheckTableRead_v1 parameter 1 has 8192 leaves, over the input budget, and is neither a "
+        "registered table a probe reads (`circuit_check.targets.TABLE_PROBES`) nor an operand read lazily "
+        "(`circuit_check.targets.LAZY_OPERANDS`)"]
+
+
+def _wide_gemm():
+    """`Gemm_v2` at K=32, N=64, with an input budget its weight's 2,048 leaves are over and 32 vectors of its x fit in."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops import gemm as G
+    from verity.ml.circuits.ops import prims as P
+
+    return bind(G.Gemm, K=32, N=64, DOT=P.AmpereBF16TcDot16), dataclasses.replace(OPTS, input_budget=1024, vectors=40)
+
+
+def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(monkeypatch):
+    """A weight over the input budget (`targets.LAZY_OPERANDS`) takes the edge and random words every parameter takes, one
+    vector at a time, and is read lazily, never flattened; the reference on each vector equals it on the same words flattened."""
+    from verity.ml.circuits.evaluation import RegisteredTable, evaluate
+
+    t, opts = _wide_gemm()
+    (x, w), _ = CK.signature_of(t)
+    monkeypatch.setattr(RegisteredTable, "__iter__", lambda self: pytest.fail("the operand was flattened"), raising=False)
+    F = CK.Findings()
+    rec, arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and arrays is None
+    n, n_edge = rec["vectors"], rec["edge_vectors"]
+    assert n == CK._n_vectors(t, opts, [1]) == 32 and n_edge == len(VX.edges(16)) < n
+    assert rec["wide"] == [{"param": 1, "name": "w", "leaves": 2048, "width": 16, "reads": rec["wide"][0]["reads"]}]
+    assert rec["wide"][0]["reads"] >= 2048 * n
+    assert rec["realizations"] == [{"via": f"kernel:{k}", "declines": "a kernel takes arrays, not 'w' read lazily"}
+                                   for k in sorted(CK.kernels(t))]
+    xs = VX.vectors([x], n, opts.seed)
+    for i in range(n):
+        words = [VX.wide_words(w, i, n_edge, opts.seed, 1)(k) for k in range(w.leaves)]
+        assert ref[i] == tuple(evaluate(t, VX.instance_args([x], xs, i)[0], words))
+    e = CK.check_definition(t, opts, memo={}, pins=PINS)
+    assert [f["name"] for f in e["failures"] if f["check"] == "correspondence"] == []
+    assert {"via": "c-flock:ir_lower", "lowered": False, "reason": "a lowering takes every input leaf, and this Definition's "
+            "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
+
+
+def _wide_shard():
+    """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
+    random token lies in the shard."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import b1_tp2
+
+    return bind(b1_tp2.EmbeddingShard, VS=64, H=32, START=1000), dataclasses.replace(OPTS, input_budget=1024, vectors=8)
+
+
+def test_an_operand_probe_sets_the_index_that_reads_the_operands_first_and_last_rows():
+    """A shard's edge and random tokens lie outside it, so only its probes (`targets.OPERAND_PROBES`: the shard's first and last
+    token) read the table, one row each, on random words; the reference there equals it on the same words flattened."""
+    from verity.ml.circuits.evaluation import evaluate
+
+    t, opts = _wide_shard()
+    (_tok, table), _ = CK.signature_of(t)
+    F = CK.Findings()
+    rec, _arrays, ref = CK.correspondence(t, opts, F)
+    assert not F.failures and not F.warnings
+    n = CK._n_vectors(t, opts, [1])
+    assert rec["probes"] == [{"tok": 1000}, {"tok": 1063}] and rec["vectors"] == n + 2
+    assert rec["wide"][0]["reads"] == 2 * 32
+    for q, tok in enumerate((1000, 1063)):
+        words = [VX.wide_words(table, n + q, rec["edge_vectors"], opts.seed, 1)(k) for k in range(table.leaves)]
+        assert ref[n + q] == tuple(evaluate(t, tok, words)) != (0,) * 32
+
+
+def test_an_operand_no_vector_reads_is_unchecked_and_a_probe_of_a_non_scalar_is_refused(monkeypatch):
+    t, opts = _wide_shard()
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [])
+    F = CK.Findings()
+    rec, _arrays, _ref = CK.correspondence(t, opts, F)
+    assert not F.failures and rec["wide"][0]["reads"] == 0 and "probes" not in rec
+    assert [w["name"] for w in F.warnings] == [
+        "correspondence/operand-unread EmbeddingShard_v1{VS=64,H=32,START=1000}: 1 no vector read 'table', so its words are "
+        "checked on none (`circuit_check.targets.OPERAND_PROBES` sets an index that reads it)"]
+    monkeypatch.setitem(TG.OPERAND_PROBES, "EmbeddingShard_v1", lambda S: [{"table": 0}])
+    with pytest.raises(ValueError, match=r"isn't one of its Value parameters \['tok'\]"):
+        CK.correspondence(t, opts, CK.Findings())
+
+
+def test_an_operands_lazy_words_are_its_edges_then_seeded_random_words():
+    """Vector i of a lazily read operand is the i-th edge of its width in every leaf, then random words of that width, the same
+    on every sample and different per vector and per parameter."""
+    from verity.ml.circuits.types import Array, Value
+
+    pt = Array(64, Array(80, Value(8)))
+    ew = VX.edges(8)
+    for i in range(len(ew)):
+        assert {VX.wide_words(pt, i, len(ew), 7, 2)(k) for k in range(pt.leaves)} == {ew[i]}
+    draw = lambda i, param=2: [VX.wide_words(pt, i, len(ew), 7, param)(k) for k in range(pt.leaves)]  # noqa: E731
+    a = draw(len(ew))
+    assert a == draw(len(ew)) and all(0 <= v < 256 for v in a) and len(set(a)) > 64
+    assert a != draw(len(ew) + 1) and a != draw(len(ew), param=3)
+    with pytest.raises(ValueError, match="one width of at most 64 bits"):
+        VX.wide_words(Array(4, Value(128)), 0, 1, 7, 0)
 
 
 def test_a_definition_over_the_leaf_budget_is_not_partitioned(monkeypatch):
@@ -692,14 +771,13 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
-    gates = {k: catalog.reached[k][1] if k in catalog.reached else getattr(fn, "gates", 0) for k, fn in suite.items()}
     calls = TG.call_families()
-    over = {k: gates[k] for k, fn in suite.items() if TG.family(fn) in calls and gates[k] > OPTS.partition_max_gates}
+    called = [k for k in suite if catalog.reached[k][0] in calls]
+    over = {k: n for k in called if (n := catalog.reached[k][1]) > OPTS.partition_max_gates}
     assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
     assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
         "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
-    wide = {k: n for k, fn in suite.items() if TG.family(fn) in calls
-            and (n := sum(pt.leaves for pt in signature_of(fn)[0])) > OPTS.partition_max_leaves}
+    wide = {k: n for k in called if (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves}
     assert not wide
 
 
@@ -778,7 +856,7 @@ def test_a_declared_interval_the_reference_leaves_is_named():
 
 
 def test_a_transfer_the_reference_leaves_is_named():
-    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on drawn operand
+    """A primitive's transfer (its return's interval from its operands') is a fact the Build takes: checked on sampled operand
     intervals, so an exact sum of two s8 operands holds in [a0 + b0, a1 + b1] and a transfer one short of it is named."""
     from verity.ml.circuits.defs import PrimitiveDefinition
     from verity.ml.circuits.ports import Ports, as_reading
@@ -1120,8 +1198,12 @@ def test_the_cli_writes_a_report_and_fails_by_name(tmp_path, capsys):
     [real] = json.loads(out.read_text())["targets"][0]["correspondence"]["realizations"]
     assert not real["lowered"] and real["reason"].endswith("over the whole-Definition budget (1)")
     capsys.readouterr()
-    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"
-    assert cli.main([fp8, *call]) == 1                       # a failure drive's policy allows is still its real verdict
+    fp8 = "ScaledMmFp8Block_v1{K=128,N=128,G=128}"           # no Call: its shared-scale form is served in its place
+    assert cli.main([fp8, *call]) == 0
+    with pytest.MonkeyPatch.context() as mp:                  # as a Call, its coordinates' copies of each scale product fail by name
+        mp.setattr(TG, "_CALLS", set())
+        mp.setitem(TG._SHORT, "words", TG.word_call_families() | {"ScaledMmFp8Block_v1"})
+        assert cli.main([fp8, *call]) == 1
     assert f"FAIL partition/gate-recomputed {fp8}" in capsys.readouterr().out
     assert cli.main([BOOL_RECOMPUTE, *call]) == 0
     assert "1 Boolean Call(s) recomputing 1120 gate(s) across units (Q_word v2)" in capsys.readouterr().out
@@ -1339,3 +1421,40 @@ def test_the_cache_key_is_the_same_in_every_check_slot(monkeypatch):
     assert CC.key({"target": "F32Mul_v1"}) == here
     monkeypatch.setenv("VERITY_REGRESSION", "1" if os.environ.get("VERITY_REGRESSION") != "1" else "0")
     assert CC.key({"target": "F32Mul_v1"}) != here
+
+
+def test_the_cache_key_is_the_same_on_every_node(monkeypatch, tmp_path):
+    """A report one node stored counts on every other node of the image (`check.py --plan`, `research merge --verdicts`): the key
+    names no host, kernel, working directory, home, PATH or check slot (each slot sets its own `VERITY_TEST_CACHE`,
+    `tools/verity/check/slot.py`), while the CPU, a variable that can change what a check computes and the request still key it."""
+    import platform
+
+    from circuit_check import cache as CC
+
+    def node(name: str) -> dict:
+        home = tmp_path / name
+        return {"HOME": str(home), "PATH": f"{home}/.local/bin:/usr/bin", "HOSTNAME": name, "TMPDIR": f"{home}/tmp",
+                "VIRTUAL_ENV": f"{home}/trees/{name}/.venv", "SSH_CONNECTION": f"10.0.0.{len(name)} 22", "CUDA_VISIBLE_DEVICES": "",
+                "VERITY_TEST_CACHE": f"{home}/.cache/verity/tests-slot-{name}", "CHECK_SLOT": name, "VERITY_REGRESSION": "0"}
+
+    def on(name: str) -> None:
+        for k, v in node(name).items():
+            monkeypatch.setenv(k, v)
+        (tmp_path / name).mkdir(exist_ok=True)
+        monkeypatch.chdir(tmp_path / name)
+        monkeypatch.setattr(platform, "node", lambda: name)
+        monkeypatch.setattr(platform, "release", lambda: f"6.{len(name)}.0-{name}")
+        monkeypatch.setattr(platform, "version", lambda: f"#1 SMP {name}")
+        monkeypatch.setattr(platform, "platform", lambda *a, **k: f"Linux-6.{len(name)}.0-{name}-x86_64")
+
+    on("vy-nebius-1")
+    here = CC.key({"target": "F32Mul_v1"})
+    on("vy-nebius-cpu-11")
+    assert CC.key({"target": "F32Mul_v1"}) == here
+    assert CC.key({"target": "F32Add_v1"}) != here
+    monkeypatch.setenv("VERITY_REGRESSION", "1")
+    assert CC.key({"target": "F32Mul_v1"}) != here
+    monkeypatch.undo()
+    here = CC.key({"target": "F32Mul_v1"})
+    monkeypatch.setattr(platform, "machine", lambda: "aarch64")
+    assert CC.key({"target": "F32Mul_v1"}) != here                  # a different CPU is a different machine
