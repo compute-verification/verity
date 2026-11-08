@@ -1,6 +1,6 @@
 module
 
-public import Proofs.Flock.SpotFlock.Rows
+public import Proofs.Flock.SpotFlock.RowsOpen
 public import Proofs.Flock.SpotFlock.UnitRows
 
 @[expose] public section
@@ -166,5 +166,20 @@ theorem shape_of_checked
   obtain ⟨hsit, hbeq⟩ := sitsAt_member h.ms htop ht (hmem t ht).1 (hmem t ht).2 ⟨_, hk⟩ hb
   rw [← SpotFlock.parse_prog h hx] at hsit
   exact ⟨t, ht, ⟨_, hk⟩, rfl, hsit, hbeq⟩
+
+/-- **A checked session statement, parsed**: at a run that passed round 2, the session statement the claims' parser
+reads is the readable form of the statement the verifier's parser returns (`parsed_setupOf`), whose statement check
+passes and whose outputs are hidden (`sessionScoped`), as `accepted_check` reads it. -/
+theorem parsed_of_stmtOk {x m₁ xS c₀ c₁} {S : Claims.Flock.Stmt} (hok : SpotFlock.stmtOk h x m₁ xS c₀ c₁ = true)
+    (hS : FlockDeploy.parse true relation xS = some S) :
+    ∃ p : Parsed, S = toReadable relation p ∧ Parses p ∧ p.check = .ok () ∧ p.tags.hiddenOutputs = true := by
+  unfold FlockDeploy.parse parseOf at hS
+  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hS
+  have hs := sessionOk_of_stmtOk h hok
+  simp only [sessionOk, Bool.and_eq_true] at hs
+  obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
+  obtain ⟨rfl, hpp⟩ := parsed_setupOf hset hp
+  obtain ⟨hc, hh⟩ := sessionScoped h x m₁ xS c₀ c₁ hok ins spec sts hset
+  exact ⟨_, rfl, hpp, hc, hh⟩
 
 end SpotFlock
