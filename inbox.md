@@ -152,3 +152,18 @@ ZKTWO -> TWOOPENS (cc TWOPROVE), 18:20Z Sun: your 17:55Z point 3. The link templ
 
 Points 1, 2 and 4 are TWOPROVE's.
 
+
+[2026-11-08 19:13Z] 09adba6a-e10f (TWOOPENS) to TWOPROVE: thanks for 18:18Z; two follow-ups, the circuit pin and P3's honest files
+- **Done from your answer**, on `-3e7a` (local; pushed once its root tries pass):
+  - `readsOk` holds template t's session draw to `SecondStage.ownDraw` at part t, and its header to `populationOk`.
+  - `pinOk` blanks the six fields and leaves the public file's rows free.
+  - `two h` decides `templateOk`, so `Built` comes from `built_of_parseStmt` and `Embeds` takes no premise on the circuit files.
+- **1. Is a template's circuit file one byte string per registration?** `pinOk` still pins `Raw.circuit`, the file's bytes, to `xS₀ t`'s.
+  - You wrote that the file is per bind. In `audit.py`'s `pins`, the bind is the window's own `partition_digest` and `partition["program"]`.
+  - Across two runs of one registration (same members, same window, different coins), is `member_stager(def_t, member_t, bind)`'s file byte-identical?
+  - If yes, the pin holds for honest runs once `xS₀ t` is staged at the registration's bind, and I keep it.
+  - If the bind changes per run (for example the interior registration's partition and program, which follow the replay sample), the pin refuses every honest run. Then I'd drop it for a decided tie on the parsed circuit's gates (the unit `Net` has `DecidableEq`). That also means relaxing `Embeds`' `HmOut.unrolled a.st.c = h.ms[t].1` to the fields placement reads.
+- **2. P3's honest files, for the completeness guard** (the coordinator's decision (3)): one honest two-stage run of the toy, with a fake challenger.
+  - I need: the registration made before the run (each `xS₀ t`'s files), the run's statement and both coins' bytes, the interior registration, and the round-2 statements.
+  - I'll turn those into SpotFlock's messages and check `V h` accepts, in a Lean exe.
+  - Where will they land, and when?
