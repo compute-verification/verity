@@ -1,8 +1,8 @@
 /-
-Sampled proofs (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
+SPOT (`verity/sampled-proofs/v1`), a `Core.BlobProtocol`: one-stage v2's audit on the proofs themselves
 (`Spot.OneStageZk`). One-stage v1 is refused (`V1_REFUSED`): its verdicts are the evidence's, and this audit's
-are its own run of the verifier. The recursive audit (`VStar.Recursive`) is refused too (`RECURSIVE_REFUSED`): sampled
-proofs' soundness covers the one-stage form only, and the verifier refuses every form its soundness doesn't cover.
+are its own run of the verifier. The recursive audit (`VStar.Recursive`) is refused too (`RECURSIVE_REFUSED`): SPOT's
+soundness covers the one-stage form only, and the verifier refuses every form its soundness doesn't cover.
 
 `Core.Composition.product` reads every component's case, so sampled proofs is one component and the form is the params':
 
@@ -37,13 +37,13 @@ def RECURSIVE : String := "recursive"
 
 /-- The refusal of a one-stage statement naming no `proofs`, one-stage v1's. -/
 def V1_REFUSED : String :=
-  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: sampled proofs' one-stage form is v2 " ++
+  s!"one-stage v1 ({Registration.PROTOCOL}) is refused: SPOT's one-stage form is v2 " ++
     s!"({OneStageZk.PROTOCOL}), whose verdicts are its own run of the verifier on the proofs"
 
-/-- The refusal of the recursive form: sampled proofs' soundness covers the one-stage form only, and the verifier
-refuses every form its soundness doesn't cover. -/
+/-- The refusal of the recursive form: SPOT's soundness covers the one-stage form only, and the verifier refuses
+every form its soundness doesn't cover. -/
 def RECURSIVE_REFUSED : String :=
-  s!"the recursive audit ({Recursive.PROTOCOL}) is refused: sampled proofs' soundness covers one-stage v2 " ++
+  s!"the recursive audit ({Recursive.PROTOCOL}) is refused: SPOT's soundness covers one-stage v2 " ++
     s!"({OneStageZk.PROTOCOL}) only"
 
 abbrev Params := OneStageZk.Params ⊕ Recursive.Params

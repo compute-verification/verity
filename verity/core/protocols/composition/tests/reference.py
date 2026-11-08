@@ -166,10 +166,10 @@ def _recursive(rest: dict, what: str):
 
 
 #: `VStar.Recursive.Sampled.V1_REFUSED`: a one-stage statement naming no ``proofs`` is one-stage v1's.
-V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: sampled proofs' one-stage form is v2 "
+V1_REFUSED = ("one-stage v1 (verity/sampled-proofs/one-stage/v1) is refused: SPOT's one-stage form is v2 "
               "(verity/sampled-proofs/one-stage/v2), whose verdicts are its own run of the verifier on the proofs")
 #: `VStar.Recursive.Sampled.RECURSIVE_REFUSED`: the recursive form's params, refused before their rest is read.
-RECURSIVE_REFUSED = ("the recursive audit (verity/sampled-proofs/recursive/v1) is refused: sampled proofs' soundness "
+RECURSIVE_REFUSED = ("the recursive audit (verity/sampled-proofs/recursive/v1) is refused: SPOT's soundness "
                      "covers one-stage v2 (verity/sampled-proofs/one-stage/v2) only")
 
 
@@ -307,8 +307,8 @@ def _period_answer(case: str) -> str:
 #: A period's answer is slow to make (its windows' ledger signatures and layouts), and a composition's case asks for each
 #: subprotocol's twice, so it is made once a case.
 POUW_PERIOD = Ported(period_check.ID, lambda case: json.loads(_period_answer(canonical(case))))
-#: Integrity: sampled proofs (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage
-#: v1 and the recursive audit refused.
+#: Integrity: SPOT (`VStar.Recursive.Sampled`), one-stage v2's audit (`Spot.OneStageZk`); one-stage v1 and the
+#: recursive audit refused.
 SAMPLED_PROOFS = Ported(SAMPLED_PROOFS_V1, spot, blobs=True)
 #: Space and bandwidth, `PousCheck.RunProtocol.protocol` and `RemoteAudit.Protocol.protocol`.
 POUS = Recorded("verity/pous/p2/v4/run")

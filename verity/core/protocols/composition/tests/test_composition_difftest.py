@@ -143,8 +143,8 @@ V2_BREAKS = {
 }
 
 
-#: One break of sampled proofs' form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another
-#: form, the recursive form's params (refused by name), or its evidence with none of its files.
+#: One break of SPOT's form that `VStar.Recursive.Sampled` refuses: params or evidence naming no form or another form,
+#: the recursive form's params (refused by name), or its evidence with none of its files.
 FORM_BREAKS = ["params-no-form", "params-form-other", "params-recursive", "evidence-no-form", "evidence-recursive"]
 
 
@@ -579,12 +579,11 @@ def _recursive(a: dict) -> dict:
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
 def test_spot_refuses_the_recursive_form(name, request):
-    """Sampled proofs' soundness covers its one-stage form only, so it refuses the recursive form by name at its params
+    """SPOT's soundness covers its one-stage form only, so it refuses the recursive form by name at its params
     (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before it reads their rest: v2's audit under the recursive form,
     naming the recursive audit's own inputs (`_recursive`) or none of them (the form's break ``params-recursive``).
     Remote and onsite, every other subprotocol aimed at acceptance on the audit's record, reject with that refusal as
-    sampled proofs' reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases
-    (`recorded`)."""
+    SPOT's reason, in Lean as in Python. Onsite's case is slow for its space and bandwidth cases (`recorded`)."""
     product = {"remote": R.REMOTE, "onsite": R.ONSITE}[name]
     if name == "onsite":
         request.getfixturevalue("recorded")

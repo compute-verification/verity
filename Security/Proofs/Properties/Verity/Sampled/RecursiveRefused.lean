@@ -4,14 +4,14 @@ public import Proofs.Properties.Verity.SampledDraw
 public import Proofs.Properties.Verity.Soundness
 
 /-!
-# Sampled proofs refuses the recursive form, so off the one-stage form it accepts nothing
+# SPOT refuses the recursive form, so off the one-stage form it accepts nothing
 
-Sampled proofs' compiled component (`VStar.Recursive.Sampled.protocol`) refuses parameters naming the recursive form by
-name (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before their rest is read, so its parameters never decode to that
-form (`paramsOfJson_ne_inr`).
+SPOT's compiled component (`VStar.Recursive.Sampled.protocol`) refuses parameters naming the recursive form by name
+(`VStar.Recursive.Sampled.RECURSIVE_REFUSED`), before their rest is read, so its parameters never decode to that form
+(`paramsOfJson_ne_inr`).
 
 * **A sampled verdict names the one-stage form** (`paramsAt_of_verdict`): wherever composite `k`'s sampled verdict holds
-  of what the prover sent, sampled proofs' case decodes in the one-stage form, under the parameters `ParamsAt` reads,
+  of what the prover sent, SPOT's case decodes in the one-stage form, under the parameters `ParamsAt` reads,
   since the components' ids are distinct (`find_case`).
 * **Off the one-stage form, the event has probability zero** (`recursiveForm_refused`): at parameters `θ` that name no
   one-stage parameters, no play after `θ` meets the sampled verdict, so the probability that it holds while its claim
@@ -22,7 +22,7 @@ form (`paramsOfJson_ne_inr`).
 
 namespace Verity.Sampled
 
-/-- **Sampled proofs' parameters never decode to the recursive form**: `paramsOfJson` refuses it by name
+/-- **SPOT's parameters never decode to the recursive form**: `paramsOfJson` refuses it by name
 (`VStar.Recursive.Sampled.RECURSIVE_REFUSED`). -/
 theorem paramsOfJson_ne_inr (j : Lean.Json) (p : VStar.Recursive.Params) :
     VStar.Recursive.Sampled.paramsOfJson j ≠ .ok (.inr p) := by
@@ -32,8 +32,8 @@ theorem paramsOfJson_ne_inr (j : Lean.Json) (p : VStar.Recursive.Params) :
   repeat' split at h
   all_goals cases h
 
-/-- **Sampled proofs' case is the one its id names**: in a composition composite `k` accepted, the parameters the
-composition names for sampled proofs' id are those of sampled proofs' case, since the components' ids are distinct. -/
+/-- **SPOT's case is the one its id names**: in a composition composite `k` accepted, the parameters the composition
+names for SPOT's id are those of SPOT's case, since the components' ids are distinct. -/
 theorem find_case {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Verity.SameAccepts k s)
     {ps : List _root_.Core.Composition.Named} {c₀ : ByteArray} {evs : List _root_.Core.Composition.Case}
     (hd : Verity.Decoded s ps c₀ evs)
@@ -54,7 +54,7 @@ theorem find_case {k : Verity.Registration.Composite} {s : Verity.Sent} (hS : Ve
 variable {ι : Type} {d : Accounting.Device ι} {α : Type} [Fintype α]
 
 /-- **A sampled verdict names the one-stage form**: wherever composite `k`'s sampled verdict holds of what the prover
-sent, its parameters name sampled proofs' one-stage form (`ParamsAt`), since its component refuses every other
+sent, its parameters name SPOT's one-stage form (`ParamsAt`), since its component refuses every other
 (`paramsOfJson_ne_inr`). -/
 theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite) {o : Verity.Exchange}
     (hv : V.Verdict k .sampled o) : ∃ p, ParamsAt o.params p := by
@@ -74,7 +74,7 @@ theorem paramsAt_of_verdict (V : Vocab d α) (k : Verity.Registration.Composite)
     | error err => rw [hcj] at hp; cases hp
     | ok j => rw [hcj] at hp; exact paramsOfJson_ne_inr j p₁ hp
 
-/-- **Off the one-stage form, sampled proofs accepts nothing**: at parameters `θ` that name no one-stage parameters
+/-- **Off the one-stage form, SPOT accepts nothing**: at parameters `θ` that name no one-stage parameters
 (`ParamsAt`), the probability that composite `k`'s sampled verdict holds while its claim fails is `0`, so at most the
 error at any strategy, since no play after `θ` meets the verdict (`paramsAt_of_verdict`). -/
 theorem recursiveForm_refused (V : Vocab d α) (k : Verity.Registration.Composite) :
