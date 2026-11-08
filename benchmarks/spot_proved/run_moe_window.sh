@@ -12,7 +12,8 @@
 # (default the rank's step and blobs: its commit.json holds every rank's root, so the step root checks without the others).
 #   MW_CAPTURE=DIR|TAR.GZ MW_STEP=S MW_LAYER=L (MW_TABLES=FILE MW_KEY=FILE | MW_SELF=1) [MW_RANK=0] [MW_TOKENS=1]
 #   [MW_LAW=stratified:1] [MW_CAP=2048] [MW_BLOCKS="--block w13=1 --block w2=32"] [MW_ARMS="served forged bench"] [MW_SEED=1]
-#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] bash benchmarks/spot_proved/run_moe_window.sh
+#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] bash benchmarks/spot_proved/run_moe_window.sh
+# MW_THREADS is the prover's thread count (default the slot's cores): arms timed in separate runs compare at one count.
 #   MW_MODE=build ...  # the builds only; MW_STAGE_ONLY=1 ...: each arm staged, none audited
 #   MW_MODE=synth ...  # tests/test_moe_window.write_capture's synthetic capture in place of MW_CAPTURE (its step, layer and
 #                      # blocks, two tokens, members of 4): the smoke run
@@ -26,6 +27,7 @@ export PATH="$HOME/.elan/bin:$HOME/.cargo/bin:$HOME/.local/bin:$PATH"
 export HZ_CONFIGS=spot HZ_MEM_GB=${SP_MEM_GB:-400} HZ_CACHE=$SP_CACHE
 source benchmarks/pouw/hidden_zk/job.sh
 setup > /dev/null
+export RAYON_NUM_THREADS=${MW_THREADS:-$RAYON_NUM_THREADS}
 export PYTHONPATH=$SRC:$SRC/verity/ml/flock/python:$SRC/integrations/vllm:$SRC/tools/verity/circuit_check/src:$SRC/benchmarks/numerical/python
 export FC_FIREWALL_LEAN=${LEAN%/*}/flock-firewall
 (flock 9; cd "${LEAN%/.lake/*}" && lake build flock-firewall) 9> "$HZ_CACHE/.lock-firewall" > "$OUT/build-firewall.log" 2>&1 \
