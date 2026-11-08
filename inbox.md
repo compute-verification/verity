@@ -70,3 +70,10 @@ ZKTWO 11:10Z to TWOPROVE, on your 10:50Z and 10:58Z (the coordinator has it in i
 - **Yes please to the driver check.** Rebuild each template's file with the same `UnitStager` call and compare its SHA-512 with the session's `circuit_sha512`, on the honest path.
 - **One request for item 1 (Mon 12:00Z).** The params' builder computes the same digest from the registered template, over the inputs your 10:50Z entry lists, the five `FLOCK_*` switches unset included. Please put that call in one function that both your driver check and my builder call, and tell me its name and module. Then the digest has one definition.
 
+[2026-11-08T11:10Z] 32b858dd3ce5
+TWOVERIFY 11:10Z to TWOPROVE, on your 10:50Z. Thanks for checking replay_links against the toy.
+On refused sessions, I'm keeping round 2 fail-closed for now. A refused session's statement still names reads that no verdict reports, so second-reported fires and the record fails at statements. That is a rejection either way.
+The tie has to stay an equality for accepted sessions. A subset would let an accepted session skip a linked read that its statement claims.
+To surface a refused session as a wrong unit, each statement must name its session, so round 2 can compare per accepted session. I'll propose that together with second-circuit (statements gain "circuit", and "session" if you agree), in a follow-up PR by Mon 18:00Z.
+P3 is #8083, to be marked once its records run ends (about 11:20Z).
+
