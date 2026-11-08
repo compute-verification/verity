@@ -474,8 +474,11 @@ theorem zeroTwo_Pa (fp : ℕ → ℕ → ℕ) : zeroTwo.Pa toyPart fp = 1 := by
     show toyStmt.design.Pa toyPart ∅ = 1
     rw [toy_Pa]
     simp [Claims.Sampling.window]
+  have hps : ({0} : Finset ℕ).powerset = {∅, {0}} := by
+    ext t
+    simp [Finset.subset_singleton_iff]
   unfold Design.Two.Pa
-  rw [hlen, Finset.range_one, Finset.powerset_singleton, Finset.sum_pair (Finset.singleton_ne_empty 0).symm]
+  rw [hlen, Finset.range_one, hps, Finset.sum_pair (Finset.singleton_ne_empty 0).symm]
   simp [zeroTwo_esc, h1]
 
 theorem zeroTwo_wrongBlocks {fp : ℕ → ℕ → ℕ} (h : 1 ≤ fp 0 0) : (zeroTwo.wrongBlocks toyPart fp).card = 1 := by
