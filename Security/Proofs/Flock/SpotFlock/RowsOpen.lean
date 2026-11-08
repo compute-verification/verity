@@ -202,7 +202,7 @@ def RowsIn (L : Layout) : Prop :=
     stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     FlockDeploy.setupOf true xS = some (ins, spec, sts) → L.blockOf x m₁ xS u = some β →
-    ∀ g, s.prog.Needs b g → ∃ j i p (st : _root_.Flock.Stmt), L.rowOf x m₁ xS u g = some (j, i, p) ∧
+    ∀ g, s.prog.Needs b g → ∃ (j i p : ℕ) (st : _root_.Flock.Stmt), L.rowOf x m₁ xS u g = some (j, i, p) ∧
       sts[j]? = some st ∧ i < st.c.g ∧ β * st.c.g + i < st.pub.n
 
 /-- **`Reveals` at a layout's decoder** where each checked unit has its block (`Embeds`), the layout's rows are the
