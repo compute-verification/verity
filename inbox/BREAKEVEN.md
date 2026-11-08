@@ -292,3 +292,32 @@
   - **The verifier is the likely limit.** At K = 4 the zero-knowledge verdict takes 2.8 s a statement, against 2.4 s for the session, and the GPU is about half busy. A plain verifier (0.5 s) would lift this. Plain at K > 1 is not measured.
 - **Scope.** h is a per-statement ratio, the same for a week, a month or a year, and for a datacenter or the world's compute.
 - **The pod.** I've launched nothing more. vy-spot-overlap's lease ends no sooner than 01:44Z, and it stops itself.
+
+## 01:33Z from HILLCLIMB: CPU marginal and full-statement cost of the fused per-expert blocks (measured on CPU; the full statement extrapolated)
+- **Runs.** r20261108-003351-566e (fused, cpu-13, a 16-core slot) and r20261108-003417-49b0 (unfused, cpu-1, a 24-core slot).
+  - Each proved 16 and then 64 blocks a statement, one size after the other, with no other job of mine on the node.
+  - Medians of 2 timed sessions after a warm one, and every session accepted.
+- **My slip: neither run set `FC_STMT_CACHE=1`.** The cache is opt-in on the measurement branch, so every session rebuilt its statement: 4–13 s of setup.
+  - The cache changes only that setup. So I fit on the prover's own time (`prove_total`; witness+PIOP agrees), and give e2e less setup.
+  - The cache-on setup on this node is 0.1–0.2 s (669b), and none of the figures below include the uncached setup.
+
+| fused block, `--zk` | marginal ms a block (prove) | intercept s (prove) | prove s at 16 → 64 blocks | full statement, 1024 blocks, prove s (**extrapolated**) |
+|---|---:|---:|---|---:|
+| w13 | **71** | 2.4 | 3.51 → 6.92 | **75** |
+| w2 | **80** | 3.0 | 4.30 → 8.13 | **85** |
+
+- **The full statement is an extrapolation.**
+  - It's 1024 blocks at `k_log` 25, `m` = 35, so 16× beyond the largest point measured.
+  - It would need about 2.5 TB of host memory (2.5 GiB a block), and the CPU hosts have 755 GB, so it can't be run on CPU.
+  - Measured on the H200 (STATIONARY, 00:53Z), the full statement is 3.65 s (fr-w13) and 3.73 s (fr-w2) a session, with marginals of 2.85 and 2.98 ms a block. Those are the figures to price with.
+- **At these sizes the CPU prover is mostly per-statement cost.** From 16 to 64 blocks the statement grows 4×, while lincheck stays about 1 s and commit and open grow slowly. So the CPU marginal is small next to the intercept.
+- **Unfused, on 24 cores:**
+  - marginals of 9 ms a block (pe-w13), 36 ms (pe-w2, noisy: plain gave 13) and 70 ms (read H3072);
+  - intercepts of 1.8–3.3 s.
+  - A different node and core count from the fused run, so not a ratio.
+  - The same-node comparison stays 669b's: fused is 0.75× (w13) and 0.59× (w2) of the pair, e2e at 16 blocks.
+  - On the H200, STATIONARY measured fused w13's marginal at 0.82× of the modeled sum, and its best overlapped throughput at 1.7× the pair's (329 against 191 rows a second).
+- **What `--zk` costs the fused marginal on CPU:** 23% for w13 (71 against 55 ms) and about 50% for w2 (80 against 40 ms). w2's plain sessions vary by 30%, so that one is noisy.
+  - Daniel keeps ZK Flock, so this is only a comparison.
+  - On the H200, `--zk` costs the fused blocks' session 21% and 23.5%, and 35–36% of their GPU prove phase (STATIONARY).
+- **Per monitoring period:** these are per-block and per-statement figures, so the ratios read the same for any period and scope.
