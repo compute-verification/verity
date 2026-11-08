@@ -88,11 +88,11 @@ theorem select_proved (rule : Spot.Select.Rule) (d : Spot.Program) (query : Json
   obtain ⟨derived, hderived, h⟩ := bind_eq_ok.1 h
   refine ⟨n, named, derived, hn, hnamed, hderived, ?_⟩
   dsimp only at h
-  have tail : ∀ (units : Array ℕ) (c : Bool) (e : String) (X : Json) (C : Array ℕ) (r : ℕ),
+  have tail : ∀ (units : Array ℕ) (c : Bool) (e : String) (js : Json) (cl : Array ℕ) (rd : ℕ),
       (if c = true then ((throw e : _root_.Flock.V Unit) >>= fun _ =>
-          (pure (X, units ++ C, r) : _root_.Flock.V (Json × Array ℕ × ℕ)))
-        else pure (X, units ++ C, r)) = .ok (draw, proved, read) → proved = units ++ C := by
-    intro units c e X C r ht
+          (pure (js, units ++ cl, rd) : _root_.Flock.V (Json × Array ℕ × ℕ)))
+        else pure (js, units ++ cl, rd)) = .ok (draw, proved, read) → proved = units ++ cl := by
+    intro units c e js cl rd ht
     split at ht
     · exact absurd ht (by simp [throw, throwThe, MonadExceptOf.throw, bind, Except.bind])
     · simp only [pure, Except.pure, Except.ok.injEq, Prod.mk.injEq] at ht
@@ -172,7 +172,7 @@ first stage's sample, whose replay blocks' proof blocks `cellsOk` counts. -/
 theorem replayCap (H : Msg → Msg) : ((base h).atOrder (order h)).ReplayCap H (two h) (rs h) (cap h) := by
   intro x s Pt d hs hPt hd _ Ω P ω r e hacc
   have hs' : parse h x = some s := hs
-  obtain ⟨lb, hlb, hPteq⟩ := partition_eq h hPt
+  obtain ⟨lb, hlb, hPteq⟩ := partition_eq h (s := s) hPt
   obtain ⟨l, lb', hl, hlb', -, -, -, hcells⟩ := two_eq h hd
   have hlbeq : lb' = lb := by
     rw [hlb] at hlb'
