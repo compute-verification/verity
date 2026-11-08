@@ -19,11 +19,43 @@ compiled check, which ends in the one-stage audit's live check on its verdict of
 are the evidence's, is refused by name (`V1_REFUSED`: a one-stage form whose params or evidence name no `proofs`). The
 composite accepts only when every subprotocol accepts.
 
+## SPOT[Flock] on its own
+
+SPOT[Flock] on its own has three roles (`parties.SPOT_PROTOCOL`):
+
+- the **inference server** serves (with vLLM) and commits its values. It sends the verifier its registration and
+  commitments, and the proof server the replay inputs, one way;
+- the **proof server** replays the sampled requests and proves the sampled proof blocks with `flock-circuit prove --zk`.
+  It sends the verifier the proofs and gets back the coins and the sample, nothing else;
+- the **verifier**: the challenger's live coins and signed log, and the Lean verifier.
+
+The replay inputs are every value the sampled proof blocks read, with the salts that open their commitments. Each value
+is a proof block's output, a certified input (the network certifier's stamp among them), a registered value (weights,
+configs, Definitions) or advice charged at its width. A value the served hardware decides that no block computes (an
+atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
+or it is advice.
+
+It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
+network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
+(`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
+ingress, and SPOT[Flock] reads that stamp as a certified input. Neither imports the other (`tests/test_boundaries.py`),
+and they compose only above both.
+
+Its guarantee is soundness, and it rests on:
+
+- SHA-512's collision resistance (`TableCRZAt`, `LinkCRZC`);
+- uniform verifier randomness (`UniformRandomBytes`);
+- an honest verifier: the challenger flips its coins after the registration is recorded and logs them, the verifier
+  reads that log and the record the challenger wrote (`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`,
+  `RecordCustodyZKJ`), and it runs the Lean verifier;
+- where it reads the certifier's stamp, the certifier's own assumptions, which that layer states (`trusted-host` among
+  them, `verity/core/protocols/certifier/PROTOCOL.md`).
+
 ## Guarantee and assumptions
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
-`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
@@ -35,8 +67,9 @@ builds. The top statement rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
   sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
-  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions/Flock.lean`:
+  SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
+  `LinkCRZCAt`, which unfold to them).
 
 In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
@@ -194,8 +227,9 @@ those roots to the vllm-v1 roots is the committer's opening, not proof. Rows the
   samplers and `draw_first` under each sampling design against the Lean verifier's (`drawOn`) on raw bytes, and
   `tests/test_one_stage.py` the work sizes against the ones Flock's
   tests pin. `verity/ml/flock/tests/stratified_agree.py` runs the Lean verifier's sample against `one_stage.draw`.
-- **The parties.** `parties` holds the challenger, the ZK server, the workers and the verifier as parties of
-  `verity.core.deploy`, each machine's work a capability it is given; `verity.core.deploy.runtime.run` runs them.
+- **The parties.** `parties` holds both deployments as parties of `verity.core.deploy`, each machine's work a capability
+  it is given: SPOT[Flock]'s inference server, proof server and verifier, with the challenger on the verifier's side,
+  and the core deployment's challenger, ZK server, workers and verifier. `verity.core.deploy.runtime.run` runs them.
 - **The benchmark.** `benchmarks/one_stage` runs the one-stage audit end to end with Flock's circuit prover and the Lean
   verifier.
 - **The users.** Flock samples and checks the sample in its Lean verifier and proves the sampled proof blocks. The vLLM integration
@@ -259,8 +293,9 @@ from verity.core.protocols.sampled_proofs.costfit import fit
   `flock-verify verify --zk --registered` against the verifier's own program, partition and `--registered` file, and
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
-- `parties`: `Challenger`, `Firewall`, `Workers` and `Verifier`, `MANIFEST`, `PROTOCOL` (`PROTOCOLS` by id),
-  `params_of`, and `IDS`, the configuration's subprotocol names and their protocol ids.
+- `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
+  `spot_params_of`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
   with `closure_of` for a work design's closure; `ChallengerCoins`, a sample's coins from one family of the auditor's

@@ -10,9 +10,11 @@ statement reading the leaf's lane partials, a value committed after the sample (
   its unit from its own copy of that Program (``--program``, ``--partition``). Each is flat, or under
   ``H1_TMPL=structural`` the templated statement of its Definition's structural lowering (`h1unit.layout`,
   `h1unit.stager`: struct_lower's template at `h1unit.LAYOUT`, the flat circuit never built; its template, ``unit.tmpl``,
-  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier takes either: the statement check passes a
-  templated statement with the verifier's registered reads on its template (`ProvedScope.scopeOkT`), the sampled audit's
-  knowledge-soundness form (`KsScope`) admits one there, and the soundness proof is at the flat circuit it unrolls to.
+  is what the prover's ``flock-tmpl-unit`` places). The Lean verifier takes either. It reads a templated statement's
+  circuit as its template's parse (`ProvedScope.circuitOf`), never `HmOut.parse`'s, which refuses its tags: the
+  statement check passes it with the verifier's registered reads on its template (`ProvedScope.scopeOkT`), the sampled
+  audit's knowledge-soundness form (`KsScope`) admits it there, and the soundness proof is at the flat circuit it
+  unrolls to.
 * **The registered values** (`registered.Registered.commit`, ``row/v2`` rows of 16-bit leaves): ``a`` (32 rows: int8 codes
   and s_a), ``b`` (32 rows: codes and s_w), ``zy`` (the leaf's z/y record) and ``receipt`` (the leaf's CP-W receipt,
   `h1tile.reference`). STAND-IN: in a served window these are the window's A, z
