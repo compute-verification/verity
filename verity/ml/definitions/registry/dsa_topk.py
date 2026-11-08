@@ -1,19 +1,17 @@
-"""[GLM-5.3] The DSA indexer's top-k of a row past TOPK keys, under the pattern for data-dependent structure: a static
-superset of wires plus selection values computed in the circuit.
+"""[GLM-5.3] The DSA indexer's top-k of a row past TOPK keys in the relation form: a selection the circuit is given, checked
+against the row's logits.  No served Program reads this form: the Build and the predictor compute the selection in the circuit
+(`dsa_topk_mask`), which reuses this module's tie rule (`topk_set`), statics and switches (`DsaWaksmanSwap`, `DsaWaksmanPick`).
 
-* The selected-key order is a value: the served `topk_indices` row.  The Program takes it from its `run` parameter
-  (`derive.RunInputs`).
-* The selected rows are read through `DsaWaksmanRows`, a Waksman permutation network over the row's whole history (the static
-  candidate superset): its switch settings are the run's value (`waksman_settings` of the served order), and the network's wiring
-  is static.  `DsaWaksmanOrder` routes each history row's index through the same settings, so its output is the order the rows
-  arrive in.
+* `DsaWaksmanRows` reads rows through a Waksman permutation network over the row's whole history (the static candidate superset)
+  at given switch settings (`waksman_settings` of an order); `DsaWaksmanOrder` routes each history row's index through the same
+  settings, so its output is the order the rows arrive in.
 * `DsaTopKLongRow` checks in gates that this order is the top-TOPK set the circuit computes from the row's logits, under the tie
-  rule below, in strictly ascending index order (the canonical row, which `VERITY_DSA_TOPK=canonical` serves); its bit is one of the
-  Program's checks, which the verifier requires to be 1.
+  rule below, in strictly ascending index order (the canonical row, which `VERITY_DSA_TOPK=canonical` serves).
 
-So the settings the run brings route the one order the logits fix: sparse MLA accumulates the rows in an order the prover does not
-choose.  `DsaTopKOrder`, the relation without the order, accepts any permutation of the set; the pin's kernels unpatched serve
-such an order, whose places come from shared-memory atomics and vary run to run, and the long-row check refuses it.
+Settings that pass the long-row check route the one order the logits fix, but they are not unique: a switch both of whose inputs
+carry rows the pruned outputs drop takes either setting.  `DsaTopKOrder`, the relation without the order, accepts any permutation of the set; the pin's
+kernels unpatched serve such an order, whose places come from shared-memory atomics and vary run to run, and the long-row check
+refuses it.
 
 The served kernel (vLLM d9105ea80): decode takes `cooperative_topk` at most 64 rows a call (sparse_attn_indexer.py:615-642),
 whose rows of 2049..16384 keys run `histogram_4096_topk` (topk_histogram_4096.cuh:380-548): a 4096-bin histogram of each logit's

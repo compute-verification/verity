@@ -50,8 +50,7 @@
   schedule, never a batch-mate's value; requests of one (LP, T, C, policy, chunks, launch, edge) share one Program. Its Program
   reads every launch its rows ran in, so a recompute after preemption has no Program there. A launch the kernels' captured
   statics don't cover is the build's refusal, by name: today a step of more than 2,048 tokens (the all-reduce and cuBLAS
-  captures). A row of more than INDEX_TOPK keys reads its top-k order from the Program's `run` input (`dsa.run_field`), its own
-  (`batch`'s R1), and the Program returns the checks that order is the top-k set.
+  captures). A row of more than INDEX_TOPK keys computes its top-k from its logits in the Program (`dsa._Model.attention`).
 - At tensor-parallel world W, `registered.phi.tp` names one rank, and the Programs are that rank's over its weight shards, each
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
