@@ -3078,7 +3078,7 @@
    "owner": "@proofs",
    "digest": "131d62b978fb24520a75669f4f3cc387822dc77a55b1ac1b59ecf38da3278be1",
    "issue": "LEAN-186",
-   "due": "2026-11-08"
+   "due": "2026-11-12"
   },
   "SamplingDeploy.SessionsIn": {
    "owner": "@proofs",
