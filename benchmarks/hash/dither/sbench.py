@@ -781,7 +781,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             we = win is not None and getattr(win, "end_each", False)
             if pf and win is not None and mod is DF:
-                raise ValueError(f"{arm}: --prefill gates dither_one's windows (dither-a, dither-1s), not dither_fused's")
+                raise ValueError(f"{arm}: --prefill gates dither_one's execution phases (dither-a, dither-1s), not dither_fused's")
             if win is not None:
                 if mod is DF:
                     win.arm(B)
@@ -944,7 +944,7 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--scratch", default=None)
     ap.add_argument("--gpu-mem", type=float, default=0.40)
-    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
+    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither execution phase's T")
     ap.add_argument("--ops", default="decode,sat")
     ap.add_argument("--gate", action="store_true")
     ap.add_argument("--stock-own-batch", action="store_true",
@@ -958,19 +958,19 @@ def main() -> int:
     ap.add_argument("--serial", action="store_true",
                     help="one engine on the GPU at a time: each arm built, warmed, gated, timed and stopped before the next "
                          "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
-                         "Dither's window does at --prefill's T = 2048")
+                         "Dither's execution phase does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="PoUB's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
-                         "an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle run, each rep "
+                         "an off block and an on block, a tampered run)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
-                    help="the first on block's session lasts this many times the off block before it (each later one "
+                    help="the first on block's run lasts this many times the off block before it (each later one "
                          "1.5 times the longest on block before it, the tampered one twice its dither op), in "
-                         "stretches of the idle session's length (`dbw.window_s`), then of the last on session's "
+                         "stretches of the idle run's length (`dbw.window_s`), then of the last on run's "
                          "beside its block (`dbw.beside_s`)")
-    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
+    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle run's passes, in seconds")
     a = ap.parse_args()
     if a.bw_passes and not (settings.BW_LIB and settings.BW_KV):
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")

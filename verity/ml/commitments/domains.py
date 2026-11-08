@@ -56,7 +56,7 @@ POUW_PERIOD_SIDE_DOMAIN_B = "verity/pouw/window/side-domain-b/v1"
 POUW_ROUND_NOISE = "verity/pouw/round-noise/v1"
 POUW_PUBLIC_ROW_SALT = "verity/pouw/public-row-salt/v1"
 
-# PoUW: sampling (the bytes say sample)
+# PoUW: sampling (the bytes say draw)
 POUW_AUDIT_KEY = "verity/pouw/audit/v1"
 POUW_PEARL_C_SAMPLING = "verity/pouw/pearl-c-draw/v1"
 POUW_PEARL_C_SAMPLING_AFTER = "verity/pouw/pearl-c/draw-after/v1"

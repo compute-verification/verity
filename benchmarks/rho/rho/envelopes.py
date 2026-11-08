@@ -178,7 +178,7 @@ class Detection:
     def __post_init__(self) -> None:
         unset = [k for k in SAMPLING if self.sampled and not math.isfinite(getattr(self, k))]
         if unset:
-            raise ValueError(f"sampled proofs need {unset}")
+            raise ValueError(f"SPOT needs {unset}")
 
     def q(self) -> float:
         """One minus the acceptance probability per incorrect block: the proof share over the cost of proving a

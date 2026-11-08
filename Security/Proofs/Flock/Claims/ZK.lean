@@ -14,6 +14,7 @@ public import Proofs.Flock.Claims.ZK.GKExp
 public import Proofs.Flock.Claims.ZK.CoinCheck
 public import Proofs.Flock.Claims.ZK.CoinBind
 public import Proofs.Flock.Claims.ZK.Prefix
+public import Proofs.Flock.Claims.ZK.GKOneSided
 public import Proofs.Flock.Claims.ZK.Shvzk
 public import Proofs.Flock.Claims.ZK.Flock
 public import Proofs.Flock.Claims.ZK.Hypotheses
@@ -239,6 +240,10 @@ public import Proofs.Flock.Claims.ZK.RepCons
   first `K + 1` messages (`run_prefix`) and determines what the extraction run passes on (`view0_run`); so
   `PrefixHides` follows from a bound on the strategy's runs (`Proto.prefixHides_of_runs`), which Lemma C gives at
   `2·|L|·δ₁` (`Proto.runs_close_hm96`).
+* `GKOneSided`: **`Proto.gkE_go`**, the same simulator for a prover that sends `abort` last where its values fail: its
+  messages at a coin vector at most the simulator's on every test that does not grow when the last message becomes
+  `abort` (`SHVZKLe`) bound the real run's going on at its last round (`goesOnAt`) and doing `Ev` by the simulator's `Ev`,
+  at `gkE_zk`'s error (`gkE_go_pow` at `M = t·3^t`), through one-sided rewinds (`rewinds_le`, `Model.hyb₁_le_sim`).
 * `Shvzk`: `SHVZK` at every coin vector: from Lemma B where the prover goes on (`Proto.shvzk_at_hm96`, `2·n_hid·δ₁`,
   with `InnerHolds`), and from Lemma C at fixed answers where it refuses, the simulator sending the dummy-witness
   prover's messages (`Proto.shvzk_refused_hm96`, `2·|L|·δ₁`).

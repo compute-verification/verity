@@ -5,7 +5,7 @@ scalar FP32 pipe and the casts, and the same steps as exact GF(2) circuits, whic
 The semantics import nothing but the standard library. The package's docstring lists every module; the core API:
 
 - `models.MODELS`: the step semantics, `GroupSum` (grouped truncating accumulation) and `BlockScaledAlignAdd` (the
-  block-scaled FP4 path), each `model.step(acc_word, a_words, b_words) -> acc_word'`. `total` and `total_fp8` give the
+  FP4 path with scale groups), each `model.step(acc_word, a_words, b_words) -> acc_word'`. `total` and `total_fp8` give the
   total step on every encoding (NaN, infinities, saturation), and `integer.IntegerMma` the integer mma step.
 - `instructions.INSTRUCTIONS`: for each PTX instruction class, the model it uses and its status: pinned (the model matched
   every hardware probe), hypothesis or unprobed, with the evidence.
