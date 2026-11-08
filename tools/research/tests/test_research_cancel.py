@@ -1,8 +1,8 @@
 """`research cancel`: a remote run stops through SIGTERM to its workload's process group, recorded as a manual cancel, never by
-signalling its runner. Cancels that signalled the runner and then SIGKILLed it during its custody upload left 15 node 1 runs without
-custody (1-2 Oct). It works from any VM: a run another VM launched is found on its machine (`remote.adopt`). The group is signalled
+signalling its runner: one that SIGKILLed the runner during its custody upload would leave the run without custody. It works from
+any VM: a run another VM launched is found on its machine (`remote.adopt`). The group is signalled
 only while one of its members is the run's workload (RESEARCH_RUN_DIR in its environment): a runner that died leaves status.json
-`running`, and its pgid may be another job's group by then (red team of #1043, C1)."""
+`running`, and its pgid may be another job's group by then."""
 from __future__ import annotations
 
 import json
@@ -75,8 +75,8 @@ def test_cancel_terms_the_workloads_group_records_a_manual_cancel_and_leaves_the
 
 
 def test_cancel_says_how_long_the_run_ran_and_how_much_of_it_waited_for_a_check_slot():
-    """af2d (10 Oct) was launched at 16:56Z, waited in node 1's check line until 18:31Z and was cancelled at 18:43Z: 107 minutes
-    in by its state, which reads `running` from launch, but 12 of checking."""
+    """A run launched at 16:56Z that waits in node 1's check line until 18:31Z and is cancelled at 18:43Z is 107 minutes in by
+    its state, which reads `running` from launch, but 12 of checking."""
     from datetime import datetime, timezone
 
     now = datetime(2026, 10, 10, 18, 43, tzinfo=timezone.utc)
@@ -170,8 +170,8 @@ def test_a_cancel_is_reported_delivered_when_the_runner_records_the_exit_right_a
 
 
 def test_a_run_held_for_disk_before_it_starts_is_withdrawn_and_recorded_so(tmp_path, monkeypatch, capsys):
-    """A queued run waiting in its machine's `research disk-hold` has no status.json, and the cancel refused it (`not running
-    yet`): on 19 Oct infra ended 20 such holds by hand. Here a real disk-hold holds it (at 0%, so the disk never has room)."""
+    """A queued run waiting in its machine's `research disk-hold` has no status.json, and a cancel that refused it (`not running
+    yet`) would leave such holds to be ended by hand. Here a real disk-hold holds it (at 0%, so the disk never has room)."""
     root = tmp_path / "machine"
     d, req = root / "runs" / "r-x", root / "requests" / "r-x"
     d.mkdir(parents=True)
@@ -245,7 +245,7 @@ def _held(tmp_path: Path, monkeypatch):
 
 
 def test_cancel_of_a_run_held_for_disk_ends_the_hold_and_records_it_withdrawn(tmp_path, monkeypatch, capsys):
-    """INF-101: `research cancel` of a run in `research disk-hold` said "not running yet", so a held run could only wait."""
+    """`research cancel` of a run in `research disk-hold` must not say "not running yet", which leaves a held run only to wait."""
     local, d, req, mem, hold = _held(tmp_path, monkeypatch)
     try:
         assert cli.main(["cancel", str(local), "--reason", "superseded", "--by", "ci", "--runs-dir", str(local.parent)]) == 0
@@ -321,7 +321,7 @@ def test_a_run_whose_tool_predates_the_workload_check_is_refused_not_signalled_u
 
 
 def test_a_run_whose_tool_predates_the_scope_end_gets_the_group_sigterm_and_is_told_so(tmp_path, monkeypatch, capsys):
-    """A run launched before the scope end (INF-93) ships a cancel-intent without --grace-s: the cancel is delivered the old way and
+    """A run launched before the scope end ships a cancel-intent without --grace-s: the cancel is delivered the old way and
     says that nothing SIGKILLs what ignores it."""
     here, d, workload = _launched_elsewhere(tmp_path, monkeypatch)
     old = tmp_path / "b" / "tool" / "old" / "research" / "telemetry"

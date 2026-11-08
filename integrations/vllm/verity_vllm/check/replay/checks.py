@@ -1,6 +1,7 @@
 """The Program's checks (`program.predict.common.with_checks`): bits it computes from its inputs that the verifier requires to be
-`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK among them.  The instances header names them (`checks`: what each checks,
-its accept value, and the row and output leaf that computes it, `pipeline.build_instances.check_rows`).
+`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK and a request's length rule (StopCheck_v1, in its last step) among them.
+The instances header names them (`checks`: what each checks, its accept value, and under `at` the row and output leaf that
+computes it, `pipeline.build_instances.check_rows`).
 
 The checks are the Program's output, not a sample: `checks_of` evaluates every check of every executed step of every request from
 its committed inputs, the run's values included, serially in the replay's process.  One that is not `accept` refuses the replay by
@@ -28,10 +29,10 @@ def check_rows(pi: ProgramIndex) -> list[tuple[str, int, int, int]]:
     """(what it checks, row, lo, hi) of each check of `pi`'s Program, in output order; [] when it has none."""
     if (c := pi.inst.get("checks")) is None:
         return []
-    if "of" not in c or "rows" not in c or len(c["of"]) != len(c["rows"]):
+    if "of" not in c or "at" not in c or len(c["of"]) != len(c["at"]):
         raise ValueError(f"instances header `checks` ({sorted(c)}) doesn't pair each check it names (`of`) with the row computing it "
-                         f"(`rows`)")
-    return [(str(w), int(i), int(lo), int(hi)) for w, (i, lo, hi) in zip(c["of"], c["rows"])]
+                         f"(`at`)")
+    return [(str(w), int(i), int(lo), int(hi)) for w, (i, lo, hi) in zip(c["of"], c["at"])]
 
 
 def _check(pi: ProgramIndex, store: CommittedStore, weights: Callable[[str, int, int], np.ndarray | None], rid: str, arrive: int,

@@ -7,9 +7,8 @@ rows, so each prefill chunk stays on DSA's decode route at 8 heads a rank, and t
 such a registration (`predict.steps.launch_class`), compiles a long prompt as its prefill chunks, each at the launch it ran in, and
 a prefix-cache hit or a request a Commit window carries as the request's Program after its history, and refuses by name, request by
 request, a launch `predict.dsa` doesn't write: a step past the 2,048 tokens its captured all-reduce and cuBLAS routes cover.  A row
-past INDEX_TOPK (2,048) keys compiles, its top-k order a field of the Program's `run` input, checked to be the canonical row an
-engine under `DSA_TOPK_ENV` serves; no committed value binds that input yet, so the served `max_model_len` keeps every row within
-INDEX_TOPK.  `verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the limits within which every launch is written, and
+past INDEX_TOPK (2,048) keys compiles, its top-k computed from its logits in the Program and its rows read in ascending index
+order, the canonical row an engine under `DSA_TOPK_ENV` serves; the served `max_model_len` keeps every row within INDEX_TOPK.  `verity_vllm.LLM(engine_class="G")` serves it at `CLASS_G_SERVED`, the limits within which every launch is written, and
 up to its 256 sequences a step, with `options`, the prefix cache off; its admission (`engine.class_admission`) refuses as it serves
 a prompt over the served `max_model_len`, and a request in flight when a Commit window closes, since the served Commit doesn't
 commit the window's edge ports (`workload.Edge`), which a carried request's history reads.
@@ -37,7 +36,7 @@ CLASS_G_SERVED = {"max_num_batched_tokens": 2048, "max_model_len": 2048, "long_p
 #: the H200, given to the served engine so it applies it and its target declares it
 CLASS_G_MOE_BACKEND = "triton"
 #: the environment an engine serves a row past INDEX_TOPK keys under: the DSA top-k plugin's canonical row (the top-INDEX_TOPK
-#: set in ascending index order), the one order `DsaTopKLongRow` passes; `predict.dsa` refuses such a row under an engine whose
+#: set in ascending index order), the order `DsaButterflyRows` reads it in; `predict.dsa` refuses such a row under an engine whose
 #: stated environment lacks it
 DSA_TOPK_ENV = {"VERITY_DSA_TOPK": "canonical"}
 

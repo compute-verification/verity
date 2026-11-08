@@ -1,5 +1,6 @@
 """`capture.py` records the kernels `PY_KERNELS` lists, which vLLM launches from Python past the dispatcher, without changing
-what they return: each event binds the returns and the written buffers by SHA-512, and a paged cache only by shape."""
+what they return: each event binds the returns and the written buffers by SHA-512, and a paged cache only by shape. The
+sparse backend's top-k-to-slot conversion is recorded with the inputs and both returns `stage.Wires.conversion` reads."""
 from __future__ import annotations
 
 import hashlib
@@ -131,6 +132,39 @@ def test_outside_a_recorded_forward_nothing_is_recorded(tmp_path, monkeypatch) -
         assert torch.equal(got, w)
     _router_call()
     assert S.events == []
+
+
+def convert(req_id, block_table, token_indices, BLOCK_SIZE=64, BLOCK_STRIDE_ROWS=None, NUM_TOPK_TOKENS=2048,
+            return_valid_counts=False):
+    ok = token_indices >= 0
+    blk = block_table[req_id.long()[:, None], (token_indices // BLOCK_SIZE).clamp(min=0).long()]
+    out = torch.where(ok, blk * (BLOCK_STRIDE_ROWS or BLOCK_SIZE) + token_indices % BLOCK_SIZE, -1).int()
+    return (out, ok.sum(1).int()) if return_valid_counts else out
+
+
+def test_the_sparse_backends_top_k_to_slot_conversion_is_recorded_with_its_inputs_slots_and_counts(tmp_path, monkeypatch) -> None:
+    fams = "vllm.v1.attention.backends.mla.flashattn_mla_sparse"
+    for name in ("vllm", "vllm.v1", "vllm.v1.attention", "vllm.v1.attention.backends", "vllm.v1.attention.backends.mla", fams):
+        monkeypatch.setitem(sys.modules, name, types.ModuleType(name))
+    sys.modules[fams].triton_convert_req_index_to_global_index = convert
+    req, table = torch.tensor([0, 1, 1], dtype=torch.int32), torch.tensor([[3, 1], [2, 0]], dtype=torch.int32)
+    topk = torch.tensor([[0, 5, -1, -1], [1, 0, -1, -1], [2, 1, 0, -1]], dtype=torch.int32)
+
+    def call():
+        return sys.modules[fams].triton_convert_req_index_to_global_index(
+            req, table, topk, BLOCK_SIZE=4, BLOCK_STRIDE_ROWS=6, NUM_TOPK_TOKENS=4, return_valid_counts=True)
+    want = call()
+    capture, S = _capture(tmp_path, monkeypatch)
+    capture._install_py_kernels()
+    S.recording = True
+    got = call()
+    assert all(torch.equal(g, w) for g, w in zip(got, want))
+    (ev,) = S.events
+    assert ev["op"] == "triton_convert_req_index_to_global_index"
+    assert {k: ev["in"][k]["sha512"] for k in ("req_id", "block_table", "token_indices")} == {
+        "req_id": _sha(req), "block_table": _sha(table), "token_indices": _sha(topk)}
+    assert (ev["in"]["BLOCK_SIZE"], ev["in"]["BLOCK_STRIDE_ROWS"], ev["in"]["return_valid_counts"]) == (4, 6, True)
+    assert (ev["out"]["r0"]["sha512"], ev["out"]["r1"]["sha512"]) == (_sha(want[0]), _sha(want[1]))
 
 
 def test_a_vllm_without_a_kernels_module_records_the_rest(tmp_path, monkeypatch, capsys) -> None:

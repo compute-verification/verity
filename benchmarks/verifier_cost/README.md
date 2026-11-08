@@ -138,11 +138,10 @@ unroll-K.jsonl (every PHASE line, with its step) and each step's `/usr/bin/time 
 templated statement (with `--structural`, `struct_lower`'s template, the flat unit never built). With a recorded a11
 session of that kind sent (a `.tar` of its session directory), it times `archive-put` and `verify --zk --partition
 --program` as `a0.lean_verify` runs them, under `perf record` where the node has it, so the verify's own phase lines
-(`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's, since
-`verify` runs its session before refusing it. `--phases`, and every templated statement (which `verify`
-refuses last, `ProvedScope.servedForm`), add `flock_served/Main.lean`'s timing of verify's work before the session a step
+(`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's. With
+`--phases`, and at every templated statement, `flock_served/Main.lean` times verify's work before the session a step
 at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
-`KsScope.checkOf` and `Stmt.setupTablesOf` with the draw, each with its RSS. `build.json` has the unit's ANDs and matrix
+`KsScope.checkOf` and `Stmt.setupTablesOf` with the sample, each with its RSS. `build.json` has the unit's ANDs and matrix
 entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
 verifier would read.
 
