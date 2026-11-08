@@ -10,7 +10,7 @@ public import Definitions.Core.Interaction
 `Drawn`'s openings with the hash underneath. A `DrawnLayer` compares the values accepted proofs open (`opened`) with no
 commitment under them. Here each position is an hm96 row (`Hash.RowLeaf`: `hm96-sha512/row-seg/v1` or
 `hm96-sha512/row/v2`) of a frame-v3-sha512 tree, and an accepted proof's opening of a slot is an hm96 opening of its
-position's leaf (the row's bits, its salt and the path's siblings), as C-Flock's knowledge extractor takes it from the
+position's leaf (the row's bits, its salt and the path's siblings), as Flock's knowledge extractor takes it from the
 proof's witness: the rows are hidden, so the verifier sees none of them. The hash `H` is a parameter, SHA-512 the
 instance of record, one hash for the frame tree, the hm96 leaf and the row digest.
 
@@ -18,7 +18,7 @@ instance of record, one hash for the frame tree, the hm96 leaf and the row diges
   and root; the value a row decodes to; and the opening of each slot that each proof's witness carries.
 * `checked`: what the check of one opening of a position hashed: the hm96 salt's and leaf's messages, the frame leaf's
   and the path's nodes' (`RowLeaf.outerHashed`), then the row digest's (`RowLeaf.innerHashed`).
-* `Verified`, `Unverified`: round `w`'s proof of its `i`-th drawn unit opens slot `k` with an opening its position's
+* `Verified`, `Unverified`: round `w`'s proof of its `i`-th sampled proof block opens slot `k` with an opening its position's
   verifier accepts at the position's root and rank, whose row decodes to the value the proof opens; some accepted proof
   opens position `ℓ` otherwise.
 * `Split`: position `ℓ`'s verifier, root or rank differs between a path and its continuation from `ℓ`'s cut.
@@ -33,7 +33,7 @@ verifier, root and rank, have different rows, so their checks hashed a collision
 `finder` outputs. A fork escapes it only through an opening that isn't `Verified` or a `Split`. No premise of the
 credit guarantees rules either out yet: none ties a layer's `opened` to an opening of a committed leaf (the service's
 soundness is about its relation alone), and none fixes a position's root by its cut (a window's registration is fixed
-before its draw coin, not before the coins its draw follows).
+before its sampling coin, not before the coins its sample follows).
 -/
 
 @[expose] public section
@@ -42,13 +42,13 @@ namespace Accounting.TS
 
 open Pouw.RelativeSecurity
 
-/-- **A drawn layer's openings as hm96 rows of frame-v3-sha512 trees**, over `S` rounds of coins on `Paths C m × B`, `s`
-draws a round, slots `Q`, positions `Pos` and values `V`:
+/-- **A sampled layer's openings as hm96 rows of frame-v3-sha512 trees**, over `S` rounds of coins on `Paths C m × B`, `s`
+samples a round, slots `Q`, positions `Pos` and values `V`:
 * `leaf x ℓ`, `rank x ℓ`, `root x ℓ`: on `x`, what the verifier holds for position `ℓ`'s leaf (its tree's domain, the
   hm96 key and the format), the leaf's rank, and the root committed for it;
 * `decode`: the value a row's bits give;
 * `opening x w i k`: on `x`, the hm96 opening (row, salt, siblings) of slot `k` that round `w`'s proof of its `i`-th
-  drawn unit carries in its witness. -/
+  sampled proof block carries in its witness. -/
 structure HashedOpenings (C B : Type) (S m s : ℕ) (Q Pos V : Type) where
   leaf : Paths (Paths C m × B) S → Pos → Hash.RowLeaf.Verifier
   rank : Paths (Paths C m × B) S → Pos → ℕ
@@ -67,14 +67,14 @@ def checked (H : Hash.Msg → Hash.Digest) (x : Paths (Paths C m × B) S) (ℓ :
     List Hash.Msg :=
   Hash.RowLeaf.outerHashed H H (hl.leaf x ℓ) (hl.rank x ℓ) o ++ Hash.RowLeaf.innerHashed H (hl.leaf x ℓ) o
 
-/-- **Round `w`'s proof of its `i`-th drawn unit opens slot `k` by a verified path** on `x`: its opening is accepted by
+/-- **Round `w`'s proof of its `i`-th sampled proof block opens slot `k` by a verified path** on `x`: its opening is accepted by
 the verifier of the slot's position at the position's root and rank, and its row decodes to the value the proof opens. -/
 def Verified (H : Hash.Msg → Hash.Digest) (x : Paths (Paths C m × B) S) (w : Fin S) (i : Fin s) (k : Q) : Prop :=
   Hash.RowLeaf.accepts H H (hl.leaf x (pf.pos w (pf.drawnAt x w i) k)) (hl.root x (pf.pos w (pf.drawnAt x w i) k))
       (hl.rank x (pf.pos w (pf.drawnAt x w i) k)) (hl.opening x w i k) ∧
     hl.decode (hl.opening x w i k).row = pf.opened x w i k
 
-/-- **Some accepted opening of position `ℓ` on `x` isn't verified**: an accepted proof of a drawn unit opens one of its
+/-- **Some accepted opening of position `ℓ` on `x` isn't verified**: an accepted proof of a sampled proof block opens one of its
 slots, at `ℓ`, otherwise than by a verified path. -/
 def Unverified (H : Hash.Msg → Hash.Digest) (x : Paths (Paths C m × B) S) (ℓ : Pos) : Prop :=
   ∃ w i k, pf.pos w (pf.drawnAt x w i) k = ℓ ∧ pf.accepted x w i ∧ ¬ hl.Verified pf H x w i k

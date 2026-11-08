@@ -9,19 +9,19 @@ import Proofs.Flock.Soundness.Game.Basic
 import Proofs.Flock.Soundness.Game.Prob
 
 /-!
-# A sequential draw from one byte source misses no more often than its stages' bounds multiplied
+# A sequential sample from one byte source misses no more often than its stages' bounds multiplied
 
-`Slots.select` reads its coins from one byte source in order (`SampledProofs.Draw.take`): a stratified or work draw runs
-its strata in turn, each stratum's sampler on a stream it extends and reruns until it draws (`Flock.Draw.onWith`), the
+`Slots.select` reads its coins from one byte source in order (`SampledProofs.Draw.take`): a stratified or work sample runs
+its strata in turn, each stratum's sampler on a stream it extends and reruns until it samples (`Flock.Draw.onWith`), the
 next stratum starting where it stopped. Each stratum stops at a time its own bytes decide, and the bytes after it are
-uniform and unread, so the strata's draws are independent.
+uniform and unread, so the strata's samples are independent.
 
-* `StopsAt`, `SeqMiss`: a sampler stopping at its `j`-th read of `N` bytes from `p`, and stages drawing in turn, each
-  draw meeting its own condition.
+* `StopsAt`, `SeqMiss`: a sampler stopping at its `j`-th read of `N` bytes from `p`, and stages sampling in turn, each
+  sample meeting its own condition.
 * `prCoin_append`: an event of the bytes before a position and the bytes after it has the product of their
   probabilities.
-* `seqMiss_le`: the stages' draws all meet their conditions with probability at most the product of each one's bound on
-  a stream of any length, for samplers that keep a draw on a longer stream.
+* `seqMiss_le`: the stages' samples all meet their conditions with probability at most the product of each one's bound on
+  a stream of any length, for samplers that keep a sample on a longer stream.
 -/
 
 @[expose] public section
@@ -31,19 +31,19 @@ namespace Properties.SampledProofs.SecurityProofs
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Audit.DrawExec Finset
 open scoped ENNReal
 
-/-- A sampler drawing `D` at its `j`-th read of `N` bytes of `src` from `p`, its first draw: it draws nothing on the reads
+/-- A sampler sampling `D` at its `j`-th read of `N` bytes of `src` from `p`, its first sample: it samples nothing on the reads
 before. -/
 def StopsAt (N : ℕ) (run : ByteArray → Option (Array ℕ)) (src : ByteArray) (p j : ℕ) (D : Array ℕ) : Prop :=
   1 ≤ j ∧ p + j * N ≤ src.size ∧ run (src.extract p (p + j * N)) = some D ∧
     ∀ i, 1 ≤ i → i < j → run (src.extract p (p + i * N)) = none
 
-/-- A stage of a sequential draw: its reads' size, its sampler, and the condition on its draw. -/
+/-- A stage of a sequential sample: its reads' size, its sampler, and the condition on its sample. -/
 structure Stage where
   need : ℕ
   run : ByteArray → Option (Array ℕ)
   miss : Array ℕ → Prop
 
-/-- The stages draw in turn from `src`, the first from `p`, each from where the one before stopped, and each draw meets
+/-- The stages sample in turn from `src`, the first from `p`, each from where the one before stopped, and each sample meets
 its condition. -/
 def SeqMiss : List Stage → ByteArray → ℕ → Prop
   | [], _, _ => True
@@ -149,14 +149,14 @@ theorem sum_prCoin_le {C ι : Type} [Fintype C] (s : Finset ι) (p : ι → C �
   · rw [Finset.sum_eq_zero fun i hi => ite_eq_right_iff.2 fun hp => absurd ⟨i, hi, hp⟩ hc]
     exact zero_le
 
-/-- A stage's bound: its reads are not empty, its sampler keeps a draw on a longer stream, and on a stream of any length
-its draw meets its condition with probability at most `q`. -/
+/-- A stage's bound: its reads are not empty, its sampler keeps a sample on a longer stream, and on a stream of any length
+its sample meets its condition with probability at most `q`. -/
 def Stage.Bounded (s : Stage) (q : ℝ≥0∞) : Prop :=
   0 < s.need ∧ (∀ a b D, s.run a = some D → s.run (a ++ b) = some D) ∧
     ∀ L, prCoin (fun f : Fin L → Fin 256 => ∃ D, s.run (Law.streamOf f) = some D ∧ s.miss D) ≤ q
 
-/-- **A sequential draw misses no more often than its stages' bounds multiplied**: on `L` uniform bytes, the stages draw
-in turn from the start and each draw meets its condition with probability at most the product of their bounds. -/
+/-- **A sequential sample misses no more often than its stages' bounds multiplied**: on `L` uniform bytes, the stages sample
+in turn from the start and each sample meets its condition with probability at most the product of their bounds. -/
 theorem seqMiss_le : ∀ (ss : List (Stage × ℝ≥0∞)), (∀ p ∈ ss, p.1.Bounded p.2) →
     ∀ L, prCoin (fun f : Fin L → Fin 256 => SeqMiss (ss.map (·.1)) (Law.streamOf f) 0) ≤ (ss.map (·.2)).prod
   | [], _, L => by simpa [SeqMiss] using prCoin_le_one (fun _ : Fin L → Fin 256 => True)

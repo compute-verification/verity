@@ -22,7 +22,7 @@ import Proofs.Flock.VBridge.Sparse.Unit
 
 `SessionAt` says what V*'s sessions give for R's opening; `SparseSessionAt` says it for rep `i`'s sparse phase, in its
 style. The verifier's coins accept the phase at its shape (`RecCoins.sparseCoins` at the verifier's RecSparse shape,
-`unitShape`), the phase's coins `c.cs` being the coin server's in the order drawn (`sparseCs`). Some copy of the
+`unitShape`), the phase's coins `c.cs` being the challenger's live-coin part's in the order sampled (`sparseCs`). Some copy of the
 `rec-sparse` unit in some session (`SparseCopyAt`, which `MsgsLayers` reads at a fixed copy per rep) registers w at the
 message columns some computed row reads, the verifier row at `c`
 on `v`'s and with `T > 1` the slots' types on `tau`'s, its residuals' output columns registered zero (`RegOut`). The

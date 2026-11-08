@@ -134,7 +134,7 @@ structure Replayed where
   deriving Inhabited
 
 /-- Live PROTOCOL.md §1 and §4: `Flock.Piop`'s binding, zerocheck and lincheck on the masked proof, absorbing exactly what they absorb and
-drawing exactly their coins, with the pads' root absorbed after the zerocheck's label and every message-dependent check a
+flipping exactly their coins, with the pads' root absorbed after the zerocheck's label and every message-dependent check a
 constraint. -/
 def replay (st : Setup) (lay : PadLayout) (p : Proof) (root : ByteArray) : TM Replayed := do
   let s := lay.len
