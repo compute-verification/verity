@@ -1,5 +1,5 @@
 """The device witness's host-side code in ``cuda/prove_circuit.cuh``, compiled on the host with the CUDA calls stood in for:
-``fc_sha_runs`` and ``fc_sha_rows_runs``'s word assembly against ``fc_sha_rows``'s one bit a row, and ``host_copies``'s 1D, 2D
+``fc_sha_runs``'s runs and ``fc_rows_words``'s word assembly against ``fc_sha_rows``'s one bit a row, and ``host_copies``'s 1D, 2D
 and 3D copies of the host slots against ``fc_host_slots``'s scatter. Both must give the same words of z, a, b; the device's
 own run (``prover_is_deterministic`` pinned to main's transcripts) covers one statement's layout, these every layout and
 plan the generators draw, and that a slot range's slots in every block take one copy a word kind."""
@@ -39,28 +39,27 @@ def _run(tmp_path: Path, program: str) -> str:
 def _device_free(code: str) -> str:
     """A kernel or lambda body as host code: no qualifiers, launches as calls, one block of one thread."""
     code = re.sub(r"<<<.*?>>>", "", code).replace("#pragma unroll", "")
-    code = code.replace("__global__ ", "").replace("__restrict__ ", "")
+    code = code.replace("__global__ ", "").replace("__device__ __forceinline__ ", "static ").replace("__restrict__ ", "")
     for k, v in (("blockIdx.x", "0"), ("gridDim.x", "1"), ("threadIdx.x", "0"), ("blockDim.x", "1")):
         code = code.replace(k, v)
     return code
 
 
 def test_sha_rows_runs_match_per_bit(tmp_path: Path) -> None:
-    runs = _extract(r"^static void fc_sha_runs\(.*?^}\n")
-    kernel = _extract(r"^__global__ void fc_sha_rows_runs\(.*?^}\n")
-    body = kernel[kernel.index("uint32_t W[2][8];"):kernel.index("const uint32_t* A = W[0];")]
+    runs = _extract(r"^struct FcRuns \{.*?^\};\n") + _extract(r"^static void fc_sha_runs\(.*?^}\n")
+    words = _extract(r"^__device__ __forceinline__ void fc_rows_words\(.*?^}\n")
     program = r"""
+#include <algorithm>
 #include <cstdint>
 #include <cstdio>
 #include <random>
+#include <unordered_map>
 #include <vector>
 struct uint2 { uint32_t x, y; };
+struct uint4 { uint32_t x, y, z, w; };
 static uint2 make_uint2(uint32_t x, uint32_t y) { return {x, y}; }
-""" + runs + r"""
-static void words_runs(const uint64_t* tape, long long n, long long s, const uint32_t* off, const uint2* runs, int g, uint32_t out[2][8]) {
-""" + _device_free(body) + r"""
-    for (int h = 0; h < 2; h++) for (int j = 0; j < 8; j++) out[h][j] = W[h][j];
-}
+static uint4 make_uint4(uint32_t a, uint32_t b, uint32_t c, uint32_t d) { return {a, b, c, d}; }
+""" + runs + _device_free(words) + r"""
 // fc_sha_rows's words: one plan entry and one tape bit a row
 static void words_bits(const uint64_t* tape, long long n, long long s, const uint32_t* plan, int useful, int g, uint32_t out[2][8]) {
     for (int h = 0; h < 2; h++) for (int j = 0; j < 8; j++) {
@@ -90,15 +89,36 @@ int main() {
         std::vector<uint64_t> tape((size_t)tape_words * n);
         for (auto& v : tape) v = rng();
         const int nrg = (useful + 255) / 256;
-        std::vector<uint32_t> off; std::vector<uint2> runs;
-        fc_sha_runs(plan.data(), useful, 8 * nrg, off, runs);
-        if (off.size() != 2 * 8 * (size_t)nrg + 1) { printf("trial %d: %zu offsets\n", trial, off.size()); return 1; }
-        for (int s = 0; s < n; s++) for (int g = 0; g < nrg; g++) {
-            uint32_t a[2][8], b[2][8];
-            words_runs(tape.data(), n, s, off.data(), runs.data(), g, a);
-            words_bits(tape.data(), n, s, plan.data(), useful, g, b);
-            for (int h = 0; h < 2; h++) for (int j = 0; j < 8; j++, words++)
-                if (a[h][j] != b[h][j]) { printf("trial %d slot %d word %d operand %d: %08x, per bit %08x\n", trial, s, 8 * g + j, h, a[h][j], b[h][j]); return 1; }
+        FcRuns R;
+        fc_sha_runs(plan.data(), useful, nrg, R);
+        if (R.poff.size() != 16 * (size_t)nrg + 1 || R.goff.size() != (size_t)nrg + 1) { printf("trial %d: %zu offsets\n", trial, R.poff.size()); return 1; }
+        for (int g = 0; g < nrg; g++) {
+            const uint32_t nw = R.goff[g + 1] - R.goff[g];
+            if ((int)nw > R.nwc) { printf("trial %d group %d: %u words, nwc %d\n", trial, g, nw, R.nwc); return 1; }
+            for (uint32_t k = R.poff[16 * g]; k < R.poff[16 * g + 16]; k++)
+                for (uint32_t c : {R.rq[k].y >> 16, R.rq[k].w >> 16})
+                    if (c >= nw && c != (uint32_t)R.nwc) { printf("trial %d group %d: column %u of %u\n", trial, g, c, nw); return 1; }
+        }
+        for (int q = 0; q < 16 * nrg; q++)
+            if ((R.poff[q + 1] - R.poff[q]) % 2) { printf("trial %d: word and operand %d has an odd count\n", trial, q); return 1; }
+        // a block's 8 groups, its runs from base on and each group's columns as the kernel's shared memory holds them; the
+        // columns past a group's own words hold other values, which no run may read
+        for (int g0 = 0; g0 < nrg; g0 += 8) {
+            const uint32_t base = R.poff[16 * g0], end = R.poff[16 * std::min(g0 + 8, nrg)];
+            if (end - base > R.block_max) { printf("trial %d block %d: %u runs, block_max %u\n", trial, g0 / 8, end - base, R.block_max); return 1; }
+            const std::vector<uint4> rs(R.rq.begin() + base, R.rq.begin() + end);
+            for (int g = g0; g < std::min(g0 + 8, nrg); g++)
+                for (int s = 0; s < n; s++) {
+                    std::vector<uint64_t> col(R.nwc + 1);
+                    for (auto& v : col) v = rng();
+                    for (uint32_t i = R.goff[g]; i < R.goff[g + 1]; i++) col[i - R.goff[g]] = tape[(size_t)R.gw[i] * n + s];
+                    col[R.nwc] = ~0ull;
+                    uint32_t a[2][8] = {}, b[2][8];
+                    fc_rows_words(col.data(), 1, R.poff.data(), rs.data(), base, g, a);
+                    words_bits(tape.data(), n, s, plan.data(), useful, g, b);
+                    for (int h = 0; h < 2; h++) for (int j = 0; j < 8; j++, words++)
+                        if (a[h][j] != b[h][j]) { printf("trial %d slot %d word %d operand %d: %08x, per bit %08x\n", trial, s, 8 * g + j, h, a[h][j], b[h][j]); return 1; }
+                }
         }
     }
     printf("%lld\n", words);

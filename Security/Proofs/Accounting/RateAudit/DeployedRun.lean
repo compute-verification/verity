@@ -39,6 +39,7 @@ import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.Chip
 import Std.Tactic.BVDecide.Normalize.Prop
+import Proofs.Pous.Prob
 
 /-!
 # The deployed session as a run of the remote audit: its routes, and conservation at the same `γ`
@@ -67,7 +68,7 @@ variable {n P N b h ρ S L q r s d G τ : ℕ}
 
 /-- The remote model's probability is the game's, as a real. -/
 theorem pouw_pr_eq {α : Type} [Fintype α] (Q : α → Prop) : Pouw.pr Q = (Pous.pr Q).toReal := by
-  unfold Pouw.pr Pous.pr
+  unfold Pouw.pr Claims.Pr Claims.prUniform; simp only [Pous.pr_eq_card]
   rw [ENNReal.toReal_div]
   simp
 
