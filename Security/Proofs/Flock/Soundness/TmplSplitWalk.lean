@@ -548,7 +548,8 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
         refX (t.defs.getD d default) pt s (β + al - 6) H (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) k v)
       (fun o k cx w vs => refs_tabExp _ _ hs _ _ _ _ _ _ _ _ _ _ _ _ _)
-      (fun _ hB hlow o cx ws vs => refsK_tabExp _ _ _ _ _ _ _ _ _ _ _ hB hlow (fun _ _ => rfl) _ _ _ _), tabExp_empty,
+      (fun _ hB hlow rowLow alpha rows o =>
+        rowsK_tabExp _ _ hs _ _ _ _ _ _ _ _ _ hB hlow (fun _ _ => rfl) rowLow alpha rows o), tabExp_empty,
       zero_add,
       list_sum_comm]
     refine Finset.sum_congr rfl fun k hk => congrArg List.sum (List.map_congr_left fun r _ => ?_)
