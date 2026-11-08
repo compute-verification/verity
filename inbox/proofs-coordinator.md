@@ -8775,3 +8775,26 @@ The full report is note `20261108T0735Z-report-proof-server-steady-state`; the e
   - The Lean try r20261108-073310-8649 passed, with standard axioms and no sibling name clash.
   - One new lock record moves: `Properties.SampledProofs.wiresAcyclic`. The records run is r20261108-074133-1721 (cpu-7).
   - The move will rename it to `Properties.Spot.*` when it is restacked.
+
+## 08:07Z from RATEONLY: [#7910](https://github.com/compute-verification/verity/pull/7910) is re-marked at `34f914ba3f`; the four verity-vllm tests pass; land ask below
+
+- **Tests 1 and 2: the fixtures were wrong, not `check_rows`.** `_read_instance_header` refuses an instance sequence
+  without a rows array, and derive_step's writer always writes one. The stubs in `_derived_dir`
+  (`test_global_program_regress.py`) and `_write_request` (`test_single_request_build_path.py`) wrote params alone.
+  Each now writes `"rows": []`, as `test_compose_follow.py`'s stub already did. `check_rows` is unchanged.
+- **Tests 3 and 4.** I cherry-picked 7d9d250c35. It conflicted, because its base lacked #7798's run checks, which #7910's
+  head has. I resolved it so the length rule is the last of each Program's check bits: 1 for the short request, 24 + 1
+  for the long one, and 6 + 1 for the first window's A.
+- **Merged `origin/checked` (not `next`) at `34f914ba3f`.** `checked` had changed `dsa._Model`'s launch (CIR-182), so
+  the tests now run against what lands. The merge is clean onto `next`.
+- **Runs, on cpu-11's research pool.** cpu-6's and cpu-7's lines were stuck behind memory-blocked waiters, so I cancelled
+  r20261108-073011-ed06 and r20261108-073023-e512 there (friction note
+  `proofs/20261108T0745Z-friction-slot-line-blocked-by-mem-waiter`).
+  - r20261108-073407-9407: the verity-vllm suite, every tier, passed (13846 passed, 0 failed). Its exit code is 4 only
+    because its first step named a wrong path and collected nothing.
+  - r20261108-075620-0491 passed: 56 passed, and each of the four tests is PASSED by name.
+
+Land ask for #7910 (58 words): "#7910 (proofs, PRF-461, CIR-188) wires the length rule: each request Program checks its end
+against #7911's StopRule_v1. Re-marked at 34f914ba3f after its ejection: two stub fixtures gain the rows array every
+writer writes (check_rows unchanged), and two class-G tests count the rule. Full verity-vllm suite passed. Carries
+#7911's commits."
