@@ -349,6 +349,38 @@ def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
     assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
+#: The interior's ports as a session's header shares them (``shared_rows``), a table of one row a slot each.
+SHARED = dict.fromkeys(INTERIOR, Q * N_RHO)
+
+
+def _sharing(registered=None):
+    """The honest statement, its header sharing rows at the interior's ports (`SHARED`), with `registered` its reads, a
+    function of the honest statement and the second stage, if given."""
+    return lambda s, second: [{**s, "header": {**s["header"], "shared_rows": SHARED},
+                               **({} if registered is None else {"registered": registered(s, second)})}]
+
+
+@pytest.mark.parametrize("statements, codes", [
+    (_sharing(lambda s, second: _linked(s, out=_own(second))), ["two-stage-form"]),
+    (_sharing(), ["second-refs"]),
+    (_sharing(lambda s, second: None), ["second-read", "second-refs"]),
+    (_sharing(lambda s, second: _linked(s, out=_own(second, shift=1))), ["second-read"]),
+    (lambda s, second: [{**s, "registered": _linked(s, out=_own(second))}], ["second-header"]),
+])
+def test_round_two_holds_each_port_a_header_shares_rows_at_to_a_registered_read(statements, codes):
+    """`second-refs`, by both verifiers, under a reference whose sessions share rows at the interior's ports
+    (``shared_rows``: tables whose rows an instance reads by the refs in its public file's body). The run's statement
+    reading its linked `x` at the boundary and its own `out` at each slot's own rows passes, refused only on the form.
+    One leaving the shared `out` unread is refused: the session's verifier would only bound its refs by their table, so
+    one could point a drawn unit at another unit's rows. So is one reading nothing registered. A shared port read at
+    another slot's rows, where the verifier would hold the ref, is `second-read`'s, and a header sharing no rows where
+    its reference does is `second-header`'s."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, statements, proofs=_circuits((PAIR,), header={**REFERENCE, "shared_rows": SHARED}))
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+
+
 def test_round_two_places_the_reference_in_the_run_as_the_served_path_names_it():
     """The honest header is the served path's (`flock_inputs.flock_input_files`): its template's reference, the input
     set `served/<run>/m<k>` of the interior's `k`-th member, `<run>` the interior record's `window.run`, and each port's
