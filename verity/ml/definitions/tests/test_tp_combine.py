@@ -276,17 +276,14 @@ def test_the_units_refuse_what_they_do_not_state() -> None:
         bind(TC.AllReduceMultimemRow, WORLD=8, N=12, ROWS=4, ROW=0, TREES=TREES, FTZ=False).body  # noqa: B018
 
 
-def _block(fn, cuts) -> float:
+def _block(fn, cuts, on_bits: bool = True) -> float:
     """The share of a 2^K_MAX-bit C-Flock block that ``fn`` under ``cuts`` takes as one unit, as `verity_flock.circuit.compose`
     places it at one unit a block: its rows' sha512x3 and hm96 slots (`check_proof_block`'s) and the mask beside the unit's own
-    slot, the least power of two above the ANDs and port bits read off its Boolean version, or off ``fn`` where it has none
+    slot, the least power of two above the ANDs and port bits read off its Boolean version (``on_bits``), or off ``fn`` itself
     (`unit_witness`, never lowered). Past 1, compose refuses it."""
     from verity_flock import circuit as FC
 
-    try:
-        bits = BB.boolean_version(fn)
-    except BB.NoBooleanVersion:
-        bits = fn
+    bits = BB.boolean_version(fn) if on_bits else fn
     w = FC.unit_witness(bind(bits) if isinstance(bits, CompositeDefinition) else bits)
     lay = layout(fn)
     ports = [FC.Port(p, words, 16 * words) for p, words in [(p, x) for p, x, _ in lay.cut(cuts)] + list(lay.outs)]
@@ -323,10 +320,11 @@ def test_glm53s_units_at_chunks_of_96_fit_a_flock_block_and_its_coordinates_and_
         (bind(b1_tp2.AllGather, WORLD=n, N=K), {"parts": n}),
         *[(bind(TA.RmsNormMnnvl, N=GLM53_N, SHOT=s, CLUSTER=c, EPS=1e-5, FMA=True), None) for s, c in GLM53_FUSED],
         (bind(b1_tp2.AllGather, WORLD=121, N=1), {"parts": 121}),
-        (bind(dead_free.TokenSelectGroupsV1, C=1936, G=16), {"x": 16}),
     ]
     for fn, cuts in fits:
         assert check_proof_block(fn, cuts) <= K_MAX and _block(fn, cuts) <= 0.9, fn.id
+    select = bind(dead_free.TokenSelectGroupsV1, C=1936, G=16)
+    assert check_proof_block(select, {"x": 16}) <= K_MAX and _block(select, {"x": 16}, on_bits=False) <= 0.9
     whole = [*[bind(TA.AllReduceRmsNormMnnvl, **fused(s, c)) for s, c in GLM53_FUSED],
              bind(TA.AllReduceResidualMnnvl, WORLD=8, N=GLM53_N, SHOT=1), bind(TA.AllReduceMnnvl, WORLD=8, N=GLM53_N, SHOT=2)]
     for fn in whole:
