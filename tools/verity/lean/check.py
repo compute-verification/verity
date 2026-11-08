@@ -230,6 +230,9 @@ HERE = Path(__file__).resolve().parent
 #: where the Lean files are run from: `main` points it at a copy taken before the first build
 TOOL = HERE
 ROOT = HERE.parents[2]
+#: where a run's seals go (`Seals`): node-local scratch under the gitignored `.lake`, swept by pid. A module constant so a
+#: test that drives `main` can redirect it off the checkout, which the test suite's read guard would otherwise flag
+SEAL_BASE = ROOT / ".lake" / "sealed"
 POLICY = "lean-audit.json"
 #: the lock's schema version, which every lock this file writes carries as `format`: bump it with any change to what a lock
 #: holds or how its sections read, and `merge.py`'s `FORMAT` with it, so an older driver leaves a newer lock to git's
@@ -991,16 +994,17 @@ def listings(pkg: Path, files: dict[str, str], policy: dict, facts: dict, update
     return fails, now, notes
 
 
-def dependency_scans(pkg: Path, oleans: list[str], policy: dict) -> tuple[list[str], int]:
+def dependency_scans(pkg: Path, oleans: list[str], policy: dict, sealed: "Sealed | None" = None) -> tuple[list[str], int]:
     """(the `unchecked` hits, the number of files read) in what the package's build takes from the packages it fetches
     (`.lake/packages/*`): the source of each module it imports from one (``oleans``, which `Facts.lean` reports), and the
     lakefile of each such package, comments aside.  A hit fails unless `dependency_unchecked` lists its module (a lakefile:
     `<package>/lakefile.lean`) with the reason.  The toolchain, which defines these options, is trusted, and a path
-    dependency is a package of the repository, audited on its own."""
+    dependency is a package of the repository, audited on its own.  With ``sealed`` (the package's seal) the sources and
+    lakefiles are read from its copies, which ``oleans`` then name, so no dependent's build can change what is scanned."""
     fails, seen, read = [], set(), 0
     allowed = policy.get("dependency_unchecked", {})
     loaded = [os.path.realpath(o) for o in oleans]
-    packages_dir = pkg / ".lake" / "packages"
+    packages_dir = sealed.packages_dir if sealed else pkg / ".lake" / "packages"
     for d in sorted(packages_dir.iterdir()) if packages_dir.is_dir() else []:
         lib = os.path.realpath(d / ".lake" / "build" / "lib" / "lean") + os.sep
         rels = sorted(Path(o[len(lib):]).with_suffix(".lean") for o in loaded if o.startswith(lib))
@@ -1087,17 +1091,19 @@ def program(pkg: Path, source: str) -> str:
 UNREAD_FACTS = ("Security", "Security/Proofs")
 
 
-def unread_facts(pkg: Path, modules: list[str], work: Path) -> dict:
+def unread_facts(pkg: Path, modules: list[str], work: Path, sealed: "Sealed | None" = None) -> dict:
     """`Unread.lean`'s facts (each constant with what it mentions, from the `.olean` files as data) of ``modules`` (the
     package's modules under its roots, the facts' `modules`) and of every module of the packages it requires by path that
     they import (`module_files`, ``follow``), gzipped beside the report (`unread-facts.jsonl.gz`, no timestamp): its path
-    under the audit's output, SHA-256 and constants. Raises RuntimeError when the program fails."""
+    under the audit's output, SHA-256 and constants. Raises RuntimeError when the program fails.  With ``sealed`` (the
+    package's seal) `Unread.lean` runs against the seal's private copies."""
     plain, gz, config = work / "unread-facts.jsonl", work / "unread-facts.jsonl.gz", work / "unread-config.json"
     plain.unlink(missing_ok=True)
     gz.unlink(missing_ok=True)
     config.write_text(json.dumps({"modules": sorted(modules), "follow": sorted(set(module_files(pkg)) - set(modules)),
                                   "out": str(plain)}))
-    rc, text = run(["lake", "env", program(pkg, "Unread.lean"), str(config)], pkg, work / "unread.log")
+    prefix = sealed.env() if sealed else ["lake", "env"]
+    rc, text = run([*prefix, program(pkg, "Unread.lean"), str(config)], pkg, work / "unread.log")
     if rc or not plain.exists():
         raise RuntimeError(f"`Unread.lean` failed (exit {rc}):\n{text[-3000:]}")
     data = plain.read_bytes()
@@ -1120,7 +1126,8 @@ def record_scope(policy: dict) -> list[str]:
     return list(dict.fromkeys([*meaning, *sorted(extra)]))
 
 
-def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True) -> dict:
+def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None = None, keep: bool = True,
+             sealed: "Sealed | None" = None) -> dict:
     """Run `Facts.lean` on the package (its `.olean` files as data: no initializer, attribute handler or other package code
     runs): the facts document it writes, each guarantee's `reads` walked through `record_scope`.  A guarantee whose type is
     a definition under `meaning`, applied under binders, gets
@@ -1132,7 +1139,9 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
     of `constants` (the names of the lock's `shape.inline` texts, and those its premises print, that the build holds), for
     `paired`, which reads ``moved`` as `moves`.  `Facts.lean` writes the document and its canonical forms under `SCRATCH`,
     since a recorded run publishes ``work``; with ``keep``, ``work`` keeps the document only gzipped, as `FACTS` (read back
-    by `stored_facts`), and without it keeps none."""
+    by `stored_facts`), and without it keeps none.  With ``sealed`` (the package's seal) `Facts.lean` runs against the
+    seal's private copies, so the facts it reports are a function of the sealed bytes, which no dependent's build can
+    change, and the `.olean` paths it reports name the copies."""
     kept, config = work / FACTS, work / "facts-config.json"
     for p in (kept, work / "facts.json", work / "canon.jsonl"):
         p.unlink(missing_ok=True)
@@ -1152,7 +1161,8 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                       "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                       "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
                                       "honest": honest_witnesses(policy), "out": str(out), "canon": str(canon)}))
-        rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
+        prefix = sealed.env() if sealed else ["lake", "env"]
+        rc, text = run([*prefix, facts_program(pkg), str(config)], pkg, work / "facts.log")
         if rc or not out.exists():
             raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
         data = out.read_bytes()
@@ -3717,13 +3727,14 @@ def assign(names, sources: list[tuple[str, dict, dict]]) -> tuple[dict, list[str
 
 
 def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, str] | None = None,
-           ready=lambda q: None, keep: bool = True) -> tuple[list[str], dict, dict[str, list[str]]]:
+           ready=lambda q: None, keep: bool = True, seals: "Seals | None" = None) -> tuple[list[str], dict, dict[str, list[str]]]:
     """(failures, ``facts`` with each guarantee's facts taken from the package that proves it, {package: the guarantees it
     proves}) for a policy whose `proved_in` names the packages that prove its guarantees. Each must require ``pkg`` by path
     and hold a policy of its own without guarantees; ``ready`` (one) returns once its build has ended, False when it did not
     pass. `Facts.lean` reads its roots with this policy's `meaning`, `axioms` and guarantees, so the judgment is the one of
     guarantees proved in ``pkg``; with ``keep``, its document is kept under `proved-in-*/` (`facts_of`). Raises
-    RuntimeError when a package's build did not pass or its facts cannot be read."""
+    RuntimeError when a package's build did not pass or its facts cannot be read.  With ``seals`` (the run's seals) a
+    prover's facts are read from the copies taken at its own seal, which its build announced before this one reads it."""
     fails, sources, conflicts = [], [("this package", facts, lean_modules(pkg))], list(facts.get("moved_conflicts", []))
     if not isinstance(named := policy["proved_in"], list) or not all(isinstance(p, str) for p in named):
         fails.append(Failure("proved_in.form", None, "proved_in: a list of paths, each relative to this package"))
@@ -3761,11 +3772,13 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
                                f"read as a missing import here")
         qwork = work / f"proved-in-{re.sub(r'[^A-Za-z0-9]+', '_', entry)}"
         qwork.mkdir(parents=True, exist_ok=True)
+        qview = seals.take(q, (q / "lean-toolchain").read_text().strip(), qpol["roots"], qwork,
+                           log=lambda *_: None) if seals else None
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
                           "assumptions": listed_premises(policy), "shape": policy.get("shape", {}),
-                          "witnesses": policy.get("witnesses", {})}, qwork, moved, keep)
-        lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
+                          "witnesses": policy.get("witnesses", {})}, qwork, moved, keep, sealed=qview)
+        lib = (qview.lib if qview else q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}
         if unaudited := sorted(loaded - set(qf["modules"])):
@@ -4176,22 +4189,205 @@ def olean_digest(lib: Path, files: list[Path]) -> str:
     return h.hexdigest()
 
 
-REPLAY_SCHEMA = "lean-replay/v2"
+#: the parts of a module a seal copies: those `replay_keys` hashes, and the code the module system writes beside them
+SNAPSHOT_PARTS = ("", ".server", ".private")
+SNAPSHOT_CODE = (".ir.sig", ".ir")
+
+
+class Sealed:
+    """Private copies of a package's build, under ``dir``, that no later build or sandbox can touch: a reader after the
+    package's seal reads these, never the live `.lake` (`Seals`).  ``roots`` are the package's `writable` directories,
+    whose files a dependent's build may rewrite (`writable`); a file under one is copied into ``dir``, mirrored under the
+    index of its root with its `.lake` kept, so the `.olean` paths keep the `/.lake/build/` and `/.lake/packages/` markers
+    that tell an own module from a dependency's (`own_modules`, `Facts.lean`).  A file outside every root (the toolchain's,
+    which no prover writes) is read live.  ``search`` is the module search path with its directories mapped the same way, and
+    ``sysroot``/``ld`` run the compiled `Facts.lean`/`Unread.lean` against the copies."""
+
+    def __init__(self, pkg: Path, toolchain: str, dir: Path):
+        self.pkg, self.toolchain, self.dir = pkg, toolchain, dir
+        self.roots = [d.resolve() for d in writable(pkg)]
+        self.sysroot = toolchain_bins(toolchain)[0].parent.parent
+        self.search: list[str] = []
+        self.digests: dict[Path, str] = {}
+        self.lock = threading.Lock()
+
+    def moved(self, p: Path) -> Path | None:
+        """Where ``p`` is in the snapshot, if a build of the package can write it (it is under a `writable` root); its
+        `.lake` is kept, so the markers a module's path carries survive the copy."""
+        for i, r in enumerate(self.roots):
+            if p == r or p.is_relative_to(r):
+                return self.dir / str(i) / ".lake" / p.relative_to(r)
+        return None
+
+    def mapped(self, p: Path) -> Path:
+        """``p`` moved into the snapshot, or ``p`` itself when no build can write it."""
+        return self.moved(p) or p
+
+    def digest(self, p: Path) -> str:
+        """`sha256` of ``p``, memoized for a copy in the snapshot, which no one writes once the seal is taken."""
+        if not p.is_relative_to(self.dir):
+            return sha256(p)
+        with self.lock:
+            if (d := self.digests.get(p)) is not None:
+                return d
+        d = sha256(p)
+        with self.lock:
+            self.digests[p] = d
+        return d
+
+    def copy(self, live: Path) -> None:
+        """Copy the module whose `.olean` is ``live`` into the snapshot, every part it has, unless an earlier seal did: the
+        `.olean` goes last, so a copy whose `.olean` is present is whole.  ``live`` is under a `writable` root."""
+        copy = self.moved(live)
+        if copy is None or copy.is_file():
+            return
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        for ext in (*SNAPSHOT_PARTS[1:], *SNAPSHOT_CODE, SNAPSHOT_PARTS[0]):
+            src, dst = (Path(f"{live}{ext}"), Path(f"{copy}{ext}")) if ext in SNAPSHOT_PARTS else \
+                (live.with_suffix(ext), copy.with_suffix(ext))
+            if src.is_file():
+                tmp = dst.with_name(f".{dst.name}.tmp")
+                shutil.copyfile(src, tmp)
+                os.replace(tmp, dst)
+
+    def put(self, live: Path) -> None:
+        """Copy an arbitrary file ``live`` under a `writable` root into the snapshot (a dependency's source or lakefile, a
+        shared library the interpreter loads), unless an earlier seal did."""
+        copy = self.moved(live)
+        if copy is None or copy.exists() or not live.is_file():
+            return
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        tmp = copy.with_name(f".{copy.name}.tmp")
+        shutil.copyfile(live, tmp)
+        os.replace(tmp, copy)
+
+    @property
+    def packages_dir(self) -> Path:
+        """The snapshot's copy of ``pkg/.lake/packages`` (the fetched dependencies), which the dependency scans read."""
+        return self.mapped((self.pkg / ".lake" / "packages").resolve())
+
+    @property
+    def lib(self) -> Path:
+        """The snapshot's copy of ``pkg/.lake/build/lib/lean`` (the package's own `.olean` files)."""
+        return self.mapped((self.pkg / ".lake" / "build" / "lib" / "lean").resolve())
+
+    def env(self) -> list[str]:
+        """The `env` prefix that runs a compiled `Facts.lean`/`Unread.lean` against the copies: the mapped search path, the
+        mapped shared-library path, and the toolchain's sysroot (the toolchain is read live)."""
+        build_lib = self.mapped((self.pkg / ".lake" / "build" / "lib").resolve())
+        ld = [str(build_lib), str(self.sysroot / "lib" / "lean"), str(self.sysroot / "lib")]
+        return ["env", f"LEAN_PATH={os.pathsep.join(self.search)}", f"LD_LIBRARY_PATH={os.pathsep.join(ld)}",
+                f"LEAN_SYSROOT={self.sysroot}"]
+
+    def bin(self, name: str) -> list[str]:
+        """The `env` prefix for the toolchain's ``lean`` or ``leanchecker`` run against the copies (its own RPATH finds its
+        libraries, so only the search path and sysroot are set)."""
+        return ["env", f"LEAN_PATH={os.pathsep.join(self.search)}", f"LEAN_SYSROOT={self.sysroot}", str(self.sysroot / "bin" / name)]
+
+    def take(self, roots: list[str], work: Path, log=print) -> "Sealed":
+        """Take the seal: the import graph of the package's audited modules (`Graph.lean`, which reads only headers, so it
+        takes seconds), a copy of every module of that closure whose `.olean` is under a `writable` root, the sources and
+        lakefiles the dependency scans read, and the search path mapped to the copies.  Idempotent per package (every copy
+        is copy-once), and safe to call while a dependent builds, since it reads only paths a dependent cannot reach once
+        the first `.olean` is copied: the caller takes it before the package's build is announced."""
+        self.dir.mkdir(parents=True, exist_ok=True)
+        seeds = sorted(m for m in lean_modules(self.pkg) if under(roots, m))
+        (work / "graph-modules").write_text("".join(f"{m}\n" for m in seeds))
+        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
+                        f"@{work / 'graph-modules'}"], self.pkg, work / "graph.log")
+        if rc:
+            raise RuntimeError(f"Graph.lean exited {rc} sealing {self.pkg.name}: {text[-500:]}")
+        doc = json.loads((work / "graph.json").read_text())
+        oleans = [Path(g["olean"]).resolve() for g in doc["graph"].values()]
+        with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
+            list(ex.map(self.copy, oleans))
+        self.copy_sources(oleans, log)
+        self.search = [str(self.mapped(Path(d).resolve())) for d in doc["search"]]
+        return self
+
+    def copy_sources(self, oleans: list[Path], log=print) -> None:
+        """Copy the fetched-dependency sources and lakefiles the dependency scans read (`dependency_scans`,
+        `dependency_digests` read the `.olean` parts the seal already copied): for each loaded `.olean` under a fetched
+        package's build, its `.lean` source, and each such package's lakefiles."""
+        packages = (self.pkg / ".lake" / "packages").resolve()
+        if not packages.is_dir():
+            return
+        for d in packages.iterdir():
+            lib = (d / ".lake" / "build" / "lib" / "lean").resolve()
+            rels = [o.relative_to(lib).with_suffix(".lean") for o in oleans if o.is_relative_to(lib)]
+            if not rels:
+                continue
+            for rel in rels:
+                self.put(d / rel)
+            for name in ("lakefile.toml", "lakefile.lean"):
+                self.put(d / name)
+
+
+class Seals:
+    """The seals of a check run: a `Sealed` per package, taken at its seal and kept until the run ends, so a dependent that
+    reads a package's facts (`proved`) reads the same copies.  ``base`` holds every run's seals in its own fresh directory,
+    named ``<pid>-<suffix>``; a run sweeps the directories of processes that are gone (`sweep`) and removes its own at the
+    end (`close`).  The directory is `mkdtemp`-fresh, never ``base/<pid>``, so a run under a reused pid (container pids are
+    low, and a slot persists) cannot read a killed run's copies, which `Sealed.copy` would otherwise keep (it skips a file
+    already there).  ``take`` is copy-once per package and safe to call from two threads (a package's own audit and a
+    dependent's `proved`)."""
+
+    def __init__(self, base: Path):
+        self.base = base
+        base.mkdir(parents=True, exist_ok=True)
+        self.dir = Path(tempfile.mkdtemp(prefix=f"{os.getpid()}-", dir=base))
+        self.sealed: dict[Path, Sealed] = {}
+        self.locks: dict[Path, threading.Lock] = {}
+        self.lock = threading.Lock()
+        self.sweep()
+
+    def sweep(self, proc: Path = Path("/proc")) -> None:
+        """Remove the seal directories of processes that are gone, so a suspended run leaves nothing behind.  A run's
+        directory is ``<pid>-<suffix>`` (`mkdtemp`); the pid is the prefix, so a leftover from either naming sweeps away."""
+        for d in self.base.glob("*") if self.base.is_dir() else []:
+            pid = d.name.split("-", 1)[0]
+            if pid.isdigit() and not (proc / pid).exists():
+                shutil.rmtree(d, ignore_errors=True)
+
+    def take(self, pkg: Path, toolchain: str, policy_roots: list[str], work: Path, log=print) -> Sealed:
+        key = pkg.resolve()
+        with self.lock:
+            lock = self.locks.setdefault(key, threading.Lock())
+        with lock:
+            if key in self.sealed:
+                return self.sealed[key]
+            tag = re.sub(r"[^A-Za-z0-9]+", "_", pkg.name)
+            s = Sealed(pkg, toolchain, self.dir / f"{tag}-{len(self.sealed)}")
+            # hold the package's `writable` directories while the copy reads them, so a build that shares one (a sibling
+            # that requires the same path dependency) cannot rewrite a file mid-copy (`writing`)
+            with writing(pkg, log):
+                s.take(policy_roots, work, log)
+            self.sealed[key] = s
+            return s
+
+    def close(self) -> None:
+        shutil.rmtree(self.dir, ignore_errors=True)
+
+
+#: the replay cache's schema: v3 so an entry written by an audit without sealed snapshots (v2 or earlier) is never read.
+REPLAY_SCHEMA = "lean-replay/v3"
 #: how long a replay may run before it is killed; the import closure's, cold, checks all of Mathlib and core
 REPLAY_TIMEOUT = 4 * 3600
 CLOSURE_TIMEOUT = 24 * 3600
 
 
-def replay_keys(facts: dict, toolchain: str) -> dict[str, str]:
+def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     """{module: key} for every module of the import closure (``facts``' `graph`): what its kernel replay's verdict is a
     function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
     each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
-    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built."""
+    name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built.
+    ``digest`` reads a file's bytes (`Sealed.digest` for a seal's copies, which `Replay.lean` reads in step)."""
+    digest = digest or sha256
     graph = facts["graph"]
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
-        digests = dict(zip(files, ex.map(lambda ps: ",".join(sha256(p) for p in ps), files.values())))
+        digests = dict(zip(files, ex.map(lambda ps: ",".join(digest(p) for p in ps), files.values())))
     head = f"{REPLAY_SCHEMA}\0{toolchain}\0{sha256(TOOL / 'Replay.lean')}\0"
     keys: dict[str, str] = {}
     for root in graph:
@@ -4252,28 +4448,34 @@ def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
 
 
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
-                closure: bool = False) -> tuple[list[str], dict]:
+                closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
     stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
     toolchain's, Mathlib's and ArkLib's included, that has not passed it with its key (`closure_plan`), so each
-    declaration the package rests on goes through the kernel once and a warm cache checks none of them again."""
+    declaration the package rests on goes through the kernel once and a warm cache checks none of them again. ``search``
+    (a seal's mapped search path) and ``digest`` (`Sealed.digest`) make the replay read the seal's private copies rather
+    than the live `.lake`, so no dependent's build can change what the kernel replays or what its key is keyed on.
+    ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test), whose keys are hashed from
+    the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict can never poison a sealed
+    run."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
-    keys = replay_keys(facts, toolchain) if replay_cache else {}
+    keys = replay_keys(facts, toolchain, digest) if replay_cache else {}
     def passed(m):
         return m in keys and (replay_cache / f"{keys[m]}.json").is_file()
     n = replay_threads(pkg)
     _peak.bytes = 0
+    lean = ["lake", "env", "lean"] if search is None else ["env", f"LEAN_PATH={os.pathsep.join(search)}", "lean"]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
     with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
-        if keys:
+        if keys and store:
             fresh = {*facts["modules"], *deps_checked}
             touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
-        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), "lake", "env", "lean", "--run",
+        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
                         *(["--closure-reused", *deps_reused] if deps_reused else [])],
@@ -4282,7 +4484,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
         # a module's entry says its declarations passed with its imports present: one rejected elsewhere takes nothing from it
         accepted = [m for m in checked + deps_checked if m not in set(doc.get("rejected", []))] \
             if keys and (rc == 0 or (rc == 1 and "rejected" in doc)) else []
-        if accepted:
+        if accepted and store:
             replay_cache.mkdir(parents=True, exist_ok=True)
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
@@ -4314,13 +4516,14 @@ def timed(f, *args):
     return f(*args), round(time.monotonic() - s, 1)
 
 
-def dependency_digests(pkg: Path, toolchain: str, oleans: list[str]) -> dict[str, str]:
+def dependency_digests(pkg: Path, toolchain: str, oleans: list[str], sealed: "Sealed | None" = None) -> dict[str, str]:
     """A digest of the `.olean` files (every part) of the modules the package imports (``oleans``, which `Facts.lean`
     reports), per package ``pkg`` fetches (`.lake/packages/*`: Mathlib's downloaded cache, ArkLib's local build...) and for
     the toolchain's own library. A dependency's other modules may be built or not (the upstream watch's exact pass builds
     all of ArkLib) without changing the record. Lean's `.olean` files are reproducible, so the record holds across machines
-    and changes only at a bump."""
-    packages_dir = pkg / ".lake" / "packages"
+    and changes only at a bump. With ``sealed`` (the package's seal) the fetched packages are read from its copies, which
+    ``oleans`` then name; the toolchain's library is read live, since no prover writes it."""
+    packages_dir = sealed.packages_dir if sealed else pkg / ".lake" / "packages"
     libs = [(d.name, d / ".lake" / "build" / "lib" / "lean") for d in sorted(packages_dir.iterdir())] if packages_dir.is_dir() else []
     libs.append(("toolchain", toolchain_bins(toolchain)[0].parent.parent / "lib" / "lean"))
     loaded = [Path(o).resolve() for o in oleans]
@@ -4351,6 +4554,15 @@ def tests(pkg: Path, policy: dict, files: dict[str, str], work: Path, repo: Path
     with ``repo`` for `{repo}` and the directory it writes for `{out}`), else the package's own files; a file may be
     gzipped (NAME.gz). A file whose SHA-256 is not the record's fails the test unrun, and `--update` records it instead."""
     fails, now = [], {}
+    # A run reads the package's live `.lake/build` in the sandbox, not a seal, so it is sound only while nothing writes
+    # that build. Only a dependent's build writes a package's own `.lake`, and a package with `runs` has no dependents,
+    # so every build in the run has ended before its tests start. Fail loudly rather than read a build one is still
+    # writing: a `runs` entry on a depended-on package would be caught here, not read mid-build.
+    with _WROTE:
+        racing = pkg.resolve() / ".lake" in _WRITING
+    if racing:
+        return [Failure("runs.racing-build", None, f"runs: a build is still writing {pkg}'s .lake as its tests would read "
+                        f"it live; a package with `runs` must be one no other package builds")], now
     for mod, entry in sorted(policy.get("runs", {}).items()):
         now[mod] = entry
         if mod not in files:
@@ -4431,7 +4643,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           log=print, built=lambda: None, runs: bool = True, repo: Path = ROOT, moved: dict[str, str] | None = None,
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
-          bookkeeping: str | None = None) -> dict:
+          bookkeeping: str | None = None, seals: "Seals | None" = None, store: bool | None = None) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -4445,8 +4657,15 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     instead of auditing, and the report's `moved` holds their moves.  The report lists the spec's definitions
     that no guarantee reads (`unread_spec`).  ``replay_cache`` (a directory) holds each module whose replay passed, under
     its `replay_keys` key: such a module's constants join the replay unchecked, and each module checked is stored there
-    when the replay passes.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
+    when the replay passes.  ``store`` says whether this audit may write ``replay_cache`` (`replay_step`): its default,
+    sealed, lets a sealed audit store its verdicts (keyed on the sealed copies) and keeps an unsealed one, whose keys are
+    from the live `.lake`, from writing the shared cache a sealed run reuses; a caller whose cache is a throwaway private
+    directory passes ``store=True``.  ``closure`` replays the import closure too (`replay_step`).  ``kept_facts`` says which facts
     documents stay beside the reports (`facts_of`): `all` (the package's and its provers'), `own` or `none`.
+    ``seals`` (the run's seals) is taken before ``built`` is called, so every reader after it reads the seal's private
+    copies and no dependent's build changes what the facts, the replay, the scans or the digests see (`Seals`); without
+    one (a control, a lean-changed scan or a stubbed test, none of which runs a dependent's build beside the audit) the
+    readers read the live `.lake`. `main` always provides one, so the run's gate is always sealed.
     ``bookkeeping`` (a due date:
     `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
     on `bookkeeping_ticket`) and judges the policy's checks again on that lock: the package fails on what fails there and
@@ -4524,9 +4743,25 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         finally:
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
+    # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
+    # dependent's build, which may write this package's `.lake` once it is announced, cannot change what they see
+    try:
+        sealed = seals.take(pkg, rep["toolchain"], policy["roots"], work, log) if seals is not None else None
+    except RuntimeError as e:                           # the build cannot be sealed; `one`'s finally announces it unpassed
+        rep["failures"].append(Failure("lean", None, f"lean: {e}"))
+        return reported(rep)
+    search = sealed.search if sealed else None
+    dig = sealed.digest if sealed else sha256
+    # A sealed audit's replay keys come from the sealed copies, so storing its verdicts in the shared replay cache a
+    # sealed run reuses is safe. An unsealed audit's keys come from the live `.lake`, which a dependent's build can have
+    # tampered with, so by default it reuses the cache but writes nothing — a live-keyed verdict never enters it.
+    # ``store`` overrides the default for a caller whose cache is a throwaway private dir, as lean's review allows.
+    store = (sealed is not None) if store is None else store
     built()
     files = lean_modules(pkg)
     background = ThreadPoolExecutor(max_workers=5)
+    # tests run sandboxed on the live `.lake`, not a seal: a package with `runs` is one no other package builds, so every
+    # build in the run has ended before its tests start, and `tests` fails loudly if a build is still writing that `.lake`
     ran = background.submit(timed, tests, pkg, policy, files, work, repo, update) if runs and policy.get("runs") and not lifts else None
     # a spec's `proved` waits for its provers' builds; the replay, the dependency scans and digests and the upstream scan
     # read only the package's own facts, which `proved` leaves as they are, so they fill that wait. Elsewhere they keep
@@ -4551,21 +4786,21 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
 
     replayed = scanned = digested = unread = None
     try:
-        facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none")
+        facts = facts_of(pkg, current, work, moved, keep=kept_facts != "none", sealed=sealed)
         rep["seconds"]["facts"] = round(time.monotonic() - s, 1)
         if replay and not lifts and pkg.resolve().is_relative_to(ROOT) and \
                 pkg.resolve().relative_to(ROOT).as_posix() in UNREAD_FACTS:
-            unread = background.submit(timed, unread_facts, pkg, facts["modules"], work)
+            unread = background.submit(timed, unread_facts, pkg, facts["modules"], work, sealed)
         if early:
             replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache,
-                                         closure) if replay else None
-            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy)
-            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"])
+                                         closure, search, dig, store) if replay else None
+            scanned = background.submit(timed, dependency_scans, pkg, facts["oleans"], policy, sealed)
+            digested = background.submit(timed, dependency_digests, pkg, rep["toolchain"], facts["oleans"], sealed)
         cross: list[str] = []
         if "proved_in" in policy:
             p = time.monotonic()
             cross, facts, rep["proved_in"] = proved(pkg, current, facts, work, moved, built_prover,
-                                                    keep=kept_facts == "all")
+                                                    keep=kept_facts == "all", seals=seals)
             rep["seconds"]["proved-in"] = round(time.monotonic() - p - sum(waited), 1)
     except RuntimeError as e:
         rep["failures"].append(Failure("lean", None, f"lean: {e}"))
@@ -4575,7 +4810,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         rep["seconds"]["proved-in-wait"] = round(sum(waited), 1)
     rep["seconds"]["audit"] = round(time.monotonic() - s - sum(waited), 1)
     if replay and not lifts and not early:
-        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure)
+        replayed = background.submit(timed, replay_step, pkg, policy, facts, rep["toolchain"], work, replay_cache, closure,
+                                     search, dig, store)
     if lifts:
         try:
             rep["moved"] = lift(pkg, current, facts, lifts)
@@ -4596,7 +4832,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     fails = cross + fails + dropped(pkg, files, facts) + on_lock[len(fails):]
     rep["unread_spec"] = unread_spec(facts, read_by_dependents(pkg, repo))
     (missed, rep["dependency_sources"]), rep["seconds"]["dependency-sources"] = \
-        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy)
+        scanned.result() if scanned else timed(dependency_scans, pkg, facts["oleans"], policy, sealed)
     fails = scans(pkg, files, policy) + missed + fails
     rep["heartbeats"] = heartbeats(pkg, files, build_seconds([work / "build.log", work / "build-roots.log"] if build else []))
     anonymous = anonymous_instances(pkg, files, facts)
@@ -4616,7 +4852,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
             upstream.result() if upstream else timed(sibling("upstream").pinned, pkg, policy["upstream"])
         fails += [Failure("upstream", None, f) for f in missed]
     deps, rep["seconds"]["dependencies"] = \
-        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"])
+        digested.result() if digested else timed(dependency_digests, pkg, rep["toolchain"], facts["oleans"], sealed)
     if update:
         new["dependencies"] = deps
     elif "dependencies" not in policy:
@@ -4634,8 +4870,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         fails += rfails
     if fresh:
         s = time.monotonic()
+        checker = sealed.bin("leanchecker") if sealed else ["lake", "env", "leanchecker"]
         for r in policy["roots"]:
-            rc, text = run(["lake", "env", "leanchecker", "--fresh", r], pkg, work / f"fresh-{r}.log")
+            rc, text = run([*checker, "--fresh", r], pkg, work / f"fresh-{r}.log")
             if killed(rc):
                 fails.append(Failure("fresh.killed", r, f"fresh: `leanchecker --fresh {r}` was killed (exit {rc}; out of "
                                      f"memory?), not a kernel verdict"))
@@ -4960,6 +5197,9 @@ def main(argv: list[str]) -> int:
     needs = {p: [d for d in path_deps(p) if d in built and d != p] for p in pkgs}
     by_controls: list[str] = []
     reports: dict[Path, dict] = {}
+    #: the run's seals: a private copy of each package's build, taken before it is announced, that every reader reads
+    #: instead of the live `.lake` (`Seals`), so no dependent's build can change a package's facts, replay or scans
+    run_seals = Seals(SEAL_BASE)
 
     def seal(pkg: Path) -> None:
         """After ``pkg``'s build: seal its `.olean` files, then let the packages that require it build."""
@@ -4991,7 +5231,7 @@ def main(argv: list[str]) -> int:
                         ready=lambda q: (built[q].wait(), q in passed)[1] if q in built else None, owner=a.owner,
                         name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                         closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
-                        bookkeeping=due)
+                        bookkeeping=due, seals=run_seals)
         finally:
             if not built[pkg].is_set():
                 seal(pkg)
@@ -5045,10 +5285,13 @@ def main(argv: list[str]) -> int:
                     print(f"    {h['file']}:{h['line']} {h['option']} {h['value'] or 'unlimited'}; {took}; "
                           f"{h['reason'] or 'no reason given'}", flush=True)
 
-    with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
-        jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]
-        for j in jobs:
-            j.result()
+    try:
+        with ThreadPoolExecutor(max_workers=len(pkgs) + 1) as ex:
+            jobs = ([ex.submit(check_controls)] if a.all and not a.no_controls else []) + [ex.submit(one, p) for p in pkgs]
+            for j in jobs:
+                j.result()
+    finally:
+        run_seals.close()
     reports = [reports[p] for p in pkgs]
     if lifts and not reports[0]["failures"]:
         moved = Path(f"{a.lift}.moved.json")
