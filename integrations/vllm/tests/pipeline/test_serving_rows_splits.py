@@ -110,7 +110,7 @@ def window(s: Served, tmpls=TMPLS, caps=CAPS, law: dict | None = None) -> CS.Bin
     """The window of ``s``'s rows over ``tmpls`` (`members`) under ``law`` (one unit of each template by default)."""
     ms = members(s, tmpls, caps)
     defs = [(SRW.template(t).fn, sum(m.n for m in ms if m.template == t)) for t in tmpls]
-    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_law("stratified:1"), "ab" * 32, tuple(ms))
+    return CS.Binding(*CS.population_program(defs, several=True), law or D.parse_design("stratified:1"), "ab" * 32, tuple(ms))
 
 
 def read(s: Served, ms, tmpls=TMPLS) -> list[tuple[dict, list]]:

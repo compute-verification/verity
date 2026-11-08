@@ -399,7 +399,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
         publics[s["name"]] = a0.sha512_file(s["dir"] / f"pub-{s['n']}.bin")
     leaf_layer = hashlib.sha512(canonical_json(publics)).hexdigest()
     k = population if k is None else k
-    law = D.parse_law(f"stratified:{k}")
+    law = D.parse_design(f"stratified:{k}")
     window = window or {"kind": "stand-in", "of": "the proof leg's members (prove_leg.py)",
                         "members": {s["name"]: {"template": P.template_id(s["defn"]), "units": [s["base"], s["base"] + s["n"]]}
                                     for s in staged}, "link": "none"}

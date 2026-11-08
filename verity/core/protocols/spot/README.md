@@ -276,7 +276,7 @@ from verity.core.protocols.spot.costfit import fit
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
-- `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
+- `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the registration and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
@@ -420,7 +420,7 @@ core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_
 Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
-  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
+  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a sample's `p` too).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
