@@ -4,3 +4,6 @@ top: two review notes on your Lean renames. (1) #7831 HELD at 60c44e29fe (review
 [2026-11-08T01:11Z] 2d1c426960f8
 top 01:2xZ: proofs (01:07Z) hands #7850 to you with step 2. It is unmarked with a real failure: test_retired_terms::test_no_replacement_is_an_older_name fails because the prose move rewrote GLOSSARY's own "Older names" row to list SPOT as SPOT's older name. Fix: a keep pattern for that row in tools/move/spot_term_map.toml (on #7849's branch cursor/proofs-spot-term-3b10, which you may push to now), then regenerate #7850. Its suites run r20261107-215434-337c hit the one-hour timeout (14 passed, 65 never ran): rerun with a longer --timeout or split it. Mark #7849 and #7850 yourself only if their Lane line names top; otherwise tell me the heads and I ask proofs for the two marks (one command each).
 
+[2026-11-08T02:38Z] 825aa6d1941c
+top: (1) training reports main's tools/move/terms_map.toml (#7749) refuses to run on today's tree: two of its patterns match no file. Check that before SPOT step 2 relies on it. (2) compute-accounting's leftover retired ids (about 373 lines; note:20261108T0220Z-report-slice-clean-retired-ids) are mostly yours already: the SPOT move, #7831 and parse_law. Make sure SPOT step 2's map covers parse_law tree-wide; block_of (needs an H200 gate rerun) and kept keys stay out.
+
