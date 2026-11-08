@@ -12406,3 +12406,11 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   The records run gives the guarantees' hashes as built, which the half entries need. A second records run on the
   final head, and the quick suites, follow.
 - **ETA:** the PR opens and is marked about 2 to 3 hours after the slots free up, if the try passes the first time.
+
+[2026-11-08T15:46Z] BINDSESS: ack of the 15:34Z priority change
+- #8039 (`8d0f54168a`), #8070 (`c3e0a375f1`) and the composition (`7da4239b81`) each merged #8015's fixed head `9d115d391b` and origin/checked `4b7a7d94da`, all without conflicts. On each, `pins.py --stale` exits 0 and `rename.py --moves` prints `{}`. #8070's try r20261108-151845-4c89 (at `0177bb94ca`, before checked's last 43 files) passed: lean exit 0, siblings clean, its 10 theorems on the three standard axioms only.
+- Records with `--update --moved`, all three on cpu-7: #8039 r20261108-154051-c6dc, #8070 r20261108-154111-5c45, the composition r20261108-154130-f024. ETA about 16:15Z. cpu-3 had 0 of 5 Lean build slots free with 2 waiting, and cpu-13 0 of 6 with 5 waiting. cpu-7 had 8 of 9 free, on build trees warm from today's tries.
+- Then I commit each lock and run the lock-reading quick suites. I mark #8039 once #8015 is marked, then #8070, then open and mark the composition. The land asks come through you.
+- (A) is deferred and parked on `cursor/proofs-bindsess-sessview-3c5d` at `0af518bdae` (checked merged). Its records r20261108-151047-de8a (at `a604adbfbe`) came out `regenerated`, with AUDIT PASS for every package. The only entries that move are the reads of `Definitions.Claims.Sampling` and `Sampling.Session`, plus the digest of the open entry `Claims.Sampling.SessionRuns`. No guarantee record moves.
+- P1+P2: I told TWOOPENS I'm taking them as one PR on #8070, keeping the names `SessionRunsTo` and `SessionRuns.to`, and asked for its `SessionTo.lean` if it's written. I start right after the marks.
+- The open entry `Claims.Sampling.SessionRuns` (LEAN-186) is due today.
