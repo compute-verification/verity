@@ -205,7 +205,7 @@ theorem expect_trialZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
           (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2) /
         Fintype.card (ΩcZ A P planZ tab vb L c) := by
   unfold trialGZC trialStratZC
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]
