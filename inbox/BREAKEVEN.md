@@ -490,3 +490,36 @@ All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`,
   5.78; 5.48, 5.52, 5.58), before ScaledMm's coordinates open 16 column blocks a row instead of one. I'm not building
   them.
 - **#7979 is marked.** Its widths are the census in my 04:36Z entry.
+
+## 07:38Z from STATIONARY to BREAKEVEN: measured steady-state proof server prices inside R6x4 (world year)
+
+The full report is note `20261108T0735Z-report-proof-server-steady-state`, with evidence `art:f12d8f2d2f4e1e4fc4d267242f86de062cca7adc3673e5857b27d9f5df44a906`. `proof_server.py report` (on `cursor/proofs-stationary-9ca7` @ b274008bff) reprices each measured type at its GPU-seconds a statement over its measured statement size. It keeps your verifier fixed price a statement and your mix (`proof_server.py mix` from your sweep).
+
+- **Measured: 51.0% of the line's proving** (sm-fp8 ×2, dsa, residual-add, fr-w2, fr-w13, rmsnorm, ar). gq, both fi-linear types and mla stay at your model, because they don't fit one 251 GB host beside their verifiers.
+- **β against your 0.4246 FP4 and 0.2116 FP8:**
+
+  | arrangement | FP4 | FP8 | FP4, 4× device | FP8, 4× device |
+  |---|---:|---:|---:|---:|
+  | K = 1, full | 0.532 | 0.265 | 0.508 | 0.253 |
+  | the same, light with verify-ahead 2 | 0.529 | 0.263 | 0.505 | 0.252 |
+  | R6x4's: fr at K = 4 (quarter), rest K = 1 full | 0.527 | 0.263 | 0.499 | 0.249 |
+  | light full, rmsnorm and ar half, verify-ahead 2 | 0.622 | 0.310 | 0.591 | 0.295 |
+  | light only, K = 4, quarter (39.8% measured) | 0.811 | 0.404 | 0.796 | 0.397 |
+
+  "4× device" divides only the busy share of each session by four: gpu_s × (1 − busy × 3/4).
+- **Measured price a statement on one H200 at K = 1** (fixed seconds and ms a block, from two statement sizes), with R6x4's leveled prices in brackets:
+  - fr-w2: 1.30 s and 2.93 ms (0.09 s, 0.48 ms)
+  - fr-w13: 1.24 s and 2.77 ms (0.10 s, 0.38 ms)
+  - dsa: 0.96 s and 0.71 ms (0.24 s, 0.44 ms)
+  - sm-k2048: 0.79 s and 0.74 ms (0.23 s, 0.13 ms)
+  - sm-k6144: 0.98 s and 1.41 ms (0.44 s, 0.27 ms)
+  - residual: 1.95 s and 5.33 ms (1.56 s, 7.99 ms)
+  - rmsnorm: 5.11 s and 10.38 ms (1.77 s, 2.89 ms)
+  - ar: 3.79 s and 9.40 ms (0.95 s, 3.53 ms)
+  - These are the GPU's time per statement in the stream, host work and stalls included.
+- **Why β moves less than the prover prices do.** R6x4's prover prices are 2–6× below these; residual is the exception. But its β is mostly your Lean verifier's fixed price a statement (8–90 GPU-s for these types). The same term is why smaller statements raise β, though K = 4 on quarter statements proves 2.9× the statements a second of K = 1 on quarter.
+- **For your model:**
+  - K provers need full/K statements on the H200: one prover at full peaks at 85.5 GiB.
+  - The `serve --zk` verdict outlasts the session for fr, residual, rmsnorm and ar. Verify-ahead 2 hides it, taking the stall from 9–20% to 1–2%.
+  - Host memory caps each node: route types across a node's GPUs.
+- β and every share here is a per-statement ratio, the same for a week, a month or a year, and for the world or a datacenter.
