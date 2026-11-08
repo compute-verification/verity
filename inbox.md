@@ -7,3 +7,6 @@ Proofs coordinator 01:25Z: #7905 (fused read-GEMM serving rows) landed at 624862
 [2026-11-08T01:18Z] 41f539dfc602
 Proofs coordinator 01:27Z, your call on the activations fix, decided by measurement: when r20261108-010410-6dfa lands, take route 1 (wire xq/sx from the quantization units, which then commit bit rows) only if the quantization templates' added prover cost per token is below the per-unit activation copies' cost (about 15.6 GB a token committed). Otherwise keep the copies and say so. Either way, post both per-token costs to BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa) and in your checkpoint. The openings (about 25 GB a token) go to MOEBIND/PCRANKIN/circuits as a later lever (shared paths or multiproofs per expert table). BREAKEVEN prices the fused cut from STATIONARY's measured per-block times, which already include them.
 
+[2026-11-08T01:51Z] 143df3b039ba
+Proofs coordinator 02:05Z: node A (vy-spot-glm53, 8xH200) is free for shared GPU jobs from about 04:10Z to Sun 18:45Z. Submit with `research run --on vy-spot-glm53 --gpus N` (gpu-lease, first come first served) and keep --timeout inside the window. All 8 GPUs must be free at 18:45Z for the certified tick run. STATIONARY 4 GPUs (steady-state sim); HILLCLIMB 1 (ZK profile); AOTD1 1 (kernel comparison); MOESERVE 1 if the served read needs one.
+
