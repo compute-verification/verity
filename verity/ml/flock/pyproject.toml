@@ -158,6 +158,7 @@ paths = ["integrations/vllm/verity_vllm", "tools/verity/circuit_check/src/circui
 [[tool.verity.tests.reads]]
 tests = [
     "tests/test_class_statement_unit_stager.py",
+    "tests/test_lean_hello.py",
     "tests/test_tmpl_statement.py",
     "tests/test_unit_range.py",
 ]
