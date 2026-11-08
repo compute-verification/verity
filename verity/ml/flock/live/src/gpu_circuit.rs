@@ -3,7 +3,7 @@
 //! inputs and every unit's input words (both computed here from the rows, a few MB), a deep unit's slots here (`deep_unit`);
 //! a tampered witness is uploaded whole. Rep 1 proves from rep 0's level-0 commitment (`Reuse`).
 
-use std::{ffi::c_void, ptr::{null, null_mut}, sync::OnceLock, time::Instant};
+use std::{ffi::c_void, ptr::{null, null_mut}, sync::{Mutex, OnceLock}, time::Instant};
 
 use flock_field::F128;
 use flock_prover::{
@@ -740,9 +740,15 @@ struct Types {
     hsched: UnitSched,
 }
 
+/// The circuit's slot types, built once per circuit and kept for the process: the device keys its copies of their arrays by
+/// their addresses (`FcUploads`, prove_circuit.cuh), so they are never freed.
 fn types(st: &Stmt) -> &'static Types {
-    static T: OnceLock<Types> = OnceLock::new();
-    T.get_or_init(|| {
+    static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
+    let mut held = T.lock().unwrap();
+    if let Some(&(_, t)) = held.iter().find(|(k, _)| *k == st.c.sha512) {
+        return t;
+    }
+    let t: &'static Types = Box::leak(Box::new({
         let c = &st.c;
         let mut logs = Vec::new();
         let mut csc = Vec::new();
@@ -777,7 +783,9 @@ fn types(st: &Stmt) -> &'static Types {
         let u_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.unit_net)).unwrap();
         let h_range = c.ranges.iter().position(|r| r.kind == Kind::Net(c.sha_net)).unwrap();
         Types { logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(&c.nets[c.sha_net].1) }
-    })
+    }));
+    held.push((st.c.sha512, t));
+    t
 }
 
 /// The device witness's host inputs for an honest prover: every compression slot's input words, the hm96 slots' witness, and
@@ -993,7 +1001,7 @@ pub fn prove_circuit(
         let (w, l) = (1usize << cfg.initial_k, 1usize << (m - 7 - cfg.initial_k));
         assert!(z.pads.len() == w + flock_prover::pcs::ligerito::zk::EXTRA_LANES && z.pads.iter().all(|p| p.len() == z.t_pad));
         assert!(z.extra.iter().all(|x| x.len() == l), "zk: an extra lane of L words");
-        (z.pads.concat(), z.extra.concat())
+        (crate::concat(&z.pads), crate::concat(&z.extra))
     });
     #[cfg(feature = "sha512")]
     if let Some(z) = level0 {
