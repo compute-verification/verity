@@ -8,6 +8,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `partition`: the partition's digest, population, strata and expanded law from the verifier's parameters;
 * `committed_bits`: per Definition `Q_call` cuts, its units' committed bits read off its layout and by the walk that
   layout replaced (`Partition.committedBits`, `Partition.committedBitsRef`);
+* `unit_gates`: each unit's gates over a program and query, a template query's instances a range at a time and by the
+  walk unit by unit that replaced (`Partition.unitGates`, `Partition.unitGatesRef`);
 * `registration`: R1–R7's failure codes for a record against the parameters;
 * `registered`: the verifier's own entries for the values its parameters expect registered;
 * `domain`: a registered value's commitment domain, or a produced value's (`Produced.domain`);
@@ -161,6 +163,16 @@ def committedBits (j : Json) : V Json := do
     out := out.push (Json.arr #[Json.str (p.prog.defs[c.d]!).key, Lean.toJson (Partition.committedBits c.c.gates units),
       Lean.toJson (← Partition.committedBitsRef p.prog c.d units)])
   return Json.arr out
+
+/-- `{"program", "query"}`, a program object and a query, to `[gates, gates by walk]`: each unit's gates `[lo, hi)` in
+root gates (`Partition.unitGates`, a template query's instances a range at a time) and the same unit by unit
+(`Partition.unitGatesRef`, the walk it replaced); refused where the query is. -/
+def unitGates (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  let q := getD j "query"
+  let range := fun ((lo, hi) : Nat × Nat) => Json.arr #[Lean.toJson lo, Lean.toJson hi]
+  return Json.arr #[Json.arr ((← Partition.unitGates p q).map range), Json.arr ((← Partition.unitGatesRef p q).map range)]
 
 /-- `{"params", "record"}` to R1–R7's codes. -/
 def registration (j : Json) : V Json := do
@@ -630,7 +642,8 @@ def templateCircuits (j : Json) : V Json := do
   return Json.mkObj [("circuits", Json.arr (pairs.map fun (t, c) => Json.arr #[Json.str t, Json.str c]))]
 
 def table : List (String × (Json → V Json)) :=
-  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
+  [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("unit_gates", unitGates),
+   ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),

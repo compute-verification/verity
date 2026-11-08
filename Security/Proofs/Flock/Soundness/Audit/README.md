@@ -50,19 +50,19 @@ probability at most $2^{-20}$, by exact arithmetic. **A block's share** (`Audit/
 $S$ of $N$ units and a block $B$, conditioned on $|S \cap B| = j$ the share $S \cap B$ is a uniform $j$-subset of $B$
 (`share_uniform`, `share_cond`), the share size is hypergeometric (`share_card`), and $W \subseteq B$ escapes at share
 size $j$ with that size's probability times the member's own $\binom{|B|-|W|}{j}/\binom{|B|}{j}$ (`share_escape`,
-`share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ execution phases, each a fresh uniform
-$kd$-subset of the same $N$ units, an adaptive adversary that fixes phase $t$'s wrong set $W_t$ from the earlier samples
+`share_escape_total`). **The pooled escape** (`Audit/Pooled.lean`): over $T$ runs, each a fresh uniform
+$kd$-subset of the same $N$ units, an adaptive adversary that fixes run $t$'s wrong set $W_t$ from the earlier samples
 escapes every sample with $\sum_t |W_t| \ge M$ with probability at most $(1 - kd/N)^M$ (`pooled_escape`), at most
 $\prod_t \binom{N-w_t}{kd}/\binom{N}{kd}$ when $|W_t| \ge w_t$ (`pooled_escape_prod`), both in `prCoin`; at $\delta$, the
 escaped total reaches $\ln(1/\delta)/q$, $q = kd/N$, with probability at most $\delta$, which no theorem states.
 These are instances of **the monitoring-period step** (`Audit/Periods.lean`, `FlockSoundness.Audit.Periods`): $T$
-execution phases of independent uniform coins, any coin space per phase, and an event of phase $t$ that may read the phases
+runs of independent uniform coins, any coin space per run, and an event of run $t$ that may read the runs
 up to $t$ with probability at most $p_t$ given any history (`avg_prod_le`, the one induction). It holds in at least
-$M$ phases with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_count_le`), $\binom{T}{M}p^M$ at one $p$
+$M$ runs with probability at most $\sum_{|S|=M}\prod_{t\in S} p_t$ (`prCoin_count_le`), $\binom{T}{M}p^M$ at one $p$
 (`prCoin_count_le_choose`), $(1+(z-1)p)^T/z^M$ for $z \ge 1$ (`prCoin_count_mul_pow_le`, and at $\delta$
 `prCoin_count_le_of_log`). When $p$ bounds "accepted and short" and shortness is fixed before any coins are flipped, every
-phase is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
-phase's own coins decide gets only the count bounds.
+run is accepted with at least $M$ short with probability at most $p^M$ (`prCoin_forall_count_le_pow`); shortness the
+run's own coins decide gets only the count bounds.
 `subset_exec_escape_le` (`ExecDraw.lean`, beside the executable's
 other checks, since it imports `Flock.Draw`), **the running sampler**: over a uniform byte stream, the verifier's
 executable `Flock.Draw.subset k n` returns a sample missing $B$ with probability at most `subset_escape`'s
@@ -142,7 +142,7 @@ the floor of the fill's value over output bits as `audit_exfiltration`'s $H$. `s
 duality over the exact risk $\ln(\binom{n_s}{k_s}/\binom{n_s - c}{k_s})$ (`stratumRisk`, at least $k_s c / n_s$ by
 `le_stratumRisk`), the knapsack whose value core's `Stratified.harm_bound` computes.
 
-**Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a run of adaptive
+**Theorems, the cumulative harm budget** (`Audit/HarmBudget.lean`, `Audit/HarmBudgetLife.lean`), over a play of adaptive
 rounds (`Adaptive.Play`): each round's incorrect proof blocks $B_t$ and sampling design are fixed by the history before that
 round's own coins, and the prover may stop after any round. A sampling design meets the **design condition**
 (`Law.Design L π`) when every $B$ fixed before the coins has miss probability at most $\exp(-\sum_{u \in B}
@@ -151,14 +151,14 @@ round's own coins, and the prover may stop after any round. A sampling design me
 with $\lambda h_u \le \pi_u$, $\Pr[\text{accept} \wedge \sum_t h(B_t) \ge H] \le e^{-\lambda H} + \sum_t
 \mathrm{err}_t$, where $\mathrm{err}_t$ bounds the probability that round $t$'s sample hits $B_t$ and the round still
 passes (`Play.Drawn`, indexed by the rounds left after it); `harm_budget_rate` takes $\lambda = \min_{h_u > 0} \pi_u /
-h_u$. `harm_count`: under Bernoulli($q$) samples, an accepted run with $K$ or more incorrect proof blocks summed over its rounds has
+h_u$. `harm_count`: under Bernoulli($q$) samples, an accepted play with $K$ or more incorrect proof blocks summed over its rounds has
 probability at most $(1-q)^K + \sum_t \mathrm{err}_t$, tight for one round (`harm_count_tight`); `harm_count_kstar`
 gives $1 - p + \sum_t \mathrm{err}_t$ at $k^*(p) = \ln(1/(1-p)) / (-\ln(1-q))$. `life_harm_budget` is the instance over
 a lifetime of $N$ one-stage audits (`life`): after each accepted audit the prover chooses whether to go on, and a
 rejection ends the lifetime with no resample, so $\mathrm{err}_m = \varepsilon_{ks,m} + \delta_{link,m}$ by `audit_drawn`.
 It fixes each audit's sampling design in advance by its index, over one $n$; `harm_budget` itself lets the history
 choose the design. For cumulative harm this replaces the union bound of `audits_seq`: $e^{-\lambda H}$ is paid once for
-the whole run.
+the whole play.
 
 **Theorems, closure samples** (`Audit/Closure.lean`; `Flock.Draw`): `Law.closure L cl` is `L` widened on its coins
 by the verifier's closure map, each sampled proof block proved with its closure. `closure_escape`: its miss probability is
