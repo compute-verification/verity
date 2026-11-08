@@ -43,12 +43,12 @@ theorem sksL_ecrBound (H : Msg → Msg) (x : Msg) :
       0 := by
     unfold Claims.Sampling.BextAt
     rw [dite_eq_left hk]
-    simp [hn, Ex]
+    simp only [hn, List.length_nil, zero_mul, add_zero, Nat.cast_zero, Ex, Finset.sum_const_zero, zero_div]
   have hE : ExpectedCR H (Claims.Sampling.BextAt H (sksL Coin).V (sksL Coin).E 0 Unit silentP x) := by
     unfold ExpectedCR
     rw [hpr, hc, zero_div]
   unfold ecrBound
-  rw [if_pos (And.intro hE hc.le), zero_div, ENNReal.ofReal_zero]
+  rw [ite_eq_left (And.intro hE hc.le), zero_div, ENNReal.ofReal_zero]
 
 /-- **`Sampling.KSAt` fails** at `sksL`, at `δ = 0` and the budget `0`: the silent prover is accepted while no witness
 is in the relation, `γ = 0`, and `B_ext` at the budget `0` finds nothing at no cost, so the bound is `κ_0 < 1`. -/
@@ -93,7 +93,7 @@ theorem Compiled.KSAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabi
   ⟨_, _, Witness.SamplingGeneric.compiledKSAt_fails H⟩
 
 /-- **`CompilerKSAt`'s conclusion fails** at `sksL`, which accepts with an empty relation. -/
-theorem compilerKSAt_nontrivial : ¬ (sksL Bool).KSAt FlockDeploy.sha512 :=
+theorem compilerKSAt_nontrivial : ¬ (Witness.SamplingGeneric.sksL Bool).KSAt FlockDeploy.sha512 :=
   Witness.SamplingGeneric.compiledKSAt_fails _
 
 end Claims.SamplingGeneric
