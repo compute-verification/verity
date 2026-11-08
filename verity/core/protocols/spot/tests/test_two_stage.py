@@ -60,6 +60,8 @@ def _values(boundary: tuple[str, ...]) -> tuple[S.Value, ...]:
 
 PUBLIC, VALUES = _public(BOUNDARY), _values(BOUNDARY)
 RULE = S.TwoStage(GRAIN, f"subset:{Q}", K)
+#: The reference header of an honest statement in these streams: the service's scheme, none of the run's fields.
+REFERENCE = {"scheme": S.SCHEME, "units": {}, "frame_v3": {}}
 TEMPLATE, = (t for t, _ in P.strata(P.population_program(PAIR, Q * N_RHO), QUERY))
 
 
@@ -138,16 +140,17 @@ def _reads_of(statements) -> dict | None:
     return out or None
 
 
-def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of) -> S.Outcome:
+def _two_stage_outcome(stream: S.Stream, statements, reads=_reads_of, **params) -> S.Outcome:
     """The run's outcome with the second-stage statements `statements` gives (a function of the honest prover's one,
     `fake_challenger.Stream.statements`, PAIR's, and the second stage's sample, or as given), and the verifier of record
-    reporting the reads `reads` gives of them."""
+    reporting the reads `reads` gives of them; the auditor's params `proofs`, if given, else the honest ones
+    (`fake_challenger.Stream.proofs`)."""
     _, second = _stages(stream)
     stream.deliver(second, [SESSION])
     if callable(statements):
         statements = statements(stream.statements(second)[0], second)
     return stream.outcome(second, _lean(reads=reads(statements)), {"statement": "stub"},
-                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements)
+                          session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)}, statements=statements, **params)
 
 
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
@@ -248,7 +251,10 @@ def _frame(key: str, f):
     (_restated(header=None), ["second-statement", "second-cover", "second-reported"]),
     (_header(instances=Q * N_RHO + 1), ["second-population"]),
     (_header(units={"indices": list(range(1, Q * N_RHO + 1))}), ["second-population"]),
-    (_header(scheme="frame-v3-sha512/other"), ["second-roots"]),
+    (_header(scheme="frame-v3-sha512/other"), ["second-header", "second-roots"]),
+    (_header(set="served/other/m0"), ["second-header"]),
+    (_restated(header=lambda h: {**h, "units": {**h["units"], "blocks": [0]}}), ["second-header"]),
+    (_restated(header=lambda h: {**h, "frame_v3": {**h["frame_v3"], "owner": "other"}}), ["second-header"]),
     (_frame("roots", lambda r: {**r, "out": "00" * 64}), ["second-roots"]),
     (_frame("roots", lambda r: {k: v for k, v in r.items() if k != "out"}), ["second-roots"]),
     (_frame("domain_ids", lambda d: {**d, "out": d["x"]}), ["second-roots"]),
@@ -267,7 +273,8 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
     and refuses: none (`second-statements`), none for a part's template (`second-cover`), a template
     twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
-    when its session's reads are reported, since no statement makes them), and one that isn't the
+    when its session's reads are reported, since no statement makes them), one whose header has a key its template's
+    reference header lacks, at the top or in an object, or holds otherwise (`second-header`), and one that isn't the
     run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
     or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
     cell's replay block, another slot's rows, a boundary port by a port no link names, another port's own, or a linked
@@ -291,6 +298,29 @@ def test_round_two_holds_the_reads_to_what_the_verdicts_report(reads):
     stream = _stream()
     out = _two_stage_outcome(stream, lambda s, second: [s], reads)
     assert not out.accepted and stream.records[0]["audit"]["checks"]["statements"]["codes"] == ["second-reported"]
+
+
+@pytest.mark.parametrize("header, codes", [
+    (REFERENCE, ["two-stage-form"]),
+    ({**REFERENCE, "instances": 7, "units": {"indices": [9]}, "frame_v3": {"roots": {"x": "00" * 64}, "domain_ids": {}}},
+     ["two-stage-form"]),
+    ({**REFERENCE, "set": "served/other/m0"}, ["second-header"]),
+    ({**REFERENCE, "scheme": "frame-v3-sha512/other"}, ["second-header"]),
+    ({**REFERENCE, "units": {"blocks": [0]}}, ["second-header"]),
+    ({"scheme": S.SCHEME}, ["second-header"]),
+    (None, ["second-header"]),
+])
+def test_round_two_holds_each_header_to_its_templates_reference(header, codes):
+    """`second-header`, by both verifiers: each statement's header is the reference header the auditor's params give its
+    template (`template_circuits`), the two the same with the run's fields blanked (`second_stage.RUN_FIELDS`:
+    `instances`, `units.indices`, `frame_v3.roots` and `frame_v3.domain_ids`). The honest run passes unchanged, refused
+    only on the form, under a reference fixed before the run that names none of the run's fields or names them
+    otherwise; a reference with a key the header lacks, another scheme, more in `units`, or no `units` and `frame_v3`
+    objects to blank is refused by name, and so is the statement when the params give no reference."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda s, second: [s], proofs=None if header is None else _circuits((PAIR,), header=header))
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
 
 
 def test_round_two_derives_the_links_from_the_replay_block(monkeypatch):
@@ -603,17 +633,18 @@ def test_a_replay_block_of_two_templates_fits_the_check_in_order():
     assert not P.in_order(blocks, WINDOW_QUERY, 3 * Q)
 
 
-def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64)) -> dict:
-    return {"templates": [{"template": P.template_id(t), "circuit": c} for t, c in zip(window, files)]}
+def _circuits(window=WINDOW, files=("ab" * 64, "cd" * 64), header=REFERENCE) -> dict:
+    return {"templates": [{"template": P.template_id(t), "circuit": c, "header": header} for t, c in zip(window, files)]}
 
 
 def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
-    """`template_circuits`: the auditor's params name each of the check's templates' circuit files by SHA-512, in the
-    check's order, as (template, circuit) pairs, for one template's check and a window's; none names no file; any other
-    form, and a list that isn't the check's templates once each in its order, is refused."""
+    """`template_circuits`: the auditor's params name each of the check's templates' circuit files by SHA-512 and its
+    statements' reference header, in the check's order, as (template, circuit, header) triples, for one template's
+    check and a window's; none names no file; any other form, a header that isn't an object, and a list that isn't the
+    check's templates once each in its order, is refused."""
     ids = [P.template_id(t) for t in WINDOW]
-    assert S.template_circuits(_circuits(), WINDOW_QUERY) == ((ids[0], "ab" * 64), (ids[1], "cd" * 64))
-    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64),)
+    assert S.template_circuits(_circuits(), WINDOW_QUERY) == ((ids[0], "ab" * 64, REFERENCE), (ids[1], "cd" * 64, REFERENCE))
+    assert S.template_circuits(_circuits((PAIR,)), QUERY) == ((ids[0], "ab" * 64, REFERENCE),)
     assert S.template_circuits(None, WINDOW_QUERY) == ()
     entries = _circuits()["templates"]
     for proofs, match in (({"templates": entries[::-1]}, "not the check's templates"),
@@ -622,6 +653,10 @@ def test_the_params_name_each_templates_circuit_file_in_the_checks_order():
                           ({"templates": [{**entries[0], "circuit": "AB" * 64}, entries[1]]}, "lowercase hex"),
                           ({"templates": [{**entries[0], "circuit": "ab" * 64 + "\n"}, entries[1]]}, "lowercase hex"),
                           ({"templates": [{**entries[0], "kind": "flat"}, entries[1]]}, "lowercase hex"),
+                          ({"templates": [{**entries[0], "header": None}, entries[1]]}, "each header an object"),
+                          ({"templates": [{**entries[0], "header": []}, entries[1]]}, "each header an object"),
+                          ({"templates": [{k: v for k, v in entries[0].items() if k != "header"}, entries[1]]},
+                           "each header an object"),
                           ({"templates": entries, "circuit": "ab" * 64}, "proofs are"), ({}, "proofs are")):
         with pytest.raises(ValueError, match=match):
             S.template_circuits(proofs, WINDOW_QUERY)
