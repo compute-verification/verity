@@ -32,15 +32,15 @@
   "Properties.NetworkCertifier.Records",
   "Properties.NetworkPeriod",
   "Properties.NetworkScan",
-  "Properties.SampledProofs",
-  "Properties.SampledProofs.Draw",
-  "Properties.SampledProofs.Bits",
-  "Properties.SampledProofs.Interval",
-  "Properties.SampledProofs.FactorUpper",
-  "Properties.SampledProofs.TwoStageCheck",
-  "Properties.SampledProofs.Halt",
-  "Properties.SampledProofs.Second",
-  "Properties.SampledProofs.PlanCheck",
+  "Properties.Spot",
+  "Properties.Spot.Draw",
+  "Properties.Spot.Bits",
+  "Properties.Spot.Interval",
+  "Properties.Spot.FactorUpper",
+  "Properties.Spot.TwoStageCheck",
+  "Properties.Spot.Halt",
+  "Properties.Spot.Second",
+  "Properties.Spot.PlanCheck",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -79,7 +79,8 @@
   "Properties.Firewall",
   "Properties.Core.Site",
   "Properties.Verity.Subprotocols",
-  "Properties.Verity.Coupling"
+  "Properties.Verity.Coupling",
+  "Properties.Flock.Nets"
  ],
  "proved_in": ["../Proofs"],
  "assumptions_module": "Definitions.Assumptions",
@@ -95,32 +96,32 @@
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
    "why": "The protocol accepts: the event the statement conditions on."
   },
-  "Properties.SampledProofs.ClassesCover": {
+  "Properties.Spot.ClassesCover": {
    "owner": "@proofs",
    "digest": "d29ae513fb1dd3324794e0218190901b9bf8b0e721d4900872afdfe3e5c57c2f",
    "why": "The deployments the point describes: replay blocks its classes cover, each class holding at most its count."
   },
-  "Properties.SampledProofs.Covers": {
+  "Properties.Spot.Covers": {
    "owner": "@proofs",
    "digest": "d1ea27fbfc48f3cf287d474f92748a46c1f1483191bcba393157a288a310f9e6",
    "why": "The replay blocks the bound speaks of: those whose cells the cell list covers."
   },
-  "Properties.SampledProofs.FirstStageAt": {
+  "Properties.Spot.FirstStageAt": {
    "owner": "@proofs",
    "digest": "919d98e1c7b1b606b91e6006e7ae34607111abefaad01160fa51ea061b394e88",
    "why": "The first stages the bound speaks of: those sampling each replay block at the point's rate or more."
   },
-  "Properties.SampledProofs.ReadsCover": {
+  "Properties.Spot.ReadsCover": {
    "owner": "@proofs",
    "digest": "d09c954de9e544aaad19cbbabca23296410c2fff875e9626b1d2d20f03a9263a",
    "why": "The requests the patterns' bound speaks of: each reads at most `reads` of the replay block."
   },
-  "Properties.SampledProofs.RequestsCover": {
+  "Properties.Spot.RequestsCover": {
    "owner": "@proofs",
    "digest": "eed3ec598726918a9054f7d61d015c89f0d26f0db8ea7813f88ff6e152cf0e7e",
    "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
   },
-  "Properties.SampledProofs.ServedCover": {
+  "Properties.Spot.ServedCover": {
    "owner": "@proofs",
    "digest": "3a2ca54e7de4e48043f423d204ee3ce39c40858eef3687a90405f1a4e8f224da",
    "why": "The requests the capped point describes: disjoint, those reading in each replay block serving at most its class's cap."
@@ -752,7 +753,7 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Properties.SampledProofs.ExpectsV2": {
+  "Properties.Spot.ExpectsV2": {
    "owner": "@proofs",
    "digest": "b08414bd9dec813a42882d6240f9915f337fdfb0c6d29367cbd7fef7cacfb9a3",
    "issue": "LEAN-186",
@@ -794,7 +795,7 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.SampledProofsSound": {
+  "Verity.Vocab.SpotSound": {
    "owner": "@proofs",
    "digest": "c0c0fd13ed91538fbbb0bd8b231e1e0b28c9b1657924dc4272f4739c9c9a55f6",
    "issue": "LEAN-186",
@@ -887,7 +888,7 @@
    "Accounting.Remote.Held.Assumptions.SketchBoundAt",
    "Accounting.Remote.Held.Assumptions.SquaringCeiling"
   ],
-  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SampledProofsSound"]
+  "Verity.remote_soundness_of_subprotocols": ["Verity.Vocab.InferenceOnlySound", "Verity.Vocab.PouwSound", "Verity.Vocab.SpotSound"]
  },
  "meaning": [
   "Properties.Flock.Circuit.CircuitOf",
@@ -970,8 +971,8 @@
   "Properties.NetworkCertifier.Records",
   "Properties.NetworkPeriod",
   "Properties.NetworkScan",
-  "Properties.SampledProofs",
-  "SampledProofs",
+  "Properties.Spot",
+  "Spot",
   "Properties.Pous.TimedAudit",
   "PousCheck",
   "Properties.Pous.MemoryChallenger",
@@ -1009,7 +1010,8 @@
   "Properties.Core",
   "CoreProtocol.Site",
   "Definitions.Flock.Audit",
-  "Definitions.Flock.Game"
+  "Definitions.Flock.Game",
+  "Properties.Flock.Nets"
  ],
  "witnesses": {
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned": {
@@ -1084,13 +1086,13 @@
    "honest": ["Properties.Firewall.afterOnTime_honest"],
    "nontrivial": "Properties.Firewall.afterOnTime_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.secondMisses": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.secondMisses_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.secondMisses_nontrivial"
+  "Properties.Spot.SecurityProofs.secondMisses": {
+   "honest": ["Properties.Spot.SecurityProofs.secondMisses_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.secondMisses_nontrivial"
   },
-  "Properties.SampledProofs.haltEndsOpen": {
-   "honest": ["Properties.SampledProofs.haltEndsOpen_honest"],
-   "nontrivial": "Properties.SampledProofs.haltEndsOpen_nontrivial"
+  "Properties.Spot.haltEndsOpen": {
+   "honest": ["Properties.Spot.haltEndsOpen_honest"],
+   "nontrivial": "Properties.Spot.haltEndsOpen_nontrivial"
   },
   "Verity.soundness_at_of_componentBounds": {
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
@@ -1112,73 +1114,73 @@
    "honest": ["Verity.soundness_of_upFront_honest"],
    "nontrivial": "Verity.soundness_of_upFront_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.expLowerSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.expLowerSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.expLowerSound_nontrivial"
+  "Properties.Spot.SecurityProofs.expLowerSound": {
+   "honest": ["Properties.Spot.SecurityProofs.expLowerSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.expLowerSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.expUpperSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.expUpperSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.expUpperSound_nontrivial"
+  "Properties.Spot.SecurityProofs.expUpperSound": {
+   "honest": ["Properties.Spot.SecurityProofs.expUpperSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.expUpperSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.lnLowerSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnLowerSound_nontrivial"
+  "Properties.Spot.SecurityProofs.lnLowerSound": {
+   "honest": ["Properties.Spot.SecurityProofs.lnLowerSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.lnLowerSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.lnUpperSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.lnUpperSound_nontrivial"
+  "Properties.Spot.SecurityProofs.lnUpperSound": {
+   "honest": ["Properties.Spot.SecurityProofs.lnUpperSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.lnUpperSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.powLowerSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.powLowerSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.powLowerSound_nontrivial"
+  "Properties.Spot.SecurityProofs.powLowerSound": {
+   "honest": ["Properties.Spot.SecurityProofs.powLowerSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.powLowerSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.powUpperSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.powUpperSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.powUpperSound_nontrivial"
+  "Properties.Spot.SecurityProofs.powUpperSound": {
+   "honest": ["Properties.Spot.SecurityProofs.powUpperSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.powUpperSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnUpperSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnUpperSound_nontrivial"
+  "Properties.Spot.SecurityProofs.boundLnUpperSound": {
+   "honest": ["Properties.Spot.SecurityProofs.boundLnUpperSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.boundLnUpperSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.boundLnBoundSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.boundLnBoundSound_nontrivial"
+  "Properties.Spot.SecurityProofs.boundLnBoundSound": {
+   "honest": ["Properties.Spot.SecurityProofs.boundLnBoundSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.boundLnBoundSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperSound_nontrivial"
+  "Properties.Spot.SecurityProofs.factorUpperSound": {
+   "honest": ["Properties.Spot.SecurityProofs.factorUpperSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.factorUpperSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound_nontrivial"
+  "Properties.Spot.SecurityProofs.factorUpperPatternsSound": {
+   "honest": ["Properties.Spot.SecurityProofs.factorUpperPatternsSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.factorUpperPatternsSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound_nontrivial"
+  "Properties.Spot.SecurityProofs.factorUpperCappedSound": {
+   "honest": ["Properties.Spot.SecurityProofs.factorUpperCappedSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.factorUpperCappedSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.leakCheckSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.leakCheckSound_nontrivial"
+  "Properties.Spot.SecurityProofs.leakCheckSound": {
+   "honest": ["Properties.Spot.SecurityProofs.leakCheckSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.leakCheckSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.leakCountSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.leakCountSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.leakCountSound_nontrivial"
+  "Properties.Spot.SecurityProofs.leakCountSound": {
+   "honest": ["Properties.Spot.SecurityProofs.leakCountSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.leakCountSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.workCheckSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.workCheckSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.workCheckSound_nontrivial"
+  "Properties.Spot.SecurityProofs.workCheckSound": {
+   "honest": ["Properties.Spot.SecurityProofs.workCheckSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.workCheckSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_nontrivial"
+  "Properties.Spot.SecurityProofs.twoStageCheckSound": {
+   "honest": ["Properties.Spot.SecurityProofs.twoStageCheckSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.twoStageCheckSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial"
+  "Properties.Spot.SecurityProofs.twoStageCheckPatternsSound": {
+   "honest": ["Properties.Spot.SecurityProofs.twoStageCheckPatternsSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.twoStageCheckPatternsSound_nontrivial"
   },
-  "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
-   "honest": ["Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest"],
-   "nontrivial": "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial"
+  "Properties.Spot.SecurityProofs.twoStageCheckServedSound": {
+   "honest": ["Properties.Spot.SecurityProofs.twoStageCheckServedSound_honest"],
+   "nontrivial": "Properties.Spot.SecurityProofs.twoStageCheckServedSound_nontrivial"
   }
  },
  "unwitnessed": {
@@ -1862,39 +1864,39 @@
    "unfolded_hash": "05200ef6f50931e03b88116c26dec93324ef67c3084d4527fdc8c1d65b634766"
   },
   "Properties.RemoteAudit.steered_of_checked": "be81031b23d2333f173c7540da5dd2c2e8fc393ce9d84ee7118d5b1bd70c1f53",
-  "Properties.SampledProofs.SecurityProofs.designWellFormed": {
+  "Properties.Spot.SecurityProofs.designWellFormed": {
    "type_hash": "82f731f8e60afaa767b56880491e41c6465a0158b3520999c7e4c6fb29546c8a",
    "unfolded_hash": "4c25715bf394f780a88eb20397c354c430ba53e49db370fd154aa0503dfb73bd"
   },
-  "Properties.SampledProofs.SecurityProofs.drawMisses": {
+  "Properties.Spot.SecurityProofs.drawMisses": {
    "type_hash": "303f59f6e5d086c022bcd5f65d8494f0da4a42aa9cb9b2d7b80aaba186bfc119",
    "unfolded_hash": "e44586bf18963ce99c0fc55d9d547d505a5cc576f2a2c6905df554be71464de2"
   },
-  "Properties.SampledProofs.acceptMeans": {
+  "Properties.Spot.acceptMeans": {
    "type_hash": "8b5d59c8e389ebb7fca362bc1f59eb906994cdeb37ade677622b6b55e7d43910",
    "unfolded_hash": "d2920dc362799180404279c190ed7ae2ed45329143563a90f869212d0fd58408"
   },
-  "Properties.SampledProofs.bernoulliBounds": {
+  "Properties.Spot.bernoulliBounds": {
    "type_hash": "e3a8add316d4cc582418009f5a507de3cf4393c4712c5ca61ea1fbefa554eb1b",
    "unfolded_hash": "03d1b1a698bdebf4475bf032b3f2524a4405113c77415ea0fb3ddbb78c91b941"
   },
-  "Properties.SampledProofs.digestIsRecord's": {
+  "Properties.Spot.digestIsRecord's": {
    "type_hash": "abc4bf9e307d0d767e4b2403ff93ed0054962649127800445a602b2468868d70",
    "unfolded_hash": "4c6d8a3440958730143238d0f56e009e6633bcb3947ee70d1c758556fb245580"
   },
-  "Properties.SampledProofs.fleetHaltIsFinal": {
+  "Properties.Spot.fleetHaltIsFinal": {
    "type_hash": "a17a42db87754384c41caa410b493a44f749f71b39aabe166aeb090ccfcb22fc",
    "unfolded_hash": "76147db07592edaaa290cf2a8db0d2ec30dfe2508e5970fdc3424d8b35000b4d"
   },
-  "Properties.SampledProofs.haltCoversOperator": {
+  "Properties.Spot.haltCoversOperator": {
    "type_hash": "3f9891aa1693628f5b2c28e35e55a258c71bb962d4e30f5b07407e917973ef86",
    "unfolded_hash": "f67acbfdf1493d8b55b2cd8a2e106c39a8aee72d9451fd0174a3ad1a15dfbd94"
   },
-  "Properties.SampledProofs.haltIsFinal": {
+  "Properties.Spot.haltIsFinal": {
    "type_hash": "83d93d8c3f74940f0d7ec870cfb360e861b9fe0b6d842080dc0b57523ad67903",
    "unfolded_hash": "b8ab7ee7c4bd0c7e636bc61f039c339d8bb535166b1ce960003969b329c20dd5"
   },
-  "Properties.SampledProofs.noAcceptAfterHalt": {
+  "Properties.Spot.noAcceptAfterHalt": {
    "type_hash": "4e5652dc4fac3f479430a75d6b6e21077381ef38b976cc7ee0c1b93ed111c162",
    "unfolded_hash": "e414354acd8918255fe2888c376780bcd6dd97919b29cea4883bfb2faffcf306"
   }
@@ -2004,16 +2006,16 @@
    "except": [],
    "why": "what the records check's acceptance means is stated against its own functions and the reference Program's grid, with v2's statements of the evidence, the syncs and the heads, never a proof"
   },
-  "Properties.SampledProofs": {
-   "imports": ["SampledProofs"],
+  "Properties.Spot": {
+   "imports": ["Spot"],
    "except": [
-    "Properties.SampledProofs.Draw",
-    "Properties.SampledProofs.Bits",
-    "Properties.SampledProofs.Second",
-    "Properties.SampledProofs.Interval",
-    "Properties.SampledProofs.FactorUpper",
-    "Properties.SampledProofs.PlanCheck",
-    "Properties.SampledProofs.TwoStageCheck"
+    "Properties.Spot.Draw",
+    "Properties.Spot.Bits",
+    "Properties.Spot.Second",
+    "Properties.Spot.Interval",
+    "Properties.Spot.FactorUpper",
+    "Properties.Spot.PlanCheck",
+    "Properties.Spot.TwoStageCheck"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2053,30 +2055,25 @@
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
   },
-  "Properties.SampledProofs.Draw": {
-   "imports": ["Definitions.Claims", "SampledProofs"],
+  "Properties.Spot.Draw": {
+   "imports": ["Definitions.Claims", "Spot"],
    "except": [],
-   "why": "what the draw misses is stated against `Select.select`'s slots (`SampledProofs.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
+   "why": "what the draw misses is stated against `Select.select`'s slots (`Spot.Slots`) and the claims' miss probability `P_a` (`Definitions.Claims`), never a proof"
   },
   "Properties.Accounting.Compose": {
-   "imports": ["Definitions.Accounting", "SampledProofs", "Properties.SampledProofs.Draw"],
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw"],
    "except": [],
-   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`SampledProofs.Slots.layout`) and the challenger's draw from bytes (`SampledProofs.Select.select`, read as `Properties.SampledProofs.bytesOf` reads them), never a proof"
+   "why": "a declared circuit's proof units, commit coins and draw (`Definitions.Accounting.Compose`) are stated against the verifier's own partition of its program (`Spot.Slots.layout`) and the challenger's draw from bytes (`Spot.Select.select`, read as `Properties.Spot.bytesOf` reads them), never a proof"
   },
   "Properties.Accounting.Served": {
-   "imports": [
-    "Definitions.Accounting",
-    "SampledProofs",
-    "Properties.SampledProofs.Draw",
-    "Properties.Accounting.Compose"
-   ],
+   "imports": ["Definitions.Accounting", "Spot", "Properties.Spot.Draw", "Properties.Accounting.Compose"],
    "except": [],
-   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`SampledProofs.Slots.layout`, `SampledProofs.Partition.units`) and the verifier's population draw (`SampledProofs.Draw.drawUnits`, from bytes as `Properties.SampledProofs.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
+   "why": "the served window's units and draw (`Definitions.Accounting.Served`) are stated against each call's Program's partition (`Spot.Slots.layout`, `Spot.Partition.units`) and the verifier's population draw (`Spot.Draw.drawUnits`, from bytes as `Properties.Spot.bytesOf` reads them), beside `Properties.Compose.UnitsOfLayout`, never a proof"
   },
   "Properties.Pouw.Credit": {
-   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.SampledProofs.Draw"],
+   "imports": ["Definitions.Pouw.RelativeSecurity", "Properties.Pouw.Strata", "Properties.Spot.Draw"],
    "except": [],
-   "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.SampledProofs.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
+   "why": "the ε a credit reports is stated against the code's strata, law and epsAt (`Properties.Pouw.Strata`, on Lean core), its draw as `Properties.Spot.bytesOf` reads uniform streams and its probability `Pouw.RelativeSecurity.prob` (`Definitions.Pouw.RelativeSecurity`), never a proof"
   },
   "Properties.Accounting.Remote.Pooled": {
    "imports": ["Definitions.Accounting", "RemoteAudit"],
@@ -2150,7 +2147,7 @@
    "why": "the served period's values in AND gates are stated against served H1's period and premises (`Properties.Pouw.PeriodJ10R`) and the AND count (`Definitions.Core.Formalism`), never a proof"
   },
   "Properties.Challenger": {
-   "imports": ["CoreProtocol", "SampledProofs", "Flock", "Lms", "Lean"],
+   "imports": ["CoreProtocol", "Spot", "Flock", "Lms", "Lean"],
    "except": [],
    "why": "the challenger's binding is stated against the code's own functions (the interface's `Live`, the challenger's reader `drawCoins`, its record, close and ledger messages) and a model of the device's log on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
@@ -2191,9 +2188,9 @@
    "why": "the period's credit over several tile strata is stated against the one-stratum statement's own vocabulary (`Properties.Pouw.PeriodJ10R`: its verdict `PouwCheck.Credit.window`, its coins, tile run and premises) read at each stratum's view of the period's coins, never a proof"
   },
   "Properties.Flock": {
-   "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock"],
+   "imports": ["Mathlib", "Definitions.Core", "Definitions.Flock", "Flock", "Properties.Flock", "VStar.Unit"],
    "except": [],
-   "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), and is core's circuit and partition (`Definitions.Core`) at the parsed and the committed file (`Flock.Bridge.circuitOf`, `circuitOfFile`), never a proof"
+   "why": "the circuit a parsed C-Flock circuit file is built into (`Placed.keyProg`, `Layout.outsOf`, `Built`) is defined over the verifier's own types and checks (`Flock.Circuit`, `Flock.Net`) and C-Flock's circuit vocabulary (`Definitions.Flock.Circuit`), and is core's circuit and partition (`Definitions.Core`) at the parsed and the committed file (`Flock.Bridge.circuitOf`, `circuitOfFile`), never a proof; the verifier's fixed nets' lines are the circuit file's own text format (`VStar.header`, `VStar.rowLine`)"
   },
   "Properties.Annot": {
    "imports": ["Flock.Annot", "Flock.AnnotExpand"],
@@ -2239,7 +2236,7 @@
     "Properties.Composition",
     "Properties.Nci",
     "Properties.Nci.Desc",
-    "Properties.SampledProofs"
+    "Properties.Spot"
    ],
    "except": [],
    "why": "remote's acceptance is stated over the composite's own function (CoreRemote), the composition's properties, the shared definitions and the policy's properties it reads, never over a proof"
@@ -2249,38 +2246,38 @@
    "except": [],
    "why": "the record's rules are stated against the release side's own functions (`Firewall.Record`, `Firewall.Release`), on Lean core: nothing of Mathlib or of `security`, never a proof"
   },
-  "Properties.SampledProofs.Second": {
-   "imports": ["Definitions.Claims", "SampledProofs", "Properties.SampledProofs.Draw"],
+  "Properties.Spot.Second": {
+   "imports": ["Definitions.Claims", "Spot", "Properties.Spot.Draw"],
    "except": [],
-   "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.SampledProofs.bytesOf`'s reading of uniform bytes, never a proof"
+   "why": "what the two-stage rule's second stage misses is stated against `Select.selectSecond` and the claims' escape `escCell` (`Definitions.Claims.SamplingTwo`), with `Properties.Spot.bytesOf`'s reading of uniform bytes, never a proof"
   },
   "Properties.Accounting.Remote.Subprotocol": {
    "imports": ["RemoteAudit", "Properties.Accounting.Remote.Line"],
    "except": [],
    "why": "the bandwidth component's refinement is stated against its own check (`RemoteAudit.Protocol`) and the memory line of record (`Properties.RemoteAudit.Line`), whose model vocabulary it reads through that module; never a proof"
   },
-  "Properties.SampledProofs.Bits": {
-   "imports": ["Definitions.Claims.Sampling", "SampledProofs.Bits"],
+  "Properties.Spot.Bits": {
+   "imports": ["Definitions.Claims.Sampling", "Spot.Bits"],
    "except": [],
-   "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`SampledProofs.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
+   "why": "Bits' layout read as the claims' program (`bitsGate`, `bitsProg`) is stated against Bits' own gates and lowering (`Spot.Bits`) and the claims' gates and program (`Definitions.Claims.Sampling`), never a proof"
   },
-  "Properties.SampledProofs.Interval": {
-   "imports": ["Mathlib", "SampledProofs"],
+  "Properties.Spot.Interval": {
+   "imports": ["Mathlib", "Spot"],
    "except": [],
-   "why": "what the interval bounds bound is stated against their own functions (`SampledProofs.Interval`, `SampledProofs.Bound`, on Lean core) and Mathlib's `Real.exp`, `Real.log` and `Real.rpow`, never a proof"
+   "why": "what the interval bounds bound is stated against their own functions (`Spot.Interval`, `Spot.Bound`, on Lean core) and Mathlib's `Real.exp`, `Real.log` and `Real.rpow`, never a proof"
   },
-  "Properties.SampledProofs.FactorUpper": {
-   "imports": ["SampledProofs.FactorUpper", "Definitions.Claims.SamplingTwoRankin"],
+  "Properties.Spot.FactorUpper": {
+   "imports": ["Spot.FactorUpper", "Definitions.Claims.SamplingTwoRankin"],
    "except": [],
-   "why": "what Rankin's factor's upper bound bounds is stated against its own function (`SampledProofs.FactorUpper`, on Lean core) and the factors Rankin's bound multiplies (`Definitions.Claims.SamplingTwoRankin`), never a proof"
+   "why": "what Rankin's factor's upper bound bounds is stated against its own function (`Spot.FactorUpper`, on Lean core) and the factors Rankin's bound multiplies (`Definitions.Claims.SamplingTwoRankin`), never a proof"
   },
-  "Properties.SampledProofs.PlanCheck": {
-   "imports": ["Definitions.Flock.Audit", "SampledProofs"],
+  "Properties.Spot.PlanCheck": {
+   "imports": ["Definitions.Flock.Audit", "Spot"],
    "except": [],
-   "why": "what the planner's checker's acceptance means is stated against its own functions (`SampledProofs.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Flock.Audit`), never a proof"
+   "why": "what the planner's checker's acceptance means is stated against its own functions (`Spot.PlanCheck`, on Lean core) and the sampling designs and partitioning targets the guarantees read (`Definitions.Flock.Audit`), never a proof"
   },
-  "Properties.SampledProofs.TwoStageCheck": {
-   "imports": ["SampledProofs.TwoStageCheck", "Properties.SampledProofs.FactorUpper"],
+  "Properties.Spot.TwoStageCheck": {
+   "imports": ["Spot.TwoStageCheck", "Properties.Spot.FactorUpper"],
    "except": [],
    "why": "what a two-stage point's bits bound is stated against its own function and the factor bounds' covers, on the two-stage count's definitions: never a proof"
   }
@@ -5406,6 +5403,19 @@
    },
    "type_hash": "4833d6fd9acfc877d239481fbabd7f762c90d6e4b2e88f14f83431a7f1ac045d",
    "unfolded_hash": "9b59b33e852aed2e1c08c0b6c9db92791698f3dcb3cd5888d5948ffa63117245"
+  },
+  "Properties.Flock.Nets.fixedNetsBuild": {
+   "owner": "@proofs",
+   "signature": ["Properties.Flock.Nets.fixedNetsBuild : Properties.Flock.Nets.FixedNetsBuild"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "659f123f5fe2c678a13ca6547f86b1aa7e666031ffe1415cf0db93a5505c60fe",
+   "unfolded_hash": "1e501a974866156bcd35825ab6e59c86d32dda75e39a3246ccd4c6ec15382f40"
   },
   "Properties.Identity.streamIsFlock": {
    "owner": "@network-accounting",
@@ -10567,12 +10577,12 @@
     "function": "PouwWindow.Work.at?",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.acceptMeans": {
-    "function": "SampledProofs.OneStage.check",
+   "Properties.Spot.acceptMeans": {
+    "function": "Spot.OneStage.check",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.digestIsRecord's": {
-    "function": "SampledProofs.OneStage.commitmentOf",
+   "Properties.Spot.digestIsRecord's": {
+    "function": "Spot.OneStage.commitmentOf",
     "outcome": "accept"
    },
    "MemoryChallenger.Properties.SecurityProofs.judgeSigned": {
@@ -10703,12 +10713,12 @@
     "function": "CircuitRequirement.Instance.planMatches",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.designWellFormed": {
-    "function": ["SampledProofs.Slots.layout", "Properties.SampledProofs.slotDesign"],
+   "Properties.Spot.SecurityProofs.designWellFormed": {
+    "function": ["Spot.Slots.layout", "Properties.Spot.slotDesign"],
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.drawMisses": {
-    "function": "SampledProofs.Slots.select",
+   "Properties.Spot.SecurityProofs.drawMisses": {
+    "function": "Spot.Slots.select",
     "outcome": "accept"
    },
    "Properties.Requirement.topological": {
@@ -10751,28 +10761,28 @@
     "function": "CircuitRequirement.Instance.creditedReadBits",
     "outcome": "none"
    },
-   "Properties.SampledProofs.bernoulliBounds": {
-    "function": "SampledProofs.OneStage.check",
+   "Properties.Spot.bernoulliBounds": {
+    "function": "Spot.OneStage.check",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.haltIsFinal": {
-    "function": "SampledProofs.Stream.run",
+   "Properties.Spot.haltIsFinal": {
+    "function": "Spot.Stream.run",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.haltEndsOpen": {
-    "function": "SampledProofs.Stream.run",
+   "Properties.Spot.haltEndsOpen": {
+    "function": "Spot.Stream.run",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.noAcceptAfterHalt": {
-    "function": ["SampledProofs.Stream.run", "Properties.SampledProofs.runs"],
+   "Properties.Spot.noAcceptAfterHalt": {
+    "function": ["Spot.Stream.run", "Properties.Spot.runs"],
     "outcome": "accept"
    },
-   "Properties.SampledProofs.fleetHaltIsFinal": {
-    "function": "SampledProofs.Fleet.run",
+   "Properties.Spot.fleetHaltIsFinal": {
+    "function": "Spot.Fleet.run",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.haltCoversOperator": {
-    "function": "SampledProofs.Fleet.run",
+   "Properties.Spot.haltCoversOperator": {
+    "function": "Spot.Fleet.run",
     "outcome": "accept"
    },
    "NciCheck.Properties.SecurityProofs.Throttles": {
@@ -10960,7 +10970,7 @@
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.liveCoinBinding": {
-    "function": "SampledProofs.Challenger.liveReason",
+    "function": "Spot.Challenger.liveReason",
     "outcome": "accept"
    },
    "Properties.Pouw.LiveSalt.onePair": {
@@ -11131,8 +11141,8 @@
     "function": "Core.Firewall.Decision.after",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.secondMisses": {
-    "function": "SampledProofs.Select.selectSecond",
+   "Properties.Spot.SecurityProofs.secondMisses": {
+    "function": "Spot.Select.selectSecond",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Subprotocol.acceptIsVerified": {
@@ -11143,73 +11153,77 @@
     "function": "RemoteAudit.Protocol.check",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.expLowerSound": {
-    "function": "SampledProofs.Interval.expLower",
+   "Properties.Spot.SecurityProofs.expLowerSound": {
+    "function": "Spot.Interval.expLower",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.expUpperSound": {
-    "function": "SampledProofs.Interval.expUpper",
+   "Properties.Spot.SecurityProofs.expUpperSound": {
+    "function": "Spot.Interval.expUpper",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.lnLowerSound": {
-    "function": "SampledProofs.Interval.lnLower",
+   "Properties.Spot.SecurityProofs.lnLowerSound": {
+    "function": "Spot.Interval.lnLower",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.lnUpperSound": {
-    "function": "SampledProofs.Interval.lnUpper",
+   "Properties.Spot.SecurityProofs.lnUpperSound": {
+    "function": "Spot.Interval.lnUpper",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.powLowerSound": {
-    "function": "SampledProofs.Interval.powLower",
+   "Properties.Spot.SecurityProofs.powLowerSound": {
+    "function": "Spot.Interval.powLower",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.powUpperSound": {
-    "function": "SampledProofs.Interval.powUpper",
+   "Properties.Spot.SecurityProofs.powUpperSound": {
+    "function": "Spot.Interval.powUpper",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.boundLnUpperSound": {
-    "function": "SampledProofs.Bound.lnUpper",
+   "Properties.Spot.SecurityProofs.boundLnUpperSound": {
+    "function": "Spot.Bound.lnUpper",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.boundLnBoundSound": {
-    "function": "SampledProofs.Bound.lnBound",
+   "Properties.Spot.SecurityProofs.boundLnBoundSound": {
+    "function": "Spot.Bound.lnBound",
     "outcome": "none"
    },
-   "Properties.SampledProofs.SecurityProofs.factorUpperSound": {
-    "function": "SampledProofs.FactorUpper.lnFactorUpper",
+   "Properties.Spot.SecurityProofs.factorUpperSound": {
+    "function": "Spot.FactorUpper.lnFactorUpper",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.factorUpperPatternsSound": {
-    "function": "SampledProofs.FactorUpper.lnFactorUpperPatterns",
+   "Properties.Spot.SecurityProofs.factorUpperPatternsSound": {
+    "function": "Spot.FactorUpper.lnFactorUpperPatterns",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
-    "function": "SampledProofs.FactorUpper.lnFactorUpperCapped",
+   "Properties.Spot.SecurityProofs.factorUpperCappedSound": {
+    "function": "Spot.FactorUpper.lnFactorUpperCapped",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.leakCheckSound": {
-    "function": "SampledProofs.PlanCheck.leakBound",
+   "Properties.Spot.SecurityProofs.leakCheckSound": {
+    "function": "Spot.PlanCheck.leakBound",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.leakCountSound": {
-    "function": "SampledProofs.PlanCheck.leakBound",
+   "Properties.Spot.SecurityProofs.leakCountSound": {
+    "function": "Spot.PlanCheck.leakBound",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.workCheckSound": {
-    "function": "SampledProofs.PlanCheck.checkWork",
+   "Properties.Spot.SecurityProofs.workCheckSound": {
+    "function": "Spot.PlanCheck.checkWork",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
-    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+   "Properties.Spot.SecurityProofs.twoStageCheckSound": {
+    "function": "Spot.TwoStageCheck.checkTwoStage",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
-    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+   "Properties.Spot.SecurityProofs.twoStageCheckPatternsSound": {
+    "function": "Spot.TwoStageCheck.checkTwoStage",
     "outcome": "accept"
    },
-   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
-    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+   "Properties.Spot.SecurityProofs.twoStageCheckServedSound": {
+    "function": "Spot.TwoStageCheck.checkTwoStage",
     "outcome": "accept"
+   },
+   "Properties.Flock.Nets.fixedNetsBuild": {
+    "function": "Flock.HmNets.netOf",
+    "outcome": "none"
    }
   },
   "frozen": {
@@ -11278,8 +11292,8 @@
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256",
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": "lemma: DrawWithheld's nontrivial lemma: its conclusion fails at the empty ledger, which opens no session, for every draw root, so a verifier that accepts everything credits a window DrawWithheld excludes (drawWithheld_acceptAll)",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (SampledProofs.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
-   "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols, a subset of onsite's: the union bound at remote's compiled verifier (Core.Remote.protocol, sameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW's window (PouwCheck.protocol) and the inference-only policy, all three committed to one record (Properties.Composition.AcceptSame), with the same claims, errors and Vocab; it takes the three targets (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, then the prover's request and the device as the prover drives it, the parameters fixing only the coin commitment's families and the device's signer (Verity.releases: a family's next coin, a coin tree's Hello, an opening of a tree's stream's next unopened round, in any order, each release after the frame and the bytes it answers), then the close, at which the device draws each coin's salt and the coins it didn't release and releases its signatures on its record, its close and its ledger lines (Verity.finish, Verity.Signer), the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the claims read the circuit file and the public file, the committed files the parameters name by their digests (Verity.Vocab.read, programDigest, publicDigest), and the commit phase's check asks for a committed file with each digest (Verity.Vocab.Registered); every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (Spot.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, every window of PoUW's period on that record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls), the premises at the other finders its bound reads (Vocab.finderCR, by finderCROf over Vocab.finders: each a FinderSpec whose budget, a function of the strategy's calls, bounds its calls, and which finds a collision with probability at most that budget over 2^256): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable, EUF-CMA, at the compiled LMS verifier, the forger having at most Q of the device's messages signed on each of its coins, Vocab.forger_signed, Q the most the device signs in a play, Vocab.signs_le): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.soundness_of_subprotocols's statement restricted to remote's subprotocols, a subset of onsite's: the union bound at remote's compiled verifier (Core.Remote.protocol, sameB over the blobs sent: the committed files, then the evidence's blobs) in the same causal game, from Verity.soundness_at_of_targets at remote; its three subprotocols are sampled proofs v2, PoUW's window (PouwCheck.protocol) and the inference-only policy, all three committed to one record (Properties.Composition.AcceptSame), with the same claims, errors and Vocab; it takes the three targets (Verity.Vocab.SpotSound, PouwSound, InferenceOnlySound at remote) as hypotheses until each is proved",
    "Properties.Site.refuses_honest": "completeness: Refuses's honest lemma: the code accepts honestEntry, a site with one host and its uplink, against the empty Site at the genesis, and so does the spec, each decided by the code's check, so Refuses holds at a concrete log",
    "Properties.Site.refuses_nontrivial": "lemma: Refuses's nontrivial lemma: an entry check that accepts everything refuses staleEntry, which follows no head, with no refusal, and the spec refuses it, so Refuses says something of the code's check",
    "Properties.Site.entryValid_honest": "completeness: EntryValid's honest lemma: the code accepts honestEntry against the empty Site at the genesis, and it is valid there, each decided by the code's check, so EntryValid holds at a concrete log",
@@ -11302,7 +11316,7 @@
    "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": "lemma: ProtocolAccepts's nontrivial lemma: the check of record gives no verdict at a case whose α is no fraction, which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": "lemma: AcceptInferenceOnly's nontrivial lemma: InferenceOnlyHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
-   "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.sampledProofsSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
+   "Verity.soundness_at_of_componentBounds": "frozen (premise): Verity.soundness_at_of_targets's union bound at every composite's compiled verifier in the causal game (Verity.SoundnessOfComponents: Verity.Vocab.SoundnessAt), from each of the composite's subprotocols' bound at its compiled component (Verity.Vocab.ComponentBound: the component's acceptance of its own case in what the prover sent while the claim fails, at most the subprotocol's error) in place of its target; each bound gives its target by monotonicity (Verity.Vocab.sound_of, one family over every composite and subprotocol, at remote's three Vocab.spotSound_of, pouwSound_of and inferenceOnlySound_of), so a composite with one more subprotocol takes one more bound under the same statement; each bound is a hypothesis until its subprotocol's piece proves it of its compiled component, with the same claims, errors and Vocab",
    "NciCheck.Properties.DescCountsCK": "unstated: a published complies of the count of (c, k)-inference blocks (NciCheck.Count.check, the judgment against n alone) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "Verity.coins_couple": "frozen (premise): a subprotocol's target at a verdict in the causal game (Verity.CoinsCouple: Verity.Vocab.TargetFor) from its bound over the coins drawn up front at every resolution of the coin trees' coins (Verity.Vocab.UpFrontFor), the play's probability of the event being at most its probability over those coins at some resolution; at the component's acceptance it is Verity.Vocab.ComponentBound; the bound is a hypothesis until each subprotocol's piece proves it in the coins model",
    "Verity.target_of_periods": "frozen (premise): an audit's target at a verdict in the causal game (Verity.TargetOfPeriods: Verity.Vocab.TargetFor) from a period run of the coins model coupled to the play (Verity.Vocab.PeriodsCouple: its coins in bijection with the coins drawn up front, its verdict and claim refining the play's, Accounting.PeriodRun.Sound within the published delta, and the rest of the event, a log out of place or the coupling's break, within the forger's and the finder's terms); the coupling is a hypothesis until each audit's piece builds it",
@@ -14878,7 +14892,7 @@
    }
   },
   "Firewall.Record": {
-   "digest": "162811313f0ed64ea398215d0c941acde3e5498555a9ad40df98560960009cc0",
+   "digest": "ee099def500c1f0c05cae8545405b1775cbdf89ce79f3837779630e248324921",
    "definitions": {
     "Core.Firewall.Admitted": "1104c0260be780c10fa41f3671663755a6b0a2b0353d4361b3565017a585eeba",
     "Core.Firewall.Admitted.index": "89308749aab0514f57f1d68410ba8e371a9ae1d88c52e4e5d911dec04fb69f5a",
@@ -14886,13 +14900,13 @@
     "Core.Firewall.Admitted.stream": "ad2cc086aa808c7b31ab8ff03091290432cd5c89bc7ac273e6183b4cc22ae1d9",
     "Core.Firewall.Event": "df2386fc89b982c787bf8c5630086b63a4ebc7feca79cf18acf9b6a9e5fdce0f",
     "Core.Firewall.Event.admitted": "ee9ed1db55cb5ea29c856a8ed0a60c3a42deda79cbeb21ea04e18cf3a2ac9e02",
-    "Core.Firewall.Event.casesOn": "2d932f70afb9b024c9d86ef674d6a0fbb3610a153eed4ed5e238978afc407adf",
-    "Core.Firewall.Event.ctorIdx": "061e520b60ff0c09cffc66a1f1369dfed6a37ba3fc15297438348d11f234ba34",
+    "Core.Firewall.Event.casesOn": "e21e9f9c61423aa6d0339470d37f19f3232768e6c765dd31144ed25016354cfc",
+    "Core.Firewall.Event.ctorIdx": "51ab58d83d10c9b2be42ff8538c387335f0aa24b5d5df4b0eab50c2156c2ac0f",
     "Core.Firewall.Event.finish": "7dfc5af19b04ee6d2bee31598b793b793699b100a9848414bd285fa895cb0316",
     "Core.Firewall.Event.opened": "dae9dbd761d8680c4852ea8c9d52184d49349ec87fbd92f8c0e4808e96d4f5c7",
-    "Core.Firewall.Event.rec": "84517f230cdb36d73a0cb6791a48bf058241e734986b5e98658095eeb3fe5a24",
+    "Core.Firewall.Event.rec": "fc568bdc48c34e560a7a14db519f7502b63d808a1407f1ca665f7df46bef54fe",
     "Core.Firewall.Event.refused": "bc9163cf1fa90e0cd05c128ab2a287ab9fb3f31a348339c1274d25cdd2875872",
-    "Core.Firewall.Event.register": "5a82b6d21ce72c56abde93d3acec32a9cf7439bd92da348483c9367bc7055346",
+    "Core.Firewall.Event.register": "bf489bf1e181e7ff92005afee3067dfc4e8b22c0c82f074294b883fc68655e65",
     "Core.Firewall.Event.release": "e0b6c0ce5767979fe31545ec0829579acaaba14f2ed035049d60c94d13e92ece",
     "Core.Firewall.Event.skipped": "f5f1e0e76977575170369a02cce9b3168f1c758acea01985192db0bc36ec7315",
     "Core.Firewall.Event.slot": "034f494b4cb96fcc5f547726b8033633363b20d23b7572b83c8371cfe9d0863f",
@@ -14912,19 +14926,19 @@
     "Core.Firewall.Tally.mine": "e1f88e2867d8d356498b3ed109e8be00c603838426671b8e64dba41540045ee1",
     "Core.Firewall.Tally.n": "6cf802bf7a4253b8d4310ca4321c906e6c0af289957f078999682ec36c444d5c",
     "Core.Firewall.Tally.released": "deacda3479eba72fe6d63e17a84c5e97f41c38af3e59d7d4b0c85ed091067cd4",
-    "Core.Firewall.Tally.step": "bcf8c4188808135c956abae7b4d3242076e8bb16342ad9cfd156949b426120ed",
+    "Core.Firewall.Tally.step": "8599d0df2b881d74a7df0328214485187b5cdc83ddebd683aa3902ac5b46d048",
     "Core.Firewall.Tally.stopped": "0e7c20b37b07db0d22ed7950f5de88c28de8b1f1be5cc0a9dd786afdf2546772",
     "Core.Firewall.admit": "6b80a9f1aacd8f7e6e0e863717e1a63ad59772fabba36ba9af7e4b81fde82869",
     "Core.Firewall.admit.refuse": "58e85ab8e499eea1b6923b2b93d38a9a1128852f48940ff1f3fdbca928dddce9",
     "Core.Firewall.admit.served": "3426b68caccfb957a0269c5f4854e3c1933dd00a7dbe03fafb12c4bd7be60182",
-    "Core.Firewall.budgetOf": "50886b722e1b80719ea9721d68ac369df364a249c8df57d3de566f7579536e24",
+    "Core.Firewall.budgetOf": "ab6a099109c2502a20ec38c338421c912df688c442caeac5a8b467a2904b9b40",
     "Core.Firewall.failures": "d145c9e7e8bd0851eaaa06c4158e9a7c7796d612386f986e159caf5178e750d0",
-    "Core.Firewall.finished": "849b223e9342491330573e342c562b34cb033dd834c35ca5b5f30fc9fb71437c",
-    "Core.Firewall.nextOf": "2247f397cb2f24623e1d1017d72772b6009ef5e3fab4e1ff514ea9f439d7070e",
-    "Core.Firewall.openOf": "8034d1b6895d729ebbbb45fb39262afc120a6954281baaf1eeb861e6659e2ca6",
+    "Core.Firewall.finished": "3263e5f0d223360d071796d6de39cd2038280dd230a9f55d5c256b2004bafcb8",
+    "Core.Firewall.nextOf": "6ed30808215fcb7dd287931beb6418144b494d04f0294389b70a6f0f626606e6",
+    "Core.Firewall.openOf": "fcf4d9176fded264d76578bccfccb9188cc4a4299a51efa44f1095f5bcd8d7ba",
     "Core.Firewall.releaseMs": "276e441f89640543374c8bdcd910ff25c07b657eb50d2b6f96ee39aef8c874ab",
     "Core.Firewall.stop": "a3cbb98ace234db3fa243363f2512c5647e60345cd23db48cdbf2fb802e0563f",
-    "Core.Firewall.stopOf": "2b90e40fe38897cadcd11a852f88eae391d6c5a681231dd46aa95906489b3270"
+    "Core.Firewall.stopOf": "4c64f6bab4a87442e5bf2861a90fd13f77940b1f23a0c46f51d82a37a531a9be"
    }
   },
   "Firewall.Release": {
@@ -15928,18 +15942,20 @@
    }
   },
   "Flock.KsScope": {
-   "digest": "50cf5d56ff405d2414e18eadd134f9170a4dc30556a902a8f1452a9fce4dd963",
+   "digest": "dae830d8bd56251f1c7e1ef681ce31c737f61ad9ecc21a0487aacf9b595ba6ee",
    "definitions": {
     "Flock.KsScope.ROOTS_WHY": "856122f76860449b1a6c7504a4ecf832f3c95daaabfa94f7812092d433ee5c64",
     "Flock.KsScope.SCOPE_WHY": "dd0e53f27f892c737ac8ffd6097ac7a8412479c7e79053f6fda35dc725ada0c0",
     "Flock.KsScope.TABLES_WHY": "09402a61bb542aa4c0887e6cf8dbcafe20c58a7975c87d0c5edadc53e3fbdaad",
-    "Flock.KsScope.checkOf": "f059a38c0005f2721a8884d7e3caed1b60cd8f1a6ccf7494e78dbc47d4cec658",
+    "Flock.KsScope.TMPL_WHY": "aaa2ba436768854ac4dfc47242758383063f4c35646cf6852811a7ad0aaa9771",
+    "Flock.KsScope.checkOf": "6be630c05de52e27f378c42885fc58b4225079532c110a56cbc2d20b8b242345",
     "Flock.KsScope.collidesT": "d64b1507c7afd599e8161438c8ea995b72b9f89b67f3f3552c4cf8848a99d6a0",
     "Flock.KsScope.drawWhy": "31490eabd56ff3e8894152ecbe4e94d5669e623c79d6f763cc1121f716063779",
-    "Flock.KsScope.filesWhy": "4e890851b6d6edc63607ce8fa69571faa49937f0fdffba5179d97bf59576e068",
+    "Flock.KsScope.filesWhy": "be405c9f8b28eab80ce9674a5edb080dcf02d182ae36b237616128f066603f9c",
     "Flock.KsScope.rootT": "ab0baeea16d9ef7ded8923f9e81f4856026bef143cd82ea63b60583063c129ce",
     "Flock.KsScope.sharedWhy": "005abe36bb114dd69776434e06bbe9104d5eb1291760081d0e50df9a7cd4c1dc",
-    "Flock.KsScope.tagsWhy": "a0464d7483fd86ca65b9c3011870b510df0beb07dd0219f6bc555321968511dd"
+    "Flock.KsScope.tagsWhy": "a0464d7483fd86ca65b9c3011870b510df0beb07dd0219f6bc555321968511dd",
+    "Flock.KsScope.unitWhy": "ea3c5cec70972983499f11a8616dfb05b2cbc51da7f8dc7b0b7a650c49e3644f"
    }
   },
   "Flock.Layout": {
@@ -16149,7 +16165,7 @@
    }
   },
   "Flock.Net": {
-   "digest": "98d142be894904791b5ad86d6c6c0a2fe11a05a3d4fc795f90aeaf92ddd03fef",
+   "digest": "9f906a83c8410245d879fb53c0891a006ed3142e1f62b2d6fab241afa6bea531",
    "definitions": {
     "Flock.Group": "c2ac58508cfabb5f0d42cfeec05bd8dcc89a03c9d92a0cbaeb61d1c3c8f2473d",
     "Flock.Group.bits": "5dfe45faac9951c1393b030ed28c79b4f07fbd8e8025c8f8d1ca786771ac2c88",
@@ -16174,14 +16190,16 @@
     "Flock.Net.casesOn": "93a6e650fb8c59b9e057cbd969141ec827b1473659d3a3ace45b4f24233fe01d",
     "Flock.Net.checkOrder": "1fce050d8776197146e44fdf907925049e1f3847ed548d4bdc4f23ff35d0f3bd",
     "Flock.Net.constPos": "3358e457aa8d42d425d3a7bcc81d6abc65931826d2b899e62279b4a1d3ae86d4",
+    "Flock.Net.groups": "445cb47eac74c6e4c657acfb0eb0c6be7b72f9761143cd0055d420f8ff33f7a9",
     "Flock.Net.inGroups": "7fc5057389f731ad4c05c99e6664f8d223e1c35a9f3b94dc5b83a6d527d9b035",
     "Flock.Net.inWords": "550f49cd17dc44dea9060806fb1b9e829fabe7bd98b66d2ee8c0c2b0870cb10f",
     "Flock.Net.inputsOk": "83db13d1ae54f8e4401c056d45f435fb0e8669fa9e3d740dea46a32dc8961a56",
     "Flock.Net.lookup": "705e7b36dd6a6d46d4dbeb1feacf8bd40ecf135bf574432363d21ce6a0a7f5db",
     "Flock.Net.name": "d760a24deec4bfae8a60719a270f05b1110390aafadb7bedc9018ff1d0eb1a13",
+    "Flock.Net.num": "91f638ed1e275e7f1250a8c2d2c26c748e2e504ea9c408e46feabd5ce03eedc5",
     "Flock.Net.ofRows": "844e41a61c9ee09910c898e03a166681b1a2886ce3a06bf6b5c1d06e6a35098e",
     "Flock.Net.outGroups": "835dc2cf48f9ec0bde02d1618d57ac41953ee5148dca13fb69c4f631c9e2d13c",
-    "Flock.Net.parse": "7da705e97e9281384b39bf14064af9f254484a58c20222fc0ef5d6395ad10aa7",
+    "Flock.Net.parse": "10444a91bcc5c1e1495d747a6731f34c656dd430fd532c85f9400a065247980d",
     "Flock.Net.rec": "8714e44339b80a6da07df74d83b3c589393ff1b368498f2bdeefc174c8f1bf20",
     "Flock.Net.unitLog": "b8d944ea6036146905e2e33d31b25f372af116eb67fc34e52b1361601e9b1388",
     "Flock.Net.useful": "ad02b8864f21fd38b0449cbc0b3f8d562c0b1d9444bc67a3340c33d3b41fd71b",
@@ -16195,9 +16213,7 @@
     "Flock.log2ceil": "5de2c9af51b72b66e8ec0941f72322c69e4936d96d7424f4364ce1884313c02e",
     "Flock.nextPow2": "672248e8c4c082f39e900d47584890b871bb09171798a196ac4378253b873524",
     "Flock.portCols": "fc435fe8c6351b547488987e232bb7b03b497916167e65237fe18394ac7cdfa6",
-    "Flock.tokens": "7bf34c180d4aa3c64490ea5c7b6fcc540fa56bb906c435c1d8e14c9e2ea4c7aa",
-    "_private.Flock.Net.0.Flock.Net.groups": "9d322d1d29d62b3935ff57fe84b010abd49a28eebeaac86596ff95c8fa86aed9",
-    "_private.Flock.Net.0.Flock.Net.num": "6829f3c983fc9e746f54b74c6437a4f6c533c9bf9f7ffe35d7edc8a179e0a1fe"
+    "Flock.tokens": "7bf34c180d4aa3c64490ea5c7b6fcc540fa56bb906c435c1d8e14c9e2ea4c7aa"
    }
   },
   "Flock.NetAt": {
@@ -19477,7 +19493,7 @@
    }
   },
   "NetworkCheck.Period": {
-   "digest": "afbbbd47b29937e32523b751a342a1f532cb3a8e25c86947363724411020f20c",
+   "digest": "39dee9fca09c8660501e45b269ca5d8c5f4be38cd48808247a89764d7c257aff",
    "definitions": {
     "NetworkCheck.Period.Audit": "0d641bb152e911020e01f254af27bca6b76ff4e2cb57994e3121b4fcb8e976f4",
     "NetworkCheck.Period.Audit.bits": "e933e5e70e66fbf6d1a3f868d294c6a0cfc6be8b835a4d117602235327ee4af1",
@@ -19569,7 +19585,7 @@
     "NetworkCheck.Period.Schedule.bucketMs": "f96330b70ba9f3c57369585d5fb37d73d2bfe61c668357610f4a578d16a8984e",
     "NetworkCheck.Period.Schedule.cellBytes": "a3dfc2a18e79ff496dbe8740042f0a263158649c40aa192cbac5a750bce2e93a",
     "NetworkCheck.Period.Schedule.delay": "ea542b1ea5f4b8b8f6985256b8165fdffb2f2c25d267f1fe8fda04e4b467501e",
-    "NetworkCheck.Period.Schedule.digest": "6f9b1862715357bb171ff875dbe57878a1cc5c7b33aaece336dfb38af92377ab",
+    "NetworkCheck.Period.Schedule.digest": "f7a0937986bb90375bfa9449fcda29e70595290e7e2f0708fd8e95614da11a9a",
     "NetworkCheck.Period.Schedule.egressCells": "ab6af989bbb27b04199ad5d22ffcefc93500e361aa1f08a6b2431a4ff1de5615",
     "NetworkCheck.Period.Schedule.every": "efa3c1a3dbc45582812bbbdff3d45b95a9d9eefb38877ded6545f3af2340ecda",
     "NetworkCheck.Period.Schedule.ingressBuckets": "846da6f8bcc70781f4e7102f3377378986b00f603acc2335e6c2fa033569192d",
@@ -19615,13 +19631,14 @@
     "NetworkCheck.Period.commitmentTag": "3beab37b10b6aa4c879a13f8df016e198564d03f09fd8693c11ed34139d7e8a4",
     "NetworkCheck.Period.definitionDigest": "ae40e9da6fd69094665d7e4fe072852db7efadc252654311d52704f395c668b3",
     "NetworkCheck.Period.domainTag": "96482ade324b360c62b47eaa557a5e5541ebd16076ce6dcba0ea42cc95248016",
+    "NetworkCheck.Period.egressForm": "6bd720ee76f87c3c06483457b0f4a90770938e540db4fc9737deea5b18baee83",
     "NetworkCheck.Period.egressParams": "ea9cdedc049f493326d92d430445805d9484fe5bc751642907f15063b5138cb6",
     "NetworkCheck.Period.entriesPort": "dac774704dd8b773413017c7a67519dc2b573a62423347b1e6554a7eac286498",
     "NetworkCheck.Period.entriesPortName": "905c95f9938ddef046ed3860aa9672c0a5d1dd118cb489c77e63f82862c17744",
     "NetworkCheck.Period.evidenceOf": "e8f6e493568352890d94bbb521e7b18642759c63699adc8ed13d37e4b4ae27e7",
     "NetworkCheck.Period.factsJson": "0b9370f335852edb82939bc930cb9609c85bcbf85842a16a6285e5dad8228bea",
     "NetworkCheck.Period.factsOf": "5f445bdfec9198a00a1f2319913c154384e4304ecabaad26a017b50efc1b067a",
-    "NetworkCheck.Period.failReasons": "b1af8a9116ad2c444d1d18ba82ff5d2f116965954100ebeebcc4b4a03b6eee51",
+    "NetworkCheck.Period.failReasons": "cc1ad3bcbfb6304ed0d4a47f039163c708d692299a47dc0f88749419d2ff6432",
     "NetworkCheck.Period.findingOf": "b741c494b5aedde523cd8907f6c15b935bf1458c0ae0cc94e0f28d70dc8d1b73",
     "NetworkCheck.Period.firstFinding": "12d99101ffb4b62140ec080cb2befe2fb893fec15201d5a7aa9f89a1da98e6ab",
     "NetworkCheck.Period.firstParams": "4cba5348252e0f6afd34f7a65d63e75da7fdce6dfdfec950f5c78753ef353225",
@@ -21355,6 +21372,16 @@
     "FlockSoundness.Rows.stackCol": "74ee5466385dded4bcdf0fc08f284b035e2b5a68506097dd1b377ac3c88c73e0",
     "FlockSoundness.Rows.stackRow": "ea13fbfb8031b32212e1cada9a7c80a52d11097d6aad0ad9f9d55eee2a3a7f60",
     "FlockSoundness.Rows.stackW": "24e2cb50ee34d50023bf5eaa7eabb3717d42ac4e0e7bce52d5485eba4127b4df"
+   }
+  },
+  "Properties.Flock.Nets": {
+   "digest": "841eddc7b3038c396b1e6af846e1bde95e87da82074da6c39e20daba7c47e243",
+   "definitions": {
+    "Properties.Flock.Nets.Builds": "162931af75f2c73aac70b6727c3150ee817a4ed7dfa320205b1c23dc239a920e",
+    "Properties.Flock.Nets.FixedNetsBuild": "0ad9d5861b02e94a5d68538339ac46714a28b719bca3c96e16bd521bf4fdbe8f",
+    "Properties.Flock.Nets.LinesFit": "f63e77f2705c9994b2f0d8fa1d67ba6cb8068d505eaee9399d4c7f4a04150b19",
+    "Properties.Flock.Nets.built": "c15dc1f7d263235f4cac5e0e9326ed6f4befefd13557fce5333a48a532a89db6",
+    "Properties.Flock.Nets.sparseOf": "deba753eef0fb318212d2b28d08d1f6ccf2172e3a867e32248e59882632ca109"
    }
   },
   "Properties.Hash.Identity": {

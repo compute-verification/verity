@@ -624,12 +624,12 @@ class PearlKW:
         self.commitment_hash = "sha256"
         self.certificate = Certificate(
             conjecture="pearl-quantized-subspace-hardness",
-            gamma0=None,
+            gap0=None,
             omega=Fraction(1),
             claims=("pearl-quantized-subspace-hardness", "random-oracle", "cr/blake3", "cr/sha-256", "device-reproducibility",
                     "live-verifier"),
             theorems=("Pouw.SecurityProofs.WorkWeightedSampling",),
-            hypotheses=("Pearl's Assumption 1 with its jackpot policy (informal: no γ_0, no constant, no joint form)",
+            hypotheses=("Pearl's Assumption 1 with its jackpot policy (informal: no target gap g₀, no constant, no joint form)",
                         f"the {self.device.name} device's FP8 accumulation is reproduced exactly"),
             allowances=("up to ⌊k·h·w/20⌋ skippable summands per tile (5%)", "up to 1/64 dead entries per side",
                         "the useful output's peel and unscale are unchecked (barrier class (a))"),

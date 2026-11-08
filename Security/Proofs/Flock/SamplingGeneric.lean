@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
@@ -48,6 +49,10 @@ opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
 fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
 **`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`).
+
+`CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
+oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`).
 
 A frozen sampled record is a compiled verifier over Flock (`ofDeploy`, `SamplingGeneric/Deployed.lean`): its opening
 count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), its errors are within `Claims.Sampling`'s, and it
@@ -120,6 +125,9 @@ theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSR
 
 /-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
+
+/-- **KS read at a time budget**: `CompilerKS` and `CompilerEfficient` (`compilerKSAt_of`). -/
+theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEfficient
 
 /-- **`Sampling.KS` from the compiler**: `flockKS` at `ofDeploy` (`samplingKS_of_flockKS`). -/
 theorem samplingKS [Zero Col] {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T}
