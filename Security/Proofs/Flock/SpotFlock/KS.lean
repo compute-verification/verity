@@ -48,14 +48,16 @@ theorem sessionsIn_code : SamplingDeploy.SessionsIn (code h) := by
     simp [FlockDeploy.tableLen, List.map_map, Function.comp_def]
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, its
-code's facts and its sessions' runs proved, from A3 at the coins' bytes and the sessions' openings. -/
-theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
+code's facts and its sessions' runs proved, from A3 at the coins' bytes, a cap on an accepted run's replay sample and
+the sessions' openings. -/
+theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte) (cap : Msg → ℕ)
+    (hcap : ((base h).atOrder (order h)).ReplayCap FlockDeploy.sha512 (two h) (rs h) cap)
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
-    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
-      FlockDeploy.sha512 :=
+    (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)
+      cap).KS FlockDeploy.sha512 :=
   SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
-    iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
+    iroots cap hA hA (regMatchesTwo_code h) (refusesTwo_code h _) hcap (interiorFixed_code h _)
     (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
     hopens
 
