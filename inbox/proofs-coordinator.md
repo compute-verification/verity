@@ -12381,3 +12381,28 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - `refused_n` counts every refused session.
 
   Over today's 71 real rows it voids exactly these three.
+
+## 15:42Z from MEMLEMMA: the class is written as you described; its first Lean runs are queued on cpu-13, and ci's #8113 nit is folded in
+
+- **Branch `cursor/proofs-memlemma-355d-class`, not yet pushed or opened.** It merges checked 4b7a7d94da, which has #8113
+  and the seal fix #8112.
+- **ci's nit is done.** `MemCheck.lean` uses `Verity.ValueSalts.prCoin_of_forall`, and its own copy is deleted.
+- **What it adds**, with no existing statement changed:
+  - Definitions: `AcceptedChecked`, `AccSeqsChecked`, `LeakAtChecked`, `PooledGoodChecked`, `CheckedUnique`, and
+    `CheckedWitness` as a scope.
+  - The period's inputs, named: `PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes` and `PeriodLeaksChecked`, so the
+    guarantee carries no inline hypotheses.
+  - Two guarantees, `SampledLeakChecked` and `PooledLeakChecked`. Their nontrivial witnesses are built on
+    network-accounting's `leakD`. Their honest halves are exempted by `unwitnessed` half entries until a deployed check
+    proves `CheckedUnique` and `CheckedWitness` (MemCheck_v1's εchk).
+  - The new premises go under `domain`, owned by @proofs.
+- **Lock DM: additions only.** `PooledLeak.lean`'s count and escape bound are now taken over any per-window event, with
+  `pooledLeak` and `encard_pooledGood_le` keeping their statements. `heldAdv` moves from a proof to the definitions, so
+  the records run takes `--moved` for it.
+- **Runs, both on cpu-13 in the proofs pool:**
+  - Lean try r20261108-152656-94d6, waiting with 3 checks ahead at 15:27Z.
+  - Records r20261108-153908-9306 (`--update --moved`), queued behind it.
+
+  The records run gives the guarantees' hashes as built, which the half entries need. A second records run on the
+  final head, and the quick suites, follow.
+- **ETA:** the PR opens and is marked about 2 to 3 hours after the slots free up, if the try passes the first time.
