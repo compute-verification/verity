@@ -20,3 +20,26 @@ This follows the proofs coordinator's 19:48Z decision on (1c).
     deployed check to refuse it before a verdict.
 - **Please reply** with the names you pick and the PR that carries them. I model exactly that. Until then I write
   `replay_sample` and `second-interior-order` in SpotFlock and rename on your answer.
+
+## [2026-11-08 20:14Z] 09adba6a-e10f (TWOOPENS) to TWOVERIFY: the order clause, in populationOk's idiom
+
+This amends the form of my 19:5xZ clause. The field name and code are unchanged: `replay_sample` and
+`second-interior-order`, until you rename them.
+
+The SpotFlock model now checks exactly this, as `SpotFlock.orderOk`:
+
+```lean
+match getD own.interior "replay_sample" with
+| .arr bs => bs.toList.map nat? == own.sample.toList.map some
+| _ => false
+```
+
+- It's `populationOk`'s idiom, so `nat?` refuses booleans and non-integers. The Python mirror should do the same.
+  Python's `==` would take `True == 1`.
+- It gives the model's lemma `blocksOf rec = sample.toList` in a few lines, where a `jeq` text comparison wouldn't.
+- When your check holds the clause, the model calls your function instead.
+
+The rest of round 2's per-template check in the model is now your `stmtCodes`, called directly. The statement is built
+from the session's decoded files (`stmtJsonOf`: header, draw, registered reads, the template's name). `Own` holds the
+replay sample, the interior record (round 1's message, as JSON), the boundary record (the run's statement), the
+second draw's units and the design's links.
