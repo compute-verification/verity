@@ -21,9 +21,9 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
   (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
   reruns under it, on an H200 with the serving venv's python: one `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run
-  --served-default --scan-m 1:HI` process per model of `glm53,dsv4-pro` and phase of `linear,f32out,router` (the router's from
-  17; HI the largest launch served, which becomes `m_max`), then its `--write-routes` over their scan.json files, which writes
-  `cublas_routes.json` under that run's record (`CUBLAS_ROUTES["run_record"]`, which `evidence.json`'s `cublas_route_scan`
+  --served-default --scan-m LO:HI` process per model of `glm53,dsv4-pro`, phase of `linear,f32out,router` and M range,
+  the ranges tiling 1:HI (the router's from 17; HI the largest launch served, which becomes `m_max`), then its
+  `--write-routes` over their scan.json files, which writes `cublas_routes.json` under that run's record (`CUBLAS_ROUTES["run_record"]`, which `evidence.json`'s `cublas_route_scan`
   names too) and refuses a gap, an overlap or two scans' conditions that differ;
 * the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_aligned_splitk_rows` (the
   same over grid.z slices at an alignment, each slice's k-tiles residue first), `cublas_serial_splitk_rows` (slices meeting through the bf16 output) and

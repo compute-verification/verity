@@ -36,8 +36,8 @@ it contains. Your checkout and your prompt can be older than `main`: `git show o
   archive` restores them.
 - The team's own tooling and machines, which nothing in `verity/` reads: `tools/research/` (runs, the evidence store,
   messaging, pods), `tools/agent-guard/`, `tools/move/` and `infra/` (the team skill). They stay here and are never
-  exported to the public repository (Daniel, 4 Nov); new infra goes here too. compute-verification/infra holds only the
-  website.
+  exported to the public repository; new infra goes here too. compute-verification/infra holds the website, the executor
+  (its `infra/`) and its `.cursor`, nothing else.
 
 Dependencies point inward (`tests/test_boundaries.py`; every list it holds only shrinks). A verifier imports no
 `verity.ml` code; until its protocol's verifier is Lean, a Python verifier keeps only the edges into `verity.ml`

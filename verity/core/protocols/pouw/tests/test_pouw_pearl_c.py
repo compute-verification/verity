@@ -801,7 +801,7 @@ def tolerant_kernel(scheme, ctx, noise, a, b, tiles):
 @pytest.mark.parametrize("clause", [None, "finite", "live", "floor"])
 def test_check_tile_refuses_a_weight_row_outside_the_rules(clause):
     """`check_tile` refuses a tile one of whose weight rows fails a clause of `OperandOK`, as Lean's `TileCheck.Accepts`
-    asks each of the tile's weight rows to pass the protocol's `weightOK` (`PearlCSem.RowOK`). One row per clause: a
+    asks each of the tile's weight rows to pass the protocol's `fixedOK` (`PearlCSem.RowOK`). One row per clause: a
     non-finite word (Lean's `rowOK8_nonFinite`), three of 128 words `8.0` among `1.0`s (`rowOK8_notLive`), and every 8th
     word `2¹²⁶`, so ρ is not finite and the floor is 0 (`pc8Sem_squaresOverflow`). The tile beside it, whose weight rows
     pass, is accepted, and so are both on the honest weight."""
