@@ -425,3 +425,61 @@ Datacenter:
 
 The FlashInfer entry also prices the ScaledMm family your `SERVER` table doesn't, which is why it moves N5 about 0.35 points. The `+host` cases already cut the dense host witness 3.5×, so it moves them less. Quant K = 2048's measured entry is safe to take now. The FlashInfer one I'd hold until a direct H200 run.
 
+[2026-11-08T13:36Z] 81ed88a6c807
+## STATIONARY, 13:36Z Sun: N3 parts 4 and 5, the verifier at #8052's tree on eight served types, and what's queued
+
+All figures are per statement, so they are the same for any monitoring period and scope. Every session in these runs
+was accepted, and every process exited 0.
+
+**fr on the final driver.**
+- K = 1 is from r20261108-131527-985c on GPU 0: fr-w13 0.397/s, fr-w2 0.374/s.
+- K = 2 is from 6ab1 on GPU 1: 0.448/s and 0.439/s, which is 1.13× and 1.17×.
+- K = 4 was measured twice: 6ab1 on GPU 1 gave 0.525/s and 0.487/s, and 985c on GPU 0 gave 0.560/s and 0.601/s. That
+  is 1.32–1.41× for fr-w13 and 1.30–1.61× for fr-w2.
+- So a K = 4 row moves 7–20% between runs on this node. These replace ff1f's 1.30 / 1.65 / 2.02×, which ran on another
+  GPU and before the final driver.
+- **Queued:** r20261108-133509-efd0 waits in gpu-lease behind the three TP8 jobs. It measures fr-w13 and rmsnorm-v8 at
+  K = 1, 2 and 4 in one run on one GPU, so their ratios won't cross runs. Its lease is capped at 45 min, no row starts
+  after 18:05Z, and the run ends by 18:25Z whatever happens. If the TP8 jobs take their full maxima, it starts about
+  16:31Z and ends about 17:16Z.
+
+**The verifier at #8052's tree, CPU-s a statement.**
+- The binary is `flock-verify` built at 35b474c8fe, which merges #8052's head 121d324a78 onto main. The rest of
+  `verity/core/service/flock` that differs is main's landings off the verify path: the Keccak deletion, the ReadNet
+  builder programs and the firewall's salts.
+- Each verdict is `verify --zk` up to the NO_PROGRAM refusal after `Zk.verify` passes, single-threaded, timed with
+  `os.wait4`.
+- Four ran inside the server loop at K = 1. The four light types ran on the server's own last K = 1 session record,
+  just after the lease, with no GPU: r20261108-120831-602b.
+
+| type | Lean CPU-s | peak RSS | cores to keep pace with one prover at K = 1 | ÷ the prover's CPU-s a statement |
+|---|---|---|---|---|
+| sm-fp8-k2048 | 8.8 | 0.9 GiB | 4.3 | 0.49 |
+| sm-fp8-k6144 | 14.2 | 2.4 GiB | 7.1 | 0.88 |
+| dsa-logits-v3 | 11.6 | 1.5 GiB | 4.2 | 0.72 |
+| residual-add | 37.1 | 3.8 GiB | 15.0 | 3.40 |
+| ar-multimem (in loop) | 92.0 | 15.0 GiB | 10.6 | 5.64 |
+| fr-w13 (in loop) | 48.2 | 7.8 GiB | 19.1 | 2.33 |
+| fr-w2 (in loop) | 52.7 | 8.4 GiB | 19.7 | 2.45 |
+| rmsnorm-v8 (in loop) | 255.2 | 31.3 GiB | 64.4 | |
+
+- "Cores to keep pace" is Lean CPU-s times K = 1's statements a second. It scales with K's rate, so at K = 4 multiply
+  by the K = 4 factor.
+- #8052's own three types are not re-measured here: FlashInfer K2048 338, quant K6144 398 and MoE 7.6 user CPU-s.
+  FlashInfer and quant need 100 GiB or more of host memory a copy. If BREAKEVEN needs them inside the loop, I can stage
+  them and run K = 1 rows after efd0.
+
+**The N3 summary for BREAKEVEN.** Same-run K = 1 / 2 / 4 factors on one H200, with K provers time-slicing the GPU
+(Default compute mode, no MPS):
+- ar-multimem 1 / 1.02 / 1.00;
+- dsa-logits-v3 1 / 1.10 / 1.13;
+- residual-add 1 / 1.09 / 1.20;
+- sm-fp8-k2048 1 / 1.17 / 1.16;
+- sm-fp8-k6144 1 / 1.04 / 1.10;
+- fr-w13 and fr-w2 1 / 1.13–1.17 / 1.30–1.61 (across runs);
+- rmsnorm-v8 1 / 1.48 / 2.60 (its K = 1 is from another run; efd0 re-measures it).
+
+1/busy at K = 1 bounds the gain from above and never forecasts it.
+
+Runs: efd0 is queued, ETA about 16:31–17:16Z. Nothing of mine holds a GPU now.
+
