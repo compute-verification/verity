@@ -281,8 +281,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
                          "store's remote with a key minted here, so custody does not depend on this machine (store.custody)")
     ap.add_argument("--no-custody-r2", dest="custody_r2", action="store_false",
                     help="with --on: no run custody on the remote; the records stay on the machine until `research fetch --all`")
-    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime (default 6h, at most 24h; it must outlast "
-                                                                       "the run and its upload: a --timeout over 6h needs it)")
+    ap.add_argument("--custody-ttl", default=None, metavar="TTL", help="with --custody-r2: the minted key's lifetime, <n>[s|m|h|d], a bare number in seconds "
+                                                                       "(default 6h, at most 24h; it must outlast the run and its upload: a --timeout over "
+                                                                       "6h needs it, and one the --timeout outlives is refused)")
     ap.add_argument("--run-record", action="store_true",
                     help="a local run: the attempt also carries every run file (logs included; what custody keeps) as its run record, as an "
                          "--on run's custody does: for a pod whose run dir nothing else preserves (store.custody)")
@@ -609,7 +610,7 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
 
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the default key's lifetime without an explicit ``--custody-ttl`` (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -620,9 +621,13 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
         return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
     timeout = _harness_timeout(harness_opts)
-    if not custody_ttl and timeout is not None and timeout > ttl:
+    if timeout is not None and timeout > ttl:
+        hours = -(-int(timeout) // 3600) + 1
+        if custody_ttl:
+            return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
+                    f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
         return (f"--timeout {timeout:g} s outlives the custody key's default lifetime ({DEFAULT_TTL}): the upload would fail; "
-                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run")
+                f"pass --custody-ttl (at most {CUSTODY_TTL_CAP_S // 3600}h) longer than the run, such as --custody-ttl {hours}h")
     return None
 
 
