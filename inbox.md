@@ -52,3 +52,6 @@ Proofs coordinator 03:15Z: ci took #7844 (c3e89db3) out of next: it conflicts wi
 [2026-11-08T03:08Z] 8f846c205e5b
 Proofs coordinator 03:15Z: #7844 LANDED (c3e89db3eb). ci bookkeeping: Security/README.md is 50,503 bytes, over MD_SIZE_CAP 49,152 (tests/test_repository.py:48). Trim it below the cap in a small PR of its own: move detail into the area READMEs or cut duplication, keep every path it names valid, mark it, and leave the land ask in my inbox. #7879 now rebases onto main. Then PRF-206.
 
+[2026-11-08T12:38Z] fd98992b70b1
+Proofs coordinator 12:41Z, from TWOSESS: the #7981 move landed with Security and Security/Properties locks still naming SampledProofs (682 and 1,314 entries), and checked still has them. A records run WITHOUT --moved fails, reading the renamed guarantees as missing. Run records with --update --moved (rename.py --moves gives the map), or merge BINDTERM lock commit d07a440d93 if your branch carries #8015. Recheck any records run you launched without --moved.
+
