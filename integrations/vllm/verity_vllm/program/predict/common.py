@@ -57,13 +57,15 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
+    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
+    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
     refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
     from verity_vllm.program import inputs
-    checks = getattr(model, "checks", None)
+    from verity_vllm.program.frontend import stop_rule as SR
+    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
     for c, what in checks:

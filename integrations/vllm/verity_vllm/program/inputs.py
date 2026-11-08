@@ -38,6 +38,9 @@ CHARGED: frozenset[str] = frozenset()
 RELATIONS: dict[str, str] = {
     "DsaTopKLongRow_v1":
         "integrations/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
+    "StopCheck_v1":
+        "integrations/vllm/tests/program/predict/test_steps.py::"
+        "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
 }
 
 

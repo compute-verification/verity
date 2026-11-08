@@ -1,9 +1,10 @@
 """verity_vllm.program.predict.dsa past INDEX_TOPK: a row of more than INDEX_TOPK keys selects its top-k as the Build's `vllm_dsa`
 rule does, in the circuit: `DsaTopKMask` marks the logits' top-k set, `DsaButterflySettings` sets the concentrator for it, and
 sparse MLA reads the rows `DsaButterflyRows` routes at those settings, in ascending index order (the canonical row, which an engine
-under `VERITY_DSA_TOPK=canonical` serves).  The Program has no `run` input and no checks.  A row is selected at its class
-(`vllm_dsa.long_row_keys`: its keys rounded up to a multiple of INDEX_TOPK, the logits past its own `PAD_SCORE`), and below it
-read through `DsaButterflyRowsPad`, the history and its pad two arguments.
+under `VERITY_DSA_TOPK=canonical` serves).  The Program has no `run` input, and its top-k adds no check: a request's one check
+is its length rule (`stop_rule`).  A row is selected at its class (`vllm_dsa.long_row_keys`: its keys rounded up to a multiple
+of INDEX_TOPK, the logits past its own `PAD_SCORE`), and below it read through `DsaButterflyRowsPad`, the history and its pad
+two arguments.
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k) and its
 INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one; one test keeps the served INDEX_TOPK and
@@ -292,9 +293,11 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     long, short = c.requests
     assert (long.LP, long.T, long.chunks, short.LP, short.chunks) == (10, 2, (6, 4), 3, ())
     sigs = sorted((_families(p.fn.body.nodes)["DsaTopKMask_v1"], str(p.fn.signature()[1])) for p in c.programs.values())
-    assert sigs == [(0, str(Array(2, I32))), (3 * 8, str(Array(3, I32)))], "rows 4..11 of the long one, at each indexer layer"
+    rule = Array(1, Value(1))
+    assert sigs == [(0, str(TupleT(Array(2, I32), rule))), (3 * 8, str(TupleT(Array(3, I32), rule)))], \
+        "rows 4..11 of the long one, at each indexer layer; each Program's length rule last"
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
-                          batch=long.batch(), chunks=long.chunks)
+                          batch=long.batch(), chunks=long.chunks, stop=long.stop)
     assert alone.digest in c.programs
 
 
@@ -306,7 +309,7 @@ def _step(*rows: tuple[int, int, int, int]):
 @pytest.mark.slow
 def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
     """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
-    whole in one window are, call for call, their Programs across three, each with its own pad constants: the first leaves A at position 6 and B at 3, the second
+    whole in one window are, call for call, their Programs across three, each with its own pad constants and length rule: the first leaves A at position 6 and B at 3, the second
     runs B's last row with A carried through it idle, and the third runs A's last.  A's rows read the indexer's keys and scales
     past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples, then every layer's latent rows,
     index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`, while B's index-K history stays
@@ -338,16 +341,18 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
 
     def calls(p) -> list[str]:
-        return [n.fn.id for n in p.fn.body.nodes if not n.fn.id.startswith("Const")]
+        ids = [n.fn.id for n in p.fn.body.nodes if not n.fn.id.startswith("Const")]
+        assert ids[-1].startswith("StopCheck_v1"), "each window's Program ends in its own length rule"
+        return ids[:-1]
 
     for r in (0, 1):
         assert calls(prog[0][r]) == [i for p in prog[1:] if r in p for i in calls(p[r])]
     assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
     ret = field_types(prog[1][0].fn.signature()[1])
-    assert ret[0] == Array(4, I32) and ret[1:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))),
-                                                   Array(3, Array(6, Value(32))))
+    assert ret[:2] == (Array(4, I32), Array(1, Value(1))) and ret[2:] == (
+        Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))
     wls = [c.workload for c in cs]
-    assert field_types(wls[1].fn.signature()[1])[0] == Array(4, I32)
+    assert field_types(wls[1].fn.signature()[1])[0] == TupleT(*ret[:2])
     assert wls[1].edge.outs == wls[2].edge.ins and [[g for g, _, _ in gs] for _, gs in wls[2].edge.ins] == [
         ["prefix", "prefix_ik", "prefix_iks", "last_token"], ["prefix", "last_token"]]
     assert wls[2].edge.outs == wls[2].edge.ins[:1] == wls[3].edge.ins, "the idle window hands A's fields on as they came in"
@@ -359,7 +364,7 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
         params = dict(wls[w].fn.signature()[0])
         assert wls[w].ports == ("edge.kv", "edge.ik", "edge.iks", "edge.last")
         assert [len(field_types(params[p])) for p in wls[w].ports] == held
-        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[2].leaves]
+        assert [t.leaves for t in field_types(params["edge.ik"])] == [ret[3].leaves]
     names = [n for n, _ in wls[2].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n]
     assert names == [f"request[{rids[2][0]}].{g}" for g in ("prompt", "prefix_ik", "prefix_iks")], "B's index-K history is its own"
     assert [n for n, _ in wls[3].fn.signature()[0] if n.startswith("request[") and ".peers_" not in n] == [f"request[{rids[3][0]}].prompt"]
@@ -407,7 +412,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     """Class G at its served limits (`CLASS_G_SERVED`): one greedy request of KEYS prompt tokens (the served max_model_len unless
     stated) and one output, which its prefill's last row samples (no decode position: T 0), its prompt prefilled alone in chunks
     of the long-prefill threshold, its last row of KEYS keys. The step compiler plans it and builds its request Program on the meta device, every row past
-    INDEX_TOPK (2,048) in the mask form at its class: no `run` input and no checks, one DsaTopKMask per full indexer layer and row
+    INDEX_TOPK (2,048) in the mask form at its class: no `run` input, its one check its length rule, one DsaTopKMask per full indexer layer and row
     past INDEX_TOPK (in the last layer only its last chunk's: the rest are dead units, `prune`), at most KEYS / INDEX_TOPK classes. What no cheaper test can: that a request at the served limit compiles, at
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
     positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
@@ -423,7 +428,8 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     c = compile_steps(reg, advice, ingress)
     (unit,) = c.requests
     (prog,) = c.programs.values()
-    assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0]) and prog.fn.signature()[1] == Array(1, I32)
+    assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0])
+    assert prog.fn.signature()[1] == TupleT(Array(1, I32), Array(1, BIT)), "its sample, then its length rule"
     masks = Counter(n.fn.bindings["N"] for n in prog.fn.body.nodes if n.fn.id.startswith("DsaTopKMask_v1{"))
     long, last = max(LP - topk, 0), LP - CH * ((LP - 1) // CH)
     dead = long - min(last, long) if hf["indexer_types"][int(layers) - 1] == "full" else 0
