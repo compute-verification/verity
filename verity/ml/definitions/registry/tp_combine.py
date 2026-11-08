@@ -101,18 +101,18 @@ def AllReduceCustomRow(B, S, parts):
     return outs[0] if len(outs) == 1 else coll_concat(Array(N, BF16), outs)
 
 
-#: each route's static holding the call's element count
-_SIZE = {"AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceRmsNormMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
-         "AllReduceCustom_v1": "SIZE", "AllReduceNcclTree_v1": "SIZE"}
+#: by all-reduce Definition, its static holding the call's element count
+_SIZE = {TA.AllReduceMnnvl: "N", TA.AllReduceResidualMnnvl: "N", TA.AllReduceRmsNormMnnvl: "N", TA.AllReduceMultimem: "SIZE",
+         TA.AllReduceCustom: "SIZE", TA.AllReduceNcclTree: "SIZE"}
 
 
 def _call(defn, statics: dict) -> tuple[str, dict, int, int]:
     """(``Name_vN``, statics, WORLD, the call's element count) of one of `tp_allreduce`'s all-reduces."""
     name = f"{defn.name}_v{defn.version}"
-    if name not in _SIZE:
+    if defn not in _SIZE:
         raise ValueError(f"{name}: not one of tp_allreduce's all-reduces, whose combine units are stated here")
     s = dict(statics)
-    return name, s, TA.ranks(s["WORLD"]), int(s[_SIZE[name]])
+    return name, s, TA.ranks(s["WORLD"]), int(s[_SIZE[defn]])
 
 
 def _owner(runs, pos: int):
@@ -123,17 +123,17 @@ def _mnnvl_coordinate(unit):
     return lambda s, W, size, pos: (unit, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])})
 
 
-#: by route, its coordinate unit at (statics, WORLD, the call's element count, the position)
+#: by all-reduce Definition, its coordinate unit at (statics, WORLD, the call's element count, the position)
 _COORDINATE = {
-    "AllReduceMnnvl_v1": _mnnvl_coordinate(TA.AllReduceMnnvlCoordinate),
-    "AllReduceResidualMnnvl_v1": _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
-    "AllReduceRmsNormMnnvl_v1": _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
-    "AllReduceMultimem_v1": lambda s, W, size, pos: (
+    TA.AllReduceMnnvl: _mnnvl_coordinate(TA.AllReduceMnnvlCoordinate),
+    TA.AllReduceResidualMnnvl: _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    TA.AllReduceRmsNormMnnvl: _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    TA.AllReduceMultimem: lambda s, W, size, pos: (
         TA.AllReduceMultimemCoordinate,
         {"WORLD": W, "TREE": _owner(TA.multimem_runs(W, size, s["TREES"]), pos), "FTZ": bool(s["FTZ"])}),
-    "AllReduceCustom_v1": lambda s, W, size, pos: (
+    TA.AllReduceCustom: lambda s, W, size, pos: (
         TA.AllReduceCustomCoordinate, {"WORLD": W, "START": _owner(TA.custom_owners(W, size, int(s["STAGE"])), pos)}),
-    "AllReduceNcclTree_v1": lambda s, W, size, pos: (
+    TA.AllReduceNcclTree: lambda s, W, size, pos: (
         TA.AllReduceNcclTreeCoordinate, {"WORLD": W, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
 }
 
@@ -145,7 +145,7 @@ def coordinate_binding(defn, statics: dict, pos: int) -> tuple[object, dict]:
     name, s, W, size = _call(defn, statics)
     if not 0 <= int(pos) < size:
         raise ValueError(f"position {pos}: {name}'s elements are 0..{size - 1}")
-    return _COORDINATE[name](s, W, size, int(pos))
+    return _COORDINATE[defn](s, W, size, int(pos))
 
 
 def _multimem_row(s, W, N, rows, row):
@@ -160,13 +160,14 @@ def _custom_row(s, W, N, rows, row):
     return AllReduceCustomRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "STAGE": int(s["STAGE"])}
 
 
-#: by route, its row unit at (statics, WORLD, the row's width, the row count, the row); the fused calls, one token a call, have none
+#: by all-reduce Definition, its row unit at (statics, WORLD, the row's width, the row count, the row); the fused calls, one
+#: token a call, have none
 _ROW = {
-    "AllReduceMnnvl_v1": lambda s, W, N, rows, row: (TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}),
-    "AllReduceNcclTree_v1": lambda s, W, N, rows, row: (
+    TA.AllReduceMnnvl: lambda s, W, N, rows, row: (TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}),
+    TA.AllReduceNcclTree: lambda s, W, N, rows, row: (
         TA.AllReduceNcclTree, {"WORLD": W, "SIZE": N, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
-    "AllReduceMultimem_v1": _multimem_row,
-    "AllReduceCustom_v1": _custom_row,
+    TA.AllReduceMultimem: _multimem_row,
+    TA.AllReduceCustom: _custom_row,
 }
 
 
@@ -176,8 +177,8 @@ def row_binding(defn, statics: dict, rows: int, row: int) -> tuple[object, dict]
     one row (`route_binding` at rows = 1), so every row of it is one template; the others' take ROWS and ROW."""
     name, s, W, size = _call(defn, statics)
     rows, row = int(rows), int(row)
-    if name not in _ROW:
+    if defn not in _ROW:
         raise ValueError(f"{name}: one token a call, whose coordinates are its units (`coordinate_binding`)")
     if rows < 1 or size % rows or not 0 <= row < rows:
         raise ValueError(f"{name} of {size} elements: {rows} rows of equal width, row {row} one of them")
-    return _ROW[name](s, W, size // rows, rows, row)
+    return _ROW[defn](s, W, size // rows, rows, row)
