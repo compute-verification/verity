@@ -90,8 +90,8 @@ def _fail_once(monkeypatch, verb: str, stderr: str) -> list:
     ("fetch", "fatal: the remote end hung up unexpectedly"),
 ])
 def test_a_fetch_or_push_that_fails_under_load_is_retried(machines, monkeypatch, verb, stderr):
-    """Two machines' syncs under load 156 (vy-mig-check-20, 6 Oct) failed on their first attempt with an error that was not a
-    lost push race, and gave up there; a lock or transfer error clears on the next attempt."""
+    """Two machines' syncs under heavy load can fail on their first attempt with an error that is not a lost push race, and
+    must not give up there; a lock or transfer error clears on the next attempt."""
     origin, a, _ = machines
     failed = _fail_once(monkeypatch, verb, stderr)
     _insert_after(a / DOC, "<!-- a -->", "a under load")
@@ -122,8 +122,8 @@ def test_a3_a_same_hunk_conflict_names_the_file_and_loses_nothing(machines):
 
 
 def test_a_detached_head_commits_nothing(machines):
-    """The steward's clone, 6 Oct 16:05Z: once HEAD was detached, every pass committed onto it and none could push (nine syncs
-    unpushed by 17:20Z); a sync on a detached HEAD now leaves the work uncommitted for the branch to take."""
+    """Once HEAD is detached, a pass that commits onto it can't push, nor can any pass after it; a sync on a detached HEAD
+    leaves the work uncommitted for the branch to take."""
     _, a, _ = machines
     _git(a, "checkout", "-q", "--detach")
     _insert_after(a / DOC, "<!-- a -->", "a while detached")
@@ -134,8 +134,8 @@ def test_a_detached_head_commits_nothing(machines):
 
 
 def test_a_rebase_whose_abort_lost_its_state_goes_back_to_the_branch(machines, monkeypatch):
-    """The same clone, 6 Oct 16:05Z: on NFS the rebase lost `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its
-    abort did nothing and HEAD stayed detached at origin/main; the sync puts the branch back, with the local commit on it."""
+    """On NFS a rebase can lose `.git/rebase-merge` ("could not lock .../git-rebase-todo"), so its abort does nothing and
+    HEAD stays detached at origin/main; the sync puts the branch back, with the local commit on it."""
     origin, a, b = machines
     _insert_after(a / DOC, "<!-- b -->", "a first")
     assert NS.sync(a, secrets=[])["pushed"]
@@ -695,8 +695,8 @@ def test_a_missing_notes_clone_is_cloned_once_the_token_is_set(cloud_vm, tmp_pat
 
 
 def test_parallel_callers_in_one_process_clone_the_notes_once(cloud_vm, tmp_path, monkeypatch):
-    """26 Oct: `research run` on a fresh VM probes machines in parallel threads, each asking for the notes clone; the clone
-    directory was named by pid alone, so one thread's cleanup deleted another's clone mid-way and the run couldn't start."""
+    """`research run` on a fresh VM probes machines in parallel threads, each asking for the notes clone; with a clone
+    directory named by pid alone, one thread's cleanup would delete another's clone mid-way and the run couldn't start."""
     import concurrent.futures
 
     origin = cloud_vm[0]
@@ -736,7 +736,7 @@ def test_machine_resolution_clones_the_registry_on_a_fresh_vm(cloud_vm, tmp_path
 
 
 def test_a_stale_index_lock_is_removed_only_when_no_git_works_in_the_repository(tmp_path):
-    """19 Oct: a git killed mid-write left the steward's clone locked three times in three hours, and each later sync failed."""
+    """A git killed mid-write leaves the clone locked, and every later sync fails until the lock goes."""
     import os
     from research import notes_sync as NS
     repo = tmp_path / "notes"

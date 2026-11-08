@@ -1,5 +1,6 @@
 module
 
+public import Proofs.Pouw.Advantage
 public import Proofs.Pouw.AttnNoise
 public import Proofs.Pouw.Barrier
 public import Proofs.Pouw.Barrier.Proofs
@@ -54,7 +55,7 @@ public import Proofs.Pouw.Fp8Atom.Proofs
 public import Proofs.Pouw.FpG1
 public import Proofs.Pouw.FpG1.H1
 public import Proofs.Pouw.Game
-public import SampledProofs.HiddenDraw
+public import Spot.HiddenDraw
 public import Proofs.Pouw.H1Zy
 public import Proofs.Pouw.LiveCredit
 public import Proofs.Pouw.M1
@@ -153,7 +154,6 @@ public import Proofs.Pouw.PearlC.TileValues
 public import Proofs.Pouw.PearlC.TileGapTol
 public import Proofs.Pouw.PearlC.TileDrawGap
 public import Proofs.Pouw.PearlC.TileGap
-public import Proofs.Pouw.PearlC.TileUOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyGap
 public import Proofs.Pouw.PearlC.UOnlyLoopGap
 public import Proofs.Pouw.PearlC.W1BudgetAbort
@@ -209,8 +209,8 @@ public import Proofs.Pouw.Lemmas.Game
 # PoUW's proofs
 
 Every theorem of the package and every lemma behind it, over `Definitions.Pouw`'s definitions and `Definitions.Pouw.Assumptions`'
-named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Barrier`, `Dimension`,
-`Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
+named assumptions, with each guarantee's proof `Pouw.SecurityProofs.….G : Pouw.Guarantees.….G` (`Advantage`, `Barrier`,
+`Dimension`, `Game`, `NCP`, `PearlC`, `Receipt`), and the keyed leaf's as `Pouw.Salt.keyed_leaf_hides` and `Pouw.Salt.keyed_leaf_binds`
 (`Salt`, its witnesses in `Salt/Witness`); the kernel checks them, and nobody reviews them for meaning. The topics' maps
 are in `Definitions.Pouw`.
 -/

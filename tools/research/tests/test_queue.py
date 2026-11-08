@@ -514,7 +514,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 
 POUS = "verity/core/protocols/pous/lean"
-TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json"
 UP = "../../../../../Security/Proofs/lakefile.toml"
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
@@ -3317,7 +3317,7 @@ def test_ready_mark_from_an_agent_vm_builds_the_lean_it_reaches_on_a_node_refuse
         "  - Lean: 6 module(s) that are or import what it changes couldn't be built: "
         + "; ".join(f"its build on {n} exited 1 without a result line: research run: {n}: ssh: connect to host: Connection "
                     "refused" for n in PREFLIGHT_LEAN_ON)
-        + f": mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says "
+        + f": mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says "
           "why not)"], err
     assert [a[2] for a in launched] == [first, second]
     assert StoreLabels(world.store, log=world.logs.append).ready(3, h3) is False and _no_worktree_left(world)
@@ -3379,7 +3379,7 @@ def test_the_lean_step_falls_back_to_the_next_node_when_one_cannot_start_the_bui
         assert isinstance(got, str) and got == (
             f"its build on {first} exited 255 without a result line: ssh: connect to host {first} port 22: Connection timed "
             f"out; its build on {second} (run r20261030-190002-abcd) exited 1 without a result line: research: run "
-            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them (`build` Lean slots are @infra's; `research status` there says why not)"), got
+            f"r20261030-190002-abcd refused on {second}: the node is drained: mark again once {first} or {second} builds them in its `build` Lean slots (`research status` there says why not)"), got
 
 
 def test_the_lean_step_ships_the_merged_tree_to_a_node_for_ready_on_and_reads_its_result(tmp_path):
@@ -4862,7 +4862,7 @@ def _restated(d: dict) -> None:
 
 #: the head's lock -> what its merge onto `next` drops that `next` needs; None: the head leaves the lock alone
 LOCK_DROPS = {
-    # the record driver keeps a premise one side dropped while the merged record lists its guarantee
+    # the record driver drops a premise the head dropped where `next` didn't restate its guarantee: the head's own drop
     "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), []),
     "a dropped frozen key": (lambda d: d["shape"]["frozen"].pop("F"), ["pkg/lean-audit.json: shape.frozen[F]"]),
     "a renamed guarantee": (_renamed, []),

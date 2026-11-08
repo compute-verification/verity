@@ -80,13 +80,13 @@ open Claims.Sampling (AuditStatement CommitmentScheme Opening InScope forkOn ass
 theorem Pr_eq_card_of_mem {α : Type} [Fintype α] (p : α → Prop) (S : Finset α) (h : ∀ a, a ∈ S ↔ p a) :
     Pr p = (#S : ℝ) / Fintype.card α := by
   classical
-  unfold Pr
+  unfold Pr Claims.prUniform
   rw [show univ.filter p = S from Finset.ext fun a => by rw [mem_filter, h]; exact and_iff_right (mem_univ _)]
 
 theorem Pr_pos_of {α : Type} [Fintype α] {p : α → Prop} (a : α) (h : p a) : 0 < Pr p := by
   classical
   have : Nonempty α := ⟨a⟩
-  unfold Pr
+  unfold Pr Claims.prUniform
   have hc : 0 < #(univ.filter p) := card_pos.2 ⟨a, mem_filter.2 ⟨mem_univ _, h⟩⟩
   exact div_pos (Nat.cast_pos.2 hc) (Nat.cast_pos.2 Fintype.card_pos)
 

@@ -1,5 +1,5 @@
-"""A leased deployments-gpu Job mounts circuits' lease pool whoever renders it. On Oct 1 node 2's Build hand-back ran
-`dispatch.py submit --task 1` over ssh without VY_LEASE_HOSTDIRS, and five circuits Commits leased GPUs from proofs' pool."""
+"""A leased deployments-gpu Job mounts circuits' lease pool whoever renders it: node 2's Build hand-back runs
+`dispatch.py submit --task 1` over ssh without VY_LEASE_HOSTDIRS, and its Commits must not lease GPUs from proofs' pool."""
 from __future__ import annotations
 
 import importlib.util

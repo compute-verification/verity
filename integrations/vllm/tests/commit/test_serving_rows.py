@@ -21,7 +21,7 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2, row_leaf,
                                            sha512_row_layout, sha512_row_seg_digest, sha512_row_v2_digest)
 from verity.ml.circuits.defs import REGISTRY, bind
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R
 from verity.ml.windows import flock_inputs as FI, rows as SR
 from verity_vllm.commit import index as IX
 from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead_v1 and SiluMul_v1)
@@ -29,7 +29,7 @@ from verity.ml.definitions.registry import b1  # noqa: F401  (registers RoPEHead
 VECTOR = json.loads((Path(__file__).parent / "serving_row_leaf_vector.json").read_text())
 DEFS = (bind(REGISTRY["RoPEHead_v1"], D=64), bind(REGISTRY["SiluMul_v1"], I=64))
 TEMPLATES = [P.template_id(d) for d in DEFS]
-LAW = D.parse_law("subset:1")
+LAW = D.parse_design("subset:1")
 RUN = "ab" * 32
 
 
@@ -280,7 +280,7 @@ def s8_window(chunks: list[tuple[int, int]], n: int = 5) -> tuple[SR.Binding, li
     t = bind(REGISTRY["ScaledMmS8Coordinate_v1"], K=64, DOT=REGISTRY["BlackwellS8ImmaDot32_v1"])
     ms = [SR.Member(P.template_id(t), (("x", 34), ("w", 34)), (("o0", 1),), size, base, name=f"{P.template_id(t)}/c{j}",
                     schemas=(("x", SEG), ("w", V2), ("o0", V2))) for j, (base, size) in enumerate(chunks)]
-    return SR.Binding(*SR.population_program([(t, n)], several=True), D.parse_law("stratified:2"), RUN, tuple(ms)), ms
+    return SR.Binding(*SR.population_program([(t, n)], several=True), D.parse_design("stratified:2"), RUN, tuple(ms)), ms
 
 
 def test_bit_row_chunks_commit_each_port_under_its_schema_and_tile_their_template(tmp_path):

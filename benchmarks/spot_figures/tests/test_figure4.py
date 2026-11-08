@@ -22,13 +22,13 @@ def test_the_simple_form_is_b_ln_over_the_target(out):
 
 
 def test_the_exact_form_charges_location_bits_and_rises_with_the_scope(out):
-    p, s = out["exact"][out["primary"]], out["exact"][out["secondary"]]
+    p, s = out["exact"]["datacenter year"], out["exact"]["world year"]
     assert (out["primary"], out["secondary"]) == (f1.PRIMARY, f1.SECONDARY)
     t = out["target"]["bits"]
     for bits, simple, a, b in zip(out["bits"], out["simple"], p, s):
         assert simple <= a["rate"] * (1 + bits / t) * (1 + 1e-9) and a["rate"] <= b["rate"] * (1 + 1e-9)
     assert p[0]["rate"] > 2 * out["simple"][0]
-    assert p[0]["blocks"] == round(out["tokens"][out["primary"]] * out["bits_per_token"] / 16)
+    assert p[0]["blocks"] == round(out["tokens"]["datacenter year"] * out["bits_per_token"] / 16)
 
 
 def test_a_line_buys_beta_over_h_and_its_leeway_is_that_over_the_need(out):

@@ -38,7 +38,7 @@ takes from its host and operating system is the tape's, its level-0 inputs (`Loo
 side (`CoinLayer` `Tables`, `Complete`, `DummyReg`, `Causal`, `SwCausalOn`, `TapeOK`) are its premises, with
 `FinishIs` in place of the `FinalRoundEq` `Flock.zk_server_lean_loop` takes (`LeanRelease.finalRoundEq_ofLoop`, with the
 loop's frames refusing every coin fault, `LeanRelease.frameUnrefused_ofLoop`); `SessionLoopZKDeployed` takes
-`LiveRoundEq`, `FillRoundEq` and, of the tables' side, only `SwCausalOn`: the rest holds at `Masked.dataE`
+`LiveRoundEq`, `FillRoundEq` and, of the tables' side, only `SwCausalOn` at `Loop.SwOk`: the rest holds at `Masked.dataE`
 (`Proofs.Flock.SessionLoop.TablesSide`). The proofs are
 `Flock.SecurityProofs.SessionLoopZK` and `SessionLoopZKDeployed` (`Proofs.Flock.SessionLoop`),
 `Flock.zk_server_lean_ofLoop` at the gap.
@@ -461,10 +461,9 @@ def _root_.Flock.Guarantees.SessionLoopZK : Prop :=
 /-- **Flock's zero knowledge at the session loop's own frames, at the deployed tables** (`Masked.dataE`), at the
 loop's own link and `Finish`: `SessionLoopZKAt Masked.dataE` at the release `withFiles (withLink L₀ src) src`, whose link
 is the one the loop's `Commit` carries (`Loop.linkOf src`) and whose files and stop are its `Finish`'s (`Loop.filesE`),
-with no premise on the tables but `SwCausalOn (Loop.SwOk Masked.dataE)`: `Tables`, `Complete`, `DummyReg`, `Causal`
-and `TapeOK` hold at `Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dummyReg_dataE`, `causal_dataE`,
-`tapeOK_dataE`). In place of
-`LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
+with no premise on the tables but `SwCausalOn` at `Loop.SwOk`: `Tables`, `Complete`, `DummyReg`, `Causal` and `TapeOK`
+hold at `Masked.dataE` (`Loop.tables_dataE`, `complete_dataE`, `dummyReg_dataE`, `causal_dataE`, `tapeOK_dataE`).
+In place of `LinkRoundEq` it takes that `x` is in the masked verifier's scope (`Claims.Flock.Scope`, the statement check
 `flock-verify verify --zk` runs, `ScopeMatches`) and that the loop's inputs from its host and operating system are the
 tape's (`Loop.Src`). It takes no `FinishIs`: at these premises, with `LiveRoundEq` and `SwCausalOn`, the loop's `Finish`
 is the switched session's (`Loop.finishIsOn`). The scope

@@ -221,7 +221,7 @@ inductive Law where
   | work (k : Nat) (strata : Array DrawStratum) (closure : Option (Array Nat))
   deriving DecidableEq, Repr
 
-/-- `parse_law`'s spelling. -/
+/-- `parse_design`'s spelling. -/
 def Law.name : Law → String
   | .subset k => s!"subset:{k}"
   | .bernoulli p => s!"bernoulli:{p}"
