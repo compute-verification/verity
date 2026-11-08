@@ -46,11 +46,9 @@ at copy `j` refine `Hash.EmbeddingRead` (`ReadUnit.GatesRefine`), at the ports t
 (`Flock.Bridge.rows_localEval`), so the read's row need not be committed: a block that consumes it inside itself binds
 it as a block that commits it does.
 
-`le_pow_depth` and `depth_le` give the tree bounds the read's statements take, for a table of at most `2 ^ 32` rows.
-
 `readUnitDrawn_partsOf` is the read's binding at the parsed file: `Accounting.SecurityProofs.readUnitDrawnCR` at
 `partsOf`, for reads each at one copy's gates in its unit, with its gate premise discharged by `gatesRefine_partsOf` at
-every read.
+every read. `readUnitDrawn_layout` discharges its constant and verdict premises from the parsed file's layout.
 -/
 
 @[expose] public section
@@ -59,26 +57,6 @@ namespace Accounting.ReadUnit.Gates
 
 open Flock.HmNets hiding and
 open FlockSoundness.Discharge.Hm
-
-/-- A table's rows fit its tree's leaves. -/
-theorem le_pow_depth (V : ℕ) : V ≤ 2 ^ Hash.Tree.depth V := by
-  unfold Hash.Tree.depth
-  split
-  · rename_i h
-    simpa using h
-  · have h := @Nat.lt_log2_self (V - 1)
-    generalize 2 ^ (Nat.log2 (V - 1) + 1) = p at h ⊢
-    omega
-
-/-- A table of at most `2 ^ 32` rows has a tree of depth at most 32. -/
-theorem depth_le {V : ℕ} (hV : V ≤ 2 ^ 32) : Hash.Tree.depth V ≤ 32 := by
-  unfold Hash.Tree.depth
-  split
-  · omega
-  · rename_i h
-    have hlt : V - 1 < 2 ^ 32 := Nat.lt_of_lt_of_le (Nat.sub_lt (by omega) Nat.one_pos) hV
-    have := (Nat.log2_lt (by omega)).2 hlt
-    omega
 
 /-- **The read's gates refine its reference at a unit of the parsed circuit file.** At unit `u` of `partsOf`, let the
 unit net's rows hold the read's program for a table of `V` rows of `H` words (`hr`), computing its reference wherever
