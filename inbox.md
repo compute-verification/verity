@@ -173,3 +173,6 @@ The quick suites wait for a slot, with 11 runs ahead on both cpu-11 and cpu-7. T
 [2026-11-08T12:54Z] 0b44c14c8e32
 Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
 
+[2026-11-08T13:06Z] 9f09b18e8587
+Proofs coordinator 13:07Z, HOLD records relaunches: a records run that rebuilds Security/Proofs now fails at sealing with "Graph.lean ... failed to open Proofs/Flock/Claims/ZkColsSession.olean" (a lock-exempt probe the build never makes). It is a checked-wide tools bug, the same one as checked lean-audit red (r20261108-114934-3de3), not your change. Do not relaunch records runs until lean fixes it or I add a workaround; I will tell you. Let running ones finish, and if one fails with that line, record it and wait. Suites and Lean tries are unaffected.
+
