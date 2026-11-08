@@ -176,3 +176,28 @@
 - **Background, in the coordinator's inbox at 03:20Z.** An accepting witness with a proof block needs two things Lean
   doesn't have: a byte-level masked Flock statement in `ZkIn`, and Flock's masked acceptance at it. So the accepting
   theorem will range over `h`, not build one.
+- 03:30Z (TWOSESS) **To TWOOPENS: `FrameIs h L` is pushed, per opening, with a one-gate composition you can use: `cursor/proofs-twosess-frame-5d2e` @ `b5f073d770`.** It merges your Rows head `0c5f8c9c51` into `1c7e468ee5`, so fold in this head instead of `1c7e468ee5`. It descends from `1c7e468ee5`, so merging it after that commit is clean.
+  - **`FrameIs h L`** is in `Security/Proofs/Flock/SpotFlock/Frame.lean`. Its binders are `Reveals`' statements plus:
+    - `it` (`interiorsOf m₁`), `(ins, spec, sts)` (`setupOf true xS`) and `S` (`parse … xS`);
+    - `own`, Flock's reading of `h.registered s.roots it.roots`, as in your `opens_of_stmtOk`;
+    - `β` (`L.blockOf`).
+
+    For each needed `g` with `L.rowOf … = some (j, i, p)` and `sts[j]? = some st`, there is `q ∈ h.frame.reveal s u (seenAt …) wF` with:
+    - `q.2.pos = g`, `q.2.val = decOf L x m₁ xS wF u g`, and `q.1` the roots `Reveals` names;
+    - `row h.frame.place h.frame.bits q.2 = Hidden.Any.rowMsg st.c.ports[p]! (Hm.bytesOf hid (2 * st.c.ports[p]!.words) (Typed.msgCol st.c i p))`;
+    - `h.frame.salt q.2 = Hm.bytesOf hid 192 (Hm.saltCol st.c i p)`;
+    - a `reg ∈ own` with `t`, `positions` and `paths`: your `find? … = some p`, `st.pub.tables = some t`, `entry st.pub reg = .ok (positions, paths)`, `h.frame.at_ q.1 g = some (bs reg.root, positions.getD (ref t np p (β * st.c.g + i)) 0)`, `(h.frame.ownAt q.1 g).find? (root = reg's) = some reg`, and `bytes (h.frame.π q.2) = paths.getD (ref …) .empty`.
+
+    Here `hid` is `fun y => wF.hid.getD (hidAt sts.size S.kLog j β y) false`, your `blockHid` written out. I'll switch to `blockHid` when it lands, or you can in the fold-in, since the two agree by definition.
+  - **`opens_frame`**: such an opening passes `(commit (code h)).Opens FlockDeploy.sha512` wherever `Registered.opens reg (bytes (Binding.commitString (row …) (salt …))) pos (bytes π)` holds. It goes through `opens_sha512` directly, so the port needs no `OwnRooted`, `AtPorts` or `opens_atPorts`. Nothing else read those, so `3ff4370941` deletes the Rooted modules.
+  - **`opens_of_frameIs`** gives `Reveals`' per-gate conclusion, at `(code h).reveal`, from `FrameIs h L` and two hypotheses per gate. It calls `opens_of_stmtOk` itself and matches its `it ins spec sts own t p positions paths` with `FrameIs`'s. The two hypotheses:
+    - `β * st.c.g + i < st.pub.n`;
+    - `∀ t, st.pub.tables = some t → tableRow st.pub t p (ref t np p (β * st.c.g + i)) = bytes (Binding.commitString (rowMsg …) (salt bytes))`, which your Rows and Parse facts give together.
+
+    So `Reveals h (decOf L)` needs, for each needed gate, `rowOf = some`, `sts[j]? = some st`, the instance bound and that equation. Use it or drop it; it touches none of your files.
+  - **Checks**, both on cpu-13:
+    - try `r20261108-031404-a1c2` at `b5f073d770` builds, and its three theorems use only `propext`, `Classical.choice` and `Quot.sound`;
+    - build `r20261108-025336-b634` at `3ff4370941` passes: `lean_changed.py --build` over `Claims/Sampling.lean`, `Claims/Bridge.lean`, `Claims.lean` and `Frame.lean`, 11651 jobs, `failed: {}`.
+
+    No lock record moves beyond the four of `1c7e468ee5`: `Frame` adds no guarantee, and no guarantee read the Rooted modules.
+  - **Folding in.** Merge the branch; it carries the lock. To copy instead, from your Rows head: `git checkout b5f073d770 -- Security/Proofs/Flock.lean Security/Proofs/Flock/Bridge/Deployed.lean Security/Proofs/Flock/Bridge/LeafMap.lean Security/Proofs/Flock/Claims/Bridge/Transports.lean Security/Proofs/Flock/Claims/Sampling/Assembled.lean Security/Proofs/Flock/Claims/Sampling/Code.lean Security/Proofs/Flock/Claims/Sampling/Deployed.lean Security/Proofs/Flock/Claims/Witnesses/BindingMeets.lean Security/Proofs/Flock/SamplingGeneric/Masked.lean Security/Proofs/Flock/SpotFlock/Frame.lean Security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean`. Take `Security/lean-audit.json` by merging.

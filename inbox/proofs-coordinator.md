@@ -6253,3 +6253,24 @@ premise. Records that move:
   - The body says what lean-agreement covers. It runs Lean `flock-verify` against the pinned upstream Rust verifiers and stored live verdicts, and none of its sets is `--zk`. So it cross-checks that this PR leaves the plain path untouched. It says nothing about the ZK verifier, whose evidence is the `--zk` selftest, the exact hiding tests and d168's 16 sessions replayed under both/both.
   - It is on drive's low-risk lane (`verity/ml/flock/` isn't in `lowrisk_excludes`), so drive can land it onto `checked` on the mark alone. The full check there, lean-agreement included, gates main. It changes the Rust ZK verifier's code, so you may want to read it or give it a land verdict yourself.
 - **611c is done, but only partly useful.** The CPU prover's phases and the replay, flat against partial, ran. Lean `verify --zk` refused every session: "a session without the verifier's program (--program): a verifier that cannot read". I'll relaunch the Lean leg with `--program` on cpu-13. The addendum is still due Sun 20:00Z.
+
+## 03:30Z from TWOSESS: `FrameIs h L` (R1 of `Reveals`) is stated, pushed, and composes with R3 in Lean; `OwnRooted` is no longer needed
+
+- **Branch:** `cursor/proofs-twosess-frame-5d2e` @ `b5f073d770`. It merges TWOOPENS's Rows head `0c5f8c9c51` into the lock commit `1c7e468ee5`. It adds `Security/Proofs/Flock/SpotFlock/Frame.lean`, which holds `FrameIs`, `opens_frame`, `leaf_commitString` and `opens_of_frameIs`.
+- **What `FrameIs h L` asks of the frame**, one opening at a time, in TWOOPENS's 01:32Z shape. Take each gate a checked unit needs whose row the session reads: table `j`'s instance `i` in the unit's block, at port `p`. The frame's reveal holds an opening there that:
+  - carries the decoded value, under the roots `Reveals` names;
+  - has as row and salt the bytes the Flock witness's hidden values hold at the row's message and salt columns;
+  - is checked at a registered read of port `p` (from `h.registered`, at the run's roots and the interior registration's): at that read's root and the header's position, through the header's path.
+
+  It is a premise on `h` and `L` together, not a theorem. `reveal` is how the code reads openings out of a Flock witness, and `at_`, `ownAt`, `place`, `bits`, `salt` and `π` are the deployed check's. So it holds for a frame whose reveal reads those bytes and whose check reads the registered ports at the header's positions.
+- **PRF-460's premise changes.** The port is stated per opening, so the composition needs no `OwnRooted h.frame shapes`: `opens_frame` goes through `opens_sha512` directly. Nothing else read the Rooted modules (`OwnRooted`, `AtPorts`, `opens_atPorts`), so `3ff4370941` deletes them, and `Claims/Sampling.lean` and `Claims/Bridge.lean` are back to #7878's versions. PRF-460's new premise should now read `FrameIs h L` (`SpotFlock.Frame`) in place of `OwnRooted h.frame shapes`.
+- **Most of the composition is now in Lean.** `opens_of_frameIs` gives `Reveals`' opening at one gate from `FrameIs`, `opens_of_stmtOk` (called inside), the instance bound, and the table-row equation that TWOOPENS's Rows and Parse facts give. What remains for `Reveals h (decOf L)`:
+  - those two facts, TWOOPENS's;
+  - the layout's own facts: `rowOf` defined at each needed gate, `j < sts.size`, and the instance bound.
+- **Checks**, both on cpu-13:
+  - try `r20261108-031404-a1c2` at the head builds, and its three theorems use only the three standard axioms;
+  - build `r20261108-025336-b634` passes over the changed aggregators and `Frame.lean`: 11651 jobs, `failed: {}`.
+
+  No lock record moves beyond the four named at 02:08Z.
+- **Folding in.** TWOOPENS merges this head in place of `1c7e468ee5`. It descends from `1c7e468ee5`, so the merge is clean in either order. This file list replaces the 02:08Z one. To copy from #7878's head: `git checkout b5f073d770 -- Security/Proofs/Flock.lean Security/Proofs/Flock/Bridge/Deployed.lean Security/Proofs/Flock/Bridge/LeafMap.lean Security/Proofs/Flock/Claims/Bridge/Transports.lean Security/Proofs/Flock/Claims/Sampling/Assembled.lean Security/Proofs/Flock/Claims/Sampling/Code.lean Security/Proofs/Flock/Claims/Sampling/Deployed.lean Security/Proofs/Flock/Claims/Witnesses/BindingMeets.lean Security/Proofs/Flock/SamplingGeneric/Masked.lean Security/Proofs/Flock/SpotFlock/Frame.lean Security/Proofs/NetworkCertifier/SampledLeakRegPlain.lean`, plus TWOOPENS's `Format.lean`, `Reads.lean` and `Rows.lean`. Take `Security/lean-audit.json` by merging.
+- **Next:** switch `FrameIs` to TWOOPENS's `blockHid` once it lands; it's written out inline for now. R1 is otherwise done, and I can take the next piece.
