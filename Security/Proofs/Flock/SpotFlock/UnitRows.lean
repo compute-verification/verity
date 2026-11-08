@@ -57,11 +57,12 @@ namespace SpotFlock
 open FlockSoundness FlockSoundness.Discharge Exec Flock Flock.Readable
 
 /-- **Each table of a parsed, checked, hidden-output statement has an accepted statement its share satisfies**: table
-`j` has an accepted statement `a` on `p.sts[j]` whose block R1CS `T` every witness of the deployed relation satisfies
-with table `j`'s share of its hidden values. -/
+`j` has an accepted statement `a` on `p.sts[j]`, whose circuit is the one the scope check parses (`Read.circ`), and
+whose block R1CS `T` every witness of the deployed relation satisfies with table `j`'s share of its hidden values. -/
 theorem accepted_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh : p.tags.hiddenOutputs = true)
     {j : ℕ} (hj : j < p.sts.size) :
     ∃ (T : Model.Statement) (a : HiddenExec.AcceptedH T), a.st = p.sts[j] ∧ T.kLog = p.sts[j].c.kLog ∧
+      p.toRead.circ = a.st.c ∧
       ∀ w : Claims.Flock.Wit, Claims.Flock.RelS (toReadable relation p) w → T.Satisfies (zOf p.sts.size w j T.m) := by
   obtain ⟨hRu, c0, -, hc0, -, -, hok⟩ := (check_ok_iff _ _ _ _ _ _ _ _).1 hc
   have hpi : p.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
@@ -92,6 +93,9 @@ theorem accepted_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
     rw [hh] at hc0
     simp only [↓reduceIte] at hc0
     exact Except.ok.inj (hc0.symm.trans hcst)
+  have hcirc : p.toRead.circ = st.c := by
+    unfold Read.circ
+    rw [hc0, hc0']
   rw [hc0'] at hok
   have hrows : (Layout.v1Ports st.c || Layout.bitRows st.c) = true := by
     unfold FormOk at hok
@@ -121,7 +125,7 @@ theorem accepted_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
   refine ⟨L.model (Refine.regionsOf st),
     ⟨tagsAt p.tags p.I.count j, p.I.circuitFile, p.I.publicFile, p.coins, p.I.tables, d, p.I.partition, p.I.program,
       st, ht', Hidden.setupHidden_specCC hd, Hidden.unpin_layout ht' hd,
-      HiddenExec.unitRowsFlat_unpin ht' hd hrf.1.toP, Refine.regionsOf st, hT⟩, rfl, rfl, fun w hR => ?_⟩
+      HiddenExec.unitRowsFlat_unpin ht' hd hrf.1.toP, Refine.regionsOf st, hT⟩, rfl, rfl, hcirc, fun w hR => ?_⟩
   obtain ⟨_, hsat⟩ := hsatAll w hR
   exact hsat
 
@@ -145,7 +149,7 @@ theorem unitRows_check {p : Parsed} (hP : Parses p) (hc : p.check = .ok ()) (hh 
       ∀ w : Claims.Flock.Wit, Claims.Flock.RelS (toReadable relation p) w →
         ∀ (g : ℕ) (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)),
           a.rows.Sat fun y => Flock.InnerRows.bitAt p w j o (a.col hg y) := by
-  obtain ⟨T, a, hst, hk, hsat⟩ := accepted_check hP hc hh hj
+  obtain ⟨T, a, hst, hk, -, hsat⟩ := accepted_check hP hc hh hj
   refine ⟨T, a, hst, hk, fun w hR g hg o => ?_⟩
   have hk' : T.kLog = p.sts[j]!.c.kLog := by rw [hk, getElem!_pos p.sts j hj]
   simpa only [bit_block_zOf p w j hk'] using (a.placement hg).sat.rowsSat (hsat w hR) o

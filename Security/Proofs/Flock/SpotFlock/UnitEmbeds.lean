@@ -177,7 +177,8 @@ reads is the readable form of the statement the verifier's parser returns (`pars
 passes and whose outputs are hidden (`sessionScoped`), as `accepted_check` reads it. -/
 theorem parsed_of_stmtOkAt {x m₁ xS c₀ c₁ t} {S : Claims.Flock.Stmt}
     (hok : SpotFlock.stmtOkAt h x m₁ xS c₀ c₁ t = true) (hS : FlockDeploy.parse true relation xS = some S) :
-    ∃ p : Parsed, S = toReadable relation p ∧ Parses p ∧ p.check = .ok () ∧ p.tags.hiddenOutputs = true := by
+    ∃ p : Parsed, parseBytes (FlockDeploy.readOf true) xS = some p ∧ S = toReadable relation p ∧ Parses p ∧
+      p.check = .ok () ∧ p.tags.hiddenOutputs = true := by
   unfold FlockDeploy.parse parseOf at hS
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hS
   have hs := sessionOk_of_stmtOkAt h hok
@@ -185,6 +186,6 @@ theorem parsed_of_stmtOkAt {x m₁ xS c₀ c₁ t} {S : Claims.Flock.Stmt}
   obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
   obtain ⟨rfl, hpp⟩ := parsed_setupOf hset hp
   obtain ⟨hc, hh⟩ := sessionScoped h x m₁ xS c₀ c₁ t hok ins spec sts hset
-  exact ⟨_, rfl, hpp, hc, hh⟩
+  exact ⟨_, hp, rfl, hpp, hc, hh⟩
 
 end SpotFlock
