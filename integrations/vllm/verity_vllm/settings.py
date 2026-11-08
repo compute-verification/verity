@@ -190,8 +190,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_INDUCTOR_DIR_PER_PROCESS", flag, False, WHERE, "TORCHINDUCTOR_CACHE_DIR is this process's own (`engine.env.INDUCTOR_DIR_MARK`)"),
     S("VERITY_INT8_CREDITED_READ", str, None, VALUE, "MODE:PAGED_SO, the int8 attention's credited read every engine installs"),
     S("VERITY_INT8_PARTS", csv, (), VALUE, "the int8 parts a rank registers when it starts (`engine.int8_ranks`)"),
-    S("VERITY_POOL_ROW", stripped, "", VALUE, "the carried pool's class past the served rows' (a JSON object of `engine.pool_row."
-      "POOL_STATICS`): the engine keys its blocks by BlockKey_v1 and each window's close exports its pool row; empty, off"),
+    S("VERITY_POOL_ROW", int_or_zero, 0, VALUE, "the carried pool's token width CTW: the engine keys its blocks by BlockKey_v1 "
+      "for tokens of CTW bits and each window's close exports its pool row (`engine.pool_row`); 0, off"),
     S("VERITY_SPARSE_MLA_NUM_SPLITS", stripped, "0", VALUE, "FA3's sparse MLA splits: 1 pins one split, 0 leaves vLLM's heuristic; "
       "empty is refused", empty=True),
     # ---- Build, Match and the row (pipeline/, check/, query/)

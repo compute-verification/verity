@@ -1,6 +1,6 @@
-"""The carried pool's row: vLLM d9105ea80's prefix-cache ``BlockPool`` at a window's edge as `CompileSlice_v6`'s pool row
-(`verity.ml.protocols.certifier.compile_slice_v6`), with vLLM keying its blocks by BlockKey_v1 so that the row's keys are
-the ones vLLM hits on.
+"""The carried pool's row: vLLM d9105ea80's prefix-cache ``BlockPool`` at a window's edge as the pool row the network
+certifier's compile slice carries between windows (`verity.ml.commitments.pool_row`), with vLLM keying its blocks by
+BlockKey_v1 so that the row's keys are the ones vLLM hits on.
 
 **The snapshot** (`snapshot`) reads a live pool as plain data (`Pool`). It takes each block's reference count and key,
 the free queue from its head, and each key's copies in vLLM's order: one block, or a ``{block_id: block}`` dict in the
@@ -21,9 +21,9 @@ anything the row can't hold:
 - ``key``: ``NOKEY`` for none.
 
 A pool between windows holds no block, so `row` refuses one with a holder. A window's edge comes where no request runs,
-so every block 1 … NB − 1 is in the free queue. `root` is the row's root under a class's statics.
+so every block 1 … NB − 1 is in the free queue. `export` writes the row and its root (`pool_row.root`).
 
-**Genesis.** A fresh pool is the empty row (`compile_slice_v6.empty_row`). vLLM's ``reset_prefix_cache`` clears every
+**Genesis.** A fresh pool is the empty row (`pool_row.empty`). vLLM's ``reset_prefix_cache`` clears every
 key but leaves the free queue in the order it was in, so `genesis_reset` also relinks the queue in id order. It is the
 reset a run starts its chain from, and the one after a failed window.
 
@@ -36,22 +36,20 @@ LoRA, multimodal inputs, a cache salt and prompt embeddings all bring extra keys
 from __future__ import annotations
 
 import json
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, NamedTuple
 
+from verity.ml.commitments import pool_row as R
+from verity.ml.commitments.gates import block_key as BK
 from verity_vllm.engine.hooks import Hooks
 
-__all__ = ["GROUP_BYTES", "POOL_STATICS", "Pool", "Refused", "export", "genesis_reset", "install_keys", "pool_class", "root",
-           "row", "snapshot"]
+__all__ = ["GROUP_BYTES", "Pool", "Refused", "export", "genesis_reset", "install_keys", "row", "snapshot"]
 
 #: the group id's bytes at the end of a vLLM block hash (``make_block_hash_with_group_id``)
 GROUP_BYTES = 4
 KEY_BYTES = 64
 KV_CACHE_UTILS = "vllm.v1.core.kv_cache_utils"
-#: the carried pool's statics past the served rows' (`compile_slice_v5.statics`)
-POOL_STATICS = ("CTW", "CU", "DA", "NS", "NM", "NRB", "NRK")
 
 
 class Refused(ValueError):
@@ -124,10 +122,8 @@ def snapshot(pool: Any, block_size: int | None = None) -> Pool:
     return Pool(tuple(blk.ref_cnt for blk in blocks), tuple(keys), _free(pool, len(blocks)), copies)
 
 
-def row(p: Pool) -> Any:
-    """``p`` as `compile_slice_v6.PoolRow`; `Refused` where a block is held or not free."""
-    from verity.ml.protocols.certifier import compile_slice_v6 as V6
-
+def row(p: Pool) -> R.PoolRow:
+    """``p`` as its pool row; `Refused` where a block is held or not free."""
     nb = len(p.ref)
     held = [b for b in range(1, nb) if p.ref[b]]
     if held:
@@ -145,39 +141,15 @@ def row(p: Pool) -> Any:
     for ids in p.copies.values():
         chain(ids, "cprev", "cnext")
         links["mlast"][ids[0] - 1] = ids[-1]
-    return V6.PoolRow(p.free[0] if p.free else 0, p.free[-1] if p.free else 0,
-                      *(tuple(links[f]) for f in ("prev", "next", "cprev", "cnext", "mlast")),
-                      tuple(p.key[b] or V6.NOKEY for b in range(1, nb)))
+    return R.PoolRow(p.free[0] if p.free else 0, p.free[-1] if p.free else 0,
+                     *(tuple(links[f]) for f in R.LINKS + ("mlast",)), tuple(p.key[b] or R.NOKEY for b in range(1, nb)))
 
 
-def pool_class(served: Mapping[str, int], extra: Mapping[str, int]) -> dict[str, int]:
-    """The carried pool's class (`compile_slice_v6.STATICS`): the served rows' statics (`serve_commit.served_statics`)
-    and ``extra``, every name of `POOL_STATICS`."""
-    from verity.ml.protocols.certifier import compile_slice_v5 as V5
-
-    if set(extra) != set(POOL_STATICS):
-        raise ValueError(f"the pool's class names {', '.join(POOL_STATICS)} past the served rows', not {sorted(extra)}")
-    st = {**served, **{k: int(v) for k, v in extra.items()}}
-    V5.shape(SimpleNamespace(**st))
-    return st
-
-
-def root(S: Mapping[str, int] | Any, r: Any) -> bytes:
-    """The row's root (`compile_slice_v6.root`) under the class ``S``, whose NB must be the row's."""
-    from verity.ml.protocols.certifier import compile_slice_v6 as V6
-
-    S = SimpleNamespace(**S) if isinstance(S, Mapping) else S
-    if S.NB != len(r.key) + 1:
-        raise Refused(f"a pool of {len(r.key) + 1} blocks under a class of NB = {S.NB}")
-    return V6.root(S, r)
-
-
-def export(pool: Any, S: Mapping[str, int] | Any, path: Path | None = None) -> dict[str, Any]:
-    """``pool``'s row and root under the class ``S``, written to ``path`` (the row's fields, the root) when given; the
-    public record (NB and the root)."""
-    S = SimpleNamespace(**S) if isinstance(S, Mapping) else S
-    r = row(snapshot(pool, S.B))
-    rt = root(S, r)
+def export(pool: Any, block_size: int, path: Path | None = None) -> dict[str, Any]:
+    """``pool``'s row (`snapshot` at ``block_size``, `row`) and root, written to ``path`` (the row's fields, the root)
+    when given; the public record (NB and the root)."""
+    r = row(snapshot(pool, block_size))
+    rt = R.root(r)
     if path is not None:
         path.parent.mkdir(parents=True, exist_ok=True)
         fields = {f: getattr(r, f) for f in r._fields if f != "key"}
@@ -201,7 +173,6 @@ def genesis_reset(pool: Any) -> None:
 
 def hasher(tok: int) -> Callable[..., bytes]:
     """``hash_block_tokens`` under BlockKey_v1 at TOK = ``tok`` bits a token."""
-    from verity.ml.commitments.gates import block_key as BK
 
     def hash_block_tokens(hash_function: Any, parent_block_hash: bytes | None, curr_block_token_ids: Sequence[int],
                           extra_keys: tuple[Any, ...] | None = None) -> bytes:
@@ -212,14 +183,12 @@ def hasher(tok: int) -> Callable[..., bytes]:
     return hash_block_tokens
 
 
-def install_keys(S: Mapping[str, int] | Any, hooks: Hooks | None = None, module: Any = None) -> Hooks:
-    """Key vLLM's blocks by BlockKey_v1 (`hasher`) at the class ``S``'s token width (`compile_slice_v4.key_tok`), in this
-    process: before the engine core hashes a request."""
-    from verity.ml.protocols.certifier import compile_slice_v4 as V4
-
+def install_keys(ctw: int, block_size: int, hooks: Hooks | None = None, module: Any = None) -> Hooks:
+    """Key vLLM's blocks of ``block_size`` tokens by BlockKey_v1 (`hasher`) for tokens of ``ctw`` bits
+    (`block_key.token_width`), in this process: before the engine core hashes a request."""
     if module is None:
         import importlib
         module = importlib.import_module(KV_CACHE_UTILS)
     hooks = hooks or Hooks(tag="pool-row-keys")
-    hooks.patch(module, "hash_block_tokens", hasher(V4.key_tok(SimpleNamespace(**S) if isinstance(S, Mapping) else S)))
+    hooks.patch(module, "hash_block_tokens", hasher(BK.token_width(ctw, block_size)))
     return hooks

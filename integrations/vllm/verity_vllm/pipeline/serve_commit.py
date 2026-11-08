@@ -248,7 +248,7 @@ class CommitWindows:
     its hooks being on top of the committer's; what its ``close`` returns is the window line's ``pouw_h1``, and when that
     is a `Future` (its release off the loop) the line is written once it resolves, the loop and the sealer going on. An arm
     with ``sealed`` hears each window's seal line, or why it has none. With ``pool`` (a call for the engine's live
-    ``BlockPool``) and its class ``pool_class``, each close exports the pool's row on the loop (`_pool_row`)."""
+    ``BlockPool``) and its blocks' size ``pool_block``, each close exports the pool's row on the loop (`_pool_row`)."""
 
     def __init__(self, committer: Any, out: Path, *, run_id: str, window_steps: int, idle_close_steps: int = 1,
                  eos_ids: Sequence[int] = (), decode: Callable[[Sequence[int]], str] | None = None,
@@ -257,11 +257,11 @@ class CommitWindows:
                  served: Mapping[str, int] | None = None, sealer: Any = None, window_bytes: int | None = None, disk: Any = None,
                  on_floor: Callable[[str], None] | None = None, mirror: Callable[[], None] | None = None,
                  request_cap: int = 0, arm: Any = None, release: Any = None, pool: Callable[[], Any] | None = None,
-                 pool_class: Mapping[str, int] | None = None) -> None:
+                 pool_block: int | None = None) -> None:
         self.com, self.out, self.clock, self.wall, self.marks = committer, Path(out), clock, wall, marks
-        if (pool is None) != (pool_class is None):
-            raise ValueError("a pool row needs both the live pool and its class (engine.pool_row.pool_class)")
-        self.pool, self.pool_class = pool, dict(pool_class) if pool_class is not None else None
+        if (pool is None) != (pool_block is None):
+            raise ValueError("a pool row needs both the live pool and its blocks' size")
+        self.pool, self.pool_block = pool, pool_block
         self._pool_out: dict[int, dict[str, Any]] = {}   # each window's pool row record (`_pool_row`), until its line
         self.release = release                           # `serve_release.Draws`: each window's draw-gated release, before its seal
         self.arm, self._arm_out = arm, {}                # each window's arm outcome, until its line is written
@@ -458,13 +458,13 @@ class CommitWindows:
         return rec
 
     def _pool_row(self) -> None:
-        """The prefix cache's pool at the close as its row (`engine.pool_row.export` under ``pool_class``), the row and its
-        root to ``pool_rows/w<k>.json``: the window line's ``pool_row`` is the row's NB and root, or why the row can't hold
+        """The prefix cache's pool at the close as its row (`engine.pool_row.export`), the row and its root to
+        ``pool_rows/w<k>.json``: the window line's ``pool_row`` is the row's NB and root, or why the row can't hold
         the pool (a block a running request holds). No coin or verdict reads it yet, so it doesn't fail the window."""
         from verity_vllm.engine import pool_row as PR
 
         try:
-            got = PR.export(self.pool(), self.pool_class, self.out / "pool_rows" / f"w{self.window}.json")
+            got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
         except PR.Refused as e:
             got = {"refused": str(e)[:500]}
         with self._lock:
