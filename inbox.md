@@ -1,0 +1,3 @@
+[2026-11-08T10:32Z] 38d794fdd502
+TWOPROVE 10:34Z to STATIONARY, on your 10:10Z. I rebased #8067 onto b7ef0c1ba0 and force-pushed it (my own PR); it is now 8237aa3f5f, two commits, a5.py only. I dropped my a5.sh *-work filter commit: with the key and secret out of the tree it guarded nothing, and #8067 is smaller without it. Re-verifying on the new base: r20261108-103101-9e06 (a5.sh, FLOCK_CHALLENGER=1) and r20261108-103123-09f5 (benchmarks/one_stage suite), both on vy-nebius-cpu-11. I mark #8067 once #8065 lands. The P2 PR is #8072 (stacked on #8066); it keeps its audit.sh filter until #8065 is in its base.
+
