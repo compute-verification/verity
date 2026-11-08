@@ -1,6 +1,6 @@
 """A window's rows: the ``frame-v3-sha512`` + ``hm96-sha512/v1`` commitment of a window's units in Flock's statement row leaf
 format (``verity_flock.circuit``'s statement rows), with the registration, Flock's public and prover files and the
-labels the one-stage audit binds (``verity.core.protocols.sampled_proofs.one_stage``).
+labels the one-stage audit binds (``verity.core.protocols.spot.one_stage``).
 
 The population is the verifier's: its program is ``TemplateInstances`` / ``TemplatePopulations`` over the members' templates and
 counts (``verity.ml.windows.population``, over the builders core's ``one_stage.partition`` names too), its
@@ -75,10 +75,10 @@ from verity.ml.commitments import hm96, row_table as RT
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.hm96 import batch as HB
-from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth
+from verity.ml.commitments.merkle import CommitmentDomain, levels, merkle_depth, tree_levels
 from verity.ml.commitments.window import WINDOW_DOMAIN, window_domain
 from verity.ml.commitments.rowleaf import (ROLE_X, SCHEMA_HM96_SHA512_ROW, SCHEMA_HM96_SHA512_ROW_SEG, SCHEMA_HM96_SHA512_ROW_V2,
-                                           sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
+                                           row_leaf, sha512_row_prefix, sha512_row_seg_digest, sha512_row_v2_prefix)
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.windows.population import population_program, template_partition
 
@@ -864,6 +864,76 @@ def registered_header(win: Mapping[str, Any], k: int) -> dict[str, Any] | None:
         if missing := [x for x in e["positions"] if str(x) not in got]:
             raise ValueError(f"member {k} {p}: the window gives no path for rows {missing[:4]} of {e['value']!r}")
         out[p] = {**e, "paths": [got[str(x)] for x in e["positions"]]}
+    return out
+
+
+def own_value(port: str) -> str:
+    """The value a member's port ``<member>/<port>`` is read as at its own registered root (`own_entries`, `own_reads`).
+    It is never the port's own name: the audit takes a value named as a registration root's port for a registered value
+    of the record (`audit.session_registered`), which a registration listing none refuses."""
+    return f"committed/{port}"
+
+
+def own_entries(mem: Mapping[str, Any], body: bytes, without: Collection[str] = ()) -> dict[str, dict[str, Any]]:
+    """Header ``registered`` entries (`registered_header`'s form) for shared-row member ``mem``'s ports but ``without``, from
+    its public ``body`` (`Committed.public_body`): each port whose table is one row per instance, instance i's row i, as rows
+    of the value `own_value` names, its own tree, whose root and domain the registration holds (``frame_v3``'s), row i at
+    position i with its path. A statement checked against registered reads must have every port registered
+    (`Flock.Registered.checkComplete`); these are the reads of the ports its registered values' reads leave, which the
+    verifier makes at the registration's roots (`own_reads`). A port of another table layout gets none: its readers'
+    positions are the prover's refs. Refused where a port's rows don't make its ``frame_v3`` root."""
+    shared = mem.get("shared_rows")
+    if not shared:
+        return {}
+    n, ports, fv = int(mem["n"]), [p for p, _w in mem["ports"]], mem["frame_v3"]
+    starts, at = {}, 0
+    for p in ports:
+        starts[p], at = at, at + int(shared[p]) * BC_BYTES
+    if len(body) != at + 4 * n * len(ports):
+        raise ValueError(f"{mem['name']}: a public body of {len(body)} bytes, not its tables' and refs' {at + 4 * n * len(ports)}")
+    refs = np.frombuffer(body, dtype="<u4", offset=at).reshape(n, len(ports))
+    out = {}
+    for j, p in enumerate(ports):
+        if p in without or int(shared[p]) != n or not np.array_equal(refs[:, j], np.arange(n)):
+            continue
+        dom = CommitmentDomain(bytes.fromhex(fv["bindings"][p]), OWNER, RangeIndexedDomain(0, n), hash="sha512")
+        bcs = [body[starts[p] + BC_BYTES * i:starts[p] + BC_BYTES * (i + 1)] for i in range(n)]
+        lv = tree_levels(dom, [row_leaf(dom, i, INST.tree_leaf(INST.default_key, bc), fv["schemas"][p]) for i, bc in enumerate(bcs)])
+        if dom.domain_id.hex() != fv["domain_ids"][p] or lv[-1][0].hex() != fv["roots"][p]:
+            raise ValueError(f"{mem['name']} {p}: its rows' tree is not its frame_v3 root")
+        out[p] = {"value": own_value(f"{mem['name']}/{p}"), "positions": list(range(n)),
+                  "paths": [b"".join(level[(i >> d) ^ 1] for d, level in enumerate(lv[:-1])).hex() for i in range(n)]}
+    return out
+
+
+def own_reads(reads: Mapping[str, Mapping[str, Any]], w: Binding, roots: Mapping[str, Mapping[str, Any]], *,
+              registered: Any) -> dict[str, dict[str, Any]]:
+    """The verifier's ``--registered`` files ``reads`` (by member key: a read of a registered value or of a row table) with
+    every other port of the member as rows of its own tree at the root the registration holds for it (``roots``, the
+    registration's entries by ``<member>/<port>``), unit ``m.base + i`` reading row i: Lean refuses a statement checked
+    against registered reads unless they name every port of its circuit (`Flock.Registered.checkComplete`), so each row
+    a member's outputs read opens a root registered before any coin. The prover's header gives the paths (`own_entries`).
+    A port whose registered tree isn't one leaf a unit gets none, and Lean refuses the member at that port. ``registered``
+    is core's ``one_stage.registered``, as `interface.registered_reads` takes it. Refused (ValueError) where the
+    registration holds no root for a port."""
+    out = dict(reads)
+    for m in w.members:
+        f = reads.get(m.key)
+        if f is None:
+            continue
+        ports, words = dict(f["ports"]), dict(m.rows + m.outs)
+        for p, _w in m.all_rows:
+            if p in ports:
+                continue
+            e = roots.get(m.port(p))
+            if e is None:
+                raise ValueError(f"{m.key} {p}: the registration holds no root for it")
+            if int(e["leaves"]) != m.n:
+                continue
+            ports[p] = {"value": own_value(m.port(p)), "root": e["root"], "leaves": m.n, "words": words[p],
+                        "word_bits": registered.WORD_BITS, "domain": e["domain"], registered.SCHEMA_KEY: m.schema(p),
+                        "reads": list(range(m.n)), registered.READS_FROM: m.base}
+        out[m.key] = {**f, "ports": dict(sorted(ports.items()))}
     return out
 
 

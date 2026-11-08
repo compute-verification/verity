@@ -1,5 +1,6 @@
-"""infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` on branch main, which it refuses on a detached HEAD
-(else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of origin's main."""
+"""infra/control/drive.sh's checkout: `drive.sh merge` runs `research merge` in the queue's clone on branch main, which it refuses
+on a detached HEAD (else every `drive.sh merge` is refused), while the tick and `drive.sh queue` keep a detached checkout of
+origin's main."""
 import os
 import re
 import subprocess
@@ -17,12 +18,16 @@ def git(*args, cwd):
 
 @pytest.fixture
 def repo(tmp_path):
-    origin, clone = tmp_path / "origin", tmp_path / "verity"
+    """$REPO and the queue's clone, both behind origin's main: $REPO detached and the queue's clone on `checked`, where the last
+    tick left them."""
+    origin, clone, queue = tmp_path / "origin", tmp_path / "verity", tmp_path / "fast" / "queue-verity"
     origin.mkdir()
     git("init", "-q", "-b", "main", cwd=origin)
     git("commit", "-q", "--allow-empty", "-m", "first", cwd=origin)
     git("clone", "-q", str(origin), str(clone), cwd=tmp_path)
-    git("checkout", "-q", "--detach", cwd=clone)                       # where the last tick left it
+    git("checkout", "-q", "--detach", cwd=clone)
+    git("clone", "-q", str(origin), str(queue), cwd=tmp_path)
+    git("checkout", "-q", "-b", "checked", cwd=queue)
     git("commit", "-q", "--allow-empty", "-m", "second", cwd=origin)
     return clone, git("rev-parse", "HEAD", cwd=origin)
 
@@ -82,9 +87,12 @@ def test_start_seeds_the_clones_before_its_push_check():
     assert start.index("fast_clones") < start.index("gh_app_token.sh")
 
 
-def test_locked_calls_checkout_with_its_verb():
+def test_locked_calls_checkout_with_its_verb_and_runs_merge_in_the_queues_clone():
+    """`research merge` runs in the queue's clone, a full one: in $REPO, a blob:none partial clone, its sweep fetched each open
+    PR's head it lacked, a pack each, until the pod's disk filled."""
     body = re.search(r"^locked\(\) \{\n(.*?)^\}\n", DRIVE.read_text(), re.M | re.S).group(1)
     assert 'checkout "$1" || exit 1' in body and "--detach" not in body
+    assert 'if [ "$1" = merge ]; then cd "$FAST/queue-verity"; else cd "$REPO"; fi || exit 1' in body
 
 
 @pytest.mark.parametrize("args, runs", [(("queue", "promote"), "unlocked"), (("queue", "baseline", "abc", "--by", "ci"), "unlocked"),
@@ -100,11 +108,44 @@ def test_queue_baseline_and_promote_run_beside_a_tick(args, runs):
     assert "flock" not in body and "checkout" not in body and "RESEARCH_DRIVE=1" in body
 
 
-def test_merge_checks_out_branch_main_at_origin(repo):
+def test_merge_checks_out_branch_main_at_origin_in_both_clones(repo):
+    """The queue's clone, where `research merge` runs, and $REPO, whose code it runs, are both on branch main at origin's tip;
+    `research merge`'s `_admissible` reads the branch."""
     clone, tip = repo
     checkout(clone, "merge")
-    assert git("symbolic-ref", "--quiet", "--short", "HEAD", cwd=clone) == "main"  # research merge's _admissible reads this
-    assert git("rev-parse", "HEAD", cwd=clone) == tip
+    for c in (clone, Path(clone).parent / "fast" / "queue-verity"):
+        assert git("symbolic-ref", "--quiet", "--short", "HEAD", cwd=c) == "main"
+        assert git("rev-parse", "HEAD", cwd=c) == tip
+
+
+def test_prune_trees_folds_the_code_clones_packs_into_one_once_they_pass_50(tmp_path):
+    """Each checkout in $REPO, a partial clone, fetches the blobs it lacks as a pack of its own, and git's auto maintenance
+    never repacks a partial clone's such packs (here auto gc is off): at 50 packs `prune_trees` leaves them, past 50 it folds
+    them into one."""
+    repo = tmp_path / "verity"
+    repo.mkdir()
+    (tmp_path / "trains").mkdir()
+    git("init", "-q", "-b", "main", cwd=repo)
+    git("config", "gc.auto", "0", cwd=repo)
+    env = {**os.environ, "REPO": str(repo), "FAST": str(tmp_path / "fast"), "TRAIN_TREES": str(tmp_path / "trains")}
+
+    def packs() -> int:
+        return len(list((repo / ".git" / "objects" / "pack").glob("*.pack")))
+
+    def prune() -> None:
+        subprocess.run(["sh", "-c", f'{function("prune_trees")}prune_trees'], env=env, check=True)
+
+    for n in range(1, 52):
+        (repo / "f").write_text(f"{n}\n")
+        git("add", "f", cwd=repo)
+        git("commit", "-q", "-m", str(n), cwd=repo)
+        git("repack", "-q", cwd=repo)
+        if n == 50:
+            prune()
+            assert packs() == 50
+    assert packs() == 51
+    prune()
+    assert packs() == 1 and git("rev-list", "--count", "HEAD", cwd=repo) == "51"
 
 
 def test_merge_resets_a_local_main_that_drifted(repo):

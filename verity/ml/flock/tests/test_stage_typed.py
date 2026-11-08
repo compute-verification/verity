@@ -11,7 +11,6 @@ import pytest
 from verity_flock import circuit as FC
 from verity_flock import typed_statement as TS
 
-pytest.importorskip("verity_numerical")
 pytest.importorskip("verity.ml.definitions.registry.prims")
 from verity_flock import subcircuit_templates as TM  # noqa: E402
 from synthetic_sets import synthetic_set  # noqa: E402

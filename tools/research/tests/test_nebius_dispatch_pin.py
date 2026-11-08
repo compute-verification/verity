@@ -1,6 +1,6 @@
 """Node 1's dispatcher chains an item on the template content it started on: a template refreshed mid-chain (config-run going from
-two tasks to three, 2:15 PM PDT Sep 30) applies only to items submitted after it. Twelve Commits dispatched on the two-task template
-had their replay chained on the three-task one, which looked for a bundle the old template never sealed and exited 12."""
+two tasks to three) applies only to items submitted after it. A Commit dispatched on the two-task template whose replay chained on
+the three-task one would look for a bundle the old template never sealed and exit 12."""
 from __future__ import annotations
 
 import importlib.util

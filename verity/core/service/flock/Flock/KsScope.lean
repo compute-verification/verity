@@ -1,25 +1,32 @@
 /-
-The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV4`) takes
-none of `SampledKSLiveV3`'s file preconditions as a hypothesis: no form goes ahead of its proof. Under `--zk` every session
-of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
+The forms `verify --zk` refuses so that the sampled audit's knowledge soundness (`Flock.Guarantees.SampledKSLiveV3`)
+takes none of `Flock.Bridge.SampledKSLiveRoots`' file preconditions as a hypothesis: no form goes ahead of its proof.
+Under `--zk` every session of a statement outside them is refused, beside `ProvedScope.check` and `PortRoots.check`:
 
 * `tagsWhy tags`: a typed statement, one with public outputs, one without retained rounds, or one whose leaves are not
-  `hm96-sha512/v1` (V3's `I.tags.typed = false` and `TagsOkZHJ`).
+  `hm96-sha512/v1` (`SampledKSLiveRoots`' `I.tags.typed = false` and `TagsOkZHJ`).
 * `filesWhy tags c pub publicFile`: a circuit outside `ProvedScope.scopeOkH` (the unit reads one input group and returns
-  the outputs, V3's `scopeOkH`; `ProvedScope.check` holds a hidden-output circuit only to the weaker `scopeOkI`), and a
-  shared-row public file (header `shared_rows`) outside the form `Flock.Guarantees.SampledKSLiveV5` covers
+  the outputs, `SampledKSLiveRoots`' `scopeOkH`; `ProvedScope.check` holds a hidden-output circuit only to the weaker
+  `scopeOkI`), and a shared-row public file (header `shared_rows`) outside the form `Flock.Guarantees.SampledKSLiveV5` covers
   (`sharedWhy`): the circuit's public input ports parse (`HmIn.parse`), the file loads over them (`HmIn.loadPublic`),
   and no two ports' roots over its tables are one root under different domains (`collidesT`, V5's `RootFixesDomainL` at
   the file's leaf map). A file without shared rows is V3's form (`pub.tables = none`).
 * `drawWhy count draw`: at more than one table, a session whose record holds no sample that parses, or whose subset sample's
-  `k` the tables don't divide (V3's `kd % nTab = 0`).
+  `k` the tables don't divide (`SampledKSLiveRoots`' `kd % nTab = 0`).
 
-`checkOf parsed tags publicFile count draw` runs them on the circuit as `HmOut.parse` reads it and the public file as
-`HmOut.loadPublic` loads it; `check_ok` says what passing it establishes: V4's file preconditions, or V5's at a
-shared-row file. V3's sixth, that the unit is a built net, follows
-from the parse of an untyped statement. A V* session (`--rec-inner`) is the recursion's, whose guarantee is its own, so
-`verify` doesn't run the check on it. `flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python
-mirror (`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
+`checkOf parsed tags publicFile count draw` runs them on the circuit `parsed` it is handed and the public file as
+`HmOut.loadPublic` loads it over that circuit. `check` runs `checkOf` on the circuit `HmOut.parse` reads, a flat file's,
+and `check_ok` says what passing `check` establishes: `SampledKSLiveRoots`' file preconditions, or V5's at a shared-row
+file. Their sixth, that the unit is a built net, follows from the parse of an untyped statement. A V* session
+(`--rec-inner`) is the recursion's, whose guarantee is its own, so `verify` doesn't run the check on it.
+`flock-verify ks-form` runs `checkOf` alone on a statement's files, and the Python mirror
+(`one_stage.proofs.ks_form_why`, `filesWhy` on the files' heads) is held to it.
+
+`verify --zk` hands `checkOf` the circuit `ProvedScope.circuitOf` reads: at a templated statement (`Tags.isTmpl`) the
+template's parse (`HmOut.parseTmpl`), which carries its template, never `HmOut.parse`'s, which refuses its tags; at a
+flat one, `HmOut.parse`'s. A templated circuit is held to the unit's form on the template's description (`unitWhy`:
+`ProvedScope.scopeOkT` at `count` tables), never on the rows the template unrolls to, and its statement circuit, the
+flat circuit `HmOut.unrolled` gives, is then in `scopeOkH`. `checkOf_ok` says what passing establishes at any circuit.
 -/
 module
 
@@ -42,6 +49,10 @@ def tagsWhy (tags : Tags) : Option String :=
 
 def SCOPE_WHY : String :=
   "a circuit outside the unit's form under --zk (scopeOkH: the unit reads its one input group and returns the outputs)"
+
+def TMPL_WHY : String :=
+  "a templated circuit outside the unit's form under --zk (scopeOkT, on its template: one table, and the unit reads its \
+    one input group and returns the outputs)"
 
 def TABLES_WHY : String := "a shared-row public file (header shared_rows) under --zk"
 
@@ -73,12 +84,22 @@ def sharedWhy (tags : Tags) (c : Circuit) (publicFile : ByteArray) : Option Stri
       | none => some TABLES_WHY
       | some t => if collidesT c pub t then some ROOTS_WHY else none
 
-/-- The circuit and public file: the unit's form (`ProvedScope.scopeOkH`), and no shared rows or shared rows in V5's form
-(`sharedWhy`). -/
-def filesWhy (tags : Tags) (c : Circuit) (pub : Public) (publicFile : ByteArray) : Option String :=
-  if !ProvedScope.scopeOkH c then some SCOPE_WHY
-  else if pub.tables.isSome then sharedWhy tags c publicFile
-  else none
+/-- **The unit's form**: a templated statement's circuit (`Tags.isTmpl`) in `ProvedScope.scopeOkT` under `--zk` at
+`count` tables, on its template (`Circuit.tmpl`), which `scopeOkT` reads without the rows it unrolls to; any other
+circuit in `ProvedScope.scopeOkH`. -/
+def unitWhy (tags : Tags) (count : Nat) (c : Circuit) : Option String :=
+  if tags.isTmpl then
+    match c.tmpl with
+    | some tu => if ProvedScope.scopeOkT tags.hiddenOutputs true count c tu then none else some TMPL_WHY
+    | none => some TMPL_WHY
+  else if ProvedScope.scopeOkH c then none else some SCOPE_WHY
+
+/-- The circuit and public file at `count` tables: the unit's form (`unitWhy`), and no shared rows or shared rows in V5's
+form (`sharedWhy`). -/
+def filesWhy (tags : Tags) (count : Nat) (c : Circuit) (pub : Public) (publicFile : ByteArray) : Option String :=
+  match unitWhy tags count c with
+  | some why => some why
+  | none => if pub.tables.isSome then sharedWhy tags c publicFile else none
 
 /-- The session's sample (`draw`, the record's `unit_draw`) at `count` tables: none to check at one table; at more, a sample
 that parses, and a subset sample's `k` a multiple of `count`, so every table proves `k / count` units. -/
@@ -94,8 +115,8 @@ def drawWhy (count : Nat) (draw : Option Json) : Option String :=
         | _ => none
 
 /-- **`verify --zk`'s files are in the form the sampled audit's knowledge soundness covers**: the tags (`tagsWhy`), on the
-circuit `parsed` (`HmOut.parse`'s) and the public file as `HmOut.loadPublic` loads it the unit's form and no shared rows
-(`filesWhy`, or V5's shared-row form), and the session's sample (`drawWhy`). -/
+circuit `parsed` (`ProvedScope.circuitOf`'s under `verify --zk`) and the public file as `HmOut.loadPublic` loads it the
+unit's form and no shared rows (`filesWhy`, or V5's shared-row form), and the session's sample (`drawWhy`). -/
 def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count : Nat) (draw : Option Json) :
     Except String Unit :=
   match tagsWhy tags with
@@ -104,7 +125,7 @@ def checkOf (parsed : V Circuit) (tags : Tags) (publicFile : ByteArray) (count :
     | .error e => .error (ProvedScope.refusal s!"a circuit that does not parse ({e})")
     | .ok c => match HmOut.loadPublic tags c publicFile with
       | .error e => .error (ProvedScope.refusal s!"a public file that does not load ({e})")
-      | .ok pub => match filesWhy tags c pub publicFile with
+      | .ok pub => match filesWhy tags count c pub publicFile with
         | some why => .error (ProvedScope.refusal why)
         | none => match drawWhy count draw with
           | some why => .error (ProvedScope.refusal why)
@@ -161,16 +182,38 @@ theorem domOf_eq_of_collidesT_false {c : Circuit} {pub : Public} {t : Tables} (h
     (roots := (Array.range c.ports.size).map (rootT c pub t)) h hlt hq
     (by rw [PortRoots.getD_range_map _ (Nat.lt_trans hlt hq), PortRoots.getD_range_map _ hq]; exact he)
 
-theorem filesWhy_none {tags : Tags} {c : Circuit} {pub : Public} {publicFile : ByteArray}
-    (h : filesWhy tags c pub publicFile = none) :
-    ProvedScope.scopeOkH c = true ∧ (pub.tables = none ∨ SharedOk tags c publicFile) := by
+/-- **A circuit of any other statement in the unit's form is in `scopeOkH`.** -/
+theorem unitWhy_flat {tags : Tags} {count : Nat} {c : Circuit} (h : unitWhy tags count c = none)
+    (ht : tags.isTmpl = false) : ProvedScope.scopeOkH c = true := by
+  unfold unitWhy at h
+  rw [ite_eq_right (Bool.eq_false_iff.mp ht)] at h
+  split at h
+  next hs => exact hs
+  next => cases h
+
+/-- **A templated statement's circuit in the unit's form carries its template, in `scopeOkT`.** -/
+theorem unitWhy_tmpl {tags : Tags} {count : Nat} {c : Circuit} (h : unitWhy tags count c = none)
+    (ht : tags.isTmpl = true) :
+    ∃ tu, c.tmpl = some tu ∧ ProvedScope.scopeOkT tags.hiddenOutputs true count c tu = true := by
+  unfold unitWhy at h
+  rw [ite_eq_left ht] at h
+  split at h
+  next tu hc =>
+    split at h
+    next hs => exact ⟨tu, hc, hs⟩
+    next => cases h
+  next => cases h
+
+theorem filesWhy_none {tags : Tags} {count : Nat} {c : Circuit} {pub : Public} {publicFile : ByteArray}
+    (h : filesWhy tags count c pub publicFile = none) :
+    unitWhy tags count c = none ∧ (pub.tables = none ∨ SharedOk tags c publicFile) := by
   unfold filesWhy at h
   split at h
   next => cases h
-  next h1 =>
+  next hu =>
     split at h
-    next => exact ⟨by simpa using h1, Or.inr (sharedWhy_none h)⟩
-    next h2 => exact ⟨by simpa using h1, Or.inl (by simpa using h2)⟩
+    next => exact ⟨hu, Or.inr (sharedWhy_none h)⟩
+    next h2 => exact ⟨hu, Or.inl (by simpa using h2)⟩
 
 /-- **At more than one table, a passing sample parses, and its subset `k` is a multiple of the tables.** -/
 theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw = none) (hc : ¬ count ≤ 1) :
@@ -190,7 +233,7 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
       next => cases h
 
 /-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
-public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
+public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V3's form) or is
 in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
 theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
     {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
@@ -203,14 +246,39 @@ theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × Byt
   | some w => simp [ht] at h
   | none =>
     simp only [ht, hpub] at h
-    cases hf : filesWhy tags c pub pf with
+    cases hf : filesWhy tags count c pub pf with
     | some w => simp [hf] at h
     | none =>
       simp only [hf] at h
       cases hd : drawWhy count draw with
       | some w => simp [hd] at h
       | none =>
-        obtain ⟨hs, hp⟩ := filesWhy_none hf
-        exact ⟨rfl, hs, hp, rfl⟩
+        obtain ⟨hu, hp⟩ := filesWhy_none hf
+        exact ⟨rfl, unitWhy_flat hu (HmOut.parse_isTmpl hc), hp, rfl⟩
+
+/-- **What `checkOf` passing says of the files**, at any circuit `parsed` holds (a templated statement's carrying its
+template, as `ProvedScope.circuitOf` reads it): the tags pass `tagsWhy`, the circuit is in the unit's form (`unitWhy`:
+`unitWhy_flat`, `unitWhy_tmpl`), the public file `HmOut.loadPublic` loads has no shared rows or is in V5's shared-row
+form (`SharedOk`), and the sample passes `drawWhy`. -/
+theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {draw : Option Json}
+    {c : Circuit} {pub : Public} (h : checkOf parsed tags pf count draw = .ok ()) (hc : parsed = .ok c)
+    (hpub : HmOut.loadPublic tags c pf = .ok pub) :
+    tagsWhy tags = none ∧ unitWhy tags count c = none ∧ (pub.tables = none ∨ SharedOk tags c pf) ∧
+      drawWhy count draw = none := by
+  subst hc
+  unfold checkOf at h
+  cases ht : tagsWhy tags with
+  | some w => simp [ht] at h
+  | none =>
+    simp only [ht, hpub] at h
+    cases hf : filesWhy tags count c pub pf with
+    | some w => simp [hf] at h
+    | none =>
+      simp only [hf] at h
+      cases hd : drawWhy count draw with
+      | some w => simp [hd] at h
+      | none =>
+        obtain ⟨hu, hp⟩ := filesWhy_none hf
+        exact ⟨rfl, hu, hp, rfl⟩
 
 end Flock.KsScope

@@ -48,7 +48,8 @@ knows every public value of every block.
 The composite circuit (``flock-circuit``) is the statement's meaning: a ``META`` line (ports, ranges, each row's constants,
 the wires, the units' leaf and output maps, the pinned dummy values, the leaf-commitment scheme, the program digests, the
 partition digest), then each slot type's ``flock-ir-unit/v2`` circuit; the templated statement (``flock-circuit/tmpl``,
-`compose`'s ``layout``) gives the unit as its ``flock-ir-tmpl/v2`` template in META instead. Its SHA-512 (:func:`digest`) is the pin. The verifier derives Δ, the public
+`compose`'s ``layout``) gives the unit as its ``flock-ir-tmpl/v2`` template instead, in a section of its own right after
+META (:func:`template_section`). Its SHA-512 (:func:`digest`) is the pin. The verifier derives Δ, the public
 regions and their values from it and from its own public instance file (no rows, no salts), never from the prover's; the
 instance file's header carries each block's unit indices (the VUs of the partition it proves).
 """
@@ -74,6 +75,8 @@ STATEMENT = "verity/flock-circuit"
 #: The templated statement (the Lean verifier's ``Tags.circuitTmpl``): `compose`'s ``layout``
 TMPL_FORMAT = "flock-circuit/tmpl"
 TMPL_STATEMENT = "verity/flock-circuit/tmpl"
+#: The header of a templated statement's template section (:func:`template_section`)
+TMPL_SECTION = "TEMPLATE"
 SCHEME = "frame-v3-sha512/hm96-sha512"
 ROW_SCHEMA = "hm96-sha512/row/v1"
 INST_FORMAT = "flock-circuit-inputs"
@@ -120,14 +123,34 @@ BINDING_KEYS = ("partition", "program_sha512", "program_digests")
 
 _COMPACT = json.JSONEncoder(sort_keys=True, separators=(",", ":"))
 _HASH_CHUNK = 1 << 24
-#: compose's stand-in for META ``template``, whose lines it serializes on their own: a template's META is most of the file
-_SPLICE = "\0template\0"
 
 
 def meta_of(text: str) -> dict:
     """The circuit file's META (its second line), parsed without copying the rest of the file."""
     i = text.index("\n") + 1
     return json.loads(text[i + 5:text.index("\n", i)])
+
+
+def template_section(tmpl_text: str) -> str:
+    """A templated statement's template section, right after META: ``TEMPLATE n``, then the ``n`` lines of ``tmpl_text``
+    (`tmpl.write`'s), which the Lean verifier reads off the file's head (``HmOut.tmplOf``) and its sections' parse passes
+    over (``HmRow.tmplLines``)."""
+    text = tmpl_text if tmpl_text.endswith("\n") else tmpl_text + "\n"
+    return f"{TMPL_SECTION} {text.count(chr(10))}\n{text}"
+
+
+def template_of(text: str) -> str:
+    """A templated statement's template (`tmpl.parse` reads it): its template section's lines (:func:`template_section`),
+    each ending in a newline, read without copying the rest of the file."""
+    i = text.index("\n", text.index("\n") + 1) + 1
+    j = text.index("\n", i)
+    head = text[i:j].split()
+    if len(head) != 2 or head[0] != TMPL_SECTION or not head[1].isdigit():
+        raise ValueError(f"no template section after META: {text[i:i + 40]!r}")
+    end = j
+    for _ in range(int(head[1])):
+        end = text.index("\n", end + 1)
+    return text[j + 1:end + 1]
 
 
 def _sha512(pieces) -> hashlib._Hash:
@@ -698,8 +721,8 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     (:data:`TMPL_STATEMENT`, the Lean verifier's ``HmOut.parseTmpl``), the same statement with its unit given as
     the unit's ``flock-ir-tmpl/v2`` template (`tmpl.emit` of the flat unit, or a structural lowering's own template,
     `class_statement.TmplLowering`, whose only statement this is and whose ``unit_sha256`` is over the template's text):
-    META ``template`` its lines and ``layout`` the mode, in place of the ``CIRCUIT unit`` section and the flat META
-    ``template``. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
+    its template section right after META (:func:`template_section`) in place of the ``CIRCUIT unit`` section, and META
+    ``layout`` the mode. The verifier unrolls the template and commits its columns at the layout's positions (`tmpl.layout`), so
     the unit's range and ``unit_log`` are that net's slot. A size class's ``definition`` has no templated form.
 
     ``out`` (a binary file, `compose_to`'s): the text is written there, UTF-8, as it is rendered, and only its first two lines
@@ -767,7 +790,7 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
         from . import tmpl as TM
 
         if definition is not None:
-            raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: META template is its unit's")
+            raise ValueError(f"{low.name}: a unit class (META definition) has no templated statement: the verifier refuses one")
         if template is None:
             template, stats = TM.emit(TM.of_layout(low.layout, low.name))
             order = stats["order"]
@@ -845,51 +868,47 @@ def compose(low: IL.Lowering, sub, vus_per_block: int | None = None, forged: boo
     if pinned_outputs and any(meta["dummy"]["outputs"][sum(w for _, w in outs[:len(outs) - k_pin]):]):
         raise ValueError(f"{low.name}: the all-zero instance's pinned outputs are not zero (it pads every block)")
     if template is not None:
-        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, template=_SPLICE, layout=layout)
+        meta.update(format=TMPL_FORMAT, statement=TMPL_STATEMENT, layout=layout)
     if extra_meta:
         if clash := sorted(set(extra_meta) & set(meta)):
             raise ValueError(f"extra_meta: {clash} are META's own keys")
         meta.update(extra_meta)
 
-    def serialized() -> list[str]:
-        meta_json = [json.dumps(meta, sort_keys=True, separators=(",", ":"))]
-        if template is not None:
-            a, b = meta_json[0].split(json.dumps(_SPLICE))
-            meta_json = [a, json.dumps(tmpl_text.splitlines(), separators=(",", ":")), b]
-        return meta_json
+    def serialized() -> str:
+        return json.dumps(meta, sort_keys=True, separators=(",", ":"))
 
     meta_json = serialized()
     head = f"{meta['format']} {low.name}\nMETA "
+    tmpl_section = [] if template is None else [template_section(tmpl_text)]
     texts = [(SHA_NET, _expanded(IL.layout(S.compression3(), ["cv0", "msg0", "cv1", "msg1", "cv2", "msg2"], ["out0", "out1", "out2"]), SHA_NET)),
              (HM_NET, _expanded(IL.layout(S.hm96_row(), ["cv", "pad", "y"], ["bc"]), HM_NET))]
     texts += [(f"stage{i}", t) for i, t in enumerate(stage_texts)]
     sections = lambda texts: (s for nm, t in texts for s in (f"CIRCUIT {nm} {t.count(chr(10))}\n", t))  # noqa: E731
     if out is None:
-        return "".join([head, *meta_json, "\n", *sections(([] if template is not None else [("unit", unit)]) + texts)])
+        return "".join([head, meta_json, "\n", *tmpl_section, *sections(([] if template is not None else [("unit", unit)]) + texts)])
     _put(out, head)
     at = out.tell()
-    for s in [*meta_json, "\n"]:
-        _put(out, s)
+    _put(out, meta_json + "\n")
     if template is None:
         lines = 1 + low.layout.useful
         _put(out, f"CIRCUIT unit {lines}\n")
         unit_sha256, got = _write_netlist(low, out)
         if got != lines:
             raise AssertionError(f"{low.name}: the unit's netlist has {got} lines, not the {lines} its section names")
-        stand_in = "".join(meta_json).encode()
+        stand_in = meta_json.encode()
         cover["params"]["unit_sha256"] = meta["unit_sha256"] = unit_sha256
         if not partition:
             meta["partition"]["digest"] = partition_digest(cover)
         meta_json = serialized()
-        if len(b := "".join(meta_json).encode()) != len(stand_in):
+        if len(b := meta_json.encode()) != len(stand_in):
             raise AssertionError(f"{low.name}: META is {len(b)} bytes, its stand-in {len(stand_in)}")
         end = out.tell()
         out.seek(at)
         out.write(b)
         out.seek(end)
-    for s in sections(texts):
+    for s in [*tmpl_section, *sections(texts)]:
         _put(out, s)
-    return "".join([head, *meta_json, "\n"])
+    return head + meta_json + "\n"
 
 
 def compose_to(path: Path, low: IL.Lowering, sub, **kw) -> dict:
@@ -1173,7 +1192,7 @@ def write(text: str | None, input_set, lo: int, hi: int, path, pub_path=None, sa
 
     ``registered`` (``{port: {"value", "positions", "paths"}}``, with ``tables``): the rows whose table rows are rows of a
     registered value, committed with the registration's salts (``salts``), each table row's position and frame-v3 path to the
-    registered root (``verity.core.protocols.sampled_proofs.one_stage.registered``, committed in the port's row format: its
+    registered root (``verity.core.protocols.spot.one_stage.registered``, committed in the port's row format: its
     ``schema``); the header's ``registered``. A port
     is an input port (its table's rows) or an output port's row (its table the instances' output rows, one each: instance
     ``i``'s output is the registered row at ``positions[i]``, under that row's registered salt ``salts[port][i]``). A padding
@@ -1321,7 +1340,7 @@ def stage(low: IL.Lowering, input_set, lo: int, hi: int, out_dir, public_only: b
 
 def lowering_for_set(input_set) -> IL.Lowering:
     """The template's Flock lowering for a set (``lowering_for_set`` when the template's statement depends on the set)."""
-    from verity_numerical.bench import lowerings
+    from verity_flock import lowerings
 
     mod = lowerings.registry("C-Flock").module(input_set.subcircuit.template.id)
     if hasattr(mod, "circuit_lowering"):

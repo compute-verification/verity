@@ -182,7 +182,7 @@ def test_domain_and_registry():
     with pytest.raises(KeyError):
         get("pearl-c-mxfp4-v0")
     mx = F.PearlC4("mxfp4", hashing="h0")
-    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gamma0 is None
+    assert mx.contrast and mx.name == "pearl-c-mxfp4-v0" and mx.certificate.claims == () and mx.certificate.gap0 is None
     s.check(Matmul(0, Shape(64, 1024, 128), 0))
     s.check(Matmul(0, Shape(64, 1024, 1 << 18), 0))
     # n = 64, an MQA unit of one 64-wide KV head, would need B-OVF's 5.7% and is not claimed

@@ -14,6 +14,7 @@ import numpy as np
 import pytest
 
 from verity_numerical.bench import generate as G
+from verity_flock import synthetic as SY
 from verity_flock import input_sets as IS
 from verity_flock import subcircuit_templates as TM
 
@@ -113,7 +114,7 @@ def test_generation_is_deterministic_and_prefix_stable(tmp_path):
 def test_draw_format_is_pinned():
     """Instance words are a function of (key, sample) alone: the counter stream's bytes and the word rule, fixed here."""
     sub = TM.subcircuit("gemm-coordinate", K=64)
-    k = G.key_for(sub, 1)
+    k = SY.key_for(sub, 1)
     assert k.stream(("x", 0), 8).hex() == "cbfb52e4ff385132"
     d = sub.draw(k, 0)
     assert d.inputs["x"][:8].tolist() == [48997, 48895, 48786, 48679, 49141, 49163, 16398, 48634]
@@ -151,7 +152,7 @@ def test_evaluation_targets_equal_the_definitions():
     from verity.ml.circuits.defs import REGISTRY, bind
     from verity.ml.circuits.ops import gemm
 
-    key = G.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
+    key = SY.key_for(TM.subcircuit("attention-head", D=16, BN=16), 0)
     for sub, n in ((TM.subcircuit("attention-head", D=16, BN=16, T="17:40"), 4), (TM.subcircuit("rope-head", D=8), 16)):
         draws = [sub.draw(key, j) for j in range(n)]
         for d in draws:
@@ -237,7 +238,7 @@ def test_e4m3_words_are_pinned():
     r = np.array([0, 126, 127, 253, 254, 0xFFFFFFFF], dtype=np.uint32)
     assert TM.e4m3_finite_words(r).tolist() == [0, 126, 128, 254, 0, 15]
     sub = TM.subcircuit("gemm-coordinate", K=64, semantics="sm89.mma.m16n8k32.e4m3")
-    assert sub.draw(G.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
+    assert sub.draw(SY.key_for(sub, 1), 0).inputs["x"][:8].tolist() == PINNED_ADA_X
 
 
 PINNED_ADA_X = [121, 85, 110, 206, 231, 247, 42, 81]

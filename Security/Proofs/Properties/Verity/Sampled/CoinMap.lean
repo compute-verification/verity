@@ -1101,11 +1101,11 @@ theorem avg_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (H : (Fin m →
 /-- **The sample reads the bytes of its coins**: the device's bytes the sample reads are those `coinBytes` reads off
 `srcCoins`, the premise `coupled_draw_coins_setsUp` takes. -/
 theorem bytesOf_srcCoins (A : Live) {m : ℕ} (hL : A.Lb 0 = m * 64) (ω : A.Ω) :
-    _root_.Properties.SampledProofs.bytesOf (A.src ω 0) =
-      _root_.Properties.SampledProofs.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
+    _root_.Properties.Spot.bytesOf (A.src ω 0) =
+      _root_.Properties.Spot.bytesOf (coinBytes m 64 (srcCoins A hL ω) 0) := by
   have h : coinBytes m 64 (srcCoins A hL ω) = srcEquiv hL (A.src ω) := (coinBytesEquiv m 64).symm_apply_apply _
-  have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.SampledProofs.bytesOf f =
-      _root_.Properties.SampledProofs.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
+  have key : ∀ {L L' : ℕ} (h : L = L') (f : Fin L → Fin 256), _root_.Properties.Spot.bytesOf f =
+      _root_.Properties.Spot.bytesOf fun j : Fin L' => f (Fin.cast h.symm j) := by
     intro L L' h f
     subst h
     rfl

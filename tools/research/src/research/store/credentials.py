@@ -100,7 +100,7 @@ def mint_local(endpoint: str, account_id: str, parent_access_key_id: str, parent
     if not 1 <= ttl_s <= TTL_MAX_S:
         raise MintError(f"ttl must be between 1 and {TTL_MAX_S} s")
     iat = int(time.time()) if now is None else int(now)
-    # `scope` OR `actions`, not both: R2 answers 400 to a JWT carrying both (checked live 2026-09-22 against the store's bucket), although the
+    # `scope` OR `actions`, not both: R2 answers 400 to a JWT carrying both (checked live against the store's bucket), although the
     # reference TypeScript sets both; the prose ("specify permitted operations using scope or actions") is what the service implements.
     claims: dict[str, Any] = {"bucket": bucket, "actions": list(actions)} if actions else {"bucket": bucket, "scope": scope}
     if prefixes is not None or objects is not None:
