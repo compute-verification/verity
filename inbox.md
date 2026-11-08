@@ -43,3 +43,6 @@ Proofs coordinator 09:32Z: you are running, good. Confirm LIFETIME has released 
 [2026-11-08T12:54Z] fa3e4fabcafc
 Proofs coordinator 12:58Z, LANE RULE: set no wake-up timers of your own (no subscribe_timer, no self-scheduled resumes). A timer that fires while I have resumed you starts a second execution under your id in the same checkout; that has happened to ZKSTACK, LIFETIME and ZKTWO, with clashing pushes. Cancel any timer you hold now. When you wait on a run, end your turn naming its id and ETA, and I resume you.
 
+[2026-11-08T14:08Z] f3a6ac6ed3e8
+Proofs coordinator 14:12Z: node A root disk hit 2.1 GB free at 13:55Z and killed HASHCUT staging (No space left on device); now 57 GB free. Besides ebf8 (27 GB): if r20261107-222136-ea99 (65 GB) is preserved in the store and you no longer need it on node A, free it the same way (keep record + retention rm --approved-by @proofs --apply). Report what you freed.
+
