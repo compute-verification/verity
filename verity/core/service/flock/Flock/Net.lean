@@ -324,7 +324,7 @@ and as `lineNums` reads it otherwise. -/
 def lineNumsFast (s : String) : Option (Array Nat) :=
   let n := s.utf8ByteSize.toUSize
   if h : Scan.ascii s = true ∧ n.toNat = s.utf8ByteSize then
-    match Scan.numsU s n h.2 0 0 0 #[] with
+    match Scan.numsU s n (Nat.le_of_eq h.2) 0 0 0 #[] with
     | some v => some v
     | none => (tokens s).mapM String.toNat?
   else (tokens s).mapM String.toNat?
@@ -340,10 +340,11 @@ after it, so it stays above `Row.of`, `look` and `parseWith`. -/
     split
     · rename_i v hv
       have hc := Scan.ascii_chars h.1
-      have hu := Scan.numsU_some s _ h.2 (s.utf8ByteSize + 1) 0 0 0 #[] v (by rw [h.2]; omega) (by simp) (by simp) hv
+      have hu := Scan.numsU_some s _ (Nat.le_of_eq h.2) (s.utf8ByteSize + 1) 0 0 0 #[] v (by rw [h.2]; omega)
+        (by simp) (by simp) hv
       simp only [USize.toNat_zero, bne_self_eq_false, UInt64.toNat_zero] at hu
-      have h' := Scan.nums_eq hc s.toList [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
-        (by rw [Scan.size_ascii hc]; omega)
+      have h' := Scan.nums_eq hc _ (Nat.le_of_eq h.2) s.toList [] [] (s.utf8ByteSize + 1) false 0 #[] (by simp)
+        (by rw [h.2, Scan.size_ascii hc]; simp) (by rw [Scan.size_ascii hc]; omega)
       rw [List.length_nil] at h'
       rw [h'] at hu
       rw [tokens_eq]
@@ -401,21 +402,20 @@ theorem mapM_toNat_arr (xs : Array String) (m : String) :
   rw [Array.mapM_eq_mapM_toList, Array.mapM_eq_mapM_toList, mapM_toNat]
   cases xs.toList.mapM String.toNat? <;> rfl
 
-/-- Row `i` of a `NET` block as numbers, from `t[k]` (`look`). -/
-def rowAt (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) : V (Array Nat) :=
-  match look t k (lines.getD (1 + i) "") with
+/-- Row `i`'s numbers `o`, or the error `parse` gives when they are not numbers. -/
+def rowOf (o : Option (Array Nat)) (i : Nat) : V (Array Nat) :=
+  match o with
   | some v => pure v
   | none => throw s!"flock-ir-unit/v2: row {i} is not numbers"
 
-theorem rowAt_eq (t : Array Row) (k : Nat) (lines : Array String) (i : Nat) :
-    rowAt t k lines i = rowNums lines i := by
-  unfold rowAt rowNums
-  rw [look_eq, lineNums, mapM_toNat_arr]
+theorem rowOf_eq (lines : Array String) (i : Nat) : rowOf (lineNums (lines.getD (1 + i) "")) i = rowNums lines i := by
+  unfold rowOf rowNums lineNums
+  rw [mapM_toNat_arr]
 
-/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
-(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
-def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
-  let h := tokens (lines.getD 0 "")
+/-- `parse` of the lines `line 0`, ..., `line (n - 1)`, row `i`'s numbers `row (1 + i)`: `parse` when they are a block's
+lines and each line's numbers (`parseOn_eq`). -/
+def parseOn (line : Nat → String) (n : Nat) (row : Nat → Option (Array Nat)) : V Net := do
+  let h := tokens (line 0)
   if h[0]? != some "flock-ir-unit/v2" then throw "not a flock-ir-unit/v2 circuit"
   let name := h.getD 1 ""
   let useful ← num h 2
@@ -433,25 +433,38 @@ def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net := do
   let mut ra := #[]
   let mut rb := #[]
   for i in [0:useful] do
-    let v ← rowAt t (base + 1 + i) lines i
+    let v ← rowOf (row (1 + i)) i
     let na := v.getD 0 0
     let nb := v.getD (1 + na) 0
     if v.size == 0 || v.size != 2 + na + nb then throw s!"flock-ir-unit/v2: row {i} is malformed"
     ra := ra.push (v.extract 1 (1 + na))
     rb := rb.push (v.extract (2 + na) (2 + na + nb))
   let mut at_ := 1 + useful
-  if (lines.getD at_ "").startsWith "LEAVES " then
-    match JsonParse.parse ((lines.getD at_ "").drop 7).toString with
+  if (line at_).startsWith "LEAVES " then
+    match JsonParse.parse ((line at_).drop 7).toString with
     | .ok _ => at_ := at_ + 1
     | .error e => throw s!"flock-ir-unit/v2: the LEAVES line is not JSON: {e}"
-  if (lines.getD at_ "").startsWith "CUT " then
+  if (line at_).startsWith "CUT " then
     throw s!"{name}: a CUT line (a tail the verifier evaluates); the verifier evaluates no part of the computation"
-  if at_ != lines.size then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
+  if at_ != n then throw "flock-ir-unit/v2: text after the rows that is not its LEAVES line"
   ofRows name useful constPos inGroups outGroups ra rb
 
-theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines := by
-  unfold parseWith parse
-  simp only [rowAt_eq, rowNums]
+theorem parseOn_eq (lines : Array String) (line : Nat → String) (n : Nat) (row : Nat → Option (Array Nat))
+    (hl : ∀ k, line k = lines.getD k "") (hn : n = lines.size) (hr : ∀ k, row k = lineNums (line k)) :
+    parseOn line n row = parse lines := by
+  obtain rfl : row = fun k => lineNums (line k) := funext hr
+  obtain rfl : line = fun k => lines.getD k "" := funext hl
+  subst hn
+  unfold parseOn parse
+  simp only [rowOf_eq, rowNums]
+
+/-- `parse` with each row's numbers from `t` (`look`): the rows read where the file's lines were split
+(`HmRow.parseFastFrom`), line `base + j` of the file being line `j` of `lines`. `parseWith_eq` holds for any `t`. -/
+def parseWith (t : Array Row) (base : Nat) (lines : Array String) : V Net :=
+  parseOn (lines.getD · "") lines.size fun j => look t (base + j) (lines.getD j "")
+
+theorem parseWith_eq (t : Array Row) (base : Nat) (lines : Array String) : parseWith t base lines = parse lines :=
+  parseOn_eq lines _ _ _ (fun _ => rfl) rfl fun _ => look_eq _ _ _
 
 /-- `parse` reading each row with `lineNums` (`lineNumsFast`): `parseWith` on no rows read beforehand. -/
 def parseScan (lines : Array String) : V Net := parseWith #[] 0 lines

@@ -23,6 +23,7 @@ module
 
 public import Flock.With.Hashes
 public import Flock.HmRow
+public import Flock.ByteLines
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -363,6 +364,132 @@ def parseWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (
       classOfWith hs bytes head mj
     else pure ByteArray.empty
   parseRest tags tables tmpl pre sha lines name mj classSha
+
+/-- `parseWith` after the file's lines: `l0` and `l1` read as its header and META, then `k` with the circuit's name,
+META and class digest (`parseWith_head`). -/
+def headWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (l0 l1 : String)
+    (k : String → Json → ByteArray → V Circuit) : M Circuit := do
+  let head := l0.trimAsciiEnd.toString
+  if !head.startsWith (tags.fileFormat ++ " ") then throw s!"circuit: not a {tags.fileFormat} file"
+  let name := (head.drop (tags.fileFormat.length + 1)).toString
+  let metaLine := l1.trimAsciiEnd.toString
+  if !metaLine.startsWith "META " then throw "circuit: no META line"
+  let mj ← match JsonParse.parse (metaLine.drop 5).toString with
+    | .ok j => pure j
+    | .error e => throw s!"META: {e}"
+  if (← J.str mj "format" ctx) != tags.fileFormat || (← J.str mj "statement" ctx) != tags.statement then
+    throw s!"META: not {tags.statement}"
+  let classSha ← if tags.bindings then do
+      if !isSha512Hex ((mj.getObjValAs? String "program_sha512").toOption.getD "") then
+        throw "META: program_sha512 (the Program the partition is over) is not a SHA-512 digest"
+      let part := (mj.getObjVal? "partition").toOption.getD Json.null
+      let rule := (part.getObjValAs? String "rule").toOption.getD ""
+      if !(rule == PARTITION_V1 || rule == PARTITION_PROVISIONAL) || !isSha512Hex ((part.getObjValAs? String "digest").toOption.getD "") then
+        throw s!"META: the partition is not a {PARTITION_V1} (or the provisional {PARTITION_PROVISIONAL}) SHA-512 digest"
+      classOfWith hs bytes head mj
+    else pure ByteArray.empty
+  k name mj classSha
+
+theorem parseWith_head (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
+    (tmpl : Option Typed.Template) (pre : Array (String × Net)) : parseWith hs tags bytes tables tmpl pre = (do
+      let sha ← hs.sha512 bytes
+      let text ← match String.fromUTF8? bytes with
+        | some s => pure s
+        | none => throw "circuit: not UTF-8"
+      let lines0 := (text.splitOn "\n").toArray
+      let lines := if lines0.back? == some "" then lines0.pop else lines0
+      headWith hs tags bytes (lines.getD 0 "") (lines.getD 1 "") fun name mj classSha =>
+        parseRest tags tables tmpl pre sha lines name mj classSha) := rfl
+
+/-- `sectionsLoop` over a view's lines, each `NET` block's rows read off the file's bytes (`sectionsLoopV_eq`). -/
+def sectionsLoopV (tags : Tags) (v : ByteLines.View) (s : Array (String × Net) × Nat) :
+    V (Array (String × Net) × Nat) :=
+  forIn Lean.Loop.mk s fun _ __s => do
+    let nets := __s.1
+    let at_ := __s.2
+    if at_ < v.count then
+      let h := tokens (v.str at_)
+      if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
+      let some n := h[2]!.toNat? | throw s!"circuit: {tags.blockKeyword} line count"
+      if at_ + 1 + n > v.count then throw s!"circuit: {h[1]!} is truncated"
+      let net ← match v.net (at_ + 1) (at_ + 1 + n) with
+        | .ok net => pure net
+        | .error e => throw s!"{h[1]!}: {e}"
+      return .yield (nets.push (h[1]!, net), at_ + 1 + n)
+    else return .done (nets, at_)
+
+theorem sectionsLoopV_eq (tags : Tags) (v : ByteLines.View) (hv : v.Ok) (s : Array (String × Net) × Nat) :
+    sectionsLoopV tags v s = sectionsLoop tags v.lines s := by
+  unfold sectionsLoopV sectionsLoop
+  simp only [ByteLines.View.size_lines, ByteLines.View.getElem!_lines, ByteLines.View.net_eq v hv.nums]
+
+theorem sectionsLoop_nil (tags : Tags) (nets : Array (String × Net)) (n : Nat) :
+    sectionsLoop tags #[] (nets, n) = pure (nets, n) := by
+  unfold sectionsLoop
+  show Lean.Loop.forIn _ _ _ = _
+  rw [Lean.Loop.forIn_eq_of_monadTail]
+  simp
+
+/-- `parseRest` with no template: its sections, then the rest from the nets they give. -/
+theorem parseRest_split (tags : Tags) (tables : List (String × ByteArray)) (pre : Array (String × Net))
+    (sha : ByteArray) (lines : Array String) (name : String) (mj : Json) (classSha : ByteArray) :
+    parseRest tags tables none pre sha lines name mj classSha = (do
+      let s ← sectionsLoop tags lines (pre, 2)
+      parseRest tags tables none s.1 sha #[] name mj classSha) := by
+  unfold parseRest
+  congr 1
+  funext s
+  rw [sectionsLoop_nil]
+  rfl
+
+/-- `parseWith` with an ASCII file's lines read off its bytes (`ByteLines.View`), a row's numbers too, so a row makes no
+`String`; `parseWith` itself with a template, or for a file that is not ASCII. -/
+def parseWithB (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : M Circuit :=
+  match tmpl with
+  | some _ => parseWith hs tags bytes tables tmpl pre
+  | none =>
+    match ByteLines.View.of? bytes with
+    | none => parseWith hs tags bytes tables none pre
+    | some v => do
+      let sha ← hs.sha512 bytes
+      let text ← (pure v.s : M String)
+      if text = v.s then
+        headWith hs tags bytes (v.str 0) (v.str 1) fun name mj classSha => do
+          let s ← sectionsLoopV tags v (pre, 2)
+          parseRest tags tables none s.1 sha #[] name mj classSha
+      else
+        let lines0 := (text.splitOn "\n").toArray
+        let lines := if lines0.back? == some "" then lines0.pop else lines0
+        headWith hs tags bytes (lines.getD 0 "") (lines.getD 1 "") fun name mj classSha =>
+          parseRest tags tables none pre sha lines name mj classSha
+
+/-- Compiled code runs `parseWithB`; the kernel and every proof see `parseWith`. `@[csimp]` rewrites only code compiled
+after it, so it stays directly below `parseWith`, above every caller. -/
+@[csimp] theorem parseWith_eq_bytes : @parseWith = @parseWithB := by
+  funext M _ _ _ hs tags bytes tables tmpl pre
+  unfold parseWithB
+  cases tmpl with
+  | some t => rfl
+  | none =>
+    dsimp only
+    split
+    · rfl
+    · rename_i v hv
+      obtain ⟨hfrom, hok⟩ := ByteLines.View.of?_spec hv
+      rw [parseWith_head]
+      simp only [hfrom]
+      congr 1
+      funext sha
+      congr 1
+      funext text
+      by_cases ht : text = v.s
+      · subst ht
+        rw [ite_eq_left rfl, hok.lines, ByteLines.View.getD_lines, ByteLines.View.getD_lines]
+        congr 1
+        funext name mj classSha
+        rw [parseRest_split, sectionsLoopV_eq tags v hok]
+      · rw [ite_eq_right ht]
 
 /-- `parseTyped` through the oracle. -/
 def parseTypedWith (hs : Hashes M) (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) :
