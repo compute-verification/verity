@@ -14587,3 +14587,33 @@ r20261108-235202-ef9d.
 
 **Memo corrected** (`proofs/20261108T2305Z-report-cacheopt-memo`, synced): the headline becomes 11.30% with the
 recommit, with the reset bit's cost beside it, and the post table gains rows 13 and 14.
+
+## 23:58Z from TWOVERIFY: option (b) done; land ask, #8083 re-marked at 50dd35983a; #8119 and #8168 carried up
+
+#8083 merges #7497's head `209e76f66e` and #8204's head `935c643452`, both now on `checked`, and never `next`. #8119 and
+#8168 each merge #8083's new head. All three new heads merge onto `checked` cleanly (`git merge-tree`).
+
+- **#8083 land ask:** marked ready at `50dd35983a` (`pr:8083@50dd35983a55b72c2f01f7af563ace51e385e7b6`).
+  - The conflicts were only in `Spot/Pieces.lean` and the spot difftest, where each side had added its own piece. Both
+    are kept: `second_statements` and `replay_links` beside #7497's `fits`, in the table, the docstrings and `PIECE_RUNS`.
+    #8204 merged without conflicts.
+  - Lean try `r20261108-234557-599c` (cpu-13) at `50dd35983a`: exit 0. `Pieces.lean` elaborates (it has no theorems for
+    the probe), and the spot build passes. `Security/Proofs` builds `Proofs.Properties.Spot` and #7497's `Spot.Credited`
+    and `Sampled.Record` on #8083's Spot (74 files changed there, 249 s), and `Properties.Spot` builds.
+  - Lock DM: no lock entry moved, so there is no records run. Both locks merged through the driver with nothing to
+    reconcile. Every guarantee's read record at the head equals one side's exactly, and no definition is read at two
+    digests (`Security`: 1396 records, `Security/Properties`: 433). `unwitnessed` is untouched. The records gate warns
+    that no pass is on the new Lean inputs, which leaves them to the lock run after landing.
+  - The preflight merged it onto `next` (`e140bfa72c`) cleanly, and the checks that ran passed (87 suites collected).
+    Lean is left to the lock run (222 modules). The warn gate flags the spot README, 426 bytes over its cap at #8083
+    alone; #8119 and #8168 bring it to 49,149 bytes.
+  - To land: `research queue review 8083 --land --sha 50dd35983a55b72c2f01f7af563ace51e385e7b6 --by <reviewer>`.
+- **#8119** is at `43fa1efcfa`. It merged #8083's new head without conflicts, and no lock entry moved. Its quick suites
+  (changed since `50dd35983a`) are `r20261108-234853-9be1` on cpu-1, ETA about 01:05Z. I mark it when they pass and post
+  its land ask then.
+- **#8168** is at `e206883a7c`. One conflict, in `Pieces.lean`: #7497's `fits` sits just above `templateCircuits`,
+  whose docstring #8168 rewrote, and both are kept. Its quick suites are `r20261108-234855-accd` on cpu-3, ETA about
+  01:05Z; it marks when they pass. TWOPROVE's #8206 marks with it, and #8206's head `ca3df930c1` merges cleanly with
+  `e206883a7c`, so it needs no change for this.
+- **The old heads' runs:** `fe2d` (#8168 at `616bfcc9ab`, cpu-11) and `0d18` (#8119 at `86fc15c083`, cpu-12) are still
+  running. I'm letting them finish; they're informational only.
