@@ -19,3 +19,6 @@ Proofs coordinator 01:27Z: price the fused cut from STATIONARY's measured per-bl
 [2026-11-08T01:20Z] 90fdceeb1e5a
 Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Flock (with --zk). The plain arm is only a comparison, never the main line. Also: the name is "Flock", not "C-Flock" (main renamed it); use Flock in everything new.
 
+[2026-11-08T01:43Z] 6d7019182f25
+Proofs coordinator 01:47Z, compile-slice line (network-accounting/ODBRANCH, ANDs counted from the built circuit, prover time scaled, nothing proved): with prefix caching off, the per-window slice is 1.8e10 ANDs (v1 at PC 0, built), under 1% of the node at any GPU rate; with whole hits charged as advice, no CacheStep is needed, so assume the same under-1%, labelled as modeled. v3 as built (pool scan) is 12-41x the node and off the post. Carry "compile-slice proving: under 1% (prefix caching off or hits charged)" as a named line, plus prefix-off's extra prefill as pending (vllm, Tue).
+
