@@ -233,7 +233,7 @@ def _frame(key: str, f):
     (lambda s, second: [s, s], ["second-template"]),
     (_restated(template="TwoStageTestOther_v0"), ["second-template", "second-cover"]),
     (lambda s, second: [{k: v for k, v in s.items() if k != "registered"}], ["second-statement", "second-cover"]),
-    (_restated(header=None), ["second-statement", "second-cover"]),
+    (_restated(header=None), ["second-statement", "second-cover", "second-reported"]),
     (_header(instances=Q * N_RHO + 1), ["second-population"]),
     (_header(units={"indices": list(range(1, Q * N_RHO + 1))}), ["second-population"]),
     (_header(scheme="frame-v3-sha512/other"), ["second-roots"]),
@@ -254,7 +254,8 @@ def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
     """Round 2, by both verifiers, passes the run's own statements, its linked ports reading the boundary at each slot's
     cell's replay block, and its own `out` reading each slot's own rows or not (the form's refusal their one failure),
     and refuses: none (`second-statements`), none for a template the second stage drew in (`second-cover`), a template
-    twice or one of no part (`second-template`), one that isn't a statement (`second-statement`), and one that isn't the
+    twice or one of no part (`second-template`), one that isn't a statement (`second-statement`, and `second-reported`
+    when its session's reads are reported, since no statement makes them), and one that isn't the
     run's: another population of slots (`second-population`), a scheme, root or domain the interior registration's isn't
     or a port of it it neither roots nor reads (`second-roots`), another sample (`second-sample`), or a read of another
     cell's replay block, another slot's rows, a boundary port by a port no link names, another port's own, or a linked
