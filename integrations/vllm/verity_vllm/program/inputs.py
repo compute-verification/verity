@@ -82,6 +82,10 @@ RUN: dict[str, Kind] = {
         "witness", "a DSA row past TOPK keys: the Waksman settings that route its top-k order. Only the top-k set in ascending "
                    "index order passes `DsaTopKLongRow_v1`, and every reader reads the routed rows, a function of that order, "
                    "so the settings' redundant bits reach no output", relation="DsaTopKLongRow_v1"),
+    "training_generator_state": Kind(
+        "certified", "a training step's generator state before a random op (`frontend.rules.training_draws.Random`): the run's "
+                     "seed and the Philox offset its earlier samples reached, a run input as a request's seed and its Philox "
+                     "positions are. The record commits it beside the op's samples, and no gate reads it"),
 }
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
@@ -100,6 +104,12 @@ ALLOWED: dict[str, str] = {
     "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",
+    "run.training_sample":
+        "a training step's random op's samples (`frontend.rules.training_draws.Random`): torch's CUDA generator draws them from "
+        "the generator state beside them, and no Definition computes that stream (curand's Philox4x32-10, torch's transforms, "
+        "the launch's grid-stride order), so the prover picks them and they move output bits: at most each op's width a step, "
+        "its elements times their bits. Fix: a Definition of the generator computes them from the certified generator state, "
+        "or charge them at their width as advice",
 }
 
 

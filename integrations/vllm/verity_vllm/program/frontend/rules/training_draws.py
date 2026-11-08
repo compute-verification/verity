@@ -5,7 +5,8 @@ torch's CUDA samples are curand's Philox4x32-10, keyed by the generator's seed a
 grid-stride order through torch's uniform, normal (Box-Muller) and integer transforms. No Definition computes that stream exactly,
 so a random op is not computed: what the run drew is a field of the Program's `run` input, and beside it the generator's state
 it claims to have sampled from, so the record commits each op's values with its seed. Nothing checks the values against the seed
-until a Definition of the GPU's generator exists.
+until a Definition of the GPU's generator exists: `program.inputs` lists the values free (``run.training_sample``) and declares
+the generator's state certified (``training_generator_state``).
 
     Random  rand / randn / randint / randperm, their generator forms, rand_like / randn_like / randint_like, normal with
             number arguments, and the functional normal_, uniform_, exponential_ and bernoulli_ (with a number p)
@@ -50,8 +51,8 @@ class Random(_TrainRule):
         k = ctx.state.get("draws", 0)
         ctx.state["draws"] = k + 1
         meta = node.meta["val"]
-        values = ctx.run_value(f"draw{k}:{node.name}", type_of_tensor(meta), node)
-        ctx.run_value(f"draw{k}.seed:{node.name}", SEED, node)
+        values = ctx.run_value(f"draw{k}:{node.name}", type_of_tensor(meta), "training_sample", node)
+        ctx.run_value(f"draw{k}.seed:{node.name}", SEED, "training_generator_state", node)
         ctx.define(node, values)
         ctx.record(self, node, {"draw": k, "dtype": str(meta.dtype), "shape": list(meta.shape)}, emitted="run input")
 
