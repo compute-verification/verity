@@ -4727,7 +4727,12 @@ class Pipeline:
         graph = {}
         for m, g in doc["graph"].items():
             rel = Path(*m.split(".")).with_suffix(".olean")
-            holders = [d for d in dirs if (d / rel).exists()]
+            holders: list[Path] = []
+            held: set[Path] = set()                            # a search path may list the same directory twice
+            for d in dirs:
+                if (d / rel).exists() and (r := d.resolve()) not in held:
+                    held.add(r)
+                    holders.append(d)
             if len(holders) != 1:
                 where = ", ".join(str(d) for d in holders) or "no search directory"
                 raise RuntimeError(f"replay: {m} is found in {where}; a shadowed or unplaced module is not replayed")
