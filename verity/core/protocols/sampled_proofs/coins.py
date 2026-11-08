@@ -406,6 +406,8 @@ def draw_first(randomness: OwnRandomness, law: Mapping[str, Any], population: in
         raise ValueError("a closure widens a work draw only")
     if kind == "subset":
         k = law["k"]
+        if k < 1:
+            raise ValueError("a subset law draws at least one unit")
         if k > population:
             raise ValueError(f"a subset draw of {k} exceeds the population of {population}")
         units = randomness.stream(2 * k * _width(population) + 64, lambda read: _subset(k, population, read))

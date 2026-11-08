@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.DrawLaw
+public import Proofs.Flock.Claims.Sampling.Select.Design
 public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOk
 public import Proofs.Flock.Soundness.Discharge.Composed.CustodyJ
 public import Proofs.Flock.Soundness.ExecStrataOf
@@ -18,6 +19,8 @@ sampling design's own `P_a`. This file holds what the statement reads and how th
   rule's (`stratumK`, `workK`) and `kd` their sum. A Bernoulli law is none (`NotBernoulli`);
 * `pa_stratified`, `pa_work`: such a sampling design's claims design (`oneStageOf`) misses `B` with `strataPa` of its strata's sizes
   and samples; `pa_empty_of_lawOn`: it misses nothing with probability `1`;
+* `wellFormed_of_lawOn`: such a sampling design, where it is the one the verifier's agreed law gives (`deriveLaw`, else
+  `flockLaw` of `derive`'s law object), is well formed over `ns` (`OneStage.WellFormed`), by the code's own refusals;
 * `drawUnits_miss_le`: the deployed sample misses a set `U` of slots with probability at most `P_a(U)` (`one_bound`,
   `strata_bound`);
 * `execSel src law pop`: the deployed sample as a sampling design on the verifier's bytes `src`, a sample that runs out of them sampling
@@ -431,6 +434,67 @@ theorem lawSized_size {n : ℕ} {law : Flock.Draw.Law} {kd : ℕ} (hlaw : LawSiz
           rfl
       _ = (ws.toList.map (·.k)).sum := congrArg List.sum (List.map_congr_left hc)
       _ = kd := hsum
+
+open Properties.SampledProofs.SecurityProofs in
+/-- **The law the verifier agrees is well formed over its strata**: where `deriveLaw` expands the named law, or
+`flockLaw` reads `derive`'s law object, and the law is one at `ns` (`LawOn`), its claims design is well formed over
+`ns`, by the code's own refusals. A subset draws at least one unit (`flockLaw`); a stratified `K` is in
+`[1, population]` (`Flock.Draw.derive`); a work law's strata are nonempty (`strataOf` of a covered partition), its
+floors at least one (`workTableOfJson`) and its work nonzero (`deriveWork`). -/
+theorem wellFormed_of_lawOn {p : SampledProofs.Program} {query law lawJ : Lean.Json} {table : Option Lean.Json}
+    {n : ℕ} {derived : Option Flock.Draw.Law} {parsed : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ}
+    (hJ : SampledProofs.Draw.derive p query law table = .ok lawJ)
+    (hd : SampledProofs.Draw.deriveLaw p query law table = .ok derived)
+    (hp : SampledProofs.Draw.flockLaw lawJ n = .ok parsed) (hlaw : LawOn (derived.getD parsed) ns kd) :
+    (Properties.SampledProofs.oneStageOf (derived.getD parsed)).WellFormed ns := by
+  rcases deriveLaw_cases p query law table derived hd with ⟨rfl, hk1, hk2⟩ | ⟨S, k, law', hS, rfl, hlaw'⟩
+  · have hJ' : lawJ = law := by
+      unfold SampledProofs.Draw.derive at hJ
+      rw [hd] at hJ
+      exact (Except.ok.inj hJ).symm
+    subst hJ'
+    rcases flockLaw_cases _ _ _ hp with ⟨k, rfl, -, -, hk⟩ | ⟨a, b, rfl, hb, hab⟩ | hk | hk
+    · obtain ⟨rfl, hkd⟩ := hlaw
+      exact ⟨hk, hkd⟩
+    · exact ⟨hb, hab⟩
+    · exact absurd hk hk1
+    · exact absurd hk hk2
+  · rcases hlaw' with hder | ⟨t, tab, ht, hwork⟩
+    · obtain ⟨hk1, -⟩ := derive_bounds k S law' hder
+      obtain rfl := derive_ok k S law' hder
+      obtain ⟨-, hK, hpos, -⟩ := hlaw
+      exact ⟨hk1, hK, hpos⟩
+    · obtain ⟨ws, hF, htot, rfl⟩ := deriveWork_wf k S tab law' hwork
+      have hSpos : ∀ q ∈ S.toList, 1 ≤ rsSize q.2 := by
+        unfold SampledProofs.Partition.strata at hS
+        obtain ⟨rs, he, hS⟩ := bind_eq_ok.1 hS
+        obtain rfl := (Except.ok.inj hS).symm
+        exact strataOf_pos _ (partition_covered p query rs he)
+      have hfl : ∀ s ∈ ws.toList, 1 ≤ s.floor := fun s hs => by
+        obtain ⟨_, -, -, e, he, hfe⟩ := forall₂_mem_right hF s hs
+        rw [hfe]
+        exact workTable_floor _ tab ht e he
+      have hpos : ∀ s ∈ ws.toList, 1 ≤ s.size := fun s hs => by
+        obtain ⟨q, hq, hu, -⟩ := forall₂_mem_right hF s hs
+        rw [stratum_size, hu]
+        exact hSpos q hq
+      obtain ⟨⟨-, hsz⟩, -⟩ := hlaw
+      have hns : ns = ws.toList.map (·.size) := by
+        rw [← hsz]
+        simp only [Array.toList_map, List.map_map]
+        rfl
+      subst hns
+      have hW : (((ws.toList.map (·.size)).zip ((ws.map fun s => { s with
+          k := Flock.Draw.workK k s.work s.size (Flock.Draw.totalWork ws) s.floor }).toList.map (·.work))).map
+            (fun p => p.1 * p.2)).sum = Flock.Draw.totalWork ws := by
+        rw [totalWork_eq, Array.toList_map, List.map_map, List.zip_map', List.map_map]
+        rfl
+      refine ⟨by simp, by simp, fun x hx => ?_, by rw [hW]; exact Nat.pos_of_ne_zero htot, fun x hx => ?_⟩
+      · rw [Array.toList_map, List.map_map, List.mem_map] at hx
+        obtain ⟨w, hw, rfl⟩ := hx
+        exact hfl w hw
+      · obtain ⟨w, hw, rfl⟩ := List.mem_map.1 hx
+        exact hpos w hw
 
 /-- **A sample file of the verifier's sample under a sampling design on strata decodes only to `kd` units** (`lawSized_size`). -/
 theorem lawOn_size {n : ℕ} {law : Flock.Draw.Law} {ns : List ℕ} {kd : ℕ} (hlaw : LawOn law ns kd)
