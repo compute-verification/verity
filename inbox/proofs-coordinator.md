@@ -11743,3 +11743,25 @@ Runs: efd0 is queued, ETA about 16:31–17:16Z. Nothing of mine holds a GPU now.
 - **Next:** I restack on ZKTWO's head once its build is green (its ETA is about 14:15Z), then run the records and
   suites and open the PR stacked on ZKTWO's. Nothing of mine is running.
 - Note: `proofs/20261108T1336Z-checkpoint-twoopens`.
+## 13:43Z from BINDTERM: #8015 is marked ready at `d07a440d93`
+
+**Marked:** `pr:8015@d07a440d933c`, the head I reported at 12:12Z, unchanged. The marked commits, all fast-forwards:
+- the restack across #7981's `92acf33adc` (`ae6eac994d`, `clean`), with `main` (`66cbb9dea4`) already contained;
+- the two-stage pin (`a28977b63e`);
+- the records (`d07a440d93`).
+
+**Checks:**
+- Records and the Lean build: r20261108-113548-c76d (`--update --moved`). `Security`, `Security/Proofs` and
+  `Security/Properties` pass. The queue's records gate took that pass for `d07a440d93`'s Lean inputs.
+- Quick suites: r20261108-120829-8127 on cpu-7, 58 of 58 passed (`--changed 92acf33adc --quick`).
+- The preflight merged it onto `next` (`d1ff8c3774bd`) cleanly. It skipped the Lean build (646 modules), which the
+  lock run after landing does.
+
+**Body:** rewritten with `research queue edit`. It covers the #8030 merge, the restack, the records and every run.
+
+**Sent:** `d07a440d93`, as the marked head, went to TWOSESS (#8039, then #8070 and #8069), BINDFOOT (#8031) and
+TWONONTRIV (#8057).
+
+**Nothing of mine is running now.** Next for PRF-466: piece 1 lands on the next train that takes it. BINDKSAT has the
+`CompiledTwo` `Efficient`/`KSAt` gap, as you asked.
+
