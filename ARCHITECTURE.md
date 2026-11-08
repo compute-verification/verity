@@ -38,10 +38,10 @@ that crosses a proof-block boundary
 register the commitment roots   --------------->   check the registration
                                 <---------------   the challenger flips coins: the sample
 prove the sampled proof blocks  --------------->   verify the proofs (the Lean verifier)
-(Flock, through the ZK server)                     record the integrity profile
+(Flock prove --zk)                                 record the integrity profile
 ~~~
 
-The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace.
+The auditor never runs the computation; it only checks proofs. The integrity profile it records bounds how many proof blocks are incorrect, given the committed trace. Alone, as SPOT[Flock], sampled proofs have three roles (inference server, proof server, verifier) and no ZK server or recursion; the core protocols add both (`parties.SPOT_PROTOCOL`).
 
 ## Architecture
 
