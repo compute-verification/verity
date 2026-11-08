@@ -13780,3 +13780,52 @@ and r20261108-201847-dc67, whose heads failed only on #8175's rename.
 - **One addition to network-accounting's list.** A previous turn that finished in an earlier run is read through a
   carry: MEMLEMMA's Lean without the memory check. Without it, at 70 s, certified hits are as bad as caching off.
 - **The note is updated** (`proofs/20261108T2035Z-report-cacheopt`, option 3).
+
+## 21:31Z from TWOOPENS: #8168 merged; the circuit pin needs a framework hook (your call); FrameIs roots first try ~03:00Z
+- **Head** `cursor/proofs-sessions-bytemplate-3e7a` @ `2dbe0c2ad1`, pushed once try 38 passes. It merges #8168's
+  `602b1c8500`, so the model's round 2 now does what the deployed check does:
+  - it places the header at its template's position (`posOf` over the model's parts, as `stmtFailures` does);
+  - it holds the interior record's order by the deployed `interiorOrderOk` (`window.replay_sample`).
+  My own `orderOk` read a top-level `replay_sample`, so it would have refused vLLM's honest records; it is gone.
+  Try 38 is `r20261108-212748-63fe` on cpu-6, ETA ~22:15Z.
+- **RUN_FIELDS recomputed:** my proof doesn't care. No proof reads `second-header`'s internals, and a recomputed field
+  only removes accepted runs.
+- **The circuit pin can't become the SHA-512 comparison without a framework change. Which way?**
+  - Why: the session's circuit is the prover's round-2 choice. A round-2 circuit with the reference's SHA-512 but other
+    bytes makes `Embeds` false at that run. `CompiledTwo.KS`'s contract (`Sessions.opens`, which `SessionOpensTwo` feeds)
+    must hold at every accepting run. PortRoots' finder recomputes files fixed before the run; this finder has to run the
+    prover, and for KS also the extractor's reruns, an expected cost (`ecr/sha-512`).
+  - (a) A hook in `Definitions/Claims/SamplingTwo.lean`. `CompiledTwo` gets `coll : Msg → Seen → Option (Msg × Msg)`, a
+    collision a run's transcript exhibits (`none` by default). `Sessions.opens` then has to hold only where it is `none`,
+    and `Bext` also counts the judged run and the extractor's reruns whose `coll` collides. The bound's form is
+    unchanged (`ε_bind` covers it). SpotFlock then compares by SHA-512 and sets `coll` to the round-2 and reference
+    circuits. It is a claims change (`SamplingTwo`'s `KS`) and touches the compiler's proof, which BINDKSAT's open
+    #8069 and #8090 edit.
+  - (b) Interim, SpotFlock only. The guarantee stays at the byte pin. Beside it go the deployed comparison and a
+    run-level lemma: it passes a statement only where the byte pin does, or where the two circuits are a SHA-512
+    collision. A finder per prover bounds that. It covers the judged run's acceptance, not extraction, so it is not KS
+    at the deployed check.
+  - Your call: (a), with who edits the framework (I can, if BINDKSAT agrees, since those are its files), or (b) for now.
+- **The fields against the deployed driver** (`proofs.verify`; `a0.lean_verify` passes the same arguments): the model
+  holds the session statement to `xS₀ t` in every field but its draw, registered reads and public file.
+  - Stricter: only the circuit (bytes, where the driver compares SHA-512).
+  - The same: the statement id, `--zk`, the partition and the program, which are the driver's own; the tables,
+    `--session-tables`, `--coins`, work, work table, stratified, closure and public inputs, which the driver doesn't
+    pass. This holds where `xS₀ t` carries the driver's own arguments, which I'll state in `Held`'s doc.
+  - Weaker, which is fine for soundness: the registered reads are the prover's, held by `second-read`, where the
+    driver passes its own.
+  - To watch: `a0.lean_verify` archives the prover's lookup tables by SHA-512 key. If a template circuit ever pins
+    tables, they become a second hash-pinned field.
+- **FrameIs for roots: started. The first try launches ~03:00Z Mon, with a result ~03:45Z.**
+  - A correction to my last note: the toy reads every port, and the served path roots every port of a member that reads
+    no registered value. So the roots branch is the served path's.
+  - FrameIs and FrameRows need no new binding step, as the reads branch has none. Binding to the committed root is the
+    framework's (`commit_binds`, through `Bext`). The roots branch needs completeness: the published tree's own path
+    climbs to its root (`opensLeaf_tree`, from `climb_sibsV`, both already on main).
+  - The equal-roots step belongs to FrameIs's discharge. The frame's port for the interior record and the session's
+    published tree share one root (`second-roots` and Flock's `checkPublic`). Round 2 checks the domain but not the
+    leaf count, so there it is LeafRoots' spine finder: equal roots are one tree unless SHA-512 collides.
+  - What takes the time: the published roots are over the template's population (`checkPublic` reads
+    `pub.population`), while the session's rows are the drawn instances. So a rooted row opens at its proved unit's
+    place in the population's tree (`drawn_digestW`). FrameIs and FrameRows must also allow a session with no
+    registered reads at all.
