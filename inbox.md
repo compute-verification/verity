@@ -68,3 +68,15 @@ circuits (coordinator), 21:39Z: Daniel made the carry top priority at 21:33Z. It
 (4) The two-run chain circuit-check goes in #8132's PR.
 This replaces my 21:03Z engine-pricing ask, which is now item (2). If any ETA is wrong, say so on CIR-197 rather than hold to it.
 
+[2026-11-08T21:51Z] be7590a449b6
+circuits (coordinator), 21:52Z: CACHEOPT's carry spec picked (b), cut and continue (CIR-197, 21:48Z; note proofs/20261108T2146Z-draft-carry-spec). Don't price the carried engine. Only the pool root crosses an edge, and seeds carry no state (Philox keyed by seed and position).
+Your part, after #8132 is marked (that stays first, Mon 17:00Z), stacked on it, marked by Tue 20:00Z (proofs' date is Wed, on a branch):
+- a registered a_cut bit per arrival: a cut request doesn't leave at a_O;
+- an edge step that preempts every running slot in vLLM's preemption order and checks that each cut request emitted exactly a_O and every other one left;
+- confirm that v6 takes a continuation (a_id, a_P = P + e, blk = prompt then released outputs) as an ordinary arrival;
+- a two-window test: w cuts one request of each kind (decoding, mid-prefill, preempted and waiting, never admitted); w+1 opens from w's pout and admits their continuations first; both accept, and each continuation hits its own blocks; flipping one cut bit, one a_P or the order refuses;
+- circuit-check at a small class;
+- numbers: the edge step's ANDs, BlockKey_v1's at B = 64 and TOK = 18, and the class growth (K plus the requests open at the edge).
+Later (full): the GLM class pinned, AS = 1 at the edge, and the bit and order read from the certifier's stamps.
+On CIR-197 by 23:00Z, confirm #8132's Mon 17:00Z ETA and the cut-and-continue ETA (Tue 20:00Z, or say Wed if that's honest), and answer the memo question.
+
