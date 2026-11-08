@@ -331,9 +331,9 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
     res = {}
     for prec in a.precisions:
         o = torch.cat(obs[prec], 1)
-        col = ((o[0] - o[1]) / (2 * s * amps[:, None])).T
+        col = ((o[0] - o[1]) / (2 * s * (1.0 if a.peel == "saturate" else amps[:, None]))).T
         if a.peel == "saturate":
-            W, beta, g_hat = col, ((o[0] + o[1]) / 2).mean(0), g.double()
+            W, beta, g_hat = col, ((o[0] + o[1]) / 2).mean(0), None
         else:
             Z = H @ E[T].double().T
             if prec == "bf16":
@@ -351,7 +351,10 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
             W, beta = col * g_hat, col @ b_hat.double()
         res[prec] = {"W": W, "beta": beta,
                      "W_mse_over_var": float((W - W_true).pow(2).mean() / W_true.pow(2).mean()),
-                     "g_mse_over_var": float((g_hat - g.double()).pow(2).mean() / g.double().pow(2).mean())}
+                     "g_mse_over_var": None if g_hat is None else
+                     float((g_hat - g.double()).pow(2).mean() / g.double().pow(2).mean())}
+    if max(e["W_mse_over_var"] for e in res.values()) > 0.5:
+        raise SystemExit(f"--peel {a.peel}: E diag(g) read no better than its variance; the peel is broken")
     return res
 
 
@@ -377,7 +380,7 @@ def part_rows(lm: LM, tok, a) -> dict:
         T = torch.randperm(V, generator=gen)[:max(reads)]
         est = peel(lm, tok, pre, last, t0, h0, T, a)
         print(f"peel {a.peel}: " + ", ".join(f"{p} E diag(g) mse/var {e['W_mse_over_var']:.3g}, g mse/var "
-                                             f"{e['g_mse_over_var']:.3g}" for p, e in est.items())
+                                             f"{e['g_mse_over_var']}" for p, e in est.items())
               + f", {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
     for l in layers:
         x0 = taps0[(site, l)][0, 0].float()
@@ -439,7 +442,13 @@ def part_rows(lm: LM, tok, a) -> dict:
                          "bits_per_row": bits, "bits_per_fault": bits / F, "mi_bits_per_row": mi,
                          "mi_bits_per_fault": mi / F,
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
-    return {"part": "rows", "rows": rows}
+    res = {"part": "rows", "rows": rows}
+    if est is not None:
+        res["peel"] = {"mode": a.peel, "tokens": len(T),
+                       "faults_by_k": {k: 2 * d * math.ceil(len(T) / (k - 1)) for k in a.ks if k > 1},
+                       "by_precision": {p: {n: v for n, v in e.items() if n not in ("W", "beta")}
+                                        for p, e in est.items()}}
+    return res
 
 
 def ulp2(z: torch.Tensor, precision: str) -> torch.Tensor:
