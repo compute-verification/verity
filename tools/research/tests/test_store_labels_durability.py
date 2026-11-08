@@ -208,6 +208,24 @@ def test_conflicting_assertions_coexist_on_both_sides_with_latest_and_history_vi
     assert rep["preserved"] and rep["targets"][0]["labels"] == {**rep["targets"][0]["labels"], "local": 1, "remote": 3, "missing": 0}
 
 
+def test_the_text_views_print_a_label_auth_token_by_its_length_and_json_keeps_it(env, tmp_path, capsys):
+    """A ready mark read back printed its `label_auth` companion's token, valid for minutes, into a worker's output."""
+    st = LocalStore(tmp_path / "A")
+    st.put_attempt(_attempt())
+    jwt = "eyJhbGciOiJSUzI1NiJ9.eyJub25jZSI6ImFiYyJ9.c2lnbmF0dXJl"
+    st.add_label(RUN, "label_auth", {"for": "ab" * 64, "token": jwt}, "kernels", ts="2026-11-08T04:36:00Z")
+    assert main(["labels", "--store", str(st.root), RUN]) == 0
+    out = capsys.readouterr().out
+    assert jwt not in out and f"<token, {len(jwt)} chars>" in out and "ab" * 64 in out
+    assert main(["push", "--store", str(st.root), RUN]) == 0
+    capsys.readouterr()
+    main(["labels", "--store", str(st.root), RUN, "--remote"])
+    out = capsys.readouterr().out
+    assert jwt not in out and "<token, " in out
+    assert main(["labels", "--store", str(st.root), RUN, "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)[0]["value"]["token"] == jwt
+
+
 def test_pull_from_a_machine_brings_the_labels_of_the_attempt_its_derivation_and_outputs(env, tmp_path, monkeypatch, capsys):
     from research.store import cli_prov
 
