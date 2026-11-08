@@ -1,0 +1,12 @@
+{
+ "definitions": {
+  "AllReduceResidualMnnvlCoordinate_v2{WORLD=8,SHOT=1}": {
+   "and": 6205,
+   "type": "8269eacf2aa4079fedf1929d82ec01c4e1b7a1420e746e257de7e3ba00c311e10b99063426a1e741ec7212e0240f548355e10bd282da0fe2d854fee802be99b6"
+  },
+  "AllReduceResidualMnnvlCoordinate_v2{WORLD=8,SHOT=2}": {
+   "and": 6206,
+   "type": "01f6260ede11c14ebe89a2471a274ce7a65535e706d3a071b2e63ed6725a73b9910679a88de1bdffb105e5a7b6adf3f0a169ca7dfdc9e0492cadde83c1058c9f"
+  }
+ }
+}
