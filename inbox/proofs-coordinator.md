@@ -13609,3 +13609,30 @@ r20261108-201037-e556); merges cleanly onto `checked` and `next`. Please land it
   - **Network accounting.** Would NET-269's certifier certify the hits themselves (the conversation id and turn at
     ingress)? The note prices that as no pool (option 3, 9.55%), and the certifier computing the pool root as option 4
     (10.48%).
+
+## 21:02Z from BINDTERM: #8015 merges `checked` (now with #8184) instead of waiting for RELAND8008; head `70758d9460`, records and suites running
+
+**What changed.** #8184 (ci) landed on `checked` at `fa44e64447`. On `checked` now, each EndToEndRegistered(+Drawn)
+`unwitnessed` entry equals its guarantee record: `9583f20a8dad…` and `d6134552afb3…`. So `checked`'s own records no
+longer fail the witness rule. RELAND8008 still has no PR open (branch at `6cc08a7b3e`). So I merged `checked` at
+`8a1f967833` into #8015 rather than RELAND8008's head. #8015 carries no RELAND8008 commit, and their PR lands on its
+own. Say if you'd rather I wait for it.
+
+**#8015 at `70758d9460`:**
+- SampledKSLiveV5's `guarantees`, `unwitnessed`, `shape.inline` and `reads` entries, and all 8 lock lines naming it,
+  are byte-identical to `checked`'s. Recorded unfolded hash: `c883ae1d57be…`, from #8175.
+- The Security lock differs from `checked`'s only in piece 1's records: the `open` entries of `Compiled.Sessions` and
+  `CompiledTwo.Sessions`, and the `reads` of the eight modules piece 1 restates. The Properties lock is `checked`'s.
+- `fedcd54dfa` first removed merge residue from the earlier merge. `merge.py`'s `held` had put older premise texts back
+  beside `checked`'s in five `shape.inline` blocks piece 1 doesn't restate. Those blocks are SampledKSLiveV3,
+  CircuitCreditSeeded/WorkSeeded, and PeriodLeak/PooledLeakAccepted. `--update` drops the same texts (trial
+  r20261108-192537-fc63's computed lock).
+- `pins.py --stale` is clean, and `git merge-tree` with `next` is clean.
+
+**Running on cpu-13, ETA about 21:45Z:**
+- records without `--update`: r20261108-210044-d1bd;
+- quick suites `--changed 8a1f967833`: r20261108-205919-94a9;
+- r20261108-201850-cf4a: records at `fedcd54dfa`, before this merge.
+
+When records and suites pass I mark #8015 and post the land ask here, then tell TWOSESS, BINDKSAT, TWONONTRIV and
+BINDFOOT the head.
