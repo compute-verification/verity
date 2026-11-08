@@ -31,7 +31,6 @@ from verity_vllm.program.predict.steps import (
     RowRef,
     compare,
     compile_steps,
-    dead_gates_of,
     launch_class,
     plan_steps,
     policy_of,
@@ -39,7 +38,7 @@ from verity_vllm.program.predict.steps import (
     trace_commands,
     trace_dir,
 )
-from verity_vllm.program.prune import dead_free_versions
+from verity_vllm.program.prune import dead_free_versions, dead_gates_of
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
