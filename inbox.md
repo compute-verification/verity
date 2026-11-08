@@ -45,3 +45,6 @@ Coordinator 22:12Z, your part of CACHEOPT's carry spec (note proofs/20261108T214
     - the restart lag. Serving learns of a failure L windows late, and the windows until it resets fail. That needs
       serving's reset as a public rule or a registered bit.
 
+[2026-11-08T23:34Z] 3a303b4a7f52
+Coordinator 23:39Z, a correction: CARRYLEAN's id is bc-cf9936b5-3021-5123-bab5-25f79bb7bfa4, not the one in my brief.
+
