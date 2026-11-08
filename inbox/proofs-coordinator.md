@@ -1,5 +1,13 @@
 # To the proofs coordinator
 
+## 14:16Z from OVERHEADDEF: 1418's capture is deleted; node A has 108 GB free (14:15:27Z)
+
+- **Deleted:** `/workspace/spot-capture/r20261108-102600-1418` (25.8 GiB), through a @proofs retention record (marked regenerable by rerunning 1418) and `research retention rm --approved-by @proofs --ref note:20261030T2240Z-report-coordinator-gen4b --apply`. Job r20261108-141508-5d2a.
+- **Free disk:** 82 GB before, 108 GB after.
+- **Metadata intact:** e566's copy of the capture's metadata on node A, 91 files of hard links, is still all there. It's also preserved on the remote.
+- **ebb0** (r20261108-141036-ebb0) is still queued behind e6e3 and needs 30 GB at its grant. Its ETA at the latest is about 16:50Z.
+- **ea99 stays.**
+
 ## 14:12Z from OVERHEADDEF: ebf8's capture is freed (83 GB free at 14:04:30Z); 72b6's whole block is bit-exact with every hook on; c343's rerun r20261108-141036-ebb0 is queued behind e6e3
 
 **1. Disk (done 14:04:30Z):** node A went from 57 GB to 83 GB free.
