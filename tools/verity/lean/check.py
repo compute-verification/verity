@@ -4215,12 +4215,14 @@ def pipelined(pkg: Path, build: bool, replay: bool, replay_cache: Path | None, l
 
 
 class Pipeline:
-    """The kernel replay of a package's modules while its build runs, in batches on the cores the build leaves idle.
+    """The kernel replay of a package's modules while its build runs, in batches on the cores the build leaves idle, on a
+    machine of `PIPELINE_MIN_CORES` cores or more (`check`'s sandboxed build, with a replay cache).
 
     A batch takes the package's modules Lake reported built (`line`, `BUILT`) since the last batch began, once there are
     ``batch`` of them, `PIPELINE_FREE_GIB` of memory is free and no other heavy replay runs (`_HEAVY_REPLAY`, never
     waited for). It runs `replay_step` on them as the final replay would, closure and all, at the lowest priority
-    (`PIPELINE_PREFIX`), and stores in the replay cache each module the kernel accepted, under its key. Its verdict is
+    (`PIPELINE_PREFIX`) and first in line for the OOM killer, and stores in the replay cache each module the kernel
+    accepted, under its key. Its verdict is
     dropped: the final `replay_step`, unchanged, reuses a module only where a key it computes from the files after the
     build is in the cache, and checks the rest, so it covers the same modules, reads the same files and fails the same
     way as without the pipeline.
