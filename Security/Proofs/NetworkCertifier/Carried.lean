@@ -217,6 +217,18 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
 
 /-! ### The period -/
 
+/-- **Prefix stability across runs**: run `i`'s operator reads only the runs before it, so two observation sequences
+that agree on those runs give it one input, whatever run `i` and the runs after it saw. -/
+theorem runsBefore_congr {m : ℕ} {α : Type} {o o' : Fin m → α} {i : Fin m}
+    (h : ∀ j : Fin m, j.val < i.val → o j = o' j) : runsBefore o i = runsBefore o' i := by
+  apply List.ext_getElem
+  · simp [runsBefore]
+  · intro j h1 h2
+    have hj : j < i.val :=
+      lt_of_lt_of_le h1 (by simp only [runsBefore, List.length_take]; exact min_le_left _ _)
+    simp only [runsBefore, List.getElem_take, List.getElem_ofFn]
+    exact h ⟨j, lt_trans hj i.isLt⟩ hj
+
 /-- **The count over a carried pool, at one family of incorrect sets**: the period's observations meeting the carried
 good event at the sets `F i` number at most
 `∏_i 2^#(freeInputs_i \ (reg_i ∪ chk_i ∪ prow_i)) · 2^(faultyBits_i (F i)) · Dj^k_i`. A run's code is its inputs off its
@@ -278,14 +290,7 @@ theorem encard_carried_le {L K S m : ℕ} (lay : AuditStatement → BoundaryGate
         split_ifs with hc <;> first
           | rfl
           | exact (hprev _ (by have := hc.1; show i.val - 1 < i.val; omega)).2
-      have hrb : runsBefore o i = runsBefore o' i := by
-        apply List.ext_getElem
-        · simp [runsBefore]
-        · intro j h1 h2
-          have hj : j < i.val :=
-            lt_of_lt_of_le h1 (by simp only [runsBefore, List.length_take]; exact min_le_left _ _)
-          simp only [runsBefore, List.getElem_take, List.getElem_ofFn]
-          exact (hprev ⟨j, lt_trans hj i.isLt⟩ hj).1
+      have hrb : runsBefore o i = runsBefore o' i := runsBefore_congr fun j hj => (hprev j hj).1
       obtain ⟨hl, -, hfit, hdisj, ha, hfree, hval, hpin, hpout, hacc⟩ := hrun i
       obtain ⟨hl', -, -, -, ha', hfree', hval', hpin', hpout', hacc'⟩ := hrun' i
       have hc := congrFun h i
