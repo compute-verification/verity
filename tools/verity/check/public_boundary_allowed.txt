@@ -1,7 +1,6 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
-benchmarks/one_stage/served_verdicts.py -> examples/h200/interfaces
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
