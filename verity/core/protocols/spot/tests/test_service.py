@@ -331,8 +331,8 @@ def test_a_bernoulli_law_is_refused_at_register():
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
     for selection, law, table in ((S.Law("subset:2"), {"law": "subset", "k": 2}, None),
-                                  (S.Law("stratified:2"), D.parse_law("stratified:2"), None),
-                                  (S.Law("work:2"), D.parse_law("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
+                                  (S.Law("stratified:2"), D.parse_design("stratified:2"), None),
+                                  (S.Law("work:2"), D.parse_design("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
         stream = _stream(_spec(selection, public=(*RECORD_ITEMS, STRATUM)))
         assert stream.register(_record(law=law, work_table=table), _ports(6), work_table=table).order == 0, law
 
@@ -716,6 +716,6 @@ def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)
-        reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
+        reg = stream.register(_record(law=D.parse_design(text), work_table=table), _ports(6), work_table=table)
         draw = stream.select(reg)
         assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)

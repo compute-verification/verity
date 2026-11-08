@@ -372,7 +372,7 @@ def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Op
 
 
 def _lowered(t: Any, opts: Options, lower_whole: bool) -> bool:
-    """Whether a lowering takes ``t``'s correspondence vectors, so `floored` adds random ones to them: the C-Flock lowering of it
+    """Whether a lowering takes ``t``'s correspondence vectors, so `floored` adds random ones to them: the Flock lowering of it
     whole (a primitive's piece; a composite under ``lower_max_gates`` gates, or Boolean) or its structural lowering.  A lowering
     takes every input; a kernel declines what is outside its domain, so it takes its floor from its own sampler (`_sampled`)."""
     if isinstance(t, ScalarReference):

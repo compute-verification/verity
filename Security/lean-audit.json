@@ -49693,6 +49693,12 @@
     "FlockSoundness.Audit.Law.workRule": "79289815544a89846bdc7be39d6379c8ae92a444a800f1160e03fdbf7b9dba63"
    }
   },
+  "Proofs.Flock.Soundness.BindSound": {
+   "digest": "4b061564427c0fce5e28703f3a722cc92d97d9e131d26b33413669425f41a225",
+   "definitions": {
+    "FlockSoundness.Model.Statement.LinkLayout": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
+   }
+  },
   "Proofs.Flock.Soundness.Binding.Layout": {
    "digest": "a2421fd4d21abdf0d99f907b643a1e570435fb8f59b2378214a4e357391a297d",
    "definitions": {
@@ -52240,12 +52246,6 @@
     "FlockSoundness.LinkFinder.nextRead": "d2c488c687df8fcc021b2282483cd12c119cca88b18679c8c0a2d7721dd8cc08",
     "FlockSoundness.LinkFinder.outOf": "7f82bbd8e8a1e26c83bc43060ea7a1eda3a1c483c8e4971f63973532a77b70f2",
     "FlockSoundness.LinkFinder.pRd": "1e3babdb651227f8ed7aafbdce1871a66a1462a2dc5bf250e4fc8d420674c326"
-   }
-  },
-  "Proofs.Flock.Soundness.LinkSound": {
-   "digest": "4b061564427c0fce5e28703f3a722cc92d97d9e131d26b33413669425f41a225",
-   "definitions": {
-    "FlockSoundness.Model.Statement.LinkLayout": "b37e44f0312955e52492256533b24acdc935490aeddd9708281231159bd4adce"
    }
   },
   "Proofs.Flock.Soundness.ListSize": {

@@ -223,6 +223,38 @@ def test_the_structural_lowering_is_its_definitions_lowering():
     assert _verdict(t, tm)[0] == "syntactic"
 
 
+def test_a_struct_lower_template_reading_a_table_is_its_lowering_by_construction(monkeypatch):
+    """A toy library table read three times (of an input, of an XOR form and of a read's value; a fourth, of a constant,
+    folded): `struct_lower` lays the read's rows out once as `ir_lower._Read` does, and the lowering reads each live table
+    read as those rows (`_read_bits`), so the template is the lowering by construction."""
+    import numpy as np
+
+    from verity.ml.circuits.boolean import forms as F
+    from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+    from verity.ml.circuits.ops import prims as OP
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+
+    S = pytest.importorskip("verity_flock.struct_lower")
+    table, words, b8 = "structural-test-toy", (np.random.default_rng(7).integers(0, 1 << 6, 256) | 0x80).astype(np.uint32), Value(8)
+    read = PrimitiveDefinition("StructuralTestRead", 1, (("x", b8),), b8, lambda x: int(words[x]), register=False)
+    mix = PrimitiveDefinition("StructuralTestMix", 1, (("x", b8), ("y", b8)), b8, lambda x, y: x ^ y, register=False)
+    monkeypatch.setitem(F.TABLES, table, lambda: words)
+    monkeypatch.setitem(F._TABLE_WORDS, table, words)
+    monkeypatch.setattr(IL, "_library_table", lambda name: name == table)
+    monkeypatch.setitem(IL.PIECES, read.id, lambda C, x: C.lookup(table, list(x), 8))
+    monkeypatch.setitem(IL.PIECES, mix.id, lambda C, x, y: [a ^ b for a, b in zip(x, y)])
+
+    def body(B, _S, x, y):
+        a = B.call(read, x)
+        return array_of([a, B.call(read, B.call(mix, x, y)), B.call(read, B.call(OP.const(8, 0x5A))), B.call(read, a)])
+
+    toy = bind(CompositeDefinition("StructuralTestReads", 1, (), lambda _S: ((("x", b8), ("y", b8)), Array(4, b8)), body,
+                                   register=False))
+    v, r = _verdict(toy, S.lower(toy)[0])
+    assert (v, r["structural"]["lowering"]["reads"], r["failures"]) == ("syntactic", 3, [])
+
+
 def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template(monkeypatch):
     """``c-flock:struct_lower`` (`checks.struct_lowering`, under ``Options.struct_max_gates``): a scan's structural template,
     evaluated from the template, equals the reference on every correspondence vector; a template whose outputs differ is

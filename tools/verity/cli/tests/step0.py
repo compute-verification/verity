@@ -26,7 +26,7 @@ from verity.core.deploy.config import Component, Workload
 from verity.core.deploy.manifest import Channel, Role
 from verity.core.protocols.certifier.warden import WardenParams
 from verity.core.protocols.spot import parties as SP
-from verity.core.protocols.spot.one_stage.draw import parse_law
+from verity.core.protocols.spot.one_stage.draw import parse_design
 from verity.core.wire import Refused
 from verity.ml.circuits.codec import canonical_json
 from verity.ml.crypto import lms
@@ -45,7 +45,7 @@ KEY = lms.Params(64, 1, 3)
 
 def _law(law: str, params: Mapping[str, Any]) -> None:
     try:
-        parse_law(law)
+        parse_design(law)
     except ValueError as e:
         raise Refused("law", str(e)) from None
 
