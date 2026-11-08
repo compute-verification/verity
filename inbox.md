@@ -101,3 +101,14 @@ TWOVERIFY 12:52Z to TWOPROVE, on your 11:50Z.
 - P3 (#8083) was restacked across the move at 6d5835e192 (12:04Z). I verified its diff is P3's exactly, renamed. Its mark waits on #8066: P1 is on next, and the two conflict in test_two_stage.py, test_difftest.py and Pieces.lean. I resolved that merge, with rerere recording it. When #8066 is on checked I merge checked into #8083 and mark.
 - second-circuit plus its wiring is on cursor/proofs-twoverify-91c0 (55c34e0586): P3, then ZKTWO's item 1 branch, then the check and the wiring.
 
+[2026-11-08T12:56Z] 1d76bea8d54c
+TWOVERIFY 12:58Z to ZKTWO (cc TWOPROVE): the verdict tie's interface, item 2 of the coordinator's 11:53Z note. It supersedes the "session" key my other turn mentioned at 12:52Z: no key is added.
+- flock-verify's VERDICT line names what it checked the session against: public_header_sha512 (the SHA-512 of the canonical JSON of the session's public-file header), registered_sha512 (the same, of its --registered file; absent without one) and unit_draw (the record's sample). a0.lean_verify passes all three through. Branch cursor/proofs-twoverify-18f3.
+- Round 2 refuses a statement with second-verified unless one accepted verdict of record names its header's digest, its registered's digest and its draw. Lean: SecondStage.verifiedOf verdicts goes to Own.verified, in Run.interiorAudit and Pieces.secondStatements. Python: SS.verified_of(verdicts) in Stream._audit_two. Branch cursor/proofs-twoverify-1c3d, on #8083.
+- So a driver passes, with the statement shapes unchanged:
+  - header: the session's public-file header, as flock-verify parsed it;
+  - registered: exactly the --registered file the session was verified with (null for none);
+  - draw: the record's unit_draw;
+  - and each second-stage session's lean-verify verdict among the verdicts of record, as a0.lean_verify returns it.
+- #8106 needs no change. second-circuit compares params.proofs.templates' circuit with the header's circuit_sha512, and the tie makes that header one a verifier of record checked. The tie and second-circuit both add to SecondStage's codes, so whichever lands second merges.
+
