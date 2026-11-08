@@ -29,6 +29,8 @@ binary-field proof with upstream Flock (`succinctlabs/flock` at `b684b12`, patch
     outputs from the template, `tmpl.evaluate`), and `class_sweep.py`, the
     backend sweep's work lists; `circuit_bench.py`,
     `flock-circuit`'s sweep.
+  - `proof_server.py`: SPOT's proof server. It runs one long-lived `flock-circuit prove --zk --stream -` per GPU and
+    one `serve --zk --queue -` per block type; a session's verdict of record runs off the provers' path.
   - `bench.py`, `ir_bench.py`, `negatives.py`, `register.py`: the benchmark sweeps, statement negatives and cell
     registration.
 - `live/`: the Rust crate `flock-live`, which the pod scripts drop into a Flock `b684b12` checkout as
