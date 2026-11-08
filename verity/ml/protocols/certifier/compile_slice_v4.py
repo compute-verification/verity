@@ -140,8 +140,10 @@ CompileSliceRowGroups.refuse = CS._refuse_blocks
 
 
 def statics(*args, **kw) -> dict:
-    """`compile_slice.statics`: the slice's statics are CompileSlice_v1's."""
-    return CS.statics(*args, **kw)
+    """`compile_slice.statics`, CompileSlice_v1's, refused where an output length is wider than a length slot."""
+    st = CS.statics(*args, **kw)
+    _check(SimpleNamespace(**st))
+    return st
 
 
 def unit(**st):
