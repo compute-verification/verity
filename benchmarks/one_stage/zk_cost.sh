@@ -11,10 +11,15 @@
 #      ZK_UNITS="fp8-coord:K=6144 router" (served types instead of A6's coordinates, zk_cost.py's --units: ZK_SIZES then
 #      defaults to half,full, ZK_DRAWS to c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw, ZK_ARMS to dev,nofw,fw; overhead instead of fit)
 #      ZK_STAGE_ONLY=1 (with ZK_UNITS: stage on this node's CPUs, keep the records, no CUDA, build or GPU)
+#      ZK_STAGED=DIR (with ZK_UNITS: prove the statements an earlier run staged, its zk directory with plan.json kept in
+#      DIR, hard-linked into this run's scratch where they share a filesystem, instead of staging them again)
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
 #      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
 #      LEASE_MEM_GB (the lease's memory cap, gpu-lease's --mem-gb; else gpu-lease's own per-GPU default)
+#      LEASE_PREEMPTIBLE=1 (gpu-lease's --preemptible: a waiting point stops no one's preemptible lease, and its own lease,
+#      whose grace is its --max-min, is never stopped before it ends; 0 lets a waiting point stop the newest preemptible
+#      leases once their grace has passed)
 #      ZK_NICE=0 (the staging's and the builds' nice; the sessions run at the job's own)
 #      ZK_SCRATCH=$FLOCK_WORK (the run's scratch, a mktemp dir under it: the staged statements, each deleted once its last
 #      point is proved; data only, so a noexec tmpfs such as /dev/shm keeps them, about 24 GB of circuit.txt for
@@ -136,10 +141,20 @@ B=
 # a served type stages on CPUs alone (stage.py, no Lean)
 if [ -n "${ZK_UNITS:-}" ]; then
   : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
-  log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
-  nice -n "${ZK_NICE:-0}" "$PY" benchmarks/one_stage/zk_cost.py stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" \
-    --draws "$ZK_DRAWS" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
-  rc=${PIPESTATUS[0]}
+  if [ -n "${ZK_STAGED:-}" ]; then
+    log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; units $ZK_UNITS staged in $ZK_STAGED"
+    # the plan's paths name the staging run's scratch; a new plan.json and records leave DIR's own untouched
+    mkdir -p "$Z" && { cp -al "$ZK_STAGED"/. "$Z"/ 2> /dev/null || cp -a "$ZK_STAGED"/. "$Z"/; } \
+      && rm -rf "$Z/records" && cp -a "$ZK_STAGED/records" "$Z/records" && "$PY" -c 'import json, os, sys
+z = sys.argv[1]; f = os.path.join(z, "plan.json"); t = open(f).read(); old = os.path.dirname(json.loads(t)[0]["dir"])
+open(f + ".new", "w").write(t.replace(json.dumps(old)[1:-1], json.dumps(z)[1:-1])); os.replace(f + ".new", f)' "$Z"
+    rc=$?
+  else
+    log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
+    nice -n "${ZK_NICE:-0}" "$PY" benchmarks/one_stage/zk_cost.py stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" \
+      --draws "$ZK_DRAWS" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+    rc=${PIPESTATUS[0]}
+  fi
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then
     keep; log "zk-cost: staged only, rc $rc"; [ -z "$B" ] || wait "$B"; exit "$rc"
   fi
@@ -181,7 +196,11 @@ if [ "$rc" = 0 ]; then
   else
     LEASE=()
   fi
-  [ ${#LEASE[@]} -gt 0 ] && LEASE+=(1 --wait --max-min "${LEASE_MAX_MIN:-30}" ${LEASE_MEM_GB:+--mem-gb "$LEASE_MEM_GB"} --)
+  if [ ${#LEASE[@]} -gt 0 ]; then
+    LEASE+=(1 --wait --max-min "${LEASE_MAX_MIN:-30}" ${LEASE_MEM_GB:+--mem-gb "$LEASE_MEM_GB"})
+    [ "${LEASE_PREEMPTIBLE:-1}" = 1 ] && LEASE+=(--preemptible)
+    LEASE+=(--)
+  fi
   export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/zk-cost/${RESEARCH_RUN_ID:-local}}
   log "prove: arms ${ZK_ARMS:-fw,nofw}, ${ZK_COLD:-2} cold, ${ZK_WARM:-1}+${ZK_RUNS:-3} warm ($([ ${#LEASE[@]} -gt 0 ] \
     && echo "waiting for a GPU" || echo "no gpu-lease on this node: the run's own GPU"))"
