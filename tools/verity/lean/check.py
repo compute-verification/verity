@@ -126,7 +126,10 @@ environment extension loaded, so none of the package's code runs), and replays t
                  module it imports transitively included, on the same toolchain and `Replay.lean` (`replay_keys`) joins it
                  unchecked, and its constants are still walked for axioms. With `--closure`, the kernel also rejects a
                  declaration of a module of the import closure (the toolchain's, Mathlib's, ArkLib's) that has not passed
-                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`)
+                 the replay under its key, each checked with its imports present (`replay_step`, `closure_plan`). A heavy
+                 package's build on a large machine also replays its modules as Lake builds them, in batches that store
+                 what the kernel accepted, keyed on private copies of the files they read (`Pipeline`); the replay after
+                 the build then reuses those whose files are unchanged, and is the one that judges
     upstream     a dependency that the policy's `upstream` section scans proves, at the revision `lake-manifest.json` pins,
                  a theorem about a watched assumption or hand proof that the entry's `ack` does not hold (`upstream.py`):
                  a bump that brings such a proof fails until someone has looked at it
@@ -215,6 +218,7 @@ import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -378,13 +382,7 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
     for line in (proc / "meminfo").read_text().splitlines():
         k, _, v = line.partition(":")
         info[k] = int(v.split()[0]) * 1024 if v.split() else 0
-    try:
-        own = next((ln.split("::", 1)[1].strip() for ln in (proc / "self" / "cgroup").read_text().splitlines()
-                    if ln.startswith("0::")), "/")
-    except OSError:
-        own = "/"
-    parts = [q for q in own.split("/") if q]
-    dirs = [cgroup.joinpath(*parts[:i]) for i in range(len(parts), -1, -1)]
+    dirs = _cgroups(proc, cgroup)
 
     def limit(name: str) -> int | None:
         got = []
@@ -400,6 +398,38 @@ def memory_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")
     ram = ram if (m := limit("memory.max")) is None else min(ram, m)
     swap = swap if (s := limit("memory.swap.max")) is None else min(swap, s)
     return (ram + swap) / 2**30
+
+
+def _cgroups(proc: Path, cgroup: Path) -> list[Path]:
+    """This process's cgroup directory and every one above it, the deepest first."""
+    try:
+        own = next((ln.split("::", 1)[1].strip() for ln in (proc / "self" / "cgroup").read_text().splitlines()
+                    if ln.startswith("0::")), "/")
+    except OSError:
+        own = "/"
+    parts = [q for q in own.split("/") if q]
+    return [cgroup.joinpath(*parts[:i]) for i in range(len(parts), -1, -1)]
+
+
+def free_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) -> float:
+    """The memory this process could take now, swap aside: the machine's available memory (`MemAvailable`), bounded by
+    what each cgroup at or above it has left under its limit (`memory.max` less `memory.current`, whose page cache
+    counts as left where it is inactive, as `MemAvailable` counts it)."""
+    info = {}
+    for line in (proc / "meminfo").read_text().splitlines():
+        k, _, v = line.partition(":")
+        info[k] = int(v.split()[0]) * 1024 if v.split() else 0
+    left = [info.get("MemAvailable", 0)]
+    for d in _cgroups(proc, cgroup):
+        try:
+            cap = (d / "memory.max").read_text().strip()
+            if cap == "max":
+                continue
+            stat = dict(ln.split() for ln in (d / "memory.stat").read_text().splitlines() if len(ln.split()) == 2)
+            left.append(int(cap) - int((d / "memory.current").read_text()) + int(stat.get("inactive_file", 0)))
+        except (OSError, ValueError):
+            continue
+    return max(0, min(left)) / 2**30
 
 
 #: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
@@ -512,13 +542,30 @@ def lake_env() -> dict[str, str]:
 _peak = threading.local()
 
 
-def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600) -> tuple[int, str]:
+def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 * 3600,
+        on_line=None) -> tuple[int, str]:
     """``argv``'s exit code and its output. It is reaped with `os.wait4`, whose usage covers the process and every
-    descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`)."""
+    descendant it waited for (each `lean` a `lake build` runs), so the step's peak memory is known (`took`). ``on_line``
+    is given each line of its standard output as it comes (a build's, to `Pipeline.line`)."""
     p = subprocess.Popen(argv, cwd=cwd, env=lake_env(), stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     got: dict[str, str] = {}
-    readers = [threading.Thread(target=lambda k, f: got.__setitem__(k, f.read()), args=(k, f), daemon=True)
-               for k, f in (("out", p.stdout), ("err", p.stderr))]
+
+    def read(k, f, give=on_line):
+        if k != "out" or give is None:
+            got[k] = f.read()
+            return
+        lines = []
+        for line in f:
+            lines.append(line)
+            try:
+                if give is not None:
+                    give(line)
+            except (AttributeError, TypeError, ValueError, LookupError, RuntimeError, OSError) as e:
+                # a bug in the callback must not stop the drain, or the build blocks on a full pipe: record it and read on
+                got["on_line_error"] = f"{type(e).__name__}: {e}"
+                give = None
+        got[k] = "".join(lines)
+    readers = [threading.Thread(target=read, args=(k, f), daemon=True) for k, f in (("out", p.stdout), ("err", p.stderr))]
     for r in readers:
         r.start()
     expired = threading.Event()
@@ -540,7 +587,8 @@ def run(argv: list[str], cwd: Path, log: Path | None = None, timeout: float = 4 
     _peak.bytes = max(getattr(_peak, "bytes", 0), usage.ru_maxrss * 1024)          # Linux reports it in KiB
     text = got.get("out", "") + got.get("err", "")
     if log is not None:
-        log.write_text(text)
+        log.write_text(text if (err := got.get("on_line_error")) is None else
+                       f"{text}\ncheck: the build-output callback was disabled after an error: {err}\n")
     if expired.is_set():
         raise subprocess.TimeoutExpired(argv, timeout, output=text)
     return p.returncode, text
@@ -4381,9 +4429,9 @@ def replay_keys(facts: dict, toolchain: str, digest=None) -> dict[str, str]:
     function of. A module's key hashes the toolchain, `Replay.lean`, its `.olean` files (every part), and the name and key of
     each module it imports, so it covers the `.olean` files of everything it imports, transitively, each under its module's
     name, never a path: a module whose bytes and imports' bytes are unchanged keeps its key wherever the package is built.
-    ``digest`` reads a file's bytes (`Sealed.digest` for a seal's copies, which `Replay.lean` reads in step)."""
-    digest = digest or sha256
-    graph = facts["graph"]
+    ``digest`` hashes a file in place of `sha256` (`Pipeline.digest` for a batch's private copies, `Sealed.digest` for a
+    seal's copies, which `Replay.lean` reads in step)."""
+    graph, digest = facts["graph"], digest or sha256
     files = {m: [p for p in (Path(g["olean"]), Path(g["olean"] + ".server"), Path(g["olean"] + ".private")) if p.is_file()]
              for m, g in graph.items()}
     with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
@@ -4437,28 +4485,33 @@ def store_replay(replay_cache: Path, key: str, module: str) -> None:
     os.replace(tmp, replay_cache / f"{key}.json")
 
 
-def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> None:
+def touch_replays(replay_cache: Path, keys: dict[str, str], modules) -> int:
     """Mark the entries of ``modules`` used now, so the cache's eviction (`lean_audit.prune_replays`, by mtime) keeps what
-    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored."""
+    every replay reuses, Mathlib's and ArkLib's modules first, rather than dropping it as the oldest stored. Returns how many
+    a concurrent prune had already dropped since this replay read and reused them (nothing is lost; they are not re-touched)."""
+    evicted = 0
     for m in modules:
         try:
             os.utime(replay_cache / f"{keys[m]}.json")
-        except OSError:                                # evicted since it was read: this replay already reused it
-            pass
+        except OSError:                                # a concurrent prune_replays dropped it since it was read and reused
+            evicted += 1
+    return evicted
 
 
 def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path, replay_cache: Path | None,
-                closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True) -> tuple[list[str], dict]:
+                closure: bool = False, search: list[str] | None = None, digest=None, store: bool = True,
+                prefix: tuple[str, ...] = (), held: bool = False) -> tuple[list[str], dict]:
     """(failures, how many modules were checked and reused): the kernel replay of the package's audited modules
     (`Replay.lean`), each module whose `replay_keys` key ``replay_cache`` holds joining it unchecked, and each module checked
     stored there when the replay passes. With ``closure``, the replay also checks every module of the import closure, the
     toolchain's, Mathlib's and ArkLib's included, that has not passed it with its key (`closure_plan`), so each
     declaration the package rests on goes through the kernel once and a warm cache checks none of them again. ``search``
-    (a seal's mapped search path) and ``digest`` (`Sealed.digest`) make the replay read the seal's private copies rather
-    than the live `.lake`, so no dependent's build can change what the kernel replays or what its key is keyed on.
-    ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test), whose keys are hashed from
-    the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict can never poison a sealed
-    run."""
+    (a seal's or a batch's mapped search path) and ``digest`` (`Sealed.digest` or `Pipeline.digest`) make the replay read
+    private copies rather than the live `.lake`, so no dependent's build can change what the kernel replays or what its
+    key is keyed on. ``prefix`` goes before the command and ``held`` says the caller holds `_HEAVY_REPLAY` already
+    (`Pipeline`'s batches). ``store`` is false for an unsealed audit (a control, a lean-changed scan, a stubbed test),
+    whose keys are hashed from the live `.lake`: it may reuse the cache but writes nothing to it, so a live-keyed verdict
+    can never poison a sealed run."""
     found = work / "replay.json"
     found.unlink(missing_ok=True)
     keys = replay_keys(facts, toolchain, digest) if replay_cache else {}
@@ -4468,14 +4521,15 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
     _peak.bytes = 0
     lean = ["lake", "env", "lean"] if search is None else ["env", f"LEAN_PATH={os.pathsep.join(search)}", "lean"]
     # what passed is read once the replay may start, so a package audited beside one that shares its closure reuses it
-    with _HEAVY_REPLAY if n is not None else contextlib.nullcontext():
+    with _HEAVY_REPLAY if n is not None and not held else contextlib.nullcontext():
         reused = [m for m in facts["modules"] if passed(m)]
         checked = [m for m in facts["modules"] if m not in reused]
         deps_checked, deps_reused = closure_plan(facts, passed) if closure else ([], [])
+        evicted = 0
         if keys and store:
             fresh = {*facts["modules"], *deps_checked}
-            touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
-        rc, text = run([*([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
+            evicted = touch_replays(replay_cache, keys, [*reused, *(m for m in facts["graph"] if closure and m not in fresh)])
+        rc, text = run([*prefix, *([] if n is None else ["env", f"LEAN_NUM_THREADS={n}"]), *lean, "--run",
                         str(TOOL / "Replay.lean"), str(found), *checked, *(["--reused", *reused] if reused else []),
                         *(["--closure", *deps_checked] if deps_checked else []),
                         *(["--closure-reused", *deps_reused] if deps_reused else [])],
@@ -4489,7 +4543,7 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
             for m in accepted:
                 store_replay(replay_cache, keys[m], m)
     stats = {"checked": len(checked), "reused": len(reused), "peak_gib": round(_peak.bytes / 2**30, 1),
-             "phases": doc.get("seconds", {})}
+             "phases": doc.get("seconds", {}), "evicted": evicted}
     if closure:
         stats["closure"] = {"modules": len(facts["graph"]) - len(facts["modules"]), "checked": len(deps_checked),
                             "reused": len(facts["graph"]) - len(facts["modules"]) - len(deps_checked),
@@ -4508,6 +4562,238 @@ def replay_step(pkg: Path, policy: dict, facts: dict, toolchain: str, work: Path
                              f"{', '.join(walked) or 'none'}, the .olean files record "
                              f"{', '.join(sorted(facts['axioms'])) or 'none'}"))
     return fails, stats
+
+
+#: a pipelined batch starts only with this much memory free (`free_gib`): about a heavy replay's peak (44 to 138 GiB in
+#: the lock runs of 7 Nov) and room for the build beside it
+PIPELINE_FREE_GIB = 160
+#: a pipelined batch starts once this many of the package's modules were built since the last one started
+PIPELINE_BATCH = 300
+#: no batch runs beside a build on fewer cores: such a build is bound by its cores, which a batch would take from it
+PIPELINE_MIN_CORES = 64
+#: a batch's replay runs at the lowest priority, is the one the kernel kills first when memory runs out, and leaves its
+#: process id in the file it is given, so a build that fails can stop it (`Pipeline.end`)
+PIPELINE_PREFIX = ("sh", "-c", 'echo $$ > "$0" && echo 1000 > /proc/self/oom_score_adj && exec nice -n 19 "$@"')
+#: the parts of a module a batch copies: those `replay_keys` hashes, and the code the module system writes beside them
+SNAPSHOT_PARTS = ("", ".server", ".private")
+SNAPSHOT_CODE = (".ir.sig", ".ir")
+
+
+def pipelined(pkg: Path, build: bool, replay: bool, replay_cache: Path | None, lifts) -> bool:
+    """Whether ``pkg``'s audit replays its modules while its build runs (`Pipeline`): it builds and replays with a cache, in
+    the sandbox (outside it the build could write anything, the cache included), its replay is a heavy one
+    (`replay_threads`) on `PIPELINE_MIN_CORES` cores or more."""
+    return (build and replay and replay_cache is not None and not lifts and cores() >= PIPELINE_MIN_CORES
+            and replay_threads(pkg) is not None and sandboxed())
+
+
+class Pipeline:
+    """The kernel replay of a package's modules while its build runs, in batches on the cores the build leaves idle, on a
+    machine of `PIPELINE_MIN_CORES` cores or more (`check`'s sandboxed build, with a replay cache).
+
+    A batch takes the package's modules Lake reported built (`line`, `BUILT`) since the last batch began, once there are
+    ``batch`` of them, `PIPELINE_FREE_GIB` of memory is free and no other heavy replay runs (`_HEAVY_REPLAY`, never
+    waited for). It runs `replay_step` on them as the final replay would, closure and all, at the lowest priority
+    (`PIPELINE_PREFIX`) and first in line for the OOM killer, and stores in the replay cache each module the kernel
+    accepted, under its key. Its verdict is
+    dropped: the final `replay_step`, unchanged, reuses a module only where a key it computes from the files after the
+    build is in the cache, and checks the rest, so it covers the same modules, reads the same files and fails the same
+    way as without the pipeline.
+
+    The build runs the package's code, which may rewrite any file under the `.lake` directories it writes (`writable`)
+    while a batch reads it. So a batch reads none of them where the build can reach: each `.olean` file it needs from one
+    (every part, `SNAPSHOT_PARTS` and `SNAPSHOT_CODE`) is copied once into this pipeline's snapshot, out of the sandbox's
+    reach, and the batch's keys and its `lean` (``search``) read the copies. A module's key is then a function of the
+    bytes its batch checked, imports included, and the final replay reuses it only where the files after the build hold
+    those bytes. The import graph comes from the modules' headers (`Graph.lean`), as `Facts.lean`'s does: a graph that
+    differs from it gives other keys, so it can cost reuse, never soundness."""
+
+    def __init__(self, pkg: Path, policy: dict, toolchain: str, work: Path, replay_cache: Path, closure: bool,
+                 batch: int = PIPELINE_BATCH, log=print):
+        self.pkg, self.policy, self.toolchain, self.replay_cache, self.closure = pkg, policy, toolchain, replay_cache, closure
+        self.batch, self.log = batch, log
+        self.dir = work / "pipeline"
+        shutil.rmtree(self.dir, ignore_errors=True)
+        self.snapshot = self.dir / "snapshot"
+        self.roots = [d.resolve() for d in writable(pkg)]
+        self.own = {m for m in lean_modules(pkg) if under(policy["roots"], m)}
+        self.pending: list[str] = []
+        self.ended = self.held = False
+        self.pid: Path | None = None
+        self.digests: dict[Path, str] = {}
+        self.cond = threading.Condition()
+        #: each batch's modules, what its replay checked and reused, its seconds, and its error where it had one
+        self.batches: list[dict] = []
+        self.thread = threading.Thread(target=self._loop, daemon=True)
+        self.thread.start()
+
+    def line(self, text: str) -> None:
+        """A line of the build's output: each of the package's modules it reports built joins the next batch."""
+        if got := [m for m, *_ in BUILT.findall(text) if m in self.own]:
+            with self.cond:
+                self.pending.extend(got)
+                self.cond.notify()
+
+    def end(self, stop: bool = False) -> None:
+        """The build has ended: no batch starts. One already running goes on, and the final replay waits for it
+        (`_HEAVY_REPLAY`); with ``stop`` (the build failed, so there is no final replay) it is killed."""
+        with self.cond:
+            self.ended = True
+            self.cond.notify()
+            if stop and self.pid is not None:
+                try:
+                    os.kill(int(self.pid.read_text()), signal.SIGKILL)
+                except (OSError, ValueError) as e:             # not started yet, or already gone: nothing to kill
+                    self.log(f"lean: the running batch's replay was already gone when the build failed ({type(e).__name__})")
+
+    def _go(self) -> bool:
+        if self.ended:
+            return True
+        if len(self.pending) < self.batch or free_gib() < PIPELINE_FREE_GIB:
+            return False
+        self.held = _HEAVY_REPLAY.acquire(blocking=False)
+        return self.held
+
+    def _loop(self) -> None:
+        try:
+            while True:
+                with self.cond:
+                    self.cond.wait_for(self._go)
+                    if self.ended:
+                        if self.held:
+                            _HEAVY_REPLAY.release()
+                        return
+                    mods, self.pending = self.pending, []
+                try:
+                    self._replay(mods)
+                finally:
+                    self.held = False
+                    _HEAVY_REPLAY.release()
+        finally:
+            shutil.rmtree(self.snapshot, ignore_errors=True)
+
+    def _replay(self, mods: list[str]) -> None:
+        rec: dict = {"modules": len(mods)}
+        self.batches.append(rec)
+        work = self.dir / f"batch-{len(self.batches)}"
+        work.mkdir(parents=True, exist_ok=True)
+        s = time.monotonic()
+        try:
+            facts, search = self.copied(mods, work)
+            keys = replay_keys(facts, self.toolchain, self.digest)
+            def passed(m):
+                return (self.replay_cache / f"{keys[m]}.json").is_file()
+            if all(map(passed, mods)) and not (self.closure and closure_plan(facts, passed)[0]):
+                rec["checked"] = 0                              # `Replay.lean` would only load what it reuses
+                return
+            with self.cond:
+                if self.ended:
+                    return
+                self.pid = work / "replay.pid"
+            fails, stats = replay_step(self.pkg, self.policy, facts, self.toolchain, work, self.replay_cache, self.closure,
+                                       search=search, prefix=(*PIPELINE_PREFIX, str(self.pid)), held=True,
+                                       digest=self.digest)
+            rec |= {"checked": stats["checked"], "phases": stats["phases"], "peak_gib": stats["peak_gib"],
+                    "failures": [f.split("\n")[0][:300] for f in fails if f.code != "replay.axioms"]}
+            if "closure" in stats:
+                rec["closure_checked"] = stats["closure"]["checked"]
+        except (OSError, TypeError, AttributeError, ValueError, LookupError, RuntimeError, subprocess.SubprocessError) as e:
+            rec["error"] = f"{type(e).__name__}: {e}"[:500]     # a batch only saves work: the final replay decides
+        finally:
+            with self.cond:
+                self.pid = None
+            rec["seconds"] = round(time.monotonic() - s, 1)
+
+    def copied(self, mods: list[str], work: Path) -> tuple[dict, list[str]]:
+        """(the facts `replay_step` replays ``mods`` on, the search path): the graph of ``mods`` and everything they
+        import (`Graph.lean`), with each module's `.olean` copied to where `lean` looks for it, and the search path's
+        directories moved the same way.
+
+        `lean` finds a module by name along the search path (`SearchPath.findWithExt`), not by resolving a symlink: a
+        module ``m`` lives at ``dir/<m as a path>.olean`` under the first search directory holding it. So a copy goes to
+        `moved`(that directory, resolved) over the same relative path, never to `moved` of the olean's resolved target;
+        otherwise a symlinked, shadowed or relocated olean could key a batch with bytes `lean` never loads. The batch is
+        abandoned (storing nothing, so the final replay checks the module) when a module's olean resolves outside its
+        search directory, when its name is found in more than one search directory, or when a module read in place (from
+        a directory no build writes) resolves into a writable root. Before replay, every graph module's first hit along
+        the moved search path must resolve to the file its key is taken from."""
+        (work / "modules").write_text("".join(f"{m}\n" for m in mods))
+        rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
+                        f"@{work / 'modules'}"], self.pkg, work / "graph.log")
+        if rc:
+            raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
+        doc = json.loads((work / "graph.json").read_text())
+        dirs = [Path(d) for d in doc["search"]]
+        jobs = {}
+        graph = {}
+        for m, g in doc["graph"].items():
+            rel = Path(*m.split(".")).with_suffix(".olean")
+            holders: list[Path] = []
+            held: set[Path] = set()                            # a search path may list the same directory twice
+            for d in dirs:
+                if (d / rel).exists() and (r := d.resolve()) not in held:
+                    held.add(r)
+                    holders.append(d)
+            if len(holders) != 1:
+                where = ", ".join(str(d) for d in holders) or "no search directory"
+                raise RuntimeError(f"replay: {m} is found in {where}; a shadowed or unplaced module is not replayed")
+            d = holders[0]
+            live = d / rel
+            target = live.resolve()
+            snap = self.moved(d.resolve())
+            if snap is None:                                   # a directory no build writes: its module is read in place
+                if self.moved(target) is not None:
+                    raise RuntimeError(f"replay: {m} is read in place but resolves into a writable root at {target}")
+                graph[m] = {"olean": str(live), "imports": g["imports"]}
+            else:                                              # a writable directory: the module is copied from within it
+                if not target.is_relative_to(d.resolve()):
+                    raise RuntimeError(f"replay: {m}'s olean {live} resolves outside its search directory {d} to {target}")
+                copy = snap / rel
+                jobs[copy] = live
+                graph[m] = {"olean": str(copy), "imports": g["imports"]}
+        with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
+            list(ex.map(lambda kv: self.copy(*kv), jobs.items()))
+        search = [str(self.moved(Path(d).resolve()) or d) for d in doc["search"]]
+        for m in doc["graph"]:
+            rel = Path(*m.split(".")).with_suffix(".olean")
+            hit = next((Path(s) / rel for s in search if (Path(s) / rel).exists()), None)
+            want = Path(graph[m]["olean"])
+            if hit is None or hit.resolve() != want.resolve():
+                raise RuntimeError(f"replay: {m} would load {hit}, not the keyed {want}")
+        return {"graph": graph, "modules": mods, "axioms": []}, search
+
+    def digest(self, p: Path) -> str:
+        """`sha256` of ``p``, kept for a copy in the snapshot, which no one writes once it is made."""
+        if not p.is_relative_to(self.snapshot):
+            return sha256(p)
+        with self.cond:
+            if (d := self.digests.get(p)) is not None:
+                return d
+        d = sha256(p)
+        with self.cond:
+            self.digests[p] = d
+        return d
+
+    def moved(self, p: Path) -> Path | None:
+        """Where ``p`` is in the snapshot, if a build of the package can write it (it is under a `writable` directory)."""
+        for i, r in enumerate(self.roots):
+            if p.is_relative_to(r):
+                return self.snapshot / str(i) / p.relative_to(r)
+        return None
+
+    def copy(self, copy: Path, live: Path) -> None:
+        """Copy the module whose `.olean` is ``live`` to ``copy``, every part it has, unless an earlier batch did: the
+        `.olean` goes last, so a copy whose `.olean` is there is whole."""
+        if copy.is_file():
+            return
+        copy.parent.mkdir(parents=True, exist_ok=True)
+        for ext in (*SNAPSHOT_PARTS[1:], *SNAPSHOT_CODE, SNAPSHOT_PARTS[0]):
+            src, dst = (Path(f"{live}{ext}"), Path(f"{copy}{ext}")) if ext in SNAPSHOT_PARTS else \
+                (live.with_suffix(ext), copy.with_suffix(ext))
+            if src.is_file():
+                tmp = dst.with_name(f".{dst.name}.tmp")
+                shutil.copyfile(src, tmp)
+                os.replace(tmp, dst)
 
 
 def timed(f, *args):
@@ -4691,6 +4977,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         (work / stale).unlink(missing_ok=True)
     rep["toolchain"] = (pkg / "lean-toolchain").read_text().strip()
     t, _peak.bytes = time.monotonic(), 0
+    pipe = None
     if build:
         rep["sandbox"] = sandboxed()
         n = build_threads(pkg)
@@ -4702,6 +4989,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
         if n is not None:
             rep["build_threads"] = n
         staged: dict[tuple[str, str], str] = {}
+        pipe = Pipeline(pkg, policy, rep["toolchain"], work, replay_cache, closure, log=log) \
+            if pipelined(pkg, build, replay, replay_cache, lifts) else None
         try:
             for step, argv in (("setup", None), ("stage", None),
                                ("build-plugins", lambda: (in_sandbox(pkg, [*jobs, "lake", "build", *ts])
@@ -4718,7 +5007,9 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     continue
                 with contextlib.nullcontext() if argv is None else writing(pkg, log):
                     s = time.monotonic()
-                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else run(argv, pkg, work / f"{step}.log")
+                    rc, text = setup(pkg, rep["toolchain"], work / "setup.log") if argv is None else \
+                        run(argv, pkg, work / f"{step}.log") if pipe is None else \
+                        run(argv, pkg, work / f"{step}.log", on_line=pipe.line)
                     rep["seconds"][step] = round(time.monotonic() - s, 1)
                 if rc:
                     rep["failures"].append(Failure(step, None, f"{step}: exit {rc}\n{text[-3000:]}"))
@@ -4741,6 +5032,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                     "removed, so the next build compiles them: " + ", ".join(f"{m} ({o}'s)" for m, _, o in bad[:10]))))
                 return reported(rep)
         finally:
+            if pipe:
+                pipe.end(stop=bool(rep["failures"]))
             if cache:
                 shutil.rmtree(cache, ignore_errors=True)
     # the seal, taken before the build is announced (`built`): every reader below reads these private copies, so a
@@ -4868,6 +5161,8 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     if replayed:
         (rfails, rep["replay"]), rep["seconds"]["replay"] = replayed.result()
         fails += rfails
+    if pipe:
+        rep["pipeline"] = [dict(b) for b in pipe.batches]
     if fresh:
         s = time.monotonic()
         checker = sealed.bin("leanchecker") if sealed else ["lake", "env", "leanchecker"]
