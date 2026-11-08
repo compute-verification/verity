@@ -196,6 +196,86 @@ def test_the_route_table_covers_every_decode_batch_once() -> None:
         assert all(r[0] <= r[1] and (r[2] is None or 1 < r[2] <= int(key.split()[1]) // 16) for r in runs), key
 
 
+def _table_scans(cut: int = 700) -> list[dict]:
+    """The committed route table as `--scan-run` processes write it: one served-default scan.json document per model and tabled
+    phase, the linear ones cut again at M = `cut` (a run across it ends in one document and resumes in the next), and a bmm
+    case beside them, which the table does not hold."""
+    cond = BC.ROUTE_CONDITIONS
+    config = {k: cond[k] for k in ("torch", "cublas_version", *X.REDUCED, "preferred_blas_library", "env")} | {"ok": True}
+    device = {k: cond[k] for k in ("device", "compute_capability", "multiprocessors")}
+    docs = []
+    for model, m in X.MODELS.items():
+        for phase in X.TABLED:
+            names = ["mlp.gate"] if phase == "router" else [n for n, _, _ in getattr(m, phase)]
+            for lo, hi in ([(1, cut), (cut + 1, None)] if phase == "linear" else [(1, None)]) if names else []:
+                cases = {f"{model}/{phase}/{n}": {"ok": True, "routes": [
+                    [max(r[0], lo), r[1] if hi is None else min(r[1], hi), r[2]]
+                    for r in BC.CUBLAS_ROUTES["routes"][X.route_key(model, phase, n)] if r[1] >= lo and (hi is None or r[0] <= hi)]}
+                    for n in names}
+                docs.append({"ok": True, "served_default": True, "errors": {}, "switch": dict(config), "switch_after": dict(config),
+                             "device": dict(device), "cases": cases})
+    docs[0]["cases"]["glm53/bmm/q_nope_absorb"] = {"ok": True, "routes": [[1, 3, None]]}
+    return docs
+
+
+def test_the_route_writer_rebuilds_the_committed_table_from_its_scans() -> None:
+    docs = _table_scans()
+    assert len(docs) == 7 and sum("/linear/" in k for d in docs for k in d["cases"]) == 8
+    assert X.route_table(docs, BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
+    assert X.route_table(docs[::-1], BC.CUBLAS_ROUTES["run_record"]) == BC.CUBLAS_ROUTES
+
+
+def _router_runs(docs):
+    (case,) = [d["cases"][k] for d in docs for k in d["cases"] if k == "dsv4-pro/router/mlp.gate"]
+    return case["routes"]
+
+
+def _drop_a_run(docs):
+    del _router_runs(docs)[1]
+
+
+def _router_from_1(docs):
+    _router_runs(docs)[0][0] = 1
+
+
+def _one_shape_short(docs):
+    _router_runs(docs)[-1][1] -= 1
+
+
+@pytest.mark.parametrize("break_it, why", [
+    (_drop_a_run, "a gap or an overlap"),
+    (lambda d: d.append(copy.deepcopy(d[0])), "a gap or an overlap"),
+    (_router_from_1, "router 7168 384: a run starts at M=1 where M=17 is next"),
+    (_one_shape_short, "the shapes' runs stop at different M"),
+    (lambda d: d[2].update(ok=False), "scan 2 is not ok"),
+    (lambda d: d[2].update(served_default=False), "split-K-off switch"),
+    (lambda d: d[3]["switch"].update(torch="2.14.0+cu130") or d[3]["switch_after"].update(torch="2.14.0+cu130"), "scan 3 ran under"),
+    (lambda d: d[1]["switch_after"].update(cublas_version=120902), "configuration moved during the scan"),
+    (lambda d: d.clear(), "no scan holds"),
+])
+def test_the_route_writer_refuses_scans_that_are_not_one_tiling_under_one_set_of_conditions(break_it, why) -> None:
+    docs = _table_scans()
+    break_it(docs)
+    with pytest.raises(ValueError, match=why.replace("(", r"\(")):
+        X.route_table(docs, BC.CUBLAS_ROUTES["run_record"])
+
+
+def test_write_routes_writes_the_table_the_loader_reads(tmp_path) -> None:
+    paths = []
+    for i, doc in enumerate(_table_scans(cut=1200)):
+        (p := tmp_path / f"s{i}" / "scan.json").parent.mkdir()
+        p.write_text(json.dumps(doc))
+        paths.append(str(p))
+    rr = BC.CUBLAS_ROUTES["run_record"]
+    assert X.main(["--write-routes", *paths, "--run-record", rr, "--out", str(tmp_path)]) == 0
+    text = (tmp_path / "cublas_routes.json").read_text()
+    assert json.loads(text) == BC.CUBLAS_ROUTES and len(text.splitlines()) == 8 + len(BC.CUBLAS_ROUTES["routes"])
+    with pytest.raises(ValueError, match="not an art: id"):
+        X.main(["--write-routes", *paths, "--run-record", "r20261107-000000-0000", "--out", str(tmp_path)])
+    with pytest.raises(SystemExit):
+        X.main(["--write-routes", *paths, "--out", str(tmp_path)])
+
+
 def test_the_default_cublas_route_does_not_confuse_unrecorded_with_non_split() -> None:
     for M in X.LINEAR_M:
         assert BC.default_cublas_route("linear", M, 6144, 160) == ("splitk", {"SPLIT_K": 4})
