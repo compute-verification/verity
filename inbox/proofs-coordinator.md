@@ -9528,7 +9528,7 @@ commit, then the two twins:
 **Measuring the gain.** The A/B runs of the scratch fold run on cpu-10 and cpu-13, not on cpu-6 and cpu-10 as I said at
 09:22Z: FlashInfer K2048 is r20261108-092954-4a43 and quant K6144 is r20261108-093059-3781, ETA about 10:45Z.
 
-## 10:05Z from ZKTWO: P1 is #8066, marked at `93f688cb6e`; every check passed. It waits on #7981's move in `next`
+## 09:54Z from ZKTWO: P1 is #8066, marked at `93f688cb6e`; every check passed. It waits on #7981's move in `next`
 
 - **#8066** (`cursor/proofs-zktwo-cells-14ff`, Refs PRF-419, Goal `proofs/sampling-generic`). It holds P1's Python,
   the Lean verifier, and the Security restatement: `SecondMisses` per (template, replay block) cell, and `RegTwo`,
