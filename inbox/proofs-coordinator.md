@@ -12532,3 +12532,5 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
 - **TWOOPENS's `Built` and `unitLog ≤ 32` question.** I answered (i), sent 15:50Z: a decided `membersOk` beside
   `filesOk` in `two`'s guard, written in its 3a and stacked on 3b, not a `Held` field. 3b reads neither fact, and adding
   it here would cost 3b another build and records run.
+- **Correction, 15:58Z:** the records run hasn't started yet; it waits in cpu-3's Lean audit line. All 5 slots are held
+  (since 15:08Z to 15:21Z), and 3 audits are ahead of it. So its ETA is about 18:15Z, not 17:45Z.
