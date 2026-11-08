@@ -19,7 +19,7 @@ without replacement inside each, independently.
   `Q_template_instance` and `Q_template_instances`; another query refuses it.
 * **Sizes**: k_s = max(1, round(k n_s / n)), rounding half up in integers (`stratum_k`), so every template has a sample.
 * **The sampling design object** is `{"law": "stratified", "k": K, "strata": [{"template": <descriptor id>, "units": [[lo, hi], ...],
-  "k": k_s}, ...]}`: the agreement's rule `stratified:K` expanded by `derive`. R1 holds the registered sampling design to the verifier's
+  "k": k_s}, ...]}`: the law `{"law": "stratified", "k": K}` expanded by `derive`. R1 holds the registered sampling design to the verifier's
   own expansion, and the sample carries the sampling design's keys plus `population` and `units`.
 
 **The work sampling design** (the Lean verifier's `Flock.Draw.Law.work`, its bound
@@ -36,10 +36,14 @@ k_s = min(n_s, max(f_s, ceil(K w_s n_s / W))) (`work_k`), and a work stratum is 
   the sampling design is derived, or credited 0. The acceptance-probability bound needs each proof block's inclusion probability to be at least K w_u / W
   over the credited W, which a per-template work that over-credits any unit breaks.
 
-**The rate sampling design** (`parse_rate`, the Lean's `Select.parseRate`): a selection rule's `rate:NUM/DEN` or `rate:NUM/DEN:T` has no
-sampling design object of its own. Over a registration's N proof blocks it is `subset:K` at K = `rate_count`, ceil(q N) for q = NUM/DEN
-rounded up to a multiple of the T tables, so its sample object is a subset's. Under a fixed `subset:K` a proof block's inclusion
-K/N falls as the prover pads N; under a rate it stays at least q.
+**The rate sampling designs** (`parse_rate` and `parse_strata_rate`, the Lean's `Select.parseRate` and `Select.parseStrataRate`): a
+selection rule states its sampling design as a rate q = NUM/DEN, which has no sampling design object of its own. Over a registration's
+N proof blocks `rate:NUM/DEN` or `rate:NUM/DEN:T` is `subset:K` at K = `rate_count`, ceil(q N) rounded up to a multiple of the T
+tables. `stratified-rate:NUM/DEN` and `work-rate:NUM/DEN` are the work sampling design over a table the verifier derives
+(`rate_table`), each stratum's floor raised to ceil(q n_s) (`rate_floor`): the stratified rate at K = 1 with every template's work 1,
+the work rate at K = ceil(q N) with the verifier's work table's work. Since k_s >= its floor, every stratum samples at least q of its
+proof blocks however many the prover registers (Lean `Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, is
+refused as a rule: a proof block's inclusion K/N falls as the prover pads the N it registers.
 
 **Several tables** (`--session-tables J`) prove one sample split into J equal consecutive parts, so the sample's count must be
 fixed and a multiple of J (`tables_problem`, Lean `Draw.tablesWhy`): a subset sample's k, or a stratified sample's sum of
@@ -107,6 +111,47 @@ def rate_count(num: int, den: int, tables: int, n: int) -> int:
     tables proves the same count and every proof block is sampled with probability K/n >= NUM/DEN, whatever n the prover registers.
     The Lean's `SampledProofs.Rate.count` is this."""
     return tables * -(-(num * n) // (den * tables))
+
+
+def parse_strata_rate(text: Any) -> tuple[bool, int, int] | None:
+    """The stratified rate sampling design `stratified-rate:NUM/DEN` or the work rate sampling design `work-rate:NUM/DEN` as
+    `(work, NUM, DEN)`, `work` True for the work rate: a public rate NUM/DEN with 0 < NUM <= DEN, numbers in ASCII digits; None
+    for any other text. The Lean's `Select.parseStrataRate` is this."""
+    if not isinstance(text, str):
+        return None
+    kind, _, arg = text.partition(":")
+    num, _, den = arg.partition("/")
+    if kind in ("stratified-rate", "work-rate") and digits(num) and digits(den) and 0 < int(num) <= int(den):
+        return kind == "work-rate", int(num), int(den)
+    return None
+
+
+def rate_floor(num: int, den: int, n: int, floor: int) -> int:
+    """A stratum's floor at the rate NUM/DEN: ceil(NUM n / DEN), raised to the verifier's `floor`, at most the stratum's n proof
+    blocks. A work sampling design samples each stratum at its floor or more (`work_k`), so every proof block of a stratum whose
+    floor this is is sampled with probability at least NUM/DEN, whatever strata the prover registers. The Lean's
+    `SampledProofs.Rate.floor` is this, and `Rate.workK_ge` the bound."""
+    return min(n, max(floor, rate_count(num, den, 1, n)))
+
+
+def rate_table(program: Program, query: Mapping[str, Any], rate: tuple[bool, int, int],
+               table: Mapping[str, Any] | None) -> dict[str, dict[str, int]]:
+    """The work table a stratified or work rate sampling design (`parse_strata_rate`'s `rate`) is expanded over: each stratum
+    of the program under the query (`partition.strata`) with its floor at the rate (`rate_floor`), under the stratified rate
+    work 1 and floor 1 before the rate, under the work rate the verifier's `table`'s work and floor. Raises
+    `partition.QueryRefused` when the query doesn't apply, and `ValueError` when a work rate has no table or the table names
+    no work for a stratum's template. The Lean's `Select.Rule.tableOver` is this."""
+    work, num, den = rate
+    if work and table is None:
+        raise ValueError("a work rate law needs the verifier's work table")
+    works = work_table(table) if work else {}
+    out: dict[str, dict[str, int]] = {}
+    for t, rs in P.strata(program, query):
+        if work and t not in works:
+            raise ValueError(f"the work table names no work for template {t!r}")
+        w, f = works[t] if work else (1, 1)
+        out[t] = {"work": w, "floor": rate_floor(num, den, _size(rs), f)}
+    return out
 
 
 def stratum_k(k: int, size: int, population: int) -> int:
