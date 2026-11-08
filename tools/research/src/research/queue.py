@@ -752,6 +752,8 @@ CHECK_STEPS = ("preflight-lock", "preflight-lints", "preflight-fixtures", "lean-
                "ratchet-gate")
 #: an entry of `DriveFlags.lowrisk_excludes`: a directory from the repository's root ending in `/`, or a file name glob
 LOWRISK_EXCLUDE_RE = re.compile(r"(?:[\w.-]+/)+|[\w.*?\[\]-]+")
+#: an entry of `DriveFlags.bottom_ring`: a handle as a post that starts with it rings it (`slack.NAME_TOKEN_RE`)
+HANDLE_RE = re.compile(r"@[a-z0-9][a-z0-9._-]*")
 #: drive.toml's `executor`: off, shadow (beside the after-landing run) or on (in its place)
 EXECUTOR_MODES = ("off", "shadow", "on")
 #: drive.toml's `close_unlandable`: off, log (each close it would make, only logged) or on
@@ -826,6 +828,10 @@ class DriveFlags:
     #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
     #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
+    #: who drive rings while `next`'s lowest member waits at its head for a land verdict, holding every landing above it
+    #: (`drive.Driver._bottom`), and the minutes it waits before each ring
+    bottom_ring: tuple[str, ...] = ("@ci", "@top")
+    bottom_wait_min: int = 30
     #: count a ready mark or land verdict only when its `label_auth` companion authenticates it as its author's, or as an agent's
     #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
     #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
@@ -903,6 +909,15 @@ class DriveFlags:
                 raise bad("lowrisk_excludes", "a non-empty list of directories from the repository's root, each ending in `/`, "
                                               "and file name globs, as [\"*.lean\", \"verity/core/\"]")
             got["lowrisk_excludes"] = tuple(v)
+        if "bottom_ring" in doc:
+            v = doc["bottom_ring"]
+            if not (isinstance(v, list) and v and all(isinstance(x, str) and HANDLE_RE.fullmatch(x) for x in v)):
+                raise bad("bottom_ring", "a non-empty list of handles, each `@` and its lower-case name, as [\"@ci\"]")
+            got["bottom_ring"] = tuple(v)
+        if "bottom_wait_min" in doc:
+            if type(doc["bottom_wait_min"]) is not int or doc["bottom_wait_min"] < 1:
+                raise bad("bottom_wait_min", "a whole number of minutes, 1 or more")
+            got["bottom_wait_min"] = doc["bottom_wait_min"]
         for k in ("regenerate_locks", "verdict_first", "lowrisk_lane", "signed_verdicts"):
             if k in doc:
                 if not isinstance(doc[k], bool):
@@ -6562,7 +6577,8 @@ def main(argv: list[str]) -> int:
                    after_landing_shards=flags.after_landing_shards,
                    lowrisk_lane=flags.lowrisk_lane, lowrisk_per_tick=flags.lowrisk_per_tick,
                    lowrisk_excludes=flags.lowrisk_excludes, executor=flags.executor,
-                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps).tick(dry_run=a.dry_run)
+                   executor_enqueue=flags.executor_enqueue, warn_steps=flags.warn_steps, bottom_ring=flags.bottom_ring,
+                   bottom_wait_min=flags.bottom_wait_min).tick(dry_run=a.dry_run)
             return 0
         if a.pr is None or not a.reason:
             ap.error("eject needs a PR number and --reason")
