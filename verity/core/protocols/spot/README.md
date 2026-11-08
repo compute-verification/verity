@@ -120,15 +120,11 @@ but sizes each stratum by the work its proof blocks are credited: with `W = Σ_s
 Each verifier derives the strata from its own program and query, never from the prover. Both verifiers refuse what the
 soundness statement doesn't cover: `bernoulli` at any `p` (`bernoulli`) and a closure map (`closure`).
 
-**A Spec states a rate.** The prover sizes each registration's `N`, so a `Spec`'s rule is a rate, which names its design
-only once `N` is known: `rate:NUM/DEN[:T]` is `subset:K` at `K = ⌈NUM·N/DEN⌉` rounded up to a multiple of `T`;
-`stratified-rate:NUM/DEN` is `work:1` over a work table with every stratum at work one and floor `⌈NUM·n_s/DEN⌉`; and
-`work-rate:NUM/DEN` is `work:K` at `K = ⌈NUM·N/DEN⌉` over the verifier's work table with each floor raised to
-`⌈NUM·n_s/DEN⌉` (`service.selection_law`, `service.selection_table`; Lean's `Select.Rule.lawOver`, `Select.Rule.tableOver`).
-Each proof block is then sampled with probability at least `NUM/DEN` however the prover pads `N` or spreads it over
-subcircuits (`Rate.count_ge`, `Rate.workK_ge`). A fixed count, `subset:K`, `stratified:K` or `work:K`, samples each with
-`K/N` as `N` grows, so both verifiers refuse it as a Spec's rule and as a two-stage design's first stage, whose replay law
-is a `rate:` law (`service.fixed`, Lean's `Select.FIXED`).
+**A Spec states a rate.** The prover sizes `N`, so a `Spec`'s rule is a rate, `0 < NUM ≤ DEN`: `rate:NUM/DEN[:T]` is
+`subset:⌈NUM·N/DEN⌉` rounded up to a multiple of `T`, and `stratified-rate:` and `work-rate:` are `work:1` at work one and
+`work:⌈NUM·N/DEN⌉` on the verifier's work table, each stratum's floor raised to `⌈NUM·n_s/DEN⌉`. Each proof block's
+inclusion is then at least `NUM/DEN` however `N` is padded (`Rate.count_ge`, `Rate.workK_ge`), not `K/N` as under a fixed
+count, which both verifiers refuse as a rule or a two-stage first stage.
 
 **What an accepted audit establishes.** Under a stratified sample, a set of incorrect proof blocks has acceptance probability
 `Π_s C(n_s − m_s, k_s) / C(n_s, k_s)`, `m_s` being its proof blocks in
@@ -278,7 +274,7 @@ from verity.core.protocols.spot.costfit import fit
     raise `Refused` (with its `Verdict`) or `Pending`; `halted` is its halt's cause once its fleet halted it. Its `unit`
     is one subcircuit, or a window's several in order (a TP rank's served window): the check's `program` is then their
     digests and its query `Q_template_instances`, `register(counts=)` gives the challenger's own instances of each,
-    and the window is sampled once by its rule, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN`, a stratum per subcircuit.
+    and the window is sampled once by a `stratified-rate:` or `work-rate:` rule, a stratum per subcircuit.
   - `Fleet()` has `attach(stream, operator)`, before the stream's first registration; `halted` maps each halted
     operator to its halt's cause.
   - `selection_law` is the sampling design a rule names over N proof blocks, and `select_draw` the sample object from the
@@ -432,10 +428,6 @@ Code and records call a sampling design a `law`; the name stays until a format v
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
   --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a sample's `p` too).
-- A Spec's rule's text is a rate, `rate:NUM/DEN[:T]`, `stratified-rate:NUM/DEN` or `work-rate:NUM/DEN` with `0 < NUM ≤ DEN`
-  (`draw.parse_rate`, `draw.parse_strata_rate`), or `bernoulli:NUM/DEN`, which registration refuses; one-stage's parameters
-  may state a rate in place of the design it resolves to over their program (`service.params_law`, Lean's
-  `OneStage.design`).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and
   `{"law": "work", "k": K, "strata": [{"template", "units", "work", "floor", "k"}, ...]}`. The registration carries the
