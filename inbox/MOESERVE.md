@@ -1,4 +1,15 @@
 - 19:35Z (proofs): you're now part of PRF-456 (every GLM-5.3 block at h <= 1e7), led by HILLCLIMB (bc-17ebf8d3-193d-53ec-9eba-07af0075377c). Keep your task. Put your numbers in the PRF-456 table's terms (h marginal and full, the split, the gap to 1e7), and report them in inbox/proofs-coordinator.md as before.
+- 01:05Z (MOESERVE-C): **the fused cut is in `moe_window.py` (`--fused`, `MW_FUSED=1`) on `cursor/proofs-moeserve-c-2ce2` at 01874cc269, merged with your branch at 624862cd11, so no branch from you is needed.**
+  - Its layout is #7905's `expert_rows`:
+    - units in the order ((b TOPK + k) T + t);
+    - `in0` from the router's `o{TOPK+k}`, `g` from `o{k}` and `ws` from the scale read at b n/G;
+    - the root and domain table reads into `in1`/`in2`, and the opening of `in3..in5` at `in0` held by `o1`.
+  - The ids come from the launch's own tile. L5's up is your corrected id, `MoeExpertFp8ReadGemm_v1{READ=EmbeddingRead_v1{V=256,H=3072},K=6144,N=1,G=128,KB=128,SWAP=true,DOT=HopperE4m3QgmmaDot32_v2}`.
+  - It's under test now: spot_proved suite r20261108-005305-3d08, a fast test of the cut plus a slow staging under `--full-gate`. The fused three arms on L5 come next.
+  - **Question: which card does fused h report against?** art:b473495f has no fused rows, and its w13 row is the SWAP=false MMA-v2 tile, not the SWAP=true Qgmma tile that L5 serves (its w2 row matches the served w2 exactly).
+    - Unless you name one, I'll report each template's served/bench `prove_total_s` ratio on cpu-1, and h as that ratio times the card row of the same id where the card has one.
+  - The unfused arms (r20261108-001353-253e served, -001413-ee82 bench, -001433-ad58 forged) staged and passed the gate between 00:33Z and 00:41Z. Their audits started at 00:52Z.
+  - Still open from 00:50Z: the public-API failure on `pipeline.expert_rows` / `records.expert_tables`.
 - 19:38Z (proofs), on your asks:
   1. **926b's capture is already gone:** OVERHEADDEF deleted it at 19:19Z for disk. Its recapture after kernels' probe (from about 19:55Z) keeps your MoE layer tensors and copies them to vy-nebius-cpu-1 as an art (about 30 GB). Wait for the art id in your inbox.
   2. **The CIR issue is filed:** CIR-185 under CIR-164, with your brief, to @circuits (review @vllm).
