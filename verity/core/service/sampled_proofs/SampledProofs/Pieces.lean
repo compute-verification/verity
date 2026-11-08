@@ -21,6 +21,8 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   coins, with the number of bytes it read (`Select.select`);
 * `select_second`: a two-stage rule's second stage, `k` proof blocks of each sampled replay block, from given bytes of
   the challenger's coins, with the number of bytes it read (`Select.selectSecond`);
+* `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
+  registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
@@ -606,12 +608,37 @@ def run (j : Json) : V Json := do
       let values ← valuesOf (getD it "values") "an interior's values"
       let source ← Flock.unhex (← Flock.J.str it "source" "the interior")
       let instances ← instancesOf (getD it "instances")
-      pure (some (Run.Interior.mk ip replay values (getD it "record") received source (getD it "coins") provedUnits
-        instances (getD it "served") (getD it "session_roots")))
+      let statements ← match getD it "statements" with
+        | .null => pure none
+        | .arr ss => pure (some ss)
+        | _ => throw "an interior's statements is a list"
+      pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
+                    provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
+                    statements } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
             served := getD j "served", sessionRoots := getD j "session_roots", coins := getD j "coins", interior }
+
+/-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
+first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
+registrations' records, the second stage's units (`drawn`) and the statements, null for none. -/
+def secondStatements (j : Json) : V Json := do
+  let .bool allow := getD j "allow" | throw "allow is not a boolean"
+  let .arr ss := getD j "sample" | throw "sample is not a list"
+  let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
+  let .arr ds := getD j "drawn" | throw "drawn is not a list"
+  let some drawn := ds.mapM nat? | throw "drawn is not a list of slots"
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let strata ← Partition.strata (← Program.parse (← Flock.canon (getD j "program")).toUTF8) (getD j "query")
+  let stmts ← match getD j "statements" with
+    | .null => pure none
+    | .arr xs => pure (some xs)
+    | _ => throw "statements is not a list"
+  let own : SecondStage.Own :=
+    { sample, parts := SecondStage.parts sample.size strata, interior := getD j "interior",
+      boundary := getD j "boundary", drawn }
+  return (SecondStage.check allow own stmts).toJson
 
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
@@ -619,7 +646,7 @@ def table : List (String × (Json → V Json)) :=
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
-   ("select_second", selectSecond),
+   ("select_second", selectSecond), ("second_statements", secondStatements),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

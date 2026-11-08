@@ -21,6 +21,7 @@ public import SampledProofs.Select
 public import SampledProofs.Slots
 public import SampledProofs.FilePart
 public import SampledProofs.Service
+public import SampledProofs.SecondStage
 public import SampledProofs.Run
 public import SampledProofs.Stream
 public import SampledProofs.Fleet
