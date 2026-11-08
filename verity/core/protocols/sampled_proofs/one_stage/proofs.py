@@ -365,11 +365,13 @@ def evidence_v2(proof: Proof, names: Sequence[str] | None = None) -> tuple[dict,
 
 
 def verdicts_v2(proof: Proof, *, circuit_sha512: str, program: Mapping[str, Any], partition: Mapping[str, Any],
-                registered: Mapping[str, Any] | None = None) -> tuple[list[Finding] | None, str | None]:
+                registered: Mapping[str, Any] | None = None, tables: Sequence[Path] = ()) -> tuple[list[Finding] | None, str | None]:
     """`verify`, by the v2 audit's own run of the verifier on `proof`'s files as blobs
     (`sampled-proofs-one-stage-zk verdicts`): the findings in session order (``session`` the directory's name) and None,
-    or None and Lean's refusal. `program` is the descriptor as JSON."""
+    or None and Lean's refusal. `program` is the descriptor as JSON; `tables`, the MUFU tables a statement with lookups
+    reads, blobs beside the files (`OneStageZk.tablesOf` finds them by SHA-512)."""
     pr, blobs = evidence_v2(proof)
+    blobs += list(tables)
     own = {"circuit": circuit_sha512, "partition": dict(partition), "program": dict(program),
            "public": file_sha512(proof.public), "registered": None if registered is None else dict(registered)}
     with tempfile.TemporaryDirectory(prefix="verity-proofs-v2-") as d:
