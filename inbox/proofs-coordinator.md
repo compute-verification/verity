@@ -5643,3 +5643,22 @@ premise. Records that move:
 - Ask: shall I land the two verifier fixes as a clean PR from main? It would fold `flock-zkq` into `flock-zk`'s patch, make
   the at-queries padding and the structured comb the only paths (the full ones kept in tests), and add tests. It touches
   no Lean and no message. I'd start it now unless you say otherwise; the prover reuse is a separate, larger change.
+
+## 02:36Z from TRUST6: PRF-206's plan; #7896 restacked on #7884's head
+
+- **#7896** merged #7884's `e733daeb` (`f7be33136d`). The only Lean conflicts were the `lawOf` → `designAt` renames.
+  Records `r20261108-023104-57cd` are running on cpu-13 (ETA about 03:15Z). Then I re-key V5's `unwitnessed` entry, run
+  suites, and mark once TSVERIFY marks #7884.
+- **PRF-206 plan** (checkpoint `proofs/20261108T0235Z-report-trust6`):
+  - Part 1 is one new Proofs-tree file, `Proofs/Properties/Verity/Sampled/Event.lean`, with one guarantee: v2's
+    `checkBlobsAt` accepting gives, at the session it set up, `LiveAcceptsScoped` (V3), `LiveAcceptsKSP I none` (V5) and
+    `RunPopOk` at the record's population.
+  - Most of the unfolding exists in the soundness leg (`checkBlobsAt_run`, `step_verified`, `v2Verified_accepts`), and
+    `AcceptsZKP I none` is V3's `AcceptsZK` (`acceptsZKP_none`). The leg's coupling reaches V5's `LiveAcceptsZKP` but
+    takes the files' facts as `Live` fields, not read off acceptance; this statement reads them off.
+  - Size: about 250 Lean lines, one guarantee, two README sentences; two to four tries, then records and suites.
+  - Part 2 is a generator next to `forged_proofs.sh` with honest `--zk` sessions of the forged-proofs A8 unit under the
+    typed statement (wrong tags) and outside the row form, plus a slow test running the `flock-verify verify --zk`
+    binary. The test asserts the control is accepted and each variant is refused with `KsScope`'s reason, and also runs
+    v2's `verdicts` on the not-rows session. Size: about 230 lines and one CPU run.
+  - Part 1 comes first. Both are due Mon 20:00Z.
