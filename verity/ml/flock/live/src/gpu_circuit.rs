@@ -809,8 +809,9 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
 }
 
 /// A slot type's circuit as the device reads it, CSC over its slot's columns: A's and B's column pointers and nonzero counts,
-/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). The device reads the row indices here, page-locked and
-/// mapped, so it holds only the column pointers; with `FC_CSC_DEVICE=1` it holds a copy of the rows and they're freed here.
+/// and their row indices, the bulk ([`Types::types_gen`]'s set 0). Rows of at least `FC_CSC_HOST_MIB` MiB (default 1024) stay
+/// here, page-locked and mapped, where the fold reads them over the bus each rep, and the device holds only their column
+/// pointers; it holds a copy of smaller rows, and they're freed here.
 struct TypeCsc {
     col_ptr: [Vec<u32>; 2],
     nnz: [u32; 2],
@@ -836,8 +837,8 @@ struct Types {
 }
 
 /// The circuit's slot types, built once per circuit and kept for the process. Their CSC goes to the device as it is built: the
-/// column pointers as a copy, the row indices read in place ([`TypeCsc`]); the unit's rows as CSR are built only for a rep whose
-/// units the device computes, until it holds them ([`prove_circuit`]).
+/// column pointers as a copy, a large type's row indices read in place ([`TypeCsc`]); the unit's rows as CSR are built only for
+/// a rep whose units the device computes, until it holds them ([`prove_circuit`]).
 fn types(st: &Stmt) -> &'static Types {
     static T: Mutex<Vec<([u8; 64], &'static Types)>> = Mutex::new(Vec::new());
     static GEN: AtomicU64 = AtomicU64::new(1);
@@ -886,12 +887,19 @@ fn types(st: &Stmt) -> &'static Types {
         let arrays: Vec<&Vec<u32>> =
             csc.iter().flat_map(|t: &TypeCsc| { let r = t.rows.as_ref().unwrap(); [&t.col_ptr[0], &r[0], &t.col_ptr[1], &r[1]] }).collect();
         let (h, len): (Vec<*const u32>, Vec<usize>) = arrays.iter().map(|v| (v.as_ptr(), v.len())).unzip();
-        // the rows are the odd arrays; the leaked `Types` keeps them, unmoved, for the process
-        let rows_on_device = std::env::var("FC_CSC_DEVICE").as_deref() == Ok("1");
-        let host = if rows_on_device { 0 } else { (0..h.len()).filter(|i| i % 2 == 1).fold(0u64, |m, i| m | 1 << i) };
+        // a type's rows (its odd arrays) of at least FC_CSC_HOST_MIB MiB stay here, which the leaked `Types` keeps, unmoved, for the
+        // process; the device holds a copy of the rest
+        let min = std::env::var("FC_CSC_HOST_MIB").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(1024).saturating_mul(1 << 20);
+        let mapped: Vec<bool> = csc.iter().map(|t| 4 * (t.nnz[0] as usize + t.nnz[1] as usize) >= min).collect();
+        let host = mapped.iter().enumerate().filter(|(_, m)| **m).fold(0u64, |b, (t, _)| b | 0b1010 << (4 * t));
+        if mapped.contains(&true) {
+            let words: usize = csc.iter().zip(&mapped).filter(|(_, m)| **m).map(|(t, _)| t.nnz[0] as usize + t.nnz[1] as usize).sum();
+            eprintln!("the slot types' rows read from the host, mapped: {} MiB ({} of {} types)", (4 * words) >> 20,
+                      mapped.iter().filter(|m| **m).count(), csc.len());
+        }
         // a device that can't take them now keeps them on the host, and the first rep's fold copies them under the same key
-        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host) } == 0 && rows_on_device {
-            csc.iter_mut().for_each(|t| t.rows = None);
+        if unsafe { flock_cuda_types_upload(types_gen, 0, h.as_ptr(), len.as_ptr(), h.len(), host) } == 0 {
+            csc.iter_mut().zip(&mapped).filter(|(_, m)| !**m).for_each(|(t, _)| t.rows = None);
         }
         let sha = &c.nets[c.sha_net].1;
         Types { types_gen, logs, csc, ranges, u_range, sched: schedule(c.unit()), h_range, hsched: schedule(sha), hcsr: [csr(&sha.a), csr(&sha.b)] }
