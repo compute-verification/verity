@@ -59,18 +59,33 @@ def test_rows_that_push_a_fitting_slot_past_the_block_fail():
     assert (f["bits"], f["rows"], f["hm96"]) == (367_263_744, 2, 2)
 
 
-def test_a_held_definition_is_recorded_and_a_held_one_that_fits_is_stale(monkeypatch):
-    """`BLOCK_HELD` names a Definition past the block and why: its block is recorded with the reason, not failed.  A held
-    Definition whose block fits fails ``block/stale-hold``, so the list shrinks with each fix; `BLOCK_HELD_MAX` bounds it."""
+def test_the_held_list_only_shrinks():
+    """`block_held.HELD` is at most `block_held.MAX` long, and each entry says why."""
+    from circuit_check import block_held as BH
+
+    assert len(BH.HELD) <= BH.MAX and all(why.strip() for why in BH.HELD.values())
+
+
+def test_a_held_definition_is_reported_held_and_a_held_one_that_fits_is_stale(monkeypatch):
+    """A Definition `block_held.HELD` names: past the block, the report holds its ``block/past-range`` failure with why and
+    doesn't count it; fitting, the report fails it ``block/stale-hold``, so the list shrinks with each fix.  The target's own
+    entry is the same either way: no target's check reads the list."""
+    from circuit_check import block_held as BH
     from verity_flock import circuit as FC
 
-    assert len(CK.BLOCK_HELD) <= CK.BLOCK_HELD_MAX
     fn = _toy()
-    monkeypatch.setitem(CK.BLOCK_HELD, fn.id, "a toy")
-    F = CK.Findings()
-    assert CK.unit_block(fn, F)["held"] == "a toy"
-    (f,) = F.failures
-    assert f["name"].startswith("block/stale-hold CircuitCheckBlock_v1 its block of 2^20 bits fits 2^27, but it is held (a toy)")
+    monkeypatch.setitem(BH.HELD, fn.id, "a toy")
+    entry = CK.check_definition(fn, OPTS, as_call=False)
+    s = CK.summarize([entry])
+    assert "block_held" not in s
+    (name,) = [n for n in s["failure_names"] if n.startswith("block/")]
+    assert name.startswith("block/stale-hold CircuitCheckBlock_v1 its block of 2^20 bits fits 2^27, but block_held.HELD holds it "
+                           "(a toy): delete its entry")
     monkeypatch.setattr(FC, "K_MAX", 19)
     F = CK.Findings()
-    assert CK.unit_block(fn, F)["held"] == "a toy" and not F.failures
+    past = {**entry, "block": CK.block_range(fn, F), "failures": F.failures}
+    assert [f["code"] for f in F.failures] == ["past-range"]
+    s = CK.summarize([past])
+    assert s["block_held"] == {fn.id: "a toy"} and not [n for n in s["failure_names"] if n.startswith("block/")]
+    monkeypatch.delitem(BH.HELD, fn.id)
+    assert [n for n in CK.summarize([past])["failure_names"] if n.startswith("block/past-range CircuitCheckBlock_v1")]

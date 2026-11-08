@@ -52,7 +52,7 @@
                      (`verity_flock.circuit.unit_block`: its rows' sha512x3 and hm96 slots and the mask beside its own slot
                      of ANDs and ports, as `compose` places them), within Flock's proved range of 2^``K_MAX`` (`block_range`):
                      past it, `compose` refuses the unit.  Failed for every Definition checked whole, as PoUW and a served
-                     window's templates each stage one, unless `BLOCK_HELD` says why not
+                     window's templates each stage one, unless `block_held.HELD` says why not (the report's, `summarize`)
 
 Correctness and invariant violations are failures, each with a name (``"<check>/<code> <definition> ..."``); redundant and dead
 gates are warnings with counts (they become failures with the re-baseline's common-subexpression pass).  An unpinned lowering,
@@ -1112,33 +1112,43 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     return entry
 
 
-#: Definitions checked whole whose Flock block `block_range` records past the range rather than fails, each with why:
-#: none stages it whole as one unit, or a served one whose calls are moving to a chunked form, named with the PR that
-#: moves them.  It only shrinks (`BLOCK_HELD_MAX`), and a held Definition whose block fits fails ``block/stale-hold``.
-BLOCK_HELD: dict[str, str] = {}
-BLOCK_HELD_MAX = 0
-
-
 def unit_block(t: Any, F: Findings, lower_whole: bool = True) -> dict:
-    """`block_range` of ``t``, failed past the range where ``t`` is checked whole (``lower_whole``) and not `BLOCK_HELD`."""
-    return block_range(t, F, applies=lower_whole, held=BLOCK_HELD.get(t.id))
+    """`block_range` of ``t``, failed past the range where ``t`` is checked whole (``lower_whole``)."""
+    return block_range(t, F, applies=lower_whole)
 
 
-def block_range(t: Any, F: Findings, applies: bool = True, held: str | None = None) -> dict:
+def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
     """The Flock block ``t`` needs as one unit, read off its Definition (`verity_flock.circuit.unit_block`: its rows'
     sha512x3 and hm96 slots and the mask beside its own slot, as `compose` places them), against Flock's proved range of
     2^``K_MAX``; past it a failure where ``t`` is checked whole (``applies``: not as a subcircuit whose units are its
-    template's proof blocks) unless ``held`` says why not, and a held one that fits fails as stale."""
+    template's proof blocks).  Which of those failures are held is the report's (`summarize`, `block_held`), so no target's
+    verdict reads the list."""
     from verity_flock import circuit as FC
 
     b = FC.unit_block(t)
-    why = FC.past_block(b)
-    if applies and why is not None and held is None:
+    if applies and (why := FC.past_block(b)) is not None:
         F.fail("block", "past-range", t.id, why, **b)
-    elif applies and why is None and held is not None:
-        F.fail("block", "stale-hold", t.id, f"its block of 2^{b['k_log']} bits fits 2^{FC.K_MAX}, but it is held ({held}): delete "
-               "its entry from BLOCK_HELD in tools/verity/circuit_check/src/circuit_check/checks.py and lower BLOCK_HELD_MAX", **b)
-    return {**b, "applies": applies, **({"held": held} if held is not None else {})}
+    return {**b, "applies": applies}
+
+
+def _held_blocks(entries: list[dict]) -> tuple[dict[str, str], list[dict]]:
+    """Of ``entries``, the Definitions `block_held.HELD` holds past the block, each with why, and a ``block/stale-hold``
+    failure for each held one checked whole whose block fits."""
+    from .block_held import HELD
+
+    held, stale = {}, []
+    for e in entries:
+        d, b = e.get("definition") or e.get("target"), e.get("block") or {}
+        if d not in HELD or not b.get("applies"):
+            continue
+        if b["k_log"] > b["k_max"]:
+            held[d] = HELD[d]
+            continue
+        F = Findings()
+        F.fail("block", "stale-hold", d, f"its block of 2^{b['k_log']} bits fits 2^{b['k_max']}, but block_held.HELD holds it "
+               f"({HELD[d]}): delete its entry (tools/verity/circuit_check/src/circuit_check/block_held.py) and lower MAX", **b)
+        stale += F.failures
+    return held, stale
 
 
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
@@ -1362,13 +1372,17 @@ def summarize(entries: Iterable[dict]) -> dict:
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
     ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and
     ``q_call_refused``: each Definition `Q_call` v1 does not apply to, with why; ``by_calls``: each root checked by its calls
-    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on."""
+    (`circuit_check.by_calls`), not lowered whole, with the targets its callees rely on; ``block_held``: each Definition past
+    the Flock block that `block_held.HELD` holds, with why, its ``block/past-range`` failure not counted (`_held_blocks`)."""
     entries = list(entries)
     fails: dict[str, dict] = {}
     warns: dict[str, dict] = {}
+    held, stale = _held_blocks(entries)
     for e in entries:
-        fails.update((f["name"], f) for f in e.get("failures", []))
+        fails.update((f["name"], f) for f in e.get("failures", [])
+                     if (f["check"], f["code"]) != ("block", "past-range") or f["definition"] not in held)
         warns.update((w["name"], w) for w in e.get("warnings", []))
+    fails.update((f["name"], f) for f in stale)
     fails, warns = list(fails.values()), list(warns.values())
     by_check: Counter = Counter()
     by_def: dict[str, Counter] = {}
@@ -1388,7 +1402,7 @@ def summarize(entries: Iterable[dict]) -> dict:
                                                                      if c.get("binding")})
     return {"ok": not fails, "failures": len(fails), "failure_names": [f["name"] for f in fails],
             "recomputed_across": dict(sorted(across.items())), "q_call_refused": dict(sorted(refused.items())),
-            "by_calls": dict(sorted(by_calls.items())),
+            "by_calls": dict(sorted(by_calls.items())), **({"block_held": dict(sorted(held.items()))} if held else {}),
             "unchecked": {"items": len(warns), "definitions": len({w["definition"] for w in warns})},
             "warnings": {k: {"total": v, "definitions": len(by_def[k]), "by_definition": dict(by_def[k].most_common())}
                          for k, v in by_check.most_common()}}
@@ -1403,7 +1417,7 @@ def report(targets: list[dict], opts: Options) -> dict:
             "targets": targets}
 
 
-__all__ = ["BLOCK_HELD", "BLOCK_HELD_MAX", "Findings", "Options", "SCHEMA", "block_range", "check_definition", "check_row",
-           "check_subcircuit", "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
+__all__ = ["Findings", "Options", "SCHEMA", "block_range", "check_definition", "check_row", "check_subcircuit",
+           "conformance_of", "correspondence", "dead_gates", "is_commit", "load_pins", "partition", "redundant_ands",
            "redundant_gates", "report", "summarize", "target_equivalence", "template_lowering", "unit_block",
            "whole_lowering"]

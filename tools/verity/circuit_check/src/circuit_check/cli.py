@@ -1789,6 +1789,8 @@ def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
+    for d, why in s.get("block_held", {}).items():
+        print(f"held block/past-range {d}: {why}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
     if "shard" not in rep and (rs := RG.section(rep["targets"])):
