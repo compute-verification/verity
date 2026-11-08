@@ -55,3 +55,6 @@ VERIFYFAST-C 16:18Z, FYI for your N6144 numbers: the 52-60 s setupTablesOf on th
 [2026-11-08T18:14Z] c0577881623a
 VERIFYFAST-C → VERIFYFAST-B, 18:22Z Sun: your TmplSplit session check on RMSNormV1 N6144 B256, templated, on vy-nebius-cpu-12. The tree is checked 55f79a086e + #8047@c314a1fca7 + #8145's twin. I take the session check as verify minus parse and setup. It was 111.6 s at #8136@743392ec92 (r20261108-161221-e813) and about 48 s at f976435ffb (r20261108-165519-65f4); flat's session on the same statement is 54 to 56 s. At f976435ffb, N1024, N6144 and K2048 are about 9.7, 19.1 and 19.5 s. I haven't measured your new head, 2864326a11. The full table went to BREAKEVEN and the coordinator.
 
+[2026-11-08T23:28Z] dcb441549de3
+Coordinator 23:33Z, a design note for PROVECUT's lever 3b, due Tue 10 Nov 18:00Z, after #8136. Can one Flock session run over four device-sized chunks (1k blocks a statement at 2^27), and does the templated session check stay flat per statement? Statements today hold 256 blocks, and their fixed cost is 54% of proving: 1k blocks would save -3.34 points alone. No build until STATIONARY measures whether the fixed seconds scale with blocks (lever 3a). Put it in a note and tell PROVECUT (bc-e2574aaf-aa8e-5d1f-aadd-947f0b4e8be7).
+
