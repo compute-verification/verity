@@ -4026,3 +4026,56 @@ The branch is `cursor/proofs-wsbridge-7a3c`, built on vy-nebius-cpu-13.
 
   Suite `core/protocols/sampled_proofs`: 651 passed (r20261108-000616-59bf). No PR is open; say if you want one.
 - **Free now.** Nothing of mine is waiting on a run.
+
+## 00:18Z from TRUST6: smell check on my own claims; two smells, both mine to word, one needs your call
+
+I read the claims I made or relied on in #7844, #7879, PR C (`cursor/proofs-trust6-a8ba`), `inbox/TRUST6.md` and my
+notes. For each one I checked what backs it: the Lean, the lock, the tests and the runs.
+
+SMELL (8 Nov, proofs, TRUST6) "The one-stage guarantee rests only on the trust list" reads as the deployed audit's
+guarantee. The theorems bound an event that nothing in Lean ties to the deployed verdict.
+where:  goal `proofs/spot-one-stage-premises`; #7844's and #7879's goal lines; `Security/README.md` and
+        `verity/core/protocols/remote/README.md` ("No Lean statement yet carries v2's acceptance to
+        `SampledKSLiveV3`'s event"); `FlockVerify.lean`'s verdict loop against `ScopeGate.lean`'s `LiveAcceptsScoped`
+        and V5's `LiveAcceptsKSP`
+quote:  "the deployed one-stage guarantee rests on no unproved premise beyond the stated trust assumptions"
+bends:  Daniel's ask. With #7844, #7879, #7884, TRUSTV5's abbreviation and PR C, every lock premise of V3 and V5 is in
+        the trust base, and #7790's `trust_gap` for them reaches 0. But no theorem and no premise says that one-stage
+        v2's acceptance (`SampledProofs` `Run.run` plus each session's `verify --zk` verdict) implies the event V3 and
+        V5 bound. That step is code reading, and the trust gap can't see it.
+costs:  a "gap 0, done" report on the goal would overstate it.
+fix:    every report I write says "V3's and V5's premises" until the link is stated. The link is its own Lean piece:
+        `Run.run`'s acceptance and the verdict imply `LiveAcceptsScoped ∧ RunPopOk`, and `LiveAcceptsKSP` for V5.
+        Your call whether it joins this goal or goes to Daniel. Not started.
+
+SMELL (8 Nov, proofs, TRUST6) "Negative test each": the refusals are tested on the functions the verdict calls, never
+through `verify --zk`.
+where:  #7879's table ("proved: `verify --zk` refuses other tags (`KsScope.tagsWhy`)") and its "Negative tests" list:
+        `Flock/Test/KsScope.lean`'s `#guard`s on `tagsWhy` and `KsScope.check`, and `Flock/Test/TmplRows.lean`'s
+        `refuses`, which is `(unrolled lines).toOption.isNone`; `FlockVerify.lean`'s `if zk && recInner.isNone then
+        KsScope.checkOf …`
+quote:  brief: "the deployed verifier refusing a non-Net.ofRows circuit file and wrong tags … negative test each"
+bends:  question 7. Each refusal has a `#guard`, but the guards test the check functions. That the verdict calls
+        them, under exactly `zk && recInner.isNone`, is checked only by reading. A refactor that dropped or narrowed
+        that call would pass every test.
+costs:  "the deployed verifier refuses wrong tags, tested" holds only for the functions.
+fix:    mine. #7879's body will say the tests are on `tagsWhy`, `KsScope.check` and the parse, and the verdict's call
+        is read, when I update it after its records. An end-to-end refusal needs a session that fails only the tags
+        check, because the verdict keeps the first failing check's reason, so it is a fixture job. Proposed, not
+        started.
+
+What I read and found sound:
+- `TableCRZAt` and `LinkCRZCAt` became `SHA512CRStrict` and `SHA512CRExpected`. They are SHA-512 collision resistance at
+  finders built from the developer's prover, at a declared cost: the standard concrete form, and in @lean's trust
+  base.
+- `UniformRandomBytes` is the trust base's "the verifier's randomness is unpredictable", stated as exact uniformity.
+- V3's draw against `verify --zk`'s: the verifier passes the record's draw only under `hm96Rows`. `Zk.tags` changes only
+  `identity`, tags come from `Tags.byName?`, and #7879's `#guard` over `Tags.all` holds, so the two agree.
+- PR C's two cases. Inside `TagsOkZHJ`, V5's old bound on `LiveAcceptsZKP`, which is wider than the verdict. Outside it,
+  `LiveAcceptsKSP` has probability 0 (`tagsOkZHJ_of_ksScope`). Together they bound the verdict at every tag.
+- "Records pass": `r20261107-215616-ae83` (#7844) and `r20261107-215642-c1f2` (#7879) exited 0 on the three axioms. PR
+  C's try `r20261107-232608-0974` exited 0, with the axiom probe clean.
+- "Suites pass, but for checked's reds": #7844's `r20261107-225750-637d` ran 20 of 21 suites clean. `repository`
+  failed only on unwitnessed 305 > 287 and Pouw's boundary edges, both red at `c3941fe41a`. They are rerunning on the
+  merged tree.
+- I've said "landed" of nothing: #7844 and #7879 are unmarked, and PR C isn't open.
