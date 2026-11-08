@@ -94,9 +94,12 @@ def test_the_pool_is_vllm_s_at_its_edges(asy) -> None:
     assert c["refused the hit of a cache that never evicts"] == c["hits shortened by eviction"]
 
 
-def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path) -> None:
-    """The trace-corpus fixture (served sync, 100 KV blocks of 16 tokens, prefix caching, preemptions), as recorded: the
-    unit holds `BlockPool` over every operation at R = its 256 sequences, through hundreds of evicting computes."""
+@pytest.mark.parametrize("arrivals", ["admit", "first"])
+def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path, arrivals) -> None:
+    """The trace-corpus fixture (served sync, 100 KV blocks of 16 tokens, prefix caching, preemptions), each step's rows
+    in Model Runner V2's batch order (sorted stably by n) as served traces keep them: the unit holds `BlockPool` over
+    every operation at R = its 256 sequences, through hundreds of evicting computes, with requests arriving at their
+    recorded steps and as the advice encoder replays them."""
     src = V.FIXTURES / "corpus-smallkv"
     for f in ("meta.json", "server.log"):
         shutil.copy(src / f, tmp_path / f)
@@ -105,8 +108,9 @@ def test_the_pool_is_vllm_s_on_a_served_sync_trace(tmp_path) -> None:
     (tmp_path / "requests.jsonl").write_text("".join(json.dumps({**q, "eos": q["finish_reason"] == "stop"}) + "\n"
                                                      for q in reqs))
     inp = V.replay_input(tmp_path)
+    inp = V.Input(inp.engine, inp.requests, inp.before, [sorted(s, key=lambda x: x[2]) for s in inp.rows])
     assert not inp.engine.async_scheduling and inp.engine.num_gpu_blocks == 100
-    c = V.drive(inp, V.statics_for(inp, R=inp.engine.max_num_seqs, D=4)).counts
+    c = V.drive(inp, V.statics_for(inp, R=inp.engine.max_num_seqs, D=4), arrivals=arrivals).counts
     assert c["steps"] == len(inp.rows) and c["preempted frees"] >= 2
     assert c["evicting computes"] >= 200 and c["allocations a full pool refuses"] >= 100
     assert c["hits past the first eviction"] >= 100 and c["evictions splitting one free's blocks"] >= 100
