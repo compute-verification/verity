@@ -28,14 +28,12 @@ def test_class_g_steps_need_no_refusal(S):
 def test_production_sizes_refuse_by_name(S):
     """Past class G's limits each refusal `dsa` would raise is its own Need, and the step's other calls are still counted: a row
     past INDEX_TOPK keys refuses its top-k (the radix selection) but keeps its logits, the 8,192-token launch has no captured
-    all-reduce (vLLM's NCCL route) or indexer cuBLAS route, a 2,000-row prefill takes the dense-MHA backend and one past
-    INDEX_TOPK keys the sparse-MQA one, and the unseeded and top-k requests have no select (a seeded request in the batch keeps
-    FlashInfer's sampler off)."""
+    all-reduce (vLLM's NCCL route), a 2,000-row prefill takes the dense-MHA backend and one past INDEX_TOPK keys the sparse-MQA
+    one, and the unseeded and top-k requests have no select (a seeded request in the batch keeps FlashInfer's sampler off)."""
     need = S.step(8192, 8192, [(2000, 0), (4000, 16000)], [5000] + [100] * 191, 194,
                   {"greedy": 180, "seeded": 4, "random": 10, "top_k": 2}, True)
     assert _gaps(need) == {
         ("dsa-topk", "radix-topk", "radix top-k"), ("tp-allreduce", "allreduce-pynccl_comm", "no capture"),
-        ("cublas-bf16-gemm", "cublas-linear", "no capture"), ("router-gemm", "cublas-router", "no capture"),
         ("fa3-prefill-attention", "prefill-call", "dense-MHA prefill"), ("dsa-sparse-prefill", "prefill-call", "sparse-MQA prefill"),
         ("token-select", "select-random", "unseeded sampling"), ("token-select", "select-top_k", "top-k sampling")}
     ids = Counter({n.id: c for n, c in need.items()})

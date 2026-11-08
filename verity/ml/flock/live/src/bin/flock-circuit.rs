@@ -3,7 +3,7 @@
 //!
 //!   flock-circuit serve    --listen ADDR --out DIR --instances PUB --circuit FILE --pin SHA256 [--sessions N] [--operator LANE] [--session-tables J]
 //!                          [--rec-run FILE --rec-part J]   (--zk: each Hello answered logged in a recursive run's record, `run_record`)
-//!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256   (a long-lived verifier, `serve_queue`)
+//!   flock-circuit serve    --queue FILE|- --listen ADDR --out DIR --circuit FILE --pin SHA256 [--tree-from HOST:PORT]   (a long-lived verifier, `serve_queue`)
 //!   flock-circuit prove    --verifier ADDR --instances INST --circuit FILE [--gpu] [--runs N] [--warm W] [--dump DIR] [--session-tables J]
 //!                          [--salt-refs REFS]   (--zk: the ZK server's salts in place of INST's, `value_salts`)
 //!   flock-circuit prove    --stream FILE|- [--gpu] [--warm W]   (a long-lived prover over a stream of statements, `prove_stream`)
@@ -19,8 +19,8 @@
 //! `--session-tables J` (both sides, CPU prover): the session's units in J equal tables (`session_tables`), each with its own
 //! randomness, all J roots in one `Commit`, and every proof after the session's last coin (the barrier).
 //!
-//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N`): each session's
-//! coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
+//! `serve --tree-from HOST:PORT [--tree-secret-file F]` (`--zk` or `FC_COINS=tree`, with `--sessions N` or `--queue`): each
+//! session's coin tree sampled and opened by the challenger (`flock_live::tree_from`), not sampled here.
 
 use std::{
     collections::BTreeMap,
@@ -491,7 +491,7 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
 }
 
 /// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
-/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+/// the prover's tables after it each keep their own, never the other's; every other caller builds its own ([`Stmt::drawn`]).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Side { Fresh, Verifier, Prover }
 
@@ -504,7 +504,7 @@ fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, St
     let cache = match side {
         Side::Verifier if stmt_cache_on() => &VERIFIER_STMTS,
         Side::Prover if stmt_cache_on() => &PROVER_STMTS,
-        _ => return Stmt::new(st.c.clone(), n, id).map(Arc::new),
+        _ => return st.drawn(n, id).map(Arc::new),
     };
     STMT_LOOKUPS[(side == Side::Prover) as usize].fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     cache.drawn(st, n, id)
@@ -879,12 +879,12 @@ struct Serving {
     law: Option<flock_live::unit_draw::Law>,
     tabs: Tables,
     /// `serve --tree-from`: the challenger every session's coin tree is sampled by
-    tree_from: Option<TreeFrom>,
+    tree_from: Option<Arc<TreeFrom>>,
 }
 
 /// The challenger's session (`serve --tree-from`), one connection the server's sessions share. It closes when the server is
-/// done with it: once its last session's record is written, `serve_loop` returns and drops the [`Serving`] its sessions were
-/// made from. A close the challenger doesn't confirm is the server's refusal.
+/// done with it: once its last session's record is written, `serve_loop` returns and drops the last [`Serving`] holding it
+/// (`serve --queue`: once its queue ends). A close the challenger doesn't confirm is the server's refusal.
 struct TreeFrom(flock_live::tree_from::Shared);
 
 impl Drop for TreeFrom {
@@ -897,8 +897,9 @@ impl Drop for TreeFrom {
 
 /// `serve --tree-from HOST:PORT [--tree-secret-file F]`: the challenger that samples and opens every session's coin tree
 /// ([`flock_live::tree_from`]). Only sessions on the keyed coin tree (`--zk`, or plain ones under `FC_COINS=tree`)
-/// commit their coins to a tree, and the challenger's session closes after the server's last, so a bounded `--sessions N`.
-fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
+/// commit their coins to a tree, and the challenger's session closes after the server's last: a bounded `--sessions N`, or
+/// the end of a `--queue` (``queue``).
+fn tree_from_arg(tabs: &Tables, queue: bool) -> Option<Arc<TreeFrom>> {
     let (address, secret_file) = (arg("--tree-from", ""), arg("--tree-secret-file", ""));
     if address.is_empty() {
         if !secret_file.is_empty() {
@@ -910,8 +911,8 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
         refuse("--tree-from is serve's, for sessions on the keyed coin tree (--zk, or FC_COINS=tree): only theirs commit \
                 their coins to a tree".into());
     }
-    if arg("--sessions", "").parse::<usize>().is_err() {
-        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N".into());
+    if !queue && arg("--sessions", "").parse::<usize>().is_err() {
+        refuse("--tree-from: the challenger's session closes after the server's last, so --sessions N or --queue".into());
     }
     let secret = (!secret_file.is_empty()).then(|| {
         let s = std::fs::read_to_string(&secret_file).unwrap_or_else(|e| refuse(format!("--tree-secret-file: {e}")));
@@ -919,7 +920,7 @@ fn tree_from_arg(tabs: &Tables) -> Option<TreeFrom> {
             .unwrap_or_else(|| refuse("--tree-secret-file: the challenger session's secret, in hex".into()))
     });
     let c = flock_live::tree_from::Challenger::connect(&address, secret.as_deref()).unwrap_or_else(|e| refuse(format!("--tree-from: {e}")));
-    Some(TreeFrom(Arc::new(Mutex::new(c))))
+    Some(Arc::new(TreeFrom(Arc::new(Mutex::new(c)))))
 }
 
 fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
@@ -970,7 +971,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
     } else {
         Tables::one(st, inst)
     };
-    let tree_from = tree_from_arg(&tabs);
+    let tree_from = tree_from_arg(&tabs, false);
     Serving { given, law, tabs, tree_from }
 }
 
@@ -978,7 +979,7 @@ fn serving(st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Serving {
 fn server_of(sv: &Serving, st: &Arc<Stmt>, inst: &Arc<Instances>, count: usize) -> Server {
     let s = Server::new(config_of(&sv.tabs), Box::new(CircuitVerifier::new(sv.tabs.clone())));
     let s = match &sv.tree_from {
-        Some(TreeFrom(c)) => s.with_tree_from(c.clone()),
+        Some(t) => s.with_tree_from(t.0.clone()),
         None => s,
     };
     if let Some(draw) = &sv.given {
@@ -1096,7 +1097,16 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
@@ -3939,6 +3949,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
+    // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
+    // the transport before it. Not through the ZK server's Lean session loop
+    let hello_ahead = (!plan.lean_session && plan.lean_frames.is_none() && std::env::var("FC_HELLO_AHEAD").as_deref() != Ok("0")).then(|| {
+        let (t, h) = (t.clone(), hello.clone());
+        flock_live::spawn(move || call(&t, Req::Hello(h)))
+    });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
@@ -3993,7 +4009,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello.clone()))? {
+        let hello_got = match hello_ahead {
+            Some(h) => h.join().unwrap_or_else(|e| Err(format!("hello: {}", panic_msg(e)))),
+            None => call(&t, Req::Hello(hello.clone())),
+        };
+        match hello_got? {
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)
@@ -4792,7 +4812,7 @@ fn run_case(st: &Arc<Stmt>, inst: &Arc<Instances>, name: &str, gpu: bool) -> Val
         let Some(&(_, q)) = region_shared_columns(&st.regions).first() else {
             return json!({"case": name, "pass": true, "skipped": "no partial region: every region covers whole words"});
         };
-        let mut c = st.c.clone();
+        let mut c = (*st.c).clone();
         let r = c.ranges.iter().find(|r| q >= r.start() && q < r.start() + (r.count << r.slot_log)).cloned().expect("a slot holds the column");
         let Kind::Net(i) = r.kind else {
             return json!({"case": name, "pass": false, "why": format!("column {q} is in the mask slot")});
@@ -6819,10 +6839,11 @@ fn zk_self_check() -> zkv::SelfCheck {
 /// under DIR rather than `--out`. A population's public file is checked
 /// as `serve` checks it (no rows, its public words, Linking) once for its consecutive sessions, each population size's
 /// statement is built once, the sample is served at Register as `--draw-file`'s is, and the session's line carries its
-/// label. No `--instances`, `--draw*`, `--links`, `--tree-from`, `--rec-run` or session tables.
+/// label. With `--tree-from`, every session's coin tree comes from one challenger session, opened at the first line and
+/// closed when the queue ends. No `--instances`, `--draw*`, `--links`, `--rec-run` or session tables.
 fn serve_queue(c: Composite, path: &str) {
     use std::io::BufRead;
-    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--tree-from", "--rec-run", "--tmpl-unit"]
+    let given = ["--instances", "--draw", "--draw-law", "--draw-file", "--links", "--rec-run", "--tmpl-unit"]
         .into_iter().filter(|f| !arg(f, "").is_empty()).collect::<Vec<_>>();
     if !given.is_empty() || tables_arg() > 1 {
         refuse(format!("--queue: each session's population and sample come from its line, so no {given:?} or --session-tables"));
@@ -6837,8 +6858,10 @@ fn serve_queue(c: Composite, path: &str) {
     } else {
         Box::new(std::io::BufReader::new(std::fs::File::open(path).unwrap_or_else(|e| refuse(format!("--queue {path}: {e}")))))
     });
-    // the circuit until its first statement holds it, its statements (one a population size), and its last public file
-    let state: Mutex<(Option<Composite>, Vec<Arc<Stmt>>, Option<(String, Arc<Instances>)>)> = Mutex::new((Some(c), Vec::new(), None));
+    // the circuit until its first statement holds it, its statements (one a population size), its last public file, and
+    // the challenger's session once the first line has opened it
+    type State = (Option<Composite>, Vec<Arc<Stmt>>, Option<(String, Arc<Instances>)>, Option<Option<Arc<TreeFrom>>>);
+    let state: Mutex<State> = Mutex::new((Some(c), Vec::new(), None, None));
     serve_loop(None, || {
         let mut line = String::new();
         while line.trim().is_empty() {
@@ -6853,9 +6876,9 @@ fn serve_queue(c: Composite, path: &str) {
         flock_live::unit_draw::check(&draw).unwrap_or_else(|e| refuse(e));
         let tb = Instant::now();
         let mut g = state.lock().unwrap_or_else(PoisonError::into_inner);
-        let (c0, stmts, last) = &mut *g;
+        let (c0, stmts, last, tree_from) = &mut *g;
         if last.as_ref().is_none_or(|(f, _)| *f != instances) {
-            let c = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
+            let c: &Composite = c0.as_ref().unwrap_or_else(|| &stmts[0].c);
             let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
             if inst.has_rows() {
                 refuse(format!("{instances} holds rows: stage the verifier's own public file (public_only)"));
@@ -6872,15 +6895,20 @@ fn serve_queue(c: Composite, path: &str) {
         let st = match stmts.iter().find(|st| st.n == inst.n) {
             Some(st) => st.clone(),
             None => {
-                let c = c0.take().unwrap_or_else(|| stmts[0].c.clone());
-                let st = Arc::new(Stmt::new(c, inst.n, id.clone()).unwrap_or_else(|e| refuse(e)));
+                let st = match c0.take() {
+                    Some(c) => Stmt::new(c, inst.n, id.clone()),
+                    None => stmts[0].drawn(inst.n, id.clone()),
+                };
+                let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                 statement_checks(&st);
                 statement_built(&st, tb);
                 stmts.push(st.clone());
                 st
             }
         };
-        let sv = Serving { given: Some(draw), law: None, tabs: Tables::one(&st, &inst), tree_from: None };
+        let tabs = Tables::one(&st, &inst);
+        let tree_from = tree_from.get_or_insert_with(|| tree_from_arg(&tabs, true)).clone();
+        let sv = Serving { given: Some(draw), law: None, tabs, tree_from };
         let mut tag = json!({"label": j["label"]});
         if let Some(out) = j["out"].as_str() {
             tag["out"] = json!(out);
@@ -6937,7 +6965,7 @@ fn prove_stream(path: &str) {
                 c
             });
             if loaded.is_some() || last.get(&key).is_none_or(|(f, _)| *f != instances) {
-                let c = loaded.as_ref().unwrap_or_else(|| &stmts[&key][0].c);
+                let c: &Composite = loaded.as_ref().unwrap_or_else(|| &stmts[&key][0].c);
                 let inst = Instances::load(&instances, c).unwrap_or_else(|e| refuse(format!("{instances}: {e}")));
                 check_public(c, &inst).unwrap_or_else(|e| refuse(e));
                 last.insert(key.clone(), (instances.clone(), Arc::new(inst)));
@@ -6947,14 +6975,14 @@ fn prove_stream(path: &str) {
             let st = match have.iter().find(|st| st.n == inst.n) {
                 Some(st) => st.clone(),
                 None => {
-                    let (c, id) = match loaded {
+                    let st = match loaded {
                         Some(c) => {
                             let id = identity(&c);
-                            (c, id)
+                            Stmt::new(c, inst.n, id)
                         }
-                        None => (have[0].c.clone(), have[0].identity.clone()),
+                        None => have[0].drawn(inst.n, have[0].identity.clone()),
                     };
-                    let st = Arc::new(Stmt::new(c, inst.n, id).unwrap_or_else(|e| refuse(e)));
+                    let st = Arc::new(st.unwrap_or_else(|e| refuse(e)));
                     statement_checks(&st);
                     if firewall_on(&st) {
                         refuse("--stream: no ZK server path (FC_FIREWALL=1)".into());
