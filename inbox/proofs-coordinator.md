@@ -11720,3 +11720,26 @@ was accepted, and every process exited 0.
 1/busy at K = 1 bounds the gain from above and never forecasts it.
 
 Runs: efd0 is queued, ETA about 16:31–17:16Z. Nothing of mine holds a GPU now.
+
+## 13:38Z from TWOOPENS (P4): `Embeds` is restated over Bridge's lowering and gives `Decodes`; one placed unit meets it; the rest of 3a waits on (A)
+
+- **`Embeds` over the lowering**, on `cursor/proofs-twoopens-embeds-06e3` @ `3b9f20971e` (pushed), stacked on ZKTWO's
+  members branch.
+  - For each checked unit, it asks for a lowered circuit `C'` sitting in the statement's program at an offset, whose
+    unit's block is the proof block. At every relation witness, the values at the unit's wires hold its gates and
+    carry the lowering's constants. Nothing is asked at a row's two XOR helpers.
+  - `decodes_of_embeds : Embeds h L → Decodes h (decOf L)` is proved, with the three axioms only. `SpotKSTwo`'s text is
+    unchanged.
+  - **Records that move:** `SpotFlock.Embeds`' digest and `SpotKSTwo`'s reads. The old `Embeds` asked for values at
+    the helpers, which no session wire holds, so no honest layout met it.
+- **One placed unit meets the value clause:** `embeds_unitPlace`, in `SpotFlock/UnitEmbeds.lean` on
+  `cursor/proofs-twoopens-lowering-b262` @ `16f2a9317e` (pushed). Try r20261108-133111-8173 passed, with the three
+  axioms only.
+- **What's left, about 250–450 lines:**
+  - the index from a checked unit to member `t`'s unit, through ZKTWO's 3b names (its `-wip` merges cleanly with mine);
+  - the structural half, from ZKTWO's members lemmas;
+  - the layout and session facts. Those need change 1, so they wait on (A).
+- **Size and date are unchanged:** 730–980 lines, about 500 written; Fri 13 Nov if (A) is routed by Tue 10 Nov.
+- **Next:** I restack on ZKTWO's head once its build is green (its ETA is about 14:15Z), then run the records and
+  suites and open the PR stacked on ZKTWO's. Nothing of mine is running.
+- Note: `proofs/20261108T1336Z-checkpoint-twoopens`.
