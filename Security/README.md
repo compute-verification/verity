@@ -24,16 +24,16 @@ incorrect set of the trace the extractor recovers.
    with a binding commitment, at every δ ≥ 0, Pr[accept ∧ F ∉ M_δ] ≤ δ + ε_ks + ε_bind, with ε_ks = κ_δ − δ + √(γ·Pr[B])
    from Π's errors at the sampled proof blocks' sessions and ε_bind = Pr[B_ext]; `CompilerZK` carries Π's zero
    knowledge to SPOT[Π]. Their premises (`Arg.KS`, the binding, the scope, the contract) are their domain. At Flock,
-   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/Refused.lean`, proved in
+   `Flock.Guarantees.SampledKSLiveV3` (stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in
    `Proofs/Flock/Bridge/KSLive.lean`) proves the bound at the deployed sessions:
    Pr[`verify --zk` accepts ∧ the run's population is the registration's ∧ F ∉ M_δ] ≤ δ + ε̄_ks + ε_link, at
    δ = C(n−K₀, k)/C(n, k) for k of n proof blocks sampled uniformly, with ε̄_ks Flock's error averaged over the sessions
    and ε_link the link's term:
-   - Domain: the circuit and public files parse, the statement is in scope, and k ≤ n splits evenly over the tables.
-   - Real: SHA-512 collision resistance, through its folds.
-   - Folds into: `TableCRZAt` and `LinkCRZCAt` into `Claims.ExpectedCR`; `UniformRandomBytes` (the verifier's bytes,
-     exactly uniform) and `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
-   - Open: `TagsOkZHJ` and `Built`, hypotheses on the statement's form.
+   - Domain: the circuit and public files parse, with no shared rows, and k ≤ n; `verify --zk` checks the scope, the
+     tags and k's split over the tables (`Flock.KsScope.check`).
+   - Real: SHA-512 collision resistance (`TableCRZAt` and `LinkCRZCAt` unfold to it) and `UniformRandomBytes` (the
+     verifier's bytes, exactly uniform).
+   - Folds into: `RecordCustodyZKJ` (the record is the live session's) into Core's challenger premises.
 2. **The recursion.** `Claims.RecGeneric.CompilerKS` (`Definitions/Claims/RecursionGeneric.lean`, proved in
    `Proofs/Flock/RecGeneric/OuterProof.lean`): for every Π_in its repetition extractor shows knowledge sound, binding
    ZK server and knowledge-sound Π_out, the compiled verifier is knowledge sound wherever the compiler's contract holds;
@@ -69,8 +69,8 @@ incorrect set of the trace the extractor recovers.
    - Real: SHA-512 collision resistance (`Vocab.FinderCR`) and LMS unforgeability (`Hash.Assumptions.LmsUnforgeable`),
      read in the error.
    - Open: the targets (`SampledProofsSound`, `PouwSound`, `InferenceOnlySound`, `PousSound`, `BandwidthAuditSound`,
-     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until its subprotocol's
-     proof discharges it.
+     `NetworkCertifierSound`, `WipeSound`; remote's are the first three), each a hypothesis until proved
+     (PoUW's: `verity/core/protocols/pouw/`).
 
 **The real assumptions.** Items 1 to 3 rest on three, each under the lock's `open` until `Definitions/Assumptions.lean`
 declares it (The lock): `Claims.ExpectedCR` (SHA-512 collision resistance, which the other SHA-512 shapes
@@ -475,8 +475,8 @@ None of these is assumed silently; each would restate the conclusion:
 - `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
   (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
   its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
-  without proof, are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open
-  (The lock).
+  without proof, are declared in `Definitions/Assumptions.lean` or a module under it; a premise declared elsewhere is
+  open (The lock).
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
@@ -485,7 +485,7 @@ None of these is assumed silently; each would restate the conclusion:
 What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
+import, and its `trees` forbid a statement from reading, or a definitions or
 properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
@@ -494,7 +494,7 @@ guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by m
 Each package's `lean-audit.json` is its lock. For each guarantee it records the signature, its premises (the named
 assumptions, the domain hypotheses, the open premises, and the `Prop`s of an assumptions module its statement only reads) and a SHA-256 hash of
 its type, and, per module, every definition the statements read with a digest. A named assumption, under `assumptions`, is
-declared in `Definitions/Assumptions.lean` (`assumptions_module`); every other assumption is open, under `open` with
+declared in `Definitions/Assumptions.lean` (`assumptions_module`) or under it; every other assumption is open, under `open` with
 the Linear issue that discharges it and its due date, and `--update` adds none on its own, so that list only shrinks. A
 hypothesis that is part of what its guarantee says (a domain, a scope, the layer below's guarantee) is under `domain`
 with a one-line `why` instead, and a guarantee with an honest witness must have that witness conclude it. The
@@ -505,30 +505,15 @@ when:
   `native_decide`), or an option that skips the kernel;
 - a guarantee has a `Prop` hypothesis that is not an assumption: a `Prop` listed by name in the lock, with an owner
   and its definition's digest;
-- a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions.lean`), or an
+- a premise is listed under the wrong kind (a named assumption declared outside `Definitions/Assumptions`), or an
   open premise is not listed;
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record no longer matches the build;
-- a deployed guarantee rests, outside the trust base, on a premise its `trust_gap` entry doesn't list, or the entry
-  lists one it no longer rests on.
+- a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
-The trust base (`trust`) is what the deployed guarantees may rest on: SHA-512's collision resistance
-(`SHA512CRStrict`, `SHA512CRExpected`, `Claims.StrictBirthday`, `Claims.ExpectedCR`), uniform random bytes
-(`UniformRandomBytes`, `UniformRandomBytesTest`) and an honest verifier's coin log (`ChallengerLogsCoins`,
-`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`, each premise with the
-assumption it states). A deployed guarantee
-may also rest on premises of its own that a ruling's rule names, each with that reason (`trust.extra`): the remote
-audit's verifier never talks to the onsite devices and gets their LMS signatures only as witness inside the proof, so
-`Verity.remote_soundness_of_subprotocols` trusts `LmsUnforgeable`. `deployed` lists the guarantees that
-state the deployed system, and `trust_gap` what each rests on beyond its trust: the named assumptions and open
-premises its record lists, and those of each listed guarantee whose statement it takes as a domain hypothesis. A
-premise enters the gap only by hand, and leaves it when a proof discharges it; the Lean check prints each deployed
-guarantee's gap, and the total is to reach zero.
-
-A changed record means a guarantee now says something else. When one lands, the change is shown, the statement before
-and after and each changed definition with its source; nothing waits on it, and a guarantee that only moved shows none.
+A changed record means a guarantee now says something else. When one lands, the statement before and after is shown
+with each changed definition's source; nothing waits on it, and a guarantee that only moved shows none.
 
 ## The guarantees to read first
 
@@ -538,12 +523,12 @@ remote's three, each subprotocol's target a hypothesis until its own proof disch
 `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
-conditions it places on its inputs and setup, which the lock also lists, are left out.
+conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
-| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/Refused.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance for its finders, `TableCRZAt` and `LinkCRZC` |
-| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `DrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
+| Sampled proofs | `Flock.Guarantees.SampledKSLiveV3`, stated in `Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Proofs/Flock/Bridge/KSLive.lean` | Proved under named assumptions: `UniformRandomBytes`, `RecordCustodyZKJ`, and SHA-512's collision resistance (`SHA512CRStrict`, `SHA512CRExpected`) at its finders |
+| PoUW | `Properties.Pouw.Period.H1CheckedCreditPeriod`, the instance at the deployed H1 tile unit of the general `CheckedCreditPeriod` (both in `Properties/lean-audit.json`), `Properties/Pouw/Period.lean` | Proved under named assumptions: `ServiceSound`, `SampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `StagedPins`, `UnitFixed`, `OperandHMu`, `ReceiptLuckAt`, `GuessLuckAt`. The deployed path doesn't meet `SaltIsLiveCoin` yet, and no served path meets `AcceptedLive` (credit only after `flock-verify --zk --registered` accepts) |
 | PoUS | `Pous.Period.PeriodHeld`, `Properties/Pous/Period.lean` | Proved under named assumptions: `CoinCommitHides`, `RingDevice`, and `P2RingAuditSecure`, an open conjecture |
 | Bandwidth audit | `Bandwidth.Guarantees.AuditRO`, `Definitions/Accounting/Guarantees/Bandwidth.lean` | Proved, in the random-oracle model |
 | Network certification | `NetTiming.Guarantees.PeriodLeakAccepted`, `Definitions/NetworkCertifier/Guarantees/Period.lean` | Proved under named assumptions: `TrustedHost`, `Claims.Flock.ListWithin`, and sampled proofs' `Claims.Sampling.KS` and `Claims.Sampling.CommitmentScheme.Binds`; each window is bounded alone, with no union over the period yet |
@@ -568,8 +553,8 @@ PoUB, network certification and memory wipes, with PoUS and PoUB-P2 on one store
   one-stage form is v2, which runs `flock-verify --zk` on the sessions' files itself and reads the challenger's signed
   coins; one-stage v1, which takes the sessions' verdicts as evidence, is refused. No Lean statement yet carries v2's
   acceptance to `SampledKSLiveV3`'s event.
-- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `TableCRZAt`,
-  `LinkCRZC`, `TileServiceSound`, `TileDrawIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
+- **Assumptions:** those guarantees' named assumptions, `UniformRandomBytes`, `RecordCustodyZKJ`, `SHA512CRStrict`,
+  `SHA512CRExpected`, `TileServiceSound`, `TileSampleIsCoin`, `SaltIsLiveCoin`, `RegisteredBeforeDraw`, `UnitFixed` and
   `SharedNoiseLucks`. Trust model: nothing the developer runs or hosts is trusted, and every coin is live,
   with no Fiat–Shamir and no retries. The challenger and the verifier both run on auditor hosts. The challenger, which
   flips each coin after the commitment it challenges, is the one auditor-trusted device remote relies on

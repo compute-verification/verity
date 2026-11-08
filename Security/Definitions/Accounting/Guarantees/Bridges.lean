@@ -48,23 +48,23 @@ def B1 (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : T
 there. Under B1 and the `Ω_max` bound, for every in-domain workload and adversary of `CM_A` whose prover's work at `π`
 in `[tₛ + ℓ, t_d − ℓ)` is at most `T` and whose oracle calls are at most `q` at every oracle and salt
 (`Adversary.Bounded` at `CM_A`), the audit with `t` work-weighted samples accepts the transcript the verifier receives
-before `t_d` while `T < (1 − γ)(1 − ε_s)·W`, `γ = 1 − (1 − γ₀)/Ω_max`, with probability at most
-`(1 − ε_s)^t + ε(q, N)`. -/
+before `t_d` while `T < (1 − g)(1 − ε_s)·W`, `g = 1 − (1 − g₀)/Ω_max`, with probability at most
+`(1 − ε_s)^t + δ(q, N)`. -/
 def pouwRow : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] {L : Type} [LinearOrder L] [Fintype L]
     (𝓕 : Set (Actual.Run L)) (V : Finset L) (tₛ t_d ℓ : ℕ) (read : Set (ℕ × L × ℕ × L × ℕ × ℕ × ℕ) → Pouw.Transcript)
     (hash : (ρ : Actual.Run L) → Finset (Fin ρ.A.N)) (π : (ρ : Actual.Run L) → Fin ρ.A.N → ℕ)
-    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (γ₀ Ωmax : ℝ) (ε : ℕ → ℕ → ℝ),
-    γ₀ < 1 → 0 < Ωmax →
+    (P : Pouw.Protocol Q R S) (D : Pouw.Layout → Prop) (g₀ Ωmax : ℝ) (δ : ℕ → ℕ → ℝ),
+    g₀ < 1 → 0 < Ωmax →
     (∀ U : Pouw.Workload, U.InDomain D → ∀ u < U.layout.N,
       (P.Wref U.layout u : ℝ) ≤ Ωmax * ((U.layout.shape u).Wmm : ℝ)) →
-    B1 Q R S 𝓕 V tₛ t_d ℓ read hash π P D γ₀ ε →
+    B1 Q R S 𝓕 V tₛ t_d ℓ read hash π P D g₀ δ →
     ∀ U : Pouw.Workload, U.InDomain D → ∀ A : Pouw.Adversary (Actual.costModel Q R S 𝓕 V tₛ t_d ℓ read hash π),
     ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → A.Bounded U T q → ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       Pouw.pr (fun x : (Q → R) × S × (Fin t → Pouw.Ticket (P.Wref U.layout) U.layout.N) =>
           Pouw.AuditAccepts (Pouw.correctSet P U x.1 x.2.1 (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - Pouw.reductionGamma γ₀ Ωmax) * (1 - εs) * Pouw.totalWref P U.layout)
-        ≤ (1 - εs) ^ t + ε q U.layout.N
+          T < (1 - Pouw.reductionGap g₀ Ωmax) * (1 - εs) * Pouw.totalWref P U.layout)
+        ≤ (1 - εs) ^ t + δ q U.layout.N
 
 /-- **B4.** For a strategy `S` over a causal world (`CausalStrategy`: causal from every tick, each run causal at `ℓ`),
 on links as declared (`DeclaredLinks`: alphabets across the strategy, each run's wires on declared links within

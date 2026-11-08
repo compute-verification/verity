@@ -48,17 +48,18 @@ environment extension loaded, so none of the package's code runs), and replays t
                  this repository builds (the toolchain's, a fetched dependency's) that the admitted imports and `Init`
                  already reach is no import outside the layer: it brings nothing in (an `import all Init.Data.Array.Basic`
                  a proof takes to see a body)
-    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module`, taken
-                 as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared elsewhere, or its
-                 definition no longer has the digest its record holds; or the policy still lists assumption modules,
-                 which `--update` converts into the definitions the guarantees read there; or one declared elsewhere
-                 is listed beside its `open` or `domain` entry, which `--update` drops
-    open         a premise declared outside `assumptions_module` is not listed under `open` with its `owner`, the
-                 Linear `issue` that discharges it and its `due` date (`--update` adds one only under `open_seed`), or
-                 its entry has no owner, no guarantee takes it, or its definition no longer has its recorded digest
+    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module` or a
+                 module under it, taken as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared
+                 elsewhere, or its definition no longer has the digest its record holds; or the policy still lists
+                 assumption modules, which `--update` converts into the definitions the guarantees read there; or one
+                 declared elsewhere is listed beside its `open` or `domain` entry, which `--update` drops
+    open         a premise declared outside `assumptions_module` and the modules under it is not listed under `open` with
+                 its `owner`, the Linear `issue` that discharges it and its `due` date (`--update` adds one only under
+                 `open_seed`), or its entry has no owner, no guarantee takes it, or its definition no longer has its
+                 recorded digest
     domain       a premise listed under `domain` (part of what its guarantee says, with a one-line `why` and no issue;
                  another listed guarantee's statement is one, `cites` naming it) has no owner or `why`, is declared in
-                 `assumptions_module`, no guarantee takes it, its digest changed, or a guarantee that takes it has
+                 `assumptions_module` or under it, no guarantee takes it, its digest changed, or a guarantee that takes it has
                  honest witnesses none of which concludes it at the deployed instance (then it is `open`)
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
                  hypothesis that is not a listed premise, or no longer says what its record says:
@@ -1151,7 +1152,7 @@ def facts_of(pkg: Path, policy: dict, work: Path, moved: dict[str, str] | None =
                                       "assumptions": sorted(a for a in listed_premises(policy) if isinstance(a, str)),
                                       "verifier": {k: v for k, v in policy.get("verifier", {}).items() if k in ("entries", "stop", "hash")},
                                       "moved": sorted([new, old] for old, new in (moved or {}).items()), "names": asked,
-                                      "out": str(out), "canon": str(canon)}))
+                                      "honest": honest_witnesses(policy), "out": str(out), "canon": str(canon)}))
         rc, text = run(["lake", "env", facts_program(pkg), str(config)], pkg, work / "facts.log")
         if rc or not out.exists():
             raise RuntimeError(f"`Facts.lean` failed (exit {rc}; a root that was not built?):\n{text[-3000:]}")
@@ -2038,15 +2039,39 @@ def concluded_constants(read: dict) -> set[str]:
     return {c for k in read.get("conclusion") or [] for c in (k.get("head"), *(k.get("defs") or [])) if c}
 
 
+def honest_witnesses(policy: dict) -> dict[str, list[str]]:
+    """{guarantee: the `honest` witnesses its `witnesses` entry lists}: `Facts.lean` reads their conclusions against the
+    guarantee's premises (`agree`)."""
+    ws = policy.get("witnesses")
+    return {g: [n for n in w["honest"] if isinstance(n, str)] for g, w in sorted((ws if isinstance(ws, dict) else {}).items())
+            if isinstance(w, dict) and isinstance(w.get("honest"), list)}
+
+
+def honest_concludes(pin: dict, witnesses: list[dict]) -> set[str]:
+    """What the honest witnesses ``witnesses`` (their facts) conclude of the guarantee whose facts are ``pin``: each
+    conjunct's head and the definitions it applies (`concluded_constants`), of each witness's statement as written and
+    with a lifted definition unfolded once (`lifted`, which unfolds `P inst` past its head `P`); less a premise of
+    ``pin`` that fixes an argument (`args`) and that conjuncts headed by it conclude, unless `Facts.lean` found one of them
+    at the arguments it fixes (`agree`: each definitionally equal, by `isDefEq`, or a variable of the conjunct's `∀`s).
+    The statements are the witnesses' types as the kernel has them (`Facts.lean`'s `body`), not their names."""
+    reads = [r for w in witnesses for r in (w.get("body") or {}, (w.get("body") or {}).get("lifted") or {})]
+    out = set().union(*map(concluded_constants, reads)) if reads else set()
+    heads = {k.get("head") for r in reads for k in r.get("conclusion") or []}
+    for p in pin.get("premises") or []:
+        if p.get("head") in heads and any(a is not None for a in p.get("args") or []) and p.get("agree") is not True:
+            out.discard(p.get("head"))
+    return out
+
+
 def honest_cover(policy: dict, facts: dict) -> dict[str, set[str]]:
-    """{guarantee: what its `honest` witnesses conclude together at the deployed instance}, for each guarantee whose
-    `witnesses` entry lists honest witnesses the build has."""
+    """{guarantee: what its `honest` witnesses conclude of it together at the deployed instance (`honest_concludes`)},
+    for each guarantee whose `witnesses` entry lists honest witnesses the build has."""
     ws, listed, out = policy.get("witnesses"), policy.get("guarantees") or {}, {}
     for g, w in sorted((ws if isinstance(ws, dict) else {}).items()):
         names = w.get("honest") if isinstance(w, dict) else None
         pins = [facts["pins"].get(n) if n in listed else None for n in names] if isinstance(names, list) and names else []
         if pins and all(p and p.get("kind") == "theorem" and isinstance(p.get("body"), dict) for p in pins):
-            out[g] = set().union(*(concluded_constants(statement_read(p)) for p in pins))
+            out[g] = honest_concludes(facts["pins"].get(g) or {}, pins)
     return out
 
 
@@ -2176,7 +2201,8 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
     - `honest`: together their conclusions conclude, at the honest deployed instance, each premise of the guarantee outside
       a named assumption's module and `witnesses_assumed` (`honest_premises`) and, for a property, its function's
       acceptance (`accepted`): a
-      conjunct headed by or applying each. Each says something (`vacuous_meets`), and none applies a verifier that accepts
+      conjunct headed by or applying each, a premise's head read as written too and at the arguments the guarantee
+      fixes (`honest_concludes`). Each says something (`vacuous_meets`), and none applies a verifier that accepts
       everything (`accept_all`: that is the nontrivial lemma's object). A premise that can never hold fails here;
     - `nontrivial`: past its binders, `¬ C …` with `C` a head of the guarantee's conclusion, or one it unfolds through
       (`concluded`). For the `acceptance` kind, at the verifier that accepts everything, with a `∀` before the `¬` for each
@@ -2262,15 +2288,15 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                  f"of the {kind} kind ({why})"))
             continue
         kind = w.get("kind", kind or "acceptance")
-        covered, reached, checked = set(), set(), skip != "honest"
+        hps, reached, checked = [], set(), skip != "honest"
         for n in w.get("honest") or []:
             hp, why_not = witness_pin("witnesses", n, g, "honest", policy, facts)
             fails += why_not
             if hp is None:
                 checked = False
                 continue
+            hps.append(hp)
             read = statement_read(hp)
-            covered |= concluded_constants(read)
             for k in read.get("conclusion") or []:
                 reached |= set(k.get("defs") or [])
             for v in [*([x] if (x := vacuous_meets(ranges_dropped(read), None)) else []), *assumes(hp, policy, own)]:
@@ -2284,6 +2310,7 @@ def witness_failures(policy: dict, facts: dict, own: set[str]) -> list[str]:
                                      f"verifier that accepts everything ({', '.join(hp['accept_all'])}): an honest lemma is "
                                      f"at the deployed verifier, and the accept-all one is the `nontrivial` lemma's object "
                                      f"(as `HonestH200`'s honest period, built with `accepts := fun _ _ => True`, was)"))
+        covered = honest_concludes(pin, hps)
         missing = [p for p in honest_premises(pin, policy, own) if p not in covered]
         fns = accepted(policy, g)
         if checked and (missing or (fns and not any(reaches(f, reached) for f in fns))):
@@ -3737,7 +3764,8 @@ def proved(pkg: Path, policy: dict, facts: dict, work: Path, moved: dict[str, st
         qwork.mkdir(parents=True, exist_ok=True)
         qf = facts_of(q, {"roots": qpol["roots"], "meaning": policy.get("meaning", policy["roots"]),
                           "trees": policy.get("trees", {}), "axioms": policy.get("axioms", STANDARD), "guarantees": policy.get("guarantees", {}),
-                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {})}, qwork, moved, keep)
+                          "assumptions": listed_premises(policy), "shape": policy.get("shape", {}),
+                          "witnesses": policy.get("witnesses", {})}, qwork, moved, keep)
         lib = (q / ".lake" / "build" / "lib" / "lean").resolve()
         loaded = {".".join(r.relative_to(lib).with_suffix("").parts) for r in (Path(o).resolve() for o in qf["oleans"])
                   if r.parts[:len(lib.parts)] == lib.parts}

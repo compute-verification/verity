@@ -2,7 +2,7 @@
 
 Lean's ρ is free, while the served chain fixes α, β and X (`pearl_c.s5_stats`).  The largest ρ that `hsat`
 (α·(|x| + 4ρ) ≤ 448) allows is ρ_max = (448/α − s)/4, with equality at the row's largest element, and it is the best ρ for
-`hfloor` and `hlive`, which only get easier as ρ grows.  At ρ_max, per credited row i (δ = `Params.pi.δ` = 1):
+`hfloor` and `hlive`, which only get easier as ρ grows.  At ρ_max, per credited row i (the noise scale σ = `Params.pi.σ` = 1, Pearl's δ):
 
 - `hfloor` (1 ≤ α·ρ) holds iff α·s ≤ 444; the margin is 444 − α·s;
 - `hlive` (`LiveOperand 1 ρ X`: 64·#{(i, l) : 8ρ_i ≤ |X i l|} ≤ m·k) counts x_l loud iff |x_l|·α ≥ 2·(448 − α·s), over a

@@ -1,5 +1,5 @@
 #!/bin/sh
-# The agent watch (INF-69): free cloud agents whose run is held, from the control pod. Code: /data/infra/agent_watch.py (infra/ops's
+# The agent watch: free cloud agents whose run is held, from the control pod. Code: /data/infra/agent_watch.py (infra/ops's
 # verity_ops/agent_watch.py, standard library only). The key goes only into the environment: /data/agent-watch/cursor.env (root,
 # 0600, one CURSOR_API_KEY= line) is sourced. Until it exists the loop waits and says so once. Findings: /data/agent-watch/events.jsonl,
 # which infra's relay posts (infra/control/agent_watch_relay.py). Log: /data/agent-watch/watch.log. Coordinators come from the
