@@ -339,6 +339,18 @@ fn inner_product(a: &[F128], b: &[F128]) -> F128 {
     a.iter().zip(b).fold(F128::ZERO, |acc, (x, y)| acc + *x * *y)
 }
 
+/// Whether [`comb_structured`] gives `c`'s lincheck comb at the quirky eq table `(ws, xr)`; where it doesn't, the flat fold runs.
+pub fn structured_at(c: &BlockCircuit, ws: &[F128], xr: &[F128], k_skip: usize) -> bool {
+    structured_covers(c, k_skip) && !first_slot_vanishes(c, ws, xr, k_skip)
+}
+
+/// `comb_partial_structured` on the fold's pool: the lincheck's last vector from `c`'s structure after the rounds (`rr`, the
+/// inner point's rest), its parts' seconds into `times`.
+pub fn comb_structured(c: &BlockCircuit, alpha: F128, beta: F128, ws: &[F128], xr: &[F128], rr: &[F128],
+                       times: &mut Vec<(&'static str, f64)>) -> Vec<F128> {
+    on_fold_pool(c.n_cols(), || comb_partial_structured(c, alpha, beta, ws, xr, rr, times))
+}
+
 /// Whether `comb_partial_structured` covers `c`: every slot type at least 2^k_skip columns and within the block, the ranges
 /// disjoint and within it, Δ and the pin within it. Upstream's fold panics on the last three; this form then folds flat.
 fn structured_covers(c: &BlockCircuit, k_skip: usize) -> bool {
