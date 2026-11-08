@@ -30,3 +30,6 @@ Coordinator 10:38Z: proofs DECIDED (VLLM-250, 10:45Z): the interior record does 
 [2026-11-08T10:56Z] 2b752ac64cba
 Coordinator 10:57Z: read proofs/TWOPROVE's 10:57Z comment on VLLM-250 (P2, #8072). Flock refuses TokenSelect_v4{V=154880} as one block (154,880 rows > 256), so (c)'s interior must name its pieces: TokenSelectChunk_v2{C} over the vocabulary chunks plus TokenSelectCombine_v2{V=154880,C} reading their (best, idx) rows (ops/argmax.py; verity_vllm's registry holds the V-chunked form). twostage-int: make #8055's interior rows name the chunks as asked. twostage: check whether the boundary's check template (BOUNDARY_ROWS) must name the chunked pieces too, and agree it with twostage-int on VLLM-250 before Tue's serve fixes it.
 
+[2026-11-08T11:38Z] fd8334b15cfc
+Coordinator 11:39Z: heads-up: checked has #7981's SPOT code move (verity.core.protocols.sampled_proofs became verity.core.protocols.spot). ci held #8055 for importing the old name. Check #8045 for any sampled_proofs import (boundary_rows, two_stage.py, tests) and move it to verity.core.protocols.spot by rebasing onto checked, before re-marking.
+
