@@ -18,6 +18,8 @@ with the digest of the row `poolOpen` names, with no probability: what `PeriodRo
 
 namespace NetTiming
 
+open Claims Claims.Sampling
+
 /-- **The check holds the pool's roots**: every run over the horizon `n` from inputs in `As` that holds one set of values,
 only at committed gates of proof blocks of no class sampled `all`, and is `valid`, opens at `prow` a row whose
 `sha512/row-seg/v1` digest is `pin` and leaves at `nrow` one whose digest is `pout`. -/
