@@ -10,7 +10,8 @@ import figure1 as f1  # noqa: E402
 import total_cost as tc  # noqa: E402
 from verity.core.protocols.spot import optimize as opt  # noqa: E402
 
-sc, c, cuts, confs, inputs, lines, computed = tc._lines("GLM-5.3", "census")
+#: proving only: each case adds the verifier's seconds itself (`reprice.apply_server`'s column)
+sc, c, cuts, confs, inputs, lines, computed = tc._lines("GLM-5.3", "census", verify=False)
 SCOPES = {s.name: s for s in f1.scopes(c, lines["tokens"][0])}
 
 
