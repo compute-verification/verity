@@ -260,7 +260,7 @@ set_option synthInstance.maxSize 1024 in
 /-- **The sampling claims at the deployed record, with zero knowledge from the models**: `sampling_deployed` at
 the record masked at `tapeOf` and `S_GK` given the leaf layer, its `hZK` from `zk_deploy_mask_of_models_gap`. -/
 theorem sampling_deployed_models (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)

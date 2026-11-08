@@ -50,12 +50,13 @@ The two extractors read their coins differently: `Sampling.E` gives each slot of
 all of the verifier's rounds, of which a session reads those on its rounds, and `Compiled.E` gives each slot one coin
 vector per proof block's shape, of which the slot reads its block's. At fixed outer and inner coins, the slot's block
 is fixed (`slotUnit`), and `combSlot` and `restSlot` exchange the coins `Compiled.E` reads at the slot for those
-`Sampling.E` reads on the block's rounds, a bijection, so both extractors' laws are the same (`Ex_couple`). At coupled
-coins the two extractions return the same and make the same SHA-512 calls of their own (`Agree`, `E_agree`), so the
-failure event and `B_ext` have the same probability (`prBad_eq`, `bext_eq`), and `FlockKS` gives `Sampling.KS`'s bound
-at the deployed decoder (`ksLin_of_flockKS`). `Sampling.KS` reads every decoder within Flock's radius, each the deployed
-decoder of the record that differs from `D` only there (`withDecode`), which its statement and hypotheses read as they
-read `D` (`samplingKS_of_flockKS`).
+`Sampling.E` reads on the block's rounds, a bijection, so both extractors' laws are the same (`Ex_couple`). `ofDeploy`
+keys each slot as its own session, so `Compiled.E` extracts at every slot whose block is below `n_PU`, as `Sampling.E`
+does (`E_agree_unit`). At coupled coins the two extractions return the same and make the same SHA-512 calls of their
+own (`Agree`, `E_agree`), so the failure event and `B_ext` have the same probability (`prBad_eq`, `bext_eq`), and
+`FlockKS` gives `Sampling.KS`'s bound at the deployed decoder (`ksLin_of_flockKS`). `Sampling.KS` reads every decoder
+within Flock's radius, each the deployed decoder of the record that differs from `D` only there (`withDecode`), which
+its statement and hypotheses read as they read `D` (`samplingKS_of_flockKS`).
 -/
 
 @[expose] public section
@@ -76,16 +77,6 @@ theorem zip_finRange_take {α : Type} (n : ℕ) (l : List α) :
   · have h0 : (List.finRange n)[i]? = none := List.getElem?_eq_none (by simpa using Nat.le_of_not_lt hi)
     rw [ite_eq_right hi, h0]
     simp
-
-theorem getElem?_of_mem_zip_finRange {β : Type} {k : ℕ} {l : List β} {j : Fin k} {a : β}
-    (h : (j, a) ∈ (List.finRange k).zip l) : l[j.val]? = some a := by
-  obtain ⟨i, hi⟩ := List.mem_iff_getElem?.1 h
-  obtain ⟨h1, h2⟩ := List.getElem?_zip_eq_some.1 hi
-  obtain ⟨hlt, hj⟩ := List.getElem?_eq_some_iff.1 h1
-  have hj' : (List.finRange k)[i] = j := hj
-  have hji : j.val = i := by rw [← hj']; simp
-  rw [hji]
-  exact h2
 
 theorem mem_waitAccC {R : Type} {H : Msg → Msg} {run : R → Trace} {k : ℕ} {rs : List R} {r : R} {v : Seen}
     (h : (r, v) ∈ ((waitAccC k rs []).eval H run).1) : (run r).out = .acc ∧ v = (run r).seen := by
@@ -143,6 +134,11 @@ theorem bind_left {p : RP R α} {f : α → RP R β} {a : α} (hp : Claims.Sampl
    by rw [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog_of_noHash H run hp, h, List.nil_append]⟩
 
 theorem of_eq_right {p q q' : RP R α} (e : q = q') (h : Agree H run p q') : Agree H run p q := e ▸ h
+
+theorem flatMap_singleton {γ : Type} (f : β → RP R (List γ)) (b : β) : Agree H run (f b) (flatMapRP f [b]) := by
+  show Agree H run (f b) ((f b).bind fun cs => .ret (cs ++ []))
+  exact ⟨by rw [RP.eval_bind_ret]; exact (List.append_nil _).symm,
+    by simp only [Claims.Sampling.ownLog_bind, Claims.Sampling.ownLog, List.append_nil]⟩
 
 theorem ite_pos {c : Prop} [Decidable c] {p p' q q' : RP R α} (hc : c) (h : Agree H run p q) :
     Agree H run (if c then p else p') (if c then q else q') := by
@@ -386,8 +382,10 @@ theorem runExt_ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg �
     (s : AuditStatement) (r : Fin (D.V.k x) → Coin) (v : Seen) (c : (ofDeploy D iroots).SlotEC x) :
     (ofDeploy D iroots).runExt x s r v c =
       flatMapRP (fun iu : Fin (Claims.Sampling.nPU D x) × ℕ =>
-          if hu : iu.2 < Claims.Sampling.nPU D x then
-            (ofDeploy D iroots).unitExt x s iu.2 r v (c iu.1 ⟨iu.2, hu⟩)
+          if hu : iu.2 < Claims.Sampling.nPU D x ∧
+              ((ofDeploy D iroots).sessSlots x ((ofDeploy D iroots).checked x r) iu.1).head? = some iu.1.val then
+            (ofDeploy D iroots).sessExt x s ((ofDeploy D iroots).sessBlocks x ((ofDeploy D iroots).checked x r) iu.1)
+              iu.2 r v (c iu.1 ⟨iu.2, hu.1⟩)
           else .ret [])
         ((List.finRange (Claims.Sampling.nPU D x)).zip (D.checked x r)) := by
   unfold Compiled.runExt
@@ -397,15 +395,15 @@ variable {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T} {iroots : Msg
 
 omit [DecidableEq Col] in
 /-- **A sampled proof block's two extractions agree** at a block below `n_PU`, when the block's coins at the slot are
-`Sampling.E`'s on its session's rounds. -/
-theorem unitExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D) (x : Msg)
+`Sampling.E`'s on its session's rounds: `Compiled.E`'s, the session's at the block alone. -/
+theorem sessExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D) (x : Msg)
     {Ω : Type} (P : Prover Ω) (ω : Ω) (s : AuditStatement) (u : ℕ) (r : Fin (D.V.k x) → Coin)
     (hu : ∃ p : Fin (Claims.Sampling.nPU D x), (D.checked x r)[p.val]? = some u)
     (hr : (run H P D.V x ω r).out = .acc) (ρ : D.UnitCoins x)
     (g' : Fin (D.innerWaits x) → Fin (D.innerCap x) → Fin (D.rounds x u).card → Coin)
     (hρ : ∀ i j t, ρ i j ((D.rounds x u).orderEmbOfFin rfl t) = g' i j t) :
     Agree H (run H P D.V x ω) (Claims.Sampling.unitExt D D.flock.decode x s u r (run H P D.V x ω r).seen ρ)
-      ((ofDeploy D iroots).unitExt x s u r (run H P D.V x ω r).seen g') := by
+      ((ofDeploy D iroots).sessExt x s [u] u r (run H P D.V x ω r).seen g') := by
   obtain ⟨xS, emb, P', hmono, hrange, hacc, hview⟩ := hruns x Ω P ω r u hu
   have hS : ∀ t, emb t ∈ D.rounds x u := fun t => (hrange (emb t)).2 ⟨t, rfl⟩
   have hsess := (hview r fun _ _ _ => rfl).1
@@ -431,7 +429,7 @@ theorem unitExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
     intro r' hr'
     rw [hco r']
     exact (hview r' fun t ht hlt => hr' t ht fun t' ht' => by obtain ⟨i, rfl⟩ := (hrange t').1 ht'; exact hlt i).1
-  unfold Claims.Sampling.unitExt Compiled.unitExt
+  unfold Claims.Sampling.unitExt Compiled.sessExt Compiled.sessWit
   rw [hsess, hsessL]
   dsimp only
   rw [dite_eq_left hshape]
@@ -484,7 +482,10 @@ theorem unitExt_agree (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.S
           hshape hw hc hcard' g' _)
     refine Eq.trans ?_ ((ofDeploy D iroots).served_eval H P ω P' r r hcard hviewL (fun _ _ => rfl) _).symm
     exact hfw.trans (e3.symm.trans e4.symm)
-  · rcases o with _ | w <;> exact Agree.refl _
+  · rcases o with _ | w
+    · exact Agree.refl _
+    · exact Agree.flatMap_singleton (fun u' => Claims.Sampling.checkRevealed (ofDeploy D iroots).commit
+        ((ofDeploy D iroots).reveal s u' (run H P D.V x ω r).seen w)) u
 
 omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] in
 /-- **A sampled proof block not below `n_PU` is not extracted**: on a statement in scope its session's witness would
@@ -509,7 +510,8 @@ theorem unitExt_big (hrefuse : Claims.Sampling.Refuses H D) (hopens : Claims.Sam
 
 omit [DecidableEq Col] in
 /-- **One slot's two extractions agree**, when `Sampling.E`'s coins at the slot are `g` on the rounds of the slot's
-block `o` and `e` elsewhere. -/
+block `o` and `e` elsewhere: `ofDeploy` keys each slot as its own session (`skey`'s default), so `Compiled.E` extracts
+the slot's block alone at every slot whose block is below `n_PU`, as `Sampling.E` does. -/
 theorem E_agree_unit (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D)
     (hrefuse : Claims.Sampling.Refuses H D) (hopens : Claims.Sampling.SessionOpens H D iroots) (x : Msg) {Ω : Type}
     (P : Prover Ω) (ω : Ω) (s : AuditStatement) (r : Fin (D.V.k x) → Coin) (hr : (run H P D.V x ω r).out = .acc)
@@ -519,14 +521,25 @@ theorem E_agree_unit (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sa
     Agree H (run H P D.V x ω)
       (Claims.Sampling.unitExt D D.flock.decode x s u r (run H P D.V x ω r).seen
         (combSlot (fun v : Fin (Claims.Sampling.nPU D x) => D.rounds x v) o g e))
-      (if hu : u < Claims.Sampling.nPU D x then
-        (ofDeploy D iroots).unitExt x s u r (run H P D.V x ω r).seen (g ⟨u, hu⟩) else .ret []) := by
+      (if hu : u < Claims.Sampling.nPU D x ∧
+          ((ofDeploy D iroots).sessSlots x ((ofDeploy D iroots).checked x r) p).head? = some p.val then
+        (ofDeploy D iroots).sessExt x s ((ofDeploy D iroots).sessBlocks x ((ofDeploy D iroots).checked x r) p) u r
+          (run H P D.V x ω r).seen (g ⟨u, hu.1⟩) else .ret []) := by
   by_cases hu : u < Claims.Sampling.nPU D x
-  · refine Agree.of_eq_right (dite_eq_left hu) ?_
-    exact unitExt_agree hruns hnum x P ω s u r ⟨p, hpu⟩ hr
+  · have hpL : ((ofDeploy D iroots).checked x r)[p.val]? = some u := by
+      show ((D.checked x r).take (Claims.Sampling.nPU D x))[p.val]? = some u
+      rw [List.getElem?_take, ite_eq_left p.isLt]
+      exact hpu
+    have hk : ∀ a b, (ofDeploy D iroots).skey x ((ofDeploy D iroots).checked x r) a =
+        (ofDeploy D iroots).skey x ((ofDeploy D iroots).checked x r) b → a = b := fun _ _ h => h
+    have hfirst : ((ofDeploy D iroots).sessSlots x ((ofDeploy D iroots).checked x r) p).head? = some p.val := by
+      simp only [Compiled.sessSlots_eq_singleton hk hpL hu, List.head?_cons]
+    refine Agree.of_eq_right (dite_eq_left (And.intro hu hfirst)) ?_
+    rw [Compiled.sessBlocks_eq_singleton hk hpL hu]
+    exact sessExt_agree hruns hnum x P ω s u r ⟨p, hpu⟩ hr
       (combSlot (fun v : Fin (Claims.Sampling.nPU D x) => D.rounds x v) o g e) (g ⟨u, hu⟩) fun i l t =>
         combSlot_emb (fun v : Fin (Claims.Sampling.nPU D x) => D.rounds x v) (ho hu) g e i l t
-  · refine Agree.of_eq_right (dite_eq_right hu) ?_
+  · refine Agree.of_eq_right (dite_eq_right fun h => hu h.1) ?_
     exact unitExt_big hrefuse hopens x P ω s u r ⟨p, hpu⟩ hr hu _
 
 omit [DecidableEq Col] in

@@ -242,6 +242,8 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       refine (Pr_le_one _).trans (le_of_eq (Finset.prod_eq_one fun ρ _ => Finset.prod_eq_one fun t _ => ?_).symm)
       rw [hc ρ t, Finset.card_empty, Claims.Sampling.escCell_zero]
   slots _ _ := le_rfl
+  shared := (twoL_sessions (Coin := Coin) H).shared
+  unions _ := ⟨le_rfl, le_rfl⟩
   refuses x _ _ _ _ _ := twoLTwo_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed := (twoL_sessions (Coin := Coin) H).fixed
@@ -259,6 +261,7 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
     refine ⟨[u], u, [u], hb, by interval_cases u <;> decide, hb, fun val ι hq => ?_⟩
     have hv := (hq (twoStmt.roots, ⟨u, true, []⟩) (List.mem_singleton_self _) rfl).1 rfl
     exact two_correct hu2 val ι hv
+  keys := (twoL_sessions (Coin := Coin) H).keys
 
 /-- **Two sampled sessions meet the two-stage contract** (`twoLTwo`, at every hash): over a knowledge-sound proof
 system (`twoA`) with a binding commitment, a compiled two-stage verifier whose first stage samples both replay blocks of

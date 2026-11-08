@@ -503,11 +503,15 @@ def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
   | some s => (D.part s).blocks.length
   | none => 0
 
-/-- **The extractor's waits** stop at `k = 2^40·(2·n_PU + 1)` accepted runs. A union over the minimal sets of the
-complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`; this `k`
-makes it at most `2^{2^{−40}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through
-`log₂ k`. -/
-def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (2 * nPU D x + 1)
+/-- **The waits' slack exponent** `j = 10`: a wait keeps `2^j` accepted runs for each bit of the union its bound is paid
+over, so the union costs at most the slack `c = 2^{2^{−j}}` (`slack`). -/
+def slackExp : ℕ := 10
+
+/-- **The extractor's waits** stop at `k = 2^j·(2·n_PU + 1)` accepted runs (`slackExp`). A union over the minimal sets
+of the complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`;
+this `k` makes it at most `2^{2^{−j}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only
+through `log₂ k`. -/
+def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ slackExp * (2 * nPU D x + 1)
 
 /-- The waits give up after `K = 2^128·k` reruns. -/
 def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
@@ -727,8 +731,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 noncomputable def κF (D : Deploy Coin Col T) (x : Msg) : ℝ :=
   4 * D.εtable x + 2 ^ (-(D.innerWaits x : ℝ)) + 2 * D.innerK x / D.innerCap x + Real.exp (-(D.innerK x : ℝ) / 8)
 
-/-- The waits' slack factor, `c = 2^{2^{−40}} < 1 + 2^{−40}`: each wait's (`Deploy.k`). -/
-noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-40 : ℝ))
+/-- The waits' slack factor, `c = 2^{2^{−j}} < 1 + 2^{−j}` at `j = slackExp`: each wait's (`Deploy.k`). -/
+noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-(slackExp : ℝ)))
 
 /-- **The knowledge error at `δ`**: `δ + ε_ks`, with
 `ε_ks = (c² − 1)·δ + c²·κ_F + (1 + c)·(2k/K + e^{−k/8})`: the outer wait's factor `c` times the inner wait's bound

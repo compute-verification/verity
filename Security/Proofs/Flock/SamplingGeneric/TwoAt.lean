@@ -24,11 +24,12 @@ At this code, four of `ksTwo_code`'s hypotheses are facts of the order and the b
   challenger call (`CallsUniform`): the bytes `b x` returns on its round's coin are uniform. A3 holds every call's
   bytes independent of every earlier call's, so the second stage's bytes are uniform whatever the first stage drew.
 * `ksTwo_atOrder`: `CompiledTwo.KS` at Flock's masked record and SHA-512 from those two calls' A3 and six facts of
-  the code (`RegMatchesTwo`, `RefusesTwo`, `InteriorFixed`, `SessionRuns`, `SessionsIn`, `SessionOpensTwo`). The
+  the code (`RegMatchesTwo`, `RefusesTwo`, `InteriorFixed`, `SessionRunsTo`, `SessionsIn`, `SessionOpensTwo`). The
   verifier in public-coin form, its parser, partition, sessions and reveals are `c`'s.
+* `sessionsTwo_atOrder`: the two-stage contract at those premises (`sessionsTwo_code`).
 
 `Flock.SecurityProofs.SampledKSTwo : Flock.Guarantees.SampledKSTwo` (`Proofs.Flock.SamplingGeneric.Guarantees`)
-states it. Its witnesses:
+states it, with the sessions' runs both ways (`SessionRuns`, which gives `SessionRunsTo`). Its witnesses:
 
 * `Flock.SecurityProofs.SampledKSTwo_honest`: every premise at a toy code (`toyCode`) that parses no statement, accepts
   none, opens no session and reads no bytes;
@@ -111,7 +112,7 @@ and SHA-512 (`ksTwo_code`), with `BytesUniform` and `SecondUniform` from each ca
 theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (hA₁ : CallsUniform L₁ b₁) (hA₂ : CallsUniform L₂ b₂)
     (hreg : RegMatchesTwo (c.atOrder j) reg two) (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two)
     (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
-    (hruns : Claims.Sampling.SessionRuns FlockDeploy.sha512
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
       (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
     (hnum : SessionsIn (codeTwoAt c reg L₁ L₂ j b₁ b₂))
     (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
@@ -119,6 +120,22 @@ theorem ksTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (hA₁ : Call
     (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoAt c reg L₁ L₂ j b₁ b₂) iroots two
       (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁))).KS FlockDeploy.sha512 :=
   ksTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots hreg
+    (bytesUniform_atOrder c L₁ j b₁ hA₁) (firstFixed_atOrder c L₁ j b₁) (secondUniform_atOrder c L₂ j b₂ hA₂)
+    (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hi hruns hnum hopens
+
+/-- **The two-stage contract at the round order**: `sessionsTwo_code` with `ksTwo_atOrder`'s facts of the order and the
+byte maps. -/
+theorem sessionsTwo_atOrder (iroots : Msg → Seen → ℕ → List Msg) (hA₁ : CallsUniform L₁ b₁)
+    (hA₂ : CallsUniform L₂ b₂) (hreg : RegMatchesTwo (c.atOrder j) reg two)
+    (hr : (c.atOrder j).RefusesTwo FlockDeploy.sha512 two) (hi : (c.atOrder j).InteriorFixed FlockDeploy.sha512 iroots)
+    (hruns : Claims.Sampling.SessionRunsTo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)))
+    (hnum : SessionsIn (codeTwoAt c reg L₁ L₂ j b₁ b₂))
+    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+      (deploy _root_.Flock.Readable.relation (codeTwoAt c reg L₁ L₂ j b₁ b₂)) two iroots) :
+    (compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (codeTwoAt c reg L₁ L₂ j b₁ b₂) iroots two
+      (replayTwo (c.atOrder j) reg L₁ (bytesFirst c L₁ j b₁))).Sessions FlockDeploy.sha512 :=
+  sessionsTwo_code (c.atOrder j) reg two L₁ L₂ (bytesFirst c L₁ j b₁) (bytesSecond c L₂ j b₂) iroots hreg
     (bytesUniform_atOrder c L₁ j b₁ hA₁) (firstFixed_atOrder c L₁ j b₁) (secondUniform_atOrder c L₂ j b₂ hA₂)
     (bytesFixedTwo_atOrder c L₁ L₂ j b₁ b₂) hr hi hruns hnum hopens
 

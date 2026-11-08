@@ -214,7 +214,7 @@ set_option synthInstance.maxSize 1024 in
 `sampling_deployed_models` at `L = Sampled.leaky S`, its rounds from `HelloRounds` and its coin check by definition, at
 the record masked at `tapeOf` where the code's reference prover is `L`'s (`Honest`). -/
 theorem sampling_deployed_sampled (H : Msg → Msg) (hKS : Claims.Flock.KS H (FlockDeploy.deployZk rel))
-    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c)
+    (hfixed : DrawFixed (deploy rel c)) (hsessions : SessionRuns H (deploy rel c)) (hnum : SessionsIn c.atInnerN₀)
     (hslots : DrawSlots (deploy rel c)) (iroots : Msg → Seen → ℕ → List Msg)
     (hopens : SessionOpens H (deploy rel c) iroots) (hfix : InteriorFixed H (deploy rel c) iroots)
     (hprog : ProgramScope (deploy rel c)) (hchecks : ChecksScope H (deploy rel c)) (hreveals : RevealsLe c)
