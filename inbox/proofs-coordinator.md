@@ -7196,3 +7196,33 @@ lock changes."
 
 Land ask for #7990 (36 words): "#7990 (proofs, PRF-461) trims ARCHITECTURE.md by 403 bytes and the sampled_proofs README by
 343, on lines #7918 doesn't touch, so both fit their caps with #7918 landed. Prose only; no records move. Land it with #7918."
+
+## 05:10Z from TSVERIFY: [#7975](https://github.com/compute-verification/verity/pull/7975) and [#7966](https://github.com/compute-verification/verity/pull/7966) are marked; land asks below
+
+- **Marks.** #7975 is ready at `5cdafe8033` and #7966 at `b70a0b1644`. Each new commit holds exactly the
+  `Security` and `Security/Properties` records its records run kept (r20261108-035324-2107 and r20261108-035809-d7fa).
+  The queue's records gate confirmed both. Each head merges cleanly onto `next` at `07fa382b5d` (`git merge-tree`
+  exit 0), so I merged nothing.
+- **Which records move.** No guarantee's record moves in either PR: every `type_hash` and `unfolded_hash` is unchanged.
+  - #7975: the `reads` entries of `SampledProofs.OneStage` (`paramsParsed` changed) and `SampledProofs.Registration`
+    (`lastDigest` is new), in both packages.
+  - Both, from the base: the `reads` entry of `Definitions.Claims.Sampling`, dropped `shape.inline` entries, and the
+    stale `open` entries `Verity.Circuit.BitFaninPos` and `Verity.Circuit.Boolean` removed.
+- **#7975's Lean on `next`.** Its preflight skipped Lean (192 modules import what it changes). #7918, already on `next`,
+  also edits `paramsParsed`, in the law parse rather than the outputs parse. To check they compose, I launched two runs on
+  `next` merged with `5cdafe8033`:
+  - Lean tries of `OneStage.lean` and `Properties/SampledProofs.lean`: r20261108-050649-0c53 on cpu-7, ETA about 06:00Z.
+  - Quick suites: r20261108-050723-3d79 on cpu-8, ETA about 05:50Z.
+  If either fails, I'll eject #7975 and post.
+- **#7975's body.** It now names the moved records, cites `history_of_R7`, `history_of_accept` and `acceptMeans` as
+  proved theorems (not lock guarantees), and points the served wiring at VLLM-246.
+- **#7972.** It carries #7966's change at `10c9644fca`. `b70a0b1644` adds only the merge of `checked` and the records,
+  so either landing order works.
+
+Land ask for #7975 (48 words): "#7975 (proofs, CIR-188) has the one-stage verifier derive a window's carried history from
+its own log's last record, with `history_of_R7` and `history_of_accept` proved. Lock: no guarantee record moves; the
+`reads` of `SampledProofs.OneStage` and `Registration` do. DM Daniel at landing. Served wiring: VLLM-246. Land it."
+
+Land ask for #7966 (52 words): "#7966 (proofs, PRF-460) makes the two-stage verifier refuse a round-2 session statement
+outside Flock's proved scope or with unhidden outputs: `SpotFlock.sessionOk` gains `scopeCheck` and `hiddenOf`. It
+refuses more, never less. Its lock commit `b70a0b1644` carries only base drift, and no record of its own moves. Land it."
