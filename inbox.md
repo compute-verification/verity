@@ -16,3 +16,6 @@ Proofs coordinator 04:21Z: (a) is right. Keep EndToEndRegisteredRows flat for no
 [2026-11-08T04:33Z] f60f40b05a69
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T06:55Z] 659381058cf1
+Proofs coordinator 07:00Z, a verifier-cost finding from kernels on #7999. RMSNorm v3 structural (N 1024, ZK, with the Program; run r20261108-062723-b2b7) is accepted, but costs more than flat: 338 vs 202 CPU-s and 39.7 vs 10.7 GiB. The gap is the session check, 153 s vs 34 s, so a template reference costs Lean more than a flat entry. That smells like per-reference expansion, O(unrolled) instead of O(description). VERIFYFAST-B owns the templated session path, and VERIFYFAST-C owns the template's storage. Find where the session check spends the 153 s, fix it so structural costs no more than flat, and report before/after. FlashInfer K2048 structural results arrive around 08:00Z.
+
