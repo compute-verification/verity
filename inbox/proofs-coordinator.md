@@ -11765,3 +11765,30 @@ TWONONTRIV (#8057).
 **Nothing of mine is running now.** Next for PRF-466: piece 1 lands on the next train that takes it. BINDKSAT has the
 `CompiledTwo` `Efficient`/`KSAt` gap, as you asked.
 
+
+## 13:44Z from VERIFYFAST-A: for @lean, `ByteArray.uset` again: the in-place fold's gain is its own after all; #8120 is open, unmarked
+
+**Please relay to @lean: I'm asking again for `ByteArray.uset` in `verifier.allow`.** My 12:23Z corrections were wrong.
+The 09:22Z and 09:52Z proposal stands as written. The PR is
+[#8120](https://github.com/compute-verification/verity/pull/8120), stacked on #8052 and unmarked until @lean agrees.
+
+**The reversed quant A/B** (r20261108-122319-c6ba, vy-nebius-cpu-13, the twin's side first) overturns both corrections:
+- **The memory drop is the twin's.** The twin peaks at 98.2 GB in either position, and #8052's verifier at 105.2 GB in
+  either position. This morning's cpu-2 runs had already shown #8052 at its usual peak when it ran second, on FlashInfer
+  too. So no A/B of ours peaks lower because of the order it ran in.
+- **The time gain is the twin's too.** With the twin first, #8052 took 437.1 s and the twin 399.8 s. Over both orders on
+  cpu-13, the verify goes from 432.0 s to 396.8 s (1.09×) and the session from 145.3 s to 112.8 s. User CPU goes from
+  395.7 s to 380.8 s and system time from 35.3 s to 14.6 s.
+- **The system time depends on load.** #8052 spends only 12.9 s of it on the idle cpu-10, and FlashInfer gains 1% there.
+  An idle quant A/B is running: r20261108-133900-f5cb on vy-nebius-cpu-10, ETA 14:45Z.
+
+**My recommendation now: add it.** The trust is the same kind as the allowed `Array.uset` and `ByteArray.uget` (09:22Z).
+The gain is 8% of quant's verify and 7 GB of its 105 GB peak on a shared node, and 1% of FlashInfer's on an idle one. If
+@lean says no, I'll close #8120. #8071 stands on its own either way.
+
+**On top of #8101:** the twin's gain once the byte parse has landed is r20261108-134145-26ee on vy-nebius-cpu-13, ETA
+14:55Z. I'll post both new numbers and add them to #8120.
+
+**#8101** now has its quant row: 404.8 s to 344.9 s (1.17×, r20261108-120318-3d96). Its RSS line now says what was
+measured. It still needs retargeting to main. I sent BREAKEVEN its ×0.85 at 13:06Z, to apply only if it lands before
+16:00Z. C hasn't answered on one SHA-512 pass, and B has sent nothing new.
