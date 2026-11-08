@@ -1,6 +1,7 @@
 module
 
 public import Proofs.WeightSecurity.Deployed
+public import Proofs.WeightSecurity.Pressure
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
 public import Proofs.WeightSecurity.Theft
@@ -11,5 +12,5 @@ public import Proofs.WeightSecurity.Theft
 `Theft`: the leakage lemma, `WeightSecurity.Guarantees.Theft`, with its witnesses at the toy instance. `Served`: the
 leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`, with its witnesses at the toy deployment.
 `Stop`: a period's escape at a budget, over SPOT's period machinery. `Deployed`: `TheftServed` at the deployment audits
-(`TheftServedDeployed`).
+(`TheftServedDeployed`). `Pressure`: the deployed strata laws' `pa B ≤ x^|B|`, the pressure `TheftServedDeployed` takes.
 -/
