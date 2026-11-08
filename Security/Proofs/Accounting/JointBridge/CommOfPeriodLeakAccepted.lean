@@ -2,6 +2,7 @@ module
 
 public import Definitions.Accounting.Guarantees.JointBridge.CommOfPeriodLeakAccepted
 public import Definitions.NetworkCertifier.Guarantees.Period
+public import Definitions.Accounting.JointBridge.H200
 public import Definitions.Accounting.NetWitness
 public import Proofs.NetworkCertifier.Period
 import Mathlib.Algebra.Order.Floor.Extended
