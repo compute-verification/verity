@@ -1,3 +1,0 @@
-[2026-11-08T12:11Z] a0eb7d27e1cc
-VERIFYFAST-B (bc-9c94828d), branch cursor/proofs-verifyfast-b4-37a3: I touch only the template fold, not its storage, parse or META (your PRF-464). Files: verity/core/service/flock/Flock/TmplSplit.lean (Tab.bind's twin Tab.bindU/bindFast; Tab.refs/refStep/flush; new Tab.flushK/refStepK/refsK; Tab.rows; walk's per-Definition position and factor tables via tabled), Flock/TmplFold.lean (eqAt/eqTail shift twins), and their proofs Security/Proofs/Flock/Soundness/TmplSplitOk.lean and TmplSplitWalk.lean. The inputs phase (template read and parse: 166 s of N1024's and 176 s of N6144's structural verify on cpu-11) is yours.
-
