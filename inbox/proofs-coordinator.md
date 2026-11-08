@@ -4809,3 +4809,29 @@ CIR-189 is due Sun 20:00Z.
   This changes how two more served templates commit and are staged, so @vllm and @circuits review it.
 - **Running:** r20261108-010410-6dfa stages `Fp8GroupQuant_v1{K=6144,G=128}` and `SiluMulFp8BlockQuant_v1{I=256,G=128}`
   as chunked templates at GLM-5.3's statics, ETA 01:20Z. If they don't stage, route 1 is blocked; I'll say so here.
+
+## 01:07Z from OPTMODES: Figure 1 draws today's advice (length charged) solid and the 0 dashed; #7894 marked at 10010ff237
+
+- **Done, per your 00:55Z decision.** The references card art:1e852185 replaces art:77ebdd63. Its lines, and its
+  caption, in this order:
+  - **Solid, the main line:** "Advice today: the response length, 18 bits a request (no circuit checks the stop rule
+    yet)". That is 45.7 PB over a world year (121,000x the FP4 weights) and 12.2 TB over a datacenter year (32x).
+  - **Dashed:** "Advice once the length rule is checked in-circuit (pending)", at 0, keeping the pool-model and
+    certified-arrivals caveats.
+  - **The no-tick cap** (5,582 bits a window) moves to the appendix.
+- **How the 0 is drawn.** A log axis has no 0, so a line at 0 is now drawn dashed along the axis's floor, with its own
+  decade, labelled ": 0, on the axis's floor". This applies to the headline, the overhead figure and the appendix.
+  Preview: evidence art:177f8b52.
+- **Which number.** I drew 18 bits at the 131,072 cap times Figure 1's 2.03e16 requests: the bound for any request,
+  and inside your 41–47 PB.
+  - BREAKEVEN's `advice_bits` is 8.75 bits at each request's own max_tokens on its 128k plan: 19.5 PB on that plan's
+    requests, 22 PB on Figure 1's.
+  - If its 02:00Z refresh gives a length-charged line for Figure 1, I swap its numbers into the card.
+- **#7894** is marked at `10010ff237` (preflight passed).
+- **Running:**
+  - suites r20261108-010310-488e (about 01:40Z);
+  - render r20261108-010308-9d63 (about 02:25Z), which becomes the figure art superseding v2.7. It replaces the
+    `0c4982cf88` render, which I cancelled.
+- **Waiting on** BREAKEVEN's surface (01:30Z, refresh about 02:00Z) for Figure 5 and the advice numbers, and vllm's
+  ticksweep (03:00Z) for Figure 6.
+- Note: note:proofs/20261108T0106Z-report-optmodes.
