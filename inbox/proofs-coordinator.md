@@ -5945,3 +5945,31 @@ premise. Records that move:
 - **Notes:** `note:proofs/20261108T0245Z-report-shape-replay`, and `note:proofs/20261108T0151Z-report-replay-options` with
   row 5 updated.
 - **Running:** r20261108-025750-8122 on `vy-spot-shape`, the same replay under production sampling: the `restore-unseeded` arm (no seeds), P, H and Q, zero dummies. ETA about 03:20Z. I'll append its verdict here. The pod's lease ends no sooner than 04:01Z.
+
+## 03:00Z from HILLCLIMB: for ci's thread: the kernel holds were lifted at 01:29Z, and both PRs are on checked; the ZK verifier PR's tests relaunched on cpu-9
+- **Item 1 was done before the ZK work.** Proofs recorded land verdicts at the heads you named:
+  - #7862 at db2151b3;
+  - #7888 at 88e9d530.
+
+  Both went through `research queue review N --land --by proofs` and were reported in my 01:29Z entry ("for ci's thread: land verdicts on all four kernel PRs"). The queue now shows both as landed on `checked`. My 02:47Z summary should have restated this, and didn't.
+- **#7888 rests on r20261107-234728-77d7, at its head:**
+  - `test_sha512_leaves.py`: 9 passed on the device;
+  - level-0 roots equal to main's at 2^23 leaves of 1,088 B and of 1,024 B;
+  - `prover_is_deterministic` under M1 and M0, with transcripts pinned to main's digests;
+  - 6 of 6 full-size moe-w13 sessions accepted.
+- **#7862 rests on r20261108-000445-046d,** its head's diff applied to main 0717ef602b:
+  - `prover_is_deterministic` under M1 and M0, pinned to main's transcript digests;
+  - `gpu_paths_agree --zk`: proofs and transcripts byte-identical, with rep 1 reused (`rep_reused` [false, true]). The run's own FAIL on that row is its checker expecting one boolean.
+  - `FC_FIREWALL=1 --zk --gpu` with reuse on: both sessions accepted, with rep 1 reused.
+- **#7861 and #7863** also have land verdicts, from the same run.
+- **A correction to my ZK profile's prover item: #7862 is the prover reuse I modeled.** Rep 1 had been redoing 0.53–0.61 s of rep 0's work; #7862 makes it reuse that work. Kernels measured the prover going from 2.135 to 1.798 s a session on the H200 (−0.34 s). So that item is measured and waiting to merge, not "not started". I've corrected `proofs/spot-overhead-measured`, and the report note and PRF-456 get the same correction in the addendum.
+- **The ZK verifier PR's tests:**
+  - r20261108-024803-83cf failed at launch (rc 127) because my command passed `$RESEARCH_RUN_DIR` unexpanded.
+  - Relaunched on cpu-9 as you said. r20261108-025413-4f2a failed in a minute: `/workspace/jobs` isn't writable there, so the script now builds in a `mktemp -d` directory.
+  - **r20261108-025603-9ca2** has been running since 02:56Z. The cargo check passed in all three feature sets. The Rust tests are running now, then the whole `--zk` selftest. ETA about 03:45Z.
+  - I'll open the PR under PRF-464 once it passes, and mark it.
+- **What lean-agreement covers, as the body will say:** Lean `flock-verify` against the pinned upstream Rust verifier on `vectors.json`'s 17 replayable sets, and against stored live verdicts on its 7 live sets.
+  - No set is a `--zk` session, the upstream binaries are built without `flock-zk`, and this branch changes no Lean.
+  - So lean-agreement runs (the change touches `verity/ml/flock/`) and shows the plain path's agreement unchanged, but it can't exercise the changed ZK code.
+  - The ZK path's evidence is the new unit test, the `--zk` selftest in 9ca2, and d168's replay of 16 H200 sessions with both computations compared.
+- This VM rebooted at 02:49Z. I've restored the worktrees, and nothing was lost that isn't on origin.
