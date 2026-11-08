@@ -31,7 +31,7 @@ package imports nothing else from `verity_vllm`, so every stage may import it.
 * `predicted_row` -- a predicted row's record (`verity-vllm/predicted-row/v1`, ``predicted.json``): the Build of record the
   ahead-of-time compiler wrote and its manifest's sha256, as ``predict compare --predicted`` reads it; its `of` refuses an
   unknown field and `dump` writes it back.
-* `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v0`,
+* `boundary_commit` -- a served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`,
   ``commit.json``): its layout, each value's root and the index's leaf, as the class's registration and a recommit from the
   prover's files read it (`pipeline.boundary_rows`); its `of` refuses an unknown field and `dump` writes it back.
 """

@@ -1,4 +1,4 @@
-"""A served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v0`, `FILE`): the public part
+"""A served window's boundary commitment of one size class (`verity-vllm/boundary-rows/v1`, `FILE`): the public part
 `pipeline.boundary_rows` writes under ``w<window>/p<P>-o<O>/`` as the window closes, which the challenger's copy of the
 class's layout (`boundary_rows.layout_of`), its registration (`boundary_rows.record`) and a recommit from the prover's files
 (`boundary_rows.reopen`) read. Its id is under ``format``, since ``schema`` is each value's row schema."""
@@ -11,7 +11,7 @@ from typing import Any
 
 from verity_vllm.records.fields import RecordError, only, required
 
-SCHEMA = "verity-vllm/boundary-rows/v0"
+SCHEMA = "verity-vllm/boundary-rows/v1"
 #: its name in the class's directory, beside the prover's ``index.json``, ``index-salt.bin`` and ``salts.bin``
 FILE = "commit.json"
 
@@ -25,6 +25,7 @@ class BoundaryCommit:
     check: str                                        # the check template's id
     per_prompt: int                                   # its instances a prompt row
     per_output: int                                   # its instances an output
+    inline: bool                                      # whether the replay block holds them inlined (`Layout.inline`)
     spans: int                                        # the class's spans N, one replay block each
     replay: str                                       # the replay block's id
     program: str                                      # the registration's program digest
@@ -51,6 +52,6 @@ class BoundaryCommit:
 
 
 KINDS: dict[str, type | tuple[type, ...]] = {"window": int, "run": str, "prompt": int, "outputs": int, "check": str,
-                                             "per_prompt": int, "per_output": int, "spans": int, "replay": str, "program": str,
-                                             "partition": str, "schema": str, "values": Mapping, "index": str,
-                                             "index_rule": str, "seconds": (int, float)}
+                                             "per_prompt": int, "per_output": int, "inline": bool, "spans": int,
+                                             "replay": str, "program": str, "partition": str, "schema": str,
+                                             "values": Mapping, "index": str, "index_rule": str, "seconds": (int, float)}

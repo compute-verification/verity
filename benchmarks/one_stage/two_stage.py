@@ -6,8 +6,9 @@ the same point, for its interior registration and the second stage (`First.secon
 
 * **The Spec** (`spec_of`): the values ``b.ingress`` and ``b.egress`` (phase ``serve``) and the interior values (phase
   ``interior``: the check template's ports as the replay side commits them, `interior_values`); the selection
-  `TwoStage(grain, replay, k)` over the class's replay block; the check, the check template's program and
-  ``Q_template_instance`` query with its proof deadline; and the public items both registrations show.
+  `TwoStage(grain, replay, k)` over the class's replay block; the check, its templates' programs and their query
+  (`Layout.templates`, `Layout.query`: the check template's instances, or, inlined, the templates its body calls) with
+  its proof deadline; and the public items both registrations show.
 * **The coins.** `first` takes a class's `ChallengerCoins` (a test's in-process challenger). The command opens one
   challenger session on the window's run (`a5_coins.start`: ``local``, ``loopback:HOST:PORT`` or ``gate:USER@HOST``),
   each class a rank of it, sampling on a thread of its own in its turn; the session's evidence goes into every class's
@@ -18,8 +19,9 @@ the same point, for its interior registration and the second stage (`First.secon
   again on the bytes read (`Staged`, which then reads the second stage's coins from a live session), holding each to
   ``stage1.json``: the same Spec digest, registration digest and sample.
 
-Until the class's request Definition and two-stage over a window of templates land, the replay block is
-`boundary_rows`' stand-in (one check template's instances), and so is every sample this draws.
+Until the class's request Definition lands, the replay block is `boundary_rows`' stand-in (one check template's
+instances, or their bodies inlined, as the class's ``commit.json`` says), and so is every sample this draws. An inlined
+check whose body calls several templates needs core's two-stage over a window of templates.
 
 Usage::
 
@@ -98,15 +100,17 @@ def spec_of(layout: BR.Layout, rule: Rule) -> S.Spec:
               S.Public("leaf_layer", "structure", "the interior registration's public bodies' digest"),
               *(S.Public(f"{k}:{v}", "structure", f"{v}'s {k}, from the class and its spans") for v in names
                 for k in ("leaves", "domain")))
-    check = S.Check(P.program_digest(Program(layout.check)), P.template_instance_query(layout.check),
-                    proof_deadline=rule.proof_deadline)
+    digests = tuple(P.program_digest(Program(t)) for t in layout.templates)
+    check = S.Check(digests[0] if len(digests) == 1 else digests, layout.query, proof_deadline=rule.proof_deadline)
     return S.Spec(values, S.TwoStage(layout.grain, rule.replay, rule.k), check, public, f"{BR.FORMAT}\0{layout.run}".encode())
 
 
 def stream_of(layout: BR.Layout, rule: Rule, coins: CC.ChallengerCoins, *, delta: float = 0.5, **kwargs: Any) -> S.Stream:
-    """The class's two-stage stream on ``coins``: its unit the check template, its replay block the layout's."""
-    return S.Stream(spec_of(layout, rule), layout.check, budget=1, delta=delta, challenger=CHALLENGER, coins=coins,
-                    replay=layout.replay, **kwargs)
+    """The class's two-stage stream on ``coins``: its units the check's templates (`Layout.templates`), its replay block
+    the layout's."""
+    ts = layout.templates
+    return S.Stream(spec_of(layout, rule), ts[0] if len(ts) == 1 else ts, budget=1, delta=delta, challenger=CHALLENGER,
+                    coins=coins, replay=layout.replay, **kwargs)
 
 
 class Recorded(CC.ChallengerCoins):

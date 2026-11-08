@@ -47,7 +47,7 @@ The arms, each one engine configuration; each adds its change to the arm it name
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
 - ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
   window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
-  ``per_prompt``, ``per_output``, ``drained``) ``--boundary-rows``'s JSON, at ``--window-s``.
+  ``per_prompt``, ``per_output``, ``drained``, ``inline``) ``--boundary-rows``'s JSON, at ``--window-s``.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -1003,7 +1003,7 @@ def main(argv: list[str] | None = None) -> int:
     r.add_argument("--window-s", type=float, default=600.0, help="the Commit period the tokens arm closes at")
     r.add_argument("--kv-window-s", type=float, default=600.0, help="the window edge the kv arm hashes the KV cache at")
     r.add_argument("--boundary-rows", type=json.loads, metavar="JSON",
-                   help="the boundary-rows arm's object: check, per_prompt, per_output, drained")
+                   help="the boundary-rows arm's object: check, per_prompt, per_output, drained, inline")
     r.add_argument("--plan", help="the plan's file, shared by a job's arms (default: OUT/plan.jsonl)")
     r.add_argument("--docs", type=int, default=20000, help="the shard's documents a plan draws from")
     r.add_argument("--seed", type=int, default=0)

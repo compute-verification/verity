@@ -18,10 +18,12 @@ program, partition, port, schema, N leaves, run); a u32 is two u16 words, low fi
 The step shapes are no value: they choose the Programs, and the window's advice commits them. Each leaf's salt is fresh
 from the OS (`commit`).
 
-**The replay block** (`Layout.replay`) is a stand-in until the class's request Definition and two-stage over a window of
-templates land: `per_prompt * P + per_output * O` instances of one check template (`population`), so a window committed
-under it is audited with that one template. The boundary's values, layout and serving path stay as they are when the
-replay block becomes the class's own; its program, and so its domains, name whichever replay block it is configured with.
+**The replay block** (`Layout.replay`) is a stand-in until the class's request Definition lands: `per_prompt * P +
+per_output * O` instances of one check template (`population`), so a window committed under it is audited with that one
+template; or, ``inline``, those instances with each one's body in place (`inlined`), audited with the templates that body
+calls, for a check template too large for one proof block whose pieces are. The boundary's values, layout and serving
+path stay as they are when the replay block becomes the class's own; its program, and so its domains, name whichever
+replay block it is configured with.
 
 **Files** (`write`), under ``w<window>/p<P>-o<O>/``: ``commit.json`` (public: the layout, each value's root, domain and
 leaves, the index's hiding leaf), and prover-only ``index.json`` (each span's engine id, prompt, sampling inputs, ids
@@ -49,9 +51,12 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
-from verity.ml.circuits.defs import SpecializedDefinition
+from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
 from verity.ml.circuits.population import population
 from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import coll_concat
+from verity.ml.circuits.types import Array
 from verity.ml.commitments.identity import identity_digest_sha512
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
@@ -163,11 +168,33 @@ def run_root(serve: str, window: int) -> str:
     return hashlib.sha512(f"{FORMAT}\0{serve}\0{int(window)}".encode()).hexdigest()
 
 
+def inlined(template: SpecializedDefinition, n: int) -> SpecializedDefinition:
+    """`TemplateInlined_v1{template, N=n}`: `n` instances of the composite ``template``, each one's body emitted in place, every
+    parameter an array over instances and the result the instances' results in order. It computes `population`'s function,
+    but its roots are the calls inside ``template``'s body, so a check of the templates that body calls counts their
+    instances in it, while its outputs stay ``template``'s alone."""
+    if not isinstance(getattr(template, "defn", None), CompositeDefinition) or n < 1:
+        raise ValueError(f"inlines one instance or more of a composite template, not {n} of {template.id}")
+    params, ret = template.signature()
+
+    def signature(S: Any) -> tuple[tuple[tuple[str, Any], ...], Any]:
+        return tuple((name, Array(S.N, t)) for name, t in params), Array(S.N, ret)
+
+    def body(B: Any, S: Any, *args: Any) -> Any:
+        return coll_concat(Array(S.N, ret), [template.defn.body(B, template.S(), *(a[i] for a in args)) for i in range(S.N)])
+
+    defn = CompositeDefinition("TemplateInlined", 1, ("template", "N"), signature, body, register=False,
+                               doc=f"{n} instances of {template.id}, each body in place")
+    return bind(defn, template=descriptor_id(template), N=n)
+
+
 @dataclass(frozen=True)
 class Layout:
     """One class's registration, from public items alone: the check template ``check``, its instances a span
     (``per_prompt`` a prompt row, ``per_output`` an output), the class (``prompt``, ``outputs``), the spans N and the run.
-    What the prover commits under and the challenger's own copies (`ports`)."""
+    ``inline``: the replay block holds them `inlined`, and the check's proof blocks are the templates the check template's
+    body calls (`templates`); else they are its instances (`population`). What the prover commits under and the
+    challenger's own copies (`ports`)."""
 
     check: SpecializedDefinition
     per_prompt: int
@@ -176,6 +203,7 @@ class Layout:
     outputs: int
     spans: int
     run: str
+    inline: bool = False
 
     def __post_init__(self) -> None:
         for k in ("prompt", "outputs"):
@@ -187,14 +215,34 @@ class Layout:
         if self.n_rho < 2:
             raise ValueError(f"a replay block holds two proof blocks or more (TwoStage), not {self.n_rho}: "
                              f"{self.per_prompt} a prompt row and {self.per_output} an output at ({self.prompt}, {self.outputs})")
+        if self.inline:
+            composite = isinstance(getattr(self.check, "defn", None), CompositeDefinition)
+            forms = {n.form for n in self.check.body.nodes} if composite else {"primitive"}
+            if not forms <= {"call", "batch"}:
+                raise ValueError(f"an inlined check template's body is calls of templates, each a proof block, not "
+                                 f"{P.template_id(self.check)}'s {sorted(forms - {'call', 'batch'})}")
 
     @property
     def n_rho(self) -> int:
         return self.per_prompt * self.prompt + self.per_output * self.outputs
 
     @cached_property
+    def templates(self) -> tuple[SpecializedDefinition, ...]:
+        """The check's proof blocks' templates: the check template, or, inlined, each template its body calls, in the order
+        of its first call."""
+        if not self.inline:
+            return (self.check,)
+        return tuple({P.template_id(n.fn): n.fn for n in self.check.body.nodes}.values())
+
+    @property
+    def query(self) -> dict[str, Any]:
+        """The check's proof blocks in a replay block (`service.Check.query`): one template's instances, or each one's."""
+        ts = self.templates
+        return P.template_instance_query(ts[0]) if len(ts) == 1 else P.template_instances_query(ts)
+
+    @cached_property
     def replay(self) -> SpecializedDefinition:
-        return population(self.check, self.n_rho)
+        return inlined(self.check, self.n_rho) if self.inline else population(self.check, self.n_rho)
 
     @cached_property
     def program(self) -> Program:
@@ -223,7 +271,7 @@ class Layout:
 
     def provenance(self) -> dict[str, Any]:
         return {"prompt": self.prompt, "outputs": self.outputs, "check": P.template_id(self.check),
-                "per_prompt": self.per_prompt, "per_output": self.per_output}
+                "per_prompt": self.per_prompt, "per_output": self.per_output, "inline": self.inline}
 
 
 def port_rows(spans: Sequence[Span], layout: Layout) -> dict[str, np.ndarray]:
@@ -274,7 +322,7 @@ def layout_of(pub: Mapping[str, Any], check: SpecializedDefinition) -> Layout:
     c = BoundaryCommit.of(pub, COMMIT)
     if c.check != P.template_id(check):
         raise ValueError(f"a {FORMAT} commitment of check {c.check}, not {P.template_id(check)}")
-    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run)
+    return Layout(check, c.per_prompt, c.per_output, c.prompt, c.outputs, c.spans, c.run, c.inline)
 
 
 def record(pub: Mapping[str, Any], check: SpecializedDefinition, law: Mapping[str, Any], previous: str | None = None,
@@ -360,14 +408,16 @@ class BoundaryWindows:
     closes at the first schedule ``window_s`` after it opened (`tick`), at a step that leaves no request running once it
     holds a finished one (``drained``), and at `stop`; its finished spans are committed class by class (`commit`, `write`)
     on a thread of their own, under ``out``/w<window>/, before anything can sample them, and each class's
-    ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread. A
-    failed commit is reported to ``sink`` (``error``) and registers nothing."""
+    ``commit.json`` goes to ``sink`` too. ``check`` is the check template, or a callable giving it on that thread, and
+    ``inline`` its `Layout`'s. A failed commit is reported to ``sink`` (``error``) and registers nothing."""
 
     def __init__(self, out: Path, check: SpecializedDefinition | Callable[[], SpecializedDefinition], per_prompt: int,
-                 per_output: int, window_s: float, *, drained: bool = True, sink: Callable[[dict], None] | None = None,
-                 clock: Callable[[], float] = time.monotonic, serve: str | None = None) -> None:
+                 per_output: int, window_s: float, *, drained: bool = True, inline: bool = False,
+                 sink: Callable[[dict], None] | None = None, clock: Callable[[], float] = time.monotonic,
+                 serve: str | None = None) -> None:
         self.out, self.per_prompt, self.per_output = Path(out), int(per_prompt), int(per_output)
-        self.window_s, self.drained, self.sink, self.clock = float(window_s), drained, sink, clock
+        self.window_s, self.drained, self.inline = float(window_s), drained, inline
+        self.sink, self.clock = sink, clock
         self.serve = serve or secrets.token_hex(32)
         self._check, self._check_fn = (check, None) if isinstance(check, SpecializedDefinition) else (None, check)
         self.open: dict[str, dict[str, Any]] = {}
@@ -379,10 +429,11 @@ class BoundaryWindows:
     @classmethod
     def of(cls, cfg: Mapping[str, Any], out: Path, sink: Callable[[dict], None] | None = None) -> BoundaryWindows:
         """From a serve's configuration: ``check``, a serving template's descriptor id (`check_template`), and
-        ``per_prompt``, ``per_output``, ``window_s`` and ``drained``."""
+        ``per_prompt``, ``per_output``, ``window_s``, ``drained`` and ``inline``."""
         t = str(cfg["check"])
         return cls(out, lambda: check_template(t), int(cfg.get("per_prompt", 0)), int(cfg.get("per_output", 1)),
-                   float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)), sink=sink)
+                   float(cfg.get("window_s", 600)), drained=bool(cfg.get("drained", True)),
+                   inline=bool(cfg.get("inline", False)), sink=sink)
 
     @property
     def check(self) -> SpecializedDefinition:
@@ -447,7 +498,8 @@ class BoundaryWindows:
             window, opened, closed, carried, spans = job
             for (p, o), mine in classes(spans).items():
                 try:
-                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine), run_root(self.serve, window))
+                    layout = Layout(self.check, self.per_prompt, self.per_output, p, o, len(mine),
+                                    run_root(self.serve, window), self.inline)
                     c = commit(mine, layout, window)
                     write(c, self.out / f"w{window}" / f"p{p}-o{o}")
                     line = {**c.public(), "serve": self.serve, "open_s": opened, "close_s": closed, "carried": carried}
@@ -504,4 +556,4 @@ class BoundaryWindows:
 
 __all__ = ["COMMIT", "EGRESS", "FIELDS", "FINISH", "FORMAT", "INDEX", "INGRESS", "MIN_CAP", "PORTS", "SALTS", "SCHEMA",
            "BoundaryWindows", "Committed", "Layout", "Span", "cap", "check_template", "classes", "commit", "egress_row",
-           "ingress_row", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]
+           "ingress_row", "inlined", "layout_of", "port_rows", "record", "reopen", "run_root", "sampling_of", "write"]

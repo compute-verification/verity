@@ -14,6 +14,9 @@ import pytest
 
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R, verifier as V
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.evaluation import evaluate
+from verity.ml.circuits.population import population
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.ml.windows import rows as CS
 from verity_vllm.engine.hooks import Hooks
@@ -24,6 +27,12 @@ XOR8 = PrimitiveDefinition("BoundaryRowsTestXor8", 1, (("a", Bits(8)), ("b", Bit
 #: the check template: a proof block of one gate's worth
 PAIR = bind(CompositeDefinition("BoundaryRowsTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                 lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+NOT8 = PrimitiveDefinition("BoundaryRowsTestNot8", 1, (("a", Bits(8)),), Bits(8), lambda a: a ^ 0xFF, register=False)
+NOT = bind(CompositeDefinition("BoundaryRowsTestNot", 0, (), lambda S_: ((("a", Bits(8)),), Bits(8)),
+                               lambda B, S_, a: B.call(NOT8, a), register=False))
+#: a check template whose body calls two templates, as one too large for a proof block calls its pieces
+CHAIN = bind(CompositeDefinition("BoundaryRowsTestChain", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
+                                 lambda B, S_, x: B.call(NOT, B.call(PAIR, x)), register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 LAW = {"law": "subset", "k": 2}
@@ -104,6 +113,34 @@ def test_a_class_reopens_from_its_files_and_refuses_a_changed_one(tmp_path):
     (d / BR.INDEX).write_text(json.dumps(idx) + "\n")
     with pytest.raises(ValueError, match="recommit to another values"):
         BR.reopen(d, PAIR)
+
+
+def test_an_inlined_check_is_checked_by_the_templates_its_body_calls(tmp_path):
+    """``inline``: the replay block is the check template's instances with each body in place, computing what their
+    population computes and holding only their outputs; its proof blocks are the templates the body calls, in the order of
+    their first call; and the class commits, registers and reopens with ``inline`` in its record, under other domains than
+    the population's. A primitive has no body to inline."""
+    L = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128, inline=True)
+    assert [P.template_id(t) for t in L.templates] == [P.template_id(PAIR), P.template_id(NOT)]
+    assert L.query == P.template_instances_query([PAIR, NOT]) and P.units(Program(L.replay), L.query) == 8
+    assert L.replay.signature()[1] == Array(4, Bits(8))
+    xs = [3, 5, 7, 7, 0, 255, 1, 2]
+    want = tuple(0xFF ^ a ^ b for a, b in zip(xs[::2], xs[1::2]))
+    assert evaluate(L.replay, xs) == evaluate(population(CHAIN, 4), xs) == want
+    c = BR.commit(_spans(), L, 0)
+    pub = json.loads(json.dumps(c.public()))
+    assert pub["inline"] is True and BR.layout_of(pub, CHAIN) == L
+    assert V.check(BR.record(pub, CHAIN, LAW), L.program, L.grain, LAW, CS.SCHEME, L.ports()).codes == ()
+    plain = BR.Layout(CHAIN, 0, 1, 4, 4, 5, "a" * 128)
+    assert plain.templates == (CHAIN,) and plain.ports()[BR.INGRESS]["domain"] != L.ports()[BR.INGRESS]["domain"]
+    assert BR.reopen(BR.write(c, tmp_path / "w0" / "p4-o4"), CHAIN).roots == c.roots
+    with pytest.raises(ValueError, match="composite"):
+        BR.inlined(XOR8, 2)
+    with pytest.raises(ValueError, match="calls of templates"):
+        BR.Layout(PAIR, 0, 1, 4, 4, 5, "a" * 128, inline=True)
+    bw = BR.BoundaryWindows.of({"check": P.template_id(CHAIN), "inline": True}, tmp_path / "of")
+    bw.stop()
+    assert bw.inline and not BR.BoundaryWindows.of({"check": "c"}, tmp_path / "of2").inline
 
 
 class Request:

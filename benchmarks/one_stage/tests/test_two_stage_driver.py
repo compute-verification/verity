@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.program import Program
+from verity.ml.circuits.refs import coll_concat
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.sampled_proofs import challenger as Ch, service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registration as R
@@ -29,6 +31,11 @@ XOR8 = PrimitiveDefinition("TwoStageDriverTestXor8", 1, (("a", Bits(8)), ("b", B
                            register=False)
 PAIR = bind(CompositeDefinition("TwoStageDriverTestPair", 0, (), lambda S_: ((("x", Array(2, Bits(8))),), Bits(8)),
                                 lambda B, S_, x: B.call(XOR8, x[0], x[1]), register=False))
+#: a check template whose body calls PAIR twice: inlined, its proof blocks are PAIR's instances
+WRAP = bind(CompositeDefinition("TwoStageDriverTestWrap", 0, (),
+                                lambda S_: ((("x", Array(2, Array(2, Bits(8)))),), Array(2, Bits(8))),
+                                lambda B, S_, x: coll_concat(Array(2, Bits(8)), [B.call(PAIR, x[0]), B.call(PAIR, x[1])]),
+                                register=False))
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "max_tokens": 4, "min_tokens": 0,
           "ignore_eos": True, "seed": None, "presence_penalty": 0.0, "frequency_penalty": 0.0, "repetition_penalty": 1.0}
 N, Q, K, N_RHO = 6, 2, 1, 4
@@ -36,14 +43,15 @@ INTERIOR = (("x", BR.SCHEMA), ("out", BR.SCHEMA))
 RULE = TS.Rule(f"rate:{Q}/{N}", K, INTERIOR, 60.0)
 
 
-def _class() -> BR.Committed:
+def _class(check=PAIR, inline: bool = False) -> BR.Committed:
     spans = [BR.Span(f"r{i}", (i, i + 1, i + 2), GREEDY, (7, 8, 9, i), "length") for i in range(N)]
-    return BR.commit(spans, BR.Layout(PAIR, 0, 1, 4, 4, N, BR.run_root("test-serve", 0)), 0)
+    return BR.commit(spans, BR.Layout(check, 0, 1, 4, 4, N, BR.run_root("test-serve", 0), inline), 0)
 
 
 def _interior(layout: BR.Layout, previous: str) -> tuple[dict, dict]:
-    """The replay side's interior registration over the Q sampled spans' Q·n_rho proof blocks, at stand-in roots."""
-    m = Q * layout.n_rho
+    """The replay side's interior registration over the Q sampled spans' proof blocks (PAIR's instances), at stand-in
+    roots."""
+    m = Q * P.units(Program(layout.replay), layout.query)
     program, query = P.population_program(PAIR, m), P.template_instance_query(PAIR)
     part = P.partition(program, query)
     ports = {v: {"leaves": m, "domain": R.window_domain(part["program"], P.digest(part), v, s, m, layout.run)}
@@ -71,6 +79,18 @@ def test_the_replay_side_resumes_the_first_stage_and_samples_the_second():
     assert ireg.order == again.registration.order and again.coins.live
     assert second.replay_sample == again.draw and len(second.units) == Q * K
     assert [u // N_RHO for u in second.units] == list(range(Q))
+
+
+def test_an_inlined_checks_second_stage_samples_the_template_its_body_calls():
+    """An inlined check (`commit.json`'s ``inline``): the class's stream checks the template WRAP's body calls, so the
+    replay side resumes it from ``stage1.json`` alone and the second stage samples among PAIR's instances, two an
+    instance of WRAP, in each sampled span."""
+    got = TS.first(_class(WRAP, inline=True).public(), WRAP, RULE, FC.Challenger("first"))
+    assert got.layout.inline and got.stream.spec.check.query == P.template_instance_query(PAIR)
+    again = TS.resume(json.loads(json.dumps(got.stage1())), WRAP, FC.Challenger("second"))
+    assert (again.registration.digest, again.draw.units) == (got.registration.digest, got.draw.units)
+    _, second = again.second(*_interior(again.layout, again.registration.digest))
+    assert len(second.units) == Q * K and [u // (2 * N_RHO) for u in second.units] == list(range(Q))
 
 
 def test_resume_refuses_another_rule_registration_or_sample():
