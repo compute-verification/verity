@@ -5314,6 +5314,64 @@ def test_a_batch_reads_copies_of_the_files_the_build_can_write_keyed_as_those_by
     assert A.replay_keys(live, "t")["P.B"] != keys["P.B"]
 
 
+def graph_reports(monkeypatch, search: list[str], graph: dict) -> None:
+    """Make `Graph.lean` report ``search`` and ``graph`` (paths as strings), so `copied` sees a build's layout without one."""
+    def run(argv, cwd, log=None, timeout=None, on_line=None):
+        Path(argv[argv.index(str(A.TOOL / "Graph.lean")) + 1]).write_text(json.dumps({"search": search, "graph": graph}))
+        return 0, ""
+    monkeypatch.setattr(A, "run", run)
+
+
+def test_a_batch_abandons_a_symlinked_olean_whose_target_escapes_its_search_directory(tmp_path, monkeypatch):
+    """top's A/M swap: a build writes `A.olean` in a writable directory as a symlink to a file outside it. `lean` finds the
+    module by name there and loads the target, but a copy's key must be of bytes under the directory `lean` searched, so
+    `copied` abandons the batch, which stores nothing; the final replay then checks the module."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    d0 = p.pkg / ".lake" / "build" / "lib" / "lean"
+    d1 = p.pkg / ".lake" / "alt" / "lib" / "lean"
+    (d1 / "P").mkdir(parents=True)
+    (d1 / "P" / "M.olean").write_text("M, outside A's directory")
+    (d0 / "P").mkdir(parents=True)
+    (d0 / "P" / "A.olean").symlink_to(d1 / "P" / "M.olean")
+    graph_reports(monkeypatch, [str(d0), str(d1)], {"P.A": {"olean": str(d0 / "P" / "A.olean"), "imports": []}})
+    p._replay(["P.A"])
+    assert "resolves outside" in p.batches[-1]["error"] and "P.A" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
+def test_a_batch_abandons_a_read_in_place_module_that_resolves_into_a_writable_root(tmp_path, monkeypatch):
+    """ci's moved module: a module found in a directory no build writes is read in place, uncopied, so its key is of the
+    bytes there. If its olean is a symlink into a writable root the prover controls, those bytes are not fixed, so `copied`
+    abandons the batch, which stores nothing; the final replay checks it."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    ro = tmp_path / "ro" / "lib" / "lean"            # a directory no build writes: read in place, uncopied
+    w = p.pkg / ".lake" / "build" / "lib" / "lean"   # a writable root
+    (w / "Lib").mkdir(parents=True)
+    (w / "Lib" / "M.olean").write_text("the prover's bytes")
+    (ro / "Lib").mkdir(parents=True)
+    (ro / "Lib" / "M.olean").symlink_to(w / "Lib" / "M.olean")
+    graph_reports(monkeypatch, [str(ro)], {"Lib.M": {"olean": str(ro / "Lib" / "M.olean"), "imports": []}})
+    p._replay(["Lib.M"])
+    assert "writable root" in p.batches[-1]["error"] and "Lib.M" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
+def test_a_batch_abandons_a_module_that_shadows_a_toolchain_module(tmp_path, monkeypatch):
+    """A package module with a toolchain module's name is found in both the writable package directory and the toolchain's,
+    so which one `lean` loads turns on search order, not on a single key's bytes. `copied` abandons the batch, which stores
+    nothing; the final replay checks it."""
+    p = pipeline(tmp_path, monkeypatch, ["P/A.lean"])
+    lib = p.pkg / ".lake" / "build" / "lib" / "lean"
+    tc = tmp_path / "toolchain" / "lib" / "lean"
+    for d in (lib, tc):
+        d.mkdir(parents=True)
+        (d / "Init.olean").write_text(f"init at {d}")
+    graph_reports(monkeypatch, [str(lib), str(tc)], {"Init": {"olean": str(lib / "Init.olean"), "imports": []}})
+    p._replay(["Init"])
+    assert "shadowed" in p.batches[-1]["error"] and "Init" in p.batches[-1]["error"]
+    assert not list(p.replay_cache.glob("*.json"))
+
+
 def kernel_control(pkg: Path) -> dict:
     """``pkg``, a copy of the control, given `violations.json`'s `kernel` case: a declaration that skipped the kernel."""
     kernel = json.loads((HERE / "fixtures" / "violations.json").read_text())["kernel"]

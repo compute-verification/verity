@@ -4705,24 +4705,55 @@ class Pipeline:
 
     def copied(self, mods: list[str], work: Path) -> tuple[dict, list[str]]:
         """(the facts `replay_step` replays ``mods`` on, the search path): the graph of ``mods`` and everything they
-        import (`Graph.lean`), with each module's `.olean` under a `writable` directory moved to its copy in the snapshot,
-        made now unless an earlier batch made it, and the search path's directories moved the same way."""
+        import (`Graph.lean`), with each module's `.olean` copied to where `lean` looks for it, and the search path's
+        directories moved the same way.
+
+        `lean` finds a module by name along the search path (`SearchPath.findWithExt`), not by resolving a symlink: a
+        module ``m`` lives at ``dir/<m as a path>.olean`` under the first search directory holding it. So a copy goes to
+        `moved`(that directory, resolved) over the same relative path, never to `moved` of the olean's resolved target;
+        otherwise a symlinked, shadowed or relocated olean could key a batch with bytes `lean` never loads. The batch is
+        abandoned (storing nothing, so the final replay checks the module) when a module's olean resolves outside its
+        search directory, when its name is found in more than one search directory, or when a module read in place (from
+        a directory no build writes) resolves into a writable root. Before replay, every graph module's first hit along
+        the moved search path must resolve to the file its key is taken from."""
         (work / "modules").write_text("".join(f"{m}\n" for m in mods))
         rc, text = run(["lake", "env", "lean", "--run", str(TOOL / "Graph.lean"), str(work / "graph.json"),
                         f"@{work / 'modules'}"], self.pkg, work / "graph.log")
         if rc:
             raise RuntimeError(f"Graph.lean exited {rc}: {text[-500:]}")
         doc = json.loads((work / "graph.json").read_text())
+        dirs = [Path(d) for d in doc["search"]]
         jobs = {}
         graph = {}
         for m, g in doc["graph"].items():
-            live = Path(g["olean"]).resolve()
-            if (copy := self.moved(live)) is not None:
+            rel = Path(*m.split(".")).with_suffix(".olean")
+            holders = [d for d in dirs if (d / rel).exists()]
+            if len(holders) != 1:
+                where = ", ".join(str(d) for d in holders) or "no search directory"
+                raise RuntimeError(f"replay: {m} is found in {where}; a shadowed or unplaced module is not replayed")
+            d = holders[0]
+            live = d / rel
+            target = live.resolve()
+            snap = self.moved(d.resolve())
+            if snap is None:                                   # a directory no build writes: its module is read in place
+                if self.moved(target) is not None:
+                    raise RuntimeError(f"replay: {m} is read in place but resolves into a writable root at {target}")
+                graph[m] = {"olean": str(live), "imports": g["imports"]}
+            else:                                              # a writable directory: the module is copied from within it
+                if not target.is_relative_to(d.resolve()):
+                    raise RuntimeError(f"replay: {m}'s olean {live} resolves outside its search directory {d} to {target}")
+                copy = snap / rel
                 jobs[copy] = live
-            graph[m] = {"olean": str(copy or live), "imports": g["imports"]}
+                graph[m] = {"olean": str(copy), "imports": g["imports"]}
         with ThreadPoolExecutor(max_workers=min(8, cores())) as ex:
             list(ex.map(lambda kv: self.copy(*kv), jobs.items()))
         search = [str(self.moved(Path(d).resolve()) or d) for d in doc["search"]]
+        for m in doc["graph"]:
+            rel = Path(*m.split(".")).with_suffix(".olean")
+            hit = next((Path(s) / rel for s in search if (Path(s) / rel).exists()), None)
+            want = Path(graph[m]["olean"])
+            if hit is None or hit.resolve() != want.resolve():
+                raise RuntimeError(f"replay: {m} would load {hit}, not the keyed {want}")
         return {"graph": graph, "modules": mods, "axioms": []}, search
 
     def digest(self, p: Path) -> str:
