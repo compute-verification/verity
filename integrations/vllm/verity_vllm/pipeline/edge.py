@@ -11,9 +11,11 @@ The Program's side, each field's type and the reads of it, is `program.workload.
   (`members`): its carried requests in the order w − 1 left them, then the ones it admitted, by first row. A request that only
   may carry (its last kept output is in w's last step) has no Program in w + 1, and one that never ran has no history.
 - **Which fields.** Each port is a Tuple with one field per member holding it, in member order (`fields`). `edge.kv` holds
-  every member's latent rows [0, computed) of every layer (a request Program's `prefix`). `edge.last` holds the last kept
-  output (`last_token`) of each member past its prompt. The indexer's keys and scales aren't carried: a row reads them only
-  past the indexer's top-k keys, which the decoder refuses.
+  every member's latent rows [0, computed) of every layer (a request Program's `prefix`). `edge.ik` and `edge.iks` hold the
+  indexer's keys and scales (`prefix_ik`, `prefix_iks`) of each member whose record's last row reads past the model's
+  INDEX_TOPK keys (`prompt_len + output_len - 1` > INDEX_TOPK, `predict.segment.edge_groups`), the same in every window; a
+  model without an indexer has neither port. `edge.last` holds the last kept output (`last_token`) of each member past its
+  prompt.
 - **The verifier's side.** `carried(last, advice)` refuses ``advice`` unless it follows ``last``, the window before it
   (`window_advice.NotFollowing`, by name), and gives each carried request that reads history its field in each of ``last``'s
   ports (`Slice`).
@@ -30,14 +32,17 @@ __all__ = ["VALUES", "Slice", "Value", "carried", "fields", "members"]
 
 class Value(NamedTuple):
     """One edge port: its name (a port of window w's record and a registered value of window w + 1's), the request Program
-    Input its fields fill, and whether a member holds a field only once it is past its prompt."""
+    Input its fields fill, whether a member holds a field only once it is past its prompt, and whether only if its rows read
+    past INDEX_TOPK keys."""
 
     name: str
     history: str
     past_prompt: bool
+    past_topk: bool = False
 
 
-VALUES = (Value("edge.kv", "prefix", False), Value("edge.last", "last_token", True))
+VALUES = (Value("edge.kv", "prefix", False), Value("edge.ik", "prefix_ik", False, True), Value("edge.iks", "prefix_iks", False, True),
+          Value("edge.last", "last_token", True))
 
 
 class Slice(NamedTuple):
@@ -55,19 +60,23 @@ def members(advice: WA.Advice) -> tuple[WA.Close, ...]:
     return tuple(c for c in WA.close(advice) if c.must and c.state.computed)
 
 
-def fields(advice: WA.Advice) -> dict[str, tuple[int, ...]]:
-    """Each port's members holding a field, as indices in ``advice``, in field order."""
+def fields(advice: WA.Advice, topk: int | None = None) -> dict[str, tuple[int, ...]]:
+    """Each port's members holding a field, as indices in ``advice``, in field order. ``topk``: the model's INDEX_TOPK, None for a
+    model without an indexer (no `edge.ik` or `edge.iks`)."""
     held = members(advice)
-    return {v.name: tuple(c.request for c in held
-                          if not v.past_prompt or c.state.computed >= advice.requests[c.request].prompt_len) for v in VALUES}
+
+    def holds(v: Value, c: WA.Close) -> bool:
+        q = advice.requests[c.request]
+        return (not v.past_prompt or c.state.computed >= q.prompt_len) and (not v.past_topk or q.prompt_len + q.output_len - 1 > topk)
+    return {v.name: tuple(c.request for c in held if holds(v, c)) for v in VALUES if topk is not None or not v.past_topk}
 
 
-def carried(last: WA.Advice, advice: WA.Advice) -> tuple[Slice, ...]:
+def carried(last: WA.Advice, advice: WA.Advice, topk: int | None = None) -> tuple[Slice, ...]:
     """The verifier's: ``advice`` held to ``last``, the window before it (`window_advice.follows`, refusing by name), and each
-    carried request's fields in ``last``'s edge, in ``advice``'s order. A carried request that isn't one of ``last``'s members
-    reads no history and has no slice."""
+    carried request's fields in ``last``'s edge (`fields` at ``topk``), in ``advice``'s order. A carried request that isn't one
+    of ``last``'s members reads no history and has no slice."""
     pairs = WA.follows(last, advice)
-    held = fields(last)
+    held = fields(last, topk)
     at = set(held[VALUES[0].name])
     return tuple(Slice(k, advice.requests[k].id, advice.carried[k].computed,
                        {p: f.index(i) for p, f in held.items() if i in f}) for k, i in pairs if i in at)

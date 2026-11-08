@@ -485,8 +485,27 @@ fn table_names(tables: usize) -> Vec<String> {
 /// `count` equal consecutive parts, and table `j` proves part `j` as a subset sample of the population, under an identity that
 /// names the session's rules for several tables.
 fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
+    side_tables(Side::Fresh, st, inst, draw, count)
+}
+
+/// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
+/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side { Fresh, Verifier, Prover }
+
+fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, String> {
+    static VERIFIER: StmtCache = StmtCache::new();
+    static PROVER: StmtCache = StmtCache::new();
+    match side {
+        Side::Verifier if stmt_cache_on() => VERIFIER.drawn(st, n, id),
+        Side::Prover if stmt_cache_on() => PROVER.drawn(st, n, id),
+        _ => Stmt::new(st.c.clone(), n, id).map(Arc::new),
+    }
+}
+
+fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
-        let (st, inst) = match draw { Some(d) => drawn(st, inst, d)?, None => (st.clone(), inst.clone()) };
+        let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
             zk_shape_ok(&st)?;
         }
@@ -516,11 +535,11 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
                                            one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
                                            after the last coin of every stream (the barrier)");
         }
-        let ds = Stmt::new(st.c.clone(), di.n, id)?;
+        let ds = side_stmt(side, st, di.n, id)?;
         if is_zk(&ds) {
             zk_shape_ok(&ds)?;
         }
-        Ok(Table { name, st: Arc::new(ds), inst: Arc::new(di) })
+        Ok(Table { name, st: ds, inst: Arc::new(di) })
     }).collect::<Result<Vec<_>, String>>()?;
     if list.iter().any(|t| t.st.m_pts != list[0].st.m_pts) {
         return Err("tables: the tables' link points have different lengths".into());
@@ -747,10 +766,14 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
 
 /// The sampled proof blocks' statement over a registered population (both sides derive it from the population file and the sample).
 fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+    side_drawn(Side::Fresh, st, inst, draw)
+}
+
+fn side_drawn(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
     let di = inst.drawn(&st.c, draw)?;
     check_public(&st.c, &di)?;
-    let ds = Stmt::new(st.c.clone(), di.n, st.identity.clone())?;
-    Ok((Arc::new(ds), Arc::new(di)))
+    let ds = side_stmt(side, st, di.n, st.identity.clone())?;
+    Ok((ds, Arc::new(di)))
 }
 
 /// A shared transport used as a plain one (so it can be wrapped).
@@ -952,7 +975,7 @@ fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_li
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
-        let tabs = session_tables(&st, &inst, Some(draw), count)?;
+        let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
         Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
 }
@@ -1229,6 +1252,30 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
     });
     eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
     (t_level0, reps)
+}
+
+/// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
+/// to R, a level's tree 2^(its message columns + its rate) leaves; under M1 each rep's pads tree comes first (`zk_prepare`'s ids).
+fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)> {
+    let pcs = pcs_of(st, lig);
+    let cfg = pcs.ligerito_prover_config().expect("Ligerito config");
+    let (r, pads) = (cfg.recursive_steps as u64, is_zk(st) as u64);
+    let mut trees = vec![(level0, pcs.n_leaves())];
+    for rep in 0..2 {
+        let first = level0 + 1 + rep * (pads + r) + pads;
+        trees.extend((0..cfg.recursive_steps).map(|i| (first + i as u64, 1usize << (cfg.recursive_log_msg_cols[i] + cfg.log_inv_rates[i + 1]))));
+    }
+    trees
+}
+
+#[cfg(feature = "gpu")]
+fn pin_salts(b: &Arc<Vec<u8>>) -> Option<flock_live::gpu_circuit::Pinned> {
+    flock_live::gpu_circuit::Pinned::new(b)
+}
+
+#[cfg(not(feature = "gpu"))]
+fn pin_salts(_: &Arc<Vec<u8>>) -> Option<()> {
+    None
 }
 
 /// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
@@ -3730,7 +3777,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
-        Ok(Resp::Draw(d)) => session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
+        Ok(Resp::Draw(d)) => side_tables(Side::Prover, st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
         other => return Err((json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new())),
     };
     let tabs = match tabs {
@@ -3776,6 +3823,24 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
+    // the device's trees' salts read beside the witness build and page-locked for its copies, not inside its timed phases
+    // (FC_SALTS_AHEAD=0: each tree's where the device builds it); not under the ZK server, whose Lean draws them
+    let salts_ahead = (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+        && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
+    .then(|| {
+        let tables: Vec<_> = salts_t.iter().map(|s| {
+            let s = s.lock().unwrap_or_else(PoisonError::into_inner);
+            (s.ahead(), salt_trees(st, lig, s.level0_id()))
+        }).collect();
+        flock_live::spawn(move || {
+            let t0 = Instant::now();
+            let mut pinned = Vec::new();
+            for (a, trees) in &tables {
+                a.draw(trees, &mut |b| pinned.extend(pin_salts(b)));
+            }
+            (tables, pinned, t0.elapsed().as_secs_f64())
+        })
+    });
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
@@ -4194,6 +4259,13 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    if let Some(h) = salts_ahead {
+        let (tables, pinned, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
+        let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
+        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": pinned.len(),
+                                            "untaken": untaken}));
+        flock_live::spawn(move || drop(pinned));
+    }
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
                 prove_s, buckets, tp0 })
 }

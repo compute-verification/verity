@@ -143,7 +143,7 @@ unsafe extern "C" fn hm96_tree(ctx: *mut c_void, tree: i32, leaves: i64) -> *con
             0 => s.level0(leaves as usize),
             _ => {
                 let id = s.next_id();
-                std::sync::Arc::new(s.expand(id, leaves as usize))
+                s.take(id, leaves as usize)
             }
         };
         let p = b.as_ptr();
@@ -207,6 +207,8 @@ unsafe extern "C" {
     fn flock_cuda_hm96_leaves(x: *const u8, salts: *const u8, n: i64, prefixes: *const u8, tables: *const u64, out: *mut u8) -> i32;
     fn flock_cuda_circuit_kept(tag: u64) -> i32;
     fn flock_cuda_host_alloc(bytes: usize) -> *mut c_void;
+    fn flock_cuda_host_register(p: *mut c_void, bytes: usize) -> i32;
+    fn flock_cuda_host_unregister(p: *mut c_void);
     fn flock_cuda_dev_alloc(bytes: usize) -> *mut c_void;
     fn flock_cuda_copy(dst: *mut c_void, src: *const c_void, bytes: usize) -> i32;
 }
@@ -223,6 +225,22 @@ pub enum Reuse {
 /// Whether the device holds a rep 0's level-0 commitment for `tag`.
 pub fn kept(tag: u64) -> bool {
     unsafe { flock_cuda_circuit_kept(tag) != 0 }
+}
+
+/// Salts page-locked for the device's copies, unlocked when dropped; holding them, so they are never freed while locked.
+pub struct Pinned(std::sync::Arc<Vec<u8>>);
+
+impl Pinned {
+    /// `b` page-locked; None where the runtime refuses (its copies then stage through pageable memory)
+    pub fn new(b: &std::sync::Arc<Vec<u8>>) -> Option<Self> {
+        (!b.is_empty() && unsafe { flock_cuda_host_register(b.as_ptr() as *mut c_void, b.len()) } != 0).then(|| Pinned(b.clone()))
+    }
+}
+
+impl Drop for Pinned {
+    fn drop(&mut self) {
+        unsafe { flock_cuda_host_unregister(self.0.as_ptr() as *mut c_void) }
+    }
 }
 
 /// The device's unit kernel syncs once per AND-level for 32 units per CTA, so a deep unit leaves the device idle (a flattened

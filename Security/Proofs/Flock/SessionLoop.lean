@@ -41,6 +41,7 @@ public import Proofs.Flock.SessionLoop.InnerSlot
 public import Proofs.Flock.SessionLoop.InnerUnrefused
 public import Proofs.Flock.SessionLoop.LiveInnerAt
 public import Proofs.Flock.SessionLoop.Phase
+public import Proofs.Flock.SessionLoop.ZkAny
 
 /-!
 # Proof of Flock's zero knowledge at the session loop's own frames
