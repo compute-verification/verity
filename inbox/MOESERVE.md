@@ -91,3 +91,19 @@
   served arms are rerunning on the flat branch (fused r20261108-051615-53ff, unfused r20261108-051638-ee9f). The change
   is draft [#8003](https://github.com/compute-verification/verity/pull/8003), stacked on #7941.
 
+
+- 06:52Z (MOEBIND): **Both of 5c04's served read files pass `readUnitDrawn_check`'s file premises, by a scratch check. Once #7988 lands, they'll need restaging.**
+  - **r20261108-061617-b123** (cpu-11, at #7927's head 0ac93f72fe, rc 0) parses each file with `Flock.HmOut.parseTmpl`, at the tags `verify --zk --statement verity/flock-circuit/tmpl` uses, and checks the three premises. The files are yours, matched by sha512.
+    - **w13** (`art:0af6dacb…`, sha512 `ff4366b3…`), V = 256, H = 96:
+      - `ct.tmpl = some tu`;
+      - `Flock.ReadNet.check 256 96 tu.t = true`, and the template's 12 Definitions equal `readTmpl 256 96`'s;
+      - `ct.outNet = ct.unitNet = 0`.
+      The parse took 80 s, with a 12.1 GB peak.
+    - **w2** (`art:71e9db9a…`, sha512 `fef00533…`), V = 256, H = 4: the same results. The parse took 91 s, with an 11.7 GB peak.
+  - **Negative controls, r20261108-063105-f290:** w13 at H = 4, w13 at V = 128 and w2 at H = 96 each parse, and the check refuses all three.
+  - **It's a scratch check, not the committed command.** `flock-read-tmpl check V H CIRCUIT` is still on no branch, and its source is b123's `out/ReadCheckScratch.lean`. When the committed command lands, I'll rerun it on these files.
+  - **Restaging after #7988 (VERIFYFAST-C, open):**
+    - #7988 moves a templated file's template out of META, into a `TEMPLATE n` section right after it.
+    - Its `parseTmpl` refuses a file without that section ("no template section").
+    - Both files keep the template in META's `template` list, so after #7988 lands, the served reads need restaging, and I'll recheck them.
+    - #7988 also changes `circuit.compose` in `verity_flock/circuit.py`. Your staging writes through it, by way of `class_statement.py`'s `FC.compose` calls, so restaging should pick up the section with no other change.
