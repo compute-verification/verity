@@ -20,8 +20,9 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
   are not the boundary's at S[0], every circuit and wire holding: Lean's registered reads refuse both link members ("does not
   open"), the fold and flips accepted.
 
-Exit 0 when the run is as expected: accepted with every negative refused, or (``--altered``) refused at both link members by
-Lean's registered reads and nowhere else. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files
+Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record accepted or refusing
+only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
+alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else. ``--out`` holds both windows (``boundary/``, ``interior/``, their private files
 too), the first stage (``first/``), a5's records (``audit/``) and ``summary.json``.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
@@ -92,16 +93,35 @@ def first_stage(a: argparse.Namespace, bc: T.CS.Committed, brec: dict, out: Path
     return (sorted(int(u) for u in draw["units"]) if d.ok else None), got
 
 
-def expected(a: argparse.Namespace, s: dict, ok: bool) -> bool:
-    """Honest: accepted with every negative refused. ``--altered``: every check before the sample passed, and Lean's verify
-    refused both link members (m0, m3) by `ALTERED` and accepted the fold and flips."""
-    if not a.altered:
-        return ok
+def own_ports(window: T.CS.Binding) -> list[str]:
+    """The interior registration's own ports the sessions read: every member's every port but its link port."""
+    return sorted(m.port(p) for t, m in enumerate(window.members) for p, _ in m.all_rows if p != T.link(t))
+
+
+def own_reads_only(record: dict, window: T.CS.Binding) -> bool:
+    """Whether the audit record refuses only the sessions' reads of the interior's own ports: its one failed check is
+    one-stage's ``registered``, which takes reads of earlier values alone, naming no registered value and exactly those
+    ports. `SpotFlock.FrameIs` asks for those reads, so the two-stage record check is to take them."""
+    bad = {k: v for k, v in (record.get("checks") or {}).items() if not v.get("ok")}
+    d = (bad.get("registered") or {}).get("detail") or {}
+    return set(bad) == {"registered"} and d.get("registered") == [] == d.get("wrong") and d.get("opened") == own_ports(window)
+
+
+def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.CS.Binding) -> bool:
+    """Honest: every check before the sample passed, every Lean verdict accepted, the sessions' registered reads the
+    verifier's own, every negative refused, and the record accepted or refusing only the reads of the interior's own
+    ports (`own_reads_only`). ``--altered``: every check before the sample passed, and Lean's verify refused both link
+    members (m0, m3) by `ALTERED` and accepted the fold and flips."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
+    before = all((s.get("checks_before_draw") or {}).values())
+    if not a.altered:
+        refused = [v if isinstance(v, bool) else bool(v.get("refused")) for v in (s.get("negatives") or {}).values()]
+        return (before and audit.get("complete") is True and audit.get("registered_reads") is True
+                and all(v is True for v in (audit.get("verdicts") or {}).values()) and bool(refused) and all(refused)
+                and (ok or own_reads_only(record, window)))
     links = [f"lean-verify/m{t}" for t in T.LINKS]
     rest = [f"lean-verify/m{t}" for t in range(len(T.TEMPLATES)) if t not in T.LINKS]
-    return (all((s.get("checks_before_draw") or {}).values()) and audit.get("accepted") is False
-            and all(ALTERED in (why.get(x) or "") for x in links)
+    return (before and audit.get("accepted") is False and all(ALTERED in (why.get(x) or "") for x in links)
             and all((audit.get("verdicts") or {}).get(x) is True for x in rest))
 
 
@@ -156,9 +176,12 @@ def main(argv=None) -> int:
                    sample=sample, audit={x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts",
                                                                 "negatives", "circuits", "timing")},
                    accepted=ok)
-    summary["as_expected"] = expected(a, s, ok)
+    record = json.loads((out / "audit" / "audit.json").read_text()) if (out / "audit" / "audit.json").exists() else {}
+    summary["record"] = {"failed": sorted(k for k, v in (record.get("checks") or {}).items() if not v.get("ok")),
+                         "own_reads_only": own_reads_only(record, it.window)}
+    summary["as_expected"] = expected(a, s, ok, record, it.window)
     (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-    print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "as_expected")}, default=str))
+    print("TWO " + json.dumps({x: summary.get(x) for x in ("sample", "accepted", "record", "as_expected")}, default=str))
     return 0 if summary["as_expected"] else 1
 
 
