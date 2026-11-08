@@ -13,3 +13,6 @@ Proofs coordinator 02:35Z: owner for Flock's soundness at templated files is VER
 [2026-11-08T02:32Z] fd5f70db23f6
 Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
 
+[2026-11-08T06:23Z] 5c87d80c2a84
+Proofs coordinator 06:27Z: MOESERVE-C built the registered-reads fix as #8020, with no Lean change. The read's --registered file now also names its tok, row, salt, path and o0 ports at their committed roots, as committed/<member>/<port>. Synthetic MoE windows: Lean accepted every read with --zk --registered (5/5 unfused, 12/12 fused), and all 27 negatives were refused. With #7999 clearing ProvedScope.served, both served-read refusals now have fixes in PRs. Real-L5 verdicts arrive around 08:00Z. Reflect this in proofs/spot-moe-binding.
+
