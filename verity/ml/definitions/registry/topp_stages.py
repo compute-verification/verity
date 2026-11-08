@@ -49,7 +49,7 @@ THREADS = 32 * K.NUM_WARPS
 STATS_PART = 4096
 PARTS = K.STATS_BLOCK // STATS_PART
 #: the lanes of a ``GumbelTopPSelect_v1`` chunk, at most (`Geo.chunk`)
-SELECT_N = 512
+SELECT_N = 256
 _CONF = "exact-model-tested"
 
 
