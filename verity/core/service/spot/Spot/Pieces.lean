@@ -19,8 +19,9 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
 * `draw`: the sample from given bytes of the challenger's coins;
 * `select`: the challenger's sample from a Spec's selection rule on, over a program and query, from given bytes of its
   coins, with the number of bytes it read (`Select.select`);
-* `select_second`: a two-stage rule's second stage, `k` proof blocks of each sampled replay block, from given bytes of
-  the challenger's coins, with the number of bytes it read (`Select.selectSecond`);
+* `select_second`: a two-stage rule's second stage, `ks[t]` proof blocks of each cell (a sampled replay block's
+  instances of template `t`), from given bytes of the challenger's coins, with the number of bytes it read
+  (`Select.selectSecond`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
@@ -272,14 +273,15 @@ def select (j : Json) : V Json := do
   let (draw, _, read) ← Select.select rule p (getD j "query") table cm (← Flock.unhex (← Flock.J.str j "source" "the select"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
-/-- `{"sample", "n", "k", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`) over
-the proof blocks of the replay sample `sample`, `n` in each replay block and `k` of them sampled in each, from the
-source's bytes, and how many of them it read; refused where the Python raises. -/
+/-- `{"sample", "ns", "ks", "source"}` to `{"draw", "read"}`: a two-stage rule's second stage (`Select.selectSecond`)
+over the proof blocks of the replay sample `sample`, `ns[t]` of template `t` in each replay block, its cell, and `ks[t]`
+of them sampled in each, from the source's bytes, and how many of them it read; refused where the Python raises. -/
 def selectSecond (j : Json) : V Json := do
   let .arr ss := getD j "sample" | throw "sample is not a list"
   let some sample := ss.mapM nat? | throw "sample is not a list of replay blocks"
-  let (some n, some k) := (nat? (getD j "n"), nat? (getD j "k")) | throw "n and k are counts"
-  let (draw, read) ← Select.selectSecond sample n k (← Flock.unhex (← Flock.J.str j "source" "the second stage"))
+  let (.arr ns, .arr ks) := (getD j "ns", getD j "ks") | throw "ns and ks are lists of counts"
+  let (some ns, some ks) := (ns.mapM nat?, ks.mapM nat?) | throw "ns and ks are lists of counts"
+  let (draw, read) ← Select.selectSecond sample ns ks (← Flock.unhex (← Flock.J.str j "source" "the second stage"))
   return Json.mkObj [("draw", draw), ("read", Lean.toJson read)]
 
 /-- `select`'s input to `{"classes", "checked"}`: the claims' partition over the program under the query (`Slots.layout`),

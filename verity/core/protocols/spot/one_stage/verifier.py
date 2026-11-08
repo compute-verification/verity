@@ -340,12 +340,13 @@ def select(python: Mapping[str, Any], read: bytes, rule: Mapping[str, Any], prog
     return dict(got["draw"] if RECORD_VERDICT == "lean" else python), Verdict(True, (), {}, verifiers)
 
 
-def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], n: int,
-                  k: int) -> tuple[dict[str, Any], Verdict]:
+def select_second(python: Mapping[str, Any], read: bytes, sample: Sequence[int], ns: Sequence[int],
+                  ks: Sequence[int]) -> tuple[dict[str, Any], Verdict]:
     """A two-stage design's second stage by the verifier: the Lean's `Select.selectSecond` on `read`, the bytes of the
     challenger's coins that the Python sample `python` (`service.select_second`'s) read in order, over the replay sample
-    `sample`, `n` proof blocks in each replay block and `k` of them sampled in each; compared as `select` compares."""
-    got = lean("select_second", {"sample": list(sample), "n": n, "k": k, "source": read.hex()})
+    `sample`, each template's `ns[t]` proof blocks in each replay block, its cell, and `ks[t]` of them sampled in each;
+    compared as `select` compares."""
+    got = lean("select_second", {"sample": list(sample), "ns": list(ns), "ks": list(ks), "source": read.hex()})
     mine = {"draw": dict(python), "read": len(read)}
     verifiers = {"of_record": RECORD_VERDICT, "lean": {"refused": got["refused"]} if "refused" in got else
                  {"read": got.get("read")}, "python": {"read": len(read)}}

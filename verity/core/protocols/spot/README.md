@@ -55,7 +55,7 @@ Its guarantee is soundness, and it rests on:
 
 The guarantee is knowledge soundness of the sampled audit: except with a bounded probability, when the verifier
 accepts, at most the profile's count of proof blocks are incorrect. Its top statement is Flock's
-`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/Refused.lean` and proved in
+`Flock.Guarantees.SampledKSLiveV3`, stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean` and proved in
 `Security/Proofs/Flock/Bridge/KSLive.lean`, and it bounds the probability
 that `flock-verify --zk` accepts the files and the run passes the registration's population while the claim fails. It
 covers sessions of non-templated statements, as `Flock.Desc.parse` reads a flat file. The V5 guarantees
@@ -67,8 +67,9 @@ builds. The top statement rests on these named assumptions:
   idealized; its docstring says what that leaves out).
 - `RecordCustodyZKJ`: the record `flock-verify --zk` reads is the one the challenger wrote for the live session, and its
   sample file is the one `flock-verify draw` printed for the verifier's own sample.
-- `TableCRZAt` (`cr/sha-512`; the statement reads it through its abbreviation `TableCRZ`) and `LinkCRZC`
-  (`ecr/sha-512`): SHA-512's collision resistance, for the collision finders the proof builds from the prover.
+- `SHA512CRStrict` (`cr/sha-512`) and `SHA512CRExpected` (`ecr/sha-512`), in `Security/Definitions/Assumptions/Flock.lean`:
+  SHA-512's collision resistance, taken at the collision finders the proof builds from the prover (`TableCRZAt` and
+  `LinkCRZCAt`, which unfold to them).
 
 In the one-stage form, v2's verdicts are its own run of `flock-verify verify --zk` on the sessions' files, which come
 in as blobs (under "Where things are"), so a composite accepts there only where that run accepts. No Lean statement yet
@@ -121,9 +122,14 @@ doing a fraction `ε` of the credited work have acceptance probability at most `
 has at most `2^-40`. The proof system adds, per proof block, its knowledge-soundness and binding errors (ε_ks and ε_bind).
 
 **Two-stage designs** (`TwoStage`). Those above are one-stage. A two-stage design commits only replay-block boundaries
-while serving and samples `k` proof blocks in each sampled replay block once its interior is committed
-(`Stream.register_interiors`; `GLOSSARY.md`, "Two-stage design"): one of `n` proof blocks and footprint `w` is
-missed with probability at most `C(n − w, k) / C(n, k)`, `1 ≤ k < n`. The verifier samples both stages
+while serving and, once a sampled replay block's interior is committed (`Stream.register_interiors`; `GLOSSARY.md`,
+"Two-stage design"), samples `k_t` of its `n_t` instances of each template `t` of the check, one cell (the claims'
+`cell`; the rule's `k`, one count or one per template, capped at the cell's size; counts proving every cell whole are
+refused). The check names the replay block's templates in the order of their first instance in it and the interior is
+template-major, so each cell is a range of the interior's proof blocks and the second stage is one stratum per cell
+(`second_law`). A cell of `n` proof blocks and footprint `w` is missed with probability at most
+`C(n − w, k) / C(n, k)`, a replay block's cells independently; the profile at the footprint reads a replay block as
+`Subset(min k_t)` over `T·n_max` proof blocks, which bounds that product. The verifier samples both stages
 (`Select.select`, `Select.selectSecond`), and the two-stage certificate's knowledge soundness at Flock's masked record
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'

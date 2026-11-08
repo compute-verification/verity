@@ -128,7 +128,7 @@ binding error per audit.
   with that binding on the statement's rows' circuit at the live sample under A3 (`ASSUMPTIONS.md`, The headline). Each
   is proved under the assumptions its footprint lists, every hypothesis with its kind: hardness (`cr/sha-512`,
   `ecr/sha-512`), platform (A3, and A6, the challenger's OS randomness), model, intended to prove (`hHm`, the placements
-  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`; `assumption-notes/e2e-checklist.md`), or a numeric condition.
+  `pp` or `dp`, `lay`, `rs`, `tr`, `hConst`, `hZero`), or a numeric condition.
 - **Over what the verifier accepts** (`Discharge/FailClosed`). `flock-verify verify` refuses every statement outside the
   forms the proof covers (the verifier's `Flock.ProvedScope`; `FailClosed.scopeOk_eq`), so the executable's headlines
   (`zk_session_sound` with its `J`, hidden, custody and composed forms, and `flock_headline_exec` with its hidden and

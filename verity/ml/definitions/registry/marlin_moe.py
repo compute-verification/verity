@@ -37,9 +37,10 @@ the launch's thread config (TK, TN) (ops.cu:274-342; the H200's numRegs decide b
 (no group rounding of iters: group_blocks 2 < thread_k_blocks, the template 408-416).  `blk` and `parallel` are the launch's schedule,
 `moe_align_block_size`'s sorted_token_ids (a pair's position / moe_block_size) and num_tokens_post_padded / moe_block_size; at
 every block the template reduces a tile's W = TK / 32 warp rows as above (red_off = threads / (TN / 2) / 2, 1539-1541, per m block
-of 16).  The pairs' ranks within an expert come from atomicAdd (moe_align_sum_kernels.cu), so `MoeAlignRanks` reads them from a
-key per pair, a witness of the run (the GPU's sorted position), and with `MoeAlignBlocks` is a schedule the kernel can give
-whatever the key.
+of 16).  The pairs' ranks within an expert come from atomicAdd in vLLM's moe_align_sum_kernels.cu, an order no input fixes;
+`MoeAlignRanks` ranks them by a key per pair, and with `MoeAlignBlocks` is a schedule the kernel can give whatever the key.  The
+served align ranks each expert's pairs in pair-index order (the deterministic `moe_align_block_size`), so every Program keys the
+ranks by the pair indices and none reads a key from the run.
 
 Registered functions (`_v1`):
   E2m1ToBf16, E8m0DequantBf16                 primitives: the exact e2m1 value, the e8m0 scale as bf16
@@ -465,8 +466,8 @@ def MoeAlignRankStart(B, S, e, k, i, es, ks, ix):
 def MoeAlignRanks(B, S, ids, key, ix):
     """`moe_align_block_size`'s ranks over P pairs routed to `ids`: (rank, start) per pair (`MoeAlignRankStart_v1`), `ix` the pairs'
     indices 0 .. P - 1 (the align rule's constants).  The kernel places a pair at its expert's offset plus its rank, which atomicAdd
-    hands out in an order no input fixes; `key` orders each expert's pairs (ties by index), so any key gives ranks of that form, and
-    the GPU's sorted position of each pair gives the GPU's."""
+    hands out in an order no input fixes; `key` orders each expert's pairs (ties by index), so any key gives ranks of that form.
+    The Programs pass the pair indices as the key, the order the served deterministic align gives."""
     rs = B.batch(bind(MoeAlignRankStart, E=S.E, P=S.P, BM=S.BM), ids, key, ix, ids, key, ix, axes=(0, 0, 0, None, None, None))
     return tuple_of(rs.take(1, 0), rs.take(1, 1))
 

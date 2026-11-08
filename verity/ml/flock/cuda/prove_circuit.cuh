@@ -1,7 +1,8 @@
 // verity flock-circuit: Flock-CUDA for verity/flock-circuit (verity/ml/flock/live/src/circuit.rs). Included after
 // prove_chunk.cuh at the end of cuda-ghash/prove_ffi.cu by verity/ml/flock/cuda_circuit_patch.py, which also derives
 // flock_cuda_prove_circuit from flock_cuda_prove_chunk's body: the same commit, zerocheck, lincheck, ring switch and
-// Ligerito, with this file's witness (fc_witness) and lincheck fold (fc_fold) in place of the chunk statement's.
+// Ligerito, with this file's witness (fc_witness), lincheck fold (fc_fold) and arena size (fc_arena_of, arena_bytes.h) in place
+// of the chunk statement's.
 //
 // A block holds ranges of slots of a few types (compressions, units, the mask slot), each type's circuit a CSC of
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (natively, fc_sha_tape
@@ -17,6 +18,7 @@
 // the witness's scratch outside the arena (sha512 tapes, compression and unit rows) goes in batches of at most this many bytes:
 // it is held beside the arena while the next session's witness builds
 #define FC_WITNESS_BATCH (512LL << 20)
+#include "arena_bytes.h"
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -493,6 +495,14 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
         if (t < 0 || t >= N->n_types || ((long long)(N->r_pos0[j] + N->r_count[j]) << N->type_log[t]) > (1LL << k_log)) return 1;
     }
     return 0;
+}
+
+static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
+    long long fold_words = 0;
+    for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
+    const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+    return fc_arena_bytes(&s);
 }
 
 // chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job

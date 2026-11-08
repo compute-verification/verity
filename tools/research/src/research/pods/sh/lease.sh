@@ -12,8 +12,8 @@
 # read never extends the lease.  At EPOCH the pod guard (pod_guard.sh daemon) ends a pod whose runs all have custody; this loop ends
 # it at EPOCH + LEASE_GRACE_S whatever is still unfetched (the grace is the runs' own custody push).
 #
-# Termination: GraphQL podTerminate with the pod-scoped RUNPOD_API_KEY RunPod puts in the container's first process (measured
-# 2026-09-24 through pod_guard.sh: a pod may terminate itself; it may not list or read pods, so `runpodctl get pod` is Unauthorized),
+# Termination: GraphQL podTerminate with the pod-scoped RUNPOD_API_KEY RunPod puts in the container's first process (as measured
+# through pod_guard.sh: a pod may terminate itself; it may not list or read pods, so `runpodctl get pod` is Unauthorized),
 # then REST DELETE, then `runpodctl remove pod`.  The account key is never on a pod.
 # Test seams: LEASE_NOW (epoch), LEASE_ONCE=1 (one tick, exit 0 terminated / 1 not due / 2 failed), LEASE_TERMINATE_CMD (run with the
 # pod id as $1 instead of the API), LEASE_API_GQL / LEASE_API_REST, LEASE_ENVIRON (default /proc/1/environ).
