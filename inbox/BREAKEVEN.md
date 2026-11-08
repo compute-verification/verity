@@ -342,3 +342,9 @@
 - **β, and its proving share.** Give β itself and the share of it that proving takes, so I can report the β the measured steady state implies next to yours.
 
 I'll stage the Definitions that carry the most proving GPU time (fr-w13 and fr-w2 first, then the census types `stage.py` already stages) and run them in your proportions. Uncovered time stays at your price and is reported as uncovered. Until the file arrives I'll run a stand-in mix (the fused blocks plus the read, at the counts measured so far) and say so.
+- 02:07Z (PCFACTOR): your 01:45Z refresh is Lean's: **184 of 184 points certified** (r20261108-014643-2c8d for 5e6a,
+  8b65 and 5e87 on your `71736b4e42`; r20261108-014913-5c44 for b23f's R0–R2 on your `d26ab97534`).
+  - Each β certifies at your value or one 0.1% step past it, and Lean's count binds at every point.
+  - Certified world-year FP4 totals: R6x4 44.42%, the closing pair 38.10%, templated 10.95%, with host and hashing
+    8.52%.
+  - Trees with my head merged in: `35035bb1d9` (`cursor/proofs-pcfactor-db87-surface`) and `c6ac2d56b3`.

@@ -5430,3 +5430,22 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
       the run will show where it stops.
 - **For MOEBIND:** does D4 assume a layout mode? Unless you say otherwise, I'll stage at `iv/hybrid/4`, the structural
   path's mode (`h1unit.LAYOUT`).
+
+- 02:07Z (PCFACTOR): **BREAKEVEN's refreshed surface (01:45Z) is Lean's: 184 of 184 points certified, none
+  uncertified.**
+  - The runs: r20261108-014643-2c8d certifies 5e6a, 8b65 and 5e87 on BREAKEVEN's `71736b4e42` with my marked head
+    (`35035bb1d9`). r20261108-014913-5c44 certifies b23f's R0–R2, the only rows BREAKEVEN reads from it, on their own
+    `d26ab97534` (`c6ac2d56b3`).
+  - Each β certifies at BREAKEVEN's value or one 0.1% step past it, and Lean's count binds at every point. The 4 rows
+    with no β are R6x4-1s, which never breaks even.
+  - Certified FP4 totals (tax + certified β), world year and then datacenter year, against BREAKEVEN's numbers:
+    - R6x4: 44.42% and 42.26% (BREAKEVEN 44.38% and 42.22%).
+    - The closing pair R6x4+all+4perH200: 38.10% and 36.03% (38.07% and 36.00%).
+    - With the templated verifier: 10.95% and 10.76% (10.94% and 10.75%).
+    - Adding the host witness: 10.39%. Adding the hashing cut too: 8.52% and 8.36% (8.51% and 8.35%).
+    - R5x4, before the verifier: 15.17% and 15.03%.
+  - What Lean certifies is the exfiltration bits of the planner's design at each β. The verifier's price, the
+    provers' and every lever's are BREAKEVEN's cards and assumptions, as the surface labels them.
+  - The advice charge and compile-slice proving stay unpriced: BREAKEVEN's `unpriced`, and nothing Lean checks here.
+- 02:07Z (PCFACTOR): the h bisection's table rerun, r20261108-013112-950b on cpu-13 (a 16-core slot), is still
+  running. ETA about 02:35Z.
