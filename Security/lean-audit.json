@@ -18164,26 +18164,26 @@
     "NetTiming.Witness.PeriodLeakAccepted_nontrivial :",
     "  Not",
     "    (Real.instLE.le",
-    "      (Claims.PrBad FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.tapL Bool).V",
-    "        (NetTiming.RLeakTap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.tapL Bool).commit",
-    "          (Claims.Witness.SamplingGeneric.tapL Bool).parse (Claims.Witness.SamplingGeneric.tapL Bool).partition 1 1 1",
+    "      (Claims.PrBad FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "        (NetTiming.RLeakTap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "          (Claims.Witness.SamplingGeneric.certL Bool).parse (Claims.Witness.SamplingGeneric.certL Bool).partition 1 1 1",
     "          (fun x => NetTiming.Witness.notLay) (fun x => 1) 0",
     "          (fun s => NetTiming.AsReg s.prog NetTiming.Witness.notLay 1 Finset.instEmptyCollection.emptyCollection) 1",
-    "          fun x => NetTiming.Witness.tapOps)",
-    "        (Claims.Witness.SamplingGeneric.tapL Bool).E List.nil Claims.Witness.silentP)",
+    "          fun x => NetTiming.Witness.certOps)",
+    "        (Claims.Witness.SamplingGeneric.certL Bool).E List.nil Claims.Witness.silentP)",
     "      (instHAdd.hAdd",
     "        (instHAdd.hAdd",
-    "          (instHAdd.hAdd ((Claims.Witness.SamplingGeneric.tapL Bool).κ 0 List.nil)",
-    "            (instHMul.hMul ((Claims.Witness.SamplingGeneric.tapL Bool).γ List.nil)",
-    "                (Claims.PrB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.tapL Bool).V Claims.Witness.silentP",
+    "          (instHAdd.hAdd ((Claims.Witness.SamplingGeneric.certL Bool).κ 0 List.nil)",
+    "            (instHMul.hMul ((Claims.Witness.SamplingGeneric.certL Bool).γ List.nil)",
+    "                (Claims.PrB FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V Claims.Witness.silentP",
     "                  List.nil)).sqrt)",
     "          (Claims.Finder.Pr FlockDeploy.sha512",
-    "            (Claims.Sampling.Bext FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.tapL Bool).V",
-    "              (Claims.Witness.SamplingGeneric.tapL Bool).E Unit Claims.Witness.silentP List.nil)))",
+    "            (Claims.Sampling.Bext FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "              (Claims.Witness.SamplingGeneric.certL Bool).E Unit Claims.Witness.silentP List.nil)))",
     "        (Claims.Finder.Pr FlockDeploy.sha512",
-    "          (NetTiming.Btap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.tapL Bool).V",
-    "            (Claims.Witness.SamplingGeneric.tapL Bool).E (Claims.Witness.SamplingGeneric.tapL Bool).commit",
-    "            (Claims.Witness.SamplingGeneric.tapL Bool).parse (fun x => NetTiming.Witness.tapOps) Unit",
+    "          (NetTiming.Btap FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.certL Bool).V",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).E (Claims.Witness.SamplingGeneric.certL Bool).commit",
+    "            (Claims.Witness.SamplingGeneric.certL Bool).parse (fun x => NetTiming.Witness.certOps) Unit",
     "            Claims.Witness.silentP List.nil))))"
    ],
    "assumptions": [],
@@ -18193,7 +18193,7 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "838bb9e27a0651ee8087452a540295b1e28153c99026cd438fa372626918e1eb"
+   "type_hash": "364b80292eb0de6ee2d2bfac0222191120bdfa9fdf804a7842ea1eb2cfc238b7"
   },
   "NetTiming.Witness.SampledAuditAccepted_honest": {
    "owner": "@proofs",
@@ -34787,10 +34787,10 @@
    }
   },
   "Definitions.NetworkCertifier.Witness": {
-   "digest": "0058ef4d831481992058f858bc5b1a75f03f48336054510a22d82b8b876f328f",
+   "digest": "16dffeccf3cfbcb5fdca377e1fb7b627789cb758a5f280a6a0db9cecc2cf70b6",
    "definitions": {
+    "NetTiming.Witness.certOps": "850046dee06cea45d59d052626cfd5c408fe7a94b4d3b00db74c4656ccd740d0",
     "NetTiming.Witness.notLay": "b12c501c588a135dc1f9cb4168be2e565fcef30d74cfd9b3d0cae68e5f929b4c",
-    "NetTiming.Witness.tapOps": "57e392331af1cf0c8f41f10a1c802e6704b6c20b6b391200109eff05934038c8",
     "NetTiming.Witness.trivLay": "5988642439af8c4776d03b25406c91ed65a4251e64c9904698e9f95f2423da53"
    }
   },
@@ -46693,8 +46693,9 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingGeneric": {
-   "digest": "6b5467c56c2ec1537677dc33e8179bd223ac950093099c20e54770022250cfd0",
+   "digest": "ff1e007c57cd492640b6d9f57c798f91077d836e461b308266485047df00a0ac",
    "definitions": {
+    "Claims.Witness.SamplingGeneric.certL": "81030f02dfbea658782d5ee67a95596c9b83ce74461ae79c64b18c127b121293",
     "Claims.Witness.SamplingGeneric.leakL": "ba685e1c5077b42959a2a72926e5d59e24d4f4dea5974e2ac3867a2f780a36dd",
     "Claims.Witness.SamplingGeneric.notPart": "e6bc0d55b7ff7cf837836690a9cd1126dc06545220a2680712baa834d27fdb9b",
     "Claims.Witness.SamplingGeneric.notProg": "14d3fd2a76b241df84de6409b2b4c001523be346aff77025bc4ea34a6add4a4b",
@@ -46702,7 +46703,6 @@
     "Claims.Witness.SamplingGeneric.sesOut": "b956e7da8e45999b2e446fd9277eaf79ec642be82a8b3a957c7a776fd49bb78e",
     "Claims.Witness.SamplingGeneric.sesV": "2780f1c4f24fb1acd696e0d2d55c4a56ede52d35a76df81d85c7a2065caa06d3",
     "Claims.Witness.SamplingGeneric.sksL": "ff7b736f13ace5266cf1b38ce92b16b6efa8268505b8c38d64802ccb8edd0e5f",
-    "Claims.Witness.SamplingGeneric.tapL": "824aa2c9f3a362e029c2f17bc75cc38d40df3094760bab077960d3bc55c3e11b",
     "Claims.Witness.SamplingGeneric.toyA": "0f24d1fec82ec83f95338cb52554887dd0c1a50383023485bf088547125b872f",
     "Claims.Witness.SamplingGeneric.trueCm": "97a249a518b21f0e8d881f9cd8864a5228a7b226c03620d7e833437fcb9bed49",
     "Claims.Witness.SamplingGeneric.twoA": "b16cef13140e0c3773039e852aaec00057ddc279b077bf2a8bc1dc8277c7255c",
