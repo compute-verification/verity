@@ -54,10 +54,12 @@ def test_a_call_trace_lowers_to_the_whole_circuit(name: str) -> None:
     assert (lay.useful, h.hexdigest()) == PINS[name]
 
 
-def test_a_folded_definition_alone_is_lowered_by_its_builder() -> None:
-    """A compression no part holds (circuit-check's binding) is lowered by its own builder at its pattern (``fold_build``), with
-    its commits, not gate by gate (minutes of linear forms growing round over round): its trace's ANDs."""
+def test_a_folded_definition_alone_is_lowered_by_its_builder(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A compression no part holds (circuit-check's binding) is lowered by its own builder at its pattern (``fold_build``), not
+    gate by gate (15 minutes of linear forms growing round over round)."""
     iv = ["o" if b.c else "z" for v in IV for b in const_bits(v, 64)]
     P = TR.encode_pattern(iv + [((i,), 0) for i in range(1024)])
-    C = whole(bind(Sha512CompressFolded, P=P)).circuit()
-    assert C.counts()["ands"] == Sha512CompressFolded.traced(P).counts["and"]
+    built, fold_build = [], Sha512CompressFolded.fold_build
+    monkeypatch.setattr(Sha512CompressFolded, "fold_build", lambda S, C, x: built.append(S.P) or fold_build(S, C, x))
+    whole(bind(Sha512CompressFolded, P=P)).circuit()
+    assert built == [P]
