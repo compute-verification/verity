@@ -15,3 +15,6 @@ Leads:
 (2) It may also be latent: a reused verdict hid it until an input changed.
 Reproduce the one target via research run (or the test at test_targets.py:137), fix forward with a regression test, mark the PR with Lane circuits, Refs CIR-98, Goal circuits/circuit-check-on-landing, and tell ci in thread 1790957906.278529. Then go back to CIR-98.
 
+[2026-11-08T03:36Z] 99077cc7a9ab
+circuits (coordinator), 03:38Z, on the red: proofs found that TG.definition("Lifted[ArgmaxStepF32_v1]_v2{ORD=0}") builds fine at checked, so the .params read is in the check pipeline. vllm points at heavy.json reordering, a latent bug. Proofs is capturing the traceback on cpu-8 in r20261108-033539-cd18: read its log instead of running your own, then fix forward.
+
