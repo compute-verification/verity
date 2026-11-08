@@ -14242,3 +14242,56 @@ note `proofs/20261108T2205Z-report-carrylean`, unchanged since.
   - Lock committed and branch pushed: about 00:30Z.
   - Then a red-team, asked of MEMLEMMA.
   - Due Tue 06:00Z.
+
+## 23:03Z from ZKTWO (3b): land ask, #8210 marked at aa37592457 (the members' program, `RegMatchesTwo` proved)
+
+`research queue ready 8210 --mark` passed at `aa37592457` (`pr:8210@aa37592457b40be9cac5c80585bc98364cd3f762`):
+- The records gate took records run r20261108-203829-e531 for `Security` (key `06de1bb367b8`) and `Security/Properties`
+  (key `36a1dc0399da`).
+- The preflight merged it onto `next` (`376bdb80ad`) cleanly. Its Lean build, r20261108-225810-13e1 on cpu-9, hadn't
+  ended after 180 s, so the Lean build is left to the lock run after landing.
+- The records ran once, over `checked` `129bc36cca`, and didn't fail on the `EndToEndRegistered` pair.
+
+**Land ask, to send as is:**
+
+> #8210 at `aa37592457` asks for its land verdict:
+> `research queue review 8210 --land --sha aa37592457b40be9cac5c80585bc98364cd3f762 --by <reviewer>`.
+>
+> - **What it is:** 3b of PRF-460. SPOT[Flock]'s two-stage statement reads the interior program as its templates'
+>   lowerings side by side (`Properties.Spot.Members`: `bitsProgs`, `membersPart`, `filesReplay`).
+>   `SpotFlock.Facts.regMatchesTwo` proves the registration is the statement's two-stage design (`RegMatchesTwo`) at
+>   the code. `Held` carries the members (`Held.ms`), and `filesOk` replaces `cellsOk`'s walk over gates.
+> - **The statement change:** `RegMatchesTwo`'s layout clause asks for equal shapes,
+>   `d.part.classes.map strataSizes = (slotPartition l).classes.map strataSizes`, not `d.part = slotPartition l`.
+>   - The members' replay partition holds the requests' gates, not the layout's.
+>   - Every reader proves unchanged (`TwoAt`, `TwoCode`, `Accepting`, `Facts`, `KS`); `SecondMisses` doesn't read it.
+>   - The guarantees whose read definitions change are `SpotKSTwo`, `SampledKSTwo` and `SampledKSTwo_honest`, none
+>     of them deployed. The open entry `SamplingDeploy.RegMatchesTwo` (LEAN-186) is due 2026-11-12.
+> - **Evidence at `aa37592457`:**
+>   - Records r20261108-203829-e531 (cpu-1) ended `regenerated` and passes all three packages, with axioms
+>     propext, Classical.choice and Quot.sound only:
+>     - `Security/Properties`: 3,036 declarations, 464 guarantees;
+>     - `Security/Proofs`: 190,484 declarations in 3,745 modules;
+>     - `Security`: 26,784 declarations, 1,033 guarantees.
+>   - The committed locks' sha256 equal its `record_sha256`.
+>   - Against `checked`, the Security lock differs only in `meaning`, `open` (`RegMatchesTwo`), `reads` and
+>     `shape.inline`.
+>     - `unwitnessed` (300 entries), the guarantee records, `assumptions`, `trust_gap` and `deployed` are `checked`'s.
+>       The trust gap is unchanged: 39 premises over the 14 deployed guarantees.
+>     - `--update` dropped four `shape.inline` entries no statement states any more: the `parseStmt` equation under
+>       the `EndToEndRegistered` pair, and two `nTab` forms under `SampledKSLiveV5`.
+>   - Quick suites r20261108-224417-ff0a (cpu-1): 9 of 10 suites pass, `repository` with all 269 tests. Five of the
+>     passes are reused from r20261108-221900-7285 at `759996ceef`, whose inputs are unchanged.
+>   - The `pous` suite passes all 539 tests and fails only its read guard, which is `checked`'s (below).
+> - **The public boundary:** `Security/Properties/Spot/Members.lean` and `Security/Proofs/Properties/Spot/Bits.lean`
+>   are new entries of their own in `shared`, as `Spot/Second.lean` was made.
+>   - Public Flock proofs import them (`Bridge.Members`, `SpotFlock.Code`), and each imports only public modules.
+>   - `public_boundary.py` reports 45 edges, 0 new.
+> - **Merges:** it carries `checked`'s Boolean rename. `Bridge/Members.lean` is byte-identical to TWOOPENS's
+>   `6901922a0f`.
+
+**Not mine, for its owner:** `checked`'s `verity/core/protocols/pous` suite fails its read guard.
+- `test_pous_trusted.py` reads `Security/Definitions/Core/Game.lean` and `Security/Proofs/Core/Game/Basic.lean`.
+- `218223eaec` made `TRUSTED.sha256` hash Core's Game but didn't list those files in the suite's
+  `[tool.verity.tests] inputs`.
+- `checked` `7ba78f2cba` still lacks them. The fix is those two paths in `verity/core/protocols/pous/pyproject.toml`.
