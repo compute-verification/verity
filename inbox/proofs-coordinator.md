@@ -4343,3 +4343,20 @@ If any of these lands before 01:30Z, I'll refresh H1, H2 and L1 in the note.
 - **R4, the commitment (TWOSESS, done but for adoption).** `opens_atPorts` passes an opening at `commitAt`'s rooted ports, given Flock's `opensLeaf` there. It needs `ownAt` adopted in `SamplingDeploy.Code` (TSVERIFY).
 
 The composition, `Reveals` from R1 to R4 plus a premise that `h.registered`'s ports are the frame's at the run's roots, is mine too. R2 is the long one and the one most likely to miss Sunday 20:00Z without a helper.
+
+## 00:30Z from MOEBIND: P2 now binds the read inside the fused block; D's state; may D go on a second branch now?
+
+- **P2 now covers the fused block (CIR-187) on the binding side.** It is local at 0b78b88169, and at 467036f612 with P1C's facts merged. Try r20261108-002016-2f71 passes: all 4 theorems use only `propext`, `Classical.choice` and `Quot.sound`, and the sibling probe is clean. One cost: `Deployed.lean` takes 525 s to elaborate again (43 s before), and I'm profiling it now.
+  - `GatesRefine` now states the read at its unit's local evaluation, the values the unit's own gates compute, which a fused GEMM consumes.
+  - It needs a gate committed only where the gate is the root, the domain or the verdict and lies inside the unit. The root and domain are input columns, outside the unit, so D needs only the verdict committed.
+  - The bound is unchanged: $\varepsilon + \mathbb{E}[\mathrm{cost}]/2^{256}$ over every read of a drawn unit, indexed by unit and copy.
+  - For a fused block, three things must stay: the verdict as a committed output, registered as accepting; the root registered by reference; the domain registered by reference. MOESERVE's 23:58Z design already has all three.
+- **One gap is left for the fused template, and I've kept it out of the D PR.** D3 states the read at the unit's root valuation, which is the separate-block template. In the fused template, the read is a called Definition inside the GEMM's block. Covering it means reparameterizing about 750 lines of D3 over a call copy's valuation (PCRANKIN, 23:55Z).
+  - I told PCRANKIN not to hold D for it. It goes in as a follow-up commit if it fits before Sun 14:00Z, else in a follow-up PR once CIR-187's template is fixed.
+  - So, once D lands, P2 covers the fused block and P1 is discharged for the separate-block template. **Say if you want D held for the fused template instead.**
+- **D's other parts:**
+  - D1's layout facts are proved (P1C), and merged into my D4 tree.
+  - Parts A and B are marked, as #7885.
+  - D3 reads only the per-part lemmas (composition (ii)), so A's and C's flat composites, and my `readNet_sound`, `holdsRead_sound` and `gatesRefine_of_run`, aren't needed. The D PR deletes whichever of them nothing reads.
+  - D4's final theorem waits on PCRANKIN's `Check.lean`.
+- **A second branch, asked again.** #7838 is on `next` but not on `checked`, so a push to `cursor/proofs-moebind-bdb9` would change its marked head. To show D4 on a branch by 02:00Z, may I push it to `cursor/proofs-moebind-d4-<hex>`, stacked on #7838? Until you say, it stays local, with the SHAs and runs in note proofs/20261108T0025Z-report-moebind.
