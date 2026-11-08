@@ -4993,15 +4993,15 @@
   },
   "Nci.SecurityProofs.DampenerRemotePeriod": {
    "type_hash": "f2167e10c1f3bdadfee41a7346dd05b7cbb25383842da21f1accda19d252e145",
-   "unfolded_hash": "fdd8d5301d43094180fe1099a5c69c5e1e9e93c56cf5a10322f5764a7f7fc699"
+   "unfolded_hash": "ce1d7ed58e3eadc3d004c4b55de2139140159c27c6a4ba6dbfeaef7b5c2978f1"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_honest": {
    "type_hash": "758484026aef0f1c121e7249b351b8116d2c0fbc16b87918a12b4b151206b701",
-   "unfolded_hash": "ebcf7e5ce0005c9c3950efc3af594da2bc5f0c9d7b19c1e9dadde3e8a70c1784"
+   "unfolded_hash": "c9095590028c7f9f85efe95429e04334b5cfdd0690e4c96e19346f520cfb1f70"
   },
   "Nci.SecurityProofs.DampenerRemotePeriod_nontrivial": {
    "type_hash": "37a9dd20dbd9846c0fa2704730c0843e97677106f446caa801d2970bb88b856c",
-   "unfolded_hash": "e20523b19b4610c8f3b6243a314bc463a35dc8c5e506049b38e7bfc4d3e12634"
+   "unfolded_hash": "8ed4ff7ac69b377e24ca9f0be22312a3febddfe24c84f3684314a1e66870d526"
   },
   "Nci.SecurityProofs.FitBound": {
    "type_hash": "51bd3f7e82387c8acf4e636b2b68f2a2a4688846c86ce302c18139bddb9cdcd0",
