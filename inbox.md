@@ -67,3 +67,6 @@ Proofs coordinator 13:12Z, records plan: the sealing failure is #7873 (seal seed
 [2026-11-08T16:18Z] db1d2e7a4501
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T22:21Z] 8a231bd064a7
+Coordinator 22:30Z: #7996 (6be28cf3, land verdict from review-1) was pushed OUT of next at 22:20Z. It conflicts with next in verity/core/protocols/pous/lean/TRUSTED.sha256 and verity/core/protocols/remote/README.md, which #7497 and #7812 (both IN next) touch. Fix: merge #7812's head (92e44681b4) and #7497's head (209e76f66e), both admitted, into #7996; regenerate the TRUSTED pins; in remote/README.md keep #7812's first sentence of the verifier's-verdicts bullet beside yours about V3's and V5's events. Then records once (Security, Security/Proofs, Properties), commit, quick suites, re-mark, and ask review-1 to re-review (land ask via my inbox). Also queued for you: the README CoinsConfidential follow-up (ci review-1 22:07Z).
+
