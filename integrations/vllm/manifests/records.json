@@ -6,7 +6,7 @@
    "record": "art:b70ee40e853da7b1096e2e3186c1ae03ebf6545e049ea225fc07f9e29de02090",
    "tier": "heavy",
    "pinned_from": {
-    "build": "/workspace/tmp/circuits-neutrality/r20261108-154143-f891/dsv4-pro__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager",
+    "build": "art:74ceaf98a4ac4151cd17456f458deb4ccf02f6fe5e06334e4965c2c4e8cd6f5b",
     "run": "r20261108-154143-f891",
     "tree": "bab8f81dd9d729ac9fa0c4c777175f51bc0cc4eb"
    },
@@ -68,6 +68,10 @@
       "build_request_LP256_T31": "5a2a11367893dff7fa393de4af1585189049abb327c456cd5b40136e009cd3c0ceab90aa0021dadbdce90d577276b246cf545ae53ceaf7256570cc41a5736aaa"
      }
     }
+   },
+   "aot": {
+    "comparison": "r20261108-172117-6e05",
+    "trace": "art:74ceaf98a4ac4151cd17456f458deb4ccf02f6fe5e06334e4965c2c4e8cd6f5b"
    }
   },
   "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager": {
