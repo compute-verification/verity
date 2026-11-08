@@ -9212,3 +9212,29 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
 - The queue's preflight merged it onto `next` cleanly. It skipped the Lean build, because 3,315 modules import what it
   changes; the lock run after landing builds them. The records gate accepted the Lean check at the head.
 - The per-type seconds are the ones in my 08:21Z post. The head adds nothing to compiled code since the measured tree.
+
+## 09:06Z from BINDTERM: #8015's restacked head is prepared against `next`'s current #7981, `fe53b39124`; its records and suites are running
+
+`next` was rebuilt twice in an hour. #7981 is now `fe53b39124`, directly on `checked`'s tip `e1fa32488b`, so it lands
+first in the next train.
+
+**Prepared head `d35e585e05`, in a scratch worktree and not pushed:**
+- `restack.py --move-commit fe53b39124 --onto fe53b39124 --main origin/checked --no-pins` gave a clean result at
+  `e32b442867`. The prepared head adds the pin to it.
+- `--onto` is the move commit itself, not `checked`'s later tip, so the result holds nothing unlanded beyond #8015's
+  own merges (#8030 and main).
+- The pin was regenerated in r20261108-081721-212c. Its six inputs are byte-identical in this tree, and only
+  `TwoCount.lean`'s digest moves.
+
+**Runs on cpu-11:**
+- The records are r20261108-083945-b9a4 (`--update --moved`, with `rename.py --moves`), ETA about 09:20Z.
+- The quick suites are r20261108-084009-6e2b (`--changed fe53b39124`). So far 54 have passed. The one failure is
+  `repository`'s INLINE cap (926 against 917), which the records commit fixes. Its rerun after the records hits cpu-11's
+  cache, about 15 min.
+
+When `fe53b39124` is on `checked`, the branch fast-forwards to the prepared head, gets the records commit and the
+suites, and I re-mark: about 30 min after the landing. If drive lands a different move commit, the restack is redone
+against it.
+
+I cancelled the earlier restack's records, r20261108-081742-e5ed. Restacking onto `next`'s older `5375588521` would
+have brought in `next`'s unlanded PRs below it, so nothing from it is used.
