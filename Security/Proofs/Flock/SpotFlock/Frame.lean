@@ -104,4 +104,62 @@ def FrameIs (L : Layout) : Prop :=
           bytes (h.frame.π q.2) =
             paths.getD (_root_.Flock.Registered.ref t st.c.ports.size p (β * st.c.g + i)) ByteArray.empty
 
+/-- **`Reveals`' opening at a gate whose row the frame opens**: at the statements `FrameIs` reads, a gate the checked
+unit's correctness reads, whose row is table `j`'s (`st`) instance `i` at port `p`, where that instance is one of the
+statement's and the table's row there is the commit string of the row message and salt bytes the hidden values hold,
+has the opening `Reveals` asks for: it passes the deployed check, at the gate, of the decoded value, under the roots
+`Reveals` names. The registered read it passes is `opens_of_stmtOk`'s, at the run's roots and the interior
+registration's. -/
+theorem opens_of_frameIs (L : Layout) (hF : FrameIs h L) :
+    ∀ x s Pt d (m₀ m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb it ins spec sts S own β,
+    parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
+    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
+    interiorsOf m₁ = some it → FlockDeploy.setupOf true xS = some (ins, spec, sts) →
+    FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S →
+    (FlockDeploy.jsonOf "registered reads" (h.registered s.roots it.roots) >>= _root_.Flock.Registered.ofJson) =
+      .ok own →
+    L.blockOf x m₁ xS u = some β →
+    ∀ g j i p (st : _root_.Flock.Stmt), s.prog.Needs b g → L.rowOf x m₁ xS u g = some (j, i, p) →
+      sts[j]? = some st → β * st.c.g + i < st.pub.n →
+      (∀ t, st.pub.tables = some t →
+        _root_.Flock.Registered.tableRow st.pub t p (_root_.Flock.Registered.ref t st.c.ports.size p (β * st.c.g + i)) =
+          bytes (FlockSoundness.Binding.commitString
+            (FlockSoundness.Discharge.Hidden.Any.rowMsg st.c.ports[p]!
+              (FlockSoundness.Discharge.Hm.bytesOf (fun y => wF.hid.getD (hidAt sts.size S.kLog j β y) false)
+                (2 * st.c.ports[p]!.words) (FlockSoundness.Typed.msgCol st.c i p)))
+            (FlockSoundness.Discharge.Hm.bytesOf (fun y => wF.hid.getD (hidAt sts.size S.kLog j β y) false) 192
+              (FlockSoundness.Discharge.Hm.saltCol st.c i p)))) →
+      ∃ q ∈ (code h).reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF,
+        (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 q.1 q.2 = true ∧ q.2.pos = g ∧
+          q.2.val = decOf L x m₁ xS wF u g ∧
+          q.1 = if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ else s.roots := by
+  intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb it ins spec sts S own β hx hP h2 hin hok hu hck hb hρ hrb hit hset hS
+    hown hβ g j i p st hg hr hst hn hbc
+  obtain ⟨q, hq, hpos, hval, hroot, hrow, hsalt, reg, hreg, t, positions, paths, hp, ht, hent, hat, hfind, hπ⟩ :=
+    hF x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb it ins spec sts S own β hx hP h2 hin hok hu hck hb hρ hrb hit hset hS
+      hown hβ g j i p st hg hr hst
+  obtain ⟨it', ins', spec', sts', own', hit', hset', -, hown', hall⟩ := opens_of_stmtOk h hx hok
+  rw [hit] at hit'
+  cases hit'
+  rw [hset] at hset'
+  cases hset'
+  rw [hown] at hown'
+  cases hown'
+  obtain ⟨t', idx, ht', -, hregs⟩ := hall st (Array.mem_iff_getElem?.2 ⟨j, hst⟩)
+  rw [ht] at ht'
+  cases ht'
+  obtain ⟨p', positions', paths', hp', hent', hi⟩ := hregs reg hreg
+  rw [hp] at hp'
+  cases hp'
+  rw [hent] at hent'
+  cases hent'
+  obtain ⟨-, -, hop⟩ := hi (β * st.c.g + i) hn
+  refine ⟨q, hq, ?_, hpos, hval, hroot⟩
+  subst hpos
+  refine opens_frame h hat hfind ?_
+  rw [hrow, hsalt, hπ, ← hbc t ht]
+  exact hop
+
 end SpotFlock
