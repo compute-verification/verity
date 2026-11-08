@@ -45,8 +45,8 @@ probability at most `(1 - q)^F` plus the windows' soundness errors `ε i`, whate
 `F ≥ ln (1/δ) / q` that is at most `δ + Σ_i ε_i`.
 
 The statement is a fact of probability over every sample, acceptance event and error: the sample's law and each window's
-soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.Sampling.KS` for each
-window) come in where it is applied to the sampled verifier.
+soundness are its hypotheses. A deployment's instances of them (A3 for the sample, `Claims.SamplingGeneric.Compiled.KS`
+for each window) come in where it is applied to the sampled verifier.
 -/
 
 @[expose] public section

@@ -230,22 +230,23 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
 - **The ingress bound** (`NetTiming.SecurityProofs.Ingress`, `NetTiming.SecurityProofs.PerWindow`):
   `EncardIngressDecodableLe`, `EncardIngressObsDecodableLeContents`, `EncardIngressDecodableLeContents`,
   `EncardIngressObsDecodableLeContentsPerWindow`.
-- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, `KS`'s bound at
-  `RAcc δ` on the statements whose layout fits the program: no incorrect proof block is sampled `all`, and the advice
-  holding the incorrect proof blocks' committed gates at the trace's values makes `Accepted` every run the trace carries.
-  `SampledAuditInstance.lean` discharges its `KS` hypothesis from `Claims.Sampling.sampling_assembled_of`'s `KS`
-  conjunct: `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and `sampledAuditAccepted_plain`
-  at the masked and plain records.
+- **The sampled audit implies `Accepted`** (`SampledAuditAccepted.lean`): `SampledAuditAccepted`, the bound of
+  `Claims.SamplingGeneric.Compiled.KS` at `RAcc δ`, at any compiled sampled verifier, on the statements whose layout
+  fits the program: no incorrect proof block is sampled `all`, and the advice holding the incorrect proof blocks'
+  committed gates at the trace's values makes `Accepted` every run the trace carries. `SampledAuditInstance.lean`
+  discharges its `Compiled.KS` hypothesis at an assembled sampling record from the compiler at Flock
+  (`Claims.SamplingGeneric.flockKS`): `sampledAuditAccepted_of` over any Flock record, `sampledAuditAccepted_zk` and
+  `sampledAuditAccepted_plain` at the masked and plain records.
 - **The leak bound under a sampled audit** (`SampledCharge.lean`):
   `EncardAccSeqsSampledLe`, the count of the sequences accepted with a possible incorrect set: the inputs other than the
   ingress, the incorrect proof blocks' committed bits and the choice of incorrect set. `SampledLeakAccepted` is what an accepted
-  sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Claims.Sampling.KS` at the deployment,
+  sampled audit establishes: with `SampledAuditAccepted` as its hypothesis and `Compiled.KS` at the compiled verifier,
   the carried sequences of length `k` are among those the count bounds except with probability `δ + ε_ks + ε_bind`
   (`RLeak`), and the count holds with `c` the number of free inputs not in the statement's registered inputs `reg`
   (`freeInputs`, at `AsReg`), at whatever values the trace holds at `reg`. It is `SampledLeak.lean`'s
   `sampledLeak_reg`. `RAcc` pins the inputs to the trace, so the values at `reg` are the trace's; that the
-  registration's commitment binds them is a separate statement, not yet proved. Both `SampledAuditAccepted` and
-  `Claims.Sampling.KS` are named assumptions in the lock.
+  registration's commitment binds them is a separate statement, not yet proved. `Compiled.KS` is an open premise in
+  the lock, and `SampledAuditAccepted` is proved.
 - **The leak through the network certifier over a monitoring period** (`Period.lean`): `PeriodLeakAccepted` composes
   the leak bound at the network certifier's rows (`TapRows.lean`'s `sampledLeak_tap`) with the read-back of its
   record, so the bound's content term comes from the audits: over a monitoring period's windows, each registered as a
@@ -265,11 +266,11 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   `Definitions/NetworkCertifier/RecordRows.lean`), is one (`RowsFormat.tapRecord`), on the schedules whose cells fall
   in the monitoring period's buckets, at most `S` a bucket, and its `#guard`s hold it to the Python records. The record
   holds the fail cells and padding too, so the proof counts the cells through the
-  observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its named assumptions are
-  `Claims.Sampling.KS`, `CommitmentScheme.Binds`, `Claims.Flock.ListWithin` and `trusted-host`. The union over the monitoring
-  period's live coins and the registration's binding of the prover's values at `reg` are not yet stated.
-  `Claims.Sampling.KS` stands in for proofs' live bound (`Flock.Guarantees.SampledKSLive`), which replaces it once
-  locked, with live forms of `SampledAuditAccepted` and `SampledLeakAccepted`.
+  observations and needs no fail-cell charge: `∏_c (cap_c + 1)` is room. Its premises are `Compiled.KS`,
+  `CommitmentScheme.Binds` and `trusted-host`. The union over the monitoring period's live coins and the registration's
+  binding of the prover's values at `reg` are not yet stated. `Compiled.KS` stands in for proofs' live bound
+  (`Flock.Guarantees.SampledKSLive`), which replaces it once locked, with live forms of `SampledAuditAccepted` and
+  `SampledLeakAccepted`.
 - **The incorrect proof blocks over a monitoring period** (`Pooled.lean`): `PooledWrongUnitsLe` is the bound over many periods,
   cumulative rather than per window, and a fact of probability with no named assumption. Over `m` windows on independent
   live coins (their coins are the product `Fin m → Ω`), window `i` sampling a uniform `k_i`-subset of its `n_i` units,
@@ -277,7 +278,7 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   meets one with probability at most `ε_i`: for `q ≤ k_i / n_i` in every window, every window accepts while the
   monitoring period holds at least `F` incorrect proof blocks with probability at most `(1 - q)^F + Σ_i ε_i`, whatever `m` is, and
   `(1 - q)^F ≤ δ` once `F ≥ ln(1/δ)/q`. The sampling design and each window's error are hypotheses, which A3 and
-  `Claims.Sampling.KS` discharge where the bound is applied to the sampled verifier.
+  `Compiled.KS` discharge where the bound is applied to the sampled verifier.
 - **The leak through the network certifier over a monitoring period** (`PooledLeak.lean`): `PooledLeakAccepted` is
   the count `K_pooled`, conditional on two per-window inputs taken as plain hypotheses, at the incorrect set `W_i` of the
   witness computed from window `i`'s registration (read from the earlier windows' coins): the conditional escape

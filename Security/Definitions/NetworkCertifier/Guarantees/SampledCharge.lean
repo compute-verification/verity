@@ -72,6 +72,7 @@ and at most `2^c` advice values are charged `c` or less (`hAs`), as for any pref
 namespace NetTiming.Guarantees
 
 open Claims.Sampling
+open Claims.SamplingGeneric (Arg Compiled)
 
 -- A guarantee keeps its theorem's hypothesis names for the reader, though no statement refers to them.
 set_option linter.unusedVariables false
@@ -90,10 +91,9 @@ def EncardAccSeqsSampledLe : Prop :=
     (AccSeqsSampled C P d lay n As δ op D).encard ≤
       ((2 ^ c * (faultySets d P δ).card * 2 ^ β * D ^ n : ℕ) : ℕ∞)
 
-/-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every deployment `D` of the sampled
-verifier where `Claims.Sampling.KS` holds, every public layout `lay` and horizon `k` of its statements, `δ ≥ 0`, a
-decoder that lists every trace within Flock's radius, and `β` bounding each possible incorrect set's committed bits
-(`faultyBits`), on the statements in scope:
+/-- **An accepted sampled audit bounds the leak, given `SampledAuditAccepted`.** At every compiled sampled verifier `D`
+where `Claims.SamplingGeneric.Compiled.KS` holds, every public layout `lay` and horizon `k` of its statements, `δ ≥ 0`,
+and `β` bounding each possible incorrect set's committed bits (`faultyBits`), on the statements in scope:
 
 * `Pr[acc ∧ ¬RLeak δ] ≤ δ + ε_ks + ε_bind`: except with that probability, every observation sequence of length `k` with
   jitter below `Dj` that the trace's transfer gates carry with every status complete is among the sequences
@@ -107,14 +107,14 @@ decoder that lists every trace within Flock's radius, and `β` bounding each pos
 public only where something binds them, as the registration's commitment binds the registered inputs. -/
 def SampledLeakAccepted : Prop :=
   SampledAuditAccepted →
-    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
-      (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ)
-      (Dj : ℕ) (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
+    ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+      (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (L K S : ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
+      (reg : AuditStatement → Finset ℕ) (β : AuditStatement → ℕ) (Dj : ℕ)
+      (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
       KSLinOn H D.V (ScopeAcc D lay k)
           (RLeak H D.commit D.parse D.partition L K S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj)
-          (E D decode) (κ D δ) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) ∧
+          D.E (D.κ δ) D.γ (fun _ => 1) (Bext H D.V D.E) ∧
         ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
           ∀ (op : ℕ → List (Obs L K S) → List Bool) (ρ : ℕ → Bool),
             (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) ρ) δ op Dj).encard ≤
@@ -131,19 +131,18 @@ opens its registered inputs `reg` under the statement's roots (`RegOpens`, openi
 * those sequences number at most `2^#(freeInputs \ reg) · #faultySets(δ) · 2^β · Dj^k`. -/
 def SampledLeakRegistered : Prop :=
   SampledAuditAccepted →
-    ∀ {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
-      (H : Claims.Msg → Claims.Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
-      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T) (hδ : 0 ≤ δ)
-      (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode) (reg : AuditStatement → Finset ℕ)
-      (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
+    ∀ {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
+      (H : Claims.Msg → Claims.Msg) (D : Compiled Coin A) (hks : D.KS H) (hb : D.commit.Binds H) (L K S : ℕ)
+      (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ)
+      (reg : AuditStatement → Finset ℕ) (ops : AuditStatement → List (Opening Bool)) (β : AuditStatement → ℕ) (Dj : ℕ)
       (hβ : ∀ s P, D.partition s = some P → ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s),
       (∀ x, ScopeAcc D lay k x → (∀ s, D.parse x = some s → RegOpens H D.commit s (reg s) (ops s)) →
         ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Claims.Prover Ω),
           Claims.PrBad H D.V
               (RLeak H D.commit D.parse D.partition L K S lay k δ
-                (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj) (E D decode) x P ≤
-            κ D δ x + Real.sqrt (γ D x * Claims.PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
-              (Breg H D.V (E D decode) D.commit D.parse ops Ω P x).Pr H) ∧
+                (fun s _ => AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) Dj) D.E x P ≤
+            D.κ δ x + Real.sqrt (D.γ x * Claims.PrB H D.V P x) + (Bext H D.V D.E Ω P x).Pr H +
+              (Breg H D.V D.E D.commit D.parse ops Ω P x).Pr H) ∧
         ∀ x, ScopeAcc D lay k x → ∀ s P, D.parse x = some s → D.partition s = some P →
           ∀ op : ℕ → List (Obs L K S) → List Bool,
             (AccSeqsSampled s.prog P s.design (lay s) (k s) (AsReg s.prog (lay s) (k s) (reg s) (regVal (ops s))) δ op
