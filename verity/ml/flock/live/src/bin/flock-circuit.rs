@@ -485,8 +485,27 @@ fn table_names(tables: usize) -> Vec<String> {
 /// `count` equal consecutive parts, and table `j` proves part `j` as a subset sample of the population, under an identity that
 /// names the session's rules for several tables.
 fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
+    side_tables(Side::Fresh, st, inst, draw, count)
+}
+
+/// Whose drawn statements a session's tables reuse ([`StmtCache`]; none under `FC_STMT_CACHE=0`): the verifier's Register and
+/// the prover's tables after it each keep their own, never the other's; every other caller builds afresh.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Side { Fresh, Verifier, Prover }
+
+fn side_stmt(side: Side, st: &Stmt, n: usize, id: Value) -> Result<Arc<Stmt>, String> {
+    static VERIFIER: StmtCache = StmtCache::new();
+    static PROVER: StmtCache = StmtCache::new();
+    match side {
+        Side::Verifier if stmt_cache_on() => VERIFIER.drawn(st, n, id),
+        Side::Prover if stmt_cache_on() => PROVER.drawn(st, n, id),
+        _ => Stmt::new(st.c.clone(), n, id).map(Arc::new),
+    }
+}
+
+fn side_tables(side: Side, st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, count: usize) -> Result<Tables, String> {
     if count <= 1 {
-        let (st, inst) = match draw { Some(d) => drawn(st, inst, d)?, None => (st.clone(), inst.clone()) };
+        let (st, inst) = match draw { Some(d) => side_drawn(side, st, inst, d)?, None => (st.clone(), inst.clone()) };
         if draw.is_some() && is_zk(&st) {
             zk_shape_ok(&st)?;
         }
@@ -516,11 +535,11 @@ fn session_tables(st: &Arc<Stmt>, inst: &Arc<Instances>, draw: Option<&Value>, c
                                            one-table session's); a rank check per table; every table's level-0 root in one commit; every proof \
                                            after the last coin of every stream (the barrier)");
         }
-        let ds = Stmt::new(st.c.clone(), di.n, id)?;
+        let ds = side_stmt(side, st, di.n, id)?;
         if is_zk(&ds) {
             zk_shape_ok(&ds)?;
         }
-        Ok(Table { name, st: Arc::new(ds), inst: Arc::new(di) })
+        Ok(Table { name, st: ds, inst: Arc::new(di) })
     }).collect::<Result<Vec<_>, String>>()?;
     if list.iter().any(|t| t.st.m_pts != list[0].st.m_pts) {
         return Err("tables: the tables' link points have different lengths".into());
@@ -554,7 +573,7 @@ impl StatementVerifier for CircuitVerifier {
     fn verify(&self, t: &str, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
         let tb = self.tabs.list.iter().find(|x| x.name == t).ok_or(format!("no table {t} in the statement"))?;
         if is_zk(&tb.st) {
-            return Self::verify_zk(tb, rep, proof, ch, link);
+            return Self::verify_zk(tb, rep, proof, self.lincheck, ch, link);
         }
         let t0 = Instant::now();
         let mut ph = sverify::Phases::default();
@@ -609,12 +628,13 @@ impl CircuitVerifier {
 
     /// M1: the zerocheck and lincheck replayed on masked values as constraints on the committed pads (`zk_veil::replay`),
     /// upstream's opening with the two masked claims' ring-switch checks turned into constraints, then the inner proof.
-    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], ch: &mut ReplayChallenger, link: &LinkCtx<'_>) -> Result<Vec<u8>, String> {
+    fn verify_zk(tb: &Table, rep: usize, proof: &[u8], lincheck: sverify::Lincheck, ch: &mut ReplayChallenger, link: &LinkCtx<'_>)
+                 -> Result<Vec<u8>, String> {
         if link.points.len() != 2 || link.y.iter().any(|y| *y != F128::ZERO) {
             return Err("session: two points and y = 0 expected (nothing is prover-supplied)".into());
         }
         let (commitment, proof, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(proof).map_err(|e| format!("decode: {e}"))?;
-        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, ch)?;
+        verify_zk_with(&tb.st, &tb.inst, &commitment, &proof, &inner, link.points, rep, lincheck, ch)?;
         Ok(merkle_digest_bytes(&commitment.cap).to_vec())
     }
 }
@@ -622,10 +642,12 @@ impl CircuitVerifier {
 /// Everything M1's verifier checks before the inner proof, on any challenger (the session's replay, or a simulator's coin
 /// tape): the replayed zerocheck and lincheck, upstream's opening with the masked claims' ring-switch checks and level 0's lane
 /// phase turned into constraints, level 0's rows checked against rep `rep`'s pair of extra lanes. Returns the constraints the
-/// inner proof must prove, and level 0's record.
+/// inner proof must prove, and level 0's record. `lincheck`: how the replay computes the lincheck's comb (the same verdict in
+/// every mode).
 #[allow(clippy::too_many_arguments)]
 fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, ch: &mut Ch)
+                                                                 root: &[u8; 64], points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                 ch: &mut Ch)
     -> Result<(Vec<(&'static str, zkv::Lin)>, flock_core::pcs::ligerito::zk::Level0ZkRecord), String> {
     let pcs = pcs_of(st, LigeritoProfile::Fast100);
     if commitment.params != pcs {
@@ -633,7 +655,7 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
     }
     let lay = zk_layout(st);
     bind_statement(ch, &st.r1cs, commitment);
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, ch)?;
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &proof.zerocheck, &proof.lincheck, &st.circuit, &lay, root, None, lincheck, ch)?;
     let extra = st.extra_claims(points, inst);
     let rs = &proof.pcs_open.ring_switches;
     if rs.len() != 2 + extra.len() {
@@ -670,10 +692,11 @@ fn zk_constraints<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst:
 /// M1's verifier on any challenger: [`zk_constraints`], then the inner proof.
 #[allow(clippy::too_many_arguments)]
 fn verify_zk_with<Ch: flock_transcript::challenger::Challenger>(st: &Stmt, inst: &Instances, commitment: &Commitment, proof: &R1csProofLigerito,
-                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, ch: &mut Ch) -> Result<(), String> {
+                                                                  inner: &InnerProof, points: &[Vec<F128>], rep: usize, lincheck: sverify::Lincheck,
+                                                                  ch: &mut Ch) -> Result<(), String> {
     let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "zk: the pads' root is not 64 bytes".to_string())?;
     catch_unwind(AssertUnwindSafe(|| -> Result<(), String> {
-        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, ch)?;
+        let (cons, _) = zk_constraints(st, inst, commitment, proof, &root, points, rep, lincheck, ch)?;
         zkv::verify_inner(inner, &zk_layout(st), proof.zerocheck.final_c_eval, cons, ch)
     }))
     .map_err(|_| "verifier panicked".to_string())?
@@ -747,10 +770,14 @@ fn config_with(tabs: &[(&str, &Stmt, &Instances)], unit_draw: Option<Value>) -> 
 
 /// The sampled proof blocks' statement over a registered population (both sides derive it from the population file and the sample).
 fn drawn(st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
+    side_drawn(Side::Fresh, st, inst, draw)
+}
+
+fn side_drawn(side: Side, st: &Stmt, inst: &Instances, draw: &Value) -> Result<(Arc<Stmt>, Arc<Instances>), String> {
     let di = inst.drawn(&st.c, draw)?;
     check_public(&st.c, &di)?;
-    let ds = Stmt::new(st.c.clone(), di.n, st.identity.clone())?;
-    Ok((Arc::new(ds), Arc::new(di)))
+    let ds = side_stmt(side, st, di.n, st.identity.clone())?;
+    Ok((ds, Arc::new(di)))
 }
 
 /// A shared transport used as a plain one (so it can be wrapped).
@@ -952,7 +979,7 @@ fn with_draw(mut s: Server, st: &Arc<Stmt>, inst: &Arc<Instances>, law: flock_li
     s.cfg.draw_law = Some((law, inst.n as u64));
     let (st, inst) = (st.clone(), inst.clone());
     s.with_draw(Box::new(move |draw: &Value| {
-        let tabs = session_tables(&st, &inst, Some(draw), count)?;
+        let tabs = side_tables(Side::Verifier, &st, &inst, Some(draw), count)?;
         Ok((config_of(&tabs), Box::new(CircuitVerifier::new(tabs)) as Box<dyn StatementVerifier>))
     }))
 }
@@ -1229,6 +1256,78 @@ fn zk_prepare(st: &Stmt, plan: &Plan, seed: ProverSeed, lig: LigeritoProfile, sa
     });
     eprintln!("ZKPRE\t{}", json!({"level0_s": t_level0, "s": tl0.elapsed().as_secs_f64()}));
     (t_level0, reps)
+}
+
+/// The salt trees a device session's table samples, in order, as (tree id, leaves): level 0, then each rep's Ligerito levels 1
+/// to R, a level's tree 2^(its message columns + its rate) leaves; under M1 each rep's pads tree comes first (`zk_prepare`'s ids).
+fn salt_trees(st: &Stmt, lig: LigeritoProfile, level0: u64) -> Vec<(u64, usize)> {
+    let pcs = pcs_of(st, lig);
+    let cfg = pcs.ligerito_prover_config().expect("Ligerito config");
+    let (r, pads) = (cfg.recursive_steps as u64, is_zk(st) as u64);
+    let mut trees = vec![(level0, pcs.n_leaves())];
+    for rep in 0..2 {
+        let first = level0 + 1 + rep * (pads + r) + pads;
+        trees.extend((0..cfg.recursive_steps).map(|i| (first + i as u64, 1usize << (cfg.recursive_log_msg_cols[i] + cfg.log_inv_rates[i + 1]))));
+    }
+    trees
+}
+
+#[cfg(feature = "gpu")]
+type SaltBuf = flock_live::gpu_circuit::Pinned;
+#[cfg(not(feature = "gpu"))]
+type SaltBuf = ();
+
+/// The read-ahead's salt buffers of the process's last session, page-locked once: a later session refills those of its trees'
+/// sizes in place (every byte, from the source a sample reads), so it locks, unlocks and faults in no page of them
+/// (FC_SALTS_REUSE=0: each session locks its own and unlocks them after it, the reference for the reuse's gain).
+static SALT_BUFS: Mutex<Vec<SaltBuf>> = Mutex::new(Vec::new());
+
+/// A tree's `n`-byte buffer for the read-ahead, written whole by `fill`: one of `free` (an earlier session's) of that size, else a
+/// fresh one, page-locked; `held` keeps it locked for the session.
+#[cfg(feature = "gpu")]
+fn salt_buffer(free: &mut Vec<SaltBuf>, held: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    for i in 0..free.len() {
+        if let Some(b) = free[i].refill(n, fill) {
+            held.push(free.swap_remove(i));
+            return b;
+        }
+    }
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    let b = Arc::new(b);
+    held.extend(flock_live::gpu_circuit::Pinned::new(&b));
+    b
+}
+
+#[cfg(not(feature = "gpu"))]
+fn salt_buffer(_: &mut Vec<SaltBuf>, _: &mut Vec<SaltBuf>, n: usize, fill: &mut dyn FnMut(&mut [u8])) -> Arc<Vec<u8>> {
+    let mut b = vec![0u8; n];
+    fill(&mut b);
+    Arc::new(b)
+}
+
+/// The read-ahead's own pool: FC_SALTS_THREADS threads (default: one a core; 0: rayon's global pool, the witness build's) at
+/// nice FC_SALTS_NICE (default 19), so its draws take the cores the witness build leaves idle, not a share of its cores. A
+/// sample that finds its tree not yet read reads its own on the caller's pool, so no draw waits on the read-ahead's priority.
+fn salts_pool() -> Option<&'static rayon::ThreadPool> {
+    static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let var = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<i32>().ok());
+        let n = var("FC_SALTS_THREADS").map_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()), |n| n.max(0) as usize);
+        let nice = var("FC_SALTS_NICE").unwrap_or(19).clamp(0, 19);
+        (n > 0).then(|| {
+            rayon::ThreadPoolBuilder::new().num_threads(n).stack_size(flock_live::THREAD_STACK).thread_name(|i| format!("flock-salts-{i}"))
+                .start_handler(move |_| nice_thread(nice)).build().expect("the salts' pool")
+        })
+    })
+    .as_ref()
+}
+
+/// This thread's nice value raised to `nice` (Linux keeps one per thread); left as it is where refused.
+fn nice_thread(nice: i32) {
+    if nice > 0 {
+        unsafe { libc::setpriority(libc::PRIO_PROCESS, libc::syscall(libc::SYS_gettid) as libc::id_t, nice) };
+    }
 }
 
 /// A table's level-0 root before any stream opens, in a session of several tables (whose one `Commit` carries every table's
@@ -1916,7 +2015,8 @@ impl Firewall {
         }
         let (zc0, lc0) = zkv::from_exposed(&vals, &lay);
         let rp = catch_unwind(AssertUnwindSafe(|| {
-            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), &mut zkv::Tape::new(&r.coins))
+            zkv::replay(&st.r1cs, &st.c0_identity, &zc0, &lc0, &st.circuit, &lay, &[0; 64], Some(&[F128::ZERO; zkv::SKIP]), sverify::Lincheck::default(),
+                        &mut zkv::Tape::new(&r.coins))
         })).map_err(|e| refused(format!("the replay of the passed values: {}", panic_msg(e))))?.map_err(refused)?;
         vals[lay.fc()] = rp.cons.iter().find(|c| c.0 == "zerocheck c_eval").ok_or_else(|| refused("no c_eval row"))?.1.c;
         let relations: Vec<&'static str> = rp.cons.iter().map(|c| c.0).collect();
@@ -2105,7 +2205,7 @@ fn zk_finish<C: flock_transcript::challenger::Challenger + Send>(st: &Stmt, zk: 
     let tz = Instant::now();
     let (mut zc, lc) = zkv::mask_proof(&proof.zerocheck, &proof.lincheck, &zk.lay, &sent.h);
     let own_comb = (!proof.lincheck.comb_partial.is_empty()).then_some(proof.lincheck.comb_partial.as_slice());
-    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, &mut zkv::Tape::new(&coins))
+    let rp = zkv::replay(&st.r1cs, &st.c0_identity, &zc, &lc, &st.circuit, &zk.lay, &zk.root, own_comb, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins))
         .unwrap_or_else(|e| panic!("{e}"));
     let t_replay = tz.elapsed().as_secs_f64();
     let wp = claim_word_points(st, &zk.lay, &coins).unwrap_or_else(|e| panic!("{e}"));
@@ -2341,7 +2441,7 @@ fn simulate_full(st: &Stmt, inst: &Instances, coins: &[F128], points: &[Vec<F128
     let proof = R1csProofLigerito { zerocheck: zc, lincheck: lc, pcs_open: flock_core::pcs::BatchOpeningProofLigerito {
         ring_switches, batching_nonces: dpr.pcs_open.batching_nonces.clone(), ligerito: lg } };
     let mut tape = zkv::Tape::new(coins);
-    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, &mut tape)?;
+    let (cons, _) = zk_constraints(st, inst, &commitment, &proof, &[0; 64], points, rep, sverify::Lincheck::default(), &mut tape)?;
     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
     let salts = flock_live::zk_hooks::LeafSalts::for_seed(&ProverSeed::from_os()).expand(1, n);
     let inner = zkv::simulate_inner(&lay, rng, index, cons, salts, &mut tape)?;
@@ -2415,7 +2515,7 @@ fn session_relations_q(st: &Stmt, inst: &Instances, proofs: &[Vec<u8>], coins: &
     for (rep, p) in proofs.iter().enumerate() {
         let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).map_err(|e| format!("decode: {e}"))?;
         let root: [u8; 64] = inner.root.clone().try_into().map_err(|_| "pads root")?;
-        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], &mut zkv::Tape::new(&coins[rep]))?;
+        let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, pairs[rep], sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))?;
         reps.push((rec, pr.pcs_open.ligerito));
     }
     let n = mul(wmat(reps[1].0.rho), inv(wmat(reps[0].0.rho)));
@@ -2522,10 +2622,11 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 let (c, pr, inner): (Commitment, R1csProofLigerito, InnerProof) = bincode::deserialize(p).unwrap();
                 if run == 0 {
                     let (coins, points) = tape.as_ref().unwrap();
-                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut zkv::Tape::new(&coins[rep]));
+                    let ok = verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
                     assert!(ok.is_ok(), "a {kind} proof is rejected on its own coin tape: {ok:?}");
                     let root: [u8; 64] = inner.root.clone().try_into().unwrap();
-                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&coins[rep])).unwrap_or_else(|e| refuse(e));
+                    let (_, rec) = zk_constraints(st, inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]))
+                        .unwrap_or_else(|e| refuse(e));
                     q0[rep] = rec.queries0[..4].to_vec();
                 }
                 let mut row = fields(kind, run, rep, &pr, &inner);
@@ -2545,7 +2646,7 @@ fn zkstat(st: &Arc<Stmt>, inst: &Arc<Instances>) {
         for rep in 0..2 {
             let (c, pr, inner) = simulate_full(st, inst, &coins[rep], &points, &dummy[rep], &mut rng, rep, (2 * run + rep) as u64).unwrap_or_else(|e| refuse(e));
             // the simulated proof must be accepted by the verifier on the same coins
-            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, &mut zkv::Tape::new(&coins[rep]));
+            let ok = verify_zk_with(st, inst, &c, &pr, &inner, &points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&coins[rep]));
             assert!(ok.is_ok(), "the verifier rejects a simulated proof: {ok:?}");
             accepted += 1;
             let mut row = fields("sim", run, rep, &pr, &inner);
@@ -3003,7 +3104,7 @@ fn rewind(tabs: &Tables, v: impl Transport + 'static, hello: &str, points: &[Vec
         let (st, inst) = (&*tb.st, &*tb.inst);
         let (c, pr, inner) = simulate_full(st, inst, &coins[s].concat(), points, &dummy[s], rng, rep, streams.len() as u64 * index + s as u64)?;
         let mut rec = flock_live::RecordingChallenger::new(&domain_of(&st.c, count, &tb.name, rep), coins[s].clone());
-        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
+        verify_zk_with(st, inst, &c, &pr, &inner, points, rep, sverify::Lincheck::default(), &mut rec).map_err(|e| format!("{stream}'s simulation is rejected on the extracted coins: {e}"))?;
         if let Some(e) = rec.mismatch.or_else(|| (rec.rounds.len() != coins[s].len()).then(|| format!("{} rounds, extracted {}", rec.rounds.len(), coins[s].len()))) {
             return Err(format!("{stream}'s simulation does not follow the extracted schedule: {e}"));
         }
@@ -3228,7 +3329,7 @@ fn zkrewind(st: &Arc<Stmt>, inst: &Arc<Instances>) {
                 row["table"] = json!(j);
                 // the level-0 positions of the sampled rows, from the verifier's record on the view's coins
                 if let (Some((points, flat)), Ok(root)) = (&ext, <[u8; 64]>::try_from(inner.root.clone())) {
-                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, &mut zkv::Tape::new(&flat[s])) {
+                    if let Ok((_, rec)) = zk_constraints(&tb.st, &tb.inst, &c, &pr, &root, points, rep, sverify::Lincheck::default(), &mut zkv::Tape::new(&flat[s])) {
                         row["lig_rows0_q"] = json!(rec.queries0[..4]);
                     }
                     let n = zkv::Code::new(lay.len() + zkv::K_PAD).n;
@@ -3366,18 +3467,13 @@ fn gpu_buckets(wt: &WitData, ph: [f64; 8], wph: [f64; 3], hph: [f64; 3], reused:
            "host_slots": match wt { WitData::Dev(_, h, _) | WitData::DevCut(_, h, _, _) => h.layout(), WitData::Host(..) => "none" }})
 }
 
-/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its witness and level-0 commitment on the device and rep 1 takes them.
+/// One rep on the GPU; with `reuse_tag`, rep 0 keeps its level-0 commitment on the device and rep 1 takes it.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, ch: &mut LiveChallenger,
              salts: &Mutex<flock_live::zk_hooks::LeafSalts>, reuse_tag: Option<u64>, native_sha: bool) -> Result<(Vec<u8>, Value), String> {
-    use flock_live::gpu_circuit::{Live, Reuse, kept, prove_circuit};
-    let reuse = match (reuse_tag, rep) {
-        (None, _) => Reuse::None,
-        (Some(t), 0) => Reuse::Keep(t),
-        (Some(t), _) => Reuse::Take(t),
-    };
-    let reused = matches!(reuse, Reuse::Take(t) if kept(t));
+    use flock_live::gpu_circuit::{Live, prove_circuit};
+    let (reuse, reused) = reuse_of(reuse_tag, rep);
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Stream(ch), salted(st).then_some(salts), reuse,
                                                  native_sha))?;
@@ -3389,19 +3485,34 @@ fn prove_gpu(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Ho
     Ok((bytes, bk))
 }
 
+/// Rep 0 keeps its level-0 commitment for the session's `reuse_tag` and rep 1 takes it; whether the device holds it for this
+/// rep.
+#[cfg(feature = "gpu")]
+fn reuse_of(reuse_tag: Option<u64>, rep: usize) -> (flock_live::gpu_circuit::Reuse, bool) {
+    use flock_live::gpu_circuit::{Reuse, kept};
+    let reuse = match (reuse_tag, rep) {
+        (None, _) => Reuse::None,
+        (Some(t), 0) => Reuse::Keep(t),
+        (Some(t), _) => Reuse::Take(t),
+    };
+    (reuse, matches!(reuse, Reuse::Take(t) if kept(t)))
+}
+
 /// M1 on the device, its device part: every live round the device frames goes to `rounds` (the rep's masking challenger, made
 /// again there by `flock_live::replay_round`, so the verifier sees what M1's CPU prover sends); level 0's hiding runs on the device.
-/// The caller finishes the rep with [`zk_finish`], or [`zk_finish_fw`] under the ZK server, as on the CPU.
+/// The caller finishes the rep with [`zk_finish`], or [`zk_finish_fw`] under the ZK server, as on the CPU. With `reuse_tag`, rep 1
+/// opens rep 0's level-0 codeword, the one both reps commit.
 #[cfg(feature = "gpu")]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(st: &Stmt, wt: &WitData, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Mutex<flock_live::zk_hooks::LeafSalts>,
-                 level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool)
-                 -> Result<(R1csProofLigerito, Commitment, Value), String> {
-    use flock_live::gpu_circuit::{Live, Reuse, prove_circuit};
+                 level0: &flock_core::pcs::ligerito::zk::Level0Zk, rounds: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool,
+                 reuse_tag: Option<u64>) -> Result<(R1csProofLigerito, Commitment, Value), String> {
+    use flock_live::gpu_circuit::{Live, prove_circuit};
+    let (reuse, reused) = reuse_of(reuse_tag, rep);
     let (proof, commitment, ph, wph, hph) =
         with_gpu_src(st, wt, |src| prove_circuit(st, src, &pcs_of(st, lig), &domain(&st.c, rep), hook, Live::Zk { level0, rounds }, Some(salts),
-                                                 Reuse::None, native_sha))?;
-    let bk = gpu_buckets(wt, ph, wph, hph, false, native_sha);
+                                                 reuse, native_sha))?;
+    let bk = gpu_buckets(wt, ph, wph, hph, reused, native_sha);
     eprintln!("GPUPHASE\t{bk}");
     Ok((proof, commitment, bk))
 }
@@ -3416,7 +3527,7 @@ fn prove_gpu(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _
 #[cfg(not(feature = "gpu"))]
 #[allow(clippy::too_many_arguments)]
 fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_>, _: &Mutex<flock_live::zk_hooks::LeafSalts>,
-                 _: &flock_core::pcs::ligerito::zk::Level0Zk, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, _: bool)
+                 _: &flock_core::pcs::ligerito::zk::Level0Zk, _: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, _: bool, _: Option<u64>)
                  -> Result<(R1csProofLigerito, Commitment, Value), String> {
     Err("built without the gpu feature".into())
 }
@@ -3426,11 +3537,11 @@ fn gpu_zk_device(_: &Stmt, _: &WitData, _: LigeritoProfile, _: usize, _: Hook<'_
 #[allow(clippy::too_many_arguments)]
 fn gpu_device(st: &Arc<Stmt>, wt: &Arc<WitData>, lig: LigeritoProfile, rep: usize, hook: Hook<'_>, salts: &Arc<Mutex<flock_live::zk_hooks::LeafSalts>>,
               level0: &Arc<flock_core::pcs::ligerito::zk::Level0Zk>, round: &mut dyn FnMut(&[u8], usize) -> Vec<F128>, native_sha: bool,
-              firewall: &Option<Arc<Mutex<Firewall>>>) -> Result<(R1csProofLigerito, Commitment, Value), String> {
-    let Some(g) = firewall else { return gpu_zk_device(st, wt, lig, rep, hook, salts, level0, round, native_sha) };
+              firewall: &Option<Arc<Mutex<Firewall>>>, reuse_tag: Option<u64>) -> Result<(R1csProofLigerito, Commitment, Value), String> {
+    let Some(g) = firewall else { return gpu_zk_device(st, wt, lig, rep, hook, salts, level0, round, native_sha, reuse_tag) };
     let cut = g.lock().unwrap_or_else(PoisonError::into_inner).cut();
     let (st, wt, salts, level0) = (st.clone(), wt.clone(), salts.clone(), level0.clone());
-    worker(cut, move |rounds, hook| gpu_zk_device(&st, &wt, lig, rep, hook, &salts, &level0, rounds, native_sha), round, hook)
+    worker(cut, move |rounds, hook| gpu_zk_device(&st, &wt, lig, rep, hook, &salts, &level0, rounds, native_sha, reuse_tag), round, hook)
 }
 
 #[derive(Clone, Default)]
@@ -3482,7 +3593,7 @@ struct Plan {
     coin_nonce: Option<[u8; 32]>,
     /// the device witness's units from the host (`Some(true)`), the device (`Some(false)`), or by depth (`deep_unit`)
     host_units: Option<bool>,
-    /// rep 1 from rep 0's device witness and level-0 commitment (default: unless `FC_REP_REUSE=0`; never under `--zk`)
+    /// rep 1 from rep 0's device level-0 commitment (default: unless `FC_REP_REUSE=0`)
     rep_reuse: Option<bool>,
     /// the compression slots' witness natively (`Some(true)`) or level by level (`Some(false)`); default native unless
     /// `FC_NATIVE_SHA=0`
@@ -3720,7 +3831,7 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
             Some(s) if s.names() == names => Ok(s.clone()),
             _ => session_tables(st, inst, None, names.len()),
         },
-        Ok(Resp::Draw(d)) => session_tables(st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
+        Ok(Resp::Draw(d)) => side_tables(Side::Prover, st, inst, Some(&serde_json::from_str(&d).unwrap_or(Value::Null)), names.len()),
         other => return Err((json!({"accepted": false, "why": format!("register: {other:?}"), "prover_stopped": "register refused"}), Vec::new())),
     };
     let tabs = match tabs {
@@ -3752,11 +3863,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let tree = is_zk(st) || plain_tree(st);
     let mut commit: Vec<F128> = Vec::new();
     let (device, host_units, mapped) = witness_mode(st, plan);
-    // on the device, rep 1 proves from rep 0's witness and level-0 commitment (the session's tag keys what rep 0 keeps); not
-    // under M1, whose level 0 and lane phase are its own
+    // on the device, rep 1 proves from rep 0's level-0 commitment (the session's tag keys what rep 0 keeps) and builds its
+    // witness again, under M1 too: both reps commit one level-0 codeword
     static SESSIONS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
     let native_sha = plan.native_sha.unwrap_or_else(|| std::env::var("FC_NATIVE_SHA").as_deref() != Ok("0"));
-    let reuse_tag = (plan.gpu && !plan.rep1_other_witness && !is_zk(st)
+    let reuse_tag = (plan.gpu && !plan.rep1_other_witness
         && plan.rep_reuse.unwrap_or_else(|| std::env::var("FC_REP_REUSE").as_deref() != Ok("0")))
         .then(|| SESSIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed));
     let lig = if plan.fast { LigeritoProfile::Fast } else { LigeritoProfile::Fast100 };
@@ -3766,6 +3877,38 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let s = flock_live::zk_hooks::LeafSalts::for_seed(&seed);
         (0..tabs.list.len()).map(|j| Arc::new(Mutex::new(s.table(j as u64)))).collect()
     };
+    // the device's trees' salts read beside the witness build, on the read-ahead's own pool (`salts_pool`), into page-locked
+    // buffers for its copies (`SALT_BUFS`), not inside its timed phases (FC_SALTS_AHEAD=0: each tree's where the device builds
+    // it; FC_SALTS_AFTER=1: from when every table's witness is built, beside the device's phases only); not under the ZK
+    // server, whose Lean draws them
+    let after = std::env::var("FC_SALTS_AFTER").as_deref() == Ok("1");
+    let start_ahead = || (plan.gpu && salted(st) && plan.lean_frames.is_none() && !firewall_on(st)
+        && std::env::var("FC_SALTS_AHEAD").as_deref() != Ok("0"))
+    .then(|| {
+        let tables: Vec<_> = salts_t.iter().map(|s| {
+            let s = s.lock().unwrap_or_else(PoisonError::into_inner);
+            (s.ahead(), salt_trees(st, lig, s.level0_id()))
+        }).collect();
+        flock_live::spawn(move || {
+            let t0 = Instant::now();
+            let reuse = std::env::var("FC_SALTS_REUSE").as_deref() != Ok("0");
+            let mut free = if reuse { std::mem::take(&mut *SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner)) } else { Vec::new() };
+            let (had, mut held) = (free.len(), Vec::new());
+            let mut draw = || for (a, trees) in &tables {
+                a.draw(trees, &mut |n, fill| salt_buffer(&mut free, &mut held, n, fill));
+            };
+            let pool = salts_pool();
+            match pool {
+                Some(p) => p.install(draw),
+                None => draw(),
+            }
+            let reused = had - free.len();
+            drop(free);
+            let threads = pool.map_or(0, |p| p.current_num_threads());
+            (tables, held, reuse, reused, threads, t0.elapsed().as_secs_f64())
+        })
+    });
+    let mut salts_ahead = if after { None } else { start_ahead() };
     // the rank check's claim points: per table (each has its own mask slot)
     let points_t: Vec<Arc<Mutex<Vec<Vec<F128>>>>> = tabs.list.iter().map(|_| Arc::new(Mutex::new(Vec::new()))).collect();
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
@@ -3807,6 +3950,9 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         };
         witness_s += tw0 + tw1;
         wits.push((w0, Some(wt0), wt1));
+    }
+    if after {
+        salts_ahead = start_ahead();
     }
     let tj = Instant::now();
     let mut zk_pre = match zk_pre.map(|h| h.join()) {
@@ -4055,7 +4201,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                 let (mut mch, sent) = zk_masking(st, lch.take().expect("rep 0's stream"), &z);
                                 let tp = Instant::now();
                                 let dev = gpu_device(st, &wt, lig, rep, &mut hook, salts, &z.level0,
-                                                     &mut |c: &[u8], n: usize| firewalled_round(&firewall, &mut mch, c, n), native_sha, &firewall);
+                                                     &mut |c: &[u8], n: usize| firewalled_round(&firewall, &mut mch, c, n), native_sha, &firewall,
+                                                     reuse_tag.map(|t| (t << 8) | j as u64));
                                 rep0_finish = Some(match &firewall {
                                     Some(g) => {
                                         let (bk, end) = firewalled_end(g, &mut mch, &mut hook, dev)?;
@@ -4095,7 +4242,8 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
                                         open(&mut opened, &mut first, &mut r0);
                                         firewalled_round(&firewall, &mut opened.as_mut().expect("rep 1's stream").0, c, n)
                                     };
-                                    gpu_device(st, &wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha, &firewall)
+                                    gpu_device(st, &wt, lig, rep, &mut hook, salts, &z.level0, &mut rounds, native_sha, &firewall,
+                                               reuse_tag.map(|t| (t << 8) | j as u64))
                                 }));
                                 // a device that asked no round: the ZK server opens rep 1's stream for the schedule it releases
                                 if firewall.is_some() && dev.is_ok() {
@@ -4182,6 +4330,17 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     })();
     let e2e_s = t0.elapsed().as_secs_f64();
     let wait_e2e_s = t.lock().unwrap_or_else(PoisonError::into_inner).wait_s();
+    if let Some(h) = salts_ahead {
+        let (tables, held, reuse, reused, threads, s) = h.join().unwrap_or_else(|e| panic!("the salts read ahead: {}", panic_msg(e)));
+        let untaken: usize = tables.iter().map(|(a, _)| a.untaken()).sum();
+        eprintln!("SALTSAHEAD\t{}", json!({"s": s, "trees": tables.iter().map(|(_, t)| t.len()).sum::<usize>(), "pinned": held.len(),
+                                            "reused": reused, "threads": threads, "untaken": untaken}));
+        if reuse {
+            SALT_BUFS.lock().unwrap_or_else(PoisonError::into_inner).extend(held);
+        } else {
+            flock_live::spawn(move || drop(held));
+        }
+    }
     Ok(Proved { t, log, tabs, plan: plan.clone(), hello, commit, sig, res, proofs, early, e2e_s, wait_e2e_s, witness_s, witness_prebuilt_s,
                 prove_s, buckets, tp0 })
 }
@@ -5085,9 +5244,8 @@ fn with_tail(text: &str) -> (String, String) {
 /// altered (re-encoded: the replay reports the changed messages and keeps issuing the recorded coins, so the lincheck's own
 /// final check decides). Every mode accepts the honest proofs and rejects each alteration with the same reason. The honest proofs
 /// are verified three times, the modes interleaved, and each verification's `verify_s` and per-rep phases are kept. Under
-/// `--zk` the lincheck is the zk replay's (`zk_veil::replay` folds its own comb; `FC_LINCHECK` is not read), so there is one
-/// mode: the proofs are re-encoded with their `InnerProof`, and each alteration must be refused by the inner proof's batched
-/// constraint.
+/// `--zk` the modes are the zk replay's (`zk_veil::replay`), the proofs are re-encoded with their `InnerProof`, and each
+/// alteration must be refused by the inner proof's batched constraint.
 fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Value {
     let s0 = Arc::new(Mutex::new(server(st, inst)));
     let (v, proofs) = session(st, inst, shared(InProc(s0.clone())), &Plan { gpu, ..Plan::default() }, ProverSeed::from_os());
@@ -5123,9 +5281,8 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
         }
         r
     };
-    let modes: &[sverify::Lincheck] =
-        if zk { &[sverify::Lincheck::Partial] } else { &[sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both] };
-    let name = |m: sverify::Lincheck| if zk { "zk replay".to_string() } else { format!("{m:?}") };
+    let modes = [sverify::Lincheck::Flat, sverify::Lincheck::Partial, sverify::Lincheck::Both];
+    let name = |m: sverify::Lincheck| if zk { format!("zk {m:?}") } else { format!("{m:?}") };
     let runs: Vec<(&str, Vec<Value>)> = sets.iter().map(|(what, ps)| (*what, modes.iter().map(|&m| {
         let map = ps.iter().enumerate().map(|(r, b)| ((TABLE.to_string(), r), b.clone())).collect::<BTreeMap<_, _>>();
         let ver = CircuitVerifier { lincheck: m, ..CircuitVerifier::one(st, inst) };
@@ -5146,7 +5303,7 @@ fn lincheck_modes_case(st: &Arc<Stmt>, inst: &Arc<Instances>, gpu: bool) -> Valu
     let pass = reencoded && same_why && all("honest", &verified) && all("z_partial", &lincheck_rejects)
         && all("round", &lincheck_rejects);
     let expect = if zk {
-        "the zk replay: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
+        "the zk replay flat, partial and both: honest proofs accepted, altered lincheck proofs refused by the inner proof's batched constraint"
     } else {
         "flat, partial and both: the same verdict on honest and altered lincheck proofs"
     };
@@ -5971,8 +6128,8 @@ fn gpu_cpu_case(_: &Arc<Stmt>, _: &Arc<Instances>) -> Value {
 }
 
 /// The device prover's paths against each other: the device's units, a rebuilt rep 1 and the compressions level by level, against
-/// the host's units, rep 1 from rep 0's witness and level-0 commitment, and the compressions natively (host units only where the
-/// device witness takes them, a statement whose units return its outputs; reuse never under M1), its witness built ahead of the
+/// the host's units, rep 1 from rep 0's level-0 commitment, and the compressions natively (host units only where the
+/// device witness takes them, a statement whose units return its outputs), its witness built ahead of the
 /// session as the prove loop's next session's is. Equal seeds and verifier coins give byte-identical proofs and transcripts.
 #[cfg(feature = "seed-injection")]
 fn gpu_paths_case(st: &Arc<Stmt>, inst: &Arc<Instances>) -> Value {

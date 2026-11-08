@@ -175,8 +175,8 @@ def L₀ (n oc : ℕ) : Compiled Unit A₀ where
 /-! ## It meets the contract -/
 
 theorem unitClass₀ : unitClass s₀.prog [0] = some 16 := by
-  obtain ⟨t, ht⟩ : ∃ t, unitClasses = 16 :: t := by
-    rw [unitClasses, List.range_succ_eq_map, List.map_cons]
+  obtain ⟨t, ht⟩ : ∃ t, sizeClasses = 16 :: t := by
+    rw [sizeClasses, List.range_succ_eq_map, List.map_cons]
     exact ⟨_, rfl⟩
   rw [unitClass, ht]
   rfl

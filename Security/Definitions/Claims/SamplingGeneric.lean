@@ -101,7 +101,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    (`ZkCompiled.ZkSessions`, `Claims.Sampling`'s `Framing` facts in their generic form): the rounds are the parts', the
    router puts each round in its part, each session's rounds and simulator coins are its slot's, an honest trace's
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
-7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
+7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`, `CompilerKSAt`,
    `CompilerEfficient`, `CompilerZK`, `CompilerComplete`): each claim of every compiled verifier that meets the
    contract, from `Arg`'s.
 8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at the record's deployed decoder (`D.decode`), its assemble step counted
@@ -488,6 +488,15 @@ def Bits (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
     BitsLin H L.V L.Scope (Sampling.R H L.commit L.parse L.partition δ) L.E (Bext H L.V L.E)
       fun x => lamLin (L.κ δ x) (L.γ x) 1 (L.work x)
 
+/-- **KS read at a time budget**, on the statements in scope, at every `δ ≥ 0`: `Pr[acc ∧ incorrect ∉ M_δ]` is at most
+`κ_δ + √γ·sbB(2T) + ecrBound(B_ext at T, 2·T·work)` for every prover and every budget `T` on one run's SHA-512 work,
+the prover's own included (`Sampling.KSAt`), and `B_ext` at `T` costs at most `2·T·work` in expectation
+(`Sampling.BextAtCostLe`): where the hash assumptions hold at its finders, `κ_δ + 2T·√γ/2^256.5 + 2T·work/2^256`. -/
+def KSAt (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
+  (∀ δ : ℝ, 0 ≤ δ →
+    Sampling.KSAt H L.V L.Scope (Sampling.R H L.commit L.parse L.partition δ) L.E (L.κ δ) L.γ L.work) ∧
+    Sampling.BextAtCostLe H L.V L.E L.work
+
 /-- **Efficiency**: the extractor's reruns, at most `1 + K_out + k_out·(K_in + k_in·n_PU·ρ_s)` and
 `1 + k_out + k_out·k_in·(1 + n_PU·e_s)` expected; its own SHA-512 calls, the opening checks', at most
 `k_out·k_in·n_PU·openCalls` (`Sampling.Efficient`, generic, with the waits' counts apart). -/
@@ -810,6 +819,12 @@ def CompilerKSCount : Prop :=
 def CompilerBits : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.Bits H
+
+/-- **KS read at a time budget**: as `CompilerBits`, `KSAt`, each hash term at a budget the reader computes from the
+prover's time rather than at the calls the oracle logs (a corollary of `CompilerKS` and `CompilerEfficient`). -/
+def CompilerKSAt : Prop :=
+  ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : Compiled Coin A)
+    (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.OpenCallsLe H → L.KSAt H
 
 /-- **Efficiency**: the compiled extractor's reruns and own calls, at the contract, from the opening checks' count. -/
 def CompilerEfficient : Prop :=

@@ -1,6 +1,6 @@
 module
 
-public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.SamplingServed
 public import Proofs.Flock.Claims.Witnesses.SamplingGeneric
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.Claims.Deploy
@@ -308,3 +308,107 @@ theorem CompiledTwo.Exfil_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [In
 theorem compilerExfilTwo_nontrivial : ¬ (sksLTwo Bool).Exfil FlockDeploy.sha512 := compiledTwoExfil_fails _
 
 end Claims.SamplingGeneric
+
+/-! ## The patterns' form says something -/
+
+namespace Claims.Witness.SamplingGeneric
+
+open Claims.Sampling
+
+/-- **`InfluenceTwoPatterns`'s premise holds** at the two-session toy: it is in the two-stage scope, the scope its
+compiled two-stage verifier checks. -/
+theorem influenceTwoPatterns_honest : InScopeTwo twoPart twoTwo twoStmt ∧ (twoLTwo Bool).Scope [] :=
+  ⟨inScopeTwo_two, twoLTwo_scope []⟩
+
+/-- A commitment scheme under which every opening opens. -/
+def openCm : CommitmentScheme Bool := ⟨fun _ _ => .ret true, fun _ _ _ => []⟩
+
+/-- A statement whose one gate, an empty `and`, is returned; no gate is an input. -/
+def openStmt : AuditStatement := ⟨[], ⟨[.and []], [0]⟩, ⟨"", 0, []⟩, ⟨[]⟩, []⟩
+
+/-- The partition with no proof blocks: it partitions no gate of `openStmt`, which is outside the two-stage scope. -/
+def noPart : Partition := ⟨[]⟩
+
+/-- The two-stage design over no replay blocks, with no first-stage rule and no stratum. -/
+def noTwo : Design.Two := ⟨noPart, ⟨[]⟩, []⟩
+
+/-- The witness that opens the returned gate at `b`. -/
+def openW (b : Bool) : Wit := ⟨[⟨0, b, []⟩]⟩
+
+/-- Over no replay blocks the first stage samples nothing and the second stage misses nothing: `P̄_a = 1`. -/
+theorem noTwo_Pa (fp : ℕ → ℕ → ℕ) : noTwo.Pa noPart fp = 1 := by
+  have hl : noTwo.part.blocks.length = 0 := rfl
+  unfold Design.Two.Pa
+  rw [hl, Finset.range_zero, Finset.powerset_empty, Finset.sum_singleton]
+  simp only [Finset.prod_empty, Finset.sdiff_self, mul_one]
+  rfl
+
+theorem admissibleTwo_noTwo : admissibleTwo noPart noTwo 0 = {∅} := by
+  ext T
+  have hl : noPart.blocks.length = 0 := rfl
+  simp only [admissibleTwo, Finset.mem_filter, Finset.mem_powerset, Finset.mem_singleton, hl, Finset.range_zero,
+    Finset.subset_empty]
+  refine ⟨fun h => h.1, fun h => ⟨h, ?_⟩⟩
+  show (0 : ℝ) < noTwo.Pa noPart _
+  rw [noTwo_Pa]
+  exact one_pos
+
+theorem inputsOf_open (b : Bool) : inputsOf id openCm openStmt (openW b) = fun _ => none := by
+  funext g
+  have h : openStmt.prog.gates[g]? ≠ some .input := by
+    match g with
+    | 0 => simp [openStmt]
+    | n + 1 => simp [openStmt]
+  simp [inputsOf, h]
+
+theorem served_open (b : Bool) : served id openCm openStmt (openW b) = fun _ => b := by
+  funext ⟨k, hk⟩
+  match k, hk with
+  | 0, _ => cases b <;> rfl
+  | n + 1, hk => exact absurd hk (by simp [openStmt])
+
+/-- Two witnesses serve `true` and `false` on no inputs, each at a footprint in `M̄_0`. -/
+theorem two_le_card_influence_open : 2 ≤ (influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card := by
+  classical
+  have hmem : ∀ b, (fun _ => b) ∈ influenceTwo id openCm openStmt noPart noTwo 0 (fun _ => none) := by
+    intro b
+    unfold influenceTwo
+    refine Finset.mem_filter.2 ⟨Finset.mem_univ _, openW b, inputsOf_open b, ⟨fun _ _ => false, ?_⟩, served_open b⟩
+    show (0 : ℝ) < noTwo.Pa noPart _
+    rw [noTwo_Pa]
+    exact one_pos
+  have hne : (fun _ => true : Fin openStmt.prog.outs.length → Bool) ≠ fun _ => false := by
+    intro h
+    have := congrFun h ⟨0, Nat.zero_lt_one⟩
+    simp at this
+  calc 2 = ({fun _ => true, fun _ => false} : Finset (Fin openStmt.prog.outs.length → Bool)).card :=
+        (Finset.card_pair hne).symm
+    _ ≤ _ := Finset.card_le_card fun y hy => by
+        rcases Finset.mem_insert.1 hy with rfl | hy
+        · exact hmem true
+        · rw [Finset.mem_singleton.1 hy]
+          exact hmem false
+
+/-- The admissible sets are `{∅}`, whose one pattern touches no request: the patterns' sum is `2^0`. -/
+theorem patterns_noTwo :
+    ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+        (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+          (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+      2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r) = 1 := by
+  rw [admissibleTwo_noTwo, Finset.image_singleton, Finset.sum_singleton]
+  simp [blocksTo, lightOf, lightBits]
+
+/-- **`InfluenceTwoPatterns`'s conclusion fails** outside the two-stage scope: at `openStmt` over the partition with no
+proof blocks, two witnesses serve different outputs at footprints in `M̄_0`, so the influence set has two members, and
+the patterns' sum is `1`. -/
+theorem influenceTwoPatterns_nontrivial :
+    ¬ ((influenceTwo id openCm openStmt noPart noTwo 0 fun _ => none).card ≤
+      ∑ p ∈ (admissibleTwo noPart noTwo 0).image
+          (fun T r => lightOf openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r)
+            (blocksTo openStmt.prog noPart (fun _ => ()) T r)),
+        2 ^ ∑ r, lightBits openStmt noPart (servedBits (fun _ : Fin openStmt.prog.outs.length => ()) r) (p r)) := by
+  rw [patterns_noTwo]
+  have := two_le_card_influence_open
+  omega
+
+end Claims.Witness.SamplingGeneric
