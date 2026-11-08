@@ -209,7 +209,8 @@ theorem certifierColl_of_disagree (H : Msg → Msg) (D : Compiled Coin A) (hb : 
     (s : Ω × (Fin (D.V.k x) → Coin) × D.E.C x) {st : AuditStatement} (hst : D.parse x = some st)
     (hpass : ∀ q ∈ tops st, D.commit.Opens H st.roots q = true) (hacc : (run H P D.V x s.1 s.2.1).out = .acc)
     {w : Wit} (hw : (D.E.eval H P x s.1 s.2.1 s.2.2).1 = some w) {g : ℕ} (hq : ∃ q ∈ tops st, q.pos = g)
-    {b : Bool} (hwb : w.val H D.commit st g = some b) (hne : b ≠ certifierVal (tops st) g) : CertifierColl H D tops P x s := by
+    {b : Bool} (hwb : w.val H D.commit st g = some b) (hne : b ≠ certifierVal (tops st) g) :
+    CertifierColl H D tops P x s := by
   rw [D.E_eval H P x s.1 s.2.1 s.2.2 hst hacc, Option.some.injEq] at hw
   subst hw
   obtain ⟨q, hq', hqr, hqp, hqv⟩ := mem_assemble_of_val hwb

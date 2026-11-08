@@ -73,9 +73,10 @@ accepts everything. Each builds its instance and takes no hypothesis.
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
   `PeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
   certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
-  witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`, `leakL`,
-  `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`, `certOps`), and
-  no definition of this module: a statement the lock lists reads no proof-only definition outside the excepted toys.
+  witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`,
+  `leakL`, `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`,
+  `certOps`), and no definition of this module: a statement the lock lists reads no proof-only definition outside the
+  excepted toys.
 * `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
@@ -294,13 +295,13 @@ theorem leakL_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   simp at h1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakCertifier`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the network
-certifier's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that ingress,
-holds none, and the only possible incorrect set is empty, since the one unit is sampled `all`. -/
+/-- **No witness is in `RLeakCertifier`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the
+network certifier's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that
+ingress, holds none, and the only possible incorrect set is empty, since the one unit is sampled `all`. -/
 theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :
-    ¬ RLeakCertifier H (certL Coin).commit (certL Coin).parse (certL Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As
-      1 (fun _ => certOps) x w := by
+    ¬ RLeakCertifier H (certL Coin).commit (certL Coin).parse (certL Coin).partition 1 1 1 (fun _ => notLay)
+      (fun _ => 1) 0 As 1 (fun _ => certOps) x w := by
   rintro ⟨s, P, hs, hP, h⟩
   simp only [certL, leakL, Option.some.injEq] at hs hP
   subst hs hP

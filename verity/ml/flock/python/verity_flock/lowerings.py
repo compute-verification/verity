@@ -1,9 +1,9 @@
 """Per-template lowering modules: one file per subcircuit template in each backend family, found by a registry.
 
-Each family keeps a ``templates/`` directory beside its code (:data:`DIRECTORIES`) with at most one module per catalogue template
-(``bench.templates.TEMPLATES``), named by the template id with ``-`` as ``_`` (``gemm-coordinate`` -> ``gemm_coordinate.py``),
-so lanes lowering different templates of one backend edit different files.  A template without a module is ``n/s``, the reason
-naming the file to create.  A module needs nothing from this package:
+Each family keeps a ``templates/`` directory beside its code (:data:`DIRECTORIES`) with at most one module per catalogue
+template (``subcircuit_templates.TEMPLATES``), named by the template id with ``-`` as ``_`` (``gemm-coordinate`` ->
+``gemm_coordinate.py``), so lanes lowering different templates of one backend edit different files.  A template without a
+module is ``n/s``, the reason naming the file to create.  A module needs nothing from this one:
 
     TEMPLATE = "gemm-coordinate"                          the catalogue id it lowers (required)
     def supports(subcircuit, scheme) -> str | None        None when the family lowers this statement, else why not (required)
@@ -13,8 +13,8 @@ naming the file to create.  A module needs nothing from this package:
                                                           (optional; absent: the scripts regenerate their own frozen set, so
                                                           only that set is accepted)
 
-``subcircuit`` is a ``bench.templates.Subcircuit`` (``.id``, ``.params``, ``.template.id``), ``scheme`` a commitment scheme id
-(``frame-v3/blake3-keyed``), ``input_set`` a ``bench.input_sets.InputSet``.  The reason a module returns is what a table prints
+``subcircuit`` is a ``subcircuit_templates.Subcircuit`` (``.id``, ``.params``, ``.template.id``), ``scheme`` a commitment scheme
+id (``frame-v3/blake3-keyed``), ``input_set`` an ``input_sets.InputSet``.  The reason a module returns is what a table prints
 for the cell (``n/s``).
 """
 from __future__ import annotations
@@ -29,7 +29,7 @@ from verity_flock import subcircuit_templates as TM
 
 REPO = Path(__file__).resolve().parents[5]
 DIRECTORIES = {
-    "C-Flock": REPO / "verity" / "ml" / "flock" / "python" / "verity_flock" / "templates",
+    "C-Flock": Path(__file__).resolve().parent / "templates",
 }
 
 
