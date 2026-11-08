@@ -423,6 +423,17 @@ extern "C" int flock_cuda_copy(void* dst, const void* src, size_t bytes) {
     return 0;
 }
 
+// zeroes a DevBuf (gpu_circuit.rs) before the pool takes it back, on a stream of its own and waited for, as flock_cuda_copy
+extern "C" int flock_cuda_dev_zero(void* p, size_t bytes) {
+    cudaStream_t s;
+    if (cudaStreamCreateWithFlags(&s, cudaStreamNonBlocking) != cudaSuccess) { cudaGetLastError(); return 1; }
+    cudaError_t e = cudaMemsetAsync(p, 0, bytes, s);
+    if (e == cudaSuccess) e = cudaStreamSynchronize(s);
+    cudaStreamDestroy(s);
+    if (e != cudaSuccess) { cudaGetLastError(); return 1; }
+    return 0;
+}
+
 static bool fc_on_device(const void* p) {
     cudaPointerAttributes a;
     if (!p || cudaPointerGetAttributes(&a, p) != cudaSuccess) { cudaGetLastError(); return false; }
@@ -537,7 +548,8 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             }
             // FC_HS_DMA=1: mapped a, b host slots go to a device staging buffer by the copy engine on hs_stream, issued before the
             // compression rows' copy, and fc_host_slots reads the staged words: the same words, with no SM waiting on PCIe reads
-            // beside the compressions. The buffer is kept for the process, since a cudaFree would sync the device.
+            // beside the compressions. The buffer is kept for the process, since a cudaFree would sync the device, and zeroed on
+            // hs_stream once fc_host_slots has read it.
             static const bool hs_dma = [] { const char* e = std::getenv("FC_HS_DMA"); return e && e[0] == '1'; }();
             static uint64_t* hs_stage = nullptr;
             static size_t hs_stage_cap = 0;
@@ -651,6 +663,10 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             if (!hin_dev) CK(fc_wipe_free(d_hin, (size_t)n_h * N->h_in_words * 16));
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
+                if (zab_staged) {
+                    CK(cudaMemsetAsync(hs_stage, 0, hs_stage_cap * 8, hs_stream));
+                    CK(cudaStreamSynchronize(hs_stream));
+                }
                 cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
             } else {
                 const uint64_t* p = N->host0_zab;
