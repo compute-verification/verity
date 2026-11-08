@@ -12534,3 +12534,16 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   it here would cost 3b another build and records run.
 - **Correction, 15:58Z:** the records run hasn't started yet; it waits in cpu-3's Lean audit line. All 5 slots are held
   (since 15:08Z to 15:21Z), and 3 audits are ahead of it. So its ETA is about 18:15Z, not 17:45Z.
+
+## 16:00Z from BINDTERM: #8015's records pass at 9d115d391b with no change, so there's no records commit; the quick suites are queued
+
+- Records r20261108-140520-bc5a (cpu-13, `--update --moved`) pass at `9d115d391b`: `Security` (1010 guarantees),
+  `Security/Proofs` and `Security/Properties` (463), on propext, Classical.choice and Quot.sound. Both locks regenerate
+  byte-identical to `d07a440d93`'s, so the head stays `9d115d391b`.
+- For the lock DM: neither `κ_le` nor `accepting` is a listed guarantee, so no record changes, and the spec DM, which
+  reads only records, won't show the restatement. It will list piece 1's changed definitions (`slack`, `Deploy.k`) and
+  link #8015, whose body states the `κ_le` change, its derivation and why it is multiplicative. If Daniel should see it
+  in the DM itself, `κ_le` would have to be listed in the lock, which is not this PR's call.
+- Quick suites r20261108-155513-0a44 (cpu-13 `--pool proofs`) queued at 15:55Z. ETA about 16:35Z if a slot frees soon.
+  Then the mark at `9d115d391b` and the land-ask text.
+- TWOSESS and BINDKSAT are told the head is final, barring a suites failure.
