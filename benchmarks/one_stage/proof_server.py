@@ -200,18 +200,29 @@ class Gpu:
 
 
 class Guard:
-    """Stops the run's process groups once the host's free memory (the cgroup's room under memory.max, else
-    MemAvailable) falls under ``floor_gib``, so host RAM ends the run as a recorded limit and not as an OOM kill."""
+    """Stops the run's process groups once the host's free memory falls under ``floor_gib``, so host RAM ends the run as
+    a recorded limit and not as an OOM kill. Free is ``limit_gib`` less every visible process's resident set when given
+    (a RunPod container shows no memory cgroup, and its /proc/meminfo is the host's); else the cgroup's room under
+    memory.max; else MemAvailable."""
 
-    def __init__(self, pids: list[int], floor_gib: float, every: float = 1.0) -> None:
+    def __init__(self, pids: list[int], floor_gib: float, limit_gib: float = 0.0, every: float = 1.0) -> None:
         self.pids, self.floor, self.hit, self.low_gib = pids, floor_gib * 2**30, None, None
+        self.limit, self.used_peak_gib = limit_gib * 2**30, 0.0
         self._stop = threading.Event()
         self._every = every
         self._t = threading.Thread(target=self._run, daemon=True)
         self._t.start()
 
-    @staticmethod
-    def free() -> float | None:
+    def free(self) -> float | None:
+        if self.limit:
+            used = 0
+            for d in Path("/proc").iterdir():
+                try:
+                    used += int((d / "statm").read_text().split()[1]) * os.sysconf("SC_PAGE_SIZE") if d.name.isdigit() else 0
+                except (OSError, IndexError, ValueError):
+                    pass
+            self.used_peak_gib = max(self.used_peak_gib, used / 2**30)
+            return self.limit - used
         try:
             rel = Path("/proc/self/cgroup").read_text().strip().split("::", 1)[1]
             d = Path("/sys/fs/cgroup") / rel.lstrip("/")
@@ -340,7 +351,7 @@ def run(a) -> int:
     readers = [threading.Thread(target=read, args=(i, p), daemon=True) for i, p in enumerate(provers)]
     for r in readers:
         r.start()
-    guard = Guard([p.pid for p in provers] + [p.pid for p in serves.values()], a.mem_floor)
+    guard = Guard([p.pid for p in provers] + [p.pid for p in serves.values()], a.mem_floor, a.mem_limit)
     timed_out = False
     for p in provers:
         try:
@@ -377,7 +388,8 @@ def run(a) -> int:
     rec |= {"provers": K, "verify_ahead": ahead, "sessions": a.sessions, "warm": warm, "cpu": a.cpu, "plain": a.plain,
             "timed_out": timed_out, "rc": [p.returncode for p in provers], "wall_s": round(time.time() - t_start, 3),
             "host_limit": {"stopped_at_s": guard.hit and round(guard.hit - t_start, 1), "floor_gib": a.mem_floor,
-                           "min_free_gib": guard.low_gib and round(guard.low_gib, 1)},
+                           "limit_gib": a.mem_limit or None, "min_free_gib": guard.low_gib and round(guard.low_gib, 1),
+                           "used_peak_gib": round(guard.used_peak_gib, 1) if a.mem_limit else None},
             "types": {t: {k: v[k] for k in ("c", "full", "k_log", "rb")} for t, v in types.items()},
             "host_peak_gib": [round(x / 2**20, 2) for x in host_kb], "verifiers_peak_gib": round(serve_kb / 2**20, 2),
             "gpu_peak_mib": {str(p.pid): gpu_peak.get(p.pid) for p in provers}, "gpu_peak_all_mib": gpu_peak,
@@ -518,6 +530,8 @@ def main() -> int:
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--deadline", type=float, default=3 * 3600, help="seconds before the provers are stopped")
     ap.add_argument("--mem-floor", type=float, default=8.0, help="GiB of free host memory under which the run is stopped")
+    ap.add_argument("--mem-limit", type=float, default=0.0,
+                    help="the host's memory in GiB where no cgroup shows its limit (a RunPod pod's memoryInGb)")
     ap.add_argument("--bin")
     ap.add_argument("--cpu", action="store_true", help="the CPU prover (no --gpu, no device sampling)")
     ap.add_argument("--plain", action="store_true", help="Flock's plain path, a comparison (no --zk, FC_COINS=tree)")

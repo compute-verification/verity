@@ -27,6 +27,7 @@
 #      type at quarter,half,full)
 #      ST_ZK (a directory the staged statements stay in after the run, so a later run with it reuses each type staged there
 #      with the same spec and device check; unset: the run's scratch)
+#      ST_MEM_GIB (the host's memory where no cgroup shows it, a RunPod pod's memoryInGb: the server stops at 8 GiB free of it)
 # Kept in $OUT: per type and count its stage.json, the sessions' prove.out, prove.err and serve.log, and the records;
 # never a circuit, a prover's file or a proof.
 for kv in "$@"; do case $kv in *=*) export "$kv" ;; esac; done
@@ -215,7 +216,7 @@ print(", ".join("%s at k_log %s (%s s)" % (r["n"], r["k_log"], r["seconds"]["tot
     [ "$left" -gt 300 ] || { log "server: K=$k not run: past the deadline"; rc=1; continue; }
     FC_VERIFY_AHEAD=${ST_VERIFY_AHEAD:-1} taskset -c "$PC" "$PY" benchmarks/one_stage/proof_server.py run --bin "$BIN" \
       --mix "${ST_MIX:?}" --staged "$Z" --types "$OK" --provers "$k" --sessions "${ST_SESSIONS:-120}" --warm "${ST_SERVER_WARM:-0}" \
-      --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
+      --out "$O/server-k$k" --scratch "$W/server-k$k" --deadline "$left" --mem-limit "${ST_MEM_GIB:-0}" "${CPUFLAG[@]}" 2>&1 | tee -a "$O/server.log" \
       | grep SERVER | tee -a "$O/job.log"
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
     rm -rf "$W/server-k$k"
