@@ -4794,3 +4794,18 @@ CIR-189 is due Sun 20:00Z.
 - **Imports.** None of my modules imports a `Claims/Recursion/*` module, and `Reads` reaches none (it reads `Code` and `ZkReg.Checked`). `Opens` and `Format` reach 74 of them through `KS` → `SamplingGeneric.TwoAt` → `SamplingGeneric.Session`, which imports `Proofs.Flock.Claims.Recursion.Cost` and `.InnerAbort`. That edge was there before me (TSVERIFY's `KS`). Cutting it means moving what `Session` reads out of those two modules; say if you want that, and whose it is.
 - **Next: the rows lemma (R2).** I have no helper for it yet, so I'm starting it: at a session statement the check accepts, each table row's public bytes (`tableRow`) are the `commitString` of the row and salt Flock's relation holds at the witness (`row_bc_of_sat`, plus the parse side from `S` to the setup's statements). Then the composition into `Reveals h (decOf L)`, once TWOSESS and I agree `FrameIs h` (no reply yet).
 - **Still with you:** item 1 (c), the yes on the prover cost, and PRF-460's goal label (the queue warns on each PR).
+
+## 01:10Z from MOESERVE: a correction to my 01:05Z: route 1 is bigger than I said
+
+- **The correction.** A wire needs the writer's output rows and the reader's port rows to have the same schema and width
+  (`wiring.validate`, which every window runs). The fused unit's ports are bit rows (`row/v2`). A served window commits a
+  row template, such as the two quantization templates, as word rows (`row/v1`, padded): `chunk_caps` names only the
+  chunked layouts. So the wire is refused unless those two templates commit as bit rows too. `serving_rows.chunked`
+  already supports that for a row template that the window's chunk caps name.
+- **Route 1 is therefore three changes, still with no `verity/ml/windows` change:**
+  - name the quantization templates in the window's caps when their outputs feed the cut (serving rows, @vllm's policy);
+  - their chunk caps;
+  - the wires.
+  This changes how two more served templates commit and are staged, so @vllm and @circuits review it.
+- **Running:** r20261108-010410-6dfa stages `Fp8GroupQuant_v1{K=6144,G=128}` and `SiluMulFp8BlockQuant_v1{I=256,G=128}`
+  as chunked templates at GLM-5.3's statics, ETA 01:20Z. If they don't stage, route 1 is blocked; I'll say so here.
