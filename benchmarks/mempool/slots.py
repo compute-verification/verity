@@ -279,7 +279,7 @@ def _unslice(bits: list[int], T: int) -> list[int]:
     return out
 
 
-def evaluate(slot: Slot, ops: list[PR.Op], log: list, alpha: int, gamma: int) -> dict[str, int]:
+def evaluate(slot: Slot, ops: list[PR.PoolOp], log: list, alpha: int, gamma: int) -> dict[str, int]:
     """Runs the slot on each operation (one bit-sliced vector each) and holds its outputs to the log's; returns counts of
     vectors that agree and of assertion failures."""
     C, S, kind = slot.C, slot.S, slot.kind
@@ -309,7 +309,7 @@ def evaluate(slot: Slot, ops: list[PR.Op], log: list, alpha: int, gamma: int) ->
     return {"vectors": T, "assertion failures": bin(fail).count("1"), **{k: v for k, v in bad.items() if v}}
 
 
-def tampered(slot: Slot, ops: list[PR.Op], log: list, alpha: int, gamma: int, rng: random.Random) -> int:
+def tampered(slot: Slot, ops: list[PR.PoolOp], log: list, alpha: int, gamma: int, rng: random.Random) -> int:
     """How many of the vectors, with one used read's value or time bit flipped, the slot still accepts with the honest
     read product (an accepted tamper would have to be caught by nothing; expected 0)."""
     C, kind = slot.C, slot.kind
@@ -328,7 +328,7 @@ def tampered(slot: Slot, ops: list[PR.Op], log: list, alpha: int, gamma: int, rn
     return sum(1 for vi in range(T) if not (fail >> vi) & 1 and R_t[vi] == R_h[vi])
 
 
-def _inputs(slot: Slot, ops: list[PR.Op], log: list, alpha: int, gamma: int) -> dict[str, list[int]]:
+def _inputs(slot: Slot, ops: list[PR.PoolOp], log: list, alpha: int, gamma: int) -> dict[str, list[int]]:
     S, kind = slot.S, slot.kind
     T = len(ops)
     vals: dict[str, list[int]] = {"s": [o.base // 8 for o in ops], "alpha": [alpha] * T, "gamma": [gamma] * T}
@@ -356,7 +356,7 @@ def main() -> None:
     ap.add_argument("--json", type=Path)
     a = ap.parse_args()
     rng = random.Random(5)
-    by_kind: dict[tuple[bool, str], list[tuple[PR.Op, list]]] = {}
+    by_kind: dict[tuple[bool, str], list[tuple[PR.PoolOp, list]]] = {}
     runs = [("async-crush.json.gz", DT.load(DT.FIXTURES / "async-crush.json.gz"), False),
             ("async-prefix-cache.jsonl", DT.load(DT.FIXTURES / "async-prefix-cache.jsonl"), False)]
     if (DT.FIXTURES / "async-kv-pressure.jsonl").exists():
@@ -376,7 +376,7 @@ def main() -> None:
         slot = Slot(kind, PR.GLM, caching)
         rng.shuffle(items)
         items = items[: a.vectors]
-        groups: dict[int, list[PR.Op]] = {}
+        groups: dict[int, list[PR.PoolOp]] = {}
         logs: dict[int, list] = {}
         for o, log in items:
             groups.setdefault(id(log), []).append(o)
