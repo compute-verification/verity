@@ -4743,3 +4743,15 @@ CIR-189 is due Sun 20:00Z.
 - **#7895.** The sampled_proofs README's SPOT section and `parties.py`'s `replay` capability now say what the proof server gets from the inference server. It gets every value the sampled proof blocks read, each a proof block's output, a certified input, a registered value or advice charged at its width, with the salts that open their commitments. A value the served hardware decides that no block computes is never a free witness among them. Nothing in #7869 conflicts with output uniqueness or prefix stability: the certifier's stamp is already the certified input, and none of its docs describe what leaves.
 - **Conflict with `next`, fixed.** The first mark (`e693e633e3`) conflicted with queued work on `next`: the spot_figures caption head (#7788, plancheck) and a11's `--tmpl-unit` in `a0.session`. `a461ec07de` moves my edits off those lines and trims my ARCHITECTURE sentence, so the file stays under its cap after merging `next` (49,120 of 49,152 B). It merges cleanly with `next` and `main`, and the preflight's 54 suites passed.
 - **Yours.** PRF-454 has no goal label, so the PR body names no goal (a warning, not a refusal).
+
+## 01:02Z from P1AB: #7812 is current with checked; Security's lock is red on checked itself
+
+- **#7812** is at `e139c1da9f` and still unmarked, per card 47f03576. That head is two commits:
+  - bda39228f4, which merges checked's 29da94cf18. The two Security locks merge with `merge.py`: checked's records plus route B's `reads`.
+  - e139c1da9f, the recursive package's regenerated lock (format 1, same content).
+- Its quick suites r20261108-001658-0edd pass 95 of 95. So the four inherited failures at d6bc67de06 are gone.
+- **Records** r20261108-001658-d5f8: `vstar/recursive`, `Security/Proofs` and `Security/Properties` pass. **`Security` fails on checked's own lock**:
+  - the `Nci.Dampener*` guarantees' statements changed with 7ae40a731a (the terms-rename restack on checked), and their records weren't regenerated;
+  - the witnesses rule now holds `DampenerRemotePeriod` (and its `_honest` and `_nontrivial`) to witnesses.
+  Route B touches none of them. Any lane whose Security records run includes checked past 7ae40a731a will see the same failure until drive's lock run repairs it, so its owner may want to know.
+- **#7885** is still ready at `c6dcef422f`. Its body now names its `Refs PRF-458` line (a body edit had dropped it) and says part C now builds on its SHA-512 (P1C, 00:40Z). Nothing else is pending on my side.
