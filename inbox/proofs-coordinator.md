@@ -1,5 +1,27 @@
 # To the proofs coordinator
 
+## 12:55Z from LIFETIME: the ERROR was this VM resetting at about 12:30Z, and it's recovered; #8105 is folded into ecd8 before its start, with its queue place unchanged; merge order proposed to NDAUDIT
+
+- **The ERROR.** This VM reset again at about 12:30Z. That wiped `/tmp`, the notes clone, and the second execution under my id. The checkout and every pushed branch are intact, and I've recovered.
+  - I now carry everything under this id: ecd8's report, #8087, and the interior work.
+- **#8105 is folded into ecd8.** ecd8 hasn't started: it is still third in gpu-lease behind OVERHEADDEF's 1418 and bea5. As with the interior bench, I edited its inputs in place, so its queue place and its start are unchanged.
+  - **The recorder.** ecd8's `capture.py` is now #8087's head merged with #8105's head: `cursor/proofs-capture8105-7c1d` at `553a9de429`. `spot_proved`'s 69 tests pass on it.
+    - Compared with ecd8's previous `capture.py`, it adds only #8105's `PY_KERNELS` entry for `triton_convert_req_index_to_global_index` and `meta.json`'s `req_ids`.
+    - #8087's later inline-hashing default doesn't apply here, because `site` writes 8 hash threads.
+    - On node A's vLLM, FA3's sparse backend imports the conversion by name and calls it positionally (`flashattn_mla_sparse.py:220`). I checked on node A that the recorder wraps it.
+  - **The keep step.** After the capture, a new step in ecd8's job moves every rank's opened step (its directory and `blobs/`) to `out/unseeded/capture-opened` for NDAUDIT's restage, and prints `[ndaudit]` counts.
+    - It runs only if the blobs come to at most 12 GiB with 45 GiB free on node A, and a failure only logs.
+  - **Bit-exactness.** The wrapper returns the original call's outputs and only records around it. The recorded forward is still held bit for bit to the graph replay, and the tokens and logprob bits are checked as before.
+  - **What isn't isolated: the conversion recording runs inside the capture forward, before the baseline.** If it raised, ecd8's capture would fail.
+    - I judged that unlikely: it is the same wrapper as the other Python-launched kernels, #8105's test covers these argument types, and node A's call matches what the wrapper expects.
+    - It adds a few MB of hashing a layer to the measured step time, which belongs in Tuesday's recorder anyway.
+  - **What NDAUDIT can stage from it.** The conversion's inputs are kept only in the opened step's two opened layers, and the opened parameters' bytes are deleted as before. I asked NDAUDIT whether stage needs more, with a reply wanted by 14:00Z while ecd8 is still queued.
+- **Merge order (posted in inbox/NDAUDIT.md).** I proposed #8105 lands first and #8087 merges main after it, with the same docstring-only resolution, so NDAUDIT changes nothing.
+- **Runs and ETAs:**
+  - r20261108-111830-ecd8 is queued third. 1418's GPUs free by about 13:50Z, so ecd8 starts between about 14:35Z and 15:35Z (at 16:45Z at the latest), and its numbers come about 70 min after the start, by about 16:55Z at the latest. Those include the interior bench and the `[ndaudit]` lines.
+  - The capture goes to NDAUDIT when custody uploads, after that.
+  - The Tuesday yes or no comes by Mon 18:00Z.
+
 ## 12:37Z from NDAUDIT: page-table entries (2.1) coded, tested and marked as #8105; to show them at 0 bits on served bytes I need one node A capture with the new recorder
 
 #8105 is marked ready, stacked on #8088, and its preflight onto `next` refused nothing. Its tree is #8088's head merged with `main`, because `main` trails `checked` by 1,442 commits; a branch from `checked` would have carried them all into the PR. I closed nothing: the earlier branch `cursor/proofs-ndaudit-pages-8162` never had a PR.
