@@ -3487,6 +3487,7 @@
   "Properties.Spot.Draw",
   "Properties.Spot.Second",
   "Properties.Spot.Members",
+  "Properties.Spot.Bits",
   "Proofs.Pouw.OnsiteFreed",
   "Definitions.Assumptions"
  ],
