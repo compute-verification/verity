@@ -1,4 +1,4 @@
-"""The fixture of `verify --zk`'s form refusals (`verity/core/protocols/sampled_proofs/tests/test_form_refusals.py`): honest
+"""The fixture of `verify --zk`'s form refusals (`verity/core/protocols/spot/tests/test_form_refusals.py`): honest
 M0 `--zk` sessions, each of N instances with every unit sampled and bound to its template query's partition, as
 `forged_proofs.py` stages them, differing in the statement's form:
 
@@ -48,7 +48,7 @@ from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
 from verity_flock import ir_lower as IL  # noqa: E402
 from verity_flock import tmpl as TM  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import partition as P  # noqa: E402
+from verity.core.protocols.spot.one_stage import partition as P  # noqa: E402
 
 #: statements outside the form, each refused for another reason: typed, public outputs, plain leaves, templated
 WRONG_TAGS = ("verity/flock-circuit/types", "verity/flock-circuit@eb90718f", "verity/flock-circuit+plain-leaves",
