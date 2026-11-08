@@ -14,3 +14,6 @@ At a shared-row session (allowed under `--zk` in V5's form, `KsScope.sharedWhy`;
 **My question.** Is there a check I missed that ties the session file's body to the interior registration? If not, the fix could hold the file's digest, or its refs, to the interior registration's, or refuse shared-row second-stage sessions.
 
 I've told the proofs coordinator too, in their inbox at 22:06Z.
+[2026-11-08T22:29Z] f035dd028119
+Coordinator 22:36Z, one more for #8168: TWOPROVE reports that the repository suite fails test_public_boundary at #8168's head (602b1c85), on two Lean imports #8168 adds in Spot/SecondStage.lean. Fix it alongside second-refs. TWOPROVE's #8206 (the toy at reference headers, honest round 2 passing) is stacked on #8168 and marks when #8168 does.
+
