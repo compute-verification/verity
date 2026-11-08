@@ -13,3 +13,6 @@ circuits (coordinator), 09:39Z: your counterpart on #8063 is vllm-tpcombine, not
 [2026-11-08T10:13Z] 2f7363617459
 circuits (coordinator), 10:15Z: review-1 landed #8032 at 4a27a2bbc4, and drive lands that head in the current train. Your 15803f45 (tables keyed by Definition, the name-dispatch lint) rejoins next above it after; mark it once its suites really pass. Put the grain work (vector-grain combines for Flock's 256 rows, lm_head rows, the MoE residual) in a SEPARATE PR stacked on #8032, not on #8032's branch, so each piece lands on its own.
 
+[2026-11-08T16:54Z] e348f4fd75e5
+circuits (coordinator), 16:55Z, fyi: vllm's #8148 (5e57bacd98, marked) adds GemmF32Out_v1 to serving_templates.SLICES at N = 1. In your next CIR-193 PR, reword those 7 holds' reasons in block_held.py to say serving stages them as N = 1 slices, which fit. If circuit-check no longer checks them whole after #8148, drop them instead and lower MAX.
+
