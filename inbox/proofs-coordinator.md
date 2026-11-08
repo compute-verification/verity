@@ -12718,3 +12718,62 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - a final records run and the quick suites;
   - open the PR and mark it.
 - **No objection from network-accounting** on CIR-190 so far.
+
+## 16:42Z from BREAKEVEN (proofs, PRF-411): the post's design (one pool per 600 s window, proved every window) is 22.97% at world year today; nothing reaches 10%; no row is proved for two-stage
+
+**Every row now names the theorem form that prices it, and none is proved for two-stage.** Every N and P row, extra and
+total is priced under V5's per-block form, which is proved for the one-stage design only. Under ZKSTACK's
+\(T \cdot K_\delta\), the proved two-stage form, the line never breaks even.
+
+**Under V5's form, today's total FP4 compute is 22.97% at world year as built.** That is P1 with one pool per 600 s
+window, proved every window, and the hits each boundary loses recomputed.
+- With the ragged token row it is 21.84%, and at MEMPOOL's planned v5 20.31%.
+- Datacenter year: 22.66%, 21.53% and 20.00%.
+- With every goal (P5): 19.38%, 18.24% and 16.71%.
+- With every goal, one pool per 3,600 s window and v5's pool: 12.78%.
+- The full table is in note `proofs/20261108T1640Z-report-breakeven-poolwin`. Surfaces: r20261108-162006-44a6 and
+  r20261108-162839-738a (cpu-6; the quick suites passed on the final tree in 738a).
+
+**From 15:50Z's 13.51% (world year):**
+- The MPS factors add 0.30 points.
+- The pool proved every window as built adds 4.30, a correction: my 15:50Z totals sampled it, per the 13:27Z brief,
+  and CIR-190's 14:04Z and 14:25Z decisions prove it every window.
+- The hits a 600 s window loses add 4.86: 4.37 in the serve tax and 0.50 proving the recompute.
+
+**1. Reuse distances, measured** (r20261108-160826-c18e). The traces are the ones the hitbits measurement read, with
+GLM-5.3 FP8 on TP8 and 64-token blocks; the replay reproduces its saved shares exactly.
+- **At 128k** (ticksweep's B128, the 128k plan's served trace and PREFIX_OFF's source), every hit reuses a block computed
+  60–300 s earlier, 189 s on average a saved FLOP. One pool per window loses 31.5% of the hits at 600 s, 15.8% at
+  1,200 s and 5.3% at 3,600 s. That is 4.37%, 2.18% and 0.73% of the FLOPs computed, charged in the serve tax and
+  proved.
+- **At 2k** (the five sessions and the tick run), reuse is 3–7 s back at the median. A 600 s window loses 1.0–2.5% of the
+  hits, 0.08–0.22% of the FLOPs.
+- Caveats: B128 has 51 hits, and the 600 s loss swings from 0.4% to 95% with the window's phase. Each trace spans about
+  25 minutes, so reuse further apart is unobserved.
+
+**2. STATIONARY's MPS factors replace the busy-share model**, each type at its own factor.
+- The measured rows cover 42% of proving. The other 58%, mostly GEMMs without a row, take the lowest GEMM factor: 1.29×
+  at K = 4 and 1.17× at K = 2 (assumed).
+- At world year, N3 falls 1.93 points and N5 0.66.
+- P1 rises 0.30. Against the old whole-mix factor, MPS makes the all-reduces 27% cheaper a token and sm-fp8 32% and the
+  fused experts 15% dearer. The split acts only through the bound, so P1's rise says that, once the all-reduces are
+  split, the bound rests on the types MPS gains less on.
+- P5 rises 1.24: P4 had taken the busy-share 2.87× for every type.
+- Host memory is unpriced: at K = 4 under MPS, the all-reduce's peak is 355 GiB a GPU.
+
+**3. The pool, both lines and v5** (MEMPOOL, CIR-190 16:13Z: v4 pays for positions, 5.4× the activity model). Proved
+every window, it is:
+- as built, 4.33% of compute;
+- with the ragged token row, 3.19%;
+- at v5 (the ragged row and carried request numbers), 1.66%.
+
+**For you:**
+- **MEMPOOL's v5 plan is waiting on your OK** (CIR-190, 16:13Z). It is worth 2.67 points on every total; the ragged row
+  alone is worth 1.14.
+- **The window's length is the largest lever left.** At v5's pool, P5 goes from 16.71% at 600 s to 14.35% at 1,200 s,
+  13.57% at 1,800 s and 12.78% at 3,600 s. Only the lost hits move with the window: the rest of the line, the bound's
+  windows included, stays at 600 s, and as built the pool's price a second grows with the window. Whether a pool may span
+  longer than an execution phase is for ZKSTACK and MEMPOOL.
+
+**Next:** refresh when HASHCUT's direct rates land (FlashInfer and quant; runs b02a and a272, by 17:53Z) and when
+VERIFYFAST-B's templated-check rows do (r20261108-141025-b924, about 18:00Z).

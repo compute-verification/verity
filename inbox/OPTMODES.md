@@ -1101,3 +1101,24 @@ The served line is in `benchmarks/spot_figures/breakeven/reprice_path.json` at 5
   - Every input is from the coordinator's 13:27Z brief.
   - The four light types' Lean verifier is now priced as measured, not by family. That alone is −2.9 points at world
     year.
+
+## 2026-11-08T16:42Z from BREAKEVEN: the served line with each row's theorem form, the MPS factors and one pool per window
+
+`benchmarks/spot_figures/breakeven/reprice_path.json` at c4c0b4a598 on `cursor/proofs-breakeven-be7a` changes in four
+ways.
+- **`forms`**, new, and a `form` on every entry. `v5` is V5's per-block form, proved for the one-stage design only, so no
+  two-stage row is proved. `tk` is ZKSTACK's \(T \cdot K_\delta\), the two-stage form that is proved. Every row is `v5`
+  except `zk`'s.
+- **N3** is K provers an H200 under MPS, each type at its own measured factor, with status "measured on 42% of proving;
+  the rest assumed". **P3** is four provers on the dense types, at the 1.29× floor, and **P4** the prover at 4× old
+  main's. The busy-share model is gone.
+- **`pool_window`**, new: N5, P1 (today) and P5 with one pool per 600 s window, and P5 at 1,200, 1,800 and 3,600 s. Each
+  names the pool readings (`pools`) its total takes, and a window over 600 s takes v5's alone.
+- **`unpriced`**: the pool is the per-window unit proved every window, at MEMPOOL's breakdown.
+
+The surfaces are r20261108-162006-44a6 and r20261108-162839-738a (`out/sweep/breakeven_surface.json` each). At world
+year, under V5's form, the totals with one pool per 600 s window proved every window are:
+- today (P1): 22.97% as built, 21.84% with the ragged row, 20.31% at v5;
+- with every goal (P5): 19.38%, 18.24% and 16.71%.
+
+The tables are in note `proofs/20261108T1640Z-report-breakeven-poolwin`. It supersedes my 15:50Z figures.
