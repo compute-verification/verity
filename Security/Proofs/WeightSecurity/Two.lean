@@ -34,7 +34,8 @@ coins. Its record (`twoRec`): accepted when the run accepts; sampled incorrect w
 
 namespace WeightSecurity.SecurityProofs
 
-open Claims Claims.Sampling Claims.SamplingGeneric FlockSoundness.Game
+open Claims Claims.Sampling Claims.SamplingGeneric
+open FlockSoundness.Game hiding Msg
 open Claims.Sampling.EndToEndDraw (SubsetInputsDesign)
 open scoped ENNReal
 
@@ -171,7 +172,7 @@ theorem twoRec_accepted_le [Fintype O] (H : Msg → Msg) (L : CompiledTwo Coin A
     exact h
   · rw [show twoMiss H L δ x P = fun _ => False from
       funext fun r => propext (iff_false_intro fun h => hx (href x P r h.1)), Verity.Game.prCoin_false]
-    exact zero_le _
+    exact zero_le
 
 /-- **A record not sampled incorrect counts fewer than `K`** under `CapTwo`: its run accepts, so its statement is in
 scope, and the fewest replay blocks its extractions mark is one of them. -/
@@ -216,7 +217,7 @@ theorem value_lead_eq_zero {β : ℕ → Type} (G : (i : ℕ) → Verity.Game (�
       refine le_antisymm ((value_runBind_le_mul (fun _ => periodG G (i + 1) T)
         (fun b s' => (periodRun G rec (i + 1) T s').map (rec i (Strategy.ofBind _ (G i) s) b :: ·))
         (fun l => M ≤ Served.lead l) (fun _ => True) 0 (G i) s
-        (atEnds_of_forall (fun b s' => ?_) (G i) s)).trans_eq (mul_zero _)) (zero_le _)
+        (atEnds_of_forall (fun b s' => ?_) (G i) s)).trans_eq (mul_zero _)) zero_le
       beta_reduce
       rw [if_pos trivial, Verity.Game.value_map]
       by_cases hm : (rec i (Strategy.ofBind _ (G i) s) b).sampledIncorrect
