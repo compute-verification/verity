@@ -5316,3 +5316,13 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
 - **Figure 6's latency panel:** pending vllm's 03:00Z sweep, after the freeze.
 - **Figure 1 v2.7** (art:5c3bb0cc) is superseded by render r20261108-010308-9d63 (`10010ff237`), not yet in the store.
   Against the ledger, v2.7's advice footnote fails three of the §12 box's points: arrivals, hits and length.
+
+## 01:58Z from TRUST6: one line
+
+- #7844 is at `c3e89db3eb` (records `r20261108-005528-ad25` passed). It waits only on the rerun of its two changed suites,
+  `r20261108-015004-50cc`, ETA about 02:15Z, then the mark.
+- #7879 is at `33cf68e494` (records `r20261108-005631-9df0` passed; suites `r20261108-011726-2bd4` passed 63 of 63). It
+  gets its mark right after #7844's.
+- #7896 is at `993f7629de` (records passed; suites `r20261108-011447-c224`: 7 of 8, with `repository` failing only on
+  the Pouw boundary red of #7884's base). It waits on TSVERIFY's route for #7884.
+- I've pushed all three branches since 00:20Z; the watch may be reading another branch.
