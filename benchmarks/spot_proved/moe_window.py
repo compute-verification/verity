@@ -3,7 +3,7 @@
 
     python benchmarks/spot_proved/moe_window.py --capture DIR --step S --layer L --out DIR --key FILE
         (--tables FILE | --self-register) [--rank 0] [--tokens 1] [--cap 2048] [--law stratified:1] [--forge w13]
-        [--bench SEED] [--circuit-only] [--full-gate] [--checkpoint DIR]
+        [--bench SEED] [--circuit-only] [--full-gate] [--checkpoint DIR] [--fused]
 
 * **The cut.** `expert_rows`' cut of one layer on one TP rank at T of the step's tokens, as a stated circuit (the form of
   `test_fp8_moe_per_expert._cut`): the router's slots (`MoeRouterSigmoidBiasSlots_v2`, a unit a token), each slot's
@@ -12,7 +12,9 @@
   read's, w2's slot-major). A table is `expert_rows.table_param`'s, its rows `table_words`'; a read's ``tok`` is wired
   from the router's slot id, a GEMM's ``w`` and ``ws`` from its reads and w2's ``g`` from the slot's weight. The router's
   logits and bias and each GEMM's activation and scales are the window's free inputs (in the served circuit, the blocks
-  before it write them).
+  before it write them). ``--fused`` cuts each projection's reads of its weight rows into its GEMM: one
+  `MoeExpertFp8ReadGemm(W)_v1` unit a block of a pair, table-major, reads its block's rows and multiplies by them; the
+  scale reads stay.
 * **Values.** Each unit's values are the capture's recorded tensors of the opened MoE layer, every one held to the step's
   commitment as `stage.Capture` loads it: the router's logits the gate's f32 ``aten::mm`` rows and its bias the layer's
   ``e_score_correction_bias``; each pair's expert its place in the launch's ``sorted_token_ids`` and ``expert_ids``, its
@@ -236,19 +238,26 @@ def labels(names: dict, params: list[str] | None) -> dict:
     return {p: {"w": one(w), "ws": one(ws)} for p, (w, ws) in names.items()}
 
 
-def templates(v: dict, scale: float, kernel: str, blocks: dict) -> dict:
+def templates(v: dict, scale: float, kernel: str, blocks: dict, fused: bool = False) -> dict:
+    """The router and each projection's block GEMM: `MoeExpertFp8BlockGemm(W)_v4`, or with ``fused`` the GEMM over the rows it
+    reads itself, `MoeExpertFp8ReadGemm(W)_v1` with ``READ`` the read of a block's n K / 2 words."""
     up, down = v["up"], v["down"]
     st = {p: {"K": S["K"], "G": S["G"], "KB": S["KB"], "SWAP": S["SWAP"], "DOT": S["dot"]} for p, S in (("up", up), ("down", down))}
-    return {"router": bind(BMOE.MoeRouterSigmoidBiasSlots, E=up["E"], TOPK=v["topk"], SCALE=scale, KERNEL=kernel),
-            "word_router": bind(MOE.MoeRouterSigmoidBiasSlots, E=up["E"], TOPK=v["topk"], SCALE=scale, KERNEL=kernel),
-            "up": bind(BM.MoeExpertFp8BlockGemmV4, N=blocks["w13"], **st["up"]),
-            "down": bind(BM.MoeExpertFp8BlockGemmWV4, N=blocks["w2"], **st["down"])}
+    out = {"router": bind(BMOE.MoeRouterSigmoidBiasSlots, E=up["E"], TOPK=v["topk"], SCALE=scale, KERNEL=kernel),
+           "word_router": bind(MOE.MoeRouterSigmoidBiasSlots, E=up["E"], TOPK=v["topk"], SCALE=scale, KERNEL=kernel)}
+    for p, gemm, read_gemm, b in (("up", BM.MoeExpertFp8BlockGemmV4, BM.MoeExpertFp8ReadGemmV1, "w13"),
+                                  ("down", BM.MoeExpertFp8BlockGemmWV4, BM.MoeExpertFp8ReadGemmWV1, "w2")):
+        read = {"READ": EMB.read(v[p]["E"], blocks[b] * v[p]["K"] // 2)} if fused else {}
+        out[p] = bind(read_gemm if fused else gemm, N=blocks[b], **st[p], **read)
+    return out
 
 
-def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circuit, dict]:
+def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str, fused: bool = False) -> tuple[WI.Circuit, dict]:
     """The layer's cut at T tokens (module docstring) and its plan: per projection its blocks, and its weight and scale reads'
     template, tables, Definition and first unit (a read template two projections' tables share holds the first's units, then
-    the second's)."""
+    the second's). With ``fused`` (`templates`') a projection's weight read is its GEMM's own: one unit a (block, slot,
+    token), table-major, reads its block's rows and multiplies by them, and holds the read's declarations and ``tok`` wire;
+    its ``ws`` and w2's ``g`` are wired as the unfused GEMM's are, in that order."""
     from verity_vllm.pipeline.expert_rows import table_param
 
     T, topk, E = len(v["tokens"]), v["topk"], v["up"]["E"]
@@ -263,8 +272,8 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circ
         units[tid][1] += n
         return tid, at
 
-    def read(label: str, H: int, B: int) -> tuple[str, list[str], object, int]:
-        fn = EMB.read(E, H)
+    def read(label: str, H: int, B: int, fn=None) -> tuple[str, list[str], object, int]:
+        fn = fn or EMB.read(E, H)
         (tid, base), mine = add(fn, B * topk * T), []
         for b in range(B):
             at, param = base + b * topk * T, table_param(label, H, b)
@@ -282,6 +291,15 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str) -> tuple[WI.Circ
         if N % n or G % n:
             raise ValueError(f"{proj}: blocks of {n} rows don't divide its {N} rows and G = {G}")
         B, NBG, per = N // n, -(-N // G), G // n
+        if fused:
+            w = read(lab[proj]["w"], n * K // 2, B, fns[proj])
+            ws = read(lab[proj]["ws"], 2 * K // G, NBG)
+            wires.append(WI.Wire(w[0], "ws", ws[0], "o0", w[3], (NBG, per, topk * T), ws[3], (topk * T, 0, 1)))
+            if proj == "down":
+                wires += [WI.Wire(w[0], "g", rid, f"o{k}", w[3] + (b * topk + k) * T, (T,), 0, (1,))
+                          for b in range(B) for k in range(topk)]
+            plan[proj] = {"n": n, "B": B, "NBG": NBG, "rows": w, "scales": ws, "gemm": w[0], "fused": True}
+            continue
         w, ws = read(lab[proj]["w"], n * K // 2, B), read(lab[proj]["ws"], 2 * K // G, NBG)
         gid, g0 = add(fns[proj], B * topk * T)
         if proj == "up":
@@ -332,41 +350,48 @@ def record(win: WI.Window, v: dict, fns: dict, plan: dict, tables: dict, forge: 
                [*(np.ascontiguousarray(v["g"][:, k]) for k in range(topk)),
                 *(v["e"][:, k].astype(np.int32) for k in range(topk))])
     units = {"router": T}
+
+    def opened(params: list[str]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        rows, salts, paths = [], [], []
+        for param in params:
+            tb = tables[param]
+            for k in range(topk):
+                for t in range(T):
+                    e = int(v["e"][t, k])
+                    rows.append(_row(tb, e))
+                    salts.append(_u64(tb.salts[e]))
+                    paths.append(_u64(tb.path(e)).reshape(-1, 8))
+        return np.stack(rows), np.stack(salts), np.stack(paths)
+
     for proj in ("up", "down"):
         p = plan[proj]
-        n = p["n"]
-        for part, (_tid, params, fn, _at) in (("w", p["rows"]), ("ws", p["scales"])):
-            rows, salts, paths = [], [], []
-            for param in params:
-                tb = tables[param]
-                for k in range(topk):
-                    for t in range(T):
-                        e = int(v["e"][t, k])
-                        rows.append(_row(tb, e))
-                        salts.append(_u64(tb.salts[e]))
-                        paths.append(_u64(tb.path(e)).reshape(-1, 8))
-            rows_ = np.stack(rows)
-            win.record(fn, [None, None, None, rows_, np.stack(salts), np.stack(paths)],
-                       [rows_, np.ones(len(rows), dtype=np.uint16)])
+        n, fused = p["n"], p.get("fused", False)
+        for part, (_tid, params, fn, _at) in ((() if fused else (("w", p["rows"]),)) + (("ws", p["scales"]),)):
+            rows, salts, paths = opened(params)
+            win.record(fn, [None, None, None, rows, salts, paths], [rows, np.ones(len(rows), dtype=np.uint16)])
             units[f"{proj}.{part}"] = len(rows)
         y = (v["y13"] if proj == "up" else v["y2"]).copy()
         if forge == "w13" and proj == "up":
             y ^= np.uint16(1)
-        if proj == "up":
+        if proj == "up" or fused:
             order = [(b, k, t) for b in range(p["B"]) for k in range(topk) for t in range(T)]
-            xq = np.stack([v["x13"][t] for _b, _k, t in order])
-            sx = np.stack([v["s13"][t] for _b, _k, t in order])
-            ins = [xq, sx, None, None]
         else:
             order = [(b, k, t) for k in range(topk) for b in range(p["B"]) for t in range(T)]
-            xq = np.stack([v["x2"][t * topk + k] for _b, k, t in order])
-            sx = np.stack([v["s2"][t * topk + k] for _b, k, t in order])
-            ins = [xq, sx, None, None, None]
+        x, s = (v["x13"], v["s13"]) if proj == "up" else (v["x2"], v["s2"])
+        at = (lambda k, t: t) if proj == "up" else (lambda k, t: t * topk + k)
+        xq, sx = np.stack([x[at(k, t)] for _b, k, t in order]), np.stack([s[at(k, t)] for _b, k, t in order])
+        want = ["xq", "sx", *(["g"] if proj == "down" else []), *([] if fused else ["w"]), "ws"]
+        ins = [xq, sx, *[None] * (len(want) - 2)]
+        outs = [np.stack([y[t, k, b * n:(b + 1) * n] for b, k, t in order])]
+        if fused:
+            want = ["tok", "root", "domain", "row", "salt", "path", *want]
+            ins = [None, None, None, *opened(p["rows"][1]), *ins]
+            outs.append(np.ones(len(order), dtype=np.uint16))
         names = [q for q, _w in WI.layout(fns[proj]).rows]
-        if names != (["xq", "sx", "w", "ws"] if proj == "up" else ["xq", "sx", "g", "w", "ws"]):
-            raise ValueError(f"{proj}: the block GEMM's ports are {names}")
-        win.record(fns[proj], ins, [np.stack([y[t, k, b * n:(b + 1) * n] for b, k, t in order])])
-        units[f"{proj}.gemm"] = len(order)
+        if names != want:
+            raise ValueError(f"{proj}: the block GEMM's ports are {names}, not {want}")
+        win.record(fns[proj], ins, outs)
+        units[f"{proj}.{'fused' if fused else 'gemm'}"] = len(order)
     return units
 
 
@@ -408,6 +433,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--bench", type=int, metavar="SEED", help="benchmark values of the same shapes (module docstring)")
     ap.add_argument("--circuit-only", action="store_true")
     ap.add_argument("--full-gate", action="store_true", help="also evaluate every unit's template (Window.mismatches)")
+    ap.add_argument("--fused", action="store_true", help="each GEMM reads its own weight rows (module docstring)")
     ap.add_argument("--repo", default="zai-org/GLM-5.3", help="with --self-register: the registration's model")
     ap.add_argument("--revision", default="capture", help="with --self-register: the registration's revision")
     a = ap.parse_args(argv)
@@ -432,16 +458,16 @@ def main(argv: list[str] | None = None) -> int:
         blocks = {k: int(x) for k, x in reg.blocks.items()}
     else:
         blocks = {"w13": 1, "w2": 32} | {b.split("=")[0]: int(b.split("=")[1]) for b in a.block}
-    fns = templates(v, a.scale, a.kernel, blocks)
+    fns = templates(v, a.scale, a.kernel, blocks, a.fused)
     if a.bench is not None:
         v = bench(v, a.bench, fns["word_router"])
     lab = labels(v["names"], list(reg.values) if reg else None)
     run = (hashlib.sha512(f"verity/spot/moe-window/bench\0{a.bench}".encode()).hexdigest() if a.bench is not None else cap.root)
     name = f"spot-moe-per-expert/L{a.layer}/T{a.tokens}"
-    circuit, plan = cut(v, fns, lab, blocks, name)
+    circuit, plan = cut(v, fns, lab, blocks, name, a.fused)
     law = D.parse_law(a.law)
     report = {"capture": a.capture, "step": a.step, "layer": a.layer, "rank": a.rank, "tokens": v["tokens"], "run": run,
-              "bench": a.bench, "forge": a.forge, "law": a.law, "cap": a.cap, "blocks": blocks,
+              "bench": a.bench, "forge": a.forge, "law": a.law, "cap": a.cap, "blocks": blocks, "fused": a.fused,
               "statics": {p: {k: (x.id if k == "dot" else x) for k, x in v[p].items()} for p in ("up", "down")},
               "templates": {k: descriptor_id(fn) for k, fn in fns.items() if k != "word_router"}}
     if a.circuit_only:

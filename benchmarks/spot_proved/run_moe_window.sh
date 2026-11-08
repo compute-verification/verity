@@ -12,8 +12,9 @@
 # (default the rank's step and blobs: its commit.json holds every rank's root, so the step root checks without the others).
 #   MW_CAPTURE=DIR|TAR.GZ MW_STEP=S MW_LAYER=L (MW_TABLES=FILE MW_KEY=FILE | MW_SELF=1) [MW_RANK=0] [MW_TOKENS=1]
 #   [MW_LAW=stratified:1] [MW_CAP=2048] [MW_BLOCKS="--block w13=1 --block w2=32"] [MW_ARMS="served forged bench"] [MW_SEED=1]
-#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] bash benchmarks/spot_proved/run_moe_window.sh
+#   [MW_FLIPS=4] [MW_CARD=FILE] [MW_WARM=2] [MW_CHECKPOINT=DIR] [MW_THREADS=N] [MW_FUSED=1] bash benchmarks/spot_proved/run_moe_window.sh
 # MW_THREADS is the prover's thread count (default the slot's cores): arms timed in separate runs compare at one count.
+# MW_FUSED=1 stages the fused cut (moe_window.py --fused): each GEMM reads its own weight rows.
 #   MW_MODE=build ...  # the builds only; MW_STAGE_ONLY=1 ...: each arm staged, none audited
 #   MW_MODE=synth ...  # tests/test_moe_window.write_capture's synthetic capture in place of MW_CAPTURE (its step, layer and
 #                      # blocks, two tokens, members of 4): the smoke run
@@ -75,6 +76,7 @@ esac
 LAW=${MW_LAW:-stratified:1}
 BASE=(--capture "$CAP" --step "${MW_STEP:?}" --layer "${MW_LAYER:?}" --rank "${MW_RANK:-0}" --tokens "${MW_TOKENS:-1}"
       --cap "${MW_CAP:-2048}" --law "$LAW" ${MW_CHECKPOINT:+--checkpoint "$MW_CHECKPOINT"})
+[ "${MW_FUSED:-0}" = 1 ] && BASE+=(--fused)
 if [ -n "${MW_TABLES:-}" ]; then REG=(--tables "$MW_TABLES" --key "${MW_KEY:?}")
 elif [ "${MW_SELF:-0}" = 1 ]; then
   read -ra BLK <<< "${MW_BLOCKS:---block w13=1 --block w2=32}"; REG=(--self-register --key "$W/served.key" "${BLK[@]}")

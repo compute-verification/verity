@@ -7,7 +7,9 @@ statics, every recorded tensor and opened weight under its SHA-512, the rank and
 * the cut's tables are the ones `expert_tables` registers for the same weights, by name, so the verifier's pins are the
   registration's;
 * a staged layer is a window the verifier's side takes from its records: its circuit record the one ``--circuit-only``
-  derives without values, each table read pinned by the window's registration, and a forged arm staged past the gate."""
+  derives without values, each table read pinned by the window's registration, and a forged arm staged past the gate;
+* ``--fused`` cuts the weight reads into the GEMMs, which hold their declarations, and its staged units are their
+  templates' on the recorded values."""
 from __future__ import annotations
 
 import hashlib
@@ -191,6 +193,31 @@ def test_the_cuts_tables_are_the_ones_expert_tables_registers(MW, captured):
     assert held["ingress"] == 0 and held["registered"] > 0 and held["free"] == left
 
 
+def test_the_fused_cut_reads_each_blocks_rows_inside_its_gemm(MW, captured):
+    _d, v = captured
+    blocks = {"w13": 8, "w2": 8}
+    lab = MW.labels({"up": ("model.layers.3.mlp.experts.w13_weight", "model.layers.3.mlp.experts.w13_weight_scale_inv"),
+                     "down": ("model.layers.3.mlp.experts.w2_weight", "model.layers.3.mlp.experts.w2_weight_scale_inv")}, None)
+    plain, _ = MW.cut(v, MW.templates(v, 2.5, "block", blocks), lab, blocks, "test")
+    fns = MW.templates(v, 2.5, "block", blocks, fused=True)
+    circuit, plan = MW.cut(v, fns, lab, blocks, "test", fused=True)
+    up, down, scales = MW.descriptor_id(fns["up"]), MW.descriptor_id(fns["down"]), plan["up"]["scales"][0]
+    assert (up.split("{")[0], down.split("{")[0]) == ("MoeExpertFp8ReadGemm_v1", "MoeExpertFp8ReadGemmW_v1")
+    assert (plan["up"]["rows"][0], plan["down"]["rows"][0], plan["down"]["scales"][0]) == (up, down, scales)
+    assert circuit.units == {MW.descriptor_id(fns["router"]): S, up: 8 * TOPK * S, down: 8 * TOPK * S, scales: 2 * 2 * TOPK * S}
+    assert circuit.registered.params == plain.registered.params
+    assert {o.reader for o in circuit.registered.openings} == {r.reader for r in circuit.registered.roots} == {up, down, scales}
+    lays = circuit.layouts
+
+    def bits(tid, ports) -> int:
+        return 16 * sum(dict(lays[tid][0].rows)[p] for p in ports) * lays[tid][1]
+
+    pins = {p: f"{i:0128x}" for i, p in enumerate(sorted(plain.registered.params))}
+    held = MW.WI.input_count(circuit.description(), pins=pins, roots=pins)
+    left = bits(MW.descriptor_id(fns["router"]), ("logits", "bias")) + bits(up, ("xq", "sx")) + bits(down, ("xq", "sx"))
+    assert held["ingress"] == 0 and held["registered"] > 0 and held["free"] == left
+
+
 @pytest.mark.slow
 def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, captured, tmp_path, capsys):
     """The whole staging on the synthetic capture, its forged arm and ``--circuit-only``, and the verifier's side of the window
@@ -225,3 +252,32 @@ def test_a_staged_layer_is_a_window_its_verifier_takes_from_the_records(MW, capt
     assert MW.main([*base, "--out", str(tmp_path / "f"), "--forge", "w13"]) == 0
     forged = json.loads((tmp_path / "f" / "stage.json").read_text())
     assert forged["forge"] == "w13" and forged["circuit"] == st["circuit"]
+
+
+@pytest.mark.slow
+def test_a_fused_layer_stages_units_their_templates_compute_and_its_verifier_pins_their_reads(MW, captured, tmp_path, capsys):
+    """``--fused`` staged with ``--full-gate`` on the synthetic capture, and taken back by the verifier's side: the only check
+    that the fused GEMMs' recorded rows, salts, paths and activations are their templates' (`Window.mismatches`) before a
+    session proves them; slow for the fused templates' population Programs and their evaluation."""
+    from verity.core.protocols.sampled_proofs.one_stage import draw as D
+    from verity.core.protocols.sampled_proofs.one_stage import registered as REG
+
+    d, _v = captured
+    base = ["--capture", str(d), "--step", str(STEP), "--layer", str(LAYER), "--tokens", "2", "--cap", "4", *BLOCKS,
+            "--self-register", "--key", str(tmp_path / "key"), "--fused"]
+    assert MW.main([*base, "--out", str(tmp_path / "w"), "--full-gate"]) == 0
+    st = json.loads((tmp_path / "w" / "stage.json").read_text())
+    assert st["fused"] and st["gate"]["ok"] and st["tables"]["not_registered_rows"] == []
+    assert st["full_gate"]["mismatched"] == {}
+    assert st["units"] == {"router": 2, "up.ws": 2 * TOPK * 2, "up.fused": 8 * TOPK * 2, "down.ws": 2 * TOPK * 2,
+                           "down.fused": 8 * TOPK * 2}
+    doc = json.loads((tmp_path / "w" / "tables.json").read_text())
+    mine, rec = MW.WI.of_records(tmp_path / "w" / "window", D.parse_law("stratified:1"), MW.WI.resolve)
+    files = MW.WI.registered_reads(rec, mine, doc["values"], registered=REG)
+    reads = [m for m in mine.members if m.template.split("{")[0] in
+             ("EmbeddingRead_v1", "MoeExpertFp8ReadGemm_v1", "MoeExpertFp8ReadGemmW_v1")]
+    assert sorted(files) == sorted(m.key for m in reads) and any(m.template.startswith("MoeExpertFp8ReadGemm") for m in reads)
+    assert all(set(f["ports"]) == {"root", "domain", "o1"} for f in files.values())
+    capsys.readouterr()
+    assert MW.main([*base, "--out", str(tmp_path / "c"), "--circuit-only"]) == 0
+    assert json.loads(capsys.readouterr().out.splitlines()[-1])["circuit"] == st["circuit"]
