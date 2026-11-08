@@ -23,7 +23,7 @@ from verity.ml.definitions.registry import tp_allreduce_check as K
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x807F, 0x0080, 0x8080, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80,
                      0xFF80, 0x7FC0, 0x7F81, 0xFFFF], np.uint16)
 #: One token of a served `vllm::flashinfer_trtllm_fused_allreduce_norm` call (GLM-5.3 FP8 TP8 on 8x H200, vLLM d9105ea80): layer
-#: 42's post-attention call at step 1210 of capture r20261107-103343-2364, token 3 of the launch's `SERVED_M`. Every rank's
+#: 42's post-attention call at step 1210 of a capture, token 3 of the launch's `SERVED_M`. Every rank's
 #: ``allreduce_in`` before the call; ``residual`` before and after it; ``allreduce_in`` and ``norm_out`` after it; the norm's
 #: weight.
 SERVED = Path(__file__).with_name("data") / "glm53_tp8_fused_allreduce_norm_token.npz"

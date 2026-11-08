@@ -3,6 +3,7 @@ module
 public import Proofs.Properties.Verity.Sampled
 public import Proofs.Properties.Verity.Sampled.UnboundBridge
 public import Proofs.Flock.Bridge.PopMatches
+public import Proofs.Flock.Bridge.UnitRows
 public import Proofs.Flock.Bridge.V5.Assembly
 public import Proofs.Flock.Soundness.Discharge.Placed.KeyedP
 public import Proofs.Flock.Soundness.Discharge.Aliased.KeysP
@@ -70,6 +71,13 @@ theorem constWiresOf_eq_ite (c : Flock.Circuit) (hU : FlockSoundness.Built c.uni
   unfold constWiresOf
   simp only [Fin.ext_iff, e1, e0]
 
+/-- **The constants hold each unit's constant gate at 1**, at any public input ports: it is the constant wire. -/
+theorem constsOfP_constGate (D : Flock.Desc) (hU : FlockSoundness.Built D.unroll.unit) (n : ℕ)
+    (pi : Flock.HmIn.Ports) (pub : Flock.Public) (u : Fin n) :
+    constsOfP D.unroll hU n pi pub (constGate D hU n u) = some true := by
+  unfold constsOfP
+  rw [constWiresOf_constGate]
+
 end Flock.Bridge
 
 namespace Verity
@@ -91,7 +99,7 @@ files' circuit, under openings `op` of the files that hold wherever the commitme
 files' constants, are within `F`, when on `C` the units unbound under any openings that hold at `κ` and wherever `val`
 opens a value are (`hgame`), and every value `val` opens passes `Cm` under `roots` (`hval`). -/
 theorem unbound_subset_of_parsed {o : Option Flock.Bridge.Parsed} {r : Flock.Bridge.Parsed} (ho : o = some r)
-    {C : FlockSoundness.Audit.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
+    {C : Verity.Boolean.Circuit} (hC : Flock.Bridge.keyCircuit r.D r.hU r.n = C)
     {P : FlockSoundness.Audit.Partition C r.n} (hP : HEq (Flock.Bridge.keyPartition r.D r.hU r.n) P)
     {κ₀ : Fin (Flock.Bridge.keyCircuit r.D r.hU r.n).N → Option Bool} {κ : Fin C.N → Option Bool} (hκ : HEq κ₀ κ)
     (hcon : ∀ g, Verity.parsedConsts (some r) g = κ₀ g)

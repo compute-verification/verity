@@ -16,7 +16,8 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   of a value it expects registered and doesn't fill, lowercase hex of 64 bytes), and `outputs`, the ones that are
   outputs of an earlier run or reuse an earlier record's registered value (`{value: {"record", "port" | "value"}}`, each
   of a value it expects registered and neither fills nor pinned, `record` lowercase hex of 64 bytes and `port` or `value`
-  a string), each refused with any other form or when it expects
+  a string; or `{value: {"port"}}`, a window's history: that port of the previous record, the log's last, whose digest
+  the verifier takes from the log, `Registration.lastDigest`), each refused with any other form or when it expects
   none registered; and `row_schemas`, the ones whose rows are not `row/v1` rows (`{value: schema}`, each of a value it
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
@@ -25,7 +26,9 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
   it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
   declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
-  record's program to (`Registration.declaredCode`), refused in any other form;
+  record's program to (`Registration.declaredCode`), refused in any other form; and it may add `seed_salt`: the window's
+  seed salt it read from the challenger's log (`Challenger.seedSaltOf`), lowercase hex of 64 bytes, which needs
+  `window_root` and which R6 holds the record's window to name (`R6-seed-salt`), refused in any other form;
 * **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
 * **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
@@ -150,6 +153,7 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
   let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
     else keys
+  let keys := if (field? j "seed_salt").isSome then keys.push "seed_salt" else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -203,8 +207,12 @@ def paramsParsed (j : Json) : V Params := do
         throw "output values are registered values' earlier ports: the verifier expects none registered"
       kvs.toArray.mapM fun (v, o) => do
         let fail := s!"output value {v}: not a registered value it neither fills nor pinned, with an earlier record's " ++
-          "digest and a port or a value"
+          "digest and a port or a value, or a port of the previous record"
         if !(registered.any (·.1 == v) && !supplied.any (·.1 == v) && !pinned.any (·.1 == v)) then throw fail
+        if keys? o == some #["port"] then
+          match getD o "port" with
+          | .str p => return (v, Registration.lastDigest log, Registration.Earlier.port p)
+          | _ => throw fail
         let (key, mk) ← if keys? o == some #["port", "record"] then pure ("port", Registration.Earlier.port)
           else if keys? o == some #["record", "value"] then pure ("value", Registration.Earlier.value) else throw fail
         match getD o "record", getD o key with
@@ -233,6 +241,12 @@ def paramsParsed (j : Json) : V Params := do
     | .null => pure none
     | .str r => if r.length == 128 && isHex r then pure (some r) else throw "a window root is lowercase hex of 64 bytes"
     | _ => throw "a window root is lowercase hex of 64 bytes"
+  let seedSalt ← match getD j "seed_salt" with
+    | .null => pure none
+    | .str s => if s.length == 128 && isHex s then pure (some s) else throw "a seed salt is lowercase hex of 64 bytes"
+    | _ => throw "a seed salt is lowercase hex of 64 bytes"
+  if seedSalt.isSome && windowRoot.isNone then
+    throw "a seed salt is read on the window's session: it needs the window's open root (window_root)"
   let challenger ← match field? j "challenger" with
     | none => pure none
     | some ch => do
@@ -261,7 +275,7 @@ def paramsParsed (j : Json) : V Params := do
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
                                     registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
-                                    declared },
+                                    declared, seedSalt },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then

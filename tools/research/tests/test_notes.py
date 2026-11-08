@@ -169,8 +169,8 @@ def test_newest_checkpoint_wins_wherever_it_sits_and_times_before_midnight_are_y
 
 
 def test_a_newer_open_checkpoint_after_a_final_one_reopens_the_lane_despite_its_final_section(tmp_path):
-    # verify-night-3 2026-09-26: "## FINAL" from an earlier round made the reopened lane final, done at the report's mtime, and
-    # the reaper took the pod the reopened lane had just created
+    # a "## FINAL" from an earlier round must not make the reopened lane final, done at the report's mtime, or the reaper takes
+    # the pod the reopened lane has just created
     body = ("CHECKPOINT 7585828 (20:40Z) [open] reopened for another round: NOT final\n"
             "CHECKPOINT 906255b (18:49Z) [final] round done\n\n## FINAL\n\nround done, pods terminated\n")
     row = notes.lane_status(_report(tmp_path, "l", body, 10), NOW, 45)
@@ -1053,7 +1053,7 @@ def test_scheduled_runs_launch_once_per_utc_day_or_iso_week_at_or_after_their_ti
     def at(days: float = 0, minutes: float = 0, state: dict | None = None) -> list[str]:
         return notes.run_lines(tmp_path, NOW + dt.timedelta(days=days, minutes=minutes), state, run=run, new_id=lambda: next(ids))
 
-    state, home = {}, Path.home()                                  # NOW: Wednesday 2026-09-23 21:00Z, ISO week 39
+    state, home = {}, Path.home()                                  # NOW: a Wednesday, 21:00Z, ISO week 39
     assert at(state=state) == ["21:00Z LAUNCHED lean-fresh r1 on vy-lean"]
     assert calls == [([sys.executable, "-m", "research", "run", "--id", "r1", *FRESH], f"{home}/src", home / "src", notes.RUN_LAUNCH_TIMEOUT_S)]
     assert state["run"]["lean-fresh"] == {"period": "2026-09-23", "run": "r1", "rc": 0}
@@ -1146,7 +1146,7 @@ def test_guardian_kills_go_to_the_owning_lanes_inbox_by_machine_pod_hint_or_cwd(
 
 
 def test_snapshot_refuses_git_data_by_name_and_by_content(tmp_path):
-    """The notes repo is public: a git bundle, pack or index (14 bundles of the private repo were found there, 2026-09-27) is never
+    """The notes repo is public: a git bundle, pack or index (a bundle of the private repo, say) is never
     committed, whatever its name, and is reported as refused."""
     root = tmp_path / "notes"
     _git(tmp_path, "init", "-q", "-b", "main", str(root))

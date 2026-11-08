@@ -25,6 +25,7 @@ from verity.ml.definitions import boolean as SW
 from verity.ml.definitions.registry import boolean_tp_allreduce as BA
 from verity.ml.definitions.registry import tp_allreduce as TA
 from verity.ml.definitions.registry import tp_allreduce_check as K
+from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
 SPECIALS = np.array([0x0000, 0x8000, 0x0001, 0x8001, 0x007F, 0x807F, 0x0080, 0x8080, 0x3F80, 0xBF80, 0x7F7F, 0xFF7F, 0x7F80,
                      0xFF80, 0x7FC0, 0x7F81, 0xFFFF], np.uint16)
@@ -72,29 +73,29 @@ def _random_tree(rng, world: int):
         i, j = sorted(rng.choice(len(nodes), 2, replace=False))
         b, a = nodes.pop(j), nodes.pop(i)
         nodes.append((a, b))
-    return TA.multimem_tree(nodes[0], world)
+    return TN.multimem_tree(nodes[0], world)
 
 
 # --- trees and owners ------------------------------------------------------------------------------------------------------------
 
 def test_trees_are_canonical_and_checked() -> None:
-    assert TA.multimem_tree((((5, 4), (7, 6)), ((1, 0), (3, 2))), 8) == BALANCED8
+    assert TN.multimem_tree((((5, 4), (7, 6)), ((1, 0), (3, 2))), 8) == BALANCED8
     assert CHAIN8 == (((((((0, 1), 2), 3), 4), 5), 6), 7)
     assert TA.chain(4, (2, 0, 3, 1)) == (((0, 2), 3), 1)
-    assert TA.tree_leaves(SKEWED8) == (0, 4, 6, 1, 5, 2, 7, 3)
+    assert TN.tree_leaves(SKEWED8) == (0, 4, 6, 1, 5, 2, 7, 3)
     for bad, match in ((((0, 1), (2, 2)), "each once"), (((0, 1), 2), "each once"), (((0, 1, 2), 3), "two"),
                        (((0, 1), (2, 3.0)), "rank or a pair"), (((0, True), (2, 3)), "rank or a pair")):
         with pytest.raises(ValueError, match=match):
-            TA.multimem_tree(bad, 4)
+            TN.multimem_tree(bad, 4)
     with pytest.raises(ValueError, match="one tree per owner"):
-        TA.multimem_trees((BALANCED8,) * 7, 8)
+        TN.multimem_trees((BALANCED8,) * 7, 8)
 
 
 def test_every_tree_is_its_clusters() -> None:
     """All 15 trees over 4 ranks, all 945 over 6, and 200 random ones over 8 come back from their adds' rank sets; sets that
     don't make a binary tree come back None."""
     for world, n in ((4, 15), (6, 945)):
-        trees = {TA.multimem_tree(t, world) for t in _all_trees(tuple(range(world)))}
+        trees = {TN.multimem_tree(t, world) for t in _all_trees(tuple(range(world)))}
         assert len(trees) == n
         assert all(TA.tree_from_clusters(TA.tree_clusters(t), world) == t for t in trees)
     rng = np.random.default_rng(1)

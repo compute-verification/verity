@@ -46,7 +46,8 @@ SUPPORTED: dict[str, Supported] = {
                                                     "sets its batch invariance and enforce_eager (default: bi-eager, or bi-compiled "
                                                     "with enforce_eager False)"),
     "engine_class": Supported((str, type(None)), None, "a registered engine class (engine.profiles.engine_classes), whose world, "
-                                                       "execution, engine limits, prefix cache and experts the engine runs at, and "
+                                                       "execution, engine limits, prefix cache, experts and environment the engine "
+                                                       "runs at, and "
                                                        "whose window's limits its admission holds (default: none)"),
     "dtype": Supported((str, type(None)), None, "served dtype override (default: the checkpoint profile's)"),
     "quantization": Supported((str, type(None)), None, "vLLM quantization override, such as fp8 (default: the checkpoint's)"),
@@ -201,9 +202,10 @@ class LLM:
     * ``engine_class`` (str): a registered engine class (`engine.profiles.engine_classes`), such as ``"G"``: the engine runs at
       the class's ``tensor_parallel_size``, an ``execution`` it serves (default its own; class G's ``"compiled"`` at its CUDA
       graphs' ``compilation_config``), served engine limits, ``moe_backend`` and prefix cache off, with
-      ``max_num_seqs`` at most the class's (its default).  An option that contradicts the class, another
+      ``max_num_seqs`` at most the class's (its default), under the class's environment (class G's
+      ``VERITY_DSA_TOPK=canonical``), set over the process's.  An option that contradicts the class, another
       kernel override, or a checkpoint of another model type raises `errors.Refused` before the engine is built, and so does a
-      built engine whose vLLM config doesn't carry the class's settings after it.  The built engine's admission
+      built engine whose vLLM config or environment doesn't carry the class's settings after it.  The built engine's admission
       (`engine.class_admission`) refuses a prompt over the class's served ``max_model_len``, and
       ``close_window()`` refuses while a request is in flight; a refusal ends the window.  Default none.
     * ``dtype`` (str): served dtype override; default the checkpoint profile's.
@@ -246,9 +248,10 @@ class LLM:
         engine_args = {k: opts[k] for k in ENGINE_ARGS if k in options}
         if self.pin.world > 1:
             engine_args["tensor_parallel_size"] = self.pin.world
+        env = {} if opts["engine_class"] is None else {"env": EC.env(opts["engine_class"])}
         self._engine = va.build_engine(config.CHECKPOINTS, max_num_seqs=opts["max_num_seqs"], case=self.pin.case,
                                        engine_args=engine_args,
-                                       execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]))
+                                       execution=opts["execution"] or va.execution_label_of(opts["enforce_eager"]), **env)
         self.records: list[GenerateRecord] = []
         self.spec_digest: str | None = None
         self.protocols = None
@@ -258,7 +261,7 @@ class LLM:
             from verity_vllm.engine.class_admission import Admission
             from verity_vllm.engine.profiles import engine_classes as EC
             from verity_vllm.errors import Refused
-            bad = EC.effective_refusals(opts["engine_class"], self._engine.effective or {})
+            bad = EC.effective_refusals(opts["engine_class"], self._engine.effective or {}, dict(self._engine.env_flags or {}))
             if bad:
                 raise Refused(bad, what=f"engine class {opts['engine_class']}")
             self.admission = Admission(opts["engine_class"]).install(self._engine.llm)
