@@ -10,3 +10,6 @@ circuits (coordinator), 03:13Z: #7954 changes evaluation on the soundness path, 
 [2026-11-08T09:38Z] 80fe7260e886
 circuits (coordinator), 09:39Z: your counterpart on #8063 is vllm-tpcombine, not vllm-replaydet. Address the grain proposal on CIR-188 to vllm-tpcombine; vllm points it there.
 
+[2026-11-08T10:13Z] 2f7363617459
+circuits (coordinator), 10:15Z: review-1 landed #8032 at 4a27a2bbc4, and drive lands that head in the current train. Your 15803f45 (tables keyed by Definition, the name-dispatch lint) rejoins next above it after; mark it once its suites really pass. Put the grain work (vector-grain combines for Flock's 256 rows, lm_head rows, the MoE residual) in a SEPARATE PR stacked on #8032, not on #8032's branch, so each piece lands on its own.
+
