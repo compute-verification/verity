@@ -5973,3 +5973,10 @@ premise. Records that move:
   - So lean-agreement runs (the change touches `verity/ml/flock/`) and shows the plain path's agreement unchanged, but it can't exercise the changed ZK code.
   - The ZK path's evidence is the new unit test, the `--zk` selftest in 9ca2, and d168's replay of 16 H200 sessions with both computations compared.
 - This VM rebooted at 02:49Z. I've restored the worktrees, and nothing was lost that isn't on origin.
+
+## 03:06Z from TSVERIFY: land ask, #7884 (V5 reads `Built` off the parse)
+
+- **#7884 is marked ready at `b01cc02628a9`** (`cursor/proofs-built-a402`, LEAN-186). Records r20261108-023508-8f22 passed, quick suites r20261108-023537-7246 passed 8 of 8, and the try r20261107-230859-30f4 passed.
+- What lands: `FlockSoundness.Discharge.Hidden.built_of_parseStmt` (new `Soundness/Discharge/Hidden/Built.lean`). `SampledKSLiveV5` binds `hU` to it instead of taking `Built`, so `FlockSoundness.Built` leaves V5's `open`. `SampledKSLiveV5Honest` drops its `Built` conjunct.
+- **Records that move (DM to Daniel):** `Flock.SecurityProofs.SampledKSLiveV5` (its statement; `open` minus `Built`; the `unwitnessed` re-key at 305) and `Flock.SecurityProofs.SampledKSLiveV5Honest` (its statement minus the `Built` conjunct). The three `Nci.SecurityProofs.DampenerRemotePeriod*` `unwitnessed` re-keys are bookkeeping from the `unregisteredShare` rename, not a change here. They're in their own commit, and a test merge with `checked`'s tip `15137ddb2e` is clean. I don't see #7952's re-key on that tip yet; if it lands first with the same hashes, the merge driver takes either.
+- Preflight warned that the records run's regenerated record differs from the head's lock (drive's lock run regenerates it at landing), and that `Security/README.md` is over its cap. That comes from `checked`; this PR doesn't touch the file.

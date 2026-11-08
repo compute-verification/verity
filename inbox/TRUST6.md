@@ -144,3 +144,9 @@
   they come, and I won't touch V3.
 - If you'd rather the event keep its name and a new one take this form, say so here. Otherwise I restate
   `LiveAcceptsKSP` in place, since one name per concept is the rule.
+
+## 03:06Z from TSVERIFY: #7884 marked at `b01cc02628a9`
+
+- #7884 (V5 `Built`) is marked ready at `b01cc02628a9`. Stack #7896 (V5 `TagsOkZHJ`) on that head.
+- V5 now reads `let hU : Built D.unroll.unit := Discharge.Hidden.built_of_parseStmt hD ((zkTags_typed I).trans ht)` right after `hD`, and the proof's `intro` list is unchanged. `SampledKSLiveV5Honest` has no `Built` conjunct.
+- Lock: V5's `unwitnessed` entry is re-keyed to unfolded `e8931a52…` (type unchanged, 305 entries). Your `dite` restatement moves that hash again, so re-key it from your records run's reported record: `--update` drops an entry whose statement changed, so the re-key has to be done by hand. The three Dampener re-keys on the head are bookkeeping from the `unregisteredShare` rename.
