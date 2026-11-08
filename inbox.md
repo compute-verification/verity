@@ -459,3 +459,27 @@ BINDREADERS, 18:39Z. #8057's new head is 12f0368848 (pushed as a fast-forward). 
 
 Runs: c4bc is done. 35df's Security result is in, and its Security/Properties phase is still running (ETA about 18:45Z); it isn't needed for the answer. Next, on your word or once RELAND8008 is marked (target 19:00Z): merge its head, rerun records with --update --moved on vy-nebius-cpu-12 --pool proofs (about 35 min there), commit with the sha check, run the quick suites, and then ask you before marking. Checkpoint: notes lanes/proofs/20261108T1837Z-checkpoint-bindreaders-13.
 
+[2026-11-08T18:40Z] 1b2be720bb09
+TWOVERIFY -> proofs coordinator, 18:50Z Sun: both decisions are built, and my records still wait on the witnesses PR.
+
+**#8168, the follow-up stacked on #8083.** Branch `cursor/proofs-twoverify-eee0`, head `d199a28acc`. #8083 itself is unchanged.
+- Multi-field returns now link field by field: template_j's `o0` links to the boundary's `o<j>`, in Lean and Python, with difftest cases. P1's boundary registers MIXED's x, y, o0 and o1.
+- Round 2 reads the statements by position, one for each part: `second-order` checks positions and `second-cover` asks for every part. This is option (b). `check_ok` now concludes `ps[i]?.map (·.template) = some s.template` for each statement (new lemma `orderFailures_nil`).
+- The negative test `test_round_two_refuses_statements_out_of_the_parts_order` swaps the honest order, and it is refused as `second-order` by name.
+- Lean try and the build of `Pieces` and `Run`, `r20261108-181749-6bfa`: exit 0, every `#guard` passed, 8 theorems on the three axioms.
+- Quick suites `r20261108-181809-e7d7` (cpu-1): running, ETA about 19:05Z.
+- The spot lock has no guarantees and no lock names a `SecondStage` declaration, so this PR needs no records run. I mark it when e7d7 passes, once #8083 is marked.
+
+**Table splits, from your 18:24Z decision.**
+- A split across several statements is already refused as `second-template`.
+- A split across Flock tables can't be seen in a statement, so it needs the verdict to name the table count:
+  - #8114 at `aa2e87d9e4`: every `flock-verify verify` verdict names `session_tables` (`--session-tables J`, else 1). Try `r20261108-183646-9821`, ETA about 19:00Z. Suites `r20261108-183708-9888`, ETA about 19:30Z.
+  - #8119 at `fb2d75523b`: a new code, `second-tables`, refuses a statement when any accepted verdict of record naming its header, reads and draw names a count other than 1, or names none. The new theorem `tablesOk_one` states what that guarantees, and `stmtCodes_nil` concludes `tablesOk`. Try and build `r20261108-183619-9777`, ETA about 18:55Z. Suites `r20261108-183640-2312`, ETA about 19:20Z.
+- All four run on cpu-12 in the proofs pool. Honest verdicts name 1, because `one_stage.proofs.verify` never passes `--session-tables`.
+
+**Confirmations** (sent to ZKTWO and TWOOPENS at 18:40Z):
+- (d): `FORM` stays false until SpotKSTwo covers the T-session run. Turning it on is its own change, in Lean and Python together.
+- pinOk's blanked fields are exactly `instances`, `units.indices`, `frame_v3.roots`, `frame_v3.domain_ids`, `draw` and `registered`. That holds for #8083 and #8168, with `scheme` pinned to the record and `template` fixed by position.
+
+**Records** for #8083, #8114 and #8119 wait for RELAND8008's witnesses PR. Then I merge its head and run records once each, #8083 first. I don't re-key any `unwitnessed` entry.
+
