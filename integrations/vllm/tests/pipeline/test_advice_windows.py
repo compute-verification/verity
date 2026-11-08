@@ -353,9 +353,11 @@ class _Coins:
 
 
 def _draw(rec: dict, law: dict) -> dict:
-    from verity.core.protocols.sampled_proofs import service as S
+    """A challenger's sample under the registration's expanded `law` (`service.select_draw` past its rule)."""
+    from verity.core.protocols.sampled_proofs import coins as T
 
-    return S.select_draw(S.Law(f"work:{law['k']}"), law, rec["population"], _Coins())
+    n = rec["population"]
+    return {**law, "population": n, "units": sorted(T.draw_first(T.OwnRandomness(_Coins()), law, n)["units"])}
 
 
 def test_the_compilers_transfer_gate_units_are_drawn_whole_beside_the_drawn_rest(gated_tp):
