@@ -270,17 +270,24 @@ def free_gib(proc: Path = Path("/proc"), cgroup: Path = Path("/sys/fs/cgroup")) 
 #: about what one `lean` of a Mathlib or ArkLib build peaks at: Lake runs as many at once as `LEAN_NUM_THREADS`, so a build
 #: of such a package runs no more than its memory holds (a Security build with more jobs is OOM-killed, even at 64 GB)
 BUILD_GIB_PER_JOB = 8
+#: the dependencies (manifest names) that make a package's build and replay heavy
+HEAVY_DEPS = frozenset({"mathlib", "Arklib"})
 
 
-def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
-    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins Mathlib or ArkLib and
-    `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
+def pins_heavy(pkg: Path) -> bool:
+    """Whether ``pkg`` pins one of `HEAVY_DEPS`, by its manifest alone."""
     m = pkg / "lake-manifest.json"
     try:
         names = {d.get("name") for d in json.loads(m.read_text()).get("packages", [])} if m.is_file() else set()
     except (OSError, ValueError):
         names = set()
-    if "LEAN_NUM_THREADS" in env or not names & {"mathlib", "Arklib"}:
+    return bool(names & HEAVY_DEPS)
+
+
+def build_threads(pkg: Path, env=os.environ, have_gib: float | None = None) -> int | None:
+    """The `LEAN_NUM_THREADS` a build of ``pkg`` runs with, when its memory bounds it: ``pkg`` pins a heavy
+    dependency (`pins_heavy`) and `LEAN_NUM_THREADS` is unset; else None (`lake_env`'s value)."""
+    if "LEAN_NUM_THREADS" in env or not pins_heavy(pkg):
         return None
     gib = memory_gib() if have_gib is None else have_gib
     return max(1, min(cores(), int(gib // BUILD_GIB_PER_JOB)))
@@ -4616,9 +4623,11 @@ SNAPSHOT_CODE = (".ir.sig", ".ir")
 def pipelined(pkg: Path, build: bool, replay: bool, replay_cache: Path | None, lifts) -> bool:
     """Whether ``pkg``'s audit replays its modules while its build runs (`Pipeline`): it builds and replays with a cache, in
     the sandbox (outside it the build could write anything, the cache included), its replay is a heavy one
-    (`replay_threads`) on `PIPELINE_MIN_CORES` cores or more."""
+    (`pins_heavy`) on `PIPELINE_MIN_CORES` cores or more. Heaviness is the manifest's, not `replay_threads`':
+    `lean_audit.py` sets `LEAN_NUM_THREADS` for every audit it runs, under which `replay_threads` is None for every
+    package."""
     return (build and replay and replay_cache is not None and not lifts and cores() >= PIPELINE_MIN_CORES
-            and replay_threads(pkg) is not None and sandboxed())
+            and pins_heavy(pkg) and sandboxed())
 
 
 class Pipeline:
