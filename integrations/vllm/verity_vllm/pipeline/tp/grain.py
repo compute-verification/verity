@@ -43,6 +43,8 @@ GATHERS = frozenset({B1T.AllGather2, B1T.AllGather})
 FUSED = frozenset({TA.AllReduceRmsNormMnnvl, TA.AllReduceResidualMnnvl})
 #: the most words of a gathered row: a gather of K one-word rows and its K-word row fill at most 128 hm96 slots
 CHUNK_MAX = 127
+#: a token select's group of logits: a word of each `TokenSelectGroups_v1` unit's row of bests
+GROUP = 16
 
 #: runs of one Definition over consecutive positions: (Definition, units)
 Runs = tuple[tuple[Any, int], ...]

@@ -14,7 +14,7 @@ units a sample draws), never a free input: `interface.input_count` counts every 
   row's chunks, and the fused all-reduce's norm, one unit for every rank;
 * its readers, per rank: a call of a rank Program reading a combine's output is a unit of its own Definition, placed at the
   last site it reads. A token select (`TokenSelect_v4{V}`) is instead the served window's split of it
-  (`window_circuit.GROUP`): V / C units `TokenSelectGroups_v1{C, GROUP}` reading its logits as their writers' rows, C
+  (`grain.GROUP`): V / C units `TokenSelectGroups_v1{C, GROUP}` reading its logits as their writers' rows, C
   `grain.select_width`, and one `TokenSelectCombine_v2{V, GROUP}` reading their bests and indices and ``x0``, logits[0]'s
   producer unit's word. A call producing a later site's partial (the LM head reading the last norm) is its producer units,
   each reading it, and a read by another site's combine (the fused all-reduce's residual) is that site's combine units' port.
@@ -41,7 +41,6 @@ from typing import Any
 
 from verity_vllm.pipeline.tp import grain as G
 from verity_vllm.program import tp_binding as TB
-from verity_vllm.program.predict.window_circuit import GROUP
 
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
@@ -225,13 +224,13 @@ class _Window:
         widths = {w for _lo, _hi, w, *_ in segs}
         C = None
         if fn.defn is DF.TokenSelectV4 and len(widths) == 1:
-            C = G.select_width(fn.statics["V"], widths.pop(), GROUP)
+            C = G.select_width(fn.statics["V"], widths.pop(), G.GROUP)
         if C is None:
             self.consumers[i, r, x] = (self.alloc((i, j, CONSUMER, r), fn, 1),)
             return
         V = fn.statics["V"]
-        groups = self.alloc((i, j, CONSUMER, r), bind(DF.TokenSelectGroupsV1, C=C, G=GROUP), V // C)
-        select = self.alloc((i, j, CONSUMER, r), bind(DF.TokenSelectCombineV2, V=V, C=GROUP), 1)
+        groups = self.alloc((i, j, CONSUMER, r), bind(DF.TokenSelectGroupsV1, C=C, G=G.GROUP), V // C)
+        select = self.alloc((i, j, CONSUMER, r), bind(DF.TokenSelectCombineV2, V=V, C=G.GROUP), 1)
         for port, out in (("best", "o0"), ("idx", "o1")):
             if (why := self.spread([select], port, V // C, 0, groups[0], out, groups[1], V // C)) is not None:
                 raise ValueError(f"{self.name}: {why}")
