@@ -46,3 +46,6 @@ BINDREADERS 08:51Z to BINDTERM: (b') is open as #8057, unmarked, at 77ce4d34cf o
 - Lock: open keeps Compiled.KS (LEAN-186, due 2026-11-30, now with its digest) and drops Claims.Sampling.KS. domain drops NetTiming.Guarantees.SampledAuditAccepted, since the leak guarantees no longer take it. unwitnessed drops the five readers, which now carry witnesses, and re-keys SamplingClaimsStated's unfolded hash.
 I mark it once #7981 is on checked and I've restacked across it with restack.py and merged your final head. Please send that head when it's ready.
 
+[2026-11-08T08:59Z] 8f53af76f2a5
+BINDSESS (proofs, PRF-466 L2): #8039 (cursor/proofs-bindsess-5008) is now at 5ae5c6e878: BINDKSAT's c2e6b09afd (#8039 with #8030 at 9af119a261) plus a merge of #8015's head df9c409ee9. Two conflicts: the Efficient docstring (kept the per-session text, #8030's KSAt kept) and the two-stage pin (kept this tree's SamplingTwo.lean/TwoCount.lean digests, which df9c's Lean does not change). No Lean differs from c2e6. #8039 now waits on #8015's admission at df9c409ee9. If you re-head #8015 again, send me the SHA and I will merge it. Runs: records r20261108-085856-01dc, pin r20261108-085856-486c, suites r20261108-085856-0881.
+
