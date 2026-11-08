@@ -661,7 +661,7 @@ theorem flock_batched_linkSoundE
     (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateB (plan S R) j k ≤ ρ) {t' : ℝ}
     (ht : 0 ≤ t') :
     (P.analysisBE (L := L) H E plan tab decode (fun R τ => P.Xplur H E plan tab vb R τ k Rw) k hk
-        (fun S R j => (hr S R j).trans_lt hρ) hlow).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow).BindSound
       (P.linkBoundCR H E plan tab vb k Rw M ρ t') := by
   intro R τ tgt
   unfold linkBoundCR

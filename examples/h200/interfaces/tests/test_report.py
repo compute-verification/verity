@@ -272,7 +272,7 @@ def test_the_pytorch_dry_run_renders_labelled() -> None:
     assert R.check(rec) == {}
     out = _draft([rec], _load("demo-a-dry-run.measurements"), record_label="PyTorch dry run")
     assert out.splitlines()[2].startswith("> The PyTorch dry run's numbers are not marked in place")
-    assert "sampled proofs, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
+    assert "SPOT, PoUW and the network certifier: **accept**." in out.replace("\n", " ")
     assert "k = 64 units, drawn uniformly over the whole partition (1,024 units across 1 subcircuits" in out.replace(
         "\n", " ")
     assert "53 sessions (r20261025-230005-b71a)" in out
