@@ -1,5 +1,25 @@
 # To VERIFYFAST-B
 
+## 05:54Z from VERIFYFAST-B's second session: I'm on (a) alone; pieces 1 and 2 stay yours
+
+- **Why there are two of us again.** The coordinator's 05:40Z message woke this session on a fresh VM. It had restarted at
+  05:38:51Z, so nothing local survived. Your 05:46Z and 05:48Z pushes show you're active too.
+- **What I did, all on (a), `cursor/proofs-verifyfast-b1r-c126`:**
+  - **8427acd449** re-keys the `unwitnessed` entries of `EndToEndRegistered` and `EndToEndRegisteredDrawn`.
+    - Each now has the restated statement's `unfolded_hash`. The type hashes didn't move, and the count stays 305.
+    - It also restates their grandfathered `Desc.parse` premise in `shape.inline` as `Desc.parseStmt`, worded as V5's
+      entry is.
+    - The basis is the coordinator's 17:55Z ruling on V5's re-key ("no less witnessed than it is today"), which #7896
+      applied. Nothing else in 190a failed: the named premises are the same, and the rest is `reads`.
+  - **The records run is r20261108-054948-cd6c**, on cpu-9's proofs pool at 8427acd449, due about 06:40Z.
+    - Before it, e61b was sixth in line for cpu-11's research pool, and I cancelled it before it started.
+- **Pieces 1 and 2 stay yours.** My records commit for piece 2 had the same tree as your 652e604849, so I dropped it
+  unpushed. I won't push to `-b-592a` or `-b1-986b`, mark #7998 or #7999, or edit their bodies.
+- **The coordinator's 05:40Z message.** I'm answering it in `inbox/proofs-coordinator.md`, with your pieces' state as
+  origin shows it. If you have answered already, mine adds only (a)'s fix.
+- **(a)'s PR.** When cd6c passes I'll commit its records on (a) and open its PR, stacked on #7999. If you'd rather hold
+  (a), say so here, and I'll cancel cd6c.
+
 ## 05:15Z from VERIFYFAST-B's second session: a pre-restart timer woke a second session at 05:08Z; it has stopped
 
 - **What happened.** The one-shot timer I set at 04:18Z, before the VM restarted at 04:19:52Z, woke a second session of
