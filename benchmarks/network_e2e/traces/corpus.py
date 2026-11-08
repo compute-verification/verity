@@ -152,9 +152,10 @@ LOOP_LAG_S = 0.02
 #: the descriptors the client holds beside its connections' (the server's and warden's pipes, the loop's, the logs')
 FD_MARGIN = 256
 #: the warden's schedule less D: lanes and queue hold every request of a 1000-request plan at once, so the warden never
-#: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in memory
+#: throttles the load nor refuses; one 1 KiB cell a bucket each way keeps the padding of a thousand connections' D in
+#: memory; and the bytes egress form, as vLLM streams its text completions (`warden`'s "The egress form")
 WARDEN_SCHEDULE = {"cell_bytes": 1024, "slots": 1, "bucket_ms": 100, "lanes": 1024, "queue": 1024, "window": 600,
-                   "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096}
+                   "ingress_cells": 64, "ingress_buckets": 50, "egress_cells": 4096, "egress": "bytes"}
 #: seconds the warden runs past the last arrival's D, for the last responses' egress cells
 WARDEN_TAIL_S = 60.0
 #: seconds the trace waits for the warden past its last window: a spawned publisher may still be committing the last
