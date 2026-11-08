@@ -78,10 +78,11 @@ def _check(S: Any) -> Any:
     return run
 
 
-ServedSeed = EW.specialized("ServedSeed", 1, STATICS, _rule, _rule_sig, refuse=_refuse,
+CONFORMANCE = "protocol-defined: the served seed rule, whose function is `served_seed.derived` or the body's seed (`reference`)"
+ServedSeed = EW.specialized("ServedSeed", 1, STATICS, _rule, _rule_sig, refuse=_refuse, conformance=CONFORMANCE,
                             doc="A sampled request's seed: its body's where it names one, else served_seed.derived of the "
                                 "window's verifier coin (COIN bytes) and its id (RID bytes), on SHA-512 gates")
-SeedCheck = EW.specialized("SeedCheck", 1, STATICS, _check, _check_sig, refuse=_refuse,
+SeedCheck = EW.specialized("SeedCheck", 1, STATICS, _check, _check_sig, refuse=_refuse, conformance=CONFORMANCE,
                            doc="1 iff served, the seed a Program's sampler read, is ServedSeed_v1's of the certified inputs")
 
 

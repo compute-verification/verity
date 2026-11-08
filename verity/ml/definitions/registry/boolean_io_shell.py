@@ -101,7 +101,9 @@ def _sampled(S):
 
 
 IngressSampledV1 = EW.specialized("IngressSampled", 1, ["MODEL", "LP", "V", "RID"], _sampled, sampled_sig,
-                                  refuse=X.sampled_refuse, doc=f"Ingress schema v1's parse: {sampled_parse.__doc__}")
+                                  refuse=X.sampled_refuse, doc=f"Ingress schema v1's parse: {sampled_parse.__doc__}",
+                                  conformance="protocol-defined: ingress schema v1's parse, whose function is "
+                                              "`io_shell.sampled_reference`")
 
 
 def decrement(C, bits: list) -> list:
