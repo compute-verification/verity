@@ -22,6 +22,8 @@ UNCUT = ("a served Call with no cut in serving_templates, past the block whole e
          "until it has a chunked form (CIR-188)")
 MOE = ("the FP8 MoE expert GEMM's whole coordinate over every expert's K weights (benchmarks/one_stage/a9.py's unit), or its "
        "row: serving stages its K-chunks (serving_templates.KCHUNKS) or per-expert blocks (serving_templates.EXPERTS) instead")
+MOE_GEMM = ("one of GLM-5.3's served FP8 MoE expert GEMMs whole (fp8_moe_experts.circuit-check.py's served roots): serving "
+            "stages its K-chunks (serving_templates.KCHUNKS) or per-expert blocks (serving_templates.EXPERTS), never the GEMM")
 TRAINING = "a training step's row, not a Call of a served Program nor PoUW's: no window stages it whole"
 INSIDE = ("neither a Call of a served Program (targets.call_families), a serving cut (serving_templates) nor PoUW's: a "
           "subcircuit proved inside its callers' units, or a whole step's composition, which no window stages whole")
@@ -70,6 +72,9 @@ HELD: dict[str, str] = {
         "MoeExpertFp8Coordinate_v1{E=256,K=6144,G=128,KB=128,SWAP=True,DOT=HopperE4m3QgmmaDot32_v1}",
         "MoeExpertFp8Row_v1{E=256,K=6144}",
     ], MOE),
+    **{f"MoeExpertFp8Gemm{w}_v1{{E=256,{kn},G=128,KB=128,SWAP={swap},DOT={dot}}}": MOE_GEMM
+       for w, kn in (("", "K=6144,N=512"), ("W", "K=256,N=6144")) for swap in (False, True)
+       for dot in ("HopperE4m3MmaV2Dot32_v1", "HopperE4m3QgmmaDot32_v1")},
     **dict.fromkeys(["LogSoftmaxNllBackwardRow_v1{V=12288}", "LogSoftmaxRow_v1{V=12288}"], TRAINING),
     **dict.fromkeys([
         "Fa2AttentionSplit_v1{T=300,NS=2,NH=4,KVH=2,D=64,BN=256,DOT=HopperBF16WgmmaDot16_v1,INV=Fa2InvSum_v1,MASKED_FROM=1}",
@@ -101,4 +106,4 @@ HELD: dict[str, str] = {
         "TopPMask_v1{V=64}",
     ], INSIDE),
 }
-MAX = 116
+MAX = 124
