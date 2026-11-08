@@ -500,7 +500,8 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
           (fun t' => Gs pt s (ip.getD t' pt.qc)) v))
       (fun o k cx w vs => by
         rw [refs_tabSum, mul_add, ← List.sum_map_mul_left]
-        exact congrArg (_ + ·) (congrArg List.sum (List.map_congr_left fun v _ => by ring))),
+        exact congrArg (_ + ·) (congrArg List.sum (List.map_congr_left fun v _ => by ring)))
+      (fun h => nomatch h),
       tabSum_empty, mul_zero, zero_add]
     refine congrArg List.sum (List.map_congr_left fun r _ => ?_)
     rw [Finset.sum_range_one]
@@ -544,7 +545,9 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
       (fun k cx v => hiE pt (β + al - 6) H cx *
         refX (t.defs.getD d default) pt s (β + al - 6) H (2 ^ al) (2 ^ β) as (eqHalf pt.r 0 (β + al - 6))
           (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) (fun t' k => Gs pt s ((ip k).getD t' pt.qc)) k v)
-      (fun o k cx w vs => refs_tabExp _ _ hs _ _ _ _ _ _ _ _ _ _ _ _ _), tabExp_empty, zero_add, list_sum_comm]
+      (fun o k cx w vs => refs_tabExp _ _ hs _ _ _ _ _ _ _ _ _ _ _ _ _)
+      (fun _ hB hlow o cx ws vs => refsK_tabExp _ _ _ _ _ _ _ _ _ _ hB hlow _ _ _ _), tabExp_empty, zero_add,
+      list_sum_comm]
     refine Finset.sum_congr rfl fun k hk => congrArg List.sum (List.map_congr_left fun r _ => ?_)
     have hk' := has h6 k (Finset.mem_range.mp hk)
     unfold rowVal grpVal
