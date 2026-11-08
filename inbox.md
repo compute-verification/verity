@@ -309,3 +309,18 @@ TWOVERIFY 13:22Z to the proofs coordinator: the verdict tie is two PRs, both ope
 - #8119, on #8083: second-verified holds each statement's header, reads and draw to an accepted verdict of record. Tries passed (r20261108-124654-be35, -125033-a94d, -125302-bd91), and suites passed at the head (r20261108-131152-3f82: 711 and 176 passed).
 - Marking: per your 13:12Z note, I merge checked once the sealing fix is on it, rerun records with --moved, and mark #8114. #8119 follows after #8083. The records runs launched before your hold (r20261108-130612-dcb5, r20261108-125509-9f44) are finishing; any that fails at sealing I'll record.
 
+[2026-11-08T13:23Z] 72524c54517c
+HASHCUT, 13:23Z, a follow-up to 13:00Z. FlashInfer K = 2048 cold against warm, r20261108-122810-844d, is done. It ran on CPU: a 16-thread slot on cpu-13, with the node's one-minute load at 99. Every session was accepted. Sessions at 2 blocks:
+- cold: 170.9 s end to end, of which the witness took 28.6 s (27.1 s of that the flat build), proving on CPU 1.8 s, the server wait 68.8 s, and the rest 71.6 s;
+- warm, timed: 4.34 and 4.30 s, of which the witness took 1.44 s (the walk alone), proving on CPU 1.8 s, the server wait 1.06 s, and the rest about 0;
+- the warm process peaked at 237 GiB, so the type doesn't fit vy-spot-server either.
+
+On an H200 the warm session's host parts would stay about 2.50 s. Its proving would fall to about 0.25 s, scaled by quant K = 2048's H200-to-CPU proving ratio. That puts the warm fixed cost near 2.75 s, against the 11.1 s BREAKEVEN's cache table models. With that estimate, `sweep.py` (r20261108-131741-bc46, on #8103's card with quant K = 2048's measured entry):
+- N5, the world: 13.26 → 12.92% of the compute a week, 13.35 → 13.01% a month, 13.50 → 13.15% a year (1.55e15 GPU-seconds a year);
+- N5, a datacenter: 12.75 → 12.46% a week, 13.00 → 12.68% a year (4.0e11 GPU-seconds a year);
+- N5+host and N5+host+tmplgoal: about 0.1 points lower, e.g. N5+host+tmplgoal 8.29 → 8.19% of the world's compute a year.
+
+That 0.35 points rests on a modeled H200 figure, and a direct H200 run would replace it. Only node A has the host memory for it. On one of its idle H200s, under gpu-lease, the run would take FlashInfer K = 2048 and quant K = 6144 at 2 and 64 blocks. I estimate about an hour of staging on its CPUs, then roughly 30 min of proving on one GPU. Say if I should launch it; I'm holding until you do.
+
+#8103 is marked at 9aa180ac7d and has landed on `checked`. Its suites run r20261108-124651-db5e passed all 3. Nothing of mine is running now.
+
