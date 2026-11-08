@@ -1,8 +1,8 @@
 """`stage.py`'s MoE and plain all-reduce populations, and the step's op coverage, on an in-memory capture: the w13 launch is
 staged beside the routed w2 one, each pair reading its own A row (the w13 launch its token's); a plain all-reduce with no
 multimem op inside it is FlashInfer's MNNVL one within 0.5 MiB, at its shot, and NCCL's past it; a multimem one binds the
-node's reduction tree, which capture.py's settings carry; an op inside an ungated op is listed as not gated, and one inside a
-gated op is not."""
+node's reduction tree, which capture.py's settings carry; an op inside an ungated op is listed as not gated, one inside a
+gated op is not, a call its population refused is, and the MoE align is listed apart as a schedule op."""
 from __future__ import annotations
 
 import importlib.util
@@ -161,6 +161,12 @@ def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(m
     ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::moe_align_block_size", "parent": 0},
           {"seq": 2, "op": "moe_launch", "parent": 0}, {"seq": 3, "op": "vllm::all_reduce", "parent": None},
           {"seq": 4, "op": "symm_mem::multimem_all_reduce_", "parent": 3}, {"seq": 5, "op": "aten::copy_", "parent": 4}]
-    gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
+    gated, other, schedule = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
     assert gated == {"moe_launch": 2, "vllm::all_reduce": 2}
-    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2}
+    assert other == {"vllm::moe_forward_shared": 2}
+    assert schedule == {"_moe_C::moe_align_block_size": 2} and set(stage.SCHEDULE_OPS) == set(schedule)
+    refused = {"AllReduceNccl_W2": {"calls": [{"seq": 3}]}, "AtenAdd_other": {"calls": [{"rank": 1, "seq": 2}]}}
+    gated, other, _ = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}), refused)
+    assert gated == {"moe_launch": 1}
+    assert other == {"vllm::moe_forward_shared": 2, "moe_launch": 1, "vllm::all_reduce": 2, "symm_mem::multimem_all_reduce_": 2,
+                     "aten::copy_": 2}

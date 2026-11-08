@@ -1007,7 +1007,7 @@ Two gaps stood between these statements and the deployed verifier:
   every session, and nothing rewrites, truncates or remakes a log. A file cannot see its host restore an earlier copy of
   it, from a snapshot, a backup or otherwise, nor restart the memory challenger onto one. That the host never does is
   `trusted-host` (`verity.core.claims`): "the auditor's device runs its stated code, timing
-  included, on a host the prover doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
+  included, on a host the developer doesn't control, with its CPU isolated from other tenants and a monotonic clock; the
   host never restores its earlier state". This log is part of that state, as is the LMS leaf state.
   Under one secret a reused id would also replay the coins, which `CoinTree.draw` derives from the secret and the id.
   The composed check accepts a session only under the id the auditor designated (`run.check`'s `session_id`), so an

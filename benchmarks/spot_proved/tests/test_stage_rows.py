@@ -25,7 +25,7 @@ def _cap(stage, events: list, tensors: dict, tokens: int):
     C = stage.Capture
 
     class _Cap:
-        cells, rows, slots, real_rows, tokens = C.cells, C.rows, C.slots, C.real_rows, C.tokens
+        cells, rows, slots, real_rows, tokens, padded = C.cells, C.rows, C.slots, C.real_rows, C.tokens, C.padded
 
         def opened(self, e, weights=False):
             return True
