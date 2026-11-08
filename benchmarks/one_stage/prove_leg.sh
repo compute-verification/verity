@@ -13,8 +13,8 @@
 #      slots or inline; unset, its template's own, chunk_rows.reads)  FLOCK_CHALLENGER=1 (each verifier's coin trees from
 #      a challenger of its own, its audit in the leg's verdicts)
 # Kept in $OUT/leg: the leg's records (leg.json, audit.json, registration, sample), the public files and the sessions; never a
-# prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive, nor a challenger's key and secret (its
-# `-work` directory). $OUT/summary.json: the verdicts. They are kept however the job ends, a timeout or a cancel included.
+# prover's file (inst-*) nor a circuit (its pin is kept), nor a session's archive. $OUT/summary.json: the verdicts. They are
+# kept however the job ends, a timeout or a cancel included.
 set -uo pipefail
 export HZ_CONFIGS=prove-leg HZ_MEM_GB=${LEG_MEM_GB:-32}
 if [ -n "${LEG_CACHE:-}" ] && mkdir -p "$LEG_CACHE" 2>/dev/null && [ -w "$LEG_CACHE" ]; then export HZ_CACHE=$LEG_CACHE; fi
@@ -22,8 +22,7 @@ source benchmarks/pouw/hidden_zk/job.sh
 keep_leg() {
   [ -d "$W/leg" ] || return 0
   mkdir -p "$OUT/leg"
-  (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' ! -path '*-work/*' -print0 \
-    | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
+  (cd "$W/leg" && find . -type f ! -name circuit.txt ! -name 'inst-*' ! -path '*/archive/*' -print0 | xargs -0 -r -I{} cp --parents {} "$OUT/leg/")
   [ -f "$W/leg/summary.json" ] && cp "$W/leg/summary.json" "$OUT/summary.json"
   return 0
 }
