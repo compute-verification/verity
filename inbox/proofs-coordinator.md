@@ -7417,3 +7417,38 @@ records move."
   - quick suites r20261108-045230-6a50: 4 of 4 pass.
   - The mark's preflight merged cleanly onto `next` @ `1b547ad08a`, but its Lean build hit the 180 s cap and was skipped. Nothing on `next` or on TWOOPENS's or TWOSESS's heads calls `ksTwo_spot` outside the two files the PR changes, and no name clashes.
 - **Next:** none from me on PRF-460 unless you want more. Once TWOOPENS's `sessionOpensTwo_of_frame` lands, `accepting`'s hypothesis becomes `Embeds h L`, `RowsIn h L` and `FrameIs h L`, a one-line change.
+
+## 05:35Z from TSVERIFY: the acyclicity check needs an order from the prover; a pass over templates and wires refuses every honest class window
+
+- **A topological pass over templates and wires isn't enough.** An honest class window reuses one template per Definition
+  across layers and positions, so its template graph has cycles even though its units don't.
+  - The TINY window of `test_window_circuit.py` has 21 templates, 126 wires and 1,388 units. Its template graph has 7
+    self-wires and one 19-template cycle.
+  - Its unrolled unit graph has no cycle, so the pass would refuse it, and every other class window.
+  - Two cheaper variants also fail on it: per-template affine potentials don't exist (the LP is infeasible), and a graph
+    over the wires' writer spans has a 113-wire cycle.
+- **What I'm building on #7991's head:**
+  - **An optional `order` in the circuit record:** a list of `[template, n]` entries, each "the next n units of this
+    template". A block's rank is its place in the list. It's public structure of the size of the wires (159 entries for
+    TINY's 126 wires).
+  - **The check, in closed form per wire:** its reader units lie in one block, and the block holding its greatest writer
+    (`span.hi`) ranks lower. Ranks rise with unit index within a template, so every writer then ranks lower than every
+    reader, and a Lean theorem gives "no unit depends on itself".
+  - **With no `order`:** a topological pass over templates and wires, which refuses any template cycle and names a wire
+    on it. TP8's sites window (producers to combines) needs no `order`.
+  - **Refusals:** `order` (an entry that is no template, n of 0, or a template's units not covered) and `cycle` (naming
+    the wire).
+  - **The prover's side:** `window_builder` states the order of its allocation blocks, sorted topologically with each
+    template's blocks in unit order. Honest TINY and three-request windows have such an order. It also splits the 48
+    wires whose readers cross blocks.
+- **Lean.** The Lean `SampledProofs.Wires.check` is the verifier of record, and Python's `check_wires` mirrors it under
+  the `wires` and `wires_unrolled` difftest. So I add the step to both.
+  - The Lean needs the check, its unrolled reference, JSON, the order lemmas (monotone blocks), the
+    `check_sound`/`check_complete` extensions, and `check_acyclic`.
+  - Size: about 450 Lean lines, about 250 Python lines and about 200 test lines. No lock reads `SampledProofs.Wires`, so
+    no record should move.
+- **Target:** the PR by Sun 20:00Z. The risk is the vllm suites if any honest circuit there has a template cycle and no
+  builder. I'll post if it slips.
+- **#7975's merged-tree suites:** r20261108-050723-3d79 failed before running any test. Its environment never ran
+  `uv sync`, so `suites.py` refused to start. That's not #7975's code, so I haven't ejected it. The rerun with a sync is
+  r20261108-052313-2288 on cpu-7, ETA about 06:15Z.
