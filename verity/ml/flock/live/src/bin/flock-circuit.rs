@@ -1343,6 +1343,23 @@ fn salts_pool() -> Option<&'static rayon::ThreadPool> {
     .as_ref()
 }
 
+/// The front ahead's own pool ([`prove_jobs`]): a session's witness build and M1's preparation, which run beside the previous
+/// session's reps, on FC_FRONT_THREADS threads (default: one a core) at nice FC_FRONT_NICE (default 0), so they take the cores
+/// the reps' host work leaves idle. Neither set: rayon's global pool, the reps'.
+fn front_pool() -> Option<&'static rayon::ThreadPool> {
+    static POOL: std::sync::OnceLock<Option<rayon::ThreadPool>> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        let var = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<i32>().ok());
+        let (threads, nice) = (var("FC_FRONT_THREADS"), var("FC_FRONT_NICE").unwrap_or(0).clamp(0, 19));
+        let n = threads.map_or_else(|| std::thread::available_parallelism().map_or(1, |n| n.get()), |n| n.max(1) as usize);
+        (threads.is_some() || nice > 0).then(|| {
+            rayon::ThreadPoolBuilder::new().num_threads(n).stack_size(flock_live::THREAD_STACK).thread_name(|i| format!("flock-front-{i}"))
+                .start_handler(move |_| nice_thread(nice)).build().expect("the front's pool")
+        })
+    })
+    .as_ref()
+}
+
 /// This thread's nice value raised to `nice` (Linux keeps one per thread); left as it is where refused.
 fn nice_thread(nice: i32) {
     if nice > 0 {
@@ -3983,9 +4000,16 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     // M1 on the device: level 0's hiding and both reps' pads commitments beside the witness build, and rep 0's replay and inner
     // proof beside rep 1's device run (FC_ZK_SEQUENTIAL: neither, the reference for the overlap's gain)
     let overlap = std::env::var_os("FC_ZK_SEQUENTIAL").is_none();
+    let front = plan.turn.as_ref().and(front_pool());
     let zk_pre = (plan.gpu && is_zk(st) && overlap && plan.lean_frames.is_none()).then(|| {
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
-        flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
+        flock_live::spawn(move || {
+            let prepare = || zk_prepare(&st, &plan, seed, lig, &salts, &points);
+            match front {
+                Some(p) => p.install(prepare),
+                None => prepare(),
+            }
+        })
     });
     // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
     // the transport before it. Not through the ZK server's Lean session loop
@@ -3995,37 +4019,44 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
-    let mut witness_s = 0.0;
-    let mut witness_prebuilt_s: Option<f64> = None;
-    let mut wits = Vec::new();
-    for (j, tb) in tabs.list.iter().enumerate() {
-        // a witness built beside the previous session: its wait counts as this session's witness time
-        let tw = Instant::now();
-        let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
-            .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
-            .flatten()
-            .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
-            .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
-        let (w0, wt0, tw0) = match pre {
-            Some(p) => {
-                witness_prebuilt_s = Some(p.built_s);
-                (p.w0, p.wt0, tw.elapsed().as_secs_f64())
-            }
-            None => {
-                let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
-                let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped));
-                (w0, wt0, tw0)
-            }
-        };
-        let (wt1, tw1) = if plan.rep1_other_witness {
-            let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped);
-            (Some(w), t)
-        } else {
-            (None, 0.0)
-        };
-        witness_s += tw0 + tw1;
-        wits.push((w0, Some(wt0), wt1));
-    }
+    let build = || {
+        let mut witness_s = 0.0;
+        let mut witness_prebuilt_s: Option<f64> = None;
+        let mut wits = Vec::new();
+        for (j, tb) in tabs.list.iter().enumerate() {
+            // a witness built beside the previous session: its wait counts as this session's witness time
+            let tw = Instant::now();
+            let pre = (tabs.list.len() == 1 && !plan.rep1_other_witness)
+                .then(|| plan.prebuilt.as_ref().and_then(|m| m.lock().unwrap_or_else(PoisonError::into_inner).take()))
+                .flatten()
+                .map(|h| h.join().unwrap_or_else(|e| panic!("the prebuilt witness: {}", panic_msg(e))))
+                .filter(|p| Arc::ptr_eq(&p.st, &tb.st) && p.seed == seed && p.mode == (device, host_units, mapped));
+            let (w0, wt0, tw0) = match pre {
+                Some(p) => {
+                    witness_prebuilt_s = Some(p.built_s);
+                    (p.w0, p.wt0, tw.elapsed().as_secs_f64())
+                }
+                None => {
+                    let w0 = wit(&tb.st, &tb.inst, plan, plan.zero_witness, seed, j);
+                    let (wt0, tw0) = witness_uploaded(&tb.st, &w0, (device, host_units, mapped));
+                    (w0, wt0, tw0)
+                }
+            };
+            let (wt1, tw1) = if plan.rep1_other_witness {
+                let (w, t) = witness(&tb.st, &wit(&tb.st, &tb.inst, plan, true, seed, j), device, host_units, mapped);
+                (Some(w), t)
+            } else {
+                (None, 0.0)
+            };
+            witness_s += tw0 + tw1;
+            wits.push((w0, Some(wt0), wt1));
+        }
+        (wits, witness_s, witness_prebuilt_s)
+    };
+    let (mut wits, witness_s, witness_prebuilt_s) = match front {
+        Some(p) => p.install(build),
+        None => build(),
+    };
     if after {
         salts_ahead = start_ahead();
     }
