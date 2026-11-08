@@ -283,7 +283,7 @@ variable {L : Law n} {Reg : Type} {session : Finset (Fin n) → Reg → Game Boo
 /-- **The influence of an accepted audit** (one-stage): the audit accepts while the committed transcript delivers on
 `D` a value outside the influence set at `δ` with probability at most `δ + ε_ks + δ_link + δ_in`. -/
 theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
-    (hlink : (P.analysis X ext).LinkSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
+    (hlink : (P.analysis X ext).BindSound δlink) (hin : AnchorsSound X a δin) (δ : ℝ≥0∞)
     (σ : Strategy (audit L Reg session)) :
     prob (fun o => o.1 = true ∧ out D (X (reg σ) (cont σ)) ∉ P.influenceSet D L.escape a δ)
         (audit L Reg session) σ ≤ δ + εks + δlink + δin := by
@@ -304,7 +304,7 @@ theorem audit_influence (hks : (P.analysis X ext).KnowledgeSound εks)
 and a receiver `g` that sees only what is delivered on `D`, succeed together (the audit accepts and `g` returns `m`) with
 probability at most `|influenceSet|/|M| + δ + ε_ks + δ_link + δ_in`. -/
 theorem audit_exfiltration_influenceSet {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (δ : ℝ≥0∞) (σ : M → Strategy (audit L Reg session)) (g : (D → Bool) → M) :
     avg (fun m => prob (fun o => o.1 = true ∧ g (out D (X (reg (σ m)) (cont (σ m)))) = m)
         (audit L Reg session) (σ m)) ≤
@@ -344,7 +344,7 @@ receiver `g` that sees only what is delivered on `D`, succeed together with prob
 a separator (the value bits) and `miss (k + 1) < δ` (which units are wrong). With `|M| = 2^ℓ`, the first term is
 `2^(H + log₂ ∑_{j ≤ k} C(n, j) − ℓ)`. -/
 theorem audit_exfiltration {M : Type} [Fintype M] [Nonempty M] [DecidableEq M]
-    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).LinkSound δlink)
+    (hks : (P.analysis X ext).KnowledgeSound εks) (hlink : (P.analysis X ext).BindSound δlink)
     (hin : AnchorsSound X a δin) (hD : D ⊆ P.committed) (hb : Fin n → ℕ) (K : Finset (Fin n) → Finset (Fin C.N))
     (hK : ∀ B, K B ⊆ P.committed) (hsep : ∀ B, P.Separates (K B) B D) (hw : ∀ B, (K B).card ≤ ∑ u ∈ B, hb u)
     {δ : ℝ≥0∞} {H k : ℕ} (hH : IsHarmBound L (fun u => (hb u : ℝ)) δ H) (hk : L.miss (k + 1) < δ)
@@ -377,7 +377,7 @@ theorem Refines.twoStage_influence (r : Refines Pf Pc) {L₁ : Law nc} {L₂ : F
       (Fin C.N → Bool))
     (ext : (S : Finset (Fin nf)) → (R : Reg) → (S₁ : Finset (Fin nc)) → (I : Int S₁) →
       Strategy (session S R S₁ I) → Fin nf → Option (Fin C.N → Bool))
-    (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).LinkSound δlink)
+    (hks : (r.analysis₂ X Yint ext).KnowledgeSound εks) (hlink : (r.analysis₂ X Yint ext).BindSound δlink)
     (hin : AnchorsSound₂ X a δin) (δ : ℝ≥0∞) (σ : Strategy (twoStage L₁ L₂ Reg Int session)) :
     prob (fun o => o.1 = true ∧ out D (X (reg₂ σ) (cont₁ σ)) ∉ Pc.influenceSet D (effAcceptProb L₁ L₂ r.parent) a δ)
         (twoStage L₁ L₂ Reg Int session) σ ≤ δ + εks + δlink + δin := by

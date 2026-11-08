@@ -33,10 +33,10 @@ theorem unitClass_of_le {Cp : Prog} {u : List ℕ} (h : committed Cp u ≤ unitC
     ∃ w, unitClass Cp u = some w ∧ committed Cp u ≤ w := by
   have hlog : Nat.log2 (unitClassMax / 16) = 14 := by
     rw [show unitClassMax / 16 = 2 ^ 14 from rfl, Nat.log2_two_pow]
-  have hmem : unitClassMax ∈ unitClasses := by
-    rw [unitClasses, hlog]
+  have hmem : unitClassMax ∈ sizeClasses := by
+    rw [sizeClasses, hlog]
     exact List.mem_map.2 ⟨14, by simp, rfl⟩
-  have hs : (unitClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
+  have hs : (sizeClasses.find? fun w => decide (committed Cp u ≤ w)).isSome :=
     List.find?_isSome.2 ⟨unitClassMax, hmem, decide_eq_true h⟩
   obtain ⟨w, hw⟩ := Option.isSome_iff_exists.1 hs
   have hd := List.find?_some hw

@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.SamplingTwo
+public import Definitions.Claims.Guarantees.SamplingTwo
 public import Proofs.Flock.SamplingGeneric.TwoCount
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -52,7 +53,8 @@ serve at most `∏_r min(Σ_{U of class p r} 2^{b(U)}, 2^{|r|})` outputs, at any
 classes, a request whose `T_r` commits at least `|r|` bits costs `|r|` and its blocks are forgotten, and the count is
 never above the sets'.
 
-* `Prog.Reads`: gate `g` reads gate `j`, itself or through the wires it reads.
+* `Prog.Reads.trans`, `Prog.Reads.read`, `Prog.Reads.le`: gate `g` reads gate `j` (`Prog.Reads`, with `servedBits`,
+  `blocksTo`, `lightOf` and `lightBits` in `Definitions.Claims.SamplingServed`), itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
   traces that make every proof block outside `T` correct and agree at the inputs and at the committed values of `T`
   that a returned gate reads agree at it.
@@ -70,8 +72,9 @@ never above the sets'.
   and the bound to charge is the smaller of that and the served-output cap.
 * `card_influenceTwo_le_classes`, `card_influenceTwo_le_touched`: **patterns**: the influence set counted by the
   admissible sets' patterns under any classes, and by which requests they touch.
-* `lightOf`, `lightBits`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form**: a request
-  whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the sets' count.
+* `lightBits_lightOf`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form** at `lightOf`'s
+  classes: a request whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the
+  sets' count. The lock lists it as `Claims.SecurityProofs.InfluenceTwoPatterns`.
 * `CompiledTwo.exfil_served`: **the corollary of `CompiledTwo.Exfil`**: KS at `RInflTwo`, with the influence set under
   the smaller of the served-output cap and `2^{|outs|}`.
 -/
@@ -83,11 +86,6 @@ namespace Claims.Sampling
 open Finset
 
 /-! ## What a gate reads -/
-
-/-- **Gate `g` reads gate `j`**: `j` is `g`, or a gate that one of the wires `g` reads reads. -/
-inductive Prog.Reads (C : Prog) : ℕ → ℕ → Prop
-  | refl (g : ℕ) : Prog.Reads C g g
-  | step {g i j : ℕ} {x : BGate} : C.gates[g]? = some x → i ∈ x.reads → Prog.Reads C i j → Prog.Reads C g j
 
 theorem Prog.Reads.trans {C : Prog} {g i j : ℕ} (h₁ : C.Reads g i) (h₂ : C.Reads i j) : C.Reads g j := by
   revert h₂
@@ -195,19 +193,6 @@ theorem outs_eq_reads {C : Prog} {P : Partition} (hC : C.Topological) (hP : P.Pa
   exact boundary_eq_reads hC hP hX hY hin hT o (.refl o) v hv hov (Prog.boundary_of_out _ ho)
 
 /-! ## One set of incorrect proof blocks, request by request -/
-
-/-- **Request `r`'s served bits** `|r|` under a split `req` of the served outputs into requests: the served outputs it
-holds. -/
-def servedBits {R : Type} [DecidableEq R] {n : ℕ} (req : Fin n → R) (r : R) : ℕ :=
-  (univ.filter fun i => req i = r).card
-
-open Classical in
-/-- **The proof blocks of `T` that request `r` reads** `T_r`: those with a committed value that one of `r`'s served
-outputs reads. `T` touches `r` when `T_r` is nonempty. -/
-noncomputable def blocksTo {R : Type} (C : Prog) (Pt : Partition) (req : Fin C.outs.length → R) (T : Finset ℕ)
-    (r : R) : Finset ℕ :=
-  T.filter fun v => ∃ g ∈ Pt.blocks.getD v [], C.Boundary (Pt.blocks.getD v []) g = true ∧
-    ∃ i, req i = r ∧ C.Reads C.outs[i] g
 
 /-- Request `r`'s served outputs of `y`. -/
 def onReq {R : Type} {n : ℕ} (req : Fin n → R) (r : R) (y : Fin n → Bool) : {i // req i = r} → Bool :=
@@ -544,17 +529,6 @@ theorem card_influenceTwo_le_touched (H : Msg → Msg) (Cm : CommitmentScheme Bo
     ext r
     simpa using congrFun h r
 
-/-- **A request's class of `U`**: `none` at `U = ∅`; `some none` when `U` commits at least `n` bits, so that its blocks
-are forgotten; and `some (some U)` otherwise. -/
-def lightOf (s : AuditStatement) (Pt : Partition) (n : ℕ) (U : Finset ℕ) : Option (Option (Finset ℕ)) :=
-  if U = ∅ then none else if n ≤ bitsOf s Pt U then some none else some (some U)
-
-/-- A class's bits: `0` at `none`, `n` at `some none` and `b(U)` at `some (some U)`. -/
-def lightBits (s : AuditStatement) (Pt : Partition) (n : ℕ) : Option (Option (Finset ℕ)) → ℕ
-  | none => 0
-  | some none => n
-  | some (some U) => bitsOf s Pt U
-
 theorem lightOf_eq_none {s : AuditStatement} {Pt : Partition} {n : ℕ} {U : Finset ℕ} (h : lightOf s Pt n U = none) :
     U = ∅ := by
   unfold lightOf at h
@@ -649,3 +623,7 @@ theorem exfil_served {H : Msg → Msg} {L : CompiledTwo Coin A} (hL : L.Exfil H)
 end CompiledTwo
 
 end Claims.SamplingGeneric
+
+/-- **The patterns' form** (`card_influenceTwo_le_patterns`). -/
+theorem Claims.SecurityProofs.InfluenceTwoPatterns : Claims.Guarantees.InfluenceTwoPatterns :=
+  fun H Cm _ _ _ hs δ a _ _ _ req => Claims.Sampling.card_influenceTwo_le_patterns H Cm hs δ a req
