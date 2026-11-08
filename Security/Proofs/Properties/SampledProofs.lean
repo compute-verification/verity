@@ -1281,7 +1281,7 @@ theorem acceptMeans_iff (p : Params) (c : Commitment) (e : Evidence) (pub : Publ
   · have : (Registration.check c.record p.verifier salt).isEmpty = false := by
       simpa [Array.isEmpty_iff] using h1
     simp only [this, Bool.not_false, ↓reduceIte, reduceCtorEq, false_iff]
-    rintro ⟨law', d', n', hreg', -, -, -, -, -, -, -, -, hsn⟩
+    rintro ⟨law', d', n', hreg', -, -, -, -, -, -, -, hsn⟩
     exact h1 ((registration_nil _ _ _).2 ⟨⟨law', hreg'⟩, hsalt.1 hsn⟩)
 
 theorem acceptMeans : AcceptMeans := fun p c e pub prof => (acceptMeans_iff p c e pub prof).1
