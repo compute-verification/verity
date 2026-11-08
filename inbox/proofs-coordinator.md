@@ -9715,3 +9715,43 @@ Stacked on #8015 and waiting for that head: #8039 (BINDSESS, which restacks firs
   - Suites: r20261108-084533-1b83 4/4 at the head; r20261108-084533-0ce6 on `next` red only on #7794's
     `test_repo_env_reads`. Preflight onto `next` 6e5d1f3cdc clean.
   - Figure art v2.10: art:071cfd43. Nothing of mine is running.
+
+## 10:20Z from MOESERVE-C: Lean accepts the templated MoE reads with `--zk --registered` on #7999 + #8020, and every own port opens at the registration's roots
+
+- **Verdict: accepted, 2 of 2 templated reads.** Run r20261108-091506-354e (cpu-11) staged the synthetic unfused MoE
+  window with both read templates stated as the served path states them: `verity/flock-circuit/tmpl`, `iv/hybrid/4`,
+  structural.
+  - `flock-verify verify --statement verity/flock-circuit/tmpl --zk --registered` accepted both drawn reads:
+    - m31, the w2 weight read `EmbeddingRead_v1{V=32,H=256}`;
+    - m37, the w2 scale read `{V=32,H=4}`.
+  - The router and both GEMMs, which are flat, were accepted too: 5 of 5 drawn sessions.
+- **Time and peak memory**, each read's verify replayed under `/usr/bin/time -v` on one core:
+
+  | Read | Wall time | Peak memory |
+  |---|---|---|
+  | m31 | 4:01.5 | 12.9 GiB |
+  | m37 | 3:49.3 | 11.3 GiB |
+
+  - a5's own timings agree: 247.0 s and 225.0 s.
+  - For comparison, 310a's GEMM template took 55.9 s at 1.9 GB. A read's templated circuit is 380 MB, because its META
+    carries the whole `flock-read-tmpl` text.
+- **Own ports: yes.** In both verdicts, every own port (`tok`, `row`, `salt`, `path`, `o0`) is read as
+  `committed/<member>/<port>` at exactly the registration's root for that port.
+  - The table ports (`root`, `domain`, `o1`) open at the table's registered roots.
+  - Each verifier file names all 8 ports.
+- **What it took.** Branch `cursor/proofs-moeserve-c-tmplreg-2ce2`, at `714d3188de`, combines:
+  - #8003's templated merge;
+  - #7999 `2728ae37b2` and #8020 `6839cb68e0`;
+  - #7941 `37857081b2`, which brings #7927's `flock-read-tmpl`, the executable a structural read's compose runs;
+  - the harness: `moe_window --read-layout`, `a5`'s templated members, and `MW_READ_LAYOUT`.
+- **The gap this leaves for the served path: the firewall.**
+  - The read members' provers ran `prove --zk` themselves (`a5 --templated-direct`), not behind `flock-firewall`.
+  - The firewall's `Hello` sets up only the statements `Tags.find?` names, and that list (`Tags.all`) has no templated
+    statement. So it refuses `verity/flock-circuit/tmpl` as an unknown statement.
+  - Every other member stayed behind the firewall. Who owns `Flock.Firewall`'s statement list?
+- **Synthetic, not the real L5.** The real layer needs B's key on cpu-1. This branch runs it with
+  `MW_READ_LAYOUT=iv/hybrid/4` once cpu-1's slots free.
+- **Still running in 354e:** the audit's record checks, its 26 negatives and 4 proof edits, ETA about 11:40Z. One of
+  the negatives leaves a port committed afresh, now on a templated statement.
+- **Cancelled:** r20261108-084712-9ce3, whose tree lacked `flock-read-tmpl`.
+- Noted that #8008 is the end-to-end registered guarantee for templated statements.
