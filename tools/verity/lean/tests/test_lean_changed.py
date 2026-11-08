@@ -993,6 +993,21 @@ def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_o
     assert any("no machine in" in s and "lean_slot.py --status" in s for s in said), "none read: how to list a machine's pools"
 
 
+def test_slots_there_reads_the_path_every_machine_keeps_whatever_lean_slots_says_here(monkeypatch, tmp_path):
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "lean-slots")
+    ran = []
+
+    def run(argv, **kw):
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 255 if len(ran) > 1 else 0, "build 2\n", "Permission denied (publickey).\n")
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    assert LC.slots_there(["-i", "KEY", "research@peer"]) == "build 2\n"
+    assert ran[0][-2:] == ["research@peer", f"cat {LC.LEAN_SLOT.SLOTS_PATH}"] and "BatchMode=yes" in ran[0]
+    with pytest.raises(OSError, match="exit 255: Permission denied"):
+        LC.slots_there(["research@peer"])
+
+
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
     tree, calls = trying
     said = []

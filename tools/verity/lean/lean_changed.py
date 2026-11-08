@@ -1251,9 +1251,9 @@ SLOTS_STATUS = "python3 tools/verity/check/lean_slot.py --status"
 
 
 def slots_there(ssh: list[str]) -> str:
-    """The Lean slots file (LEAN_SLOT.SLOTS, at one path on every machine) of the machine ``ssh`` reaches (its PEERS line's ssh
-    options and destination), as `slot.py` reaches a twin; OSError or a SubprocessError when it can't be read."""
-    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", *ssh, f"cat {shlex.quote(str(LEAN_SLOT.SLOTS))}"],
+    """The Lean slots file (LEAN_SLOT.SLOTS_PATH, whatever LEAN_SLOTS says here) of the machine ``ssh`` reaches (its PEERS
+    line's ssh options and destination), as `slot.py` reaches a twin; OSError or a SubprocessError when it can't be read."""
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", *ssh, f"cat {shlex.quote(LEAN_SLOT.SLOTS_PATH)}"],
                        capture_output=True, text=True, timeout=LEAN_SLOT.SLOT.TWIN_SSH_S)
     if r.returncode:
         raise OSError(f"exit {r.returncode}: {(r.stderr.strip().splitlines() or ['no output'])[-1]}")
