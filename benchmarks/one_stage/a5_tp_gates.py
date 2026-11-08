@@ -212,7 +212,7 @@ def window(r: int, hidden: int, tokens: int, requests: int, rest: int) -> CS.Bin
     units = len(sites(requests)) * tokens
     program, query = CS.population_program([(tg, units), (other, rest)])
     (tid, _, _), (rid, _, _) = P.ranges(program, query)
-    law = D.parse_law(RULE)
+    law = D.parse_design(RULE)
     ports = tuple(f"part{j}" for j in RANKS)
     gates = tuple(CS.Member(tid, rows=tuple((p, hidden) for p in ports), outs=(("o0", hidden),), n=tokens, base=u * tokens,
                             tables=tuple((p, tokens) for p in ports), name=f"{tid}/q{q}c{k}",

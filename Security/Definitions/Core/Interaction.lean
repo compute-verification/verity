@@ -2,6 +2,7 @@ module
 
 public import Mathlib
 public import Definitions.Core.Hash
+public import Definitions.Core.Uniform
 
 /-!
 # Interaction: the live-coin model every proof system's claims are stated in
@@ -176,11 +177,9 @@ def run {Ω Coin : Type} [Inhabited Coin] (H : Msg → Msg) (P : Prover Ω) (V :
     (r : Fin (V.k x) → Coin) : Trace :=
   stepWith H P x ω (fun as => V.next x as ((List.range as.length).map (coinSeq r))) (V.k x) [] [] ⟨[], [], [], .rej⟩
 
-/-! ## Probability: uniform averages over finite coin spaces -/
+/-! ## Probability: uniform averages over finite coin spaces
 
-open Classical in
-noncomputable def Pr {α : Type} [Fintype α] (p : α → Prop) : ℝ :=
-  ((Finset.univ.filter p).card : ℝ) / Fintype.card α
+`Pr p` is in `Definitions/Core/Uniform.lean`. -/
 
 /-- The expectation of `f` under uniform coins. -/
 noncomputable def Ex {α : Type} [Fintype α] (f : α → ℝ) : ℝ := (∑ a, f a) / Fintype.card α
@@ -542,10 +541,11 @@ structure Recorded {Coin : Type} (V : Verifier Coin) where
   as : List Msg
   r : Fin (V.k x) → Coin
 
-/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is established by
-a test against recorded sessions, not by a Lean proof, and none is expected: `check`'s `lean-agreement` job
-(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier
-(`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
+/-- **Nontriviality**: there are recorded runs, and the verifier accepts each when it is replayed. It is for a test
+against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s `lean-agreement` job
+(`tools/verity/check/ci.toml`) replays recorded honest sessions through the compiled Lean verifier's checks
+(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (V : Verifier Coin) (recs : List (Recorded V)) : Prop :=
   recs ≠ [] ∧ ∀ e ∈ recs, (run H (replay e.as) V e.x () e.r).out = .acc
 

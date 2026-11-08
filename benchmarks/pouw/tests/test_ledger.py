@@ -483,6 +483,8 @@ def test_verify_writes_one_record_per_arm_and_shape_with_everything_the_ledger_k
     assert m["steps"]["phase_groups"]["after"] == ["tile_hash", "screen"]
     assert m["gamma"]["published"] == V2_HOT_872["published"] and m["gamma"]["path"] == "cast-8.72"
     assert m["gamma"]["by_price"] == V2_HOT_872["by_price"] and m["gamma"]["arm_claim"] == ARM_GAMMA
+    g = Fraction(V2_HOT_872["published"])
+    assert Fraction(m["gamma"]["eps"]) == L.eps(g) == g / (1 - g) > g
     assert m["hypothesis"] == "tile hashing on the side lane hides it under the next call"
     assert m["mechanism"] == ["cast:packed-sts64", "hash:side-stream"] and m["approach"] == "pouw/pearl-c-sm120"
     assert m["verify"]["accepted"] and RUN in m["verify"]["transcript"]
@@ -505,7 +507,7 @@ def test_the_run_s_flags_win_over_the_arm_s_lineage_and_a_bare_arm_still_gets_a_
     assert m["hypothesis"] == "a run's own line" and m["parent"] == "pearl-c-sm120/0123456789ab" and r["refs"] == {}
     assert m["tier"] == "2a" and r["labels"] == [[L.KERNEL_OUTCOME, "dropped"], [L.KERNEL_REASON, "slower than its parent"]]
     assert m["missing"] == ["variant", "the priced path (GateRecord.prices, from the variant's prices)"]
-    assert m["gamma"]["published"] is None and m["gamma"]["arm_claim"] is None
+    assert m["gamma"]["published"] is None and m["gamma"]["eps"] is None and m["gamma"]["arm_claim"] is None
     assert m["gate"]["variant"] is None and m["gate"]["controls_rejected"]
 
 
@@ -616,7 +618,9 @@ def test_store_records_come_back_as_panel_rows_under_the_panel_s_rules(tmp_path)
     assert r["kind"] == "measured" and r["line"] == "pearl-c-sm120" and r["version"] == "v2-hot" and r["attempt"] is None
     assert r["verifier"]["negative_control"].startswith("REJECT") and r["sm_clock_mhz"]["baseline"] == [2091.0, 2093.0]
     assert r["gamma"] == float(Fraction(V2_HOT_872["published"])) and r["decode_method"] == "dependent-chain"
-    assert r["precision"] == "fp8" and "γ cast-8.72 at FADD 1047/125, the larger, from staged price twins" in r["description"]
+    eps = float(L.eps(Fraction(V2_HOT_872["published"])))
+    assert r["precision"] == "fp8" and (f"ε {eps:.4%} from the gap on cast-8.72 at FADD 1047/125, the larger, from staged "
+                                        "price twins") in r["description"]
     assert r["source"].endswith("(kernel-attempt/v1)") and var["id"] in r["description"] and "store_refused" not in r
 
     screen = tmp_path / "screen" / RUN

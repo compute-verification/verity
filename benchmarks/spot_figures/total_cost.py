@@ -199,8 +199,11 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
-                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8 it leaves "
-                       "at most 44 bits of advice a 600 s window, the references card's tick line"}
+                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8, with "
+                       "certified arrivals and prefix caching off, it leaves no scheduling advice but the response "
+                       "length, which stays advice until a circuit checks the stop rule; the run with the real network "
+                       "certifier is pending (a client stood in for it in the measured runs, which served with prefix "
+                       "caching on)"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
     window = c["window"].value
     edge = {"part": "step record, token commits and replay-block edge snapshot",
@@ -259,6 +262,51 @@ def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
                                      source=f"{part.source}; cut by the partition card {v['name']}{art}")}
 
 
+def verifier_seconds(v: dict, block: str) -> tuple[float, str]:
+    """The verifier's core-seconds a statement of `block`'s type from a `verifier_cost` card's value, and how they are
+    known: its measured type's, its family's line through its members (or through the fixed seconds at size 0 and its
+    one member; the member's own where the block gives no size), else the measured types' median."""
+    by = {t["block"]: t["core_seconds"] for t in v["types"]}
+    for prefix, seconds in by.items():
+        if block.startswith(prefix):
+            return seconds, "measured"
+    for fam in v["families"]:
+        if block.startswith(tuple(fam["types"])):
+            size = fam["size"] and re.search(rf"[{{,]{fam['size']}=(\d+)", block)
+            if not size:
+                return by[fam["members"][0]], "family"
+            pts = [(int(re.search(rf"[{{,]{fam['size']}=(\d+)", m)[1]), by[m]) for m in fam["members"]]
+            (x0, y0), (x1, y1) = pts if len(pts) == 2 else [(0, v["fixed_seconds"]), *pts]
+            return y0 + (int(size[1]) - x0) * (y1 - y0) / (x1 - x0), "family"
+    return median(by.values()), "assumed"
+
+
+def _verify_sentence(inputs: dict) -> str:
+    """The caption's sentence on the verifier's share of β, empty where the inputs leave it out."""
+    if "verifier_cost" not in inputs:
+        return " β counts proving only: the verifier's CPU is not in it."
+    seconds = [x["verify_core_seconds"] for x in inputs["partition"]["value"]["strata"] if x["per_token"] > 0]
+    return (f" β also pays the verifier: each statement's verify, its type's core-seconds on one core "
+            f"({min(seconds):,.0f} s to {max(seconds):,.0f} s), at {inputs['verifier_cost']['value']:.3g} "
+            "core-seconds a GPU-second, adds to its fixed seconds, so total compute is serve tax, proving and "
+            "verifying.")
+
+
+def verified(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
+    """The priced inputs with each statement's verify, its type's core-seconds (`verifier_seconds`) at the card's
+    core-seconds a GPU-second, added to the statement's fixed GPU-seconds."""
+    v, part = card["value"], c["partition"]
+    strata = []
+    for x in part.value["strata"]:
+        seconds, how = verifier_seconds(v, x["block"])
+        strata.append(x | {"fixed_seconds": x["fixed_seconds"] + seconds / v["core_seconds_per_gpu_second"],
+                           "verify_core_seconds": seconds, "verify_priced": how})
+    art = f" ({card['art']})" if card.get("art") else ""
+    return c | {"partition": replace(part, value=part.value | {"strata": strata}),
+                "verifier_cost": f1.InputCard(v["core_seconds_per_gpu_second"], "core-s/GPU-s", card["status"],
+                                              f"the verifier_cost card{art}: {card['source']}", card["provisional"])}
+
+
 def _definition(block: str) -> tuple[str, int | None]:
     k = re.search(r"[{,]K=(\d+)", block)
     return block.split("{")[0], int(k.group(1)) if k else None
@@ -267,7 +315,9 @@ def _definition(block: str) -> tuple[str, int | None]:
 def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     """The inputs with every proof block priced in GPU-seconds from the `proof_overhead` card, and the marginal
     overhead they come to.  A stratum whose type the card measures (its block, else the card's block of the same
-    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap; a type the card doesn't
+    Definition and K) takes its seconds a block, its statement's fixed seconds and its cap.  One the card measures only
+    at another size, 2^Δk its block's, takes 2^Δk its seconds and 2^-Δk its cap: Δk compares the two k_logs as the
+    strata estimate them, the card's block's from the strata where they hold one of its type.  A type the card doesn't
     measure is `computed` from its staged witness bits: the measured types' median seconds a witness bit, a statement's
     fixed seconds on their least-squares line in k_log, and as many blocks as a full statement holds.  Each stratum's
     `price` is the MACs that cost its seconds at that overhead, so the planner's cells and grains prove it at them."""
@@ -280,11 +330,19 @@ def priced(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
     rate = median(b["seconds_per_block"] / 2 ** b["k_log"] for b in types.values())
     slope, intercept = linear_regression([b["k_log"] for b in types.values()],
                                          [b["fixed_seconds"] for b in types.values()])
+    k_of = {x["block"]: x["k_log"] for x in part.value["strata"] if "k_log" in x}
+    held = {_definition(b["block"]): (b, k_of[b["block"]]) for b in v["blocks"] if b["block"] in k_of}
     strata = []
     for x in part.value["strata"]:
-        if b := by_name.get(x["block"]) or types.get(_definition(x["block"])):
+        if b := by_name.get(x["block"]):
             strata.append(x | {k: b[k] for k in ("seconds_per_block", "fixed_seconds", "statement_blocks")}
                           | {"priced": "measured"})
+        elif b := types.get(_definition(x["block"])):
+            b, k = held.get(_definition(x["block"]), (b, b["k_log"]))
+            dk = x["k_log"] - k if "k_log" in x else 0
+            cap = b["statement_blocks"] << -dk if dk < 0 else max(1, b["statement_blocks"] >> dk)
+            strata.append(x | {"seconds_per_block": b["seconds_per_block"] * 2.0 ** dk, "fixed_seconds": b["fixed_seconds"],
+                               "statement_blocks": cap, "priced": "measured"})
         elif "k_log" in x:
             strata.append(x | {"seconds_per_block": rate * 2 ** x["k_log"],
                                "fixed_seconds": max(0.0, intercept + slope * x["k_log"]),
@@ -488,7 +546,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed, measured on benchmark values, which a "
-            "replayed served step's values cost the same as. Every β has its own plan, the one with the "
+            f"replayed served step's values cost the same as.{_verify_sentence(out['inputs'])} Every β has its own "
+            "plan, the one with the "
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
@@ -600,15 +659,19 @@ def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None,
         return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 
 
-def _lines(model_name: str, request: str) -> tuple:
-    """The model's cards and, for each configuration it has the cut of, its priced inputs, its line (proof blocks a
-    token, fill and marginal overhead) and which of its cells' types are computed."""
+def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+    """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
+    verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
+    overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name)
     c = f1.cards(model_name, request)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
               for n, conf in confs.items()}
+    if verify and (vc := spot_cards.load("verifier_cost", model_name, required=False)):
+        sc |= {"verifier_cost": vc}
+        inputs = {n: verified(i, vc) for n, i in inputs.items()}
 
     def line(i: dict[str, f1.InputCard]) -> tuple:
         strata = i["partition"].value["strata"]
@@ -796,8 +859,8 @@ def at_budgets(out: dict) -> list[dict]:
 
 
 PRIMARY, SECONDARY = f1.PRIMARY, f1.SECONDARY
-#: the line the headline scope's exfiltration panel also plots over the stretch scope, and its style there
-STRETCH_LINE, STRETCH_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
+#: the line the headline scope's exfiltration panel also plots over the secondary scope, and its style there
+SECONDARY_LINE, SECONDARY_STYLE = "tokens", ("#6A51A3", (0, (5, 2)), 2.0)
 #: references closer than this factor stagger their labels: the lowest below its line, the rest alternating sides
 CROWDED = 2.5
 #: each configuration's colour, line style and width: a line's registrations dark to light, each narrower so that one
@@ -828,12 +891,12 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     import textwrap
 
     from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
-    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _lines, _power
+    from render import CAPTION_DROP, OFF_SCALE, REFERENCE_STYLE, _bytes, _decades, _fit, _floor, _lines, _power, _zeros
 
     p, tax = out["panels"][panel], out["taxes"]
     series = [s for s in p["series"] if s["scope"] == scope]
-    stretch = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
-               == (PRIMARY, "exfiltration", SECONDARY, STRETCH_LINE)]
+    secondary = [s for s in p["series"] if (scope, panel, s["scope"], s["config"])
+               == (PRIMARY, "exfiltration", SECONDARY, SECONDARY_LINE)]
     scale = 1 / 8 if p["unit"] == "bit" else 1 / out["inputs"]["h100_hour_flop"]["value"]
     fmt = _bytes if p["unit"] == "bit" else _power
     xs = [x for s in series for x in s["x"]] + [tax[s["config"]][k] for s in series for k in ("low", "high")]
@@ -850,10 +913,12 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
     refs = _lines(p["references"], scope, scale)
     if panel == "exfiltration":
         refs = sorted(refs + [(out["scopes"][scope]["served_bits"] * scale, "Everything the scope serves", "dotted")])
-    ys = [y * scale for s in series + stretch for y in s["y"]]
+    ys = [y * scale for s in series + secondary for y in s["y"]]
     far = [r for r in refs if r[0] > max(ys) * OFF_SCALE]
     refs = [r for r in refs if r not in far]
     lo, hi = 10.0 ** floor(log10(min(ys + [r[0] for r in refs]))), 10.0 ** (floor(log10(max(ys + [r[0] for r in refs]))) + 1)
+    zeros = _zeros(p["references"], scope)
+    lo /= 10 if zeros else 1
     caption = out["scopes"][scope]["captions"][panel]
     if far:
         caption += " Above the axis: " + "; ".join(f"{label} ({fmt(a)})" for a, label, _ in far) + "."
@@ -871,9 +936,10 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         k = k + 1 if i and amount < refs[i - 1][0] * CROWDED else 0
         below = k == 0 and i + 1 < len(refs) and refs[i + 1][0] < amount * CROWDED
         ax.axhline(amount, color="#909090", ls=styles[style], lw=1.3, zorder=1)
-        ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
-                ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
-                zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5})
+        _fit(ax.text(lo_x * 1.3 if k % 2 else hi_x / 1.3, amount / 1.08 if below else amount * 1.08, label,
+                     ha="left" if k % 2 else "right", va="top" if below else "bottom", fontsize=14, color="#555555",
+                     zorder=5, bbox={"facecolor": "white", "alpha": .75, "edgecolor": "none", "pad": .5}))
+    _floor(ax, zeros, styles, 14)
     for s in series:
         color, ls, lw = STYLE[s["config"]]
         t = tax[s["config"]]
@@ -882,13 +948,13 @@ def _panel(fig, ax, out: dict, scope: str, panel: str, wrap: int) -> None:
         ax.plot([t["low"], t["high"]], [y0, y0], color=color, lw=1.4, zorder=3, marker="|", markersize=12)
         ax.plot([t["tax"]], [y0], marker="o", markersize=13, color=color, zorder=4, mew=2.2,
                 markerfacecolor="white" if t["status"] == "priced" else color)
-    for s in stretch:
-        color, ls, lw = STRETCH_STYLE
+    for s in secondary:
+        color, ls, lw = SECONDARY_STYLE
         ax.plot(s["x"], [y * scale for y in s["y"]], color=color, ls=ls, lw=lw, zorder=3)
     configs = list(dict.fromkeys(s["config"] for s in series))
-    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(STRETCH_STYLE) for _ in stretch]
-    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY} (the stretch scope)"
-                                                  for s in stretch]
+    handles = [plt_line(STYLE[n]) for n in configs] + [plt_line(SECONDARY_STYLE) for _ in secondary]
+    labels = [legend(out, n) for n in configs] + [f"{legend(out, s['config'])}, over a {SECONDARY}"
+                                                  for s in secondary]
     ax.legend(handles, [fill(label, 64) for label in labels], loc="lower left", bbox_to_anchor=(0, 1.01),
               ncol=2 if len(configs) > 3 else 3, frameon=False, fontsize=14, handlelength=2.6, columnspacing=1.4,
               borderaxespad=0)

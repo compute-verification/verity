@@ -166,34 +166,18 @@ theorem scopeOk_sound {C : Prog} {Pt : Partition} {d : Design.Two} (hs : scopeOk
   exact ⟨topoOk_sound htopo, partitionsOk_sound hpart, of_decide_eq_true hnd, fun v hv => hrep v hv,
     ⟨hlen, fun p hp => oneStageOk_sound (hrules p hp)⟩, hklen, fun k hk' => of_decide_eq_true (hk k hk')⟩
 
-theorem stratumIdx_le : ∀ (ns : List ℕ) (v : ℕ), stratumIdx ns v ≤ ns.length
-  | [], _ => by simp [stratumIdx]
-  | n :: ns, v => by
-    unfold stratumIdx
-    split
-    · omega
-    · have := stratumIdx_le ns (v - n)
-      simp only [List.length_cons]
-      omega
-
-/-- Past the strata, a cell is empty. -/
-theorem cell_eq_empty {Pt Pρ : Partition} {ρ t : ℕ} (ht : Pt.strata.length < t) : cell Pt Pρ ρ t = ∅ := by
-  refine Finset.eq_empty_of_forall_notMem fun v hv => ?_
-  have hvt := (mem_filter.1 hv).2.2
-  have := stratumIdx_le (Pt.strata.map List.length) v
-  rw [List.length_map] at this
-  unfold Partition.stratumOf at hvt
-  omega
-
 theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : Spot.Slots.Layout} {d : Design.Two}
-    (hc : cellsOk g Pt l d = true) : ∀ ρ b, l.blocks[ρ]? = some b →
-      (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧
-          ∀ t, cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅) ∨
-        (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
-  intro ρ b hb
-  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
+    (hc : cellsOk g Pt l d = true) : g.ns.size = Pt.strata.length ∧
+      (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧ ∀ ρ b, l.blocks[ρ]? = some b →
+        (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+            cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
+          (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
   unfold cellsOk at hc
+  rw [Bool.and_eq_true, Bool.and_eq_true, beq_iff_eq, List.all_eq_true] at hc
+  obtain ⟨⟨hT, hk⟩, hc⟩ := hc
   rw [List.all_eq_true] at hc
+  refine ⟨hT, fun t ht => by simpa using hk t (List.mem_range.2 ht), fun ρ b hb => ?_⟩
+  have hρ : ρ < l.blocks.size := (Array.getElem?_eq_some_iff.1 hb).1
   have h1 := hc ρ (List.mem_range.2 hρ)
   simp only [hb] at h1
   cases hu : b.unit with
@@ -205,16 +189,10 @@ theorem cellsOk_sound {g : RegTwo} {Pt : Partition} {l : Spot.Slots.Layout} {d :
     · exact absurd hvρ hn
     · exact ha
   | some u =>
-    simp only [hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.any_eq_true, List.all_eq_true,
-      List.mem_range] at h1
-    obtain ⟨⟨rfl, hnd⟩, t₀, ht₀, hk, hcell⟩ := h1
-    refine Or.inl ⟨by simp [hu], ?_, t₀, ht₀, hk, fun t => ?_⟩
-    · intro a ha a' ha' he
-      exact List.inj_on_of_nodup_map hnd (List.mem_range.2 ha) (List.mem_range.2 ha') he
-    · rcases Nat.lt_or_ge t (Pt.strata.length + 1) with ht | ht
-      · exact hcell t ht
-      · rw [if_neg (by omega)]
-        exact cell_eq_empty (by omega)
+    simp only [hu, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq, List.all_eq_true, List.mem_range] at h1
+    obtain ⟨rfl, hcells⟩ := h1
+    refine Or.inl ⟨by simp [hu], fun t ht => ⟨fun a ha a' ha' he => ?_, (hcells t ht).2⟩⟩
+    exact List.inj_on_of_nodup_map (hcells t ht).1 (List.mem_range.2 ha) (List.mem_range.2 ha') he
 
 theorem zkOk_sound {xS : Msg} (hz : zkOk xS = true) : ∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧
     0 < sts.size ∧ sts.size ≤ 200 ∧ spec.points ≤ 2 ∧
@@ -358,10 +336,11 @@ theorem regMatchesTwo :
     ∀ x s Pt d, (code h).parse x = some s → (code h).partition s = some Pt → two h s = some d → InScopeTwo Pt d s →
       ∃ g l, reg h x = some g ∧ Spot.Slots.layout g.first.program g.first.query = .ok l ∧
         d.part = slotPartition l ∧ slotDesign g.first.rule g.first.program g.first.query g.first.table = .ok d.replay ∧
+        g.ns.size = Pt.strata.length ∧ (∀ t < Pt.strata.length, d.k.getD t 0 = g.ks.getD t 0) ∧
         ∀ ρ b, l.blocks[ρ]? = some b →
-          (b.unit = some ρ ∧ Set.InjOn (g.blockOf ρ) (Set.Iio g.n) ∧ ∃ t₀ < Pt.strata.length, d.k.getD t₀ 0 = g.k ∧
-            ∀ t, cell Pt d.part ρ t = if t = t₀ then (range g.n).image (g.blockOf ρ) else ∅) ∨
-          (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
+          (b.unit = some ρ ∧ ∀ t < Pt.strata.length, Set.InjOn (g.blockOf ρ t) (Set.Iio (g.ns.getD t 0)) ∧
+              cell Pt d.part ρ t = (range (g.ns.getD t 0)).image (g.blockOf ρ t)) ∨
+            (b.unit = none ∧ ∀ t, ∀ v ∈ cell Pt d.part ρ t, g.always v = true) := by
   intro x s Pt d hx hP hd _
   have hx' : parse h x = some s := hx
   have hP' : partition h s = some Pt := hP
@@ -398,7 +377,7 @@ theorem sessionsIn :
       · rename_i hs
         cases hv
         simp only [sessionOk, Bool.and_eq_true, beq_iff_eq] at hs
-        exact hs
+        exact hs.1.1
       · cases hv
         exact ⟨h.xS₀_ok, rfl⟩
     · cases hv

@@ -401,8 +401,10 @@ class Population:
         return CallMember(port, member, width, dtype, "tp_rank_partials")
 
     def step_of(self, cid: int) -> int:
-        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
-        return bisect.bisect_left(self.events, cid)
+        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends).  A check after
+        the last event (`ProgramView.check_cids`) closes the last step, as `fmt.segment_steps` has it."""
+        s = bisect.bisect_left(self.events, cid)
+        return s - 1 if s == len(self.events) and cid in self.P.check_cids else s
 
     def program_path(self, cid: int) -> str:
         """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx

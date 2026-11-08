@@ -5,7 +5,7 @@ The run's memory is its test processes at the largest worker_gb, one per CPU (su
 its `--jobs`; a run of many suites at no less than TEST_PROCESS_GB each, twice over, since suites.py holds half of it for the
 suites it runs serially. Its time, for named suites, is their timeouts one after another (an undeclared one's SUITE_TIMEOUT_S) plus SYNC_S
 for the environment's `uv sync`. A run of many suites, `--changed REV` (the suites the change touches, as suites.py's `--list`
-names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite, INF-98), runs them side by side
+names them) or none named (all of them; a change that deletes a pyproject.toml reruns every suite), runs them side by side
 on its jobs: its time is the list-scheduling bound, their times summed over the jobs plus the longest, with an undeclared suite at
 UNDECLARED_S, since at SUITE_TIMEOUT_S each the tree's 79 would ask for a day. Neither drops below the kind's own (AUTO_*). Only
 what a suite declares is used, so named suites that declare neither keep the kind's size, as does a name that matches none or
@@ -28,8 +28,8 @@ VALUED = {"--changed", "--skip", "--jobs", "-j", "--mem-gb", "--logs", "--json",
 #: suites.py's SUITE_TIMEOUT_S: an undeclared suite's bound
 SUITE_TIMEOUT_S = 3600
 SYNC_S = 600
-#: an undeclared suite's time in a run of many: vy-nebius-cpu-1's suites.py durations.json (8 Oct), 32 suites run whole, had a
-#: median of 45 s and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
+#: an undeclared suite's time in a run of many: a node's suites.py durations.json, 32 suites run whole, had a median of 45 s
+#: and a mean of 181 s; the slow ones (circuit-check's 63 min) declare their timeout_s
 UNDECLARED_S = 300
 #: suites.py's TEST_PROCESS_GB: what a test process of a suite that declares no worker_gb may reach
 TEST_PROCESS_GB = 9

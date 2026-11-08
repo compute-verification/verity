@@ -33,7 +33,7 @@ additive operand takes two values on two continuations from its coin.
 
 This witness tests no skip. No unit is skipped, so it shows the hypotheses can all hold of an honest run, not that a
 skipped, priced writer's cone is charged at its sample probability: every unit is good, nothing here charges a unit that
-isn't (`DrawnLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
+isn't (`SampledLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
 -/
 
 @[expose] public section
@@ -56,7 +56,7 @@ def nz (y : FCoins) : ℤ := nzb (fbit y)
 
 /-- Sample `i` on sample bit `b`: sample 2 names `glue` when `b` is set and `prod` when it isn't; sample `i` otherwise names
 unit `i`. -/
-def drawF (b : Bool) (i : Fin 4) : Fin 4 := if i = 2 ∧ b = false then 3 else i
+def sampleF (b : Bool) (i : Fin 4) : Fin 4 := if i = 2 ∧ b = false then 3 else i
 
 /-- Each unit's slots' positions: `chunk0` reads `0, 1` and writes `2`; `chunk1` reads `3, 4` and `2` (additively) and
 writes `5`; `glue` reads `5, 6` and writes `7`; `prod` reads `7, 8` and `6` and writes `9`. -/
@@ -98,21 +98,21 @@ def outF (u : Fin 1 × Fin 4) (v : Fin 5 → ℤ) (n : ℤ) (_ : Fin 5) : ℤ :=
 /-- A unit's receipt slot: its first output slot. -/
 def receiptF (u : Fin 1 × Fin 4) : Fin 5 := if u.2 = 1 then 3 else 2
 
-/-- The sampled layer: samples by `drawF`, every proof accepted, opening the honest values. -/
-def fdl : DrawnLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ where
-  draw := drawF
+/-- The sampled layer: samples by `sampleF`, every proof accepted, opening the honest values. -/
+def fdl : SampledLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ where
+  draw := sampleF
   pos _ := posF
   coin _ _ := 0
   cut := cutF
   src := srcF
   accepted _ _ _ := True
-  opened y w i k := hval (posF (drawF (coinAt y w).2 i) k) (nz y)
+  opened y w i k := hval (posF (sampleF (coinAt y w).2 i) k) (nz y)
   rel _ _ _ _ := True
   right _ _ _ _ := True
 
 /-- The word layer: each unit's words are its honest derivation at its committed slots. -/
 noncomputable def fpf : WordLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ ℤ ℤ where
-  toDrawnLayer := fdl
+  toSampledLayer := fdl
   role := roleF
   noise y _ := nz y
   words y u := prodF u (fun k => fdl.view y u.1 u.2 k.1) (nz y) + accF u (fun k => fdl.view y u.1 u.2 k.1)
@@ -147,12 +147,12 @@ def xt : FCoins := (((true, ()), false), ())
 def xf : FCoins := (((false, ()), false), ())
 
 /-- On either sample bit, the sampled proof blocks read every position. -/
-theorem read_all : ∀ ℓ : Fin 10, ∀ b : Bool, ∃ i : Fin 4, ∃ k : Fin 5, posF (drawF b i) k = ℓ := by decide
+theorem read_all : ∀ ℓ : Fin 10, ∀ b : Bool, ∃ i : Fin 4, ∃ k : Fin 5, posF (sampleF b i) k = ℓ := by decide
 
 theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ v = hval ℓ (nz y) := by
   constructor
   · rintro ⟨w, i, k, hp, -, rfl⟩
-    have hp' : posF (drawF (coinAt y w).2 i) k = ℓ := hp
+    have hp' : posF (sampleF (coinAt y w).2 i) k = ℓ := hp
     subst hp'
     rfl
   · rintro rfl
@@ -252,16 +252,16 @@ theorem writer_reads : fpf.WriterReads := by
   rintro ℓ ⟨w, j⟩ hs
   exact h ℓ w j hs
 
-theorem draw_fix (b : Bool) (i : Fin 4) (h : i ≠ 2) : drawF b i = i := by
-  unfold drawF
+theorem sample_fix (b : Bool) (i : Fin 4) (h : i ≠ 2) : sampleF b i = i := by
+  unfold sampleF
   exact ite_eq_right fun h' => h h'.1
 
 /-- Every unit but `glue` is always proved. -/
-theorem always_proved (v : Fin 1 × Fin 4) (h : v.2 ≠ 2) : fpf.AlwaysProved v := fun b => ⟨v.2, draw_fix b v.2 h⟩
+theorem always_proved (v : Fin 1 × Fin 4) (h : v.2 ≠ 2) : fpf.AlwaysProved v := fun b => ⟨v.2, sample_fix b v.2 h⟩
 
 /-- **`glue` is sampled**: no sample names it when the sample bit isn't set. -/
 theorem glue_sampled : ¬ fpf.AlwaysProved (0, 2) := fun h => by
-  have h2 : ∀ i : Fin 4, drawF false i ≠ 2 := by decide
+  have h2 : ∀ i : Fin 4, sampleF false i ≠ 2 := by decide
   obtain ⟨i, hi⟩ := h false
   exact h2 i hi
 
@@ -303,7 +303,7 @@ theorem cone_term (v : Fin 1 × Fin 4) :
 open Classical in
 /-- `glue`'s late cone weighs `1`, `prod`'s weight. -/
 theorem coneWt_glue : fpf.coneWt fwt (0, 2) ≤ 1 := by
-  unfold DrawnLayer.coneWt
+  unfold SampledLayer.coneWt
   calc (∑ v : Fin 1 × Fin 4, if Relation.ReflTransGen fpf.Late (0, 2) v then fwt v.1 v.2 else 0)
       ≤ ∑ v : Fin 1 × Fin 4, if v = (0, 3) then (1 : ℝ) else 0 := Finset.sum_le_sum fun v _ => cone_term v
     _ = 1 := by simp [Finset.sum_ite_eq']
@@ -313,8 +313,8 @@ theorem sum_fwt : ∑ j, fwt 0 j = 3 := by
   norm_num
 
 /-- Sample 2 lands on `glue` on half the sample bits. -/
-theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
-  have h : ∀ inst : DecidablePred (fun b : Bool => drawF b 2 = 2),
+theorem prob_glue : prob (fun b : Bool => sampleF b 2 = 2) = 1 / 2 := by
+  have h : ∀ inst : DecidablePred (fun b : Bool => sampleF b 2 = 2),
       (@Finset.filter _ _ inst Finset.univ).card = 1 := by
     intro inst
     rw [Finset.card_eq_one]
@@ -332,8 +332,8 @@ at most `1/2` of the mean round weight `N_w = 3` (one round). -/
 theorem priced_glue : fpf.Priced fwt (0, 2) := by
   refine ⟨2, ?_⟩
   show fpf.coneWt fwt (0, 2) ≤
-    prob (fun b : Bool => drawF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ))
-  have h : prob (fun b : Bool => drawF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ)) = 3 / 2 := by
+    prob (fun b : Bool => sampleF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ))
+  have h : prob (fun b : Bool => sampleF b 2 = 2) * ((∑ w : Fin 1, ∑ j, fwt w j) / ((1 : ℕ) : ℝ)) = 3 / 2 := by
     rw [prob_glue, Fin.sum_univ_one, sum_fwt]
     norm_num
   rw [h]
