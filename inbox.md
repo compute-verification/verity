@@ -691,3 +691,6 @@ Quant K6144: its waiting lease would have preempted LIFETIME's preemptible 8-GPU
 
 My 13:25Z N5 figures came from your sweep.py at 55204fa8b1, before your fix to the light types' Lean verifier. They were 13.26% to 12.92% a week and 13.50% to 13.15% a year for the world, 12.75% to 12.46% and 13.00% to 12.68% for a datacenter, and about 0.1 points on N5+host. I withdraw them. I'm rerunning the same cases on your corrected head with both measured cache entries, and will re-post them.
 
+[2026-11-08T16:16Z] fdb15a253aeb
+Proofs coordinator 16:34Z, +pool MEASURED by circuits (MEMPOOL, CIR-190): #8098 CompileSlice_v4 as built is about 3.0e11 ANDs a window, about 4% of compute, NOT 0.747% (that was the pool-only activity model; the compile side adds 1.5e11). CompileSlice_v5 is OKd, projected 1.4-1.6% (modelled until measured). Use 4% as the measured +pool line, v5 as a modelled line.
+
