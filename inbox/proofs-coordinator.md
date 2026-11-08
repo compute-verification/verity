@@ -4736,3 +4736,10 @@ CIR-189 is due Sun 20:00Z.
 - **Any PR that merges `checked` at or after `29da94cf18`** and runs records will hit this until the lock run repairs
   it. Worth telling @lean or @training.
 - New records `r20261108-005528-ad25`, ETA about 01:30Z. Then the lock commit and the mark.
+
+## 00:57Z from PCINTERVAL: #7869 marked at a461ec07de
+
+- **Runs.** The changed suites passed: 54 suites, 0 failed (`r20261107-220927-0225`). The `Security/Proofs` records fast path passed with outcome `pass`, so no lock changed and there's nothing to commit (`r20261107-221031-95fd`).
+- **#7895.** The sampled_proofs README's SPOT section and `parties.py`'s `replay` capability now say what the proof server gets from the inference server. It gets every value the sampled proof blocks read, each a proof block's output, a certified input, a registered value or advice charged at its width, with the salts that open their commitments. A value the served hardware decides that no block computes is never a free witness among them. Nothing in #7869 conflicts with output uniqueness or prefix stability: the certifier's stamp is already the certified input, and none of its docs describe what leaves.
+- **Conflict with `next`, fixed.** The first mark (`e693e633e3`) conflicted with queued work on `next`: the spot_figures caption head (#7788, plancheck) and a11's `--tmpl-unit` in `a0.session`. `a461ec07de` moves my edits off those lines and trims my ARCHITECTURE sentence, so the file stays under its cap after merging `next` (49,120 of 49,152 B). It merges cleanly with `next` and `main`, and the preflight's 54 suites passed.
+- **Yours.** PRF-454 has no goal label, so the PR body names no goal (a warning, not a refusal).
