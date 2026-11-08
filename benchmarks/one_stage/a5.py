@@ -378,8 +378,9 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
     (`Stream.deliver`) and its outcome (`Stream.outcome`, ``given`` its proved units, instances, served units and session
     roots) with the coins' evidence, whose audit record fails `run` unless the Lean verifier's whole run
     (`Run.run`, its window the TP run root) is the Python's; and `coins.coins_reason` (Python's
-    `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then each negative (`a5_coins.negatives`,
-    and the evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
+    `read_reason`) on the evidence, the audit record failing `coins` where it refuses. Then, unless the audit skips its
+    negatives (``a.skip_negatives``: each replays the whole registration), each negative (`a5_coins.negatives`, and the
+    evidence for another window) as its own stream's outcome on the honest sample's bytes (`a5_coins.Replay`), refused
     where `coins_reason` refuses and the Lean's run refuses at its select (`coins`). -> (the audit record, None for a late
     proof or an outcome the stream refuses or holds pending; the negatives; the coins' record)."""
     after, root = bytes.fromhex(R.digest(rec)), a.window_root
@@ -410,7 +411,8 @@ def coins_outcome(a: argparse.Namespace, stream: S.Stream, draw: S.Draw, counts:
         result = {**result, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None,
                   "checks": {**result["checks"], "coins": {"ok": False, "codes": ["coins"], "detail": {"coins": why}}}}
     neg: dict[str, dict] = {}
-    bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None else {}
+    skip = getattr(a, "skip_negatives", False)
+    bad = {**AC.negatives(ev, a.coins.pre()), "coins-for-another-window": ev} if ev is not None and not skip else {}
     for name, coins in bad.items():
         window = "00" * 64 if name == "coins-for-another-window" else root
         s, _ = stream_of(a, mine, members, want, leaf_layer, AC.Replay(read))
