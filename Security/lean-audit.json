@@ -5389,10 +5389,6 @@
    "type_hash": "33f7bf73bd890217a96e1f811c4fa5862df92ccec1ba47b063fff95e97ba8370",
    "unfolded_hash": "5911c876bdb85e99e59ec1e249e555a99c547e3b69fc489d1f0ef3062cfe7b8d"
   },
-  "Verity.SecurityProofs.Counting": {
-   "type_hash": "34e0729bbd40c2fd7311fc30725f7d8bb1f2fb2daed521891c0dada5afd70f77",
-   "unfolded_hash": "88fa52f61fef7f02904d16c11e272cc9653e4331267135f8623d04c78a38fa60"
-  },
   "Verity.SecurityProofs.CountingSum": {
    "type_hash": "1b2f164ab74dfac250ebe357db6363a1d52294716405d3ed10596cb21004e4ef",
    "unfolded_hash": "faac75ea5c4e1cf90e8fd6249ce694822c89421fd1f1b0c7a42a4027b412593e"
@@ -23823,11 +23819,29 @@
   },
   "Verity.SecurityProofs.Counting_honest": {
    "owner": "@lean",
-   "signature": ["Verity.SecurityProofs.Counting_honest : Verity.Guarantees.Counting_honest"]
+   "signature": ["Verity.SecurityProofs.Counting_honest : Verity.Guarantees.Counting_honest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "7321aa6ea229f2fa211727e357fd61d3ae7d34b47eeb77fce279a9528f404513",
+   "unfolded_hash": "e9cd1e718e6e28ca53a1efbe18c49c202e2b2898ec110ad08f370179460b4341"
   },
   "Verity.SecurityProofs.Counting_nontrivial": {
    "owner": "@lean",
-   "signature": ["Verity.SecurityProofs.Counting_nontrivial : Verity.Guarantees.Counting_nontrivial"]
+   "signature": ["Verity.SecurityProofs.Counting_nontrivial : Verity.Guarantees.Counting_nontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "9695bf3061efadffc4747a3c68527a1a1be90984ca7abd91eec9b9a8f2eb2801",
+   "unfolded_hash": "2fd29e9644f000074d94ee73fff717237b7ebd621013daf35d2befdfdca187ac"
   },
   "Verity.SecurityProofs.CreditSizeLe": {
    "owner": "@lean",
@@ -32239,12 +32253,15 @@
    }
   },
   "Definitions.Core.Formalism.Instances": {
-   "digest": "d80dcec458a5610648c178b08689f52d55a77d68165f51f3c90b213ad0b1a782",
+   "digest": "7fcfb139a616e3654ddb8a08c94d72664ca274bd91c6988f70854d67954b02bd",
    "definitions": {
     "Verity.Formalism.C": "8a872528c24d731e807fa4612cc25f415eff121cd554a96bb408c73a07dce85d",
     "Verity.Formalism.Counter": "d09eb9d04377a7e6f897915ebb0488a9276eaa4b897e82ae6ed63899dd966b65",
     "Verity.Formalism.Honest": "27efcdcba5aa5fee92314fdea2f2e1943cc9209eeee312a41a7779e406640be4",
-    "Verity.Formalism.d": "ee7e8ae03ddf4f651b0cceaa2d55c8a40201d1d23489d9ec6b6efa602734ba58"
+    "Verity.Formalism.counted": "bc6a474fa312a26460e08889c9d1c70258f786003ebbbff92b98002d78f9687d",
+    "Verity.Formalism.d": "ee7e8ae03ddf4f651b0cceaa2d55c8a40201d1d23489d9ec6b6efa602734ba58",
+    "Verity.Formalism.heavy": "67333f0decdb79d3e4fbddbb5ccf433407e622e6861fe7e41aaca928de8c5034",
+    "Verity.Formalism.weight": "a1e7a8e55295faeaa3aa8efbafb66203a7e9866f09324c8959177daeb897cee5"
    }
   },
   "Definitions.Core.Fp32": {
@@ -32428,10 +32445,12 @@
    }
   },
   "Definitions.Core.Guarantees.Formalism.Witnesses": {
-   "digest": "86831beac66d4006a72e1ae97986616aab2148b3af8afdcdd2fdee71c9da03d8",
+   "digest": "53ea1fa69b3534537db61b0ab454371fdf2adf5382457c5f85ac369f8145180c",
    "definitions": {
     "Verity.Guarantees.CKSize_honest": "07a924d841239e97761e0cb68b60865cf6e37d99df68e8830f938ca16529fe20",
-    "Verity.Guarantees.CKSize_nontrivial": "029c0a3984c25e7e074e1426c0f9ff0ed1d098be7fa2dfc944e2028d5e4445a9"
+    "Verity.Guarantees.CKSize_nontrivial": "029c0a3984c25e7e074e1426c0f9ff0ed1d098be7fa2dfc944e2028d5e4445a9",
+    "Verity.Guarantees.Counting_honest": "9979743032bf7051dff3ccd1348bdf38e5e53866e3c7a021d8064f26bde1f334",
+    "Verity.Guarantees.Counting_nontrivial": "271b93c7a09ca28704eafe42080e61eb8266c82e9b07f6f6ef4d3fff8492c3f3"
    }
   },
   "Definitions.Core.Guarantees.Game": {
