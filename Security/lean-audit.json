@@ -44937,9 +44937,9 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "24bced9849dfe312c5cd2049cc7d4e7d05d9c95e99264c4ac62d38c80a78afac",
+   "digest": "9a1e5f49e17a985e6076e539fa2e16e071b2490b69d9f03fe9a28ab47b77b945",
    "definitions": {
-    "Flock.Bridge.LiveAcceptsKSP": "37809f2a683eead9277e0b94e6b4e03eeecc54ce87ce47882c4b0139c79b87cd",
+    "Flock.Bridge.LiveAcceptsKSP": "ddcc86cf03014a67623db82ecc9436ea7a8c1794ef1a45f8bfc0f322c6cfaa02",
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
     "Flock.Guarantees.SampledKSLiveV5": "e19488d58e4d4efd7b29f80cc37fa284f2301c116aa9f90d5368a8fba1177a4c"
    }
