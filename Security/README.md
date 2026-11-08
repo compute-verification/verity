@@ -472,10 +472,11 @@ None of these is assumed silently; each would restate the conclusion:
 
 ## Three trees
 
-- `Definitions/` (package `security`, with `Models.lean`): the spec, the part a reader reads. Each area (`Core`, `Pouw`,
-  `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and its guarantee
-  statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on without proof,
-  are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open (The lock).
+- `Definitions/` (package `security`, its root `Definitions.lean`): the spec, the part a reader reads. Each area
+  (`Core`, `Pouw`, `Pous`, `NetworkCertifier`, `Accounting`, ...) has its vocabulary, its premises (`Assumptions`) and
+  its guarantee statements (`Guarantees`), each a `def G : Prop`. The real assumptions, the few the guarantees rest on
+  without proof, are declared in one module, `Definitions/Assumptions.lean`; a premise declared anywhere else is open
+  (The lock).
 - `Properties/` (package `security_properties`): statements about the code's Lean functions, the checks each protocol
   runs, one `Properties.<Protocol>` module per protocol.
 - `Proofs/` (package `security_proofs`): every proof, `<Area>.SecurityProofs.G : <Area>.Guarantees.G` for each
@@ -484,7 +485,7 @@ None of these is assumed silently; each would restate the conclusion:
 What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
+import, and its `trees` forbid a statement from reading, or a definitions or
 properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
@@ -509,10 +510,10 @@ when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record no longer matches the build.
+- a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
-A changed record means a guarantee now says something else. When one lands, the change is shown, the statement before
-and after and each changed definition with its source; nothing waits on it, and a guarantee that only moved shows none.
+A changed record means a guarantee now says something else. When one lands, the statement before and after is shown
+with each changed definition's source; nothing waits on it, and a guarantee that only moved shows none.
 
 ## The guarantees to read first
 
@@ -522,7 +523,7 @@ remote's three, each subprotocol's target a hypothesis until its own proof disch
 `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
-conditions it places on its inputs and setup, which the lock also lists, are left out.
+conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|

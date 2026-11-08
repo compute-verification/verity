@@ -214,7 +214,7 @@ command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
 # before the lease (never a probe connect: a challenger serves the first connection whose hello it accepts); none: in-process
 # (not certified)
 if [ -n "${POUW_CHALLENGER:-}${POUW_CHALLENGER_SESSION:-}" ] && { [ -z "${POUW_CHALLENGER:-}" ] || [ -z "${POUW_CHALLENGER_SESSION:-}" ]; }; then
-  echo "hb_served: NO_CHALLENGER: a challenger session is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
+  echo "hb_served: NO_CHALLENGER: a challenge phase is POUW_CHALLENGER and POUW_CHALLENGER_SESSION together"; exit 15
 fi
 ats=$(python3 -c 'import json, os; m = json.loads(os.environ.get("DITHER_CHALLENGERS") or "{}"); ok = isinstance(m, dict) and all(isinstance(v, dict) and {"address", "session"} <= set(v) <= {"address", "commitment", "rounds", "secret_file", "session"} and all(isinstance(x, str) and x for k, x in v.items() if k != "rounds") and type(v.get("rounds", 1)) is int and v.get("rounds", 1) > 0 for v in m.values()); print(*(v["address"] for v in m.values())) if ok else exit(1)') \
   || { echo "hb_served: NO_CHALLENGER: DITHER_CHALLENGERS is not {arm: {\"session\": ID, \"address\": HOST:PORT[, \"secret_file\": F][, \"commitment\": HEX][, \"rounds\": R]}}"; exit 15; }
