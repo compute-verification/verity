@@ -55,7 +55,7 @@ a5's records (``rank0/``, ``challenger/``, ``summary.json``); the warden's rows 
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/integrations/vllm \\
       python benchmarks/one_stage/a5_warden.py --run WARDEN_RUN --m0-pythonpath PATH --bin flock-circuit --lean flock-verify \\
-        --firewall flock-firewall --challenger local --main FILE [--altered | --made-for KIND] --out DIR
+        [--firewall flock-firewall] --challenger local --main FILE [--altered | --made-for KIND] --out DIR
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ from verity.core.protocols.certifier.active import DATA, HEADER  # noqa: E402
 from verity.core.protocols.certifier.certificate import Certificate  # noqa: E402
 from verity.core.protocols.certifier.grid import Record  # noqa: E402
 from verity.core.protocols.certifier.warden import END, WardenParams  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity_vllm.commit import index as IX  # noqa: E402
 from verity.ml.windows import rows as CS  # noqa: E402
 from verity_vllm.pipeline import serving_rows as SRW  # noqa: E402
@@ -429,7 +429,8 @@ def main(argv=None) -> int:
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True)
     ap.add_argument("--lean", required=True)
-    ap.add_argument("--firewall", required=True)
+    ap.add_argument("--firewall", help="a5.py's --firewall: the core protocols' path, every session behind the ZK server; "
+                    "without it each runs prove --zk itself, as SPOT[Flock]'s proof server does")
     ap.add_argument("--challenger", choices=["local"], required=True, help="draw on a local challenger session's coins")
     ap.add_argument("--main", required=True, help="the verifier's own `git rev-list --first-parent origin/main`")
     ap.add_argument("--altered", action="store_true", help="unit 0 of the ingress chunk reads its row one bit off, in its cell")

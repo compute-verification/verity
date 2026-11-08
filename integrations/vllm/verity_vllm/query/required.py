@@ -55,19 +55,18 @@ import functools
 import hashlib
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import reduce
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by, required_values
+from verity_vllm.query.units import Policy, RequiredValues, ValueRef, partition_by
 from verity_vllm.query.manifest import format as fmt
 from verity_vllm.program.sampling_event import GREEDY_SELECTS, SAMPLING_EVENT_FAMILIES
 from verity_vllm.correspondence.reader_for_query import CallName, Correspondence, runtime_rows
 from verity.ml.definitions import word as word_query
 from verity_vllm.query.collective_names import NORM_SITE_MEMBER, collective_sites, norm_sites
-from verity_vllm.query.module_body import (Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls,
-                                           module_body_boundary)
+from verity_vllm.query.module_body import Q_MODULE_BODY_ID, Q_MODULE_BODY_TEXT, Q_module_body_v1, boundary_without_literals, literal_calls
 from verity_vllm.query.program_view import CallView, InputView, Port, ProgramView, param_reads, reads_any_of
 
 __all__ = ["SAMPLING_EVENTS", "STOCHASTIC_SAMPLING_EVENTS", "collective_kind",
@@ -289,10 +288,12 @@ class Population:
         if self.world > 1:
             self._rank_partials()
         self.literals = literals = literal_calls(P)
-        self.B_module = B_module = module_body_boundary(P, corr, literals)
+        # a check is an output, not a required Value: nothing commits it, and the replay evaluates it from the Values that are required
+        returned = replace(P, outputs=tuple(v for v in P.outputs if v not in frozenset(P.checks))) if P.checks else P
+        self.B_module = B_module = boundary_without_literals(returned, Q_module_body_v1(P, corr), literals)
         if query == Q_WORD_ID:
             self.Q = partition_by(lambda c: c.id)
-            self.B = B = boundary_without_literals(P, self.Q, literals)
+            self.B = B = boundary_without_literals(returned, self.Q, literals)
         else:
             self.Q = Q_module_body_v1(P, corr)
             self.B = B = B_module
@@ -300,7 +301,7 @@ class Population:
         #: UNRETURNED: Calls whose Values no Call reads, the Program does not return and no policy below requires: nothing depends on
         #: them, so the word check skips them and the manifest lists their outputs (`unreturned_rows`).  A Call lowered to no runtime tensor
         #: (the DSA indexer's MQA logits and top-k while every key is selected) is neither return slot nor returned tensor either.
-        word_B = B if query == Q_WORD_ID else boundary_without_literals(P, partition_by(lambda c: c.id), literals)
+        word_B = B if query == Q_WORD_ID else boundary_without_literals(returned, partition_by(lambda c: c.id), literals)
         dead = [c.id for c in P.calls if c.id not in literals and not any(ValueRef(c.id, p.name) in word_B.values for p in c.port_table)]
         self.unreturned: frozenset[int] = frozenset(dead) & corr.tensorless
         protocol: set[ValueRef] = set()
@@ -400,8 +401,10 @@ class Population:
         return CallMember(port, member, width, dtype, "tp_rank_partials")
 
     def step_of(self, cid: int) -> int:
-        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends)."""
-        return bisect.bisect_left(self.events, cid)
+        """The step of a Call: the number of sampling events before it (the event itself belongs to the step it ends).  A check after
+        the last event (`ProgramView.check_cids`) closes the last step, as `fmt.segment_steps` has it."""
+        s = bisect.bisect_left(self.events, cid)
+        return s - 1 if s == len(self.events) and cid in self.P.check_cids else s
 
     def program_path(self, cid: int) -> str:
         """The Program module path the required Values of Call `cid` are spelt under: its site path for a collective SITE, `<module>/<fx
@@ -535,7 +538,7 @@ def query_header(profile: str, *, return_slots: bool, query: str = QUERY_OF_RECO
     """The manifest's query header; under Q_word, `partition` (`partition_of`) is the Program's `verity/partition/v1` object and digest,
     and `call_boundaries` says the manifest requires Values two Calls of one module body exchange."""
     word = query == Q_WORD_ID
-    text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + f"; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
+    text = (Q_WORD_TEXT if word else Q_MODULE_BODY_TEXT) + "; policy: prescribed = record-typed inputs (weights); protocol = sampling-event outputs" + \
         (" + recorded return slots + returned tensors (every Value of an fx node's output at a step once any of them crosses the module body boundary)"
          ", neither of which is a Call lowered to no runtime tensor whose Values nothing reads" if return_slots else "") + \
         "; unreturned = the Calls whose Values nothing reads, the Program does not return and the policy does not require, listed by identity" + \

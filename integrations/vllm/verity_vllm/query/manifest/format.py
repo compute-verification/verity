@@ -512,8 +512,8 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: parameter (static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
 
-#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
-#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: [DSV4] a TP rank Program's WITNESS input `schedule`, each Marlin align call's key per pair, read by `MoeAlignRanks_v1` only; no
+#: builder emits it any more (every Program keys the align by the pair indices, the served deterministic align's order).  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
 #: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
 #: committed ranks rank each expert's pairs), and the manifest names no identity for it.
 SCHEDULE_PARAM = "schedule"
@@ -546,15 +546,21 @@ def is_stochastic_select(family: str) -> bool:
     return is_token_select(family) and family.startswith(STOCHASTIC_SELECT_PREFIXES)
 
 
-def segment_steps(rows: list[dict]) -> list[tuple[int, int]]:
-    """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`)."""
+def segment_steps(rows: list[dict], checks: dict | None = None) -> list[tuple[int, int]]:
+    """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`).
+    The Program's checks after its last sampling event (`checks`: its instances header's, `at` their rows), which the runtime never
+    runs, close its last step."""
+    at = {int(a[0]) for a in (checks or {}).get("at") or ()}
     segs, lo = [], 0
     for r in rows:
         if is_token_select(spec_family(r["spec"])):
             segs.append((lo, r["i"]))
             lo = r["i"] + 1
     if lo < len(rows):
-        segs.append((lo, len(rows) - 1))                                          # trailing instances without a sampling event (padded wrapper)
+        if segs and all(int(r["i"]) in at for r in rows[lo:]):
+            segs[-1] = (segs[-1][0], len(rows) - 1)
+        else:
+            segs.append((lo, len(rows) - 1))                                      # trailing instances without a sampling event (padded wrapper)
     return segs
 
 

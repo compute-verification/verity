@@ -322,9 +322,9 @@ def test_a_restack_job_that_ends_with_no_result_runs_once_more_and_then_its_fail
     assert len(jobs) == 2, world.logs                             # the failure is cached: no job starts again
 
 
-def test_a_restack_job_whose_process_is_gone_with_no_exit_runs_once_more_and_leaves_nothing(world, monkeypatch, jobs):
-    """A restart of the pod leaves a job with no exit and no process: the next sync runs it once more and removes the lost
-    job's directories."""
+def test_a_restack_job_whose_process_is_gone_with_no_exit_runs_again_as_no_try_and_leaves_nothing(world, monkeypatch, jobs):
+    """A restart of the pod leaves a job with no exit and no process: the next sync runs it again, still its first try, and
+    removes the lost job's directories."""
     h = Review(world, monkeypatch, land_into="checked")
     _move_pr(world, 1)
     world.gh.put(2, head := world.change({"old_proto/x.py": "X = 2\n"}))
@@ -337,31 +337,63 @@ def test_a_restack_job_whose_process_is_gone_with_no_exit_runs_once_more_and_lea
     h.q.save_state(state)
     h.tick()
     assert [j.head for j in jobs] == [head, head] and world.on_next(h.q) == [1], world.logs
-    assert any(f"the restack of {head[:12]} across the move {_member(world, 1)[:12]} ended with no result (its process is gone "
-               "with no exit written" in x for x in world.logs), world.logs
+    assert any(f"the restack of {head[:12]} across the move {_member(world, 1)[:12]} was interrupted (its process is gone "
+               "with no exit written (a restart of the pod)); again, not counted as a try" in x for x in world.logs), world.logs
+    assert [j["tries"] for j in h.q.load_state()["restacking"].values()] == [1]
     assert not Path(lost["dir"]).exists() and not Path(lost["out"]).exists()
 
 
-@pytest.mark.parametrize("rc, log, results, said, how", [
-    (0, "", [{"status": "clean", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0"),
-    (0, "", [{"status": "up-to-date", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0"),
+def test_a_restack_job_sigint_or_sigterm_stopped_runs_again_as_no_try_so_a_stop_never_refuses_the_pr(world, monkeypatch, jobs):
+    """A job stopped by SIGTERM or SIGINT (an operator, drive's stop, the pod's shutdown) runs again as the same try, still
+    waiting since its first start: after two such stops a SIGKILL'd one still has its second try, a stop of that one keeps it
+    the second, and the restack that then ends lands the PR, which was never refused and whose owner was told nothing."""
+    h = Review(world, monkeypatch, land_into="checked")
+    _move_pr(world, 1)
+    world.gh.put(2, head := world.change({"old_proto/x.py": "X = 2\n"}))
+    h.tick()
+    move = _member(world, 1)
+    for n, (rc, log, tries) in enumerate([(143, "Terminated", 1), (130, "", 1), (137, "Killed", 2), (143, "Terminated", 2)]):
+        jobs[n].end(rc, log)
+        h.clock += 600
+        h.tick()
+        assert [j.head for j in jobs] == [head] * (n + 2) and world.on_next(h.q) == [1], world.logs
+        assert [j["tries"] for j in h.q.load_state()["restacking"].values()] == [tries], world.logs
+        st = h.q.status()
+        assert st[2].state == "waiting" and st[2].why.startswith(f"{RESTACKING} {move[:12]} ({MAP}) since 13:46 UTC"), st[2]
+    said = [x for x in world.logs if f"the restack of {head[:12]} across the move {move[:12]}" in x]
+    assert [x.split(f"{move[:12]} ", 1)[1] for x in said] == [
+        "was interrupted (exit 143: Terminated); again, not counted as a try",
+        "was interrupted (exit 130); again, not counted as a try",
+        "ended with no result (exit 137: Killed); once more",
+        "was interrupted (exit 143: Terminated); again, not counted as a try"], said
+    jobs[4].run()
+    h.tick()
+    assert world.on_next(h.q) == [1, 2] and not [p for p in h.posts if "#2" in p], (world.logs, h.posts)
+
+
+@pytest.mark.parametrize("rc, log, results, said, how, interrupted", [
+    (0, "", [{"status": "clean", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0", False),
+    (0, "", [{"status": "up-to-date", "result": "c0ffee"}], {"result": "c0ffee"}, "exit 0", False),
     (1, "a\nb", [{"status": "conflicted", "step": "moved", "files": ["a.py", "b.py"]}],
-     {"why": f"{Q.RESTACK} conflicts at its moved merge in a.py, b.py"}, "exit 1: a | b"),
+     {"why": f"{Q.RESTACK} conflicts at its moved merge in a.py, b.py"}, "exit 1: a | b", False),
     (1, "", [{"status": "based-after", "error": "based after the move\nmerge it as usual"}],
-     {"why": f"{Q.RESTACK}: based-after: based after the move"}, "exit 1"),
-    (0, "", None, None, "exit 0; its results don't read (JSONDecodeError: Expecting value: line 1 column 1 (char 0))"),
-    (137, "Killed", None, None, "exit 137: Killed"),
+     {"why": f"{Q.RESTACK}: based-after: based after the move"}, "exit 1", False),
+    (0, "", None, None, "exit 0; its results don't read (JSONDecodeError: Expecting value: line 1 column 1 (char 0))", False),
+    (137, "Killed", None, None, "exit 137: Killed", False),
+    (124, "", None, None, f"exit 124, stopped {Q.RESTACK_WAIT_S // 60} min after its start", False),
+    (143, "Terminated", None, None, "exit 143: Terminated", True),
+    (130, "", None, None, "exit 130", True),
 ])
-def test_a_restack_jobs_end_reads_as_the_sync_caches_it(tmp_path, rc, log, results, said, how):
-    """What `restack.py --json` said of its head, as a sync caches it ({result} or {why}), and how its job ended; its
-    directories removed."""
+def test_a_restack_jobs_end_reads_as_the_sync_caches_it(tmp_path, rc, log, results, said, how, interrupted):
+    """What `restack.py --json` said of its head, as a sync caches it ({result} or {why}), how its job ended, and whether
+    something else interrupted it (SIGTERM's or SIGINT's exit, not SIGKILL's or `timeout`'s own); its directories removed."""
     d, out = tmp_path / "job", tmp_path / "out"
     d.mkdir()
     out.mkdir()
     (d / "log").write_text(log)
     (d / "rc").write_text(f"{rc}\n")
     (out / Q.RESTACK_OUT).write_text("" if results is None else json.dumps(results))
-    assert Q.restack_end({"dir": str(d), "out": str(out), "pid": os.getpid(), "at": 0.0}, 0.0) == (said, how)
+    assert Q.restack_end({"dir": str(d), "out": str(out), "pid": os.getpid(), "at": 0.0}, 0.0) == (said, how, interrupted)
     assert not d.exists() and not out.exists()
 
 

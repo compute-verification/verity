@@ -57,6 +57,14 @@ theorem sessionOk_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (ho
     exact hok.1.2
   · exact absurd hok Bool.false_ne_true
 
+/-- **A session statement the run checks is in the scope Flock's soundness proof covers, with hidden outputs**
+(`sessionOk`'s scope check and hidden-outputs tag). -/
+theorem scoped_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+    FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true := by
+  have hs := sessionOk_of_stmtOk h hok
+  simp only [sessionOk, Bool.and_eq_true] at hs
+  exact ⟨hs.1.2, hs.2⟩
+
 /-- **The two-stage verifier's step structure**: a prefix of 3 rounds, then Flock's masked verifier at the round-2
 statement for `k₀ h` rounds; a refused prefix shows `xS₀`'s refused run. -/
 noncomputable def steps (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) :

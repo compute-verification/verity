@@ -89,9 +89,9 @@ check_item() {  # check_item KEY ITEM.json: exit 2 unless KEY is a key and ITEM 
 
 tp_of() { [[ $1 =~ __tp([12])__ ]] && echo "${BASH_REMATCH[1]}"; }
 
-# A row with 1024 input tokens or batch 32+ ran 20-120 min on node 1 by 3 Oct (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
-# TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (25 for node 2's 30-min gaps on 1 Oct) killed
-# cov-gm359 twice. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
+# A row with 1024 input tokens or batch 32+ runs 20-120 min on node 1 (gemma2-9b B8 67-76, qwen3-30b-a3b 44-54, qwen3-14b
+# TP2 B8 ~45), and a stop at max_min reruns it from the top, so VY_N2_COMMIT_MAX_MIN (sized for node 2's 30-min gaps) would kill
+# it every time. Such a row gets VY_N2_COMMIT_LONG_MAX_MIN (the fill runner's cap for a Commit guest, FILL_COMMIT_MAX_MIN), which
 # it starts only where no booked window is that close.
 commit_max_min() {  # commit_max_min ROW
   local b=0
@@ -154,8 +154,7 @@ EOF
 
 # A row's plans (plan/commit_plan.json, call_boundary_plan.json) carry the code identity of the job tree its Build ran
 # (commit_plan.key). A Commit from a job tree of other code derives both again, which node 1's leased Commit does before it takes a
-# GPU and a node 2 guest does with its GPU held: 5.0 of node 2's 9.2 idle Commit GPU-h in the 24 h to 2 Oct 16:30Z, every time
-# for that reason alone (cov-gm176 held GPU 6 for two 25-min leases at 0%, built before the 14:17Z redeploy). The key's other
+# GPU but a node 2 guest does with its GPU held, at 0% for as long as that takes (it can be whole leases). The key's other
 # fields are the row's own files, which go to node 2 unchanged; the code identity covers the workloads and the plans' schemas.
 plan_keyed() {  # plan_keyed JOB_TREE ROW_DIR: exit 0 when each plan in ROW_DIR is keyed to JOB_TREE's code, else 1 with the reason
   PYTHONPATH=$1/integrations/vllm:$1/tools/research/src "${VY_JOB_PY:-/workspace/jobs/venv312/bin/python}" - "$1" "$2" << 'EOF'
@@ -622,8 +621,8 @@ print(int(max(0, min(nom + bl - use, max(nom - use, idle)))))
 ' "${VY_N1_GPU_QUEUE:-deployments-gpu}"
 }
 
-# move each held Commit on a staged checkpoint to node 2 (node 2 first: top-level, 1 Oct 12:14 AM PDT, with node 2's GPUs idle and
-# its disk at 38%; VY_N2_FIRST=0 restores circuits' 30 Sep 7:24 PM rule, only while n1_free prints 0) while node 2 has fewer than
+# move each held Commit on a staged checkpoint to node 2 (node 2 first; with VY_N2_FIRST=0, only while n1_free prints 0) while
+# node 2 has fewer than
 # VY_N2_MAX_COMMITS Verity Commits queued; `offload --loop` repeats every VY_OFFLOAD_EVERY_S (unit vy-n2-commit-offload on node 1,
 # as research)
 offload() {

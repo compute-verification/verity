@@ -76,7 +76,7 @@ stratum's `k` at most its size, so those two hypotheses follow from the verifier
 neither: their sampling design is the verifier's own (`liveLaw`) and their bound the infimum over such assignments
 (`liveStrata_of_ofJson`: non-empty at an accepted sample file's sampling design). `drawOS_subset_escape_le`,
 `drawOS_stratified_escape_le` and `drawOS_work_escape_le` (`ExecDrawOS.lean`), **the live sample**:
-`Flock.Draw.drawWith` on the challenger's coins (`SampledProofs.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
+`Flock.Draw.drawWith` on the challenger's coins (`Spot.Draw.drawUnits`; `Flock.Draw.drawOS` is `drawWith` on
 `IO.getRandomBytes`, `drawOS_def`), extending a stream that runs out and rerunning, misses $B$ with probability at most
 the same acceptance probabilities, on a byte source that A3 makes uniform (`Assumptions.UniformRandomBytes`);
 `execOS_escape_le` and `execOS_subset_escape_le` state it for the live sample as a
@@ -193,21 +193,9 @@ $2^{-40}$ at $K = K_y = 27{,}713$ for a 0.1% share of either; `audit_window_spli
 split with y's floors, the sampling design the PoUW window runs (`PlanDraw.lean`). The product design assumes each call's sample is under a distinct
 context.
 
-**Theorems, two-stage** (`Audit/TwoStage.lean`):
-
-- `twoStage_profile`, variant (b), nested sampling: the profile over the coarse partition with the effective acceptance
-  probability
-  $e_{\text{eff}}(B) = \mathbb E_{S_1}\big[\prod_{u \in B \cap S_1} \max_{v \subseteq u}(1 - \pi_{L_2 u}(v))\big]$, with
-  $\varepsilon_{ks}$ and $\delta_{link}$ at the fine level;
-- `effAcceptProb_full`, `twoStage_full_profile`: **(b1) is one-stage over the coarse partition** ($e_{\text{eff}} = e_{L_1}$);
-- `effAcceptProb_bernoulli_prod`: with a Bernoulli first stage, $e_{\text{eff}}(B) = \prod_{u \in B}\big(1 - p + p\,m_u\big)$ for
-  any second stage, $m_u$ the largest second-stage acceptance probability inside $u$;
-- `Partition.two_stage_a_coarse`: **(a) is one-stage over the fine partition**, and its curve bounds coarse counts;
-- `Partition.Refines.exists_wrong_fine`: an incorrect coarse unit has an incorrect fine unit under every interior, the lemma
-  behind (b).
-- `Refines.oracle₂_profile`, `oracle₂_full_profile`: the same at the oracle layer, from a sound fine-level session
-  (`SessionSound₂ ε`), with the binding error zero. These are the plan's `two_stage_b_profile` and
-  `two_stage_full_eq_one_stage` as stated there.
+**Two-stage sampling** is stated in `Claims.SamplingTwo` and proved in `Proofs.Flock.SamplingGeneric.Two`
+(`Claims.SamplingGeneric.compilerKSTwo`), with its acceptance probability $\bar P_a$ at the footprint
+(`Claims.Sampling.Design.Two.Pa`). With a Bernoulli first stage, $\bar P_a$ is Partitioning's `NestedEscape` product.
 
 **Composition** (`Audit/Circuit.lean`): `compose` (every unit correct and the inputs anchored give the circuit's
 evaluation on every committed wire) and `compose_cone` (the same for a consumer's wires, from its cone alone).
@@ -226,8 +214,7 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   members;
 - `audit_influence`: $\Pr[\text{accept} \wedge \mathrm{out}_D(X) \notin \mathrm{influenceSet}] \le \delta +
   \varepsilon_{ks} + \delta_{link} + \delta_{in}$, so the prover's influence over what is delivered is
-  $\log_2 |\mathrm{influenceSet}|$ bits; `Refines.twoStage_influence` is the same over replay blocks, with $e_{\text{eff}}$
-  and the two-stage input hypothesis `AnchorsSound₂` (`Audit/TwoStage.lean`).
+  $\log_2 |\mathrm{influenceSet}|$ bits.
 - `card_influenceSet_le_harm` and `card_admissible_le`: that influence is at most $H + \log_2 \sum_{j \le K}
   \binom{n}{j}$ bits, for a harm bound $H$ (`IsHarmBound`, `Audit/Harm.lean`: the specification of core's `harm_bound`) with
   each unit's harm the width it adds to a separator, such as its exits (`card_exits_le`), and $\mathrm{miss}(K+1) <
@@ -237,32 +224,14 @@ circuit's other outputs, such as commitments and leaves, are not delivered. $K$ 
   at most $2^H \sum_{j \le K} \binom{n}{j} / |M| + \delta + \varepsilon_{ks} + \delta_{link} + \delta_{in}$; with
   $|M| = 2^\ell$, the first term is $2^{H + \log_2 \sum_{j \le K} \binom{n}{j} - \ell}$. `card_guess_le` is its counting
   step and `audit_exfiltration_influenceSet` its form over $|\mathrm{influenceSet}|$. Core's reading is
-  `verity.core.protocols.sampled_proofs.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
+  `verity.core.protocols.spot.consumers.exfiltration_bound`: `harm_bound` over output bits plus `location_bits`.
 - **Not vacuous** (`Audit/InfluenceWitness.lean`, the statement reviewer's witness): on a four-gate circuit,
   `W.lemma47` applies the influence cap to two different traces that both have an incorrect proof block, with a separator
   narrower than the unit's exits (`W.three_mem_exits`), and `W.count` bounds what they deliver by 2; `A.influence`
   meets `audit_influence`'s hypotheses at 0 on an audit that accepts with probability 1 (`A.accepts`); `Gen.harm_witness`
   meets `card_influenceSet_le_harm`'s on any partition and sampling design, with the exits as separators and each unit's
-  exported width as its harm.
-  `Two.influence` meets `Refines.twoStage_influence`'s, with `AnchorsSound₂`, on a two-stage audit that accepts with
-  probability 1 (`Two.accepts`), and `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
+  exported width as its harm; `Ex.exfil` meets `audit_exfiltration`'s eight hypotheses together, for a one-bit
   message.
-
-**Tightness and insecurity** (`Audit/Examples.lean`, on `K` chains of `nv` NOT gates, one coarse unit per chain and one
-fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates in the second stage and an ideal session):
-
-- `two_stage_b_tight`: for every first-stage sampling design, a prover whose chains are all incorrect is accepted with
-  probability exactly `twoStage_count`'s bound, $\mathbb E_{S_1}[q^{|S_1|}]$ with
-  $q = \binom{n_v - 1}{k_2}/\binom{n_v}{k_2} = 1 - k_2/n_v$;
-- `naive_two_level_unsound`: if the second stage leaves a gate unsampled and the first samples anything, that exceeds
-  $\mathrm{miss}_{L_1}(K)$, the bound that one-stage over the coarse partition (and the `m`-dependent reading of
-  the retired Python `TwoStageLaw.profile`, at $m = n_v$) would give. Nested sampling dilutes;
-- `late_interior_insecure`: with the interior committed after the fine sample (`twoStageLate`), an incorrect chain is accepted
-  with probability 1.
-
-- `effAcceptProb_bernoulli`: **(b2) is one-stage over the coarse partition, thinned.** With a Bernoulli($p$) first stage,
-  the effective acceptance probability of any set of chains is its acceptance probability under the one-stage
-  Bernoulli($p\,k_2/n_v$) sample, $(1 - p\,k_2/n_v)^{|B|}$ (`Law.bernoulli_escape`, `Law.bernoulli_avg_prod`).
 
 **The Flock instantiation, oracle layer** (`Audit/Flock.lean`, the only audit file that imports Flock's theorems):
 
@@ -275,9 +244,6 @@ fine unit per gate, with a uniform `k₂`-subset of each sampled chain's gates i
   and $\binom{n-K}{k}/\binom{n}{k} + 2^{-205}$ for the uniform $k$-subset;
 - `flock_oracle_drawn`: sampled proof blocks correct up to $2^{-205}$;
 - `flock_oracle_cone`: a consumer's wires $T$, $\max_{u \in \mathrm{cone}(T)}(1 - \pi_u) + 2 \cdot 2^{-205}$.
-
-- `flock_two_stage_sound`, `flock_two_stage_full_profile`: **two-stage (b1) on Flock** is one-stage over the coarse
-  partition, $\sup_{B \in \mathcal B} e_{L_1}(B) + 2^{-205}$, given the fine partition's lowering.
 
 The hypotheses are the lowerings.
 

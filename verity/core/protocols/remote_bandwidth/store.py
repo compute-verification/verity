@@ -1,10 +1,10 @@
 """A registered store bound to a pinned model: what a pinned BF16 checkpoint alone fixes, so the verifier recomputes the
 payload root the prover's hello must carry and refuses any other (`Binding`), in the tree whose git hash names the
 verifier a period's circuit commits to (`verity/remote-bandwidth/v0 verifier tree <tree>`,
-`sampled_proofs.challenger.credited_session`). The decision from what the files hold is Lean's
+`spot.challenger.credited_session`). The decision from what the files hold is Lean's
 (`lean/RemoteAudit/Store.lean`), which decides a session's `bound`: the verifier's Lean process takes the pin's bytes
 and the weights chunks' digests at startup (`bind`) and decides each hello (`hold`), `Binding` beside it as the
-reference, a disagreement refusing the hello (`benchmarks/remote_session/verifier.py`). This is held to it by
+reference, a disagreement refusing the hello (`verity/core/protocols/remote_bandwidth/session/verifier.py`). This is held to it by
 `lean/tests/test_binding.py`: the pin from its file's bytes (`pin_of`, `model_pin`), `checkpoint_sha512`, `store_salt`,
 `expected_root` from the weights chunks' digests, and `Binding`'s start and `hold`. Reading the files (`check`,
 `tensors`, `weight_digests`) and the arena's layout (`arena`) are Python only (`README.md`, "Which side is the

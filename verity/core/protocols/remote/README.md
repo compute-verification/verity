@@ -25,7 +25,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   (`Security/Definitions/Accounting/Remote.lean`) and `Accounting.Guarantees.Remote*`, its id `verity/remote-bandwidth/v0`,
   its whole-node benchmark `benchmarks/remote_session/`, and serve-openai's `--remote-verifier`, the address of PoUB's
   verifier;
-- `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
+- `RemoteChallenger` (`verity/core/protocols/spot/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
 - the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
   `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
@@ -56,7 +56,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 
 | Subprotocol | What it establishes | Lean check | id |
 |---|---|---|---|
-| Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
+| Sampled proofs ([README](../spot/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`verity/core/service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../pouw/README.md)) | the period's credited work, in live words, is the registered circuit's: its windows credited all or nothing | `PouwCheck.Period.protocol` (`verity/core/protocols/pouw/lean/check`), onsite's work subprotocol too | `verity/pouw/period/v1` |
 | The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`verity/core/protocols/network/nci/lean`) | `verity/inference-only/v0` |
 
@@ -99,7 +99,7 @@ rejects remote unless it rejects already. Its executable is `remote id | check P
    undecided, and it accepts if every subprotocol accepts and it binds. On accept, it publishes each subprotocol's public
    outputs.
 5. **Accounting**, per monitoring period. The accepted verification phases' bounds pool over the monitoring period
-   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod`
+   (`Flock.Guarantees.IntegrityHorizon` for sampled proofs, `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod`
    for PoUW), and the overhead calculator turns them into overhead (see Results).
 
 ## The security argument, end to end
@@ -142,7 +142,7 @@ else is a theorem or a named gap.
 
 | Kind | Assumption | Lean | How it's tested, or why it's believed |
 |---|---|---|---|
-| Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`TableCRZAt`, `LinkCRZC`, `RowsCRZC`); the hiding commitments' gap | Standard; no attack known. |
+| Cryptography | SHA-512 is collision resistant, and the commitments hide their values. | `cr/sha-512`, `ecr/sha-512` (`SHA512CRStrict`, `SHA512CRExpected`, at the finders `TableCRZAt`, `LinkCRZCAt`); the hiding commitments' gap | Standard; no attack known. |
 | The auditor's devices | The challenger runs on a host the developer doesn't control, its coins are uniform, and they reach the developer only after the commitment. | `Verity.Assumptions.TrustedHost`, `RecordCustodyZKJ`, `UniformRandomBytes`; `CoinsConfidential` (prose only) | Inspect the deployment: where the challenger runs, and its coin path. |
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
@@ -198,8 +198,9 @@ doesn't read); its coins
 reach the developer only after the commitment (`CoinsConfidential`, in prose only).
 
 **Lean.** `Flock.Guarantees.SampledKSLiveV3`, **proved**. It states its own sampling relation; it doesn't take part 1's
-theorem as a hypothesis. It takes the session files' forms as preconditions; the theorem v2's refusals are meant to
-meet, V3 with those preconditions discharged by what `verify --zk` refuses, is not stated yet.
+theorem as a hypothesis. It takes that the session's files parse and the public file has no shared rows; it reads
+the statement's scope, its tags and the draw off acceptance, since `verify --zk` refuses a session outside them
+(`Flock.KsScope.check`).
 
 ### 3. The audit of each verification phase
 
@@ -212,7 +213,7 @@ the whole, and nothing is retried.
 
 - the proof system is sound against the window's check (`Properties.Pouw.PeriodJ10R.TileServiceSound`), a named
   assumption no theorem discharges yet;
-- the published sample is the tile stratum's sample at the coin (`TileDrawIsCoin`), and registration precedes the
+- the published sample is the tile stratum's sample at the coin (`TileSampleIsCoin`), and registration precedes the
   sample (`RegisteredBeforeDraw`);
 - the salt is a live coin (`SaltIsLiveCoin`), which the deployed path doesn't meet;
 - PoUW's per-step receipts bind (`SharedNoiseLucks`: H-μ⁺ with the receipts' and guesses' lucks at J10-R's shared
@@ -224,7 +225,7 @@ The time credit adds the data sheet's rates.
 
 - Remote's rule, the composition's product rule `check`: `Properties.Composition.AcceptMeans`, **proved**. What it
   accepts fits its subprotocols, each accepts its own case, and the commitment binds their digests.
-- Sampled proofs: `Properties.SampledProofs.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
+- Sampled proofs: `Properties.Spot.AcceptMeans`, **proved**, covers `OneStage.check`, where remote's one-stage
   form (v2) ends, on its own run's verdicts.
 - PoUW's period credit: `Properties.Pouw.PeriodJ10R.H1J10RCheckedCreditPeriod`, `CheckedCreditPeriod`'s conclusion
   at `PouwCheck.Credit.window`'s verdict over J10-R's tile stratum, the guarantee `PouwCheck.Period.protocol` names
@@ -302,7 +303,7 @@ total is 2⁻⁴⁰ + n·(δ_bind + δ_ks): for a year's total below 1%, δ_bind
 **Assumes.** Parts 1 to 4's assumptions.
 
 **Lean.** `Accounting.Guarantees.JointHorizonLive` (onsite's five audits in one adaptive game; the inference-only policy is not among them), `Flock.Guarantees.IntegrityHorizon`
-(sampled proofs) and `Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
+(sampled proofs) and `Accounting.Guarantees.ComposeMonitoringPeriod.CircuitCreditPeriod` (PoUW): **proved**. `JointHorizonLive`
 takes per-period guarantees as hypotheses; no theorem yet instantiates it with parts 2 and 3.
 
 ### 6. The slowdown bound
@@ -385,8 +386,8 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 
 | Piece | Lean declaration | Lock | End to end |
 |---|---|---|---|
-| Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
-| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
+| Sampled proofs' accept rule | `Properties.Spot.AcceptMeans` (`Security/Properties/Spot.lean`; proof `acceptMeans`) | **proved** | — |
+| A Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the sample catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/ScopeGate.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
 | The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
 | The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the sample missing `m` incorrect proof blocks with probability at most `(1 − q)^m` and a sampled incorrect proof block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
@@ -415,7 +416,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
   the proof check (`verity verify proof`, today's `flock-verify --zk`) itself, and the recursive form runs V*'s
   compiled check; v1, which takes the verdicts as evidence, is refused. No Lean statement yet carries v2's acceptance
   to `SampledKSLiveV3`'s event.
-- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileDrawIsCoin`
+- **PoUW's deployed path.** It meets neither `SaltIsLiveCoin`, the roots' binding nor `AcceptedLive`; `TileSampleIsCoin`
   is an unproved code fact.
 - **The pooled δ.** δ_ks and δ_bind have no number, so PoUW's failure over a monitoring period has none either.
 - **The inference-only policy's link to the bound** (part 4, links 1, 2, 5 and 6): the policy composed into remote,
@@ -457,15 +458,15 @@ Sampled proofs (`benchmarks/prove_path/README.md`, "What an accepted audit means
 - `FlockSoundness.Assumptions.Zk.RecordCustodyZKJ` (`live-verifier`): the record the verifier reads is the one the
   challenger wrote for the live run, and its sample file is the verifier's own sample.
 - `Verity.Recursive.LiveCoins` (`live-verifier`), in the recursive form: each part's record holds the live run's coins.
-- `FlockSoundness.Assumptions.TableCRZAt` (`cr/sha-512`) and `FlockSoundness.Discharge.ZkLink.LinkCRZC`
-  (`ecr/sha-512`): SHA-512 is collision resistant for the prover's table and link finders. The lock names the table
-  finders' assumption `TableCRZAt`; the statement reads it through its abbreviation `TableCRZ`.
+- `FlockSoundness.Assumptions.SHA512CRStrict` (`cr/sha-512`) and `FlockSoundness.Assumptions.SHA512CRExpected`
+  (`ecr/sha-512`), in `Definitions/Assumptions/Flock.lean`: SHA-512 is collision resistant, taken at the prover's
+  table and link finders as `TableCRZAt` and `LinkCRZCAt`.
 - `trusted-host` (`Verity.Assumptions.TrustedHost`, `Security/Definitions/Core/Assumptions.lean`): the challenger is
   the auditor's device on a host the developer doesn't control, and the custody above rests on it; the verifier runs
   on an auditor host too. In Lean, only onsite's guarantees (network certification's) read `TrustedHost` itself.
 - `CoinsConfidential`: the challenger's coins reach the developer's machine only over paths the auditor's hosts
   control, and only after the commitment. A premise about where the challenger runs, stated in prose in
-  `verity/core/protocols/sampled_proofs/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
+  `verity/core/protocols/spot/README.md` and not yet in Lean: no `.lean` file defines it, and no guarantee takes
   it as a hypothesis. (Its companion `OneClock` ties the challenger's clock to onsite's network certifiers; remote has
   none.)
 
@@ -473,7 +474,7 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
 
 - `Properties.Pouw.PeriodJ10R.TileServiceSound`: the proof system is sound against `Credit.window` at each sampled
   proof block, Flock's soundness under live coins. It is a named assumption: no theorem discharges it yet.
-- `Properties.Pouw.PeriodJ10R.TileDrawIsCoin`: on every accepted window, the proof blocks the check demands proofs of
+- `Properties.Pouw.PeriodJ10R.TileSampleIsCoin`: on every accepted window, the proof blocks the check demands proofs of
   are the tile stratum's sample at the window's coin. A protocol-code fact still to prove.
 - `Properties.Pouw.PeriodJ10R.RegisteredBeforeDraw`: each window's registration is fixed before its sampling coin. It
   states the order only, and the binding it is used for also needs the rows committed by the registration, which the

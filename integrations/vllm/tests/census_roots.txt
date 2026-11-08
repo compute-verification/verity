@@ -33,13 +33,14 @@ verity_vllm/ops/pod_gate.sh
 # --- Python entry points
 verity_vllm.pipeline.research_tools
 verity_vllm.pipeline.cli
-verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`), called by tools/train_step_census.py
+verity_vllm.program.frontend.train_step      # a training step as a Program: a library entry point (`step_program`, `step_report`, `primitives`), called by tools/train_step_census.py and benchmarks/training_slowdown/grader
 verity_vllm.program.predict.steps      # I2, the compiler: a library entry point (`compile_steps`), called from outside the package
 verity_vllm.program.predict.window_circuit      # the window class circuit: a library entry point (`window_circuit`), called by benchmarks/prove_path (window-circuit, class-size)
 verity_vllm/pipeline/advice_code/      # advice v1, the network certifier's code: a library entry point, read by benchmarks/network_e2e and through Registered.code by predict.steps
 verity_vllm.program.predict.window_rows      # a window's rows: a library entry point (`Rows`, `weight_values`), for benchmarks/prove_path's window-commit
 verity_vllm.program.predict.window_weights      # the window circuit's weights: a library entry point (the committer's `weights_registration`, the verifier's `weights_record` and `registration_pins`), called from outside the package
 verity_vllm.program.predict.inference_blocks      # B's partition of a window circuit into inference blocks: a library entry point (`commit`, with `records.inference_blocks` its public statement), for the window commit and the network certifier's audit
+verity_vllm.program.predict.step_needs      # one served engine step's needs: a library entry point (`StepNeeds`, `workload_phi`), for benchmarks/route_capture's gap
 verity_vllm.properties.fa_tap_exactness
 verity_vllm.properties.norm_tap_exactness
 verity_vllm.properties.router_tap_exactness
@@ -91,7 +92,7 @@ verity_vllm.protocols.pouw.pearl_c.manifest
 verity_vllm.protocols.pouw.pearl_c.screen
 verity_vllm.protocols.pouw.pearl_c.screen_kernels
 verity_vllm.protocols.pouw.pearl_c.whole
-verity_vllm.protocols.sampled_proofs
+verity_vllm.protocols.spot
 tests/regression/
 verity_vllm/protocols/remote_bandwidth/      # the node's store, imported by the protocol driver and the benchmarks (benchmarks/vllm_hooks)
 verity_vllm.program.predict.batch      # the compiler's batch-invariance templates and rule, imported by circuit-check --batch

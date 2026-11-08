@@ -1,6 +1,6 @@
 """PoUB's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
-are one epoch of `sampled_proofs.challenger`'s live coins, flipped and committed by the challenger before the session, on
-its own host when it is remote (`sampled_proofs.remote`), each opened once, after the root the verifier recorded, and
+are one epoch of `spot.challenger`'s live coins, flipped and committed by the challenger before the session, on
+its own host when it is remote (`spot.remote`), each opened once, after the root the verifier recorded, and
 their commitment released to the prover only at the session's end.
 
 ~~~text
@@ -49,8 +49,8 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.core.protocols.sampled_proofs import remote
-from verity.core.protocols.sampled_proofs.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
+from verity.core.protocols.spot import remote
+from verity.core.protocols.spot.challenger import (ChallengerKey, CoinError, LiveChallenger, LiveCommitment,
                                                              LiveOpening, LiveRecord, Verify, ledger_head, live_reason,
                                                              order_reason, pinned_session, record_many)
 from verity.ml.commitments.scheme import DIGEST_BYTES

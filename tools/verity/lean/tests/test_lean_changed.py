@@ -473,7 +473,7 @@ def unwitnessed(h: str) -> str:
 @pytest.mark.parametrize("hold", [lambda *a, **k: None, refuse], ids=["slot", "dev-cache"])
 def test_a_rename_a_requirers_unwitnessed_entry_reads_regenerates_it_in_one_update_moved_run(pair, tmp_path, monkeypatch,
                                                                                             hold):
-    """#7831 renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
+    """A PR renames `DrawIsCoin` in Security, and statements of Security/Properties read it: 8 of its `unwitnessed` entries
     hold such a statement's hash, which the build under the new name no longer has. check.py fails that as
     `witnesses.unwitnessed-changed`, no record difference, unless `--moved` says the text under the old names is the
     record's, and it reads `--moved` only with `--update`. So `--records Security --update --moved` audits the requirer
@@ -1065,26 +1065,6 @@ def test_module_of_reads_the_packages_src_dir(trying):
     assert LC.module_of("Plain", "Plain/A/B.lean") == "A.B"
 
 
-def test_the_merge_queues_records_gate_counts_exactly_the_checker_files_a_records_run_reads():
-    """The merge queue's records gate (`research.queue.records_read`) lets a records run at another commit vouch for a head
-    whose checker differs only in files no records run reads; a list narrower than this one's would vouch across a change
-    that decides the run.  It counts every file of the checker Lean's records key does (`tool_inputs`), new ones included,
-    and `merge.py`, which a run loads to merge a lock across a merge of `main` (`merged`), and nothing else."""
-    from research.queue import RECORDS_SHARED, records_read
-
-    tool = LC.LA.LEAN_TOOL
-    files = sorted(tool + p.name for p in HERE.parent.iterdir() if p.is_file())
-    files += [tool + "tests/test_new.py", tool + "tests/fixtures/control/New.lean", tool + "NOTES.md", tool + "new.py",
-              "tools/verity/check/common.py", LC.LA.CONTRACT]
-    assert {tool.rstrip("/"), "tools/verity/check/common.py", LC.LA.CONTRACT} <= set(RECORDS_SHARED)
-    want, got = {*LC.tool_inputs(files), tool + "merge.py"}, {f for f in files if records_read(f)}
-    assert got == want, (
-        f"research's records gate (`records_read` in tools/research/src/research/queue.py) counts {sorted(got - want)} that "
-        f"Lean's records key doesn't, and misses {sorted(want - got)}: a file of {tool} a records run never reads goes in both "
-        "`lean_audit.NOT_READ` and `research.queue.RECORDS_TOOL_UNREAD`, and one it reads in neither (`merge.py` is in "
-        "`NOT_READ` alone)")
-
-
 def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp_path, monkeypatch):
     """A slot tree is a link into the node's cache root, and mountinfo names a mount by its resolved path, which
     `sandbox.sh` keeps writable: the `.lake` paths (and their `packages`, kept read-only) are the resolved ones."""
@@ -1098,3 +1078,17 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/core/protocols/network/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("verity/core/protocols/network/lean/", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network/lean", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []

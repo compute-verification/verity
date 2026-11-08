@@ -9,7 +9,7 @@ order of every frame are fixed by the declared Program.
 - **Trust.** The certifier is auditor-trusted: it runs on a host the developer doesn't control, and the auditor trusts it
   to run the grid and to sign what it ran. That trust, with the custody of its keys and of its LMS leaf state, is the
   named assumption `trusted-host`. The challenger's live coins reach it on two more premises, named in
-  `verity/core/protocols/sampled_proofs/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
+  `verity/core/protocols/spot/README.md`, with the coins' path in `benchmarks/live_challenger/auditor.py`:
   `CoinsConfidential`, stated as `Pouw.Assumptions.CoinsConfidential`
   (`Security/Definitions/Pouw/Assumptions/Dither.lean`: a replica's coins reach no machine outside the certifier's
   boundary before it has them), and `OneClock` (the challenger's release times and the certifier's ingress ticks are
@@ -169,7 +169,7 @@ on the signature's unforgeability, and on an honest certifier.
 ## Through the proof system (`service`)
 
 One execution phase's certificates are registered through the proof system
-(`verity.core.protocols.sampled_proofs.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
+(`verity.core.protocols.spot.service`) as a `Spec` of its own (`service.LinkWindows`, one per link):
 - **Committed:** one value, `certificates`, of four leaves: the execution phase's egress and ingress certified records,
   leaves 0 and 1, each `hm96-sha512/row/v2` over `service.encode` (the head, the certifier's salt, then the
   certificate), and their heads,
@@ -368,6 +368,112 @@ the record's own, at most r_in a bucket, as on any end without a profile. What i
 (the salt frame's place among them is the salt audit's, which takes it only first in bucket 0, `check_salts`), and
 the premises, which nothing checks.
 
+## The egress record
+
+Everything that leaves the network certifier toward a client is part of y, the output that AGENTS.md's output
+accounting needs explained, certified or charged. For a certified request, what leaves is its record and nothing else.
+The record is the I/O tie's cell form (`io_tie`), so the gate that enforces its form and the tie that checks its content
+read the same cells.
+
+**The record.** Request q is admitted at bucket s_q and has n outputs. Its record is:
+- n `DATA` cells. Cell i is byte-equal to `io_tie.data_cell(id_i, q, B)`: the header (`DATA`, q, P = B − 9), a fixed
+  head (`data: {"object":"chat.completion.chunk","created":0,"model":"verity","choices":[{"index":0,"token_id":`), the
+  id right-aligned in 10 decimal characters, a fixed tail (`,"finish_reason":null}]}`), spaces to P, and a blank line.
+- one `END`, cell n, byte-equal to `io_tie.end_cell(q, B)`: `TRAILER` (`data: [DONE]` and a blank line), then zero
+  fill.
+- `PAD` cells elsewhere: a `PAD` on q in each of q's slots before s_q + D and in the rest of its `END`'s bucket, and B zero
+  bytes (a `PAD` on stream 0) in a slot no connection holds.
+
+Cell i goes out at bucket s_q + D + ⌊i / r⌋, slot i mod r, as the network certifier's schedule puts every egress cell
+(`warden.py`'s docstring), so each cell's bucket is a function of the admissions, which are in x, and the counts.
+
+No HTTP head, response id, `created` time, usage block, logprobs or chunk boundary leaves. Every byte of a cell but q
+and the id is the template's.
+
+The finish reason isn't sent: each event's is the template's `null`, and the `END` sits at cell n. The stop rule derives
+the finish from the ids, the certified request and the registered model (`stop_rule` in
+`benchmarks/network_e2e/encodings/derived.py`): `eos` when the last id is a registered stop id, `length` at
+`max_tokens` or the model's length.
+
+`io_tie.parse_cell` gives a cell at most one reading (`PAD` or `END` on its stream, or `DATA` on its stream with its id)
+and gives no reading to any other bytes. An id has one spelling (spaces, then digits with no leading zero), so no
+encoding choice carries a bit.
+
+A connection that fails sends one `FAIL` in place of its next cell, and its reason goes to the `fails` record, never to
+the wire. The leak bound charges that log2(`egress_cells` + 1) bits per failed connection ("The active network
+certifier"), and it charges a `format` failure the same.
+
+**Enforcement, in two layers.**
+1. **At the network certifier, on every cell, deterministically.** The certifier releases a `DATA` or `END` cell only if
+   `io_tie.parse_cell` reads it. Any other cell fails the connection: `FAIL`, with reason `format` in the `fails`
+   record.
+   - Stripping means refusing; the certifier never rewrites. A rewrite would hide the server's departure from the
+     record, and would make the certifier parse the server's JSON.
+   - With one fixed byte grammar (`IoTieCell`'s reference), the certifier stays a relay of one cell form. The gate is one
+     `parse_cell` check in `warden.Warden._egress`, where it cuts a `DATA` or `END` cell.
+2. **In the audit.** The I/O tie holds every released cell to the map: its kind, its stream, and an `END` or `PAD` at its
+   slot. It holds each `DATA` cell's id to the Commit's sampled id at the map's port entry ("The I/O tie"). That is the
+   egress half of explanation: y's ids are the circuit's outputs.
+   - Whether the Commit's id is the one the circuit computes is SPOT's sampled audit of the served blocks. A wrong id
+     from an unsampled block is a wrong block, and is charged.
+
+**Either side of the network certifier.**
+- **The server's side.** What makes the id form from the engine's output is the prover's, and isn't trusted. It
+  needn't be, because the gate refuses every other form and the tie checks the ids. An example is serve-openai's
+  `--protocol ids`, `IdsProtocol` in `integrations/vllm/verity_vllm/pipeline/serve_protocol.py`.
+- **The client's side.** A client's shim may rebuild OpenAI fields from the record by a public rule:
+  - a response id from the run and the stream;
+  - `created` from the request's release bucket;
+  - usage from the counts: the certified prompt's ids and n.
+
+  Those bytes are made after the network certifier and never cross it.
+
+**Refused.** Any field not in the record: logprobs, n > 1, tool calls, stop strings, error bodies, and every header.
+None of them has a place in a cell, so a response that carries one fails the gate, and the run fails visibly instead
+of leaking it.
+- A request that asks for one isn't an id request: `active.id_request` fixes every field an id request carries.
+- serve-openai answers such a request in vLLM's framing, which fails at its first cell.
+
+**The OpenAI server's fields.** Every field vLLM's OpenAI-compatible server emits falls into one of four classes:
+- a circuit output, which the tie checks;
+- derived: a public function of the record, the certified request and registered data;
+- client-rebuilt: a server choice that no rule recomputes, which a client's shim may remake by a public rule;
+- refused: it has no place in the record.
+
+| Field | Class | In the record |
+|---|---|---|
+| the sampled ids (`token_ids`) | circuit output | each in its `DATA` cell, held to the Commit by the tie |
+| `text` | derived: the ids through the registered tokenizer | none |
+| `finish_reason`, `stop_reason` | derived: the stop rule | the template's `null`; the `END` at cell n |
+| `usage` (prompt, completion and total tokens) | derived: the certified prompt's id count and n | none |
+| `prompt_token_ids` | derived: the certified request | none |
+| `object`, `model`, `choices[].index` | derived: constants | the template's `chat.completion.chunk`, `verity` and 0 |
+| `data: [DONE]` | derived: a constant | the `END` cell's `TRAILER` |
+| chunk boundaries and timing | derived: the schedule | one cell a token, at s_q + D + ⌊i / r⌋ |
+| the response `id` | client-rebuilt: the server's is a random id | none |
+| `created` | client-rebuilt: the server's clock | the template's 0 |
+| `logprobs`, `prompt_logprobs`, `echo` | refused: values inside the circuit, a direct channel on the weights | none |
+| `routed_experts`, `metrics`, `cached_tokens` | refused: model internals, timing and cache state | none |
+| `system_fingerprint`, `service_tier`, transfer parameters | refused | none |
+| tool calls; n > 1 | refused | none |
+| error events and error bodies | refused: free text | none; the gate fails the connection |
+| the HTTP status line and headers (`date`, `server`, `content-type`, request ids, load metrics), chunk sizes, keep-alives | refused | none: no HTTP head leaves |
+
+**Not yet true.**
+- The format gate isn't written. `warden.Warden._egress` cuts the server's bytes into cells without reading them, and
+  `warden.REASONS` has no `format`. The reasons are in the parameters' digest, so the gate changes the network
+  certifier's parameters.
+- The I/O tie is a prototype on a fake upstream: in no Spec, unproved, and with the real port, vLLM's Commit, not wired
+  to it. Its Lean is to be the egress half of the explanation premise of the composed weight-security theorem.
+- No proof block checks the stop rule yet. Advice v1's tie checks it in the clear (`stop_rule`), and the compile slice
+  has no stopping request.
+- The deployed network certifier has neither the gate nor the tie. Its egress check is the step-indexed scan's
+  egress transfer blocks (`EgressBucket`), which render a drawn bucket's id-form row from the scan's slot state, so a
+  byte out of form is caught only in a drawn bucket.
+- vLLM's own server emits its stock framing, so behind the gate every connection of its would fail `format`. (`LiveServer`
+  in `benchmarks/network_traces/active_replay.py` writes the ordinal event, which `parse_cell` doesn't read, but it never
+  sits behind the gate: it is the active replay's server side, where the ordinal event tells requests apart.)
+
 ## The I/O tie (`io_tie`, a design)
 
 N2 holds a window's counts but says nothing of its frames, nor that they carry the tokens the served computation
@@ -418,8 +524,8 @@ decodes it with the public tokenizer.
   the id (`"request":%10d,"token_id":%10d`): 159 bytes, with the ordinal at frame byte 110 and the id at 132.
   `io_tie.id_event` is at least 138 bytes, with the id at 111. On egress the ordinal is the network certifier's stream, so the
   server's copy of it is redundant, and a field the server writes is a channel unless it is checked. With the ordinal
-  event, the cell holds the ordinal to q too: one more 10-digit decode and a compare, at B ≥ 168. The prototype keeps
-  the id-only event. The shim writes one of the two, and `IoTieCell` follows it.
+  event, the cell holds the ordinal to q too: one more 10-digit decode and a compare, at B ≥ 168. The egress record
+  (above) fixes the id-only event, and the ordinal event isn't in it.
 - **Ingress** carries ids too: a request is a canonical `/v1/completions` body whose prompt is token ids, each in an
   11-byte field (`[` or `,`, then `%10d`; 11 spaces past the prompt's length, which JSON reads as whitespace), placed so
   no field straddles a frame. The server adds nothing to a token-id prompt, so `c00.input/ids` is the request's ids.
@@ -1678,7 +1784,7 @@ them.
     like the salt.
   - **Revealed on the window's registration, after t_d.** `Proxy.reveal(p, registration)` gives PoUW window p's salt.
     The verifier calls it with the registration the proof system returned for p (`Registration`, from
-    `sampled_proofs.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
+    `spot.service`), and the certifier fails closed (`RuntimeError`) unless the registration's receipt is a
     registration receipt (`one_stage.registration.RECEIPT`) whose digest is the record's own and the registration's,
     and `registered` reads p off the registration: by default `served_window`, which reads the provenance
     `{"kind": "served", "window": p}`, and otherwise the reader the protocol gives (`Proxy(registered=…)`). It also
@@ -1895,16 +2001,20 @@ difftest compares (`NetTiming.SecurityProofs.Code`): `CodeExpectedRow`, `CodeAcc
 ## The active network certifier (`warden`)
 
 The wire is client ↔ network certifier ↔ server, with the network certifier responsible only for limiting network steganography and
-certifying exactly the bits it sees. So the network certifier knows bytes only: nothing in it belongs to vLLM
-or to any workload. `warden.py`'s docstring has its cells, admission, schedule and failures. This section says what
-its wire can carry.
+certifying exactly the bits it sees. So nothing in the network certifier belongs to vLLM or to any workload: it knows
+bytes, and one form of them, the egress record's ("The egress record"), the only form it releases toward a client.
+`warden.py`'s docstring has its cells, admission, schedule, egress form and failures. This section says what its wire
+can carry.
 
 **The schedule's public parameters** are `WardenParams`, fixed before the run:
 - B (`cell_bytes`), r (`slots`), τ (`bucket_ms`), D (`delay`), the lanes, the queue and the window T;
-- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`.
+- the bounds `ingress_cells`, `ingress_buckets` and `egress_cells`;
+- the egress form (`egress`): `id`, the egress record's, or `bytes`, which relays any server's bytes, for the
+  rehearsals of a server that answers in another form.
 
-`WardenParams.digest` binds them, and every record head's `parameters` is that digest. The ticker's slack is the active
-certifier's.
+`WardenParams.digest` binds them, with the cell kinds and the fail reasons, and every record head's `parameters` is that
+digest. The period check reads the id form's schedules only (`NetworkCheck.Period.egressForm`), so a `bytes` run's
+records are certified under a digest no period check takes. The ticker's slack is the active certifier's.
 
 **What the wire is a function of.** On connection q the network certifier sends r cells of B bytes each way in every bucket, from
 q's admission s to its last bucket. The kinds and buckets of q's egress cells are a function of the parameters and
@@ -1923,7 +2033,10 @@ connection has opened, and what it releases before then is buffered for the serv
 fails q there, which is f.
 
 Every `DATA` and `END` cell's content is the bytes, cut at fixed offsets (byte k is in cell ⌊k/P⌋), never by when or
-how they were read.
+how they were read. In the id form the network certifier releases a cut cell only if `io_tie.parse_cell` reads it: at
+any other it fails the connection (`format`) in that cell's slot, and none of the cell's bytes leaves. It refuses and
+never rewrites. An honest id-form server writes one `io_tie.id_event` of exactly P bytes an output, then `TRAILER`, so
+the cut gives one event a `DATA` cell and the `END` holds the trailer; any other byte stream fails at its first cell.
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
@@ -1945,8 +2058,10 @@ how they were read.
   - A server that fails connection q picks the egress cell it fails at, or not to fail: at most n + 1 ≤
     `egress_cells` + 1 outcomes.
   - Every failure sends the same `FAIL` cell, with no payload: a missed deadline, a stream that hasn't ended by the
-    last cell, a broken server connection, and the client's own two. The reason is a frame of the network certifier's `fails`
-    record, in the bucket of the `FAIL`: witness, certified with the others and never on the wire.
+    last cell, a broken server connection, a cell out of the egress form, and the client's own two. The reason is a
+    frame of the network certifier's `fails` record, in the bucket of the `FAIL`: witness, certified with the others
+    and never on the wire. A server that departs from the form at cell i gives the client what a server late at cell
+    i does, so `format` adds no outcome.
   - A failure the client causes (`ingress`, `malformed`) fails at once, and only returns the client's own bits to it.
   - A failed connection frees its lane at its `FAIL`'s bucket, so f also moves later connections' s. That carries no
     bits beyond f's, which this term charges, though they reach another client.
@@ -1970,8 +2085,8 @@ checked here.
 wire's bits. The third record, `fails`, holds one reason a failed connection.
 - Each window's three records are certified as the certifier's are (record v2 and `certificate.Issuer`), with the network
   certifier's parameters digest in the head. A head is witness, so no reason reaches the client.
-- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's, whose `FAIL` cells
-  and reasons don't match one for one, or in which a connection failed.
+- `audit` reads the records in the clear and refuses a window whose cells aren't the schedule's (and, in the id form,
+  the egress form's), whose `FAIL` cells and reasons don't match one for one, or in which a connection failed.
 - `benchmarks/network_traces/warden_serve.py` runs the network certifier live and checks that each client got exactly its egress
   record's cells, each in its bucket. The auditor gate's `warden-rehearse` (`benchmarks/live_challenger/auditor.py`)
   runs the same rehearsal on the auditor's host.

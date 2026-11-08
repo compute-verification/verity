@@ -1,9 +1,9 @@
 """Node 1's Commit pacer (sky/release.py) holds the deployments-gpu LocalQueue itself, because Kueue admits a leased Commit (no GPU
-request) before a tick can deactivate it: on Oct 1 four such Commits projected 2.1 TB against a 1.2 TB cap. The hold stays while
+request) before a tick can deactivate it, and a few such Commits project far past the cap. The hold stays while
 the admitted Commits' projection plus the next Commit's would pass the cap, or the disk is at DISK_PAUSE_PCT; with nothing
 admitted it lets one through, so a big Commit can't starve. It releases only a hold it set, and it never touches the
 ClusterQueue (the quiet hour's and the disk guard's) or the lease pools' holders, which n1_lease.py submits to their own
-LocalQueue: holding them once left two admitted Commits waiting for a GPU (Oct 1, 9:09-9:32 PM PDT)."""
+LocalQueue: holding them would leave admitted Commits waiting for a GPU."""
 from __future__ import annotations
 
 import importlib.util
@@ -155,7 +155,7 @@ def active(pacer) -> list[str]:
 
 
 def test_six_commits_of_a_model_with_no_size_go_one_at_a_time_until_the_first_has_taught_it(pacer):
-    """2 Oct: qwen25-3b and yi15-6b b32 Commits, guessed 1.3-6x low by the formula, took node 1's disk from 61% to 80% in 26 min."""
+    """qwen25-3b and yi15-6b b32 Commits, guessed up to 6x low by the formula, would fill node 1's disk in minutes."""
     for n in range(6):
         commit(pacer, f"cov-u{n}", YI.format(n), active=False)
     commit(pacer, "cov-p", B8, active=False)                 # a model the pacer has a size for isn't held back by them
@@ -173,7 +173,7 @@ def test_six_commits_of_a_model_with_no_size_go_one_at_a_time_until_the_first_ha
 
 
 def test_a_commit_of_a_model_with_no_size_admitted_on_arrival_holds_the_queue_for_the_next_one(pacer):
-    """2 Oct: five of those six arrived while the gate was open, and Kueue admitted each the moment it arrived."""
+    """Commits that arrive while the gate is open are each admitted by Kueue the moment they arrive."""
     commit(pacer, "cov-u0", YI.format(0), admitted=True)
     pacer.tick()
     assert pacer.cluster["policy"] == "Hold"
@@ -187,8 +187,8 @@ def test_a_commit_of_a_model_with_no_size_admitted_on_arrival_holds_the_queue_fo
 
 
 def test_a_tp_commit_writes_no_bundle_so_its_model_needs_no_size_and_holds_nothing(pacer):
-    """3 Oct: cov-gm359, a TP2 qwen3-14b Commit, held the queue for 45 min as a model with no size while 5 of node 1's 8 GPUs
-    were free; a TP Commit replays in its own process and writes no replay bundle, so it never teaches one either."""
+    """A TP2 qwen3-14b Commit must not hold the queue as a model with no size while node 1's GPUs are free: a TP Commit replays
+    in its own process and writes no replay bundle, so it never teaches one either."""
     tp2 = "qwen3-14b__bf16__rtxpro6000__tp2__b8__i1024__o128__g"
     commit(pacer, "cov-t", tp2, admitted=True)
     commit(pacer, "cov-u", YI.format(0), active=False)

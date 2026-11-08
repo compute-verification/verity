@@ -38,8 +38,9 @@ public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
-public import Definitions.SampledProofs
+public import Definitions.Spot
 public import Definitions.Claims
+public import Definitions.Claims.Encodings
 public import Definitions.Claims.Recursion
 public import Definitions.Claims.RecursionGeneric
 public import Definitions.Claims.RecursionLin
@@ -101,7 +102,9 @@ public import Definitions.NetworkCertifier.Guarantees.PooledLeak
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
+public import Definitions.WeightSecurity.Served
 public import Definitions.WeightSecurity.Toy
+public import Definitions.WeightSecurity.ToyServed
 public import Definitions.Assumptions
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
