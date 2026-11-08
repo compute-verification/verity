@@ -19,7 +19,7 @@ a record of that tree gives that round.
 namespace Verity.Sampled.LinkRead
 
 open Lean (Json)
-open SampledProofs SampledProofs.Challenger
+open Spot Spot.Challenger
 
 /-! ## A coin tree's line -/
 
