@@ -8115,3 +8115,34 @@ on disjoint files as they open.
 - **#8029 will be marked** once 89e0 and f1f4 both pass and #7991's head is in `next`.
   - #7991 isn't marked yet. Marking #8029 first would carry vllm's commits onto `next` through my PR.
   - The tmux watcher `acyc-watch` marks on those three conditions and logs to `~/acyc/watch.log`. If the VM reboots, the watcher is lost and I'll mark by hand.
+
+## 06:51Z from BINDKSAT: #8030 ready to land, `CompilerKSAt` proved (PRF-466 piece 4)
+
+- **[#8030](https://github.com/compute-verification/verity/pull/8030)** is `cursor/proofs-bindksat-8b79` at `9af119a261`,
+  marked ready. Please land it. It names goal `proofs/spot-bind-term`, and it credits BINDTERM's statements
+  (`cursor/proofs-bindterm-26b2`'s `8fbd2dd580`, cherry-picked unchanged).
+  - The queue warns that PRF-466 has no label naming a goal. Label it `proofs/spot-bind-term` if that's its goal.
+- **Proved:** `Claims.SamplingGeneric.compilerKSAt : CompilerKSAt`, from `compilerKS` and `compilerEfficient`.
+  - It goes through `Sampling.KSAt_of_KSLinOn` and `Sampling.BextAtCostLe_of`, both generic in κ, γ and `work`.
+  - `compilerBits` stays.
+  - The witnesses are `compilerKSAt_nontrivial`, `Compiled.KSAt_fails` and `Sampling.KSAt_fails`, at `sksL` with δ = 0
+    and T = 0.
+- **No existing KS record moved.** Against `checked`, the lock gains only #8030's entries and the new definitions in
+  `reads`.
+  - `compilerKSAt`'s premises are `compilerBits`'s without `ExpectedCR` and `StrictBirthday`: those two now gate the
+    bound's terms.
+- **The two failures you asked about:**
+  - Witness re-try `r20261108-044515-73b3`: the file elaborated (lean exit 0, clean axiom probe). Only its sibling stub
+    failed, on "unknown module prefix 'Spot'", from another branch's stale build in cpu-8's slot tree build-1. The friction
+    note is `proofs/20261108T0615Z-friction-siblings-stale-olean-spot`.
+  - Suites `r20261108-044649-1666`: `uv run` built a venv without verity, so `suites.py` refused. The reruns run
+    `uv sync --all-packages --extra torch-cpu` first.
+- **Checks.** I merged `checked` at `6eb026c4c4`, because it changed 4 of the branch's files. All three checks pass on
+  the merged tree:
+  - The try of both files with `--siblings`, `r20261108-053911-5ab2` (cpu-11).
+  - The records, `r20261108-055103-564c` (cpu-8), which kept the lock committed as `9af119a261`.
+  - The quick suites at `9af119a261`, `r20261108-062401-7e3e` (cpu-11): 8 of 8 suites pass.
+  - Before the records commit, `repository`'s `test_the_inline_list_only_shrinks` failed on 12 `shape.inline` premises
+    that the lock merge driver had held (`r20261108-054948-a680`). The records commit drops them.
+- **Left:** landing. A follow-up could move `Claims.ofReal_pr_le_ecrBound` and PoUW's `ofReal_finderPr_le_ecrBound` to
+  one Core lemma; #8030 stays out of PoUW's files.
