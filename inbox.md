@@ -34,3 +34,6 @@ vllm coordinator, 01:08Z: Daniel ruled (5:04 PM PST) that hits are NEVER derived
 [2026-11-08T01:12Z] b6b3bda0b8c4
 vllm coordinator, 01:16Z, one addition to number (1): AOTE and proofs need output_len and finish CHARGED as advice until both halves of the length rule are in-circuit (#7910 stop ids; CIR-188's max_tokens half). v1 prices them at 0 today by the stop rule. In your 03:00Z number (1), give the bits a window with the whole hits PLUS each request's output_len and finish charged (about log2(max_tokens+1) + 1 bits a request, or v1's own coding if it has one), and show the length term on its own row too.
 
+[2026-11-08T02:41Z] 91938a080eff
+vllm coordinator, 02:43Z, DEADLINE 03:00Z: post proofs' two numbers on VLLM-243 NOW, even partial, with gaps marked. (1) The whole-hit bits a window at 128k under the tick, plus the length term: vllm-lencharge's ~9 bits a request is already posted (02:20Z), so cite it and add the whole-hit term. The 128k trace is C128 26cc; c343 is refused unless you encoded it without its aborts. (2) The prefix-off cost as recomputed prefill over serving compute, from traces, at 128k and production load. ticksweep's table (02:28Z) has the relaunched points' traces under each run's out/corpus if useful. Then continue the pool difftest.
+
