@@ -1,4 +1,9 @@
-import Definitions.Pouw.TileBound.Defs
+module
+
+public import Definitions.Pouw.TileBound.Defs
+public import Mathlib.Algebra.Field.Rat
+public import Mathlib.Data.Matrix.Mul
+import Mathlib.LinearAlgebra.Matrix.Rank
 
 /-!
 # The FP4-tile model: the block-support count and what it bounds (proofs)
@@ -29,6 +34,8 @@ import Definitions.Pouw.TileBound.Defs
   per input (the `*_open_at` pins), the support count can't rule out a cost profile below FP4's. The pin exhibits
   numbers that pass the count, not a program.
 -/
+
+@[expose] public section
 
 namespace Pouw.TileBound
 

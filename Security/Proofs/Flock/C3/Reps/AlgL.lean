@@ -1,7 +1,19 @@
-import Proofs.Flock.VBridge.AlgHolds
-import Proofs.Flock.VBridge.ResLayer
-import Proofs.Flock.VBridge.AccChain
-import Proofs.Flock.VBridge.Family.Openings
+module
+
+public import Proofs.Flock.VBridge.Family.Openings
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
 # G's items 1–4 at the layer-read forms, at the family level
@@ -15,6 +27,8 @@ rep's units its own (`un p r`, `unO ℓ r j`), as `vbridgeRead_of_layers` compos
 * `hStruct_of_checkH`: the structure and groups at the holo form of the shape a passing holo part names, as
   `VStarFamily.hStruct_of_check` at `check_part_holo`.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Reps
 

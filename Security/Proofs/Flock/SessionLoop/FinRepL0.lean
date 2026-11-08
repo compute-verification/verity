@@ -1,9 +1,11 @@
-import Proofs.Flock.SessionLoop.FinRepFinal
-import Proofs.Flock.SessionLoop.FinRepXs
-import Proofs.Flock.SessionLoop.Tables
-import Proofs.Flock.Claims.ZK.FinishRank
-import Proofs.Flock.Claims.ZK.FinishSwPts
-import Proofs.Flock.Claims.ZK.LinkFft
+module
+
+public import Proofs.Flock.SessionLoop.FinRepFinal
+public import Proofs.Flock.SessionLoop.FinRepXs
+public import Proofs.Flock.SessionLoop.Tables
+public import Proofs.Flock.Claims.ZK.FinishRank
+public import Proofs.Flock.Claims.ZK.FinishSwPts
+public import Proofs.Flock.Claims.ZK.LinkFft
 
 /-!
 # (c.3)'s `FinRepL0`: level 0's opened rows and salts
@@ -22,9 +24,11 @@ names: at `q0At`'s positions. Each of those is opened (`FinRep.q0At_opened`), an
   `Link.rows` of `Masked.linkIn` and salts its fitted salts (`Loop.Level0Src.realOf_rows0`), the same row
   (`Link.rows_eq`) and salt.
 
-**`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop draws the tape's level 0
+**`Loop.finRepL0`**: at a statement in the masked scope with a witness, where the loop samples the tape's level 0
 (`Loop.Level0Src`), `FinRepL0` holds. It reads no worker's values.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.RankAt
 
@@ -215,7 +219,7 @@ theorem repCut_opens0 {coin : ℕ → ℕ → _root_.Flock.F128} {n : ℕ} {resp
   refine h0.trans ?_
   rw [show t₃.k = piopZk st extras by omega]
 
-/-- **The firewall's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by `asksCut` from a fresh
+/-- **The ZK server's rep opens level 0 at round `k₀ + 8` of its Ligerito**: answered by `asksCut` from a fresh
 transcript, its zerocheck, lincheck and ring switch take `piopZk` rounds with as many bodies (`zerocheckCut_at`,
 `lincheckCut_at`, `ringSwitchCut_sws`, `RankAt.Paces`), and its Ligerito opens `cm0` at the query of the round
 `k₀ + 6` after its pair's coins (`L0.ligeritoPZk_opens`, through `ligeritoPZk_cut`); the replay, the constraints and
@@ -421,7 +425,7 @@ open _root_.Flock (V F128 Stmt SessionSpec)
 set_option synthInstance.maxSize 100000
 set_option synthInstance.maxHeartbeats 1000000 -- `ofLoop`'s session types, as in `FrameZK`
 
-/-- **The loop's table keeps `commitOf` of the tape's level 0**: where `src` draws the tape's level 0, at rep stream
+/-- **The loop's table keeps `commitOf` of the tape's level 0**: where `src` samples the tape's level 0, at rep stream
 `2j + r` the loop's table's level-0 commitment is `commitOf` of a `Level0` on `Masked.linkIn`, at level 0 of table
 `j`'s `--zk` schedule and its `t_pad`, whose rows are `Link.rows` of its own inputs (`Level0.ofDraws_ok`). -/
 theorem Loop.Level0Src.realOf_rows0 {src : Msg → Flock.Wit →
@@ -485,7 +489,7 @@ variable (vs : finS.SwVals) (L₀ : LeanRelease Flock.Wit Tp)
   (real : Msg → Flock.Wit → Tp → ℕ → V (_root_.Flock.Firewall.Finish.Tab × Array ByteArray))
   (wk : (LeanRelease.ofLoopLink L₀ src real).toSrv.Worker) (x : Msg) (w : Flock.Wit)
 
-/-- **`FinRepL0` holds where the loop draws the tape's level 0**: at a statement in the masked scope with a witness
+/-- **`FinRepL0` holds where the loop samples the tape's level 0**: at a statement in the masked scope with a witness
 (`Loop.Level0Src`), the run from the views and the session's rep open level 0 at `q0At`'s positions
 (`FinRep.repCut_opens0`, `FinRep.repFwC_open0`, at `repSlot`'s slot), where the views' commitment
 (`commit0Cut_rows`, `finSrc_l0`, `FinRep.srcV_open0`) and the loop's table's (`Level0Src.realOf_rows0`) hold the same
@@ -609,8 +613,8 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
     refine ⟨?_, ?_⟩
     · rw [hcr, FlockSoundness.Refine.getElem!_range_map _ hpd', hf1, hrow, hcm0]
       show _ = l0.rows[p]!
-      rw [hrows0, hlv0, htp0, _root_.Flock.Firewall.Link.rows_eq, hin0, hgk, FlockComplete.tablesP,
-        FlockSoundness.Refine.getElem!_range_map _ hjT]
+      rw [hrows0, hlv0, htp0, hin0, Masked.rows_linkIn x w t ⟨k / 2, hj⟩, _root_.Flock.Firewall.Link.rows_eq, hgk,
+        FlockComplete.tablesP, FlockSoundness.Refine.getElem!_range_map _ hjT]
       all_goals rfl
     · rw [hcs, FlockSoundness.Refine.getElem!_range_map _ hpd', hf2, hsalt, hcm0]
       show _ = ((Array.range (2 ^ l0.lv.d)).map fun q =>
@@ -618,7 +622,7 @@ theorem finRepL0 (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Re
       rw [hlv0, FlockSoundness.Refine.getElem!_range_map _ hpd]
       have hsl : l0.salt p = (Masked.linkIn x w t ⟨k / 2, hj⟩).salt p :=
         congrFun (congrArg _root_.Flock.Firewall.Link.In.salt hin0) p
-      rw [hsl]
+      rw [hsl, Masked.salt_linkIn x w t ⟨k / 2, hj⟩ hpd']
       all_goals rfl
   rw [hP, hQ]
   unfold FlockComplete.openP

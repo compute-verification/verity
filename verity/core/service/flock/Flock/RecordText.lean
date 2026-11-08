@@ -1,5 +1,5 @@
 /-
-PROTOCOL.md §5.1: the session record's canonical text, the text `Json.compress` prints of what it parses to, which every
+The session record's canonical text, the text `Json.compress` prints of what it parses to, which every
 writer emits (`verity/ml/flock/live/src/record_text.rs`, `verity_flock.record_text`) and S0 holds a record to. So the
 record's text is a function of what the verifier reads of it.
 
@@ -9,9 +9,12 @@ with `"`, `\`, newline and carriage return escaped and every other character bel
 an array's elements and an object's fields (in its tree's order, sorted by key) between commas. `Flock.Test.RecordText`
 holds it to `Json.compress` on the writers' shared vectors.
 -/
-import Lean.Data.Json
-import Flock.Bytes
-import Flock.JsonParse
+module
+
+public import Flock.Bytes
+public import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.RecordText
 
@@ -56,7 +59,7 @@ end
 
 /-- S0's refusal. -/
 def refusal : String :=
-  "S0: the record is not in its canonical text (what Json.compress prints of what it parses to: PROTOCOL.md §5.1)"
+  "S0: the record is not in its canonical text (what Json.compress prints of what it parses to: `RecordText.check`)"
 
 /-- **S0: the record is in its canonical text**: it parses, and `printT` of what it parses to is the record. -/
 def check (text : String) : V Unit :=

@@ -1,18 +1,18 @@
 """PoUB's coins on the proof system's one challenger (`verity/remote-bandwidth/coins/v1`): session k's coins
-are one epoch of `sampled_proofs.challenger`'s live coins, drawn and committed by the challenger before the session, on
+are one epoch of `sampled_proofs.challenger`'s live coins, flipped and committed by the challenger before the session, on
 its own host when it is remote (`sampled_proofs.remote`), each opened once, after the root the verifier recorded, and
 their commitment released to the prover only at the session's end.
 
 ~~~text
 scheme     verity/remote-bandwidth/coins/v1, epoch k: the session's index over its registration
-families   challenge W, openings ⌈W/g⌉, append A: window t's challenge σ_t, the openings coin of the sample over windows
-           cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no append
-           family when the session takes no appends (A = 0)
+families   challenge W, openings ⌈W/g⌉, append A: window t's challenge chal_t, the openings coin of the sample over
+           windows cg … (c + 1)g − 1 (g = `groups_per_coin`, 1 by default: window t's own), and append i's coin c_a; no
+           append family when the session takes no appends (A = 0)
 coin       the first 32 bytes (COIN_BYTES) of the challenger's 64-byte coin, which its commitment holds whole
 R          SHA512("verity/remote-bandwidth/window/v1\0" ‖ registration digest ‖ u64be k): the session's window, {root} in
            the auditor's ledger, which opens one challenger session a root, ever
-after      σ_0 after R; σ_t (t ≥ 1) after the last root the verifier had received when it left; draw c's openings coin
-           after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
+after      chal_0 after R; chal_t (t ≥ 1) after the last root the verifier had received when it left; flip c's openings
+           coin after the last root of its last window, min((c + 1)g, W) − 1; append i's coin after append i's root
 released   (epoch, label, index, after, coin): what the prover is sent when a coin leaves (`Released`), no salt or path
 end        once the session has its outcome, so no root can follow: the commitment and every released coin's opening
            (`audit.AuditRun.disclose`), against which the prover checks each coin it was sent (`received_reason`)
@@ -26,7 +26,7 @@ the commitment and their openings (`received_reason`), so the record's commitmen
 no coin was chosen after a root is the challenger's to keep, as the auditor's device (`Faithful`): it commits before the
 session, logs each root before its coin leaves and signs the log, which the verifier holds the session to
 (`released_reason`).  Within a window the passes' seeds are Fiat–Shamir, chained from the coin through the prover's
-roots (`receipts.seed`); the openings are drawn from a coin of their own.  An append's coin answers the append's root, a
+roots (`receipts.seed`); the openings are sampled from a coin of their own.  An append's coin answers the append's root, a
 commitment the prover has already made: committed before the session like every coin, it opens after that root, once.
 
 `SessionCoins` is the verifier's side: the challenger (a `LiveChallenger`, or a `remote.RemoteChallenger` on the challenger's
@@ -35,8 +35,8 @@ takes from the challenger afterwards, the commitment it signed and the roots its
 (`trusted`: `remote.trusted_session` under the auditor's ledger, whose window `{root: R}` opens exactly one session,
 inside the period holding it, read only through `challenger.pinned_session`, so the session ran a tree the host's pins
 log records on main's first-parent line), `released_reason` holds to the session's own record: the same commitment,
-the same roots in the same order, σ_0 after R, and each sample's openings coin after its last window's last root, so a
-coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
+the same roots in the same order, chal_0 after R, and each sample's openings coin after its last window's last root, so
+a coin opened before its window's root, or a session whose coins are another challenger session's, is refused.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ WINDOW_DOMAIN = b"verity/remote-bandwidth/window/v1\0"
 
 
 def openings_coins(windows: int, per_coin: int = 1) -> int:
-    """⌈W/g⌉: the openings coins of `windows` windows drawn `per_coin` (g) consecutive windows a coin."""
+    """⌈W/g⌉: the openings coins of `windows` windows sampled `per_coin` (g) consecutive windows a coin."""
     if type(per_coin) is not int or per_coin < 1:
         raise ValueError("groups_per_coin is a positive integer")
     return -(-windows // per_coin)
@@ -144,7 +144,7 @@ def coin(opening: LiveOpening | Released) -> bytes:
 
 
 def layout_reason(commitment: Any, session: int, windows: int, per_coin: int = 1) -> str | None:
-    """Why `commitment` is not session `session`'s coin commitment for `windows` windows drawn `per_coin` a coin; None
+    """Why `commitment` is not session `session`'s coin commitment for `windows` windows sampled `per_coin` a coin; None
     when it is."""
     if type(commitment) is not LiveCommitment:
         return "a session's coin commitment is a live coin commitment"
@@ -198,7 +198,7 @@ def received_reason(commitment: Any, received: Sequence[Released], openings: Seq
 
 
 class SessionCoins:
-    """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows drawn
+    """Session `session`'s coins over the registration whose digest is `registration`, `windows` windows sampled
     `per_coin` a coin (`openings_coins`), through `challenger` (a `LiveChallenger` or a `remote.RemoteChallenger`),
     committed before the session.  Each family's coins open in order, each once, after the root recorded for it
     (`LiveRecord`, on `clock`); two the session asks for one behind the other may go in one round trip (`ahead`)."""
@@ -255,11 +255,11 @@ class SessionCoins:
         return opening
 
     def challenge(self, t: int, after: bytes) -> LiveOpening:
-        """σ_t, released now, after `after`: R for σ_0, else the last root received."""
+        """chal_t, released now, after `after`: R for chal_0, else the last root received."""
         return self._open(CHALLENGE, t, after)
 
     def openings(self, c: int, after: bytes) -> LiveOpening:
-        """Draw c's openings coin (window c's at one window a coin), released now, after the last root `after` of its
+        """Flip c's openings coin (window c's at one window a coin), released now, after the last root `after` of its
         last window."""
         return self._open(OPENINGS, c, after)
 
@@ -287,7 +287,7 @@ class SessionCoins:
 
 def local(registration: bytes, session: int, windows: int, entropy: Callable[[int], bytes], *,
           appends: int = APPENDS, per_coin: int = 1, clock: Callable[[], float] = time.monotonic) -> SessionCoins:
-    """Session `session`'s coins from a challenger in the verifier's process, drawing from `entropy`."""
+    """Session `session`'s coins from a challenger in the verifier's process, sampling from `entropy`."""
     return SessionCoins(LiveChallenger(SCHEME, session, families(windows, appends, per_coin), entropy), registration,
                         session, windows, per_coin=per_coin, clock=clock)
 
@@ -299,10 +299,10 @@ def released_reason(coins: SessionCoins, windows: Sequence[Sequence[bytes]], app
     the commitment the challenger signed and `received` the roots its signed release log shows it received, by family
     (`remote.trusted_session`, or `challenger.session_of` with no ledger).  Refused: another commitment; a family whose
     coins weren't opened in order, once, each after the root recorded for it, or whose recorded roots aren't the ones
-    the challenger received; σ_0 opened after anything but R, or σ_t after a root that isn't R or an earlier window's,
-    and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of windows
-    0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's openings coin opened after anything
-    but its last window's last root (so before it); an append's coin after anything but its own root."""
+    the challenger received; chal_0 opened after anything but R, or chal_t after a root that isn't R or an earlier
+    window's, and at one window in flight (`in_flight` 1, `audit.Pace.in_flight`) after anything but the last root of
+    windows 0 … t − 1 (R if they have none), so before a root of window t − 1; a sample's openings coin opened after
+    anything but its last window's last root (so before it); an append's coin after anything but its own root."""
     c = coins.commitment
     if signed != c:
         return "the challenger signed another coin commitment than the one the session's coins open against"

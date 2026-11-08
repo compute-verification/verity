@@ -1,9 +1,9 @@
-import Definitions.Core.Assumptions.Accel
-import Mathlib.Algebra.Order.Monoid.Canonical.Basic
-import Mathlib.Tactic.GCongr
-import Mathlib.Tactic.NormNum
-import Mathlib.Tactic.Positivity
-import Mathlib.Tactic.Ring
+module
+
+public import Definitions.Core.Assumptions.Accel
+public import Mathlib.Algebra.Order.Monoid.Canonical.Basic
+public import Mathlib.Tactic.Positivity
+import Mathlib.Tactic.Positivity.Finset
 
 /-!
 # The machine 𝓜: an honest semantics, the rate bound, and the card premise's refutations
@@ -20,6 +20,8 @@ import Mathlib.Tactic.Ring
   device memory than the store's resource carries in `T` seconds. Each word an instruction writes there is a unit of
   that resource (`outTo_le_use`), so a run changes at most its units (`changed_run`).
 -/
+
+@[expose] public section
 
 open scoped NNRat
 

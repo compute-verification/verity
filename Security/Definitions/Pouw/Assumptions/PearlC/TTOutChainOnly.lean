@@ -1,5 +1,7 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOut
-import Definitions.Pouw.PearlC.DeviceChainOnly
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOut
+public import Definitions.Pouw.PearlC.DeviceChainOnly
 
 /-!
 # TT_OUT under the chain-only reading at a device record (staged)
@@ -10,6 +12,8 @@ The four chain-only forms of the record's TT_OUT: `TTOut` and `TTOutTile` at the
 bundle's named `Prop`s do. No guarantee states them: the chain-only guarantees state the `W1` forms
 (`TTOutChainOnlyW1`), and their proofs reduce to the two per-unit forms here.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.Assumptions
 

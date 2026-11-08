@@ -1,5 +1,5 @@
 """Front F6's per-unit-type cost inventory: for every served workload in the census and every unit type in its template mix
-(``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit draws, and the unit's public
+(``vu_family`` + parameters), what one unit costs as a Boolean circuit, how many units an audit samples, and the unit's public
 work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
@@ -34,7 +34,7 @@ Every number says how it was obtained (``method``):
   affine in T, and built at T = BN + 16 and 2 BN + 16 (:data:`BLOCK_CHECKS`), whose excess over that fit must be one and
   two times one block's; a stratum of NB blocks is then the fit plus NB − 1 blocks' excess, evaluated at the stratum's
   mean T. The builds are at 16-aligned T: PV runs in 16-key steps, so a T between pads its last step.
-- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the law is read off builds at every V in
+- ``scan law`` (token-select): not affine in V (:func:`argmax_scan_law`); the sampling design is read off builds at every V in
   :data:`SCAN_POINTS`, checked by an exact build at :data:`SCAN_CHECK`, and evaluated at the census V.
 - ``model`` (attention whose excess past the first key block is not affine in the block count, :func:`block_law`): that
   excess is fitted with a curvature through the three points, unchecked; or, when those builds are over ``--exact-nnz``,
@@ -50,7 +50,7 @@ sharing a VU-level circuit could make between its subcircuits (an operand they s
 ANDs and nonzeros.
 
 **Sampled instances.** The sample is uniform over all units, because a hidden partition cannot be stratified by type: K =
-``record_k(ε, δ)`` units (``verity.core.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
+``record_k(ε, δ)`` units (``verity.ml.protocols.pouw.circuit.plan``, 27,713 at the default ε = 0.1%, δ = 2⁻⁴⁰) without
 replacement from the workload's N evaluable units, at each granularity. A type with n of the N units gets a hypergeometric
 count: its mean ``K n / N`` and its upper ``1 − δ`` quantile, the least k with P(X > k) ≤ δ, summed exactly over the tail
 in log space.
@@ -88,7 +88,7 @@ AFFINE: dict[str, tuple[str, Callable[[Mapping[str, Any]], tuple[int, ...]]]] = 
     "moe-sum": ("H", lambda p: (16, 32, 48, 64)),
     "gumbel-top-p-token-select": ("V", lambda p: (64, 128, 192, 256)),
 }
-#: token-select's V − 1 ArgmaxStep scan: the law (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
+#: token-select's V − 1 ArgmaxStep scan: the sampling design (:func:`argmax_scan_law`) is read off builds at every V in SCAN_POINTS and
 #: checked against an exact build at SCAN_CHECK
 SCAN_POINTS = tuple(range(2, 140))
 SCAN_CHECK = 1030
@@ -112,7 +112,7 @@ def build(template: str, params: Mapping[str, Any], statics: Mapping[str, int] |
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
-    from . import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     d = resolve(TM.subcircuit(template, **params).definition(**dict(statics or {})))
     sig, _ = signature_of(d)
@@ -171,7 +171,7 @@ def registered(template: str, params: Mapping[str, Any], T: int | None = None) -
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
     from . import lowerings
-    from . import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     mod = lowerings.registry("C-Flock").module(template)
     if mod is None:
@@ -238,7 +238,7 @@ def argmax_step() -> dict[str, Any]:
     from verity_flock import ir_lower
     from verity_flock.gf2 import Circuit
 
-    from . import templates as TM
+    from verity_flock import subcircuit_templates as TM
 
     _p, call = ir_lower.standalone(resolve(TM.subcircuit("token-select-greedy", V=8).definition()))
     gates = ir_lower.live_gates(call)
@@ -464,7 +464,7 @@ def argmax_scan_law(builds: Mapping[int, Mapping[str, int]]) -> Callable[[int], 
 # --- the sample --------------------------------------------------------------------------------------------------------------
 
 def sample_size(epsilon: Fraction = EPSILON, delta: Fraction = DELTA) -> int:
-    from verity.core.protocols.pouw.circuit.plan import record_k
+    from verity.ml.protocols.pouw.circuit.plan import record_k
 
     return record_k(epsilon, delta)
 

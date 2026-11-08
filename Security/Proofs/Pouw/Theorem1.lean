@@ -1,10 +1,15 @@
-import Proofs.Pouw.Reduction
-import Proofs.Pouw.Sampling
-import Definitions.Pouw.Guarantees.Game
+module
+
+public import Proofs.Pouw.Reduction
+public import Proofs.Pouw.Sampling
+public import Definitions.Pouw.Guarantees.Game
+public import Proofs.Pouw.Lemmas.Game
 
 /-!
 # (b) Theorem 1, (d) end to end, (d″) at the milestone
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

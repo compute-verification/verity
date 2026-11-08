@@ -1,13 +1,35 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+module
+
+public import Flock.HmRow
+public import Proofs.Flock.Soundness.Discharge.Hidden.Spec
+public import Proofs.Flock.Soundness.Refine.Regions
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The facts read off `Spec`
 
-What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the drawn public file (its
+What `Discharge/HiddenExec` reads of `Stmt.setupHidden`, from `setupHidden_spec`: its tags and the sampled public file (its
 leaf scheme and well-formedness, `setupHidden_hm96` and `setupHidden_wf`, are `Hidden.Commit`'s, on the committed
 circuit); and of `HmOut.parse`, that an untyped one is `HmRow.parse`'s circuit then `HmOut.checkRows`
 (`parse_untyped`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)
@@ -108,7 +130,7 @@ theorem setupHidden_tags (h : Stmt.setupHidden tags cf pf coins tables draw part
     st.tags = tags :=
   (setupHidden_spec' h).tagsEq
 
-/-- `Spec.pub`, at a draw. -/
+/-- `Spec.pub`, at a sample. -/
 theorem setupHidden_drawn {d : Json}
     (h : Stmt.setupHidden tags cf pf coins tables (some d) partition program = .ok st) :
     ∃ pop, HmOut.loadPublic tags st.c pf = .ok pop ∧ HmOut.drawn st.c pop d = .ok st.pub := by

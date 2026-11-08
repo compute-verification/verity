@@ -1,7 +1,12 @@
-import Definitions.Accounting.Guarantees.ComposePeriod
-import Proofs.Accounting.TS.Rounds
-import Proofs.Accounting.Compose.CircuitWork
-import Proofs.Accounting.ComposePeriod.Covers
+module
+
+public import Definitions.Accounting.Guarantees.ComposePeriod
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.Compose.CircuitWork
+public import Proofs.Accounting.ComposePeriod.Covers
+public import Proofs.Accounting.Lemmas.TS.Receipt
+public import Proofs.Accounting.Lemmas.ComposePeriod
+public import Proofs.Accounting.Lemmas.TS
 
 /-!
 # PoUW's work over a monitoring period: proofs
@@ -16,8 +21,8 @@ period's budget is its windows', by induction on the period. The window's live t
 conditioning on the first round's coins as `expect_weight_le` does, its probability is at most
 `E[1{pass}·e^{c·d}]·e^{−c·D} ≤ e^{−c·D}`. At `c = 1/Λ` the round bound is `BudgetAt`'s (`expBound_of_budgetAt`).
 
-`CircuitWorkPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
-`circuitWorkPeriod_of_covers` reads as a hypothesis and `ComposePeriod/Covers.lean` proves as `periodCovers`), and
+`CircuitWorkMonitoringPeriod` is proved here from the period layer's covers (`PeriodCoversStmt`, which
+`circuitWorkMonitoringPeriod_of_covers` reads as a hypothesis and `ComposePeriod/Covers.lean` proves as `periodCovers`), and
 `CircuitCreditPeriod` from its assembly at `a, b > 0`. It is `CircuitWork`'s proof at `n` rounds, on the accepted
 prefix's live tiles:
 * per window, `ServiceBudget` at the detected live weights (`liveShare`: `0` on a tile of no live words, else
@@ -25,7 +30,7 @@ prefix's live tiles:
   its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then
   `PeriodBudget` (`budget_period`);
 * `PeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
-  `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every drawn
+  `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
   tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
   budget game's, whose checks are the play's (`acceptsUpTo_periodGame`);
 * per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
@@ -33,6 +38,10 @@ prefix's live tiles:
   words, at most `zeroCone` a window (`zeroS_le`: a dead tile with words reaches no live words); summed over the
   prefix (`deficiencyUpTo_periodGame`), the shares in the cheaper of the two (`liveWork_of`).
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.ComposePeriod
 
@@ -119,7 +128,7 @@ theorem PeriodTailMax : Accounting.Guarantees.ComposePeriod.PeriodTailMax := by
 /-! ## The live weights -/
 
 /-- **A tile's detected live weight**: its `liveCone` when it carries live words, and `0` for a tile of none, whose
-skip no draw detects. The period's budget is taken at these weights. -/
+skip no sample detects. The period's budget is taken at these weights. -/
 noncomputable def liveShare {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np : ℕ) (live : Fin Np → Bool)
     (t : Fin Np) : ℝ :=
   if liveWords Sc Cd Np live t = 0 then 0 else liveCone Sc Cd Np live t
@@ -700,13 +709,13 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
   rw [hdef] at hlt
   exact liveWork_of ha hb (Nat.cast_nonneg _) hSF hS0 hZ hZD hfixL hfoldL hG hNW hlt
 
-/-! ## `CircuitWorkPeriod` -/
+/-! ## `CircuitWorkMonitoringPeriod` -/
 
-/-- **`CircuitWorkPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt` as a hypothesis
+/-- **`CircuitWorkMonitoringPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt` as a hypothesis
 (`periodCovers` proves it). Off `DrawnRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
-theorem circuitWorkPeriod_of_covers (hC : PeriodCoversStmt) :
-    Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod := by
+theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
+    Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn _ hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
@@ -772,13 +781,13 @@ theorem creditPrefix_le {ι K : Type} (Sc : Scheme K) (Cd : Declared ι) (Np j :
   · rw [← hzero, mul_zero]
     exact hF
 
-/-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkPeriod_of_covers` at `a, b > 0`; on an
+/-- **`CircuitCreditPeriod` from the period layer's covers**: `circuitWorkMonitoringPeriod_of_covers` at `a, b > 0`; on an
 accepted run `UnitFixed`'s sums keep `fixed` nonnegative, so the credit is below the work (`creditPrefix_le`). -/
 theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
     Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod := by
   intro ι K T L U C Ξ V _ _ _ _ _ _ _ Sc Cd n Np Kd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
-  have hW := circuitWorkPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
+  have hW := circuitWorkMonitoringPeriod_of_covers hC Sc Cd hn hN hr hK Wp Pl pr folded ρ p p0 a b wmax Λ δs δbind δks hS
     hρ hρN hwmax hlk ha.le hb.le hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, -, -, hlc⟩ := hS
   have hFix := hUF (hC Sc Cd hr hK Wp pr hwf hlc).1
@@ -802,9 +811,9 @@ theorem circuitCreditPeriod_of_covers (hC : PeriodCoversStmt) :
     exact creditPrefix_le Sc Cd Np _ ha hb hNl (mul_nonneg (Nat.cast_nonneg _) (hfix0 x hacc)) hw
   exact (prob_mono hsub).trans hW
 
-/-- `CircuitWorkPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
-theorem CircuitWorkPeriod : Accounting.Guarantees.ComposePeriod.CircuitWorkPeriod :=
-  circuitWorkPeriod_of_covers periodCovers
+/-- `CircuitWorkMonitoringPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
+theorem CircuitWorkMonitoringPeriod : Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod :=
+  circuitWorkMonitoringPeriod_of_covers periodCovers
 
 /-- `CircuitCreditPeriod`: the assembly at the period layer's covers (`periodCovers`). -/
 theorem CircuitCreditPeriod : Accounting.Guarantees.ComposePeriod.CircuitCreditPeriod :=

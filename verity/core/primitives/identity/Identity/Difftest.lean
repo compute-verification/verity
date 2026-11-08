@@ -1,5 +1,7 @@
-import Difftest
-import Identity
+module
+
+public import Difftest
+public import Identity.Tagged
 
 /-!
 # The identity difftest: `Identity`'s functions behind `Difftest.serve`
@@ -11,6 +13,8 @@ import Identity
 * `tagged`: `taggedSha512` (`tagged_sha512`), the empty tag refused;
 * `identity`: `identityDigestSha512` (`identity_digest_sha512`) of a JSON manifest.
 -/
+
+@[expose] public section
 
 namespace Identity.Difftest
 

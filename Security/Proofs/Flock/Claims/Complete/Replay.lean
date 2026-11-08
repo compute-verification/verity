@@ -1,33 +1,35 @@
-import Proofs.Flock.Claims.Complete.Replay.Steps
-import Proofs.Flock.Claims.Complete.Replay.Zerocheck
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
-import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
-import Proofs.Flock.Claims.Complete.Replay.Lincheck
-import Proofs.Flock.Claims.Complete.Replay.RingSwitch
-import Proofs.Flock.Claims.Complete.Replay.Trace
-import Proofs.Flock.Claims.Complete.Replay.Satisfies
-import Proofs.Flock.Claims.Complete.Replay.Ligerito
-import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
-import Proofs.Flock.Claims.Complete.Replay.Walk
-import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
-import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
-import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
-import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
-import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
-import Proofs.Flock.Claims.Complete.Replay.RepRounds
-import Proofs.Flock.Claims.Complete.Replay.ProverOk
-import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
-import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
-import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
-import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
-import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
-import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
-import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
-import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
+module
+
+public import Proofs.Flock.Claims.Complete.Replay.Steps
+public import Proofs.Flock.Claims.Complete.Replay.Zerocheck
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.ZerocheckGoal
+public import Proofs.Flock.Claims.Complete.Replay.Lincheck
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitch
+public import Proofs.Flock.Claims.Complete.Replay.Trace
+public import Proofs.Flock.Claims.Complete.Replay.Satisfies
+public import Proofs.Flock.Claims.Complete.Replay.Ligerito
+public import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
+public import Proofs.Flock.Claims.Complete.Replay.RingSwitchAlgebra
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoModel
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRun
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoGoal
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoProver
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoRep
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoMerkle
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWalk
+public import Proofs.Flock.Claims.Complete.Replay.RepRounds
+public import Proofs.Flock.Claims.Complete.Replay.ProverOk
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoFinal
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoBasis
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSum
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoSync
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoCons
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoWeight
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoTrack
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonest
+public import Proofs.Flock.Claims.Complete.Replay.LigeritoHonestRun
 
 /-! The verifier's phases replayed on the honest prover's rounds: the steps of both sides (`Steps`: the prover's in the
 pure session, `squeezeP_go`, `forIn_go`; the verifier's on rounds that carry the prover's, `squeezeWith_sent`,
@@ -47,9 +49,7 @@ circuit the halved fold with `β` at the pin, `folded_ok`, the start `α·v_A + 
 `lcAlgebra`, so `Lincheck` holds without it, `lincheck_relation`; `RingSwitchAlgebra`: the ring switch's algebra there
 from `RelS`, every claim's value the witness's extension at its point, lincheck's `w`, `Lc.ab_eval`, zerocheck's
 `P_c(ζ)`, `Zc.c_claim_eval`, and the extra claims at link points of `m_pts` coordinates, `Region.regionClaim_holds`,
-`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`; `Walk`: the statement's circuit fold returns at
-every rep, `Run.fold_ok`, so the three goals hold there from the session walk alone, `ZcAt`, `LcWalk` and `RsAt`,
-`replay_goals`), and Ligerito (`LigeritoModel`: the verifier's
+`rsAlgebra`, so `RingSwitch` holds without it, `ringSwitch_relation`), and Ligerito (`LigeritoModel`: the verifier's
 steps on rounds that carry a model's coins, `Runs`, composing by `Runs.bind` and `Runs.loop`; `LigeritoRun`: the
 verifier's Ligerito in closed form, `out`, and its return on the model's rounds given the Merkle openings and the final
 identity, `ligeritoWith_of`; `LigeritoGoal`: the skeleton's `Ligerito` at the rep's coins and decoded sizes, given the
@@ -74,8 +74,7 @@ batched basis, `Lg.rsSum_eq`, `RsSum` holds at the deployed relation, `rsSum_rel
 `RepWalkP` and `Lg.Honest`, `lgFinal_relation`; `LigeritoSync`: every step of the verifier's model keeps its claim the
 honest prover's sum of table against weight, `Lg.Sync`: a challenge, `Lg.Sync.chal`, one that splits,
 `Lg.Sync.chalSplit`, an out-of-domain or consistency claim, `Lg.Sync.ood`, `Lg.Sync.add`, and the final check's sum is
-the claim, `Lg.lhsE_honest`;
-`LigeritoCons`: on rows the prover committed, the consistency value is its F-table folded
+the claim, `Lg.lhsE_honest`; `LigeritoCons`: on rows the prover committed, the consistency value is its F-table folded
 at the level's challenges against its consistency weight, `Lg.consE_honest`, `Lg.consE_fold`, the prover's folds are the
 model's, `Lg.gv_foldKs`, and a level's consistency claim keeps `Lg.Sync`, `Lg.Sync.close`; `LigeritoWeight`: the
 prover's weight is the model's at every stage: level 0's, `Lg.gv_w0`, after level 0's challenges, `Lg.fold_init`, on a
@@ -94,3 +93,5 @@ last level meets the final identity, `Lg.goal_last`; `LigeritoHonestRun`: the ho
 being few coins, `Bnd`; `ProverOk`: the case's table has a registered scheme and at most 1,024 regions, `Case.schemeOk`,
 so at an oracle of 64-byte outputs its digests have the scheme's width, `opsWith_widths`, `schemeWidths`, its level-0
 cap is non-empty and under `2^64` bytes, `commitP_cap`, and `ProverOk` holds, `proverOk`). -/
+
+@[expose] public section

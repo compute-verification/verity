@@ -1,11 +1,18 @@
-import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
-import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Rows
+public import Proofs.Flock.Soundness.Discharge.ZkLink.Public
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Audit.Circuit
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Expect
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The rows link at the compiled `--zk` audit
 
-`analysisZCReg` counts a drawn unit wrong when it is wrong on the registration (`wrongRegZ`). This file adds the units
-whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the drawn units of
+`analysisZCReg` counts a sampled proof block wrong when it is wrong on the registration (`wrongRegZ`). This file adds the units
+whose value layer differs, at a registered read, from the registrant's row (`rowsWrongZ`), and bounds the sampled proof blocks of
 both kinds by `ε_ks + δ_link + δ_rows`, at a registrant's openings `wo` of the registered reads `isRead` whose
 commitments are the registered ones:
 
@@ -16,10 +23,12 @@ commitments are the registered ones:
 * `trial_rows_leZC`: the trial's rows mass at a registered read is at most `t'(1 + k)/2^256`, under A2 for the rows
   finder (`RowsCRZC`), since the trial's opening and the registrant's then collide (`ValueBindingZ.collide_spec`);
 * `ideal_le_trialZC`: `ideal_mass_leZC`'s step from the trial to the audit's extractor, for any trace;
-* `analysisZCRows`, `zk_rowsLinkSoundC`: the analysis, and its link term at `rowsBoundZC`, `δ_link + δ_rows` with
+* `analysisZCRows`, `zk_rowsLinkSoundC`: the analysis, and its binding error at `rowsBoundZC`, `δ_link + δ_rows` with
   `δ_rows` at most `δ_link`'s closed form;
 * `zk_flock_drawnC_rows`: `Audit.extraction_audit_drawn` at it.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkLink
 
@@ -129,7 +138,7 @@ theorem trial_rows_leZC {t' : ℝ} (ht : 0 ≤ t') (k Rw : ℕ) (c : vb.Pos) [No
     _ ≤ _ := div_le_div_of_nonneg_right hcost (by positivity)
 
 /-- **From the trial to the audit's extractor, for any trace `Ψ` at `c`** (`ideal_mass_leZC`'s step): a trace in
-`[0, 1]` that vanishes at draws that do not read `c`, jointly with acceptance and averaged over the draw, is at most
+`[0, 1]` that vanishes at samples that do not read `c`, jointly with acceptance and averaged over the sample, is at most
 `π c` times the trial's bound `Bt` plus `k/(eRw)` for the waits that give up. -/
 theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω → List (List (OutZC F D Sl)) → ℝ)
     (h0 : ∀ ω bs, 0 ≤ Ψ ω bs) (h1 : ∀ ω bs, Ψ ω bs ≤ 1)
@@ -192,7 +201,7 @@ theorem ideal_le_trialZC (k Rw : ℕ) (hRw : 1 ≤ Rw) (c : vb.Pos) (Ψ : L.Ω �
 
 /-- **The ideal rows mass at `c`**: the audit extractor's reading, at a registered read `c` whose registrant's
 commitment is the registered one, of a value other than the registrant's, jointly with acceptance and averaged over the
-draw, is at most `π c (t'(1 + k)/2^256 + k/(eRw))` under A2 for the rows finder. -/
+sample, is at most `π c (t'(1 + k)/2^256 + k/(eRw))` under A2 for the rows finder. -/
 theorem ideal_rows_leZC (k Rw : ℕ) (hRw : 1 ≤ Rw) {t' : ℝ} (ht : 0 ≤ t') (c : vb.Pos)
     (hon : isRead c → vb.com (wo c) = vb.cs R c)
     (hCR : ∀ _ : Nonempty (ΩcZ A P planZ tab vb L c), isRead c →
@@ -216,7 +225,7 @@ theorem ideal_rows_leZC (k Rw : ℕ) (hRw : 1 ≤ Rw) {t' : ℝ} (ht : 0 ≤ t')
       rw [h0, expect_const]
       exact hBt
 
-/-- **The rows link event leaves a trace**: if drawn unit `u`'s extracted table is committed but every close satisfying
+/-- **The rows link event leaves a trace**: if sampled proof block `u`'s extracted table is committed but every close satisfying
 message decodes off the value layer on some wire of `u`, or opens a registered read to a value other than the
 registrant's, then some commit string reads a value other than its plurality, or a registered read a value other than
 the registrant's. -/
@@ -277,7 +286,7 @@ theorem rowsLinkEv_le_psiZC (k Rw : ℕ) {ω : L.Ω} {u : Fin n} (hu : u ∈ L.d
 
 end Trial
 
-/-! ## The analysis, and its link term -/
+/-! ## The analysis, and its binding error -/
 
 open Classical in
 /-- **The compiled `--zk` audit's analysis, "wrong" against the registration and the registrant's rows**:
@@ -375,7 +384,7 @@ noncomputable def rowsBoundZC (k Rw M : ℕ) (ρ t' : ℝ) (R : Reg) (τ : Cont 
       (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
   else ⊤
 
-/-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose link term carries the rows: at a prover whose
+/-- **The rows link theorem**: `zk_linkSoundC` at `analysisZCRows`, whose binding error carries the rows: at a prover whose
 link and rows finders satisfy A2 and whose registered reads' commitments are the registrant's, `δ_link + δ_rows` with
 each at most `Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))` (`rowsBoundZC`). -/
 theorem zk_rowsLinkSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k : ℕ}
@@ -481,8 +490,8 @@ theorem zk_rowsLinkSoundC (hlow : LoweringSoundZK A P planZ tab decode) (hown : 
         div_le_div_of_nonneg_right (Finset.sum_le_sum fun c _ => hc c) hρ1.le
     _ = _ := by rw [← Finset.sum_mul]; ring
 
-/-- **The drawn units of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
-with a drawn unit in `wrongRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
+/-- **The sampled proof blocks of the compiled `--zk` audit, against the registration and the registrant's rows**: it accepts
+with a sampled proof block in `wrongRegZ` or in `rowsWrongZ` with probability at most `ε_ks + δ_link + δ_rows`. -/
 theorem zk_flock_drawnC_rows (hlow : LoweringSoundZK A P planZ tab decode) (hown : ∀ u, P.ReadsOwn u) {k Rw M : ℕ}
     (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1) (hr : ∀ S R j, rateZ (planZ S R) j k ≤ ρ)
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}

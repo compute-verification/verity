@@ -1,11 +1,13 @@
-import Definitions.Pouw.Fp8Atom.Fp32
+module
+
+public import Definitions.Pouw.Fp8Atom.Fp32
 
 /-!
 # H-1T: the forming map, the checked chain and its credited words (trusted definitions)
 
 H-1T is `docs/pouw/hardness-shaped-matrices.md` §3.1.
-It is the map `h1_tagged.py` computes (`h1t_ref`, `tag_tuples`, `chain`), with the
-salt fields of the kernel `h1t_form_xq` (`h1_kernel.py`).
+It is the map the module `h1_tagged` computes (`h1t_ref`, `tag_tuples`, `chain`; outside the tree), with the
+salt fields of the kernel `h1t_form_xq`.
 
 * **Layout.** Each k32 slice has 29 real lanes (0..28) and 3 tag lanes (29, 30, 31). There are `T = ⌈k/29⌉` slices,
   and the row and the columns are zero-padded to `29·T`.
@@ -32,6 +34,8 @@ salt fields of the kernel `h1t_form_xq` (`h1_kernel.py`).
 * **Legal** (change 5): `k ≤ 32,768`, `n ≤ 88,412`, every code finite. There is no `|x| ≤ 416` clause, which is
   correctness and not security.
 -/
+
+@[expose] public section
 
 namespace Pouw.Fp8Atom.H1T
 
@@ -83,7 +87,7 @@ def bitAt (w b : ℕ) : Bool := (w >>> b) % 2 == 1
 /-- Bits `b + 2 .. b` of `w`. -/
 def bits3 (w b : ℕ) : Fin 8 := ⟨(w >>> b) % 8, Nat.mod_lt _ (by norm_num)⟩
 
-/-- The fields `h1t_form_xq` reads (`h1_kernel.py`): real lanes `2i` and `2i + 1` from bits 15 and 31 of `r_i`; tag
+/-- The fields the kernel `h1t_form_xq` reads: real lanes `2i` and `2i + 1` from bits 15 and 31 of `r_i`; tag
 lane 29 from bits 31 and 25..23 of `r17`; tag lanes 30 and 31 from bits 15, 9..7 and 31, 25..23 of `r16`. -/
 def extract (r : RawSlice) : SliceSalt where
   pos l := bitAt (r ⟨l.val / 2, by have := l.isLt; omega⟩) (if l.val % 2 = 0 then 15 else 31)

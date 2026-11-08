@@ -1,4 +1,13 @@
+module
+
+public import Proofs.Flock.VBridge.Algebra.Lincheck
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Arith
 import Proofs.Flock.VBridge.Algebra.RunSkel
+import VCVio.Prelude.Core
 
 /-!
 # L4′: the lincheck with hidden units, at the residuals
@@ -13,6 +22,8 @@ comb `comb + h` (`addH`). `lincheck_of_residuals_holo`: so when they are zero th
 `lincheck_of_residuals_hw` reads its residuals at w itself, ending the rounds at `dot (comb + h) z_partial` for the `h`
 w holds (`hOfW`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

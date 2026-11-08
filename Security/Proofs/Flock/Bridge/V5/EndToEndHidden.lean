@@ -1,5 +1,7 @@
-import Proofs.Flock.Bridge.V5.Statement
-import Proofs.Flock.Bridge.EndToEndHiddenC
+module
+
+public import Proofs.Flock.Bridge.V5.Statement
+public import Proofs.Flock.Bridge.EndToEndHiddenC
 
 /-!
 # `EndToEndHiddenV5`, from `OpeningsCanonTargetV5`
@@ -9,12 +11,14 @@ import Proofs.Flock.Bridge.EndToEndHiddenC
 * `Layout.keyProgP_readsOwn`: `keyProgP`'s proof blocks read only their own gates and input gates (`keyProgP_reads`);
 * `zk_session_soundHJ_custody_escCP`: at flock-verify `--zk --public-inputs`'s acceptance (`zk_headline_exec_tablesA`
   at `AcceptsZKP I own`, through `decodesZCJH_custodyP` under the registration's law), at `keyProgP` and the binding
-  `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the draw's escape of `W` and the extraction's
-  terms (`zk_flock_escapeC_regC`), at any draw `L`;
-* `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's draw
-  `execSel` under the law, whose escape of `W` is at most the law's `P_a` of `W` under A3 (`execSel_escape_le`), and the
+  `rsZHJP`, a set `W` of proof blocks is wrong with probability at most the sample's escape of `W` and the extraction's
+  terms (`zk_flock_escapeC_regC`), at any sample `L`;
+* `Flock.Bridge.endToEndHiddenV5_of`: `OpeningsCanonTargetV5` gives `EndToEndHiddenV5`, at the verifier's sample
+  `execSel` under the sampling design, whose escape of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`), and the
   last term in closed form as `endToEndHiddenC_of`'s.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Layout
 
@@ -39,10 +43,10 @@ variable {n : ℕ} {Reg : Type}
 
 /-- **One hidden-output `--zk` sampled session of `J` tables at the verifier's public inputs, under the registration's
 law, is sound against the registration with canonical openings, at a set of proof blocks**: every proof block of `W` is
-wrong with probability at most the draw's escape of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
+wrong with probability at most the sample's escape of `W` and the extraction's terms (`zk_flock_escapeC_regC` at `own`). -/
 theorem zk_session_soundHJ_custody_escCP
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    {c : Flock.Circuit} (hc : HmOut.parse (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
+    {c : Flock.Circuit} (hc : HmOut.parseStmt (zkTags I) I.circuitFile I.tables = .ok c) (hU : Built c.unit)
     {pi : HmIn.Ports} (hpi : HmIn.parse c = .ok pi)
     {pub : Public} (hpub : HmIn.loadPublic (zkTags I) c pi I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
@@ -53,7 +57,8 @@ theorem zk_session_soundHJ_custody_escCP
       LiveOutJ (planZHJP (Reg := Reg) dj y₀ S R).length (mPtsOf c.g (kd / nTab I)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ) (L : Law n)
     (hTags : TagsOkZHJ I)
-    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr law)
+    (hCust : Assumptions.Zk.RecordCustodyZKJPLaw I own dj (fun S R => (planZHJP (Reg := Reg) dj y₀ S R).length) wr
+      fun _ => law)
     (hsz : ∀ S D, Draw.UnitDraw.ofJson (dj S) = .ok D → D.units.size = kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
     (hr : ∀ S R j, rateZ (planZHJP (Reg := Reg) dj y₀ S R) j k ≤ ρ) {t' : ℝ} (ht' : 0 ≤ t') (W : Finset (Fin n))
@@ -104,13 +109,13 @@ namespace Flock.Bridge
 
 open FlockSoundness FlockSoundness.Game FlockSoundness.Audit FlockSoundness.Discharge.ZkLink
 
-/-- **`OpeningsCanonTargetV5` gives `EndToEndHiddenV5`**: the session's bound at the verifier's draw under the law,
-whose escape of `W` is at most the law's `P_a` of `W` under A3 (`execSel_escape_le`). -/
+/-- **`OpeningsCanonTargetV5` gives `EndToEndHiddenV5`**: the session's bound at the verifier's sample under the sampling design,
+whose escape of `W` is at most the sampling design's `P_a` of `W` under A3 (`execSel_escape_le`). -/
 theorem endToEndHiddenV5_of (hOC : OpeningsCanonTargetV5) : EndToEndHiddenV5 := by
   intro n Reg I own ht D hD hU pi hpi pub hpub hscope law kd ns hns hlaw hdiv dj S₀ d₀ y₀ wr dg N Ω _ _ Lb src hA3 hTags
     hCust k Rw M hk hRw hM ρ hρ hr t' ht' W τ qF qS L P vb σ Cc Lm rows κ hCR hA2
-  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_escCP I own ht (Flock.Desc.parse_flat hD) hU hpi hpub hscope
-    law kd hdiv dj y₀ wr dg N L hTags hCust (lawOn_size hlaw hCust.2) hk hRw hM hρ hr ht' W
+  have h := Discharge.ZkHidden.zk_session_soundHJ_custody_escCP I own ht (Flock.Desc.parseStmt_stmt hD) hU hpi hpub
+    hscope law kd hdiv dj y₀ wr dg N L hTags hCust (lawOn_size hlaw hCust.2) hk hRw hM hρ hr ht' W
     (fun g o => canonAt rows κ g (vb.bit (vb.val o) g) (vb.val o) o.2.2)
     (hOC n Reg I own ht D hD hU pi hpi pub hpub hscope kd dj S₀ d₀ y₀) τ
     (qF := qF) (qS := qS) hCR

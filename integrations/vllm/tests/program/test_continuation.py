@@ -264,7 +264,7 @@ def test_profile_a_is_the_resolved_header_field_through_the_one_lag_rule_never_d
         K.resolve_profile({"profile": {"engine_kwargs": {"async_scheduling": None}}})
     with pytest.raises(ValueError, match="not attested"):
         K.resolve_profile({"profile": {"engine_kwargs": {}}})
-    with pytest.raises(ValueError, match="DP-pad-02"):
+    with pytest.raises(ValueError, match="post-EOS lag must be declared"):
         K.check_profile(2)
     assert K.declared_profile({"workload_fn": "Workload_v1{requests=(a,b),shared=weights,lag=1}"}) == (1, lifted_records.LAG_STATIC_FIELD + ":lag=")
 
@@ -309,26 +309,26 @@ def test_derived_invariant_reproduces_the_real_records_executed_lengths_under_th
 
 def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared_by_name():
     L_ = 32
-    # the earlystop shape: 11 served (EOS last), cap 32, A = 1 -> 12 draws at pos 31..42 (slot t at L - 1 + (t - 1), the ledger's pos fact),
-    # the lag draw at 42 (= the lag_draw_pos of record)
+    # the earlystop shape: 11 served (EOS last), cap 32, A = 1 -> 12 samples at pos 31..42 (slot t at L - 1 + (t - 1), the ledger's pos fact),
+    # the lag sample at 42 (= the lag_draw_pos of record)
     exp = K.expected_draw_positions([ORD] * 10 + [EOS[0]], cap=32, A=1, eos=EOS, prompt_len=L_)
     assert exp["positions"] == list(range(31, 43)) and exp["lag_positions"] == [42] and exp["n"] == 12 and exp["first_forbidden_position"] == 43
     assert exp["served_positions"] == list(range(31, 42))
-    # A = 0: no lag draw
+    # A = 0: no lag sample
     exp0 = K.expected_draw_positions([ORD] * 10 + [EOS[0]], cap=32, A=0, eos=EOS, prompt_len=L_)
     assert exp0["positions"] == list(range(31, 42)) and exp0["lag_positions"] == []
-    # a cap-exhausting request: cap draws, no lag position, nothing after the cap in either profile
+    # a cap-exhausting request: cap samples, no lag position, nothing after the cap in either profile
     full = K.expected_draw_positions([ORD] * 8, cap=8, A=1, eos=EOS, prompt_len=L_)
     assert full["positions"] == list(range(31, 39)) and full["lag_positions"] == [] and full["first_forbidden_position"] == 39
-    # EOS at the last slot: the cap bounds the lag slot (min(n + 1, C)); exactly cap draws
+    # EOS at the last slot: the cap bounds the lag slot (min(n + 1, C)); exactly cap samples
     at_cap = K.expected_draw_positions([ORD] * 7 + [EOS[0]], cap=8, A=1, eos=EOS, prompt_len=L_)
     assert at_cap["positions"] == list(range(31, 39)) and at_cap["lag_positions"] == []
     # the ledger: measured exactly -> ok
     assert K.compare_draw_positions(exp["positions"], list(range(31, 43)))["ok"]
-    # over-cap draws with NO EOS are EXTRA positions by name (never silent)
+    # over-cap samples with NO EOS are EXTRA positions by name (never silent)
     c = K.compare_draw_positions(full["positions"], list(range(31, 40)))
     assert not c["ok"] and c["extra"] == [39] and "without r_t" in c["problems"][0]
-    # two draws after the served EOS (a second lag draw), a missing served draw, a repeated position, out of order: each named
+    # two samples after the served EOS (a second lag sample), a missing served sample, a repeated position, out of order: each named
     c2 = K.compare_draw_positions(exp["positions"], list(range(31, 44)))
     assert c2["extra"] == [43] and not c2["ok"]
     c3 = K.compare_draw_positions(exp["positions"], [p for p in range(31, 43) if p != 35])
@@ -337,7 +337,7 @@ def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared
     assert c4["repeated"] == [40] and c4["extra"] == [] and not c4["ok"]
     c5 = K.compare_draw_positions(exp["positions"], list(reversed(range(31, 43))))
     assert not c5["ok"] and "out of order" in c5["problems"][0]
-    # A = 0 record with the lag draw present: the extra draw at 42 is named (the RNG advanced without r_t)
+    # A = 0 record with the lag sample present: the extra sample at 42 is named (the RNG advanced without r_t)
     c6 = K.compare_draw_positions(exp0["positions"], list(range(31, 43)))
     assert c6["extra"] == [42] and not c6["ok"]
     with pytest.raises(ValueError):
@@ -345,13 +345,13 @@ def test_r5_expected_draw_positions_are_the_run_slots_and_the_ledger_is_compared
 
 
 def test_r5_positions_are_the_ledgers_pos_fact_draw_k_at_prompt_len_minus_1_plus_k_stoch_m_0749():
-    """One convention on the record: the sample ledger maps draw k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
-    position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first draw is at pos 7, the llama B8
+    """One convention on the record: the sample ledger maps sample k (k from 0, slot t = k + 1) to pos = prompt_len - 1 + k, the query
+    position whose logits are sampled and the `pos` fact the sampled rows carry (an 8-token prompt's first sample is at pos 7, the llama B8
     record).  `expected_draw_positions` gives the same numbers -- the ledger imports `recurrence`/`executed_slots` and a disagreement is
     'two mechanisms'."""
     L_, C = 8, 6
     exp = K.expected_draw_positions([ORD, ORD, EOS[0]], cap=C, A=1, eos=EOS, prompt_len=L_)
-    ledger = [L_ - 1 + k for k in range(4)]  # 3 served + the lag draw = draws k = 0..3
+    ledger = [L_ - 1 + k for k in range(4)]  # 3 served + the lag sample = samples k = 0..3
     assert exp["positions"] == ledger == [7, 8, 9, 10] and exp["lag_positions"] == [10] and exp["first_forbidden_position"] == 11
     acc = K.rng_accounting(K.recurrence([ORD, ORD, EOS[0], 9, None, None], cap=C, A=1, eos=EOS), prompt_len=L_)
     assert acc["lag_draw_pos"] == 10 == exp["lag_positions"][0]

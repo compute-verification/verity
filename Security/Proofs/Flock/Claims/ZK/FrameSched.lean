@@ -1,13 +1,17 @@
-import Proofs.Flock.Claims.ZK.FrameLoop
-import Proofs.Flock.Claims.ZK.FramePass
-import Proofs.Flock.Claims.ZK.FinishLevel0
+module
+
+public import Proofs.Flock.Claims.ZK.FrameLoop
+public import Proofs.Flock.Claims.ZK.FramePass
+public import Proofs.Flock.Claims.ZK.FinishLevel0
+import all Init.Data.String.Defs
+import all Init.Data.Array.DecidableEq
 
 /-!
-# Two runs of the firewall's prover alike in shape
+# Two runs of the ZK server's prover alike in shape
 
 The loop's release runs each rep's frame on the rep's scheduled rounds at placeholder inputs (a zero level 0 of the
 statement's shape, zero salts for levels ≥ 1), and the deployed frame checks the device against the scheduled rounds at
-the tape's. Both are the firewall's own prover (`Finish.repPiop`,
+the tape's. Both are the ZK server's own prover (`Finish.repPiop`,
 `Finish.repOpening`) run at two inputs of one shape, and the frame's state reads a round's shape alone (`FrameShape`), so
 what is left is that the two runs send rounds of one shape. The prover is generic in its monad, so the comparison is
 too:
@@ -27,6 +31,8 @@ too:
 * **The ring switch** (`ringSwitchP_sim`): at switched vectors of the same sizes, it returns the same switched claims.
 -/
 
+@[expose] public section
+
 namespace Claims.ZKServer
 
 open _root_.Flock (V F128 F256 Transcript TMW liftTM)
@@ -45,7 +51,7 @@ def PendAlike (p p' : ByteArray) : Prop :=
   ∃ fs fs' : List Frame, p.data.toList = encs fs ∧ p'.data.toList = encs fs' ∧ List.Forall₂ Alike fs fs' ∧ MidAll fs
 
 /-- Two transcripts with pending bytes of one shape. -/
-def TrAlike (t t' : Transcript) : Prop := PendAlike t.pending t'.pending
+def TrAlike (t t' : Flock.Transcript) : Prop := PendAlike t.pending t'.pending
 
 /-- **Two rounds of one shape**: a squeeze's framed bytes over pending bytes of one shape, its kind and count as
 `roundFree` takes them. -/
@@ -120,11 +126,6 @@ theorem sim_ite {α β : Type} {S : α → β → Prop} (c : Prop) [Decidable c]
   · rw [if_pos hc, if_pos hc]; exact h1 hc
   · rw [if_neg hc, if_neg hc]; exact h2 hc
 
-theorem sim_mono {α β : Type} {S S' : α → β → Prop} {p : TMW M α} {q : TMW M β} (h : Sim L S p q)
-    (hS : ∀ a b, S a b → S' a b) (hp : p >>= pure = p) (hq : q >>= pure = q) : Sim L S' p q := by
-  rw [← hp, ← hq]
-  exact sim_bind h fun a b hab => sim_pure (hS a b hab)
-
 /-- **A loop over `[0:n]` alike**: if step `i` from values related by `I i` yields values related by `I (i + 1)`,
 the loops end related by `I n`. -/
 theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInStep σ)) (body' : ℕ → τ → TMW M (ForInStep τ))
@@ -153,7 +154,7 @@ theorem sim_forIn {σ τ : Type} (n : ℕ) (body : ℕ → σ → TMW M (ForInSt
 /-! ## The transcript's steps -/
 
 /-- A transcript step that only appends a frame to the pending bytes. -/
-theorem sim_liftTM_mod {x x' : _root_.Flock.Transcript.TM Unit} {F F' : Transcript → Transcript}
+theorem sim_liftTM_mod {x x' : _root_.Flock.Transcript.TM Unit} {F F' : Flock.Transcript → Flock.Transcript}
     (hx : ∀ t, x t = .ok ((), F t)) (hx' : ∀ t, x' t = .ok ((), F' t))
     (hF : ∀ t t', TrAlike t t' → TrAlike (F t) (F' t')) : Sim L (· = ·) (liftTM x : TMW M Unit) (liftTM x') := by
   intro t t' ht
@@ -931,7 +932,7 @@ theorem sim_relift (coins : Array (Array F128)) (live live' : Bool) {α β : Typ
 
 /-- A stream's transcript at its start, its domain a `u64` length. -/
 theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
-    TrAlike (Transcript.init #[] dom) (Transcript.init #[] dom) :=
+    TrAlike (Flock.Transcript.init #[] dom) (Flock.Transcript.init #[] dom) :=
   ⟨[.dom dom], [.dom dom], by simp [encs, FlockSoundness.Refine.init_enc],
     by simp [encs, FlockSoundness.Refine.init_enc], .cons rfl .nil, fun f hf => by
       simp only [List.mem_singleton] at hf
@@ -940,7 +941,7 @@ theorem trAlike_init (dom : ByteArray) (hd : dom.size < 2 ^ 64) :
 
 /-- **Two opening programs alike, run** from alike transcripts at one state: alike resumptions. -/
 theorem stepRel_run {coins : Array (Array F128)} {live : Bool} {α β : Type} {S : α → β → Prop}
-    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Transcript}
+    {p : TMW OpenM α} {q : TMW OpenM β} (h : Sim (openLift coins live) S p q) {t t' : Flock.Transcript}
     (ht : TrAlike t t') (s : Array (Array F128)) :
     StepRel (fun _ _ => True) ((p.run' t).run' s) ((q.run' t').run' s) := by
   refine stepRel_bind (T := fun _ _ => True) (stepRel_bind (T := fun _ _ => True) (h t t' ht s) fun _ _ _ => ?_)
@@ -1011,11 +1012,11 @@ theorem stateT_bind_apply {σ α β : Type} (x : StateT σ V α) (f : α → Sta
     (x >>= f) s = x s >>= fun p => f p.1 p.2 :=
   rfl
 
-theorem tmw_bind_apply {σ α β : Type} (x : TMW (StateT σ V) α) (f : α → TMW (StateT σ V) β) (t : Transcript)
+theorem tmw_bind_apply {σ α β : Type} (x : TMW (StateT σ V) α) (f : α → TMW (StateT σ V) β) (t : Flock.Transcript)
     (s : σ) : (x >>= f) t s = x t s >>= fun p => f p.1.1 p.1.2 p.2 :=
   rfl
 
-theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Transcript) (s : σ) :
+theorem tmw_run'_run {σ α : Type} (x : TMW (StateT σ V) α) (t : Flock.Transcript) (s : σ) :
     (x.run' t).run s = x t s >>= fun p => pure (p.1.1, p.2) :=
   rfl
 
@@ -1023,7 +1024,7 @@ section Skel
 
 open _root_.Flock.Firewall.Skeleton (RecM recAsks padsFrames)
 
-/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins drawn, rounds of one shape. -/
+/-- **Two recordings alike, pinned at their first rounds** `h` and `h'`: as many coins flipped, rounds of one shape. -/
 def RecP (h h' : ByteArray × ℕ) (s s' : Array (ByteArray × ℕ) × ℕ) : Prop :=
   s.2 = s'.2 ∧ RoundsAt s.1 s'.1 ∧ s.1[0]? = some h ∧ s'.1[0]? = some h'
 
@@ -1061,7 +1062,7 @@ def recLift (h h' : ByteArray × ℕ) : Lift (M := RecM) recAsks where
 
 /-- What the masked zerocheck frames before its first squeeze, up to its label, at `dom`, `digest` and `cap`. -/
 def zcPre (digest cap dom : ByteArray) : ByteArray :=
-  (Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
+  (Flock.Transcript.init #[] dom).pending ++ header 2 0 "flock-r1cs-v0".toUTF8.size ++
     _root_.Flock.Transcript.padded "flock-r1cs-v0".toUTF8 ++ header 5 0 digest.size ++
     _root_.Flock.Transcript.padded digest ++ header 5 0 cap.size ++ _root_.Flock.Transcript.padded cap ++
     header 2 0 "flock-zerocheck-v0".toUTF8.size ++ _root_.Flock.Transcript.padded "flock-zerocheck-v0".toUTF8
@@ -1073,7 +1074,7 @@ def zcPend (digest cap root dom : ByteArray) : ByteArray :=
     _root_.Flock.Transcript.padded root
 
 /-- The transcript after the masked zerocheck's first round `c`, the recording's coins. -/
-def skelT8 (c : ByteArray) : Transcript :=
+def skelT8 (c : ByteArray) : Flock.Transcript :=
   { rounds := (#[] : Array _root_.Flock.Round).push
       ⟨6, ByteArray.empty, (Array.range 6).map fun i => _root_.Flock.Firewall.Skeleton.coin (0 + i + 1), some c⟩,
     k := 0 + 1, pending := ByteArray.empty }
@@ -1086,7 +1087,7 @@ def skelS1 (c : ByteArray) : Array (ByteArray × ℕ) × ℕ :=
 /-- **The recorded zerocheck up to its first round**, from a rep's start: the rest at that round recorded. -/
 theorem zerocheckFw_head (m : ℕ) (digest cap root dom : ByteArray) (lay : _root_.Flock.Zk.PadLayout)
     (mk : ℕ → F128) :
-    zerocheckFw recAsks m digest cap root lay mk (Transcript.init #[] dom) (#[], 0) =
+    zerocheckFw recAsks m digest cap root lay mk (Flock.Transcript.init #[] dom) (#[], 0) =
       zcRest recAsks m lay mk (skelT8 (zcPend digest cap root dom ++ header 4 2 6))
         (skelS1 (zcPend digest cap root dom ++ header 4 2 6)) := by
   rw [zerocheckFw_split]
@@ -1140,9 +1141,9 @@ theorem skel_run (st : _root_.Flock.Setup) (lay : _root_.Flock.Zk.PadLayout) (ca
     RelV (fun a b => RecP (zcPend st.digest cap root dom ++ header 4 2 6, 6)
         (zcPend st.digest cap' root dom ++ header 4 2 6, 6) a.2 b.2)
       (((repPiop recAsks st lay cap root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0))
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0))
       (((repPiop recAsks st lay cap' root #[] fun _ => 0) >>= fun _ => pure () : TMW RecM Unit).run'
-        (Transcript.init #[] dom) |>.run (#[], 0)) := by
+        (Flock.Transcript.init #[] dom) |>.run (#[], 0)) := by
   have hcnt : ∀ c, (_root_.Flock.u64OfLE (zcPend st.digest c root dom ++ header 4 2 6)
       ((zcPend st.digest c root dom ++ header 4 2 6).size - 8)).toNat = 6 :=
     fun c => count_header _ 2 6 (by decide)
@@ -1247,7 +1248,7 @@ commitments of one shape. -/
 def TabAlike (t t' : _root_.Flock.Firewall.Finish.Tab) : Prop :=
   t.st = t'.st ∧ t.sch = t'.sch ∧ t.tPad = t'.tPad ∧ t.g.size = t'.g.size ∧ CapAlike t.cm0 t'.cm0
 
-/-- **Two level 0s the loop draws at one `m`**, of packed tables of one size, give tables of one shape, or are both
+/-- **Two level 0s the loop samples at one `m`**, of packed tables of one size, give tables of one shape, or are both
 refused. -/
 theorem tabOfLevel0_alike (st : _root_.Flock.Setup) {m : ℕ} {g g' : Array F128} {d d' : ByteArray}
     {l l' : _root_.Flock.Firewall.Level0.Level0} (h : _root_.Flock.Firewall.Level0.ofDraws m g d = .ok l)

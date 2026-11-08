@@ -1,5 +1,6 @@
-import Flock.HmRow
-import Flock.RecSparse
+module
+
+public import Flock.HmRow
 
 /-!
 `flock-rec-sparse`'s command: the verifier's sparse-phase unit (`Flock.RecSparse`), which `test_lean_rec_sparse` holds to
@@ -11,6 +12,8 @@ import Flock.RecSparse
 `net` prints `RecSparse.unitLaid` as `flock-ir-unit/v2` text (`ir_lower.netlist`'s form). `check` parses the file as
 `verity/flock-circuit` and prints one `{"unit", "ok"}` line for each name, with `"error"` when refused.
 -/
+
+@[expose] public section
 
 namespace Flock.RecSparseCmd
 

@@ -17,25 +17,30 @@ import json
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import torch
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parents[1] / "hash" / "exactlin"))
+import kbench  # noqa: E402
+from verity_vllm.engine import int8_fused as X  # noqa: E402
+
 import fixture as FX  # noqa: E402
 import int_mm as IM  # noqa: E402
-import kbench  # noqa: E402
 import run as R  # noqa: E402
 import wgmma as W  # noqa: E402
-from verity_vllm.engine import int8_fused as X  # noqa: E402
 
 TUNE_MS = (1, 16, 32, 64, 128, 192, 256, 384, 512, 1024, 2048, 4096, 8192, 16384, 20480)
 WARPS, STAGES = (4, 8), (2, 3, 4, 5)
 GROUPS = (1, 2, 4, 8, 16, 32)
 
 
-def coarse(m: int, n: int, kern) -> list:
+def coarse(m: int, n: int, kern: R.Kernel) -> list:
     """wgmma: each tile, its pair cluster where M has two tile rows, and split K where the tiles leave SMs idle."""
     if kern.name == "wgmma":
         tms = (64,) if m <= 64 else (64, 128) if m <= 256 else (128,)
@@ -45,7 +50,7 @@ def coarse(m: int, n: int, kern) -> list:
     return coarse_triton(m)
 
 
-def refine(cfgs: list, kern) -> list:
+def refine(cfgs: list, kern: R.Kernel) -> list:
     if kern.name == "wgmma":
         return [W.Cfg(*c[:3], g, *c[4:]) for c in cfgs for g in GROUPS]
     return [X.Cfg(*c[:3], w, s, *c[5:]) for c in cfgs for w in WARPS for s in STAGES]
@@ -78,7 +83,7 @@ def coarse_triton(m: int) -> list[X.Cfg]:
 
 
 class Shape:
-    def __init__(self, n: int, k: int, m: int):
+    def __init__(self, n: int, k: int, m: int) -> None:
         self.n, self.k, self.m = n, k, m
         self.copies = kbench.copies_for(n, k)
         self.ws = [R.Weights(n, k, seed=1000 + i, special=False) for i in range(self.copies)]
@@ -88,13 +93,13 @@ class Shape:
         self.ref_last = R.reference(IM.int_mm(self.x, self.ws[-1].w), self.sa, self.ws[-1].sw)
         self.y = torch.empty((m, n), dtype=torch.bfloat16, device="cuda")
 
-    def fn(self, cfg, kern):
-        def f():
+    def fn(self, cfg: R.KernelCfg, kern: R.Kernel) -> Callable[[], None]:
+        def f() -> None:
             for wt in self.ws:
                 kern.call(self.x, self.sa, wt.w, wt.sw, self.y, cfg)
         return f
 
-    def gate(self, cfg, kern) -> dict:
+    def gate(self, cfg: R.KernelCfg, kern: R.Kernel) -> dict:
         wt = self.ws[0]
         rec: dict = {}
         for i in range(2):
@@ -108,7 +113,8 @@ class Shape:
         return rec
 
 
-def sweep(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, kern) -> dict:
+def sweep(out: Path, shape: Shape, cfgs: list, reps: int, clock: Callable[[], int | None], phase: str,
+          kern: R.Kernel) -> dict:
     fns, recs = {}, {}
     for cfg in dict.fromkeys(cfgs):
         rec = {"phase": phase, "n": shape.n, "k": shape.k, "m": shape.m, "cfg": str(cfg)}
@@ -140,7 +146,7 @@ def sweep(out: Path, shape: Shape, cfgs: list, reps: int, clock, phase: str, ker
     return {name: us for name, us in med.items() if recs[name]["ok"]}
 
 
-def best(med: dict, top: int, kern) -> list:
+def best(med: dict, top: int, kern: R.Kernel) -> list:
     return [kern.Cfg.parse(c) for c, _ in sorted(med.items(), key=lambda cu: cu[1])[:top]]
 
 

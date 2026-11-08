@@ -1,8 +1,10 @@
-/-!
-# A drawn H1 leaf's 33 statements, port by port (option A)
+module
 
-Under option A a drawn leaf is proved as its lanes, `h1zy`'s `PouwH1LaneZy_v1{TILE}` (lane `l` by its public
-index), and their combine `PouwH1Combine_v1{TILE}`, each a C-Flock statement of one unit. This states, for a leaf's tile
+/-!
+# A sampled H1 leaf's 33 statements, port by port (option A)
+
+Under option A a sampled leaf is proved as its lanes, `h1zy`'s `PouwH1LaneZy_v1{TILE}` (lane `l` by its public
+index), and their combine `PouwH1Combine_v1{TILE}`, each a Flock statement of one unit. This states, for a leaf's tile
 and contraction (`Tile`), which port of each statement holds each of the Definition's inputs and its output, at which bits
 of the port's row (`Field`), and where the verifier opens that row (`Source`): the port of `h1zy.statement_ports`, with
 each port's row as `pouw.leaf_lanes` reads it (`reads`, `known`). `tests/test_lanes.py` holds it to the first and
@@ -11,7 +13,7 @@ leaf at K = 64.
 
 * **A port's row** is a bit row (`hm96-sha512/row/v2`) of 16-bit words, bit `t` of the row bit `t % 16` of word `t / 16`.
   Its fields are the inputs it holds, their leaves concatenated in signature order, least significant bit first
-  (`class_statement.unit_lowering`). An input row is exactly its fields' bits, which C-Flock takes only as whole words
+  (`class_statement.unit_lowering`). An input row is exactly its fields' bits, which Flock takes only as whole words
   (`unit_lowering`, `Flock.ProvedScope.v2Row`); the output port `o0` is `ok`, bit 0, zero-padded to one word.
 * **The fields**, by their path in the signature (`a[0].codes`: the codes of the lane's A row at row slot 0):
   * an A or B row (`h1zy.ROW`): `.codes`, code `k` the s8 at bits `[8k, 8k + 8)`, then `.scale`, its f32;
@@ -27,17 +29,21 @@ leaf at K = 64.
   `Tile.rowOf l s` of `a`, its B row at slot `t` row `Tile.colOf l t` of `b`, its partial row `l` of `partials`; the
   combine's `p<x>` row `x`), or the one row of a value the verifier registers itself at its known content (`known`: lane
   `l`'s `pub` and `admit`, and statement `i`'s `o0`, value `ok<i>`, the row 1; statement `i` is lane `i`, then the
-  combine). STAND-IN: `a`, `b`, `zy` and `receipt` are the leaf's own rows, as `leaf_lanes` reads them; in a served window
-  they are the window's table rows (`circuit.h1window`).
+  combine). STAND-IN: `a`, `b`, `zy` and `receipt` are the leaf's own rows, as `leaf_lanes` reads them; in a served execution phase
+  they are the execution phase's table rows (`circuit.h1window`).
 * **The unit's input wires** (`wires?`, `wireOf?`): the input ports' rows one after another in port order, wire `w` the
   unit's input column `w`, so port `p`'s row bit `b` is wire `b` past the bits of the ports before it
   (`class_statement.unit_lowering`, whose input leaf `j` is row word `j`: META `leaves_in` the identity). The test holds it
   to the lowered circuits' own port records (`unit_lowering`'s rows and input columns, `UnitStager`'s META `ports`,
-  `row_schemas` and `leaves_in`), and C-Flock's refusals to `wires?`'s.
+  `row_schemas` and `leaves_in`), and Flock's refusals to `wires?`'s.
 
 Code: Lean core only, never `Security/`, so proofs' decoders (`Security/Proofs/Accounting/TS/Session/Lanes`) import it
 from `pouw_window` through `security_properties`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow.Lanes
 
@@ -50,7 +56,7 @@ where
     | 0, m, _ => m
     | fuel + 1, m, p => if ks ≤ p then m else go fuel (m + 1) (128 * p)
 
-/-- A drawn leaf's tile: `r × c` cells at contraction `k` (`h1tile.Layout`), tiled by lanes of 4 rows and 8 columns. -/
+/-- A sampled leaf's tile: `r × c` cells at contraction `k` (`h1tile.Layout`), tiled by lanes of 4 rows and 8 columns. -/
 structure Tile where
   r : Nat
   c : Nat
@@ -185,7 +191,7 @@ def combine? (T : Tile) : Except String (List Port) := do
 
 /-! ## A J10-R leaf
 
-A drawn unit over J10-R's `PouwH1Tile_v5` is proved as `h1zy`'s v2 statements: each lane in `n` chunks along K
+A sampled proof block over J10-R's `PouwH1Tile_v5` is proved as `h1zy`'s v2 statements: each lane in `n` chunks along K
 (`PouwH1LaneZyChunk_v2`, `n = weights.chunks K`, `PouwCheck.Chunks.chunks`, which the caller passes; at `n = 1` the whole
 lane, `PouwH1LaneZy_v2`), then `PouwH1Combine_v2`, which folds the other statements' oks into its own. Statement `i < lanes n`
 is lane `i / n`'s chunk `i % n`; `leaf_lanes`' J10-R leaf reads them so:

@@ -1,19 +1,69 @@
-import Proofs.Flock.Claims.Recursion.RecRecord
-import Proofs.Flock.Claims.Recursion.DeployHonest
-import Proofs.Flock.C3.VStarList.Accepts
+module
+
+public import Proofs.Flock.C3.VStarList.Accepts
+public import Proofs.Flock.Claims.Recursion.DeployHonest
+public import Proofs.Flock.Claims.Recursion.LayoutBTops
+public import Proofs.Flock.Claims.Recursion.RecRecord
+public import Proofs.Flock.Claims.Recursion.SlotsCheck
+import all Init.Data.Repr
+import all Init.Data.String.Defs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.C3.PubRows.Check
+import Proofs.Flock.Claims.Recursion.DeployScope
+import Proofs.Flock.Claims.Scope.Fit
+import Proofs.Flock.Claims.Scope.Setup
+import Proofs.Flock.Soundness.Discharge.Hidden.Committed
+import Proofs.Flock.Soundness.Discharge.Hidden.Public
+import Proofs.Flock.Soundness.Discharge.Hidden.Spec
 import Proofs.Flock.Soundness.Discharge.Hidden.Wide.Shared
-import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Hm.Site
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
 import Proofs.Flock.Soundness.Discharge.Layout.QSort
-import Proofs.Flock.Claims.Recursion.SlotsCheck
-import Proofs.Flock.Claims.Recursion.LayoutBTops
+import Proofs.Flock.Soundness.Discharge.Layout.SharedRows
+import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
+import Proofs.Flock.Soundness.Refine.Walk
+import Std.Tactic.BVDecide.Normalize.Bool
 
 /-!
 # What a staged part's transcript shows is the record the verifier read in its own format
 
 `PartOpensB` at `cmtTr recRead` asks the commit strings a part holds to be those its V\* statement's transcript shows,
-read by `recRead`: the coin server's record in its own format (`Flock.RecRecord.readFull`). Every staged part carries
-the coin server's transcript (`insO_staged_link`), and its recursive setup holds it at the verifier's inner shape
+read by `recRead`: the challenger's live-coin part's record in its own format (`Flock.RecRecord.readFull`). Every staged part carries
+the challenger's live-coin part's transcript (`insO_staged_link`), and its recursive setup holds it at the verifier's inner shape
 (`RecSetup.commits`), which reads it in that same format and holds what it reads there to what its JSON readers read
 (`RecSetup.checkReads`, `FlockC3.VStarList.checkReads_ok`). So at a staged part (`staged_reads`) the rounds
 `cmtTr recRead` reads are the record's (`Record.msgs`), and the record's link, rounds, tops and `c_k` are the JSON's the
@@ -23,12 +73,14 @@ This is the transcript's half of `PartOpensB`. The other half is that a part's h
 its statement pins, and those rows are the JSON's (`RecVStar.checkPubRows`, `RecVStar.checkTopRows`). Its first steps
 are here: the setup checks every table's rows and registered reads (`RecIns.setup_pubRows`,
 `RecIns.setup_registered`), which give each registered port's rows as `fixedRow`'s at the positions its instances read
-(`rowsAt`), and a table's slot holds its instance's public `b ‖ c`, drawn or not (`bc_setupOneAny`), a table row
+(`rowsAt`), and a table's slot holds its instance's public `b ‖ c`, sampled or not (`bc_setupOneAny`), a table row
 (`digest_tables`). So port `q`'s hm96 slot at instance `n`, read off the witness (`hmCommit`), is that instance's row
 digest (`slotPub_table`). On the record's side, rep `x`'s `kc`-th `c_k` in the JSON is at the commit round `k` its
 schedule lists `kc`-th, and at a round with no salted tops it is the record's message `x · R + k + 1`
 (`cmt_of_rep`): the rounds open with the two reps' schedules (`scheduleOf_reps`), whose streams are apart (`rep_ne`).
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -84,7 +136,7 @@ theorem commits_text_error {sh : RecVStar.Inner} {e : String} {r : Except String
   repeat' split at h
   all_goals cases h
 
-/-- **A transcript's commits at the verifier's inner shape read it in the coin server's own format**: where
+/-- **A transcript's commits at the verifier's inner shape read it in the challenger's live-coin part's own format**: where
 `commitsOf` holds the transcript `t`, it is UTF-8 and JSON, the source has a record, and `checkReads` passed. -/
 theorem commitsOf_reads {w : RecRaw} {src : Option RecCoins.Source}
     {bound : Flock.V (Option String × Option RecVStar.StackedShape)} {sh : RecVStar.Inner}
@@ -125,7 +177,7 @@ theorem ins_of_insO {x : Msg} {i : RecIns} (h : insO x = some i) : ∃ w, decode
   exact ⟨w, hw, toOption_eq_some h⟩
 
 /-- **A staged part's transcript, as the verifier read it in its own format**: at a part staged at `x`, the recursive
-setup holds the coin server's transcript at the verifier's inner shape `sh` (`i.commits = some cs`), `checkReads`
+setup holds the challenger's live-coin part's transcript at the verifier's inner shape `sh` (`i.commits = some cs`), `checkReads`
 passed on it, and the rounds `recRead` reads off the V\* statement are the record's (`Record.msgs`), the record
 `readFull` reads. So `checkReads_ok` gives that record's link, rounds, tops and `c_k` as the JSON's. -/
 theorem staged_reads {st : Stage} {s : ℕ} {x xO : Msg} (hS : StagedPart st s x xO) :
@@ -245,7 +297,7 @@ theorem regionsOf_mem (st : Stmt) :
   fun _ hr => List.mem_map_of_mem hr
 
 open FlockSoundness.Discharge in
-/-- **A drawn table's hm96 slot holds its instance's public `b ‖ c`**: at a statement `setupOne` sets up at a draw, in
+/-- **A sampled table's hm96 slot holds its instance's public `b ‖ c`**: at a statement `setupOne` sets up at a sample, in
 either branch, a witness satisfying the table's model (at the regions the soundness proof reads) holds at instance
 `o · g + g`'s port-`p` slot the statement's `b ‖ c` of that instance's row `p` (`Layout.bc_drawnS`,
 `Hidden.bc_drawnW`, with `Hidden.drawn_digestW`). -/
@@ -454,7 +506,7 @@ theorem scheduleOf_reps {i : RecVStar.Inner} {t : String}
       obtain ⟨E, hE⟩ := fin _ Array.append_assoc
       exact ⟨rs, E, rfl, hE⟩
 
-/-- **The JSON's `c_k` of rep `x` at a commit round with no salted tops is the coin server's inner message there**:
+/-- **The JSON's `c_k` of rep `x` at a commit round with no salted tops is the challenger's live-coin part's inner message there**:
 `checkReads` reads the record's rounds as the schedule's and rep `x`'s commit strings as the JSON's
 (`checkReads_ok`), so the `kc`-th entry of rep `x`'s `c_k` is at the commit round `k` the schedule lists `kc`-th, and
 the record's message `x · R + k + 1` (round 0 being the link's) is that commit string. -/
@@ -507,7 +559,7 @@ theorem vu_lt_pow2_setupOne {tags : Tags} {cf pf : ByteArray} {coins : Coins} {t
 
 open FlockSoundness.Refine in
 set_option maxHeartbeats 2000000 in
-/-- **An undrawn statement's public file is its population's**: `setupH` loads it and keeps it whole. -/
+/-- **An unsampled statement's public file is its population's**: `setupH` loads it and keeps it whole. -/
 theorem setupH_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : Stmt.setupH tags cf pf coins tables none partition program = .ok st) :
@@ -528,7 +580,7 @@ theorem bcChunk_in {c : Circuit} {pub : Public} {o g p : ℕ} (hr : o * c.g + g 
   simp only [hr, ↓reduceIte]
 
 open FlockSoundness.Discharge in
-/-- **An undrawn table's hm96 slot holds its instance's public `b ‖ c`**: `bc_setupOne` at a statement without a draw,
+/-- **An unsampled table's hm96 slot holds its instance's public `b ‖ c`**: `bc_setupOne` at a statement without a sample,
 which proves its whole population, its public file the population's (`setupH_full`, `Spec.pub`), whose `b ‖ c` region
 "digest p" pins (`Layout.bc_pinned`, `Hidden.bc_pinned'`). -/
 theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -563,7 +615,7 @@ theorem bc_setupOne_full {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tabl
     exact Layout.bc_pinned L _ (regionsOf_mem st) (Layout.setupH_regions h) hz o hg hg2 hp hsz128
 
 open FlockSoundness.Discharge in
-/-- **A table's hm96 slot holds its instance's public `b ‖ c`**, drawn (`bc_setupOne`) or not (`bc_setupOne_full`). -/
+/-- **A table's hm96 slot holds its instance's public `b ‖ c`**, sampled (`bc_setupOne`) or not (`bc_setupOne_full`). -/
 theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
     {draw partition : Option Json} {program : Option ByteArray} {st : Stmt}
     (h : HiddenExec.setupOne tags cf pf coins tables draw partition program = .ok st)
@@ -581,7 +633,7 @@ theorem bc_setupOneAny {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables
 
 open FlockSoundness.Discharge in
 /-- **Port `q`'s hm96 slot at a table's instance `n` holds that instance's public `b ‖ c`**: at a table `setupOne`
-sets up, drawn or not, with the witness's one-table share satisfying its model, the slot's out columns (`hmCommit`)
+sets up, sampled or not, with the witness's one-table share satisfying its model, the slot's out columns (`hmCommit`)
 read as the model's `b ‖ c` bytes (`bc_bit`, `Hidden.bytesAt_bc`), which are the statement's digest of instance `n`'s
 row `q` (`bc_setupOneAny`). -/
 theorem slotPub_table {tags : Tags} {cf pf : ByteArray} {coins : Coins} {tables : List (String × ByteArray)}
@@ -1024,7 +1076,7 @@ theorem cmtTr_record {x xO : Msg} {rc : RecRecord.Record}
 
 /-- **A round a part holds whole after the link is the record's message there**: at a staged part the witness
 checks against, what part `s` holds whole at inner round `j + 1` at `layoutBTops` is its held row's slot, rep `rep`'s
-`k`-th `c_k` (`heldRow_bytes`), at a stream round with no tops, so the coin server's message `rep · R + k' + 1` where
+`k`-th `c_k` (`heldRow_bytes`), at a stream round with no tops, so the challenger's live-coin part's message `rep · R + k' + 1` where
 `k'` is the `k`-th commit round (`cmt_of_rep`), which is round `j + 1` as `cmtTr recRead` reads it (`staged_reads`). -/
 theorem held_cmt (fin : Msg → List (ℕ × List (Msg × List HmNets.Lin))) {st : Stage} {s : ℕ} {x xO : Msg}
     {w : Claims.Flock.Wit} (hS : StagedPart st s x xO)

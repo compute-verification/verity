@@ -1,4 +1,10 @@
-import Proofs.Flock.Soundness.Discharge.Inst.Rows
+module
+
+public import Proofs.Flock.Soundness.Discharge.Inst.Rows
+public import Proofs.Flock.Soundness.Discharge.Aliased.Copies
+import Mathlib.Combinatorics.Matroid.Init
+import Proofs.Flock.Soundness.Discharge.Aliased.Rows
+import Proofs.Flock.Soundness.ExecLookup
 
 /-!
 # A template instance's rows, placed by the statement the verifier accepted
@@ -13,6 +19,8 @@ them there (`placement_inst`), from the layout facts (`Layout`) and the circuit'
 - at an input bit a wire fills, Δ has the wire's one copy pair (`delta_wired`): `HmRow.check` wires each input port of
   every slot but the rows' circuits' exactly once (`CheckFacts.wired`).
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 

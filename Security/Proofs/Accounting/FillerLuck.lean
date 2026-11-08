@@ -1,5 +1,8 @@
-import Definitions.Accounting.Guarantees.FillerLuck
-import Proofs.Accounting.TS.Rounds
+module
+
+public import Definitions.Accounting.Guarantees.FillerLuck
+public import Proofs.Accounting.TS.Rounds
+public import Proofs.Accounting.Lemmas.FillerLuck
 
 /-!
 # The filler's per-check luck
@@ -9,9 +12,13 @@ Cauchy–Schwarz and Parseval: `(2p − 1)² ≤ 2^R/2^K`), read at every defici
 parity by splitting the column's noise into its parity and a uniform rest (`exists_parity_equiv`); a word ring's
 equality is read mod 2 through `φ`. A tile's cell is the cell lemma at each setting of the other rows and columns
 (`Equiv.piSplitAt`). The windows are inductions over the rounds; `FillerBlocksDeficit` is `budget_tail` at `Λ = 1`.
-A pinned receipt's draw passes with probability at most one less its wrong share at every setting of the live coins
+A pinned receipt's sample passes with probability at most one less its wrong share at every setting of the live coins
 (`prob_le_one_sub_not`, `sum_pinned_le`), so its windows are the same inductions at `p = 0`.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → expect
 
 namespace Accounting.SecurityProofs.FillerLuck
 
@@ -77,7 +84,7 @@ theorem prob_none {Ω : Type} [Fintype Ω] : prob (fun _ : Ω => False) = 0 := b
 theorem prob_all {Ω : Type} [Fintype Ω] [Nonempty Ω] : prob (fun _ : Ω => True) = 1 := by
   classical
   rw [prob_eq_expect]
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   simp only [ite_true, sum_const, card_univ, nsmul_eq_mul, mul_one]
   exact div_self (Nat.cast_ne_zero.mpr Fintype.card_ne_zero)
 
@@ -92,7 +99,7 @@ theorem exists_of_prob_pos {Ω : Type} [Fintype Ω] {p : Ω → Prop} (h : 0 < p
 theorem prob_vec {K : ℕ} (z : Fin K → ZMod 2) : prob (fun u : Fin K → ZMod 2 => u = z) = 1 / 2 ^ K := by
   classical
   rw [prob_eq_expect]
-  unfold Pouw.RelativeSecurity.expect
+  unfold Claims.Ex
   simp
 
 theorem card_fiber_eq {Y : Type} [Fintype Y] {K : ℕ} (π : Y → Fin K → ZMod 2)
@@ -265,7 +272,7 @@ theorem mul_exp_le (v : ℝ) : (1 - v) * Real.exp v ≤ 1 := by
   have he : Real.exp (-v) * Real.exp v = 1 := by rw [← Real.exp_add, neg_add_cancel, Real.exp_zero]
   nlinarith [Real.exp_pos v]
 
-/-- **One draw's budget**: an event of probability at most `1 − v` weighted by `e^v` sums to at most `|Ω|`. -/
+/-- **One sample's budget**: an event of probability at most `1 − v` weighted by `e^v` sums to at most `|Ω|`. -/
 theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : prob q ≤ 1 - v) :
     (∑ a, (by classical exact if q a then Real.exp v else 0)) ≤ (Fintype.card Ω : ℝ) := by
   classical
@@ -287,7 +294,7 @@ theorem sum_exp_le {Ω : Type} [Fintype Ω] (q : Ω → Prop) (v : ℝ) (h : pro
 
 theorem sum_ite_mono {Ω : Type} [Fintype Ω] (p q : Ω → Prop) (h : ∀ a, p a → q a) (f : Ω → ℝ)
     (hf : ∀ a, 0 ≤ f a) :
-    (∑ a, (by classical exact if p a then f a else 0)) ≤ ∑ a, (by classical exact if q a then f a else 0) := by
+    (∑ a, (by classical exact if p a then f a else 0 : ℝ)) ≤ ∑ a, (by classical exact if q a then f a else 0 : ℝ) := by
   classical
   refine sum_le_sum fun a _ => ?_
   by_cases hp : p a
@@ -388,7 +395,7 @@ theorem prob_le_one_sub_not {Ω : Type} [Fintype Ω] (q : Ω → Prop) : prob q 
     rw [div_le_iff₀ hC, sub_mul, one_mul, div_mul_cancel₀ _ hC.ne']
     convert key
 
-/-- **One pinned draw's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
+/-- **One pinned sample's budget**: a uniform tile's receipt right, weighted by `e^v` with `v` the wrong share at the live
 coins, sums to at most `|C × τ|`. -/
 theorem sum_pinned_le {C τ V : Type} [Fintype C] [Fintype τ] (G R : C → τ → V) (v : C → ℝ)
     (hv : ∀ c, v c = prob fun t => R c t ≠ G c t) :

@@ -1,19 +1,23 @@
-import Proofs.Flock.Soundness.E2E
-import Proofs.Flock.Soundness.Types.ProgramPlaces
+module
+
+public import Proofs.Flock.Soundness.Types.ProgramPlaces
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The zero's columns are input columns (`hZero`, e2e)
 
-`ZeroCols place zeros` reads every column of a drawn unit's place that sits on a gate of `zeros`. When those gates are no
+`ZeroCols place zeros` reads every column of a sampled proof block's place that sits on a gate of `zeros`. When those gates are no
 unit's (the statement's zero is a program input) and no unit's constant column sits on one, only input columns do: a
 computed column is a gate of the unit itself (`IsRowsUnit.mem`).
 
-- `zeroCols_of_inputs`: `ZeroCols` from its input columns, at any drawn units' places.
+- `zeroCols_of_inputs`: `ZeroCols` from its input columns, at any sampled proof blocks' places.
 - `Prog.zeroCols_of_inputs`: the same at the places `ProgPlaces` gives the program's units, the `hZero` that
   `Prog.flock_headline` takes.
 - `TableClass.block_eq_zero`: at a table class's slot, an input whose copy position is one of the class's forced-zero rows
   carries 0, in every block of a satisfying witness.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Zero
 
@@ -38,7 +42,7 @@ variable {C : Audit.Circuit} {n : ℕ} (P : Audit.Partition C n) {Reg : Type} {m
   (plan : Finset (Fin n) → Reg → List (TabSpec mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
 
-/-- **`ZeroCols` from the input columns**: when the gates of `zeros` are no unit's and no drawn unit's constant column
+/-- **`ZeroCols` from the input columns**: when the gates of `zeros` are no unit's and no sampled proof block's constant column
 sits on one, the columns on them are input columns, so it suffices that those carry 0. -/
 theorem zeroCols_of_inputs (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u)
     (zeros : Finset (Fin C.N)) (hzu : ∀ g ∈ zeros, P.unit g = none)
@@ -62,7 +66,7 @@ variable {N n : ℕ} {p : Prog N n} {outs : Finset (Fin N)} {Reg : Type} {mPts :
   {tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length}
 
 /-- **`hZero` at the program's places from its input columns**: the gates of `zeros` are program inputs (no unit's), no
-unit's constant column sits on one, and each drawn unit's input column on one carries 0 in every satisfying witness. -/
+unit's constant column sits on one, and each sampled proof block's input column on one carries 0 in every satisfying witness. -/
 theorem Prog.zeroCols_of_inputs (pp : ProgPlaces p outs plan tab) (zeros : Finset (Fin N))
     (hzu : ∀ g ∈ zeros, p.unit g = none) (hone : ∀ u, (pp.inst u).wire (p.rows u).one ∉ zeros)
     (hin : ∀ S R u (h : u ∈ S) (c : Fin (p.rows u).w), c.val < (p.rows u).nIn → (pp.inst u).wire c ∈ zeros →
@@ -72,7 +76,7 @@ theorem Prog.zeroCols_of_inputs (pp : ProgPlaces p outs plan tab) (zeros : Finse
   Zero.zeroCols_of_inputs (p.partition outs) plan tab _ zeros hzu (fun _ _ u _ => hone u) hin
 
 /-- **`hZero` for one zero gate**: `zer` is a program input, every unit's constant column sits on a gate `one ≠ zer`, and
-each drawn unit's input column on `zer` carries 0 in every satisfying witness. -/
+each sampled proof block's input column on `zer` carries 0 in every satisfying witness. -/
 theorem Prog.zeroCols_singleton (pp : ProgPlaces p outs plan tab) {zer one : Fin N} (hzu : p.unit zer = none)
     (hz1 : zer ≠ one) (hone : ∀ u, (pp.inst u).wire (p.rows u).one = one)
     (hin : ∀ S R u (h : u ∈ S) (c : Fin (p.rows u).w), c.val < (p.rows u).nIn → (pp.inst u).wire c = zer →

@@ -1,13 +1,13 @@
-import Lean.Data.Json
-import Flock.Canon
-import CoreProtocol.Site
+module
+
+public import CoreProtocol.Site
 
 /-!
 # The Site's difftest: `Core.Site` behind `Difftest.serve`
 
 `site-difftest` serves `table` to the core difftest harness, whose Python half (`tests/test_site_difftest.py`) holds it to
 `verity.core.site`. The Site is core's (`CoreProtocol.Site`, in `core_protocol`); its port is here because this package
-already requires the interface and the harness, and the registration log is the proof service's record. The functions,
+already requires the interface and the harness, and the registration log is the proof system's record. The functions,
 on the JSON `verity.core.site` writes, with the deployed digests (`Registration.sha512`):
 
 * `site_refusal`, `{"auditor", "log", "entry"}`: the entry held to the log, `{"refusal": name | null, "head", "digest"}`;
@@ -16,6 +16,10 @@ on the JSON `verity.core.site` writes, with the deployed digests (`Registration.
   each of its locations' ids, `outside` and `nowhere`, its `sheet`, `device` (at ticks of `tick` seconds, with no CUDA-core
   ops, oracle queries or side channels), `node`, `tiers`, `boundary`, `registered` and `host`.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.SiteDifftest
 

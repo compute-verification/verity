@@ -1,4 +1,9 @@
-import Definitions.Pouw.Fp8Atom.Atom
+module
+
+public import Definitions.Pouw.Fp8Atom.Atom
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.SetLike
 
 /-!
 # sm_120's FP8 step (trusted definitions)
@@ -17,6 +22,8 @@ it drops a bit of a subnormal or smallest-normal accumulator. So `sm120E4m3K32` 
 `sm120E4m3` pins the BF16 pipeline's −133, as `verity.ml.tc` does. The conformance vectors are `Sm120Vectors`, checked
 in `Sm120Checks`: all at −133, the floor-sensitive ones also at −150 and −124, and the floor's observability at −123.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC
 

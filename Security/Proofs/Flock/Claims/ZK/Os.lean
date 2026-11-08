@@ -1,12 +1,46 @@
-import Proofs.Flock.Claims.ZK.Release
-import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
-import Proofs.Flock.Claims.Sampling.Draws
+module
+
+public import Proofs.Flock.Claims.Sampling.Draws
+public import Proofs.Flock.Claims.ZK.Release
+public import Proofs.Flock.Soundness.Discharge.ZkView.OsSalts
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Soundness.ZK.Hiding
 
 /-!
 # The ZK server at the operating system's bytes
 
-`Flock.zk_server_lean`, `Flock.zk_server_blind` and `ZkServer.zk_deferred` draw the server's tape uniformly. Every random
-value on it is a read of the operating system that a Lean process makes: each rep's frame reads its draws in one call at
+`Flock.zk_server_lean`, `Flock.zk_server_blind` and `ZkServer.zk_deferred` sample the server's tape uniformly. Every random
+value on it is a read of the operating system that a Lean process makes: each rep's frame reads its samples in one call at
 its start (`flock-firewall frame`, `Frame.cmd`, which is `Frame.cmdWith IO.getRandomBytes`, or the session loop's frames,
 `Session.frames`, `Frame.serveWith IO.getRandomBytes` too: `Frame.drawsWith` reads
 `drawBytes l` bytes and `Draws.ofRead` refuses any other count, then parses them into the pads `h`, `μ`, the inner rows'
@@ -20,7 +54,7 @@ proving build expands nothing (`zk_hooks.rs`). The step from those reads to a un
   reps' frames, of exactly `drawBytes` bytes, and the tap's streams, which are every other byte of the tape.
   `OsTape.dec`: the same decoding of all the streams as one byte source, A3's form. `OsTape.frameBytes`: rep `i`'s
   frame's bytes on a tape. `OsTape.release`: the release whose frames read those bytes.
-* `frame_cmd`, `frame_draws`, `drawsWith_refuses`: the frame's read is the release's draws. `Frame.cmd` is
+* `frame_cmd`, `frame_draws`, `drawsWith_refuses`: the frame's read is the release's samples. `Frame.cmd` is
   `Frame.cmdWith IO.getRandomBytes`; the read `cmdWith` starts a rep with, on a source that returns rep `i`'s stream,
   takes it as `drawsAt`; a read of any other length is refused, so no rep runs on a short read's zeros.
 * `Pr_os_prod`: an event of the tape the streams decode to, beside any independent randomness, has at most the
@@ -30,6 +64,8 @@ proving build expands nothing (`zk_hooks.rs`). The step from those reads to a un
   `zkDeferredOs`, `zkServerBlindOs` and `zkServerLeanOs`. `ZkServerLeanOs` is at `O.release L`, whose rep `i` reads
   stream `i` of the tape, so `ItemsRefine` relates the model's prover to the frame at the operating system's bytes.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -72,7 +108,7 @@ theorem frameBytes_of_lt (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
     O.frameBytes ρ i = FlockSoundness.Audit.Law.streamOf ((O.e.symm ρ).1 i) :=
   dif_pos i.isLt
 
-/-- Rep `i`'s frame reads exactly the bytes its draws take. -/
+/-- Rep `i`'s frame reads exactly the bytes its samples take. -/
 theorem frameBytes_size (O : OsTape R lay) (ρ : R) (i : Fin O.reps) :
     (O.frameBytes ρ i).size = _root_.Flock.Firewall.Frame.drawBytes (lay i) := by
   rw [frameBytes_of_lt]
@@ -84,7 +120,7 @@ end OsTape
 rep starts with `drawsWith get`, at `IO.getRandomBytes`. -/
 theorem frame_cmd : _root_.Flock.Firewall.Frame.cmd = _root_.Flock.Firewall.Frame.cmdWith IO.getRandomBytes := rfl
 
-/-- **The frame's read on the tape is the release's draws**: `drawsWith`, the read `Frame.cmdWith` starts a rep with, on
+/-- **The frame's read on the tape is the release's samples**: `drawsWith`, the read `Frame.cmdWith` starts a rep with, on
 a source that returns rep `i`'s stream of the tape, takes it whole as `drawsAt` of the release that reads the tape. -/
 theorem frame_draws {W R : Type} (L : LeanRelease W R) (x : Msg) (O : OsTape R (L.lay x)) (ρ : R) (i : Fin O.reps) :
     _root_.Flock.Firewall.Frame.drawsWith (m := Id) (fun _ => pure (O.frameBytes ρ i)) (L.lay x i) =
@@ -93,7 +129,7 @@ theorem frame_draws {W R : Type} (L : LeanRelease W R) (x : Msg) (O : OsTape R (
   rw [_root_.Flock.Firewall.Frame.Draws.ofRead, if_pos (O.frameBytes_size ρ i)]
   rfl
 
-/-- **A read of any other length is refused**: the frame starts no rep on bytes that are not exactly its draws', so no
+/-- **A read of any other length is refused**: the frame starts no rep on bytes that are not exactly its samples', so no
 rep masks with the zeros `Draws.ofBytes` reads past a short input. -/
 theorem drawsWith_refuses (l : _root_.Flock.Zk.PadLayout) (b : ByteArray)
     (h : b.size ≠ _root_.Flock.Firewall.Frame.drawBytes l) (d : _root_.Flock.Firewall.Frame.Draws) :
@@ -146,7 +182,7 @@ theorem zkDeferredOs : ZkDeferredOs := by
     hη hA3).trans (add_le_add (S.zk_deferred fill H k P Rl Sim εzk γ hZK x w hR wk hRef.own Vs θ hk Ev) le_rfl)
 
 set_option synthInstance.maxSize 100000
-set_option synthInstance.maxHeartbeats 1000000
+set_option synthInstance.maxHeartbeats 1000000 -- instance search over the ZK view's and coins' product types
 
 /-- **`Flock.zk_server_blind` at the operating system's bytes**: the ZK server at pad-blind workers, at
 `flock-circuit --zk`'s reference session, with the server's tape the bytes of a byte source, read one for one (`dec`),
@@ -192,7 +228,7 @@ theorem zkServerBlindOs : ZkServerBlindOs := by
 stream, at the bytes of a byte source, read one for one (`O.dec`), which passes the event's test up to `η` (A3 per
 test); the bound plus `η`. Its premises are `Flock.zk_server_lean`'s at `O.release L` and A3 per test:
 `Claims.Hm96Hiding`, the session's six Props and the item-stream refinement at `swP vs` (`LeanRelease.ItemsRefine`), with
-no assumption on what the firewall computes. -/
+no assumption on what the ZK server computes. -/
 def ZkServerLeanOs : Prop :=
   ∀ (H : Msg → Msg) (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Readable.Relation) (S : RefSession)
     (vs : S.SwVals) (t : ℕ), 0 < t → ∀ {δ₁ : ENNReal}, Claims.Hm96Hiding ZkView.My ZkView.saltHash δ₁ → δ₁ ≠ ⊤ →

@@ -1,12 +1,47 @@
-import Proofs.Flock.Claims.ZK.FinishLigEnd
-import Proofs.Flock.Claims.ZK.FinishFc
-import Proofs.Flock.Claims.ZK.L0PinCoins
+module
+
+public import Proofs.Flock.Claims.ZK.CausalExe
+public import Proofs.Flock.Claims.ZK.FinishFc
+public import Proofs.Flock.Claims.ZK.FinishLigEnd
+public import Proofs.Flock.Claims.ZK.FinishSrc
+public import Proofs.Flock.Claims.ZK.L0PinCoins
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
-# The rep from a source that misses the firewall at `final_c`, at its inner proof's first round
+# The rep from a source that misses the ZK server at `final_c`, at its inner proof's first round
 
-`repCut_fw_inner` stops the rep from a source that may differ from the firewall at `final_c`'s pad at the inner proof's
-first round, after the firewall's PIOP and Ligerito logs. Here that stop is placed: Ligerito left no pending bytes
+`repCut_fw_inner` stops the rep from a source that may differ from the ZK server at `final_c`'s pad at the inner proof's
+first round, after the ZK server's PIOP and Ligerito logs. Here that stop is placed: Ligerito left no pending bytes
 (`ligeritoCut_end`), and the history then holds `CutEq.innerAt` bodies, the PIOP's (`piopCut_at`) and the opening's
 (`ligeritoCut_eqAt`).
 
@@ -14,12 +49,14 @@ first round, after the firewall's PIOP and Ligerito logs. Here that stop is plac
 * `repCut_fw_inner_at`: the rep from the source, cut at the inner proof's first round, sends that round's body there.
 -/
 
+@[expose] public section
+
 namespace Flock.Firewall.Finish
 
 open Flock Transcript
 open FlockComplete (PS)
 
-/-- **`piopCut_fw` from a source that may differ at `fc`**: where the firewall's PIOP at `mk` returns, the PIOP from a
+/-- **`piopCut_fw` from a source that may differ at `fc`**: where the ZK server's PIOP at `mk` returns, the PIOP from a
 source whose masked values below `zp 64` but at `fc` are `mk`'s returns the same, its zerocheck proof's `finalC` the
 source's `masked lay.fc`. -/
 theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay : Zk.PadLayout) (g : Array F128)
@@ -55,7 +92,7 @@ theorem piopCut_fw_fc (coin : ℕ → ℕ → F128) (n : ℕ) (st : Setup) (lay 
     (fun i hi => by simp only [if_neg hi]) hPC'
 
 set_option maxHeartbeats 1000000 in
-/-- **The rep from a source that misses the firewall at `fc`, at its inner proof's first round**: at `repCut_fw_inner`'s
+/-- **The rep from a source that misses the ZK server at `fc`, at its inner proof's first round**: at `repCut_fw_inner`'s
 premises and a schedule the rep's walk takes (`CutEq.SchOk`), the rep from the source, answered by `asksCut` from `l`
 with the history cut after `CutEq.innerAt l.size` bodies, stops past its Ligerito opening with no pending bytes and sends
 the inner proof's first body there, at the source's `masked lay.fc`. -/

@@ -1,15 +1,22 @@
-import Flock.Firewall.Honest
-import Proofs.Flock.Recursive.FirewallJson
+module
+
+public import Flock.Firewall.Honest
+public import Proofs.Flock.Recursive.FirewallJson
+import all Lean.Data.Json.Basic
+import all Std.Data.Internal.List.Associative
+import Std.Data.DTreeMap.Internal.WF.Lemmas
 
 /-!
-# Objects as the firewall builds, reads and pins them
+# Objects as the ZK server builds, reads and pins them
 
-The firewall builds objects with `Json.mkObj`, reads them with `getObjVal?` and pins them by canonical form. An object
+The ZK server builds objects with `Json.mkObj`, reads them with `getObjVal?` and pins them by canonical form. An object
 built from members with distinct keys holds those members in key order (`perm_ofList`, `toListModel_ofList`), two
 objects whose keys ascend and whose members have the same keys and canonical forms have one canonical form
 (`canonForm_obj_perm`), and a key of an object whose keys ascend reads its member's value (`getObjVal?_of_mem`) or
 nothing (`getObjVal?_of_not_mem`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallObj
 
@@ -59,7 +66,7 @@ theorem canonForm_obj_perm {t t' : Tree} (ht : t.Ordered) (ht' : t'.Ordered) (hp
 
 /-! ## Built from members -/
 
-theorem mkObj_eq (L : List (String × Json)) : Json.mkObj L = .obj ⟨⟨Impl.Const.ofList L⟩⟩ := rfl
+theorem mkObj_eq (L : List (String × Json)) : Json.mkObj L = .obj ⟨⟨Impl.Const.ofList L⟩⟩ := (rfl)
 
 theorem wf_ofList (L : List (String × Json)) : (Impl.Const.ofList L : Tree).WF :=
   Impl.WF.constInsertMany Impl.WF.empty
@@ -193,7 +200,7 @@ theorem linkWith_obj (t : Tree) (sigma : String) :
 theorem pairwise_ne_map {γ : Type} {key : γ → String} {l : List γ} (h : Asc key l) :
     (l.map fun e => (key e, ())).Pairwise fun a b => a.1 ≠ b.1 := List.pairwise_map.mpr h.ne
 
-/-- **Hello as the firewall reads the worker's**: at a schedule's Hello, an object whose keys ascend with plain members,
+/-- **Hello as the ZK server reads the worker's**: at a schedule's Hello, an object whose keys ascend with plain members,
 whose link (`A ++ link :: B`) is an object whose keys ascend with plain members and no `sigma`, and which has no
 `coins`, the worker's Hello with a plain Σ is plain, the parser's value of its text has a link that names Σ and no
 `coins`, and with Σ taken out of its link it has the schedule's Hello's canonical form. -/

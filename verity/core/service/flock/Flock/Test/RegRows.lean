@@ -6,9 +6,16 @@ root at its stated position, framed under the port's row format, and every insta
 verifier's program reads for its unit at that port. A K = 64 A row is 64 int8 codes, a `hm96-sha512/row/v2` bit row of
 512 bits: `words = K / 2 = 32` leaves of `word_bits = 16`, as `Port.fits` counts it.
 -/
-import Flock.Registered
-import Flock.JsonKeys
-import Flock.JsonParse
+module
+
+public import Flock.Registered
+public import Flock.JsonKeys
+public import Flock.JsonParse
+meta import Flock.Registered
+meta import Flock.JsonKeys
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.RegRows
 
@@ -105,5 +112,23 @@ def twice : String := file.compress.replace "\"a1\":" "\"a0\":"
 #guard JsonKeys.dupKey "{\"a\": \"a\", \"b\": \"}{,\\\"a\\\":\", \"c\": [\"a\", \"a\"]}" == none
 #guard JsonKeys.dupKey "{\"r\": [{\"k\": 1, \"k\": 2}]}" == some "\"k\""
 #guard JsonKeys.dupKey "{\"p\": {\"a\": {\"root\": \"00\", \"leaves\": 1, \"root\": \"01\"}}}" == some "\"root\""
+
+/-! A name a later port repeats is one `Registered.ofJson` refuses (`dupName?`), as `Json`'s type admits it though no
+parse builds it. -/
+
+def own : Array Registered.Port := (Registered.ofJson file).toOption.getD #[]
+
+#guard own.size == 2 && Registered.dupName? own.toList == none
+#guard Registered.dupName? (own.toList ++ [own[0]!]) == some "a0"
+
+/-- `file` with its ports object holding `a0`'s entry twice, a tree no insertion builds. -/
+def twicePorts : Json :=
+  let e := (file.getObjValD "ports").getObjValD "a0"
+  Json.mkObj [("format", Json.str Registered.FORMAT),
+    ("ports", Json.obj ⟨⟨.inner 2 "a0" e .leaf (.inner 1 "a0" e .leaf .leaf)⟩⟩)]
+
+#guard (Registered.portsOf twicePorts).toOption.map (·.size) == some 2
+#guard (match Registered.ofJson twicePorts with | .error e => e | .ok _ => "") ==
+  "registered reads: port a0 twice: a verdict reports one port per name, and each check reads a name's port"
 
 end Flock.Test.RegRows

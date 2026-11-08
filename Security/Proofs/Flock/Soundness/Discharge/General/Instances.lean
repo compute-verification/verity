@@ -1,5 +1,15 @@
-import Proofs.Flock.Soundness.Discharge.Layout.Scope
-import Flock.Test.Wires
+module
+
+public import Flock.Test.Wires
+public import Proofs.Flock.Soundness.Discharge.Layout.Scope
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Positivity.Finset
+import VCVio.Prelude.Core
+meta import Flock.Test.Wires
+meta import Proofs.Flock.Soundness.Discharge.Layout.Scope
 
 /-!
 # The general form at the tails' shapes
@@ -14,6 +24,8 @@ import Flock.Test.Wires
 * At a cycle through the wires (`rms 1`, `lookup true`) both refuse: `wiresAcyclic` is the general form's one refusal
   on the wires.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.General
 

@@ -1,13 +1,17 @@
-import PouwWindow.OwnPorts
-import PouwWindow.FullDraw
-import Flock.KnownRead
-import SampledProofs.Produced
-import SampledProofs.Record
+module
+
+public import Flock.KnownRead
+public import Flock.WindowRecord
+public import Lean.Data.Json.Parser
+public import PouwWindow.FullDraw
+public import PouwWindow.OwnPorts
+public import SampledProofs.Produced
+public import SampledProofs.Record
 
 /-!
-# A drawn H1 leaf's registered files, from the registration
+# A sampled H1 leaf's registered files, from the registration
 
-The verifier's `--registered` file of each of a drawn leaf's statements, from the accepted registration record and the
+The verifier's `--registered` file of each of a sampled leaf's statements, from the accepted registration record and the
 accepted produced record alone:
 
 * `roots?`: each value's registered port (`leaf_lanes.verifier_entries`). A registered value's (`a`, `b`, `zy`,
@@ -22,12 +26,14 @@ accepted produced record alone:
 * `leafOwn?`: the leaf verifier's check of a statement's file against the two records (`pouw-leaf-own`): the file parsed
   as flock-verify parses it (`Flock.Registered.ofJson`) has one read at each port (`checkOneRead`) and holds `want?`'s
   ports (`checkOwn`). `leafOwnCmd` runs it on files with each value its own table (`selfPlace`), then holds each of the
-  statement's session records to the full draw (`checkFull`); `PouwCheck.LeafOwn` runs it at a window unit's placement,
-  from the window's descriptor and round log.
+  statement's session records to the full sample (`checkFull`); `PouwCheck.LeafOwn` runs it at an execution phase unit's placement,
+  from the execution phase's descriptor and round log.
 
 `tests/test_reg_file.py` holds `fileOf?` to the Python's file at the Python's entries and roots, and holds `leafOwn?` to
 accept it.
 -/
+
+@[expose] public section
 
 namespace PouwWindow.Lanes
 
@@ -156,8 +162,8 @@ def printOwn (verdict : Except String Unit) : IO UInt32 := do
 /-- **`pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION...`**: `leafOwn?` on the three
 files at the `R × C` tile of contraction `K`, each value its own table (`selfPlace`), every value's rows
 `hm96-sha512/row/v2`, then `checkFull` on each session directory's record (`SESSION/session.json`, at least one). It
-prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it refuses and 2 on a usage error. A unit of a
-window Program, its tables placed by the window's descriptor, is `pouw-leaf-own-window`'s (`PouwCheck.LeafOwn`). -/
+prints `OWN {"accepted", "why"?}` and exits 0 where it accepts, 1 where it refuses and 2 on a usage error. A unit of an
+execution phase Program, its tables placed by the execution phase's descriptor, is `pouw-leaf-own-window`'s (`PouwCheck.LeafOwn`). -/
 def leafOwnCmd (args : List String) : IO UInt32 := do
   let reg :: prod :: file :: r :: c :: k :: stmt :: sess@(_ :: _) := args
     | usage "usage: pouw-leaf-own REGISTRATION PRODUCED REGISTERED R C K (LANE | combine) SESSION..."

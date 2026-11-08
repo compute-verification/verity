@@ -1,4 +1,6 @@
-import Definitions.Pouw.RelativeSecurity
+module
+
+public import Definitions.Pouw.RelativeSecurity
 
 /-!
 # The no-fold Dither protocol's work-soundness: the vocabulary its guarantee reads (trusted)
@@ -15,7 +17,7 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a round** of a commit-then-check protocol (`RoundProto`): the words the prover computes after the first coin, their
   commitment (the SHA-512 Merkle root over the words' leaves), and the check, parametric in the protocol,
   with the no-fold protocol as one instance (`NoFold`, `noFoldRound`) whose knobs are parameters, so protocol v1 and
-  v2 are instances, and the served sampling block, checked where its selection coin picks it (`ditherSelected`);
+  v2 are instances, and its selected form, checked where its selection coin picks it (`ditherSelected`);
 * **a round program's moments** (`wordsMoment`, `commitMoment`): the moment bounds of the two "public best" premises,
   SAK(matmul) on the words and SHA-512's speed on their commitment (`Definitions.Pouw.Assumptions.Dither`'s
   `SAKMatmul`, `SAKSha`), in units of priced cost, outside a degenerate set of dithers;
@@ -31,7 +33,14 @@ Dither's headline (`Definitions.Pouw.Guarantees.Dither.WorkSound`) is stated ove
 * **a replica's moment** (`MomentSound`): the probability form before its Markov step, which a fleet pools at its
   luck (`fleetLuck`);
 * the error (`epsWorkSound`, `ε_skip`).
+
+`noFoldRound` and `ditherSelected` are the only round protocols the Lean defines, so the headline's only instances are
+the no-fold round's, and it doesn't cover Dither v3.2's proof block, which no guarantee states yet.
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → avg
 
 namespace Pouw.Dither
 
@@ -125,7 +134,7 @@ section Round
 operands and the weight-side coins it reuses), the round's first live coin `Draw` (σ₁, the noise), the
 words the prover computes after it `Tr`, their commitment (in `Root`), the check's live coin `Chk` (σ₂), whether the
 check passes on the words (`ok`), and whether the checked cells of the words open under a root (`opens`). The prover
-sends the commitment before σ₂ is drawn and answers the check with `Ans` (the opened words and their openings);
+sends the commitment before σ₂ is sampled and answers the check with `Ans` (the opened words and their openings);
 `accept` is what the verifier checks of the answer against the commitment, and `ok` and `opens` what the analysis reads
 of the words the commitment binds (`ExtractAdv` links them).
 * `opens o r c T`: the cells the check coin `c` selects open under the root `r` at `T`'s words, by the verifier's own
@@ -138,7 +147,7 @@ of the words the commitment binds (`ExtractAdv` links them).
   (`ditherSelected`, the served design; `noFoldRound` checks its cells on every coin).
 
 The commitment's hash is the random oracle `Orc` (a uniform table: SHA-512 as a random oracle, a named use not yet
-decided), which `commit`, `opens` and `accept` read. The proof layer (C-Flock's proofs of the opened words) is the
+decided), which `commit`, `opens` and `accept` read. The proof layer (Flock's proofs of the opened words) is the
 service's, not the round's. -/
 structure RoundProto where
   Inst : Type
@@ -165,7 +174,7 @@ abbrev Word : Type := ZMod (2 ^ 32)
 /-- **The no-fold protocol's knobs**: `A` is `n × m`, `B` is `m × n'` with `m = nb · L`,
 `L` the segment length; the noise (`Draw`, and `noise`, the noised operands `(Ã, B̃)` from the committed operands and
 the noise: HYB noise in protocol v1, whatever v2 freezes); the check's coin `Chk` and the `s` words it selects
-(`cells`: the frozen protocol's stratified draw, any width, no power-of-two size); `merkle`, the commitment to the
+(`cells`: the frozen protocol's stratified sample, any width, no power-of-two size); `merkle`, the commitment to the
 words: each word a Merkle leaf (hm96 rows in frame-v3-sha512 trees), no fold, under the oracle `Orc` that stands for
 SHA-512; and `opens`, the verifier's check under the oracle that a word with its authentication path `Path` opens a
 root at a cell. -/
@@ -221,7 +230,7 @@ def noFoldRound (k : NoFold) : RoundProto where
 def noFoldHonest (k : NoFold) (a : (noFoldRound k).Inst) (d : (noFoldRound k).Draw) : (noFoldRound k).Tr :=
   fun i j b => noFoldWord k (k.noise a d) i j b
 
-/-- **The served Dither sampling block: selected or not**. The no-fold round at its knobs `k`, its check coin
+/-- **The no-fold round, selected or not**. The no-fold round at its knobs `k`, its check coin
 carrying a selection coin `Sel` beside the cells' coin: the block is checked where its
 selection coin is `picked`, with probability `π = Pr[picked]`, and then on the `s` cells its cells' coin selects, as
 in `noFoldRound`; where it isn't picked, `ok`, `opens` and `accept` hold with no cell checked. The selection is decided
@@ -244,9 +253,6 @@ def ditherSelected (k : NoFold) (Sel : Type) [Fintype Sel] (picked : Sel → Pro
 end Round
 
 section Moments
-
-/-- The uniform average of `f`. -/
-noncomputable def avg {Ω : Type} [Fintype Ω] (f : Ω → ℝ) : ℝ := (∑ ω, f ω) / Fintype.card Ω
 
 /-- **A shortfall** against a public best: `(pub − cost)₊`, how far a program's priced cost falls short of the public
 best's `pub`, in the same units (the prices `μ`). -/
@@ -416,7 +422,7 @@ end Prover
 
 /-- **The service's verdict on a period**: what the verifier accepts, from the oracle, the verifier's
 coins, the transcript (`Prover.transcript`) and the readings `Obs` of the auditor's devices (the network certifier's
-signed counts). It reads no code: the sampling blocks' checks run inside C-Flock's zero-knowledge proofs
+signed counts). It reads no code: the sampling blocks' checks run inside Flock's zero-knowledge proofs
 (`ProofSystemSound` ties it to `Prover.Accepted`). -/
 abbrev Verdict (P : RoundProto) (k : ℕ) (Obs : Type) : Type :=
   P.Orc → (Fin k → P.Draw × P.Chk) → (Fin k → P.Inst × P.Root × P.Ans) → Obs → Prop

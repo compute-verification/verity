@@ -1,6 +1,12 @@
+module
+
+public import Definitions.Accounting.Guarantees.PerRun
+public import Proofs.Pouw.PearlC.W1BudgetAbort
+public import Proofs.Pouw.PearlC.W1Priced
+public import Proofs.Pouw.PearlC.W1Stop
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Accounting.PerRunPriced
-import Proofs.Pouw.PearlC.W1Priced
-import Proofs.Pouw.PearlC.W1Stop
 
 /-!
 # Proof of the per-run guarantees from the γ-gap property per coin
@@ -18,6 +24,8 @@ split (`Pouw.PearlC.W1Priced.w1Priced_cost`: its arithmetic within the compute c
 bandwidth charge); `w1Stop_cost_le` is the same split for a device that does stop a run, whose budget must then be
 within the two.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

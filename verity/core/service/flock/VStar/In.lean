@@ -1,6 +1,6 @@
-import Flock.RecCoins
-import Flock.RecLinkPart
-import VStar.Stage
+module
+
+public import Flock.RecLinkPart
 
 /-!
 # V*'s per-part port inputs: what `verity_flock.rec_vstage.stage` writes to each part's `inst.bin`
@@ -12,12 +12,12 @@ module computes those tables from what the stager reads of the inner session (`S
 * `levelIn`: a Ligerito level's `RecOpen{LANES, H}` statement, `L<l>` (`rec_outer.stage`): `row` and `aux` (the opening's
   row and siblings, `rec_open.pack`) under the prover's fresh salts, `acc` and `acc_out` (the running sums' rows either side
   of the opening, `rec_outer.Chain`) under their registered salts, `coef` and `dirs` (the verifier's values) under
-  `verifierSalt`, `out` (the top node the opening climbs to, `rec_outer.TopValue`) under the firewall's salt;
+  `verifierSalt`, `out` (the top node the opening climbs to, `rec_outer.TopValue`) under the ZK server's salt;
 * `algebraIn`: a part of the algebra, `alg/p<j>` (`rec_vstage._stage_part`, `rec_residuals.write`): each `m<i>` the inner
   prover's rows of round `i` under its salts (rep `r` row `r`), `acc0` and `acc1` the running sums before each rep's first
   opening and after its last, `v` the verifier's values under `verifierSalt`, `out` zero rows under `zeroSalt`;
 * `capIn`: a level's `RecCap`, `cap` or `cap/L<l>` (`rec_cap.stage`): `top` every node of the level's tops under the
-  firewall's salts, `out` zero rows under `zeroSalt`;
+  ZK server's salts, `out` zero rows under `zeroSalt`;
 * `linkIn`: the link table's `RecLink{UB, PB}`, `links` (`rec_vstage.link_part`): `trow` the table's rows under their
   registered salts, `xyr`, `raux`, `xyw` and `waux` the reader's and the writer's rows and openings under the prover's
   fresh salts, `rin` and `rout` the two trees' roots under `verifierSalt`.
@@ -25,6 +25,8 @@ module computes those tables from what the stager reads of the inner session (`S
 `partIn` dispatches on the statement (`VStar.Stmt`). The difftest (`core_vstar`'s `vstar-difftest`, `part_in`) holds each
 to the stager's `inst.bin`.
 -/
+
+@[expose] public section
 
 namespace VStar.In
 
@@ -69,14 +71,14 @@ structure LinkRow where
   deriving Inhabited
 
 /-- What `rec_vstage.stage` reads of the inner session, decoded: the prover's side (the message rounds' rows and salts, the
-openings, the tops with the firewall's salts, the running sums' salts, the fresh salts of the openings' private rows, the
+openings, the tops with the ZK server's salts, the running sums' salts, the fresh salts of the openings' private rows, the
 link table's rows) and the verifier's (each rep's κ and eq(α) by level, its v, and the link trees' roots). -/
 structure Src where
   /-- round `i` (`rec_algebra.rounds`), rep `r`: the inner prover's row and the salt it committed it under (`rec-c<i>`) -/
   msgs : Array (Array Row)
   /-- both reps' openings (`rec_vstar.queries`) -/
   openings : Array Query
-  /-- rep, level: each node of the rep's top (64 bytes) with the firewall's salt (`rec_vstar.tops`) -/
+  /-- rep, level: each node of the rep's top (64 bytes) with the ZK server's salt (`rec_vstar.tops`) -/
   tops : Array (Array (Array (ByteArray × ByteArray)))
   /-- the running sums' `N + 1` salts (`rec_vstage.acc_salts`) -/
   accSalts : Array ByteArray

@@ -19,12 +19,17 @@ A flat class (no placed parts, Δ or reads) is one `CIRCUIT unit` section. A tem
 each placed layout's net, and Δ. A placed read's layout is generated (`table/v2`); its product rows' B side is the table,
 which the verifier holds (`hold`): the statement names each table by the SHA-512 of its words and never carries them.
 -/
-import Flock.Comp
-import Flock.DeriveCheck
-import Flock.Layout
-import Flock.Net
-import Flock.Tags
-import Flock.JsonParse
+module
+
+public import Flock.Comp
+public import Flock.DeriveCheck
+public import Flock.Layout
+public import Flock.Net
+public import Flock.Tags
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Typed
 
@@ -92,7 +97,7 @@ def infoIn (held : Array Held) (x : String) : Option TableInfo := (held.find? (�
 /-- The held tables' words by SHA-512. -/
 def wordsIn (held : Array Held) (x : String) : Option (Array Nat) := (held.find? (·.sha512 == x)).map (·.words)
 
-/-- **A typed statement's unit class,** as the verifier derives it: META's checked types and layouts, the tables it
+/-- **A typed statement's size class,** as the verifier derives it: META's checked types and layouts, the tables it
 holds, the unit's layout, and `deriveChecked`'s rows on exactly those, with the run that returned them (`hd`). An accepted
 typed statement carries it (`Circuit.cls`), and every net the verifier folds for it is built from `done` (`netOfD`). -/
 structure Class where

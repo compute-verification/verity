@@ -1,7 +1,10 @@
-import Definitions.Accounting.BoundReceipt
-import Definitions.Pouw.Assumptions.Game
-import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+module
+
+public import Definitions.Accounting.BoundReceipt
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.NCP.RouteUAssumptions
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # Receipts bound to the matmul: co-location and the link relay (trusted)
@@ -30,6 +33,8 @@ PoUW's game (`TileUnpredictable`), from PoUW's named assumptions.
 * `TileUnpredictablePearlCOfTTOut`: an assumption of Pearl-C's `TT_OUT` shape at W1, at any Pearl-C protocol, gives the
   same hypothesis in Pearl-C's game at W1 (`TileUnpredictablePearlC` at `W1.w1Priced`).
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees
 
@@ -100,7 +105,7 @@ random oracle on the whole of `E_j` and `z_j`, so a location makes a receipt onl
 hashes an inner-product sketch of `E_j` against a matrix expanded from `z_j`, for which `BoundSketchRelay` gives
 `½·min(|z|, |E|)` bits per relayed block, by Lindsey's lemma: the deployed bound is up to `2×` weaker than this game's.
 The rest's tile work stands for every way it gets a tile output without the link, the activations' route among them:
-its information is free here and only its work counts. The node is fixed before the mix is drawn: its state and memory
+its information is free here and only its work counts. The node is fixed before the mix is sampled: its state and memory
 are functions of the store and the tile outputs, never of the mix. Over a window's passes that is a mix derived afresh
 each pass from the chained seed; a mix (or a sketch matrix) fixed for the window lets a location keep, from one pass,
 a digest of each block that makes the next pass's receipts without it, which this game doesn't cover.
@@ -124,7 +129,7 @@ def BoundReceiptLink : Prop :=
 every `InteractiveNode` whose answers between the locations reach the mix only through the node's queries
 (`QueryDetermined`), with `BoundReceiptLink`'s parameters and its hypothesis on `m`: the probability that the verifier
 accepts, the GPU's compute is within `F`, the rest's tile work within `F_z`, and the GPU's HBM footprint short of
-`RateAudit`'s floor at `k − m` blocks, each under the node at the drawn mix, is at most
+`RateAudit`'s floor at `k − m` blocks, each under the node at the sampled mix, is at most
 
   `((k − 1)/N)^s + 2s/2^h + C(q, k − m)/2^λ + C(q_z, m + 1)/2^λ`.
 

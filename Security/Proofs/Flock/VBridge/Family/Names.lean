@@ -1,5 +1,25 @@
-import Proofs.Flock.VBridge.Family.Structure
-import Proofs.Flock.Soundness.ExecCircuit
+module
+
+public import Proofs.Flock.VBridge.Family.Structure
+import all Init.Data.String.Legacy
+import all Init.Data.String.Defs
+import all Init.Data.Repr
+import all Init.Data.Int.Repr
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The circuit file's unit name, emitted and parsed
@@ -12,6 +32,8 @@ the characters (`splitOn_nl`), `Flock.tokens` reads a line's second word (`token
 (`pyDumps_noNl`), and the unit names are one word (`recOpen_name`, `residuals_name`), so the parse names the circuit's
 unit as the statement's (`file_unitName`): `HUnitName` and `HOpenName` at any history and registration.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Names
 
@@ -159,8 +181,8 @@ theorem splitOnAux_nl (s : String) (pre mid post : List Char) (hs : s.toList = p
       rw [hnext, hun, extract_at s pre mid _ hs]
       have := ih (pre ++ mid ++ ['\n']) [] (by rw [hs]; simp) (by simp) (String.ofList mid :: r)
       rw [List.append_nil] at this
-      rw [this, List.nil_append, show (mid ++ '\n' :: post).splitOn '\n' = mid :: post.splitOn '\n' from
-        List.splitOnP_append_cons_of_forall_mem hmid' '\n' rfl post]
+      rw [this, List.nil_append, show (mid ++ '\n' :: post).splitOn '\n' = mid :: post.splitOn '\n' by
+        simp only [List.splitOn_eq_splitOnP]; exact List.splitOnP_append_cons_of_forall_mem hmid' '\n' rfl post]
       simp
     · rw [if_neg (by rw [hget, hnl, beq_iff_eq]; exact hc)]
       have hnext : (String.Pos.Raw.unoffsetBy ⟨ulen (pre ++ mid)⟩ 0).next s = ⟨ulen (pre ++ (mid ++ [c]))⟩ := by

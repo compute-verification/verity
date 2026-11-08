@@ -1,5 +1,9 @@
-import Proofs.Flock.Claims.ZK.FrameOuter
-import Proofs.Flock.Claims.ZK.FramePoints
+module
+
+public import Proofs.Flock.Claims.ZK.FrameOuter
+public import Proofs.Flock.Claims.ZK.FramePoints
+import all Init.Data.String.Defs
+import all Init.Data.Array.Basic
 
 /-!
 # The frame's rank check along a rep's requests (`FrameUnrefused`'s rank fault, at the frame)
@@ -20,6 +24,8 @@ answered them, after the earlier rep's claim points. Along the loop's requests f
   mask slot short of full rank (`LeanRelease.rankStop`), so wherever the frame takes the coins the opening's label
   passes its rank check.
 -/
+
+@[expose] public section
 
 namespace Claims.ZKServer
 
@@ -61,11 +67,6 @@ theorem good_of_same {c : Cfg} {s s' : Masker} (hg : Good c s) (h : Same s s') :
     exact b ms hms
 
 theorem same_refl (s : Masker) : Same s s := ⟨rfl, rfl, rfl, rfl, rfl, rfl⟩
-
-theorem same_trans {s s' s'' : Masker} (h : Same s s') (h' : Same s' s'') : Same s s'' := by
-  obtain ⟨a1, a2, a3, a4, a5, a6⟩ := h
-  obtain ⟨b1, b2, b3, b4, b5, b6⟩ := h'
-  exact ⟨b1.trans a1, b2.trans a2, b3.trans a3, b4.trans a4, b5.trans a5, b6.trans a6⟩
 
 theorem eq_of_isLabel {l : ByteArray} {L : String} (h : isLabel l L = true) : l = L.toUTF8 := by
   unfold isLabel at h

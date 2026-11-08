@@ -1,11 +1,15 @@
-import Flock.Firewall
+module
+
+public import Flock.Firewall
+import all Init.Data.Repr
+import Std.Data.DTreeMap.Internal.WF.Lemmas
 
 /-!
 # A plain value's text parses back to it
 
 `printJson_roundTrip`: the text `printJson` writes of a plain value (`plain`: its numbers naturals, its strings and keys
 without `"`, `\` or control characters, each object's keys ascending) parses (`JsonParse.parse`) to a value with its
-canonical form, the form the firewall's pins compare. `parse_printJson` names the value: `norm j`, each object rebuilt
+canonical form, the form the ZK server's pins compare. `parse_printJson` names the value: `norm j`, each object rebuilt
 by inserting its members, in its tree's order, into the empty tree, as the parser builds it.
 
 `reads` is the parse at every fuel, by induction on it: `value` at fuel `k` reads the text of a plain value shorter
@@ -17,6 +21,8 @@ ascending order into a tree whose keys are all below them go after its members, 
 `fractional_eq` reads `fractional`'s loop as `scan`, and every part of a plain value's text takes `scan` from outside a
 string to outside a string, whatever follows (`Clean`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.Recursion.FirewallJson
 
@@ -545,7 +551,7 @@ theorem canonForm_members : ∀ t : Impl String (fun _ => Json), plainObj t = tr
     · exact canonForm_members r h.2 e he
 end
 
-/-- **A plain value's text round-trips**: it parses to a value with its canonical form, the form the firewall's pins
+/-- **A plain value's text round-trips**: it parses to a value with its canonical form, the form the ZK server's pins
 compare. -/
 theorem printJson_roundTrip {j : Json} (h : plain j = true) :
     ∃ j', JsonParse.parse (printJson j) = .ok j' ∧ canonForm j' = canonForm j :=
@@ -713,7 +719,7 @@ theorem clean_members : ∀ t : Impl String (fun _ => Json), plainObj t = true �
     · exact clean_members r h.2 x hx
 end
 
-/-- **A plain value's text has no fraction or exponent**, so the firewall's `Hello` doesn't refuse it as
+/-- **A plain value's text has no fraction or exponent**, so the ZK server's `Hello` doesn't refuse it as
 `fractional`. -/
 theorem fractional_printJson {j : Json} (h : plain j = true) : fractional (printJson j) = false := by
   rw [fractional_eq, printJson, String.toList_ofList]

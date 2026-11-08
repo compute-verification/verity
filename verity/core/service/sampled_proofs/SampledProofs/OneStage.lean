@@ -20,37 +20,46 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
   expects registered and doesn't fill, one of `Registered.SCHEMAS`), which R7 counts a row's leaves in, refused in any
   other form; and it may add `binding`, `{"stream", "prover"}`: its stream's digest (lowercase hex of 64 bytes) and the
   identity it registered the prover under (lowercase hex of whole bytes), refused in any other form; and it may add
-  `challenger`, `{"key", "label"}`: the auditor's challenger the draw's coins come from (its LMS key,
-  `ChallengerKey.ofJson`) and the family they are drawn from, which needs `window_root`, refused in any other form;
-* **commitment**: the registration record, canonical JSON, fixed before the draw; its digest is
+  `challenger`, `{"key", "label"}`: the auditor's challenger the sample's coins come from (its LMS key,
+  `ChallengerKey.ofJson`) and the family they are sampled from, which needs `window_root`, refused in any other form; and
+  it may add `day` and `declarations`, both or neither: the window's day (a natural number) and the registration log's
+  declarations, each exactly `{"blocks", "day", "program"}` with a natural day and a string program, which R2 holds the
+  record's program to (`Registration.declaredCode`), refused in any other form;
+* **commitment**: the registration record, canonical JSON, fixed before the sample; its digest is
   `SHA-512(format || 0 || canon(record))` (`Registration.digest`), which the receipt names;
-* **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's draw), `proved_units`, `instances`,
+* **evidence**: canonical JSON with exactly `receipt`, `draw` (the verifier's sample), `proved_units`, `instances`,
   `statement`, `verdicts` (`{name: {"accepted": true | false | null, "of_record", ...}}`, each verifier's verdict on the
-  drawn units' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
+  sampled proof blocks' sessions; one of record that accepted may report the roots it opened the sessions' registered reads
   against, `"registered": {port: {"value": string, "root"}}`), `sessions`, `served` and `session_roots` (each null when
-  absent), and `coins` when the parameters name a challenger: the evidence of the draw's coins
-  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); the protocol refuses a draw that carries a
+  absent), and `coins` when the parameters name a challenger: the evidence of the sample's coins
+  (`Challenger.drawCoins`'s, `{ledger, main, pins, segment, session}`); the protocol refuses a sample that carries a
   `closure` (`evidenceOf`), outside the sampled audit's soundness statement;
 * **coins** (`coinsOf`): with a challenger, the coins `Challenger.drawCoins` reads from the evidence's `coins` under the
   parameters' key, on their window, of their family, released after the registration's digest, refused when they don't
   read; without one, none, and evidence that carries coins is refused;
-* **check** (`checkLive`, at the coins `checkAt`): with coins, that the draw's units are the ones their raw bytes draw
-  under the law (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
-  record's checks (`Record.checks`: the draw, the proved units, the receipt, the served draw, the sessions' roots, and the
-  roots the verifiers of record report opening the sessions' registered reads against, `Record.sessionRegistered`, each
+* **check** (`checkLive`, at the coins `checkAt`): with coins, that the sample's units are the ones their raw bytes sample
+  under the sampling design (`drawnFrom`), every coin opened read (`coinsWhy`); then (`check`) R1–R7 (`Registration.check`), then the
+  record's checks (`Record.checks`: the sample, the proved units, the receipt, the served sample, the sessions' roots, and the
+  roots the verifiers report opening the sessions' registered reads against, `Record.sessionRegistered`, each
   the registered one). It rejects when one fails or
-  a verdict that ran did not accept; it is undecided when they all hold but no verifier of record accepted because none
+  a verdict that ran did not accept; it is undecided when they all hold but no verifier accepted because none
   is named or one has not run; and it accepts exactly when `audit_record` does;
-* on acceptance, **public** is the drawn and proved units with the exact bounds on wrong units at δ (`Bound.boundOf`,
-  and each template's own under a stratified or work law), and the **profile** is `audit.profile`'s `IntegrityProfile`:
-  one level `unit`, the partition's units, drawn by the verifier's law.
+* on acceptance, **public** is the sampled and proved units with the exact bounds on incorrect proof blocks at δ (`Bound.boundOf`,
+  and each template's own under a stratified or work sampling design), and the **profile** is `audit.profile`'s `IntegrityProfile`:
+  one level `unit`, the partition's units, sampled by the verifier's law.
 -/
-import CoreProtocol.Cli
-import CoreProtocol.Profile
-import CoreProtocol.Live
-import SampledProofs.Registration
-import SampledProofs.Record
-import SampledProofs.ChallengerDraw
+module
+
+public import CoreProtocol.Cli
+public import CoreProtocol.Profile
+public import CoreProtocol.Live
+public import SampledProofs.Registration
+public import SampledProofs.Record
+public import SampledProofs.ChallengerDraw
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.OneStage
 
@@ -60,7 +69,7 @@ open Flock (V)
 structure Params where
   verifier : Registration.Verifier
   delta : Core.Ratio
-  /-- the auditor's challenger the draw's coins come from, and their family; none when the verifier draws from its own -/
+  /-- the auditor's challenger the sample's coins come from, and their family; none when the verifier samples from its own -/
   challenger : Option (Challenger.ChallengerKey × String) := none
 
 structure Commitment where
@@ -126,7 +135,7 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
-/-- The parameters as parsed, before `paramsOfJson`'s refusal of the law: the stream's run reads them and refuses the law
+/-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and refuses the sampling design
 itself (`Run.run`, `shapes`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
@@ -138,6 +147,8 @@ def paramsParsed (j : Json) : V Params := do
   let keys := if (field? j "window_root").isSome then keys.push "window_root" else keys
   let keys := if (field? j "held").isSome then keys.push "held" else keys
   let keys := if (field? j "challenger").isSome then keys.push "challenger" else keys
+  let keys := if (field? j "day").isSome || (field? j "declarations").isSome then keys ++ #["day", "declarations"]
+    else keys
   exactly j (if (field? j "binding").isSome then keys.push "binding" else keys) "the parameters"
   let program ← Program.parse (← Flock.canon (← obj (getD j "program") "program")).toUTF8
   let query ← obj (getD j "query") "query"
@@ -235,11 +246,21 @@ def paramsParsed (j : Json) : V Params := do
       | .str v => if registered.any (·.1 == v) then pure v else throw s!"held value {v}: not a registered value"
       | _ => throw "held values are a list of registered values"
     | _ => throw "held values are a list of registered values"
+  let declared ← if (field? j "day").isNone then pure none else do
+    let some day := nat? (getD j "day") | throw "a declared day is a natural number"
+    let .arr ds := getD j "declarations" | throw "the declarations are a list"
+    let ds ← ds.mapM fun d => do
+      exactly d #["blocks", "day", "program"] "a declaration"
+      match nat? (getD d "day"), getD d "program" with
+      | some n, .str p => pure (n, p)
+      | _, _ => throw "a declaration's day is not a natural number or its program not a string"
+    pure (some (day, ds))
   let .str d := getD j "delta" | throw "delta is not a ratio"
   let delta ← Core.Ratio.ofString d "delta"
   if delta.num == 0 || delta.den ≤ delta.num then throw "delta is not in (0, 1)"
   let p : Params := { verifier := { program, query, law, workTable, scheme, ports, leafLayer, anchors, log, partition,
-                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held },
+                                    registered, params, supplied, pinned, outputs, binding, schemas, windowRoot, held,
+                                    declared },
                       delta, challenger }
   let again := Registration.unwindowed p.verifier
   if !again.isEmpty then
@@ -249,7 +270,7 @@ def paramsParsed (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
-/-- The parameters (`paramsParsed`), with a `bernoulli` law at `0 < p < 1` refused (`Draw.countVaries`): its drawn count
+/-- The parameters (`paramsParsed`), with a `bernoulli` law at `0 < p < 1` refused (`Draw.countVaries`): its sampled count
 varies, which the sampled audit's soundness statement doesn't cover. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
@@ -289,8 +310,8 @@ def evidenceParsed (b : ByteArray) : V Evidence := do
              | x => some <$> nats x "served",
            sessionRoots := ← opt "session_roots" (obj · "session_roots"), coins := getD j "coins" }
 
-/-- The evidence (`evidenceParsed`), with a draw that carries a closure refused: a work draw widened by a closure map
-proves a set whose size varies with the draw, which the sampled audit's soundness statement doesn't cover (the stream's
+/-- The evidence (`evidenceParsed`), with a sample that carries a closure refused: a work sample widened by a closure map
+proves a set whose size varies with the sample, which the sampled audit's soundness statement doesn't cover (the stream's
 run refuses its closure map, `closure`). -/
 def evidenceOf (b : ByteArray) : V Evidence := do
   let e ← evidenceParsed b
@@ -298,7 +319,7 @@ def evidenceOf (b : ByteArray) : V Evidence := do
     throw "the draw carries a closure, which the sampled audit's soundness statement doesn't cover"
   return e
 
-/-- `audit_record`'s checks after the draw's (`Record.checks`): the names of those that fail. The registered roots the
+/-- `audit_record`'s checks after the sample's (`Record.checks`): the names of those that fail. The registered roots the
 sessions' reads were opened against are the verdicts' own (`Record.sessionRegistered`), for the registration's own
 values (`Record.ownRegistered`). -/
 def recordChecks (rec : Json) (digest : String) (e : Evidence) : Array String :=
@@ -323,7 +344,7 @@ def verdictOf (verdicts : Array (String × Json)) : Core.Outcome Unit Unit :=
   | some (name, _) => .undecided s!"the verifier of record {name} has not run"
   | none => .accept () ()
 
-/-- The coins the draw read (module docstring, **coins**): with the parameters' challenger, what `Challenger.drawCoins`
+/-- The coins the sample read (module docstring, **coins**): with the parameters' challenger, what `Challenger.drawCoins`
 reads from the evidence's `coins` under its key, on the verifier's window, of its family, released after the
 registration's digest; none without one, when the evidence carries no coins. -/
 def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) :=
@@ -334,13 +355,13 @@ def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) 
   | none, _ => if e.coins matches .null then pure none
     else throw "coins: the evidence carries coins, and the verifier names no challenger they come from"
 
-/-- The draw the coins `src` give over `population` units under the expanded `law` (`Select.select`'s for a law rule):
+/-- The sample the coins `src` give over `population` units under the expanded `law` (`Select.select`'s for a sampling design rule):
 its units, and the number of bytes of `src` it read. -/
 def drawnFrom (v : Registration.Verifier) (law : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveLaw v.program v.query v.law v.workTable
   Draw.drawUnits (derived.getD (← Draw.flockLaw law population)) population src
 
-/-- Why the draw is not the one the coins `src` give under `law` (`drawnFrom`), every coin opened read; none when it is. -/
+/-- Why the sample is not the one the coins `src` give under `law` (`drawnFrom`), every coin opened read; none when it is. -/
 def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteArray) : Option String :=
   match nat? (getD rec_ "population") with
   | none => some "the record names no population"
@@ -353,8 +374,8 @@ def coinsReason (v : Registration.Verifier) (law rec_ draw : Json) (src : ByteAr
         some s!"the draw read {read} bytes of {src.size / Challenger.COIN_BYTES} coins: a coin opened and not read"
       else none
 
-/-- R1–R7, the draw's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
-check `checkAt` runs once the coins drew the draw. -/
+/-- R1–R7, the sample's checks, the record's checks and the verdicts (module docstring, **check**), at no coins: the
+check `checkAt` runs once the coins drew the sample. -/
 def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   let v := p.verifier
   let rec_ := c.record
@@ -386,15 +407,15 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Cor
         delta := p.delta, drawn := #[(Record.LEVEL, units.size)] }
   | _, _ => .reject "the law the draw passed under has no profile"
 
-/-- Why the draw is not the one the coins `src` give under the verifier's law as derived (`coinsReason`); none when it
-is, and when the law doesn't derive, which `check` refuses. -/
+/-- Why the sample is not the one the coins `src` give under the verifier's law as derived (`coinsReason`); none when it
+is, and when the sampling design doesn't derive, which `check` refuses. -/
 def coinsWhy (p : Params) (c : Commitment) (e : Evidence) (src : ByteArray) : Option String :=
   let v := p.verifier
   match Draw.derive v.program v.query v.law v.workTable with
   | .ok law => coinsReason v law c.record e.draw src
   | .error _ => none
 
-/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't draw the draw
+/-- The check at the coins `ξ` (module docstring, **check**): with coins, a refusal when they don't sample the sample
 (`coinsWhy`), then `check`. -/
 def checkAt (p : Params) (c : Commitment) (ξ : Option ByteArray) (e : Evidence) : Core.Outcome Public Core.Integrity :=
   match ξ.bind (coinsWhy p c e) with
@@ -427,7 +448,7 @@ def protocol : Core.Protocol where
   publicJson := publicJson
   profileJson := Core.Integrity.toJson
 
-/-- The audit reads its draw's coins (`coinsOf`) and decides at them (`checkAt`). -/
+/-- The audit reads its sample's coins (`coinsOf`) and decides at them (`checkAt`). -/
 def live : Core.Live protocol where
   Coins := Option ByteArray
   coins := coinsOf

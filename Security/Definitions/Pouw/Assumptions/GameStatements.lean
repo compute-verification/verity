@@ -1,8 +1,10 @@
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.M1
-import Definitions.Pouw.Witness.Model
-import Definitions.Pouw.Witness.Copy
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Pouw.M1
+public import Definitions.Pouw.Witness.Model
+public import Definitions.Pouw.Witness.Copy
+public import Definitions.Pouw.Assumptions.Game
+public import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # The game's statements (trusted)
@@ -13,6 +15,8 @@ completeness, the witnesses for TT and Nz, and that the game can be lost. Their 
 `Pouw.Proofs.* : GameStatements.X`. (a) is the guarantee `Pouw.Guarantees.GammaFromTT`; (b), (c) and (d) are guarantees in
 `Pouw.Guarantees.Game`.
 -/
+
+@[expose] public section
 
 namespace Pouw.GameStatements
 

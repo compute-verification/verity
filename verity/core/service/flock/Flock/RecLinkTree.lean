@@ -1,5 +1,7 @@
-import Flock.Hm96
-import Flock.RecLinks
+module
+
+public import Flock.Hm96
+public import Flock.RecLinks
 
 /-!
 # The link check's rows trees (`verity_flock.rec_link.Tree`)
@@ -16,6 +18,8 @@ at most `D ≤ 32` levels): the public commitments the verifier already reads, n
 `linksArg` reads `--rec-links ROOT:N`, the table's registered root and row count, as `verify`, `statement` and
 `rec-compose` take them; a statement carrying them is held to the table by V*'s link part (`RecLinkPart`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecLinkTree
 

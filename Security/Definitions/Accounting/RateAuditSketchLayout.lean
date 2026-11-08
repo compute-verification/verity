@@ -1,4 +1,7 @@
-import Definitions.Accounting.RateAuditSketch
+module
+
+public import Definitions.Accounting.RateAuditSketch
+import Mathlib.Basic.ENNReal.Real
 
 /-!
 # The sketch rate audit for a prover whose memory holds any function of the store (trusted)
@@ -11,6 +14,8 @@ and every bit of which it reads is counted. The class here also holds nothing on
 link but the certified stream's sectors, and rebuilds nothing, so an arbitrary prover's class contains it. Its chip
 queries the oracle `H(R, t, d)` at the window's fresh seed, as `RateAuditSketch.lean`'s does.
 -/
+
+@[expose] public section
 
 namespace Accounting.RateSketch
 

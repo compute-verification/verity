@@ -1,10 +1,11 @@
 /-
 # The proof system's stream: its own rules (`service._Control`)
 
-What `service.Stream` decides of each op on its own, around the checks whose verifiers of record are their own pieces
-(`Service.checkPublic`, `Registration.check`, `Select.select`, `Draw.checkDraw`, `Service.checkVerdicts`, `Record.record`,
-`Run.run`): the failure budget, the registrations open at once, the epoch's salt and registration deadline, and each
-registration's once-only orders (drawn, session, delivered, final) and proof deadline. `run` decides one op on
+What `service.Stream` decides of each op on its own, around the checks whose verifiers are their own pieces
+(`Service.checkPublic`, `Registration.check`, `Select.select`, `Select.selectSecond`, `Draw.checkDraw`,
+`Service.checkVerdicts`, `Record.record`, `Run.run`): the failure budget, the registrations open at once, the epoch's salt
+and registration deadline, and each registration's once-only orders (sampled, under a two-stage rule its interior
+registration and second stage, session, delivered, final) and proof deadline. `run` decides one op on
 what the rules hold of the stream (a `State`) and gives what they hold after it, as `service._step` does. The stream holds
 its state of record from these outputs alone, from the empty state.
 
@@ -16,24 +17,36 @@ and an op that reads an entry the state doesn't hold is an error. As JSON:
 * `salted_at`, the salt's release or null; `ended`, null or the late registration's readings `{received_at, salted_at}`;
 * `halted`, null or the cause of the halt of the stream's operator (`Fleet`, R5-all);
 * `entries`, in order, each `{order, registration, draw, proved, drawn_at, delivered, session, final}`: `draw`
-  null until drawn, then with `proved` and `drawn_at`, and `session` null or the covered draws of the session over it.
+  null until sampled, then with `proved` and `drawn_at`, and `session` null or the covered samples of the session over it.
+  Under a two-stage rule an entry adds `interior`, its interior registration's token, once registered, then `second`,
+  the second stage's sample's token, once sampled; no other entry has either.
 
 An op is an object with `op` and the fields it reads:
 
 * `ready`; `salt` `{at}`; `salt_released` `{released_at, now}`;
 * `register` `{received_at, checks, registration}`;
-* `select` `{order, registration, checks, draw, proved, at}`;
-* `session` `{draws}`, each draw `[order, registration, draw]`;
-* `deliver` `{order, registration, draw, sessions, now}`, and `deliver_session` `{stream, draws, sessions, now}`;
+* `select` `{order, registration, checks, draw, proved, at}`, the first stage under a two-stage rule;
+* `interiors` `{order, registration, draw, checks, interior}` and `second` `{order, registration, draw, interior,
+  checks, second}`, a two-stage rule's interior registration and second stage;
+* `session` `{draws}`, each sample `[order, registration, draw]`;
+* `deliver` `{order, registration, draw, sessions, now}` (with `second` under a two-stage rule), and `deliver_session`
+  `{stream, draws, sessions, now}`;
 * `outcome` `{order, registration, draw, now, verdicts, accepted}`;
 * `halt` `{cause}`, the fleet's halt of the stream's operator (`Fleet.failures`).
+
+Under a two-stage rule (the params' `two_stage`) the first stage's sample, its interior registration and its second stage
+are once each and in that order, before any proof: `interiors` refuses `rule` (a one-stage stream), `not-drawn`, `final`,
+`delivered` and `interior-registered`; `second` refuses `rule`, `not-drawn`, `final`, `delivered`, `no-interior` (another
+interior registration, or none yet) and `drawn`; `deliver` refuses `second` (the second stage hasn't sampled) or
+`not-drawn` (another sample) unless the proof is late; and `session` refuses `rule`, since each sample's proof follows its
+own interior registration. The proof deadline counts from the first stage.
 
 `registration` and `draw` are the challenger's tokens for them (the SHA-512 of a `Registration`'s fields and of a
 `Draw`'s), so two are the same exactly when Python's objects are equal; `order` is the registration's, or null where it
 isn't an integer. Readings are the challenger's clock: a JSON number, kept as written (so the state gives it back as Python
 wrote it) and read as the double nearest it (`PyJson.nearest`, so a Python float reads back exactly), with Python's float
 arithmetic. `checks` are the checks' codes, or null where they pass; `verdicts` the verdicts' hold's codes or null;
-`accepted` the audit records' and the run's verdict; `proved` the draw's proved units' count; `sessions` the delivered
+`accepted` the audit records' and the run's verdict; `proved` the sample's proved units' count; `sessions` the delivered
 session records' SHA-512.
 
 A decision is `{"refused": codes}`, `{"pending": true}`, `{"ok": value}`, or `{"unchecked": field}` where the op passes
@@ -45,7 +58,13 @@ A halt is final. It ends every registration without a final outcome at once, as 
 nothing accepts it after that, and outcomes already final stay. A halted stream refuses every op (`halted`) and changes
 nothing, so it receives no registration again.
 -/
-import SampledProofs.Run
+module
+
+public import SampledProofs.Run
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace SampledProofs.Stream
 
@@ -70,17 +89,22 @@ def float? : Json → Option Float
 def reading? (j : Json) : Option Json := (float? j).map fun _ => j
 
 /-- The stream's public parameters: its failure budget, its rounds, its check's deadlines (seconds on the
-challenger's clock) and its digest. -/
+challenger's clock), its digest, and whether its rule is two-stage. -/
 structure Params where
   budget : Nat
   rounds : Nat
   registrationDeadline : Option Float
   proofDeadline : Float
   stream : String
+  twoStage : Bool := false
 
+/-- Exactly `{budget, rounds, registration_deadline, proof_deadline, stream}`, with `two_stage: true` under a two-stage
+rule, so a one-stage stream's params are as they were. -/
 def Params.ofJson (j : Json) : V Params := do
-  if keys? j != some #["budget", "proof_deadline", "registration_deadline", "rounds", "stream"] then
-    throw "params are exactly {budget, rounds, registration_deadline, proof_deadline, stream}"
+  let ks := #["budget", "proof_deadline", "registration_deadline", "rounds", "stream"]
+  let twoStage := keys? j == some (ks.push "two_stage")
+  if keys? j != some ks && !(twoStage && getD j "two_stage" == .bool true) then
+    throw "params are exactly {budget, rounds, registration_deadline, proof_deadline, stream}, with two_stage: true under a two-stage rule"
   let some budget := nat? (getD j "budget") | throw "a failure budget is a positive integer"
   if budget == 0 then throw "a failure budget is a positive integer"
   let some rounds := nat? (getD j "rounds") | throw s!"a session covers 1 to {ROUNDS} rounds"
@@ -93,9 +117,9 @@ def Params.ofJson (j : Json) : V Params := do
       | some d => if d > 0 then pure (some d) else throw "a registration deadline is a positive number of seconds"
       | none => throw "a registration deadline is a positive number of seconds"
   let .str stream := getD j "stream" | throw "stream is the stream's digest"
-  return { budget, rounds, registrationDeadline := rd, proofDeadline := pd, stream }
+  return { budget, rounds, registrationDeadline := rd, proofDeadline := pd, stream, twoStage }
 
-/-- A covered draw: its registration's order (none where it isn't a natural number) and token, and the draw's token. -/
+/-- A covered sample: its registration's order (none where it isn't a natural number) and token, and the sample's token. -/
 abbrev Covered := Option Nat × String × String
 
 def covered? : Json → Option Covered
@@ -115,6 +139,10 @@ structure Entry where
   delivered : Bool := false
   session : Option (Array Covered) := none
   final : Bool := false
+  /-- under a two-stage rule: the interior registration's token, once registered -/
+  interior : Option String := none
+  /-- under a two-stage rule: the second stage's sample's token, once sampled -/
+  second : Option String := none
   deriving Inhabited
 
 structure State where
@@ -149,9 +177,16 @@ private def ascending : List Nat → Bool
   | a :: b :: rest => a < b && ascending (b :: rest)
   | _ => true
 
+/-- An entry's keys: the eight every entry has, with `interior`, then `interior` and `second`, once a two-stage
+registration has them. -/
+def Entry.keysOk (j : Json) : Bool :=
+  let ks := #["delivered", "draw", "drawn_at", "final", "order", "proved", "registration", "session"]
+  keys? j == some ks || keys? j == some (sortStrings (ks.push "interior")) ||
+    keys? j == some (sortStrings (ks ++ #["interior", "second"]))
+
 def Entry.ofJson (j : Json) : V Entry := do
-  if keys? j != some #["delivered", "draw", "drawn_at", "final", "order", "proved", "registration", "session"]
-  then throw "an entry is exactly {order, registration, draw, proved, drawn_at, delivered, session, final}"
+  if !Entry.keysOk j then
+    throw "an entry is exactly {order, registration, draw, proved, drawn_at, delivered, session, final}, with interior then second under a two-stage rule"
   let some order := nat? (getD j "order") | throw "an entry's order is a natural number"
   let some registration := str? (getD j "registration") | throw "an entry's registration is a token"
   let draw ← nullOr (getD j "draw") str? "an entry's draw is null or a token"
@@ -161,7 +196,11 @@ def Entry.ofJson (j : Json) : V Entry := do
   let session ← nullOr (getD j "session") (fun | .arr cs => cs.mapM covered? | _ => none)
     "an entry's session is null or its covered draws"
   let some final := bool? (getD j "final") | throw "an entry's final is a boolean"
-  return { order, registration, draw, proved, drawnAt, delivered, session, final }
+  let interior ← nullOr (getD j "interior") str? "an entry's interior is its interior registration's token"
+  let second ← nullOr (getD j "second") str? "an entry's second is its second stage's token"
+  if (field? j "interior").isSome && interior.isNone || (field? j "second").isSome && second.isNone then
+    throw "an entry's interior and second are tokens, written once there"
+  return { order, registration, draw, proved, drawnAt, delivered, session, final, interior, second }
 
 def State.ofJson (j : Json) : V State := do
   if keys? j != some #["ended", "entries", "failures", "halted", "opened", "salted_at", "size"] then
@@ -182,11 +221,12 @@ def State.ofJson (j : Json) : V State := do
   if !(orders.all (· < size) && ascending orders) then throw "entries are registrations', in order, once each"
   return { size, opened, failures, saltedAt, ended, halted, entries }
 
-def Entry.toJson (e : Entry) : Json := Json.mkObj [
+def Entry.toJson (e : Entry) : Json := Json.mkObj ([
   ("order", Lean.toJson e.order), ("registration", .str e.registration), ("draw", (e.draw.map .str).getD .null),
   ("proved", Lean.toJson e.proved), ("drawn_at", e.drawnAt.getD .null),
   ("delivered", .bool e.delivered), ("session", (e.session.map fun cs => Json.arr (cs.map Covered.toJson)).getD .null),
-  ("final", .bool e.final)]
+  ("final", .bool e.final)] ++ (e.interior.map fun i => [("interior", Json.str i)]).getD [] ++
+  (e.second.map fun s => [("second", Json.str s)]).getD [])
 
 def State.toJson (s : State) : Json := Json.mkObj [
   ("size", Lean.toJson s.size), ("opened", natsJson s.opened), ("failures", Lean.toJson s.failures),
@@ -269,7 +309,7 @@ def finish (e : Entry) (sym : String) : M Unit := do
   put { e with final := true }
   modify fun s => { s with failures := s.failures + (if sym == ACCEPT then 0 else 1), opened := s.opened.erase e.order }
 
-/-- `Stream._late`: past the proof deadline from the draw of the session's first round (its own, alone). -/
+/-- `Stream._late`: past the proof deadline from the sample of the session's first round (its own, alone). -/
 def late (p : Params) (e : Entry) (now : Float) : M Bool := do
   let first ← match e.session.bind (·[0]?) with
     | some (some o, _, _) => held o
@@ -306,6 +346,34 @@ def select (op : Json) : M Decision := do
   put { e with draw := some draw, proved := proved, drawnAt := some at_ }
   return .ok Json.null
 
+/-- A sampled entry neither final nor delivered, of a two-stage stream. -/
+def staged (p : Params) (op : Json) : M Entry := do
+  if !p.twoStage then no "rule"
+  let e ← entryOf op
+  drawn op e
+  if e.final then no "final"
+  if e.delivered then no "delivered"
+  pure e
+
+/-- `Stream.register_interiors`: the first stage's sampled replay blocks' interiors, registered once, after it. -/
+def interiors (p : Params) (op : Json) : M Decision := do
+  let e ← staged p op
+  if e.interior.isSome then no "interior-registered"
+  if let some cs ← codes op "checks" then stop (.refused cs)
+  let interior ← token (← need op "interior") "interior"
+  put { e with interior := some interior }
+  return .ok Json.null
+
+/-- The second `select`: `k` proof blocks of each sampled replay block, once, after the interior registration. -/
+def second (p : Params) (op : Json) : M Decision := do
+  let e ← staged p op
+  if e.interior != some (← token (getD op "interior") "interior") then no "no-interior"
+  if e.second.isSome then no "drawn"
+  if let some cs ← codes op "checks" then stop (.refused cs)
+  let second ← token (← need op "second") "second"
+  put { e with second := some second }
+  return .ok Json.null
+
 def draws (op : Json) : M (Array Covered) := do
   let .arr ds := getD op "draws" | bad "draws are a list"
   ds.mapM fun d => match covered? d with
@@ -313,6 +381,7 @@ def draws (op : Json) : M (Array Covered) := do
     | none => bad "a covered draw is [order, registration, draw]"
 
 def session (p : Params) (op : Json) : M Decision := do
+  if p.twoStage then no "rule"
   let ds ← draws op
   if ds.size == 0 || ds.size > p.rounds then no "rounds"
   for (o, r, d) in ds do
@@ -339,6 +408,9 @@ def deliver (p : Params) (op : Json) : M Decision := do
   if e.session.isSome then no "covered"
   if !sessionsOk op then no "sessions"
   let isLate ← late p e (← reading op "now").2
+  if p.twoStage && !isLate then
+    let some s := e.second | no "second"
+    if getD op "second" != .str s then no "not-drawn"
   let e := { e with delivered := true }
   put e
   if isLate then
@@ -402,10 +474,11 @@ def halt (op : Json) : M Decision := do
     return .ok (natsJson s.opened)
 
 def OPS : Array String :=
-  #["ready", "salt", "salt_released", "register", "select", "session", "deliver", "deliver_session", "outcome", "halt"]
+  #["ready", "salt", "salt_released", "register", "select", "interiors", "second", "session", "deliver",
+    "deliver_session", "outcome", "halt"]
 
 def opsMsg : String :=
-  "an op is one of ready, salt, salt_released, register, select, session, deliver, deliver_session, outcome, halt"
+  "an op is one of ready, salt, salt_released, register, select, interiors, second, session, deliver, deliver_session, outcome, halt"
 
 /-- The op `name`'s own rule. -/
 def act (p : Params) (op : Json) : String → M Decision
@@ -423,6 +496,8 @@ def act (p : Params) (op : Json) : String → M Decision
     return .ok Json.null
   | "register" => register p op
   | "select" => select op
+  | "interiors" => interiors p op
+  | "second" => second p op
   | "session" => session p op
   | "deliver" => deliver p op
   | "deliver_session" => deliverSession p op

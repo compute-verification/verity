@@ -1,11 +1,17 @@
-import Definitions.Pouw.Assumptions.GameStatements
-import Definitions.Pouw.Assumptions.Deadline
-import Definitions.Pouw.Assumptions.PearlC.Deadline
-import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
-import Definitions.Pouw.Assumptions.PearlC.TTOutW1
-import Definitions.Pouw.PearlC.DeviceKernelWref
-import Definitions.Pouw.PearlC.DevicePricesLoop
-import Definitions.Pouw.PearlC.Tile
+module
+
+public import Definitions.Pouw.Assumptions.GameStatements
+public import Definitions.Pouw.Assumptions.Deadline
+public import Definitions.Pouw.Assumptions.Game
+public import Definitions.Pouw.Assumptions.PearlC.Deadline
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRev1
+public import Definitions.Pouw.Assumptions.PearlC.TTOutW1
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.PearlC.Deadline
+public import Definitions.Pouw.PearlC.DeviceKernelWref
+public import Definitions.Pouw.PearlC.DevicePricesLoop
+public import Definitions.Pouw.PearlC.Tile
+import Mathlib.Analysis.SpecialFunctions.Pow.Real
 
 /-!
 # Work between the salt and the deadline (trusted)
@@ -26,6 +32,8 @@ timed run and verifier's rule, and time meets the cost model through one named a
   hypotheses are TT_OUT rev1 per audit tile at 1/1,000 at W1 (`TTOutTilePearlCDevRev1W1`) and the honest clock at that
   cost model. `sha`, `fetch`, the salt's bytes `salt` and `sem` are parameters.
 -/
+
+@[expose] public section
 
 namespace Pouw.Guarantees
 
@@ -77,7 +85,7 @@ def SpareCapacityAtDeadline : Prop :=
 
 /-- **Pearl-C's sampled audit by the deadline.** `GγSampled` and an honest clock give, for every in-domain workload,
 adversary, timed run and deadline `td`, every run spending at most `T` after the salt's release and by `td` with at most
-`q` oracle calls, and every draw weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
+`q` oracle calls, and every sample weighted by the tiles' `W_ref`: the audit accepts a transcript received by `td` while
 `T` is below `1 − γ` of the claimed work less `ε_s` of the layout's with probability at most `(1 − ε_s)^t + η(q, N)`. -/
 def PearlCSampledByDeadline : Prop :=
   ∀ (Q R S : Type) [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : PearlC.CostModel Q R S)

@@ -1,7 +1,9 @@
-import Definitions.Pouw.Basic.Prob
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.Order.Archimedean.Real.Basic
-import Mathlib.Order.Interval.Finset.Nat
+module
+
+public import Definitions.Pouw.Basic.Prob
+public import Mathlib.Algebra.Order.Archimedean.Real.Basic
+public import Mathlib.Order.Interval.Finset.Nat
+public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
 
 /-!
 # What a remote audit shows held: the node's memory as a trace (trusted)
@@ -29,6 +31,8 @@ What the session shows held, at an outcome:
 * `held ω`, the snapshot: `Σ_p |mem ω (tick ω p)|`, the registered blocks in node memory at each credited pass's start;
 * `heldOver ω u v`, held over time: `Σ_{t ∈ [u, v)} |mem ω t|`, the registered blocks in node memory at each tick.
 -/
+
+@[expose] public section
 
 namespace Accounting.Remote.Held
 

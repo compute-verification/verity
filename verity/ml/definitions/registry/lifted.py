@@ -507,25 +507,25 @@ def l_gather_row(w: int, N: int, oor_payload: int | None = None) -> PrimitiveDef
     return p
 
 
+def _i32_payload(v: int) -> int | None:
+    """None for ⊥; the signed i32 payload of a lifted 32-bit word otherwise (validity already checked)."""
+    if v >> 32:
+        return None
+    t = v & ((1 << 32) - 1)
+    return t - (1 << 32) if t & 0x80000000 else t
+
+
 def _l_gather_row(w: int, N: int, oor_payload: int, original_id: str) -> PrimitiveDefinition:
     key = _gather_key(w, N, oor_payload)
     name = f"LGatherRow{w}x{N}" if len(key) == 2 else f"LGatherRow{w}x{N}o{oor_payload:x}"
     p = _GATHERS.get(key)
     if p is None:
         bot_w, inv_w = enc_bot(w), inv(w)
-        mask32 = (1 << 32) - 1
-
-        def _index(idx: int) -> int | None:
-            """None for ⊥; the signed i32 payload otherwise (validity already checked)."""
-            if idx >> 32:
-                return None
-            t = idx & mask32
-            return t - (1 << 32) if t & 0x80000000 else t
 
         def ev(idx: int, *rows: int, _N=N, _w=w, _bot=bot_w, _inv=inv_w, _oor=oor_payload) -> int:
             if _classify((idx,) + tuple(rows), (32,) + (_w,) * _N) == 2:
                 return _inv
-            t = _index(idx)
+            t = _i32_payload(idx)
             if t is None:
                 return _bot
             return rows[t] if 0 <= t < _N else _oor
@@ -537,7 +537,7 @@ def _l_gather_row(w: int, N: int, oor_payload: int, original_id: str) -> Primiti
             for j in range(_N):  # the INV rule, literally: an INV anywhere among the operands is INV, at the cost of reading every row
                 if _classify((get(1 + j),), (_w,)) == 2:
                     return _inv
-            t = _index(idx)
+            t = _i32_payload(idx)
             if t is None:
                 return _bot
             return get(1 + t) if 0 <= t < _N else _oor
@@ -569,18 +569,11 @@ def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
         if E < 1 or w < 1:
             raise ValueError(f"LFixedSelect{E}x{w}: E ≥ 1 and w ≥ 1 required")
         bot_w, inv_w = enc_bot(w), inv(w)
-        mask32 = (1 << 32) - 1
-
-        def _route(r: int) -> int | None:
-            if r >> 32:
-                return None
-            t = r & mask32
-            return t - (1 << 32) if t & 0x80000000 else t
 
         def ev(r: int, *z: int, _E=E, _w=w, _bot=bot_w, _inv=inv_w) -> int:
             if _classify((r,) + tuple(z), (32,) + (_w,) * _E) == 2:
                 return _inv
-            t = _route(r)
+            t = _i32_payload(r)
             if t is None:
                 return _bot
             return z[t] if 0 <= t < _E else _inv  # out of range: NAMED (INV), no wrap, no default slot
@@ -592,7 +585,7 @@ def l_fixed_select(E: int, w: int) -> PrimitiveDefinition:
             for j in range(_E):  # the INV rule: an INV anywhere among the operands is INV
                 if _classify((get(1 + j),), (_w,)) == 2:
                     return _inv
-            t = _route(r)
+            t = _i32_payload(r)
             if t is None:
                 return _bot
             return get(1 + t) if 0 <= t < _E else _inv
@@ -1407,10 +1400,6 @@ def StepBody(B, S, tok, kc, vc, weights):
     return tuple_of(y, k_new, v_new)
 
 
-def _lifted_weights_type(C: dict) -> Type:
-    return lift_type(b1.weights_type(C))
-
-
 GUARD_IN = "in"  # the input guard: the activity guard sits on the step's INPUT token — the implemented candidate
 GUARDS_IMPLEMENTED = (GUARD_IN,)
 LAGS_IMPLEMENTED = (0, 1)  # the engine's post-EOS placeholder rows (vLLM async scheduling: 1); a DECLARED static, no default
@@ -1421,7 +1410,7 @@ def check_lag(lag: int) -> int:
     `LAG = 0` (the step after the EOS is never executed) or `LAG = 1` (vLLM async scheduling: the EOS-stopped request is fed forward
     once more on its EOS token, its sample discarded).  Neither is a default; anything else is refused by name."""
     if lag not in LAGS_IMPLEMENTED:
-        raise ValueError(f"LAG={lag!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED} (DP-pad-02); nothing is assumed")
+        raise ValueError(f"LAG={lag!r}: the profile's post-EOS lag must be declared as one of {LAGS_IMPLEMENTED}; nothing is assumed")
     return int(lag)
 
 
@@ -1991,7 +1980,7 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
         check_boundary(32, e, what="eos id", prescribed=True)
     bindings = dict(fn.bindings)
     if fn.defn.name != "WorkloadRequest":
-        raise TypeError(f"{fn.id} is not a GP-01 request component (WorkloadRequest_v1{{program_digest, program_fn}})")
+        raise TypeError(f"{fn.id} is not a workload request component (WorkloadRequest_v1{{program_digest, program_fn}})")
     lag = check_lag(lag)
     key = (("program_digest", bindings["program_digest"]), ("program_fn", bindings["program_fn"]), ("EOS", eos_t), ("GUARD", guard), ("LAG", lag))
     body = fn.body
@@ -2093,8 +2082,8 @@ def lift_request_component(fn: SpecializedDefinition, eos: Sequence[int], *, max
 
 
 def address_map_modulo_guards(lifted: SpecializedDefinition) -> list[tuple[str, int, int]]:
-    """PAD-03's deletion rule as a function: the lifted body's `(spec id, lo, hi)` rows with the guard rows deleted and the gates
-    renumbered — equal to the unlifted component's rows modulo the `Lifted[…]` spec ids (tested)."""
+    """Address stability across the guard nodes, as a function: the lifted body's `(spec id, lo, hi)` rows with the guard rows
+    deleted and the gates renumbered — equal to the unlifted component's rows modulo the `Lifted[…]` spec ids (tested)."""
     from verity.ml.circuits.codec import descriptor_id
     b = lifted.body
     guards = set(lifted.guard_nodes)  # type: ignore[attr-defined]

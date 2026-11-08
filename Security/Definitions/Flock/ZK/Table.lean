@@ -1,20 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
-import Mathlib.Algebra.BigOperators.Ring.Finset
-import Mathlib.Algebra.CharP.Defs
-import Mathlib.Algebra.Group.Basic
-import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.Finite.Prod
-import Mathlib.Data.Finset.Card
-import Mathlib.Data.Fintype.Card
-import Mathlib.Data.Fintype.Pi
-import Mathlib.Data.Fintype.Prod
-import Mathlib.Data.Fin.VecNotation
-import Mathlib.Data.ZMod.Basic
-import Mathlib.Logic.Function.Basic
-import Mathlib.Logic.Function.Iterate
-import Mathlib.Tactic.Abel
-import Mathlib.Tactic.FinCases
-import Mathlib.Tactic.Ring
+module
+
+public import Mathlib.Data.Fin.VecNotation
+public import Mathlib.Data.ZMod.Basic
+public import Mathlib.Algebra.Field.Defs
+import Mathlib.Tactic.NormNum.Inv
+import Mathlib.Tactic.NormNum.Pow
 
 /-!
 # Zero knowledge: one masked table, its reference prover and `S_shvzk`, at fixed verifier coins
@@ -59,6 +49,8 @@ and keep its level-0 openings and its Ligerito part from `T'` on (step 1); fresh
 `C_μ := (Code(Y) − C_h)/β` from the replayed constraint (steps 5, 6); a pads tree with the simulated columns at the opened
 positions and ideal leaves elsewhere, and `τ`'s commitment under a fresh salt.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.ZK
 
@@ -338,7 +330,7 @@ def xTarget (rows : Fin T.nS → Fin T.nL → F) (y1 : Fin 2 → Fin T.L → K) 
   ∑ c, y1 r c * T.embed (T.E q c) + ∑ j, yb r j * T.embed (T.Gp q j) - ∑ l, T.rbar r l * T.embed (rows q l)
 
 /-- The level-0 padding reaches every vector of values at the opened positions (T4: at most `t_pad` distinct positions,
-where `X_L + κ` vanishes at none; `pad_onto_M1` for C-Flock ZK's code). -/
+where `X_L + κ` vanishes at none; `pad_onto_M1` for Flock ZK's code). -/
 def PadOnto : Prop := Function.Surjective fun μ : Fin T.tpad → F => fun q => ∑ j, μ j * T.Gp q j
 
 /-- Rep `r`'s pads-code padding reaches every vector of values at its opened positions (T4 with the monomials: at most

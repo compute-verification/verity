@@ -1,5 +1,40 @@
-import Definitions.Accounting.HeadlineDc
-import Definitions.Accounting.Assumptions.Sheet
+module
+
+public import Definitions.Accounting.Assumptions.Sheet
+public import Definitions.Accounting.HeadlineDc
+public import Definitions.Accounting.HeadlineDc.Sm100Measured
+public import Definitions.Accounting.HeadlineDc.Sm90MeasuredI3
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # The data-centre families' headline guarantees (trusted)
@@ -48,7 +83,7 @@ not a fold; with the third input it is the three-slot round trip, which is on th
 
 Binding is taken in its fork form at `δ_fork` (`BindingForkAt`, with no advantage bound) and read at `√δ_fork`
 (`BindingOfFork`), so the budget asks `δ_fork ≤ (2^-41/48,000)²` a round; no ε moves. The proof system's other pieces
-are named premises too: proof soundness (`ProofSoundAt`, which C-Flock's bound doesn't discharge until it states the
+are named premises too: proof soundness (`ProofSoundAt`, which Flock's bound doesn't discharge until it states the
 rows link) and the Definitions' pinning (`ProofsPin`, which no Lean checks of the served relations: `PouwSegCheck_v2`
 lacks it, and the pinning checks recompute every word they absorb), beside `RightFixed`. `ProofLayer.Of` and
 `ReceiptGame.Pinned` stay hypotheses over `Definitions/`. Both measured readings are at A6's proved ½ floors, so the
@@ -128,11 +163,11 @@ Outside every statement: `S8MmaExact`, that IGMMA s8 (sm_90a) and tcgen05 `kind:
 exactly in s32 on the design's operands. The bounds read classes and words (A6), not values, so they don't read it;
 completeness (honest passes) and A7's reconciliation do. A capture of each device's s8 semantics decides it.
 
-Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins drawn after
+Each covers full checking with live coins: `𝒫_full`, every round's units proved, against uniform coins flipped after
 the commitments. The sampled path's `ε_sample` and the Fiat–Shamir premium are separate lines.
 
 **The window these numbers are for.** Each statement is typed at `SmX.checks = 48,000` rounds, every round live and
-fully checked (no service draw, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
+fully checked (no service sample, so no `K_d`), and `RightFixed` charges each round an equal `1/S` share of the window's
 words (`r = 1`). It says nothing about a window of any other shape, and no served window has this one. The same bound at
 `S` rounds in place of 48,000 needs at least 28,693 (H200 sheet), 13,485 (B200 sheet), 21,918 (B200 measured) and
 120,064 (the H200's twin, whose `1 − Y` alone is 0.943%) equal live rounds for `ε < 1%`; no number of rounds takes the
@@ -187,6 +222,8 @@ Each statement's docstring gives its binding branch exactly, the exporter's `bou
 Each is proved as `Accounting.SecurityProofs.TS.G` in `Proofs.Accounting.HeadlineDc`: with `χ* = 0` it is an instance
 of `headline_of_branches` at the data's π*, each branch's floor bounded from below by lower bounds on `w*` and `φ*`.
 -/
+
+@[expose] public section
 
 namespace Accounting.Guarantees.TS
 

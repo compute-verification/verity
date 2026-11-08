@@ -1,40 +1,44 @@
-import Proofs.Flock.Soundness.Discharge.FailClosed.General
-import Proofs.Flock.Soundness.Discharge.Tables.Headline
+module
+
+public import Proofs.Flock.Soundness.Discharge.FailClosed.General
+public import Proofs.Flock.Soundness.Discharge.Tables.Headline
+
+@[expose] public section
 
 set_option Elab.async false
 
 /-!
-# The hidden-output headlines without `--zk` at a draw design
+# The hidden-output headlines without `--zk` at a sample design
 
-flock-verify draws a one-table session without `--zk` by one of two laws (`ProvedScope.lawWhy`): the live stratified
-draw, and at hidden outputs also the live subset draw, the draw every one_stage driver takes. Neither headline reads
-the law but through its miss term, so one statement covers both: a **draw design** `DrawDesign n` names the live draw's
+flock-verify samples a one-table session without `--zk` by one of two laws (`ProvedScope.lawWhy`): the live stratified
+sample, and at hidden outputs also the live subset sample, the sample every one_stage driver takes. Neither headline reads
+the sampling design but through its miss term, so one statement covers both: a **sample design** `DrawDesign n` names the live sample's
 law and population and the ideal miss that bounds its count curve under A3 (`DrawDesign.miss_le`, which is
-`Law.execOS_miss_le` at the stratified draw, at every assignment of units to strata that the strata describe, and
-`Tables.execOS_subset_miss_le` at the subset draw).
+`Law.execOS_miss_le` at the stratified sample, at every assignment of units to strata that the strata describe, and
+`Tables.execOS_subset_miss_le` at the subset sample).
 
-* `Prog.flock_headline_live_onLX`: `Prog.flock_headline_live_onX` at any law `L`, its miss term `L.miss K`
+* `Prog.flock_headline_live_onLX`: `Prog.flock_headline_live_onX` at any sampling design `L`, its miss term `L.miss K`
   (`flock_e2e_count_hm96LX`, carried to the live audit by `execRefines_on`, as `Prog.flock_headline_live_tables_subset`
   does at `J` tables);
-* `HiddenExec.flock_headline_hidden_design`: `flock_headline_hidden` at a design's live draw under A3, its miss term the
+* `HiddenExec.flock_headline_hidden_design`: `flock_headline_hidden` at a design's live sample under A3, its miss term the
   design's ideal miss;
 * `FailClosed.flock_headline_exec_hidden_design_dec` (the wires feed neither the unit nor the outputs, at
   `Placed.keyProg`) and `FailClosed.flock_headline_exec_hiddenG_design` (they feed either, at `instProg`): the two over
-  `Verifies`, with the decoder discharged (`decodesOn_execH`, `decodesOn_execHI`, each at any law).
+  `Verifies`, with the decoder discharged (`decodesOn_execH`, `decodesOn_execHI`, each at any sampling design).
 
 At `DrawDesign.stratified` each bounds by the infimum of its stratified form's bound
 (`FailClosed.flock_headline_exec_hidden_dec`, `FailClosed.flock_headline_exec_hiddenG`) over the assignments the strata
-describe, and at `DrawDesign.subset` by the live subset draw's. Each takes the same named
+describe, and at `DrawDesign.subset` by the live subset sample's. Each takes the same named
 assumptions at either law: A3 as `UniformRandomBytes` on the design's byte streams, `RecordsLive`, `DrawOkH` at the
-law's draws, `TableCRL`, `LinkCRL`.
+sampling design's samples, `TableCRL`, `LinkCRL`.
 -/
 
 namespace FlockSoundness.Discharge
 
 open Game Model Accounting Refine Audit
 
-/-- **A draw design**: the law flock-verify's live draw of a one-table session without `--zk` is by. The stratified draw
-at executable strata `St`, stratum `s` drawing `(St s).k` of its units, over `pop` units; or the subset draw of `kd` of
+/-- **A sample design**: the sampling design flock-verify's live sample of a one-table session without `--zk` is by. The stratified sample
+at executable strata `St`, stratum `s` sampling `(St s).k` of its units, over `pop` units; or the subset sample of `kd` of
 the `n` units. -/
 inductive DrawDesign (n : ℕ) : Type
   | stratified {m : ℕ} (St : Fin m → Flock.Draw.Stratum) (Kd pop : ℕ)
@@ -44,32 +48,32 @@ namespace DrawDesign
 
 variable {n : ℕ}
 
-/-- The number of byte streams the live draw reads: one per stratum, one for the subset draw. -/
+/-- The number of byte streams the live sample reads: one per stratum, one for the subset sample. -/
 def streams : DrawDesign n → ℕ
   | @stratified _ m _ _ _ => m
   | subset _ _ => 1
 
-/-- The executable law the live draw runs (`Flock.Draw.drawOS`'s). -/
+/-- The executable law the live sample runs (`Flock.Draw.drawWith`'s). -/
 def law : DrawDesign n → Flock.Draw.Law
   | stratified St Kd _ => .stratified Kd (Array.ofFn St)
   | subset kd _ => .subset kd
 
-/-- The population the live draw is over. -/
+/-- The population the live sample is over. -/
 def pop : DrawDesign n → ℕ
   | stratified _ _ pop => pop
   | subset _ _ => n
 
-/-- The ideal miss that bounds the live draw's count curve under A3 (`miss_le`). At the stratified draw it is the
-stratified law's at every assignment `σs` of the units to the strata that the strata describe (`Law.ExecStrata`), the
-infimum over them; at the subset draw it is the subset law's. -/
+/-- The ideal miss that bounds the live sample's count curve under A3 (`miss_le`). At the stratified sample it is the
+stratified sampling design's at every assignment `σs` of the units to the strata that the strata describe (`Law.ExecStrata`), the
+infimum over them; at the subset sample it is the subset sampling design's. -/
 noncomputable def idealMiss : DrawDesign n → ℕ → ENNReal
   | @stratified _ m St _ _, K =>
     ⨅ σs : Fin n → Fin m, ⨅ _ : Law.ExecStrata σs (fun s => (St s).k) St,
     ⨅ hks : ∀ s, (St s).k ≤ (Law.stratum σs s).card, (Law.stratified σs (fun s => (St s).k) hks).miss K
   | subset kd hkd, K => (Law.subset n kd hkd).miss K
 
-/-- **Under A3 the live draw misses no more than the ideal miss**: `Law.execOS_miss_le` at every assignment the strata
-describe, at the stratified draw, and `Tables.execOS_subset_miss_le` at the subset draw. -/
+/-- **Under A3 the live sample misses no more than the ideal miss**: `Law.execOS_miss_le` at every assignment the strata
+describe, at the stratified sample, and `Tables.execOS_subset_miss_le` at the subset sample. -/
 theorem miss_le (D : DrawDesign n) : ∀ {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin D.streams → ℕ)
     (src : Ω → (i : Fin D.streams) → Fin (Lb i) → Fin 256), Assumptions.UniformRandomBytes Lb src → ∀ K : ℕ,
     (Law.execOS (n := n) src D.law D.pop).miss K ≤ D.idealMiss K := by
@@ -95,8 +99,8 @@ local notation "𝔽" => FlockLevel3.GF128
 
 variable {N' n : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N')) {Reg : Type} {mPts : ℕ}
 
-/-- **The headline at the executable, for one-table sessions of the challenger, at any law.**
-`Prog.flock_headline_live_onX` with the verifier's draw any law `L` and the miss term `L.miss K`. -/
+/-- **The headline at the executable, for one-table sessions of the challenger, at any sampling design.**
+`Prog.flock_headline_live_onX` with the verifier's sample any sampling design `L` and the miss term `L.miss K`. -/
 theorem _root_.FlockSoundness.Prog.flock_headline_live_onLX {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {L : Law n}
     (T : Finset (Fin n) → Reg → TabSpec mPts)
@@ -161,8 +165,8 @@ local notation "𝔽" => FlockLevel3.GF128
 variable {n : ℕ} {I : Inputs} {mPts : ℕ} (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)}
   (x₀ : DrawSetupH I mPts S₀ (dj S₀)) {Reg : Type}
 
-/-- **The headline over hidden-output sessions, at a draw design.** `flock_headline_hidden` with the verifier's draw the
-design's live draw on byte streams A3 makes uniform, whose count curve is at most the design's ideal miss
+/-- **The headline over hidden-output sessions, at a sample design.** `flock_headline_hidden` with the verifier's sample the
+design's live sample on byte streams A3 makes uniform, whose count curve is at most the design's ideal miss
 (`DrawDesign.miss_le`). -/
 theorem flock_headline_hidden_design {Lp : Merkle.Leaf (List FlockLevel3.GF128) (List UInt8) Dig H512}
     {N' : ℕ} (p : FlockSoundness.Prog N' n) (outs : Finset (Fin N'))
@@ -220,8 +224,8 @@ open FlockSoundness.Discharge.HiddenExec FlockSoundness.Discharge.HiddenDec Floc
 open FlockSoundness.Discharge.General (rsAtG rsAtG_computes)
 open scoped ENNReal
 
-/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a draw design is sound, with the decoder
-discharged.** `flock_headline_exec_hidden_dec` at any design's live draw. -/
+/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a sample design is sound, with the decoder
+discharged.** `flock_headline_exec_hidden_dec` at any design's live sample. -/
 theorem flock_headline_exec_hidden_design_dec
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = false) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))
@@ -289,8 +293,8 @@ theorem flock_headline_exec_hidden_design_dec
     (decodesOn_execH hs.typed (hs.parseH hh) (Layout.outNet_of_wiresFeed hf) dj x₀ _ wr (hs.tagsOkH hh) hwr hdraw) τ
     (hCR hs) (hKS hs)
 
-/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a draw design, where the wires feed, is
-sound.** `flock_headline_exec_hiddenG` at any design's live draw. -/
+/-- **One hidden-output non-ZK sampled session that flock-verify accepts at a sample design, where the wires feed, is
+sound.** `flock_headline_exec_hiddenG` at any design's live sample. -/
 theorem flock_headline_exec_hiddenG_design
     {n : ℕ} {I : Inputs} (hh : I.tags.hiddenOutputs = true) (hf : ProvedScope.wiresFeed (circS I) = true) {mPts : ℕ}
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupH I mPts S₀ (dj S₀))

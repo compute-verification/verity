@@ -1,4 +1,20 @@
-import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
+module
+
+public import Proofs.Flock.Soundness.Discharge.Integrate.Sites
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Refine.Setup
 
 /-!
 # The tables of a one-table hidden-output session at public inputs
@@ -12,6 +28,8 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Tables
   `DrawSetupH.refused`, `tableAtH`, `planAtH`, `tabAtH`, `tablesAtH` at `own`.
 -/
 
+@[expose] public section
+
 namespace FlockSoundness.Discharge.HiddenExec
 
 open Flock FlockLevel3 Model Refine Audit
@@ -20,7 +38,7 @@ open FlockSoundness.Discharge.Integrate (DrawSetup)
 
 variable {n : ℕ} (I : Inputs) (own : Option ByteArray) (mPts : ℕ)
 
-/-- **A draw flock-verify sets up under hidden outputs at the verifier's public inputs `own`**: `DrawSetupH` with
+/-- **A sample flock-verify sets up under hidden outputs at the verifier's public inputs `own`**: `DrawSetupH` with
 `Stmt.setupHidden … own`. -/
 structure DrawSetupHP (S : Finset (Fin n)) (d : Lean.Json) where
   st : Stmt
@@ -41,7 +59,7 @@ structure DrawSetupHP (S : Finset (Fin n)) (d : Lean.Json) where
   hmPts : st.mPts = mPts
   wf : StmtWF st ∧ RegionsWF st
 
-/-- **A hidden-output draw's table at `own` with its sites**: `TableH` at `Stmt.setupHidden … own`, its regions holding
+/-- **A hidden-output sample's table at `own` with its sites**: `TableH` at `Stmt.setupHidden … own`, its regions holding
 the statement's. -/
 structure TableHP (S : Finset (Fin n)) where
   T : TabSpec mPts
@@ -83,7 +101,7 @@ noncomputable def specAt (regs : List (Model.Region x.st.c.kLog (x.st.m - x.st.c
     have h3 := x.hmPts
     omega⟩
 
-/-- A drawn unit's rank among the draw's proved units. -/
+/-- A sampled proof block's rank among the sample's proved units. -/
 def rank (u : Fin n) : ℕ := x.D.proved.toList.idxOf u.val
 
 theorem rank_lt {u : Fin n} (h : u ∈ S) : x.rank u < x.D.proved.size := by
@@ -101,7 +119,7 @@ theorem rank_div_lt {u : Fin n} (h : u ∈ S) : x.rank u / x.st.c.g < 2 ^ (x.st.
   rw [Nat.div_lt_iff_lt_mul x.hg, hr.hm, Nat.add_sub_cancel_left, Nat.mul_comm]
   exact lt_of_lt_of_le (x.rank_lt h) x.hblk
 
-/-- **The draw's table** (`DrawSetupH.table`): `stmtOf` of the statement at its regions, each unit at its rank `r`:
+/-- **The sample's table** (`DrawSetupH.table`): `stmtOf` of the statement at its regions, each unit at its rank `r`:
 block `r / c.g`, template instance `r % c.g`. -/
 noncomputable def table : TableHP I own mPts S where
   T := x.specAt (regionsOf x.st) (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1
@@ -116,7 +134,7 @@ noncomputable def table : TableHP I own mPts S where
   hvu _ _ := Nat.mod_lt _ x.hg
   o u h := ⟨x.rank u / x.st.c.g, x.rank_div_lt h⟩
 
-/-- The regions of a refused draw's table: the reference setup's, and Integrate's `contra`. -/
+/-- The regions of a refused sample's table: the reference setup's, and Integrate's `contra`. -/
 theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog),
     R.free.Nodup ∧ R.free.length ≤ PT_LOCAL := by
   intro R hR
@@ -124,7 +142,7 @@ theorem refused_wf : ∀ R ∈ regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x
   · exact (stmtOf_linkLayout x.st x.wf.1 x.wf.2).1 R hR
   · exact DrawSetup.contra_wf R hR
 
-/-- **The table of a refused draw `S'`** (`DrawSetupH.refused`): the reference setup's statement with `contra`'s
+/-- **The table of a refused sample `S'`** (`DrawSetupH.refused`): the reference setup's statement with `contra`'s
 regions, which no witness satisfies. -/
 noncomputable def refused (S' : Finset (Fin n)) : TableHP I own mPts S' where
   T := x.specAt (regionsOf x.st ++ DrawSetup.contra x.st.c.kLog (x.st.m - x.st.c.kLog)) x.refused_wf
@@ -148,11 +166,11 @@ end DrawSetupHP
 variable (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (x₀ : DrawSetupHP I own mPts S₀ (dj S₀))
 
 open Classical in
-/-- **The table at draw `S`** at `own` (`tableAtH`). -/
+/-- **The table at sample `S`** at `own` (`tableAtH`). -/
 noncomputable def tableAtHP (S : Finset (Fin n)) : TableHP I own mPts S :=
   if h : Nonempty (DrawSetupHP I own mPts S (dj S)) then (Classical.choice h).table else x₀.refused S
 
-/-- **A refused draw's table is unsatisfiable** (`tableAtH_unsat`). -/
+/-- **A refused sample's table is unsatisfiable** (`tableAtH_unsat`). -/
 theorem tableAtHP_unsat {S : Finset (Fin n)} (hS : ¬ Nonempty (DrawSetupHP I own mPts S (dj S)))
     (z : Witness (tableAtHP dj x₀ S).T.S.m) : ¬ (tableAtHP dj x₀ S).T.S.Satisfies z := by
   revert z
@@ -165,7 +183,7 @@ variable {Reg : Type}
 /-- The one-table plan at `own` (`planAtH`). -/
 noncomputable abbrev planAtHP : Finset (Fin n) → Reg → List (TabSpec mPts) := fun S _ => [(tableAtHP dj x₀ S).T]
 
-/-- Every drawn unit is in the plan's one table. -/
+/-- Every sampled proof block is in the plan's one table. -/
 abbrev tabAtHP : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planAtHP (Reg := Reg) dj x₀ S R).length :=
   fun _ _ _ => ⟨0, Nat.zero_lt_one⟩
 

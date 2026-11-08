@@ -1,12 +1,51 @@
-import Proofs.Flock.Claims.Recursion.VerdictRows
-import Proofs.Flock.Claims.Recursion.SchedDense
-import Proofs.Flock.Recursive.ExecClass
-import Proofs.Flock.SessionLoop.FinPoints
-import Proofs.Flock.Claims.Complete.Reps
+module
+
+public import Proofs.Flock.Claims.Complete.Reps
+public import Proofs.Flock.Claims.Recursion.VerdictRows
+public import Proofs.Flock.SessionLoop.FinPoints
+public import Proofs.Flock.VBridge.Family.Setup
+import Flock.With.Returns
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.Complete.Replay.LincheckAlgebra
-import Proofs.Flock.VBridge.Family.Join
-import Proofs.Flock.VBridge.Family.Setup
-import Proofs.Flock.Soundness.Refine.Regions
+import Proofs.Flock.Claims.Recursion.InnerForm
+import Proofs.Flock.Claims.Recursion.SchedCount
+import Proofs.Flock.Claims.Recursion.SchedDense
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Level3.FoldedBase
+import Proofs.Flock.Recursive.ExecClass
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Refine.Arith
+import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # Row G: the verdict's setup is the reader's
@@ -21,12 +60,14 @@ Row G of the verdict's rows (`VerdictRows`), the facts about the setup:
   under the registry's plain SHA-512 scheme (`Hidden.setupHidden_plain`), a `Named` one, its fold's `k_log` is its
   own, and its `k_log` is at most its `m` (`Hidden.setupHidden_wf`).
 * `extras_shape`, `folds_ofCircuit`, `slotOk_of_hidden`: a hidden-output table's extra claims are of the claims' shapes,
-  and its fold returns 64 entries at every lincheck point `residualLins` draws (`fold_ok`, on the ranges `HmRow.check`
+  and its fold returns 64 entries at every lincheck point `residualLins` samples (`fold_ok`, on the ranges `HmRow.check`
   passed).
 * `dense_inner`: at a statement the reader reads at the dense form, Flock's plain verifier sets the inner statement up
   as one table at the files' tags, whose `m` has a `fast100` schedule (`innerSetup_files`, `repRounds_size`).
 * **`DecAt.rowG`**: so row G holds at every table of a decision of an inner statement read at the dense form.
 -/
+
+@[expose] public section
 
 namespace RecDeploy.Rows
 

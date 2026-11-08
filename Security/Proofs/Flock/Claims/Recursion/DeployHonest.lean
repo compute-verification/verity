@@ -1,6 +1,42 @@
-import Proofs.Flock.Claims.KS.ZkDecJ
-import Proofs.Flock.Claims.Recursion.DeployPremises
-import Proofs.Flock.Claims.Scope.Tables
+module
+
+public import Proofs.Flock.Claims.KS.ZkDecJ
+public import Proofs.Flock.Claims.Recursion.DeployPremises
+public import Proofs.Flock.Claims.Recursion.DeploySessions
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Recursion.DeployMargin
+import Proofs.Flock.Claims.Recursion.DeployScope
 
 /-!
 # Recursion completeness at `deployRec`: the honest outer witnesses are in the V\* relation
@@ -27,7 +63,7 @@ named `Prop`:
 
 `LinksHonest` is the interface to the checks that bind `rec-top-L<l>` rows and the link points to the inner transcript
 (`RecVStar.checkLinkRounds`, `RecVStar.checkTopRows`, `RecCoins.checkLink` at `RecVStar.innerLink`), passed in as
-`linkOk`: they pass at the coin server's transcript of the honest inner rounds and the record the honest prover staged.
+`linkOk`: they pass at the challenger's live-coin part's transcript of the honest inner rounds and the record the honest prover staged.
 A staged statement holds exactly that transcript (`transcript_honest`), so the checks pass at the statement's own
 inputs. The deployed checks are in `RecIns.setup`, so at them (`linkOkSetup`) `LinksHonest` holds with no
 premise (`linksHonest_setup`): `vstar_complete_setup` and `vstar_complete_run_setup` are the theorems without it, and
@@ -35,12 +71,14 @@ the link input they pass at is the one `RecVStar.innerLink` reads off the staged
 
 The inner verifier is arbitrary here. At the deployed plain inner verifier, at SHA-512, `InnerAccepts` holds only at an
 inner statement that verifier admits (`InnerAdmitted`, `innerAdmitted_of_accepts`): its scope check passes and it
-carries a unit draw. A recursive session's inner statement has plain SHA-512 leaves, which the scope check admits
-without `--zk` and with hidden outputs (`ProvedScope.leafOk`); where the scope check or the draw fails,
+carries a unit sample. A recursive session's inner statement has plain SHA-512 leaves, which the scope check admits
+without `--zk` and with hidden outputs (`ProvedScope.leafOk`); where the scope check or the sample fails,
 `InnerAccepts` never holds and the theorem says nothing about the statement.
 `InnerAccepts` is a hypothesis about the coins, not a consequence of the relation: at coins in the inner completeness
 error the honest inner proof is refused, and the V\* statements staged there need not have a witness.
 -/
+
+@[expose] public section
 
 namespace RecDeploy
 
@@ -103,9 +141,9 @@ def WitSatisfies (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) : Pr
 inner session's record and its tables: the checks `verify`'s setup runs after `RecIns.setup`'s,
 `RecVStar.innerLink`, which holds the record's link points to the transcript's, then `RecVStar.checkLinkRounds`,
 `RecVStar.checkTopRows` and `RecCoins.checkLink`, which hold the `rec-top-L<l>` rows and the openings' tops to the
-transcript's). At an honest first part, at each part's staged statement that sets up, they pass at the coin server's
+transcript's). At an honest first part, at each part's staged statement that sets up, they pass at the challenger's live-coin part's
 transcript of the honest inner rounds and the record the honest prover staged: its link roots and points are the ones
-the coin server recorded. -/
+the challenger's live-coin part recorded. -/
 def LinksHonest (linkOk : RecIns → ByteArray → ByteArray → Array Stmt → Bool) (H : Msg → Msg)
     (IV : Claims.Verifier Coin) (b : Brings) : Prop :=
   ∀ (x : Msg) (w : Claims.Flock.Wit) (ω : Tape b) (cs : List Coin) (v : List (Msg × Msg)),
@@ -207,7 +245,7 @@ theorem insO_staged_link {st : Stage} {x : Msg} {ms : List (Msg × Out)} {s : �
 /-! ## The inner statement an honest inner run is accepted at -/
 
 /-- **The deployed plain verifier admits the inner statement**: it sets up, `verify`'s scope check
-(`ProvedScope.check`) passes on it, and it carries a unit draw (`ProvedScope.drawLaw` refuses a session without one).
+(`ProvedScope.check`) passes on it, and it carries a unit sample (`ProvedScope.drawLaw` refuses a session without one).
 At a recursive session's inner statement, whose leaves are plain SHA-512, the scope check passes only without `--zk`
 and with hidden outputs (`ProvedScope.leafOk`, `Readable.check_ok_iff`, `Readable.Rules`; `inner_check_plain`). -/
 def InnerAdmitted (x : Msg) : Prop :=
@@ -267,7 +305,7 @@ theorem vstarAt_staged {st : Stage} (hN : NumsFixed st) {x : Msg} {ms : List (Ms
   unfold vstarAt
   simp only [show numsOf (staged st x ms s) = nums st x s from hN x ms (pick st x s) s hs hp, ↓reduceIte]
 
-/-- **A staged statement's inner transcript is the coin server's of the inner rounds**: the stage reads the transcript
+/-- **A staged statement's inner transcript is the challenger's live-coin part's of the inner rounds**: the stage reads the transcript
 of the rounds before the staging message. -/
 theorem transcript_honest (b : Brings) (x : Msg) {v : List (Msg × Msg)} {n : ℕ} (hv : v.length = n + kS x) :
     b.st.transcript x (asRounds v) = b.tr x (asRounds (v.take n)) := by
@@ -316,7 +354,7 @@ theorem vstar_complete (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings
 
 /-- **Recursion completeness at `deployRec` with the deployed link checks**: `vstar_complete` at `linkOkSetup`, whose
 `LinksHonest` is `linksHonest_setup`. The checks pass at the link input read off the staged statement's inner
-transcript, the coin server's of the honest inner rounds, and its record (`insO_staged_link`). -/
+transcript, the challenger's live-coin part's of the honest inner rounds, and its record (`insO_staged_link`). -/
 theorem vstar_complete_setup (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (hN : NumsFixed b.st)
     (hS : StagedSetsUp H IV b) (hW : WitSatisfies H IV b) {x : Msg} {w : Claims.Flock.Wit} {ω : Tape b}
     {cs : List Coin} {v : List (Msg × Msg)} (hv : HonestPre H IV b w x ω cs v) (hI : InnerAccepts H IV x cs v)

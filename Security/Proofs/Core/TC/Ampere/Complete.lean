@@ -1,9 +1,17 @@
-import Proofs.Core.TC.Ampere.Words
+module
+
+public import Definitions.Core.TC.Bridge
+public import Proofs.Core.TC.Ampere.Group
+public import Proofs.Core.TC.Proofs.Prod
+import Proofs.Core.TC.Ampere.Step
 import Proofs.Core.TC.Proofs.Complete
+import Proofs.Core.TC.Proofs.Norm
 
 /-!
 # Completeness for an Ampere group: the honest witness satisfies every predicate
 -/
+
+@[expose] public section
 
 namespace Verity.TC.Proofs.Ampere
 

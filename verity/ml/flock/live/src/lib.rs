@@ -8,7 +8,7 @@
 //!   flips coins from the OS, pins the session parameters (profile, reps, flavour, statement), refuses a rep-1 coin
 //!   unless rep 1 committed rep 0's root, and refuses every coin until the link context (root_F, points, y) arrived.
 //!   With a [`LinkSpec`] the link context is a real exchange (flock-link L1): `Commit` carries root_F, every table's
-//!   root_B and its public words; the server checks the public words against its statement, then draws the link
+//!   root_B and its public words; the server checks the public words against its statement, then samples the link
 //!   points from the OS as its own coin slot; `Link` carries y; only then are Flock's coins issued, and each rep's
 //!   first round must bind exactly the committed root_B. The replay hands the recorded points and y to the statement
 //!   verifier, which opens them in every rep (L2).
@@ -35,6 +35,7 @@ pub mod lookup;
 pub mod circuit;
 pub mod firewall;
 pub mod glue;
+pub mod huge_pages;
 pub mod proved_scope;
 pub mod pure_block;
 pub mod record_text;
@@ -200,17 +201,17 @@ pub fn sha256(b: &[u8]) -> [u8; 32] {
     Sha256::digest(b).into()
 }
 
-/// The unit sample (the Lean verifier's PROTOCOL.md §7.3): the verifier samples the units to prove in the clear from its OS
+/// The unit sample (the Lean verifier's `Flock.Draw`): the verifier samples the units to prove in the clear from its OS
 /// randomness, after registration and before the statement is fixed, with `verity.ml.randomness`'s exact samplers read straight
 /// from OS bytes (no derivation). The sample is the object `{"law": "subset", "population": N, "k": K, "units": [...]}`,
 /// `{"law": "bernoulli", "population": N, "p": "num/den", "units": [...]}` or `{"law": "stratified", "population": N, "k": K,
-/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified law is the
+/// "strata": [{"template", "units": [[lo, hi], ...], "k"}, ...], "units": [...]}`, units ascending. A stratified sampling design is the
 /// verifier's own expansion of `stratified:K` over its program and query (core's `one_stage.draw.derive`, Lean
-/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and draws by it, never derives it.
+/// `HmRow.stratifiedLaw`): this module checks its form (Lean `Flock.Draw.strataProblem`) and samples by it, never derives it.
 pub mod unit_draw {
     use serde_json::{Value, json};
 
-    /// A stratum of the stratified law: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
+    /// A stratum of the stratified sampling design: a template's units as ascending, disjoint, non-adjacent half-open ranges, and its sample.
     #[derive(Clone, Debug, PartialEq)]
     pub struct Stratum {
         pub template: String,
@@ -275,7 +276,7 @@ pub mod unit_draw {
         ((2 * k as u128 * size as u128 + population as u128) / (2 * population as u128)).max(1) as u64
     }
 
-    /// Why a stratified law isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
+    /// Why a stratified sampling design isn't well formed over `population` units (Lean `Flock.Draw.strataProblem`), or `None`:
     /// `1 <= k <= population`, distinct templates, each stratum's `k` the rule's, the ranges tiling `[0, population)` exactly.
     pub fn strata_problem(k: u64, strata: &[Stratum], population: u64) -> Option<String> {
         if strata.is_empty() || k < 1 || k > population {
@@ -323,7 +324,7 @@ pub mod unit_draw {
             }
         }
 
-        /// A law object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
+        /// A sampling design object: `{"law": "stratified", "k": K, "strata": [...]}` (the verifier's own expansion, `draw.derive`'s),
         /// `{"law": "subset", "k": K}` or `{"law": "bernoulli", "p": "num/den"}`.
         pub fn of_json(v: &Value) -> Result<Law, String> {
             let keys: Vec<&str> = v.as_object().ok_or("a draw law is an object")?.keys().map(|k| k.as_str()).collect();
@@ -424,7 +425,7 @@ pub mod unit_draw {
         Ok(v)
     }
 
-    /// U2: exactly the law's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
+    /// U2: exactly the sampling design's keys; units ascending, distinct and in `[0, N)`; a subset has K <= N units; a Bernoulli p is
     /// `num/den` with `0 <= num <= den`, `den > 0`, no unit at p = 0 and every unit at p = 1; a stratified sample's strata are
     /// well formed and tile the population (`strata_problem`), and exactly `k_s` of its units fall in each. Returns the units.
     pub fn check(v: &Value) -> Result<Vec<usize>, String> {
@@ -1144,7 +1145,7 @@ impl Challenger for LiveChallenger {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Verifier side: coin server
+// Verifier side: live-coin part
 // ---------------------------------------------------------------------------------------------------------------
 
 #[derive(Clone, Debug)]
@@ -1190,9 +1191,9 @@ pub struct SessionConfig {
     /// The prime prover's coins are served in this session (`Prime` rounds); `Commit` needs at least one before it.
     pub prime_live: bool,
     /// Step 0 (`coin_seed::SCHEME`): the verifier commits to a seed in answer to `Hello`, derives every coin from it and reveals
-    /// it in its verdict (lane flock-circuit). Off for every statement that does not ask for it.
+    /// it in its verdict. Off for every statement that does not ask for it.
     pub coin_seed: bool,
-    /// The coin server keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
+    /// The challenger's live-coin part keeps every round's bytes and the replay compares the proof's messages with them byte for byte (the
     /// round digests stay, as framing); the record carries them. Off for every statement that does not ask for it.
     pub retain_rounds: bool,
     /// The hash of every digest the record binds (root_F, root_B, publics, link, rounds, proofs, stream roots): SHA-256, or
@@ -1200,7 +1201,7 @@ pub struct SessionConfig {
     pub sha512_digests: bool,
     /// The sample this statement proves (its public header's `unit_draw`, under Σ); the record keeps it (U1).
     pub unit_draw: Option<Value>,
-    /// Draw units live: after registration (`Register`) the server draws them under this law over the population.
+    /// Sample units live: after registration (`Register`) the server samples them under this sampling design over the population.
     pub draw_law: Option<(unit_draw::Law, u64)>,
     /// M2 (`coin_tree::SCHEME`): at `Hello` the verifier commits to every coin of the session (one HM96 leaf per stream and
     /// round under one SHA-512 root) and opens each round's coins with its answer; the prover checks every opening first.
@@ -1418,7 +1419,7 @@ impl Server {
         Self::try_new(cfg, verifier).unwrap_or_else(|e| panic!("{e}"))
     }
 
-    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the drawn statement from `hook`.
+    /// A server that samples units at `Register` (its configuration's `draw_law`) and takes the sampled statement from `hook`.
     pub fn with_draw(mut self, hook: DrawHook) -> Self {
         self.on_draw = Some(hook);
         self
@@ -1684,7 +1685,7 @@ impl Server {
                     self.hello = Some(h);
                     return Resp::Coins(w);
                 }
-                // a live server draws the session's key and coins from the OS: without a source it refuses, rather than answer
+                // a live server samples the session's key and coins from the OS: without a source it refuses, rather than answer
                 // Ok and leave the prover to fail on a missing commitment
                 if self.cfg.coin_tree.is_some() && self.urandom.is_none() && !self.replaying {
                     return self.refuse("coin tree: no OS random source to draw the session's key and coins".into());
@@ -2321,7 +2322,7 @@ impl Server {
 
 struct ReplayState {
     record: Arc<BTreeMap<String, StreamRec>>,
-    /// the rounds' bytes where the coin server retained them (`SessionConfig::retain_rounds`): compared byte for byte
+    /// the rounds' bytes where the challenger's live-coin part retained them (`SessionConfig::retain_rounds`): compared byte for byte
     msgs: Arc<BTreeMap<(String, usize), Vec<u8>>>,
     used: BTreeMap<String, usize>,
     failures: Vec<String>,
@@ -2621,7 +2622,7 @@ mod coin_server_tests {
              Req::Round { stream: rep_stream("t", 0), content: binding, n: 3 }]
     }
 
-    /// A session whose coin tree the challenger samples answers the prover word for word as one drawn here on the same tape,
+    /// A session whose coin tree the challenger samples answers the prover word for word as one sampled here on the same tape,
     /// and records the same coins; the challenger opened its link points after its record's link roots and its round after
     /// the round's msg_sha512, as the audit of its release log holds the record to.
     #[test]
@@ -2652,7 +2653,7 @@ mod coin_server_tests {
         assert_eq!(opens.len(), 2);
     }
 
-    /// The coin server refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
+    /// The challenger's live-coin part refuses a session whose tree the challenger samples under another nonce, or whose round doesn't open
     /// its tree, at that request; and a server whose record would show only rounds' SHA-256 takes no tree from it.
     #[test]
     fn a_challengers_tree_under_another_nonce_a_bad_round_or_a_sha256_record_is_refused() {

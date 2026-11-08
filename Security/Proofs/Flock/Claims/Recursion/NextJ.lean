@@ -1,4 +1,37 @@
-import Proofs.Flock.Claims.Recursion.NextCs
+module
+
+public import Proofs.Flock.Claims.Recursion.NextCs
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 
 /-!
 # `IVStar`'s last step at the record's parsed value (`nextJ`)
@@ -8,7 +41,7 @@ success, that no V\* part computes and the statement does not fix: the record is
 hiding leaf, and `StmtFixes` asks a check to hold at the readers' messages of every witnesses. `nextJ` is the
 element-level step whose last message carries the record's parsed value: the layout's reader `rd` (the code side's, as
 `final` is) reads it as the statement, the parsed value and the proof files (`FinalJ`), and the decision runs the
-verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the draw check at the parsed value
+verdict and custody's reading at the coin-substituted value (`decisionAtJ`), the sample check at the parsed value
 (`drawOfJ`). There is no parse in it, so parse success is no check of `IVStar`.
 
 * **The step** (`actJ`, `nextJ`): a coin is answered as the deployed plain verifier answers it (`nextJ_coin`, so
@@ -29,6 +62,8 @@ decoding stays among the verdict's checks here (`LastSplitJ`'s `checks`), and no
 `NextS`: its last message carries the decoded proofs and its decision decodes no proof file (`RecDeploy.decompB_nextS`).
 -/
 
+@[expose] public section
+
 namespace FlockDeploy
 
 open Flock
@@ -40,7 +75,7 @@ structure FinalJ where
   j : Json
   proofs : Array ByteArray
 
-/-- The record's draw at its parsed value, rebuilt (`recordDraw` after the parse). -/
+/-- The record's sample at its parsed value, rebuilt (`recordDraw` after the parse). -/
 def drawOfJ (j : Json) : Option Json :=
   match j.getObjVal? "unit_draw" with
   | .ok Json.null => none
@@ -53,7 +88,7 @@ theorem recordDraw_of_parse {record : String} {j : Json} (h : Flock.JsonParse.pa
   rw [h]
   rfl
 
-/-- The checks after the verdict at the parsed value: the statement, the draw at `f.j`, custody at `j'`. -/
+/-- The checks after the verdict at the parsed value: the statement, the sample at `f.j`, custody at `j'`. -/
 def checksAtJ (s : Ins) (spec : SessionSpec) (x : Claims.Msg) (link : List ByteArray × List ByteArray) (c₁ : Coin)
     (mids : List (Claims.Msg × Coin)) (f : FinalJ) (j' : Json) : Flock.V Unit := do
   Record.check (f.stmt == x) "live: the last message's statement is not the statement"

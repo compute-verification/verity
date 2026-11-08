@@ -1,9 +1,10 @@
-import Mathlib.Algebra.BigOperators.Group.Finset.Basic
+module
+
+public import Definitions.Core.Game
+import Mathlib.Algebra.BigOperators.Ring.Finset
 import Mathlib.Algebra.Order.BigOperators.Group.Finset
-import Mathlib.Basic.ENNReal.BigOperators
+import Mathlib.Algebra.Order.Module.Field
 import Mathlib.Basic.ENNReal.Inv
-import Mathlib.Order.CompleteLattice.Basic
-import Definitions.Core.Game
 
 /-!
 # Games: the monad laws, values, and bounds over one coin
@@ -11,6 +12,8 @@ import Definitions.Core.Game
 `value` against the optimal prover bounds every strategy's `prob` (`prob_le_value`), is at most one and monotone in the
 event, and is bounded through a bind or a coin from a bound on each continuation.
 -/
+
+@[expose] public section
 
 namespace Verity
 
@@ -166,7 +169,7 @@ theorem value_bind_le (g : Game α) (f : α → Game β) (p : β → Prop) (D : 
         _ = avg (fun c => value (fun a => ¬ D a) (k c)) + ε₂ := by rw [avg_add, avg_const]
         _ = _ := rfl
 
-/-- The value of drawing a coin and ending is the probability of the event. -/
+/-- The value of sampling a coin and ending is the probability of the event. -/
 theorem value_coin_ret (p : α → Prop) (C : Type) [Fintype C] [Nonempty C] (f : C → α) :
     value p (.coin C fun c => .ret (f c)) = prCoin fun c => p (f c) := by
   classical

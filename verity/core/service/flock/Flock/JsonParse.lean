@@ -1,4 +1,6 @@
-import Lean.Data.Json.Basic
+module
+
+public import Lean.Data.Json.Basic
 
 /-!
 # The verifier's JSON parser: total, and evaluable by the kernel
@@ -17,10 +19,12 @@ Two places differ from the source, neither on an input the verifier reads:
   character and every second nesting level does, so the fuel never runs out; were it to, the text would be refused
   (`offset N: nesting too deep`), never accepted.
 
-`parse` is the one JSON reader of C-Flock's Lean (`tests/test_flock_json.py` refuses a call of `Lean.Json.parse` in
+`parse` is the one JSON reader of Flock's Lean (`tests/test_flock_json.py` refuses a call of `Lean.Json.parse` in
 `verity/core/service/flock`). It is `@[irreducible]`, so that elaboration treats it as the opaque constant proofs were
 written against; `unfold` and the kernel see its body.
 -/
+
+@[expose] public section
 
 namespace Flock.JsonParse
 

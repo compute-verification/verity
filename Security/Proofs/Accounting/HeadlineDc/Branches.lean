@@ -1,7 +1,47 @@
-import Proofs.Accounting.Headline.Encoding
-import Proofs.Accounting.Headline.EpsJl
-import Proofs.Accounting.Headline.Luck
-import Definitions.Accounting.HeadlineDc.Encoding
+module
+
+public import Definitions.Accounting.Assumptions.TS
+public import Definitions.Accounting.HeadlineDc.Encoding
+public import Mathlib.CategoryTheory.Category.Basic
+public import Proofs.Accounting.Headline.Encoding
+public import Proofs.Accounting.Headline.EpsJl
+public import Proofs.Accounting.Headline.Luck
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Data.Rat.Star
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Accounting.Headline.Whole
+import Proofs.Accounting.TS
 
 /-!
 # The data-centre headlines' shared steps
@@ -22,6 +62,8 @@ On a model with `μ_f = μ_x = 0` both floors only grow with `w*` and `φ*`, so 
   `d̄ = ā = 0`, `χ* ≥ 0` and `Headline.epsJl_le`; `folded_of_lower` is `t = 41·0.6931471808/6000` (`ln(8/7) ≥ 1/8`);
 * `unfolded_of_lower`: the unfolded branch's floor is at least `(N_w w + N_w φ)/B_♭ · (1 − 41/48000)`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs.TS.HeadlineDc
 

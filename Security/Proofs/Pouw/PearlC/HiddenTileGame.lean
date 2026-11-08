@@ -1,15 +1,21 @@
-import Definitions.Pouw.PearlC.HiddenTileGame
-import Proofs.Pouw.PearlC.HiddenGamma
-import Proofs.Core.Game
+module
+
+public import Definitions.Pouw.PearlC.HiddenTileGame
+public import Proofs.Pouw.PearlC.HiddenGamma
+public import Proofs.Core.Game
 
 /-!
 # The hidden audit's open obligation from what a proof system gives per tile
 
 `tileProofSoundAll_of_tileGame`: a hidden audit whose class is `BoundedByInduced Cls`, with a `TileGame` for every tile
-of every in-domain workload, meets `TileProofSoundAll` at `ηzk`. Per draw `i`, a tile that is neither good nor blank has
+of every in-domain workload, meets `TileProofSoundAll` at `ηzk`. Per sample `i`, a tile that is neither good nor blank has
 its verdict accept only on a run in `Bad` (`TileGame.prob_le`); and the batch prover, read at position `i`, does no
 better than some strategy it induces on that tile's game, which is in `Cls` (core's `ProbBatchInduced`).
 -/
+
+@[expose] public section
+
+open Claims renaming Ex → ex
 
 namespace Pouw.PearlC
 

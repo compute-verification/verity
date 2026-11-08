@@ -1,7 +1,9 @@
-import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
+module
+
+public import Definitions.Pouw.Assumptions.PearlC.TTOutRowSeed
 
 /-!
-# The named assumption `FragDraw`, the fragment corollary's per-row draw (trusted; a `Prop` hypothesis, not an `axiom`)
+# The named assumption `FragDraw`, the fragment corollary's per-row sample (trusted; a `Prop` hypothesis, not an `axiom`)
 
 Named by a ruling. Only the fragment corollary takes it, `ttOutRowSeed_skipClass`
 (`RowSeedSkip.lean`), the skip class's supporting line. P2's main line, `ttOutRowSeed_of_ttOut` and
@@ -12,15 +14,17 @@ The corollary's other conditions stay definitions in `TTOutRowSeed.lean`, taken 
 resistance.
 -/
 
+@[expose] public section
+
 namespace Pouw.PearlC.Assumptions
 
 open Pouw.PearlC Pouw.Fp8Atom
 
 variable {Q R S : Type}
 
-/-- **`FragDraw` per row** at `Λ` (the ruling's item 1), assumed: a row's own draw leaves at most `Λ` fragments except
-with probability `2^−128`. For every oracle `H` (so every per-job `B̃` draw and every other answer), every activation
-input and every row `i` of unit `u` that passes the domain rules, all fixed before the row's draw, the probability over
+/-- **`FragDraw` per row** at `Λ` (the ruling's item 1), assumed: a row's own sample leaves at most `Λ` fragments except
+with probability `2^−128`. For every oracle `H` (so every per-job `B̃` sample and every other answer), every activation
+input and every row `i` of unit `u` that passes the domain rules, all fixed before the row's sample, the probability over
 the row's oracle answer `r` at `key i` that row `i`'s fragment count on `A′` from that answer and on `B̃` exceeds `Λ`
 is at most `2^−128`. It is `a-commit-latency.md`'s `FragDraw d Λ` at `d = devAt p G pr`, whose flags `fragCount`
 reads. Nothing here proves it: it is a claim about the noise distribution at the record's pipeline. -/

@@ -1,5 +1,39 @@
-import Proofs.Flock.Claims.KS.PlainEvent
-import Proofs.Flock.Claims.Sampling.Deployed
+module
+
+public import Proofs.Flock.Claims.Sampling.Deployed
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.ConflictRun
+import Proofs.Flock.Claims.KS.Width
 
 /-!
 # An accepted run of the deployed `--zk` verifier is flock-verify `--zk`'s acceptance
@@ -9,14 +43,16 @@ the sampling record `SamplingDeploy.deploy`). Where its run accepts against SHA-
 at the statement's inputs `s` (`insOf true x = some s`, what flock-verify reads of the statement), on the last message's
 record and proof files `f`, and:
 
-* the record's draw is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
+* the record's sample is the statement's as a value (`Custody.recordDraw_of_checks`: the verifier rebuilds both,
   `Flock.norm`);
 * flock-verify `--zk` accepts that transcript at the statement's inputs (`AcceptsZK s.read.I ⟨f.record, f.proofs⟩`, and
   so `LiveAcceptsZK` at every outcome carrying it).
 
-This is the `--zk` side of `plainVerdict_of_run`. Equality of the draw as a value is what the setup reads: `Exec.setupOf`
-sets the record up at the record's own draw (`Custody.setupOf_record`).
+This is the `--zk` side of `plainVerdict_of_run`. Equality of the sample as a value is what the setup reads: `Exec.setupOf`
+sets the record up at the record's own sample (`Custody.setupOf_record`).
 -/
+
+@[expose] public section
 
 namespace FlockDeploy.KS
 
@@ -30,7 +66,7 @@ theorem deploy_flock_V (rel : Readable.Parsed → Readable.Relation) (c : Sampli
     (SamplingDeploy.deploy rel c).flock.V = V true := rfl
 
 /-- **An accepted run of `V true` is flock-verify `--zk`'s acceptance**: against SHA-512, the run decided at the
-statement's inputs `s` on its last message's record and proof files `f`; the record's draw is the statement's, and
+statement's inputs `s` on its last message's record and proof files `f`; the record's sample is the statement's, and
 `verify --zk` accepts `⟨f.record, f.proofs⟩` at `s.read.I`. -/
 theorem zkAccepts_of_run {Ω : Type} {P : Claims.Prover Ω} {x : Claims.Msg} {ω : Ω}
     {r : Fin ((V true).k x) → Coin} (h : (Claims.run sha512 P (V true) x ω r).out = .acc) :

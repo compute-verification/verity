@@ -1,5 +1,6 @@
-import Flock.Bytes
-import Flock.Field
+module
+
+public import Flock.Bytes
 
 /-!
 # The record's hex round trips
@@ -7,6 +8,8 @@ import Flock.Field
 The record writes bytes as lowercase hex (`hexOf`) and an F128 as `{hi:016x}{lo:016x}` (`F128.toHex`); the decoder reads
 them back with `unhex` and `f128OfHex`. Both round trips are exact: `unhex_hexOf`, `f128OfHex_toHex`.
 -/
+
+@[expose] public section
 
 namespace FlockComplete.JsonRT
 

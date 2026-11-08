@@ -1,4 +1,6 @@
-import Definitions.Pouw.PearlC.W1
+module
+
+public import Definitions.Pouw.PearlC.W1
 
 /-!
 # The γ-gap property over W1's priced sum
@@ -18,6 +20,8 @@ W1 itself at the same `γ` and `η`, with no new assumption:
 The honest reference's cost `Wref` has no fetch term, so `γ` keeps its meaning: the priced sum only adds to what every
 program, the reference included, is charged.
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.W1Priced
 

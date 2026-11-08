@@ -4,8 +4,14 @@ sit at 128, 130, 132, 129, 131 and 133 (the map `benchmarks/verifier_cost/tmpl_l
 `posOf` agrees with the reference `posMap` on every column, which is a permutation. The layouts it refuses: an output
 group whose start a call's lanes would move, and a call in the input rows to a Definition laid out apart.
 -/
-import Flock.TmplLayout
-import Flock.Test.Tmpl
+module
+
+public import Flock.Test.Tmpl
+public import Flock.TmplLayout
+meta import Flock.Test.Tmpl
+meta import Flock.TmplLayout
+
+@[expose] public section
 
 namespace Flock.Test.TmplLayout
 

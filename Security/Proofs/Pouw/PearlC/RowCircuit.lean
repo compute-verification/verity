@@ -1,4 +1,13 @@
-import Definitions.Pouw.PearlC.RowSem
+module
+
+public import Definitions.Pouw.PearlC.RowSem
+public import Definitions.Pouw.PearlC.Row4Circuit
+public import Proofs.Pouw.PearlC.AccumProofs
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Core.Circuit
+import Proofs.Pouw.Fp8Atom.Fp32Proofs
+import Proofs.Pouw.PearlC.PeelExactProofs
 import Proofs.Pouw.PearlC.TileCircuit
 
 /-!
@@ -31,6 +40,8 @@ are `RowSem`'s formulas on the row's inputs:
   RowA and RowB is `e4m3` of `pc8Form` at its row's values and codes (`codes8_sem`, `row8A_code_sem`, `row8B_code_sem`), and
   `pc8Sem`'s `α`, `β` and floor at a row of step words are the table's words read as values (`pc8Sem_scales`).
 -/
+
+@[expose] public section
 
 namespace Pouw.PearlC.RowCircuit
 

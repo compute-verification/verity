@@ -6,8 +6,14 @@ query or a circuit whose META names no template. `ProvedScope.programHeld`: a se
 program is refused. The programs are `Flock.Test.RegProgram`'s: in `reg`, `TWiden16_v1`'s `a` reads the
 `RegisteredInput16_v1` node and `TStep_v1`'s `k` the `RegisteredInput32_v1` node; `TPair_v1` reads neither.
 -/
-import Flock.Test.RegProgram
-import Flock.ProvedScope
+module
+
+public import Flock.ProvedScope
+public import Flock.Test.RegProgram
+meta import Flock.ProvedScope
+meta import Flock.Test.RegProgram
+
+@[expose] public section
 
 namespace Flock.Test.RegCover
 

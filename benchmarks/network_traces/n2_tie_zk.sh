@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # The ingress tie in zero knowledge (n2_tie_zk.py) on a CPU machine, on hidden_zk's builds (its job.sh, sourced:
-# C-Flock's flock-circuit and the Lean flock-verify) with the firewall's Lean frame and the sampled-proofs verifier
+# Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the sampled-proofs verifier
 # built in the tree, as n2_zk.sh runs n2_zk.py. From a clone, in one of the network slots, as a job of at most 180
 # minutes:
 #   env N2_MEM_GB=56 CHECK_SLOTS=/workspace/research/locks/network/slots python3 tools/verity/check/slot.py \
@@ -11,8 +11,8 @@
 # env: N2_MEM_GB (what job.sh's stages may take, within the slot's)  N2_PORT (--port; the members are proved one after
 #      another)  N2_CACHE (the build cache, kept across runs where writable)  N2_DEBUG_CLEAR=1
 #      (--debug-clear)  N2_DRY=1 (the instances and references only)  N2_CLASS (--class: test, served or warden)
-#      N2_WARDEN_RUN (--warden-run, N2_CLASS=warden's warden run, an absolute path on the node)  N2_WINDOWS (--windows)
-#      N2_GPU=1 (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
+#      N2_WARDEN_RUN (--warden-run, N2_CLASS=warden's network certifier run, an absolute path on the node)  N2_WINDOWS
+# (--windows)      N2_GPU=1 (--gpu)  FLOCK_WORK (N2_GPU's build, /workspace/jobs/proof-throughput by default)
 # Kept in $OUT/n2tie: the driver's records and logs, the public files and everything the verifier received; never a
 # prover's file (inst-*, prover-instances.bin) nor a circuit (its pin is kept), nor a session's archive.
 set -uo pipefail

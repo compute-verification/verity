@@ -1,5 +1,24 @@
+module
+
+public import Proofs.Flock.VBridge.Algebra.ToVStar
+public import Proofs.Flock.VBridge.Algebra.Sim
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.VBridge.Algebra.Build
-import Proofs.Flock.VBridge.Algebra.ToVStar
+import VCVio.Prelude.Core
 
 /-!
 # The S `structureOf` builds has its `wt` bits below 128
@@ -10,6 +29,8 @@ residuals at `symbolic`, renamed by `bump` (which fixes exactly the elements wit
 `symbolic`, which is `symbolic` itself. Their elements are fixed by `bump` (`Lin.Good`), and `build` makes its
 operands from them and its added terms of the running sums and v (`structureOf_bitsOk`).
 -/
+
+@[expose] public section
 
 namespace Flock.RecAlgebra
 

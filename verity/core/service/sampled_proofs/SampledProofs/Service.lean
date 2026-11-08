@@ -12,9 +12,12 @@ The proof system's own checks (`service.py`), each with Python's codes, order an
   the first failure only: `pending` (no verdict of record, or one that hasn't run), `sessions` (verdicts of record about
   other sessions than the delivered ones) and `public` (the check's public outputs not reported alike).
 -/
-import SampledProofs.Registration
-import SampledProofs.PyJson
-import Std.Data.HashMap
+module
+
+public import SampledProofs.PyJson
+public import SampledProofs.Json
+
+@[expose] public section
 
 namespace SampledProofs.Service
 

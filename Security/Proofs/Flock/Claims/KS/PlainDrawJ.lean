@@ -1,8 +1,43 @@
-import Proofs.Flock.Claims.KS.PlainDrawKDefs
-import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+module
+
+public import Proofs.Flock.Claims.KS.PlainDrawKDefs
+public import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.CustodyPlain
+import Proofs.Flock.Claims.KS.ConflictOC
 
 /-!
-# The plain verdict at the statement's draw, at the record's parsed value
+# The plain verdict at the statement's sample, at the record's parsed value
 
 `PlainDrawKDefs`' predicates read a transcript's record as text (`Exec.Transcript.record`), and flock-verify parses it
 first. The recursion's last step at the parsed value (`FlockDeploy.nextJ`) runs the verdict on a parsed value, which
@@ -16,6 +51,8 @@ need not be any text's parse, so the KS and Bits route is stated here at a parse
   each text form is the form here at `j`; `acceptsAtDK_iff_exists_J` adds that a text form accepts only where its
   record parses. So `acceptsAtDJK_wrPDJK_of_K` moves an accepting record of the outcome at the text forms to `wrPDJK`.
 -/
+
+@[expose] public section
 
 namespace Claims.Bridge.PlainDraw
 
@@ -32,7 +69,7 @@ structure TranscriptJ where
   j : Json
   proofs : Array ByteArray
 
-/-- **flock-verify accepts at the setup at the draw `dr`, at the parsed value, through `keep`**: `AcceptsAtDK` with
+/-- **flock-verify accepts at the setup at the sample `dr`, at the parsed value, through `keep`**: `AcceptsAtDK` with
 `verifyJWithMK keep` on the parsed record for `verifyWithMK keep` on its text. -/
 def AcceptsAtDJK (keep : Bool → Bool) (I : Exec.Inputs) (dr : Option Json) (t : TranscriptJ) : Prop :=
   ∃ spec sts, setupAtD I dr = .ok (spec, sts) ∧
@@ -66,7 +103,7 @@ def TxNoOffAtJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N : ℕ} (C
           t.proofs[1]!)) p.val = some u ∧ u ≠ C p
 
 open Classical in
-/-- **The record writer at the draw `d`, at the parsed value, through `keep`**: at the live outcome `o`, a parsed
+/-- **The record writer at the sample `d`, at the parsed value, through `keep`**: at the live outcome `o`, a parsed
 session `verifyJWithMK keep` accepts at the setup at `d` that records `o` there up to the rounds' digests, where one
 exists, else a session without proof files, which the verdict refuses at every `keep` (`verifyJWithMK_nil`). -/
 noncomputable def wrPDJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {J mPts : ℕ} (o : Tables.LiveOutJ J mPts) :
@@ -172,7 +209,7 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The plain verdict at the draw `d`, at the parsed value, through `keep`**: `verifyJWithMK keep` accepts what
+/-- **The plain verdict at the sample `d`, at the parsed value, through `keep`**: `verifyJWithMK keep` accepts what
 `wrPDJK` writes for the outcome at the setup at `d`, the outcome's root is `rootB₀`'s, and the deployed plain reader
 looks up no column off `C` in that parsed session there (`TxNoOffAtJK`). `plainVerdictAtK` at the parsed value. -/
 def plainVerdictAtJK (keep : Bool → Bool) (I : Exec.Inputs) (d : Json) {N mPts : ℕ} (C : Fin N → List 𝔽)

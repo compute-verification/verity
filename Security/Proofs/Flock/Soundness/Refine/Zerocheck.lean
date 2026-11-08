@@ -1,7 +1,17 @@
-import Proofs.Flock.Soundness.Refine.Arith
+module
+
+public import Proofs.Flock.Soundness.Refine.Arith
+public import Proofs.Flock.Soundness.Refine.Tapes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.CategoryTheory.Category.Init
+import Mathlib.Combinatorics.Matroid.Init
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Proofs.Flock.Soundness.Refine.Exec
+import Proofs.Flock.Soundness.Refine.Plays
+import VCVio.Prelude.Core
 
 /-!
-# The zerocheck refines the model's (PROTOCOL.md §9.1–§9.2)
+# The zerocheck refines the model's (`Flock.Piop`)
 
 `zerocheck_refines`: if the executable's `bindAndZerocheck` succeeds, the model's `zerocheck`, played with the
 proof's zerocheck messages (`zcMsgs`) and the coins of the rounds the executable consumed, returns `some zc'`, and `zc'`
@@ -11,6 +21,8 @@ The residual rounds (Z6) are a loop in the executable and a recursion in the mod
 executable computes it; `residual_plays` runs the model's rounds on the fold of `zStep`, and `forIn_rounds` shows the
 executable's loop is that fold.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Refine
 
@@ -116,7 +128,7 @@ theorem consumed_eq_map (rs : Array Round) (k n : ℕ) :
   funext i
   simp
 
-/-- **The zerocheck refines the model's** (PROTOCOL.md §9.1–§9.2). If the executable's statement binding and zerocheck
+/-- **The zerocheck refines the model's** (`Flock.Piop`). If the executable's statement binding and zerocheck
 succeed from `t` to `t'`, the model's zerocheck, played with the proof's zerocheck messages and the coins of the rounds
 consumed from `t` to `t'`, returns the executable's output, read in the model's field, its `z` round `t.k + 2`'s first
 coin and its `ρ` rounds `t.k + 3 + i`'s, and `t'` is `m − 6 + 3` rounds on. -/

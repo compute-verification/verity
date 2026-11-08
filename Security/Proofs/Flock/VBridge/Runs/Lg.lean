@@ -1,8 +1,26 @@
-import Proofs.Flock.VBridge.Algebra.LigeritoConverse
-import Proofs.Flock.VBridge.Compiled
-import Proofs.Flock.Soundness.Refine.RepConverse
-import Proofs.Flock.Soundness.Refine.Seam
+module
+
+public import Proofs.Flock.VBridge.Algebra.LigeritoConverse
+public import Proofs.Flock.VBridge.Compiled
+public import Proofs.Flock.Soundness.Refine.RepConverse
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.Soundness.Discharge.DecodeZL.Sizes
+import Proofs.Flock.Soundness.Refine.Seam
+import Proofs.Flock.VBridge.Algebra.Lincheck
+import Proofs.Flock.VBridge.Algebra.RingSwitch
 
 /-!
 # `prog_of_checks`' Ligerito hypothesis from E
@@ -14,10 +32,12 @@ round `k₂ + n + 1` at ring switching's `T` and switched claims (`rsT`, `rsSws`
 on every record whose rounds from there retain the bytes it frames.
 
 * `ligerito_of_residuals_at`: `ligerito_of_residuals` with its start round, the rounds the zerocheck, the lincheck and
-  ring switching draw (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
+  ring switching sample (`zerocheck_coins`, `lincheck_coins`, `ringSwitch_spec`).
 * `levelsLoop_count`, `ligeritoRun_conss`: V*'s Ligerito records one consistency context per level, so the proof's
   query and consistency nonces (`decodeProof_sizes`) are as many as the verifier consumes.
 -/
+
+@[expose] public section
 
 namespace FlockVBridge.Runs
 

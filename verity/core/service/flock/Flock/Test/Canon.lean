@@ -3,8 +3,15 @@
 Python's `codec.canonical_json` writes for the same values (`json.dumps(..., ensure_ascii=True)` with DEL escaped), and
 each reads back to its value through the verifier's parser.
 -/
-import Flock.Canon
-import Flock.JsonParse
+module
+
+public import Flock.Canon
+public import Flock.JsonParse
+public import Lean.Data.Json.Basic
+meta import Flock.Canon
+meta import Flock.JsonParse
+
+@[expose] public section
 
 namespace Flock.Test.Canon
 

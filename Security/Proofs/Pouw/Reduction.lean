@@ -1,12 +1,14 @@
-import Definitions.Pouw.Assumptions.GameStatements
+module
+
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
-import Mathlib.Tactic.FieldSimp
-import Mathlib.Tactic.Ring
-import Mathlib.Tactic.NormNum
+public import Definitions.Pouw.Assumptions.GameStatements
 
 /-!
 # (a) `G_γ` from TT, and the overhead budget
 -/
+
+@[expose] public section
 
 namespace Pouw.Proofs
 

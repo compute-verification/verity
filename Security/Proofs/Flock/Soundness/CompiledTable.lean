@@ -1,5 +1,7 @@
-import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.CompiledAlign
+module
+
+public import Proofs.Flock.Soundness.CompiledSound
+public import Proofs.Flock.Soundness.CompiledAlign
 
 /-!
 # The compiled bound for any level-0 table
@@ -17,6 +19,8 @@ with `ε_c⁻ = tableError + Σ √(N_ℓ·Q_ℓ·Adv_{r,ℓ}) + Pr[self-clash]`
 every `T`. This is the form the knowledge extractor uses (`Knowledge.lean`).
 -/
 
+@[expose] public section
+
 namespace FlockSoundness
 
 open Game Model Accounting
@@ -33,15 +37,6 @@ noncomputable def advRT [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
     (fun d b b' => ind (fun x : OutC F D × OutC F D =>
       ∃ p, Rewinding.ConflictAt (opR H E ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ r ℓ d) x p) (b, b'))
     (lockTable A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts T σ.1) σ.2
-
-theorem advRT_C0star [Inhabited D] (A : Arith F K) (H : List UInt8 → D)
-    (E : Merkle.Enc (List F) D) (S : Statement) (m k0 : ℕ) (l₀ l₁ : Level) (rest : List Level)
-    (ext : ℕ) (hk0 : l₀.lanes = k0) (hm : 13 ≤ S.m) (ptLocal mPts : ℕ) (r ℓ : ℕ)
-    (σ : Strategy (tableC A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts)) :
-    advRT A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts
-        (C0star A H E S ⟨m, k0, l₀ :: l₁ :: rest, ext⟩ hm ptLocal mPts σ.1 σ.2) r ℓ σ =
-      advR A H E S m k0 l₀ l₁ rest ext hk0 hm ptLocal mPts r ℓ σ :=
-  rfl
 
 open Classical in
 /-- **The bad runs, cap by cap, for any level-0 table `C₀`**, given a bound `x₀` on the level-0

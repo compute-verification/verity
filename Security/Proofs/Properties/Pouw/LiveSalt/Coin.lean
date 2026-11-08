@@ -1,5 +1,18 @@
-import Proofs.Properties.Pouw.LiveSalt
-import Proofs.Properties.Pouw.LiveSalt.Canon
+module
+
+public import Proofs.Properties.Pouw.LiveSalt
+public import Proofs.Properties.Pouw.LiveSalt.Canon
+public import Properties.Pouw.LiveSalt
+import Batteries.Lean.Except
+import all Init.Data.String.Defs
+import Mathlib.Algebra.GroupWithZero.Nat
+import Mathlib.Algebra.NeZero
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.Finiteness.Attr
+import Mathlib.Tactic.Push
+import Mathlib.Tactic.SetLike
+import Proofs.Properties.Pouw.Commit
 
 /-!
 # A live root binds its commitment and its coins (`liveCoinBinding`)
@@ -14,6 +27,8 @@ give equal leaf digests, level by level (`climb_eq`), and the leaf's frame ends 
 salt and coin (`coin_eq`). Frames are split only at their first part and their last parts, each 64 bytes: the `uint` parts
 between them are minimal big-endian, of varying length.
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.LiveSalt.Coin
 

@@ -1,6 +1,60 @@
-import Proofs.Flock.Claims.KS.ZkEvent
-import Proofs.Flock.Claims.KS.ZkLevels
-import Proofs.Flock.Claims.KS.ZkLevelsAll
+module
+
+public import Proofs.Flock.Claims.KS.ZkDrawJ
+public import Proofs.Flock.Claims.KS.ZkLevels
+public import Proofs.Flock.Claims.KS.ZkLevelsAll
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.LevelZeroAcc
+import Proofs.Flock.Claims.KS.ZkDecJ
+import Proofs.Flock.Claims.KS.ZkDecodeW
+import Proofs.Flock.Claims.KS.ZkPlanHJ
+import Proofs.Flock.Soundness.Discharge.DecodeZL.Runs
+import Proofs.Flock.Soundness.Discharge.Exec.Merkle
+import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Discharge.ZkExec.RunsSeams
+import Proofs.Flock.Soundness.Discharge.ZkExec.Setup
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verdict
+import Proofs.Flock.Soundness.Discharge.ZkExec.VerdictRows
+import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
+import Proofs.Flock.Soundness.Discharge.ZkHidden.ParseStmt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.Sched
+import Proofs.Flock.Soundness.Discharge.ZkLink.Sched
 
 /-!
 # The masked reader's opened rows at a rep's run
@@ -26,6 +80,8 @@ rep's opened rows, row by row:
   public and hidden outputs and at a masked statement in scope (`decodesTableW_zkTabs`, `decodesTableHW_zkTabs`,
   `decodesTableW_deploy`). The verdict reads `o₀`'s transcript, so the outcome is pinned.
 -/
+
+@[expose] public section
 
 namespace Claims.Flock
 
@@ -436,7 +492,7 @@ local notation "𝕂" => FlockLevel3.GF256
 variable {n mPts : ℕ} {Reg : Type}
 
 /-- **An output's openings are its reps' rows at table `j`**: `OpensEntries` with each row whole, at the setup at
-the draw `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
+the sample `d`, table `j`'s `Zk.schedule` schedule and the session's two rep streams of table `j`, at `2·|regions|` extra
 claims on the streams' rounds and table `j`'s proof files; each rep's pads are its proof file's, recorded at its
 stream's query words (`PadsRep`); and each rep's recorded caps are its decoded proof file's recursive caps. -/
 def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : TabZK 𝔽 mPts)
@@ -469,7 +525,7 @@ def OpensRows (I : Inputs) (d : Lean.Json) (t : Exec.Transcript) (j : ℕ) (T : 
       (if r = 0 then out.pend.1 else out.pend.2).lig.caps =
         (List.range (sch.levels.size - 1)).map (fun i => capDig zp.proof.ligerito.recursiveCaps[i]!)
 
-/-- **`runsZCJ_live` at the setup at each draw, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
+/-- **`runsZCJ_live` at the setup at each sample, with the rows**: `runsAtZCJ_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJ_live_rows (I : Inputs) (_ht : I.tags.typed = false) (dj : Finset (Fin n) → Lean.Json)
     {S₀ : Finset (Fin n)} {d₀ : Lean.Json} (y₀ : DrawSetupZJ (inputsJ I 0) mPts S₀ d₀)
@@ -643,7 +699,7 @@ local notation "𝕂" => FlockLevel3.GF256
 
 variable {n mPts : ℕ} {Reg : Type}
 
-/-- **`runsZCJH_liveI` at the setup at each draw, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
+/-- **`runsZCJH_liveI` at the setup at each sample, with the rows**: `runsAtZCJH_live_entries` at `OpensRows`
 (`zk_table_rows₀Z`). -/
 theorem runsAtZCJH_live_rows (I : Inputs) (ht : I.tags.typed = false)
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} {d₀ : Lean.Json}
@@ -815,7 +871,7 @@ open FlockSoundness.Discharge.Tables (DecodesTable LiveOutJ)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **The deployed `--zk` decoders are right at `zkTabs` at the rows, at one outcome**: where `verify --zk` sets its
-session up at the empty draw `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
+session up at the empty sample `dj ∅`, on untyped inputs under `TagsOkZJ`, the openings `opnD` and decoder `decD` at
 `tabsJ` of `zkTabs` are right at `OpensRows` of `o₀`'s transcript at `wrS`, on `o₀` where `verify --zk` accepts that
 transcript (`decodesTableW_zkTabs` with `runsAtZCJ_live_rows`). -/
 theorem decodesTableR_zkTabs {I : Exec.Inputs} (ht : I.tags.typed = false) (hT : Composed.TagsOkZJ I) {n : ℕ}

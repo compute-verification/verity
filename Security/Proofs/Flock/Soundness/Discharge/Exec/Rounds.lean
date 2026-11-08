@@ -1,5 +1,11 @@
-import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+module
+
+public import Proofs.Flock.Soundness.Discharge.Exec.FramesRep
+public import Proofs.Flock.Soundness.Discharge.Exec.Event
+import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Discharge.Exec.Retained
+import Proofs.Flock.Soundness.Discharge.Exec.Tables
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # flock-verify's acceptance, round by round (R11b, the executable side)
@@ -20,6 +26,8 @@ when the tags retain rounds. Together, at flock-verify's acceptance:
 The bytes a round retained are the encodings of its chunk's frames, so they determine the frames (`encs_inj`); which of
 `repC`'s messages each chunk carries is the part of `DecodesAll` still open.
 -/
+
+@[expose] public section
 
 set_option Elab.async false
 

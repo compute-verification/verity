@@ -1,4 +1,4 @@
-"""The bandwidth audit's receipts beside the staging decode (`sketch.py`) on the CPU's host twins against serve.py's
+"""The bandwidth audit's receipts beside the store's load (`sketch.py`) on the CPU's host twins against serve.py's
 fixture: each block's π, σ however the decode's chunks fall, y and the chained roots; a pass refuses a unit it didn't
 read and rows that don't hold whole units; `full.py --receipts` over the toy's encoded store gives the fixture's root,
 and `bw_ref.py` passes the kept pass and refuses one changed."""
@@ -95,7 +95,7 @@ def test_the_decode_sketches_each_chunk_before_decoding_it(fx, monkeypatch):
     lay = L.store_layout(doc, L.registered_prefix(bytes.fromhex(doc["salt"])))
     p = fx["passes"][1]
     P = K.Pass(bytes.fromhex(p["seed"]), fx["store"]["units"], "cpu")
-    st = S.Store(lay, toy_rows(), 0, "unused", chunk=3)
+    st = S.EncodedRows(lay, toy_rows(), 0, "unused", chunk=3)
     st.sketch = P
     for layer, _, size, _ in doc["staging"]:
         S.decode_layer(st, layer, torch.empty(size, dtype=torch.uint8))

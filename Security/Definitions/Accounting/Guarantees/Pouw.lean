@@ -1,6 +1,9 @@
-import Definitions.Accounting.Pouw
-import Definitions.Pouw.Game.Params
-import Definitions.Pouw.Assumptions.Game
+module
+
+public import Definitions.Accounting.Pouw
+public import Definitions.Pouw.Game.Params
+public import Definitions.Pouw.Assumptions.Game
+public import Mathlib.Data.Fintype.Sigma
 
 /-!
 # PoUW's guarantee as a joint run's compute guarantee (trusted)
@@ -13,12 +16,14 @@ Proved by `Accounting.SecurityProofs.ComputeOfPouw : Accounting.Guarantees.Compu
 from `Pouw.SecurityProofs.EndToEnd`.
 -/
 
+@[expose] public section
+
 namespace Accounting.Guarantees
 
 open Accounting Pouw
 
 /-- **PoUW's guarantee is the compute guarantee.** Under EndToEnd's hypotheses (TT among them), for any run on any
-device whose compute audit realizes PoUW's game at price `p`, with at least one draw of the game's coins and the device's
+device whose compute audit realizes PoUW's game at price `p`, with at least one sample of the game's coins and the device's
 oracle queries over the compute window at most `2^64`, the compute audit has its guarantee at certificate
 `(1 − γ)(1 − εs)·W` (`γ = reductionGamma γ₀ Ωmax`) and error `(1 − εs)^t + ε(q, N)`, where `q` is the device's oracle
 rate times the compute window's length. -/

@@ -1,6 +1,25 @@
-import Proofs.Flock.Soundness.TmplValue
-import Proofs.Flock.VBridge.Unit
-import Flock.TmplComputes
+module
+
+public import Proofs.Flock.Soundness.TmplValue
+public import Proofs.Flock.VBridge.Unit
+public import Flock.TmplComputes
+import Mathlib.Algebra.Order.Floor.Semifield
+import Mathlib.MeasureTheory.Integral.Bochner.Basic
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.ExecRows
+import VCVio.Prelude.Core
 
 /-!
 # A templated unit of a partition computes its Definitions at its local evaluation
@@ -15,6 +34,8 @@ A copy is bound to as many inputs as its Definition has (`Flock.TmplValue.within
 spec (`Tmpl.DefComputes`) carries that spec of the local evaluation at its bound inputs on its outputs, at every copy
 (`unit_computes`). No verifier path reads this file.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.TmplValue
 

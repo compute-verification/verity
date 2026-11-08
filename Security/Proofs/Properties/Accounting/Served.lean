@@ -1,23 +1,58 @@
-import Mathlib.Data.List.GetD
-import Mathlib.Tactic.IntervalCases
-import Mathlib.Tactic.Linarith
-import Mathlib.Tactic.NormNum.Basic
-import Properties.Accounting.Served
+module
+
+public import Properties.Accounting.Served
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Ring.Star
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.Int.Star
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.RingTheory.WittVector.IsPoly
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # Proofs of the served tie's statements (`Accounting.Served`, `Properties.Served`)
 
 `TieCommits` goes class by class, every class but the receipt and the check word in `LayerCommitted`'s first case: a
 registered value's commit coin is `0`; an A row's or a `y` row's is its round, which is its first reader's, since only
-its own call reads it (`firstRead_cases`), or below the draw when nothing does (`round_lt`); a public input's is at most
-its first reader's round, or the draw when nothing reads it (`Tie.pub`); a computed `zTree` `z` or `y` word's is its
+its own call reads it (`firstRead_cases`), or below the sample when nothing does (`round_lt`); a public input's is at most
+its first reader's round, or the sample when nothing reads it (`Tie.pub`); a computed `zTree` `z` or `y` word's is its
 round, the floor of its cut, and a record's its round, its first reader's, as an A row's (`Tie.outWords`); `perCall`'s
 `z` or `y` word's is the round after its own, which its coin read reaches (`Tie.noised`); an inner value's is its cut.
-A receipt and a check word are in the second case: a computed value (`Tie.computed`), committed by the draw
+A receipt and a check word are in the second case: a computed value (`Tie.computed`), committed by the sample
 (`Tie.receipt`, `Tie.checked`), and only gates of its own unit read it (`Tie.readers`; each reader is a gate,
 `reads_lt`).
 `TieLive`: a unit with a word has a first gate, its round is a round of the window, and every one is live.
-`SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the draw, `LayerCommitted` at its first reader's
+`SeededScheduleNotLive`: `UnitsOfLayout` puts a read run input at the sample, `LayerCommitted` at its first reader's
 round, which `Wf` puts below it (an input has no second case). `TieScope` is `Scope` from `TieLive`, `TieCommits` and its three hypotheses, and
 `epochScope` each window's of an `EpochTie`. `spentIn_split` is what a window timed from its own start after the salt's
 release leaves uncounted. `Llama31Shape` and `Llama31Rounds` are kernel computations. `witTie`: `Tie` holds of a circuit
@@ -58,10 +93,10 @@ clause that the checks can be met; a gate of another unit (`witCrossUnit_notTie`
 committed after the coin of the round that reads it (`witPubLate_notTie`, `witPubLate_notLayerCommitted`).
 
 `witTieRing`: a ring of depth `D = 6` is tied, a `zTree` window of eight steps whose step `s` receipt is committed under
-round `s + 5`'s root, the last five steps' in the manifest before the draw; step `0`'s receipt is cut at coin `1` and
+round `s + 5`'s root, the last five steps' in the manifest before the sample; step `0`'s receipt is cut at coin `1` and
 committed at coin `5` (`witRing_late`), so only `LayerCommitted`'s second case covers it, and the window is in
 Compose's scope (`witRing_scope`, at a scheme whose luck is proved, `witScheme`). `witCross_notTie`: a receipt that a
-gate of another unit reads, committed at the draw, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
+gate of another unit reads, committed at the sample, after that reader's coin, fails `Tie.readers`, and `LayerCommitted`
 too (`witCross_notLayerCommitted`).
 
 The cone clause: two tied windows of two units of `witShape2`'s one call, in which unit 0 recomputes
@@ -71,7 +106,7 @@ word `ok₀ = (z₀ = Σ₀ ∧ y₀ = dq₀) ∨ z₁ ≠ Σ₁′`, whose esca
 product on every input the check holds on (`witConeCheck_productOf`); in `witConeZ` it is a computed
 `z₀ = Σ₀ + (z₁ − Σ₁′)`, which is unit 0's dot on every input (`witConeZ_productOf`). The Definitions accept both
 words, and both fail `ValueChecked`'s cone clause (`witConeCheck_notValueChecked`, `witConeZ_notValueChecked`): at run
-time `z₁` is what an undrawn unit 1's prover committed. `computedFeeds_unit` reduces the clause to the circuit's
+time `z₁` is what an unsampled unit 1's prover committed. `computedFeeds_unit` reduces the clause to the circuit's
 computed-reads-computed edges.
 
 The old refusals on checked records: `held_complete` reads `ValueChecked`'s fifth clause through `Tie`,
@@ -85,6 +120,8 @@ the call's scales: `witKWS_notValueChecked` (`dq(Σ, A_1, B_1)`, at `witXK 128 5
 `witKRaw_notValueChecked` (the raw product, at `witXK 128 128`) and `witKMix_notValueChecked`
 (`0·Σ + 1·dq(p)` of another product `p`, at `witXM`, where `p = 0` and `z = 1`).
 -/
+
+@[expose] public section
 
 namespace Properties.Served
 
@@ -120,7 +157,7 @@ theorem round_lt {ι : Type} {L : Shape} {F : Form} {Cd : Declared ι} {cls : �
   rw [T.round _ hc, T.rounds]
   exact roundOf_lt F hc'
 
-/-- A value's first reader: none (the draw), or a gate that reads it. -/
+/-- A value's first reader: none (the sample), or a gate that reads it. -/
 theorem firstRead_cases {ι : Type} (Cd : Declared ι) (i : ℕ) :
     Cd.firstRead i = Cd.rounds ∨
       ∃ j, j < Cd.dag.length ∧ Cd.Reads j i ∧ Cd.firstRead i = Cd.round (Cd.call j) := by
@@ -316,7 +353,7 @@ def witGate (op : Accounting.Gates.IntOp Unit) (args : List ℕ) (commit : Bool)
   { op := op, args := args, lo := 0, hi := 0, step := 0, prim := "", place := .other, commit := commit }
 
 /-- `witShape`'s one call in one live round: its coin, an A row (a run input), and a committed receipt word reading
-both, committed before the draw, the round after its own. -/
+both, committed before the sample, the round after its own. -/
 def witCircuit : Declared Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
     witGate (.affine 0 [1, 1]) [0, 1] true]
@@ -1078,7 +1115,7 @@ def witTwiceRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [106] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of one product for two units (`witTwice`, `ServedTwice.lean`): two units of one call, unit 1's served
+/-- The window of one product for two units (`witTwice`): two units of one call, unit 1's served
 product a copy of unit 0's, each unit with its own `y` and its own receipt over its own noised GEMM. -/
 def witTwice : Declared ℕ where
   dag := witPre ++ witTwiceRest
@@ -1171,7 +1208,7 @@ def witWSRest : Accounting.Gates.IntDag ℕ :=
         Accounting.Gates.s32Max false,
       witGateR (.affine 0 [1]) [102] Accounting.Gates.s32Min Accounting.Gates.s32Max true]
 
-/-- The window of an A and a B word as the scales (`witWS`, `ServedTwice.lean`): `witZ` with its served `y`'s scales
+/-- The window of an A and a B word as the scales (`witWS`): `witZ` with its served `y`'s scales
 the A row's first word and the B column's first word. -/
 def witWS : Declared ℕ := { witZ with dag := witPre ++ witWSRest }
 
@@ -1373,7 +1410,7 @@ def witCCls (i : ℕ) : Cls :=
   else .inner
 
 /-- **A checked-record window is tied**: its record a run input only its own call and unit read, its position a public
-input committed before the coin of the round that reads it, its check word committed by the draw. -/
+input committed before the coin of the round that reads it, its check word committed by the sample. -/
 theorem witTieC : Tie witShape .zTree (witC witOk) witCCls where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -1403,7 +1440,7 @@ theorem witTieC : Tie witShape .zTree (witC witOk) witCCls where
   inner := by decide +kernel
 
 /-- The checked-record window meets `LayerCommitted`: its record at its round, its reader's cut, and its check word at
-the draw's coin, past its cut, in the second case. -/
+the sample's coin, past its cut, in the second case. -/
 theorem witC_layerCommitted : LayerCommitted (witC witOk) :=
   tieCommits ℕ witShape .zTree (witC witOk) witCCls witTieC
 
@@ -1858,7 +1895,7 @@ def witRingStep (s : ℕ) : Accounting.Gates.IntDag Unit :=
 
 /-- `witShape8` in `zTree` in a ring of depth `D = 6`: step `s` is call `s`, round `s` and unit `s`; its A row and
 `z` are committed under round `s`'s root, before its coin, and its receipt under round `s + 5`'s, steps `3`–`7`'s in
-the manifest before the draw (coin `8`). -/
+the manifest before the sample (coin `8`). -/
 def witRing : Declared Unit where
   dag := (List.range 8).flatMap witRingStep
   calls := 8
@@ -1881,7 +1918,7 @@ theorem witRing_links : ∀ i, i < witRing.dag.length → witRingCls i = .receip
   decide +kernel
 
 /-- **A ring of depth six is tied**: each step's receipt is committed under round `s + 5`'s root, or the manifest, after
-its round's coin and by the draw, and no gate reads it. -/
+its round's coin and by the sample, and no gate reads it. -/
 theorem witTieRing : Tie witShape8 .zTree witRing witRingCls where
   calls := by decide +kernel
   rounds := by decide +kernel
@@ -1942,7 +1979,7 @@ theorem witRing_scope {δs : ℝ} (hδs : 0 < δs) : Scope witScheme witRing δs
 def witShape2s : Shape := { witShape with steps := 2 }
 
 /-- Two steps in `beside`, step `s` call, round and unit `s`: step `0`'s coin, A row and receipt (gates 0–2), and step
-`1`'s (3–5), whose receipt reads step `0`'s receipt too. Step `0`'s receipt is committed at the draw, coin `2`, after
+`1`'s (3–5), whose receipt reads step `0`'s receipt too. Step `0`'s receipt is committed at the sample, coin `2`, after
 its reader's coin `1`. -/
 def witCross : Declared Unit where
   dag := [witGate (.input .coin ()) [] false, witGate (.input .run ()) [] false,
@@ -2119,7 +2156,7 @@ theorem witConeCheck_productOf :
     (by decide +kernel) (witPre_val67 witConeCheckRest x) (by decide +kernel)
 
 /-- **A check reading another unit's computed word fails `ValueChecked`**: `ok₀` reads unit 1's computed
-`z₁`, which unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 undrawn and `z₁ ≠ Σ₁′`,
+`z₁`, which unit 0's proof sees as whatever unit 1's prover committed, so with unit 1 unsampled and `z₁ ≠ Σ₁′`,
 `ok₀ = 1` with any record. The window is tied (`witTieConeCheck`), and under `Gates.val` the escape never fires, so
 the record is the product on every input its check holds on (`witConeCheck_productOf`): only the cone clause refuses
 it. -/
@@ -2231,7 +2268,7 @@ theorem witConeZ_productOf :
 
 /-- **A computed `z` reading another unit's computed word fails `ValueChecked`**: unit 0's
 `z₀ = Σ₀ + (z₁ − Σ₁′)` is its dot on every input under `Gates.val` (`witConeZ_productOf`), but its proof sees `z₁` as
-whatever unit 1's prover committed, so with unit 1 undrawn `z₀` is any value. The window is tied (`witTieConeZ`). -/
+whatever unit 1's prover committed, so with unit 1 unsampled `z₀` is any value. The window is tied (`witTieConeZ`). -/
 theorem witConeZ_notValueChecked (L : Shape) (dq : List ℤ → ℤ) : ¬ ValueChecked L dq witConeZ witConeZCls := by
   rintro ⟨_, _, -, -, -, -, -, hc⟩
   exact absurd (hc 72 (by decide +kernel) (.inr (.inl (by decide +kernel))) 70

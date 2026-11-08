@@ -1,13 +1,21 @@
-import Proofs.Flock.Soundness.Audit.Work
-import Mathlib.Analysis.SpecialFunctions.Log.Basic
+module
+
+public import Proofs.Flock.Soundness.Audit.Work
+public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+import Mathlib.Algebra.BigOperators.Field
+import Mathlib.Algebra.Order.Algebra
+import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
+import Proofs.Flock.Soundness.Audit.Law
+import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game.Prob
 
 /-!
 # The cumulative harm budget over adaptive rounds
 
 Rounds run `t = 1..T`, where `T` is a stopping time the prover chooses. In round `t` the prover
-commits `X_t`, whose wrong units `B_t` are fixed before the round's fresh coins `ω_t` select the
-draw `D_t`. Every drawn unit must get an accepting proof, and a failure rejects the session with no
-redraw.
+commits `X_t`, whose incorrect proof blocks `B_t` are fixed before the round's fresh coins `ω_t` select the
+sample `D_t`. Every sampled proof block must get an accepting proof, and a failure rejects the session with no
+resample.
 
 **The design condition** (`Law.Design L π`): `Pr[D ∩ B = ∅] ≤ exp(−Σ_{u ∈ B} π_u)` for every `B`
 fixed before the coins. The Bernoulli (`bernoulli_design`, exact at rate `bernRate`:
@@ -15,7 +23,7 @@ fixed before the coins. The Bernoulli (`bernoulli_design`, exact at rate `bernRa
 work (`work_design`) laws meet it.
 
 **The model** (`Adaptive.Play`) is the run tree of one prover strategy, its own choices resolved: a
-`round L B k` node is a round whose wrong units `B` and law `L` are fixed by the history before its
+`round L B k` node is a round whose incorrect proof blocks `B` and law `L` are fixed by the history before its
 coin, `coin` nodes are the session's other coins, and `stop acc` ends the session. `Play n N` has at
 most `N` rounds, and the prover may stop after any of them. `Drawn err` is the per-round drawn-unit
 bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_drawn` gives with
@@ -25,14 +33,16 @@ bound, `Pr[D_t ∩ B_t ≠ ∅ ∧ round t passes] ≤ err_t`, which `audit_draw
 particular `λ = min_{h_u > 0} π_u / h_u` (`harmRate`, `harm_budget_rate`),
 $$\Pr\Big[\text{accept} \wedge \sum_{t \le T} h(B_t) \ge H\Big] \le e^{-\lambda H} + \sum_t \mathrm{err}_t.$$
 The proof is the supermartingale `exp(λ (Σ_{s<t} h(B_s) − H))` plus the error spent so far, stopped
-at `T`, by induction on the tree: in each round the design condition pays for the harm the draw
+at `T`, by induction on the tree: in each round the design condition pays for the harm the sample
 missed, and `Drawn` for the harm it hit (`prEv_le_exp`). Markov is the base case.
 
 **The count corollary** (`harm_count`, `harm_count_kstar`): under a Bernoulli law of rate `q`, the
 number of wrong steps reaches `K` with probability at most `(1 − q)^K + Σ err`, and
 `k*(p) = ln(1/(1−p)) / (−ln(1−q))` wrong steps with at most `1 − p + Σ err`. It is tight: one round
-that accepts exactly when its draw misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
+that accepts exactly when its sample misses `B` meets `(1 − q)^{|B|}` (`harm_count_tight`).
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Audit
 
@@ -75,7 +85,7 @@ theorem bernFactor_zero_div (num den : ℕ) :
     bernFactor num den 0 = ((den - num : ℕ) : ℝ≥0∞) / den := by
   rw [bernFactor, mul_zero, zero_add]
 
-/-- A Bernoulli draw of rate `q = num/den` meets the design condition with `π_u = q`. -/
+/-- A Bernoulli sample of rate `q = num/den` meets the design condition with `π_u = q`. -/
 theorem bernoulli_design {num den : ℕ} [NeZero den] (h : num ≤ den) :
     (bernoulli n num den).Design fun _ => (num : ℝ) / den := by
   intro B
@@ -101,7 +111,7 @@ theorem subset_design {k : ℕ} (hk : k ≤ n) (hn : 0 < n) : (subset n k hk).De
         rw [← ENNReal.ofReal_pow (Real.exp_pos _).le, ← Real.exp_nat_mul, Finset.sum_const, nsmul_eq_mul]
         congr 2; ring
 
-/-- A stratified law meets the design condition with `π_u = k_s / n_s` for `u` in stratum `s`. -/
+/-- A stratified sampling design meets the design condition with `π_u = k_s / n_s` for `u` in stratum `s`. -/
 theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (hk : ∀ s, k s ≤ (stratum σ s).card) :
     (stratified σ k hk).Design fun u => (k (σ u) : ℝ) / (stratum σ (σ u)).card := by
   intro B
@@ -133,7 +143,7 @@ theorem stratified_design {m : ℕ} (σ : Fin n → Fin m) (k : Fin m → ℕ) (
   · exact Finset.prod_le_prod fun s _ => hfac s
   · exact fun s _ => (Real.exp_pos _).le
 
-/-- The work law meets the design condition with `π_u = K w_u / W`. -/
+/-- The work sampling design meets the design condition with `π_u = K w_u / W`. -/
 theorem work_design {m : ℕ} (σ : Fin n → Fin m) (w f : Fin m → ℕ) (K : ℕ) (hf : ∀ s, 1 ≤ f s)
     (hW : 0 < totalWork σ w) : (work σ w f K).Design fun u => (K : ℝ) * w (σ u) / totalWork σ w := by
   intro B
@@ -173,7 +183,7 @@ theorem ofReal_exp_bernRate {num den : ℕ} (h : num < den) (k : ℕ) :
   rw [bernRate, mul_neg, neg_neg, Real.exp_nat_mul, Real.exp_log hq, ENNReal.ofReal_pow hq.le,
     ENNReal.ofReal_div_of_pos hden, ENNReal.ofReal_natCast, ENNReal.ofReal_natCast, bernFactor_zero_div]
 
-/-- A Bernoulli draw meets the design condition with equality at `π_u = −ln(1 − q)`. -/
+/-- A Bernoulli sample meets the design condition with equality at `π_u = −ln(1 − q)`. -/
 theorem bernoulli_design_exact {num den : ℕ} [NeZero den] (h : num < den) :
     (bernoulli n num den).Design fun _ => bernRate num den := by
   intro B
@@ -186,7 +196,7 @@ end Law
 namespace Adaptive
 
 /-- **The run tree of one prover strategy over adaptive rounds**, at most `N` of them. `round L B k`
-is a round whose law `L` and wrong units `B` the history fixes before its coin; `coin` is any other
+is a round whose sampling design `L` and incorrect proof blocks `B` the history fixes before its coin; `coin` is any other
 verifier coin; `stop acc` ends the session, accepting when `acc`. -/
 inductive Play (n : ℕ) : ℕ → Type 1 where
   | stop {N : ℕ} (acc : Bool) : Play n N
@@ -217,7 +227,7 @@ def Laws (S : Law n → Prop) : {N : ℕ} → Play n N → Prop
   | _, @Play.coin _ _ _ _ _ k => ∀ c, Laws S (k c)
   | _, .round L _ k => S L ∧ ∀ ω, Laws S (k ω)
 
-/-- **The drawn-unit bound** of every round: its draw hits its wrong units and the round passes
+/-- **The drawn-unit bound** of every round: its sample hits its incorrect proof blocks and the round passes
 with probability at most `err` of the number of rounds left after it. -/
 def Drawn (err : ℕ → ℝ≥0∞) : {N : ℕ} → Play n N → Prop
   | _, .stop _ => True
@@ -341,7 +351,7 @@ theorem prEv_le_exp {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞
             rw [add_assoc, add_comm (err N)]
 
 /-- **The cumulative harm budget.** Over at most `N` adaptive rounds whose laws meet the design
-condition with weights `π` and whose drawn units fail with at most `err`, for harms with
+condition with weights `π` and whose sampled proof blocks fail with at most `err`, for harms with
 `λ h ≤ π` and `λ ≥ 0`, the session accepts with total harm at least `H` with probability at most
 `e^{−λH} + Σ_t err_t`. -/
 theorem harm_budget {π h : Fin n → ℝ} {lam : ℝ} {err : ℕ → ℝ≥0∞} (hlam0 : 0 ≤ lam)
@@ -384,7 +394,7 @@ theorem harm_budget_rate {π h : Fin n → ℝ} {err : ℕ → ℝ≥0∞} (hπ 
       ENNReal.ofReal (Real.exp (-(harmRate π h * H))) + ∑ m ∈ range N, err m :=
   harm_budget (harmRate_nonneg hπ hh) (fun u => harmRate_mul_le hπ hh u) H P hL hD
 
-/-- **The count budget under Bernoulli draws.** With every round drawing each unit independently at
+/-- **The count budget under Bernoulli samples.** With every round sampling each unit independently at
 rate `q = num/den`, the session accepts with at least `K` wrong steps in total with probability at
 most `(1 − q)^K + Σ_t err_t`. -/
 theorem harm_count {num den : ℕ} [NeZero den] (hq : num < den) {err : ℕ → ℝ≥0∞} (K : ℕ) {N : ℕ}
@@ -401,7 +411,7 @@ theorem harm_count {num den : ℕ} [NeZero den] (hq : num < den) {err : ℕ → 
 probability above `1 − p` (less the drawn-unit error) stays under. -/
 noncomputable def kStar (num den : ℕ) (p : ℝ) : ℝ := Real.log (1 / (1 - p)) / Law.bernRate num den
 
-/-- **The count corollary.** Under Bernoulli draws of rate `q > 0`, the session accepts with at least
+/-- **The count corollary.** Under Bernoulli samples of rate `q > 0`, the session accepts with at least
 `k*(p)` wrong steps with probability at most `1 − p + Σ_t err_t`. -/
 theorem harm_count_kstar {num den : ℕ} [NeZero den] (h0 : 0 < num) (hq : num < den) {p : ℝ} (hp : p < 1)
     {err : ℕ → ℝ≥0∞} {H : ℝ} (hH : kStar num den p ≤ H) {N : ℕ} (P : Play n N)
@@ -421,7 +431,7 @@ theorem harm_count_kstar {num den : ℕ} [NeZero den] (h0 : 0 < num) (hq : num <
         exact hH
     _ = 1 - p := by rw [one_div, Real.log_inv, neg_neg, Real.exp_log h1p]
 
-/-- One round over `B` that accepts exactly when its draw misses `B`. -/
+/-- One round over `B` that accepts exactly when its sample misses `B`. -/
 def oneShot (L : Law n) (B : Finset (Fin n)) : Play n 1 :=
   .round L B fun ω => .stop (decide (Disjoint (L.draw ω) B))
 

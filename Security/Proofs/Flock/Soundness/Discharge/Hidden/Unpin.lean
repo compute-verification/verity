@@ -1,6 +1,22 @@
-import Proofs.Flock.Soundness.Discharge.Hidden.Layout
-import Proofs.Flock.Soundness.Refine.StmtOf
-import Proofs.Flock.Soundness.Discharge.PinnedSat
+module
+
+public import Proofs.Flock.Soundness.Discharge.PinnedSat
+public import Proofs.Flock.Soundness.Discharge.Hidden.Defs
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Proofs.Flock.Soundness.Discharge.Hidden.Delta
 
 /-!
 # A hidden-output statement without Δ's pinned copies (`unpin`)
@@ -16,6 +32,8 @@ pinned outputs.
 accepted statement satisfies `unpin`'s, and carries 0 on every pinned bit (`sat_unpin`). Nothing here reads a row size,
 a `G` or a producer family.
 -/
+
+@[expose] public section
 
 open Flock FlockLevel3
 open Lean (Json)

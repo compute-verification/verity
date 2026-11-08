@@ -1,5 +1,23 @@
-import Proofs.Flock.C3.HoloValues.Read
-import Proofs.Flock.VBridge.Sparse.Plays
+module
+
+public import Proofs.Flock.C3.HoloValues.Read
+public import Proofs.Flock.VBridge.Sparse.Plays
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.HoloValues.ZcLc
+import Proofs.Flock.Level3.Assembly
+import Proofs.Flock.Soundness.Refine.Arith
 
 /-!
 # A rep's sparse public values are its outputs' (`SparseRepTie`'s pub half)
@@ -11,6 +29,8 @@ where `c`'s `z`, `alpha` and the first `k_log − 6` coordinates of its `x_rest`
 rounds (`info.zc.z`, `info.lc.fold.alpha`, `info.lc.fold.rhoIn`, `info.lc.rIn`) are the coins its play's outputs read
 (`rep_of_unit_coins`, `holoRows_coins`, every round below `z_partial`'s issuing coins: `hpos_of_unit`).
 -/
+
+@[expose] public section
 
 namespace FlockC3.Sparse
 

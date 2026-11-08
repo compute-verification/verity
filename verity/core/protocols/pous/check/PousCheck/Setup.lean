@@ -1,6 +1,8 @@
-import PousCheck.Keys
-import PousCheck.Commit
-import PousCheck.Merkle
+module
+
+public import PousCheck.Keys
+public import PousCheck.Commit
+public import PousCheck.Merkle
 
 /-!
 The public-encoder setup check (`setup.verifier_key_from_encoding`, `protocol.verifier_key(…, mode=PUBLIC)`): the verifier
@@ -14,6 +16,8 @@ The refusals come in Python's order: per segment, a segment past the parameters'
 count, a block's width), the salt's length (when the first segment's keys are expanded), and the first block refused by
 `decodeBlock`; after the last segment, a missing segment, then the commitment.
 -/
+
+@[expose] public section
 
 namespace PousCheck.Setup
 

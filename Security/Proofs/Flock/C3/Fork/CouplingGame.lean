@@ -1,4 +1,9 @@
-import Proofs.Flock.Soundness.Game.Lock
+module
+
+public import Definitions.Flock.Game.Lock
+import Mathlib.Analysis.Real.Sqrt
+import Mathlib.Tactic.Positivity.Finset
+import Proofs.Flock.Soundness.Game.Basic
 
 /-!
 # a1l, step 1: games under relabelling, and a lockstep beside another
@@ -11,6 +16,8 @@ stream is a third lockstep beside the two reps. This file has the game-level pie
 * `getEO`, `liftL`, `liftR`: two locksteps' tables side by side, the first's slot `s` at `2s` and the second's at
   `2s + 1`; `liftL` runs the first while the second's index stays, `liftR` the second while the first's stays.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

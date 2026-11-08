@@ -1,3 +1,13 @@
+module
+
+public import Proofs.Flock.Claims.RootFindAlg
+meta import Lean.Meta.Tactic.NormCast
+import Mathlib.Algebra.Order.Field.Basic
+import Mathlib.Data.Nat.Totient
+import Mathlib.Data.Sym.Sym2.Init
+import Mathlib.Tactic.ContinuousFunctionalCalculus
+import Mathlib.Tactic.NormNum.GCD
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Flock.Claims.RootFindCorrect
 
 /-!
@@ -14,6 +24,8 @@ Every bound holds for every input; only `split`'s uses the shape of the pieces a
 * `rootProduct` on `f` with `d` coefficients takes at most `(7n + 20)(d + 3)³` and returns at most `d + 2`
   coefficients (`rootProduct_bound`), so `rootsC` takes at most `costBound n |basis| d` (`rootsC_ops_le`).
 -/
+
+@[expose] public section
 
 namespace Claims.RootFind
 

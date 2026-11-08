@@ -5,7 +5,7 @@
 
 A rank's Program (`build.build_program`) takes the other ranks' partials as Inputs, world - 1 `peers_<k>` per collective, so an
 isolation block over it reads them as novel: 3.1·10¹⁰ bits a GLM-5.3 B1 rank. The node's Program has no
-peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `build.drive`), into one
+peer Input. It runs the world's rank forwards, each the one its rank's Program runs (`build.decoder`, `common.drive`), into one
 Builder, one rank at a time in rank order, each up to its next collective. Collective k of every rank then reads every rank's own
 rows at k, in rank order, as `tp_links.json`'s `binding` states the rank's peer Inputs. Joined call by call, the ranks' Programs
 would be a cycle: a rank's collective k reads the other ranks' partials from the middle of their own forwards.
@@ -34,8 +34,8 @@ from verity.ml.circuits.program import Program
 from verity.ml.circuits.refs import Affine, Coll, concat
 from verity.ml.circuits.types import Array, RecordType, Type, Value
 
-from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder, drive
-from .common import Unexpressible, _arr_shape, _Launch, _Peers, _Stochastic, launch_batch, launch_rows
+from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
+from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, launch_batch, launch_rows
 from .phi import Phi
 
 
@@ -241,7 +241,7 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
             if not getattr(model, "reads_launch", False):
                 raise Unexpressible(f"vocabulary cannot express: a request run in a launch batch (no batch invariance, {len(phi.requests)} "
                                     f"requests), whose kernel choices the {nets[r].model_class} decoder reads at its own rows")
-            model.launch = _Launch(batch)
+            model.launch = model.launch.with_batch(batch)
         if wrapper == "request" and isinstance(model, _Model):
             model.ctx = launch_rows(phis[r], LP, T)
         models.append(model)
@@ -279,13 +279,13 @@ def build_node_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int 
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"a tensor-parallel node's ranks joined at their collectives, predicted ahead of time by "
                                    f"verity_vllm.program.predict.node ({BUILDER_ID})",
-                               conformance="predicted: each rank's forward is its rank Program's (predict.build)", register=False)
+                               conformance="derived: predicted, each rank's forward is its rank Program's (predict.build)", register=False)
     sd = bind(defn, SRC=src_static)
     sd.set_body(body)
     node = CompositeDefinition("Node", 1, ("body",), lambda S: S.body.signature(),
                                lambda B, S, *args: B.call(S.body, *args, name="node"),
                                doc="a tensor-parallel node's Program function: its body, the ranks' forwards joined, called once",
-                               conformance="predicted: its body's", register=False)
+                               conformance="derived: predicted, its body's", register=False)
     program = Program(bind(node, body=sd), registered=theta, theta=theta)
     timings = {"body_s": round(t_body - t0, 3), "program_s": round(time.time() - t_body, 3)}
     desc = digest = None

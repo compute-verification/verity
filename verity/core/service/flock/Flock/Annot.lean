@@ -52,9 +52,13 @@ first), then `too-many`, then `too-large`. A partition is tested on the unlabell
 the labelled annotation's: a gate in two sets of one label is refused. `max_gates` under an affine `label` is refused as
 `meaning-unsupported`; under `group` and a label table it bounds each label by the sum of its sets' sizes.
 -/
-import Lean.Data.Json
-import Std.Data.HashMap
-import Flock.Program
+module
+
+public import Flock.Program
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace Flock.Annot
 

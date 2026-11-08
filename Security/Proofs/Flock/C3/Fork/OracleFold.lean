@@ -1,4 +1,22 @@
+module
+
+public import Proofs.Flock.C3.Fork.Sparse
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
 import Proofs.Flock.C3.Fork.OracleClose
+import Proofs.Flock.Soundness.LincheckPhase
 
 /-!
 # Piece (a), the oracle count: the hidden part's fold is the sparse phase's
@@ -13,6 +31,8 @@ slot's layout factor `U_σ` (`holoPub`), unit by unit, since every unit is insid
 
 So where the prover sends `h = hiddenFold`, `holoLincheck` checks what `lincheck` checks on the hidden statement.
 -/
+
+@[expose] public section
 
 namespace FlockC3.Fork
 

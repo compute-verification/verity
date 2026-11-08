@@ -3,9 +3,12 @@ PROTOCOL.md §16.5: the verifier's public file (no rows), whose roots are frame-
 roots are checked here; the input ports' roots depend on the row leaf's schema and are the row leaf's check
 (`RowLeaf.checkPublic`).
 -/
-import Flock.Circuit
-import Flock.JsonParse
-import Flock.FV3
+module
+
+public import Flock.FV3
+public import Flock.Circuit
+
+@[expose] public section
 
 namespace Flock
 
@@ -29,7 +32,7 @@ structure Public where
   /-- SHA-256 of the header (`rows = false`, in `canonUtf8`'s form, as upstream's `serde_json` writes it) and every byte
   after it: what Σ binds -/
   sha : ByteArray
-  /-- a drawn statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
+  /-- a sampled statement's registered population (its size, `b ‖ c` and outputs): the frame-v3 roots are over it -/
   population : Option (Nat × Array ByteArray × Array Nat) := none
   tables : Option Tables := none
   deriving Inhabited

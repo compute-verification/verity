@@ -19,7 +19,7 @@ two bounds from its one sample, `free_compute` and `leak`, at delta = 1% and 1e-
 are J10-R's per-call lane units, `PouwH1LaneZy_v2` over `PouwH1Tile_v5` (a 32 x 32 leaf over the call's K), one
 subcircuit at each K, at their traced ANDs (`TILE_TRACED`): a statement for each 131,072
 of its MACs (`PouwH1LaneZyChunk_v2`) and one for the combine, each statement's output the one bit `ok`,
-and about 257 bits of receipt committed a chunk. Drawn lanes share their chunks' statements, at the chunk's k_log.
+and about 257 bits of receipt committed a chunk. Sampled lanes share their chunks' statements, at the chunk's k_log.
 
 **Budget.** Proving is within 1% of the block's compute. Serving's overhead is beside it, never in it: the commits
 (1.0 s a step, `COMMIT_STEP_S`) and PoUW's per-call noise. One serving
@@ -30,7 +30,7 @@ block's units (and, for its reservation, 8 of its tile lanes), given as its cost
 budget, and what it certifies.
 
 **PlanBounds.** `certify`'s: one stratified harm bound over every subcircuit (core's `Stratified.harm_bound`), with no
-delta split by subcircuit, its leak's location term counting the wrong units by the unit-weighted harm bound in place of
+delta split by subcircuit, its leak's location term counting the incorrect proof blocks by the unit-weighted harm bound in place of
 the exact `count_bound` (`certificate`). The bound of record is `Flock.Guarantees.JointStratified`
 (Security/Proofs/Flock/EndToEnd/Joint/Statement.lean): per verification phase, one detection budget
 `sum_s k_s x_s / n_s <= ln(1/delta)` over every subcircuit, and the ANDs and output bits of an accepted block's incorrect
@@ -39,8 +39,8 @@ delta, from one sample at one delta. A difftest holds `certify`'s fields to that
 
 **Cost.** `h200.Rates`' fit with statements shared (`CostModel.shared`: one session a subcircuit an execution phase,
 `ceil(k / cap)` statements of sampled proof blocks), its feature a unit's ANDs with its rows' openings, every unit's outputs
-committed at the GPU row committer's 225 GB/s, and a drawn request replayed at its share of the block's
-GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay domain,
+committed at the GPU row committer's 225 GB/s, and a sampled request replayed at its share of the block's
+GPU time (a stand-in). A lane unit's 32 x 32 outputs span 32 requests, so each lane subcircuit is its own replay grain,
 a sampled proof block replayed at 32 requests' share (`TILE_REQUESTS`), unshared with the other subcircuits' replays.
 
     uv run python benchmarks/sampling_plan/demo_a.py --out DIR [--spans NAME ...] [--no-frontier]
@@ -64,7 +64,7 @@ import h200 as H  # noqa: E402
 from verity.core.protocols.pouw.window import eps_at  # noqa: E402
 from verity.core.protocols.profile import MARGIN, Stratified, Stratum, neg_log_ratio  # noqa: E402
 from verity.core.protocols.sampled_proofs.optimize import (  # noqa: E402
-    Candidate, CostModel, Objective, Plan, PlanBounds, ReplayDomain, TemplateCost, _plan, density_bound, for_budget,
+    Candidate, CostModel, Objective, Plan, PlanBounds, ReplayGrain, TemplateCost, _plan, density_bound, for_budget,
     frontier, row_ands)
 
 #: Demo A's block: 16,384 requests, a 6.35 s step (the commit 1.0 s of it), 32 steps a request
@@ -203,7 +203,7 @@ def candidates(m: H.Shape = SHAPE, *, blocks: int = 1, tiles: bool = True) -> li
     output bits committed, and its statement cap its staged k_log's."""
     return [Candidate(t.id, t.id, t.units * blocks, t.ands, t.out_bits, ands=t.ands, rows=t.rows,
                       commit_bits=t.out_bits if t.commit is None else t.commit, cap=t.cap,
-                      replay=t.id if t.chunks else "request", per_replay=1 if t.chunks else t.units // m.batch)
+                      grain=t.id if t.chunks else "request", n_rho=1 if t.chunks else t.units // m.batch)
             for t in families(m, tiles=tiles)]
 
 
@@ -225,8 +225,8 @@ def costs(m: H.Shape = SHAPE, blocks: int = 1) -> CostModel:
     return CostModel(templates=each, per_and=r.per_and, statement_fixed=r.statement_fixed,
                      statement_per_and=r.statement_per_and,
                      commit_per_bit=1 / (8 * COMMIT_BPS),
-                     replay={"request": ReplayDomain(m.batch * blocks, m.block_s / m.batch)}
-                     | {t.id: ReplayDomain(t.units * blocks, TILE_REQUESTS * m.block_s / m.batch)
+                     replay={"request": ReplayGrain(m.batch * blocks, m.block_s / m.batch)}
+                     | {t.id: ReplayGrain(t.units * blocks, TILE_REQUESTS * m.block_s / m.batch)
                         for t in families(m) if t.chunks},
                      shared=True, source="h200.Rates.fitted")
 
@@ -240,7 +240,7 @@ class _Memo(Stratum):
 
     - past 2^53 units m / (n - i) rounds to 1 at m = n - k, and `log1p(-1)` raises: there each term is core's
       `neg_log_ratio` of (n - i - m) / (n - i) in integers;
-    - past 2^14 draws core takes lgamma's differences, which at a year's 1e17 units keep no digit (lgamma(1e17) is
+    - past 2^14 samples core takes lgamma's differences, which at a year's 1e17 units keep no digit (lgamma(1e17) is
       4e18, its ulp 512): past 2^25 units this sums core's own log1p terms instead, pairwise in binary64."""
 
     def _risk(self, m: int) -> float:

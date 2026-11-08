@@ -1,5 +1,42 @@
-import Proofs.Accounting.TS.Session.Lanes.Guarantees
+module
+
+public import Proofs.Accounting.TS.Session.Lanes.Guarantees
+public import Proofs.Accounting.TS.Session.Group.Layer
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.TS.GroupSound
+import Proofs.Accounting.TS.Session.Lanes.KnownRead
+import Std.Tactic.BVDecide.Normalize.Bool
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # A leaf's 33 linked sessions realize one unit (the proof)
@@ -25,6 +62,8 @@ content (`knownOf`) is the `okKnown` form the group layer reads, its other known
 This module imports `Proofs.Flock.SoundAtBridge` (through `Proofs.Accounting.TS.GroupSound`), whose imports make `X`
 a token, so `Proofs/Accounting.lean` imports it.
 -/
+
+@[expose] public section
 
 namespace Accounting.TS.Lanes
 
@@ -189,7 +228,7 @@ theorem Accounting.TS.Lanes.knownOf_okKnown (P : LanePub) (salts : String → By
       ("pub", #[(PouwWindow.Lanes.pubRow P.salt P.position P.roots l.val, salts "pub")])], rfl⟩
 
 open Accounting.TS.Checked Accounting.TS.Lanes in
-/-- **A leaf's 33 linked C-Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
+/-- **A leaf's 33 linked Flock sessions realize one unit** (`Accounting.Guarantees.TS.LeafLanesSound`):
 `Accounting.TS.Group.group_soundAt` at `leafLayer` and its 33 statements, at the known content of the path's public
 inputs (`knownOf`, which names `o0`), the ports read in full at the layout (`PouwWindow.Lanes.readFull`), the leaf
 verifier's check of each file at `ownOf` (`roots`, `place`) and of the tile (`PouwWindow.Lanes.Tile.check`, its group

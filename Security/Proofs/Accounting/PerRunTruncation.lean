@@ -1,3 +1,13 @@
+module
+
+public import Definitions.Pouw.Basic.Prob
+import Mathlib.Data.Finset.Max
+import Mathlib.Data.Rat.Cast.Order
+import Mathlib.Tactic.NormNum.Abs
+import Mathlib.Tactic.NormNum.DivMod
+import Mathlib.Tactic.NormNum.OfScientific
+import Mathlib.Tactic.NormNum.Pow
+import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
 
 /-!
@@ -9,6 +19,8 @@ adversary within `b` that is accepted wherever `a` is accepted at cost at most `
 cost below `c` with probability at most `ε`: the coins are finite, so the costs below `c` have a largest, `b < c`, and
 the adversary truncated at `b` is accepted on every such run.
 -/
+
+@[expose] public section
 
 namespace Accounting
 

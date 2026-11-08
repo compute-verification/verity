@@ -1,6 +1,41 @@
-import Definitions.Accounting.Guarantees.BandwidthAudit
-import Proofs.Accounting.Prob
+module
+
+public import Definitions.Accounting.Guarantees.BandwidthAudit
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.ENatToNat
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.AuditRO
+import Proofs.Accounting.Prob
+import Proofs.Pouw.Prob
 
 /-!
 # Proof that the bandwidth audit's guarantee is a joint run's bandwidth guarantee
@@ -9,8 +44,10 @@ At a value of the other audits' coins, the game's ingress is covered by the band
 coin where the audit accepts with those reads (or a bound `B` on them on every bandwidth coin) below the certificate,
 the game's device is accepted with its ingress, plus `S_chip + c + G·b + λ`, short of `k·b` bits. AuditRO bounds that
 event in `ℝ≥0∞`, and with `N > 0` its bound is finite and is the certificate's error as a real number
-(`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins drawn `BandwidthOfAuditPerRun`.
+(`pr_short_le_error`). The sure bound gives `BandwidthOfAudit`, the reads at the coins flipped `BandwidthOfAuditPerRun`.
 -/
+
+@[expose] public section
 
 namespace Accounting.SecurityProofs
 

@@ -1,17 +1,23 @@
-import Proofs.Properties.Pouw.Grid
+module
+
+public import Proofs.Properties.Pouw.Grid
+public import Properties.Pouw
+import Std.Data.DTreeMap.Internal.Operations
 
 /-!
-# Proofs of the draw's properties (`Properties.Pouw`, "The draw")
+# Proofs of the sample's properties (`Properties.Pouw`, "The sample")
 
 `kPrime_least`, on Lean core: the fixed-point bounds `fixedPow` computes are sound (`fixedPow_sound`), so whatever they
 decide is the exact answer and `missAtMost` is the integer comparison `a^k·dd ≤ dn·b^k` (`missAtMost_eq`), which is
 `q^k ≤ δ` (`exact_iff`) and holds from some `k` on (`exact_mono`); the bisection finds the least such `k`
 (`leastAbove_spec`).
 
-`draw_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each draw's
+`draw_misses`, from `kPrime_least`: a set of `B` tiles holding a share `ε` of the work has `p·N ≤ B`, so each sample's
 miss factor `(N − B − i)/(N − i)` is in `[0, 1 − p]` and the miss chance is at most `(1 − p)^K′ ≤ δ` (`missProb_le`);
-when `K′ = N` the draw takes every tile and the chance is 0 (`missProb_zero`).
+when `K′ = N` the sample takes every tile and the chance is 0 (`missProb_zero`).
 -/
+
+@[expose] public section
 
 namespace Properties.Pouw.Window
 
@@ -242,7 +248,7 @@ theorem kPrime_least (eps δ : Rat) (credited n w : Int) (hd : KPrimeDomain eps 
     have := h4 j hj hjk
     rw [← Rat.not_le]; intro h'; rw [← hpred] at h'; simp_all
 
-/-- The draw's `i`-th factor: the chance that draw `i` misses too, given the first `i` missed. -/
+/-- The sample's `i`-th factor: the chance that sample `i` misses too, given the first `i` missed. -/
 abbrev missFactor (N B i : Nat) : Rat := ((N - B - i : Nat) : Rat) / ((N - i : Nat) : Rat)
 
 theorem natCast_sub {a b : Nat} (h : b ≤ a) : ((a - b : Nat) : Rat) = a - b := by

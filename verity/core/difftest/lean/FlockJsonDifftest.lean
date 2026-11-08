@@ -1,11 +1,15 @@
-import Difftest
-import Flock.JsonParse
+module
 
-/-! The C-Flock verifier's JSON parser, `Flock.JsonParse.parse`, held to its Python mirror
+public import Difftest
+public import Flock.JsonParse
+
+/-! The Flock verifier's JSON parser, `Flock.JsonParse.parse`, held to its Python mirror
 (`tests/test_flock_json_port.py`), and Lean core's `Lean.Json.parse`, which it reads as, held to the same mirror. Each
 reads the text of `{"text": T}` and answers `["ok", V]` or `["error", REASON]`: a refusal is an output, so its text is
-compared too, and `V` is the parsed value in canonical JSON with nothing lost (`enc`). C-Flock's package has no
+compared too, and `V` is the parsed value in canonical JSON with nothing lost (`enc`). Flock's package has no
 dependencies, so its port lives beside the harness. -/
+
+@[expose] public section
 
 namespace FlockJsonDifftest
 

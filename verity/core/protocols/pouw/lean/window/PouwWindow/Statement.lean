@@ -1,7 +1,9 @@
-import PouwWindow.Record
+module
+
+public import PouwWindow.Record
 
 /-!
-# The window statement (`window.py`, `window_problem`)
+# The execution phase statement (`window.py`, `window_problem`)
 
 L4 on the committed entry rows: `bound` rows, each an entry row of the layout; the calls, then one filler, then empty
 entries; the ranges tile [0, N) in order; a call's range is its tiles and the filler's holds the rest within its rows;
@@ -10,6 +12,10 @@ every call's -h3 root is the pass's; the calls' pass tiles are in order and disj
 rows' indices it holds a call's to its record's keep and the filler's to zero. A problem is a value (`some why`); a
 refusal (`.error`) is where Python raises `ValueError`, or would raise another error on input off its types.
 -/
+
+@[expose] public section
+set_option backward.privateInPublic true
+set_option backward.privateInPublic.warn false
 
 namespace PouwWindow
 
@@ -27,7 +33,7 @@ private def keepOf? (record : Json) (side : Side) : Except String (List Int) :=
   | some ks => .ok ks
   | none => .error s!"the record's keep[{PouwCommit.pyRepr side.name}] is not a list of integers"
 
-/-- `window_problem`: the window statement on the entry rows, or `none`. -/
+/-- `window_problem`: the execution phase statement on the entry rows, or `none`. -/
 def windowProblem (rows : List ByteArray) (work : Work) (bound : Int) (rootH3 : ByteArray) (bits : Nat := gridBits)
     (records : Option (List Json) := none) (indices : Option (List Json) := none) : Except String (Option String) := do
   if rootH3.size != 64 then throw "the pass's -h3 tile root is 64 bytes"

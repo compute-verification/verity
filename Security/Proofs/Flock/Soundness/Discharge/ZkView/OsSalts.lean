@@ -1,14 +1,16 @@
-import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
-import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
-import Proofs.Flock.Soundness.CROnly.Hiding
-import Proofs.Flock.Soundness.ZK.RealLeaves
-import Proofs.Flock.Soundness.ExecDraw
+module
+
+public import Proofs.Flock.Soundness.Discharge.ZkView.Leaf
+public import Proofs.Flock.Soundness.Discharge.PrivateCircuit.Defs
+public import Proofs.Flock.Soundness.CROnly.Hiding
+public import Proofs.Flock.Soundness.ZK.RealLeaves
+public import Proofs.Flock.Soundness.ExecDraw
 
 /-!
 # Salts from the operating system (A3)
 
-C-Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's
-`getrandom(2)`), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge theorems draw each
+Flock reads every hm96 leaf salt from the operating system, 192 bytes a leaf (`getrandom`, the kernel's
+`getrandom(2)`), as the recursive audit's firewall and a registrant do. The hiding and zero-knowledge theorems sample each
 salt uniformly from `Salt`, hm96-sha512's 1536 salt bits. The step between the two is A3 per test
 (`Assumptions.UniformRandomBytesTest`, `uniform/io-getrandombytes`: the operating system's bytes pass the test as
 independent uniform bytes do, up to `η`), taken at the one event each theorem bounds, and `η` enters its bound. No
@@ -33,6 +35,8 @@ No computational property of SHA-512 enters. hm96's hiding is the leftover hash 
 (`CROnly.sum_hidingGap_le`), which reads of the salt hash `c(y) = SHA-512(sp ‖ y)` only that it takes at most `2^512`
 values; SHA-512's collision resistance (`cr/sha-512`) enters binding, not hiding.
 -/
+
+@[expose] public section
 
 namespace FlockSoundness.Discharge.ZkView
 
@@ -107,14 +111,9 @@ noncomputable def saltEquiv : (Fin 192 → Fin 256) ≃ Salt :=
       simp only [Fintype.card_fun, Fintype.card_fin, ZMod.card]
       rw [show (256 : ℕ) = 2 ^ 8 by norm_num, ← pow_mul]⟩)
 
-theorem saltEquiv_apply (b : Fin 192 → Fin 256) : saltEquiv b = saltOfBytes b := rfl
-
 /-- **`n` salts from `n` streams of 192 bytes**, stream `i` salting leaf `i`. -/
 noncomputable def saltsEquiv (n : ℕ) : (Fin n → Fin 192 → Fin 256) ≃ (Fin n → Salt) :=
   Equiv.piCongrRight fun _ => saltEquiv
-
-theorem saltsEquiv_apply {n : ℕ} (b : Fin n → Fin 192 → Fin 256) (i : Fin n) :
-    saltsEquiv n b i = saltOfBytes (b i) := rfl
 
 /-! ## The OS's bytes as uniform values -/
 
