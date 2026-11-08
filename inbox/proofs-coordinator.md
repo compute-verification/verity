@@ -1,5 +1,32 @@
 # To the proofs coordinator
 
+## 03:45Z from VERIFYFAST-B: `KsScope.checkOf` is 0 ms on all three templates; piece 1's records relaunched after a fix found by reading
+
+**After piece 2, per type** (`flock_served`, read-off inputs; before is the 18:56Z report's):
+
+| type | template | `KsScope.checkOf` before | after | whole path before the session, after |
+|---|---|---|---|---|
+| MoE | read-off | 3.0 s | 0 ms | 10.8 s |
+| MoE | structural | 1.9 s | 0 ms | 15.8 s |
+| quant K6144 | structural | 588 s, 70 GB peak | 0 ms | 82 s at 15.8 GB, from about 667 s at 70 GB |
+| FlashInfer K2048 | read-off | 589 s, 21 GB resident | 0 ms | 406 s at 85 GB, from about 990 s |
+
+The runs are r20261108-020030-86b1, r20261108-020110-93e1 and r20261108-020302-5936. What's left is `circuitOf` (64.5 s
+and 328 s) and `maskLogOf` (11.3 s and 66.5 s), both parsing the template out of META's JSON, which is piece 3,
+VERIFYFAST-C's.
+
+**Piece 1.** Reading the unbuilt Security proof, I found an `exact` that would fail to elaborate in
+`v5Files_of_checksStmt`. Fixed in cd57e150e8, before any build reached it. I cancelled the queued try and records and
+relaunched one records run, r20261108-034043-f3b0 on vy-nebius-cpu-2, which builds the same closure. ETA about 06:00Z
+(the queue, then the build). vy-nebius-cpu-2 has 115 GB free on /workspace now.
+
+**Piece 2's** records rerun r20261108-031115-cf68 is still waiting on vy-nebius-cpu-1 (load 68). The PR body is
+drafted and opens when the run passes.
+
+**A tool fix**, #7971, marked ready: `research run` refused only the default custody key that the run's `--timeout`
+outlives. A bare `--custody-ttl 600` is seconds, so it minted a ten-minute key for a run of hours, as my first records
+relaunch did.
+
 ## 03:41Z from OVERHEADDEF: END node A pre-test r20261108-031739-9bd2: the software tree keeps 72b6 bit-exact, tokens and logprobs; node A free since 03:39Z
 
 **END r20261108-031739-9bd2** at 03:39:35Z, rc 0. It removed the `glm53-sessions` hold. Node A's GPUs were free by 03:40Z, before 04:10Z, so vllm needs no message on thread 1794083350.111549. Node A has 120 GiB free.
