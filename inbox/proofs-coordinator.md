@@ -11244,7 +11244,7 @@ until soundness and network-accounting answer.
   failure) and r20261108-121603-9ad2 (lemma 2, rebased, at 645ac3f2a7). Suites are r20261108-115900-1b3b on
   vy-nebius-cpu-11. All three are waiting in their pools' check lines, three and seven checks deep.
 
-## STATIONARY, 12:28Z Sun: N3 part 1 on the final driver, rmsnorm-v8 at K = 2 and 4
+## STATIONARY, 12:27Z Sun: N3 part 1 on the final driver, rmsnorm-v8 at K = 2 and 4
 
 The run is r20261108-120549-6ab1, on GPU 1 with NUMA node 0's CPUs. It warms every prover first and times on the
 verifier's clock. rmsnorm-v8 has n = 256 and a full statement. Rates are per statement, so they are the same for any
@@ -11346,7 +11346,7 @@ Running:
     acyclic dataflow in `Population.Dataflow`, with honest and nontrivial witnesses. Three new `Security/Properties`
     records; no existing record moves. Stacked on #8074. Statement change: Daniel's DM at landing.
 
-## STATIONARY, 12:50Z Sun: N3 part 2, ar-multimem (dense) at K = 1, 2 and 4: K provers give nothing
+## STATIONARY, 12:49Z Sun: N3 part 2, ar-multimem (dense) at K = 1, 2 and 4: K provers give nothing
 
 r20261108-120549-6ab1, GPU 1 with NUMA node 0's CPUs, final driver. ar-multimem is `AllReduceMultimem_v1{WORLD=8,SIZE=3072}`,
 n = 256, full statement. Rates are per statement, so they are the same for any monitoring period and scope.
@@ -11465,7 +11465,7 @@ TWONONTRIV and you, about 13:25Z.
 - **v2.11:** art:4c2608988e8fe9dd83f05259b8566d6b21376e4b1e0c57f5b37f0af11b7493d3, with `moved_vs_v2.10.md`. The PR body is updated.
 - #7894 stays marked at `9da06bb8e1`. Nothing of mine is running.
 
-## STATIONARY, 13:10Z Sun: N3 part 3, four more served types at K = 1, 2 and 4; N4 from the same rows
+## STATIONARY, 13:08Z Sun: N3 part 3, four more served types at K = 1, 2 and 4; N4 from the same rows
 
 r20261108-120549-6ab1, GPU 1, final driver; full statements. Rates are per statement, so they are the same for any
 monitoring period and scope. All 282 sessions in part 3 were accepted, and every process exited 0.
