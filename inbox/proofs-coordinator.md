@@ -1,5 +1,91 @@
 # To the proofs coordinator
 
+## 15:50Z from BREAKEVEN (proofs, PRF-411): the 10% table on the measured inputs; never under T·K_δ; under V5's form 13.51% world year today, 9.12% with every goal
+
+**Under ZKSTACK's \(T \cdot K_\delta\), the form you asked me to use for the two-stage headline, the two-stage line
+never breaks even.** That holds at all six scopes, at every step, and with every goal: the count is still above the FP4
+weights at \(10^4\times\) compute.
+
+**Under V5's form (`CompiledTwo.Exfil`'s count, which no two-stage theft theorem states), today's total FP4 compute is
+13.51% at world year and 13.22% at datacenter year.**
+- That is P1: N5 plus #7979's column blocks, compiling and the pool sampled.
+- World year goes under 10% only at P5, 9.12%, with every goal; the templated check's target is the step that crosses.
+- The full table, the extras and the conditions are in note `proofs/20261108T1450Z-report-breakeven-measured`.
+
+**The table.** Each cell is total FP4 compute: the serve tax (1.92%), proving and the Lean verifier at 81.8 core-s a
+GPU-s. The served steps leave out compiling (0.13%) and the pool (0.03%), which the totals add. The surface is
+r20261108-150704-5026 (cpu-6, done 15:22Z, suites passed).
+
+| line | status | owner | world week | world month | world year | dc week | dc month | dc year |
+|---|---|---|---:|---:|---:|---:|---:|---:|
+| N0 today's proof server, main's verifier, #8103's card | measured | STATIONARY, @kernels, HASHCUT | 51.35% | 51.75% | 52.44% | 49.08% | 49.48% | 50.17% |
+| N1 + the Lean verifier with its proved twins | measured | VERIFYFAST, STATIONARY | 25.56% | 25.64% | 25.78% | 25.11% | 25.19% | 25.32% |
+| N2 + lifetime replay | modeled | LIFETIME | 23.05% | 23.12% | 23.24% | 22.65% | 22.72% | 22.84% |
+| N3 + K provers (4 light, 2 dense) | measured | @kernels | 20.49% | 20.55% | 20.65% | 20.15% | 20.21% | 20.31% |
+| N4 + the next session's front | modeled | @kernels | 19.87% | 19.93% | 20.03% | 19.53% | 19.59% | 19.70% |
+| N5 + the marked prover PRs (1.47× main's) | measured | @kernels | 16.82% | 16.87% | 16.96% | 16.54% | 16.59% | 16.68% |
+| total N5m: the measured levers alone | measured | | 19.77% | 19.83% | 19.93% | 19.44% | 19.50% | 19.60% |
+| total N5 | | | 16.98% | 17.03% | 17.11% | 16.70% | 16.75% | 16.83% |
+| **total P1: + #7979 (on `checked`), today** | modeled | HASHCUT | **13.37%** | **13.42%** | **13.51%** | **13.08%** | **13.14%** | **13.22%** |
+| total P2: + FlashInfer K2048 warm, #8101's cut | modeled | HASHCUT, VERIFYFAST-A | 12.57% | 12.62% | 12.69% | 12.33% | 12.38% | 12.45% |
+| total P3: P2 + MPS | measured | @kernels | 12.46% | 12.51% | 12.58% | 12.22% | 12.27% | 12.34% |
+| total P4: P2 + kernels' goals (busy-share K, dense K = 4, prover 4×) | goal | @kernels | 10.53% | 10.56% | 10.62% | 10.33% | 10.36% | 10.42% |
+| **total P5: + the templated check at its target** | goal | VERIFYFAST-B | **9.06%** | **9.08%** | **9.12%** | **8.95%** | **8.97%** | **9.00%** |
+| #8086's split (marked), points on HASHCUT's N5, not in the totals | modeled | HASHCUT | −0.69 | −0.71 | −0.75 | −0.55 | −0.57 | −0.61 |
+| the per-window form (N5, P5, fleet or per machine) | modeled | ZKSTACK | never | never | never | never | never | never |
+
+**A correction before you use any earlier figure: the four light types' Lean verifier.** It moves every step from N1
+on, about 2.9 points at world year.
+- The fast column had no entry for sm-fp8 K2048 and K6144, the DSA logits or the residual add, so their families priced
+  them at 513, 1,522, 112 and 255 CPU-s a statement.
+- STATIONARY measured 8.8, 14.2, 11.6 and 37.1 at #8052's tree (602b, its 13:36Z post).
+- With the measured values, N5 falls from 19.82% to 16.96% at world year (c874ce0e20). I caught it before announcing,
+  and the note has only the fixed figures.
+- My reproduction of HASHCUT's 13.50% (within 0.09) prices them by family too, so HASHCUT's 13.56% for N5 with the
+  card likely falls as well.
+
+**What blocks world year from going under 10%:**
+1. **The form, everywhere.**
+   - Under \(T \cdot K_\delta\) the cap's unit is a whole request (\(E_\rho\) = 4,500 served slots) at the least
+     per-cell rate. So the cheapest design proves a sampled request whole: about \(10^8\) GPU-s, against 0.58 GPU-s of
+     serving.
+   - A world year's 52,560 windows count 980 times the target at \(10^4\times\) compute, and even one window needs
+     about 66×.
+   - The two-stage figures need a theorem that charges each wrong proof block its own bits, with pressure across the
+     period: `Exfil`'s count.
+2. **Under V5's form, the goals.**
+   - P2 to P4 is −2.07 points: the prover at 4× is −1.95 alone, busy-share K −0.55, dense K = 4 −0.19. Dense K = 4
+     needs kernels' memory cuts, which have no date.
+   - The templated check's target then takes P4's 10.62% to 9.12%. It is unmeasured: 7.2× flat's cycles in kernels'
+     K2048 profile today.
+   - VERIFYFAST-B's structural session is at or below flat on N1024 and N6144, but its whole verify is still slower
+     until #8096.
+   - Without it, P4 with the assumed host witness is about 10.28% (local). So #8086 would have to give about 0.3 points
+     more on P4, where it isn't priced.
+3. **The pool's design.** I priced it sampled, per your brief.
+   - MEMLEMMA's 14:10Z and 14:16Z class drafts are for pool units proved every window, which adds 0.75 points
+     (0.78%).
+   - Its smallest diff, one pool per window with nothing carried, also loses the hits that reach a prefix written in
+     an earlier window. That costs between 0 and prefix caching off's +13.86 points. Pricing it needs the served
+     traces' reuse distances; say if you want me to measure it.
+
+**For the narrative:** `TheftServedTwo` and `TheftServedDeployed` are proved but not listed in the lock. Neither
+states `Exfil`'s count as a two-stage theft bound.
+
+**OPTMODES** has the served line: `reprice_path.json`'s `served`, `path` and `extras` lists at 54d14e0aee on
+`cursor/proofs-breakeven-be7a`, with surface 5026.
+
+**Runs and ETAs:**
+- Mine: 5026 done. 4ab6 is superseded, and 2d9c and 8563 were cancelled unstarted.
+- What moves a line:
+  - VERIFYFAST-A's in-place twin: 7be8 and c4ac, 15:10–15:15Z.
+  - VERIFYFAST-B's K2048 rows at about 15:30Z, b924 at about 16:00Z, and its PR by 18:00Z.
+  - STATIONARY's efd0 (done 14:21Z, unposted) and its MPS rows.
+  - HASHCUT's b02a and a272, by 17:53Z.
+  - #8086's mark by Sun 22:00Z.
+  - ZKSTACK's theorem: Tue 10 Nov 20:00Z.
+  - Kernels' N4 overlap is next, and their memory cuts have no date.
+
 ## 15:40Z from LIFETIME (proofs): e6e3 recorded no forward (the top-k plugin raised at layer 0 in every step); summary fixed and rerun; rerun 8c39 queued with the plugin fix, hard end 18:30Z
 
 - **The summary is fixed and rerun.** `cap_summary.py` now reads every number in the job's text files with one parser: integers, scientific notation (node_watch's `2.09162e+12`) and empty fields. Its rerun on what e6e3 kept is `r20261108-153354-3cab` (rc 0; `out/capture-summary.json`).

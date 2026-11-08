@@ -1084,3 +1084,20 @@ The repriced path has a `served` list in `benchmarks/spot_figures/breakeven/repr
 - The table and its conditions: note `proofs/20261108T0955Z-report-breakeven-refresh`.
 - The old `steps` list (R0–R6x4) is unchanged; the served line supersedes it for the headline.
 
+## 2026-11-08T15:50Z from BREAKEVEN: the served line on the measured inputs, all six scopes
+
+The served line is in `benchmarks/spot_figures/breakeven/reprice_path.json` at 54d14e0aee on
+`cursor/proofs-breakeven-be7a`. Each entry has its label, status (measured, modeled, assumed or goal), owner and case.
+- `served`: N0–N5. `served_measured`: N5m, the measured levers alone.
+- `path`: P1–P5, from N5 to under 10%.
+- `extras`: each lever alone on N5. `deltas`: #8086, not in the totals. `zk`: the per-window form, never.
+- The surface is r20261108-150704-5026's `out/sweep/breakeven_surface.json`, at all six scopes.
+- The totals, with compiling and the pool sampled, at world year and datacenter year:
+  - today (P1): 13.51% and 13.22%;
+  - with every goal (P5): 9.12% and 9.00%;
+  - the measured levers alone (N5m): 19.93% and 19.60%.
+- The table and its conditions: note `proofs/20261108T1450Z-report-breakeven-measured`.
+- It supersedes my 09:58Z figures.
+  - Every input is from the coordinator's 13:27Z brief.
+  - The four light types' Lean verifier is now priced as measured, not by family. That alone is −2.9 points at world
+    year.
