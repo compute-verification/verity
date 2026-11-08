@@ -16,8 +16,8 @@ use rayon::prelude::*;
 use crate::{
     LiveChallenger,
     chunk::comp,
-    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, decode_with, link_cb, prove_params, sched, statics_for},
-    ir_block::IrUnitNet,
+    gpu::{ChunkParams, ProveParams, Rounds, csc_from_rows, csc_of, csr, decode_with, link_cb, prove_params, sched, statics_for},
+    ir_block::{IrUnitNet, RowRead},
     circuit::{Kind, Stmt},
 };
 
@@ -743,20 +743,14 @@ pub struct UnitSched {
     pub order: Vec<u32>,
 }
 
-/// `rows` as CSR: each row's offset into the concatenated columns, then the columns.
-pub fn csr(rows: &[Vec<usize>]) -> (Vec<u32>, Vec<u32>) {
-    let mut off = vec![0u32];
-    let mut col = Vec::new();
-    for r in rows {
-        col.extend(r.iter().map(|&c| c as u32));
-        off.push(col.len() as u32);
-    }
-    (off, col)
-}
-
 /// The unit's schedule; a cut unit's (a second input group: its late rows, the cut words the tail computes; a second output
 /// group: its cut output rows) in two phases: the rows that read no late row, then the rest.
 pub fn schedule(net: &IrUnitNet) -> UnitSched {
+    schedule_of(net, &net.a, &net.b)
+}
+
+/// [`schedule`] of `net`'s layout with its rows `a` and `b` read through [`RowRead`].
+fn schedule_of<R: RowRead + ?Sized>(net: &IrUnitNet, a: &R, b: &R) -> UnitSched {
     let (u, first, cpos) = (net.useful, net.in_words * 128, net.const_pos);
     let rows_of = |g: &crate::ir_block::Group| -> Vec<u32> { (0..g.bits.iter().sum::<usize>()).map(|j| (g.col * 128 + j) as u32).collect() };
     let mut late_rows: Vec<u32> = net.in_groups.get(1).map(rows_of).unwrap_or_default();
@@ -767,7 +761,7 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
     }
     for i in first..u {
         if i != cpos {
-            late[i] = net.a[i].iter().chain(&net.b[i]).any(|&c| c != i && c != cpos && late[c]);
+            late[i] = a.row_cols(i).chain(b.row_cols(i)).any(|c| c != i && c != cpos && late[c]);
         }
     }
     if cut_rows.iter().any(|&r| late[r as usize]) {
@@ -787,7 +781,7 @@ pub fn schedule(net: &IrUnitNet) -> UnitSched {
             if i == cpos || late[i] != phase {
                 continue;
             }
-            let l = 1 + net.a[i].iter().chain(&net.b[i]).filter(|&&c| c != i && c != cpos && late[c] == phase && c >= first).map(|&c| level[c]).max().unwrap_or(0);
+            let l = 1 + a.row_cols(i).chain(b.row_cols(i)).filter(|&c| c != i && c != cpos && late[c] == phase && c >= first).map(|c| level[c]).max().unwrap_or(0);
             level[i] = l;
             max = max.max(l);
         }
@@ -1246,5 +1240,78 @@ mod tests {
         assert_eq!((off.clone(), col.clone()), (vec![0, 2, 2, 5], vec![3, 1, 0, 5, 2]));
         let back: Vec<Vec<usize>> = off.windows(2).map(|w| col[w[0] as usize..w[1] as usize].iter().map(|&c| c as usize).collect()).collect();
         assert_eq!(back, rows);
+    }
+
+    fn next(s: &mut u64, m: usize) -> usize {
+        *s ^= *s << 13;
+        *s ^= *s >> 7;
+        *s ^= *s << 17;
+        (*s % m as u64) as usize
+    }
+
+    /// One side's rows of a unit: input rows `[i]` or empty, the constant last, and every other row a few columns before it or
+    /// the constant, repeats and empty rows among them, some reading their own column (an assertion row). A row before `until`
+    /// reads no column in `avoid`.
+    fn random_side(s: &mut u64, first: usize, useful: usize, avoid: std::ops::Range<usize>, until: usize) -> Vec<Vec<usize>> {
+        let cp = useful - 1;
+        (0..useful)
+            .map(|i| {
+                if i == cp {
+                    return vec![cp];
+                }
+                if i < first {
+                    return if next(s, 5) == 0 { vec![] } else { vec![i] };
+                }
+                let n = next(s, 6);
+                let mut r: Vec<usize> = (0..n)
+                    .map(|_| match next(s, 9) {
+                        0 => cp,
+                        _ => match next(s, i) {
+                            c if i < until && avoid.contains(&c) => c - avoid.start,
+                            c => c,
+                        },
+                    })
+                    .collect();
+                if n > 1 && next(s, 3) == 0 {
+                    r.push(r[0]);
+                }
+                if next(s, 7) == 0 {
+                    r.push(i);
+                }
+                r
+            })
+            .collect()
+    }
+
+    #[test]
+    fn device_builders_read_rows_alike() {
+        use crate::ir_block::{Group, Rows};
+        let g = |col: usize| Group { col, words: 1, bits: vec![128] };
+        // a one-phase unit, and a cut unit (late input rows 128..256, cut output rows 256..384, which read no late row)
+        for (seed, useful, ins, outs) in [(3u64, 600usize, vec![g(0)], vec![g(4)]), (0x51ed, 5000, vec![g(0), g(1)], vec![g(30), g(2)])] {
+            let (mut s, first, k) = (seed, ins.len() * 128, useful.next_power_of_two().max(128));
+            let a = random_side(&mut s, first, useful, 128..256, 1000);
+            let b = random_side(&mut s, first, useful, 128..256, 1000);
+            let (ra, rb) = (Rows::from_vecs(&a), Rows::from_vecs(&b));
+            let pad = |rows: &Vec<Vec<usize>>| {
+                let mut r = rows.clone();
+                r.resize(k, Vec::new());
+                SparseBinaryMatrix { num_rows: k, num_cols: k, rows: r.into() }
+            };
+            for (v, r) in [(&a, &ra), (&b, &rb)] {
+                assert_eq!(csc_of(r, k), csc_of(v, k), "net {seed}: the CSC from Rows");
+                assert_eq!(csc_of(v, k), csc_from_rows(&pad(v)), "net {seed}: the CSC of the rows padded to the slot");
+                assert_eq!(csr(r), csr(v), "net {seed}: the CSR from Rows");
+            }
+            let in_words = ins.len();
+            let net = IrUnitNet { name: "t".into(), useful, const_pos: useful - 1, in_groups: ins, out_groups: outs, in_words,
+                                  out_cols: vec![], a, b, unit_log: k.trailing_zeros() as usize, sha256: [0; 32], leaves: None,
+                                  cut: None, order: None, flat: Default::default() };
+            let (x, y) = (schedule(&net), schedule_of(&net, &ra, &rb));
+            assert_eq!((x.levels0, &x.late_rows, &x.cut_rows, &x.level_off, &x.order), (y.levels0, &y.late_rows, &y.cut_rows, &y.level_off, &y.order),
+                       "net {seed}: the schedule from Rows");
+            assert!(x.level_off.len() > 3, "net {seed}: a schedule of under three levels");
+            assert_eq!(x.cut_rows.is_empty(), net.in_groups.len() == 1, "net {seed}: the cut unit's schedule is not two-phase");
+        }
     }
 }
