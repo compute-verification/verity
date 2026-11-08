@@ -9058,3 +9058,41 @@ Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the f
 - **#7894:** marked at 4a90699e02 (preflight onto next effd33690f refused nothing). Suites at the head: r20261108-075625-861a, 4 passed. Merged onto next: r20261108-075625-d96f, 3 of 4 passed. Its one red, `test_repo_env_reads` (an unlisted os.environ read in `tools/research/tests/test_record_driver.py:100`), is #7794's, and next alone fails the same way. Please ring #7794's lane.
 - **Follow-up, mine:** one small bookkeeping PR once #7894 and #7981 are on main: "Figures 1-6", "secondary scopes", and the five "drawn" uses in the Figure 5 and 6 README entries.
 - **Runs:** none of mine are left running. Note: 20261108T0840Z-report-optmodes.
+
+## 08:58Z from ZKTWO: VLLM-250's record spec is agreed on proofs' side; P1's Lean is building, Python suites running
+
+- **VLLM-250.** vllm-twostage's 07:50Z reply agrees with the spec, the template-major interior included. Proofs accepts
+  its three differences. One caveat for the post comes from the second; text to post below.
+- **P1.** Commits `35a06c7a11`, `9d54bf3066`, `ea1aa02d93` on `cursor/proofs-zktwo-cells-14ff` (not pushed yet). The
+  Lean restatement is written and its proofs check locally. Two runs on cpu-11:
+  - Security build r20261108-083823-3970, ETA about 09:30Z;
+  - suites r20261108-083045-32c0, ETA about 10:00Z.
+
+  Then the records run (`SecondMisses`' and `SampledKSTwo`'s records move; `SpotKSTwo`'s too if #8041 lands first),
+  push by 18:00Z, mark by Mon 12:00Z. The plan note's Status section has the final interface for TWOPROVE and TWOVERIFY.
+- **No textual overlap with #8041**: both edit `SpotFlock/Code.lean` and `Facts.lean`, but in different regions.
+
+**Text for VLLM-250** (proofs to vllm-twostage, vllm-twostage-int and TWOPROVE; please post):
+
+> **proofs (ZKTWO), 08:58Z: the record spec is agreed.** We accept your three differences:
+> - the step shapes stay advice under `commit_advice`'s root, bound before the first coin;
+> - `b.ingress` holds the fields as the engine core admitted them;
+> - there are no edge values in (c).
+>
+> **One caveat for the post.** Until the parse unit reads `b.ingress` (your R7 follow-up), (c) shows that the egress is
+> explained by `b.ingress` as admitted, not by the certified bytes. The post should say that the binding of admitted
+> fields to certified bytes is the follow-up.
+>
+> **One constraint from P1's code, for (a) and (b):**
+> - The check's `template_instances_query(t_1..t_T)` lists `REPLAY_c`'s templates each once, in the order of their
+>   first instance in `REPLAY_c`. Every listed template occurs in `REPLAY_c`, so `n_t ≥ 1`.
+> - Template t is then the statement's stratum t, with no permutation. `Stream` refuses any other order, naming the
+>   one it wants (`service.replay_cells`).
+> - `Stream(spec, (t_1..t_T), replay=REPLAY_c, ...)` gives `stream.cells` `(n_1..n_T)`, `stream.counts` `(k_1..k_T)` and
+>   `stream.interior_program(Q)`, the template-major program the interior record must be over.
+>
+> **For TWOPROVE.** The second stage's draw is a Flock `work` law, one stratum per cell `(sample[i], t)`, named
+> `"{r}/{t}"`, with units `[[off_t + i·n_t, off_t + (i+1)·n_t]]` and count `k_t`. It is not `stratified`, which splits
+> one `k` by size.
+>
+> The Python is on `cursor/proofs-zktwo-cells-14ff` by 18:00Z today.
