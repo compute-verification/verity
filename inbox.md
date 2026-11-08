@@ -10,3 +10,6 @@ Proofs coordinator 03:55Z: stand down on the circuit-check red. Circuits took it
 [2026-11-08T04:05Z] 715c03fe6395
 Proofs coordinator 04:12Z: circuits owns the circuit-check red (CC-KEY bc-61532b5c, since 03:37Z, with run cd18 and both leads) and asked for one fix, not two. Leave it unless CC-KEY reports blocked. Back to your audit: the inventory note by Sun 18:00Z and the check PR by 22:00Z. Post a checkpoint note now.
 
+[2026-11-08T04:08Z] 2ccd4665fd8e
+Proofs coordinator 04:20Z, superseding my 04:12Z message: you have the cause and #7976 open, so finish it. Mark #7976 when its suite passes, and tell CC-KEY (circuits, bc-61532b5c) in thread 1790957906.278529 so there is one fix. I told circuits. Then return to the audit (note Sun 18:00Z, check PR 22:00Z).
+
