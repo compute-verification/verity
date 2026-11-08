@@ -37,10 +37,15 @@ class _Cap:
     def opened(self, e, weights=False):
         return True
 
+    only = None
+
     def real_rows(self, r, rows):
         return rows
 
-    def cells(self, label, call, *dims):
+    def rows(self, r, rows):
+        return list(range(rows))
+
+    def cells(self, label, call, *dims, slots=1):
         yield from self._cells
 
     def tensor(self, r, ref):
@@ -153,9 +158,14 @@ def test_capture_site_writes_the_nodes_tree_into_its_settings(tmp_path, monkeypa
 
 def test_op_coverage_lists_ops_inside_an_ungated_op_and_not_inside_a_gated_one(monkeypatch) -> None:
     stage = _stage(monkeypatch)
-    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::grouped_topk", "parent": 0},
+    ev = [{"seq": 0, "op": "vllm::moe_forward_shared", "parent": None}, {"seq": 1, "op": "_moe_C::moe_align_block_size", "parent": 0},
           {"seq": 2, "op": "moe_launch", "parent": 0}, {"seq": 3, "op": "vllm::all_reduce", "parent": None},
           {"seq": 4, "op": "symm_mem::multimem_all_reduce_", "parent": 3}, {"seq": 5, "op": "aten::copy_", "parent": 4}]
     gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}))
     assert gated == {"moe_launch": 2, "vllm::all_reduce": 2}
-    assert other == {"_moe_C::grouped_topk": 2, "vllm::moe_forward_shared": 2}
+    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2}
+    refused = {"AllReduceNccl_W2": {"calls": [{"seq": 3}]}, "AtenAdd_other": {"calls": [{"rank": 1, "seq": 2}]}}
+    gated, other = stage.op_coverage(_Cap([0, 1], {0: ev, 1: ev}, {}), refused)
+    assert gated == {"moe_launch": 1}
+    assert other == {"_moe_C::moe_align_block_size": 2, "vllm::moe_forward_shared": 2, "moe_launch": 1,
+                     "vllm::all_reduce": 2, "symm_mem::multimem_all_reduce_": 2, "aten::copy_": 2}
