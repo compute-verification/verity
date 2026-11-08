@@ -1,5 +1,28 @@
 # To the proofs coordinator
 
+## 16:33Z from OVERHEADDEF: 72b6 replayed whole and bit-exact cross-machine on vy-glm53-h8 (d60d); c343's whole block running there (a1ee, ETA about 17:20Z)
+
+- **Second block (your item 2): r20261108-160939-d60d replayed 72b6's whole block bit-exact, cross-machine.** It ran from an empty engine with every hook on, on vy-glm53-h8; the block was served on node A. No served long-context block exists before vllm's 19:45Z serves, so 72b6 is the best-covered one.
+  - Against node A's served record, 0 of 1,326 steps, 0 of 89,819 rows and 0 of 304 requests differ. Tokens and logprobs are equal for every request.
+  - At step 163 (PIECEWISE, 369 tokens), on all 8 ranks, the recorded graph-off forward equals the graph: `differ_words` 0, no errors, one root.
+  - **Step 163 per op, node A (1418) against h8 (d60d), rank 0.** This covers 3,208 top-level ops, with 6,128 hashed inputs and 5,020 hashed outputs.
+    - Every value an op reads is equal on the two machines, except uninitialized buffers hashed before their call: `new_empty`'s results, `bmm`'s `out`, and `fused_norm_rope`'s `kv_c_out` and `k_pe_out`.
+    - One recorded output differs: `_C::cooperative_topk`'s raw selection, in 21 of 78 layers. That is the fast kernel's atomic order, which `dsa_topk` rewrites to canonical form before attention reads it. No op reads the raw bytes, and attention's `page_table` and `block_table` are equal on the two machines.
+  - **Step 1,321 (FULL graph, 1 token) lost its recorded forward on all 8 ranks; the served path was unaffected.** The cause was a recorder bug: `capture.py` hashed tensors via `contiguous().view(uint8)`, which raises on a one-element view whose stride isn't 1. My fused emulation makes one at 1 token. The fix and a test are in a513f1adc5. **r20261108-162942-b723** reruns 72b6 with it, queued behind a1ee; ETA about 17:45Z.
+- **Why h8 differed before.** On a node without NVLink multicast, four all-reduce routes differ from node A's, and `tree_allreduce.py` now restores all four.
+  - Symmetric-memory and NCCL all-reduces are summed in node A's tree.
+  - The custom all-reduce gets node A's 256 KB cap back.
+  - FlashInfer's plain all-reduce, which falls back to a trtllm workspace, is summed as mnnvl sums it.
+  - **a50f's step-0 difference was vLLM's fused all-reduce + RMSNorm** (`fuse_allreduce_rms`, steps of at most 42 tokens at TP8), which FlashInfer ran on trtllm here. `fused_from_mnnvl` now computes it as mnnvl's one-shot and two-shot kernels do: the launch grid, the warp and block butterflies, and the MUFU scale. These were read from FlashInfer 0.6.18's source and node A's SASS.
+  - My first try, r20261108-155713-d99a, never installed the wrapper, because FlashInfer's `@flashinfer_api` already sets `__wrapped__`. I cancelled it at 16:09Z, fixed it in 8e2221cd14, and relaunched as d60d.
+- **c343 (your item 1): r20261108-162707-a1ee replays c343's whole block, cross-machine, with every fix but the recorder's.** That fix can't matter at step 5,833, which has 342 tokens.
+  - Step 5,833, FA3's non-splitting path, is captured again.
+  - It is held to served tokens only, because c343 kept no served logprobs.
+  - Its replay started 16:31Z; ETA about 17:20Z.
+  - 974c's earlier step-5,833 capture on h8 (differ_words 0 on all 8 ranks, 78 of 156 FA3 calls non-splitting) stands, preserved in r20261108-155352-b97a. It ran before the fused fix, so it checks the hooks only within one engine, not against the served values.
+- **For main.** Branch `cursor/proofs-tree-allreduce-routes-5c03` at 8c9a78fa45 has the four routes and `capture.py`'s stride fix. All 52 `benchmarks/spot_proved` tests pass locally; the new ones check the fused emulation against a thread-by-thread model of the kernels. Ruff is clean. No PR is open yet; I'll mark it ready once b723 confirms step 1,321.
+- **Deletion ask.** h8 has 95 GB free. The step captures of r20261108-151550-a50f (30 GB, before the fused fix) and r20261108-155713-d99a (19 GB, wrapper not installed) are superseded. Their run records stay. May I remove those two capture directories through retention, approved by @proofs?
+
 ## 15:50Z from BREAKEVEN (proofs, PRF-411): the 10% table on the measured inputs; never under T·K_δ; under V5's form 13.51% world year today, 9.12% with every goal
 
 **Under ZKSTACK's \(T \cdot K_\delta\), the form you asked me to use for the two-stage headline, the two-stage line
