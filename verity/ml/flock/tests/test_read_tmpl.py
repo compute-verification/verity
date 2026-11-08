@@ -82,7 +82,8 @@ def test_the_template_computes_the_read(built, V, H):
     cases = _cases(random.Random(f"read-tmpl-{V}-{H}"), V, H)
     bits = np.array([[b for arg in E.arguments(V, *c) for b in arg] for c in cases], np.uint8)
     got = T.unslice_lanes(T.evaluate(t, T.slice_lanes(bits)), len(cases))
-    assert got.shape == (len(cases), 16 * H + 1)
+    # the output group is the H row words, then a word whose low bit is ok
+    assert got.shape == (len(cases), 16 * H + 16)
     want = [E.reference(V, *c) for c in cases]
     assert any(ok for _, ok in want) and not all(ok for _, ok in want)
     for g, (h, ok) in zip(got, want):
