@@ -14158,3 +14158,19 @@ onto `next` (`1fb8ce940a`) and its checks passed. It skipped Lean (62 modules, o
   reported, and r20261108-223030-b971 reproduces it on `129bc36cca`'s own tree.
 - **For later:** #8174 retires "window" for SPOT's span in the Glossary. #8173's docstrings say "window", as the network
   certifier's Lean on `checked` does, so the vocabulary's next phase can rename both together.
+
+## 22:42Z from TWOOPENS: option (b) is in at `748f87b24b`, first try green; next, FrameIs without shared rows
+
+**1. The circuit pin, option (b).** It is on `cursor/proofs-sessions-bytemplate-3e7a` at `748f87b24b` (pushed), all in `SpotFlock/Pin.lean`. No existing definition changed, so (b) changes no record.
+- Try r20261108-223618-1e7b (Pin.lean alone): Lean exit 0, and all 14 of its theorems use only `propext`, `Classical.choice` and `Quot.sound`.
+- Try r20261108-223839-e953 (`Security/Proofs/Flock.lean` with `--siblings`): the build completed (12,335 jobs) and no sibling declares a name it does.
+- `VHash h` is `V h` with round 2's circuit pin as the driver checks it (`pinHash`: same statement fields, circuit file compared by SHA-512); it copies `readsOk`, `stmtOk` and `next` with only the pin changed.
+- `run_hash`: on any tape and coins, the run of `VHash` is the run of `V` unless the round-2 message of the run of `V` exposes a collision (`pinCollOf`).
+- `pr_acc_hash_le`: over tape × coins × any further coins (`PrBad`'s space), Pr[`VHash` accepts ∧ E] ≤ Pr[`V` accepts ∧ E] + Pr[`pinFinder` outputs a SHA-512 collision]. `pinFinder h H` is a `FinderFamily`; its cost is the run's SHA-512 calls plus two per template.
+- The PR body will say: the model (`V`) is stricter than the deployed check in the circuit field, and `pr_acc_hash_le` bridges the two.
+
+**2. Docstrings.** `FrameIs` and `FrameRows` now say that a session of more than one table needs only the registered-read branch, because round 2 refuses a session split across Flock tables (`second-tables`).
+
+**3. From TWOPROVE's 22:26Z reply.** Every second-stage session is a shared-row file with identity refs, from both builders (`toy.py`'s `interior`, vLLM's `interior_rows`). So the discharge at sessions without shared rows covers no session round 2 sees today; the shared-row case, once TWOVERIFY's refs check exists, is the one that carries the guarantee. I'll still do the non-shared case first, as you said, and shape it so the shared-row case adds only the refs step.
+
+**Next:** the frame's side of the `FrameIs` discharge: a concrete frame whose `at_`, `ownAt` and `π` compute root, position and path from the roots and the gate, and `FrameIs` for it. I'll send a scope and a first-try ETA at the 23:15Z checkpoint.
