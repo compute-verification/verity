@@ -296,9 +296,8 @@ def DsaTopKMask(B, S, scores):
     return B.batch(DsaTopKAtLeast, scores, idx, key, at, axes=(0, 0, None, None))
 
 
-@functools.lru_cache(maxsize=8)
-def _counted_theta(scores: tuple, n: int, TOPK: int) -> int:
-    return heapq.nlargest(TOPK, (ext(x, j) if j < n else 0 for j, x in enumerate(scores)))[-1]
+def _counted_theta(scores, n: int, TOPK: int) -> int:
+    return heapq.nlargest(TOPK, (ext(x & M32, j) if j < n else 0 for j, x in enumerate(scores)))[-1]
 
 
 def counted_threshold(N: int, TOPK: int) -> tuple[PrimitiveDefinition, PrimitiveDefinition]:
@@ -309,10 +308,10 @@ def counted_threshold(N: int, TOPK: int) -> tuple[PrimitiveDefinition, Primitive
     p = _COUNTED.get((N, TOPK))
     if p is None:
         def key(*w: int, _N=N, _K=TOPK) -> int:
-            return _counted_theta(tuple(x & M32 for x in w[:_N]), w[_N] & M32, _K) >> 32
+            return _counted_theta(w[:_N], w[_N] & M32, _K) >> 32
 
         def at(*w: int, _N=N, _K=TOPK) -> int:
-            return M32 - (_counted_theta(tuple(x & M32 for x in w[:_N]), w[_N] & M32, _K) & M32)
+            return M32 - (_counted_theta(w[:_N], w[_N] & M32, _K) & M32)
 
         p = _COUNTED[(N, TOPK)] = tuple(
             PrimitiveDefinition(f"DsaTopKCountedThreshold{part}{N}x{TOPK}", 1, (("scores", Array(N, F32)), ("n", I32)), I32, ev,
