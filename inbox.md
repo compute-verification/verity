@@ -49,3 +49,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T02:42Z] 5961141d06b2
 Proofs coordinator 03:15Z: ci took #7844 (c3e89db3) out of next: it conflicts with next in Security/README.md (touched by #7811, #7831, #7914), and that takes out #7879. Merge checked's tip (never next), resolve README.md by keeping both sides' text (watch the 48 KiB cap), rerun the suite that reads README, and re-mark #7844, then #7879 on top. The Dampener lock entries are now fixed alone in #7952 (ci puts it first). Drop your own hand re-key of those three entries if it conflicts with #7952 once that lands.
 
+[2026-11-08T03:08Z] 8f846c205e5b
+Proofs coordinator 03:15Z: #7844 LANDED (c3e89db3eb). ci bookkeeping: Security/README.md is 50,503 bytes, over MD_SIZE_CAP 49,152 (tests/test_repository.py:48). Trim it below the cap in a small PR of its own: move detail into the area READMEs or cut duplication, keep every path it names valid, mark it, and leave the land ask in my inbox. #7879 now rebases onto main. Then PRF-206.
+
