@@ -1,0 +1,281 @@
+"""The carried pool's cut at each window edge, under vLLM's engine core: `register`, a vLLM general plugin, wraps vLLM's V1
+``Scheduler`` (the ``AsyncScheduler`` inherits it) so that at each edge the scheduler
+
+1. **holds**: it schedules nothing until no step is in flight (the async step's outputs are processed and delivered) and
+   every open request's outputs are released (`Cut.released`, its ``e``), for at most ``hold_s``;
+2. **cuts**: it preempts every running request in vLLM's own victim order (``running.pop()``, then
+   ``Scheduler._preempt_request`` with ``drop_stale_output``, as ``reset_prefix_cache(reset_running_requests=True)`` does
+   without resetting the cache), so no block is held and each request continues in the next window as an arrival of its
+   prompt and its ``e`` outputs, hitting its own cached blocks;
+3. **requeues** every waiting request in release order: the order the scheduler received them (``add_request``), which
+   under the certified tick (`tick_plugin`, whose gate adds requests in release order) is the release order;
+4. keeps the prefix cache, and records the edge (`Cut.edges`, and a line of ``cut.PID.jsonl`` under ``log``).
+
+The edge's step then schedules window w + 1's first step. With ``VERITY_POOL_ROW`` (the keys' token width CTW) too, the
+scheduler's blocks are keyed by BlockKey_v1 from its start, and each cut exports the pool's row and root
+(`engine.pool_row.export`) under ``log``'s ``pool_rows/``.
+
+Each edge's record holds its index, the scheduler step it falls before, how long it held (``held_s``, the flush and the
+wait for ``e``) over how many empty steps, the cut's and the export's time, and the cut set in preemption order: each
+request's id, release number, prompt length P, outputs n and ``e``, its computed tokens and blocks before the cut, and
+``a_O``, the outputs it emitted in the window (n less the ``e`` it carried in). A request cut with n > e (the hold timed
+out) is listed in ``over``; its continuation carries n outputs, which the network certifier has not released. A request
+whose sampling reads its own outputs (frequency or presence penalties, ``min_tokens``, logits processors) is listed in
+``reads_outputs``: vLLM's own preemption keeps its outputs as outputs, so it serves as uncut, but a Definition that reads
+the continuation as a prompt of P + e tokens doesn't compute its draws.
+
+``VERITY_CUT`` is a JSON object: ``every_s`` (an edge every so many seconds of the engine core's clock from its first
+step) or ``every_steps`` (every so many scheduler steps), ``hold_s`` (30 by default) and ``log`` (a directory). Until the
+network certifier posts each open response's released count, ``e`` is the count the engine emitted, so the hold is the
+flush alone. Refused: a scheduling policy other than FCFS, a KV connector, and more than one data-parallel engine.
+
+vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
+stdlib, `verity_vllm.settings` and `verity_vllm.engine.hooks`, and `register` imports vLLM only once ``VERITY_CUT`` is set.
+"""
+from __future__ import annotations
+
+import itertools
+import json
+import os
+import time
+from collections.abc import Callable, Mapping
+from pathlib import Path
+from typing import Any
+
+from verity_vllm import settings
+from verity_vllm.engine.hooks import Hooks
+
+__all__ = ["CUT_ENV", "Cut", "cut_config", "install", "register"]
+
+#: `register`'s configuration, a JSON object (`cut_config`)
+CUT_ENV = "VERITY_CUT"
+#: the pool row's setting, the keys' token width CTW (`engine.pool_row`)
+POOL_ENV = "VERITY_POOL_ROW"
+
+
+def cut_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
+    """``VERITY_CUT``'s JSON object (in ``environ``, by default the process environment), None where it isn't set: exactly
+    one of ``every_s`` (a positive number) and ``every_steps`` (a positive integer), ``hold_s`` (30 by default) and
+    ``log`` (optional)."""
+    cfg = settings.get(CUT_ENV, environ)
+    if cfg is None:
+        return None
+    if not isinstance(cfg, dict) or ("every_s" in cfg) == ("every_steps" in cfg):
+        raise ValueError(f"{CUT_ENV}: a JSON object with one of every_s and every_steps, not {json.dumps(cfg)[:80]!r}")
+    if unknown := set(cfg) - {"every_s", "every_steps", "hold_s", "log"}:
+        raise ValueError(f"{CUT_ENV}: unknown keys {sorted(unknown)}")
+    every_s, every_steps = cfg.get("every_s"), cfg.get("every_steps")
+    if every_s is not None and not (type(every_s) in (int, float) and every_s > 0):
+        raise ValueError(f"{CUT_ENV}: every_s is a positive number of seconds, not {every_s!r}")
+    if every_steps is not None and not (type(every_steps) is int and every_steps > 0):
+        raise ValueError(f"{CUT_ENV}: every_steps is a positive integer, not {every_steps!r}")
+    hold_s = cfg.get("hold_s", 30)
+    if not (type(hold_s) in (int, float) and hold_s >= 0):
+        raise ValueError(f"{CUT_ENV}: hold_s is a number of seconds, not {hold_s!r}")
+    return {"every_s": None if every_s is None else float(every_s), "every_steps": every_steps, "hold_s": float(hold_s),
+            "log": cfg.get("log")}
+
+
+def _reads_outputs(request: Any) -> bool:
+    p = getattr(request, "sampling_params", None)
+    if p is None:
+        return False
+    return bool(getattr(p, "frequency_penalty", 0) or getattr(p, "presence_penalty", 0) or getattr(p, "min_tokens", 0)
+                or getattr(p, "logits_processors", None))
+
+
+def _blocks(sched: Any, request_id: str) -> int:
+    try:
+        return sum(len(g) for g in sched.kv_cache_manager.get_block_ids(request_id))
+    except (AttributeError, KeyError):
+        return 0
+
+
+class Cut:
+    """One scheduler's edges: `add` numbers each request the scheduler receives, `before` holds or cuts ahead of a
+    ``schedule()`` call and returns what it held out of it, `after` puts that back. ``released(request)`` is the request's
+    released output count ``e`` (by default, what the engine emitted); ``export(sched, k)`` exports the pool's row at edge
+    k after the cut (by default, none); ``clock`` is the engine core's (injected in tests); ``log`` is a JSON-lines file."""
+
+    def __init__(self, *, every_s: float | None = None, every_steps: int | None = None, hold_s: float = 30.0,
+                 released: Callable[[Any], int] | None = None, export: Callable[[Any, int], Any] | None = None,
+                 clock: Callable[[], float] = time.monotonic, log: Path | None = None) -> None:
+        if (every_s is None) == (every_steps is None):
+            raise ValueError("an edge every so many seconds or every so many steps, one of the two")
+        self.every_s, self.every_steps, self.hold_s = every_s, every_steps, float(hold_s)
+        self.released = released or (lambda r: r.num_output_tokens)
+        self.export, self.clock = export, clock
+        self.file = None if log is None else open(log, "a", encoding="utf-8")
+        self.numbers = itertools.count()
+        self.seq: dict[str, int] = {}
+        self.carried: dict[str, int] = {}
+        self.edges: list[dict[str, Any]] = []
+        self.start: float | None = None
+        self.next_due: float = float(every_steps if every_steps is not None else every_s)
+        self.due_at: float | None = None
+        self.held_steps = 0
+
+    def add(self, request: Any) -> None:
+        self.seq.setdefault(request.request_id, next(self.numbers))
+
+    def _at(self, sched: Any, now: float) -> float:
+        return sched.current_step if self.every_steps is not None else now - self.start
+
+    def before(self, sched: Any) -> tuple[list[Any], ...] | None:
+        now = self.clock()
+        if self.start is None:
+            self.start = now
+        if self.due_at is None and self._at(sched, now) >= self.next_due:
+            self.due_at, self.held_steps = now, 0
+        if self.due_at is None:
+            return None
+        busy = any(getattr(r, "num_in_flight_tokens", 0) or getattr(r, "num_output_placeholders", 0)
+                   for r in sched.running)
+        behind = any(r.num_output_tokens > self.released(r) for r in sched.running)
+        if busy or (behind and now - self.due_at < self.hold_s):
+            self.held_steps += 1
+            held = (list(sched.running), list(sched.waiting), list(getattr(sched, "skipped_waiting", ())))
+            sched.running.clear()
+            sched.waiting.remove_requests(held[1])
+            if held[2]:
+                sched.skipped_waiting.remove_requests(held[2])
+            return held
+        self._cut(sched, now)
+        return None
+
+    def after(self, sched: Any, held: tuple[list[Any], ...] | None) -> None:
+        if held is None:
+            return
+        running, waiting, skipped = held
+        sched.running[:0] = running
+        for r in reversed(waiting):
+            sched.waiting.prepend_request(r)
+        for r in reversed(skipped):
+            sched.skipped_waiting.prepend_request(r)
+
+    def _cut(self, sched: Any, now: float) -> None:
+        k = len(self.edges)
+        cut, over, reads = [], [], []
+        t0 = self.clock()
+        while sched.running:
+            r = sched.running.pop()
+            n, e = r.num_output_tokens, self.released(r)
+            rid = r.request_id
+            cut.append({"id": rid, "seq": self.seq.get(rid), "P": r.num_prompt_tokens, "n": n, "e": e,
+                        "computed": r.num_computed_tokens, "blocks": _blocks(sched, rid),
+                        "a_O": n - self.carried.get(rid, 0)})
+            if n > e:
+                over.append(rid)
+            if _reads_outputs(r):
+                reads.append(rid)
+            sched._preempt_request(r, now, drop_stale_output=True)
+            self.carried[rid] = n
+        sched.prev_step_scheduled_req_ids.clear()
+        waiting = list(sched.waiting)
+        sched.waiting.remove_requests(waiting)
+        for r in sorted(waiting, key=lambda r: self.seq.get(r.request_id, -1)):
+            sched.waiting.add_request(r)
+        t1 = self.clock()
+        row = self.export(sched, k) if self.export is not None else None
+        t2 = self.clock()
+        rec = {"edge": k, "step": sched.current_step, "due": self.next_due, "at": self._at(sched, self.due_at),
+               "held_s": t0 - self.due_at, "held_steps": self.held_steps,
+               "cut_s": t1 - t0, "export_s": t2 - t1, "cut": cut, "requeued": [r.request_id for r in sched.waiting],
+               "skipped": [r.request_id for r in getattr(sched, "skipped_waiting", ())], "over": over,
+               "reads_outputs": reads, "pool_row": row}
+        self.edges.append(rec)
+        self.due_at = None
+        every = self.every_steps if self.every_steps is not None else self.every_s
+        while self.next_due <= self._at(sched, now):
+            self.next_due += every
+        live = {r.request_id for r in sched.waiting}
+        self.carried = {rid: n for rid, n in self.carried.items() if rid in live}
+        if self.file is not None:
+            self.file.write(json.dumps(rec, separators=(",", ":")) + "\n")
+            self.file.flush()
+
+
+def install(cls: Any, make: Callable[[Any], Cut]) -> Hooks:
+    """Wrap ``cls``'s (vLLM's ``Scheduler``'s) ``__init__``, ``add_request`` and ``schedule`` so that every scheduler it
+    builds cuts at each edge through its own `Cut`, ``make(scheduler)``, which is the scheduler's ``_verity_cut``. These
+    wrap the class, so an instance's own wrapper (the certified tick's gate) adds a request through `Cut.add` when it
+    admits it. Refused at a scheduler's start: a policy other than FCFS, a KV connector, more than one data-parallel
+    engine."""
+    hooks = Hooks(tag="cut")
+
+    def init(orig: Callable[..., None]) -> Callable[..., None]:
+        def __init__(self: Any, *args: Any, **kwargs: Any) -> None:
+            orig(self, *args, **kwargs)
+            policy = getattr(getattr(self, "scheduler_config", None), "policy", None)
+            if policy != "fcfs":
+                raise RuntimeError(f"{CUT_ENV} needs the FCFS scheduler, whose waiting queue it requeues in release "
+                                   f"order; this one's policy is {policy!r}")
+            if getattr(self, "connector", None) is not None:
+                raise RuntimeError(f"{CUT_ENV} preempts every running request at each edge, which a KV connector's "
+                                   "pending transfers don't allow")
+            dp = getattr(getattr(getattr(self, "vllm_config", None), "parallel_config", None), "data_parallel_size", 1)
+            if dp != 1:
+                raise RuntimeError(f"{CUT_ENV} cuts one engine's requests; this one is one of {dp} data-parallel engines")
+            self._verity_cut = make(self)
+        return __init__
+
+    def add_request(orig: Callable[..., Any]) -> Callable[..., Any]:
+        def add(self: Any, request: Any, *args: Any, **kwargs: Any) -> Any:
+            self._verity_cut.add(request)
+            return orig(self, request, *args, **kwargs)
+        return add
+
+    def schedule(orig: Callable[..., Any]) -> Callable[..., Any]:
+        def cut_schedule(self: Any, *args: Any, **kwargs: Any) -> Any:
+            c = self._verity_cut
+            held = c.before(self)
+            try:
+                return orig(self, *args, **kwargs)
+            finally:
+                c.after(self, held)
+        return cut_schedule
+
+    hooks.wrap(cls, "__init__", init)
+    hooks.wrap(cls, "add_request", add_request)
+    hooks.wrap(cls, "schedule", schedule)
+    return hooks
+
+
+def _make(cfg: Mapping[str, Any]) -> Callable[[Any], Cut]:
+    log = Path(cfg["log"]) if cfg.get("log") else None
+    ctw = settings.get(POOL_ENV)
+
+    def make(sched: Any) -> Cut:
+        export = None
+        if ctw:
+            from verity_vllm.engine import pool_row as PR
+            PR.install_keys(ctw, sched.block_size)
+            rows = None if log is None else log / "pool_rows"
+            if rows is not None:
+                rows.mkdir(parents=True, exist_ok=True)
+
+            def export(s: Any, k: int) -> Any:
+                try:
+                    return PR.export(s.kv_cache_manager.block_pool, s.block_size,
+                                     None if rows is None else rows / f"e{k}.json")
+                except PR.Refused as e:
+                    return {"refused": str(e)[:500]}
+        if log is not None:
+            log.mkdir(parents=True, exist_ok=True)
+        return Cut(every_s=cfg["every_s"], every_steps=cfg["every_steps"], hold_s=cfg["hold_s"], export=export,
+                   log=None if log is None else log / f"cut.{os.getpid()}.jsonl")
+    return make
+
+
+_PLUGIN: list[Hooks] = []
+
+
+def register() -> None:
+    """The cut at each window edge, as a vLLM general plugin (entry point group ``vllm.general_plugins``, run in each of
+    its processes): with ``VERITY_CUT`` set (`cut_config`), every V1 scheduler this process builds cuts (`install`).
+    Registered before a step tracer, so that the tracer records the step that follows the cut. Idempotent."""
+    cfg = cut_config()
+    if cfg is None or _PLUGIN:
+        return
+    from vllm.v1.core.sched.scheduler import Scheduler
+    _PLUGIN.append(install(Scheduler, _make(cfg)))

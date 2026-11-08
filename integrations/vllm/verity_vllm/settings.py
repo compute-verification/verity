@@ -138,6 +138,8 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_COLLECT_DEAD_GRACE_S", float, 120.0, WHERE, "seconds a dead collector waits for progress before its watchdog exits"),
     S("VERITY_COLLECT_WATCHDOG_MARKER", str, "", WHERE, "the file the collector's watchdog writes when it exits (the Commit sets it)"),
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
+    S("VERITY_CUT", json.loads, None, VALUE, "the carried pool's cut at each window edge under vLLM's engine core "
+      "(`pipeline.cut_plugin`), a JSON object: every_s or every_steps, hold_s and the log directory; unset, none"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
     S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
       "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
