@@ -19,7 +19,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 
 /-!
-# The message half of R11b, and the decoder at the headline: statements
+# The message half of the decoder premise, and the decoder at the headline: statements
 
 `flock_headline_exec`'s open guarantee is `hdec : DecodesOn …`: at every outcome of the live session flock-verify
 accepts, each rep's tape (its rounds' messages, decoded from their bytes, and coins) plays the rep's game, and the table's
@@ -146,7 +146,7 @@ noncomputable def opnAt (T : Finset (Fin n) → Reg → TabSpec mPts) (I : Input
     | none => default
   | .error _ => default
 
-/-- **The decoder is right at the headline's samples** (R11b): given the opening's and Ligerito's chunk lemmas, the
+/-- **The decoder is right at the headline's samples** (the decoder premise): given the opening's and Ligerito's chunk lemmas, the
 tags, `wr` the challenger's record and the challenger's samples proving their units at `mPts` link points, `DecodesOn`
 holds at the plain headline's tables with the decoder `decAt`, single coins as field elements, no final messages and
 `capOfRoot`. -/

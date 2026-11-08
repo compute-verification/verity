@@ -101,7 +101,7 @@ def window(row_tables: bool = True, law=None, work_table=None) -> tuple[CS.Bindi
     tables: tuple = ()
     if row_tables:
         ms, tables = SRW.with_row_tables(ms, [COORD], [s.rows], ARRIVALS)
-    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_law("stratified:2"), RUN, tuple(ms),
+    w = CS.Binding(*CS.population_program([(DEFN, UNITS)], several=True), law or D.parse_design("stratified:2"), RUN, tuple(ms),
                    tables, CTX.hex() if row_tables else "", work_table)
     return w, s, ms
 

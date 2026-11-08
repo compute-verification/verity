@@ -84,9 +84,11 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
 * **One sample per window** by the registered law (the partition file's `subset:k`) over the window's whole population, made by the
   verifier's Lean `flock-verify draw`; a TP Commit samples each rank's window on its own. Each member's server serves its share (`serve
   --draw-file`). The sessions are `--zk` (the masked protocol; without it Lean accepts a subset sample only at hidden outputs and one
-  table, `Flock.ProvedScope`). Each prover runs `flock-circuit prove --zk` itself, as SPOT[Flock]'s proof server does, with
-  no ZK server (`a0.DIRECT`: `zk_cost.py`'s `dev` arm, which Figure 1 prices). Under ``--firewall`` (Lean's `flock-firewall`), the
-  core protocols' path, it runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
+  table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
+  streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
+  `zk_cost.py`'s `dev` arm, which Figure 1 prices), Lean's verify each session's verdict of record. A templated
+  statement's (`--tmpl-unit`) runs as a process pair of its own (`a0.session`). Under ``--firewall`` (Lean's `flock-firewall`), the
+  core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived).
 * **Plain sessions** (``--plain``; `--zk` is the default): Flock's unmasked protocol, which Lean's soundness covers at one
@@ -98,9 +100,11 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   Lean `verify --coins tree --stratified K` holds it to the stratified sampling design it derives from its own `--program` and
   `--partition`. Flock's ZK server checks only a `--zk` statement's sends, so a plain prover isn't behind it (the
   summary's ``plain``).
-* **The sessions' coin trees** (FLOCK_CHALLENGER=1, a5.sh's default): every member's server takes its session's tree from
-  a challenger of its own (`a0.session`, `serve --tree-from`), and the audit passes only if each exited 0 and its audit
-  held the session's record to its release log (the summary's ``challengers``).
+* **The sessions' coin trees** (FLOCK_CHALLENGER=1, a5.sh's default): each template's verifier on the proof server takes
+  its sessions' trees from a challenger of its own (`ProofServer(challenger=True)`, `serve --queue --tree-from`), audited
+  once the server closes, and a process pair's server from one of the session's own (`a0.session`); the audit passes only
+  if each exited 0 and its audit held the sessions' records to its release log (``challenger/m<k>``, a verdict, and the
+  summary's ``challengers``).
 * **The sample from the auditor's challenger** (`--challenger local|gate:USER@HOST`, a TP Commit; `a5_coins`), on the proof
   system's path of record: the step's one challenger session, opened on the TP run root once every rank has passed its
   checks before the sample and planned the coins its sample reads (`a5_coins.need`), and only under a reserve that covers
@@ -188,6 +192,7 @@ import r2_population as R2  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.circuits.program import Program  # noqa: E402
 from verity_flock.input_sets import InputSet  # noqa: E402
+from verity_flock.proof_server import ProofServer, ProofServerError, Statement  # noqa: E402
 from verity.ml.commitments import row_table as RT  # noqa: E402
 from verity.core.protocols.spot import coins as CC, service as S  # noqa: E402
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
@@ -820,10 +825,11 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    def member_session(i: int, mm: dict, local: list[int]) -> dict:
-        """Member ``mm``'s `--zk` session (behind the ZK server under ``--firewall``) on its proved units ``local`` (sampled, and a work sample's closure), on port
-        ``port + i`` (``i`` its place among the members with proved units, `port_refusal`); `member_checks` adds Lean's
-        verdicts on it."""
+    server = proof_server(a, out, [mm for mm, _ in drawn])
+
+    def staged(mm: dict, local: list[int]) -> dict:
+        """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
+        and its prover's file."""
         m, k = mm["m"], mm["k"]
         sdir = out / f"session-m{k}"
         sdir.mkdir(parents=True, exist_ok=True)
@@ -833,7 +839,22 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         (sdir / "draw.json").write_text(json.dumps(session_draw, sort_keys=True))
         t = time.time()
         stage(served, mm, files)
-        staged_s = time.time() - t
+        return {"mm": mm, "local": local, "sdir": sdir, "staged_s": time.time() - t, "session_draw": session_draw,
+                "session_law": session_law}
+
+    def member_session(i: int, s: dict) -> dict:
+        """Staged member ``s``'s (`staged`) `--zk` session: submitted to the audit's proof server, Lean's verify its verdict
+        of record, else (`proof_server`) on port ``port + i`` (``i`` its place among the members with proved units,
+        `port_refusal`), behind the ZK server under ``--firewall``; `member_checks` adds Lean's verdicts on it."""
+        mm, local, sdir, session_draw, session_law = s["mm"], s["local"], s["sdir"], s["session_draw"], s["session_law"]
+        m = mm["m"]
+        if server is not None:
+            st = mm["st"]
+            h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
+                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin"),
+                              session_draw, str(sdir.resolve()), out=sdir / "sessions",
+                              verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
+            return {**s, "handle": h}
         t = time.time()
         env = {"FC_COINS": "tree"} if plain(a) else a0.prover_env(a.firewall, mm["st"])
         record, live = a0.session(a.bin, mm["st"], m.n, f"subset:{len(local)}", port + i, sdir, draw_file=sdir / "draw.json",
@@ -841,12 +862,28 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         session_s = round(time.time() - t, 1)
         draw_t = (record or {}).get("unit_draw") or {}
         v = V.check_draw(draw_t, {"population": session_draw["population"]}, session_law)
-        return {"mm": mm, "sdir": sdir, "staged_s": staged_s, "session_s": session_s, "record": record, "live": live,
-                "draw_t": draw_t, "draw_check": v}
+        return {**s, "session_s": session_s, "record": record, "live": live, "draw_t": draw_t, "draw_check": v}
+
+    def collected(s: dict) -> dict:
+        """Server session ``s`` (`member_session`) once both sides have recorded it, as a process pair's: a session the
+        server could not finish has no record, its prover's failure its why, and its verdict of record refuses it."""
+        h = s["handle"]
+        try:
+            h.result(a.session_timeout)
+            record, live, lean_v = json.loads((h.dir / "session.json").read_text()), h.live, h.verdict(a.session_timeout)
+        except (ProofServerError, TimeoutError) as e:
+            record, live = None, {"accepted": False, "why": str(e)[-1200:]}
+            lean_v = {"accepted": False, "of_record": True, "why": "no session recorded"}
+        draw_t = (record or {}).get("unit_draw") or {}
+        return {**s, "record": record, "live": live, "lean_verify": lean_v, "draw_t": draw_t,
+                "session_s": None if h.seconds is None else round(h.seconds, 1),
+                "draw_check": V.check_draw(draw_t, {"population": s["session_draw"]["population"]}, s["session_law"])}
 
     def member_checks(s: dict) -> dict:
         """Lean's verdicts on member session ``s`` (`member_session`) and what the audit takes from it. They read only the
         session's archive, so they run while the next member is proved."""
+        if "handle" in s:
+            s = collected(s)
         mm, sdir, record, live, draw_t, v = s["mm"], s["sdir"], s["record"], s["live"], s["draw_t"], s["draw_check"]
         m, k, session_s = mm["m"], mm["k"], s["session_s"]
         lean_u = a0.lean_draw_test(a.lean, [{"record": draw_t or None, "statement": (live or {}).get("unit_draw"),
@@ -860,7 +897,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, flags=flags),
                                         "tool": f"flock-verify verify {' '.join(flags)} --archive"}
         else:
-            got[f"lean-verify/m{k}"] = {**a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True), "tool": "flock-verify verify --zk --archive"}
+            lv = s["lean_verify"] if "handle" in s else a0.lean_verify(a.lean, mm["st"], m.n, sdir, zk=True)
+            got[f"lean-verify/m{k}"] = {**lv, "tool": "flock-verify verify --zk --archive"}
         lean_v = got[f"lean-verify/m{k}"]
         return {"mm": mm, "sdir": sdir, "staged_s": s["staged_s"], "verdicts": got, "lean_verify": lean_v,
                 "served": [m.base + u for u in draw_t.get("units", []) if m.base + u in drawn_units],  # a closure's are `proved`
@@ -871,14 +909,27 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
                               "verify_s": ((record or {}).get("verdict") or {}).get("verify_s"),
                               "lean_verify_s": lean_v.get("verify_s"), "lean_partition": lean_v.get("partition")},
                 "sessions": [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))],
-                "challenger": (live or {}).get("challenger")}
+                "challenger": (live or {}).get("challenger"), "handle": s.get("handle")}
 
-    # outer proofs run one at a time (`ONE_AT_A_TIME`): the sessions run here in the members' order, and only Lean's checks
-    # of one member, outside any ZK server, overlap the next member's session
-    with ThreadPoolExecutor(1) as lean:
-        checks = [lean.submit(member_checks, member_session(i, mm, local)) for i, (mm, local) in enumerate(drawn)]
-        done = [c.result() for c in checks]
+    # every member's statement is staged before any session flips a coin, and outer proofs run one at a time
+    # (`ONE_AT_A_TIME`): the sessions run in the members' order, on the proof server's one prover or each as its own process
+    # pair, and only Lean's checks, outside any ZK server, overlap the next member's session. A server's challengers audit
+    # its sessions at its close, each member's audit then a verdict.
+    try:
+        statements = [staged(mm, local) for mm, local in drawn]
+        with ThreadPoolExecutor(1) as lean:
+            checks = [lean.submit(member_checks, member_session(i, s)) for i, s in enumerate(statements)]
+            done = [c.result() for c in checks]
+    finally:
+        if server is not None:
+            exits = server.close()
+            (out / "proof-server" / "server.json").write_text(json.dumps({"routes": server.routes, "exits": exits},
+                                                                         indent=1, sort_keys=True))
     for got in done:
+        if got["handle"] is not None and got["handle"].challenger is not None:
+            got["challenger"] = got["handle"].challenger
+        if got["challenger"] is not None:
+            verdicts[f"challenger/m{got['mm']['k']}"] = {**got["challenger"], "accepted": got["challenger"].get("ok") is True}
         mm = got["mm"]
         summary["staging"]["drawn_s"] = round(summary["staging"].get("drawn_s", 0) + got["staged_s"], 1)
         summary["staging"]["prover_files"] = summary["staging"].get("prover_files", 0) + 1
@@ -1131,6 +1182,16 @@ def one_session(s: str) -> int:
 def plain(a: argparse.Namespace) -> bool:
     """The sessions are plain (``--plain``), not `--zk`."""
     return bool(getattr(a, "plain", False))
+
+
+def proof_server(a: argparse.Namespace, out: Path, members: Sequence[dict]) -> ProofServer | None:
+    """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
+    ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
+    FLOCK_CHALLENGER=1. None where a session is one it doesn't prove (plain, behind the ZK server under ``--firewall``, or a
+    templated statement's, `--tmpl-unit`): each session is then a process pair of its own (`a0.session`)."""
+    if plain(a) or a.firewall or any(mm["st"].get("tmpl_unit") for mm in members):
+        return None
+    return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
 
 
 def plain_refusal(a: argparse.Namespace, mine: CS.Binding, registered: dict | None) -> str | None:

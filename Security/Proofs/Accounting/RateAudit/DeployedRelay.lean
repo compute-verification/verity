@@ -286,7 +286,7 @@ noncomputable def toGrindMem (A : DeployedWindow P N b h ρ S L q r s G) : Grind
 /-- **A window's unpaid words with any side sources**, its sample beside: with `X` covering every pass's completed bits,
 the probability that its reads and `P` slacks `X + slack` fall short of its correct receipts' words is at most
 `P·G·ε`. -/
-theorem pr_unpaid_draw_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
+theorem pr_unpaid_sample_mem_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
     (hε : ∀ j η c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
         ∑ t, (A.device j η c).toInteractiveMem.tierReads (fun a => tier (a / 2)) t x.1 x.2.1 x.2.2 +
@@ -360,7 +360,7 @@ theorem window_relay_le (A : DeployedSession n P N b h ρ S L q r s d G) (tier :
           ((A.window w η).correctAll y.1 y.2.1).card * b)
       ≤ (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)) := by
   set X := Deployed.rebuildBits b rounds cRoot F
-  refine (Bandwidth.pr_mono (fun y hy => ?_)).trans ((A.window w η).pr_unpaid_draw_mem_le tier X
+  refine (Bandwidth.pr_mono (fun y hy => ?_)).trans ((A.window w η).pr_unpaid_sample_mem_le tier X
     (S + (L - ρ) + lam + m * b) d _ (fun j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O)
     (fun j ι c => PIDevice.pr_unpaid_relay_le _ tier m lam))
   have : P * (S + (L - ρ) + X + (lam + m * b)) = P * (X + (S + (L - ρ) + lam + m * b)) := by ring
@@ -465,7 +465,7 @@ theorem session_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N
     rw [e1, e2]
     refine add_le_add (add_le_add ?_ ?_) le_rfl
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.horizon_le dbar (n * P * N) (d * n) (by positivity)
+      exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
 

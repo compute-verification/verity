@@ -77,9 +77,10 @@ Each member's ports, by the family of the template's word (``LAYOUTS``):
   ``MoeExpertFp8CoordinateChunk_v1{K=k,..}``, ``SparseMlaSplitPart_v1{T=k,..}``, ``SparseMlaCombine_v1{NSPLIT=n,..}``  K-chunks
                                    (``KCHUNKS``) and split parts and combines (``SPLITS``), laid out by `kchunk_rows`, `split_rows`
                                    and `chunk_rows.reads`; always chunked, v2 bit rows, one index entry per row
-  ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``  every block j of w columns of the rows of that Definition W wide, W / w
-                                   a power of two (``COLS``): ``in<g>`` per argument group, each of its rows' columns [jw, jw + w)
-                                   in order -> ``out.<member>``, the row's output columns [jw, jw + w); one index entry per row;
+  ``MoeSum_v1{H=w,..}``, ``AllReduceMnnvl_v1{N=w,..}``, ``ResidualAdd_v1{N=w}``  every block j of w columns of the rows of that
+                                   Definition W wide, W / w a power of two (``COLS``): ``in<g>`` per argument group, each of its
+                                   rows' columns [jw, jw + w) in order -> ``out.<member>``, the row's output columns [jw, jw + w);
+                                   one index entry per row;
                                    chunked (``chunk_cap``), v2 bit rows (`chunk_rows.unit_rows`) -> ``o0``
   ``AllReduceMultimem_v1{SIZE=w,..}``  likewise along SIZE, for a row whose owners' TREES are one tree and w whole 8-element
                                    vectors (`cols_refused`); a member of blocks handed another row refuses it
@@ -393,7 +394,7 @@ def law_of(law: str | Mapping[str, Any]) -> dict[str, Any]:
     """The partition file's law as one-stage's law object, a rate's (`rated`) its kind alone until the window's population
     resolves it: ``subset`` for ``rate:``, ``stratified`` for ``stratified-rate:``, ``work`` for ``work-rate:``."""
     if not rated(law):
-        return DR.parse_law(law) if isinstance(law, str) else dict(law)
+        return DR.parse_design(law) if isinstance(law, str) else dict(law)
     strata = DR.parse_strata_rate(law)
     return {"law": "subset" if strata is None else "work" if strata[0] else "stratified"}
 
@@ -493,12 +494,13 @@ def registered(ms: Sequence[CS.Member], rows: Sequence[list[Row]]) -> IF.Registe
 
 def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
-    and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the verifier's
-    input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`, `registered`)."""
+    and `chunk_rows.statement`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the
+    verifier's input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`,
+    `registered`)."""
     sts = {}
     for t in dict.fromkeys(m.template for m in window.members if m.schemas):
         in_rows, out_rows = CR.unit_rows(template(t))
-        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
+        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, **CR.statement(template(t))}
     got, reg = IR.ingress(window, rows, row_units, arrivals), registered(window.members, rows)
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
         **({IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else {}), **({"registered": reg.doc()} if reg else {})} or None)

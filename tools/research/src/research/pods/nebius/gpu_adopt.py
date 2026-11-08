@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A GPU VM's out-of-lease probe (INF-55): a process on a GPU that no lease gave it holds that GPU's lease until it exits.
+"""A GPU VM's out-of-lease probe: a process on a GPU that no lease gave it holds that GPU's lease until it exits.
 
     gpu_adopt.py loop [--every 30]   as the research user, unit vy-gpu-adopt (vm_setup.sh installs it on a VM with GPUs)
     gpu_adopt.py check               one pass, printed as JSON (it adopts nothing that outlives the pass)

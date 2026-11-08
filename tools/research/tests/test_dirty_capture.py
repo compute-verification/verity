@@ -1,6 +1,6 @@
-"""The runner's capture of a dirty source (`env.DIRTY_CAPTURE`): on 10 Oct an ad-hoc sweep of node 1's source trees deleted the only
-copy of seven runs' dirty sources (files earlier runs left in a shared tree), so the runner now writes the dirty bytes into the run
-dir, custody always uploads them, and `evict_src` lets such a tree go only once the run's preserved record holds them."""
+"""The runner's capture of a dirty source (`env.DIRTY_CAPTURE`): an ad-hoc sweep of a node's source trees can delete the only copy
+of a run's dirty source (files earlier runs left in a shared tree), so the runner writes the dirty bytes into the run dir, custody
+always uploads them, and `evict_src` lets such a tree go only once the run's preserved record holds them."""
 import hashlib
 import json
 import os

@@ -55,7 +55,7 @@ Window `t`'s size `U_t` and correct receipts `C_t` are fixed before its openings
 and the earlier windows' coins the window's draw is `Key.subset` on the first blocks `prf t` gives a uniform coin. The
 hybrid is proved for a session read through a commitment (`Committed`, `Live` of `Committed.view c`), as the memory line
 over the prover's records (`RemoteHeld.Line`) states it; the guarantees take the session the prover plays, which holds
-no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledDrawLive`).
+no commitment while the session runs, as the committed session whose view reads none (`Draw.pooledSampleLive`).
 
 * **On uniform first blocks** (`Draw.pr_test_le`). Step `i` of the partial Fisher–Yates reads its first word, uniform
   (`Draw.pr_word_le`: a first word is the top bits of a uniform block). The sampler rejects it with probability at
@@ -84,14 +84,14 @@ no commitment while the session runs, as the committed session whose view reads 
   `coinWeight δ (P·bound t)·(s'_t·(2^-64 − 2^-512) + bound t)` is at most `coinWeight δ P + s_t/2^64`
   (`Draw.window_step_le`: rounding costs at most `2^-512`, which the sharper rejection bound pays when `s'_t ≥ 1`; a
   window of no draws has bound `1`).
-* **On the coin** (`Draw.pooledDraw`). Off the binding event, where no opened receipt was presented with an accepted row
+* **On the coin** (`Draw.pooledSample`). Off the binding event, where no opened receipt was presented with an accepted row
   other than the one its root holds, a receipt `Refused` lets through is correct (`Draw.opened_sub`); the binding event
   costs its probability, `Receipts.binding`. An accepted draw ignores the fallbacks (`Draw.openings_congr`), so on an
   accepting outcome past the pooled bound and off the binding event every window lands on `prf t` while
   `∏_t bound t ≤ δ`, where `u` always falls below: the potential after `n` windows (`Draw.pr_landed_le`). That bound is `δ` plus each
   window's `s_t/2^64`, its distinguisher's advantage at the junk commitment and its hiding term, plus the binding term
-  (`Draw.pooledDraw`, `Draw.error_toReal`). `PooledDraw` is it at the session the prover plays, with no hiding term
-  (`Draw.pooledDrawLive`); `LiveCoinsDrawn` and the memory line at the record's pooled bound (`HeldDrawn` and its
+  (`Draw.pooledSample`, `Draw.error_toReal`). `PooledSample` is it at the session the prover plays, with no hiding term
+  (`Draw.pooledSampleLive`); `LiveCoinsSampled` and the memory line at the record's pooled bound (`HeldSampled` and its
   time-held forms) follow from it as `Held` does from `LiveCoins`.
 
 **What the term is.** Window `t`'s term, `prfAdvantage (prf t) (D.distinguisher prf δ t)`, is one distinguisher's
@@ -877,7 +877,7 @@ section Session
 
 variable {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} (D : Session n m s κ X)
 
-theorem draws_le (t : Fin n) (ω : Coins n κ X) : D.draws t ω ≤ m :=
+theorem samples_le (t : Fin n) (ω : Coins n κ X) : D.samples t ω ≤ m :=
   (min_le_right _ _).trans (Nat.lt_succ_iff.1 (D.size t ω).isLt)
 
 theorem good_le (t : Fin n) (ω : Coins n κ X) : D.good t ω ≤ D.size t ω :=
@@ -898,12 +898,12 @@ theorem bound_le_one (t : Fin n) (ω : Coins n κ X) : D.bound t ω ≤ 1 := by
 theorem lands_eq {t : Fin n} {ω ω' : Coins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.lands t ω = D.lands t ω' := by
   funext b
-  simp only [Session.lands, Session.draws]
+  simp only [Session.lands, Session.samples]
   rw [e1, e2]
 
 theorem bound_eq {t : Fin n} {ω ω' : Coins n κ X} (e1 : D.size t ω = D.size t ω')
     (e2 : D.correct t ω = D.correct t ω') : D.bound t ω = D.bound t ω' := by
-  have e3 : D.draws t ω = D.draws t ω' := by simp only [Session.draws, e1]
+  have e3 : D.samples t ω = D.samples t ω' := by simp only [Session.samples, e1]
   have e4 : D.good t ω = D.good t ω' := by
     unfold Session.good
     rw [e1, e2]
@@ -993,17 +993,17 @@ theorem pr_distinguisher_le [Fintype X] (prf : Fin n → Pous.Bits κ → Blocks
     rw [e, prod_insert (by simp), mul_comm]
   by_cases hA : ∀ j : Fin n, j < t → D.lands j ω (prf j (ω.2 j))
   · have hU : (D.size t ω : ℕ) ≤ m := Nat.lt_succ_iff.1 (D.size t ω).isLt
-    have hk : D.draws t ω ≤ D.size t ω := min_le_right _ _
+    have hk : D.samples t ω ≤ D.size t ω := min_le_right _ _
     have hP0 : 0 ≤ P := prod_nonneg fun j _ => bound_nonneg D j ω
     calc pr (fun y : Pous.Bits 512 × Blocks m => D.distinguisher prf δ t ((ω, y.1), y.2))
         ≤ pr (fun y : Pous.Bits 512 × Blocks m => below δ (P * D.bound t ω) y.1 ∧ D.lands t ω y.2) :=
           Bandwidth.pr_mono fun y hy => ⟨hprod ▸ hy.2.2, hy.2.1⟩
-      _ ≤ pr (below δ (P * D.bound t ω)) * (ENNReal.ofReal (D.draws t ω * (1 / 2 ^ 64 - 1 / 2 ^ 512)) +
+      _ ≤ pr (below δ (P * D.bound t ω)) * (ENNReal.ofReal (D.samples t ω * (1 / 2 ^ 64 - 1 / 2 ^ 512)) +
             ENNReal.ofReal (D.bound t ω)) :=
           pr_and_le_mul (below δ (P * D.bound t ω)) (fun p => D.lands t ω p.2) _
             fun _ _ => pr_test_le hm hU hk (D.correct t ω)
       _ = ENNReal.ofReal (coinWeight δ (P * D.bound t ω) *
-            (D.draws t ω * (1 / 2 ^ 64 - 1 / 2 ^ 512) + D.bound t ω)) := by
+            (D.samples t ω * (1 / 2 ^ 64 - 1 / 2 ^ 512) + D.bound t ω)) := by
           rw [pr_below hδ, ← ENNReal.ofReal_add (mul_nonneg (Nat.cast_nonneg _) gap_nonneg) (bound_nonneg D t ω),
             ← ENNReal.ofReal_mul (coinWeight_nonneg _ _)]
       _ ≤ ENNReal.ofReal (coinWeight δ P + s t / 2 ^ 64) :=
@@ -1034,7 +1034,7 @@ theorem prfAdvantage_honest [Fintype X] (hc : ∀ t ω, range (D.size t ω : ℕ
     (prf : Fin n → Pous.Bits κ → Blocks m) (δ : ℝ) (t : Fin n) :
     Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t) = 0 := by
   have hl : ∀ j ω b, D.lands j ω b := fun j ω b ha =>
-    (openings_subset _ (min_le_right _ _) (draws_le D j ω) ha).trans (hc j ω)
+    (openings_subset _ (min_le_right _ _) (samples_le D j ω) ha).trans (hc j ω)
   let E : Coins n κ X × Pous.Bits 512 → Prop := fun y => below δ (∏ j ∈ univ.filter (· ≤ t), D.bound j y.1) y.2
   have e : ∀ y b, D.distinguisher prf δ t (y, b) ↔ E y :=
     fun y b => ⟨fun h => h.2.2, fun h => ⟨fun j _ => hl _ _ _, hl _ _ _, h⟩⟩
@@ -1194,41 +1194,41 @@ theorem opened_sub {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintyp
     D.opened prf rest t ω ⊆ D.correct t ω :=
   fun p hp => (hR ω ha t p hp).resolve_right fun hmv => hb ⟨t, p, hp, hmv⟩
 
-/-- `PooledDraw` at one committed session. -/
-theorem pooledDraw {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
+/-- `PooledSample` at one committed session. -/
+theorem pooledSample {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (F : Committed n m s κ X Cm)
     (com : Coins n κ X → Cm) (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448)
     (hL : ∀ c, Live (F.view c)) (hR : Refused (F.play com) prf rest T R) (hC : Counted (F.play com) T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) ((F.play (Committed.junk com t)).distinguisher prf δ t)).toReal +
         (∑ t, F.hide com prf δ t).toReal + (R.binding (F.play com) prf rest).toReal)
-      (fun ω => (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) := by
+      (fun ω => (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) := by
   classical
-  have hreal : ∀ ω, (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
+  have hreal : ∀ ω, (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
       ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p) →
       (∀ t, (F.play com).lands t ω (prf t (ω.2 t))) ∧ ∏ t, (F.play com).bound t ω ≤ δ := by
     intro ω ⟨⟨hacc, hw⟩, hb⟩
     refine ⟨fun t ha => ?_, ?_⟩
     · have h := opened_sub hR hacc hb t
       simp only [Session.opened] at h
-      rwa [openings_congr (fun _ => 0) (rest ω t) (draws_le (F.play com) t ω) ha]
+      rwa [openings_congr (fun _ => 0) (rest ω t) (samples_le (F.play com) t ω) ha]
     · refine prod_le_of_pooled_lt (fun t => (F.play com).size t ω) (fun t => (F.play com).good t ω)
-        (fun t => (F.play com).draws t ω) hδ (fun t => good_le (F.play com) t ω) ?_
-      have hw' : (F.play com).pooled δ ω < T.wrong ω := not_le.1 hw
-      have hc : (T.wrong ω : ℝ) ≤ (F.play com).wrong ω := by exact_mod_cast hC ω hacc
-      calc pooled n (fun t => (F.play com).size t ω) (fun t => (F.play com).draws t ω) δ =
+        (fun t => (F.play com).samples t ω) hδ (fun t => good_le (F.play com) t ω) ?_
+      have hw' : (F.play com).pooled δ ω < T.incorrect ω := not_le.1 hw
+      have hc : (T.incorrect ω : ℝ) ≤ (F.play com).incorrect ω := by exact_mod_cast hC ω hacc
+      calc pooled n (fun t => (F.play com).size t ω) (fun t => (F.play com).samples t ω) δ =
             (F.play com).pooled δ ω := rfl
-        _ < (F.play com).wrong ω := hw'.trans_le hc
+        _ < (F.play com).incorrect ω := hw'.trans_le hc
         _ = ∑ t, (((F.play com).size t ω - (F.play com).good t ω : ℕ) : ℝ) := by
-            rw [Session.wrong, Nat.cast_sum]
+            rw [Session.incorrect, Nat.cast_sum]
   have hall := pr_landed_le F hL com prf hδ hm
-    (fun ω => (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
+    (fun ω => (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
       ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) hreal
-  have hsplit : pr (fun ω => T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ≤
-      pr (fun ω => (T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
+  have hsplit : pr (fun ω => T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ≤
+      pr (fun ω => (T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
         ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) +
       R.binding (F.play com) prf rest :=
-    (Bandwidth.pr_mono (Q := fun ω => ((T.accepts ω ∧ ¬ (T.wrong ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
+    (Bandwidth.pr_mono (Q := fun ω => ((T.accepts ω ∧ ¬ (T.incorrect ω : ℝ) ≤ (F.play com).pooled δ ω) ∧
         ¬ (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)) ∨
         (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p))
       fun ω h => (em (∃ t, ∃ p ∈ (F.play com).opened prf rest t ω, R.Moved (F.play com) prf rest t ω p)).elim Or.inr
@@ -1248,53 +1248,53 @@ theorem hide_const {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X Cm : Type} [Fin
       (pr (D.potential prf δ t) - pr (D.potential prf δ t)) = 0
   rw [tsub_self, tsub_self, add_zero]
 
-/-- `PooledDraw` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
+/-- `PooledSample` at one session: the committed bound at a view that reads no commitment, whose hiding terms vanish
 (`hide_const`). -/
-theorem pooledDrawLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
+theorem pooledSampleLive {n m : ℕ} {s : Fin n → ℕ} {κ : ℕ} {X : Type} [Fintype X]
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (D : Session n m s κ X)
     (T : Trace (Coins n κ X)) (R : Receipts n κ X) {δ : ℝ} (hδ : 0 ≤ δ) (hm : m < 2 ^ 448) (hL : Live D)
     (hR : Refused D prf rest T R) (hC : Counted D T) :
     T.Holds (δ + ((∑ t, s t : ℕ) : ℝ) / 2 ^ 64 +
         (∑ t, Pous.StreamedWipe.prfAdvantage (prf t) (D.distinguisher prf δ t)).toReal +
         (R.binding D prf rest).toReal)
-      (fun ω => (T.wrong ω : ℝ) ≤ D.pooled δ ω) := by
+      (fun ω => (T.incorrect ω : ℝ) ≤ D.pooled δ ω) := by
   have h0 : (∑ t, (⟨fun _ => D⟩ : Committed n m s κ X Unit).hide (fun _ => ()) prf δ t) = 0 :=
     sum_eq_zero fun t _ => hide_const D _ prf δ t
-  have h := pooledDraw prf rest (⟨fun _ => D⟩ : Committed n m s κ X Unit) (fun _ => ()) T R hδ hm (fun _ => hL) hR hC
+  have h := pooledSample prf rest (⟨fun _ => D⟩ : Committed n m s κ X Unit) (fun _ => ()) T R hδ hm (fun _ => hL) hR hC
   rw [h0, ENNReal.toReal_zero, add_zero] at h
   exact h
 
 end Draw
 
-/-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledDraw`). -/
-theorem PooledDraw : Accounting.Guarantees.Remote.PooledDraw := by
+/-- **The openings' pooled bound** (`Accounting.Guarantees.Remote.PooledSample`). -/
+theorem PooledSample : Accounting.Guarantees.Remote.PooledSample := by
   intro n m k κ X _ prf rest D T R δ hδ hm hL hR hC
-  exact Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC
+  exact Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC
 
-/-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsDrawn`). -/
-theorem LiveCoinsDrawn : Accounting.Guarantees.Remote.LiveCoinsDrawn := by
+/-- **Live coins, derived** (`Accounting.Guarantees.Remote.LiveCoinsSampled`). -/
+theorem LiveCoinsSampled : Accounting.Guarantees.Remote.LiveCoinsSampled := by
   intro n m k κ X _ prf rest D T R W δ hδ hm hL hR hC hW
-  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC)
+  exact holdsMono (fun ω ha h => h.trans (hW ω ha)) (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC)
 
-/-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldDrawn`). -/
-theorem HeldDrawn : Accounting.Guarantees.Remote.HeldDrawn := by
+/-- **The snapshot held at the record's pooled bound** (`Accounting.Guarantees.Remote.HeldSampled`). -/
+theorem HeldSampled : Accounting.Guarantees.Remote.HeldSampled := by
   intro n m k κ X _ prf rest D T R S s₀ e s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hc hk hL hR hC
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC))
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   obtain ⟨hm', h0, hP⟩ := hc ω ha
   exact held_of ω hE hs hβ hI hsq hd hS hr hm' h0 hP h.1 h.2
 
 /-- **Held over time with the links charged, at the record's pooled bound**
-(`Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn`). -/
-theorem HeldOverTimeLinksDrawn : Accounting.Guarantees.Remote.HeldOverTimeLinksDrawn := by
+(`Accounting.Guarantees.Remote.HeldOverTimeLinksSampled`). -/
+theorem HeldOverTimeLinksSampled : Accounting.Guarantees.Remote.HeldOverTimeLinksSampled := by
   intro n m k κ X _ prf rest D T R K S s E β βl Br Bd Bl δs δc hE hs hβ hβl hδ hm hl hsq hd hS hr hp hcov hk hL hR hC
-  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledDrawLive prf rest D T R hδ hm hL hR hC))
+  refine holdsMono (fun ω ha h => ?_) (holdsAnd hk (Draw.pooledSampleLive prf rest D T R hδ hm hL hR hC))
   exact heldOverLinks_of K ω hE hs hβ hβl hl hsq hd hS hr hp hcov ha h.1 h.2
 
-/-- **Held over time at the record's pooled bound, under Identity** (`Accounting.Guarantees.Remote.HeldOverTimeDrawn`):
+/-- **Held over time at the record's pooled bound, under Identity** (`Accounting.Guarantees.Remote.HeldOverTimeSampled`):
 the link-charged form at links of rate 0 and burst 0. -/
-theorem HeldOverTimeDrawn : Accounting.Guarantees.Remote.HeldOverTimeDrawn := by
+theorem HeldOverTimeSampled : Accounting.Guarantees.Remote.HeldOverTimeSampled := by
   intro n m k κ X _ prf rest D T R K S s E β Br Bd δs δc hE hs hβ hδ hm hI hsq hd hS hr hp hcov hk hL hR hC
-  simpa only [add_zero] using HeldOverTimeLinksDrawn n m k κ X prf rest D T R K S s E β 0 Br Bd 0 δs δc hE hs hβ
+  simpa only [add_zero] using HeldOverTimeLinksSampled n m k κ X prf rest D T R K S s E β 0 Br Bd 0 δs δc hE hs hβ
     le_rfl hδ hm (links_of_identity hI) hsq hd hS hr hp hcov hk hL hR hC
 
 end Accounting.SecurityProofs.Remote

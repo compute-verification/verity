@@ -10,6 +10,10 @@ it can't read records the error.
 from __future__ import annotations
 
 import hashlib
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from torch._inductor.runtime.triton_heuristics import CachingAutotuner
 
 PICKS = ("first", "last")
 
@@ -22,7 +26,7 @@ def install(pick: str | None) -> list[dict]:
     seen: dict[int, tuple] = {}   # id -> (autotuner, entry): the autotuner kept, so its id is never reused
     orig_run, orig_bench = th.CachingAutotuner.run, th.CachingAutotuner.benchmark_all_configs
 
-    def entry(self_) -> dict:
+    def entry(self_: CachingAutotuner) -> dict:
         got = seen.get(id(self_))
         if got is None:
             try:
@@ -36,7 +40,7 @@ def install(pick: str | None) -> list[dict]:
             log.append(e)
         return got[1]
 
-    def bench(self_, *args, **kw):
+    def bench(self_: CachingAutotuner, *args, **kw) -> dict:
         launchers = list(getattr(self_, "launchers", None) or ())
         if pick in PICKS and launchers:
             n = len(launchers)
@@ -51,7 +55,7 @@ def install(pick: str | None) -> list[dict]:
             entry(self_)["error"] = repr(x)
         return t
 
-    def run(self_, *args, **kw):
+    def run(self_: CachingAutotuner, *args, **kw) -> Any:
         out = orig_run(self_, *args, **kw)
         try:
             e = entry(self_)

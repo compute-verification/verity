@@ -1202,7 +1202,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
     n = sum(m["n"] for m in members)
     k = n if k is None else k
     rule = f"stratified:{k}" if coins is None else rule_of(k, n)
-    law, table = (M.D.parse_law(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
+    law, table = (M.D.parse_design(rule), None) if coins is None else S.params_law(rule, pg.program, pg.query, None)
     win = {"kind": "stand-in", "of": f"round {name}: link-windows {at.windows} of {at.source}, their ingress and egress "
                                      f"at {at.setup.name}'s class (scan_zk.py)",
            "members": {m["name"]: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + m["n"]]}
@@ -1668,11 +1668,13 @@ def main(argv=None) -> int:
     p.add_argument("--main", help="with --challenger: the verifier's own copy of main's first-parent history (git "
                    "rev-list --first-parent origin/main), which must hold the commit the session's host pins")
     s = sub.add_parser("schedule", help="a setup's schedule (w63's, PARAMS, by default) as warden_serve.py's schedule "
-                                        "flags (serve, rehearse): the network certifier runs --warden-run reads")
+                                        "flags (serve, rehearse): the network certifier runs --warden-run reads, in "
+                                        "the id egress form, serve's and rehearse --ids's")
     s.add_argument("--class", dest="setup", choices=sorted(SETUPS), default=W63.name)
     a = ap.parse_args(argv)
     if a.command == "schedule":
-        print(" ".join(f"--{k.replace('_', '-')} {v}" for k, v in asdict(SETUPS[a.setup].params).items()))
+        params = SETUPS[a.setup].params
+        print(" ".join(f"--{k.replace('_', '-')} {getattr(params, k)}" for k in W.INTEGER_FIELDS))
         return 0
     if a.group < 1:
         p.error(f"--group is 1 or more link-windows, not {a.group}")
