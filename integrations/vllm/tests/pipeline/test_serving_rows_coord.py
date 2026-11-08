@@ -18,7 +18,9 @@ from verity.ml.circuits.ops.prims import HopperE4m3MmaV2Dot32
 from verity_vllm.pipeline import serving_rows as SRW
 from verity.ml.definitions.numerics import deepgemm_twins as DT
 from verity.ml.definitions.registry import boolean_deepgemm as BDG
+from verity.ml.commitments.gates import embedding as EMB
 from verity.ml.definitions.registry import boolean_fp8_moe as BFM
+from verity.ml.definitions.registry import fp8_moe as FM
 from verity.ml.definitions.registry import deepgemm as DG
 from verity.ml.definitions.registry import fp8_moe_experts as X
 from verity.ml.definitions.registry.fp8 import FP8_BLOCK
@@ -30,6 +32,22 @@ OP = "model.layers.3.mlp.experts"
 
 def gemm(routed: bool, n: int):
     return bind(X.MoeExpertFp8GemmW if routed else X.MoeExpertFp8Gemm, E=E, K=K, N=n, G=G, KB=KB, SWAP=False, DOT=HopperE4m3MmaV2Dot32)
+
+
+def per_expert(routed: bool, n_rows: int) -> tuple[tuple[str, int], ...]:
+    """A pair row's per-expert templates (`serving_templates.EXPERTS` and ``FUSED``): at each block of n rows, a power of two
+    dividing its N and G, the block GEMM, the read of its rows and the fused block reading them, N / n each, then the read of its
+    G-blocks' scale rows."""
+    fam = FM.MoeExpertFp8BlockGemmWV3 if routed else FM.MoeExpertFp8BlockGemmV3
+    fused = BFM.MoeExpertFp8ReadGemmWV1 if routed else BFM.MoeExpertFp8ReadGemmV1
+    out: tuple[tuple[str, int], ...] = ()
+    for n in (1, 2, 4, 8):
+        if n_rows % n == 0:
+            block = descriptor_id(bind(fam, K=K, N=n, G=G, KB=KB, SWAP=False, DOT=HopperE4m3MmaV2Dot32))
+            read = EMB.read(E, n * K // 2)
+            out += ((block, n_rows // n), (descriptor_id(read), n_rows // n),
+                    (descriptor_id(bind(fused, READ=read, K=K, N=n, G=G, KB=KB, SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)), n_rows // n))
+    return (*out, (descriptor_id(EMB.read(E, 2 * K // G)), -(-n_rows // G)))
 
 
 def _bits(a: np.ndarray) -> np.ndarray:
@@ -81,8 +99,9 @@ def test_a_pair_row_holds_its_n_coordinates():
         spec = descriptor_id(gemm(routed, N))
         chunks = () if routed else tuple((descriptor_id(bind(X.MoeExpertFp8CoordinateChunk, E=E, K=K // 2, G=G, KB=KB, SWAP=False,
                                                              DOT=HopperE4m3MmaV2Dot32, FIRST=f, LAST=not f)), N) for f in (True, False))
-        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N), *chunks)
-        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1), *((t, 1) for t, _n in chunks))
+        assert SRW.unit_templates(spec) == ((spec, 1), (descriptor_id(gemm(routed, 1)), N), *chunks, *per_expert(routed, N))
+        assert SRW.unit_templates(descriptor_id(gemm(routed, 1))) == ((descriptor_id(gemm(routed, 1)), 1), *((t, 1) for t, _n in chunks),
+                                                                      *per_expert(routed, 1))
         assert SRW.template(descriptor_id(gemm(routed, 1))).layout == "coord"
     boolean = bind(BFM.MoeExpertFp8GemmWV2, E=E, K=K, N=1, G=G, KB=KB, SWAP=False, DOT=BG.HopperE4m3MmaV2Dot32)
     t = SRW.template(descriptor_id(boolean))

@@ -386,6 +386,14 @@ theorem finderCROf_of_expectedCR {G : Game Exchange} {cost : Game.Strategy G →
   unfold finderCROf
   exact List.forall_iff_forall_mem.2 fun f hf => f.cr_of_expectedCR σ (h f hf)
 
+/-- **`B^τ`'s collision premise gives its bound**: where subprotocol `a`'s finder meets `Claims.ExpectedCR`
+(`Vocab.FinderCR`), its calls within its budget (`Vocab.finderSpec`) put its collision probability at most `crBound`
+at the strategy's calls. -/
+theorem Vocab.finderPr_le_crBound {ι : Type} {d : Device ι} {α : Type} [Fintype α] (V : Vocab d α) {a : Subprotocol}
+    {θ : ByteArray} {F : Array ByteArray} {c : ByteArray} {σ : Game.Strategy (V.game θ F c)}
+    (h : V.FinderCR a θ F c σ) : (V.finder a θ F c σ).Pr sha512Msg ≤ V.crBound θ a (V.cost θ F c σ) :=
+  (V.finderSpec a θ F c).cr_of_expectedCR σ h
+
 namespace Idle
 
 /-- At `unbounded`, every subprotocol's error is `⊤`. -/
@@ -416,7 +424,8 @@ theorem forger_pr (verify : Hash.Msg → Hash.Msg → Hash.Msg → Bool) : forge
 theorem error_exact (a : Subprotocol) (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (σ : Game.Strategy (exact.game θ F c)) :
     exact.error a θ F c σ = 0 := by
   unfold Vocab.error Accounting.condError
-  rw [if_pos ⟨trivial, le_of_eq (finder_pr _), fun _ _ => le_of_eq (forger_pr _)⟩]
+  rw [if_pos ⟨trivial, (finder_pr _).trans_le
+    (div_nonneg (Claims.Ex_nonneg fun _ => Nat.cast_nonneg _) (by positivity)), fun _ _ => le_of_eq (forger_pr _)⟩]
   simp [exact, vocab]
 
 /-- At `exact`, PoUW's claim fails on every play: it certifies one gate computed, and no play computes one. -/

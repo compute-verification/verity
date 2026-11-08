@@ -3,7 +3,7 @@
   "owner": "@kernels",
   "expires": "7d",
   "why": {
-    "src": "p2_stage: layer {layer}'s weights-stream bytes, the staging check's plaintext",
+    "src": "p2_stage: layer {layer}'s weights-stream bytes, the load check's plaintext",
     "enc": "p2_stage: layer {layer}'s segments of memory-accounting's encoded store, a copy, read only",
     "store": "p2_stage: layer {layer}'s P2 development store in the frozen layout, encoded across runs"
   }

@@ -6,6 +6,7 @@
     circuit-check verity/ml/circuits/ops/boolean/gf2k.circuit-check.py
                                                                     the targets a sidecar's bindings reach that its module defines
     circuit-check --all                                             every registered Definition and template (the suite's set)
+    circuit-check --as-call --ranges SparseMlaSplit_v1              the spots of a family's RANGES rule (`ranges`)
     circuit-check --all --shard 2/4 --shard-dir s2                  only the targets whose id hashes to shard 2 of 4 (`shard`)
     circuit-check --combine s1 s2 s3 s4                             the four shards' records as the unsharded run's report
     circuit-check --all --records-only --cache DIR -j 64            every catalog binding's record, no target (`records`)
@@ -20,7 +21,9 @@
     circuit-check --batch                                           batch invariance of the v0 registration's templates
 
 A root a sidecar lists in ``_by_calls_roots`` is checked by its calls alone and never built (`by_calls`): its report entry says
-``"mode": "by-calls"`` and names the target each callee relies on.
+``"mode": "by-calls"`` and names the target each callee relies on.  A family a sidecar registers over a range of statics
+(``RANGES``, `ranges`) is checked at that rule's spots when ``--ranges`` names it, and the report's ``ranges`` says whether
+each rule holds: every spot checked, and each passing.
 
 Exit status 1 when a check fails (each failure is named, `FAIL NAME`, and in the summary), 0 otherwise: the verdict is every
 target's real one, and whether a failure may stay red is drive's policy (`research.policy`, policy.toml's allowances), never
@@ -59,6 +62,7 @@ from . import ambient as AM
 from . import by_calls as BC
 from . import cache as CC
 from . import checks as CK
+from . import ranges as RG
 from . import shard as SH
 from . import sidecars as SC
 from . import structural as ST
@@ -1547,6 +1551,9 @@ def main(argv: list[str] | None = None) -> int:
                     help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
                          "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "
                          "building the whole catalog)")
+    ap.add_argument("--ranges", nargs="*", metavar="FAMILY", default=None,
+                    help="also check the spots of each sidecar's RANGES rule for these families (every rule's when none is "
+                         "named), as named targets (`ranges`); give the targets before it")
     ap.add_argument("--fail-on-warnings", action="store_true")
     ap.add_argument("--update-pins", action="store_true", help="pin the lowering counts and circuit digests measured now (review the diff)")
     ap.add_argument("--cache", type=Path, default=None, metavar="DIR",
@@ -1631,6 +1638,11 @@ def main(argv: list[str] | None = None) -> int:
         ap.error("--update-reads writes the read sets of the catalog bindings a run checks from their records: give --all, "
                  "--catalog-units and --cache DIR, and no target, --no-cache, --update-pins, --shard, --records-only or "
                  "--bindings")
+    if a.ranges is not None:
+        try:
+            a.targets = [*a.targets, *(s for s in RG.spots(a.ranges) if s not in a.targets)]
+        except (LookupError, ValueError) as e:
+            ap.error(str(e))
     if not a.targets and not a.all:
         ap.error("give a target or --all")
     shard = None
@@ -1773,13 +1785,23 @@ def _cache_lines(rep: dict) -> None:
 
 
 def verdict(rep: dict, *, out: Path | None, fail_on_warnings: bool = False, what: str | None = None) -> int:
-    """Print the report's verdict, each failure, each warning and a last line counting ``what`` (default: its targets); write the
-    report to ``out``; and return the exit status."""
+    """Print the report's verdict, each failure, each warning, each range rule a spot of which the run checked
+    (`ranges.section`; a shard's report has none, since the rule's other spots may be in other shards) and a last line counting
+    ``what`` (default: its targets); write the report to ``out``; and return the exit status.  A rule that doesn't hold fails
+    nothing itself: a failed spot is its own target's failure, and a run may check only some spots."""
     s = rep["summary"]
     for name in s["failure_names"]:
         print(f"FAIL {name}")
     for k, w in s["warnings"].items():
         print(f"unchecked {k}: {w['total']} over {w['definitions']} target(s)")
+    if "shard" not in rep and (rs := RG.section(rep["targets"])):
+        rep["ranges"] = rs
+        for r in rs:
+            why = [f"{len(r['failed'])} failed"] * bool(r["failed"]) + [f"{len(r['missing'])} not checked"] * bool(r["missing"])
+            skipped = sorted({c for cs in r["unchecked"].values() for c in cs})
+            print(f"circuit-check: range {r['rule']}: {len(r['spots'])} spot(s), "
+                  + ("holds" if r["holds"] else f"does not hold ({', '.join(why)}; --ranges checks them all)")
+                  + (f"; {len(r['unchecked'])} spot(s) passed without running {', '.join(skipped)}" if skipped else ""))
     if out:
         out.write_text(json.dumps(rep, indent=1, default=str) + "\n")
     across = s.get("recomputed_across") or {}

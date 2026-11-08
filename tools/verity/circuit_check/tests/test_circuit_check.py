@@ -860,11 +860,20 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
     assert not {"DotBf16_v3", "AttnBlock_v6"} & calls
 
 
-#: Calls the suite checks over `Options.partition_max_gates`, each with why it is allowed: both are σ Definitions at their
-#: smallest bindings (`boolean_sigma.circuit-check.py`), and splitting them moves GLM-5.3's and DeepSeek-V4's word digests
+#: GLM-5.3 TP8's multimem reduction tree, one per owner, as `AllReduceMultimem_v1`'s id spells it
+_GLM53_TREES = "(" + ",".join(["((((((0,(1,2)),3),5),6),4),7)"] * 8) + ")"
+_SERVED_ALLREDUCE = ("GLM-5.3 TP8's all-reduce at a served row count, kept in the suite by its digest pin (`tp_allreduce.circuit-check.py`'s "
+                     "`_glm53_served_roots`); its partition is checked at `_model_roots`' WORLD=8 bindings, and its cut at served size is pending")
+
+#: Calls the suite checks over `Options.partition_max_gates` or `Options.partition_max_leaves`, each with why it is allowed:
+#: two σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`), whose split moves GLM-5.3's and
+#: DeepSeek-V4's word digests, and GLM-5.3 TP8's served all-reduces over the gate budget (36 gates an element two-shot MNNVL,
+#: past 22 rows of 6,144; 16 multimem, past 50 rows), multimem at 86 rows and more over the leaf budget too
 OVER_PARTITION_BUDGET = {
     "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
     "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
+    **{f"AllReduceMnnvl_v1{{WORLD=8,N={rows * 6144},SHOT=2}}": _SERVED_ALLREDUCE for rows in range(23, 43)},
+    **{f"AllReduceMultimem_v1{{WORLD=8,SIZE={rows * 6144},TREES={_GLM53_TREES},FTZ=False}}": _SERVED_ALLREDUCE for rows in (85, 86, 256)},
 }
 
 
@@ -873,19 +882,19 @@ def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
     smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
-    only Calls that are still over it.  Gate counts are the catalog's (`Catalog.reached`): a target made from its record has
-    no body built, and building every Call's would take about half an hour."""
+    only Calls that are still over one of them.  Gate counts are the catalog's (`Catalog.reached`): a target made from its
+    record has no body built, and building every Call's would take about half an hour."""
     from verity.ml.circuits.evaluation.reference import signature_of
 
     suite = catalog.suite
     calls = TG.call_families()
     called = [k for k in suite if catalog.reached[k][0] in calls]
     over = {k: n for k in called if (n := catalog.reached[k][1]) > OPTS.partition_max_gates}
-    assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
-    assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
-        "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
     wide = {k: n for k in called if (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves}
-    assert not wide
+    assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
+    assert {k: n for k, n in wide.items() if k not in OVER_PARTITION_BUDGET} == {}
+    assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - set(wide)) == [], \
+        "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
 
 
 @pytest.mark.slow
@@ -1208,6 +1217,25 @@ def test_a_gated_definitions_circuit_digest_is_held_to_its_pin():
         assert rec["status"] == status and rec["counts"] == {"sha512": digest}
         assert [f["name"].split(" [")[0] for f in F.failures] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
         assert [w["code"] for w in F.warnings] == (["unpinned"] if status == "unpinned" else [])
+
+
+def test_any_definition_holding_a_digests_pin_is_held_to_it():
+    """A Definition that isn't gated but holds a ``digests`` pin (a binding at served statics over `targets.MAX_GATES`, which
+    the pin keeps in ``--all``, `targets.pinned`) has its circuit digest checked against it, so no held pin goes uncompared:
+    its own digest passes and another fails by name. Without a pin it gets no digest check."""
+    from verity.ml.circuits.codec import program_digest
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.program import Program
+    from verity.ml.definitions.registry import tp_allreduce as TA
+
+    d = bind(TA.AllReduceMultimemVector, WORLD=8, TREE=TA.GLM53_H200_TREE, FTZ=False)
+    digest = program_digest(Program(d))
+    assert not getattr(getattr(d, "defn", d), "gated", False)
+    assert "digest" not in CK.check_definition(d, OPTS, memo={}, pins={**PINS, "digests": {}}, as_call=False)
+    for pinned, status in ((digest, "ok"), ("0" * 128, "mismatch")):
+        e = CK.check_definition(d, OPTS, memo={}, pins={**PINS, "digests": {d.id: {"sha512": pinned}}}, as_call=False)
+        assert e["digest"]["status"] == status and e["digest"]["counts"] == {"sha512": digest}
+        assert [f["name"].split(" [")[0] for f in e["failures"]] == ([f"lowering/pin-mismatch {d.id}"] if status == "mismatch" else [])
 
 
 def test_redundant_ands_are_counted():
