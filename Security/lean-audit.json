@@ -25,7 +25,7 @@
    "digest": "d17288db09108dcb49f4caaf63f493763bd14c3f660dbe809178307fec2a498a"
   },
   "Pouw.CostModel.Hashless": {
-   "owner": "@memory-accounting",
+   "owner": "@compute-accounting",
    "digest": "23a998fe437179f7d77d2a07c5b8adec774502aef2d11fa5fbd8e4f475f92939"
   }
  },
