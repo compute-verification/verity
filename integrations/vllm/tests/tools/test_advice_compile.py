@@ -9,10 +9,12 @@ import json
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from tests.pipeline.test_window_advice import W1, W2
+from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
@@ -43,6 +45,58 @@ def test_a_window_reads_its_own_requests_when_a_user_is_served_again(tmp_path):
     assert reg == {"window": 0} and meta["default_seed"] == 7
     _, _, bodies, _ = AC.served_inputs(run, 3)
     assert bodies == {"u": {"max_tokens": 16, "prompt": [4, 5]}}
+
+
+def _served(out: Path, **kw: Any) -> tuple[Path, dict, I1.Advice]:
+    """One unseeded stochastic request from user ``q0`` served in serve-openai's window 0 (`test_serve_openai.Serving`, ``kw``
+    its options), with the `_run` stubs beside its records: the run, the request's record and its window's advice, made from
+    the rows the window committed."""
+    from tests.pipeline.test_serve_openai import Serving, records
+
+    with Serving(out, **kw) as s:
+        assert s.post("/v1/completions", {"model": "m", "prompt": [1, 2, 3, 4, 5], "max_tokens": 3, "temperature": 0.8,
+                                          "user": "q0", "stream": True})[0] == 200
+    (rec,) = records(out, "requests.jsonl")
+    _run(out, [])
+    (out / "requests.jsonl").write_text(json.dumps(rec) + "\n")
+    T = len(rec["streamed_ids"])
+    steps = tuple(I1.StepAdvice((I1.Row(0, kind, start, hi - lo),)) for _w, _s, lo, hi, start, _lp, kind in rec["rows"])
+    return out, rec, I1.Advice((I1.RequestAdvice("q0", len(rec["prompt_ids"]), T, "length"),), steps, tuple(rec["streamed_ids"]))
+
+
+@pytest.mark.usefixtures("code_versions_stood_in")
+def test_an_unseeded_stochastic_request_served_in_a_window_compiles_under_its_windows_coin_to_the_seed_it_committed(tmp_path):
+    """Serving derives the seed from the window's seed coin and the body's ``user``, the window's line names the coin, and
+    `compile_steps` given that coin (`window_coin`) and the certified body derives the seed the window committed. Another coin
+    gives another seed for the same id, the rest of the body none; a window whose line names no coin (a server that filled in
+    `DEFAULT_SEED`) is refused by name, and a seed the engine drew is not the one the compile derives."""
+    from tests.program.predict.test_steps import _registered
+    from verity_vllm.engine.served_seed import derived
+    from verity_vllm.program.predict.build import Unexpressible
+    from verity_vllm.program.predict.steps import compile_steps
+
+    (tmp_path / "ok").mkdir()
+    run, rec, advice = _served(tmp_path / "ok")
+    _, _, bodies, _ = AC.served_inputs(run, 0)
+    coin = AC.window_coin(run, 0)
+    assert "seed" not in bodies["q0"] and coin["source"] == "in-process" and rec["ingress"]["seed_rule"] == "derived"
+    reg, key = _registered(), bytes.fromhex(coin["coin"])
+    assert compile_steps(reg, advice, bodies, coin=key).requests[0].seed == rec["committed_seeds"][0] == derived(key, "q0")
+    other = compile_steps(reg, advice, bodies, coin=bytes(64) + b"\x01").requests[0].seed
+    assert other == derived(bytes(64) + b"\x01", "q0") != rec["committed_seeds"][0]
+    body = {**bodies["q0"], "temperature": 0.5, "max_tokens": 3, "prompt": [9, 8, 7, 6, 5]}
+    assert compile_steps(reg, advice, {"q0": body}, coin=key).requests[0].seed == rec["committed_seeds"][0]
+    lines = [json.loads(x) for x in (run / "windows.jsonl").read_text().splitlines()]
+    (run / "windows.jsonl").write_text("".join(json.dumps({k: v for k, v in w.items() if k != "seed_coin"}) + "\n" for w in lines))
+    assert AC.window_coin(run, 0) is None
+    with pytest.raises(Unexpressible, match=r"request 0 \('q0'\): stochastic with no seed in its certified body, and the compile has "
+                                            r"no window coin to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\)"):
+        compile_steps(reg, advice, bodies, coin=None)
+    (tmp_path / "drawn").mkdir()
+    run, rec, advice = _served(tmp_path / "drawn", seed_override=7)
+    key = bytes.fromhex(AC.window_coin(run, 0)["coin"])
+    assert rec["committed_seeds"] == [7] and not rec["check"]["passed"]
+    assert compile_steps(reg, advice, AC.served_inputs(run, 0)[2], coin=key).requests[0].seed == derived(key, "q0") != 7
 
 
 def test_the_registered_default_seed_is_the_public_one_and_a_run_that_used_another_is_refused():
