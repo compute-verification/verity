@@ -57,6 +57,7 @@ from typing import Any
 from verity.core.protocols.certifier import compile_slice as CS
 from verity.core.protocols.certifier import served_rows as SRW
 from verity_vllm.commit.served_record import BlockValues, base_id, served_rows, window_commit
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.seal_process import SealFailed
 from verity_vllm.pipeline.serve_seal import GB, committed_bytes, extras_of, freeze, seal_window, thaw, window_requests
 
@@ -465,7 +466,7 @@ class CommitWindows:
 
         try:
             got = PR.export(self.pool(), self.pool_block, self.out / "pool_rows" / f"w{self.window}.json")
-        except PR.Refused as e:
+        except Refused as e:
             got = {"refused": str(e)[:500]}
         with self._lock:
             self._pool_out[self.window] = got

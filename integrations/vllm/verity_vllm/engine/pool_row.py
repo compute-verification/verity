@@ -43,17 +43,14 @@ from typing import Any, NamedTuple
 from verity.ml.commitments import pool_row as R
 from verity.ml.commitments.gates import block_key as BK
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.errors import Refused
 
-__all__ = ["GROUP_BYTES", "Pool", "Refused", "export", "genesis_reset", "install_keys", "row", "snapshot"]
+__all__ = ["GROUP_BYTES", "Pool", "export", "genesis_reset", "install_keys", "row", "snapshot"]
 
 #: the group id's bytes at the end of a vLLM block hash (``make_block_hash_with_group_id``)
 GROUP_BYTES = 4
 KEY_BYTES = 64
 KV_CACHE_UTILS = "vllm.v1.core.kv_cache_utils"
-
-
-class Refused(ValueError):
-    """A pool the row can't hold, or a block BlockKey_v1 can't key, by name."""
 
 
 class Pool(NamedTuple):

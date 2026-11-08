@@ -12,6 +12,7 @@ import pytest
 from verity.ml.commitments import pool_row as R
 from verity.ml.commitments.gates import block_key as BK
 from verity_vllm.engine import pool_row as PR
+from verity_vllm.errors import Refused
 
 #: the stand-ins' pool: NB 6 (blocks 1 … 5), blocks of B 4 tokens
 NB, B = 6, 4
@@ -91,7 +92,7 @@ def test_a_fresh_pool_is_the_empty_row_and_the_genesis_reset_relinks_the_queue_i
     PR.genesis_reset(p)
     assert PR.export(p, B)["root"] == R.genesis(NB).hex()
     held = pool(free=(3, 1, 5, 2), held=(4,))
-    with pytest.raises(PR.Refused, match="1 blocks are held: reset at an edge"):
+    with pytest.raises(Refused, match="1 blocks are held: reset at an edge"):
         PR.genesis_reset(held)
 
 
@@ -113,16 +114,16 @@ def _bad(change):
     (lambda p: setattr(p.blocks[3], "block_hash", KA + G0), "a block has a key that the hash map doesn't list"),
 ])
 def test_what_the_row_can_t_hold_is_refused_by_name(change, match) -> None:
-    with pytest.raises(PR.Refused, match=match):
+    with pytest.raises(Refused, match=match):
         PR.snapshot(_bad(change))
 
 
 def test_a_held_block_or_a_pool_of_another_block_size_is_refused() -> None:
     """A window ends with no block held: a running request's blocks are refused (the edge's cut frees them first). The
     pool must key blocks of the engine's size."""
-    with pytest.raises(PR.Refused, match=r"1 blocks are held \(block 4 by 1\)"):
+    with pytest.raises(Refused, match=r"1 blocks are held \(block 4 by 1\)"):
         PR.row(PR.snapshot(pool(free=(3, 1, 5, 2), held=(4,))))
-    with pytest.raises(PR.Refused, match="keys blocks of 4 tokens, not the engine's 16"):
+    with pytest.raises(Refused, match="keys blocks of 4 tokens, not the engine's 16"):
         PR.export(pool(), 16)
 
 
@@ -138,7 +139,7 @@ def test_blockkey_v1_replaces_vllm_s_block_hash() -> None:
     hooks = PR.install_keys(3, B, module=mod)
     first = mod.hash_block_tokens(None, None, [1, 2, 3, 4])
     assert first == KA and mod.hash_block_tokens(None, first, [5, 6, 7, 8], None) == BK.block_key(KA, [5, 6, 7, 8], 4)
-    with pytest.raises(PR.Refused, match="BlockKey_v1 keys its tokens alone"):
+    with pytest.raises(Refused, match="BlockKey_v1 keys its tokens alone"):
         mod.hash_block_tokens(None, None, [1, 2, 3, 4], ("salt",))
     hooks.uninstall()
     assert mod.hash_block_tokens is vllm_hash

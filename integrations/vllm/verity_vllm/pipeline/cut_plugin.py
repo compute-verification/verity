@@ -35,8 +35,8 @@ engine emitted, so the hold is the flush alone. Refused: a scheduling policy oth
 and more than one data-parallel engine.
 
 vLLM loads its general plugins in each of its processes, the API server's included, so this module imports only the
-stdlib, `verity_vllm.settings`, `verity_vllm.engine.hooks`, `serve_admit` and `tick_plugin`, and `register` imports vLLM
-only once ``VERITY_CUT`` is set.
+stdlib, `verity_vllm.settings`, `verity_vllm.errors`, `verity_vllm.engine.hooks`, `serve_admit` and `tick_plugin`, and
+`register` imports vLLM only once ``VERITY_CUT`` is set.
 """
 from __future__ import annotations
 
@@ -51,6 +51,7 @@ from typing import Any
 
 from verity_vllm import settings
 from verity_vllm.engine.hooks import Hooks
+from verity_vllm.errors import Refused
 from verity_vllm.pipeline.serve_admit import request_key
 from verity_vllm.pipeline.tick_plugin import SAMPLED_PATHS, FeedReader, route_of
 
@@ -325,7 +326,7 @@ def _make(cfg: Mapping[str, Any]) -> Callable[[Any], Cut]:
                 try:
                     return PR.export(s.kv_cache_manager.block_pool, s.block_size,
                                      None if rows is None else rows / f"e{k}.json")
-                except PR.Refused as e:
+                except Refused as e:
                     return {"refused": str(e)[:500]}
         if log is not None:
             log.mkdir(parents=True, exist_ok=True)
