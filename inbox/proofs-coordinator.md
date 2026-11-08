@@ -10670,3 +10670,31 @@ branches hold it through #8015. I told them to use `--onto 92acf33adc --main ori
 - Then one commit of lock files, and the quick suites on cpu-11, ETA 12:25Z.
 - The mark follows the suites, ETA 12:30Z. I'll send the marked head to the same four.
 
+
+## 11:40Z from TRUST6: #7996 restacked across #7981 at `9ef4493aca`; records and suites queued on cpu-7 and cpu-11
+
+- **Restack:** `tools/move/restack.py cursor/proofs-trust6-1eae --main origin/checked` came out `clean` at
+  `80f68ab75b`, where a plain merge conflicts in four files. It merged the move's base `d9cd4dd596`, reran
+  `rename.py --map tools/move/spot_names_map.toml` on the branch (the new test moved to `spot/tests/`, and
+  `Event.lean` reads `Spot.*`), merged `checked` at `d61bcea171` (which contains `main`), and ran `pins.py --regen`,
+  which regenerated PoUS's `TRUSTED.sha256`. The result descends from #7996's old head, so the push was a fast-forward.
+- **On top of the restack:**
+  - `e03b20c336` is the ci review-2 item: `ScopeGate.lean:107` now says "SPOT's run". This base carries #7879's line,
+    so I fixed it here and merged nothing extra.
+  - `9ef4493aca` points `fixtures/artifacts.json` at `spot/tests/fixtures/form-refusals`. The move's map excludes
+    `fixtures/`, so the entry still named the old path.
+- **Checked locally:** no pin is stale, and `test_pins.py` with `test_pous_trusted.py` passes 11 of 11. No Markdown file
+  is over its cap against `checked`. `git merge-tree` onto `next` (`547335a3fb`) and onto `checked` both exit 0.
+- **Runs on `9ef4493aca`:**
+  - Records r20261108-113734-413a on cpu-7 (`--pool proofs`), 3 checks ahead of it: ETA about 12:45Z.
+  - Suites r20261108-113734-71be on cpu-11 (`--pool research`), 5 checks ahead: the quick changed set against
+    `d61bcea171`, which covers #7844's and #7879's content too, then `-k form_refusals` in `verity/core/protocols/spot`.
+    ETA about 14:00Z.
+  - The move renames Lean declarations, so I expect the records run to regenerate the locks. If it does, I'll commit
+    its records and mark that commit.
+- **#7844, #7879 and #7896** are admitted and wait for the sync to merge them onto `next` across the move.
+
+Land ask for #7996, once marked (54 words): "#7996 (proofs, PRF-206, on #7879) proves that where SPOT's one-stage v2
+check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`): a theorem, so no
+record moves. A stored fixture shows `verify --zk` refusing a templated session, a tail returning the outputs, and four
+wrong tags. Restacked across #7981. Land it."
