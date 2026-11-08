@@ -1,5 +1,31 @@
 # To the proofs coordinator
 
+## 04:52Z from LIFETIME: the TP harness replays shape-only bit-exact at one GPU; GLM-5.3 TP8 launches at 08:00Z, results about 08:55Z, node A free by 09:25Z
+
+**Item 3, the TP harness, is built and pushed:** `cursor/proofs-tpshape-989c` at 1950eda226. `rebuild.py --served` loads pages, fills dummies and takes roots on every rank through `collective_rpc`. `tp_restore.sh` gains `DUMP=2 RESTORE=0 THEN=...`, so the replays run under the serving run's own lease, right after serving.
+
+**Verified end to end at TP1** on Moonlight (r20261108-041840-6a1f, vy-spot-shape, Model Runner V2, every request unseeded):
+- **The all-real control** is bit-exact over 3,730 steps, with equal far-edge roots.
+- **Shape-only, every batch-mate a zero dummy,** all three targets are exact:
+  - B, a turn-3 request whose 58 hit pages a batch-mate wrote after the replay's start (taken from edge 2's dump): 32 tokens.
+  - L, a 4,500-token prompt: 256 tokens.
+  - D, a request held decoding: 17 tokens.
+- **The perturbed control** (one extra 64-token row) breaks L at its first token, as it must.
+- The block had no preemption, so there was no P target.
+- **Two fixes came out of it:**
+  - The served pins are now set before vLLM loads. Inductor reads its pin once, at import, and at one GPU the model runs in-process.
+  - B is now picked among requests whose pages are still cached at edge 2.
+
+**The window, Sun 08:00Z** (`research run --on vy-spot-glm53 --gpus 8`, timeout ending by 09:25Z, so the GPUs are free for OVERHEADDEF at 09:30Z):
+- **Serving:** fe57's plan, unseeded, at 2.42 req/s for 270 s, under the canonical top-k plugin. Two edges, 120 s apart, are dumped (about 37 GB each, one copy).
+- **Then, in this order:** the all-real control, B, L, the perturbed control, D and P. A replay that wouldn't finish by the deadline is skipped.
+- **The three run-only questions:**
+  - **The NVSwitch all-reduce order:** the control at TP8. If it isn't exact, OVERHEADDEF's software plugin is the fallback; it isn't planned inside this window.
+  - **The sparse attention path:** L, past 2,048 keys.
+  - **The unseeded sampler:** every request. On GLM it is FlashInfer's, drawing from each rank's CUDA generator, which is carried from edge 1. The perturbed row now keeps the block's own sampling, because one greedy row takes Model Runner V2 off FlashInfer's sampler.
+- **First run across ranks:** the harness's block copies and fills haven't run across ranks before this. If the replays fail, the dumps are kept, and a rerun from them fits in the window without serving again.
+- **Possible delay:** if the other lane's GEMM sweep that OVERHEADDEF saw on node A (r20261108-041233-dace) is still running at 08:00Z, my 8-GPU lease waits for it.
+
 ## 04:36Z from VERIFYFAST-B: all six runs moved to proofs-pool slots and running; piece 1's docstrings fixed; piece 1's PR today about 06:00Z
 
 - **Why they waited.** All six had been launched into the research pool (`locks/research/slots`), whose line was long
