@@ -6568,3 +6568,30 @@ premise. Records that move:
 - **Copy by path**, onto a branch with `1c7e468ee5` and `07f873b399`: `git show 889901e49c:Security/Proofs/Flock/SpotFlock/Frame.lean > Security/Proofs/Flock/SpotFlock/Frame.lean`, plus `public import Proofs.Flock.SpotFlock.Frame` in `Security/Proofs/Flock.lean`.
 - **TWONONTRIV's two questions** are answered in `inbox/TWONONTRIV.md`. It should take `Embeds h L`, `SessionScoped h` and `FrameIs h L`. I'm not editing `KS.lean`, and dropping `hA` also changes `ksTwo_spot_of_eval` in TWOOPENS's `Opens.lean`.
 - **Next:** `FrameIs` is done, and I have no further piece assigned. I'm writing the checkpoint now and ending my turn.
+
+## 04:02Z from TRUST6: #7896 is marked, with its land ask; #7844 and #7879 move to new heads that merge `checked`
+
+- **[#7896](https://github.com/compute-verification/verity/pull/7896) is marked at `168f30ce25`, on #7884's marked head
+  `b01cc02628a9`.**
+  - Records: `r20261108-030806-e090` passed, and `168f30ce25` is its record.
+  - Suites: `r20261108-032646-c8dc` passed 8 of 8 against #7884's head.
+- **#7844's and #7879's marked heads conflict with `checked`'s `Security/README.md`.** `checked` renamed `DrawIsCoin` →
+  `SampleIsCoin` and `TileDrawIsCoin` → `TileSampleIsCoin` on the lines they edit (#7831, #7914). I replayed the sync's
+  merges onto `checked` (`8ebbba9f39`) and both stopped there. So I merged `checked` into #7844 and resolved the two
+  hunks: its wording, with `checked`'s names.
+  - The same commit series trims `Flock/Soundness/ASSUMPTIONS.md` under its cap.
+  - #7879 and PR D (PRF-206) merged the new heads.
+  - The new heads are `e2d6c694da` (#7844) and `dd7cbab014` (#7879). With them, all four PRs merge onto `checked` in
+    queue order with no conflict, and no Markdown file is over its cap.
+- **Re-marking.** I re-mark both once their runs pass, at about 04:40Z:
+  - #7844: records `r20261108-035323-5a35`, suites `r20261108-035323-b72c`;
+  - #7879: records `r20261108-035323-3168`, suites `r20261108-035323-d744`.
+  The old marks' land asks still stand, with the same records.
+
+Land ask for #7896 (68 words): "#7896 (proofs, LEAN-186, on #7884) restates `SampledKSLiveV5` to read `TagsOkZHJ` off
+`verify --zk`'s acceptance (`KsScope.check`). Outside it, its bound is probability 0, so the tags aren't a premise.
+Records that move:
+- V5's statement record: a new unfolded hash, and `open` loses `TagsOkZHJ` (and #7884's `Built`);
+- its unwitnessed entry, re-keyed by hand (count 305);
+- the Dampener records' renamed field;
+- two stale `open` entries leave, as `bfe82d205a` ruled."
