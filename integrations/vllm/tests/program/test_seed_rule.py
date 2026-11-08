@@ -1,6 +1,7 @@
 """`frontend.seed_rule`: `ServedSeed_v1` is the body's seed where it names one and `served_seed.derived` of the window's coin and
-the request's id where it doesn't, at a message of one SHA-512 block and of two; and `SeedCheck_v1`, from a body's bytes through
-ingress schema v1's parse (`boolean_io_shell.IngressSampled_v1`), passes the rule's seed and fails every forged one."""
+the request's id where it doesn't, at a message of one SHA-512 block and of two (one `Sha512Compress_v1` Call a block); and
+`SeedCheck_v1`, from a body's bytes through ingress schema v1's parse (`boolean_io_shell.IngressSampled_v1`), passes the rule's
+seed and fails every forged one."""
 from __future__ import annotations
 
 import numpy as np
@@ -26,14 +27,16 @@ def _eval(fn, *args) -> list[int]:
     return [int(v) for v in np.asarray(evaluate_words(fn, *args), dtype=np.uint64).reshape(-1)]
 
 
-@pytest.mark.parametrize("COIN, RID", [(16, 4), pytest.param(64, 16, marks=pytest.mark.slow)], ids=["one-block", "two-block"])
-def test_the_rule_is_the_bodys_seed_else_derived_from_the_coin_and_the_id(COIN, RID):
+@pytest.mark.parametrize("COIN, RID, n", [(16, 4, 1), (64, 16, 2)], ids=["one-block", "two-block"])
+def test_the_rule_is_the_bodys_seed_else_derived_from_the_coin_and_the_id(COIN, RID, n):
+    fn = bind(SR.ServedSeed, COIN=COIN, RID=RID)
+    assert SR.blocks(COIN, RID) == n == sum(c.fn.id == "Sha512Compress_v1" for c in fn.body.nodes)
     rng = np.random.default_rng(COIN)
     coins = [bytes(rng.integers(0, 256, COIN, dtype=np.uint8)) for _ in range(6)]
     users = [bytes(rng.integers(0x20, 0x7F, RID, dtype=np.uint8)) for _ in range(6)]
     seeds = [0, (1 << 63) - 1, *[int(rng.integers(0, 1 << 63, dtype=np.uint64)) for _ in range(4)]]
     seeded = [1, 1, 0, 0, 1, 0]
-    got = _eval(bind(SR.ServedSeed, COIN=COIN, RID=RID), _col(seeded), _col(seeds), _rows(coins), _rows(users))
+    got = _eval(fn, _col(seeded), _col(seeds), _rows(coins), _rows(users))
     assert got == [SR.reference(*a) for a in zip(seeded, seeds, coins, users)]
     assert [g for g, s in zip(got, seeded) if not s] == [served_seed.derived(c, u.decode()) for c, u, s in zip(coins, users, seeded)
                                                          if not s]
