@@ -87,6 +87,45 @@ theorem unrolled_outPorts {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit}
   rw [unrolled_outGroups ht hsz]
   exact checked_outPorts (checked_of_check hcheck)
 
+/-- A template's committed net has its template's output ports: `Net.ofRowsAt` moves each output group's column only. -/
+theorem tmplUnit_outBits (tu : Flock.TmplUnit) :
+    (tu.net.outGroups.getD 0 default).bits = (tu.t.outGroups.getD 0 default).bits := by
+  obtain ⟨_, _, _, _, hat, _⟩ := TmplValue.unroll_of_unrollAt tu.unrolled
+  obtain ⟨_, _, _, _, _, _, _, _, _, _, _, hog, _⟩ := Flock.Net.ofRowsAt_ok hat
+  rw [hog, Array.getD_eq_getD_getElem?, Array.getD_eq_getD_getElem?, Array.getElem?_map]
+  cases tu.t.outGroups[0]? <;> rfl
+
+/-- **Each copy of the unrolled unit returns one leaf per output port**, where the unit returns the outputs (`ho`) and
+the circuit's unit is its template's committed net (`hu`): `CheckFacts`' `leavesOut`, which unrolling keeps, as it keeps
+the copies and the output group's ports (`tmplUnit_outBits`). -/
+theorem unrolled_leaves {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht : ct.tmpl = some tu)
+    (hsz : ct.unitNet < ct.nets.size) (hf : CheckFacts ct) (ho : ct.outNet = ct.unitNet) (hu : ct.unit = tu.net) :
+    0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv,
+      ((Flock.HmOut.unrolled ct).leavesOut.getD j #[]).size =
+        ((Flock.HmOut.unrolled ct).unit.outGroups.getD 0 default).bits.size := by
+  rw [FlockSoundness.unrolled_upv, FlockSoundness.unrolled_leavesOut, unrolled_outGroups ht hsz, ← tmplUnit_outBits,
+    ← hu]
+  refine ⟨hf.upv_pos, fun j hj => ?_⟩
+  have hj' : j < ct.leavesOut.size := by rw [hf.leavesOut.1]; exact hj
+  rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hj', Option.getD_some, ← getElem!_pos ct.leavesOut j hj']
+  exact hf.leavesOut.2 j hj ho
+
+/-- **`unrolled_leaves` for a parsed templated file**: `HmOut.parseTmpl` puts its template's committed net at the unit
+and has passed `HmRow.check` (`TmplValue.parseTmpl_facts`, `check_facts`). -/
+theorem unrolled_leaves_of_parse {tags : Flock.Tags} {bytes : ByteArray} {tables : List (String × ByteArray)}
+    {ct : Flock.Circuit} (h : Flock.HmOut.parseTmpl tags bytes tables = .ok ct) (ho : ct.outNet = ct.unitNet) :
+    0 < (Flock.HmOut.unrolled ct).upv ∧ ∀ j < (Flock.HmOut.unrolled ct).upv,
+      ((Flock.HmOut.unrolled ct).leavesOut.getD j #[]).size =
+        ((Flock.HmOut.unrolled ct).unit.outGroups.getD 0 default).bits.size := by
+  obtain ⟨tu, c₀, P, -, rfl, h0, hn0⟩ := TmplValue.parseTmpl_facts h
+  obtain ⟨ls, hck⟩ := P.check
+  have C := check_facts P.typed hck
+  refine unrolled_leaves rfl P.unitNet ?_ ho ?_
+  · cases C
+    constructor <;> assumption
+  · show (c₀.nets.getD c₀.unitNet default).2 = tu.net
+    rw [h0, hn0]
+
 theorem lay_oStart_dvd (V H : ℕ) : (lay V H).oStart / Flock.WORD * Flock.WORD = (lay V H).oStart := by
   refine Nat.div_mul_cancel ?_
   show Flock.WORD ∣ ((lay V H).base (nCalls V H) + (lay V H).outW * Flock.WORD - 1) /
