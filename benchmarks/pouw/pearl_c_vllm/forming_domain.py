@@ -32,8 +32,8 @@ from pathlib import Path
 
 import numpy as np
 
-from verity.core.protocols.pouw.schemes import pearl_c as C
-from verity.core.protocols.pouw.schemes import pearl_kw as P
+from verity.ml.protocols.pouw.schemes import pearl_c as C
+from verity.ml.protocols.pouw.schemes import pearl_kw as P
 
 QMAX, FLOOR_AS, TILE = 448, 444, 64
 C_LO, C_HI = Fraction(2667, 5000), Fraction(4)

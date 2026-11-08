@@ -1,7 +1,8 @@
 module
 
-public import Definitions.NetworkCertifier.Tap
 public import Definitions.NetworkCertifier.Run
+public import Definitions.NetworkCertifier.Warden
+public import Mathlib.Algebra.GroupWithZero.Nat
 
 /-!
 # The network certifier's record as rows: a row a bucket, each frame naming its connection

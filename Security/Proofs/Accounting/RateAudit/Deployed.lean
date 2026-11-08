@@ -18,7 +18,7 @@ returns the same receipts with the same tier reads, sends what the device sends,
 
 **A window and a session.** A deployed window maps to a `GrindChain` of the simulated devices, whose union over the
 `G` candidates (`GrindChain.pr_unpaid_le`) and `RatePaidNamedRO` bound each window's unpaid words; the session's pooled
-draws are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
+samples are causal over the monitoring period (`Horizon.pr_causal_le'`, `Horizon.pr_floor_le`), as in `Session.lean`.
 
 **The readings.** `K = ⌊(1 − d̄)·n·P·N⌋` and `K_w = ⌊(1 − d_w)·P·N⌋` turn the counts into the fractions of `γ`.
 -/
@@ -308,7 +308,7 @@ variable {N b h ρ S L q : ℕ}
 
 /-- The interactive device that simulates a pass device, its link carrying `L + X` bits: its side sources also answer
 the completed bits from the store. -/
-noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveDevice N b h ρ S (L + X) q where
+noncomputable def toInteractive (A : PIDevice N b h ρ S L q) (X : ℕ) : InteractiveProver N b h ρ S (L + X) q where
   state := A.state
   mem := A.mem
   side E R O := PIChip.sideOf E (A.side E R O)
@@ -334,7 +334,7 @@ theorem toInteractive_eq {τ : ℕ} (A : PIDevice N b h ρ S L q) (X : ℕ) (tie
     (by unfold completed at hX; omega) hb.2
   refine ⟨?_, fun t => h₂ t, h₄⟩
   have ht : (A.toInteractive X).tags E R O = A.tags E R O := h₁
-  simp only [InteractiveDevice.correct, PIDevice.correct, ht]
+  simp only [InteractiveProver.correct, PIDevice.correct, ht]
 
 namespace TimeBudget
 
@@ -399,7 +399,7 @@ theorem card_correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N
   rw [Finset.sum_boole]
   simp
 
-/-- **A window's unpaid words**, its draw beside: with `X` covering every pass's completed bits, the probability that
+/-- **A window's unpaid words**, its sample beside: with `X` covering every pass's completed bits, the probability that
 its reads and `P` slacks fall short of its correct receipts' words is at most `P·G·ε`. -/
 theorem pr_unpaid_draw_le {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (X slack d : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ j η c E R O, (A.device j η c).completed E R O ≤ X)
@@ -456,8 +456,8 @@ theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n
     rw [hη]
   simpa [e, hω, hc] using hy
 
-/-- A session's draws over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
-openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` drawn
+/-- A session's samples over one store as a causal family over the monitoring period (`Horizon.Causal`): any event of the
+openings and correct receipts that the family's own bound covers has at most that bound, on any store `store ω` sampled
 before the session's coins. -/
 theorem pr_draws_map_of_causal {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Ev : Store N b →
@@ -510,7 +510,7 @@ theorem pr_draws_of_causal (A : DeployedSession n P N b h ρ S L q r s d G) (Ev 
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) => Ev x.1 x.2) ≤ B :=
   pr_draws_map_of_causal id A Ev B hB
 
-/-- **A session's pooled draws over the monitoring period**: every window's openings land on correct receipts while the
+/-- **A session's pooled samples over the monitoring period**: every window's openings land on correct receipts while the
 session holds at most `K`. -/
 theorem pr_draws_horizon_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K : ℕ) :
@@ -546,7 +546,7 @@ theorem pr_draws_horizon_le (A : DeployedSession n P N b h ρ S L q r s d G) (K 
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_draws_horizon_le_map id A K
 
-/-- **A session's pooled draws in every window**: every window's openings land on correct receipts while some window
+/-- **A session's pooled samples in every window**: every window's openings land on correct receipts while some window
 holds at most `K_w`. -/
 theorem pr_draws_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
@@ -569,7 +569,7 @@ theorem pr_draws_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw 
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   pr_draws_window_le_map id A Kw
 
-/-- **A session's pooled draws**, on any store `store ω` drawn before the session's coins: every window's openings
+/-- **A session's pooled samples**, on any store `store ω` sampled before the session's coins: every window's openings
 land on correct receipts while the session holds at most `K` in all or some window at most `K_w`. -/
 theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
@@ -582,7 +582,7 @@ theorem pr_draws_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
   (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
     ((pr_or_le _ _).trans (add_le_add (pr_draws_horizon_le_map store A K) (pr_draws_window_le_map store A Kw)))
 
-/-- **A session's pooled draws**: every window's openings land on correct receipts while the session holds at most
+/-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
 theorem pr_draws_le (A : DeployedSession n P N b h ρ S L q r s d G) (K Kw : ℕ) :
     pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
@@ -610,9 +610,9 @@ theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G)
           (fun C y => C.reads tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _ (hε w))
     _ = (n : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
-/-- **The session's words, in counts, from an unpaid bound**, on any store `store ω` drawn before the session's coins:
+/-- **The session's words, in counts, from an unpaid bound**, on any store `store ω` sampled before the session's coins:
 every opening passes while the session's reads and `n·P` slacks fall short of `K + 1` words, or some window's reads
-and `P` slacks of `K_w + 1`, at most the draws' bound and `ε_u`, a bound on some window's unpaid words. -/
+and `P` slacks of `K_w + 1`, at most the samples' bound and `ε_u`, a bound on some window's unpaid words. -/
 theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ) (εu : ℝ≥0∞)
     (hu : pr (fun x : Ω × (Fin n → WindowCoins P N b h ρ r s d) =>
@@ -646,7 +646,7 @@ theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω �
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
 /-- **The session's words, in counts, from a per-window bound**: every opening passes while the session's reads and
-`n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the draws' bound
+`n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the samples' bound
 and `n·ε`. -/
 theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ)
     (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × WindowCoins P N b h ρ r s d =>
@@ -700,7 +700,7 @@ theorem div_le_ofReal {a c : ℕ} (hc : 0 < c) {t : ℝ} (h : (a : ℝ) ≤ t * 
   rw [← ENNReal.ofReal_natCast a, ← ENNReal.ofReal_natCast c, ← ENNReal.ofReal_div_of_pos hc']
   exact ENNReal.ofReal_le_ofReal ((div_le_iff₀ hc').2 h)
 
-/-- The monitoring period's draw term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
+/-- The monitoring period's sample term at `K = ⌊(1 − d̄)·M⌋`: at most `(1 − d̄)^e`. -/
 theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
     ((⌊(1 - dbar) * M⌋₊ : ℝ≥0∞) / M) ^ e ≤ ENNReal.ofReal (1 - dbar) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
@@ -709,7 +709,7 @@ theorem horizon_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
   · rw [Nat.floor_eq_zero.2 (by nlinarith [show (0 : ℝ) < M by exact_mod_cast hM])]
     simp
 
-/-- The window's draw term at `K_w = ⌊(1 − d_w)·P·N⌋`: at most `(1 − d_w/n)^e`. -/
+/-- The window's sample term at `K_w = ⌊(1 − d_w)·P·N⌋`: at most `(1 − d_w/n)^e`. -/
 theorem window_le (dw : ℝ) (n M e : ℕ) (hn : 0 < n) (hM : 0 < M) (hdw : dw ≤ 1) :
     ((((n - 1) * M + ⌊(1 - dw) * M⌋₊ : ℕ) : ℝ≥0∞) / (n * M)) ^ e ≤ ENNReal.ofReal (1 - dw / n) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
@@ -755,14 +755,14 @@ theorem ofReal_pow_le {x : ℝ} {m : ℕ} (hx : 0 ≤ x) (h : x ^ m ≤ 1 / 2 ^ 
   rw [e]
   exact ENNReal.ofReal_le_ofReal h
 
-/-- The monitoring period's term at the deployed draw: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
+/-- The monitoring period's term at the deployed sample: `(1 − 0.0015)^(2773·n) ≤ 2^-40` from `n = 7`. -/
 theorem horizon_deployed (n : ℕ) (hn : 7 ≤ n) : ENNReal.ofReal (1 - 0.0015) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
   refine ofReal_pow_le (by norm_num) ((one_sub_pow_le 0.0015 _ (by norm_num)).trans (exp_neg_le _ ?_))
   have : (7 : ℝ) ≤ n := by exact_mod_cast hn
   push_cast
   nlinarith
 
-/-- The window's term at the deployed draw: `(1 − 0.01/n)^(2773·n) ≤ e^(−27.73) ≤ 2^-40` at every `n ≥ 1`. -/
+/-- The window's term at the deployed sample: `(1 − 0.01/n)^(2773·n) ≤ e^(−27.73) ≤ 2^-40` at every `n ≥ 1`. -/
 theorem window_deployed (n : ℕ) (hn : 0 < n) : ENNReal.ofReal (1 - 0.01 / n) ^ (2773 * n) ≤ 1 / 2 ^ 40 := by
   have hn' : (1 : ℝ) ≤ n := by exact_mod_cast hn
   have hu : 0.01 / (n : ℝ) ≤ 0.01 := div_le_self (by norm_num) hn'

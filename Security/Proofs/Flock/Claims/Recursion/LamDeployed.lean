@@ -1,9 +1,42 @@
 module
 
-public import Proofs.Flock.Claims.Recursion.BoundDeploy
 public import Proofs.Flock.Claims.KS.PlainCapsDep
-public import Proofs.Flock.Soundness.Refine.Seam
-public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.NumbersDeploy
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.Polynomial.Basic
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bits
+import Proofs.Flock.Soundness.Refine.Seam
 
 /-!
 # Route 2C's bound at the deployed shape: `λ₂ ≥ 100`
@@ -19,8 +52,8 @@ plain record's numbers).
 whose `nS x ≤ 2^16` V* parts sets up, at the inner rounds `nums` reads it at, within the masked verifier's served shapes
 (`PartIn`, `ZkIn`'s fields at the recursive setup `setupO`), at inner caps of at most `2^64` positions and at most
 `2^56` calls in the inner statement's plain setup (`|S(x_I)|`, `innerSetupIns`; 390 at the honest rec-coins
-statement), at a count `n ≤ 2^55` of the inner verifier's calls on one draw's inner messages at its coins
-(`Deploy.innerCalls`, which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a draw's V\*
+statement), at a count `n ≤ 2^55` of the inner verifier's calls on one sample's inner messages at its coins
+(`Deploy.innerCalls`, which `BitsLin2` bounds `n` by) and a count `v ≤ 2^55` of the compiled verifier's own evaluations at a sample's V\*
 statements (`setupCalls`, which `BitsLin2` bounds `v` by: at the deployed shapes at most 15,829 a table, check 5's row
 commitments among them); the deployed caps `CpDep` are (`CpDep_width_le`), so `lamLin2_deployed_ge_dep`
 states it at them with no width premise. Each of `λ₂`'s six terms is at least `103 > 100 + log₂ 6`, from bounds that
@@ -36,7 +69,7 @@ The bound is crude (`λ₂` there is about 165.8, `κ` binding: the compiled ver
 term by `log₂(1 + 2v/c_S)`, at most about 0.006 bits at the deployed shapes, and the nearest, `Fdev`'s, sits near 178.9);
 it is what the parameters give at every such statement.
 It bounds a number and establishes no security level by itself: `KSLin2` at the deployment's dense statements
-(`KSLin2On` at `DenseAt`) is proved with no hypothesis at the deployed reader's record, the coin server's
+(`KSLin2On` at `DenseAt`) is proved with no hypothesis at the deployed reader's record, the challenger's live-coin part's
 (`Flock.Guarantees.RecursiveKS`), while `ksLin2_deployed_open`, at the earlier `finOpen` layout, still takes
 `PartChecksBV`, `PartOpensB` and `DecompB`. Holo statements are candidate 3's own model. `BitsLin2` at the dense
 statements, that `Pr[acc ∧ ¬R] ≤ t·2^{−λ₂}`, follows from `KSLin2On` (`bitsLin2On_of_ksLin2On`). The proved level at

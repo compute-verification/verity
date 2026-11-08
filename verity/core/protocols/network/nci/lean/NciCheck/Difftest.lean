@@ -1,6 +1,7 @@
 module
 
 public import NciCheck.Check
+public import Lean.Data.Json.Parser
 
 /-!
 # The difftest: the NCI check against the Python reference, on random declarations

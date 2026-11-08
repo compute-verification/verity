@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Accounting.TS.Drawn
-public import Definitions.Accounting.Guarantees.TS.Fixed
+public import Proofs.Accounting.Lemmas.TS.Fixed
 
 /-!
 # An honest run meets option A's hypotheses (non-vacuity)
@@ -9,7 +9,7 @@ public import Definitions.Accounting.Guarantees.TS.Fixed
 The witness Rule I asks of `Accounting.Guarantees.TS.UnitFixedOfWords` and `Accounting.Guarantees.TS.AdditiveFixed`:
 an honest word layer, with a K-chunk running sum and a glue, that meets every hypothesis of both statements.
 
-One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a draw bit (`B = Bool`) and four units, four draws a round
+One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a sample bit (`B = Bool`) and four units, four samples a round
 (`s = 4`), values, noise and words in `ℤ`, the noise being the coin bit `n`:
 
 * `chunk0` (unit 0) computes `S₀ = 2·(3 + n)` from two inputs committed before the coin;
@@ -19,8 +19,8 @@ One round (`S = 1`) with one coin bit (`m = 1`, `C = Bool`), a draw bit (`B = Bo
   `chunk1`, which is always proved;
 * `prod` (unit 3) computes `G·(11 + n)`, its multiplicative operand `G` written after the coin by `glue`.
 
-Draws 0, 1 and 3 name units 0, 1 and 3; draw 2 names `glue` when the draw bit is set and `prod` when it isn't. So
-`glue` is sampled, not always proved, and priced: draw 2 lands on it with probability `1/2`, and its late cone (`glue`
+Samples 0, 1 and 3 name units 0, 1 and 3; sample 2 names `glue` when the sample bit is set and `prod` when it isn't. So
+`glue` is sampled, not always proved, and priced: sample 2 lands on it with probability `1/2`, and its late cone (`glue`
 and `prod`) weighs `1 ≤ 1/2 · 3`, the mean round weight `N_w` being `3`. `prod` is fixed through the priced `glue`,
 `glue` through the always-proved `chunk1`, and the chunks by their bound operands. `prod` also reads `glue`'s other
 input, so every position is opened on every path.
@@ -32,7 +32,7 @@ Each unit writes its words at every output slot and its receipt commits them. Ev
 additive operand takes two values on two continuations from its coin.
 
 This witness tests no skip. No unit is skipped, so it shows the hypotheses can all hold of an honest run, not that a
-skipped, priced writer's cone is charged at its draw probability: every unit is good, nothing here charges a unit that
+skipped, priced writer's cone is charged at its sample probability: every unit is good, nothing here charges a unit that
 isn't (`DrawnLayer.Covers`), and `Priced` holds of `glue` without a run in which `glue` is skipped.
 -/
 
@@ -42,7 +42,7 @@ namespace Accounting.SecurityProofs.TS.FixedMeets
 
 open Accounting.TS Accounting.Assumptions.TS Pouw.RelativeSecurity
 
-/-- The window's coins: one round, one coin bit, a draw bit. -/
+/-- The window's coins: one round, one coin bit, a sample bit. -/
 abbrev FCoins := Paths (Paths Bool 1 × Bool) 1
 
 /-- The coin bit. -/
@@ -54,7 +54,7 @@ def nzb (b : Bool) : ℤ := if b then 1 else 0
 /-- The noise on `y`: its coin bit. -/
 def nz (y : FCoins) : ℤ := nzb (fbit y)
 
-/-- Draw `i` on draw bit `b`: draw 2 names `glue` when `b` is set and `prod` when it isn't; draw `i` otherwise names
+/-- Sample `i` on sample bit `b`: sample 2 names `glue` when `b` is set and `prod` when it isn't; sample `i` otherwise names
 unit `i`. -/
 def drawF (b : Bool) (i : Fin 4) : Fin 4 := if i = 2 ∧ b = false then 3 else i
 
@@ -98,7 +98,7 @@ def outF (u : Fin 1 × Fin 4) (v : Fin 5 → ℤ) (n : ℤ) (_ : Fin 5) : ℤ :=
 /-- A unit's receipt slot: its first output slot. -/
 def receiptF (u : Fin 1 × Fin 4) : Fin 5 := if u.2 = 1 then 3 else 2
 
-/-- The drawn layer: draws by `drawF`, every proof accepted, opening the honest values. -/
+/-- The sampled layer: samples by `drawF`, every proof accepted, opening the honest values. -/
 def fdl : DrawnLayer Bool Bool 1 1 4 (Fin 4) (Fin 5) (Fin 10) ℤ where
   draw := drawF
   pos _ := posF
@@ -146,7 +146,7 @@ noncomputable def ffolded : FCoins → ℝ := fun _ => ftot
 def xt : FCoins := (((true, ()), false), ())
 def xf : FCoins := (((false, ()), false), ())
 
-/-- On either draw bit, the drawn units read every position. -/
+/-- On either sample bit, the sampled proof blocks read every position. -/
 theorem read_all : ∀ ℓ : Fin 10, ∀ b : Bool, ∃ i : Fin 4, ∃ k : Fin 5, posF (drawF b i) k = ℓ := by decide
 
 theorem opens_iff (y : FCoins) (ℓ : Fin 10) (v : ℤ) : fdl.Opens y ℓ v ↔ v = hval ℓ (nz y) := by
@@ -259,7 +259,7 @@ theorem draw_fix (b : Bool) (i : Fin 4) (h : i ≠ 2) : drawF b i = i := by
 /-- Every unit but `glue` is always proved. -/
 theorem always_proved (v : Fin 1 × Fin 4) (h : v.2 ≠ 2) : fpf.AlwaysProved v := fun b => ⟨v.2, draw_fix b v.2 h⟩
 
-/-- **`glue` is sampled**: no draw names it when the draw bit isn't set. -/
+/-- **`glue` is sampled**: no sample names it when the sample bit isn't set. -/
 theorem glue_sampled : ¬ fpf.AlwaysProved (0, 2) := fun h => by
   have h2 : ∀ i : Fin 4, drawF false i ≠ 2 := by decide
   obtain ⟨i, hi⟩ := h false
@@ -312,7 +312,7 @@ theorem sum_fwt : ∑ j, fwt 0 j = 3 := by
   rw [Fin.sum_univ_four, fwt_ne2 0 0 (by decide), fwt_ne2 0 1 (by decide), fwt2, fwt_ne2 0 3 (by decide)]
   norm_num
 
-/-- Draw 2 lands on `glue` on half the draw bits. -/
+/-- Sample 2 lands on `glue` on half the sample bits. -/
 theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
   have h : ∀ inst : DecidablePred (fun b : Bool => drawF b 2 = 2),
       (@Finset.filter _ _ inst Finset.univ).card = 1 := by
@@ -327,7 +327,7 @@ theorem prob_glue : prob (fun b : Bool => drawF b 2 = 2) = 1 / 2 := by
   rw [h, Fintype.card_bool]
   norm_num
 
-/-- **`glue` is priced at its public fan-out**: draw 2 lands on it with probability `1/2`, and its late cone weighs `1`,
+/-- **`glue` is priced at its public fan-out**: sample 2 lands on it with probability `1/2`, and its late cone weighs `1`,
 at most `1/2` of the mean round weight `N_w = 3` (one round). -/
 theorem priced_glue : fpf.Priced fwt (0, 2) := by
   refine ⟨2, ?_⟩

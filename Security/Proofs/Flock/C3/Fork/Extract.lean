@@ -1,15 +1,30 @@
 module
 
 public import Proofs.Flock.Recursive.AuditC3
-public import Proofs.Flock.Recursive.ForkInnerC
-public import Proofs.Flock.Recursive.Multi
-public import Proofs.Flock.C3.Fork.Sound
+public import Proofs.Flock.Recursive.ForkLast
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.C3.Fork.Runs
+import Proofs.Flock.C3.Fork.Sound
+import Proofs.Flock.Recursive.ForkInner
+import Proofs.Flock.Recursive.ForkRuns
 
 /-!
 # Recursion: the extraction at the word the prover's runs open
 
 The pieces of `zk_sessions_recursive_fork_reg` (`Recursive/RegExtract.lean`). A run of the transported prover at a
-draw `ω` that opens a position of R's level 0 off `regWord` conflicts there with the run `regWord` reads at that
+sample `ω` that opens a position of R's level 0 off `regWord` conflicts there with the run `regWord` reads at that
 position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner fork at round 0.
 
 * `leaf_of_contF`, `contF_of_leaf`: a trial `contF` reaches is one at a leaf the rounds reach, and back.
@@ -18,7 +33,7 @@ position (`RunOpensReg`): both are runs of `σ` at `ω`, so the two are an inner
 * `clash₀_of_two`: two runs that open one position of R's level 0 to different rows against one cap clash (`ClashCL`
   at R's part).
 * `regClash_fork`, the per-draw fact: a leaf's run that `RegClash`es at `regStmt` is an inner fork at round 0.
-* `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each draw on `holo_runs_sound` at that draw's
+* `innerAtLeavesL_reg`: `innerAtLeavesL_of_forkOn`'s argument at each sample on `holo_runs_sound` at that sample's
   `regStmt`, its `RegClash` cases by `regClash_fork`.
 -/
 
@@ -145,7 +160,7 @@ open Exec Refine Flock FlockLevel3 Model Accounting ZkSession ZkLink ZkExec ZkBi
 
 variable {S : ℕ} {Vs : Fin S → VStmt} {Reg' Reg₂ : Type} {n : ℕ} {L : Law n} {Reg Cm : Type} {I : Inner}
 
-/-- **A trial at one of `σ`'s leaves at the draw `ω` decodes to `d`**: `InnerForkRec`'s trial, run from the root. -/
+/-- **A trial at one of `σ`'s leaves at the sample `ω` decodes to `d`**: `InnerForkRec`'s trial, run from the root. -/
 def LeafRun (zs : Reg → L.Ω → List (Cm × I.Coin) → Reg₂ → (j : Fin S) → (Vs j).Outer Reg')
     (dg : ByteArray → ByteArray) (N k Rw : ℕ) (wmsg : ((j : Fin S) → (Vs j).Bits) → List I.Msg)
     (σ : Strategy (recGame L Reg I Cm fun R ω t => outerV (zs R ω t) dg N)) (ω : L.Ω) (d : List (I.Msg × I.Coin)) :
@@ -240,10 +255,10 @@ theorem regClash_fork {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [
   rw [← hcol]
   exact fun h => hne (rowFin_inj hv.1 (by simp only [HoloReg.column, List.length_map, List.length_range]) h)
 
-/-- **The inner term at the word the prover's runs open**: `innerAtLeavesL_of_forkOn`'s argument at each draw, on
-`holo_runs_sound` at that draw's `regStmt` in place of `InnerSoundForkOn`. Two of the simulated prover's runs that
+/-- **The inner term at the word the prover's runs open**: `innerAtLeavesL_of_forkOn`'s argument at each sample, on
+`holo_runs_sound` at that sample's `regStmt` in place of `InnerSoundForkOn`. Two of the simulated prover's runs that
 clash against each other are a fork of `σ`'s own runs (`finds_forkG_refL`), and one that opens R's level 0 off the word
-is one at a leaf of `σ` at that draw but for the last coin (`outcome_contF_refL`), so an inner fork at round 0
+is one at a leaf of `σ` at that sample but for the last coin (`outcome_contF_refL`), so an inner fork at round 0
 (`regClash_fork`). -/
 theorem innerAtLeavesL_reg {nT r : ℕ} (T : Fin nT → Type) (CT : Fin r → Type) [∀ k, Fintype (CT k)]
     [∀ k, Nonempty (CT k)] {st : Flock.Stmt} (hp : HoloParams) (hcls : ClassOk (shapeOf st))

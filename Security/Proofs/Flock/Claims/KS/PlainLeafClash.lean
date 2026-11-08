@@ -20,10 +20,10 @@ their `wrPD` forms are them at `keep := id`; `PlainLeafClashK` has them at `wrPD
   `keep := id` and `wrPD`.
 * `Clash₀LU`, `LaterClashLU`, `plainDecQU`, `PlainClashQU`: `Clash₀L`, `LaterClashL`, `plainDecQ`, `PlainClashQ` at
   `leafPlain`.
-* `plain_clash₀HUAtK_of`, `plain_laterEntriesHUAtK_of`: those at the statement's draw (`plain_clash₀HLfAtK_of`,
+* `plain_clash₀HUAtK_of`, `plain_laterEntriesHUAtK_of`: those at the statement's sample (`plain_clash₀HLfAtK_of`,
   `plain_laterEntriesHLfAtK_of` at `LeafForm.plain`); `plain_clash₀HUAt`, `plain_laterEntriesHUAt`,
   `plain_laterClashHUAt` at `wrPD`, and `plainClashQ₀U`, `plainClashQ_orU`, `plainClashQLU`:
-  their hm96 counterparts at the statement's draw.
+  their hm96 counterparts at the statement's sample.
 * `plainSimClashHU`: so a live self-clash at `leafPlain` gives `P`'s accepting runs a raw clash.
 -/
 
@@ -141,11 +141,11 @@ open Lean (Json)
 local notation "𝔽" => FlockLevel3.GF128
 
 /-- **A self-clash at level 0** at a table's output: `SelfClashL`'s first case at `leafPlain`. -/
-def Clash₀LU (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def Clash₀LU (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ClashL H512 enc512 leafPlain out.cap₀ (lvOf sch 0).lanes (Model.pathLen (lvOf sch 0)) (opens₀L sch out)
 
 /-- **A self-clash past level 0** at a table's output: `SelfClashL`'s second case at `leafPlain`. -/
-def LaterClashLU (sch : Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
+def LaterClashLU (sch : FlockSoundness.Accounting.Schedule) (out : Model.OutCL 𝔽 Dig (List UInt8)) : Prop :=
   ∃ r < 2, ∃ ℓ, 1 ≤ ℓ ∧ ∃ cap, (if r = 0 then out.pend.1 else out.pend.2).caps[ℓ - 1]? = some cap ∧
     ClashL H512 enc512 leafPlain cap (lvOf sch ℓ).lanes (Model.pathLen (lvOf sch ℓ))
       (slotOpensL out r ℓ (lvOf sch ℓ).queries)
@@ -164,14 +164,14 @@ local notation "𝔽" => FlockLevel3.GF128
 of one rep's level-`ℓ` entries**, through `keep`: `laterEntriesClashK_of`'s proof, which reads no leaf;
 `laterEntriesClashKLf_of` at `leafPlain`. -/
 theorem laterEntriesClashK_ofU (keep : Bool → Bool)
-    {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+    {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAtK keep sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClashK keep I d t :=
   laterEntriesClashKLf_of keep leafPlain he hcl
 
 /-- **A self-clash past level 0 at `leafPlain` in an output whose reps' later openings are the deployed reps' is a
 clash of one rep's level-`ℓ` entries**: `laterEntriesClashK_ofU` at `keep := id`. -/
-theorem laterEntriesClash_ofU {sch : Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
+theorem laterEntriesClash_ofU {sch : FlockSoundness.Accounting.Schedule} {I : Exec.Inputs} {d : Json} {t : Exec.Transcript}
     {out : Model.OutCL 𝔽 Dig (List UInt8)} (he : ∀ r < 2, LaterEntriesAt sch I d t out r)
     (hcl : FlockDeploy.KS.LaterClashLU sch out) : LaterEntriesClash I d t :=
   (laterEntriesClash_iff_K_id _ _ _).2 <|
@@ -287,8 +287,8 @@ open Lean (Json)
 
 local notation "𝔽" => FlockLevel3.GF128
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under plain SHA-512
-leaves**, at `keep`: `clash₀_wrKHU_of` at the statement's draw `d` and no drawn unit; `plain_clash₀HLfAtK_of` at
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under plain SHA-512
+leaves**, at `keep`: `clash₀_wrKHU_of` at the statement's sample `d` and no sampled proof block; `plain_clash₀HLfAtK_of` at
 `plain`. -/
 theorem plain_clash₀HUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
@@ -311,7 +311,7 @@ theorem plain_clash₀HUAtK_of (keep : Bool → Bool)
   plain_clash₀HLfAtK_of keep AtDraw.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl hacc
     pend' hp hcl
 
-/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the draw, at hidden outputs under plain SHA-512
+/-- **The deployed plain decoders' level-0 self-clash at `plainTab`, at the sample, at hidden outputs under plain SHA-512
 leaves**: `plain_clash₀HUAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_clash₀HUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -331,8 +331,8 @@ theorem plain_clash₀HUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse 
   (entriesClash_iff_K_id _ _ _).2 <| plain_clash₀HUAtK_of id hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay
     o (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp hcl
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under plain SHA-512
-leaves**, at `keep`: `laterEntries_wrKHU_of` at the statement's draw `d` and no drawn unit;
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under plain SHA-512
+leaves**, at `keep`: `laterEntries_wrKHU_of` at the statement's sample `d` and no sampled proof block;
 `plain_laterEntriesHLfAtK_of` at `plain`. -/
 theorem plain_laterEntriesHUAtK_of (keep : Bool → Bool)
     {x : Claims.Msg} {s : Claims.Flock.Stmt}
@@ -355,7 +355,7 @@ theorem plain_laterEntriesHUAtK_of (keep : Bool → Bool)
   plain_laterEntriesHLfAtK_of keep AtDraw.LeafForm.plain hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hrl
     hacc pend' hp
 
-/-- **The deployed plain decoders' later entries at `plainTab`, at the draw, at hidden outputs under plain SHA-512
+/-- **The deployed plain decoders' later entries at `plainTab`, at the sample, at hidden outputs under plain SHA-512
 leaves**: `plain_laterEntriesHUAtK_of` at `keep := id` and what `wrPD` writes for `o`. -/
 theorem plain_laterEntriesHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt}
     (hs : parse false Readable.relation x = some s)
@@ -377,7 +377,7 @@ theorem plain_laterEntriesHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt}
     plain_laterEntriesHUAtK_of id hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o
       (recordsLiveAtDK_id_of (recordsLiveAtD_wrPD _ d o)) ((acceptsAtD_iff_acceptsAtDK_id _ _ _).1 hacc) pend' hp r hr
 
-/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the draw, at hidden outputs under plain
+/-- **The deployed plain decoders' self-clash past level 0 at `plainTab`, at the sample, at hidden outputs under plain
 SHA-512 leaves**: `laterEntriesClash_ofU` at `plain_laterEntriesHUAt`. -/
 theorem plain_laterClashHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
@@ -397,7 +397,7 @@ theorem plain_laterClashHUAt {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : pars
   laterEntriesClash_ofU
     (plain_laterEntriesHUAt hs hin hset h hh hl hd L m k0 l₀ l₁ rest ext hsch hm hlay o hacc pend' hp) hcl
 
-/-- **A live outcome decoded at the verdict at the draw, with a property `Q` of table 0's output**: the verdict
+/-- **A live outcome decoded at the verdict at the sample, with a property `Q` of table 0's output**: the verdict
 `plainVerdictAt I d C rootB₀` holds, the reps' decoded tapes play to pendings, and the output at them and the
 openings `opn` has `Q`. At `Q := SelfClashL` it is `LiveSelfClash` at the plain decoders. -/
 def plainDecQU {mPts : ℕ} (Q : Model.OutCL 𝔽 Refine.Dig (List UInt8) → Prop) (T : TabSpec mPts) (I : Exec.Inputs)
@@ -430,7 +430,7 @@ raw columns (`rawCols_plain`), so the run has a raw clash at level 0 (`PlainClas
 theorem plainClashQ₀U {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,
@@ -526,7 +526,7 @@ the run's log (`plain_levelClash`), so the run has a raw clash (`PlainClashQU` a
 theorem plainClashQLU {x : Claims.Msg} {s : Claims.Flock.Stmt} (hs : parse false Readable.relation x = some s)
     (hin : Claims.Flock.InScope false s) {ins : Ins} {spec : SessionSpec} {sts : Array Stmt}
     (hset : setupOf false x = some (ins, spec, sts)) {st : Stmt} (h : tables false x = [(spec, st)]) {d : Json}
-    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : Accounting.Schedule)
+    (hd : ins.read.draw = some d) (T : TabSpec spec.mPts) (sch : FlockSoundness.Accounting.Schedule)
     (opn : Array ByteArray → Fin 1 → Model.Opens 𝔽 Dig × Model.Salts (List UInt8))
     (hE : ∀ o : LiveOutJ 1 spec.mPts, AcceptsAtD ins.read.I (some d) (wrPD ins.read.I d o) →
       ∀ pend' : Model.PendL 𝔽 Dig × Model.PendL 𝔽 Dig,

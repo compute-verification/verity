@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.Discharge.ZkCoins.SessionDefs
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The session on committed coins opens each round at most once
@@ -158,7 +159,7 @@ open TGame
 
 variable {I Blk α : Type} [Fintype Blk]
 
-/-- **A stream reads its rounds in order**: from its `t`-th draw on, `tagRep` reads only `ix t'` with `t ≤ t'`, each
+/-- **A stream reads its rounds in order**: from its `t`-th sample on, `tagRep` reads only `ix t'` with `t ≤ t'`, each
 at most once. -/
 theorem readsIn_tagRep (dc : Decoders Blk) {R : ℕ} (ix : Fin R → I) (hix : Function.Injective ix) :
     ∀ (t : ℕ) (g : Game α), ReadsIn {x | ∃ t' : Fin R, t ≤ t'.val ∧ x = ix t'} (tagRep dc ix t g)

@@ -11,12 +11,10 @@ from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend.derive import Alloc, refuse
 from verity_vllm.program.frontend.torch_frontend import _tensor_type, shape_of
 from verity_vllm.program.frontend.rules.base import RuleInfo, StateRule
-from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, shape
+from verity_vllm.program.frontend.rules.common import attention_scale, kv_logs, row_value, shape
 from verity_vllm.program.frontend.rules.vllm_bindings import kv_prefix as KP
 from verity_vllm.program.frontend.rules.vllm_bindings.observations import (ATTN_PINS, _OBSERVED, _attn_pins_ok, active_launch_context,
                                                                            active_target_profile, attn_kind_for, attn_lookup_key)
-from verity_vllm.program.frontend.rules.vllm_bindings.operands import _row_value
-
 
 # -- KV cache write + attention read (two ops) -----------------------------------------------------------------------------
 
@@ -53,7 +51,7 @@ class KvCacheUpdateRule(StateRule):
 
     def applies(self, node, ctx):
         k, v, layer_name = node.args[:3]
-        r = _row_value(ctx, k, "key") or _row_value(ctx, v, "value")
+        r = row_value(ctx, k, "key") or row_value(ctx, v, "value")
         if r:
             return r
         if isinstance(ctx.val(k), Alloc) or isinstance(ctx.val(v), Alloc):
@@ -107,7 +105,7 @@ class UnifiedAttentionWithOutputRule(StateRule):
     def applies(self, node, ctx):
         q, k, v, out, layer_name, oscale, obscale, dep = self._args(node)
         for nm, a in (("query", q), ("key", k), ("value", v)):
-            r = _row_value(ctx, a, nm)
+            r = row_value(ctx, a, nm)
             if r:
                 return r
             if isinstance(ctx.val(a), Alloc):

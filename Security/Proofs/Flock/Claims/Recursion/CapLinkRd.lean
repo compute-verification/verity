@@ -1,9 +1,50 @@
 module
 
+public import Definitions.Claims.RecursionLin
+public import Proofs.Flock.Claims.KS.Fork
 public import Proofs.Flock.Claims.Recursion.CapLink
+public import Proofs.Flock.Soundness.LinkFinder
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Algebra.Order.Star.Real
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Bridge.Transport
+import Proofs.Flock.Claims.Finder
+import Proofs.Flock.Claims.Recursion.FlockKSLin
+import Proofs.Flock.Claims.Recursion.OuterKS
+import Proofs.Flock.Soundness.Game.Expect
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# A cap position's off mass at the abort law, at read sets
+# A cap position's off mass at the abort distribution, at read sets
 
 `Pr_off_le_capHit` charges an opening that a run makes at one value per position. A deployed run can open a position
 twice, to different rows, and then no single value per run is the model's opening there. Here the run reads a set of
@@ -29,7 +70,7 @@ section CapLinkRd
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- The value `f` reads alone most often over uniform draws. -/
+/-- The value `f` reads alone most often over uniform samples. -/
 noncomputable def plurRd {Dr Val : Type} [Fintype Dr] [Fintype Val] [Nonempty Val] (f : Dr → Finset Val) : Val :=
   (Finset.exists_max_image Finset.univ (fun v => Pr fun e => f e = {v}) Finset.univ_nonempty).choose
 
@@ -62,7 +103,7 @@ theorem tiedColl_dup {H : Msg → Msg} {l : List (Msg × Msg)} (h : TiedColl H (
   simp only [List.map_append, List.mem_append, or_self] at hu hv
   exact TiedColl.append_right ⟨u, v, hc, hu, hv⟩ l'
 
-/-- **One base run's forks at read sets, linearly**: draws read anything but their plurality single reading alone at
+/-- **One base run's forks at read sets, linearly**: samples read anything but their plurality single reading alone at
 most as often as the link finder over them succeeds, plus `1/(eM)`. -/
 theorem offRd_le_succ {Dr Val : Type} [Fintype Dr] [Nonempty Dr] [Fintype Val] [DecidableEq Val] [Nonempty Val]
     (f : Dr → Finset Val) (M : ℕ) (hM : 1 ≤ M) :

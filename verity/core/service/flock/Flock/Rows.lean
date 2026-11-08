@@ -8,9 +8,7 @@ the lowering's `LEAVES` and `CUT` JSON, which are passed through. The Python lay
 -/
 module
 
-public import Flock.Derive
 public import Flock.DeriveCheck
-public import Flock.JsonParse
 
 @[expose] public section
 

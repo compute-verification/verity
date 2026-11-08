@@ -15,7 +15,7 @@ One connection serves one registration and then `--sessions` sessions over it, e
 3. each session: `Params` with the allowance A = `timing.deadline` at a high percentile of the calibration's passes
    and gaps and of the measured round trip (`--quantile`), `--jitter-ms`, and the lifetime cap L on an appended block
    (`--lifetime`, windows, by default those of `--window-ms` in 30 s, `audit.lifetime_windows`, sent with the
-   session so the prover re-keys in time); σ_0, then a boundary message every window, each coin sent as its value and
+   session so the prover re-keys in time); chal_0, then a boundary message every window, each coin sent as its value and
    the root it was opened after (`coins.Released`), each append answered with its coin (`Verifier.append`), each root
    fed to `AuditRun.receive` stamped with the time its last byte was read (with the releases its message carries first, and
    the withdrawn blocks among them, its plan as a change when it carries one, and the step its pass covers:
@@ -91,7 +91,7 @@ Lean takes it with the event that released it, and once the session ends what th
 coins (`AuditRun.released_reason`, and under the gate the auditor's ledger, `AuditRun.trusted_reason`, which also holds
 the session's pin to the host's pins log and to `--challenger-main`, the auditor's first-parent list of main): a session
 whose coins fail it is refused as `coins`, the reason in its `challenger`. Each session reserves W challenges, ⌈W/G⌉
-openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows drawn together at its last window's close,
+openings coins (`--groups-per-coin` G, 1 by default: each sample's G windows sampled together at its last window's close,
 at two windows in flight, as the Lean's `session` refuses one in flight at G > 1) and `--appends` append coins,
 `coins.APPENDS` by default, or none, and no append family, when the prover's hello says its sessions append nothing
 (a plan of honest and skip sessions, `Verifier.appends_of`), so the challenger's close of such a session that ran to
@@ -718,7 +718,7 @@ class Pair:
     they agree on; where they differ, the session is refused at the event's window as `disagreement` (in both
     verifiers), returned as that rejection, or raised as `audit.SessionError` where `audit.AuditRun` returns no verdict.
     Everything else is read from `s`. The Lean's session takes its coins live (`"coins": null`): each the challenger
-    releases goes with the event that released it, σ_t with its start or boundary, window t's openings coin with its
+    releases goes with the event that released it, chal_t with its start or boundary, window t's openings coin with its
     close and an append's coin with the append.
 
     The driver never waits on the Lean for an event the books take: it acts on the books' result and the Lean's
@@ -1020,7 +1020,7 @@ class Verifier:
                 self.log(f"verifier: skipped a {head['type']} while waiting for {kind}")
 
     def register(self) -> tuple[audit.Registration, dict]:
-        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, drawn through
+        """The payload salt key sent (`payload-key`, the verifier's own), then the hello's registration, sampled through
         the registry: refused, with `bye` and the reason, for a node with a live registration (`audit.RegistryError`,
         raised), with a malformed layout (`regions_of`'s ValueError), deferring residency under a lifetime of one
         window (`audit.Params`'s ValueError), asking for receipts that bind PoUW's tile outputs (`bind`, which the Lean
@@ -1393,7 +1393,7 @@ class Verifier:
     @staticmethod
     def append(session: audit.AuditRun, head: dict) -> dict | audit.Verdict:
         """An append's message to the session (`AuditRun.append`), `{"type": "append", "root": hex, "count": n}`: the
-        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, drawn now, or the
+        reply `{"type": "appended", "first": j, "coin": hex}`, its first index and its coin `c_a`, sampled now, or the
         rejection."""
         got = session.append(bytes.fromhex(head["root"]), head["count"])
         if isinstance(got, audit.Verdict):

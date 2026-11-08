@@ -1,21 +1,59 @@
 module
 
-public import Proofs.Flock.Claims.Complete.Json.Stmt
 public import Proofs.Flock.Claims.Complete.Zk.Json.Goals
 import all Lean.Data.Json.Basic
 import all Lean.Data.Json.FromToJson.Basic
 import all Init.Data.Ord.String
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
+import Proofs.Flock.Claims.Complete.Json.Spec
+import Proofs.Flock.Claims.Complete.Json.Stmt
+import Proofs.Flock.Claims.Scope.Check
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Std.Data.TreeMap.Raw.Lemmas
+import Std.Data.TreeMap.Raw.WF
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
 # What the masked record needs of the statement, from its setup
 
-`stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable draw that decodes to the statement's instances
-(`DrawOk`), the statement's draw the one it was set up at, and a `Hello` that parses to an object whose `coins` is an
+`stmtOkZk`: at every good masked case, a non-empty `Σ`, a printable sample that decodes to the statement's instances
+(`DrawOk`), the statement's sample the one it was set up at, and a `Hello` that parses to an object whose `coins` is an
 object, printable with the prover's nonce put in: `StmtOkZk`, from the case's setup alone, as
 `stmtOk` at the plain verifier.
 
-* `Σ`, the draw's instances and the session's draw are as in `stmtOk`, at the one table `readyZk` asks
-  (`CaseZk.one`). Under `--zk` the draw's law is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
+* `Σ`, the sample's instances and the session's sample are as in `stmtOk`, at the one table `readyZk` asks
+  (`CaseZk.one`). Under `--zk` the sample's law is stratified or a subset (`ProvedScope.lawWhy true`), printable as at the
   plain verifier (`good_stratified`, `good_subset`).
 * The masked verifier's coins are the keyed coin tree (`Read.coins`), so the hello's `coins` is the tree's spec with an
   empty nonce, an object (`helloZk_of`). `canon` prints the hello and `Flock.JsonParse.parse` reads back an alike object
@@ -136,7 +174,7 @@ theorem insOf_true {x : Claims.Msg} {s : Ins} (h : insOf true x = some s) :
 
 variable {H : Claims.Msg → Claims.Msg} {rel : Readable.Parsed → Readable.Relation}
 
-/-- **The masked case's one table**: its statement is `setupOne`'s, at the session's tags, coins and draw. -/
+/-- **The masked case's one table**: its statement is `setupOne`'s, at the session's tags, coins and sample. -/
 theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :
     ∃ st, c.sts = #[st] ∧ c.spec = st.spec ∧
       Discharge.HiddenExec.setupOne c.s.read.tags c.s.read.I.circuitFile c.s.read.I.publicFile c.s.read.coins
@@ -154,8 +192,8 @@ theorem _root_.FlockComplete.CaseZk.one (c : CaseZk H rel) :
     omega
 
 /-- **What the masked record needs of the statement holds at every good masked case** (`StmtOkZk`), under the JSON
-library's specification: Σ is a SHA-512 digest, the draw is printable and decodes to the statement's instances, the
-session's draw is the statement's, and the keyed coin tree's hello parses to an object whose `coins` is an object,
+library's specification: Σ is a SHA-512 digest, the sample is printable and decodes to the statement's instances, the
+session's sample is the statement's, and the keyed coin tree's hello parses to an object whose `coins` is an object,
 printable with the prover's nonce put in. -/
 theorem stmtOkZk : StmtOkZk H rel := by
   intro c

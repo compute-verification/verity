@@ -38,7 +38,7 @@ at `δ = 1/2`.
 * `ExtractAdv` holds at `ξ = 0`, `κ_x = 0` and advice of `|Adv|` bits for every prover because the commitment is
   transparent; that is not `ShaRealize` on a random oracle.
 * No program exchanges bits (`ext = 0`), so `β = K = 0`, and the verdict implies the checks (`κ_S = 0`).
-* The commit phase is free: no law reads an instance, so a commit phase that adapts its instance to the earlier
+* The commit phase is free: no sampling design reads an instance, so a commit phase that adapts its instance to the earlier
   blocks' coins is charged nothing, and the instance changes no check (the noise reads none).
 * The oracle is trivial (`Orc = Unit`), so the calls are counted and priced but read nothing, and `ShaRealize`'s
   `OracleCalls` and realization over a random oracle aren't exercised here. Any table `eo : Unit ≃ (X → D)` is a
@@ -47,6 +47,8 @@ at `δ = 1/2`.
 -/
 
 @[expose] public section
+
+open Claims renaming Ex → avg
 
 namespace Pouw.SecurityProofs.DitherWitness
 

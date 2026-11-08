@@ -8,7 +8,7 @@ from __future__ import annotations
 import numpy as np
 import pytest
 
-from verity.ml.circuits.layout import GateSelection
+from verity.ml.circuits.query_ast import oracle_gateset, oracle_out
 from verity.ml.circuits.cut import call_scope
 from verity.ml.definitions import word as W
 
@@ -65,7 +65,7 @@ def test_widths_are_the_irs_out_where_no_wiring_sits_between_units(fam, statics)
     c, call = call_scope(fn)
     for u in range(len(R["kinds"])):
         gates = (G.keep[np.flatnonzero(R["owner"] == u)] + call.offset).tolist()
-        out = GateSelection(c, gates).out
+        out = oracle_out(c, oracle_gateset(c, gates))
         assert sum(c.gate(g).prim.ret.w for g in out) == R["out_bits"][u] and len(out) == R["out_gates"][u]
 
 
@@ -593,7 +593,7 @@ def test_an_entry_is_keyed_by_the_definitions_content_the_query_the_limits_and_t
         return W._rule_entry(fn, X, 32, 0, lim)[0]
     base = at(norm)
     assert len({base, at(_fn("RMSNormTriton_v1", N=1024, EPS=1e-05)), at(norm, X=8), at(norm, lim=W.gate_limits(1000))}) == 4
-    assert W.definition_digest(norm) != W.definition_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
+    assert W.closure_digest(norm) != W.closure_digest(_fn("RMSNormTriton_v1", N=2048, EPS=1e-06))
     monkeypatch.setattr(W, "_CODE", ["another cut"])
     assert at(norm) != base
 

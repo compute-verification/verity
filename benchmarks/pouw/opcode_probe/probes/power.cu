@@ -5,7 +5,7 @@
 // actually ran at, whatever NVML reports), the work done, and NVML's SM clock, power and clock-event reasons.
 // `power.sh` runs it under one gpu-lease, at the node's lock and then at the default clocks. The table also gates every
 // kernel's SASS through probe.py like any probe's (`--list`).
-//   p_honest    8 IMMA + the duo fold of their 32 words a lane (honest.cuh), drawn operands
+//   p_honest    8 IMMA + the duo fold of their 32 words a lane (honest.cuh), sampled operands
 //   p_half      4 IMMA + the same fold (half the MMAs)
 //   p_mma       8 IMMA, no fold (tensor only)
 //   p_mma0      8 IMMA on all-zero operands, no fold (the lightest tensor load)

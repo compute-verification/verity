@@ -16,7 +16,8 @@ description: >
 
 The tool is `research msg` (`tools/research/src/research/slack.py`, whose docstring lists every subcommand and flag);
 every subcommand takes `--dry-run`, which sends nothing and prints each request. `registry.json` beside this file names
-every handle (remit, charter, user group, the paths it `owns`, its Linear team, a fallback holder, up to 5 `examples` of
+every handle (remit, charter, user group, the paths it `owns`, its Linear team, its coordinator's agent id as a fallback
+holder (who else posts as it is its route's), up to 5 `examples` of
 questions it answers), the channels with their ids, and the named humans. `research msg handles` prints it; `research
 msg owners PATH...` names each path's owner (longest prefix).
 
@@ -26,10 +27,13 @@ msg owners PATH...` names each path's owner (longest prefix).
   wakes it, so its inbox holds your ask until he opens it. Put the whole brief in the ask, and card `#ask-daniel` when it
   can't wait.
 - **Each handle has an inbox thread** (its route, `routes.d` in the notes), where a post rings each name it addresses
-  with a doorbell (`from AUTHOR, thread T: ...`); the holder's own posts never ring it. The route names the holder:
+  with a doorbell (`from AUTHOR, thread T: ...`; a person's leads with them and how long they've waited, `from douglas
+  (a person, waiting 18 min), #chat-douglas thread T: ...`); the holder's own posts never ring it. The route names the holder:
   `names open --as HANDLE --succeeds` takes a handle over, `names open --as HANDLE` on a new branch adds its suffix, and
   `--poster BC_ID` lets another agent post as it, subscribed to the inbox itself: its post naming the handle rings the
-  holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too. `--as
+  holder (so a handover's outgoing generation reaches the incoming one), and that doorbell wakes the poster too.
+  `names revoke --as HANDLE --poster BC_ID` takes one off again and leaves the inbox open; `names close` closes the whole
+  name, and refuses an option it doesn't read, `--poster` among them. `--as
   NAME` takes only a name your agent id holds or posts for (`$RESEARCH_AGENT_URL`, else your Cursor identity).
 - **User groups have no members**, so tagging a handle notifies no person; `groups sync` never sets members, and a
   handle's old group ids, its `retired_usergroups`, still route.
@@ -42,7 +46,7 @@ msg owners PATH...` names each path's owner (longest prefix).
 
 | Interaction | Command | Who closes it |
 |---|---|---|
-| ask one handle | `research msg send --as ME --to @OWNER` (or `ask`) | the owner: 👀, then ✅ with a link or ❌ with a reason |
+| ask one handle | `research msg ask --as ME --to @OWNER` | the owner: 👀, then ✅ with a link or ❌ with a reason |
 | announce to some | `research msg send --kind announce --as ME --to @A @B` | each tagged handle, with a status line |
 | announce to all | `research msg send --kind announce --as ME` | every other handle, with a status line |
 
@@ -59,11 +63,15 @@ msg owners PATH...` names each path's owner (longest prefix).
 - **An ask to one handle is also an issue** in its Linear team (AGENTS.md "Where writing goes"): `ask` prints
   `linear: <ID> <url>`, and the Slack root and doorbell carry its first line and link, so put the ask itself there.
   The conversation stays in the thread. `close` moves the issue to done (`--declined`: canceled). If Linear fails, the
-  whole ask goes out on Slack. `--parent ISSUE` files it under the deliverable it serves, on that one's project and milestone;
-  `--title TEXT` names it.
+  whole ask goes out on Slack. It lands on the team's current milestone: the earliest milestone not yet past in the team's
+  active projects (with none, in no project, said on stderr). `--parent ISSUE` files it under the deliverable it serves
+  instead, on that one's project and milestone; `--title TEXT` names it. A lane with no team of its own (`linear_label` in
+  the registry) files in its parent's team with its `lane:` label. `send` files nothing, whatever its `--kind`: a ping,
+  an fyi or a status line is a post only.
 - **Answered is the ask's record**: its Linear issue out of Backlog or commented on by someone other than the asker, a
   Daniel card's page no longer Waiting on Daniel, else a reply or reaction in the thread. `research msg traffic` lists
-  the unanswered; take a linked ask on its issue.
+  the unanswered; take a linked ask on its issue. A mirrored machine alert (kind `alert`, with its `(alert: <link>)`)
+  is no ask: `traffic` lists it once, however often it repeats, as an alert to the names it addresses.
 - **Work items are Linear issues**: filing, titling, placing, commenting on and closing them, and how long each message
   is, are the coordinating skill's (`.agents/skills/coordinating/SKILL.md`). In #agent-coordination, `send`, `reply`,
   `ask` and `announce` warn past 60 words (150 for an announcement) and refuse past twice that: put the body in its issue
@@ -117,9 +125,12 @@ id is missing).
 
 A person who asks the lanes gets a private `#chat-NAME`, which `@top` runs with `research msg chat open|expect|list|close`
 (slack.py's docstring). `open` invites the person and Cursor's bot, pins a welcome, bookmarks `--start-here`, and
-publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. The events
-service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to `@top`,
-and its watchdog rings again when nobody picks it up (`infra/slack-events/`'s README). Doorbells carry no text (the
+publishes the person as `people.d/NAME.json` in the notes, read into `collaborators` with no registry PR. `--lane
+HANDLE` (on `open` or `expect`; `--lane ''` clears it) records the lane the person usually works with. The events
+service routes each post to the lanes it starts with, a reply naming no one to the lanes in its thread, else to the
+person's usual lane (`sent to @LANE: no lane named; NAME's usual lane`), else to `@top`. Its watchdog rings again,
+URGENT, when nobody picks a post up in 15 min (no 👀, no lane reply), and then also rings `@top` once for a post it sent to
+a usual lane (`infra/slack-events/`'s README). A route it can't read is retried, never dropped. Doorbells carry no text (the
 channel is private, the inboxes aren't): read with `research msg read --channel chat-NAME --thread T`, answer with
 `research msg reply --as ME --channel chat-NAME --thread T`; their next reply rings you as a doorbell (no subscription
 reaches a private chat). One agent answers each

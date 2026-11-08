@@ -9,7 +9,7 @@ Files:
 
 - `commit_gpu.cuh`: the committer (device code, constants, `Committer`); its header has the construction. A kernel that
   commits rows it produces includes it (see Tile leaves). The frame's leaf, pad and node, the hm96 leaf's mask, salt
-  digest and value, and the constants' builders are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
+  digest and value, and the code that builds the constants are the GPU's one row commitment, `verity/ml/kernels/row_commit.cuh`;
   this file keeps the committer's schedule.
 - `commit_gpu.cu`: the command line: `check` (writes every level and every leaf's b || c for `reference.py`), `bench`
   (alone, as a CUDA graph, with the root on the host, and beside the GEMM) and the raw compression rate (`sha`).

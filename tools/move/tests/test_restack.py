@@ -288,6 +288,34 @@ def test_a_script_that_fails_is_reported_and_nothing_else_happens(repo):
     assert git(repo, "worktree", "list", "--porcelain") == before
 
 
+def test_the_moves_main_has_and_the_branch_lacks_are_found_by_their_move_lines_oldest_first(repo):
+    """`Move:` runs rename.py and `Layout-move:` layout.py, each with its map (and `--no-lock` as the move ran); a merge, a
+    restack's own commit and a commit the branch has are no moves to cross."""
+    words = commit(repo, "words", {"a.txt": "a\n"})
+    git(repo, "commit", "-q", "--allow-empty", "-m", "words\n\nMove: tools/move/words_map.toml")
+    words = git(repo, "rev-parse", "HEAD")
+    git(repo, "branch", "later", words)
+    git(repo, "commit", "-q", "--allow-empty", "-m", "paths\n\nLayout-move: tools/move/paths_map.toml --no-lock")
+    paths = git(repo, "rev-parse", "HEAD")
+    git(repo, "commit", "-q", "--allow-empty", "-m", f"carried\n\n{RS.TRAILER_MOVE}: {paths}\nMove: tools/move/x.toml.bak")
+    git(repo, "checkout", "-q", "-b", "side", "HEAD~1")
+    git(repo, "commit", "-q", "--allow-empty", "-m", "side")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "merge", "-q", "--no-ff", "-m", "land side\n\nMove: tools/move/merged_map.toml", "side")
+    assert RS.moves_on("main", "pr", str(repo)) == [
+        (words, "tools/move/rename.py", ("--map", "tools/move/words_map.toml")),
+        (paths, "tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))]
+    assert RS.moves_on("main", "later", str(repo)) == RS.moves_on("main", "pr", str(repo))[1:]
+    assert RS.move_line(paths, str(repo)) == ("tools/move/layout.py", ("--map", "tools/move/paths_map.toml", "--no-lock"))
+    assert RS.move_line("move", str(repo)) is None
+
+
+def test_a_branch_with_no_move_to_cross_is_told_to_merge(repo, monkeypatch, capsys):
+    monkeypatch.chdir(repo)
+    assert RS.main(["pr", "--main", "base"]) == 0
+    assert "pr: no-moves" in capsys.readouterr().out
+
+
 def test_the_source_branch_and_checkout_are_untouched(repo):
     head = on(repo, "pr", ("edit util", {"app/util.py": edit(UTIL, "return 5", "return 50")}))
     (repo / "scratch.txt").write_text("the caller's uncommitted file\n")
@@ -407,3 +435,39 @@ def test_a_result_without_a_list_of_pins_runs_none(repo):
     on(repo, "pr", ("edit", {"README.md": "readme 2\n"}))
     r = RS.restack("pr", "move", cwd=str(repo))
     assert r["status"] == "clean" and "pins" not in [s["step"] for s in r["steps"]], r
+
+
+def test_dropping_a_scratch_worktree_never_fails_on_what_git_leaves(repo):
+    """A scratch worktree the script left a read-only directory in, which `git worktree remove` can't empty, still goes and
+    the clone forgets it: the restack's result is already read, so its cleanup fails nothing."""
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    stuck = wt / "cache" / "deep"
+    stuck.mkdir(parents=True)
+    (stuck / "f").write_text("x")
+    os.chmod(stuck, 0o555)
+    os.chmod(wt / "cache", 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert str(wt) not in git(repo, "worktree", "list")
+
+
+def test_dropping_a_scratch_worktree_changes_no_file_outside_it(repo, tmp_path):
+    """A symlink or a hard link in a read-only directory of the worktree (a tool's cache links into it) goes without its
+    target's mode changing: deleting it takes its directory's permission, never its own."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    linked, hard = outside / "linked", outside / "hard"
+    for f in (linked, hard):
+        f.write_text("secret")
+        os.chmod(f, 0o600)
+    wt = repo.parent / "scratch"
+    git(repo, "worktree", "add", "--detach", "-q", str(wt), "main")
+    for name, add in (("symlink", lambda p: p.symlink_to(linked)), ("hardlink", lambda p: os.link(hard, p))):
+        stuck = wt / "cache" / name
+        stuck.mkdir(parents=True)
+        add(stuck / "f")
+        os.chmod(stuck, 0o555)
+    RS.drop_worktree(str(wt), str(repo))
+    assert not wt.exists()
+    assert {f.name: f.stat().st_mode & 0o777 for f in (linked, hard)} == {"linked": 0o600, "hard": 0o600}

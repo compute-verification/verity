@@ -15,11 +15,11 @@ The kinds:
 * `low-comm`: `full` with an outer sync every `sync_every` steps of compressed pseudo-gradients (DiLoCo, SparseLoCo,
   DeMo).
 * `partial`: a subset trained (a frozen prefix, a share of the experts), the rest registered.
-* `distill`: `full` on a teacher's outputs, the teacher's forward registered work.
+* `distill`: `full` on a teacher's outputs, the teacher's forward registered.
 * `nci`: any algorithm of the `benchmarks/nci` library (`benchmarks/nci/algorithms.json`) from its traits; `nci:<id>` names one with no
   table.
 
-A family may name a **precision** (`precision.<name>`, FP8 or NVFP4): the format sets `β_x`, caps every per-activation
+A family may name a **precision** (`precision.<name>`, such as NVFP4): the format sets `β_x`, caps every per-activation
 bit count and the tile's weight width at its width, and multiplies the compute a target needs. A family's
 `premises = "<family>"` takes the premise numbers it doesn't give from that family (`family`).
 
@@ -34,8 +34,7 @@ from it, the same for every kind:
 * the shard: `token_state_bits` a token's trained weights at `b_w` and, with a backward, a `grad_bits` accumulator
   each; `shared_state_bits` the same over `instances.shared_run`; `flops_per_token = 2 counted / κ`; `cut_bits` the
   residual width at `b_a`, crossed twice with a backward; `token_bits` the premise's per data token;
-* `entry_width` the legs, `map_width` and `map_width_min` the residual width, and the tile's matrix from
-  `instances.tile_shape`.
+* `map_width` and `map_width_min` the residual width, and the tile's matrix from `instances.tile_shape`.
 
 The premise numbers no shape gives (`c_w`, `c_a`, the prices, E1's rates, the tile's widths, `thread_k`) are the
 family's table's, mostly `family.full`'s; a run that states its batch sets `step_tokens`.
@@ -74,7 +73,7 @@ class Family(Protocol):
 @dataclass(frozen=True)
 class Precision:
     """A number format the whole computation runs in: the activation rate `β_x` a block pays in it, its width in bits per
-    activation entry (which caps `b_a` and `f`), and the compute a target needs in it, per run kind, in multiples of the
+    activation entry (which caps `b_a` and the tile's weight width), and the compute a target needs in it, per run kind, in multiples of the
     family's own (`inf` where unknown)."""
 
     name: str
@@ -138,11 +137,8 @@ class Premises:
     c_w: float | None = None
     c_a: float | None = None
     b_a: float | None = None
-    f: float | None = None
-    width: float | None = None
     beta_x: float | None = None
     per_param: float | None = None
-    bcol: float | None = None
     thread_d: int | None = None
     thread_e: float | None = None
     thread_c: float | None = None
@@ -167,19 +163,19 @@ class Premises:
         return m * self.precision.efficiency.get(run.kind, math.inf) if self.precision else m
 
     def premised(self, model: Model, run: Run, *, kappa: float, state_bits: float, trained: Trained | None = None,
-                 legs: int | None = None, fanout: float | None = None, efficiency: Mapping[str, float] | None = None,
+                 fanout: float | None = None, efficiency: Mapping[str, float] | None = None,
                  **given: Any) -> Profile:
-        """The profile with this family's premises, the instance's token structure unless the kind gives its own, the
+        """The profile with this family's premises, the instance's fan-out unless the kind gives its own, the
         precision's `β_x` and widths applied, and the shape fields derived from `trained` (the module's docstring)."""
         p = self.precision
         fan = model.fanout if fanout is None else fanout
         values = {f.name: getattr(self, f.name) for f in fields(Profile) if hasattr(self, f.name)}
         values |= {"thread_e": self.thread_e or fan, "step_tokens": run.step_tokens or self.step_tokens}
         if p:
-            values |= {"beta_x": p.beta_x, "b_a": _cap(self.b_a, p.bits), "f": _cap(self.f, p.bits),
+            values |= {"beta_x": p.beta_x, "b_a": _cap(self.b_a, p.bits),
                        "tile_weight_bits": _cap(self.tile_weight_bits, p.bits)}
         values |= {"name": self.name, "kappa": kappa, "state_bits": state_bits, "efficiency": self.m(run, efficiency),
-                   "legs": model.legs if legs is None else legs, "fanout": fan, "vocab": model.vocab} | given
+                   "fanout": fan} | given
         if trained is not None and model.matrices:
             values |= _shaped(model, values, trained, self.grad_bits) | given
         return Profile(**values)
@@ -198,7 +194,7 @@ def _shaped(model: Model, v: Mapping[str, Any], t: Trained, grad_bits: float | N
     return {
         "kappa_forward": kappa * t.forward / t.counted, "kappa_wgrad": kappa * t.forward / t.counted if t.backward else None,
         "layers": t.layers, "layer_weights": instances.layer_weights(model, t.size), "layer_bits": layer_bits,
-        "entry_width": v["legs"], "map_width": model.d_model, "map_width_min": model.d_model,
+        "map_width": model.d_model, "map_width_min": model.d_model,
         "token_state_bits": token, "shared_state_bits": shared, "flops_per_token": 2 * t.counted / kappa,
         "cut_bits": None if v["b_a"] is None else (2 if t.backward else 1) * model.d_model * v["b_a"],
         "token_bits": None if v["token_bits"] is None else v["token_bits"] * t.data, "decode_flops": t.decode,
@@ -251,13 +247,12 @@ class Adapter(Premises):
     adapter's `bits` per weight (plus `seed_bits` for seeded projections), and only its products are counted, so `κ` is
     tiny. `form`:
 
-    * `lora`: `A` (`r × d_in`) and `B` (`d_out × r`) per matrix; an activation into `B` reaches `d_out` products, and a
-      token's chain passes through the `r`-wide bottleneck (`legs = r`).
-    * `xs` (LoRA-XS): an `r × r` core between frozen SVD factors of each matrix (`fanout = legs = r`).
+    * `lora`: `A` (`r × d_in`) and `B` (`d_out × r`) per matrix; an activation into `B` reaches `d_out` products.
+    * `xs` (LoRA-XS): an `r × r` core between frozen SVD factors of each matrix (`fanout = r`).
     * `tied` (TinyLoRA): `params` values shared by every matrix, each matrix's `r × r` core a seeded projection of them.
 
     Whatever its table says, an adapter is outside `UpdateHardness` (`b`: it needs the weights to drift, and the
-    registered base doesn't), its frozen embedding gives no `ColumnsIncompressible` (`bcol`), and threads' `d` is `r`.
+    registered base doesn't), and threads' `d` is `r`.
     Its shape fields are its own: `layer_bits` and the token's state are the adapter's weights at `b_w`, a tile reads an
     `A` (`d_in × r`, or a core's `r × r`), and a tied adapter's state is its `params` values, which no shard splits
     (each matrix's core regenerated from them, `SEED` gates an entry and a multiply-add, is its decode cost)."""
@@ -307,7 +302,7 @@ class Adapter(Premises):
                           tile=(rows, r))
         lw = {"layer_weights": min(params, instances.layer_weights(model, size))} if tied else {}
         return self.premised(model, run, kappa=kappa, state_bits=params * self.bits + self.seed_bits, trained=trained,
-                             legs=self.rank, fanout=fan, b=None, bcol=None, thread_d=self.rank, **lw)
+                             fanout=fan, b=None, thread_d=self.rank, **lw)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -315,7 +310,7 @@ class Seed(Premises):
     """Evolution strategies and zeroth-order methods (ES, MeZO): every weight moves along seeded noise, so the update is
     `steps · population` scalars of `bits` each (the seeds follow a counter). A block that reads that description rebuilds
     the weights by regenerating every perturbation, so the state is the description, and no class prices a weight
-    (`b`, `b_w`, `bcol` and threads' `d` unknown, as `algorithms.json` has `theorem_applies = false` for them). The
+    (`b`, `b_w` and threads' `d` unknown, as `algorithms.json` has `theorem_applies = false` for them). The
     description doesn't split across shards, decoding it costs `SEED` gates per weight per perturbation, and with no
     backward there are no weight gradients and one crossing; `forwards` is the forward passes per token (MeZO's two)."""
 
@@ -331,7 +326,7 @@ class Seed(Premises):
         trained = Trained(model.n_total, model.n_active, instances.whole, model.layers, self.forwards * n, n,
                           splits=False, decode=SEED * self.steps * self.population * model.n_total, backward=False)
         return self.premised(model, run, kappa=self.kappa, state_bits=state, trained=trained,
-                             b=None, b_w=None, bcol=None, thread_d=None)
+                             b=None, b_w=None, thread_d=None)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -339,8 +334,7 @@ class Partial(Premises):
     """A subset trained, the rest frozen and registered: the matrices of `groups`, in the last `layer_fraction` of the
     layers (a frozen prefix, which the backward never reaches), with `expert_fraction` of the routed experts carrying
     `slot_fraction` of a token's routed slots (ESFT), and the LM head if `head`. The state is the subset at
-    `state_bits_per_param`. Legs and fan-out stay the whole model's, which only loosens the bounds; the frozen
-    embedding gives no `ColumnsIncompressible` (`bcol`). Its depth is the trained layers' (a frozen prefix's inputs come
+    `state_bits_per_param`. Fan-out stays the whole model's, which only loosens the bounds. Its depth is the trained layers' (a frozen prefix's inputs come
     from registered weights, as layer 0's from token ids), and its shard state the subset's."""
 
     state_bits_per_param: float
@@ -378,15 +372,14 @@ class Partial(Premises):
         layers = max(1, round(self.layer_fraction * instances.spanned(model, self.groups)))
         trained = Trained(total, active, size, layers, c * active, active,
                           prefix=self.layer_fraction >= 1)
-        return self.premised(model, run, kappa=kappa, state_bits=total * self.state_bits_per_param, trained=trained,
-                             bcol=None)
+        return self.premised(model, run, kappa=kappa, state_bits=total * self.state_bits_per_param, trained=trained)
 
 
 @dataclass(frozen=True, kw_only=True)
 class Distill(Premises):
     """The model trained in full on a teacher's outputs: its next-token distributions (pretraining distillation, reaching
     only targets above the teacher's loss) or its sampled traces (in place of RL). The state is the student's, as
-    `Full`'s. A `teacher` run online is registered work: its forward adds `overhead · 2 N_teacher` gates per token and no
+    `Full`'s. A `teacher` run online is in the registered circuit: its forward adds `overhead · 2 N_teacher` gates per token and no
     counted products. A sunk teacher (none) adds nothing. Its shape fields are `Full`'s, with the teacher's outputs as
     data: `data_tokens_per_token` data tokens per token trained (a sunk teacher's distributions)."""
 
@@ -420,7 +413,7 @@ class Nci(Premises):
     `nci.rate_cap` and `nci.boundary_bits_cap`), with the carried state capped as `Full`'s (`nci.state_bits_cap`):
 
     * the state is `state_bits_per_param · updated_fraction · n_total`, or `description_bits` when it doesn't split;
-    * `κ`, `c` (`uses_per_thread`), legs and threads' `d` (`entry_fee_override`), fan-out and threads' `e`
+    * `κ`, `c` (`uses_per_thread`), threads' `d` (`entry_fee_override`), fan-out and threads' `e`
       (`fanout_override`) and `b_a` (`boundary_bits`) are its traits; `b = b_w` is its state rate, unknown when the
       state doesn't split; a trait `theorem_applies = false` leaves threads' `d` unknown;
     * `efficiency.pretrain` is `1 / multiplier` (the library's multiplier is compute-equivalent against dense AdamW
@@ -454,8 +447,7 @@ class Nci(Premises):
                           backward=t["crossings"] >= 2, data=t["data_tokens_per_token"])
         return self.premised(
             model, run, kappa=t["kappa"], state_bits=state, trained=trained,
-            legs=t["entry_fee_override"] or model.legs, fanout=t["fanout_override"] or model.fanout,
-            efficiency=efficiency, b=hard, b_w=hard, b_a=b_a, per_param=c,
+            fanout=t["fanout_override"] or model.fanout, efficiency=efficiency, b=hard, b_w=hard, b_a=b_a,
             thread_d=(t["entry_fee_override"] or self.thread_d) if t["theorem_applies"] else None,
             thread_e=t["fanout_override"] or model.fanout, thread_c=c,
             cut_bits=t["boundary_width_fraction"] * model.d_model * b_a * t["crossings"])

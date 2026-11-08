@@ -19,7 +19,7 @@ audit's outcome gives it and the event that runs the later sessions' simulators 
 `residual` where the honest run reaches the session (`step_le`). Hybrid `M` is the honest run (`hyb_M`), and hybrid `0`
 the composed simulator (`hyb_zero`), since the framing's messages are functions of the statement and the history.
 
-* `Ex_resample`, `Pr_resample`: resampling one coordinate keeps the law; `Pr_le_resample`: a hybrid step from two
+* `Ex_resample`, `Pr_resample`: resampling one coordinate keeps the sampling design; `Pr_le_resample`: a hybrid step from two
   resamplings.
 * `pre`, `pre_succ`: the honest run's first sessions; where it goes on after session `j`'s start, the next session is
   `A`'s run against `residual`. `pre_congr`: the first `j` sessions read only the first `j` slots.
@@ -36,8 +36,8 @@ open Claims
 
 /-! ## Transcripts and simulator programs -/
 
-theorem histOf_eq (ms : List (Msg × Out)) : histOf ms = ZKMal.histOf ms := by
-  unfold histOf ZKMal.histOf
+theorem histOf_eq (ms : List (Msg × Out)) : histOf ms = Claims.histOf ms := by
+  unfold histOf Claims.histOf
   congr 1
 
 theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
@@ -51,10 +51,10 @@ theorem recGoesOn_cons_msg (a m : Msg) (τ : List (Msg × Out)) :
 /-- An honest run's transcript goes on, in the claims' sense, exactly where it has all its rounds, each a message. -/
 theorem recGoesOn_interact (ask : List Msg → Out) (pm : List (Msg × Msg) → Msg) :
     ∀ (n : ℕ) (hist : List (Msg × Msg)),
-      Recursion.goesOn (ZKMal.interact ask pm n hist) = ZKMal.goesOn n (ZKMal.interact ask pm n hist)
+      Recursion.goesOn (Claims.interact ask pm n hist) = ZKMal.goesOn n (Claims.interact ask pm n hist)
   | 0, _ => rfl
   | n + 1, hist => by
-    simp only [ZKMal.interact]
+    simp only [Claims.interact]
     cases ask (hist.map Prod.fst ++ [pm hist]) with
     | msg m => rw [recGoesOn_cons_msg, ZKMal.goesOn_cons]; exact recGoesOn_interact ask pm n _
     | acc => simp [Recursion.goesOn, ZKMal.goesOn, ZKMal.isMsg]
@@ -79,8 +79,8 @@ theorem simAt_of {St : Type} {S : SimOut St} {C : Type} {xS : Msg} (h : Nonempty
 
 /-! ## Resampling one coordinate -/
 
-/-- **Resampling keeps the law**: where `(a, b) ↦ (u a b, v a)` is an involution, drawing `a`, then `b` fresh in place
-of `v a`, draws `u a b` uniformly. -/
+/-- **Resampling keeps the sampling design**: where `(a, b) ↦ (u a b, v a)` is an involution, sampling `a`, then `b` fresh in place
+of `v a`, samples `u a b` uniformly. -/
 theorem Ex_resample {α β : Type} [Fintype α] [Fintype β] [Nonempty β] (u : α → β → α) (v : α → β)
     (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b) (f : α → ℝ) :
     (Ex fun a => Ex fun b => f (u a b)) = Ex f := by
@@ -212,7 +212,7 @@ end ZkCompiled
 abbrev askOf {Θ : Type} (H : Msg → Msg) (Vs : VStar Θ) (x : Msg) (θ : Θ) (as : List Msg) : Out :=
   ((Vs.next x as θ).eval H).1
 
-/-- **One hybrid step**: where resampling one coordinate keeps the law on each side, a bound at each fixed rest of the
+/-- **One hybrid step**: where resampling one coordinate keeps the sampling design on each side, a bound at each fixed rest of the
 coordinates is a bound on average. -/
 theorem Pr_le_resample {α β γ : Type} [Fintype α] [Fintype β] [Nonempty β] [Fintype γ] [Nonempty γ]
     (u : α → β → α) (v : α → β) (h1 : ∀ a b, u (u a b) (v a) = a) (h2 : ∀ a b, v (u a b) = b)
@@ -233,9 +233,9 @@ theorem Pr_le_of_imp {α β : Type} [Fintype α] [Nonempty α] [Fintype β] [Non
 
 /-- `simRounds` from nothing, where each message is a function of the history, is the run of that function. -/
 theorem simRounds_said (H : Msg → Msg) (ask : List Msg → Out) (f : List (Msg × Out) → SP Msg)
-    (g : List (Msg × Msg) → Msg) (hf : ∀ ms, f ms = .ret (g (ZKMal.histOf ms))) (n : ℕ) :
-    (SP.eval H ask (Recursion.simRounds f n [])).1 = ZKMal.interact ask g n [] := by
-  have hh : ∀ h : List (Msg × Msg), ZKMal.histOf (RecDeploy.asRounds h) = h := by
+    (g : List (Msg × Msg) → Msg) (hf : ∀ ms, f ms = .ret (g (Claims.histOf ms))) (n : ℕ) :
+    (SP.eval H ask (Recursion.simRounds f n [])).1 = Claims.interact ask g n [] := by
+  have hh : ∀ h : List (Msg × Msg), Claims.histOf (RecDeploy.asRounds h) = h := by
     intro h
     induction h with
     | nil => rfl
@@ -373,7 +373,7 @@ theorem sim_out (L : ZkCompiled Coin A) (H : Msg → Msg) (x : Msg) {Θ : Type} 
     (o : List Msg × List A.St) (c : L.sim.C x) :
     (L.sim.given o).out H Vs θ x c =
       L.simEval H x Vs θ o.2 c (List.finRange (L.M x))
-        (ZKMal.interact (askOf H Vs x θ) (fun h => (L.step x h).said) (L.k₀ x) []) := by
+        (Claims.interact (askOf H Vs x θ) (fun h => (L.step x h).said) (L.k₀ x) []) := by
   show (SP.eval H (askOf H Vs x θ) (Recursion.spBind (Recursion.simRounds
     (fun ms => (.ret (L.step x (histOf ms)).said : SP Msg)) (L.k₀ x) [])
       fun ms => L.simSessions x o.2 c (List.finRange (L.M x)) ms)).1 = _
@@ -412,9 +412,9 @@ theorem pm_in (w : Sampling.Wit) (t : L.Tp x) {i : ℕ} (hi : i < L.M x) {hist h
 /-- The honest run before session `j` is the composed prover's. -/
 theorem pre_eq (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) {j : ℕ}
     (hj : j ≤ L.M x) :
-    L.pre H w x Vs θ t j = ZKMal.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x j) [] := by
+    L.pre H w x Vs θ t j = Claims.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x j) [] := by
   have hm : (runStar H (L.prover w x) Vs x t θ).msgs =
-      ZKMal.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x (L.M x)) [] := by
+      Claims.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x (L.M x)) [] := by
     rw [ZKMal.runStar_msgs, hk, hS.rounds x s hs]
     refine ZKMal.interact_congr _ _ _ _ _ fun i hi => hS.honest x s hs w _ t ?_
     rw [List.nil_append, ZKMal.histOf_length, List.length_take]
@@ -425,7 +425,7 @@ theorem pre_eq (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs
 
 /-- Before the sessions, the honest run says what the framing fixes. -/
 theorem pre_zero (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : Vs.k x = L.V.k x) (t : L.Tp x) :
-    L.pre H w x Vs θ t 0 = ZKMal.interact (askOf H Vs x θ) (fun h => (L.step x h).said) (L.k₀ x) [] := by
+    L.pre H w x Vs θ t 0 = Claims.interact (askOf H Vs x θ) (fun h => (L.step x h).said) (L.k₀ x) [] := by
   rw [pre_eq hS hs w Vs θ hk t (Nat.zero_le _), L.start_zero]
   refine ZKMal.interact_congr _ _ _ _ _ fun i hi => pm_framing hS hs w t ?_
   rw [List.nil_append, ZKMal.histOf_length, List.length_take]
@@ -450,7 +450,7 @@ theorem pre_succ (w : Sampling.Wit) {Θ : Type} (Vs : VStar Θ) (θ : Θ) (hk : 
   congr 1
   rw [ZKMal.runStar_msgs, histOf_eq]
   have e3 := ZKMal.interact_shift (askOf H Vs x θ) (L.pm H w x t)
-    (ZKMal.histOf (ZKMal.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x i) [])) (L.n x i) []
+    (Claims.histOf (Claims.interact (askOf H Vs x θ) (L.pm H w x t) (L.start x i) [])) (L.n x i) []
   rw [List.append_nil, ZKMal.histOf_map_fst] at e3
   rw [e3]
   refine ZKMal.interact_congr _ _ _ _ _ fun m hm => ?_

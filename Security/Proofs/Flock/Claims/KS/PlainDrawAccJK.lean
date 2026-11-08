@@ -1,10 +1,56 @@
 module
 
-public import Proofs.Flock.Claims.KS.PlainDrawAccK
 public import Proofs.Flock.Claims.KS.PlainDrawJ
+public import Proofs.Flock.Soundness.Discharge.Exec.Rounds
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.Claims.KS.Entries
+import Proofs.Flock.Claims.KS.LevelZero
+import Proofs.Flock.Claims.KS.LevelZeroAcc
+import Proofs.Flock.Claims.KS.OffSC
+import Proofs.Flock.Claims.KS.PlainDrawK
+import Proofs.Flock.Soundness.Discharge.Exec.VerifyKJ
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepted
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
+import Proofs.Flock.Soundness.Discharge.HiddenExec.Setup
+import Proofs.Flock.Soundness.Discharge.Integrate.Accepted
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.Discharge.ZkExec.PlaysDet
+import Proofs.Flock.Soundness.Refine.Seam
+import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
-# flock-verify's acceptance at a draw value, at the parsed record, through `keep`
+# flock-verify's acceptance at a sample value, at the parsed record, through `keep`
 
 `PlainDrawAccK` at `AcceptsAtDJK`: each lemma's proof on the walkers of `verifyJWithMK keep` (`verifyJK_ok_tables`,
 `verifyJK_one_ok`) and of `Record.decodeJWithK keep` (`decodeJWithK_points`, `decodeJWithK_roundsWF`,
@@ -482,8 +528,8 @@ open Flock FlockLevel3 Refine
 open FlockSoundness.Discharge.Exec (Inputs verifyJK_one_ok)
 open FlockSoundness.Discharge.Integrate FlockSoundness.Discharge.HiddenExec
 
-/-- **A draw flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDJK keep I (some d)`, with no
-premise on the record's draw. -/
+/-- **A sample flock-verify accepts at sets up**: `drawSetup_of_accepts` at `AcceptsAtDJK keep I (some d)`, with no
+premise on the record's sample. -/
 theorem drawSetup_of_acceptsDJK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
@@ -498,8 +544,8 @@ theorem drawSetup_of_acceptsDJK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetup_of_setupH ht hc ho hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
-`tableAt_of_accepts` at `AcceptsAtDJK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at, the headline's table is `stmtOf` of the statement it accepted**:
+`tableAt_of_accepts` at `AcceptsAtDJK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAt_of_acceptsDJK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmRow.parse I.tags I.circuitFile I.tables = .ok c) (ho : c.outNet = c.unitNet)
     (hh : I.tags.hiddenOutputs = false) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)
@@ -515,8 +561,8 @@ theorem tableAt_of_acceptsDJK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ}
   obtain ⟨y, hy, e⟩ := tableAt_stmtOf ht dj x₀ x
   exact ⟨x.st, hst, hy ▸ ⟨y.wf.1, e⟩⟩
 
-/-- **A draw flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
-`AcceptsAtDJK keep I (some d)`, with no premise on the record's draw. -/
+/-- **A sample flock-verify accepts at under hidden outputs sets up**: `drawSetupH_of_accepts` at
+`AcceptsAtDJK keep I (some d)`, with no premise on the record's sample. -/
 theorem drawSetupH_of_acceptsDJK (keep : Bool → Bool)
     {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {d : Lean.Json} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
@@ -531,8 +577,8 @@ theorem drawSetupH_of_acceptsDJK (keep : Bool → Bool)
   obtain ⟨D, hD, -⟩ := Layout.drawn_spec (c := { st.c with outPorts := #[] }) hdr
   exact ⟨st, D, hst, hD, fun hS hm => drawSetupH_of_setupHiddenI ht hc hst hf hD hS hm⟩
 
-/-- **At a draw flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
-accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDJK keep I (some (dj S))`, with no premise on the record's draw. -/
+/-- **At a sample flock-verify accepts at under hidden outputs, the hidden table is `stmtOf` of the statement it
+accepted**: `tableAtH_of_acceptsI` at `AcceptsAtDJK keep I (some (dj S))`, with no premise on the record's sample. -/
 theorem tableAtH_of_acceptsDJK (keep : Bool → Bool) {I : Inputs} {mPts n : ℕ} {S : Finset (Fin n)} {c : Flock.Circuit}
     (ht : I.tags.typed = false) (hc : HmOut.parse I.tags I.circuitFile I.tables = .ok c)
     (hh : I.tags.hiddenOutputs = true) (hc1 : I.count ≤ 1) (dj : Finset (Fin n) → Lean.Json)

@@ -14,12 +14,21 @@ def test_the_rules_parse_and_name_the_hold_label():
     assert rules.hold_label == "hold"
 
 
-def test_drives_flags_parse_and_put_no_pr_first_by_default():
+def test_drives_flags_parse_and_name_the_machines_its_checks_run_on():
     flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
-    assert flags.on and flags.first == ()
+    assert flags.on
 
 
-def test_drives_landing_gates_are_in_the_tree():
-    """Drive runs each from `main`, and a gate that isn't there can't judge, which leaves every PR off `next`."""
-    gates = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS).landing_gates
-    assert "tools/verity/check/gates/markdown_caps.py" in gates and all((ROOT / g).is_file() for g in gates)
+def test_drives_gates_are_in_the_tree_and_the_markdown_caps_only_warn():
+    """Drive runs each from `main`, and a gate that isn't there can't judge, which leaves every PR off `next`.  A Markdown file
+    over its cap is a warning: the caps' gate is a warn gate, never a landing gate."""
+    flags = DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS)
+    caps = "tools/verity/check/gates/markdown_caps.py"
+    assert caps in flags.warn_gates and caps not in flags.landing_gates
+    assert all((ROOT / g).is_file() for g in flags.landing_gates + flags.warn_gates)
+
+
+def test_a_red_ratchet_gate_step_never_reverts():
+    """A red ratchet-gate step is a warn step's: drive rings its culprits' lanes, which fix it forward in their next PR, and
+    reverts none of them."""
+    assert "ratchet-gate" in DriveFlags.parse((ROOT / DRIVE_FLAGS).read_text(), DRIVE_FLAGS).warn_steps

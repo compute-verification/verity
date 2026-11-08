@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.Exec.FlockLinkL
 public import Proofs.Flock.Soundness.Audit.FlockLinked
+import Mathlib.Combinatorics.Matroid.Init
 
 /-!
 # The compiled-layer audit with `δ_link` discharged
@@ -17,7 +18,7 @@ What it rests on, all named:
   (`hCR : LinkCRL … (reg σ) (cont σ) …`);
 * `ValueBinding`, the binding of wires to registered commit strings, which the circuit prover's `hm96-sha512` leaf
   layout discharges;
-* the lowering, `LoweringSoundB`, or in the `_placed` forms each drawn unit's place in its table (`UnitPlace`: the row
+* the lowering, `LoweringSoundB`, or in the `_placed` forms each sampled proof block's place in its table (`UnitPlace`: the row
   placement).
 
 The numeric side conditions are `N₀/(ek) ≤ ρ < 1` for every table (`hr`, `hρ`) and `t'`, the SHA-512 evaluations of one
@@ -65,7 +66,7 @@ theorem flock_batched_count_linkedL (hlow : P.LoweringSoundB plan tab decode)
     (flock_batched_linkSoundEL P H E Lf plan tab vb hlow hk hRw hM hρ hr ht) K σ).trans_eq
     (by rw [linkBoundCR_eqL P H E Lf plan tab vb hCR])
 
-/-- **Drawn units of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
+/-- **Sampled proof blocks of the compiled-layer audit, with `δ_link` discharged**, are correct at the plurality value layer
 up to `ε_ks(σ) + linkBoundE`. -/
 theorem flock_batched_drawn_linkedL (hlow : P.LoweringSoundB plan tab decode)
     {k : ℕ} (hk : 1 ≤ k) {Rw M : ℕ} (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -86,8 +87,8 @@ variable {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type} {D Sl : Type} 
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (plan S R).length)
   {L : Law n}
 
-/-- **The compiled-layer count curve from the drawn units' places**: `flock_batched_count_linkedL` with the lowering
-discharged by each drawn unit's place in its table (`UnitPlace`: the row placement). What remains named is A2, `ValueBinding` and the places. -/
+/-- **The compiled-layer count curve from the sampled proof blocks' places**: `flock_batched_count_linkedL` with the lowering
+discharged by each sampled proof block's place in its table (`UnitPlace`: the row placement). What remains named is A2, `ValueBinding` and the places. -/
 theorem flock_batched_count_placedL
     (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}
     (vb : P.ValueBinding plan tab (P.placeDecoder plan tab place) Hc)
@@ -101,7 +102,7 @@ theorem flock_batched_count_placedL
   flock_batched_count_linkedL P H E Lf plan tab vb (P.loweringSoundB_of_place plan tab place) hk hRw hM hρ hr
     ht K σ hCR
 
-/-- **Drawn units, from the drawn units' places**: `flock_batched_drawn_linkedL` with the lowering discharged by
+/-- **Sampled proof blocks, from the sampled proof blocks' places**: `flock_batched_drawn_linkedL` with the lowering discharged by
 `UnitPlace`. -/
 theorem flock_batched_drawn_placedL
     (place : ∀ S R u, u ∈ S → UnitPlace P (Partition.tabOf plan tab S R u).S u) {Dh : Type} {Hc : List UInt8 → Dh}

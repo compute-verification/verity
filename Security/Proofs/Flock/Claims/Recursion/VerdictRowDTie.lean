@@ -2,9 +2,41 @@ module
 
 public import Proofs.Flock.Claims.Recursion.VerdictRowDCoin
 public import Proofs.Flock.Claims.Recursion.OpenLowerDeployed
-public import Proofs.Flock.VBridge.Algebra.RunSkel
-public import Proofs.Flock.VBridge.Algebra.Zerocheck
-public import Proofs.Flock.VBridge.PartS
+public import Proofs.Flock.Claims.Recursion.VerdictRowDSide
+public import Proofs.Flock.Recursive.ValueSrc
+import Mathlib.Algebra.Order.Floor.Extended
+import Mathlib.Algebra.Order.Interval.Basic
+import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
+import Mathlib.Analysis.SpecialFunctions.Bernstein
+import Mathlib.Analysis.SpecialFunctions.Gamma.Basic
+import Mathlib.Analysis.SpecialFunctions.Trigonometric.DerivHyp
+import Mathlib.Combinatorics.Enumerative.DyckWord
+import Mathlib.Combinatorics.SimpleGraph.Triangle.Removal
+import Mathlib.Data.NNRat.Floor
+import Mathlib.Data.Nat.Choose.Multinomial
+import Mathlib.Geometry.Euclidean.Altitude
+import Mathlib.NumberTheory.Chebyshev
+import Mathlib.NumberTheory.Height.NumberField
+import Mathlib.NumberTheory.Height.Projectivization
+import Mathlib.NumberTheory.LucasLehmer
+import Mathlib.NumberTheory.SelbergSieve
+import Mathlib.RingTheory.Radical.NatInt
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Mathlib.Tactic.ReduceModChar
+import Mathlib.Topology.Sheaves.Init
+import Proofs.Flock.VBridge.Algebra.RunSkel
 
 /-!
 # Row D's ties at the deployed layout: the side's schedule and check 5's positions
@@ -183,7 +215,7 @@ theorem verifierRows_filter {sh : Shape} {a b : Array (Array F128)} {extras : Ar
   unfold RecAlgebra.verifierRows
   rw [e]
 
-/-- **`verifierRows` reads a round**: the zerocheck draws its first coins before anything else, so no rows come of no
+/-- **`verifierRows` reads a round**: the zerocheck flips its first coins before anything else, so no rows come of no
 rounds. -/
 theorem verifierRows_pos {sh : Shape} {rounds : Array (Array F128)} {extras : Array Claim} {comb : Array F128}
     {w : Array F128 × RecAlgebra.Info RecAlgebra.Lin × Array (Array (Array F128))}

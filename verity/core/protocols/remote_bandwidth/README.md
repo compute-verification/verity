@@ -9,7 +9,7 @@ is the outline and the entry points.
 A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the prover
 doesn't control (`verifier_party.py`), or every party in one process (`period.py`), against the prover's passes over
 its registered store. A period's case replays through the Lean (`RemoteAudit.Protocol`), and the session harness runs
-the Lean verifier of record beside the books (below). Not all of it is zero knowledge yet:
+the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
 
 - **Openings are in the clear.** Each window's openings go to the verifier party as they are (`wire.encode_openings`),
   and it checks them itself (`audit.AuditRun.verify`). Those checks are the specification of what each zero-knowledge
@@ -32,18 +32,18 @@ the Lean verifier of record beside the books (below). Not all of it is zero know
   scaled up to a deployment's monitoring period.
 - The Lean package `lean/` (root module `RemoteAudit`): `remote-audit-verifier` (`RemoteAudit.Verifier`), the verifier's
   process the session harness runs; `remote-audit-protocol` (`RemoteAudit.Protocol`), a period's case as onsite's
-  bandwidth component, which publishes `q_bytes` and `eps` (`certify`); and `remote-audit-difftest`, which holds
+  bandwidth subprotocol, which publishes `q_bytes` and `eps` (`certify`); and `remote-audit-difftest`, which holds
   `audit.py` to it.
 - `benchmarks/remote_session/`: a session over TCP on GPUs, the verifier's side and the prover's each on its own machine.
 
 ## Which side is the definition
 
-The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier of record; the Python mirrors it.
+The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verifier; the Python mirrors it.
 `audit.py` and what it calls here (`receipts.py`, `codec.py`, `coins.py`) are held to it by `lean/tests/`' difftest:
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
-seed, codec, plans, receipts, openings, draws). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
+seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
+the Lean's verdicts are `Security/Properties/Accounting/Remote.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -56,14 +56,14 @@ window's verdict is the Lean's, and the Python check of its openings runs beside
   window's (k + 1)-th root is refused as `order` by both sessions, and a transcript carries its session's pace.
 - the Lean's record holds every field the ledger reads but four: the coins' commitment root, which is the books'; the
   block size, a constant; the registration's receipt, bind, codec, layout and rows, bound by its digest, which the
-  Lean's record names; and the integrity profile, a function of the Lean's lengths and draws at δ
+  Lean's record names; and the integrity profile, a function of the Lean's lengths and samples at δ
   (`audit.window_profile`).
 - every recorded session in the store replays through both to the same verdict (`lean/tests/replay.py`), and to the
   one it recorded wherever its `verifier.json` keeps enough to rebuild its events in turn: three sessions that failed
   `few` don't keep their appends, and both verifiers refuse the same call of their replay.
 
 The driver's scheduling (when a boundary leaves, `AuditRun.next_boundary_ns`), the plans the `memory` diagnostic
-reads, and the window and draw counts `verifier.json` keeps are still read from the books. The Lean checks the same
+reads, and the window and sample counts `verifier.json` keeps are still read from the books. The Lean checks the same
 plans event by event.
 
 The store binding (`store.py`) decides whether a registered store is the one a pinned model fixes (`verifier.py
@@ -97,15 +97,15 @@ The memory line held over time is the line of record a gate run publishes (`audi
 read over each stretch of a paced session's groups, from their timings, the store, the on-chip storage, the node's
 rates and bursts and the wrong receipts, in exact rationals. The Lean computes it (`lean/RemoteAudit/Line.lean`, its
 W from `Pooled.lean`), as the verifier process's `line_record` request, off the Lean verifier's record of the session
-(`lineOfRecordAt`: its groups' passes, its windows' receipts and draws and its registered blocks the record's, each
-window's draws refused unless `min(s, U_t)`; drawn g > 1 windows a coin, its draws' receipts and draws, each `g`
+(`lineOfRecordAt`: its groups' passes, its windows' receipts and samples and its registered blocks the record's, each
+window's samples refused unless `min(s, U_t)`; sampled g > 1 windows a coin, its samples' receipts and samples, each `g`
 windows' summed and refused unless `min(s, U)` and below 2^64, and at one window in flight no line), refused unless
 the record is of the node's registration given with it (`lineOfRegistered`), with the auditor's times and each
 group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+`Security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 
@@ -113,7 +113,7 @@ compared word for word. The Lean statement that the line is true of the trace th
 transcript (the difftest's case: every event, its clock, the coins and each window's openings, which
 `verifier.py --transcript DIR` writes for each session it runs) replays in full, a `receipt`, `codec` or path rejection
 included, and a remote session's `verifier.json`, which keeps no roots, plans, coins or openings, replays as the case
-its arrivals, steps, draws and parameters make (the module's docstring says how it is held to the recorded verdict).
+its arrivals, steps, samples and parameters make (the module's docstring says how it is held to the recorded verdict).
 
 ~~~text
 uv run python verity/core/protocols/remote_bandwidth/lean/tests/replay.py record VERIFIER.json ... --out ROWS.json
@@ -130,12 +130,12 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
-- `coins.py`: a session's live coins, an epoch of the proof service's one challenger (`sampled_proofs.challenger`, in
+- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`sampled_proofs.challenger`, in
   process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
   coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
-  window's draws after its roots; and, once the session has its outcome and no root can follow, the commitment and
+  window's samples after its roots; and, once the session has its outcome and no root can follow, the commitment and
   every released coin's opening (`audit.AuditRun.disclose`; the remote session's `coins` after `ended`), which it
   checks each coin it was sent against (`received_reason`). The commitment's root is a function of every coin, so the
   prover holds none of it while the session runs, and no guarantee takes a hiding premise on it (`PROTOCOL.md` §4).

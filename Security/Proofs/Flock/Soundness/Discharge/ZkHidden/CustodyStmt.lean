@@ -1,8 +1,26 @@
 module
 
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundCustody
-public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJJson
+public import Proofs.Flock.Soundness.Discharge.Composed.Defs
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.BindStmt
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJ
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundDrawOk
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundRuns
+public import Proofs.Flock.Soundness.Discharge.ZkHidden.Theorems
+public import Proofs.Flock.Soundness.Discharge.ZkLink.DrawOkJson
+import Mathlib.Tactic.Echelon.Zsqrtd
+import Mathlib.Tactic.NormNum.Irrational
+import Mathlib.Tactic.NormNum.IsCoprime
+import Mathlib.Tactic.NormNum.IsSquare
+import Mathlib.Tactic.NormNum.LegendreSymbol
+import Mathlib.Tactic.NormNum.ModEq
+import Mathlib.Tactic.NormNum.NatFib
+import Mathlib.Tactic.NormNum.NatLog
+import Mathlib.Tactic.NormNum.NatSqrt
+import Mathlib.Tactic.NormNum.Ordinal
+import Mathlib.Tactic.NormNum.Parity
+import Mathlib.Tactic.NormNum.Prime
+import Mathlib.Tactic.NormNum.RealSqrt
+import Proofs.Flock.Soundness.Discharge.ZkHidden.SoundStmt
 
 @[expose] public section
 
@@ -13,7 +31,7 @@ set_option Elab.async false
 
 `zk_session_soundH_custody`, `zk_session_soundHJ_custody` and `zk_session_soundHJ_custody_json` at `HmOut.parseStmt`
 (`hcS`, a templated file's committed circuit unrolled), with the rows' fit `hv1` given: `zk_session_soundHSt` and
-`zk_session_soundHJSt` with the record's custody in place of `hRec` and `hDraw`, the draws from `drawOkZKH_of_execSt`
+`zk_session_soundHJSt` with the record's custody in place of `hRec` and `hDraw`, the samples from `drawOkZKH_of_execSt`
 and `drawOkZKHJ_of_fileSt`.
 -/
 
@@ -36,16 +54,16 @@ theorem zk_session_soundH_custodySt
     (hv1 : Hidden.Any.RowsFitS c) (hU : Built c.unit)
     {pub : Public} (hpub : HmOut.loadPublic (zkTags I) c I.publicFile = .ok pub)
     (hscope : Layout.scopeOkH c = true)
-    -- the law and A3
+    -- the sampling design and A3
     {m : ℕ} (σs : Fin n → Fin m) (ks : Fin m → ℕ) (hks : ∀ s, ks s ≤ (Law.stratum σs s).card)
     (St : Fin m → Flock.Draw.Stratum) (hS : Law.ExecStrata σs ks St) (Kd pop : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin m → ℕ) (src : Ω → (i : Fin m) → Fin (Lb i) → Fin 256)
     (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the record, at the link points of the law's draws
+    -- the record, at the link points of the sampling design's samples
     (dj : Finset (Fin n) → Lean.Json) {S₀ : Finset (Fin n)} (y₀ : DrawSetupZKH I (mPtsOf c.g (∑ s, ks s)) S₀ (dj S₀))
     (wr : Finset (Fin n) → Reg → LiveOut (mPtsOf c.g (∑ s, ks s)) → Exec.Transcript)
     (dg : ByteArray → ByteArray) (N : ℕ)
-    -- the verify command's tags, and live-verifier: the record and its draw file are the live session's
+    -- the verify command's tags, and live-verifier: the record and its sample file are the live session's
     (hTags : TagsOkH I) (hCust : Assumptions.Zk.RecordCustodyZK I dj wr (.stratified Kd (Array.ofFn St)) pop)
     -- the count curve's parameters
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -83,7 +101,7 @@ theorem zk_session_soundH_custodySt
     (fun ω => drawOkZKH_of_execSt I ht hcS σs ks hks St hS Kd pop Lb src dj hCust.2 ω) hTags hCust.1 hk hRw hM hρ hr ht' K₀
     τ hCR
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the coin server's custody**, at the session's
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the challenger's live-coin part's custody**, at the session's
 statement circuit (`zk_session_soundHJ_custody` at `HmOut.parseStmt`). -/
 theorem zk_session_soundHJ_custodySt
     (I : Inputs) (ht : I.tags.typed = false)
@@ -99,7 +117,7 @@ theorem zk_session_soundHJ_custodySt
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, and the coin server's custody of the record and its draw file
+    -- the verify command's tags, and the challenger's live-coin part's custody of the record and its sample file
     (hTags : TagsOkZHJ I)
     (hCust : Assumptions.Zk.RecordCustodyZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr kd)
     {k Rw M : ℕ} (hk : 1 ≤ k) (hRw : 1 ≤ Rw) (hM : 1 ≤ M) {ρ : ℝ} (hρ : ρ < 1)
@@ -127,7 +145,7 @@ theorem zk_session_soundHJ_custodySt
   zk_session_soundHJSt I ht dj y₀ wr dg N hcS hv1 hU hpub hscope kd hkd Lb src hA3
     (fun _ => drawOkZKHJ_of_fileSt I ht hcS kd n hdiv dj hCust.2 _) hTags hCust.1 hk hRw hM hρ hr ht' K₀ τ
 
-/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the record's custody and the printed draw
+/-- **One hidden-output `--zk` sampled session of `J` tables is sound, at the record's custody and the printed sample
 file**, at the session's statement circuit (`zk_session_soundHJ_custody_json` at `HmOut.parseStmt`). -/
 theorem zk_session_soundHJ_custody_jsonSt
     (I : Inputs) (ht : I.tags.typed = false)
@@ -143,8 +161,8 @@ theorem zk_session_soundHJ_custody_jsonSt
     (dg : ByteArray → ByteArray) (N : ℕ)
     {Ω : Type} [Fintype Ω] [Nonempty Ω] (Lb : Fin 1 → ℕ)
     (src : Ω → (i : Fin 1) → Fin (Lb i) → Fin 256) (hA3 : Assumptions.UniformRandomBytes Lb src)
-    -- the verify command's tags, the coin server's custody of the record, and its draw file as `flock-verify draw`
-    -- printed the verifier's draw
+    -- the verify command's tags, the challenger's live-coin part's custody of the record, and its sample file as `flock-verify draw`
+    -- printed the verifier's sample
     (hTags : TagsOkZHJ I)
     (hRec : RecordsLiveZKJ I dj (fun S R => (planZHJ (Reg := Reg) dj y₀ S R).length) wr)
     (hdj : ∀ S, dj S = (drawOf (.subset kd) n S).toJson)

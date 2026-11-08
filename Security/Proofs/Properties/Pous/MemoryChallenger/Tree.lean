@@ -1,7 +1,12 @@
 module
 
 public import Properties.Pous.MemoryChallenger
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
+import Mathlib.Algebra.Order.Group.Nat
+import Mathlib.Algebra.Ring.Parity
+import Mathlib.Data.Finset.Attr
+import Mathlib.Tactic.Bound.Init
+import Mathlib.Tactic.SetLike
 
 /-!
 # The records tree binds its values

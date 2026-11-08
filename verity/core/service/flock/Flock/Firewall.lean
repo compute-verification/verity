@@ -1,5 +1,5 @@
 /-
-The firewall's contract, inner phase (live PROTOCOL.md §10.3): what the firewall may send the challenger's coin server, as a
+The ZK server's contract, inner phase (live PROTOCOL.md §10.3): what the ZK server may send the challenger's live-coin part, as a
 program. `rec_live` relays a live session through it (`flock-firewall live`, `liveCmd`), and its Python mirror is held to
 it (`flock-firewall`, `verity/ml/flock/tests/test_firewall_agreement.py`).
 -/
@@ -8,6 +8,7 @@ module
 public import Lean.Data.Json
 public import Flock.Hm96
 public import Flock.JsonParse
+public import Flock.CanonForm
 
 @[expose] public section
 
@@ -17,7 +18,7 @@ open Lean (Json JsonNumber)
 
 /-! ## The contract
 
-Before release, every value the firewall sends the auditor is one of three things:
+Before release, every value the ZK server sends the auditor is one of three things:
 
 * **salted**: a commitment, `Hm96.Default512.commitString`, under a fresh salt the workers never see;
 * **masked**: the value plus a fresh pad the workers never see, released only after every relation the verifier will
@@ -27,12 +28,12 @@ Before release, every value the firewall sends the auditor is one of three thing
 Everything else a worker sends (the statement digest, labels, the domain, nonces, the hidden statement's Σ) is
 **dropped**, and a request that leaves the schedule stops the session, which the auditor sees as `end: "stop"`.
 
-For the inner phase that is the type `Sent`: each message to the coin server is the schedule's own value, a count the
+For the inner phase that is the type `Sent`: each message to the challenger's live-coin part is the schedule's own value, a count the
 schedule fixes, zeros, or a list of salted commitments. Nothing a worker sends reaches it except under a salt from the
-firewall's stream. `run` is the firewall: the pinned schedule, the worker's requests, the firewall's salts in, the coin
-server's record out. -/
+ZK server's stream. `run` is the ZK server: the pinned schedule, the worker's requests, the ZK server's salts in, the challenger's
+live-coin part's record out. -/
 
-/-- A message from the firewall to the coin server. -/
+/-- A message from the ZK server to the challenger's live-coin part. -/
 inductive Sent where
   /-- the schedule's `Hello` (fixed), never the worker's text -/
   | hello (h : Json)
@@ -318,7 +319,7 @@ def Schedule.tables (s : Schedule) : List String :=
 def jnat (n : Nat) : Json := .num ⟨Int.ofNat n, 0⟩
 
 /-- A round's schedule entry read field by field: its stream, `k`, `n`, each fresh top's node count, its copies of a
-level-0 top and its message rows (`none` for an entry `schedule` refuses). What the firewall sends for a round is pinned
+level-0 top and its message rows (`none` for an entry `schedule` refuses). What the ZK server sends for a round is pinned
 to these, beside the canonical compare, so that what it sends is the schedule's value. -/
 def roundSpec (j : Json) : Option (String × Nat × Nat × List Nat × Nat × Nat) :=
   Except.toOption (ε := String) do
@@ -342,37 +343,6 @@ value: every later cap is a fresh top, whatever its value. -/
 def copiesOf (s : Schedule) (i : Nat) : Nat := ((roundSpec (s.rounds.getD i .null)).map (·.2.2.2.2.1)).getD 0
 
 /-! ## Canonical forms (`rec_live.canonical`) -/
-
-/-- One token of a JSON value as `Json.compress` writes it: a number as its text, an array's or object's members between
-its opening and `close`, each member of an object its `key` then its value, in key order. -/
-inductive Tok where
-  | null
-  | bool (b : Bool)
-  | num (text : String)
-  | str (s : String)
-  | arr
-  | obj
-  | key (k : String)
-  | close
-  deriving DecidableEq
-
-mutual
-/-- A value's canonical form, its tokens as `Json.compress` writes them, so that two values compress alike exactly when
-their canonical forms are equal. `compress` is a `partial def`, which no proof can unfold; `canonForm` is total. -/
-def canonForm : Json → List Tok
-  | .null => [.null]
-  | .bool b => [.bool b]
-  | .num n => [.num (toString n)]
-  | .str s => [.str s]
-  | .arr ⟨a⟩ => .arr :: canonFormList a ++ [.close]
-  | .obj ⟨⟨t⟩⟩ => .obj :: canonFormObj t ++ [.close]
-def canonFormList : List Json → List Tok
-  | [] => []
-  | j :: js => canonForm j ++ canonFormList js
-def canonFormObj : Std.DTreeMap.Internal.Impl String (fun _ => Json) → List Tok
-  | .leaf => []
-  | .inner _ k v l r => canonFormObj l ++ (.key k :: canonForm v) ++ canonFormObj r
-end
 
 /-- A string `JsonParse` reads back unescaped: no `"`, `\` or control character. -/
 def plainStr (s : String) : Bool := s.all fun c => c != '"' && c != '\\' && 0x20 ≤ c.val
@@ -420,7 +390,7 @@ end
 
 def printJson (j : Json) : String := String.ofList (jsonChars j)
 
-/-- **The schedules the firewall holds a session to**, those an honest worker's session can finish; `schedule` refuses
+/-- **The schedules the ZK server holds a session to**, those an honest worker's session can finish; `schedule` refuses
 every other:
 * Hello is plain (`plain`), so it prints back as it parses, names no `coins`, and is an object whose `link` is an object
   without `sigma`;
@@ -482,10 +452,10 @@ def schedule (s : Json) : V Schedule := do
   | .ok v => return v
   | .error _ => throw "not a rec/inner-transcript/v1/schedule"
 
-/-! ## The firewall (`rec_live.Proxy`) -/
+/-! ## The ZK server (`rec_live.Proxy`) -/
 
 structure State where
-  /-- what the coin server has received, in order -/
+  /-- what the challenger's live-coin part has received, in order -/
   sent : Array Sent := #[]
   hello : Bool := false
   committed : Bool := false
@@ -497,10 +467,10 @@ structure State where
   rounds : Nat := 0
   stopped : Bool := false
   finished : Bool := false
-  /-- the firewall's salts not yet drawn -/
+  /-- the ZK server's salts not yet sampled -/
   salts : List ByteArray
 
-/-- What the firewall got equals the pinned schedule's, compared as `rec_live` compares them, by canonical form. -/
+/-- What the ZK server got equals the pinned schedule's, compared as `rec_live` compares them, by canonical form. -/
 def pinned (what : String) (got want : Json) : V Unit := do
   if canonForm got != canonForm want then
     throw s!"FIREWALL-REFUSED: {what}: {got.compress} where the pinned schedule has {want.compress}"
@@ -521,7 +491,7 @@ def saltedTop (top : ByteArray) : Fw (List ByteArray) := (topRows top).mapM salt
 def send (m : Sent) : Fw Unit := modify fun st => { st with sent := st.sent.push m }
 
 /-- The text has a number with a fraction or an exponent, outside strings. `rec_live` compares a `Hello` as Python's
-canonical JSON, where `2.0` and `2` differ, and Lean's parser keeps no spelling, so the firewall refuses any such number. -/
+canonical JSON, where `2.0` and `2` differ, and Lean's parser keeps no spelling, so the ZK server refuses any such number. -/
 def fractional (text : String) : Bool := Id.run do
   let mut inStr := false
   let mut esc := false
@@ -644,7 +614,7 @@ def step (s : Schedule) : Req → Fw Unit
     set { st with finished := true }
     send (.finish true)
 
-/-- The firewall over a session: each request in turn, stopping at the first refusal; a session that ends without
+/-- The ZK server over a session: each request in turn, stopping at the first refusal; a session that ends without
 `Finish` stops. A request after `Finish` (other than `Ping`) stops it too, as `rec_live` records. -/
 def run (s : Schedule) (reqs : List ByteArray) (salts : List ByteArray) : Array Sent × Bool := Id.run do
   let mut st : State := { salts }
@@ -657,7 +627,7 @@ def run (s : Schedule) (reqs : List ByteArray) (salts : List ByteArray) : Array 
     | .error _ => stopped := true
   return (st.sent, st.finished && !stopped)
 
-/-! ## The coin server's record (`rec_live.CoinServer.record`, without the coins it drew) -/
+/-! ## The challenger's live-coin part's record (`rec_live.CoinServer.record`, without the coins it drew) -/
 
 def hexs (l : List ByteArray) : Json := .arr (l.map (Json.str ∘ hexOf)).toArray
 
@@ -688,7 +658,7 @@ def record (sent : Array Sent) (ok : Bool) : Json := Id.run do
     ("link", link), ("streams", Json.mkObj named), ("rounds", .arr rounds), ("message_rows", jnat rows),
     ("row_words", jnat ROW_WORDS), ("end", .str (if ok then "finish" else "stop"))]
 
-/-- The coin server's calls, in order, as `rec_live.CoinServer`'s methods: `start`, `commit`, `y`, `open` with its stream,
+/-- The challenger's live-coin part's calls, in order, as `rec_live.CoinServer`'s methods: `start`, `commit`, `y`, `open` with its stream,
 parent and position, `round` with its stream and coin count. -/
 def calls (sent : Array Sent) : Json :=
   .arr (sent.filterMap fun
@@ -699,8 +669,35 @@ def calls (sent : Array Sent) : Json :=
     | .round st _ _ _ n => some (.arr #[.str "round", .str st, jnat n])
     | .finish _ => none)
 
-/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`: the record; with
-`"calls": true`, `{"record", "calls"}`. -/
+/-! ## A session on the challenger's coin tree (`rec_live --coin-tree`)
+
+The prover's `Hello` names the challenger's coin tree under `coins`: the tree's spec, and a nonce of the prover's own, which
+the session never uses (the challenger's nonce keys the tree). The challenger's live-coin part is sent the schedule's `Hello` either way,
+so the ZK server's messages are the live-coin session's. `treeHello` reads such a request as `step` reads one on live coins:
+a `Hello` whose `coins` without its nonce is the pinned spec, as that `Hello` without `coins`; any other `Hello` stops the
+session, and every other request is unchanged. -/
+
+def u32le (n : Nat) : ByteArray := ⟨(List.range 4).toArray.map fun i => (n / 256 ^ i % 256).toUInt8⟩
+
+def treeHello (spec : Json) (b : ByteArray) : V ByteArray := do
+  let .hello text ← decode b | return b
+  if fractional text then throw "FIREWALL-REFUSED: Hello: a number that is not an integer"
+  let v ← JsonParse.parse text
+  let some c := (v.getObjVal? "coins").toOption
+    | throw s!"FIREWALL-REFUSED: Hello: no coins where the challenger's coin tree is {spec.compress}"
+  if (without c "nonce").compress != spec.compress then
+    throw s!"FIREWALL-REFUSED: Hello: coins {c.compress} where the challenger's coin tree is {spec.compress}"
+  let t := (without v "coins").compress.toUTF8
+  return ByteArray.mk #[1] ++ u32le t.size ++ t
+
+/-- The requests as `step` reads them: under a pinned coin tree (`some spec`), through `treeHello`. -/
+def onTree : Option Json → ByteArray → V ByteArray
+  | none, b => pure b
+  | some spec, b => treeHello spec b
+
+/-- One case of `flock-firewall`'s input, `{"schedule", "requests": [hex], "salts": [hex]}`, and `"coin_tree": spec` for a
+session on the challenger's coin tree: the record; with `"calls": true`, `{"record", "calls"}`. Under a coin tree the
+requests are read through `treeHello`, and the first it refuses ends them, as `run` stops at a refusal. -/
 def case (j : Json) : V Json := do
   let s ← schedule (← field j "schedule")
   let hexList := fun (k : String) => do
@@ -708,7 +705,10 @@ def case (j : Json) : V Json := do
     a.toList.mapM fun x => match x with
       | .str h => unhex h
       | _ => throw s!"{k}: not hex"
-  let (sent, ok) := run s (← hexList "requests") (← hexList "salts")
+  let tree := (j.getObjVal? "coin_tree").toOption
+  let reqs := ((← hexList "requests").map (onTree tree)).takeWhile (·.toOption.isSome) |>.filterMap (·.toOption)
+  let reqs := if reqs.length < (← hexList "requests").length then reqs ++ [ByteArray.empty] else reqs
+  let (sent, ok) := run s reqs (← hexList "salts")
   if j.getObjValD "calls" == .bool true then
     return Json.mkObj [("record", record sent ok), ("calls", calls sent)]
   return record sent ok
@@ -728,12 +728,12 @@ def cmd (_ : List String) : IO UInt32 := do
     stdout.flush
   return 0
 
-/-! ## `flock-firewall live`: the firewall as a live session's send check (`rec_live --lean`) -/
+/-! ## `flock-firewall live`: the ZK server as a live session's send check (`rec_live --lean`) -/
 
 /-- A salt's bytes, `hm96-sha512/v1`'s. -/
 def SALT_BYTES : Nat := 192
 
-/-- A message to the coin server, as `rec_live` relays it to `CoinServer`'s methods. -/
+/-- A message to the challenger's live-coin part, as `rec_live` relays it to `CoinServer`'s methods. -/
 def sentJson : Sent → Json
   | .hello h => Json.mkObj [("hello", h)]
   | .commit roots => Json.mkObj [("commit", .arr (roots.map fun (n, t) => Json.arr #[.str n, hexs t]).toArray)]
@@ -743,8 +743,8 @@ def sentJson : Sent → Json
       ("tops", .arr (tops.map hexs).toArray), ("level0", jnat level0), ("commits", hexs rows), ("n", jnat n)])]
   | .finish ok => Json.mkObj [("finish", .bool ok)]
 
-/-- One request of a live session at the state `st`, its salts those `st` holds undrawn then `fresh`: what it sends, the
-salts it drew in order and the state after it, holding the salts it didn't draw, or the refusal that stops the session.
+/-- One request of a live session at the state `st`, its salts those `st` holds unsampled then `fresh`: what it sends, the
+salts it drew in order and the state after it, holding the salts it didn't sample, or the refusal that stops the session.
 On a session's requests in turn from `{ salts := [] }`, each with the fresh salts read for it, this is `run`'s loop at
 those salts in order (`FirewallLive.run_live`). -/
 def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray) :
@@ -754,13 +754,14 @@ def liveStep (s : Schedule) (st : State) (b : ByteArray) (fresh : List ByteArray
   | .ok ((), st') => .ok (st'.sent.toList, pool.take (pool.length - st'.salts.length), { st' with sent := #[] })
   | .error e => .error e
 
-/-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, answered
-`{"ok": true}`; each later line is one request in hex, answered with what the firewall sends the coin server for it and
+/-- `flock-firewall live` at the byte source `get`: one session. Its first line is `{"schedule": …}`, with `"coin_tree":
+spec` for a session on the challenger's coin tree (each request then read through `treeHello`), answered
+`{"ok": true}`; each later line is one request in hex, answered with what the ZK server sends the challenger's live-coin part for it and
 the salts it drew for them, `{"sent": [sentJson…], "salts": [hex…]}`, or with the refusal that stops the session,
 `{"stop": why}`, which every later line is answered with too. Every line is a request, an empty one an empty frame. A
-request's fresh salts are read from `get` before it runs, as many as it could draw (a salted row reads at least one node
-of 64 request bytes, a round's message row aside), and those it doesn't draw are the next request's first: the salts
-drawn are the first of the salts read, in order. -/
+request's fresh salts are read from `get` before it runs, as many as it could sample (a salted row reads at least one node
+of 64 request bytes, a round's message row aside), and those it doesn't sample are the next request's first: the salts
+sampled are the first of the salts read, in order. -/
 def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let stdin ← IO.getStdin
   let stdout ← IO.getStdout
@@ -771,6 +772,7 @@ def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
   let some s := (JsonParse.parse first >>= (field · "schedule") >>= schedule).toOption
     | out (Json.mkObj [("error", .str "the first line is not {\"schedule\": a rec/inner-transcript/v1/schedule}")])
       return 1
+  let tree := (JsonParse.parse first >>= (·.getObjVal? "coin_tree")).toOption
   out (Json.mkObj [("ok", .bool true)])
   let mut st : State := { salts := [] }
   let mut stop : Option String := none
@@ -780,7 +782,7 @@ def liveWith (get : USize → IO ByteArray) (_ : List String) : IO UInt32 := do
     if let some why := stop then
       out (Json.mkObj [("stop", .str why)])
       continue
-    match unhex line.trim with
+    match unhex line.trim >>= onTree tree with
     | .error e =>
       stop := some e
       out (Json.mkObj [("stop", .str e)])
