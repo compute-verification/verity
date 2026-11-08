@@ -93,8 +93,7 @@ network certifier's; `Period` counts with it. `Checked` proves the leak bounds w
 `PooledLeakChecked`): inputs a check pins cost no advice bits, and `WitnessesChecked` gives their nontrivial lemmas.
 `Carried` proves the leak bound over runs that carry the pool (`PooledLeakCarried`): an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and `WitnessesCarried` gives its nontrivial lemma. `PoolRoots`
-gives the opened rows' roots from each run's in-circuit checks and the record rule (`RootsOfChecked`,
-`PeriodRootsOfChecked`).
+gives the opened rows' roots from each run's in-circuit checks and the record rule (`RootsOfChecked`).
 -/
 
 @[expose] public section
@@ -171,6 +170,4 @@ theorem SampledLeakChecked : NetTiming.Guarantees.SampledLeakChecked := NetTimin
 theorem PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked := NetTiming.pooledLeakChecked
 theorem PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried := NetTiming.pooledLeakCarried
 theorem RootsOfChecked : NetTiming.Guarantees.RootsOfChecked := NetTiming.rootsOfChecked
-theorem PeriodRootsOfChecked : NetTiming.Guarantees.PeriodRootsOfChecked := NetTiming.periodRootsOfChecked
-
 end NetTiming.SecurityProofs
