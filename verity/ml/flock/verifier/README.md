@@ -147,7 +147,8 @@ sessions a part, it doesn't compose the statement.
 
 `ID` names a statement version (`Flock.Tags`): `verity/flock-circuit`, the default, whose rows are `hm96-sha512/row/v1`
 leaves and whose outputs are all hidden rows; `verity/flock-circuit/types`, the typed statement;
-`verity/flock-circuit/tmpl`, the templated statement, parsed and refused; `verity/flock-circuit+plain-leaves`, a recursive
+`verity/flock-circuit/tmpl`, the templated statement, taken at one `--zk` table in the form `ProvedScope.scopeOkT` checks
+on its template; `verity/flock-circuit+plain-leaves`, a recursive
 session's inner statement, checked without `--zk`; `+seed-injection` on any of them, as the prover's selftest build pins
 it, which `verify` checks and then refuses. The names pinned at older commits (`verity/flock-circuit@<commit>`, back to `verity/flock-netlist/v1`) are still
 parsed, so recorded sessions keep their names, and each one before hm96-sha512 rows is refused for its form. Those with
