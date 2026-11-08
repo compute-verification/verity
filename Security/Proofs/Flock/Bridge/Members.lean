@@ -6,6 +6,7 @@ public import Proofs.Properties.Spot.Bits
 public import Proofs.Flock.Bridge.BitsKeyProg
 public import Proofs.Flock.Bridge.Lowers
 public import Proofs.Flock.Claims.Bridge.WrongSet
+public import Proofs.Flock.SamplingGeneric.ReplayPartition
 import Proofs.Flock.SamplingBoundary
 
 /-!
@@ -28,6 +29,14 @@ them, and `Q` returns one of them exactly when `P` returns it. Then:
   is slot `unitBase ms m + u` of `membersPart ms`, in stratum `m`, and its proof block is the member's own
   (`Bits.blockOf`, Bridge's `blockOf` of its key program's partition), `Bits.base ms m` later.
 * `membersConsts_base`: the members' constants at `Bits.base ms m + p` are member `m`'s at `p`.
+* `getElem?_blocks_filesReplay`: slot `ρ` of the members' replay partition (`filesReplay`) is its request's proof
+  blocks' gates together (`slotFiles`).
+* `cell_filesReplay`, `cell_filesReplay_input`: where the layout fits the members' files (`FilesFit`: request slot `ρ`
+  is unit `ρ`, with room in each member for its units), request `ρ`'s cell of member `t` is `filesBlockOf ms ns ρ t`
+  on `[0, n_t)`, injectively (`injective_filesBlockOf`), and an input slot's cells are empty
+  (`Claims.Sampling.cell_eq_union`).
+* `replayOf_filesReplay`, `replayOf_filesReplay_iff_filesBlockOf`: there, proof block `v` replays in request `ρ`
+  exactly when it is one of `ρ`'s units, `filesBlockOf ms ns ρ t p` (`Claims.Sampling.replayOf_eq_some_iff_union`).
 -/
 
 @[expose] public section
@@ -478,5 +487,172 @@ theorem getElem?_blocks_membersPart_bridge {m : ℕ} (hm : m < ms.length) {hU : 
   rw [getElem?_blocks_membersPart ms hm u.isLt, blockOf_bitsKeyProg hu u]
 
 end keyProg
+
+/-! ## The members' replay partition and its cells -/
+
+theorem unitBase_succ {m : ℕ} (hm : m < ms.length) : unitBase ms (m + 1) = unitBase ms m + ms[m].2.size := by
+  unfold unitBase
+  rw [List.take_add_one, List.getElem?_eq_getElem hm, Option.toList_some, List.map_append, List.sum_append]
+  rfl
+
+theorem unitBase_mono {m m' : ℕ} (h : m ≤ m') : unitBase ms m ≤ unitBase ms m' := by
+  unfold unitBase
+  rw [← List.take_append_drop m (ms.take m'), List.take_take, Nat.min_eq_left h, List.map_append, List.sum_append]
+  exact Nat.le_add_right _ _
+
+theorem length_blocks_membersPart : (membersPart ms).blocks.length = unitBase ms ms.length := by
+  rw [blocks_membersPart, List.length_flatMap, unitBase_eq ms le_rfl]
+
+theorem unitBase_add_lt {m u : ℕ} (hm : m < ms.length) (hu : u < ms[m].2.size) :
+    unitBase ms m + u < (membersPart ms).blocks.length := by
+  have := unitBase_mono ms (show m + 1 ≤ ms.length by omega)
+  rw [unitBase_succ ms hm] at this
+  rw [length_blocks_membersPart]
+  omega
+
+theorem rank_mul_add_lt {u N n p : ℕ} (hu : u < N) (hp : p < n) : u * n + p < N * n := by
+  have := Nat.mul_le_mul_right n (show u + 1 ≤ N by omega)
+  rw [Nat.add_one_mul] at this
+  omega
+
+theorem injective_filesBlockOf (ns : Array ℕ) (u t : ℕ) : Function.Injective (filesBlockOf ms ns u t) := by
+  intro p p' h
+  simp only [filesBlockOf] at h
+  omega
+
+theorem mem_filesUnits {ns : Array ℕ} {u v : ℕ} :
+    v ∈ filesUnits ms ns u ↔ ∃ t, t < ms.length ∧ ∃ p, p < ns.getD t 0 ∧ unitBase ms t + (u * ns.getD t 0 + p) = v := by
+  simp [filesUnits, filesBlockOf]
+
+theorem blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
+    (filesReplay ms ns l).blocks = l.blocks.toList.map (filesBlock ms ns) := by
+  simp [filesReplay, Partition.blocks, Spot.Slots.Layout.blocks, List.map_flatten, Function.comp_def]
+
+theorem length_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) :
+    (filesReplay ms ns l).blocks.length = l.blocks.size := by
+  simp [blocks_filesReplay]
+
+/-- Slot `ρ`'s proof blocks in the members' replay partition: its request's (`filesUnits`); none for an input slot or
+past the layout. -/
+def slotFiles (ns : Array ℕ) (l : Spot.Slots.Layout) (ρ : ℕ) : List ℕ :=
+  match (l.blocks[ρ]?).bind (·.unit) with
+  | some u => filesUnits ms ns u
+  | none => []
+
+/-- **Slot `ρ`'s block is its proof blocks' gates together.** -/
+theorem getElem?_blocks_filesReplay (ns : Array ℕ) (l : Spot.Slots.Layout) {ρ : ℕ}
+    (hρ : ρ < (filesReplay ms ns l).blocks.length) :
+    (filesReplay ms ns l).blocks[ρ]? =
+      some ((slotFiles ms ns l ρ).flatMap fun w => (membersPart ms).blocks.getD w []) := by
+  rw [length_blocks_filesReplay] at hρ
+  simp only [blocks_filesReplay, List.getElem?_map, Array.getElem?_toList, Array.getElem?_eq_getElem hρ,
+    Option.map_some, slotFiles, filesBlock, Option.bind_some]
+  cases l.blocks[ρ].unit <;> rfl
+
+/-- **The replay layout fits the members' files**: each request slot `ρ` is unit `ρ`, and each member `t` has room for
+its `n_t` units, `ρ·n_t` to `(ρ + 1)·n_t`. -/
+def FilesFit (ns : Array ℕ) (l : Spot.Slots.Layout) : Prop :=
+  ∀ ρ b, l.blocks[ρ]? = some b → ∀ u, b.unit = some u →
+    u = ρ ∧ ∀ t (ht : t < ms.length), (ρ + 1) * ns.getD t 0 ≤ ms[t].2.size
+
+section files
+
+variable {ns : Array ℕ} {l : Spot.Slots.Layout}
+
+/-- A proof block of slot `ρ` is member `t`'s unit `ρ·n_t + p`, with room for it. -/
+theorem exists_of_mem_slotFiles (hfit : FilesFit ms ns l) {ρ w : ℕ} (hw : w ∈ slotFiles ms ns l ρ) :
+    (∀ t (ht : t < ms.length), (ρ + 1) * ns.getD t 0 ≤ ms[t].2.size) ∧
+      ∃ t, t < ms.length ∧ ∃ p, p < ns.getD t 0 ∧ unitBase ms t + (ρ * ns.getD t 0 + p) = w := by
+  unfold slotFiles at hw
+  rcases hb : l.blocks[ρ]? with _ | b
+  · simp [hb] at hw
+  · rcases hu : b.unit with _ | u
+    · simp [hb, hu] at hw
+    · simp only [hb, hu, Option.bind_some] at hw
+      obtain ⟨rfl, hroom⟩ := hfit ρ b hb u hu
+      exact ⟨hroom, (mem_filesUnits ms).1 hw⟩
+
+/-- **A slot's proof blocks are proof blocks** of the members' partition. -/
+theorem lt_of_mem_slotFiles (hfit : FilesFit ms ns l) {ρ w : ℕ} (hw : w ∈ slotFiles ms ns l ρ) :
+    w < (membersPart ms).blocks.length := by
+  obtain ⟨hroom, t, ht, p, hp, rfl⟩ := exists_of_mem_slotFiles ms hfit hw
+  exact unitBase_add_lt ms ht (lt_of_lt_of_le (rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t ht))
+
+/-- **Two slots share no proof block.** -/
+theorem not_mem_slotFiles (hfit : FilesFit ms ns l) {ρ₁ ρ₂ : ℕ} (h12 : ρ₁ ≠ ρ₂) {w : ℕ}
+    (hw₁ : w ∈ slotFiles ms ns l ρ₁) : w ∉ slotFiles ms ns l ρ₂ := by
+  intro hw₂
+  obtain ⟨hroom₁, t₁, ht₁, p₁, hp₁, rfl⟩ := exists_of_mem_slotFiles ms hfit hw₁
+  obtain ⟨hroom₂, t₂, ht₂, p₂, hp₂, heq⟩ := exists_of_mem_slotFiles ms hfit hw₂
+  have hx₁ : ρ₁ * ns.getD t₁ 0 + p₁ < ms[t₁].2.size :=
+    lt_of_lt_of_le (rank_mul_add_lt (Nat.lt_add_one ρ₁) hp₁) (hroom₁ t₁ ht₁)
+  have hx₂ : ρ₂ * ns.getD t₂ 0 + p₂ < ms[t₂].2.size :=
+    lt_of_lt_of_le (rank_mul_add_lt (Nat.lt_add_one ρ₂) hp₂) (hroom₂ t₂ ht₂)
+  have e := stratumOf_membersPart ms ht₂ hx₂
+  rw [heq, stratumOf_membersPart ms ht₁ hx₁] at e
+  subst e
+  have h : ρ₁ * ns.getD t₁ 0 + p₁ = ρ₂ * ns.getD t₁ 0 + p₂ := by omega
+  rcases Nat.lt_or_gt_of_ne h12 with hlt | hlt
+  · have := rank_mul_add_lt hlt hp₁
+    omega
+  · have := rank_mul_add_lt hlt hp₂
+    omega
+
+/-- **Cell `(ρ, t)` of the members' replay partition** is slot `ρ`'s proof blocks in stratum `t`. -/
+theorem cell_filesReplay_eq (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {ρ t : ℕ} (hρ : ρ < l.blocks.size) :
+    cell (membersPart ms) (filesReplay ms ns l) ρ t =
+      ((slotFiles ms ns l ρ).filter fun v => (membersPart ms).stratumOf v = t).toFinset :=
+  cell_eq_union (I := slotFiles ms ns l) hnd hne (fun _ h => getElem?_blocks_filesReplay ms ns l h)
+    (fun _ _ _ _ h12 _ hw => not_mem_slotFiles ms hfit h12 hw)
+    (fun _ _ _ hw => lt_of_mem_slotFiles ms hfit hw) (by rw [length_blocks_filesReplay]; exact hρ)
+
+/-- **Request `ρ`'s cell of member `t` is member `t`'s units `ρ·n_t + p`**, `p < n_t`: `filesBlockOf ms ns ρ t` on
+`[0, n_t)`. -/
+theorem cell_filesReplay (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {ρ t : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b)
+    (hbu : b.unit = some ρ) (ht : t < ms.length) :
+    cell (membersPart ms) (filesReplay ms ns l) ρ t = (Finset.range (ns.getD t 0)).image (filesBlockOf ms ns ρ t) := by
+  have hroom := (hfit ρ b hb ρ hbu).2
+  rw [cell_filesReplay_eq ms hnd hne hfit (Array.getElem?_eq_some_iff.1 hb).1,
+    show slotFiles ms ns l ρ = filesUnits ms ns ρ by simp [slotFiles, hb, hbu]]
+  ext v
+  simp only [List.mem_toFinset, List.mem_filter, decide_eq_true_eq, mem_filesUnits, Finset.mem_image,
+    Finset.mem_range, filesBlockOf]
+  constructor
+  · rintro ⟨⟨t', ht', p, hp, rfl⟩, hs⟩
+    rw [stratumOf_membersPart ms ht' (lt_of_lt_of_le (rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t' ht'))] at hs
+    subst hs
+    exact ⟨p, hp, rfl⟩
+  · rintro ⟨p, hp, rfl⟩
+    exact ⟨⟨t, ht, p, hp, rfl⟩,
+      stratumOf_membersPart ms ht (lt_of_lt_of_le (rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t ht))⟩
+
+/-- **An input slot's cells are empty.** -/
+theorem cell_filesReplay_input (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {ρ t : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b)
+    (hbu : b.unit = none) : cell (membersPart ms) (filesReplay ms ns l) ρ t = ∅ := by
+  rw [cell_filesReplay_eq ms hnd hne hfit (Array.getElem?_eq_some_iff.1 hb).1]
+  simp [slotFiles, hb, hbu]
+
+/-- **Proof block `v` replays in request `ρ`** exactly when it is one of slot `ρ`'s proof blocks. -/
+theorem replayOf_filesReplay (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {v ρ : ℕ} (hv : v < (membersPart ms).blocks.length) (hρ : ρ < l.blocks.size) :
+    replayOf (membersPart ms) (filesReplay ms ns l) v = some ρ ↔ v ∈ slotFiles ms ns l ρ :=
+  replayOf_eq_some_iff_union (I := slotFiles ms ns l) hnd hne (fun _ h => getElem?_blocks_filesReplay ms ns l h)
+    (fun _ _ _ _ h12 _ hw => not_mem_slotFiles ms hfit h12 hw) hv (by rw [length_blocks_filesReplay]; exact hρ)
+
+/-- **Proof block `v` replays in request `ρ`'s unit slot** exactly when it is unit `p < n_t` of some member `t`:
+`v = filesBlockOf ms ns ρ t p`. -/
+theorem replayOf_filesReplay_iff_filesBlockOf (hnd : (membersPart ms).gates.Nodup) (hne : ∀ u ∈ (membersPart ms).blocks, u ≠ [])
+    (hfit : FilesFit ms ns l) {v ρ : ℕ} {b : Spot.Slots.ProofBlock} (hb : l.blocks[ρ]? = some b)
+    (hbu : b.unit = some ρ) (hv : v < (membersPart ms).blocks.length) :
+    replayOf (membersPart ms) (filesReplay ms ns l) v = some ρ ↔
+      ∃ t, t < ms.length ∧ ∃ p, p < ns.getD t 0 ∧ filesBlockOf ms ns ρ t p = v := by
+  rw [replayOf_filesReplay ms hnd hne hfit hv (Array.getElem?_eq_some_iff.1 hb).1,
+    show slotFiles ms ns l ρ = filesUnits ms ns ρ by simp [slotFiles, hb, hbu]]
+  exact mem_filesUnits ms
+
+end files
 
 end Flock.Bridge.Members

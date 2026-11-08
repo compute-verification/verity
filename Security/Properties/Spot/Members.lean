@@ -1,6 +1,7 @@
 module
 
 public import Properties.Spot.Bits
+public import Spot.Slots
 
 /-!
 # An audit's members side by side, as the claims' program (`Spot.Bits.Members`)
@@ -18,10 +19,15 @@ statement over several templates' circuit files, each template's units lowered f
 * `unitBase`, `memberBlocks`, `membersPart ms`: the members' proof blocks, one class whose stratum `m` is member `m`'s
   units' blocks (`Bits.blockOf`) at its positions, member `m`'s unit `u` slot `unitBase ms m + u`.
 * `membersConsts ms`: each member's constants (`Bits.consts`) at its positions.
+* `filesBlockOf ms ns`, `filesUnits`, `filesBlock`, `filesReplay ms ns l`: the members' replay partition over the replay
+  layout `l`, each member `t` holding `n_t` units (`ns`) per request: request `ρ`'s replay block is its units of every
+  member together, member `t`'s units `ρ·n_t + p` for `p < n_t`, slot `filesBlockOf ms ns ρ t p`; an input slot's block
+  holds none.
 
 `Proofs.Flock.Bridge.Members` proves that member `m` sits at `Bits.base ms m`, that no member's gate reads another's,
 that each unit of a member is lowered there as Bridge's lowering of the member's circuit lowers it, and where each
-member's proof blocks and constants sit.
+member's proof blocks and constants sit; and that the members' replay partition has the replay layout's shape and
+request `ρ`'s cell of member `t` is `filesBlockOf ms ns ρ t` on `[0, n_t)`.
 -/
 
 @[expose] public section
@@ -80,5 +86,25 @@ def membersConsts (ms : Bits.Members) (j : ℕ) : Option Bool :=
   match (List.range ms.length).find? (fun m => decide (j < Bits.base ms (m + 1))) with
   | some m => (ms[m]?).bind fun ci => Bits.consts ci.1 ci.2.size (j - Bits.base ms m)
   | none => none
+
+/-- **Request `u`'s unit `p` of member `t`**, member `t` holding `ns[t]` units per request: its slot in
+`membersPart ms`. -/
+def filesBlockOf (ms : Bits.Members) (ns : Array ℕ) (u t p : ℕ) : ℕ := unitBase ms t + (u * ns.getD t 0 + p)
+
+/-- **Request `u`'s proof blocks**: its units of every member, member by member. -/
+def filesUnits (ms : Bits.Members) (ns : Array ℕ) (u : ℕ) : List ℕ :=
+  (List.range ms.length).flatMap fun t => (List.range (ns.getD t 0)).map (filesBlockOf ms ns u t)
+
+/-- **A replay slot's block in the members' replay partition**: its request's proof blocks' gates together; none for an
+input slot. -/
+def filesBlock (ms : Bits.Members) (ns : Array ℕ) (b : Slots.ProofBlock) : List ℕ :=
+  match b.unit with
+  | some u => (filesUnits ms ns u).flatMap fun v => (membersPart ms).blocks.getD v []
+  | none => []
+
+/-- **The members' replay partition** over the replay layout `l`: the layout's classes and strata, each slot's block its
+request's proof blocks' gates (`filesBlock`). -/
+def filesReplay (ms : Bits.Members) (ns : Array ℕ) (l : Slots.Layout) : Claims.Sampling.Partition :=
+  ⟨l.classes.toList.map fun c => c.toList.map fun s => s.toList.map (filesBlock ms ns)⟩
 
 end Properties.Spot
