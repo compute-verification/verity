@@ -2,7 +2,7 @@ module
 
 public import Proofs.Flock.Claims.Recursion.CopySiteDeployed
 public import Proofs.Flock.Claims.Recursion.DeployPremises
-public import Proofs.Properties.Nci.ReadsExact
+public import Proofs.Core.QSort
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -65,7 +65,7 @@ checks (`RecIns.setup`), with no premise:
   the setup's label check (`RecVStar.checkLabels`, which runs under the verifier's inner shape, `insO_staged`) makes its
   labels the proved units (`checkLabel_idx`). These ascend (`proved_asc`): `UnitDraw.ofJson` refuses sampled proof blocks, or a
   closure, that are not ascending and distinct, or a closure holding a sampled proof block (`ofJson_asc`), and with a closure
-  `proved` is their `qsort`, which sorts (`ReadsExact.qsort_sorted`) and permutes (`CoinPos.qsort_perm`) them.
+  `proved` is their `qsort`, which sorts (`Verity.QSort.ByKey.qsort_sorted`) and permutes (`CoinPos.qsort_perm`) them.
 -/
 
 namespace RecDeploy.CopySite
@@ -153,7 +153,7 @@ theorem proved_asc {d : Lean.Json} {D : Draw.UnitDraw} (h : Draw.UnitDraw.ofJson
   · exact hu
   · refine asc_of_pairwise ?_
     have hs : ((D.units ++ D.closure).qsort (· < ·)).toList.Pairwise (· ≤ ·) :=
-      NciCheck.Properties.SecurityProofs.ReadsExact.qsort_sorted id (D.units ++ D.closure)
+      Verity.QSort.ByKey.qsort_sorted id (D.units ++ D.closure)
     have hnd : (D.units ++ D.closure).toList.Nodup := by
       rw [Array.toList_append]
       show List.Pairwise (fun a b => a ≠ b) (D.units.toList ++ D.closure.toList)

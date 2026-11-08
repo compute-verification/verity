@@ -168,7 +168,7 @@ def test_the_gate_reads_only_a_check_declaration_it_can_parse(tool_py, pr, state
 ], ids=["another-tool", "comment", "docstring", "suffix-keyword"])
 def test_the_gate_reads_checks_own_produces_whatever_quotes_one_above_it(above):
     """A pattern for `produces=[...]` took the first one anywhere in main's tool.py: another Tool's, a comment's, a docstring's,
-    or a keyword that merely ends in `produces` (red team, #990).  A bench-result/v1 never lands as a check."""
+    or a keyword that merely ends in `produces`.  A bench-result/v1 never lands as a check."""
     _s, tr, _head = _train_on(above + MAINS, 2, "bench-result/v1")
     assert (tr.state, tr.why) == ("stuck", f"run r9's result is a bench-result/v1, and {trains.TOOL_PY} on main produces check/v1")
     _s, tr, _head = _train_on(above + MAINS, 2)

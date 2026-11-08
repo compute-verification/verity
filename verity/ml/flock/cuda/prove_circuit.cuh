@@ -1,7 +1,8 @@
 // verity flock-circuit: Flock-CUDA for verity/flock-circuit (verity/ml/flock/live/src/circuit.rs). Included after
 // prove_chunk.cuh at the end of cuda-ghash/prove_ffi.cu by verity/ml/flock/cuda_circuit_patch.py, which also derives
 // flock_cuda_prove_circuit from flock_cuda_prove_chunk's body: the same commit, zerocheck, lincheck, ring switch and
-// Ligerito, with this file's witness (fc_witness) and lincheck fold (fc_fold) in place of the chunk statement's.
+// Ligerito, with this file's witness (fc_witness), lincheck fold (fc_fold) and arena size (fc_arena_of, arena_bytes.h) in place
+// of the chunk statement's.
 //
 // A block holds ranges of slots of a few types (compressions, units, the mask slot), each type's circuit a CSC of
 // 2^type_log columns. The witness is built on the device: the compressions from their host-given inputs (natively, fc_sha_tape
@@ -14,6 +15,10 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
+// the witness's scratch outside the arena (sha512 tapes, compression and unit rows) goes in batches of at most this many bytes:
+// it is held beside the arena while the next session's witness builds
+#define FC_WITNESS_BATCH (512LL << 20)
+#include "arena_bytes.h"
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -492,6 +497,14 @@ static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams*
     return 0;
 }
 
+static size_t fc_arena_of(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
+    long long fold_words = 0;
+    for (int t = 0; t < N->n_types; t++) fold_words += 1LL << N->type_log[t];
+    const FcArenaShape s = {P->m, P->k_log, N->c.sub_log, P->initial_k, P->recursive_steps, P->log_inv_rates, P->recursive_ks,
+                            P->queries, FLOCK_HB, N->zk_on, N->zk_on ? N->zk_t_pad : 0, fold_words};
+    return fc_arena_bytes(&s);
+}
+
 // chunk_zlin_transpose's former kernel, one byte a thread per store (the same bytes): FC_ZLIN_BYTEWISE=1 times it in the same job
 __global__ void fc_zlin_transpose_bytewise(const F128* __restrict__ z, int k_log, long long n_stripes, uint8_t* __restrict__ out) {
     const long long wpr = (1LL << k_log) / 128;
@@ -633,7 +646,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 // FC_SHA_ROWS_NOCACHE=1: every row's tape bits read straight from the tape
                 static const int rows_cache = [] { const char* e = std::getenv("FC_SHA_ROWS_NOCACHE"); return !(e && e[0] == '1'); }();
                 const long long per = (long long)N->h_tape_words * 8;
-                const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(n_h, FC_WITNESS_BATCH / per));
                 uint64_t* d_tape;
                 CK(cudaMalloc(&d_tape, (size_t)(batch * per)));
                 const int nrg = (N->h_useful + 255) / 256;
@@ -654,7 +667,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
 #endif
             } else {
                 const long long per = 3LL * N->h_useful * 4;
-                const long long batch = std::max(1LL, std::min(hg, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(hg, FC_WITNESS_BATCH / per));
                 hs_bytes = (size_t)(batch * per);
                 CK(cudaMalloc(&d_hs, hs_bytes));
                 if (const int e = host_slots()) return e;
@@ -708,11 +721,11 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             uint64_t* d_in; uint32_t* d_scratch; size_t scratch_bytes;
             CK(cudaMalloc(&d_in, (size_t)n_units * N->u_in_words * 16));
             CK(cudaMemcpy(d_in, N->u_inputs, (size_t)n_units * N->u_in_words * 16, cudaMemcpyHostToDevice));
-            // groups in batches that keep the scratch under ~2 GB
+            // groups in batches that keep the scratch under FC_WITNESS_BATCH
             const long long per = 3LL * N->u_useful * 4;
             const int warps = N->u_warps < 1 ? 1 : (N->u_warps > 8 ? 8 : N->u_warps);
             if (N->u_n_late == 0) {
-                const long long batch = std::max(1LL, std::min(groups, (2LL << 30) / per));
+                const long long batch = std::max(1LL, std::min(groups, FC_WITNESS_BATCH / per));
                 scratch_bytes = (size_t)(batch * per);
                 CK(cudaMalloc(&d_scratch, scratch_bytes));
                 for (long long g0 = 0; g0 < groups; g0 += batch) {

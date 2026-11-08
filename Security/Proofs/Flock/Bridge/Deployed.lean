@@ -238,11 +238,12 @@ theorem commitDep_binds (H : Msg → Msg) (C : FlockSoundness.Audit.Circuit) (ro
   pathCommit_binds (hm96Leaf_binds H (rowDep_places C rows c hseg _ _) _) (regPath_binds H _)
 
 /-- **A sampled verifier's code whose commitment is `commitDep`'s layout**: at a circuit file whose ports are all
-unsegmented row/v2 rows (`RowsV2`), the rows `SamplingDeploy.commit` hashes. -/
+unsegmented row/v2 rows (`RowsV2`), the rows `SamplingDeploy.commit` hashes, every position reading the registered
+ports at the registration's roots whatever roots it is opened under (`ownAt`). -/
 def LayoutIs (C : FlockSoundness.Audit.Circuit) (rows : Fin C.N → Option RowAt) (c : Flock.Circuit) (nl : ℕ)
     (roots : List Msg) (cd : SamplingDeploy.Code) : Prop :=
   RowsV2 c ∧ cd.at_ = atOf C rows ∧ cd.place = placeOf C rows ∧ cd.bits = bitsOf (Flock.log2ceil nl) ∧
-    cd.salt = saltOf ∧ cd.π = pathOf (Flock.log2ceil nl) ∧ cd.own = portsOf c nl roots
+    cd.salt = saltOf ∧ cd.π = pathOf (Flock.log2ceil nl) ∧ cd.own = portsOf c nl roots ∧ cd.ownAt = fun _ _ => cd.own
 
 open Classical in
 /-- **The evaluation's values as claims openings**: at each wire, its value in `C`'s evaluation on `xv`'s inputs, with

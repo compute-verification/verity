@@ -22,13 +22,13 @@ import Mathlib.Tactic.NormNum.RealSqrt
 /-!
 # The statements: flock-verify's acceptance under either tag, hidden outputs included
 
-e2e-exec's acceptance lemmas (`Discharge/Exec`) take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
+`Discharge/Exec`'s acceptance lemmas take `hh : I.tags.hiddenOutputs = false`: they are about `Stmt.setupH`'s
 statements, and under hidden outputs `Stmt.setupTables` calls `Stmt.setupHidden`. Each statement here is one of them
 without `hh`, so it covers the sessions main's prover writes (`verity/flock-circuit`, the default
 `--statement`). Where the original names `setupH`, this one names `setupOne`, the setup `setupTables` calls for the
 tag; where it doesn't, the conclusion is the original's.
 
-* `SetupTablesOkAny`, `AcceptsSetupOne`, `AcceptsOneAny`: e2e-exec's `setupTables_ok`, `accepts_setupH`, `accepts_one`.
+* `SetupTablesOkAny`, `AcceptsSetupOne`, `AcceptsOneAny`: `Exec.setupTables_ok`, `Exec.accepts_setupH`, `Exec.accepts_one`.
 * `AcceptsRetainedAny`, `AcceptsAllRetainedAny`, `AcceptsRepRoundsAny`: `accepts_retained`, `accepts_allRetained`,
   `accepts_rep_rounds`.
 * `AcceptsTablesHm96Any`, `AcceptsTablesHm96OfLeafAny`, `AcceptsVerdictHm96Any`: `accepts_tables_hm96`,

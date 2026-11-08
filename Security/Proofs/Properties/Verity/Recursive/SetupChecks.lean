@@ -317,7 +317,7 @@ theorem partVerdict_setup {h : VStar.Recursive.InnerHeld} {j : ℕ} {p : VStar.R
       bs.get s.record s!"part {j}'s record" = .ok recordB ∧ String.fromUTF8? recordB = some record ∧
       (partTags tags0 circuitB).hm96Rows = true ∧ Witness.recordDraw record = some draw ∧
       Registered.checkProgram (some p.program) registered.isSome = .ok () ∧
-      SampledProofs.OneStageZk.buildSessionOf (ProvedScope.circuitOf (partTags tags0 circuitB) circuitB [])
+      Spot.OneStageZk.buildSessionOf (ProvedScope.circuitOf (partTags tags0 circuitB) circuitB [])
         (partTags tags0 circuitB) circuitB pubB (partCoins tags0) [] 1 (some draw) (some p.partition)
         (some p.program) registered = .ok (spec, sts) ∧
       (complete = true → sts.forM (fun st => Registered.checkComplete st.c (registered.getD #[])) = .ok ()) ∧

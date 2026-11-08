@@ -74,8 +74,9 @@ def write_instances(out: str, program, digest: str, corr_digest: str | None, sup
                     params: list[list[str]] | None = None, checks: dict | None = None) -> None:
     """A derive dir's `instances.json.gz`: the Program's instance sequence (`_instance_rows`) under its digests.  `names` (by Call)
     and `params` stand in for the Program's own Call names and parameters, which no digest covers (`predict.aot.emit`: as its
-    trace named them).  `checks` (`BuildResult.checks`) is written with the row and leaf of each check (`check_rows`), which the
-    replay evaluates and requires to be `accept` (`check.replay.checks`).  A Boolean Program's rows are row dicts (`_word_rows`),
+    trace named them).  `checks` (`BuildResult.checks`) is written with the row and leaf of each check (`check_rows`) under ``at``,
+    never ``rows``, which ends the header for a reader of it alone (`program_view._read_instance_header`); the replay evaluates
+    each and requires it to be `accept` (`check.replay.checks`).  A Boolean Program's rows are row dicts (`_word_rows`),
     which `RowTexts` doesn't write."""
     word = getattr(program, "word", None)
     body = (word or program).fn.body
@@ -83,7 +84,7 @@ def write_instances(out: str, program, digest: str, corr_digest: str | None, sup
         params = [[n, str(t)] for n, t in body.params]
     head = {"schema": "cb-a/instance-sequence/v2", "digest": digest, "correspondence_digest": corr_digest, "params": params,
             **({"ir": "boolean"} if word is not None else {}), **supplied,
-            **({"checks": {**checks, "rows": check_rows(body, len(checks["of"]))}} if checks else {})}
+            **({"checks": {**checks, "at": check_rows(body, len(checks["of"]))}} if checks else {})}
     path = os.path.join(out, "instances.json.gz")
     if word is None:
         write_program_instances(path, head, program, names=names)

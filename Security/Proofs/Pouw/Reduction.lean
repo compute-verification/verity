@@ -1,8 +1,8 @@
 module
 
-public import Definitions.Pouw.Assumptions.Pinned
 import Mathlib.Tactic.Positivity.Finset
 import Proofs.Pouw.Prob
+public import Definitions.Pouw.Assumptions.GameStatements
 
 /-!
 # (a) `G_γ` from TT, and the overhead budget
@@ -56,14 +56,14 @@ theorem wins_imp_tt (P : Protocol Q R S) (U : Workload) (H : Q → R) (s : S) (�
   exact lt_of_mul_lt_mul_left h4 hΩ.le
 
 /-- **(a)** `G_g` from TT, with `g = 1 − (1 − g₀)/Ω_max` and `δ = ε_TT(q)`. -/
-theorem gapFromTT : Pinned.GapFromTT := by
+theorem gapFromTT : GameStatements.GapFromTT := by
   intro Q R S _ _ _ _ CM P D g₀ Ωmax ε hg₀ hΩ hW hTT U hU T hT q hq A hA
   refine le_trans (pr_mono ?_) (hTT.2 U hU T hT q hq A hA)
   rintro ⟨H, s⟩ ⟨hwin, hb⟩
   exact ⟨wins_imp_tt P U H s _ hΩ (hW U hU) hwin, hb⟩
 
 /-- **The overhead budget**: `g ≤ 1%` under TT(0.5%) iff `Ω_max ≤ 199/198`. -/
-theorem gapBudget : Pinned.GapBudget := by
+theorem gapBudget : GameStatements.GapBudget := by
   intro Ωmax hΩ
   unfold reductionGap Params.gap0
   rw [show (1 : ℝ) - 1 / 200 = 199 / 200 by norm_num]

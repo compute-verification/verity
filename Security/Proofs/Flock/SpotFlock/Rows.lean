@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
+import Proofs.Flock.Claims.Scope.InScope
 
 /-!
 # The session's hidden values at its tables' columns
@@ -12,8 +13,9 @@ reads hidden value `hidAt J kLog j β y` (`Readable.Sys.idx`). So a layout whose
 decodes the gate's value as that hidden value (`decOf_hid`), and a reveal that opens the hidden values at a row's
 columns opens the values the decoder gives.
 
-`parse_setupOf`: the statement the claims' parser reads is the readable form of the setup's own tables, so a session
-statement's tables (`setupOf`, whose registered reads `SpotFlock.Reads` reads) are the relation's.
+`parse_setupOf`: the statement the claims' parser reads is the readable form of the setup's own tables (the verifier's
+parser returns them, `parsed_setupOf`), so a session statement's tables (`setupOf`, whose registered reads
+`SpotFlock.Reads` reads) are the relation's.
 -/
 
 @[expose] public section
@@ -104,20 +106,21 @@ theorem valueAt_relation {p : _root_.Flock.Readable.Parsed} (β : ℕ) (w : Clai
         (hidAt p.sts.size (_root_.Flock.Readable.toReadable _root_.Flock.Readable.relation p).kLog j β y) false :=
   valueAt_toReadable (relation_sys p) (relation_J p) (relation_N p) β w hj hy
 
-/-- **The claims' parser reads the setup's tables**: at a session statement that sets up as a masked Flock statement,
-the statement the claims' parser reads is the readable form of the setup's own tables. -/
-theorem parse_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
-    {sts : Array _root_.Flock.Stmt} {S : Claims.Flock.Stmt} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
-    (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) :
-    S = _root_.Flock.Readable.toReadable _root_.Flock.Readable.relation { ins.read with sts } := by
+/-- **The verifier's parser returns the setup's tables**: at a session statement that sets up as a masked Flock
+statement, the statement the verifier's parser returns is the setup's reading with the setup's own tables, and it is
+the parser's own. -/
+theorem parsed_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {p : _root_.Flock.Readable.Parsed}
+    (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
+    (hp : _root_.Flock.Readable.parseBytes (FlockDeploy.readOf true) xS = some p) :
+    p = { ins.read with sts } ∧ _root_.Flock.Readable.Parses p := by
   obtain ⟨hins, hsetup⟩ := FlockDeploy.setupOf_some hset
   have hread := FlockDeploy.Ins.setup_read hsetup
-  unfold FlockDeploy.parse _root_.Flock.Readable.parseOf at hS
-  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hS
   unfold _root_.Flock.Readable.parseBytes FlockDeploy.readOf at hp
   rw [hins] at hp
   obtain ⟨r, hr, hrp⟩ := Option.bind_eq_some_iff.1 hp
   obtain rfl : ins.read = r := Option.some.inj hr
+  refine ⟨?_, _root_.Flock.Readable.parses_of_parse hrp⟩
   unfold _root_.Flock.Readable.Read.parse at hrp
   obtain ⟨sts', hsts', rfl⟩ := Option.map_eq_some_iff.1 hrp
   simp only [_root_.Flock.Readable.Read.tablesOf, hread] at hsts'
@@ -128,6 +131,16 @@ theorem parse_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.Se
       · cases hsts'
     · exact Option.some.inj hsts'
   rw [e]
+
+/-- **The claims' parser reads the setup's tables**: at a session statement that sets up as a masked Flock statement,
+the statement the claims' parser reads is the readable form of the setup's own tables. -/
+theorem parse_setupOf {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} {S : Claims.Flock.Stmt} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
+    (hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S) :
+    S = _root_.Flock.Readable.toReadable _root_.Flock.Readable.relation { ins.read with sts } := by
+  unfold FlockDeploy.parse _root_.Flock.Readable.parseOf at hS
+  obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hS
+  rw [(parsed_setupOf hset hp).1]
 
 /-- **The decoder at a table's bit**: where a layout's wire for gate `g` of unit `u` is table `j`'s bit `y` in the
 session's block circuit, the decoded value is the hidden value at `hidAt` in the unit's block. -/

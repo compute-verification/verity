@@ -1076,7 +1076,8 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         };
         let (mut tl, mut parts) = (Instant::now(), serde_json::Map::new());
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
-        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        lap("rowin", &mut tl, &mut parts);
+        let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         lap("rows", &mut tl, &mut parts);
         let mut host = flock_live::gpu_circuit::host_slots(st, st.c.hm_net, &hm);
@@ -1096,7 +1097,16 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
                 if times {
                     eprintln!("WITNESS\t{}", Value::Object(parts));
                 }
-                return (WitData::Dev(rows, packed, Vec::new()), t.elapsed().as_secs_f64());
+                let s = t.elapsed().as_secs_f64();
+                // the slots and inputs the pack copied are freed beside the session, off its critical path (WITNESSFREE: how long)
+                flock_live::spawn(move || {
+                    let t = Instant::now();
+                    drop((host, hm, ins));
+                    if times {
+                        eprintln!("WITNESSFREE\t{}", json!({"s": t.elapsed().as_secs_f64()}));
+                    }
+                });
+                return (WitData::Dev(rows, packed, Vec::new()), s);
             }
             host.extend(flock_live::gpu_circuit::host_slots(st, st.c.unit_net, &ins));
             lap("units", &mut tl, &mut parts);
@@ -1116,7 +1126,7 @@ fn witness(st: &Stmt, w: &Wit, device: bool, host_units: bool, mapped: bool) -> 
         use rayon::prelude::*;
         let c = &st.c;
         let ri: Vec<_> = (0..st.blocks()).into_par_iter().map(|b| (w.rowin)(b)).collect();
-        let rows: Vec<F128> = ri.iter().flat_map(|x| x.0.iter().flatten().copied()).collect();
+        let rows = flock_live::concat(&ri.iter().flat_map(|x| &x.0).collect::<Vec<_>>());
         let hm: Vec<Vec<F128>> = ri.into_iter().flat_map(|x| x.1).collect();
         let ins = st.converge_with(&*w.inputs, None, &w.nets, None);
         let mut host = flock_live::gpu_circuit::host_slots(st, c.hm_net, &hm);
@@ -3939,6 +3949,12 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
         let (st, plan, salts, points) = (st.clone(), plan.clone(), salts_t[0].clone(), points_t[0].clone());
         flock_live::spawn(move || zk_prepare(&st, &plan, seed, lig, &salts, &points))
     });
+    // Hello's round trip beside the witness build (FC_HELLO_AHEAD=0: after it): Hello reads no witness, and nothing else reaches
+    // the transport before it. Not through the ZK server's Lean session loop
+    let hello_ahead = (!plan.lean_session && plan.lean_frames.is_none() && std::env::var("FC_HELLO_AHEAD").as_deref() != Ok("0")).then(|| {
+        let (t, h) = (t.clone(), hello.clone());
+        flock_live::spawn(move || call(&t, Req::Hello(h)))
+    });
     // every table's witness. Rep 1 proves from rep 0's unless it has its own: the CPU prover consumes a witness, so rep 0 takes a
     // copy and rep 1 the original (two copies at most, never one per rep plus the original)
     let mut witness_s = 0.0;
@@ -3993,7 +4009,11 @@ fn session_proved(st: &Arc<Stmt>, inst: &Arc<Instances>, t: SharedTransport, pla
     let mut early = 0;
     let tp0 = Instant::now();
     let res: Result<(), String> = (|| {
-        match call(&t, Req::Hello(hello.clone()))? {
+        let hello_got = match hello_ahead {
+            Some(h) => h.join().unwrap_or_else(|e| Err(format!("hello: {}", panic_msg(e)))),
+            None => call(&t, Req::Hello(hello.clone())),
+        };
+        match hello_got? {
             // M0's seed commitment (4 words), the keyed coin tree's root and session key (20; `coin_tree::Checked` checked them,
             // or the ZK server did), or under the Lean session loop, which checked them, the loop's id for the session in their
             // place (4, `Session.idFrame`)

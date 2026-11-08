@@ -29,7 +29,7 @@ from a one-table acceptance:
 `drawSetup_of_accepts`: a one-table acceptance whose record's sample is `d` gives setupH's statement at `d` and the
 sample `D`, and a `DrawSetup` whenever `D` proves `S` and the statement's link points are `mPts`. `tableAt_of_accepts`:
 then `tableAt`'s table at `S` is `stmtOf` of the statement flock-verify accepted. The link points are setupH's
-`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (e2e-exec's `Exec.setupH_mPts_drawn`).
+`PT_LOCAL + nbl`, a function of `|D.proved|` and `c.g` (`Exec.setupH_mPts_drawn`).
 -/
 
 @[expose] public section
