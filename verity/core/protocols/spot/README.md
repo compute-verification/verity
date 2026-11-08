@@ -35,6 +35,11 @@ configs, Definitions) or advice charged at its width. A value the served hardwar
 atomics order, a split choice) is never among them as a free witness: serving makes it canonical so a block computes it,
 or it is advice.
 
+Under a two-stage sampling design the same three roles run `parties.SPOT_TWO_PROTOCOL`. The draw samples replay blocks.
+The proof server replays them and sends the verifier their interior registration (`Interior`). Once it is in, the
+verifier draws the second stage on fresh coins (`Second`). The proof server then proves the second stage's proof
+blocks, one session a template, and the verifier audits both stages.
+
 It has no ZK server and no recursion: the proof server talks only to the verifier. The core protocols (PoUW, PoUS and
 network certification, in the remote and onsite deployments) wrap SPOT[Flock] in the recursion layer and the ZK server
 (`parties.PROTOCOL`). The network certifier is a layer of its own: it stamps each request's release order and bucket at
@@ -271,7 +276,7 @@ from verity.core.protocols.spot.costfit import fit
 - `registration`: `record` builds a `verity/registration/v1` record (v2 with registered values), `check` holds one to
   the verifier's copies (R1 to R7), `matches_public` to the verifier's public file, `receipt` logs it, `digest` names it, and `window_domain` is a
   registered root's commitment domain (`verity.ml.commitments.window`'s, which an integration commits under).
-- `draw`: `parse_law` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
+- `draw`: `parse_design` reads a sampling design's text, `derive` expands a rule over the verifier's program and query (and
   a work table), `check_draw` holds a sample to the registration and the verifier's sampling design, and `check_proved`
   holds the proved proof blocks to the sample; `stratum_k`, `work_k`, `work_table` and `proved` are the pieces they use.
 - `partition`: `partition`, `digest`, `units` and `strata` over core's `verity/partition/v1` with the template queries,
@@ -296,7 +301,8 @@ from verity.core.protocols.spot.costfit import fit
   returns each session's `Finding` (accepted, why, the program its verdict names, its registered finding, the proof blocks it
   proved), so a protocol reads verdicts from that run, never from a record the prover hands in.
 - `parties`: SPOT[Flock]'s `InferenceServer`, `ProofServer` and `SpotVerifier` (`SPOT_MANIFEST`, `SPOT_PROTOCOL`,
-  `spot_params_of`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
+  `spot_params_of`), in two stages with `TwoStageProofServer` and `TwoStageVerifier` (`SPOT_TWO_MANIFEST`,
+  `SPOT_TWO_PROTOCOL`), the core deployment's `Firewall`, `Workers` and `Verifier` (`MANIFEST`, `PROTOCOL`, `params_of`),
   the `Challenger` both run, `PROTOCOLS` by id, and `IDS`, the configuration's subprotocol names and their protocol ids.
 - `consumers`: `infiltration_bound`, `exfiltration_bound`, `compute_bound` and `location_bits`, over any `IntegrityProfile`.
 - `coins`: `OwnRandomness`, exact samplers over a byte source (a challenger's coins); `draw_first`, a one-stage sampling design's sample from it,
@@ -414,7 +420,7 @@ core's `verity/ml/circuits/tests/partition_vectors.json` and `template_instance_
 Code and records call a sampling design a `law`; the name stays until a format version renames it.
 
 - A sampling design's text is `subset:K` or `bernoulli:NUM/DEN` with `NUM ≤ DEN` and `DEN > 0` (`flock-circuit serve
-  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_law`), each number in ASCII digits
+  --draw`'s syntax), or one of the rules `stratified:K` and `work:K` with `K ≥ 1` (`draw.parse_design`), each number in ASCII digits
   (`draw.digits`, as the Lean reads them; a sample's `p` too).
 - As objects they are `{"law": "subset", "k": K}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, and the rules expanded by
   `draw.derive`: `{"law": "stratified", "k": K, "strata": [{"template", "units", "k"}, ...]}` and

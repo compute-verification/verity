@@ -59,8 +59,9 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
-the interior values, the record and its place in the log, the second stage's coins and their evidence, and its audit
-record's proved units, instances, served units and session roots. -/
+the interior values, the record and its place in the log, the second stage's coins and their evidence, its audit
+record's proved units, instances, served units and session roots, and the circuit file each template's sessions verify
+against, by SHA-512, as the auditor's params name them (`templateCircuits`). -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -73,6 +74,7 @@ structure Interior where
   instances : Option Int
   served : Json
   sessionRoots : Json
+  circuits : Array (String × String) := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -106,6 +108,26 @@ private def hexDigit (c : Char) : Bool := ('0' ≤ c && c ≤ '9') || ('a' ≤ c
 def digest? : Json → Bool
   | .str s => (s.length == 128 || (s.length == 129 && s.endsWith "\n")) && (s.toList.take 128).all hexDigit
   | _ => false
+
+/-- `service.template_circuits`: the auditor's params naming each template's circuit file, a two-stage run's
+`interior.params.proofs`, `{"templates": [{"template": <descriptor id>, "circuit": <SHA-512, lowercase hex>}, ...]}`, as
+(template, circuit) pairs in the order the check's template query `query` names the templates (`Select.templateIds`),
+which is REPLAY_c's first-instance order (`Select.replayCells`); `null` names no file and gives no pairs. An error for any
+other form, a circuit that isn't 128 lowercase hex digits, and a list that doesn't name each of the check's templates
+once, in its order. -/
+def templateCircuits (proofs query : Json) : V (Array (String × String)) := do
+  if proofs matches .null then return #[]
+  let ids ← Select.templateIds query
+  let form := "the params' proofs are {\"templates\": [{\"template\": <descriptor id>, \"circuit\": <SHA-512>}, ...]}"
+  let (some #["templates"], .arr es) := (keys? proofs, getD proofs "templates") | throw form
+  let pairs ← es.mapM fun e => match keys? e, getD e "template", getD e "circuit" with
+    | some #["circuit", "template"], .str t, .str c =>
+      if c.length == 128 && c.all hexDigit then pure (t, c)
+      else throw s!"{form}, each circuit a SHA-512 in lowercase hex: {e.compress}"
+    | _, _, _ => throw s!"{form}, each circuit a SHA-512 in lowercase hex: {e.compress}"
+  if pairs.map (·.1) != ids then
+    throw s!"the params name the circuits of {pairs.map (·.1)}, not the check's templates {ids}, each once, in its order"
+  return pairs
 
 /-- The receipt the stream writes for an accepted registration: its digest, the challenger and its place in the log. -/
 def receipt (record : Json) (challenger received : String) : V Json := do

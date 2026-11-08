@@ -93,7 +93,7 @@ ALLOWED = {
     # deployment layer (`wipe_parties`), their messages the wire's. The
     # memory challenger reports its sessions under its party's per-period root (`core.attest`).
     "core.protocols.pous": {"core.claims", "core.attest", "core.wire", "core.deploy", "ml.commitments", "ml.crypto",
-                            "ml.randomness"},
+                            "ml.randomness", "core.protocols.reporting"},
     # The bandwidth audit's store is PoUS's `C*`,
     # under its setup and `vk`, reused as they are.
     "core.protocols.bandwidth": {"ml.crypto", "ml.randomness", "core.protocols.pous"},
@@ -108,7 +108,7 @@ ALLOWED = {
     # The session's verifier and prover are parties of the deployment layer (`session_parties`), their messages the wire's.
     "core.protocols.remote_bandwidth": {"ml.commitments", "ml.randomness", "core.protocols.profile",
                                         "core.protocols.spot", "core.protocols.pous", "core.wire",
-                                        "core.deploy"},
+                                        "core.deploy", "core.protocols.reporting"},
     # PoUW's tile check is a sampled proof (`.agents/skills/friction/SKILL.md`).
     "core.protocols.pouw": {"ml.circuits", "ml.commitments", "ml.crypto", "ml.randomness", "core.protocols.profile",
                             "core.protocols.spot"},
@@ -117,6 +117,8 @@ ALLOWED = {
     "core.protocols.certifier": {"ml.circuits", "ml.commitments", "ml.crypto", "core.protocols.spot"},
     # A record entry (`Core.Record`): the form every protocol's signed, chained record entries take.
     "core.protocols.record": set(),
+    # The reporting grid every monitoring-period report states, its periods and δs: stdlib only.
+    "core.protocols.reporting": set(),
     # What the protocols' provers build and their verifiers don't read, which no core unit imports.  PoUW's and the
     # certifier's are stated over their protocol's parameters and records in core (`ML_IMPORTS_CORE`), and PoUW's schemes
     # and circuits over the catalog's silicon models and Definitions (the tensor-core steps, FP32 and the casts).

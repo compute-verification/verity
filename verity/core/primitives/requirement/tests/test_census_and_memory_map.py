@@ -1,5 +1,6 @@
-"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.commit.memory_map`) held to `core_requirement`'s Lean
-through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference agreeing with Lean on each.
+"""`requirement.from_census` and memory-map/v1's builder (`verity_vllm.protocols.remote_bandwidth.commit_map`) held to
+`core_requirement`'s Lean through the difftest's instance format (`test_requirement_difftest.encode`), Python's reference
+agreeing with Lean on each.
 
 The census path: a census and a schedule as an instance (`census_execution`): the census's values, then a value of 0 bits
 for each root Call a step runs, whose operands are the values the Call reads or selects. Lean's live values and bits are
@@ -246,13 +247,14 @@ def map_case(requests: dict[str, Program], arrive: dict[str, int], censuses: dic
     request, layer, plane and `MM.Row`, each value's block, and the blocks the replayed map holds at each step. A
     request's census is its Program's at its sampling events unless `censuses` gives one."""
     from verity_vllm.commit import memory_map as MM
+    from verity_vllm.protocols.remote_bandwidth.commit_map import KvPool, record
     from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
     from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
     censuses = censuses or {}
     rows = {r: MM.rows(p, censuses.get(r)) for r, p in requests.items()}
     tables = first_need(rows, arrive)
-    head, steps = MM.record(rows, arrive, _payload, bytes(range(64)), MM.KvPool(block_size=BLOCK_SIZE), tables)
+    head, steps = record(rows, arrive, _payload, bytes(range(64)), KvPool(block_size=BLOCK_SIZE), tables)
     end = max(arrive[r] + rs.steps for r, rs in rows.items())
     assert all(s.step < end for s in steps)
     (sb,) = {rs.row_bytes for rs in rows.values()}

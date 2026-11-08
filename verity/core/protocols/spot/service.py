@@ -64,6 +64,16 @@ refused, so each design has one form. Both stages' samples are the Lean verifier
 `Select.selectSecond`), and its knowledge soundness at Flock's masked record is `SamplingDeploy.ksTwo_code`'s, under
 the premises that theorem takes.
 
+**The circuit files.** A two-stage run's second-stage sessions each verify against their template's circuit file: the
+flat Flock circuit file of one instance of it (`verity_flock.class_statement.UnitStager`, `unit_lowering` at
+`structural=False`, as one-stage's sessions verify against theirs), which binds the interior registration's partition
+and program digests. The auditor names each file by its SHA-512 in the run's interior params, `proofs.templates`
+(`template_circuits`), and reproduces it from public data alone: the template's Definition and rows, the interior's
+partition and program digests, the values it reads (`reads`), its AND gates per stage (`stage_ands`) and the leaf
+scheme, in a process where `FLOCK_PACK_WORDS`, `FLOCK_CORE_ROWS`, `FLOCK_PLAIN_LEAVES`, `FLOCK_OWN_ROWS` and
+`FLOCK_GEMM_TILE` are unset, since each changes the file. The interior's digests depend on Q, which a rate law draws, so
+the names are each run's and are handed to `outcome`.
+
 **The salt and the registration deadline.** `Stream.salt` issues the epoch's salt coin once, from the challenger's own
 coins, and reads its release on the challenger's clock (`salted_at`). `Stream.salt_released` instead records a salt
 released elsewhere (PoUW's epoch coin, shared by one stream per level) with its release on the same clock, which can't
@@ -260,7 +270,7 @@ class All:
 @dataclass(frozen=True)
 class Law:
     """A one-stage sampling design: the rate sampling design `rate:NUM/DEN` or `rate:NUM/DEN:T` (`draw.parse_rate`), what a new Spec states, or
-    one in one-stage's syntax (`draw.parse_law`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
+    one in one-stage's syntax (`draw.parse_design`): `subset:K`, `bernoulli:NUM/DEN`, `stratified:K` or `work:K`. A rate
     samples `subset:K` at K = ceil(NUM N / DEN) rounded up to a multiple of the T tables (`draw.rate_count`) over the N
     proof blocks each registration brings, so every proof block is sampled with probability at least NUM/DEN however large the prover
     makes N; a fixed `subset:K` samples each with K/N."""
@@ -270,7 +280,7 @@ class Law:
     def __post_init__(self) -> None:
         if D.parse_rate(self.text) is None:
             try:
-                D.parse_law(self.text)
+                D.parse_design(self.text)
             except ValueError:
                 raise ValueError("a law is rate:NUM/DEN or rate:NUM/DEN:T (0 < NUM <= DEN, T >= 1), subset:K, stratified:K, "
                                  f"work:K or bernoulli:NUM/DEN, not {self.text!r}") from None
@@ -309,7 +319,7 @@ def _replay_law(text: Any) -> bool:
     if D.parse_rate(text) is not None:
         return True
     try:
-        return D.parse_law(text)["law"] == "subset"
+        return D.parse_design(text)["law"] == "subset"
     except (ValueError, TypeError):
         return False
 
@@ -693,7 +703,7 @@ def selection_law(rule: Selection, n: int) -> dict[str, Any]:
     text = rule.replay if isinstance(rule, TwoStage) else rule.text
     rate = D.parse_rate(text)
     if rate is None:
-        return D.parse_law(text)
+        return D.parse_design(text)
     k = D.rate_count(*rate, n)
     if not 1 <= k <= n:
         raise _refuse("rate", {"law": text, "population": n, "k": k})
@@ -744,14 +754,55 @@ def replay_cells(replay: Program, query: Mapping[str, Any]) -> tuple[int, ...]:
         ranges = P.ranges(replay, query)
     except (P.QueryRefused, ValueError) as e:
         raise ValueError(f"the check's query doesn't apply to the replay block: {e}") from None
-    params = query.get("params") if isinstance(query, Mapping) else None
-    ids = [params["template"]] if isinstance(params, Mapping) and "template" in params else \
-        list(params["templates"]) if isinstance(params, Mapping) and "templates" in params else None
+    ids = _check_ids(query)
     first = list(dict.fromkeys(t for t, _lo, _n in ranges))
     if ids is None or first != ids:
         raise ValueError(f"the check's templates {ids} are not the replay block's, each once, in the order of its first "
                          f"instance in it ({first})")
     return tuple(sum(n for t, _lo, n in ranges if t == i) for i in ids)
+
+
+def _check_ids(query: Any) -> list[str] | None:
+    """The templates the check's template query names, in its order, its parameters checked as core's `validate` does;
+    None for any other query. The Lean verifier's `Select.templateIds` (`Flock.TemplateQuery.templatesOf`) is this."""
+    if not isinstance(query, Mapping):
+        return None
+    name = query.get("name") if isinstance(query.get("name"), str) else ""
+    version = query.get("version") if _nat(query.get("version")) else 0
+    params = query.get("params")
+    keys = sorted(params) if isinstance(params, Mapping) else []
+    if (name, version) == ("Q_template_instance", 0):
+        return [params["template"]] if keys == ["template"] and isinstance(params["template"], str) else None
+    ts = params.get("templates") if (name, version) == ("Q_template_instances", 0) and keys == ["templates"] else None
+    ok = isinstance(ts, list) and ts and all(isinstance(t, str) for t in ts) and len(set(ts)) == len(ts)
+    return list(ts) if ok else None
+
+
+def template_circuits(proofs: Mapping[str, Any] | None, query: Mapping[str, Any]) -> tuple[tuple[str, str], ...]:
+    """The auditor's params naming each template's circuit file (the module docstring), a two-stage run's
+    `interior.params.proofs`: `{"templates": [{"template": <descriptor id>, "circuit": <SHA-512, lowercase hex>}, ...]}`,
+    as (template, circuit) pairs in the order the check's template query `query` names the templates, which is REPLAY_c's
+    first-instance order (`replay_cells`). None names no file and gives no pairs. Raises `ValueError` for any other form,
+    a circuit that isn't 128 lowercase hex digits, and a list that doesn't name each of the check's templates once, in
+    its order. The Lean verifier's `Run.templateCircuits` is this."""
+    if proofs is None:
+        return ()
+    ids = _check_ids(query)
+    if ids is None:
+        raise ValueError("a two-stage design's check is a template query")
+    form = 'the params\' proofs are {"templates": [{"template": <descriptor id>, "circuit": <SHA-512>}, ...]}'
+    if not isinstance(proofs, Mapping) or set(proofs) != {"templates"} or not isinstance(proofs["templates"], (list, tuple)):
+        raise ValueError(form)
+    pairs = []
+    for e in proofs["templates"]:
+        if not (isinstance(e, Mapping) and set(e) == {"template", "circuit"} and isinstance(e["template"], str)
+                and isinstance(e["circuit"], str) and _DIGEST.fullmatch(e["circuit"])):
+            raise ValueError(f"{form}, each circuit a SHA-512 in lowercase hex: {e!r}")
+        pairs.append((e["template"], e["circuit"]))
+    if [t for t, _c in pairs] != ids:
+        raise ValueError(f"the params name the circuits of {[t for t, _c in pairs]}, not the check's templates {ids}, "
+                         "each once, in its order")
+    return tuple(pairs)
 
 
 def second_counts(k: int | Mapping[str, Any], ids: Sequence[str], ns: Sequence[int]) -> tuple[int, ...]:
@@ -2004,7 +2055,7 @@ class Stream:
     def outcome(self, draw: Draw, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any], *,
                 proved_units: Sequence[int] | None = None, instances: int | None = None, served: Sequence[int] | None = None,
                 session_roots: Mapping[str, str] | None = None, coins: Mapping[str, Any] | None = None,
-                interior_coins: Mapping[str, Any] | None = None) -> Outcome:
+                interior_coins: Mapping[str, Any] | None = None, proofs: Mapping[str, Any] | None = None) -> Outcome:
         """The sample's final outcome, once. With no proof delivered: a reject (`late`) once the deadline has passed, and
         `Pending` before. With one: `Pending` until every verdict of record has run (`accepted` not null); each verdict of
         record names the delivered `sessions` and reports the public outputs alike (`check_verdicts`, by the verifier,
@@ -2029,8 +2080,18 @@ class Stream:
         `proved_units`, `instances` and `served` are its, `session_roots` is held port by port to the registration
         whose port it names (the boundary values the sessions opened to the registration's audit record, when they
         opened any, and the rest to the interior registration's), `coins` is the first stage's evidence and
-        `interior_coins` the second stage's. The outcome accepts when the registration's audit record (over the replay
-        sample) and the interior registration's (over the sample) both do, and the run of record checks both."""
+        `interior_coins` the second stage's. `proofs` is the auditor's params naming each template's circuit file
+        (`template_circuits`), which the run of record reads from its interior params. The outcome accepts when the
+        registration's audit record (over the replay sample) and the interior registration's (over the sample) both do,
+        and the run of record checks both. Raises `Refused` (`proofs`) for `proofs` on a one-stage stream, or in any form
+        `template_circuits` refuses, before anything is decided."""
+        if proofs is not None:
+            if self.n_rho is None:
+                raise _refuse("proofs", "a one-stage run's params name no template circuit files")
+            try:
+                template_circuits(proofs, self.spec.check.query)
+            except ValueError as e:
+                raise _refuse("proofs", str(e)) from None
         op: dict[str, Any] = {"op": "outcome", **{k: v for k, v in self._drawn_op(draw).items() if k != "second"}}
         got: dict[str, Any] = {}
         o = op["order"]
@@ -2051,7 +2112,7 @@ class Stream:
             if self.n_rho is not None:
                 got.update(zip(("audit", "public", "replay"), self._audit_two(e, verdicts, statement, proved_units,
                                                                               instances, served, session_roots, coins,
-                                                                              interior_coins)))
+                                                                              interior_coins, proofs)))
                 op["accepted"] = got["audit"]["accepted"] and got["replay"]["accepted"]
                 return None
             got.update(zip(("audit", "public"), self._audit(e, draw, verdicts, statement, proved_units, instances, served,
@@ -2115,7 +2176,8 @@ class Stream:
     def _audit_two(self, e: _Entry, verdicts: Mapping[str, Mapping[str, Any]], statement: Mapping[str, Any],
                    proved_units: Sequence[int] | None, instances: int | None, served: Sequence[int] | None,
                    session_roots: Mapping[str, str] | None, coins: Mapping[str, Any] | None,
-                   interior_coins: Mapping[str, Any] | None) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+                   interior_coins: Mapping[str, Any] | None, proofs: Mapping[str, Any] | None = None
+                   ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample and the registration's over the replay sample, both failing `run` where the whole
         run isn't the verifier's; and the public outputs."""
@@ -2159,7 +2221,7 @@ class Stream:
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
                                 "coins": interior_coins, "proved_units": proved_units, "instances": instances,
-                                "served": served, "session_roots": session_roots})
+                                "served": served, "session_roots": session_roots, "proofs": proofs})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
         return rec, public, boundary
