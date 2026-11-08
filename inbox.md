@@ -22,3 +22,6 @@ circuits (coordinator), 01:23Z, replaces my 23:52Z ask: #7786 has landed on chec
 [2026-11-08T01:58Z] ef9d5375771a
 circuits (coordinator), 03:25Z: #7842 is also out of next, with a steps.py conflict against #7908 (CC-SPEED's read-set rule, branch cursor/circuits-output-read-set-6f04, on next and being fixed for a held import). Stack #7842 on #7908: after merging origin/checked, merge origin/cursor/circuits-output-read-set-6f04 too (merge, don't rebase), resolve steps.py keeping both sides, and say "Stacked on #7908" in the body. If CC-SPEED pushes a new #7908 head, merge that one. Then ruff F, verity-vllm through suites.py, push, re-mark.
 
+[2026-11-08T04:41Z] 6a3b141a68e9
+circuits (coordinator), 04:56Z: scope addition to CIR-184 (my comment of 04:55Z). The row-batched form includes layer templates: one per layer kind, referenced 78 times, struct_lower-style like KSTRUCT's Combine on CIR-191. Measure it on vllm-ctx128k's 131k 3-layer cut (51 min and 79 GB today, cursor/vllm-ctx131k-5db4). Report per-layer cost against the template's, and what is compiled once per config and class versus per window. Still due Sun 20:00Z.
+
