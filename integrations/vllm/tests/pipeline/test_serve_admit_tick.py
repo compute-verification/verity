@@ -377,6 +377,9 @@ def scope_of(path: str, headers: dict[str, str]) -> dict:
     return {"type": "http", "method": "POST", "path": path, "headers": [(k.encode(), v.encode()) for k, v in headers.items()]}
 
 
+GREEDY = b'{"prompt": [1], "temperature": 0}'
+
+
 class App:
     def __init__(self, status: int = 200) -> None:
         self.status, self.seen = status, []
@@ -394,13 +397,13 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     feed, read = tp.TickFeed(ok), tp.FeedReader(tmp_path / "feed.jsonl")
     assert read() == []
     asgi(feed, scope_of("/v1/completions", {"x-verity-release": "0", "x-verity-release-run": "ab",
-                                            "x-verity-release-bucket": "0", "x-request-id": "c0"}), [b"{}"])
-    asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [b"{}"])
+                                            "x-verity-release-bucket": "0", "x-request-id": "c0"}), [GREEDY])
+    asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [GREEDY])
     assert ok.seen[1][b"x-request-id"] == b"verity-ab-1"
-    dup = asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [b"{}"])
+    dup = asgi(feed, scope_of("/v1/completions", {"x-verity-release": "1", "x-verity-release-run": "ab"}), [GREEDY])
     assert dup[0]["status"] == 400 and len(ok.seen) == 2
-    asgi(tp.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [b"{}"])
-    plain = asgi(feed, scope_of("/v1/completions", {}), [b"{}"])
+    asgi(tp.TickFeed(refused), scope_of("/v1/completions", {"x-verity-release": "2", "x-verity-release-run": "ab"}), [GREEDY])
+    plain = asgi(feed, scope_of("/v1/completions", {}), [GREEDY])
     assert plain[0]["status"] == 200
     wm = asgi(feed, scope_of(sa.WATERMARK_PATH, {"x-verity-release-run": "ab"}), [b"0 1", b"\n1 3\n", b""])
     assert wm[0]["status"] == 200
@@ -420,6 +423,84 @@ def test_tick_feed_writes_the_releases_and_the_watermark_the_gate_reads(tmp_path
     with open(tmp_path / "feed.jsonl", "ab") as f:
         f.write(b'"n": 3}\n')
     assert read() == [{"run": "ab", "t": 2, "n": 3}]
+
+
+class BodyApp(App):
+    """`App` that reads the whole request body first, as vLLM's server does, keeping each request's."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.bodies: list[bytes] = []
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        body, more = b"", True
+        while more:
+            m = await receive()
+            body, more = body + m.get("body", b""), m.get("more_body", False)
+        self.bodies.append(body)
+        await super().__call__(scope, receive, send)
+
+
+def test_tick_feed_refuses_a_stochastic_request_without_a_seed(tmp_path, monkeypatch):
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    app = BodyApp()
+    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
+    numbered = {"x-verity-release": "0", "x-verity-release-run": "ab"}
+    for path in sorted(tp.SAMPLED_PATHS):
+        for body in ({"prompt": [1], "temperature": 0.8}, {"prompt": [1]}, {"temperature": 0.8, "seed": None},
+                     {"temperature": 0.8, "seed": "7"}, {"temperature": "0", "seed": 1.0}):
+            sent = asgi(feed, scope_of(path, {}), [json.dumps(body).encode()])
+            assert sent[0]["status"] == 400 and b"needs an integer seed" in sent[1]["body"], (path, body)
+    refused = asgi(feed, scope_of("/v1/completions", numbered), [b'{"temperature": 1', b".0}"])
+    assert b"temperature 1.0 needs an integer seed, not null" in refused[1]["body"]
+    assert app.bodies == [] and read() == [{"run": "ab", "n": 0, "passed": True}]
+    assert asgi(feed, scope_of("/v1/completions", numbered), [GREEDY])[0]["status"] == 400
+
+    passing = [b'{"prompt": [1], "temperature": 0.8, "seed": 7}', b'{"prompt": [1], "temperature": 0}',
+               b'{"temperature": 0.0, "seed": null}', b"not json", b"[1, 2]", b""]
+    for body in passing:
+        assert asgi(feed, scope_of("/v1/chat/completions", {}), [body[:5], body[5:]])[0]["status"] == 200
+    assert asgi(feed, scope_of("/v1/models", {}), [b"{}"])[0]["status"] == 200
+    assert app.bodies == [*passing, b"{}"]
+
+
+def test_tick_feed_serves_only_its_allow_list_under_any_root_path(tmp_path, monkeypatch):
+    for k, v in config(tmp_path).items():
+        monkeypatch.setenv(k, v)
+    app = BodyApp()
+    feed, read = tp.TickFeed(app), tp.FeedReader(tmp_path / "feed.jsonl")
+    numbered = {"x-verity-release": "0", "x-verity-release-run": "ab"}
+    responses = asgi(feed, scope_of("/v1/responses", numbered), [b'{"input": "hi", "temperature": 0}'])
+    assert responses[0]["status"] == 400 and b"not '/v1/responses'" in responses[1]["body"]
+    assert read() == [{"run": "ab", "n": 0, "passed": True}]
+    for path in ("/v1/completions/render", "/v1/audio/transcriptions", "/pooling", "/invocations", "/v1/completions/",
+                 "//v1/completions", "/"):
+        assert asgi(feed, scope_of(path, {}), [GREEDY])[0]["status"] == 400, path
+    assert app.bodies == []
+
+    health = asgi(feed, {**scope_of("/health", {}), "method": "GET"}, [b""])
+    assert health[0]["status"] == 200 and app.bodies == [b""]
+    mounted = {"root_path": "/api"}
+    assert tp.route_of({"path": "/api/v1/completions", **mounted}) == "/v1/completions"
+    assert tp.route_of({"path": "/apiv1/completions", **mounted}) == "/apiv1/completions"
+    assert tp.route_of({"path": "/v1/completions", "root_path": "/api/"}) == "/v1/completions"
+    unseeded = asgi(feed, {**scope_of("/api/v1/completions", {}), **mounted}, [b'{"temperature": 0.8}'])
+    assert unseeded[0]["status"] == 400 and b"needs an integer seed" in unseeded[1]["body"]
+    assert asgi(feed, {**scope_of("/api/v1/responses", {}), **mounted}, [GREEDY])[0]["status"] == 400
+    assert asgi(feed, {**scope_of("/api/v1/chat/completions", {}), **mounted}, [GREEDY])[0]["status"] == 200
+    assert app.bodies == [b"", GREEDY]
+
+    sent: list[dict] = []
+
+    async def connect() -> dict:
+        return {"type": "websocket.connect"}
+
+    async def send(m: dict) -> None:
+        sent.append(m)
+
+    asyncio.run(feed({"type": "websocket", "path": "/v1/realtime", "headers": []}, connect, send))
+    assert sent == [{"type": "websocket.close", "code": 1008}] and len(app.seen) == 2
 
 
 def test_without_its_variable_the_feed_passes_everything(monkeypatch):

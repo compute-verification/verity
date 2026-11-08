@@ -7,8 +7,9 @@ the loop's nonce) and never the prover's, `Hello`'s answer and every coin checke
 in the honest prover's order, a `Commit` answered without coins ending the session, a `Ping` answered by the loop and
 never leaving, every request after a refusal refused
 without reaching the auditor, and nothing of a session read after its `Finish`. The loop starts the reps' frames on a
-port of its own and drives each itself, every coin a frame takes the loop's own opening. `flock-circuit`'s ZK
-server sessions through it are the end-to-end check (live PROTOCOL.md §10.4)."""
+port of its own and drives each itself, every coin a frame takes the loop's own opening, and a coin a frame refuses (a
+zerocheck outer coin `1`) stops the session at that round. `flock-circuit`'s ZK server sessions through it are the
+end-to-end check (live PROTOCOL.md §10.4)."""
 from __future__ import annotations
 
 import hashlib

@@ -16,6 +16,10 @@
    "and": 41864,
    "type": "066def656ec91590a4084f5e18f837ebfc3d18a0b82fa183d7d84a0fb828fbebafbae7a9e582622e7549f1b9d8cb6fd0fa5d4f4ac3256e3d01df1702ba059821"
   },
+  "AllReduceNcclTreeCoordinate_v2{WORLD=8,CHAIN=(0,1,2,3,4,5,6,7)}": {
+   "and": 5019,
+   "type": "de9ea6153b9671040b8a8b7cc4f6bc2062f288c1f00a3ea3a88b123f676ca15cb262a7502d97fabd25b6eb58d4e234fe48e32a383f26bdeeae977fe31963add8"
+  },
   "AllReduceNcclTree_v2{WORLD=4,SIZE=8,CHAIN=(0,1,2,3)}": {
    "and": 17208,
    "type": "82be889b830120b2a5ab7e047712d42470b53a82725d60afec888ca5e3eb6bbe86bdcec99d1974d2dacec24277f2ee70a9241c143bbb8ac160d97d0d8fc0a28a"

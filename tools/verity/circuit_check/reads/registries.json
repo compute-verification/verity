@@ -340,6 +340,7 @@
    "verity/ml/definitions/registry/tp_allreduce_check.py",
    "verity/ml/definitions/registry/traced_parts.py",
    "verity/ml/definitions/registry/value_inputs.py",
+   "verity/ml/definitions/tiny.py",
    "verity/ml/flock/python/verity_flock/__init__.py",
    "verity/ml/flock/python/verity_flock/challengers.py",
    "verity/ml/flock/python/verity_flock/circuit.py",

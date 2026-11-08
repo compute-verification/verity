@@ -398,7 +398,7 @@ theorem sessionsIn :
       · rename_i hs
         cases hv
         simp only [sessionOk, Bool.and_eq_true, beq_iff_eq] at hs
-        exact hs
+        exact hs.1.1
       · cases hv
         exact ⟨h.xS₀_ok, rfl⟩
     · cases hv
