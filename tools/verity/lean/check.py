@@ -1296,11 +1296,24 @@ def facts_document(facts: dict, files: dict[str, str], findings: dict, toolchain
             "findings": findings}
 
 
+def facts_bytes(doc: dict) -> bytes:
+    """``doc`` (`facts_document`) gzipped with no timestamp and canonical keys: equal documents are equal bytes, so the
+    graph's cutoff skips stage B when a proof edit leaves the facts unchanged."""
+    return gzip.compress(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode(), compresslevel=1, mtime=0)
+
+
 def write_facts_document(path: Path, doc: dict) -> None:
-    """Write ``doc`` (`facts_document`) to ``path``, gzipped with no timestamp and canonical keys: equal documents are
-    equal bytes, so the graph's cutoff skips stage B when a proof edit leaves the facts unchanged."""
+    """Write ``doc`` (`facts_document`) to ``path`` as `facts_bytes`."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(gzip.compress(json.dumps(doc, sort_keys=True, ensure_ascii=False).encode(), compresslevel=1, mtime=0))
+    path.write_bytes(facts_bytes(doc))
+
+
+def write_atomic(path: Path, data: bytes) -> None:
+    """Write ``data`` to ``path`` whole or not at all, as `store_replay` does: a temporary file beside it, named for the
+    process and thread (the packages of one audit store in threads of one process), renamed over it (`os.replace`)."""
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    tmp.write_bytes(data)
+    os.replace(tmp, path)
 
 
 def read_facts_document(path: Path) -> dict:
@@ -1314,6 +1327,48 @@ def read_facts_document(path: Path) -> dict:
     if doc.get("schema") != FACTS_SCHEMA:
         raise RuntimeError(f"the facts document {p} is {doc.get('schema')!r}, not {FACTS_SCHEMA}; rebuild its facts "
                            f"(`check.py --facts-only`)")
+    return doc
+
+
+def store_cached_facts(cache: Path, key: str, doc: dict) -> Path:
+    """Store ``doc`` (`facts_document`) in the facts cache ``cache`` under its content address ``key`` (`facts_key`): the
+    canonical, position-free document at `<key>.json.gz` (`facts_bytes`, the bytes `--facts-only` writes, so the graph's
+    content cutoff is unchanged: the key is never in the body), then a sidecar `<key>.json` recording the schema, the key
+    and the SHA-256 of those bytes.  Each is written whole or not at all (`write_atomic`), the sidecar last, so a crash
+    leaves a document without its sidecar, which `read_cached_facts` takes as a miss.  Returns the document's path."""
+    cache.mkdir(parents=True, exist_ok=True)
+    doc_path, data = cache / f"{key}.json.gz", facts_bytes(doc)
+    write_atomic(doc_path, data)
+    write_atomic(cache / f"{key}.json", json.dumps({"schema": FACTS_SCHEMA, "key": key,
+                                                    "sha256": hashlib.sha256(data).hexdigest()}, sort_keys=True).encode())
+    return doc_path
+
+
+def read_cached_facts(cache: Path, key: str) -> dict | None:
+    """The facts document in ``cache`` under ``key`` (`store_cached_facts`), looked up only by that content address: the
+    `facts_key` the caller recomputes from the current tree, never a caller's path.  None, a miss and never a hit, when the
+    document or its sidecar is absent, as a crash between the two writes leaves it.  Raises RuntimeError, refusing a
+    tampered or stale document under the right key name rather than judging it, when the sidecar can't be read, its schema
+    is not `FACTS_SCHEMA`, its recorded key is not ``key`` (a stale or misfiled document records another build's), or the
+    document's bytes don't hash to its SHA-256 (a tampered one).  The bytes are read once, then hashed and decoded."""
+    doc_path, side = cache / f"{key}.json.gz", cache / f"{key}.json"
+    if not doc_path.is_file() or not side.is_file():
+        return None
+    try:
+        meta = json.loads(side.read_text())
+    except (OSError, ValueError) as e:
+        raise RuntimeError(f"the facts sidecar {side} can't be read ({e!r}); the document is refused")
+    if meta.get("schema") != FACTS_SCHEMA:
+        raise RuntimeError(f"the facts document {doc_path} is {meta.get('schema')!r}, not {FACTS_SCHEMA}; refused")
+    if meta.get("key") != key:
+        raise RuntimeError(f"the facts document under {doc_path.name} records key {meta.get('key')!r}, not {key}: stale or "
+                           f"misfiled, refused")
+    data = doc_path.read_bytes()
+    if hashlib.sha256(data).hexdigest() != meta.get("sha256"):
+        raise RuntimeError(f"the facts document {doc_path} does not match its recorded SHA-256: tampered, refused")
+    doc = json.loads(gzip.decompress(data))
+    if doc.get("schema") != FACTS_SCHEMA:
+        raise RuntimeError(f"the facts document {doc_path} is {doc.get('schema')!r}, not {FACTS_SCHEMA}; refused")
     return doc
 
 
@@ -5107,7 +5162,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
           ready=lambda q: None, owner: str | None = None, name: bool = False, lifts: dict | None = None,
           replay_cache: Path | None = None, closure: bool = False, kept_facts: str = "all",
           bookkeeping: str | None = None, facts_out: Path | None = None, seals: "Seals | None" = None,
-          store: bool | None = None, facts_cache: Path | None = None) -> dict:
+          store: bool | None = None, facts_cache: Path | None = None, facts_reuse: bool = False) -> dict:
     """Audit one package; returns its report (`failures` empty when it passes). ``built`` is called once its build has
     passed, before anything reads it; ``ready`` (a package its `proved_in` names) returns once that package's build has
     ended, False when it did not pass (`proved`); the report's `seconds` holds that wait as `proved-in-wait`, apart from
@@ -5139,7 +5194,10 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     `--facts-from` (`audit_from_facts`) judges from, so the two give the same verdict and record.  ``facts_cache`` (a
     directory, `--facts-only` with the replay and the tests off) writes it instead under its content address
     (`facts_key`), so the lock run and the records step of one landing share the one document; the report's `facts_key`
-    and `facts_document` name it (the caller drops it on a tamper)."""
+    and `facts_document` name it (the caller drops it on a tamper).  With ``facts_reuse`` (`--facts-cache`, a judging
+    audit) it is stored with its sidecar (`store_cached_facts`), which `read_cached_facts` checks on a reuse; without it
+    (`--facts-only`, the graph's stage A) the document alone is written, so stage A's output stays the bytes the graph's
+    content cutoff compares."""
     rep, policy, work = _open(pkg, out)
     if policy is None:
         return reported(rep)
@@ -5368,7 +5426,11 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
                                  "compile_time": listed, "notes": lnotes}}
         if "upstream" in policy:
             findings["upstream"] = {"pinned": rep.get("upstream", {}), "missed": up_missed}
-        write_facts_document(Path(facts_out), facts_document(facts, files, findings, rep["toolchain"]))
+        doc = facts_document(facts, files, findings, rep["toolchain"])
+        if facts_cache is not None and facts_reuse:
+            store_cached_facts(facts_cache, rep["facts_key"], doc)
+        else:
+            write_facts_document(Path(facts_out), doc)
     return _finish(pkg, work, policy, new, facts, files, fails, rep, update, moved, bookkeeping, judged, on_lock, lnotes, t, log)
 
 
@@ -5692,6 +5754,11 @@ def main(argv: list[str]) -> int:
                     "(`facts_key`), into DIR, so `--facts-from DIR` judges from it with no build.  It does not record, "
                     "replay or run tests; it passes once it has written each document (a lock failure is `--facts-from`'s "
                     "to report)")
+    ap.add_argument("--facts-cache", type=Path, metavar="DIR", help="while judging each named package as usual, also store "
+                    "its sealed facts document into DIR, keyed by that build (`facts_key`), with a sidecar `<facts_key>.json` "
+                    "so a later reuse looks the document up by the key the current tree computes and refuses a tampered or "
+                    "stale one.  lean_changed's records step passes it so drive's lock run reuses the facts the records run "
+                    "already read, rather than recomputing them")
     a = ap.parse_args(argv)
     pkgs = [p.resolve() for p in (packages(a.root.resolve()) if a.all else a.package)]
     if not pkgs or (a.all and a.package) or (a.all and (a.update or a.name_instances)):
@@ -5712,6 +5779,9 @@ def main(argv: list[str]) -> int:
             ap.error("--facts-only writes the facts, it does not record, judge or replay: not with --update, --lift, "
                      "--name-instances, --regenerate, --moved, --fresh, --closure, --replay-cache or --dev-cache "
                      "(`--facts-from` judges, with --update it records)")
+    if a.facts_cache is not None and (a.facts_only is not None or a.facts_from is not None):
+        ap.error("--facts-cache stores the document while judging the build; --facts-only writes it without judging and "
+                 "--facts-from judges from a stored one: give one, not a combination")
     due = (datetime.date.today() + datetime.timedelta(days=BOOKKEEPING_DAYS)).isoformat() if a.bookkeeping else None
     moved = None
     if a.moved:
@@ -5810,7 +5880,9 @@ def main(argv: list[str]) -> int:
                             name=a.name_instances and mine, lifts=lifts if mine else None, replay_cache=a.replay_cache,
                             closure=a.closure, kept_facts=a.facts if a.facts != "named" else "own" if mine else "none",
                             bookkeeping=due, seals=run_seals,
-                            facts_cache=a.facts_only.resolve() if a.facts_only and mine else None)
+                            facts_cache=(a.facts_only or a.facts_cache).resolve()
+                            if (a.facts_only or a.facts_cache) and mine else None,
+                            facts_reuse=a.facts_cache is not None)
         finally:
             if a.facts_from is None and not built[pkg].is_set():
                 seal(pkg)
@@ -5820,8 +5892,9 @@ def main(argv: list[str]) -> int:
                 rep["failures"] += tamper
                 if regen := rep.pop("regenerated", None):
                     Path(regen).unlink(missing_ok=True)
-                if doc := rep.get("facts_document"):     # the seal didn't hold: the stored facts may not be this build's
-                    Path(doc).unlink(missing_ok=True)
+                if doc := rep.get("facts_document"):     # the seal didn't hold: the stored facts may not be this build's;
+                    Path(doc).with_name(Path(doc).name.removesuffix(".json.gz") + ".json").unlink(missing_ok=True)
+                    Path(doc).unlink(missing_ok=True)    # the sidecar first, so a crash between leaves a miss
             if a.regenerate and rep.get("regenerated") and rep["failures"]:
                 rep["settled"], rep["failures"] = rep["failures"], []
             reports[pkg] = reported(rep)
