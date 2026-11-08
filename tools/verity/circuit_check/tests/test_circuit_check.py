@@ -821,7 +821,8 @@ _SERVED_ALLREDUCE = ("GLM-5.3 TP8's all-reduce at a served row count, kept in th
 #: Calls the suite checks over `Options.partition_max_gates` or `Options.partition_max_leaves`, each with why it is allowed:
 #: two σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`), whose split moves GLM-5.3's and
 #: DeepSeek-V4's word digests, and GLM-5.3 TP8's served all-reduces over the gate budget (36 gates an element two-shot MNNVL,
-#: past 22 rows of 6,144; 16 multimem, past 50 rows), multimem at 86 rows and more over the leaf budget too
+#: past 22 rows of 6,144; 16 multimem, past 50 rows), multimem at 86 rows and more over the leaf budget too.  Each passes no
+#: Call status to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes
 OVER_PARTITION_BUDGET = {
     "AllReduceRmsNormMnnvl_v2{WORLD=2,N=256,SHOT=1,CLUSTER=1,EPS=1e-05,FMA=False}": "split pending",
     "MhcFusedPostPre_v2{HC=2,H=64,NS=2,TH=8,TN=4,REPEAT=2,EPS=1e-06,HC_EPS=1e-06}": "split pending",
@@ -830,24 +831,65 @@ OVER_PARTITION_BUDGET = {
 }
 
 
+def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
+    """{the suite's Calls over `Options.partition_max_gates` or `Options.partition_max_leaves`: which}.  Gate counts are the
+    catalog's (`Catalog.reached`): a target made from its record has no body built, and building every Call's would take about
+    half an hour."""
+    from verity.ml.circuits.evaluation.reference import signature_of
+
+    suite, out = catalog.suite, {}
+    for k in suite:
+        if catalog.reached[k][0] in calls:
+            if (n := catalog.reached[k][1]) > OPTS.partition_max_gates:
+                out[k] = f"{n} gates"
+            elif (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves:
+                out[k] = f"{n} leaves"
+    return out
+
+
 @pytest.mark.slow
 def test_every_call_the_suite_checks_is_partitioned(catalog):
     """No Call passes with its partition unchecked: each is within `Options.partition_max_gates` (the Boolean attention Calls
     at T = 17 are about 1.9M gates, 2.1M with Gemma-2's softcap; DeepSeek-V4's Boolean FlashMLA prefill and mHC Calls at their
-    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, apart from `OVER_PARTITION_BUDGET`, which holds
-    only Calls that are still over one of them.  Gate counts are the catalog's (`Catalog.reached`): a target made from its
-    record has no body built, and building every Call's would take about half an hour."""
-    from verity.ml.circuits.evaluation.reference import signature_of
-
-    suite = catalog.suite
-    calls = TG.call_families()
-    called = [k for k in suite if catalog.reached[k][0] in calls]
-    over = {k: n for k in called if (n := catalog.reached[k][1]) > OPTS.partition_max_gates}
-    wide = {k: n for k in called if (n := sum(pt.leaves for pt in signature_of(suite[k])[0])) > OPTS.partition_max_leaves}
-    assert {k: n for k, n in over.items() if k not in OVER_PARTITION_BUDGET} == {}
-    assert {k: n for k, n in wide.items() if k not in OVER_PARTITION_BUDGET} == {}
-    assert sorted(set(OVER_PARTITION_BUDGET) - set(over) - set(wide)) == [], \
+    smallest whole blocks 4.1M to 4.6M) and `Options.partition_max_leaves`, or is partitioned by its callees
+    (`checks.callees_are_calls`), apart from `OVER_PARTITION_BUDGET`, which holds only Calls that are still neither."""
+    suite, calls = catalog.suite, TG.call_families()
+    over = _over_budget(catalog, calls)
+    assert {k: why for k, why in over.items() if k not in OVER_PARTITION_BUDGET and not CK.callees_are_calls(suite[k], OPTS)} == {}, \
+        "a Call over the partition budget whose callees aren't all Calls: list its callees in targets.CALLEE_CALLS, or hold it here"
+    assert sorted(set(OVER_PARTITION_BUDGET) - set(over)) == [], \
         "no longer an over-budget Call the suite checks: remove it from OVER_PARTITION_BUDGET"
+    assert sorted(k for k in OVER_PARTITION_BUDGET if CK.callees_are_calls(suite[k], OPTS)) == [], \
+        "partitioned by its callees now: remove it from OVER_PARTITION_BUDGET"
+
+
+@pytest.mark.slow
+def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(catalog):
+    """`targets.CALLEE_CALLS` is the families of the Definitions an `checks.uncut` Call calls (and, through each callee `uncut`
+    itself, its callees), apart from those that are Calls otherwise, each with the families of the Calls that pass it.  The
+    uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from `OVER_PARTITION_BUDGET`'s: they pass
+    nothing, and stay unchecked until their cut lands."""
+    from circuit_check import ranges as RG
+
+    suite, calls = catalog.suite, TG.call_families()
+    own = calls - set(TG.CALLEE_CALLS)
+    stack = [suite[k] for k in _over_budget(catalog, calls) if k not in OVER_PARTITION_BUDGET]
+    stack += [fn for spot in RG.spots() if TG.family(fn := TG.definition(spot)) in calls]
+    want: dict[str, set[str]] = {}
+    seen: set[str] = set()
+    while stack:
+        fn = stack.pop()
+        if fn.id in seen or not hasattr(fn, "body") or CK.uncut(fn, OPTS) is None:
+            continue
+        seen.add(fn.id)
+        for n in fn.body.nodes:
+            if (f := TG.family(n.fn)) not in own:
+                want.setdefault(f, set()).add(TG.family(fn))
+            stack.append(n.fn)
+    assert want == {f: set(by) for f, by in TG.CALLEE_CALLS.items()}, (
+        f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
+        "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
+    assert {f: by for f, by in TG.CALLEE_CALLS.items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
 
 
 @pytest.mark.slow
