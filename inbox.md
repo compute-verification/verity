@@ -80,3 +80,6 @@ Your part, after #8132 is marked (that stays first, Mon 17:00Z), stacked on it, 
 Later (full): the GLM class pinned, AS = 1 at the edge, and the bit and order read from the certifier's stamps.
 On CIR-197 by 23:00Z, confirm #8132's Mon 17:00Z ETA and the cut-and-continue ETA (Tue 20:00Z, or say Wed if that's honest), and answer the memo question.
 
+[2026-11-08T22:48Z] ad864b190a71
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
