@@ -823,6 +823,7 @@ theorem poolChained_iff (rec : Json) (v : Registration.Verifier) :
   · simp
   · rcases he : Registration.entryOf rec p.pin with _ | e <;>
       rcases ho : Registration.poolOpen rec v p with _ | ⟨d, r⟩ <;> simp [he, ho]
+    exact ⟨fun h => ⟨d, r, ⟨rfl, rfl⟩, h⟩, fun ⟨_, _, ⟨h1, h2⟩, h⟩ => by subst h1 h2; exact h⟩
 
 theorem registration_nil (rec : Json) (v : Registration.Verifier) :
     Registration.check rec v = #[] ↔ ∃ law, Registered v rec law := by
