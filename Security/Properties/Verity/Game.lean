@@ -22,10 +22,10 @@ The verifier is one compiled Lean function per composite (`Verity.Registration.C
 the composite `Core.Composites.composites` lists for it (`verifier`): onsite's `Core.Onsite.protocol`
 (`verity/onsite/v0`, `Core.Composition.tiedSameB`) and remote's `Core.Remote.protocol` (`verity/remote/v0`,
 `Core.Composition.tiedSameB`), each composing its subprotocols over the blobs the prover sent. Onsite has seven
-subprotocols and remote three of them, each subprotocol at the component its composite names for it (`component`);
+subprotocols and remote three of them, each subprotocol at the compiled check its composite names for it (`component`);
 the five that decide a period are one per `Accounting.Audit` (`Subprotocol.ofAudit`):
 
-| subprotocol | `Audit` | onsite's component | remote's component |
+| subprotocol | `Audit` | onsite's compiled check | remote's compiled check |
 | --- | --- | --- | --- |
 | sampled proofs | `.sampled` | `VStar.Recursive.Sampled.protocol` (`verity/sampled-proofs/v1`: one-stage v2's audit or the recursive audit, as its params' `form` names it; one-stage v1 refused) | the same |
 | PoUW | `.pouw` | `PouwCheck.Period.protocol` (its period credit) | the same |
@@ -87,11 +87,11 @@ The statement's form is the causal game, the committed files, one fixed extracto
   circuit (`declaration`: its registered inputs `θ`, `theta`). The wipe's claim is that the run, read at the wipe's
   boundary as the wipe's game (`Verity.Wipe.OfRun`, `wipeRun`), doesn't keep foreign content past the survivor threshold
   the wipe publishes (`Verity.Wipe.OfRun.Kept` at `foreignBits`).
-* **Each component's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
+* **Each compiled check's acceptance in what the prover sent.** Subprotocol `a`'s verdict at composite `k` (`Verdict`) is the
   file check, the composite's own acceptance as a `same` composition (`SameAccepts`: an accepted composition of its
-  components whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
+  subprotocols whose record subprotocols committed to one record, `Properties.Composition.AcceptSame`'s conclusion, and
   every window of PoUW's period on the record and at onsite PoUS and PoUB-P2 on one store, `AcceptTied`'s),
-  and `a`'s compiled component's acceptance of its own case. The device's log as each component's check read it
+  and `a`'s compiled check's acceptance of its own case. The device's log as each compiled check read it
   (`coinsRead`) is the targets' to bind to the device's whole log (`Logged`).
 * **PoUW counts gates** of the committed circuit the play computed after their window's coin, over the period's windows
   (`computed`), with no pricing.
@@ -122,7 +122,7 @@ inductive Subprotocol
   | sampled
   /-- PoUW: work -/
   | pouw
-  /-- the inference-only policy: the declared circuit divides into inference blocks within their budgets -/
+  /-- the inference-only policy: the registered circuit divides into inference blocks within their budgets -/
   | inferenceOnly
   /-- PoUS: space -/
   | pous
@@ -167,7 +167,7 @@ def ties : Verity.Registration.Composite → List Composition.Tie
   | .onsite => Onsite.ties
   | .remote => [Remote.windows]
 
-/-- **The compiled component of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
+/-- **The compiled check of composite `k` that decides subprotocol `a`**; `none` when `k` has no such
 subprotocol. -/
 def component : Verity.Registration.Composite → Subprotocol → Option BlobProtocol
   | .onsite, .sampled => some VStar.Recursive.Sampled.protocol
@@ -182,19 +182,19 @@ def component : Verity.Registration.Composite → Subprotocol → Option BlobPro
   | .remote, .inferenceOnly => some NciCheck.Protocol.protocol
   | .remote, _ => none
 
-/-- Composite `k`'s subprotocols: those it has a component for. Remote's are a subset of onsite's. -/
+/-- Composite `k`'s subprotocols: those it has a compiled check for. Remote's are a subset of onsite's. -/
 def subprotocols (k : Verity.Registration.Composite) : Finset Subprotocol :=
   Finset.univ.filter fun a => (component k a).isSome
 
 /-- What the prover sends a composite's verifier: the parameters, the commitment and the evidence, as bytes,
-and the blobs its components read. -/
+and the blobs its subprotocols read. -/
 structure Sent where
   params : ByteArray
   commitment : ByteArray
   evidence : ByteArray
   blobs : Array ByteArray
 
-/-- Composite `k`'s components on the blobs the prover sent. -/
+/-- Composite `k`'s subprotocols on the blobs the prover sent. -/
 def Sent.components (k : Verity.Registration.Composite) (s : Sent) : List Protocol :=
   (componentsOf k).map (·.onBlobs (Blobs.ofArray s.blobs))
 
@@ -203,25 +203,25 @@ def Accepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
   ((verifier k).answer s.params s.commitment s.evidence s.blobs).verdict = .accept
 
 /-- The three byte strings decode under the composition's formats (`Core.Composition.product`'s, which both composites
-read): the components' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
+read): the subprotocols' parameters `ps`, the binding `c` of their digests, and their cases `ev`. -/
 def Decoded (s : Sent) (ps : List Composition.Named) (c : ByteArray) (ev : List Composition.Case) : Prop :=
   (canonicalJson s.params >>= Composition.decodeParams) = .ok ps ∧ Composition.decodeCommitment s.commitment = .ok c ∧
     Composition.decodeEvidence s.evidence = .ok ev
 
 /-- The protocol `P` accepts its own case in what the prover sent composite `k`: the three byte strings decode, and
-one of the components' cases is `P`'s, as one of `k`'s components, which decodes under the parameters `k` names for
+one of the subprotocols' cases is `P`'s, as one of `k`'s subprotocols, which decodes under the parameters `k` names for
 it, and `P`'s check accepts it. -/
 def CaseAccepts (k : Verity.Registration.Composite) (P : BlobProtocol) (s : Sent) : Prop :=
   ∃ ps c ev, Decoded s ps c ev ∧
     ∃ x ∈ Properties.Composition.triples (s.components k) ps ev, x.1 = P.onBlobs (Blobs.ofArray s.blobs) ∧
       Properties.Composition.DecodedAccepted x.1 x.2.1.params.toUTF8 x.2.2.commitment x.2.2.evidence
 
-/-- Subprotocol `a`'s component at composite `k` accepts its own case in what the prover sent. -/
+/-- Subprotocol `a`'s compiled check at composite `k` accepts its own case in what the prover sent. -/
 def ComponentAccepts (k : Verity.Registration.Composite) (a : Subprotocol) (s : Sent) : Prop :=
   ∃ P, component k a = some P ∧ CaseAccepts k P s
 
 /-- **Composite `k` accepted what the prover sent as a `same` composition**: the three byte strings decode to an
-accepted composition of `k`'s components on the blobs sent, whose record subprotocols (`tied k`) committed to one
+accepted composition of `k`'s subprotocols on the blobs sent, whose record subprotocols (`tied k`) committed to one
 record (`Properties.Composition.SameAccepted`), and whose ties (`ties k`: at both, every window of PoUW's period on the
 policy's record; at onsite, also PoUS and PoUB-P2 on one store) each named one value (`Properties.Composition.Tied`). -/
 def SameAccepts (k : Verity.Registration.Composite) (s : Sent) : Prop :=
@@ -477,7 +477,7 @@ structure Exchange where
   evidence : ByteArray
   blobs : Array ByteArray
 
-/-- What the prover sent the composite in the play that ended with `o`: the blobs its components read are the committed
+/-- What the prover sent the composite in the play that ended with `o`: the blobs its subprotocols read are the committed
 files, then the evidence's blobs. -/
 def Exchange.sent (o : Exchange) : Sent := ⟨o.params, o.commitment, o.evidence, o.files ++ o.blobs⟩
 
@@ -624,7 +624,7 @@ abbrev World {ι : Type} (d : Device ι) (α : Type) [Fintype α] := Accounting.
 /-- **The names the subprotocols define.** v2's reading of the committed files at the parameters; the positions from
 the files and the commitment, the circuit file's and the public file's digests in the parameters and the registered
 files; the coin commitment's families and the device's signer, the device's only parts the parameters fix (its frames
-are the prover's: `Frame`), and the device's log as each component's check read it, decoded from the device's signed
+are the prover's: `Frame`), and the device's log as each compiled check read it, decoded from the device's signed
 log in what the prover sent; the extractor applied to a strategy, and each subprotocol's collision finder and forger of
 the device's signature, with their SHA-512 calls bounded by the strategy's (`finder_calls`, `forger_calls`), and the
 device's messages in a play and the forger's on each of its coins bounded by the published `Q` (`signs_le`,
@@ -775,7 +775,7 @@ def Opens (θ : ByteArray) (F : Array ByteArray) (c : ByteArray) (g : Fin (V.cir
         ∀ i : Fin ((V.circuitOf θ F).w g), o.row[p.offset + i.val]? = some (v.getLsbD i.val)
 
 /-- **Subprotocol `a`'s verdict at composite `k`**: the committed files passed the commit phase's check, `k` accepted
-what the prover sent as a `same` composition, and `a`'s compiled component accepts its own case in it. -/
+what the prover sent as a `same` composition, and `a`'s compiled check accepts its own case in it. -/
 def Verdict (k : Verity.Registration.Composite) (a : Subprotocol) (o : Exchange) : Prop :=
   V.Registered o.params o.files ∧ SameAccepts k o.sent ∧ ComponentAccepts k a o.sent
 
