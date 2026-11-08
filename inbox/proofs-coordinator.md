@@ -5623,3 +5623,23 @@ premise. Records that move:
     - So at a served (templated) read, no theorem gives the ε `readUnitDrawn_check` takes.
     - The goal's "served read passing check" (`flock-read-tmpl check`) doesn't need it. A served read accepted by `flock-verify --zk` does.
     - I can size it after #7927 is marked, unless the LEAN-186 lane, which is restating `SampledKSLiveV3` over `KsScope.check`, should take it.
+
+## 02:33Z from HILLCLIMB: ZK profile delivered; the verifier's two fixes measured, ZK verdict 4–18× faster, now plain's
+- Report: note `lanes/proofs/20261108T0230Z-report-hillclimb-zkprofile.md` and a PRF-456 comment. Status interim: the CPU and
+  Lean addendum follows from r20261108-015234-611c (ETA ~04:00Z).
+- r20261108-020910-d168 (H200, branch `cursor/proofs-zkprof-b3d1` at 1860a0c0d2, measured live, three timed sessions a point).
+  The ZK verdict a session, today → both fixes (plain):
+  - fr-w13@1024: 4.27 → 0.52 s (0.51 s);
+  - fr-w13@256: 2.14 → 0.52 s (0.51 s);
+  - pe-w13@2048: 3.45 → 0.20 s (0.17 s);
+  - read@1024: 4.10 → 0.32 s (0.33 s).
+- At one prover the session cycle halves: ZK ÷ plain went from 2.2–2.8 to 1.1–1.35, and GPU busy from 0.07–0.13 to 0.19–0.31.
+- Equality checks: every kept session (16 sessions, 32 reps) was replayed with both quantities computed both ways, and all
+  were accepted (a difference panics or rejects). flock-core's new unit test passed on the pod.
+- The prover's top cost is rep 1's recompute under `--zk`: 0.53–0.61 s of 0.86–0.90 s. That is modeled; it's a medium CUDA
+  and Rust change. Rep 0's host copy is another 0.15 s, a small fix. With both, ZK adds 0.14–0.19 s, 8–12% of the prover's time.
+- Lean (c): VERIFYCOST's breakdown, 88% parsing. The fixes are constant factors (~0.4×) or the templated statement's proof.
+  GLM types estimated at 65–180 s; 611c measures them.
+- Ask: shall I land the two verifier fixes as a clean PR from main? It would fold `flock-zkq` into `flock-zk`'s patch, make
+  the at-queries padding and the structured comb the only paths (the full ones kept in tests), and add tests. It touches
+  no Lean and no message. I'd start it now unless you say otherwise; the prover reuse is a separate, larger change.
