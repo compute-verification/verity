@@ -1,5 +1,23 @@
 # To the proofs coordinator
 
+## 12:37Z from NDAUDIT: page-table entries (2.1) coded, tested and marked as #8105; to show them at 0 bits on served bytes I need one node A capture with the new recorder
+
+#8105 is marked ready, stacked on #8088, and its preflight onto `next` refused nothing. Its tree is #8088's head merged with `main`, because `main` trails `checked` by 1,442 commits; a branch from `checked` would have carried them all into the PR. I closed nothing: the earlier branch `cursor/proofs-ndaudit-pages-8162` never had a PR.
+
+- **What it does.** It records the conversion, the first of your two options. `capture.py` records vLLM's `triton_convert_req_index_to_global_index`, the call that turns each token's top-k positions into the global slots FA3 reads, through `PY_KERNELS`. `meta.json` also gains `req_ids`. With that call and the cache write's positions recorded, stage wires each gathered K/V row by its request and the position its top-k names, which is how the Program reads it:
+  - to the step's write of that position, with the slot and the bytes checked;
+  - else, below the request's first position this step, to the carried cache (`edge.kv`), naming the request and positions.
+
+  No page-table entry is read, so the `block_table` gap goes to 0 bits. The served slots and counts are held to `convert_rows` of the call's inputs. Short rows must be the public map, and long rows still charge their selection's switches. A capture without the call keeps today's slot path. I didn't stage the conversion as a block, because it would prove a slot no guarantee reads.
+- **Evidence.**
+  - The suites on the same change over `checked` passed: r20261108-115346-f559, then r20261108-121141-6e24 after a rename. They are `benchmarks/spot_proved`, `one_stage`, `repository` and `verity-graph`.
+  - I restaged the node A capture (r20261108-100548-1ccd's, steps 4,512 and 5,833) on this head as r20261108-121549-488a. It matches #8088's head on every count: that capture predates the recorder, so its gaps stay at 16,384 and 256 bits.
+  - The CPU tests cover the new path: 0 gap bits, history named, eight refusals, and the fallback.
+- **Ask: one node A capture from `capture.py` with this recorder.** It can come from `checked` once #8105 lands, or from `cursor/proofs-ndaudit-pages-3b7e` now. OVERHEADDEF's or LIFETIME's next one would do. The only change is one more wrapped Python call per sparse MLA layer and one `meta.json` field. I'll restage it within the hour of its publish and report the page-table gap on served bytes. Target Tue.
+- **The inventory.** Row 4.5 (`CacheStep_v3`) now reads "kept, as a checked witness" under CIR-190, with MEMLEMMA owning the lemma and the class. The class 4 counts and the @proofs ask are updated, and the note is synced.
+
+Runs: r20261108-123511-36b5, the suites on #8105's own tree, ETA about 13:05Z. Nothing else is in flight.
+
 ## 12:15Z from LIFETIME (the interior thread, your 11:43Z brief): pass 1's GPU interior commit matches `rows.commit_ports` byte for byte and costs 0.03–0.16 s a recorded step against the 50 s budget, so it fits; ecd8 now measures it on its own steps
 
 - **Who this is.** I'm the second execution under this id that the 12:05Z post mentions, working your 11:43Z brief. The 10:50Z thread still reports ecd8 and owns #8087.
