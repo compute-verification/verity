@@ -662,8 +662,9 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 CK(cudaEventRecord(hs_done, hs_stream));
                 return 0;
             };
-            // a copy a run of slots of one width at one stride on the device (a 2D copy where the pitches allow), each of its
-            // z, a, b words' (a, b in the a, b layout, then fc_host_slots_and forms z)
+            // A copy a group of slots of one width, each of its z, a, b words' (a, b in the a, b layout, then fc_host_slots_and
+            // forms z): a run of slots at one stride on the device, or runs like it each at one stride from the last (a slot
+            // range's slots in each block), as a 3D copy, a 2D copy or a copy a slot, as the strides and pitches allow.
             auto host_copies = [&]() -> int {
                 if (!hs_copy) return 0;
                 const long long n = N->n_host0, per = N->host0_ab ? 4 : 6;
@@ -671,26 +672,48 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 const int* words = N->host0_words;
                 F128* dst[3] = {df, d_a, d_b};
                 const uint64_t* src = N->host0_zab;
+                // the end of the run from slot a, its stride in *st (its width for a run of one)
+                auto run_end = [&](long long a, long long* st) {
+                    long long b = a + 1;
+                    *st = words[a];
+                    if (b < n && words[b] == words[a] && at[b] - at[a] >= words[a]) {
+                        *st = at[b] - at[a];
+                        while (b < n && words[b] == words[a] && at[b] - at[b - 1] == *st) b++;
+                    }
+                    return b;
+                };
                 for (long long i0 = 0; i0 < n;) {
                     const long long w = words[i0];
-                    long long i1 = i0 + 1, stride = w;
-                    if (i1 < n && words[i1] == w && at[i1] - at[i0] >= w) {
-                        stride = at[i1] - at[i0];
-                        while (i1 < n && words[i1] == w && at[i1] - at[i1 - 1] == stride) i1++;
+                    long long stride;
+                    const long long i1 = run_end(i0, &stride), len = i1 - i0;
+                    long long depth = 1, outer = 0;
+                    if (len > 1 && i1 < n && words[i1] == w && (at[i1] - at[i0]) % stride == 0 && at[i1] - at[i0] >= len * stride) {
+                        outer = at[i1] - at[i0];
+                        for (long long j = i1, st; j < n && words[j] == w && at[j] - at[j - len] == outer && run_end(j, &st) - j == len &&
+                                                   st == stride;
+                             j += len)
+                            depth++;
                     }
-                    const bool two_d = i1 - i0 > 1 && stride * 16 <= hs_max_pitch && per * w * 8 <= hs_max_pitch;
+                    const bool pitched = stride * 16 <= hs_max_pitch && per * w * 8 <= hs_max_pitch;
                     for (int k = N->host0_ab ? 1 : 0; k < 3; k++) {
                         const uint64_t* s = src + 2 * w * (k - (N->host0_ab ? 1 : 0));
-                        if (two_d) {
+                        if (pitched && depth > 1) {
+                            cudaMemcpy3DParms p = {};
+                            p.srcPtr = make_cudaPitchedPtr((void*)s, (size_t)(per * w * 8), (size_t)w * 16, (size_t)len);
+                            p.dstPtr = make_cudaPitchedPtr((void*)(dst[k] + at[i0]), (size_t)stride * 16, (size_t)w * 16, (size_t)(outer / stride));
+                            p.extent = make_cudaExtent((size_t)w * 16, (size_t)len, (size_t)depth);
+                            p.kind = cudaMemcpyHostToDevice;
+                            CK(cudaMemcpy3DAsync(&p, hs_stream));
+                        } else if (pitched && len > 1) {
                             CK(cudaMemcpy2DAsync(dst[k] + at[i0], (size_t)stride * 16, s, (size_t)(per * w * 8), (size_t)w * 16,
-                                                 (size_t)(i1 - i0), cudaMemcpyHostToDevice, hs_stream));
+                                                 (size_t)len, cudaMemcpyHostToDevice, hs_stream));
                         } else {
-                            for (long long i = i0; i < i1; i++)
+                            for (long long i = i0; i < i0 + len * depth; i++)
                                 CK(cudaMemcpyAsync(dst[k] + at[i], s + per * w * (i - i0), (size_t)w * 16, cudaMemcpyHostToDevice, hs_stream));
                         }
                     }
-                    src += per * w * (i1 - i0);
-                    i0 = i1;
+                    src += per * w * len * depth;
+                    i0 += len * depth;
                 }
                 if (N->host0_ab) {
                     fc_host_slots_and<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(d_hat, d_hw, n, (uint4*)df, (const uint4*)d_a,
