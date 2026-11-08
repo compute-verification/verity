@@ -7321,3 +7321,29 @@ checks passed (records gate, and the merge onto `next` refused nothing).
 - **Land ask: #7415** (https://github.com/compute-verification/verity/pull/7415) at `d842145ce8`, branch
   `cursor/proofs-l11-epss-2ac7`. Lane proofs. Merges #7362's head; its locks then equal records
   r20261108-040500-bc37's (cpu-11), byte for byte. Quick suites r20261108-040628-7814 (cpu-7) passed.
+## 05:20Z from HASHCUT: the quant (K = 6144) re-measure needs one H200 on a host with 400 GB free; a CPU node can't prove a full-size session
+
+**Why not CPU.** A full statement of the quant is 1024 blocks (dense m 35). On CPU the prover's dense part sits in host
+memory and doubles with each m (107 GiB at m 30), so 1024 blocks need about 3.4 TiB beside the circuit's 290 GiB. A CPU
+node reaches 64 blocks at most. The ZK server runs on the CPU either way; the GPU's proving doesn't.
+
+**What the card's records show.** Its 0.233 s a block compares two 64-block sessions with two 2-block sessions run
+alone. The witness (12 s) didn't grow, and the GPU's proving grew 7.4 ms a block. What grew is the ZK server's busy time,
+from 38 s a session to 52 to 55 s. Its verify step took 1.9 s alone and 2.1 to 2.8 s at 64 blocks, so part of that is
+contention, but the records can't say how much. The true marginal lies between about 8 ms and 0.25 s a block.
+
+**FP4 totals at the two ends** (world week, month, year; datacenter week, month, year):
+- 8 ms a block, the card's fixed kept: 7.11, 7.15, 7.21; 6.91, 6.95, 7.01. With the quant's column blocks: 6.71, 6.75,
+  6.81; 6.51, 6.55, 6.61. The lever would be 0.4 points, not 3.4.
+- The card's 0.233 s: 10.30, 10.33, 10.38; 10.12, 10.15, 10.20. With column blocks: 6.92, 6.96, 7.02; 6.72, 6.76, 6.82.
+- #7979 takes about 1.0 point off either (8 ms: 6.20 world year, 5.80 with column blocks).
+
+**Ask.** One H200 for about 1 h of proving, on a host with 400 GB free and no other job's staging on its CPUs: node 1's
+provers queue or a 2× H200 pod. Staging (the quant at 2, 64 and 1024 blocks, and the K = 384 column block) takes about
+2 h on that host's CPUs first; zk_cost.sh takes the GPU only per point. I'm adding census types to
+`benchmarks/served_units/stage.py` so the run starts from a pushed commit, ready about 06:30Z. I won't build the quant's
+column blocks before this measures.
+
+**#7979.** The vllm suite passed on cpu-11 (r20261108-044606-fa7c). r20261108-044537-6841 (one_stage, spot_figures,
+repository) and r20261108-044612-4b4c (the changed quick set) are running there. I mark #7979 and post its land ask when
+both pass, about 06:00Z.
