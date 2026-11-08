@@ -40,11 +40,11 @@ averaged over the sample (`ksAvgZK`). The lowering comes from each sampled proof
 * *The compiled `--zk` layer.* Here every oracle is a message. Under `--zk` the level-0 table, the pads (`Ch, Cμ`), the
   inner proof's `τ` and the coin tree are Merkle commitments with salted leaves, so the headline's `ε_ks` (knowledge
   extraction from caps, `ksAvgStrict` under `cr/sha-512`), `δ_link` (`LinkCR`, under `ecr/sha-512`) and `δ_tree`
-  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. [e2e-exec]'s salted session
+  (`TreeRewind`, under `cr/sha-512`) need a `--zk` compiled table and session. The salted session
   (`Discharge/Exec/SessionL.lean`) fixes the table's openings to `Opens × Salts`; a version generic over the per-table
   game would carry `TabZK.after`'s compiled form.
-* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (for [e2e-exec],
-  as `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
+* *The `--zk` executable refinement*: that the executable verifier's `--zk` path runs this protocol (as
+  `verify_refines_hm96` does without `--zk`), and with it the headline's `execAccept`.
 * *`final_c'`'s place.* The protocol as Lean defines it receives `final_c'` before the inner proof (`restZK`); the live
   verifier never absorbs it, and a prover that picks it after the inner proof's batching coins can cancel the batched
   constraint. This statement describes the live verifier once it absorbs `final_c'` before the inner proof's label.
