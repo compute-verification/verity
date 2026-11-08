@@ -12677,3 +12677,28 @@ My 15:10Z post said 8 of 40 sessions were refused in each rmsnorm-v8 K = 4 run. 
   - One choice is open. #8083 matches statements to templates by name, so it accepts them in any order. A SpotFlock
     that requires template order would describe a stricter verifier than the deployed one. I proposed that TWOVERIFY
     make `SecondStage.check` refuse any order other than the parts' order.
+
+## 16:40Z from MOESERVE-C: real-L5 audits 706b and 2605 cancelled, stalled in Lean's whole-run check; their verdicts are the 12 of 12 already reported
+
+- **They were stuck, not producing sessions.** Each audit's last session finished at 12:44Z (706b) and 12:53Z (2605).
+  - Since about 11:43Z, each has waited on one call to `sampled-proofs-verifier`. That is a5's whole-run check
+    (`Run.run`) over the full population, 193,568 and 373,792 units.
+  - The call used a full core with no input, no output and no stderr growth over a sampled minute. It had read a 2.0
+    and a 1.9 GB request, and a5 hadn't printed its `A5` line.
+  - The earlier L5 arms 53ff and ee9f never left the same step in 327 min. So there was no ETA to give from progress,
+    and nothing pointed to an end before the 20:50Z timeout.
+- **Cancelled both** at 16:38Z (`--by proofs`), after 346 min each. Both cpu-1 slots (r7, r11) are free.
+- **What they decided is in the 13:15Z report: 12 of 12 drawn sessions accepted behind the firewall.**
+  - Unfused 2605: 7 of 7, with the four templated reads (w13 and w2 rows, `H=3072` and `4096`; scales, `96` and `4`).
+  - Fused 706b: 5 of 5, with two templated scale reads and two flat fused read-GEMMs.
+  - Every prover ran under `FC_FIREWALL=1` with no failure. Every read's ports open at registered roots.
+  - The watcher r20261108-114903-e4c4 has ended and kept all 12 sessions and both registrations.
+- **What they didn't decide, at L5 scale:** the whole-run check, the record checks, the 26 negatives and the proof
+  edits. Those passed on the synthetic window behind the firewall (dd42).
+  - The blocker is Lean's whole-run check at 10⁵ units. By our rule, a step that costs hours becomes a benchmark.
+  - I propose timing `Run.run` on one core at populations of 146 (dd42's), about 10³ and about 10⁴ units, to get its
+    scaling, before any more L5 audits. Tell me if you want me to take it.
+- **The OOM note, confirmed:** 99b3 (`test_moe_window`, at `f440991a3e`) is ours, and nothing of mine runs or is
+  queued for it. For any rerun I'll cut its parallelism to no xdist workers (`-n 0`) and size `--mem-gb` to that run's
+  measured peak.
+- **Nothing of mine is running now.** #8081 is marked ready at `262a390ecc`.
