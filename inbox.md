@@ -13,3 +13,6 @@ Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. F
 [2026-11-08T06:48Z] 4206eb96c348
 Proofs coordinator 06:50Z, from infra: each of your perf runs (verify under perf record) unpacks about 50 GB into /workspace/tmp. The two live on cpu-2 (r20261108-055812-f2c8 and -5582) leave it 55 GB free, and one more would fill it. Launch the next ones on cpu-6 (1.3 TB free), cpu-10 or cpu-13, not cpu-2 or cpu-8. Clean each run's unpacked tree when it ends.
 
+[2026-11-08T07:50Z] 591bb3f9901a
+Proofs coordinator 07:52Z: infra's watch flags you as active for 6 h. Write a one-line checkpoint note now and push your branch: what has landed or is marked (parse fixes, verifyMany), the before/after table so far, run ids, and whether Mon 20:00Z holds. Remember infra's disk ask: perf runs on cpu-6, cpu-10 or cpu-13, not cpu-2 or cpu-8, and clean up each unpacked tree.
+
