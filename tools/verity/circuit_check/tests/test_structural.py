@@ -247,6 +247,32 @@ def test_the_struct_lower_realization_is_held_to_the_reference_from_its_template
     assert [f["code"] for f in F.failures] == ["lowering-mismatch"] and CK.STRUCT_VIA in F.failures[0]["name"]
 
 
+def test_a_familys_struct_budget_is_read_from_its_pins_so_every_run_checks_it_the_same_way():
+    """`checks.struct_budget`: a composite within its family's ``struct_max_gates`` pin is realized by its structural lowering
+    too under the default options, one over it is recorded unlowered with the budget named, and a family with no pin takes
+    ``Options.struct_max_gates`` alone."""
+    pytest.importorskip("verity_flock.struct_lower")
+    from circuit_check import checks as CK
+
+    from verity.ml.circuits.defs import CompositeDefinition
+    from verity.ml.circuits.types import Array
+
+    pair = Array(2, SB.BIT)
+    t = CompositeDefinition("StructuralTestMajs", 1, (), lambda S: ((("a", pair), ("b", pair), ("c", pair)), pair),
+                            lambda B, S, a, b, c: B.batch(MAJ, a, b, c, axes=(0, 0, 0)), register=False)
+
+    def struct(pins: dict) -> list[dict]:
+        e = CK.check_definition(t, CK.Options(vectors=8), pins=pins, as_call=False)
+        assert not e["failures"]
+        return [r for r in e["correspondence"]["realizations"] if r["via"] == CK.STRUCT_VIA]
+
+    assert struct({}) == []
+    (rec,) = struct({CK.STRUCT_PINS: {"StructuralTestMajs_v1": 1 << 20}})
+    assert rec["lowered"] and rec["mismatches"] == 0 and rec["compared"] > 0
+    (rec,) = struct({CK.STRUCT_PINS: {"StructuralTestMajs_v1": 1}})
+    assert not rec["lowered"] and "over its family's struct budget, 1 (its sidecar's 'struct_max_gates')" in rec["reason"]
+
+
 # --- a proof block on its row ports ----------------------------------------------------------------------------------
 
 def test_a_structural_stagers_unit_is_the_flat_unit_on_its_ports_by_construction():

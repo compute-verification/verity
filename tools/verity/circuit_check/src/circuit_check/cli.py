@@ -1546,7 +1546,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="lower a Definition whole when the piece pins estimate at most this many ANDs")
     ap.add_argument("--struct-max-gates", type=int, default=CK.Options.struct_max_gates,
                     help="realize a composite of at most this many IR gates by its structural lowering too "
-                         "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none)")
+                         "(c-flock:struct_lower: verity_flock.struct_lower's template, evaluated from the template; 0: none "
+                         "but each family's struct budget, its sidecar's struct_max_gates pin)")
     ap.add_argument("--as-call", action=argparse.BooleanOptionalAction, default=None,
                     help="hold a Definition target to the partition invariant as a Call, or not (--no-as-call) (default: when its "
                          "family is a Call of a served Program, `targets.is_call`, which refuses one it can't decide without "

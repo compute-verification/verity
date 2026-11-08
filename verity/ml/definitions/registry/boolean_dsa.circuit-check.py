@@ -4,6 +4,32 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+#: GLM-5.3's DSA indexer logits on bits at its served shapes over every key count a 128k-context row takes, checked at these spots
+#: (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaMqaLogits_v4``).  Its description is the same at every N (one
+#: `DsaMqaLogitsQ_v1{32,128}` Call and a batch of `DsaMqaLogitsKey_v1{32,128}` over the keys); on bits k is N x 1,024 leaves, so
+#: past 4,096 keys it is over the input budget
+RANGES = {
+    "DsaMqaLogits_v4{N=1..131072,H=32,D=128}": (
+        # the ends: one key, and a 128k-context row
+        "N=1", "N=131072",
+        # the first batch of more than one key, the top-k's identity limit and one past it
+        "N=2", "N=2048", "N=2049",
+        # the last key count whose k is within the input budget and the first past it, v3's longest registered row, and 64k
+        "N=4096", "N=4097", "N=32533", "N=65536",
+    ),
+}
+
+
+def _glm53_served_roots() -> list[Any]:
+    """`DsaMqaLogits_v4`'s two blocks at GLM-5.3's served H and D, each checked whole: past 4,096 keys the composite's
+    correspondence is unchecked (its word view compares it), so its blocks' is here.  Both are within their family's struct
+    budget (this module's pins' ``struct_max_gates``), so each is realized by its structural lowering, and over
+    `targets.MAX_GATES`, so each holds a ``digests`` pin, which keeps it in ``--all``."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.definitions.registry import boolean_dsa
+
+    return [bind(boolean_dsa.DsaMqaLogitsQ, H=32, D=128), bind(boolean_dsa.DsaMqaLogitsKey, H=32, D=128)]
+
 
 def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     """This module's Definitions in tiny whole-model configurations (`circuit_check.targets.TINY`, the vLLM tests'), and the
