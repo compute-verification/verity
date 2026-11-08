@@ -6,7 +6,7 @@ public import Proofs.Flock.Recursive.Witness
 public import Proofs.Flock.Soundness.Refine.Walk
 public import Proofs.Flock.Soundness.Refine.Lookups
 public import Proofs.Flock.Soundness.Discharge.ZkExec.Verify
-public import Proofs.Properties.NetworkCertifier.Bytes
+public import Proofs.Properties.NetworkCertifier.Check.Bytes
 
 /-!
 # Sampled proofs' acceptance: v2's verdict is flock-verify `--zk`'s on the session's files

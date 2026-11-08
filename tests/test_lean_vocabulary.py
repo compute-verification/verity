@@ -523,7 +523,7 @@ KNOWN: dict[str, str] = {
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/Exfiltration.lean::Population.Exfil.Strategy":
+    "Security/Definitions/SampledProofs/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
@@ -628,9 +628,9 @@ KNOWN: dict[str, str] = {
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/Period.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
