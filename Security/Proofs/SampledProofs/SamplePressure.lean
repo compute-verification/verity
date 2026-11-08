@@ -95,6 +95,7 @@ theorem card_missing (B : Finset (Fin n)) : (missing n k B).card = (n - B.card).
 /-- The uniform sample gives each sample probability `1 / C(n, k)`. -/
 theorem uniformSample_toReal (hk : k ≤ n) (s : Verity.Draw.Subset n k) :
     (uniformSample n k hk s).toReal = 1 / n.choose k := by
+  haveI : Nonempty (Verity.Draw.Subset n k) := ⟨s⟩
   rw [uniformSample, PMF.uniformOfFintype_apply, Fintype.card_finset_len, Fintype.card_fin, ENNReal.toReal_inv,
     ENNReal.toReal_natCast, one_div]
 

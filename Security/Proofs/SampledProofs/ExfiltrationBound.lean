@@ -215,7 +215,7 @@ theorem exfiltration_bound {Ω W T Slot V Y : Type} [Fintype Ω] [DecidableEq Ω
         rw [prob_eq_ex, ex, mul_sum]
         refine sum_congr rfl fun cs _ => ?_
         have hpr := prodLaw_toReal ρ (iid μ n) w cs
-        by_cases hc : (K : ℝ) - Δ ≤ (A w).cum n [] cs <;> simp [hc, hpr, mul_assoc]
+        by_cases hc : (K : ℝ) - Δ ≤ (A w).cum n [] cs <;> simp [hc, hpr]
     _ ≤ ∑ w, (ρ w).toReal * Real.exp (-(κ * ((K : ℝ) - Δ - ℓ))) :=
         sum_le_sum fun w _ => mul_le_mul_of_nonneg_left (tail_cum hκ (hP w) (hL w) n [] ((K : ℝ) - Δ))
           ENNReal.toReal_nonneg

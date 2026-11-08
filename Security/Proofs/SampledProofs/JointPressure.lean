@@ -1,6 +1,7 @@
 module
 
 public import Mathlib.Analysis.SpecialFunctions.Log.Basic
+public import Mathlib.Probability.Distributions.Uniform
 public import Proofs.SampledProofs.ExfiltrationBound
 
 /-!

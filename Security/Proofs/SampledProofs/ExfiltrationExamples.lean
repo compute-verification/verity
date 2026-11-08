@@ -7,7 +7,9 @@ import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
 import Mathlib.Analysis.Complex.Order
 import Mathlib.Analysis.Complex.Trigonometric
+import Mathlib.Basic.ENNReal.Real
 import Mathlib.Data.EReal.Inv
+import Mathlib.Data.Fintype.BigOperators
 import Proofs.SampledProofs.Determinacy
 import Proofs.SampledProofs.Exfiltration
 
@@ -102,13 +104,16 @@ theorem tight_exists {κ ℓ : ℝ} (hκ : 0 ≤ κ) (hℓ : 0 < ℓ) :
     ∃ (μ : PMF Bool) (A : Strategy Bool), DetectionPressure μ κ A ∧ LeakBounded ℓ A ∧
       ∀ (n j : ℕ), j < n → prob μ n (fun cs => ((j : ℝ) + 1) * ℓ ≤ A.cum n [] cs) =
         Real.exp (-(κ * (((j : ℝ) + 1) * ℓ - ℓ))) := by
+  have h0 : 0 ≤ Real.exp (-(κ * ℓ)) := (Real.exp_pos _).le
   have h1 : Real.exp (-(κ * ℓ)) ≤ 1 := Real.exp_le_one_iff.2 (by nlinarith)
-  let a : NNReal := ⟨Real.exp (-(κ * ℓ)), (Real.exp_pos _).le⟩
-  have ha : a ≤ 1 := by rw [← NNReal.coe_le_coe, NNReal.coe_one]; exact h1
-  have hs : Verity.Game.prPMFReal (PMF.bernoulli a ha) (· ∈ ({true} : Finset Bool)) = Real.exp (-(κ * ℓ)) := by
-    rw [Verity.Game.prPMFReal_mem, sum_singleton, PMF.bernoulli_apply]
-    simp [a]
-  refine ⟨PMF.bernoulli a ha, constStrategy ℓ {true}, fun _ => hs.le, const_leakBounded hℓ.le _, fun n j hj => ?_⟩
+  let μ : PMF Bool :=
+    PMF.ofFintype (fun b => ENNReal.ofReal (if b then Real.exp (-(κ * ℓ)) else 1 - Real.exp (-(κ * ℓ)))) (by
+      rw [Fintype.sum_bool]
+      exact (ENNReal.ofReal_add h0 (sub_nonneg.2 h1)).symm.trans (by rw [add_sub_cancel, ENNReal.ofReal_one]))
+  have hs : Verity.Game.prPMFReal μ (· ∈ ({true} : Finset Bool)) = Real.exp (-(κ * ℓ)) := by
+    rw [Verity.Game.prPMFReal_mem, sum_singleton]
+    exact ENNReal.toReal_ofReal h0
+  refine ⟨μ, constStrategy ℓ {true}, fun _ => hs.le, const_leakBounded hℓ.le _, fun n j hj => ?_⟩
   exact tight_tail hℓ hs [] hj
 
 /-! ## Without detection pressure -/
@@ -167,7 +172,7 @@ theorem not_trustedModel_of_reveal {W H T : Type} [Fintype W] {ρ : PMF W} {S : 
     ¬ TrustedModel ρ S hon g := by
   intro hT
   have := hT dec
-  simp only [hdec, eq_self_iff_true, Verity.Game.prPMFReal_true] at this
+  simp only [hdec, Verity.Game.prPMFReal_true] at this
   linarith
 
 end Population.Exfil
