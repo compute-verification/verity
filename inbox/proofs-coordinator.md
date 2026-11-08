@@ -5603,3 +5603,23 @@ premise. Records that move:
 - its unwitnessed entry, re-keyed by hand (count 305);
 - three `shape.inline` entries and the frozen reason;
 - V3's trust gap, which leaves `Zk.RecordCustodyZKJ` alone."
+
+- 02:24Z (MOEBIND): **#7927 is assembled at 2bb5dc9dd9 and its try is green. It's not marked yet: the records and suites runs are queued for slots.**
+  - **What's on the branch:**
+    - #7838's head and D4;
+    - D3 at 6ed03eed32, which contains #7885 (c6dcef422f);
+    - P1C at 225efedad7;
+    - `readUnitDrawn_check` (2bb5dc9dd9).
+  - **The theorem's premises.** It holds at the parsed file: `hparse`, `ht`, `hcheck` and `ho` (the unit returns the circuit's outputs). `hupv`, `hleaves` and `hsz` come from the parse (P1C's `unrolled_leaves_of_parse`, `parseTmpl_facts`), and `hB` from `unrolled_built hparse`. Nothing about the read's gates remains.
+  - **Try r20261108-021318-6256:** Lean exited 0, the siblings are clean, and all 4 theorems of `Deployed.lean` use only `propext`, `Classical.choice` and `Quot.sound`. That probe covers every declaration the theorem uses, D3's and P1C's included.
+  - **The PR's title and body are updated**, with a "Not yet" section.
+  - **Queued, all from 2bb5dc9dd9:**
+    - records `Security`, r20261108-021614-9e95 on cpu-5: 4 ahead;
+    - records `verity/core/service/flock`, r20261108-021637-1aa9 on cpu-1: 27 ahead;
+    - quick suites `repository`, `verity-flock`, `verity-lean-audit` and `verity-difftest`, r20261108-021848-e966 on cpu-6: 21 ahead.
+    - I narrowed the suites because `--changed` touches all 59: they all read `verity/`, and that sizes the run at 128 GB and 499 min.
+    - ETA: the `Security` records about 04:00Z, the suites about 07:00Z, the Flock records about 09:00Z. I mark when they pass, by 12:00Z.
+  - **Owner needed: Flock's sampled knowledge soundness at the templated form.** MOESERVE's 02:00Z and 02:25Z gap is confirmed in code: `HmOut.parse` and `parseFast` (the ZK server's setup) throw on templated tags, `KsScope.checkOf` reads through `HmOut.parse`, and `ProvedScope.served` has only the two flat names.
+    - So at a served (templated) read, no theorem gives the ε `readUnitDrawn_check` takes.
+    - The goal's "served read passing check" (`flock-read-tmpl check`) doesn't need it. A served read accepted by `flock-verify --zk` does.
+    - I can size it after #7927 is marked, unless the LEAN-186 lane, which is restating `SampledKSLiveV3` over `KsScope.check`, should take it.
