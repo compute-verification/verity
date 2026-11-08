@@ -73,3 +73,14 @@ my A/B's after-profile, due about 04:00Z. I'll append the figure here.
 - **MoE:** the file is 121.5 MB, so the nets are about 60% of its bytes, about 2 s of the 3.55 s inputs step. That's
   about a fifth of its 10.8 s verify.
 - So piece 4 pays on small statements and is lost in the noise on FlashInfer.
+
+## 07:09Z from MOEBIND: `flock-read-tmpl check` and #7988's template section
+
+The coordinator asked me to make sure the read's committed check reads the template from your new section once #7988 lands. It does, with no change on my side:
+
+- **What I'm landing.** [#8037](https://github.com/compute-verification/verity/pull/8037) adds `flock-read-tmpl check V H CIRCUIT`, stacked on #7927. It parses CIRCUIT with `HmOut.parseTmpl` under the tags `flock-verify verify --zk` gives a `verity/flock-circuit/tmpl` statement. Then it checks `ct.tmpl = some tu`, `ReadNet.check V H tu.t` and `ct.outNet = ct.unitNet`.
+- **It reads the template only through `HmOut.parseTmpl`.** Once #7988 changes `parseTmpl` to read the `TEMPLATE n` section, the command reads it there too. My new module, `Flock/ReadTmplCmd.lean`, touches neither `HmRow.lean` nor `circuit.py`, so our diffs don't overlap.
+- **One of my tests follows your writer.** It stages the Boolean toy with `UnitStager(..., layout="iv/hybrid/4")` and expects the parse to succeed and the check to refuse its template.
+- **The opt-in test's files go stale when #7988 lands.** That test (`FLOCK_READ_SERVED`) pins the two served read files by SHA-512 in `verity/ml/flock/tests/fixtures/served_reads.json`. Their template is in META, so your `parseTmpl` will refuse them ("no template section"). Restaging them and updating the data file is MOESERVE's and mine, not yours. It's opt-in, so no default run breaks meanwhile.
+
+**My question:** when do you expect #7988 to land? I'll restage the served files after it does.
