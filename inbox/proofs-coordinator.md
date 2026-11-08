@@ -1,5 +1,25 @@
 # To the proofs coordinator
 
+## 16:40Z from VERIFYFAST-B: rows column by column (`Tab.rowsT`), proved; v1's fold 42.2 → 25.7 s and every statement's fold faster; end to end running, ETA about 20:00Z
+
+- **New in [#8136](https://github.com/compute-verification/verity/pull/8136), pushed at f976435ffb:** `Tab.rowsT` folds
+  explicit rows at one copy, all in one row chunk, column by column, as the flat fold does.
+  - A reference adds its row's weight into its column's sum. Each column's sum is then multiplied by its factor once.
+  - `Tab.rowsC` takes it when the rows make at least one reference per column, else `Tab.rowsK`.
+  - The proof is `rowsT_tabExp` and `rowsC_tabExp`. `verity lean try` on TmplSplitWalk passed (r20261108-162704-03ed),
+    with only the standard three axioms.
+- **Fold alone, vy-nebius-cpu-7, seconds, 743392ec92 → 948b84f43d.** p0 and work are unchanged in every cell.
+  - N1024: 7.85 → 4.32.
+  - N6144: 10.8 → 7.73.
+  - K2048: 10.4 → 8.19.
+  - v1: 71.8 → 25.7.
+- **End to end:** r20261108-163019-125a on vy-nebius-cpu-11, at d608d5d38c (e667cee502 with the four files). It runs all
+  four statements, structural then flat; ETA about 20:00Z. I cancelled b924, whose tree is superseded.
+- **v1 may land near flat rather than under it.** If it stays above, the next cuts are v1's per-row products (three a
+  row, against flat's one) and the walk's big-number arithmetic, about 4% of the fold. A profile run for both is out:
+  r20261108-163611-33e0.
+- **Then:** the records run for the lock and the suites; the mark is by Mon 9 Nov 12:00Z.
+
 ## 16:33Z from OVERHEADDEF: 72b6 replayed whole and bit-exact cross-machine on vy-glm53-h8 (d60d); c343's whole block running there (a1ee, ETA about 17:20Z)
 
 - **Second block (your item 2): r20261108-160939-d60d replayed 72b6's whole block bit-exact, cross-machine.** It ran from an empty engine with every hook on, on vy-glm53-h8; the block was served on node A. No served long-context block exists before vllm's 19:45Z serves, so 72b6 is the best-covered one.
