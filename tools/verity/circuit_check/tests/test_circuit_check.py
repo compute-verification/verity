@@ -506,6 +506,55 @@ def test_an_operand_over_the_input_budget_is_read_lazily_on_the_vectors_words(mo
             "correspondence reads an operand over the input budget lazily"} in e["correspondence"]["realizations"]
 
 
+def _wide_experts(E: int):
+    """`MoeExpertFp8Gemm_v1` over E experts at the sidecar's small statics, with an input budget its expert stack's E N K leaves
+    are over and 8 vectors of its other parameters fit in."""
+    from verity.ml.circuits.defs import bind
+    from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32
+    from verity.ml.definitions.registry import fp8_moe_experts as X
+
+    return (bind(X.MoeExpertFp8Gemm, E=E, K=128, N=80, G=64, KB=32, SWAP=False, DOT=BlackwellE4m3QmmaDot32),
+            dataclasses.replace(OPTS, input_budget=8192, vectors=8))
+
+
+def test_an_expert_gemm_resolves_only_the_expert_a_vector_selects(monkeypatch):
+    """An expert GEMM's stack read lazily: each vector that selects an expert reads its N K weights and no other's, the walk's
+    parameter resolutions (`verity.ml.circuits.layout._arg_ref`) are the same over 4 experts as over 16, so a vector costs
+    what its expert's rows cost and not every expert's, and the reference equals it on the same words flattened."""
+    from verity.ml.circuits import layout
+    from verity.ml.circuits.evaluation import evaluate
+
+    resolutions = {}
+    for E in (4, 16):
+        t, opts = _wide_experts(E)
+        params, _ = CK.signature_of(t)
+        calls = [0]
+        resolve_arg = layout._arg_ref
+
+        def counted(*a, _f=resolve_arg, _c=calls):
+            _c[0] += 1
+            return _f(*a)
+
+        monkeypatch.setattr(layout, "_arg_ref", counted)
+        F = CK.Findings()
+        rec, _arrays, ref = CK.correspondence(t, opts, F)
+        monkeypatch.setattr(layout, "_arg_ref", resolve_arg)
+        assert not F.failures and rec["probes"] == [{"e": E - 1}]
+        n = rec["vectors"] - 1
+        other = [params[j] for j in (0, 1, 2, 4)]
+        es = [VX.instance_args(other, VX.vectors(other, n, opts.seed), i)[2] for i in range(n)]
+        selecting = sum(0 <= v < E for v in es) + 1
+        assert 2 <= selecting < rec["vectors"] and rec["wide"][0]["reads"] == selecting * 80 * 128
+        resolutions[E] = calls[0]
+        if E == 4:
+            xs = VX.vectors(other, n, opts.seed)
+            for i in range(n):
+                xq, sx, e, ws = VX.instance_args(other, xs, i)
+                words = [VX.wide_words(params[3], i, rec["edge_vectors"], opts.seed, 3)(k) for k in range(params[3].leaves)]
+                assert ref[i] == tuple(evaluate(t, xq, sx, e, words, ws))
+    assert resolutions[4] == resolutions[16], resolutions
+
+
 def _wide_shard():
     """`EmbeddingShard_v1` at VS=64, H=32, START=1000, with an input budget its table's 2,048 leaves are over: no edge or
     random token lies in the shard."""
