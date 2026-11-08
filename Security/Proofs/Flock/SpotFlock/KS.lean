@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.Facts
+public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
@@ -17,15 +18,16 @@ import Proofs.Flock.SamplingGeneric.TwoKSAt
   `Code.InteriorFixed`;
 * `sessionsIn_code`: `SessionsIn`, the reference statement being in Flock's masked scope (`Held.xS₀_ok`): every
   session's statement has its shapes, so its `N₀` is the code's;
-* `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from A3 at the coins' bytes (`CallsUniform`)
-  and the sessions' openings (`SessionOpensTwo`); the sessions' runs are `SpotFlock.sessionRuns`.
-* `sessionsTwo_spot`: the two-stage contract at the same premises (`sessionsTwo_atOrder`).
+* `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from the sessions' openings
+  (`SessionOpensTwo`); A3 at the coins' bytes is `SpotFlock.callsUniform` and the sessions' runs are
+  `SpotFlock.sessionRuns`.
+* `sessionsTwo_spot`: the two-stage contract from the same openings (`sessionsTwo_atOrder`).
 * `ksTwo_spot_one`, `efficient_spot_one`: one session a run. The session doesn't read the unit (`SpotFlock.session`),
   so every slot of a sample has one key (`SamplingDeploy.compiledTwoOne`) and the extractor runs Flock's once a run:
   KS there, and its reruns, at most `1 + k_out + k_out·k_in·(1 + e_s)` in expectation, from the opening checks' count.
 * `ksAtTwo_spot`, `ksAtTwo_spot_one`: `CompiledTwo.KSAt`, KS with each hash term at a budget on one run's SHA-512 work
-  (`compilerKSAtTwo`), at the same premises and the reveal count (`SamplingDeploy.RevealsLe`), which bounds the opening
-  checks' calls (`openCallsLe_compiled`); and the same at one session a run.
+  (`compilerKSAtTwo`), from the same openings and the reveal count (`SamplingDeploy.RevealsLe`), which bounds the
+  opening checks' calls (`openCallsLe_compiled`); and the same at one session a run.
 -/
 
 @[expose] public section
@@ -55,16 +57,15 @@ theorem sessionsIn_code : SamplingDeploy.SessionsIn (code h) := by
     rw [FlockDeploy.tables_eq hset, hset]
     simp [FlockDeploy.tableLen, List.map_map, Function.comp_def]
 
-/-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, its
-code's facts and its sessions' runs proved, from A3 at the coins' bytes and the sessions' openings. -/
-theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+/-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, A3 at its
+coins' bytes, its code's facts and its sessions' runs proved, from the sessions' openings. -/
+theorem ksTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
       FlockDeploy.sha512 :=
-  SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
-    iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
-    (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+  SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
+    (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
+    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
     hopens
 
 /-- **SPOT[Flock]'s two-stage contract at its code**: `sessionsTwo_atOrder` at `ksTwo_spot`'s premises. -/
