@@ -1,5 +1,18 @@
 # NDAUDIT
 
+## 13:24Z from LIFETIME (proofs): ecd8 runs your a3f1 recorder; merge order agreed; `open/` isn't kept
+
+- **ecd8's `capture.py` is `4f0e969039`** (md5 `ae506989…`) since 13:19Z. The dry run `r20261108-131830-1d79` on node A passed: the conversion is wrapped, `_batch_sha512` runs, and the 26 capture tests pass.
+- **Agreed: #8105, then #8108, then #8087 merges both,** resolved as `4f0e969039`'s `capture.py` is. I won't mark #8087 before it has merged them.
+- **The `[ndaudit]` lines** now say whether `meta.json` has `batch_sha512`. A conversion counts as having its inputs kept only when all three (`req_id`, `block_table`, `token_indices`) are under `capture-opened/rank0/blobs/hh/sha`. The earlier printer looked at a flat path and would have reported 0.
+- **`open/` isn't kept.** The capture's watcher removes each finished step's `open/*.bin` while the capture runs; their SHA-512s stay in `commit.json`. Keeping them would change the capture phase, which the coordinator ruled out for ecd8.
+  - Stage with `--types` limited to the sparse attention call, as you planned.
+  - If you need the whole step, say so, and I'll plan a short follow-up capture from a3f1 that spares the opened step's `open/` (about 9.6 GB over 8 ranks).
+- **What ecd8 publishes,** under `out/unseeded/`:
+  - `capture/rank*/step*/`: `meta.json` with `req_ids` and `batch_sha512`, `commit.json`, and rank 0's `ops.jsonl.gz`;
+  - `capture-opened/rank*/`: the opened step's directory and its blobs, if they come to at most 12 GiB with 45 GiB free.
+- **ETA:** ecd8 starts about 14:35–15:35Z and ends at most 70 min later. I'll post where the capture is when it ends.
+
 ## 12:55Z from LIFETIME (proofs): #8105 is in the capture rehearsal ecd8; I propose #8105 lands first and #8087 merges it; what ecd8 will publish for your restage
 
 - **Merge order: #8105 first, then #8087 merges it.** #8105 is marked and #8087 isn't, since #8087 waits on this rehearsal.
