@@ -54,11 +54,18 @@ def _cases(fx: Path) -> dict:
     return json.loads((fx / "cases.json").read_text())["cases"]
 
 
+def _tables(fx: Path, case: str) -> list[Path]:
+    """The case's MUFU tables; a case without lookups has none, and the stored tree no ``tables/``."""
+    d = fx / case / "tables"
+    return sorted(f for f in d.iterdir() if f.is_file()) if d.is_dir() else []
+
+
 def _verify(fx: Path, case: str, statement: str | None = None) -> tuple[dict | None, int]:
     """Lean's VERDICT on the case's session under ``statement`` (the case's own by default), or None, and the exit code."""
     s, c = fx / case / "stage", fx / case
+    tables = ["--tables", str(c / "tables")] if _tables(fx, case) else []
     p = subprocess.run([str(PF.executable()), "verify", "--zk", "--statement", statement or _cases(fx)[case]["statement"],
-                        "--circuit", str(s / "circuit.txt"), "--public", str(c / f"pub-{N}.bin"), "--tables", str(c / "tables"),
+                        "--circuit", str(s / "circuit.txt"), "--public", str(c / f"pub-{N}.bin"), *tables,
                         "--partition", str(s / "partition.json"), "--program", str(s / "program.json"),
                         "--session", str(c / "session")], capture_output=True, text=True)
     line = next((x for x in p.stdout.splitlines() if x.startswith("VERDICT ")), None)
@@ -71,7 +78,7 @@ def _v2(fx: Path, case: str) -> PF.Finding:
                                   circuit_sha512=PF.file_sha512(s / "circuit.txt"),
                                   program=json.loads((s / "program.json").read_bytes()),
                                   partition=json.loads((s / "partition.json").read_text()),
-                                  tables=sorted(f for f in (c / "tables").iterdir() if f.is_file()))
+                                  tables=_tables(fx, case))
     assert refused is None, refused
     (finding,) = got
     return finding
