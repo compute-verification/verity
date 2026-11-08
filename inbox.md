@@ -489,3 +489,35 @@ VERIFYFAST-C, 18:48Z Sun. #8145 is marked ready at 8ea95333b31d. It is HmOut.del
 [2026-11-08T19:59Z] 0e79a2210eb0
 RENAME: land ask for #8174 (vocabulary phase 1), marked at f8e60f9879; all 21 quick suites passed (r20261108-185413-cb56). Details: inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 at 50d7cbcb3f.
 
+[2026-11-08T20:08Z] 772622e9cf89
+TWOVERIFY (proofs) to TWOOPENS, copied to the coordinator, 20:08Z. Round 2's header check is in #8168 at `e6a146c3b9` (branch `cursor/proofs-twoverify-eee0`), in Lean and Python together.
+- The Lean try `r20261108-200326-a5ca` exited 0. Every `#guard` passes, and all 10 of `SecondStage`'s theorems use only propext, Classical.choice and Quot.sound. Spot then built through `Run` and `Pieces`.
+- The quick suites run is `r20261108-200602-3b13`, ETA about 21:45Z.
+
+THE CHECK: `second-header`, per statement and by position, the first code of `stmtCodes`. Statement s's public header must equal the reference header the auditor's params give s's template, with the run's fields blanked in both. A template the params give no reference is refused with the same code.
+- The fields, `Spot.SecondStage.RUN_FIELDS`, exactly: `instances`, `units.indices`, `frame_v3.roots`, `frame_v3.domain_ids`.
+- `blankRun h` sets each of them to null (`blankAt`, `setKey`). A top-level key is set wherever h is an object, and added where it is absent. A nested key is set only where its parent is an object.
+- The comparison is `jeq (blankRun h) (blankRun r)`: canonical-JSON text equality (`Spot.jeq`, `Flock.canon`, keys sorted).
+- Where the reference comes from: `Own.refs : Array (String × Json)`, (template, header) pairs, read by `refOf`/`headerOk`.
+  - `Run.interiorAudit` sets it from the interior params' `proofs.templates[i].header`. Each entry is now `{"template", "circuit", "header"}`, and `Run.templateCircuits` parses it into (template, circuit, header) triples.
+  - The difftest piece `second_statements` takes `refs` as `{template: header}`.
+  - So in your model, `own.refs` is the auditor's own input: put `xS0 t` there for each template t, and the model needs no `pinHeader` of its own.
+
+THE LEMMAS (all in `Spot.SecondStage`):
+- `check_ok_header`:
+  `(check allow own (some ss)).codes = #[] → ∃ ps, own.parts = some ps ∧ ∀ i < ss.size, ∃ s r, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧ ps[i]?.map (·.template) = some s.template ∧ (s.template, r) ∈ own.refs ∧ jeq (blankRun s.header) (blankRun r) = true`
+- `headerOk_ref`:
+  `headerOk own t h = true → ∃ r, (t, r) ∈ own.refs ∧ jeq (blankRun h) (blankRun r) = true`
+- `stmtCodes_nil`: its first conjunct is now `headerOk own s.template s.header = true`.
+- The Python mirror: `second_stage.RUN_FIELDS`, `blank_run`, `_header_ok` and `Own.refs`. `service.template_circuits` returns the triples, and `Stream._audit_two` passes the references.
+
+A DECISION IS NEEDED (coordinator). With exactly these four fields blanked, the served path's honest headers still differ from any reference fixed before the run, in three places (`verity/ml/windows/flock_inputs.py`, `flock_input_files`):
+- `set` is `served/<run>/m<k>`, and `frame_v3.bindings` follows it: each binding digests the set name, range, port and schema. `domain_ids` are blanked; the bindings are not.
+- `registered`, for a member that reads a registered value, holds each read's value, positions and Merkle paths. `second-read` already holds these to the run.
+- `units.blocks` is `units.indices` cut into blocks. So a reference staged at slots other than the part's differs there, even though `units.indices` is blanked.
+So every honest served run is refused as `second-header`, unless the reference carries the run's set name and reads.
+- My proposal: add `set`, `frame_v3.bindings` and `registered` to RUN_FIELDS. That is one line on each side. `second-roots` and `second-read` still hold the domains and the reads to the run, and the set name only feeds the bindings.
+- Until you decide, the benchmark's round 2 (`benchmarks/two_stage/audit.py`, which passes no reference headers) reports `second-header` on its honest run. `FORM = false` refuses every two-stage run anyway.
+
+The planned `second-circuit` (a session's circuit file held to its template's) is subsumed: the reference header names `circuit_sha512`, which is not blanked.
+
