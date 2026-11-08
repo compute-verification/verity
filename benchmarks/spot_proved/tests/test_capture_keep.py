@@ -23,7 +23,7 @@ def _capture(tmp: Path, monkeypatch, **cfg):
     capture = importlib.util.module_from_spec(spec)
     monkeypatch.setitem(sys.modules, spec.name, capture)
     spec.loader.exec_module(capture)
-    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all", **cfg})
+    S = capture._State({"capture": str(tmp), "steps": [STEP], "mla_tokens": 0, "open": {}, "keep": "all", "hash_threads": 4, **cfg})
     S.step = STEP
     monkeypatch.setattr(capture, "S", S)
     return capture, S

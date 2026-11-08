@@ -177,7 +177,7 @@ class _State:
         self.keep_max = int(cfg.get("keep_max_mib", 64)) << 20
         self.min_free = int(cfg.get("min_free_gib", 40)) << 30
         self.floor_hit = False
-        self.threads = int(cfg.get("hash_threads", 8))
+        self.threads = int(cfg.get("hash_threads", 0))
         self.host_budget = int(cfg.get("host_mib", 8192)) << 20
         self.cache_hash = cfg.get("cache_hash", "gpu")
         self.gpu_check = int(cfg.get("gpu_check", 4))
@@ -241,14 +241,15 @@ class _State:
 
 
 class _Hasher:
-    """SHA-512s of recorded tensors' host copies on ``--hash-threads`` threads while the forward goes on. A copy is made only
-    once the copies held come to at most ``--host-mib`` with it (a larger one waits until none is held), so host memory stays
-    bounded however many tokens the step has; `drain` waits for every job."""
+    """SHA-512s of recorded tensors' host copies on ``--hash-threads`` threads while the forward goes on (at 0, each as it is
+    recorded, so its reference is complete when its op is). A copy is made only once the copies held come to at most
+    ``--host-mib`` with it (a larger one waits until none is held), so host memory stays bounded however many tokens the
+    step has; `drain` waits for every job."""
 
     def __init__(self, threads: int, budget: int) -> None:
         import threading
         from concurrent.futures import ThreadPoolExecutor
-        self.pool = ThreadPoolExecutor(max(1, threads), thread_name_prefix="spot-hash")
+        self.pool = ThreadPoolExecutor(threads, thread_name_prefix="spot-hash") if threads > 0 else None
         self.cv = threading.Condition()
         self.budget, self.held, self.peak = budget, 0, 0
         self.jobs: list = []
@@ -271,7 +272,10 @@ class _Hasher:
                 fn(*args)
             finally:
                 self.give(n)
-        self.jobs.append(self.pool.submit(job))
+        if self.pool is None:
+            job()
+        else:
+            self.jobs.append(self.pool.submit(job))
 
     def drain(self) -> None:
         from concurrent.futures import wait
@@ -1231,7 +1235,7 @@ def main(argv: list[str]) -> int:
                    help="with --keep all, a larger tensor is written only in an opened layer (hashed into the root either way)")
     s.add_argument("--min-free-gib", type=int, default=40,
                    help="a step stops writing and spooling tensors once its disk would fall below this")
-    s.add_argument("--hash-threads", type=int, default=8, help="host threads hashing each rank's recorded tensors")
+    s.add_argument("--hash-threads", type=int, default=8, help="host threads hashing each rank's recorded tensors (0: inline)")
     s.add_argument("--host-mib", type=int, default=8192,
                    help="the most of a rank's recorded tensors' host copies held at once, awaiting their hashes")
     s.add_argument("--cache-hash", choices=("gpu", "host"), default="gpu",

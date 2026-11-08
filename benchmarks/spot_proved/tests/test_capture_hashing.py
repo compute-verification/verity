@@ -24,7 +24,7 @@ def _capture(tmp: Path, monkeypatch, name: str = "spot_capture_hashing", **cfg):
     monkeypatch.setitem(sys.modules, spec.name, capture)
     spec.loader.exec_module(capture)
     S = capture._State({"capture": str(tmp), "steps": [0, 1, 2], "mla_tokens": 0, "open": {"dense": 1, "moe": 1},
-                        "keep": "opened", "min_free_gib": 0, **cfg})
+                        "keep": "opened", "min_free_gib": 0, "hash_threads": 4, **cfg})
     monkeypatch.setattr(capture, "S", S)
     return capture, S
 
@@ -119,8 +119,17 @@ def test_a_device_hash_that_disagrees_with_the_host_is_refused(tmp_path, monkeyp
 
 
 def test_host_copies_stay_within_the_budget(tmp_path, monkeypatch) -> None:
-    capture, S = _capture(tmp_path, monkeypatch, host_mib=1, hash_threads=4, keep="none")
+    capture, S = _capture(tmp_path, monkeypatch, host_mib=1, keep="none")
     refs = [capture._ref(torch.full((1 << 17,), i, dtype=torch.int32)) for i in range(16)]
     capture._drain()
     assert S.hasher.peak <= 1 << 20 and S.hasher.held == 0
     assert len({r["sha512"] for r in refs}) == 16
+
+
+def test_without_hash_threads_a_reference_is_complete_when_recorded(tmp_path, monkeypatch) -> None:
+    capture, S = _capture(tmp_path, monkeypatch, hash_threads=0, keep="all", keep_max_mib=64)
+    t = torch.arange(1000, dtype=torch.int32)
+    ref = capture._ref(t)
+    want = hashlib.sha512(t.numpy().tobytes()).hexdigest()
+    assert ref["sha512"] == want and S.hasher.pool is None and not S.hasher.jobs
+    assert (S.root() / "blobs" / want[:2] / want).read_bytes() == t.numpy().tobytes()
