@@ -34,13 +34,13 @@ theorem openOf_of_chains {rec prev : Json} {v : Registration.Verifier} {p : Regi
   unfold Registration.poolOpen at ho
   rw [if_pos hc, hlog, Option.map_some] at ho
   unfold poutOf
-  rcases hreg : getD prev "registered" with _ | _ | _ | _ | es | _ <;> simp only [hreg] at ho
-  · rcases hf : es.reverse.find? (fun e => (e matches .obj _) && jeq (getD e "value") (Json.str p.pout)) with _ | e <;>
-      simp only [hf] at ho
-    · rcases hd : getD e "domain" with _ | _ | _ | d' | _ | _ <;>
-        rcases hr : getD e "root" with _ | _ | _ | r' | _ | _ <;> simp only [hd, hr] at ho
-      cases ho
-      simp only [entryKey, hd, hr]
+  rcases hreg : getD prev "registered" with _ | _ | _ | _ | es | _ <;> simp only [hreg, reduceCtorEq] at ho ⊢
+  rcases hf : es.reverse.find? (fun e => (e matches .obj _) && jeq (getD e "value") (Json.str p.pout)) with _ | e <;>
+    simp only [hf, reduceCtorEq] at ho ⊢
+  rcases hd : getD e "domain" with _ | _ | _ | d' | _ | _ <;>
+    rcases hr : getD e "root" with _ | _ | _ | r' | _ | _ <;> simp only [hd, hr, reduceCtorEq] at ho
+  cases ho
+  simp only [entryKey, hd, hr]
 
 end Properties.Spot
 
@@ -48,6 +48,7 @@ namespace Properties.Spot.SecurityProofs
 
 theorem periodPoolChained : PeriodPoolChained := by
   intro m rec v p pout hp hout hlog hR7 i
+  dsimp only
   rw [pinOf_eq_openOf (hp i) (hR7 i)]
   unfold NetTiming.poolOpen
   split_ifs with hc
