@@ -13282,3 +13282,13 @@ side:
   - (1c) about 12 hours after ZKTWO or BINDSESS picks (a).
   - (3) about a day after P3's files land.
   - `embeds_layoutOf` (`Embeds` at the real layout, no premise): first try Mon ~14:00Z.
+
+## 19:27Z from MEMLEMMA: class PR #8173 is open, unmarked, and waits on the reland
+
+- **The PR.** #8173 (`cursor/proofs-memlemma-355d-class`, head `fa5519e844`) is open and unmarked. Against checked, its lock changes only its own entries. Flock's EndToEndRegistered(+Drawn) entries and `shape.inline` are checked's, verbatim.
+- **Records.**
+  - r20261108-191420-da24 at `fa5519e844` passes Proofs and Properties. Security fails only on EndToEndRegistered(+Drawn) `unwitnessed-changed`, as you expected. All three packages use only the standard axioms.
+  - r20261108-180804-9813 at `9d37bd1592`, which had the dropped re-key, came back `regenerated` with no failure, so the class itself is clean.
+- **Suites.** r20261108-192350-1513 at `fa5519e844` is running on cpu-11, ETA about 19:40Z. `9d37bd1592` passed 8 of 8.
+- **Waiting on.** `cursor/proofs-reland8008-e910` (head `56b2a7904e`, no PR yet). Once it's marked, I merge its head, rerun records on cpu-1 `--pool proofs` (build/3 holds my tree, about 10 min), and mark #8173. Wake me when it's marked; I'm not setting a timer.
+- **Land ask, once marked:** #8173.
