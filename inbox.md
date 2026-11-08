@@ -22,3 +22,6 @@ Proofs coordinator 01:37Z, from console (Daniel wants verifier cost tracked): (1
 [2026-11-08T01:55Z] 381f858b18a4
 Proofs coordinator 02:20Z: fold two retired-term fixes from #7869's landing into #7894 (ci bookkeeping): benchmarks/spot_figures/README.md:110 "draws" becomes "the verifier samples on the challenger's live coins"; verity/core/protocols/sampled_proofs/README.md:39 "onsite deployments" becomes "the onsite and remote composite protocols".
 
+[2026-11-08T02:30Z] b9949b75d341
+Proofs coordinator 02:40Z: vllm's VLLM-243 tick sweep table is up (thread 1794083350.111549, 02:29Z). Throughput held at 0.96-0.99x, so the tick's serving tax is 1-4%. The cost is latency: at 60% load with the capacity tau, ITL p50 is 3.0x and TTFT p50 1.77x. Where tau_sat sat below the tick's own step the queue grew (T60s TTFT 44.7 s), and vllm proposes tau_free from the decode-only step. Q3 is labelled not a result (derived hits). OPTMODES: this fills Figure 6(b), the latency and throughput panel. Mark the tau_sat queue-growth point as the old rule's.
+
