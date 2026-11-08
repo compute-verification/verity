@@ -3,8 +3,9 @@ each a checked circuit output, certified or committed advice, and reads the advi
 name; and prefix stability, changing y at or after a step changing nothing the circuit computes before it. A window cut after
 any step plans and compiles those steps as the whole does, and another length for a request in flight moves only the unit
 fields `READS` declares its length read ahead for: `T` on a batch-invariant target, which sizes only its Program's later
-decodes, and `edge` in class G, what the window's close returns, for which the Program also computes its indexer's keys and
-scales for the rows it ran, the one read ahead that isn't prefix stable (accounted only as the advice it is)."""
+decodes, `stop`, its length rule (`RequestUnit.stop`, whose config holds how many outputs its Program has), and `edge` in
+class G, what the window's close returns, for which the Program also computes its indexer's keys and scales for the rows it
+ran, the one read ahead that isn't prefix stable (accounted only as the advice it is)."""
 from __future__ import annotations
 
 import json
@@ -197,8 +198,8 @@ def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
 @pytest.mark.slow
 def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
     """At every cut each request compiles to the Program it has whole, and its Programs at each length its body allows are,
-    call for call, prefixes of one another, returning its token ids alone, ``Array(L, I32)``: its length sizes only its later
-    decodes (about 6 s)."""
+    call for call but its length rule's check, prefixes of one another, returning its token ids first, ``Array(L, I32)``: its
+    length sizes only its later decodes and its length rule (about 6 s)."""
     reg = _registered()
     advice, ingress = _mixed()
     whole = compile_steps(reg, advice, ingress)
