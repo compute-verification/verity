@@ -72,10 +72,11 @@ commitments, is refused earlier, for its form (`ProvedScope.check`).
   entries of `Security/lean-audit.json`, among them `EndToEnd`, `EndToEndHidden`, `ZeroKnowledgeHidden`, `MaskedZK`,
   `RecursiveKS`, `RecursiveZK`, `PublicAudit` and `IntegrityHorizon`, each stated in a `Statement.lean` (or
   `KSStatement.lean`, `PublicAudit.lean`) of its area under `Security/Proofs/Flock/`.
-- The assumptions: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`UniformRandomBytes`, `HmRowComputes`),
-  `Assumptions/Custody.lean` (`RecordCustodyExec`, `RecordCustodyExecH`), and the rest of the lock's `assumptions` list
-  (`Model.Statement.LinkLayout`, `SHA512CRStrict`, the `Zk.RecordCustodyZK*` family); what each means:
-  `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
+- The named assumptions, the lock's `assumptions`: `Security/Definitions/Assumptions/Flock.lean` (`SHA512CRStrict`,
+  `SHA512CRExpected`, `UniformRandomBytes`, `UniformRandomBytesTest`). The other assumptions, the lock's `open` and
+  `domain` entries: `Security/Proofs/Flock/Soundness/Assumptions.lean` (`HmRowComputes`), `Assumptions/Custody.lean`
+  (`RecordCustodyExec`, `RecordCustodyExecH`) and `Assumptions/Zk.lean` (the `Zk.RecordCustodyZK*` family). What each
+  means: `Security/Proofs/Flock/Soundness/ASSUMPTIONS.md`.
 - The trusted code: the running binary also trusts the toolchain's compiler and runtime and the C compiler and library
   under them, and no declaration swaps a definition for code no proof reads (`verity/core/service/flock/README.md`,
   enforced by `verity/ml/flock/tests/test_lean_verifier.py`). The agreement corpus's coverage rule is

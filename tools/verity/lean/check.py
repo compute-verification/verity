@@ -48,17 +48,18 @@ environment extension loaded, so none of the package's code runs), and replays t
                  this repository builds (the toolchain's, a fetched dependency's) that the admitted imports and `Init`
                  already reach is no import outside the layer: it brings nothing in (an `import all Init.Data.Array.Basic`
                  a proof takes to see a body)
-    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module`, taken
-                 as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared elsewhere, or its
-                 definition no longer has the digest its record holds; or the policy still lists assumption modules,
-                 which `--update` converts into the definitions the guarantees read there; or one declared elsewhere
-                 is listed beside its `open` or `domain` entry, which `--update` drops
-    open         a premise declared outside `assumptions_module` is not listed under `open` with its `owner`, the
-                 Linear `issue` that discharges it and its `due` date (`--update` adds one only under `open_seed`), or
-                 its entry has no owner, no guarantee takes it, or its definition no longer has its recorded digest
+    assumptions  a named assumption (listed by name under `assumptions`: a `Prop` declared in `assumptions_module` or a
+                 module under it, taken as a premise by a guarantee) has no `owner`, no guarantee reads it, is declared
+                 elsewhere, or its definition no longer has the digest its record holds; or the policy still lists
+                 assumption modules, which `--update` converts into the definitions the guarantees read there; or one
+                 declared elsewhere is listed beside its `open` or `domain` entry, which `--update` drops
+    open         a premise declared outside `assumptions_module` and the modules under it is not listed under `open` with
+                 its `owner`, the Linear `issue` that discharges it and its `due` date (`--update` adds one only under
+                 `open_seed`), or its entry has no owner, no guarantee takes it, or its definition no longer has its
+                 recorded digest
     domain       a premise listed under `domain` (part of what its guarantee says, with a one-line `why` and no issue;
                  another listed guarantee's statement is one, `cites` naming it) has no owner or `why`, is declared in
-                 `assumptions_module`, no guarantee takes it, its digest changed, or a guarantee that takes it has
+                 `assumptions_module` or under it, no guarantee takes it, its digest changed, or a guarantee that takes it has
                  honest witnesses none of which concludes it at the deployed instance (then it is `open`)
     guarantees   a theorem in `guarantees` is missing or not a theorem, uses a disallowed axiom, has a closed `Prop`
                  hypothesis that is not a listed premise, or no longer says what its record says:
