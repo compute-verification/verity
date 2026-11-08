@@ -41,11 +41,15 @@ far edge as rebuild.json does, with the roots at S against the GPU's.
 from a mirror: a dummy keeps its lengths, its arrival, its prefix-cache hits and its served finish, and nothing of its
 values. Its tokens are substitutes, each full page's derived from that page's chain hash so that pages equal in serving
 stay equal (RID's own pages kept), and its K/V is never loaded: zero or NaN (``--dummy``) at the start, in every page a
-forced hit seeds for it, and in every slot it writes, refilled once the GPU has finished the step. It runs until its
-served output count (``ignore_eos``), so it finishes where serving did. RID's prefix and every page it hits come from
-serving's bytes: the edge's K/V file, or the mirror, which a replay identical to serving wrote. shape.json compares
+forced hit seeds for it, and in every slot it writes, refilled once the GPU has finished the step. A dummy runs until
+its served output count (``ignore_eos``), so it finishes where serving did. RID's prefix and every page it hits come
+from serving's bytes: the edge's K/V file, or the mirror, which a replay identical to serving wrote. shape.json compares
 RID's tokens and logprob bits and the schedule (a dummy's finish reason aside) up to RID's last step, and records what
 the replay took from the run.
+
+Zero is the replay. NaN probes for reads at weight zero, which no finite dummy can show: FA3's causal varlen prefill
+weights the sequence packed after RID by zero in RID's last partial key tile, so a NaN dummy there turns RID's rows NaN
+where any finite one leaves them exact.
 """
 from __future__ import annotations
 
@@ -1091,7 +1095,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--shape-only", metavar="RID",
                     help="replay RID with every other request a dummy of its shape (`Dummies`), until its last served "
                          "output; writes shape.json")
-    ap.add_argument("--dummy", choices=("zero", "nan"), default="nan", help="what a dummy's K/V holds")
+    ap.add_argument("--dummy", choices=("zero", "nan"), default="zero",
+                    help="what a dummy's K/V holds: zero, or NaN to probe for reads at weight zero")
     ap.add_argument("--perturb", type=int, default=0, metavar="N",
                     help="with --shape-only, a control: add one dummy of N prompt tokens at the first step, a row serving "
                          "never ran")
