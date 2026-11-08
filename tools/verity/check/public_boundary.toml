@@ -25,6 +25,7 @@ spot = [
 flock = [
     "verity/ml/flock",
     "verity/core/service/flock",
+    "Security/Proofs/Properties/Flock{,.lean}",
     "Security/*/Flock{,.lean}",
 ]
 ml = ["verity/ml/{circuits,definitions,commitments,crypto,randomness,windows,kernels,private_circuits}"]

@@ -100,12 +100,15 @@ def checkOrder (name : String) (inCols constPos : Nat) (ra rb : Array (Array Nat
       if c ≥ r then throw s!"{name}: row {r} reads column {c}, not an earlier one"
       if padding c then throw s!"{name}: row {r} reads column {c}, an input padding column"
 
-private def num (h : Array String) (i : Nat) : V Nat :=
+/-- The header's field `i` as a number. -/
+def num (h : Array String) (i : Nat) : V Nat :=
   match h[i]?.bind String.toNat? with
   | some n => pure n
   | none => throw s!"flock-ir-unit/v2: header field {i} is not a number"
 
-private def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
+/-- The port groups the header lists from field `at0` (their count, then each one's column, words, port count and port
+widths), and the field after them. -/
+def groups (h : Array String) (at0 : Nat) : V (Array Group × Nat) := do
   let count ← num h at0
   let mut at_ := at0 + 1
   let mut out := #[]
