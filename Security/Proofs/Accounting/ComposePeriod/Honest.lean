@@ -91,7 +91,7 @@ def run (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit wher
   right := fun _ _ _ _ => True
 
 /-- The period's proofs, `Declared.periodLayer` at the honest run. -/
-def layer (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) n 1 1 (Fin 1) ℕ (Fin n × ℕ) Unit :=
+def layer (n : ℕ) : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) n 1 1 (Fin 1) ℕ (Fin n × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (run n)
 
 /-- The honest run's anatomy: one fixed word a window. -/
@@ -333,7 +333,7 @@ def runR (n : ℕ) : Outcomes Bool (Equiv.Perm (Fin 1) × Unit) 1 1 1 n Unit whe
   right := fun _ _ _ _ => True
 
 /-- Its proofs, `Declared.periodLayer` at `runR`. -/
-def layerR (n : ℕ) : DrawnLayer Bool (Equiv.Perm (Fin 1) × Unit) (n + 1) 1 1 (Fin 1) ℕ (Fin (n + 1) × ℕ) Unit :=
+def layerR (n : ℕ) : SampledLayer Bool (Equiv.Perm (Fin 1) × Unit) (n + 1) 1 1 (Fin 1) ℕ (Fin (n + 1) × ℕ) Unit :=
   circuit.periodLayer (Nat.one_pos : 0 < circuit.rounds) (le_rfl : 1 ≤ 1) (runR (n + 1))
 
 /-- Its play: the period's ideal game at `liveCone`, accepted on every path (the record credits the accepted prefix). -/

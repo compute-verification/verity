@@ -52,7 +52,7 @@ the served schedule, which `Tie.commit` and `Tie.receipt` state. What stays of i
   overlap (W-a);
 * **population** (`ServedUnits`): each linear's Program has the shape's unit count, and the declared circuit's units are
   the window's `population`;
-* **the sample** (`DrawMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
+* **the sample** (`SampleMissesSubset`): the verifier's `subset:K_d` sample over the window's population from `L` uniform bytes
   (`SampledProofs.Draw.drawUnits`, what `flock-verify draw --population N --k K` runs) misses a set `U` no more often
   than `Pouw.Window.subsetDraw K_d` of a uniform permutation does. It is over the code alone, like
   `Properties.SampledProofs.DrawMisses`.
@@ -102,7 +102,7 @@ def ServedUnits {ι : Type} (L : Shape) (Cd : Declared ι) (prog : ℕ → Sampl
 /-- **The verifier's subset sample over a population misses no more often than a uniform `K`-subset**: for every `K ≤ N`,
 number `L` of uniform bytes and set `U`, `drawUnits (subset K) N` is accepted on the bytes and samples no unit of `U` with
 probability at most the probability that `Pouw.Window.subsetDraw K` of a uniform permutation of `Fin N` misses `U`. -/
-def DrawMissesSubset : Prop :=
+def SampleMissesSubset : Prop :=
   ∀ (K N L : ℕ) (U : Finset ℕ), K ≤ N →
     prob (fun src : Fin L → Fin 256 => ∃ r,
         SampledProofs.Draw.drawUnits (.subset K) N (Properties.SampledProofs.bytesOf src) = .ok r ∧
@@ -121,11 +121,11 @@ def SeededScheduleNotLive : Prop :=
 
 /-- **The served hypothesis**: declared circuit `Cd`, classed by `cls`, is served window `L` in form `F` (`Tie`), its
 units are the per-call Programs' (`ServedUnits`), and the verifier's sample over its population misses as a uniform
-subset does (`DrawMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
+subset does (`SampleMissesSubset`). With `TieCommits` and `TieLive` it gives `Scope`'s two protocol conjuncts
 (`LayerCommitted`, `Declared.Live`; `TieScope`), and it carries `UnitsOfLayout`'s units and sample, per call. -/
 def IsServed {ι : Type} (L : Shape) (F : Form) (Cd : Declared ι) (cls : ℕ → Cls) (prog : ℕ → SampledProofs.Program)
     (query : ℕ → Json) (start : ℕ → ℕ) : Prop :=
-  Tie L F Cd cls ∧ ServedUnits L Cd prog query start ∧ DrawMissesSubset
+  Tie L F Cd cls ∧ ServedUnits L Cd prog query start ∧ SampleMissesSubset
 
 /-- **A tied circuit is in Compose's scope given the three conjuncts the tie doesn't read**: `Tie` gives `Scope`'s
 `Declared.Live` (`TieLive`) and `LayerCommitted` (`TieCommits`), so a tied circuit that is well formed, with a positive

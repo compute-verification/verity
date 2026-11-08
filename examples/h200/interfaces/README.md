@@ -56,11 +56,11 @@ for one server block and the Lean check's answer for it. It extends the all-prot
 - the composed verdict, which is the answer's: the Lean check of the block's product (`CHECKS`: `verity/onsite/v0` or
   `verity/remote/v0`, as the composite Lean check writes its `answer.json`), `accept`, `reject` or `undecided`, and
   `undecided` with no answer. Nothing in Python combines the subprotocols' verdicts;
-- what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointHorizonLive` over the
+- what the product's subprotocols say (`compose`) and the error of `Accounting.Guarantees.JointPooledLive` over the
   block: the accepted subprotocols' errors summed. The product (`PRODUCTS`) is onsite's, every subprotocol, unless
   `composed.product` names remote's, sampled proofs and PoUW, whose other subprotocols are `dropped`: not run and not
   composed;
-- the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointHorizonLive's
+- the monitoring period: week, month and year over a census deployment's machines (a parameter), with JointPooledLive's
   union bound over that many blocks and the per-block error each δ needs.
 
 `check` recomputes every derived field from the subprotocols' entries and the answer.

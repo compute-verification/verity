@@ -179,7 +179,7 @@ noncomputable def layerAt {ι C V : Type} (Cd : Declared ι) (hr : 0 < Cd.rounds
     (ws : CreditWindows (StrataCoin C m σ) n) (opened : Paths (StrataCoin C m σ) n → Fin n → ℕ → ℕ → V)
     (enc : C → ByteArray) (place : Paths (StrataCoin C m σ) n → Fin n → Fin (tileCount σ s) → Place)
     (tile : Noise → List (List ℕ) → Fin (tileCount σ s) → (ℕ → V) → Prop) :
-    DrawnLayer C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) n Cd.rounds (k s) (Fin (tileCount σ s)) ℕ (Fin n × ℕ) V :=
+    SampledLayer C (Equiv.Perm (Fin (tileCount σ s)) × Rest σ s) n Cd.rounds (k s) (Fin (tileCount σ s)) ℕ (Fin n × ℕ) V :=
   tileLayer Cd hr σ k hk s unitOf (creditAt hM σ s ws) (pullAt hM σ s opened) (relAt hM σ s ws place tile)
     (rightAt hM hr σ s enc place tile)
 

@@ -30,7 +30,7 @@ prefix's live tiles:
   its `LuckAt` from `PerLiveTile` (`luckAt_of_perLiveTile`: luck `1` on a dead tile, of weight `0`); then
   `PeriodBudget` (`budget_period`);
 * `PeriodTailMax` once at `t = ln(1/δ_s)`, read at the prefix `j = prefixLen` (the credited windows are the first
-  `prefixLen`, `credited_iff`); `DrawnRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
+  `prefixLen`, `credited_iff`); `SampledRightOff` at `n` rounds (its event `n·(δ_bind + δ_ks)`), off which every sampled
   tile of a credited window is right at its committed values, so `PrefixOf` passes the play's first `j` rounds, and the
   budget game's, whose checks are the play's (`acceptsUpTo_periodGame`);
 * per credited window, the covers, `UnitFixed`'s sums (a good tile is live in a credited window, `periodMode`'s
@@ -712,7 +712,7 @@ theorem work_step {ι K C Ξ V : Type} (Sc : Scheme K) (Cd : Declared ι) {n Np 
 /-! ## `CircuitWorkMonitoringPeriod` -/
 
 /-- **`CircuitWorkMonitoringPeriod` from the period layer's covers**: the assembly, reading `PeriodCoversStmt` as a hypothesis
-(`periodCovers` proves it). Off `DrawnRightOff`'s event and the period budget's tail at its accepted prefix,
+(`periodCovers` proves it). Off `SampledRightOff`'s event and the period budget's tail at its accepted prefix,
 `work_step`. -/
 theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
     Accounting.Guarantees.ComposePeriod.CircuitWorkMonitoringPeriod := by
@@ -720,7 +720,7 @@ theorem circuitWorkMonitoringPeriod_of_covers (hC : PeriodCoversStmt) :
     hρ hρN hwmax hlk ha hb hΛ hSR hG hDD hPre hMoved hJS hPins hMu hRB hGs hUF
   obtain ⟨hwf, -, hδs, hLP, hlc⟩ := hS
   obtain ⟨hWR, hCov⟩ := hC Sc Cd hr hK Wp pr hwf hlc
-  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.DrawnRightOff C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd
+  obtain ⟨E, hE, hEoff⟩ := Accounting.SecurityProofs.TS.SampledRightOff C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd
     (Cd.periodLayer hr hK pr) δbind δks hMoved hJS hPins
   have hBud : RoundGame.BudgetAt Λ (periodGame (Ξ := Ξ) (tileStage Cd Np) (liveShare Sc Cd Np) a b Kd Wp) :=
     budget_period Sc Cd hLP hρ hρN hwmax hlk ha hb hSR Wp hMu hRB hGs

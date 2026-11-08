@@ -71,11 +71,11 @@ period's coins, which the cheater may steer, and the tail at a stopping time is 
 * `periodMode`: the run's modes as the period's proofs read them: a live tile `(w, t)` of a credited window has window
   `w`'s mode along its rounds' coins (`tileMode` per window), and every other tile is skipped whole.
 * `PerLiveTile`: `PerTile` on the window's live tiles.
-* `Declared.periodLayer`: the period's proofs as one `Accounting.TS.DrawnLayer` over `n` rounds, each window
+* `Declared.periodLayer`: the period's proofs as one `Accounting.TS.SampledLayer` over `n` rounds, each window
   `Declared.layer`'s: positions are `(window, gate)`, so each window's positions are its own, cut at its own coins (a
   registered input at its window's first coin, which binds no earlier than the service does) and written by its own
   proof blocks; the sample is each window's; only the run-dependent half (`Outcomes`) is abstract.
-* `PrefixOf`: `DrawnLayer.Of`'s game clause on every prefix: right sampled tiles in the first `j` windows pass the
+* `PrefixOf`: `SampledLayer.Of`'s game clause on every prefix: right sampled tiles in the first `j` windows pass the
   game's first `j` rounds.
 * `creditedLive`, `LiveWorkAt`, `rOfPrefix`: the credited windows' live words; `WorkAt` on live words, with the
   shares over the declared words; the period's logical bound over its accepted prefix of `j` windows,
@@ -231,15 +231,15 @@ def PerLiveTile {ι K C : Type} {Np M : ℕ} (Sc : Scheme K) (Cd : Declared ι) 
 /-- **The period's proofs as the IR defines them**: `Declared.layer` in every window, its positions tagged by their
 window. Window `w`'s tile `t` reads `(w, ℓ)` for each of its slots `ℓ`, its noise reads window `w`'s coin of its round,
 position `(w, ℓ)` is cut at window `w`'s coin `Declared.layer` cuts `ℓ` at and written by window `w`'s proof block of
-`ℓ`, and window `w`'s sample is its own (`drawOf`). No position crosses windows: a value one window hands the next
+`ℓ`, and window `w`'s sample is its own (`sampleOf`). No position crosses windows: a value one window hands the next
 (decode feedback, a KV cache) is the next window's input, cut where that window's IR cuts it, so the period's late
 cones stay inside their windows. A registered input is cut at its window's first coin, no earlier than the service
 commits it. The sample is uniform over every tile, dead ones included, as the served gate's is; a sampled dead tile is
 proved like any other, and its words count for nothing (`periodMode`, `liveCone`). -/
 def Declared.periodLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : Outcomes C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np n V) :
-    DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V where
-  draw := drawOf hK
+    SampledLayer C (Equiv.Perm (Fin Np) × Ξ) n Cd.rounds Kd (Fin Np) ℕ (Fin n × ℕ) V where
+  draw := sampleOf hK
   pos := fun w t k => (w, (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length))
   coin := fun _ t => ⟨min (Cd.roundOf t.val) (Cd.rounds - 1),
     Nat.lt_of_le_of_lt (Nat.min_le_right _ _) (Nat.sub_lt hr Nat.one_pos)⟩
@@ -252,11 +252,11 @@ def Declared.periodLayer {ι C Ξ V : Type} (Cd : Declared ι) {n Np Kd : ℕ} (
   rel := pr.rel
   right := pr.right
 
-/-- **The game is its sampled tiles' proofs', on every prefix**: `DrawnLayer.Of`'s game clause cut after each window.
+/-- **The game is its sampled tiles' proofs', on every prefix**: `SampledLayer.Of`'s game clause cut after each window.
 When every tile the samples of the first `j` windows name is right at its committed values, the game's first `j` rounds
 pass. A window's round reads only its own coins and sample, so a window past the prefix doesn't bear on it. -/
 def PrefixOf {C B : Type} [Fintype C] [Fintype B] {n m s : ℕ} {J Q Pos V : Type} [Nonempty V]
-    (pf : DrawnLayer C B n m s J Q Pos V) (g : RoundGame (Paths C m × B) n) : Prop :=
+    (pf : SampledLayer C B n m s J Q Pos V) (g : RoundGame (Paths C m × B) n) : Prop :=
   ∀ x j, (∀ w : Fin n, w.val < j → ∀ i, pf.right x w (pf.drawnAt x w i) (pf.view x w (pf.drawnAt x w i))) →
     RoundGame.acceptsUpTo g j x
 

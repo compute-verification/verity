@@ -12,7 +12,7 @@ public import Proofs.Accounting.Lemmas.Compose
 and proved here as `periodCovers`. The assembly reads it as a hypothesis (`ComposePeriod.circuitWorkMonitoringPeriod_of_covers`).
 
 It is `CoversProof.serviceCovers`' argument with a window index. Every position, cut and writer of window `w` of the
-period layer (`Declared.periodLayer`) is window `w`'s, so a late edge (`DrawnLayer.Late`) stays in its window and
+period layer (`Declared.periodLayer`) is window `w`'s, so a late edge (`SampledLayer.Late`) stays in its window and
 lies in the IR's late cone (`Declared.Reaches`) under `Declared.Wf` and `LayerCommitted`, as `reaches_of_late` shows
 for one window. A credited window's live tiles have its own run's modes under `periodMode`, and its dead tiles are
 skipped whole. So a live tile of words that isn't good is reached by a tile its window's run didn't pay for: either a
@@ -33,7 +33,7 @@ open Accounting.TS Accounting.Compose Pouw.RelativeSecurity
 
 open Classical in
 /-- **The period layer's covers on a credited window's live tiles** (proved as `periodCovers`): the period layer's
-writers read their positions (`DrawnLayer.WriterReads`), and on every path `x`, in every credited window `w` whose dead
+writers read their positions (`SampledLayer.WriterReads`), and on every path `x`, in every credited window `w` whose dead
 tiles' cones hold no live words (`DeadConeDead`), the live words of the tiles that aren't good under the period's modes
 (`periodMode`) are at most `N_w` times the `liveCone` of the tiles window `w`'s run didn't pay for, at its rounds'
 coins. The right side is window `w`'s round's deficiency in `periodGame` at weights `liveCone` and costs `1, 1`. -/

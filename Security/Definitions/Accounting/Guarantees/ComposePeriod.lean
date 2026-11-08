@@ -31,7 +31,7 @@ at it (`PeriodTailMax`).
 * `CircuitWorkPeriod`: (L), the circuit's work on live tiles, over the period's accepted prefix. Proved
   (`Proofs.Accounting.ComposePeriod`) from `CircuitWork`'s lemmas, not from its conclusion (a per-window tail at `δ`
   can't be averaged into `ε/n`): `ServiceBudget` per window at the window's detected live weights, `PeriodBudget`,
-  `PeriodTailMax` once at `t = ln(1/δ_s)`, `DrawnRightOff` at `n` rounds, the period layer's `Covers` on the credited
+  `PeriodTailMax` once at `t = ln(1/δ_s)`, `SampledRightOff` at `n` rounds, the period layer's `Covers` on the credited
   windows' live tiles and `WriterReads` (`PeriodCoversStmt`, `ServiceCovers`' argument with a window index, proved as
   `periodCovers` in `Proofs.Accounting.ComposePeriod.Covers`) and `UnitFixed`'s sums.
 * `CircuitCreditPeriod`: (L)'s credit in live words, `(1 − ε(j))₊` of the accepted prefix's live words with `ε` at the
@@ -48,7 +48,7 @@ open Accounting.TS Accounting.Compose Accounting.Assumptions.TS Accounting.Assum
 /-- **(L) The circuit's work on its live tiles over a monitoring period's accepted prefix, live coins.** For every
 declared circuit `Cd` and scheme `Sc`, run as a period of at most `n ≥ 1` windows in order, each window
 `CircuitWork`'s: the circuit's rounds in order, each round's noise coin live and released after its operands are
-committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`drawOf`, uniform over every tile, dead ones
+committed, then the service's sample of `K_d` of the `N_p ≥ Cd.units` tiles (`sampleOf`, uniform over every tile, dead ones
 included) with the proofs' coins `Ξ`, all fresh; window `w + 1`'s first coin is released after window `w`'s sample. The
 cheater's play in each window, its live tiles included, may be any function of every earlier window's coins
 (`WindowPlay`). The period is credited up to its first window with a refused proof (`Outcomes.Credited`): its accepted

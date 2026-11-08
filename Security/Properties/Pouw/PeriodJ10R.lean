@@ -274,7 +274,7 @@ noncomputable def tileLayer {ι C Ξ V : Type} (Cd : Declared ι) {nB mB n : ℕ
     (ws : CreditWindows (Coin C Ξ Cd.rounds σ sT) n)
     (opened : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → ℕ → ℕ → V)
     (rel right : Paths (Coin C Ξ Cd.rounds σ sT) n → Fin n → Fin (tileCount σ sT) → (ℕ → V) → Prop) :
-    DrawnLayer C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) n Cd.rounds (k sT) (Fin (tileCount σ sT)) ℕ (Fin n × ℕ) V :=
+    SampledLayer C (Equiv.Perm (Fin (tileCount σ sT)) × Ξ) n Cd.rounds (k sT) (Fin (tileCount σ sT)) ℕ (Fin n × ℕ) V :=
   Cd.periodLayer hr (hk sT) (tileRun σ k hk sT unitOf ws opened rel right)
 
 /-- **`Credit.window`'s sample is the tile coordinate of the sampling block's sample**: on every path and every window

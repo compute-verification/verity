@@ -99,7 +99,7 @@ named.
 
 * `Joint`, `CovertResidual` (`Joint.lean`): on any device, the probability that the compute, bandwidth and capacity
   audits all accept while some account is below its certificate, or beyond its residual, is at most `εW + εQ + εS`.
-* `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive` (`JointLive.lean`): the joint guarantee over one
+* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive` (`JointLive.lean`): the joint guarantee over one
   period, over `m` periods and over `B` server blocks with the memory wipes that open them, as one causal game over the
   five subprotocols' per-period guarantees.
 * `ComputeOfPouw` (`Pouw.lean`): PoUW's guarantee is the compute guarantee, at certificate `(1 − γ)(1 − εs)·W`.

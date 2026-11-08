@@ -52,8 +52,8 @@ The logical layer:
   other value (glue, the KV cache) with its writing gate's round, before that round's coin or, when it depends on it,
   after; a read is late when its operand's cut is past the reader's coin; a unit writes another late when one of its
   gates is read late by one of the other's, and its late cone is closed under that per unit, as
-  `DrawnLayer.Late` is.
-* `LayerCommitted`, `Declared.atDraw`, `Declared.atIR`: the service commits every value the prover writes by its IR
+  `SampledLayer.Late` is.
+* `LayerCommitted`, `Declared.atSample`, `Declared.atIR`: the service commits every value the prover writes by its IR
   cut, or a computed value only its own unit reads (a receipt) by the sample (protocol structure, in `Scope`, which
   today's code doesn't meet); the circuit with every value committed at the
   sample, where the seeded statements check binding, and with every value cut at the IR, where they count cones.
@@ -77,18 +77,18 @@ The logical layer:
   stages, one a round, with a unit's mode `Accounting.TS.Mode` (paid; folded, its product skipped and its
   committed words folded; or whole, product and fold skipped), each stage's tiles' deficient words right or not
   (`right`) and their checked values honest or not (`same`, which a receipt-lucky skipped tile meets); and the modes as
-  the window's proofs read them, which `DrawnLayer.Good` and `UnitFixed` take.
+  the window's proofs read them, which `SampledLayer.Good` and `UnitFixed` take.
 * `JointRun`, `JointRun.share`, `SplitStages.joint`, `jointMode`: a window's modes and checked values as functions of
   every round's coin at once, which the seeded statements take (a cheater may choose a round's skips after querying
   the oracle for later rounds' seeds); a split-stage window is one, and the proofs read its modes as `tileMode` does.
 * `tileGame`, `PerTile`: a tile's stage as the ideal game split at the receipt (`ReceiptGame`), in each skipped mode,
   and a claim of every credited tile at its stage, whatever the past: what `OperandHMu` and `ReceiptLuckAt` and
   `Assumptions.Compose.GuessLuckAt` are taken of.
-* `jointGame`, `serviceGame`, `drawOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
+* `jointGame`, `serviceGame`, `sampleOf`: the window as one round on coins `A × (Equiv.Perm (Fin N) × Ξ)`: the rounds'
   coins, then the service's one uniform `K`-subset (`Pouw.Window.subsetDraw`, its `Equiv.Perm`) and the proofs' coins
   `Ξ`. Its share is `a·(folded weight) + b·(whole weight)` at the weights it is given, and it passes when every sampled
   tile's checked value is honest; `serviceGame` is it at a split-stage window's joint run.
-* `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `Accounting.TS.DrawnLayer` over the IR's
+* `Declared.slots`, `ProofRun`, `Declared.layer`: the window's proofs as an `Accounting.TS.SampledLayer` over the IR's
   gates as positions, its static half defined from the IR (each tile's slots its unit's gates and their operands, each
   position's writer the unit of its gate, each position's cut its IR cut or the service's commit coin, whichever is
   later, each tile's coin its round's, the sample the
@@ -158,7 +158,7 @@ operands, interval, primitive, place and whether it is committed), and as the IR
   The proofs' layer cuts `ℓ` there or at its IR cut, whichever is later (`Declared.layer`). The live statements take
   it no later than the IR cut, or the sample for a computed value only its own unit reads (`LayerCommitted`, in
   `Scope`); the seeded statements read the circuit at the sample
-  (`Declared.atDraw`) for binding and at the IR (`Declared.atIR`) for cones, so they read no `commitRound`;
+  (`Declared.atSample`) for binding and at the IR (`Declared.atIR`) for cones, so they read no `commitRound`;
 * `seedNames r ℓ`: whether round `r`'s seed preimage names a root that value `ℓ` is a leaf under, every opening of it
   checked against that root (`SHA-512(tag ‖ salt ‖ position ‖ root(A) ‖ root(B))`, whose salt names
   the weights' root). The seeded statements need every value a seeded round reads named (`SeedNamed`, in
@@ -324,7 +324,7 @@ def Declared.UnitLate {ι : Type} (Cd : Declared ι) (u v : ℕ) : Prop :=
   ∃ i j, Cd.Writes i ∧ Cd.unit i = u ∧ Cd.unit j = v ∧ Cd.Late i j
 
 /-- **Unit `u'` is in unit `u`'s late cone**: `u` itself, and every unit reached from it along late
-writes (`Declared.UnitLate`, transitively). It is closed per unit, as `Accounting.TS.DrawnLayer.Late` is: a skipped unit
+writes (`Declared.UnitLate`, transitively). It is closed per unit, as `Accounting.TS.SampledLayer.Late` is: a skipped unit
 can leave every gate of it wrong, so a late read of any one of them reaches the reader's whole unit. -/
 def Declared.Reaches {ι : Type} (Cd : Declared ι) : ℕ → ℕ → Prop := Relation.ReflTransGen Cd.UnitLate
 
@@ -348,7 +348,7 @@ it against the reader's noise (`A = −b` cancels a one-bit dither), even when o
 It is a fact of the declared circuit, not a premise about the cheater. A service that commits later than it allows
 fails it, and then `Scope` fails and the live statements credit nothing. A `Declared` whose `commitRound` claims an
 earlier coin than the code commits at meets it, and then its layer cuts a value before the code binds it: an opening
-moved after that cut is `DrawnLayer.MovedIn`, so the failure lands in the binding premise (`MovedIn ≤ δ_bind`), which
+moved after that cut is `SampledLayer.MovedIn`, so the failure lands in the binding premise (`MovedIn ≤ δ_bind`), which
 is false at any small `δ_bind` against a cheater that moves it. Neither case is `ServiceCovers`'s: it takes this as a
 hypothesis. It is also the order the binding card needs: `δ_bind` bounds an opening that differs from a root fixed
 before the cut, and nothing for a value committed after it; the layer cuts a value of the second case at its commit
@@ -372,7 +372,7 @@ before its coin (`credit.a_link`). A seeded window's coins are still one salt a 
 before the activations are committed. No code checks this order itself: that every value the served
 Program writes is committed under the root of the round its `commitRound` names. A served Program's commit coins reach
 `Declared` only through `Properties.Compose.UnitsOfLayout`, which is unproved. The seeded statements don't read it: they
-read the circuit at the sample (`Declared.atDraw`) and at the IR (`Declared.atIR`, which meets it), and take its seeded
+read the circuit at the sample (`Declared.atSample`) and at the IR (`Declared.atIR`, which meets it), and take its seeded
 mirror, `SeedNamed`. -/
 def LayerCommitted {ι : Type} (Cd : Declared ι) : Prop :=
   ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ ∨
@@ -380,10 +380,10 @@ def LayerCommitted {ι : Type} (Cd : Declared ι) : Prop :=
 
 /-- **The circuit committed at the sample**: every value's commit coin the service's live sample (`rounds`), so
 `Declared.layer` cuts every position there, after every round's coin. The seeded statements check binding on it
-(`DrawnLayer.MovedIn`, `Of`, `JointSound`): under seeded coins a round's coin is the oracle's answer at a preimage the
+(`SampledLayer.MovedIn`, `Of`, `JointSound`): under seeded coins a round's coin is the oracle's answer at a preimage the
 cheater chooses, so it can query any round's seed, then choose what it commits, and nothing it writes is bound before
 the sample. -/
-def Declared.atDraw {ι : Type} (Cd : Declared ι) : Declared ι := { Cd with commitRound := fun _ => Cd.rounds }
+def Declared.atSample {ι : Type} (Cd : Declared ι) : Declared ι := { Cd with commitRound := fun _ => Cd.rounds }
 
 /-- **The circuit cut at the IR**: every value's commit coin `0`, so `Declared.layer` cuts each position at its IR cut
 (`Declared.cutOf`), and `LayerCommitted` holds. The seeded statements count cones on it (`UnitFixed`,
@@ -634,7 +634,7 @@ def SplitStages.joint {C V : Type} {M : ℕ} (stg : V → ℕ) (W : SplitStages 
   ⟨W.modeAt stg, W.sameAt stg⟩
 
 /-- **A joint run's modes as the window's proofs read them**: on a path of the window's one service round, tile `u`'s
-mode at the rounds' coins. `Accounting.TS.DrawnLayer.Good` and `Accounting.Assumptions.TS.UnitFixed` read these. -/
+mode at the rounds' coins. `Accounting.TS.SampledLayer.Good` and `Accounting.Assumptions.TS.UnitFixed` read these. -/
 def jointMode {A B : Type} {Np : ℕ} (R : JointRun A (Fin Np)) (x : Paths (A × B) 1) (u : Fin 1 × Fin Np) : Mode :=
   R.mode (coinAt x 0).1 u.2
 
@@ -677,7 +677,7 @@ noncomputable def serviceGame {C Ξ : Type} {N M : ℕ} (stg : Fin N → ℕ) (W
   jointGame (W.joint stg) w a b K
 
 /-- **The service's samples**: sample `i` is the permutation's image of `i`, so the `K` samples are `subsetDraw K`. -/
-def drawOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
+def sampleOf {N K : ℕ} {Ξ : Type} (hK : K ≤ N) (β : Equiv.Perm (Fin N) × Ξ) (i : Fin K) : Fin N :=
   β.1 (Fin.castLE hK i)
 
 /-! ## The window's proofs, their static half from the IR -/
@@ -689,7 +689,7 @@ def Declared.slots {ι : Type} (Cd : Declared ι) (t : ℕ) : List ℕ :=
 
 /-- **The window's proofs' run-dependent half**, on the window's one service round over the rounds' coins and the
 sample `B`: whether the proof of the `i`-th sampled tile was accepted and the values its opening gives its slots, and each
-tile's relation (the public Program its proof passes) and rightness on its slots' values, as `DrawnLayer`'s fields of
+tile's relation (the public Program its proof passes) and rightness on its slots' values, as `SampledLayer`'s fields of
 those names. Everything else of the layer is the IR's (`Declared.layer`). -/
 structure ProofRun (C B : Type) (m s Np : ℕ) (V : Type) where
   accepted : Paths (Paths C m × B) 1 → Fin 1 → Fin s → Prop
@@ -697,23 +697,23 @@ structure ProofRun (C B : Type) (m s Np : ℕ) (V : Type) where
   rel : Paths (Paths C m × B) 1 → Fin 1 → Fin Np → (ℕ → V) → Prop
   right : Paths (Paths C m × B) 1 → Fin 1 → Fin Np → (ℕ → V) → Prop
 
-/-- **The window's proofs as the IR defines them** (`DrawnLayer`, at one service round): positions are the
+/-- **The window's proofs as the IR defines them** (`SampledLayer`, at one service round): positions are the
 circuit's gates and slots are numbered, and
-* `draw`: the service's (`drawOf`, the first `K_d` images of a uniform permutation of the `N_p` tiles);
+* `draw`: the service's (`sampleOf`, the first `K_d` images of a uniform permutation of the `N_p` tiles);
 * `pos t k`: tile `t`'s `k`-th slot (`Declared.slots`), its first slot past the list (no position for a tile of no
   gates: `Cd.dag.length`, which no unit writes);
 * `coin t`: its unit's round (`Declared.roundOf`, in range under `Declared.Wf`);
 * `cut ℓ`: gate `ℓ`'s IR cut (`Declared.cutOf`) or the coin the service commits it before (`Declared.commitRound`),
   whichever is later, the sample past the last round: the layer binds a value no earlier than the service does (at
-  `Declared.atDraw` every cut is the sample, at `Declared.atIR` every cut the IR's);
+  `Declared.atSample` every cut is the sample, at `Declared.atIR` every cut the IR's);
 * `src ℓ`: the unit of gate `ℓ` for a value the prover writes (`Declared.Writes`), none for a coin input or past the
   circuit;
 and the run-dependent rest is `pr`'s. A cheater can't change any static field: they are the IR's, fixed before the
 run. -/
 def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 < Cd.rounds) (hK : Kd ≤ Np)
     (pr : ProofRun C (Equiv.Perm (Fin Np) × Ξ) Cd.rounds Kd Np V) :
-    DrawnLayer C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd (Fin Np) ℕ ℕ V where
-  draw := drawOf hK
+    SampledLayer C (Equiv.Perm (Fin Np) × Ξ) 1 Cd.rounds Kd (Fin Np) ℕ ℕ V where
+  draw := sampleOf hK
   pos := fun _ t k => (Cd.slots t.val)[k]?.getD ((Cd.slots t.val).headD Cd.dag.length)
   coin := fun _ t => ⟨min (Cd.roundOf t.val) (Cd.rounds - 1),
     Nat.lt_of_le_of_lt (Nat.min_le_right _ _) (Nat.sub_lt hr Nat.one_pos)⟩
@@ -730,34 +730,34 @@ def Declared.layer {ι C Ξ V : Type} (Cd : Declared ι) {Np Kd : ℕ} (hr : 0 <
 gate's round, W1): each value `ℓ` the prover writes whose commit coin is no later than its IR cut (`LayerCommitted`'s
 first case) is bound before coin `Declared.cutOf ℓ` of the window's `rounds` (the sample past the last). A value opened
 one way for one sampled tile and another for a tile that reads it, after the reader's coin, is then a binding failure
-(`DrawnLayer.MovedIn`). `Declared.layer` meets it, so at `Declared.atIR` for every value. A value of
+(`SampledLayer.MovedIn`). `Declared.layer` meets it, so at `Declared.atIR` for every value. A value of
 `LayerCommitted`'s second case, committed past its IR cut, is bound at its commit coin, and only its own unit reads
 it. -/
-def StageCuts {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
+def StageCuts {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : SampledLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
     Prop :=
   ∀ ℓ, Cd.Writes ℓ → Cd.commitRound ℓ ≤ Cd.cutOf ℓ → ((pf.cut ℓ).2 : ℕ) = min (Cd.cutOf ℓ) Cd.rounds
 
 /-- **Each tile's noise reads its round's coin** (W2: one coin a round): the layer's coin for tile `t` is
 its unit's round, the coin `Declared.Late` reads. `Declared.layer` meets it under `Declared.Wf`. -/
-def StageCoins {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
+def StageCoins {ι C B Q V : Type} {s N : ℕ} (Cd : Declared ι) (pf : SampledLayer C B 1 Cd.rounds s (Fin N) Q ℕ V) :
     Prop :=
   ∀ t : Fin N, ((pf.coin 0 t : Fin Cd.rounds) : ℕ) = Cd.roundOf t.val
 
 /-- **Each tile's slots and each position's writer lie inside the IR**: a position with a writer is a value the prover
 writes, a gate of the writer's unit, and each slot of tile `t` is one of `t`'s own gates or an operand of one of them
 (`Declared.slots`), or no position when `t` has no gates. With `StageCuts`, `StageCoins` and `LayerCommitted` it puts
-the layer's late cones (`DrawnLayer.Late`) inside the IR's (`Declared.Reaches`), so a share charging each skipped tile
+the layer's late cones (`SampledLayer.Late`) inside the IR's (`Declared.Reaches`), so a share charging each skipped tile
 its `tileCone` covers every tile that isn't good (`ServiceCovers`). `Declared.layer` meets it by definition. -/
-def StageSlots {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
+def StageSlots {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : SampledLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
     Prop :=
   (∀ ℓ u, pf.src ℓ = some u → Cd.Writes ℓ ∧ Cd.unit ℓ = u.2.val) ∧
     ∀ (t : Fin N) (k : ℕ), pf.pos 0 t k ∈ Cd.slots t.val ∨ (Cd.slots t.val = [] ∧ pf.pos 0 t k = Cd.dag.length)
 
 /-- **Every one of the IR's slots and writers is the layer's** (the completeness half `StageSlots` leaves out): every
 value the prover writes has its unit as its writer, and every gate of tile `t` and every operand of one is one of `t`'s
-slots. Without it the layer could miss a late edge, and `DrawnLayer.Good` would hold for a tile whose words read a late,
+slots. Without it the layer could miss a late edge, and `SampledLayer.Good` would hold for a tile whose words read a late,
 skipped writer, which `UnitFixed` can't meet. `Declared.layer` meets it under `Declared.Wf` and `units ≤ N`. -/
-def StageComplete {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : DrawnLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
+def StageComplete {ι C B V : Type} {s N : ℕ} (Cd : Declared ι) (pf : SampledLayer C B 1 Cd.rounds s (Fin N) ℕ ℕ V) :
     Prop :=
   (∀ ℓ, Cd.Writes ℓ → ∃ u, pf.src ℓ = some u ∧ u.2.val = Cd.unit ℓ) ∧
     ∀ (t : Fin N) (ℓ : ℕ), ℓ ∈ Cd.slots t.val → ∃ k, pf.pos 0 t k = ℓ
