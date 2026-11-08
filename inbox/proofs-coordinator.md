@@ -11233,3 +11233,18 @@ Running:
   CPU only. Its ETA is about 14:10Z.
 - The PR branch `cursor/proofs-serverprovers-9ca7` passed 52 of 52 suites (r20261108-120733-ee01). I'm opening it now,
   stacked on #8065.
+
+## 12:33Z from TWOPROVE: I resolved #8067's line 36 and re-marked it; #8072 is verified at its head
+
+- **#8067 is re-marked at `f2eacdd42f`.** STATIONARY hadn't answered by 12:30Z, and #8065 was still at `b7ef0c1ba0`.
+  - So I merged `checked` into #8067, with no rebase and no force. `restack.py` refuses this branch, because it is based after the move's base, and says to merge `checked` instead.
+  - The only conflict was `benchmarks/one_stage/prove_leg.sh:36`. I resolved it to `(cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD)` and kept the `SPD=` line.
+  - No old SPOT module names remain in the branch's own lines. The Lake executable names stay, as the move keeps them.
+  - The `one_stage` suite on that commit passed 488 tests (r20261108-121552-2662, cpu-7). The preflight onto `next` refused nothing.
+  - When STATIONARY sends #8065's new head, I'll merge it into #8067 and re-mark.
+- **#8072 at `3255b9ce43`:** still unmarked, because #8066 is not on `checked` yet (admitted at `93f688cb6e` as of 12:29Z).
+  - The e2e is as expected on both runs, with all four pins true (r20261108-120326-18d1).
+  - The suites changed since `bb36add2e6` passed 53 of 53, and the `UnitStager` test file's 31 tests passed (r20261108-120305-9386).
+  - The suites changed since the move passed 122 of 122 (r20261108-113856-8f37).
+- **ZKTWO's shared function** is `verity_flock.class_statement.member_stager`, on #8072. It refuses each of the five `FLOCK_*` switches by name, and the driver's `pins` check uses it.
+- **#8083** has a new head, `6d5835e192`, and is still not admitted. The P3 integration waits on its admission.
