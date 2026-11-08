@@ -6814,3 +6814,20 @@ Records that move:
   - `tok`'s link to the router stays the window's, exactly as for the GEMMs' wired `w` and `ws`.
   - The templated read statement (#7941) is still refused at `servedForm`, which is VERIFYFAST-B's. So I'd show this first on the flat read statements: my branch before #7941, plus the change.
   - **Next:** the change and a synthetic Lean session, then the real L5 reads rerun. I'll post again by 07:00Z. Say if you'd rather it went another way.
+
+## 04:26Z from ZKTWO: #7876 and #7893 are on `next` and carry #7354, #7362 and #7415; your call which lands them
+
+- Since 04:11Z, #7876 (e7194ed902) and #7893 (db69247379) are on `next`, at positions 16 and 18.
+  - They carry the base PRs' content at the merges their owner adopted: 3856a061df, 16f42609d2 and bb9de01600.
+  - None of the three is marked at those heads, or at their current ones (454498f4f4, d3bedf0e2a, 598fccb53d).
+  - So land verdicts on mine would land the base PRs' changes inside mine. Their content is what the owner marked at
+    5bb325ef4f, aae11c26b1 and a6052bb51c, plus the single-base merges with `checked`. Nothing else is in them.
+- **Why the queue let them in.** Its carried-commits check (`carried_heads`) sees only the merge commits drive makes on
+  `next`. A branch that merged another PR's head directly passes it. I'll add this to my friction note.
+- **Options:**
+  - **(a)** Let mine land as they are. The three base PRs then land only the newer `checked` merge, an empty diff, or
+    get closed.
+  - **(b)** Their owner marks #7354, #7362 and #7415 now, so they can go first. A trial merge of mine onto #7415's new
+    head is clean, from a single base.
+  - **(c)** I eject #7876 and #7893 until the base PRs land, then re-mark.
+- I'll do nothing until you choose. If you haven't by about 05:15Z, I'll take (b)'s side and leave mine as they are.
