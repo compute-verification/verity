@@ -58,6 +58,8 @@ READ = "grader-products/v1"
 #: the capture of training's slowdown code the grader reads beside (its `capture.products.CAPTURE`)
 CAPTURE = "4.12.9"
 THE_CODE = "training's slowdown code"
+#: its package, which sits in `benchmarks/training_slowdown`
+PACKAGE = "training_slowdown"
 DERIVE = "derive the step with step_program, the training-step frontend"
 #: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
 #: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
@@ -223,15 +225,14 @@ def load_handover(path: Path) -> Handover:
 # -- training's slowdown code --------------------------------------------------------------------------------------------
 
 def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
-    """Training's slowdown code from `directory`, the one its package sits in (`benchmarks/covert_witness` on its branch), at
+    """Training's slowdown code from `directory`, the one its package (`PACKAGE`) sits in (`benchmarks/training_slowdown`), at
     `commit`: checked against the checkout's HEAD where `directory` is in a git checkout (`checked`), else taken as named.
     Returns the modules the grader calls (`opnames`, `formalism`, `capture.products` as `products`), its version and the
     commit. Refuses a directory without it, another commit, the package already loaded from another directory in this
     process, and another capture."""
     d = Path(directory).resolve()
-    if not (d / "te_core" / "__init__.py").is_file():
-        raise Refused(f"{d} doesn't hold {THE_CODE}: pass the directory its package sits in (benchmarks/covert_witness "
-                      f"on its branch)")
+    if not (d / PACKAGE / "__init__.py").is_file():
+        raise Refused(f"{d} doesn't hold {THE_CODE}: pass the directory its package sits in (benchmarks/training_slowdown)")
     if not re.fullmatch(r"[0-9a-f]{7,40}", commit):
         raise Refused(f"{commit!r} isn't a commit: name the commit {THE_CODE} is at, in 7 to 40 hex digits")
     head = subprocess.run(["git", "-C", str(d), "rev-parse", "HEAD"], capture_output=True, text=True)
@@ -239,14 +240,14 @@ def load_slowdown_code(directory: Path, commit: str) -> SimpleNamespace:
     if checked and not head.stdout.strip().startswith(commit):
         raise Refused(f"{THE_CODE} at {d} is at {head.stdout.strip()[:12]}, not {commit}: check out {commit}, or "
                       f"name the commit it is at")
-    loaded = sys.modules.get("te_core")
+    loaded = sys.modules.get(PACKAGE)
     if loaded is not None and Path(loaded.__file__).resolve().parent.parent != d:
         raise Refused(f"{THE_CODE} is already loaded from {Path(loaded.__file__).resolve().parent.parent} in this process: "
                       f"read it from one directory a process")
     if str(d) not in sys.path:
         sys.path.insert(0, str(d))
-    pkg = importlib.import_module("te_core")
-    mods = {m: importlib.import_module(f"te_core.{p}") for m, p in (
+    pkg = importlib.import_module(PACKAGE)
+    mods = {m: importlib.import_module(f"{PACKAGE}.{p}") for m, p in (
         ("opnames", "opnames"), ("formalism", "formalism"), ("products", "capture.products"))}
     if mods["products"].CAPTURE != CAPTURE:
         raise Refused(f"the grader reads beside capture {CAPTURE}, and {THE_CODE} at {commit} captures with "
@@ -698,7 +699,7 @@ def main(argv: list[str] | None = None) -> int:
                                                                f"beside {THE_CODE} (grader.py's docstring).")
     ap.add_argument("handover", type=Path, help="the hand-over's directory (grader.write_handover's) or its handover.json")
     ap.add_argument("--slowdown-code", type=Path, required=True,
-                    help=f"the directory {THE_CODE}'s package sits in (benchmarks/covert_witness on its branch)")
+                    help=f"the directory {THE_CODE}'s package sits in (benchmarks/training_slowdown)")
     ap.add_argument("--commit", required=True, help=f"the commit {THE_CODE} is at")
     ap.add_argument("--trace", type=Path, help=f"{THE_CODE}'s product rows of the same step (its capture's .products.json)")
     ap.add_argument("--out", type=Path, required=True, help="where to write what it read (JSON)")

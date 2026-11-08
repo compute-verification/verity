@@ -19,11 +19,11 @@ import grader as G
 from verity_config.settings import of
 
 #: the stand-in: the modules the grader calls, at the capture it reads beside
-STANDIN = {"te_core/__init__.py": 'VERSION = "stand-in"\n',
-           "te_core/opnames.py": "def gemm_like(name):\n    return name in ('mm', 'bmm')\n",
-           "te_core/formalism.py": "HE_BITS = {}\n",
-           "te_core/capture/__init__.py": "",
-           "te_core/capture/products.py": f"CAPTURE = {G.CAPTURE!r}\n"}
+STANDIN = {f"{G.PACKAGE}/__init__.py": 'VERSION = "stand-in"\n',
+           f"{G.PACKAGE}/opnames.py": "def gemm_like(name):\n    return name in ('mm', 'bmm')\n",
+           f"{G.PACKAGE}/formalism.py": "HE_BITS = {}\n",
+           f"{G.PACKAGE}/capture/__init__.py": "",
+           f"{G.PACKAGE}/capture/products.py": f"CAPTURE = {G.CAPTURE!r}\n"}
 SLOWDOWN_CODE = of(__file__).VERITY_GRADER_SLOWDOWN_CODE
 
 
@@ -47,7 +47,7 @@ def _standin(d: Path, capture: str = G.CAPTURE, commit: bool = True) -> str | No
 
 
 def _unload() -> None:
-    for m in [m for m in sys.modules if m.split(".")[0] == "te_core"]:
+    for m in [m for m in sys.modules if m.split(".")[0] == G.PACKAGE]:
         del sys.modules[m]
 
 
@@ -56,7 +56,7 @@ def fresh(monkeypatch):
     """sys.path and the slowdown code's modules as they were before the test: the loader puts its directory on sys.path and
     imports its package by name."""
     monkeypatch.setattr(sys, "path", list(sys.path))
-    before = {m: v for m, v in sys.modules.items() if m.split(".")[0] == "te_core"}
+    before = {m: v for m, v in sys.modules.items() if m.split(".")[0] == G.PACKAGE}
     yield
     _unload()
     sys.modules.update(before)
@@ -133,7 +133,7 @@ def test_the_tiny_steps_beside_the_slowdown_code(step, fresh, steps, monkeypatch
         dot_alone(monkeypatch, s.program)
     else:
         request.getfixturevalue("unit_prices")
-    capture_step = importlib.import_module("te_core.capture.trace").capture_step
+    capture_step = importlib.import_module(f"{G.PACKAGE}.capture.trace").capture_step
     torch.manual_seed(0)
     model = LF.LM(LF.SIZES["tiny"], ctx=2 * STEP[1], vocab=64, matmul_dtype=dtype)
     g = capture_step(model, torch.optim.AdamW(model.parameters(), **LF.ADAMW), LF.square_loss,
