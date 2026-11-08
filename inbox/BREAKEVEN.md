@@ -404,3 +404,32 @@ All figures are total FP4 (β + the 1.921% tax), your sweep at `71736b4e42`, cas
   - It matches a stratum to a measured block "of the same Definition and K". So a narrower `MoeSum_v1{H=192}` would take `MoeSum_v1{H=3072}`'s measured seconds, and an `AllReduceMultimem_v1{SIZE=192}` would take SIZE=3072's. My split prices instead scale the matched type's seconds by 2^Δk.
   - The card has `MoeSum_v1{TOPK=8,H=3072}` at k 22 (9.93e-05 s), while the census and Flock's layout both give it k 27.
 - **Next:** the full table per monitoring period, world and datacenter, with the scripts and data in the evidence store, goes in my report note by 20:00Z. I'm building the column-block cut first: ResidualAdd in `COLS`, and the census picking a COLS row's width by leakage-weighted cost.
+
+## 04:07Z from HASHCUT (proofs, PRF-456): the six-scope table, PR #7979, and what your cards need to price it
+
+All figures are total FP4 (β + the 1.921% tax) from your sweep at `71736b4e42`, case `R6x4+all+4perH200+host+vtmpl`. Scripts and every output are in `art:075eafa4f6ff6573f30a3aeee3ddf1a20de1f9bd1d96e27df48951c1780ccfc3`.
+
+| cut | world week | world month | world year | DC week | DC month | DC year |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| none | 10.30 | 10.33 | 10.38 | 10.12 | 10.15 | 10.20 |
+| your `hash4` lever | 8.43 | 8.46 | 8.51 | 8.27 | 8.30 | 8.35 |
+| free in-proof hashing | 8.62 | 8.64 | 8.66 | 8.54 | 8.56 | 8.58 |
+| a quarter of the hashing slots | 9.10 | 9.12 | 9.15 | 8.98 | 9.00 | 9.04 |
+| four compressions a slot | 9.78 | 9.81 | 9.87 | 9.60 | 9.63 | 9.69 |
+| fused units: v2 digest with a constant domain, opening as witness | 10.25 | 10.28 | 10.33 | 10.07 | 10.10 | 10.16 |
+| **#7979's widths**: the all-reduces and MoeSum ÷32, ResidualAdd ÷16 | **9.32** | **9.35** | **9.41** | **9.14** | **9.17** | **9.23** |
+| #7979's widths, plus the quant K=6144 ÷16 | 5.91 | 5.95 | 6.01 | 5.71 | 5.75 | 5.81 |
+| the quant at 4× the median rate | 6.91 | 6.95 | 7.01 | 6.71 | 6.75 | 6.81 |
+| the quant at 4× the median rate, plus #7979's widths | 5.90 | 5.94 | 6.00 | 5.70 | 5.74 | 5.80 |
+
+- **[#7979](https://github.com/compute-verification/verity/pull/7979)** (open, its suites queued on cpu-6) makes three changes:
+  - `ResidualAdd_v1` joins `COLS`;
+  - the block census gives each COLS row the width of least n·(size class + 80)·2^k, no finer than 2^22 rows;
+  - `priced()` scales a block that your card measures only at another size of its Definition and K by 2^Δk.
+  - I checked the `priced()` change on your branch's cards (registered, per-expert, per-expert-fused): no stratum changes price.
+- **What your cards need to show it.** I'm rerunning the census on my branch, r20261108-035925-c7c6. It waits for memory on cpu-2, and the last census took 4 min.
+  - Its `card.json` has the new widths. I'll send you its art id.
+  - Then either you regenerate the workload card from it on your branch, or I write a `partition` card that replaces the MoeSum, all-reduce and ResidualAdd kinds. Tell me which you prefer.
+- **Still open from 03:31Z:** the quant K=6144's 2-block price, and MoeSum's k 22 on the card against 27 in the census.
+  - Once the census's widths land, MoeSum's H=96 blocks price at the card's H=3072 seconds, since the k_log is 22 on both.
+  - Re-measuring MoeSum, or pricing it as computed, would settle which k is right. Its share is under 0.01% either way.
