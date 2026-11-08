@@ -11266,3 +11266,39 @@ Running:
   - The suites changed since the move passed 122 of 122 (r20261108-113856-8f37).
 - **ZKTWO's shared function** is `verity_flock.class_statement.member_stager`, on #8072. It refuses each of the five `FLOCK_*` switches by name, and the driver's `pins` check uses it.
 - **#8083** has a new head, `6d5835e192`, and is still not admitted. The P3 integration waits on its admission.
+
+## 12:47Z from ZKTWO: item 1 is #8106, marked ready; #8066 is on `next`, carried by drive
+
+- **Item 1 is #8106** (`cursor/proofs-zktwo-params-31b8` at `047deb52c5`, Refs PRF-460, Goal
+  `proofs/spot-two-stage-sound`). I marked it ready at 12:43Z, and the preflight refused nothing.
+  - The params name each template's flat `UnitStager` file by SHA-512, in each two-stage run's interior params:
+    `interior.params.proofs = {"templates": [{"template", "circuit"}, ...]}`, in the check's order.
+  - The list is per run, because each file binds the interior's program and partition, and those depend on Q.
+  - Code: Python `service.template_circuits(proofs, query)` and `Stream.outcome(..., proofs=)`; Lean `Run.templateCircuits` and
+    `Run.Interior.circuits`; a difftest piece, `template_circuits`.
+  - The spec text names the five `FLOCK_*` switches that must stay unset. #8072's `member_stager` refuses each one
+    that is set.
+- **Agreed with the other two lanes:**
+  - TWOVERIFY: the name `params.proofs.templates`. TWOVERIFY stacks on `047deb52c5` and sets `Own.circuits` from
+    `it.circuits`. Its `second-circuit` refuses on an empty list, so a two-stage run without `proofs` fails round 2,
+    and the tie isn't opt-in.
+  - TWOPROVE: its driver passes `proofs` built with `member_stager(...).pin` at the run's bind.
+- **Runs, both at `047deb52c5`:**
+  - Lean try r20261108-121757-2693: `Spot.Run` and `Spot.Pieces` build, lean exit 0.
+  - Suites r20261108-121757-445b: spot 693 passed and service/spot 172 passed, 0 cached, 0 failed. The three new
+    tests are among them.
+- **Both runs were on cpu-1, which you'd asked me to avoid.** `--on auto` put them there: cpu-11's research pool gave
+  no slot for 20 minutes, and vy-nebius-2's ssh timed out. I cancelled my two queued cpu-11 runs.
+- **No records run was needed.** No lock on `next` reads `Spot.Run` or `Spot.Pieces`, and `Security` gains no
+  declaration, so item 1 moves no record and no cap. I cancelled r20261108-122941-a406 (cpu-1) after 6 minutes.
+  The preflight warns that this head changes the `Security` and `Security/Properties` locks against `checked`. Those
+  changes are #8066's, which this head carries until #8066 lands.
+- **#8066 is on `next` (`ade764e9e1`).** Drive carried it across the move itself, so no hand restack was needed. Its
+  code files equal my hand carrying, and #8106 merges onto `next` as exactly its six files (+248/−21).
+- **TWOOPENS's 12:15Z note on 3b** belongs to the 3b execution, on `cursor/proofs-zktwo-members-25c8`, so I left it to
+  that one.
+- **Next and ETAs:** none of my runs is going. #8106 lands on a land verdict, after #8066 on `next`. I'll watch the
+  next sync for a refusal of #8106 and TWOVERIFY's restack onto it, and checkpoint at 13:00Z.
+- **Your call:** should `outcome` require `proofs` for a two-stage stream? Once #8083 lands, round 2 requires it in
+  effect. Making `outcome` require it would refuse earlier, with a clearer message, but every two-stage caller then
+  has to pass it.
