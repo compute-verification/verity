@@ -68,58 +68,55 @@ theorem ksTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.
     (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
     hopens
 
-/-- **SPOT[Flock]'s two-stage contract at its code**: `sessionsTwo_atOrder` at `ksTwo_spot`'s premises. -/
-theorem sessionsTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+/-- **SPOT[Flock]'s two-stage contract at its code**: `sessionsTwo_atOrder` at `ksTwo_spot`'s premise, A3 at its
+coins' bytes by `callsUniform`. -/
+theorem sessionsTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h)).Sessions FlockDeploy.sha512 :=
   SamplingDeploy.sessionsTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
-    (fun _ => coinByte) iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
-    (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h) hopens
+    (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
+    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+    hopens
 
 /-- **SPOT[Flock] with one session a run is knowledge sound**: its session doesn't read the unit
 (`SpotFlock.session`), so every slot of a sample has one key and the extractor runs Flock's once a run (`ksTwo_one`
 at `sessionsTwo_spot`). -/
-theorem ksTwo_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+theorem ksTwo_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h)).KS FlockDeploy.sha512 :=
-  SamplingDeploy.ksTwo_one (code h) iroots (two h) (rs h) (sessionsTwo_spot h hA hopens) fun _ _ _ _ => rfl
+  SamplingDeploy.ksTwo_one (code h) iroots (two h) (rs h) (sessionsTwo_spot h hopens) fun _ _ _ _ => rfl
 
 /-- **SPOT[Flock]'s extractor with one session a run**: at most `1 + k_out + k_out·k_in·(1 + e_s)` reruns in
 expectation and `k_out·k_in·n_PU·openCalls` own SHA-512 calls, from the opening checks' count
 (`compilerEfficientTwo` at `sessionsTwo_one`). -/
-theorem efficient_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+theorem efficient_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
     (hopen : (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots
       (two h) (rs h)).OpenCallsLe FlockDeploy.sha512) :
     (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h)).Efficient FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerEfficientTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
-    (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) _ (sessionsTwo_spot h hA hopens)
+    (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) _ (sessionsTwo_spot h hopens)
       fun _ _ _ _ => rfl) hopen
 
 /-- **SPOT[Flock]'s two-stage knowledge soundness at a time budget**: `compilerKSAtTwo` at `ksTwo_spot`'s premises
 (`sessionsTwo_spot`), with Flock's KS and binding as in `ksTwo_masked`, and the opening checks' count from the reveal
 count (`openCallsLe_compiled`). -/
-theorem ksAtTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+theorem ksAtTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
     (hrev : SamplingDeploy.RevealsLe (code h)) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h)).KSAt FlockDeploy.sha512 :=
   Claims.SamplingGeneric.compilerKSAtTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
     (Claims.SamplingGeneric.flockArgKS FlockDeploy.sha512 _ _root_.Flock.SecurityProofs.MaskedKS
-      (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _) (sessionsTwo_spot h hA hopens)
+      (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _) (sessionsTwo_spot h hopens)
     (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ hrev)
 
 /-- **SPOT[Flock] with one session a run, at a time budget**: `ksAtTwo_spot`'s statement at
 `SamplingDeploy.compiledTwoOne`, whose work counts one session a run (`compilerKSAtTwo` at `sessionsTwo_one`). -/
-theorem ksAtTwo_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+theorem ksAtTwo_spot_one (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots)
     (hrev : SamplingDeploy.RevealsLe (code h)) :
     (SamplingDeploy.compiledTwoOne (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
@@ -127,7 +124,7 @@ theorem ksAtTwo_spot_one (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ =>
   Claims.SamplingGeneric.compilerKSAtTwo FlockDeploy.Coin _ _ FlockDeploy.sha512
     (Claims.SamplingGeneric.flockArgKS FlockDeploy.sha512 _ _root_.Flock.SecurityProofs.MaskedKS
       (Claims.Sampling.listWithin_deployZk _)) (SamplingDeploy.commit_binds (code h) _)
-    (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) _ (sessionsTwo_spot h hA hopens)
+    (SamplingDeploy.sessionsTwo_one _ (code h) iroots (two h) (rs h) _ (sessionsTwo_spot h hopens)
       fun _ _ _ _ => rfl)
     (SamplingDeploy.openCallsLe_compiled _ (code h) iroots _ hrev)
 
