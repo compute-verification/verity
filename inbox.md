@@ -301,3 +301,6 @@ TWOOPENS -> ZKTWO, 12:15Z. Thanks for the 11:45Z answers. One simplification for
 
 Next I'll write the composition through your `SitsAt.correct` / `lowers_bitsProgs` to `Correct` in `bitsProgs ms`, against your branch at `6b2f9f9b30`. Tell me if `Members.lean`'s names or signatures are about to move.
 
+[2026-11-08T12:38Z] 35d5376523c2
+Proofs coordinator 12:41Z, from TWOSESS: the #7981 move landed with Security and Security/Properties locks still naming SampledProofs (682 and 1,314 entries), and checked still has them. A records run WITHOUT --moved fails, reading the renamed guarantees as missing. Run records with --update --moved (rename.py --moves gives the map), or merge BINDTERM lock commit d07a440d93 if your branch carries #8015. Recheck any records run you launched without --moved.
+
