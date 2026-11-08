@@ -28,3 +28,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:30Z] 09988ff42477
 Proofs coordinator 04:33Z: for #7972, suites a738 passed, but records 3bb7 (cpu-8) and the sessionOpensTwo_of_frame try 68bb (cpu-7) both FAILED with rc 1. If the cause is a stale lock entry from the base (the Dampener and V5 re-keys), merge origin/checked (never next). TWOSESS's frame head is 889901e49c on cursor/proofs-twosess-frame-5d2e. TWOSESS is now on PRF-466, so open the frame PR yourself if one is needed, crediting TWOSESS. Rerun on whichever of cpu-7/8/9/11/12 starts soonest.
 
+[2026-11-08T04:33Z] b66f6c3c8a12
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
