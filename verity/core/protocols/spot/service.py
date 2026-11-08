@@ -20,6 +20,7 @@ rule: it is the service's own, a salted root of a declared Value, or an item the
   schema its Value names (`over`).
 * Declared, or refused: `population` (the record's `population`, `program` and `partition`, which are functions of the
   check and N); `population:<template>` (a stratified or work sampling design's strata, one per template); `window` (its provenance);
+  `seed_salt` when the window names one (the challenger's coin, so the Spec declares it of kind `coins`);
   `leaf_layer` and `anchors` when not empty; and a value's layout, `leaves:<value>` and `domain:<value>`, with
   `words:<value>` and `word_bits:<value>` for a registered value.
 
@@ -92,6 +93,13 @@ log holds `{"event": "salt", "salt", "salted_at"}` (with `"external": true` from
 `{"event": "registration", "order", "registration", "salted_at", "received_at"}` or `{"event": "late-registration",
 "salted_at", "received_at"}`. With no registration deadline `register` reads no clock and logs nothing to the epoch log.
 
+**The window's seed salt.** `Stream.seed_salt` draws a window's seed salt at its open, before it serves: the one coin of
+the challenger's seed-salt family released after the window's open root (`coins.draw_seed_salt`), a family no sample
+reads, drawn once a window and before any registration of it (`seed-salted`, `seed-salt-late`), and logged
+(`{"event": "seed-salt", "window_root", "seed_salt", "seeded_at"}`). Each registration of that window is held to it by
+both verifiers (`registration.check`'s `seed_salt`, R6-seed-salt): its window names it, a certified input the window's
+circuits read. A verifier that didn't draw it reads it from the challenger's log (`coins.seed_salt_of`).
+
 **No retries.** The salt is issued or recorded once (`salt`, `salt_released`). A registration is sampled once, after its receipt (`select`); its
 proof is delivered once (`deliver`); its outcome is final (`outcome`), and nothing
 resamples. A proof delivered after `Check.proof_deadline` (seconds on the challenger's clock, from the sample) is a reject,
@@ -162,7 +170,7 @@ from verity.core.protocols.profile import Bernoulli, IntegrityProfile, Subset
 
 from .one_stage import audit as A, draw as D, partition as P, registered as G, registration as R, verifier as V
 from .one_stage.verdict import Verdict, _Collect
-from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first
+from .coins import ChallengerCoins, OwnRandomness, closure_of, draw_first, draw_seed_salt
 
 SCHEME = "frame-v3-sha512/hm96-sha512"
 HIDING = "hm96-sha512/"
@@ -474,6 +482,9 @@ class Spec:
                 raise ValueError(f"public item {p.item!r}: a commitment item names a declared value")
             if p.source == "window" and self.check.window is None:
                 raise ValueError(f"public item {p.item!r}: a window item needs the check's window statement")
+        if R.SEED_SALT in items and items[R.SEED_SALT].kind != "coins":
+            raise ValueError(f"public item {R.SEED_SALT!r}: the window's seed salt is the challenger's coin, of kind "
+                             "'coins'")
         for o in self.check.public_outputs:
             if o not in items or items[o].kind != "output":
                 raise ValueError(f"public output {o!r} needs a public item of kind 'output', with its reason")
@@ -624,6 +635,8 @@ def check_public(spec: Spec, record: Any, values: Sequence[Value] | None = None,
         need += [f"population:{s.get('template') if isinstance(s, Mapping) else s}" for s in law["strata"]]
     if "window" in record:
         need.append("window")
+    if isinstance(record.get("window"), Mapping) and R.SEED_SALT in record["window"]:
+        need.append(R.SEED_SALT)
     if record.get("leaf_layer") is not None:
         need.append("leaf_layer")
     if record.get("anchors"):
@@ -928,8 +941,9 @@ class _Entry:
     program: Program
     work_table: Mapping[str, Any] | None = None
     #: what `register` handed R1-R7 besides the record: (ports, leaf_layer, anchors, the log's records, registered,
-    #: supplied, pinned, schemas, window_root, held, outputs)
+    #: supplied, pinned, schemas, window_root, held, outputs), and its window's seed salt
     copies: tuple[Any, ...] = ()
+    seed_salt: str | None = None
     read: bytes | None = None
     closure: Mapping[int, Sequence[int]] | None = None
     draw: Draw | None = None
@@ -942,6 +956,7 @@ class _Entry:
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
+    interior_seed_salt: str | None = None
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1453,8 +1468,11 @@ class Stream:
 
     A stream runs one epoch with one salt: `salt` issues it from the coins, or `salt_released` records one released
     elsewhere with its release, and under `Check.registration_deadline` every registration is received within the
-    deadline of that release, or the epoch ends (`ended`) at the first that isn't. `epoch_log` holds the challenger's
-    clock readings.
+    deadline of that release, or the epoch ends (`ended`) at the first that isn't. A window's seed salt is
+    `seed_salt`'s, drawn at the window's open, and both verifiers hold every registration of the window to name it
+    (R6). That it is drawn once a window and before the window's first registration is the stream's own bookkeeping,
+    outside the rules below: a verifier that didn't draw it reads it from the challenger's log, which shows the one coin
+    (`coins.seed_salt_of`). `epoch_log` holds the challenger's clock readings.
 
     The stream's own rules (the budget, the open registrations, the salt and both deadlines, and each registration's
     once-only orders) decide each op by the verifier (`verifier.stream`: the Lean's `Spot.Stream`
@@ -1561,6 +1579,7 @@ class Stream:
         self._records: list[dict[str, Any]] = []
         self._epoch_log: list[dict[str, Any]] = []
         self._salted_at: float | None = None
+        self._seed_salts: dict[str, bytes] = {}
         self._fleet: Fleet | None = None
         self._fleet_index: int | None = None
         self._digests: dict[str, int] = {}
@@ -1619,7 +1638,8 @@ class Stream:
     @property
     def epoch_log(self) -> tuple[dict[str, Any], ...]:
         """The epoch's clock readings, in order: the salt's release, `{"event": "salt", "salt": <hex>, "salted_at"}`
-        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
+        (with `"external": true` from `salt_released`, `salted_at` being its `released_at`), each window's seed salt,
+        `{"event": "seed-salt", "window_root", "seed_salt": <hex>, "seeded_at"}` (`seed_salt`), and under `Check.registration_deadline` each registration received, `{"event": "registration", "order",
         "registration": <digest>, "salted_at", "received_at"}`, or refused as late, `{"event": "late-registration",
         "salted_at", "received_at"}` (`salted_at` null when no salt was issued). A registration refused on what it holds
         is not received, and not logged."""
@@ -1746,6 +1766,31 @@ class Stream:
         self._salted_at = released_at
         self._epoch_log.append({"event": "salt", "salt": salt.hex(), "salted_at": released_at, "external": True})
 
+    def seed_salt(self, coins: ChallengerCoins, window_root: str) -> bytes:
+        """The window's seed salt, drawn at the window's open, before it serves (`coins.draw_seed_salt`): the first coin
+        of the challenger's seed-salt family (`coins`, a `coins.ChallengerCoins` over that family of the window's
+        session), released after the window's open root `window_root`. Its release is read on the challenger's clock
+        (`seeded_at`) and logged (`epoch_log`). Each registration of the window (`register`'s and `register_interiors`'
+        `window_root`) is then held to it by both verifiers: its window names it (`registration.SEED_SALT`), and a
+        window that names another, or none, is refused (`R6-seed-salt`), as is a seed salt where the stream drew none.
+        Raises `Refused`: `seed-salted` (the window has its salt: nothing redraws it) or `seed-salt-late` (the stream
+        received a registration of the window already); and `CoinError` where the draw fails."""
+        if isinstance(window_root, str) and window_root in self._seed_salts:
+            raise _refuse("seed-salted", {"window_root": window_root})
+        if isinstance(window_root, str) and any(window_root in (*e.copies[8:9], *e.interior_copies[8:9])
+                                                for e in self._entries):
+            raise _refuse("seed-salt-late", {"window_root": window_root})
+        salt = draw_seed_salt(coins, window_root)
+        seeded_at = self._clock()
+        self._seed_salts[window_root] = salt
+        self._epoch_log.append({"event": "seed-salt", "window_root": window_root, "seed_salt": salt.hex(),
+                                "seeded_at": seeded_at})
+        return salt
+
+    def _seed_salt_of(self, window_root: str | None) -> str | None:
+        salt = self._seed_salts.get(window_root) if isinstance(window_root, str) else None
+        return None if salt is None else salt.hex()
+
     def register(self, record: Mapping[str, Any], ports: Mapping[str, Mapping[str, Any]], *, leaf_layer: str | None = None,
                  anchors: Sequence[Any] = (), registered: Mapping[str, int] | None = None,
                  work_table: Mapping[str, Any] | None = None, supplied: Mapping[str, Any] | None = None,
@@ -1776,6 +1821,7 @@ class Stream:
         deadline = self.spec.check.registration_deadline
         op: dict[str, Any] = {"op": "register"}
         got: dict[str, Any] = {}
+        seed_salt = self._seed_salt_of(window_root)
 
         def received() -> float:
             got["received_at"] = self._clock()
@@ -1805,7 +1851,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, self.query, law, SCHEME, ports, leaf_layer, anchors, earlier, None,
                             table, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs)
+                            outputs=outputs, seed_salt=seed_salt)
                 if v.ok and bernoulli(law):
                     v = _refuse("bernoulli", {"law": law, "reason": BERNOULLI}).verdict
                 if v.ok and not P.in_order(program, self.query, n):
@@ -1835,7 +1881,7 @@ class Stream:
         program, law = got["program"], got["law"]
         self._entries.append(_Entry(reg, D.derive(program, self.query, law, got["table"]), program, work_table,
                                     (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas,
-                                     window_root, held, outputs)))
+                                     window_root, held, outputs), seed_salt))
         if deadline is not None:
             self._epoch_log.append({"event": "registration", "order": reg.order, "registration": reg.digest,
                                     "salted_at": reg.salted_at, "received_at": reg.received_at})
@@ -1926,6 +1972,7 @@ class Stream:
         first = draw.replay_sample or draw
         op: dict[str, Any] = {"op": "interiors", **self._drawn_op(first)}
         got: dict[str, Any] = {}
+        seed_salt = self._seed_salt_of(window_root)
 
         def checks() -> list[str] | None:
             m = len(first.units) * self.n_rho
@@ -1938,7 +1985,7 @@ class Stream:
                 earlier = self._earlier(record, supplied, outputs)
                 v = V.check(record, program, query, {"law": "subset", "k": m}, SCHEME, ports, leaf_layer, anchors,
                             earlier, None, None, registered, supplied, pinned, self.binding, schemas, window_root, held,
-                            outputs=outputs)
+                            outputs=outputs, seed_salt=seed_salt)
                 if v.ok and not P.in_order(program, query, m):
                     v = _refuse("population-order", {"population": m}).verdict
                 got.update(program=program, earlier=earlier)
@@ -1957,6 +2004,7 @@ class Stream:
         e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
+        e.interior_seed_salt = seed_salt
         return reg
 
     def interior_program(self, q: int) -> Program:
@@ -2227,7 +2275,7 @@ class Stream:
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
                       statement, self.delta, *asked, served, session_roots, supplied=supplied, pinned=pinned,
                       binding=self.binding, schemas=schemas, window_root=window_root, held=held, coins=coins,
-                      value_outputs=given)
+                      value_outputs=given, seed_salt=e.seed_salt)
             if not v.ok:
                 rec = _run_failed(rec, v)
         return rec, public
@@ -2273,9 +2321,10 @@ class Stream:
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,
                       e.sessions, verdicts, outputs, statement, self.delta, None, None, None, replay_session_roots,
                       supplied=supplied, pinned=pinned, binding=self.binding, schemas=schemas, window_root=window_root,
-                      held=held, coins=coins, value_outputs=given,
+                      held=held, coins=coins, value_outputs=given, seed_salt=e.seed_salt,
                       interior={"program": e.interior_program, "query": self.spec.check.query,
                                 "law": {"law": "subset", "k": ireg.record["population"]}, "copies": e.interior_copies,
+                                "seed_salt": e.interior_seed_salt,
                                 "replay": Program(self.replay),
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,

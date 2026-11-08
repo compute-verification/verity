@@ -3,8 +3,9 @@ elaborate and declare the same name, and only an import of both refuses it (`env
 the package's root does, an hour into a records run. So `try` compiles FILE's probed copy as it elaborates it, the copy
 at its module's path in a scratch directory under `.lake/axiom-probe/` (`lean -R SCRATCH -o`, `source`), then elaborates
 a stub there that imports that build of FILE and every
-module of FILE's package that is built and imports FILE neither directly nor through others. Lean refuses a duplicate
-name as it imports, before it elaborates anything, and its refusal names both modules.
+module of FILE's package that is built and imports FILE neither directly nor through others, the other executables'
+roots aside: each declares `main` and is the root of its own build, so no module imports two of them. Lean refuses a
+duplicate name as it imports, before it elaborates anything, and its refusal names both modules.
 
 The stub reads FILE's build through a `--setup` file (its `importArts`, as Lake hands a module its imports) and the rest
 from LEAN_PATH. It is a `module` with `public import`s, as a package root is, when FILE and every sibling are modules,
@@ -58,9 +59,9 @@ class Plan(NamedTuple):
     module: str
     #: whether the stub is a `module`
     is_module: bool
-    #: the built modules of the package that don't import FILE
+    #: the built modules of the package that don't import FILE, other executables' roots aside
     siblings: list[str]
-    #: the package's other modules that don't import FILE, not built or built before a change
+    #: the package's other modules that don't import FILE, not built or built before a change, other executables' roots aside
     unchecked: list[str]
 
 
@@ -114,6 +115,12 @@ def modules(pkg: Path) -> dict[str, Path]:
     return out
 
 
+def executables(pkg: Path) -> set[str]:
+    """The module names of ``pkg``'s `[[lean_exe]]`s' roots."""
+    got = source_dir(pkg)
+    return set() if got is None else {exe.get("root", exe["name"]) for exe in got[1].get("lean_exe", [])}
+
+
 def _header(f: Path):
     return H.header(f.read_text(errors="replace"))
 
@@ -147,7 +154,7 @@ def plan(pkg: Path, rel: str) -> Plan | str:
 
     built, unchecked = [], []
     lib = pkg / LIB
-    for m in sorted(set(mods) - above):
+    for m in sorted(set(mods) - above - (executables(pkg) - {mod})):
         olean = lib.joinpath(*m.split(".")).with_suffix(".olean")
         (built if olean.is_file() and olean.stat().st_mtime >= latest(m) else unchecked).append(m)
     return Plan(mod, all(headers[m] is not None and headers[m].module for m in [mod, *built]), built, unchecked)
