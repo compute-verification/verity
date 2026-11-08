@@ -309,31 +309,8 @@ theorem inner_badTwo_le (L : CompiledTwo Coin A) (x : Msg) (run' : (Fin (L.V.k x
   have hy : ∀ X ∈ Xs,
       Pr (fun p : (Fin (L.V.k x) → Coin) × L.SlotEC x =>
         (run' (forkOn (L.stage2 x) r p.1)).out = .acc ∧
-          ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr := by
-    intro X hX
-    let sel : List ℕ → Option (Fin (L.nPU x)) := fun l =>
-      (List.finRange (L.nPU x)).find? fun i => decide (∃ v ∈ X, l[i.val]? = some v)
-    have hsel : ∀ l : List ℕ, l.length ≤ L.nPU x → ∀ v ∈ l, v ∈ X →
-        ∃ i, sel l = some i ∧ ∃ v ∈ X, l[i.val]? = some v := by
-      intro l hl v hvl hvX
-      obtain ⟨j, hj, hjv⟩ := List.getElem_of_mem hvl
-      have hjv' : l[(⟨j, lt_of_lt_of_le hj hl⟩ : Fin (L.nPU x)).val]? = some v := by
-        show l[j]? = some v
-        rw [List.getElem?_eq_getElem hj, hjv]
-      obtain ⟨i, hi⟩ := Option.isSome_iff_exists.1
-        ((List.find?_isSome (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ X, l[i.val]? = some v))).2
-          ⟨⟨j, lt_of_lt_of_le hj hl⟩, List.mem_finRange _, decide_eq_true ⟨v, hvX, hjv'⟩⟩)
-      exact ⟨i, hi, of_decide_eq_true
-        (List.find?_some (p := fun i : Fin (L.nPU x) => decide (∃ v ∈ X, l[i.val]? = some v)) hi)⟩
-    have hmiss := (Pr_fst (β := L.SlotEC x) (fun d : Fin (L.V.k x) → Coin =>
-      ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ X)).trans_le (hesc X hX)
-    refine Claims.Sampling.Pr_or_le (fun p hp => ?_) hmiss (hsess sel)
-    by_cases hm : ∃ v ∈ L.checked x (forkOn (L.stage2 x) r p.1), v ∈ X
-    · obtain ⟨v, hvl, hvX⟩ := hm
-      obtain ⟨i, hi, v', hv'X, hv'⟩ := hsel _ (hslots _) v hvl hvX
-      exact Or.inr ⟨hp.1, i, hi, ⟨v', hXs X hX v' hv'X⟩, hv',
-        fun hf => hp.2 v' hv'X ⟨i, hXs X hX v' hv'X, hv', hf⟩⟩
-    · exact Or.inl fun v hvl hvX => hm ⟨v, hvl, hvX⟩
+          ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r p.1) v p.2) ≤ esc + κr :=
+    fun X hX => L.pr_notGood_le x run' found (hXs X hX) hslots r (hesc X hX) hsess
   have hw := wait_bad_le (fun d => (run' (forkOn (L.stage2 x) r d)).out = .acc) (L.k x) (L.cap x) (L.cap_pos x)
     (L.k_pos x) Xs (fun X d uc => ∀ v ∈ X, ¬ L.GoodAt x found (forkOn (L.stage2 x) r d) v uc)
     (add_nonneg hesc0 hκr0) hy
@@ -599,8 +576,7 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
   refine Or.inr ⟨_, hXr, accList_length_eq hshort2, fun l e hl v hv hgood => ?_⟩
   obtain ⟨⟨ρ', t'⟩, _, hvp⟩ := mem_biUnion.1 hv
   obtain ⟨hvcell, hvwrong⟩ := mem_filter.1 hvp
-  obtain ⟨i, hvlt, hvi, xS, vS, hsess, hsh, wS, hwS, hRw⟩ := hgood
-  have hvc := List.mem_of_getElem? hvi
+  obtain ⟨hvc, xS, vS, wS, hsess, hRw, hkept⟩ := L.good_found H P ω x s c (hS.shared x Ω P ω) hjZ hl hgood
   have hacc' : (run' (forkOn (L.stage2 x) r e)).out = .acc := by
     have h := acc_of_accList hl
     exact h
@@ -609,8 +585,7 @@ theorem splitTwo {H : Msg → Msg} {L : CompiledTwo Coin A} (hbind : L.commit.Bi
   have hρp : ρ = ρ' := Option.some.inj (hρ.symm.trans (replayOf_of_mem_cell hvcell))
   subst hρp
   have hcorr := hcor (w.val H L.commit s) (ιr ρ) fun q hq hok => by
-    have hqf : q ∈ fd := L.mem_found H x s run' c hjZ hl hvi hvlt
-      (L.unitExt_mem H x run' s v _ _ hsess hsh hwS hq hok)
+    have hqf : q ∈ fd := hkept q hq hok
     refine ⟨fun hr => ?_, fun hi => ?_⟩
     · rw [hr] at hok
       exact val_assemble hagree hqf hr hok

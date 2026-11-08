@@ -61,23 +61,26 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    partition and commitment; the second stage (`stage2`: the sample and the sessions); the sampled proof blocks
    (`checked`); each one's public shape (`sh`) and the bounds on its session's errors (`κb`, `γb`), its session's
    rounds (`rounds`, whose order embedding `emb` of `A`'s rounds is defined, from which `coinsOf` reads a session's
-   coins and `place` replaces them), and its session (`session`: its statement and view); the roots a run shows for a
-   proof block's interior values (`iroots`); and what a session's witness reveals (`reveal`), each opening checked at
-   most `openCalls` SHA-512 calls.
-3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled proof block's extraction `Arg`'s extractor at its
-   session (`Compiled.unitExt`), each rerun the judged run's coins with the session's rounds replaced (`place`), seen as
-   the session's view, then what its witness reveals that passes its opening check. Its coins are per slot of the
-   sample (`SlotEC`), as `Sampling.E`'s are, so a proof block at two slots is extracted twice, on independent coins
-   (`runExt`, a run's extractions). Every SHA-512 call of the extraction is an `RP.hash` (the openings it checks) or a
-   rerun's, so `Bext`'s cost counts them all. The statements hold at every `A` and `H`, so that the extracted trace is
-   the prover's rests on `A`'s assemble step being the program its count describes (at Flock, the deployed decoder).
+   coins and `place` replaces them), and its session (`session`: its statement and view); each slot's session key
+   (`skey`, slots with one key sharing one session) and a cap on a sample's keys (`nSess`); the roots a run shows for
+   a proof block's interior values (`iroots`); and what a session's witness reveals (`reveal`), each opening checked
+   at most `openCalls` SHA-512 calls.
+3. **The extractor** (`Compiled.E`): `Sampling.E` with each sampled session's extraction `Arg`'s extractor at it
+   (`Compiled.sessWit`), once per session at its first slot, each rerun the judged run's coins with the session's
+   rounds replaced (`place`), seen as the session's view, then what its witness reveals at each of the session's proof
+   blocks that passes its opening check (`Compiled.sessExt`). Its coins are per slot of the sample (`SlotEC`), as
+   `Sampling.E`'s are, of which a session reads its first slot's (`runExt`, a run's extractions). Every SHA-512 call of
+   the extraction is an `RP.hash` (the openings it checks) or a rerun's, so `Bext`'s cost counts them all. The
+   statements hold at every `A` and `H`, so that the extracted trace is the prover's rests on `A`'s assemble step being
+   the program its count describes (at Flock, the deployed decoder).
 4. **The errors**: `κ_δ = c²·(δ + κ_s) + (1 + c)·(2k/K + e^{−k/8})`, `Sampling.κ` with Flock's `κ_F` replaced by the
    largest of the proof blocks' bounds on `Arg`'s `κ` (`κs`, at `κb`); `γ = c⁴·k(x)·γ_s`, with `γ_s` the largest of
    their bounds on `Arg`'s `γ` per round (`γb` over the shape's rounds; a session's fork finder is the compiled
    verifier's `B` at a round guess among `k(x)`); `ε_bind = Pr[B_ext]`.
 5. **The contract** (`Compiled.Sessions`): the code facts the compiler theorems read, the generic forms of those
    `Claims.Sampling`'s proofs take at Flock: the second stage samples the sample by the design (`draws`), in at most
-   `n_PU` slots (`slots`); the verifier refuses what is out of scope (`refuses`); the interior roots precede the second
+   `n_PU` slots (`slots`); slots with one key show one session (`shared`), at most `n_sess` keys a sample (`keys`); the
+   verifier refuses what is out of scope (`refuses`); the interior roots precede the second
    stage (`interior`); the sample precedes its sessions (`fixed`); each sampled proof block's session, at the block's
    shape and within its error bounds, accepts whenever the run does and is a run of a prover against `Arg`'s verifier
    on the session's coins (`runs`); and a witness in `Arg`'s relation reveals openings under which its proof block is
@@ -217,9 +220,12 @@ the verifier, its parser, scope check and partition, the trace's commitment; the
 and the sessions, after the registration); the slots of the proof blocks a run samples (`checked`); each one's public
 shape (`sh x u`, fixed by the statement) and the bounds on its session's errors (`κb x u`, `γb x u`: on `A`'s `κ` and
 `γ` at the session's statement); its session's rounds (`rounds`) and the session as a run shows it (`session`: its
-statement in `A` and its view); the roots a run shows for a proof block's interior values (`iroots`); what a session's
-witness reveals (`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of checking
-what one session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness error. -/
+statement in `A` and its view); each slot's session key in the sample (`skey x l p`: slots with one key share one
+session, which the extractor extracts once; each slot its own session by default) and a public cap on the keys a sample
+holds (`nSess`, `n_PU` by default); the roots a run shows for a proof block's interior values (`iroots`); what a
+session's witness reveals (`reveal`: committed values, each with the roots it is committed under); the SHA-512 calls of
+checking what one session's witness reveals (`openCalls`); and the reference prover on its tapes with its completeness
+error. -/
 structure Compiled (Coin : Type) (A : Arg Coin) where
   V : Verifier Coin
   parse : Msg → Option AuditStatement
@@ -233,6 +239,11 @@ structure Compiled (Coin : Type) (A : Arg Coin) where
   γb : Msg → ℕ → ℝ
   rounds : (x : Msg) → ℕ → Finset (Fin (V.k x))
   session : Msg → ℕ → Seen → Option (Msg × Seen)
+  skey : Msg → List ℕ → ℕ → ℕ := fun _ _ p => p
+  nSess : Msg → ℕ := fun x =>
+    match parse x with
+    | some s => ((partition s).getD ⟨[]⟩).blocks.length
+    | none => 0
   iroots : Msg → Seen → ℕ → List Msg
   reveal : AuditStatement → ℕ → Seen → A.W → List (List Msg × Opening Bool)
   openCalls : Msg → ℕ
@@ -285,29 +296,45 @@ def place (L : Compiled Coin A) (x : Msg) (u : ℕ) (xS : Msg) (r : Fin (L.V.k x
 
 /-! ## 3. The extractor -/
 
+/-- **The slots of slot `i`'s session** in the sample `l`, in order: those whose proof block is below `n_PU` and whose key
+is `i`'s (`skey`). The first is the session's first slot, where the extractor extracts it. -/
+def sessSlots (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : ℕ) : List ℕ :=
+  (List.range l.length).filter fun j => (l[j]?.any fun u => decide (u < L.nPU x)) && L.skey x l j == L.skey x l i
+
+/-- The proof blocks at the slots of slot `i`'s session (`sessSlots`). -/
+def sessBlocks (L : Compiled Coin A) (x : Msg) (l : List ℕ) (i : ℕ) : List ℕ :=
+  (L.sessSlots x l i).filterMap fun j => l[j]?
+
 open Classical in
-/-- **A sampled proof block's extraction at an accepted run** `(r, v)`: `A`'s extractor at the block's session, its
-judged coins the session's coins of `r`, each rerun `r` with the session's rounds replaced (`place`), seen as the
-session's view; then what its witness reveals that passes its opening check. At a session whose shape is not the
-block's, which no sampled proof block's session has (`Sessions.runs`), nothing. -/
-noncomputable def unitExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (u : ℕ) (r : Fin (L.V.k x) → Coin)
-    (v : Seen) (c : A.EC (L.sh x u)) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+/-- **A session's witness at an accepted run** `(r, v)`, extracted at its proof block `u`: `A`'s extractor at `u`'s
+session, its judged coins the session's coins of `r`, each rerun `r` with the session's rounds replaced (`place`), seen
+as the session's view. At a session whose shape is not the block's, which no sampled proof block's session has
+(`Sessions.runs`), none. -/
+noncomputable def sessWit (L : Compiled Coin A) (x : Msg) (u : ℕ) (r : Fin (L.V.k x) → Coin) (v : Seen)
+    (c : A.EC (L.sh x u)) : RP (Fin (L.V.k x) → Coin) (Option A.W) :=
   match L.session x u v with
-  | none => .ret []
+  | none => .ret none
   | some (xS, _) =>
     if h : A.shape xS = L.sh x u then
-      (serve (fun r' => viewing (L.view x u) (L.place x u xS r r'))
-          (A.ext xS (L.coinsOf x u xS r) (cast (congrArg A.EC h.symm) c))).bind fun
-        | none => .ret []
-        | some w => checkRevealed L.commit (L.reveal s u v w)
-    else .ret []
+      serve (fun r' => viewing (L.view x u) (L.place x u xS r r'))
+        (A.ext xS (L.coinsOf x u xS r) (cast (congrArg A.EC h.symm) c))
+    else .ret none
+
+/-- **A session's extraction**: its witness, extracted once at its first slot's proof block `u` (`sessWit`); then what
+the witness reveals at each of the session's proof blocks `us` that passes its opening check. -/
+noncomputable def sessExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (us : List ℕ) (u : ℕ)
+    (r : Fin (L.V.k x) → Coin) (v : Seen) (c : A.EC (L.sh x u)) :
+    RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
+  (L.sessWit x u r v c).bind fun
+    | none => .ret []
+    | some w => flatMapRP (fun u' => checkRevealed L.commit (L.reveal s u' v w)) us
 
 /-- The extractor's coins at one slot of the sample: `A`'s extractor's at each proof block's shape, of which the slot
 reads its block's. -/
 abbrev BlockEC (L : Compiled Coin A) (x : Msg) := (u : Fin (L.nPU x)) → A.EC (L.sh x u)
 
 /-- The extractor's coins at one accepted inner run: one `BlockEC` per slot of the sample (`Sampling.E`'s per-slot
-coins), so a proof block at two slots is extracted twice, on independent coins. -/
+coins), of which a session reads its first slot's. -/
 abbrev SlotEC (L : Compiled Coin A) (x : Msg) := Fin (L.nPU x) → L.BlockEC x
 
 /-- The extractor's coins: the outer wait's `K` coin vectors; for each of its `k` accepted runs, the inner wait's `K`
@@ -318,17 +345,20 @@ abbrev ECoins (L : Compiled Coin A) (x : Msg) :=
     (Fin (L.k x) × Fin (L.k x) × Fin (L.nPU x) → L.BlockEC x)
 
 /-- **A run's extractions**, at the accepted run `(r, v)` and the extractor's coins `c` there: slot by slot of the sample
-(the first `n_PU`, every slot by `Sessions.slots`), the proof block's at the slot's coins (`unitExt`), with what each
-finds that passes its opening check. -/
+(the first `n_PU`, every slot by `Sessions.slots`), at each session's first slot (`sessSlots`), the session's
+extraction at the slot's coins (`sessExt`), with what its witness reveals at each of the session's proof blocks that
+passes its opening check. So `A`'s extractor runs once per session, at most `n_sess` times (`Sessions.keys`). -/
 noncomputable def runExt (L : Compiled Coin A) (x : Msg) (s : AuditStatement) (r : Fin (L.V.k x) → Coin) (v : Seen)
     (c : L.SlotEC x) : RP (Fin (L.V.k x) → Coin) (List (List Msg × Opening Bool)) :=
   flatMapRP (fun iu : Fin (L.nPU x) × ℕ =>
-      if hu : iu.2 < L.nPU x then L.unitExt x s iu.2 r v (c iu.1 ⟨iu.2, hu⟩) else .ret [])
+      if hu : iu.2 < L.nPU x ∧ (L.sessSlots x (L.checked x r) iu.1).head? = some iu.1.val then
+        L.sessExt x s (L.sessBlocks x (L.checked x r) iu.1) iu.2 r v (c iu.1 ⟨iu.2, hu.1⟩)
+      else .ret [])
     ((List.finRange (L.nPU x)).zip (L.checked x r))
 
 /-- **The sampling extractor** (`Sampling.E`, generic): replay the judged run; if it accepted, rerun on fresh coins
 until `k` accepted runs are in hand; at each, rerun fresh on the second stage until `k` accepted runs are in hand (each
-wait giving up after `K`); at each of those, extract every slot of the sample (`runExt`); and assemble. -/
+wait giving up after `K`); at each of those, extract each session of the sample once (`runExt`); and assemble. -/
 noncomputable def E (L : Compiled Coin A) : Extractor Coin Sampling.Wit L.V where
   C x := ECoins L x
   ext x r₀ c := .rerun r₀ fun v₀ =>
@@ -379,10 +409,10 @@ noncomputable def es (L : Compiled Coin A) (x : Msg) : ℝ :=
 /-- The sessions' strict reruns: the largest of `E^rep`'s `1 + m′·K` at the proof blocks' shapes. -/
 def ρs (L : Compiled Coin A) (x : Msg) : ℕ := maxBelowN (L.nPU x) fun u => 1 + A.waits (L.sh x u) * A.cap (L.sh x u)
 
-/-- The extractor's expected work in runs, `1 + k + k²·(1 + n_PU·e_s) + k²·n_PU·openCalls`: its expected reruns and its
-own SHA-512 calls, the opening checks' (`Sampling.work` at `A`'s). -/
+/-- The extractor's expected work in runs, `1 + k + k²·(1 + n_sess·e_s) + k²·n_PU·openCalls`: its expected reruns and
+its own SHA-512 calls, the opening checks' (`Sampling.work` at `A`'s, one `E^rep` per session). -/
 noncomputable def work (L : Compiled Coin A) (x : Msg) : ℝ :=
-  1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x) + (L.k x : ℝ) ^ 2 * L.nPU x * L.openCalls x
+  1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nSess x * L.es x) + (L.k x : ℝ) ^ 2 * L.nPU x * L.openCalls x
 
 /-- **The sampling scope, on the statement's bytes**: it parses, its query evaluates, and the partition and statement are
 in scope (`Sampling.Scope`). -/
@@ -398,6 +428,10 @@ def Scope (L : Compiled Coin A) (x : Msg) : Prop :=
   the probability over fresh second-stage coins that the sample misses `B`, and averages at most `P_a(B)`.
 * `slots` (the first `n_PU` slots `Claims.Sampling`'s hypotheses read): the sample has at most `n_PU` slots, so the
   extractor reads every one.
+* `shared`: at an accepted run, slots of the sample with one key (`skey`) show one session, so the witness the
+  extractor finds at the session's first slot serves them all.
+* `keys`: the sample's slots hold at most `n_sess` keys, so the extractor runs `A`'s extractor at most `n_sess` times
+  per run.
 * `refuses` (`Refuses`): an accepted run's statement is in scope.
 * `interior` (`InteriorFixed`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins.
@@ -422,6 +456,11 @@ structure Sessions (H : Msg → Msg) (L : Compiled Coin A) : Prop where
       (∀ r, Pr (fun d : Fin (L.V.k x) → Coin => ∀ u ∈ L.checked x (forkOn (L.stage2 x) r d), u ∉ B) ≤ esc r) ∧
       Ex esc ≤ s.design.Pa P B
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  shared : ∀ x (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
+    (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
+    L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →
+    L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
+  keys : ∀ x r, ((Finset.range (L.checked x r).length).image (L.skey x (L.checked x r))).card ≤ L.nSess x
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r d u,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r d)).seen u = L.iroots x (run H P L.V x ω r).seen u
@@ -465,11 +504,12 @@ def Bits (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
     BitsLin H L.V L.Scope (Sampling.R H L.commit L.parse L.partition δ) L.E (Bext H L.V L.E)
       fun x => lamLin (L.κ δ x) (L.γ x) 1 (L.work x)
 
-/-- **Efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_PU·ρ_s)` and `1 + k + k²·(1 + n_PU·e_s)`
-expected; its own SHA-512 calls, the opening checks', at most `k²·n_PU·openCalls` (`Sampling.Efficient`, generic). -/
+/-- **Efficiency**: the extractor's reruns, at most `1 + K + k·(K + k·n_sess·ρ_s)` and `1 + k + k²·(1 + n_sess·e_s)`
+expected, one `E^rep` per session; its own SHA-512 calls, the opening checks', at most `k²·n_PU·openCalls`
+(`Sampling.Efficient`, generic). -/
 def Efficient (H : Msg → Msg) (L : Compiled Coin A) : Prop :=
-  ExtractRunsLe H L.E (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * (L.nPU x * L.ρs x))) ∧
-    ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x)) ∧
+  ExtractRunsLe H L.E (fun x => 1 + L.cap x + L.k x * (L.cap x + L.k x * (L.nSess x * L.ρs x))) ∧
+    ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nSess x * L.es x)) ∧
     ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * L.openCalls x)
 
 /-- **The opening checks' count**: checking what one session's witness reveals, each opening under its roots, makes at

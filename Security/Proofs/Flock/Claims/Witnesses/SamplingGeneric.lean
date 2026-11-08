@@ -132,7 +132,7 @@ theorem noHash_runExt (L : Compiled Coin A) (hs : ∀ x u v, L.session x u v = n
   unfold Compiled.runExt
   refine noHash_flatMapRP _ (fun iu => ?_) _
   split
-  · simp only [Compiled.unitExt, hs]
+  · simp only [Compiled.sessExt, Compiled.sessWit, hs]
     trivial
   · trivial
 
@@ -560,6 +560,11 @@ theorem twoL_sessions (H : Msg → Msg) : (twoL Coin).Sessions H where
       rw [Pr_congr fun d => iff_false_intro (hn d), Pr_false]
       exact two_Pa_nonneg B
   slots _ _ := le_rfl
+  shared _ _ _ _ _ i j u u' _ hu hu' hk := by
+    obtain rfl : i = j := hk
+    obtain rfl : u = u' := Option.some.inj (hu.symm.trans hu')
+    rfl
+  keys _ _ := Finset.card_image_le.trans (Finset.card_range _).le
   refuses x _ _ _ _ _ := twoL_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed _ _ _ _ := ⟨Finset.subset_univ _, fun _ => rfl⟩

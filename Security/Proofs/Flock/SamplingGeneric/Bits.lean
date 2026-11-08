@@ -70,7 +70,7 @@ theorem γ_nonneg (L : Compiled Coin A) (x : Msg) : 0 ≤ L.γ x := by
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem work_pos (L : Compiled Coin A) (x : Msg) : 0 < L.work x := by
-  have h1 : 0 ≤ (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x) :=
+  have h1 : 0 ≤ (L.k x : ℝ) ^ 2 * (1 + L.nSess x * L.es x) :=
     mul_nonneg (sq_nonneg _) (add_nonneg zero_le_one (mul_nonneg (Nat.cast_nonneg _) (maxBelow_nonneg _ _)))
   have h2 : 0 ≤ (L.k x : ℝ) ^ 2 * L.nPU x * L.openCalls x := by positivity
   have h3 : (0 : ℝ) ≤ L.k x := Nat.cast_nonneg _
@@ -78,7 +78,7 @@ theorem work_pos (L : Compiled Coin A) (x : Msg) : 0 < L.work x := by
   linarith
 
 theorem bits_of_ks {H : Msg → Msg} {L : Compiled Coin A} (hks : L.KS H)
-    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nPU x * L.es x)))
+    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.k x + (L.k x : ℝ) ^ 2 * (1 + L.nSess x * L.es x)))
     (hown : Sampling.ExtractOwnLe H L.E (fun x => L.k x ^ 2 * L.nPU x * L.openCalls x)) :
     L.Bits H := fun δ hδ =>
   Sampling.Bits_of_KSLin (hks δ hδ) hruns hown (fun x => L.κ_pos hδ x) L.γ_nonneg L.work_pos

@@ -228,7 +228,7 @@ read at a replay block.
   `X` with probability at most `∏_{ρ∈S} ∏_t C(n_{ρ,t} − |X ∩ cell(ρ, t)|, k_t)/C(n_{ρ,t}, k_t)`, `S` the replay
   blocks `r` samples: the second stage's sample is, in each sampled replay block, a uniform `k_t`-subset of each cell,
   independently.
-* `slots`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
+* `slots`, `shared`, `refuses` (at `CompiledTwo.Scope`), `fixed` and `runs`: `Sessions`'.
 * `interior`: the roots a run shows for a replay block's interior values are the same at fresh second-stage coins.
 * `opens`: on a statement in scope, at an accepted run that samples `u` and shows its session, a witness in `A`'s
   relation at the session's statement reveals openings such that any values and interior values agreeing with those
@@ -245,6 +245,10 @@ structure Sessions (H : Msg → Msg) (L : CompiledTwo Coin A) : Prop where
           ∏ t ∈ Finset.range Pt.strata.length,
             escCell (cell Pt d.part ρ t).card (d.k.getD t 0) (X ∩ cell Pt d.part ρ t).card
   slots : ∀ x r, (L.checked x r).length ≤ L.nPU x
+  shared : ∀ x (Ω : Type) (P : Prover Ω) ω r i j u u', (run H P L.V x ω r).out = .acc →
+    (L.checked x r)[i]? = some u → (L.checked x r)[j]? = some u' →
+    L.skey x (L.checked x r) i = L.skey x (L.checked x r) j →
+    L.session x u (run H P L.V x ω r).seen = L.session x u' (run H P L.V x ω r).seen
   refuses : ∀ x (Ω : Type) (P : Prover Ω) ω r, (run H P L.V x ω r).out = .acc → L.Scope x
   interior : ∀ x (Ω : Type) (P : Prover Ω) ω r e ρ,
     L.iroots x (run H P L.V x ω (forkOn (L.stage2 x) r e)).seen ρ = L.iroots x (run H P L.V x ω r).seen ρ
