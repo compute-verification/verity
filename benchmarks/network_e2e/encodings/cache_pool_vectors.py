@@ -306,9 +306,12 @@ class _Driver:
         if pool.hf != len(kv.free) - len(free_cached):
             raise AssertionError(f"call {len(self.calls)}: hf {pool.hf}, BlockPool's hashless free "
                                  f"{len(kv.free) - len(free_cached)}")
+        entry_of: dict[int, int] = {}
+        for x, h in enumerate(hashes):
+            if h is not None:
+                entry_of.setdefault(h, x)
         for i, s in self.slots.items():
-            want = S.N if not kv.num_cached.get(i) else next(
-                x for x, h in enumerate(hashes) if h == self.reqs[i].block_hashes[kv.num_cached[i] - 1])
+            want = S.N if not kv.num_cached.get(i) else entry_of[self.reqs[i].block_hashes[kv.num_cached[i] - 1]]
             if pool.spfx[s] != want:
                 raise AssertionError(f"call {len(self.calls)}: slot {s}'s walk entry {pool.spfx[s]}, want {want}")
         self.ever |= set(kv.by_hash)
