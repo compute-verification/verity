@@ -1,9 +1,9 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
 (``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
-whose output is a strided view into its real rows, its padding rows charged as advice; a parameter is ``registered`` with its
+whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
 committed SHA-512; an `ADVICE` input is charged at its width; anything else, and an output of the call enclosing the reader,
-is `Unwired` with the fix. `traced` records what an instance's arguments read, and `wiring` charges each advice argument and
-each padded buffer once."""
+is `Unwired` with the fix. `traced` records what an instance's arguments read, and `wiring` charges each advice argument
+once."""
 from __future__ import annotations
 
 import hashlib
@@ -104,18 +104,16 @@ def test_an_input_is_wired_to_the_call_that_output_its_bytes_or_a_tensor_it_view
     assert wires.source(0, ev[0]["out"]["ret0"]) == {"kind": "block", "rank": 0, "seq": 0, "op": "aten::mm", "out": "ret0"}
 
 
-def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_rows_charged_once(step) -> None:
+def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_rows_cost_nothing(step) -> None:
     stage, cap, wires = step
     ev = cap.events[0]
-    buf = ev[8]["in"]["input"]
-    src = wires.source(0, buf)
+    src = wires.source(0, ev[8]["in"]["input"])
     assert src == {"kind": "block", "rank": 0, "seq": 7, "op": "aten::bmm", "out": "out",
-                   "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "rows": 4},
-                   "padding": {"rows": 2, "bits": 2 * 8 * 16, "sha512": buf["sha512"]}}
+                   "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "rows": 4}}
     quant = wires.source(0, ev[9]["in"]["input"])
-    assert (quant["seq"], quant["into"]["seq"], quant["padding"]) == (7, 9, src["padding"]), "the enclosing call is skipped"
+    assert (quant["seq"], quant["into"]["seq"], quant["cover"]) == (7, 9, src["cover"]), "the enclosing call is skipped"
     w = stage.wiring({"A": {"gate": [{"key": [0, 8, 0], "sources": [src]}, {"key": [0, 9, 0], "sources": [quant]}]}})
-    assert w["advice_bits"] == 2 * 8 * 16, "two readers of one padded buffer charge its padding once"
+    assert w["advice_bits"] == 0, "the padding rows past the 4 real rows are in no population"
     with pytest.raises(stage.Unwired, match="reads self"):
         wires.source(0, ev[11]["in"]["self"])
 
