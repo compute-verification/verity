@@ -69,6 +69,11 @@ PUBLIC = {
                                           "its digest",
     "verity_vllm.pipeline.edge": "I7: the edge between two Commit windows on the advice's side: the requests it holds, each "
                                  "port's fields, and each carried request's, held to window_advice.follows",
+    "verity_vllm.pipeline.boundary_rows": "I1: a served window's boundary commitment at serve: each finished request's "
+                                          "b.ingress and b.egress rows by size class, committed as the engine core serves "
+                                          "(BoundaryWindows, which benchmarks/serve_tax's plugin installs), a class's "
+                                          "layout, record and files (Layout, record, reopen), which "
+                                          "benchmarks/one_stage/two_stage.py registers",
     "verity_vllm.pipeline.serve_h1": "I1: serve-openai's PoUW H1 arm, its --protocols-config (config_of) and the window "
                                      "Program it declares (H1Windows), which a period's offline Program must equal",
     "verity_vllm.pipeline.serve_tie": "I1: serve-openai's H1 tie, and where a serve dir holds each window's registration W, "
