@@ -27,7 +27,11 @@ roots, the bytes it read and the session's evidence, then a coin opened after th
 opening, coins opened before the commitment (their `after` rewritten or not), a coin opened and not read, the bytes
 tampered or longer, another commitment, a release log edited, the window of another session the ledger opens (a prover
 picking the window), a session whose pin is off the verifier's copy of main, no pins log, each malformed form. A
-``--zk`` session's coins (`COIN_TREES`, `SESSION_TREES`: `coin_trees_of` and `sessions_tree_reason`,
+window's seed salt (`SEED_SALT`: `seed_salt_of`, `Spot.Challenger.seedSaltOf`) is the first coin of the
+seed-salt family a ledger session's challenger opened after the window's open root, among other families' roots, then
+a second coin opened after that root (the salt's read alone, or both), the family's first coin opened after another
+root, no coin, a forged coin, another family's, another window, a session not withheld, a release log edited, each
+malformed form. A ``--zk`` session's coins (`COIN_TREES`, `SESSION_TREES`: `coin_trees_of` and `sessions_tree_reason`,
 `Spot.ChallengerTrees`) are coin trees a session's challenger sampled and opened, their lines among its roots
 and releases, and the records of sessions on them, one tree each; then a tree's or a round's line with a key dropped or
 added, a malformed key, nonce, root, spec, after or coins, a root or key sampled twice, a tree's line no reader reads, a
@@ -746,12 +750,12 @@ class Ledger:
     `two_step` (sampled when `s`'s id is a reserved one, unless set), every v2 session is reserved before it is opened, its
     open binding the reserve, and sometimes another reserve is never opened.  When `withheld`, `s`'s open marks it a
     withheld session (`withheld: true`).  The older v1 session is chosen at random unless `v1` says.  When `declare`, `s`'s lane
-    declares its days (`declare_days`)."""
+    declares its days (`declare_days`).  `s`'s window is `window` (sampled, unless given)."""
 
     def __init__(self, rng: random.Random, s: Session, closed: bool = True, period: str | None = None,
                  two_step: bool | None = None, withheld: bool = False, v1: bool | None = None,
-                 declare: bool = False) -> None:
-        self.rng, self.s, self.window = rng, s, _window(rng)
+                 declare: bool = False, window: dict | None = None) -> None:
+        self.rng, self.s, self.window = rng, s, _window(rng) if window is None else window
         self.two_step = (Ch._RESERVED_SESSION.fullmatch(s.id) is not None
                          and (rng.random() < 0.8 if two_step is None else two_step))
         self._ids = itertools.count()
@@ -1917,6 +1921,103 @@ def draw_coins_case(rng: random.Random, name: str) -> Any:
     return j
 
 
+def seed_salt(j: Any) -> Any:
+    _request(j, ["coins", "key", "window"])
+    if type(j["window"]) is not str:
+        raise D.Reject("window is not a string")
+
+    def go():
+        key = Ch.ChallengerKey.from_json(j["key"])
+        try:
+            return {"reason": None, "salt": T.seed_salt_of(key, j["window"], j["coins"], lms_verify).hex()}
+        except Ch.CoinError as e:
+            return {"reason": str(e), "salt": None}
+    return _refusing(go)
+
+
+class Salted(Drawn):
+    """A window's seed salt from a ledger session's challenger (`T.draw_seed_salt`): the first coin of its
+    `T.SEED_SALT_FAMILY`, opened after the window's open root, between other families' roots; the ledger opens the
+    session for that window. As a server picking its salt would, `early` opens a coin of the family after another root
+    first and then the salt's after the window's root, and `twice` a second coin after the window's root (`second`).
+    `_step` and `other_window` are `Drawn`'s, and the evidence carries no key (`seed_salt_of`'s, `draw_coins`')."""
+
+    def __init__(self, rng: random.Random, early: bool = False, twice: bool = False, withheld: bool = True) -> None:
+        s = self.s = _ledger_session(rng)
+        s.ch = _challenger(rng, [("other", 4), (T.SEED_SALT_FAMILY, 3), ("draw", 4)])
+        s.ch.sign_record(s.host, s.pub, lambda m: lms.sign_at(s.k, s.q, m).encode())
+        s.lines = [canonical_json_text({"event": "commitment", "root": s.ch.commitment.root.hex()})]
+        clock = itertools.count(rng.choice([0, 1, 10 ** 12])).__next__
+        self.records = {label: Ch.LiveRecord(s.ch, label, clock) for label, _ in s.ch.commitment.families}
+        self.window = _window(rng)
+        root = bytes.fromhex(self.window["root"])
+        self._others(rng)
+        salt = self.records[T.SEED_SALT_FAMILY]
+        coins = T.ChallengerCoins(salt)
+        if early:
+            self._step(T.SEED_SALT_FAMILY, lambda: salt.record(rng.randbytes(64)))
+            coins.commit(root)
+            self.salt = self._step(T.SEED_SALT_FAMILY, lambda: coins(Ch.COIN_BYTES))
+        else:
+            self.salt = self._step(T.SEED_SALT_FAMILY, lambda: T.draw_seed_salt(coins, self.window["root"]))
+        self.segment = coins.segments[0]
+        self.second = self._step(T.SEED_SALT_FAMILY, lambda: salt.record(root)) if twice else None
+        self._others(rng)
+        s.close = s.signed(None)
+        self.ledger = Ledger(rng, s, withheld=withheld, window=self.window)
+        self.pins, self.main = _pinned(rng, self.ledger, "honest")
+
+    def _others(self, rng: random.Random) -> None:
+        for label in rng.choices(["other", "draw"], k=rng.randint(0, 2)):
+            self._step(label, functools.partial(self.records[label].record, rng.randbytes(64)))
+
+    def evidence(self, segment: dict) -> dict:
+        return {k: v for k, v in super().evidence(segment).items() if k != "key"}
+
+
+SEED_SALT_NAMES = ["honest", "twice", "both", "early", "none", "forged", "other-family", "other-window", "window-form",
+                   "key-form", "unwithheld", "coins-form", "log-tampered", "request"]
+
+
+def seed_salt_case(rng: random.Random, name: str) -> Any:
+    """A window's seed salt (`Salted`) with the evidence the verifier reads it from, or mutation `name`: a second coin
+    released after the window's root (the salt's alone, or both), the family's first coin released after another root,
+    no coin, a forged one, another family's, another window, a malformed window, key or evidence, a session not
+    withheld, a release log edited, a malformed request."""
+    rng = _seeded(rng)
+    d = Salted(rng, early=name == "early", twice=name in ("twice", "both"), withheld=name != "unwithheld")
+    seg = d.segment.to_json()
+    match name:
+        case "both":
+            seg = {**seg, "openings": [*seg["openings"], d.second.to_json()]}
+        case "none":
+            seg = {**seg, "openings": []}
+        case "forged":
+            seg = {**seg, "openings": [{**seg["openings"][0], "coin": rng.randbytes(64).hex()}]}
+        case "other-family":
+            seg = {**seg, "label": rng.choice(["other", "draw"])}
+    coins = d.evidence(seg)
+    j = {"coins": coins, "key": d.s.key.to_json(), "window": d.window["root"]}
+    match name:
+        case "other-window":
+            j["window"] = d.other_window(rng)
+        case "window-form":
+            j["window"] = rng.choice(["", j["window"].upper(), j["window"][:-2], j["window"] + "00"])
+        case "key-form":
+            j["key"] = key_case(rng, rng.choice(KEY_NAMES[1:]))
+        case "coins-form":
+            j["coins"] = rng.choice([_body(coins, segment=DROP), {**coins, "key": j["key"]}, None, [coins]])
+        case "log-tampered":
+            log = coins["session"]["log"]
+            coins["session"]["log"] = _set(log, rng.randrange(1, len(log)), **{"x": 1})
+        case "request":
+            if rng.random() < 0.5:
+                del j[rng.choice(sorted(j))]
+            else:
+                j["window"] = rng.choice([5, None, {"root": j["window"]}])
+    return j
+
+
 def within(j: Any) -> Any:
     _request(j, ["coins", "limits"])
     if j["limits"] is None:
@@ -2465,6 +2566,8 @@ PINNED = D.Port(PIECES, "challenger_pinned", pinned, _cases(pinned_case, PINNED_
 READ = D.Port(PIECES, "challenger_read", read, _cases(read_case, READ_NAMES), package=PACKAGE, of_record="lean")
 DRAW_COINS = D.Port(PIECES, "challenger_draw_coins", draw_coins, _cases(draw_coins_case, DRAW_COINS_NAMES),
                     package=PACKAGE, of_record="lean")
+SEED_SALT = D.Port(PIECES, "challenger_seed_salt", seed_salt, _cases(seed_salt_case, SEED_SALT_NAMES), package=PACKAGE,
+                   of_record="lean")
 WITHIN = D.Port(PIECES, "challenger_within", within, _cases(within_case, WITHIN_NAMES), package=PACKAGE,
                 of_record="lean")
 COIN_TREES = D.Port(PIECES, "challenger_coin_trees", coin_trees, _cases(coin_trees_case, COIN_TREES_NAMES),
@@ -2483,7 +2586,8 @@ RUNS = [(COMMITMENT, commitment_case, COMMITMENT_NAMES, 300), (OPENING, opening_
         (LEDGER, ledger_case, LEDGER_NAMES, 300), (DAY, day_case, DAY_NAMES, 200), (HEAD, head_case, HEAD_NAMES, 100),
         (SESSION, session_case, SESSION_NAMES, 300), (CREDITED, credited_case, CREDITED_NAMES, 200),
         (PINNED, pinned_case, PINNED_NAMES, 200), (READ, read_case, READ_NAMES, 200),
-        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (WITHIN, within_case, WITHIN_NAMES, 100),
+        (DRAW_COINS, draw_coins_case, DRAW_COINS_NAMES, 200), (SEED_SALT, seed_salt_case, SEED_SALT_NAMES, 200),
+        (WITHIN, within_case, WITHIN_NAMES, 100),
         (COIN_TREES, coin_trees_case, COIN_TREES_NAMES, 200),
         (SESSION_TREES, session_trees_case, SESSION_TREES_NAMES, 200),
         (SAMPLE_LINK_FIRST, sample_link_first_case, SAMPLE_LINK_FIRST_NAMES, 200)]
