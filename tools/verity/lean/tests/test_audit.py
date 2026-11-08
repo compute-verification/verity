@@ -1348,7 +1348,7 @@ def test_an_audit_keeps_the_package_s_and_its_provers_facts_as_kept_facts_says(t
         seen.append(keep)
         return {"modules": [], "oleans": [], "pins": {}}
 
-    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None):
+    def proved(q, policy, facts, work, moved=None, ready=None, keep=True, seals=None, keys=False):
         seen.append(keep)
         raise RuntimeError("stop after the provers' facts")
 
@@ -4917,7 +4917,7 @@ def test_the_steps_reading_only_the_packages_own_facts_start_before_its_proved_i
                 order.append(getattr(args[0], "__name__", str(args[0])))
             return super().submit(fn, *args, **kw)
 
-    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None):
+    def proved(pkg, policy, facts, work, moved, ready, keep=True, seals=None, keys=False):
         order.append("proved")
         return [], facts | {"pins": {"P.g": {"kind": "theorem", "reads": []}}, "oleans": ["prover.olean"]}, {"../proofs": ["P.g"]}
 
