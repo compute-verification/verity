@@ -6,6 +6,10 @@
     python3 tools/agent-guard/inbox.py pull AGENT_ID [--repo DIR]    move AGENT_ID's pushed messages into this VM's inbox
     python3 tools/agent-guard/inbox.py list                          each agent's pending and delivered messages (a
                                                                      pending one with `since` its oldest message's stamp)
+    python3 tools/agent-guard/inbox.py status AGENT_ID [--repo DIR]  whether AGENT_ID's VM has taken its pushed messages;
+                                                                     exit 1 when one has waited past STALE_S unpulled
+    python3 tools/agent-guard/inbox.py check AGENT_ID                on AGENT_ID's own VM: whether this VM's hook polls
+                                                                     for it; exit 1, with how to read the branch, if not
 
 `send` pushes the message as a commit to origin's branch `inbox/AGENT_ID` (one file, `inbox.md`), from the checkout it runs
 in (`--repo`). Wherever AGENT_ID runs, its shell hook starts `pull` in the background at most every $AGENT_INBOX_POLL_S
@@ -20,6 +24,7 @@ AGENT_ID is the agent's conversation id: a cloud agent's or a subagent's is the 
 from __future__ import annotations
 
 import argparse
+import calendar
 import os
 import re
 import secrets
@@ -36,6 +41,9 @@ HEAD = re.compile(r"^\[\d{4}-\d\d-\d\dT\d\d:\d\dZ\] ([0-9a-f]{12})$", re.M)
 FILE = "inbox.md"
 PUSH_TRIES = 4
 LOCK_STALE_S = 300
+#: a pushed message no VM has taken after this long: its target's hook isn't polling (INF-608: BINDKSAT's branch held every
+#: message from 04:33Z to 07:32Z while each `send` said only "pushed")
+STALE_S = 600
 
 
 def agent_id(agent: str) -> str:
@@ -117,6 +125,25 @@ def split(text: str) -> list[tuple[str, str]]:
     return [(m[1], text[m.start():heads[i + 1].start() if i + 1 < len(heads) else len(text)]) for i, m in enumerate(heads)]
 
 
+def unpulled(repo: Path, agent: str) -> tuple[int, str | None]:
+    """How many messages origin's `inbox/agent` holds that no VM has taken, and the oldest one's stamp."""
+    at = tip(repo, agent)
+    if at is None:
+        return 0, None
+    stamps = STAMP.findall(remote_text(repo, agent, at))
+    return len(stamps), (stamps[0] if stamps else None)
+
+
+def age_s(stamp: str, now: float | None = None) -> float:
+    return (time.time() if now is None else now) - calendar.timegm(time.strptime(stamp, "%Y-%m-%dT%H:%MZ"))
+
+
+def stale_note(agent: str, n: int, oldest: str) -> str:
+    return (f"{n} message(s) on origin's inbox/{agent} are still unpulled, the oldest from {oldest}: its VM's shell hook isn't "
+            f"polling (a hook older than the inbox, or no shell command since). The agent reads them with "
+            f"`git fetch origin inbox/{agent} && git show FETCH_HEAD:{FILE}`, and `inbox.py check {agent}` on its VM says why")
+
+
 def pull(agent: str, repo: Path, inbox: Path = INBOX) -> int:
     """Move the messages on origin's `inbox/agent` into this VM's inbox, then empty the branch's file; how many arrived.
 
@@ -165,15 +192,48 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("agent")
     p.add_argument("--repo", type=Path, default=Path("."))
     sub.add_parser("list")
+    st = sub.add_parser("status")
+    st.add_argument("agent")
+    st.add_argument("--repo", type=Path, default=Path("."))
+    ck = sub.add_parser("check")
+    ck.add_argument("agent")
     a = ap.parse_args(argv)
     if a.cmd == "send":
         text = a.text if a.text is not None else (sys.stdin.read() if a.file == "-" else Path(a.file).read_text())
         if a.local:
             print(f"queued for {a.agent}: {send(a.agent, text)}")
-        else:
-            print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
-                  "shell hook delivers it within a poll interval")
+            return 0
+        try:
+            before = unpulled(a.repo, full_id(a.agent))
+        except RuntimeError:
+            before = (0, None)
+        print(f"pushed for {a.agent}: origin's inbox/{full_id(a.agent)} at {push(a.agent, text, a.repo)[:12]}; its "
+              "shell hook delivers it within a poll interval")
+        if before[1] and age_s(before[1]) > STALE_S:
+            print(f"inbox: NOT DELIVERED YET: {stale_note(a.agent, before[0], before[1])}", file=sys.stderr)
         return 0
+    if a.cmd == "status":
+        n, oldest = unpulled(a.repo, full_id(a.agent))
+        if not n:
+            print(f"inbox: origin's inbox/{a.agent} is empty: its VM took every message")
+            return 0
+        if age_s(oldest) > STALE_S:
+            print(f"inbox: NOT DELIVERED: {stale_note(a.agent, n, oldest)}")
+            return 1
+        print(f"inbox: {n} message(s) on origin's inbox/{a.agent}, the oldest from {oldest}: within its hook's poll interval")
+        return 0
+    if a.cmd == "check":
+        mark, log = INBOX / f"{agent_id(a.agent)}.polled", INBOX / f"{a.agent}.pull.log"
+        every = settings.INBOX_POLL_S
+        tail = log.read_text(errors="replace").strip().splitlines()[-1:] if log.exists() else []
+        if every != "off" and mark.exists() and time.time() - mark.stat().st_mtime < float(every) + 60:
+            print(f"inbox: this VM's hook polls for {a.agent} every {every} s" + (f"; its last pull said: {tail[0]}" if tail else ""))
+            return 0
+        why = ("AGENT_INBOX_POLL_S is off" if every == "off" else
+               f"no poll for {a.agent} in {INBOX} within {every} s, so this VM's shell hook doesn't deliver its id")
+        print(f"inbox: NOT POLLING: {why}" + (f" (last pull: {tail[0]})" if tail else "")
+              + f". Read your messages with `git fetch origin inbox/{a.agent} && git show FETCH_HEAD:{FILE}`")
+        return 1
     if a.cmd == "pull":
         print(f"inbox: {pull(a.agent, a.repo)} new message(s) for {a.agent}")
         return 0

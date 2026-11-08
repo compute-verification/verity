@@ -1,4 +1,5 @@
 """`.cursor/hooks.json`'s shell hook refuses commands that print the environment and lets everything else through."""
+import importlib.util
 import json
 import os
 import shutil
@@ -326,6 +327,49 @@ def test_a_message_pushed_from_one_vm_is_pulled_and_delivered_on_another_once(tm
     tool("send", W, "--text", "and one more", "--repo", str(coord))
     assert "1 new message(s)" in tool("pull", W, "--repo", str(worker), inbox=box)
     assert "and one more" in hook("ls", W, box)["user_message"]
+
+
+def test_a_sender_learns_when_a_target_hook_is_not_taking_its_messages_and_the_target_can_check_its_own_vm(tmp_path, monkeypatch):
+    """INF-608: BINDKSAT's branch held every message from 04:33Z to 07:32Z while each `send` said only "pushed". `status` and
+    a later `send` say a message has waited past STALE_S unpulled; `check` on the target's VM says whether its hook polls."""
+    origin, coord, worker = (tmp_path / n for n in ("origin.git", "coord", "worker"))
+    env = {**os.environ, **GIT_ENV}
+    subprocess.run(["git", "init", "-q", "--bare", "-b", "main", str(origin)], check=True, capture_output=True, env=env)
+    for clone in (coord, worker):
+        subprocess.run(["git", "clone", "-q", str(origin), str(clone)], check=True, capture_output=True, env=env)
+    W = "bc-33333333-3333-4333-8333-333333333333"
+
+    def tool(*args, inbox=tmp_path / "unused", poll="30"):
+        return subprocess.run([sys.executable, INBOX_TOOL, *args], env={**env, "AGENT_INBOX": str(inbox), "AGENT_INBOX_POLL_S": poll},
+                              capture_output=True, text=True)
+
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    tool("send", W, "--text", "fresh", "--repo", str(coord))
+    fresh = tool("status", W, "--repo", str(coord))
+    assert fresh.returncode == 0 and "within its hook's poll interval" in fresh.stdout
+    spec = importlib.util.spec_from_file_location("inbox_tool", INBOX_TOOL)
+    sys.path.insert(0, str(INBOX_TOOL.parent))
+    try:
+        inbox = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(inbox)
+    finally:
+        sys.path.remove(str(INBOX_TOOL.parent))
+    for k, v in GIT_ENV.items():
+        monkeypatch.setenv(k, v)
+    old = "[2026-01-01T00:00Z] abcdefabcdef\nthe 04:33Z heads-up\n\n"
+    inbox.commit(coord, W, old, inbox.tip(coord, W), "an old message")
+    stale = tool("status", W, "--repo", str(coord))
+    assert stale.returncode == 1 and "NOT DELIVERED" in stale.stdout and "2026-01-01T00:00Z" in stale.stdout
+    again = tool("send", W, "--text", "one more", "--repo", str(coord))
+    assert again.returncode == 0 and "NOT DELIVERED YET: 1 message(s)" in again.stderr
+    box = tmp_path / "worker-inbox"
+    assert tool("pull", W, "--repo", str(worker), inbox=box).returncode == 0
+    assert "is empty" in tool("status", W, "--repo", str(coord)).stdout
+    off = tool("check", W, inbox=tmp_path / "quiet-inbox")
+    assert off.returncode == 1 and "NOT POLLING" in off.stdout and f"inbox/{W}" in off.stdout
+    (box / f"{W}.polled").touch()
+    assert tool("check", W, inbox=box).returncode == 0
+    assert "AGENT_INBOX_POLL_S is off" in tool("check", W, inbox=box, poll="off").stdout
 
 
 def test_the_hook_starts_a_pull_at_most_once_per_interval_and_never_when_off(tmp_path):
