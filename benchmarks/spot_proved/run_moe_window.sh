@@ -90,9 +90,10 @@ if [ -n "${MW_READ_LAYOUT:-}" ]; then
   tu=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
   [ -x "$tu" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 7; }
   TU=(--tmpl-unit-bin "$tu" --templated-direct)
-  export FLOCK_READ_TMPL=${LEAN%/*}/flock-read-tmpl   # the verifier's read template, which a structural read's compose reads
   (flock 9; cd "${LEAN%/.lake/*}" && lake build flock-read-tmpl) 9> "$HZ_CACHE/.lock-read-tmpl" > "$OUT/build-read-tmpl.log" 2>&1 \
     || { tail -40 "$OUT/build-read-tmpl.log"; exit 7; }
+  # the verifier's read template, which a structural read's compose runs: on the path, as `read_tmpl.executable` takes it
+  mkdir -p "$W/bin" && ln -sf "${LEAN%/*}/flock-read-tmpl" "$W/bin/flock-read-tmpl" && export PATH="$W/bin:$PATH"
 fi
 if [ -n "${MW_TABLES:-}" ]; then REG=(--tables "$MW_TABLES" --key "${MW_KEY:?}")
 elif [ "${MW_SELF:-0}" = 1 ]; then
