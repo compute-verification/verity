@@ -209,8 +209,6 @@ ALLOWED: dict[str, str] = {
                                                               "after it lands",
     "production would publish every event": "infra's Vercel deployment, another sense",
     "Production is `verity-slack-events`": "infra's Vercel deployment, another sense",
-    "the coin server keeps each round's bytes": "a row of Flock's Soundness README beside one a queued PR on next "
-                                                "rewrites; renamed after it lands",
     "T proof units per registration, unit t the link-window's bucket row t": "a public item's reason in the ingress tie's "
                                                                              "Spec (`certifier.tie_service`): `Spec.digest` hashes it",
     '"proof-unit"': "the kind circuit-check's Boolean export records for a unit circuit (`boolean_export.Registry.type_of`)",
@@ -230,8 +228,6 @@ ALLOWED: dict[str, str] = {
     "an *active warden* in network steganography's sense": "network steganography's own term, which `ARCHITECTURE.md` "
                                                            "names to say it is not the network certifier's name",
     "where a passive warden only watches": "network steganography's own term, beside the one above",
-    "(the bytes say draw)": "`verity/ml/commitments/domains.py`'s comment over the POUW_*_SAMPLING tags, which names their "
-                            "bytes (`verity/pouw/pearl-c-draw/v1` and the rest)",
 }
 
 PENDING: dict[str, str] = {

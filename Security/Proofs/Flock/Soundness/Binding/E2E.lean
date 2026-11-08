@@ -11,7 +11,7 @@ public import Proofs.Flock.Soundness.StrictCR
 `flock_e2e_count` and `flock_e2e_drawn` (`E2E.lean`), and their forms at the executable's sampling design
 (`ExecStratified.lean`), with `vb : ValueBinding` built from the serving rows (`HmRows.binding`). The binding's hash is
 SHA-512 (`Refine.H512`), so `SHA512CRExpected` (`hCR`) is about SHA-512 itself, and what `vb` carried becomes:
-* `HmRowComputes` (`hHm`), the circuit's row hashing (phase 2i), the one gap of the binding;
+* `HmRowComputes` (`hHm`), the circuit's row hashing, the one gap of the binding;
 * the layout's facts, in `lay : Layout` (`decode_row`: the decoder reads the rows the witness holds) and `rs : HmRows`
   (`bc_registered`: the `b ‖ c` the witness holds hashes to the registered leaf; `other_registered`: the returned
   outputs' leaves).

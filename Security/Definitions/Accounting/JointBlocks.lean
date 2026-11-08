@@ -24,7 +24,7 @@ The wipe that opens block `b` is core's (`Verity.Wipe`, at boundary `b` of a sch
 survivor bound (`Verity.Wipe.SurvivorBound`) at the pair its verdict publishes, a bound in the wipe's own game over a
 uniform foreign content, the seed and the spot reads. The joint guarantee reads it on the run through a map of the run
 into the wipe's game at each boundary (`Verity.Wipe.OfRun`), on a run whose coins there are the wipe's
-(`Accounting.Guarantees.JointHorizonBlocksLive`). The blocks are fields here, not read off that core vocabulary.
+(`Accounting.Guarantees.JointPooledBlocksLive`). The blocks are fields here, not read off that core vocabulary.
 -/
 
 @[expose] public section

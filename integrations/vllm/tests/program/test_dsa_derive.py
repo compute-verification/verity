@@ -6,9 +6,8 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
-* past TOPK keys the settings of a Waksman network over the row's history are a field of the `run` input, `DsaTopKLongRow_v1`
-  checks the order they route (`DsaWaksmanOrder_v1`) against the row's logits (one of the Program's checks, an output after the
-  source's), and sparse MLA reads the rows `DsaWaksmanRows_v1` routes at them;
+* past TOPK keys `DsaTopKMask_v1` marks the row's top-TOPK set from its logits, `DsaButterflySettings_v1` computes the
+  concentrator's settings for it, and sparse MLA reads the rows `DsaButterflyRows_v1` routes at them, in ascending index order;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -36,7 +35,6 @@ from verity.ml.circuits import codec
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.refs import Affine, runs
 from verity.ml.circuits.evaluation import evaluate
-from verity.ml.circuits.types import Array, Value
 from verity_vllm.program.frontend import targets as TG
 from verity_vllm.program.frontend.derive import derive_report
 from verity_vllm.program.frontend.export_compat import dsa_leaves
@@ -47,7 +45,8 @@ from verity_vllm.program.frontend.rules.vllm_bindings.observations import launch
 from verity_vllm.program.frontend.rules.vocab import PROFILE_B1_EAGER_V3, PROFILES, Vocabulary
 from verity_vllm.program.frontend.target_profile import TargetProfile
 from verity.ml.definitions.numerics.serve3_reference import materialize
-from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, fa3_check_inf, fa3_split, hopper, sparse_mla
+from verity.ml.definitions.registry import b1, cublas_bf16, dsa, dsa_norm, dsa_topk, dsa_topk_mask, fa3_check_inf, fa3_split, hopper
+from verity.ml.definitions.registry import sparse_mla
 from verity.ml.definitions.registry import sparse_mla_split
 from verity.ml.definitions.registry import bf16_gemm_check as BC
 from verity.ml.definitions.registry.boolean_rope import RoPEHeadGptJV2
@@ -549,45 +548,31 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
     assert roles["layers.0.W_UK_T"]["role"] == "mla.absorb" and roles["layers.0.indexer.k_norm.bias"]["role"] == "dsa.indexer.k_norm.bias"
 
 
-@pytest.mark.slow
-def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
-    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
-    rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
-    order by `DsaTopKLongRow_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when it is the logits' top-2 set in ascending
-    index order), and both layers' `SparseMla_v1{T=2}` read the rows `DsaWaksmanRows_v1{N=3,K=2}` routes at the same settings, in
-    that order.  Every one of the 8 settings is evaluated: one order passes, the set's other permutation is refused."""
+def test_a_row_past_topk_selects_its_top_k_from_its_logits_and_reads_its_rows_in_index_order(served):
+    """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer marks its logits' top-2 set
+    (`DsaTopKMask_v1{N=3,TOPK=2}`) and computes the concentrator's settings for it (`DsaButterflySettings_v1{N=3,K=2}`), and both
+    layers' `SparseMla_v1{T=2}` read the rows `DsaButterflyRows_v1{N=3,K=2}` routes at those settings: the Program has no `run`
+    input and no checks, and its outputs are the reference's over the set in ascending index order."""
     model = _model(topk=2)
     xs = _inputs(model)
     rep = _derive(model, xs)
     assert rep.program is not None, rep.unsupported
-    assert dsa_topk.waksman_switches(3, 2) == 3
-    assert rep.provenance["run_inputs"] == {"param": len(xs), "name": "run", "fields": [
-        {"name": f"{NAMES[0]}/topk_switches[t=2]", "type": repr(Array(3, Value(1))), "offset": 0, "leaves": 3}]}
-    assert rep.provenance["checks"]["accept"] == 1 and len(rep.provenance["checks"]["of"]) == 1
-    routed = bind(dsa_topk.DsaWaksmanOrder, N=3, TOPK=2).id
-    check = bind(dsa_topk.DsaTopKLongRow, N=3, TOPK=2).id
-    rows = bind(dsa_topk.DsaWaksmanRows, N=3, K=2, W=L + R, E=16).id
+    assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance
+    assert len(rep.program.fn.signature()[0]) == len(xs) + 1, "the inputs, then the weights"
+    mask = bind(dsa_topk_mask.DsaTopKMask, N=3, TOPK=2).id
+    settings = bind(dsa_topk_mask.DsaButterflySettings, N=3, K=2).id
+    rows = bind(dsa_topk_mask.DsaButterflyRows, N=3, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
-    assert [i for i in _ids(rep) if i in (routed, check, rows, attn2)] == [attn2, attn2, routed, check, rows, attn2, rows, attn2]
+    assert [i for i in _ids(rep) if i in (mask, settings, rows, attn2)] == [attn2, attn2, mask, settings, rows, attn2, rows, attn2]
     (app,) = [a for a in rep.provenance["applications"] if a["rule"] == "DsaIndexerAttn[vllm-dsa]_v1"
               and a["preconditions_checked"]["indexer"] and a["preconditions_checked"]["past_topk"]]
     assert app["preconditions_checked"]["past_topk"] == [2]
 
     logits = _index_logits(model, xs)[2]
     assert len(set(logits)) == 3
-    top = set(dsa_topk.topk_set(logits, 2))
-    accepted = []
-    for bits in range(8):
-        sw = [bits >> i & 1 for i in range(3)]
-        order = dsa_topk.waksman_apply(sw, [0, 1, 2], 2)
-        out = _run(rep, model, xs, sw)
-        assert out[-1] == int(order == sorted(top)), (sw, order)
-        if out[-1]:
-            assert out[:-1] == _reference(model, xs, orders={2: order}), order
-            accepted.append(tuple(order))
-    assert set(accepted) == {tuple(sorted(top))}
-    for order, ok in ((sorted(top), 1), (sorted(top, reverse=True), 0)):
-        assert _run(rep, model, xs, dsa_topk.waksman_settings(order, 3))[-1] == ok
+    top = sorted(dsa_topk.topk_set(logits, 2))
+    assert top != [0, 1], "the selection is not the first rows, which a wrong mask would also read"
+    assert _run(rep, model, xs) == _reference(model, xs, orders={2: top})
 
 
 class _LargeMlaAbsorb(nn.Module):

@@ -1,8 +1,8 @@
-"""Ending a run's processes by its cgroup scope (INF-93): what `research cancel` and a stage timeout stop.
+"""Ending a run's processes by its cgroup scope: what `research cancel` and a stage timeout stop.
 
 A run's workload is its own process group, but its processes leave the group: vLLM's TP rank workers and suites.py's pytest-xdist
-workers start groups and sessions of their own, and a worker whose parent died is reparented out of the tree (vy-glm53-eu, 19 Oct
-01:20Z: eight rank workers kept ~94 GB per GPU after `research cancel`).  What they cannot leave is their cgroup.  A run sits in
+workers start groups and sessions of their own, and a worker whose parent died is reparented out of the tree (eight rank workers can
+keep ~94 GB per GPU after `research cancel`).  What they cannot leave is their cgroup.  A run sits in
 systemd scopes:
 
   cluster-<run id>.scope   a queued run (`research run --queue`): its runner and workload (infra/cluster submit.wrappers)
@@ -25,9 +25,9 @@ run-dir processes, and the record says so (`fallback`).
 Who ends a cancelled run is settled by CONTROL_CANCEL, which `claim` creates at most once: `research cancel` claims it with its
 request before it signals anything, and the runner, once the workload has exited, claims it as closed.  Whichever claims it first
 decides: the cancel's request makes the runner end the run after the grace; a closed one (the runner had recorded the exit
-already) or a runner that is gone makes the cancel end the run itself.  Without it a workload that died of the SIGTERM before the
-request was written left the runner ending only its group (vy-glm53-cpu-2, 20 Oct 06:12Z: five `timeout` stages, each its own
-process group, and their vllm.build children ignored SIGTERM and ran on).
+already) or a runner that is gone makes the cancel end the run itself.  Without it a workload that dies of the SIGTERM before the
+request is written leaves the runner ending only its group (`timeout` stages are each their own process group, and their
+vllm.build children ignore SIGTERM and run on).
 """
 from __future__ import annotations
 

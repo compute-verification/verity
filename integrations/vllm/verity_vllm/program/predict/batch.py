@@ -20,7 +20,7 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R3: a derived split count. The served engine runs every top-p launch at the registered split count, so the compiler emits the
   constant form ("splits": registered_splits(num_SMs) = SplitsFor_v1(1, num_SMs)) at any top_p.
 - R2: a request whose unit (LP, T, policy, seed, id, C, prefill chunks, carried out, edge), rows or discarded rows differ when its advice is compiled
-  alone (its rows renumbered, its own release buckets): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
+  alone (its rows renumbered; release buckets, which no plan reads, 0): planning reads no batch-mate, whatever path a later change adds. A prefix-cache hit on
   another request's KV is kept when its tokens are checked equal (through each run, the source's certified prompt equals the
   request's), since that KV is then a function of the request's own prompt, given (a) and (b) on the units that computed it.
   Alone, a stand-in computes it from the request's own tokens. Any other hit on another request's KV is refused. In class G a
@@ -33,11 +33,9 @@ request's Program is built at its launch context, which the advice fixes, and th
 - R1: GP-01 wiring: a RowRef or a component naming another request's Program, or a request's outputs whose cone (`check.batch.
   separable` over `workload_labels`) reads another request's Inputs or a batch-provenance one (a history behind no checked
   hit included). A tensor-parallel rank's `peers_*` are its request's own: this rests on the node binding each to the same
-  request's partial on the other rank, which the cross-rank transfer must hold request by request. Its `run` (the Waksman
-  settings of each row past INDEX_TOPK, `dsa.run_field`) is its own too: each field routes the request's own key indices, and its
-  checks (`DsaTopKLongRow`) hold the routed order to the top-INDEX_TOPK set of the request's own logits in ascending index order,
-  the one order those logits fix, so each field is a function of the request's own inputs. No order a kernel or a prover picks
-  passes: a row past INDEX_TOPK is served under `VERITY_DSA_TOPK=canonical` (`dsa.Net` refuses an engine without it). A shared
+  request's partial on the other rank, which the cross-rank transfer must hold request by request. A row past INDEX_TOPK
+  computes its selection from the request's own logits (`DsaTopKMask`, `DsaButterflySettings`), so it reads nothing of another's:
+  its rows in ascending index order, the row `VERITY_DSA_TOPK=canonical` serves (`dsa.Net` refuses an engine without it). A shared
   prefix page is no other request's computed value in GP-01: no wire runs from the request that computed it, and every request
   that reads it reads it as an Input of its own history (`HISTORY_GROUPS`), a committed value the replay binds to the rows that
   computed it (`check.replay.cached_prefix`). R1 holds that Input the request's own only where its value is a function of the
@@ -52,11 +50,11 @@ request's Program is built at its launch context, which the advice fixes, and th
 from __future__ import annotations
 
 import sys
-from dataclasses import replace
 from functools import cache
 from typing import Any, Callable, Mapping
 
 from verity_vllm.check.batch import BATCH, SHARED, Fields, Template, own, separable
+from verity_vllm.pipeline import window_advice as WA
 
 from .build import Unexpressible, _Specs, build_program, model_shape
 from .common import _ptypes, kind
@@ -98,7 +96,7 @@ def workload_labels(wl: Any, checked: frozenset[int] = frozenset()) -> tuple[tup
     too where R2 checked it (``checked``: a hit whose tokens are checked equal); a tensor-parallel rank's `peers_<k>` held by its
     index too, since the node binds each to the same request's partial of collective k on the other rank (`tp_links.json`; GP-01's
     `request[<id>].peers_<k>`), a value of that request's own inputs on every rank, and its `run` (R1 of the module docstring); any
-    other request-local group (`splits`, an unchecked history, `schedule`, or one unknown here) `BATCH`. Its return: each
+    other request-local group (`splits`, an unchecked history, or one unknown here) `BATCH`. Its return: each
     request's outputs held by its index, then the edge it leaves field by field."""
     from verity_vllm.program.workload import edge_ports
     edge = wl.edge.static() if getattr(wl, "edge", None) is not None else {"in": [], "out": []}
@@ -236,13 +234,16 @@ def _check_hit(advice: Any, ingress: Mapping[str, Any], s: int, row: Any) -> Non
         at = end
 
 
-def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, int]:
+def _row(row: Any, request: int, sources: tuple) -> WA.Row:
+    return WA.Row(request, row.kind, row.start, row.n, row.cache_hit, row.preempted, sources)
+
+
+def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, dict, int]:
     """``advice`` and ``ingress`` with request ``r`` alone, and r's index there: its record and body, each of its rows in a step of
-    its own, its own release buckets in order, and the state a Commit window carries it in with (`pipeline.window_advice`). A hit
-    on another request's KV (`_check_hit`) holds the KV of r's first C tokens, so alone a stand-in computes it: a greedy request of
-    those C tokens with one output, admitted just before r in r's first step. Such a hit on a later row (a resume, or any row of a
-    carried request) has no solo form."""
-    I1 = sys.modules[type(advice).__module__]
+    its own, and the state a Commit window carries it in with (`pipeline.window_advice`), rebuilt from the fields the compiler
+    reads (`reads.READS`), its release buckets 0, which no plan reads. A hit on another request's KV (`_check_hit`) holds the KV
+    of r's first C tokens, so alone a stand-in computes it: a greedy request of those C tokens with one output, admitted just
+    before r in r's first step. Such a hit on a later row (a resume, or any row of a carried request) has no solo form."""
     q = advice.requests[r]
     carried = getattr(advice, "carried", ())
     rows = [(s, row) for s, step in enumerate(advice.steps) for row in step.rows if row.request == r]
@@ -252,17 +253,16 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[Any, dict, i
                 raise BatchDependent(f"request {r}: step {s} resumes it on KV another request computed (v0 has no solo form for it)")
             _check_hit(advice, ingress, s, row)
     k = int(any(src.request != r for src in rows[0][1].sources))
-    release = tuple(b for o, b in zip(I1.outputs(advice), advice.release) if o.request == r)
-    steps = [I1.StepAdvice((replace(row, request=k, sources=tuple(replace(src, request=k) for src in row.sources)),)) for _, row in rows]
-    requests, bodies = (q,), {q.id: ingress[q.id]}
+    own = sum(o.request == r for o in (WA if hasattr(advice, "carried") else sys.modules[type(advice).__module__]).outputs(advice))
+    steps = [WA.StepAdvice((_row(row, k, tuple(WA.Source(k, src.n) for src in row.sources)),)) for _, row in rows]
+    requests, bodies = (WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish),), {q.id: ingress[q.id]}
     if k:
         C, stand = rows[0][1].cache_hit, f"{q.id} (prefix)"
-        requests, release = (I1.RequestAdvice(stand, C, 1, "length"), q), (0, *release)
+        requests, own = (WA.RequestAdvice(stand, C, 1, "length"), *requests), own + 1
         bodies[stand] = {"prompt": list(_prompt(ingress[q.id])[:C]), "max_tokens": 1, "temperature": 0}
-        steps[0] = I1.StepAdvice((I1.Row(0, "prefill", 0, C), replace(rows[0][1], request=1, sources=(I1.Source(0, C),))))
-    if r < len(carried):
-        return I1.Advice(requests, tuple(steps), release, carried=(carried[r],)), bodies, k
-    return I1.Advice(requests, tuple(steps), release), bodies, k
+        steps[0] = WA.StepAdvice((WA.Row(0, "prefill", 0, C), _row(rows[0][1], 1, (WA.Source(0, C),))))
+    carry = tuple(WA.Carried(c.C, c.computed, c.kept, c.made) for c in carried[r:r + 1])
+    return WA.Advice(requests, tuple(steps), (0,) * own, carry), bodies, k
 
 
 def _unit(u: Any) -> tuple:
