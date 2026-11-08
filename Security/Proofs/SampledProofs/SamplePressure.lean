@@ -27,6 +27,7 @@ whose wrong set has `K` units escapes with probability `C(n - K, k) / C(n, k)`.
 namespace Population.Exfil
 
 open Finset
+open Verity.Game (iid)
 
 variable {n k : ℕ}
 

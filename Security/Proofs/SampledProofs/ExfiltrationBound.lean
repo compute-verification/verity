@@ -41,6 +41,7 @@ meta import Lean.Meta.Tactic.NormCast
 namespace Population.Exfil
 
 open Finset
+open Verity.Game (iid piLaw_toReal prodLaw prodLaw_toReal)
 
 /-! ## Detection pressure from the sample and the cone -/
 

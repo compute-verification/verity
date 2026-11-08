@@ -3,7 +3,7 @@ module
 public import Definitions.SampledProofs.Necessity
 public import Mathlib.Data.Fintype.Option
 public import Mathlib.Data.Fintype.Prod
-public import Proofs.SampledProofs.Coins
+public import Proofs.Core.Coins
 public import Proofs.SampledProofs.Egress
 import Mathlib.Algebra.Order.BigOperators.Ring.Finset
 import Mathlib.Data.Fintype.BigOperators
@@ -55,6 +55,7 @@ transcript; (ii) local checks; (iii) robust determinacy, which for opaque units 
 namespace Population.Iop
 
 open Finset
+open Verity.Game (iid_toReal)
 
 variable {U T : Type}
 

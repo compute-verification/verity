@@ -1,6 +1,6 @@
 module
 
-public import Definitions.SampledProofs.Coins
+public import Definitions.Core.Coins
 public import Proofs.Core.Prob
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Basic.ENNReal.BigOperators
@@ -15,7 +15,7 @@ product of theirs (`iid_toReal`), and the first coin splits off (`iid_cons_toRea
 
 @[expose] public section
 
-namespace Population
+namespace Verity.Game
 
 variable {Ω : Type} [Fintype Ω]
 
@@ -38,4 +38,4 @@ theorem prodLaw_toReal {W X : Type} [Fintype W] [Fintype X] (ρ : PMF W) (ν : P
     (prodLaw ρ ν (w, x)).toReal = (ρ w).toReal * (ν x).toReal :=
   ENNReal.toReal_mul
 
-end Population
+end Verity.Game

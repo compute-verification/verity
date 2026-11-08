@@ -1,6 +1,6 @@
 module
 
-public import Definitions.SampledProofs.Coins
+public import Definitions.Core.Coins
 public import Definitions.SampledProofs.Dataflow
 public import Mathlib.Basic.Real.Basic
 public import Mathlib.Algebra.BigOperators.Group.Finset.Defs
@@ -61,7 +61,7 @@ def Accepts (chk : U → T → Prop) (A : Finset U) {k : ℕ} (d : Fin k → U) 
 /-- The probability of an event of the sample, over `k` independent samples from `π`: core's `Verity.Game.prPMFReal`
 under their law `iid π k`. -/
 noncomputable abbrev prob [Fintype U] (π : PMF U) (k : ℕ) (E : (Fin k → U) → Prop) : ℝ :=
-  Verity.Game.prPMFReal (iid π k) E
+  Verity.Game.prPMFReal (Verity.Game.iid π k) E
 
 /-- **The certificate's conclusion** about the transcript `σ`: no always-proved unit is wrong, and the sample's weight on
 the incorrect proof blocks is at most `ε`. -/

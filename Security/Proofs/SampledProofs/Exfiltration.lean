@@ -1,7 +1,7 @@
 module
 
 public import Definitions.SampledProofs.Exfiltration
-public import Proofs.SampledProofs.Coins
+public import Proofs.Core.Coins
 import Mathlib.Algebra.BigOperators.Fin
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
@@ -32,6 +32,7 @@ leaking what its incorrect proof blocks' cones carry, and the deployment halting
 namespace Population.Exfil
 
 open Finset
+open Verity.Game (iid_toReal iid_cons_toReal)
 
 variable {Ω : Type} [Fintype Ω] {μ : PMF Ω}
 

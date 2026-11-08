@@ -5,7 +5,6 @@ public import Definitions.SampledProofs.Partition
 public import Definitions.SampledProofs.LongValue
 public import Definitions.SampledProofs.Oblivious
 public import Definitions.SampledProofs.AddressMap
-public import Definitions.SampledProofs.Coins
 public import Definitions.SampledProofs.Necessity
 public import Definitions.SampledProofs.Exfiltration
 public import Definitions.SampledProofs.SamplePressure
@@ -24,8 +23,7 @@ circuit's partition as a population over its committed wires, and the orders on 
 hold `Option V`, ⊥ where no opening has the declared width, and the verifier's view of a run's openings. `Oblivious`:
 when a trace's read sets depend on no value (or only on the public inputs), the classical notion that constrains only
 honest runs, address closure, and the padding of a trace into a static population. `AddressMap`: a program's read sets
-without its unit functions, and the static wirings that express it. `Coins`: independent draws (`iid`, `piLaw`), whose
-events have core's probability `Verity.Game.prPMFReal`. `Necessity`: the IOP's sampling certificate (a
+without its unit functions, and the static wirings that express it. `Necessity`: the IOP's sampling certificate (a
 transcript before the coins, `k` samples from a distribution fixed before it, an always-proved set), amplification, and
 what each policy's damage is (integrity's damaged egress, control at the public widths, a range-restricted dataflow).
 `Exfiltration`: the windowed audit as a game, an adaptive prover over live-coin windows that halts at the first

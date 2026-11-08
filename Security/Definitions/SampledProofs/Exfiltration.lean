@@ -1,6 +1,6 @@
 module
 
-public import Definitions.SampledProofs.Coins
+public import Definitions.Core.Coins
 public import Mathlib.Analysis.Complex.Exponential
 import Mathlib.Algebra.Order.BigOperators.Expect
 import Mathlib.Algebra.Order.Field.Power
@@ -24,7 +24,7 @@ This file is the vocabulary for that game, over a finite coin space with a distr
   and the coins on which the window escapes detection, `esc h`. Neither depends on the window's own coin: that is what
   live coins, flipped after the commitment, mean.
 * `ex μ n F` and `prob μ n E` are the expectation and the probability over `n` windows' coins, each window's coin flipped
-  independently from `μ` (`iid μ n`). `prob` is core's probability, `Verity.Game.prPMFReal`.
+  independently from `μ` (`Verity.Game.iid μ n`). `prob` is core's probability, `Verity.Game.prPMFReal`.
 * `Strategy.cum` is what leaves up to and including the first detection (its egress left before its verdict);
   `Strategy.cumPrev` what leaves when a caught window's egress is withheld (egress waits for the verdict);
   `Strategy.cumUpTo j` what leaves before the `j`-th detection, for a deployment that tolerates `j - 1` failures.
@@ -64,12 +64,12 @@ variable {Ω : Type}
 
 /-- The expectation of `F` over `n` windows' coins, each flipped independently from `μ`. -/
 noncomputable def ex [Fintype Ω] (μ : PMF Ω) (n : ℕ) (F : (Fin n → Ω) → ℝ) : ℝ :=
-  ∑ cs, (iid μ n cs).toReal * F cs
+  ∑ cs, (Verity.Game.iid μ n cs).toReal * F cs
 
 /-- The probability of the event `E` over `n` windows' coins, each flipped independently from `μ`: core's
 `Verity.Game.prPMFReal` under their law `iid μ n`. -/
 noncomputable abbrev prob [Fintype Ω] (μ : PMF Ω) (n : ℕ) (E : (Fin n → Ω) → Prop) : ℝ :=
-  Verity.Game.prPMFReal (iid μ n) E
+  Verity.Game.prPMFReal (Verity.Game.iid μ n) E
 
 /-- **What leaves up to and including the first detection**, over `n` windows from the history `h`: each window's leak,
 until the first window whose coin catches an incorrect proof block. That window's egress left before its verdict. -/
@@ -109,7 +109,7 @@ def TrustedModel {W H T : Type} (ρ : PMF W) (S : W → T) (hon : W → H) (g : 
 /-- The sample that catches each unit `u` independently, when its coin `p u` comes up `true`: a coin says, per unit,
 whether a wrong `u` would be caught (sampled, and not lucky). -/
 noncomputable abbrev indepSample {U : Type} [Fintype U] [DecidableEq U] (p : U → PMF Bool) : PMF (U → Bool) :=
-  piLaw p
+  Verity.Game.piLaw p
 
 /-- The coins of the independent sample on which the wrong set `B` escapes: none of its units is caught. -/
 def acceptCoins {U : Type} [Fintype U] [DecidableEq U] (B : Finset U) : Finset (U → Bool) :=

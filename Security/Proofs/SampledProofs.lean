@@ -1,6 +1,5 @@
 module
 
-public import Proofs.SampledProofs.Coins
 public import Proofs.SampledProofs.Determinacy
 public import Proofs.SampledProofs.Necessity
 public import Proofs.SampledProofs.Egress

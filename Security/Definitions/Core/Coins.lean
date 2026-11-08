@@ -10,12 +10,12 @@ public import Mathlib.Probability.ProbabilityMassFunction.Constructions
 
 `piLaw ν` is the law of independent draws, coordinate `i` drawn from `ν i`: the weight of `x` is `∏ i, ν i (x i)`.
 `iid μ n` is `n` independent draws from `μ`, and `prodLaw ρ ν` two independent draws of different types. An event's
-probability under any of them is core's, `Verity.Game.prPMFReal`.
+probability under any of them is `prPMFReal` (`Definitions.Core.Prob`).
 -/
 
 @[expose] public section
 
-namespace Population
+namespace Verity.Game
 
 open scoped ENNReal
 
@@ -40,4 +40,4 @@ noncomputable def prodLaw {W X : Type} [Fintype W] [Fintype X] (ρ : PMF W) (ν 
     rw [Fintype.sum_prod_type]
     simp only [← Finset.mul_sum, hν, mul_one, hρ])
 
-end Population
+end Verity.Game
