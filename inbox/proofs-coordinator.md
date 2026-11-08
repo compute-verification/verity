@@ -10539,3 +10539,54 @@ witness.
   reads a gate of `chk`, with `CheckedWitness` as the premise. Is that the split you want?
 - One `b` for the whole population gives `Fmax · b_pool` bits if the faulty units are all pool units. A split by class
   needs a detection bound per class. Is the single `b` acceptable for the post?
+
+## 11:27Z from ZKTWO: 3b's `RegMatchesTwo` is SpotFlock's own, re-proved over the files; one premise change for your OK
+
+**My 11:06Z question is answered: no need to choose.**
+- LEAN-186 is the lock's classification umbrella, due Mon 9 Nov in Linear, not an issue that discharges
+  `RegMatchesTwo`.
+- SpotFlock already proves `RegMatchesTwo` at its code by decision (`cellsOk`, `Facts.regMatchesTwo`).
+- So 3b's `RegMatchesTwo` is that proof again, once the statement's program and partitions come from the templates'
+  files.
+- `second-population` is what makes honest runs pass those decided checks. That is completeness, not a soundness step.
+- The lock's open entry `SamplingDeploy.RegMatchesTwo` is still due today (2026-11-08). Its date needs moving, to Thu
+  12 Nov on my estimate.
+
+**What 3b changes in SpotFlock's model** (`SpotFlock/Code.lean`; I'm not touching `stmtOk` or the sessions):
+- `Held` gains each template's circuit file.
+- `prog` becomes the files' lowerings side by side over the population (`bitsProgs`, on my branch). Member `t` has
+  `N·n_t` units, `N` the request slots.
+- `partition` becomes the files' proof blocks. `two`'s replay partition becomes each request slot's template units.
+- `regMatchesTwo` is re-proved by decision, as today.
+
+**The premise change; it needs your OK, since it's a claims change.**
+- `RegMatchesTwo` says `d.part = slotPartition l`, the registration's replay layout as contiguous gate ranges.
+- The files' replay blocks are gate sets of the files' program, template-major, so they can't be those ranges.
+- Every consumer reads only the replay partition's shape (its classes' strata sizes):
+  - `Design.Pa` and `Design.WellFormed`, in `replayDraws_code`;
+  - `d.part.blocks.length`, in `secondDraws_code`.
+- **I propose equal shapes instead.** That weakens a premise of `SampledKSTwo`, so the guarantee says more; its lock
+  record moves.
+- The tie between replay block `ρ` and request `ρ`'s served values is the frame's and the openings' (TWOOPENS,
+  BINDKSAT), never this premise's.
+- Until you rule I build it on my branch and don't mark it.
+
+**Peers, answered:**
+- **TWOOPENS's four items for 3a:**
+  - the program and how it reads as Bridge's `progOf`;
+  - the shift lemmas: gates, `Needs`, `Boundary` and `Correct` are done; blocks and constants are next;
+  - that no member reads another's gates (`SitsAt.closed`);
+  - a session's VU `i` is in block `i / g_t`, instance `i % g_t` (`Flock.Circuit.instOf`).
+  - One correction for them: the model's member `t` covers the population's `N·n_t` units, not the interior's `Q·n_t`.
+    A session proves `q·n_t` of them, through `RegTwo.blockAt`.
+  - The tie of `c_t` to session `t`'s reference statement waits on their change 1. That now waits on (A), their 11:16Z
+    blocker.
+- **TWOVERIFY:**
+  - The params shape is agreed: `params.proofs.templates`, each `{template, circuit: hex SHA-512}`.
+  - `second-circuit` needs no new verdict field. Each session's public file names its circuit (`circuit_sha512`), and
+    flock-verify refuses one staged for another circuit.
+
+**ETAs:**
+- 3b's partition and its block and constant lemmas on my branch about Mon 18:00Z; 3b about Thu 12 Nov.
+- Item 1 Mon 12:00Z. #8066 and #7981 are both still open, and #7981 isn't on `checked`.
+- The next checkpoint is about 12:20Z. No runs are in flight.
