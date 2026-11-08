@@ -870,6 +870,28 @@ def test_a_call_over_the_budget_whose_callees_are_calls_is_partitioned_by_them(m
     assert CK.summarize([e])["by_callees"] == {top.id: sorted([twice.id, mul.id])}
 
 
+def test_a_call_cut_member_by_member_down_to_a_member_over_the_budget_is_partitioned_by_its_callees(monkeypatch):
+    """A Call whose body `cut.separable` cuts member by member, down to a member over the budget that isn't (``too-large``), is
+    `checks.uncut` too, as `DsaButterflyRowsPad_v1` is around `DsaButterflyRows_v1`: its callees partition it, the member by its
+    own callees, and where one of those is no Call it fails by its name with that gap."""
+    from verity.ml.circuits.types import Value
+
+    top, twice, mul, opts = _two_callees()
+    wrap = _composite("CircuitCheckWrap", (_f32x2(), Value(32)), lambda B, S, x: B.call(top, x))
+    assert CK.uncut(wrap, opts) == f"its member {top.id}'s 3 gates are over the partition budget 2, and not cut member by member"
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (wrap, top, twice, mul)})
+    e = CK.check_definition(wrap, opts, memo={}, pins=PINS, as_call=True)
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [f"partition/gate-recomputed {twice.id} (1 gate(s))"]
+    p = e["partition"]
+    assert p["checked"] and sorted(p["by_callees"]) == [top.id]
+    assert sorted(p["by_callees"][top.id]["by_callees"]) == sorted([twice.id, mul.id])
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (wrap, top, mul)})
+    e = CK.check_definition(wrap, opts, memo={}, pins=PINS, as_call=True)
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [
+        f"partition/unpartitioned {wrap.id} its member {top.id}'s 3 gates are over the partition budget 2, and not cut member by "
+        f"member; {top.id}: {twice.id} is no Call"]
+
+
 def test_a_call_over_the_budget_with_a_callee_that_is_no_call_fails_by_its_name(monkeypatch):
     """A callee that is no Call is partitioned inside the Call that contains it, which here is over the budget: nothing checks
     the Call's partition, so it fails by its name (``partition/unpartitioned``), with the callee, rather than pass as a warning."""
@@ -1104,21 +1126,8 @@ def _over_budget(catalog, calls: set[str]) -> dict[str, str]:
 
 def _gap(fn) -> str | None:
     """Why a Call of ``fn`` over the budget passes with its partition unchecked, or None: for one `checks.uncut` leaves to its
-    callees, `checks.callee_gap`; for one the partition cuts member by member (`cut.separable`, in turn), a member over the
-    gate budget that isn't cut so, which `word.unit_rule` leaves whole (``too-large``)."""
-    from verity.ml.circuits.cut import separable
-    from verity.ml.definitions import word as W
-
-    if CK.uncut(fn, OPTS) is not None:
-        return CK.callee_gap(fn, OPTS)
-    todo = [fn]
-    while todo:
-        u = todo.pop()
-        if hasattr(u, "body") and u.gates > W.gate_limit(u, OPTS.partition_max_gates):
-            if (sep := separable(u)) is None:
-                return f"its member {u.id} is over the partition budget and not cut member by member"
-            todo += [c for c, _m in sep]
-    return None
+    callees (a member that the cut member by member leaves whole included), `checks.callee_gap`."""
+    return CK.callee_gap(fn, OPTS) if CK.uncut(fn, OPTS) is not None else None
 
 
 _WALK: dict = {}

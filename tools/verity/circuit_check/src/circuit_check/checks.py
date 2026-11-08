@@ -45,7 +45,8 @@
                      beside it (`q_call`: proof blocks, committed bits, values computed in two proof blocks; or why it refuses,
                      a warning).
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
-                     nor is one over ``partition_max_gates`` gates not cut member by member (`uncut`); such a Call is
+                     nor is one over ``partition_max_gates`` gates not cut member by member, or cut so down to a member
+                     over the budget that isn't (`uncut`); such a Call is
                      partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
                      Call's, failing by its name), and otherwise fails by its own name, ``partition/unpartitioned``, with why
                      its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget): every
@@ -1161,7 +1162,8 @@ def q_call(fn: Any, opts: Options, F: Findings, memo: dict) -> dict:
 def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     """Why `partition` can't check a Call of ``fn`` itself, or None: its parameters' leaves are over ``partition_max_leaves`` (the
     word query and `Q_call` resolve every leaf), or it is a composite over its gate budget (``partition_max_gates``,
-    `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`)."""
+    `word.gate_limit`) whose body `word.unit_rule` doesn't cut member by member (`cut.separable`), or cuts so down to a member
+    over its own budget that it doesn't (``too-large``)."""
     from verity.ml.circuits.cut import separable
     from verity.ml.definitions import word as W
 
@@ -1170,9 +1172,17 @@ def uncut(fn: Any, opts: Options = DEFAULTS) -> str | None:
     if (leaves := sum(pt.leaves for pt in signature_of(fn)[0])) > opts.partition_max_leaves:
         return (f"its parameters' {leaves} leaves are over the partition's leaf budget {opts.partition_max_leaves}: the word query "
                 "and Q_call resolve every leaf")
-    if not isinstance(fn, PrimitiveDefinition) and fn.gates > (limit := W.gate_limit(fn, opts.partition_max_gates)) \
-            and separable(fn) is None:
-        return f"{fn.gates} gates: over the partition budget {limit}"
+    todo, seen = [fn], set()
+    while todo:
+        u = todo.pop()
+        if u.id in seen or isinstance(u, PrimitiveDefinition) or not hasattr(u, "body") \
+                or u.gates <= (limit := W.gate_limit(u, opts.partition_max_gates)):
+            continue
+        seen.add(u.id)
+        if (sep := separable(u)) is None:
+            return (f"{fn.gates} gates: over the partition budget {limit}" if u is fn else
+                    f"its member {u.id}'s {u.gates} gates are over the partition budget {limit}, and not cut member by member")
+        todo += [c for c, _m in sep]
     return None
 
 
