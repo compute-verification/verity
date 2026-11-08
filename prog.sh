@@ -1,0 +1,1 @@
+O=/workspace/research/runs/$1/out; cat $O/summary.txt | cut -c1-200 | tail -6; echo; N=/workspace/tmp/circuits-neutrality/$1; ls $N/*/ 2>/dev/null | head -20; tail -c 1500 $O/neutrality.log | tr '\r' '\n' | tail -8 | cut -c1-250
