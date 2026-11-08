@@ -14,7 +14,8 @@ prefix as external tokens, then `cache_blocks`). Block ids, runner slots, the pr
 engine state are the fresh engine's own. ``--tail`` sets what a re-added request's last, partial block holds past its
 prefix: the served bytes (``copy``), zeros (``zero``), or NaN, with every other slot of the fresh pool NaN too
 (``nan``: then nothing outside a computed prefix may be read). The served arm must have kept the K/V file of both edges
-(serve_tax's ``--save-kv FROM,TO``).
+(serve_tax's ``--save-kv FROM,TO``). The served generators are put back and each re-added request gets its served seed
+when the runner adds it (`carry_rng`), so unseeded sampling draws as serving drew.
 
 The fresh engine's prefix cache holds only the re-added requests' pages, so a request the served engine served from a
 finished request's cached pages would miss. ``--hits forced`` (the default) takes each request's prefix-cache hit from
@@ -71,6 +72,7 @@ from verity_config.settings import SHARED  # noqa: E402 (from the tree's tools/c
 import boundary as B  # noqa: E402 (beside this file)
 import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402
+import tp_state as T  # noqa: E402
 
 TAILS = ("copy", "zero", "nan")
 #: substitute token ids for dummies: clear of the low ids and of the special tokens at the top of the vocabulary
@@ -556,6 +558,32 @@ def served_finish(st_requests: dict[str, int], outputs: dict[int, dict], steps: 
     return {rid: n.get(rid, 0) for rid in done}
 
 
+def served_seeds(st: dict[str, Any]) -> dict[str, int]:
+    """Each request the served runner held at the edge: its sampling seed (Model Runner V2's, drawn from numpy's global
+    generator when the request reached the runner, unless the request set one)."""
+    leaves = (st.get("runner") or {}).get("leaves", {})
+    if "sampler.sampling_states.seeds" not in leaves:
+        raise SystemExit("the edge's state holds no Model Runner V2 seeds: serve with VLLM_USE_V2_MODEL_RUNNER=1")
+    _, index = leaves["req_states.req_id_to_index"]
+    _, seeds = leaves["sampler.sampling_states.seeds"]
+    return {rid: int(seeds[i]) for rid, i in index.items()}
+
+
+def carry_rng(runner: Any, st: dict[str, Any] | None = None, start: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The served generators put back and each re-added request's served seed given to it when the runner adds it
+    (`tp_state.SeedHook`), from an edge's state (``st``) or a mirror's start (``start``, `start_state`'s ``rng``): a
+    re-added unseeded request would draw a new seed from numpy's generator, and shift every later request's."""
+    if start is not None:
+        if "rng" not in start:
+            raise SystemExit("the mirror's start state holds no generators: take it again (--at-step --mirror-out)")
+        T.set_rng(runner, start["rng"], seeds=True)
+        return {"from": "start", "seeds": len(start["rng"].get("seeds") or {})}
+    seeds = served_seeds(st)
+    B.set_rng(st["rng"])
+    runner._verity_seed_hook = T.SeedHook(runner, seeds)
+    return {"from": "edge", "seeds": len(seeds)}
+
+
 def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], layers: list[Any], block_size: int,
           tail: str, shape: Dummies | None = None) -> dict[str, Any]:
     """Every request ``st`` (the served edge's state) holds, added to the fresh engine as `rebuild`'s docstring says;
@@ -763,12 +791,12 @@ class _Stop(Exception):
 
 
 def start_state(sched: Any, kvm: Any, kv: Any, mirror: Mirror, arrived: dict[str, dict], served_steps: dict[int, dict],
-                done: int, step: int, block_size: int) -> dict[str, Any]:
+                done: int, step: int, block_size: int, runner: Any) -> dict[str, Any]:
     """What lifetime replay starts step ``step`` from, taken right before the served-identical engine schedules it (every
     step before has finished on the GPU and the mirror holds its slots): the scheduler's queues in order, each request's
     prompt, processed outputs, computed tokens (step S-1's included), status and sampling, the last step whose output was
-    processed, the requests the record finishes after it and before S, and each request's K/V root over its computed
-    tokens on the GPU and in the mirror."""
+    processed, the requests the record finishes after it and before S, each request's K/V root over its computed tokens
+    on the GPU and in the mirror, and the generators with each request's seed (`tp_state.rng_state`)."""
     order = [r.request_id for q in (sched.running, sched.waiting, getattr(sched, "skipped_waiting", ())) for r in q]
     reqs = {}
     for rid in order:
@@ -786,7 +814,7 @@ def start_state(sched: Any, kvm: Any, kv: Any, mirror: Mirror, arrived: dict[str
     return {"step": step, "processed_through": done, "order": order, "requests": reqs, "finished_before": finished,
             "blocks": {rid: list(ids) for rid, (ids, _) in spans.items()}, "truth": truth, "mirror_vs_gpu": roots_diff(truth, mine),
             "preempted_waiting": sorted(r for r in order if reqs[r]["status"] == "PREEMPTED"),
-            "partial_last_pages": sum(1 for _, n in spans.values() if n % block_size)}
+            "partial_last_pages": sum(1 for _, n in spans.values() if n % block_size), "rng": T.rng_state(runner)}
 
 
 def split_outputs(diff_of: Any, served: dict[int, dict], rebuilt: dict[int, dict], readded: set[str]) -> dict[str, Any]:
@@ -926,6 +954,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         want0 = {r: v for r, v in begin["truth"].items() if r in readded}
         out["start"] = {k: begin[k] for k in ("step", "processed_through", "finished_before", "mirror_vs_gpu", "preempted_waiting",
                                               "partial_last_pages")}
+        out["rng"] = carry_rng(runner, start=begin)
     else:
         if mirror and not shape:
             pages = first_of(pages, mirror.page)
@@ -933,6 +962,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         readded = set(out["rebuilt"].pop("order"))
         held = []
         want0 = roots(near_file, served_spans(st0), bs)
+        out["rng"] = carry_rng(runner, st=st0)
     trace.scheduled = first
     got0 = roots(kv.rows, live_spans(sched, kvm), bs)
     if shape:
@@ -977,7 +1007,7 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 mirror.flush()
                 if a.mirror_out and trace.scheduled == a.at_step:
                     stop["start"] = start_state(sched, kvm, kv, mirror, arrived, w["steps"], max(outs, default=first - 1),
-                                                a.at_step, bs)
+                                                a.at_step, bs, runner)
                     raise _Stop(f"stopped right before step {a.at_step}, with its start state taken")
             if shape:
                 shape.flush()

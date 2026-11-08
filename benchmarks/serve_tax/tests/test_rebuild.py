@@ -160,7 +160,17 @@ def test_start_state_refuses_a_step_that_runs_a_request_finished_the_step_before
     served = {9: {"finished": {"x": {"reason": "length"}}}, 10: {"rows": [["a", 3, 1], ["x", 3, 1]]}}
     arrived = {"a": {"sampling": {}}, "x": {"sampling": {}}}
     with pytest.raises(SystemExit, match="start elsewhere"):
-        RB.start_state(sched, None, None, None, arrived, served, 8, 10, 4)
+        RB.start_state(sched, None, None, None, arrived, served, 8, 10, 4, None)
+
+
+def test_served_seeds_read_each_held_request_s_runner_slot_and_refuse_a_v1_edge() -> None:
+    st = {"runner": {"leaves": {"req_states.req_id_to_index": ("plain", {"a": 2, "b": 0}),
+                                "sampler.sampling_states.seeds": ("UvaBackedTensor", [11, -5, 7])}}}
+    assert RB.served_seeds(st) == {"a": 7, "b": 11}
+    with pytest.raises(SystemExit, match="V2_MODEL_RUNNER"):
+        RB.served_seeds({"runner": {"leaves": {}}})
+    with pytest.raises(SystemExit, match="no generators"):
+        RB.carry_rng(None, start={"step": 3})
 
 
 def test_roots_read_each_request_s_computed_tokens_only() -> None:
