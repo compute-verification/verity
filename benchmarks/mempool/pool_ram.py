@@ -56,7 +56,7 @@ class Blk(NamedTuple):
     owner: int = 0
 
 
-class Op(NamedTuple):
+class PoolOp(NamedTuple):
     kind: str
     desc: dict
     base: int                   # 8·(o + 1) for the o-th operation: its position j accesses at base + j
@@ -76,13 +76,13 @@ class Ram:
         self.log: list[tuple[tuple, Any, int, Any, int]] = []
         self.accesses = 0
         self.first: dict[tuple, Any] = {}
-        self.ops: list[Op] = []
+        self.ops: list[PoolOp] = []
         self.begun = 0
         self.touch: Callable[[tuple], None] | None = None
 
     def begin(self, kind: str, **desc: Any) -> None:
         self.begun += 1
-        op = Op(kind, desc, 8 * self.begun, {})
+        op = PoolOp(kind, desc, 8 * self.begun, {})
         if self.keep:
             self.ops.append(op)
         else:
