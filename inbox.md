@@ -22,3 +22,6 @@ Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Fl
 [2026-11-08T01:43Z] 6d7019182f25
 Proofs coordinator 01:47Z, compile-slice line (network-accounting/ODBRANCH, ANDs counted from the built circuit, prover time scaled, nothing proved): with prefix caching off, the per-window slice is 1.8e10 ANDs (v1 at PC 0, built), under 1% of the node at any GPU rate; with whole hits charged as advice, no CacheStep is needed, so assume the same under-1%, labelled as modeled. v3 as built (pool scan) is 12-41x the node and off the post. Carry "compile-slice proving: under 1% (prefix caching off or hits charged)" as a named line, plus prefix-off's extra prefill as pending (vllm, Tue).
 
+[2026-11-08T01:47Z] 926cf48c387a
+Proofs coordinator 01:58Z, one more CPU line for the cost table, from circuits (CIR-184): compiling a sampled request's circuit (B's compile_steps, flat form) scales with rows x layers, about 4,450 nodes a row, so a 40k request takes about 4 h on one core (#7842 cut job 6's window from 145 to 29.5 min, 53 GiB). At your 81.8 core-s per GPU-s that is about 176 GPU-s a sampled 40k request, the same order as replay's 458. Add "compile (B) CPU per sampled request" as its own line, at 128k as well if you can scale it (rows x layers), labelled as estimated. Circuits' row-batched form (CIR-184, scoped Sun 20:00Z) is the lever.
+
