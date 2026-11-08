@@ -4330,6 +4330,11 @@
   "Flock.SecurityProofs.SampledAuditAnyDeployed": {
    "honest": ["Flock.SecurityProofs.SessionLoopZKAnyDeployed_honest"],
    "nontrivial": "Flock.SecurityProofs.SampledAuditAnyDeployed_nontrivial"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
+   "honest": ["Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest"],
+   "nontrivial": "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial",
+   "kind": "exclusion"
   }
  },
  "unwitnessed": {
@@ -4689,10 +4694,6 @@
   },
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_bodies": "4acf1c33f2211813d280f64d9ce420527790e62cdc0bd2120a685384914d8df5",
   "Accounting.SecurityProofs.ServingBlocks.ServingBlockBound_nontrivial_overlap": "ce07bb9268f9ba61b228b15986624be7a933fefcbad6c041e24f3c41e0e22c5c",
-  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary": {
-   "type_hash": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
-   "unfolded_hash": "7d6c4d4dd87ad56ff3ecc4cb7b71b376d15c0e0b6d3951d2ae5526721867d320"
-  },
   "Accounting.SecurityProofs.TS.CheckedSessionSound": {
    "type_hash": "59ccc77bbee7f21805538ad51557c48a566d9c08401de5ff9bc988fff15c13ad",
    "unfolded_hash": "499dcebb040895154a3f56dfd6f541bb403ce46aa0f1fa7f7d1458b669a6959d"
@@ -9435,6 +9436,38 @@
    },
    "type_hash": "25bb13b79dd739375049d34f8168300966c182117594c7a5a67767779cd0ea9c",
    "unfolded_hash": "7d6c4d4dd87ad56ff3ecc4cb7b71b376d15c0e0b6d3951d2ae5526721867d320"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedElementary_honest"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "b937b5e90ac4e9fa4cc05c362459bc2dcffa1c15a3f8cfb2cf6158528814ecd5",
+   "unfolded_hash": "f8b9ec07014d0f84fc0fee04f7f1cd8cf742a12c39be77008350d763324165b8"
+  },
+  "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": {
+   "owner": "@training",
+   "signature": [
+    "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial :",
+    "  Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "2d20e7e6b89b4fdf3de336f65c1bb585181dc57741bfd6d21d65b68f85246846",
+   "unfolded_hash": "8304cc3ecb636ac525b633213e062a13bd8928d9c145532d7bd73fe066d0e218"
   },
   "Accounting.SecurityProofs.Sketch.CommitThenProject": {
    "owner": "@memory-accounting",
@@ -25851,7 +25884,9 @@
    "Accounting.SecurityProofs.Remote.HeldOverTimeLinksSampled": "frozen (no-function): It is Accounting.SecurityProofs.Remote.HeldOverTimeLinks with LiveCoins derived from the verifier's opening draw as deployed (Accounting.Remote.Draw: Key.subset on the first SHA-512 blocks prf t gives window t's uniform openings coin, released after the window's size and correct receipts are fixed, the rejection sampler exact on each draw's first word and its fallbacks free) and a trace over the coins, not a function's acceptance (RemoteAudit.draws, Key.subset); the session is the one the prover plays, which holds no coin commitment while it runs (the challenger sends each coin as it releases it and its commitment to the session's coins only after the prover's last root, with the outcome: soundness's ruling of 27 Oct, no hiding premise on the root), so Live, Refused and Counted are stated on that session and no hiding term is charged (note:20261027T0118Z-report-coin-order-rbw), Refused lets an opened receipt through only correct or moved off the row its root holds (Accounting.Remote.Draw.Receipts.held, by definition the plurality of the rows the receipt shows over the window's continuations, so read off its cut: Accounting.SecurityProofs.Remote.Binding.held_cont, tally_le_held), charged as the receipts' binding term (Accounting.Remote.Draw.Receipts.binding), which Accounting.SecurityProofs.Remote.ReceiptsBindingOfCR bounds under claim cr/sha-512 for the fork finder that runs the prover twice from the window's cut, at sum_t sqrt(|L_t| s_t (q_t^2/2^513 + split_t)), split_t the chance that the two runs' roots differ, which is not bounded here: the prover sends window t's roots before it holds anything of window t's openings coin, but that they read only the cut is not a premise (the gap binding-split; note:20261024T2140Z-report-err-terms, note:20261025T0010Z-report-bind-fork, note:20261025T0115Z-report-bind-close), and the coin function enters as the advantage of each window's distinguisher, one a window and fixed by the session (Accounting.Remote.Draw.Session.distinguisher, read by Pous.pr, which is not a shape.events probability; note:20261024T1346Z-report-draw-oracle), and that audit.pooled's greedy reaches the pooled bound's supremum is not stated (note:20261024T0920Z-report-draw-exact), at W the record's pooled bound; SketchBound is stated on the trace and derived on a model of the receipts' sketch (Accounting.Remote.Sketch) by Accounting.SecurityProofs.Remote.SketchBoundDeployed, whose premises Receipted and Present tie that model to the trace and whose random-oracle step is the named premise Accounting.Assumptions.SketchHashRandom at ε_ro = (Q + P)^2/2^257, added to δs (note:20261024T0839Z-report-sketchbound, note:20261024T1350Z-report-sketch-named, note:20261024T1817Z-report-rt4-fixes)",
    "Accounting.SecurityProofs.JointPooledLive": "frozen (no-function): Like JointPeriodLive, over a horizon of periods in one causal game: each period's per-period guarantees are hypotheses over an abstract live period of the device model whose verdicts, openings, extractor, finders, computed gates and world are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), and it bounds a Verity.Game.prob event, which shape.events does not list.",
    "Accounting.SecurityProofs.JointPooledBlocksLive": "frozen (no-function): Like JointPooledLive, over a horizon of server-time blocks and the wipes that open them in one causal game: each block's per-period guarantees and each block's PoUS memory term are hypotheses over an abstract live block of the device model whose verdicts are fields of the run, not Lean functions (Security/Definitions/Accounting/JointLive.lean), each wipe is core's Verity.Wipe, with its survivor bound (Verity.Wipe.SurvivorBound) and a map of the run into the wipe's game at its boundary (Verity.Wipe.OfRun, whose measure preservation is a hypothesis) whose preimage of the survivor event is a disjunct, and it bounds a Verity.Game.prob event, which shape.events does not list.",
-   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here."
+   "NetTiming.SecurityProofs.PooledIncorrectBlocksLe": "frozen (no-function): It is a fact of probability over an abstract monitoring period of windows on a product of live coins (Fin m → Ω), each with an abstract draw whose law (a uniform k-subset of its units) is a hypothesis, an abstract set of wrong units read only from earlier windows' coins, and an abstract acceptance event whose soundness error is a hypothesis, not a run of the sampled verifier or of the challenger's draw (Flock.Draw): it bounds Pr[every window accepts ∧ F ≤ Σ wrong units] by (1 − q)^F + Σ ε_i, and the leak those wrong units carry (the count over the monitoring period, with A3 and KS at the deployment) is not stated here.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_honest": "completeness: UncertifiedElementary's honest lemma: at Honest (Accounting.ServingBlocks.Honest, Security/Definitions/Accounting/ServingBlocks/Instances.lean), at its serving block after the wipe with that block as its one inference block, the weight the inference block leaves equals the split weight, which is 1 (gate 2's operation, split across the wipe), so its cap is attained with a right-hand side above 0. It states facts of an instance, not a property of a Lean function, and rests on no run and no art:.",
+   "Accounting.SecurityProofs.ServingBlocks.UncertifiedElementary_nontrivial": "lemma: UncertifiedElementary's nontrivial lemma: it takes no premise to drop, so a tighter cap fails at an explicit circuit: at Straddle, at its serving block after the wipe with that block as its one inference block, the operation split across the wipe is left at the split weight, so the cap fails at every right-hand side below it, 0 among them. A counterexample at an instance, not a property of a Lean function."
   },
   "conjectures": {
    "Pous.P2.Assumptions.P2RingAuditSecure": {
@@ -29305,12 +29340,14 @@
    }
   },
   "Definitions.Accounting.Guarantees.ServingBlocks.Witnesses": {
-   "digest": "05955b712cd4c89d863f929a16cfcc58f787a94e0466fd168aaf9cc9aae466d5",
+   "digest": "df5b568597ff9626909e86cf7c2f7d0e4f63d7862ffd9ffa3da40e1a3d007dec",
    "definitions": {
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_honest": "25797ab90323ce962d8b746541fadb2402657126f47bd6c9fb7c71c51434d4eb",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBoundRemote_nontrivial": "5966cd1a2bcc52533644b9e29551a86d124db749cb25bbbef1cc1101625a13f6",
     "Accounting.Guarantees.ServingBlocks.ServingBlockBound_honest": "e5d0cfb7e12796c00dc4e54fb4984db24aa41e3a10153a76fc1486a7cda8ca6a",
-    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e744485e2a719f114d332e0119503dd16e78503bf7926fd31c30fa18c2828428"
+    "Accounting.Guarantees.ServingBlocks.ServingBlockBound_nontrivial": "e744485e2a719f114d332e0119503dd16e78503bf7926fd31c30fa18c2828428",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_honest": "1fefcdec4121890a8f73fd6005382cc1378dde962dd1b83b9d1447f8c55e20c3",
+    "Accounting.Guarantees.ServingBlocks.UncertifiedElementary_nontrivial": "169cbf03d056a965fce16e6609ad137859e71eec7892f93acdb19d890a63d201"
    }
   },
   "Definitions.Accounting.Guarantees.Sheet": {
@@ -30410,7 +30447,7 @@
    }
   },
   "Definitions.Accounting.ServingBlocks.Instances": {
-   "digest": "739837c03a459efc296a6b1a4db703885d22c6adfc7e69671cb6834a53e8968b",
+   "digest": "8fb00e487d9772c4d6ec78ef1aa3f5b41248327b3e79aed8ffa839e431ad0d8a",
    "definitions": {
     "Accounting.ServingBlocks.Counter.C": "3b93f637755e03d11d4590845850e2a40f8ca396e64620f282ac3eea5242dea6",
     "Accounting.ServingBlocks.Counter.J": "c3bdc4121c7ea29a05761b86cf7f1289f7752725e46610cf8988a159fa55d9fa",
@@ -30426,6 +30463,11 @@
     "Accounting.ServingBlocks.Honest.d": "e18cb02333a6fd8fc57ecee395e1cde0a87c8af62fd0e6abaf0c48b9e1e07686",
     "Accounting.ServingBlocks.Honest.q": "ff10d6a5f6fc4e4e2358b01325aed2926711dee3bdeaf454f1d88b4c42756a63",
     "Accounting.ServingBlocks.Honest.r": "3ca1d6cd78afe2cb43a880985ea1140a7e7812e2dd1ca83afcccca45fc9ccc5a",
+    "Accounting.ServingBlocks.Straddle.C": "7371efce3e84e1f496ff2e7535910e7f73f1fe901a3863383056ff86badd424c",
+    "Accounting.ServingBlocks.Straddle.J": "8961a0112ee79113d25018121ecafab6c7d2100b581f4b885bf64ed6341b8f7d",
+    "Accounting.ServingBlocks.Straddle.P": "a7b55379b791cff511b9c1f2d874e1db7827b7460c67d16880c77e1fc078815c",
+    "Accounting.ServingBlocks.Straddle.d": "c44e2f906e4d2bf5b5da2496778be358bb04228c5d2eb9081b60060ee20bff69",
+    "Accounting.ServingBlocks.Straddle.r": "cd2f0034233af2622583a9b9af8bfdd5e9e31dc1860b599e2955f4a710f120d2",
     "Accounting.ServingBlocks.refl": "bb317f3b047d8ee30d41e5f0f0a50868b2b1eb950aa129a0c2954e51f961f464"
    }
   },
