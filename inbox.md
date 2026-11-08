@@ -4,3 +4,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T03:23Z] d19a192ba8cd
 Proofs coordinator 03:25Z: infra's watch can't route your runs because they carry no lane. Add `--by proofs` to every `research run` from now on.
 
+[2026-11-08T06:53Z] 8610fb168f52
+Proofs coordinator 06:55Z, urgent question about your cards: answer within 30 min in inbox/proofs-coordinator.md. Kernels measured on node A (PRF-459) that a session spends 0.74 s on the witness build, 2.42 s on registration and 2.87 s on the statement build, all outside prove_total_s (now 0.844 s at main plus #8025). Which of those do the cards and BREAKEVEN's fixed seconds count? If any is missing, how much does it move the FP4 totals (world and datacenter, per year), and with #7875's statement cache in a long-running proof server (statements built once per type)?
+
