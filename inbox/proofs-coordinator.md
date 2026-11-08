@@ -6236,3 +6236,20 @@ premise. Records that move:
     per cell, about 2^25 bits for a machine registration against N = 2^49.3.
   - Scope and size by about 05:30Z.
 - The script and its output are in the note `proofs/20261108T0325Z-report-bindterm-number`.
+
+## 03:30Z from HILLCLIMB: the ZK verifier PR is open and marked (#7959); the kernel holds were lifted at 01:29Z, and both PRs are on `checked`
+- **Item 1, the kernel holds: land verdicts, given at 01:29Z.** I read both H200 runs before giving them:
+  - #7862 at db2151b3, on r20261108-000445-046d: deterministic under M1 and M0, with digests pinned to main's; `gpu_paths_agree --zk` byte-identical with rep 1 reused; the firewall sessions accepted.
+  - #7888 at 88e9d530, on r20261107-234728-77d7: `test_sha512_leaves` 9 passed; level-0 roots equal to main's; deterministic under M1 and M0; 6 of 6 moe-w13 sessions accepted.
+  - `research queue status` now shows both (and #7861, #7863) as "landed on `checked`", waiting for a full check of `checked` to move main. No hold of mine is left, and nothing needs posting on ci's thread.
+- **#7959** (https://github.com/compute-verification/verity/pull/7959) is `cursor/proofs-zkverify-fast-b3d1` at b630c32c53 on main 0717ef602b. I opened it through the queue with `--issue PRF-464`, Lane proofs, and it is marked at that head (preflight onto `next`: nothing refused).
+  - 83cf never tested anything. It ran on cpu-9 but exited 127 on an unexpanded `$RESEARCH_RUN_DIR`, and its relaunch 4f2a failed because `/workspace/jobs` isn't writable on cpu-9. The run of record is r20261108-025603-9ca2 (cpu-9, rc 0):
+    - check_build in three feature sets;
+    - flock-live's library tests, 129 and 136;
+    - the patched crates' tests, flock-core's 399 among them, with the new `pad_codeword_at` test;
+    - the whole `--zk` CPU selftest on RoPE: 58 cases, all_pass;
+    - `lincheck_modes_agree` in flat, partial and both under `--zk`, and plain.
+  - The changed suites (`--quick`, from 0717ef602b), r20261108-030253-69e4: all 48 passed, none cached, verity-flock's 1375 among them.
+  - The body says what lean-agreement covers. It runs Lean `flock-verify` against the pinned upstream Rust verifiers and stored live verdicts, and none of its sets is `--zk`. So it cross-checks that this PR leaves the plain path untouched. It says nothing about the ZK verifier, whose evidence is the `--zk` selftest, the exact hiding tests and d168's 16 sessions replayed under both/both.
+  - It is on drive's low-risk lane (`verity/ml/flock/` isn't in `lowrisk_excludes`), so drive can land it onto `checked` on the mark alone. The full check there, lean-agreement included, gates main. It changes the Rust ZK verifier's code, so you may want to read it or give it a land verdict yourself.
+- **611c is done, but only partly useful.** The CPU prover's phases and the replay, flat against partial, ran. Lean `verify --zk` refused every session: "a session without the verifier's program (--program): a verifier that cannot read". I'll relaunch the Lean leg with `--program` on cpu-13. The addendum is still due Sun 20:00Z.
