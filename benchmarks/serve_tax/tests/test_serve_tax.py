@@ -107,6 +107,19 @@ def test_server_env_names_the_changes(tmp_path: Path):
         S.server_env(S.ARMS["tick"], tmp_path, tmp_path, None, 600.0, 600.0)
 
 
+def test_the_boundary_rows_arm_turns_prefix_caching_off_and_hands_the_plugin_its_object(tmp_path: Path,
+                                                                                        monkeypatch: pytest.MonkeyPatch):
+    m = S.MODELS["glm53"]
+    argv = S.server_argv(S.ARMS["boundary-rows"], m, Path("/ck"), 8000)
+    assert argv == S.server_argv(S.ARMS["record"], m, Path("/ck"), 8000) + ["--no-enable-prefix-caching"]
+    with pytest.raises(SystemExit, match="BOUNDARY_ROWS"):
+        S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0)
+    monkeypatch.setenv("BOUNDARY_ROWS", '{"check": "t", "per_output": 1, "drained": true}')
+    cfg = json.loads(S.server_env(S.ARMS["boundary-rows"], tmp_path, tmp_path, None, 30.0, 600.0)[S.PLUGIN_ENV])
+    assert cfg["record"] and cfg["boundary_rows"] == {"window_s": 30.0, "check": "t", "per_output": 1, "drained": True}
+    assert "boundary_rows" not in json.loads(S.server_env(S.ARMS["record"], tmp_path, tmp_path, None, 30.0, 600.0)[S.PLUGIN_ENV])
+
+
 def test_only_the_restore_arms_take_edges_and_only_restore_dumps_there(tmp_path: Path):
     edges = {"edges_s": [180.0, 360.0], "save_kv": [1], "dump": False}
     cfg = {a: json.loads(S.server_env(S.ARMS[a], tmp_path, tmp_path, None, 600.0, 600.0, edges)[S.PLUGIN_ENV])
@@ -147,6 +160,7 @@ def test_every_engine_runs_with_inductors_rblock_pinned(tmp_path: Path, monkeypa
 
 def test_only_the_batch_invariant_arms_run_vllms_batch_invariant_kernels(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("VLLM_BATCH_INVARIANT", "1")   # a job's environment doesn't turn it on for the stock arms
+    monkeypatch.setenv("BOUNDARY_ROWS", '{"check": "t"}')
     on = {a for a in S.ARMS if S.server_env(S.ARMS[a], tmp_path, tmp_path, {"bucket_us": 1, "sat_us": 1, "free_us": 1},
                                             600.0, 600.0)["VLLM_BATCH_INVARIANT"] == "1"}
     assert on == {"bi-compiled", "bi-eager"}

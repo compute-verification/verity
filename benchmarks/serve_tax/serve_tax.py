@@ -45,6 +45,9 @@ The arms, each one engine configuration; each adds its change to the arm it name
   seconds of a load): the engine drains, the KV pool is hashed where it lies by the row-table kernels under a fresh key
   and copied to pinned host memory (on the ranks ``--kv-copy`` names), and the scheduler's state and each rank's runner
   rows and generators are taken, all kept until the next edge (`servetax_plugin.edges_of`, `boundary.rank_take`).
+- ``boundary-rows``: ``record`` with prefix caching off and the two-stage audit's boundary commitment at serve, each
+  window's finished requests committed by size class (`verity_vllm.pipeline.boundary_rows`), its object (``check``,
+  ``per_prompt``, ``per_output``, ``drained``) the JSON in ``BOUNDARY_ROWS``, at ``--window-s``.
 
 `plan` fixes the requests every arm serves, so a job's arms and reps read one file (``--plan``).
 
@@ -139,6 +142,9 @@ ARMS = {
                     "drained, the KV pool hashed by the row-table kernels and copied to host memory, the scheduler's "
                     "state and each rank's runner rows and generators taken and kept; no leaf dump, no per-step timing",
                     plugin=("record", "tokens"), edges=True, edge_dump=False, edge_busy=False),
+    "boundary-rows": Arm("record", "+ the two-stage boundary commitment at serve: each window's finished requests committed "
+                         "by size class (boundary_rows), prefix caching off", ("--no-enable-prefix-caching",),
+                         plugin=("record", "boundary_rows")),
 }
 #: what every request's body adds to the corpus's (`corpus`), set by `run` from its arm
 BODY_EXTRA: dict = {}
@@ -242,9 +248,13 @@ def server_env(arm: Arm, d: Path, site: Path, tick: dict | None, window_s: float
                PYTHONPATH=os.pathsep.join([str(site), str(HERE), str(ROOT / "integrations/vllm"), str(ROOT),
                                            *SHARED.PYTHONPATH]))
     env.update(arm.env)
+    if "boundary_rows" in arm.plugin and not os.environ.get("BOUNDARY_ROWS"):
+        raise SystemExit("the boundary-rows arm needs BOUNDARY_ROWS, a JSON object naming its check template")
     if arm.plugin:
+        rows = ({"boundary_rows": {"window_s": window_s, **json.loads(os.environ["BOUNDARY_ROWS"])}}
+                if "boundary_rows" in arm.plugin else {})
         env[PLUGIN_ENV] = json.dumps({"out": str(d), "window_s": window_s, "kv_window_s": kv_window_s,
-                                      **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {})})
+                                      **{k: True for k in arm.plugin}, **(edges if arm.edges and edges else {}), **rows})
     if arm.tick:
         if tick is None:
             raise SystemExit("the tick arms need τ: --tick-ms SAT,FREE or --tick-from STEP_TRACE")
