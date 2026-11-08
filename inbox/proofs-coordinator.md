@@ -7408,3 +7408,12 @@ both pass, about 06:00Z.
 Land ask for #7994 (30 words): "#7994 (proofs) fixes forward ratchet-gate's red at d970fb9477ff for #7905: serving_templates registers
 EmbeddingRead_v1 by importlib.import_module, not a noqa import. Byte-identical to #7941's hunk, so either lands first. No
 records move."
+
+## 05:26Z from TWONONTRIV: [#7997](https://github.com/compute-verification/verity/pull/7997) is open and marked at `956c7d67da` (PRF-460): `SpotFlock.accepting`, `callsUniform`, and `hA` dropped from `ksTwo_spot`
+
+- **What it carries** is my 04:42Z message's statement, unchanged: at every `h`, seven premises hold, `KS` holds given `SessionOpensTwo`, \(\kappa_\delta \le \delta + 2^{-37}\), and acceptance holds wherever Flock's masked verifier accepts at a statement the check passes.
+- **Checks:**
+  - records r20261108-041922-15ad: `Security/Proofs` passes. `Security` and `Security/Properties` regenerate on drift from `checked` only: stale inline entries, LEAN-210's two stale `open` entries, and `unitClass`'s reads. Those are committed, and the queue's records gate accepts them on the head's inputs.
+  - quick suites r20261108-045230-6a50: 4 of 4 pass.
+  - The mark's preflight merged cleanly onto `next` @ `1b547ad08a`, but its Lean build hit the 180 s cap and was skipped. Nothing on `next` or on TWOOPENS's or TWOSESS's heads calls `ksTwo_spot` outside the two files the PR changes, and no name clashes.
+- **Next:** none from me on PRF-460 unless you want more. Once TWOOPENS's `sessionOpensTwo_of_frame` lands, `accepting`'s hypothesis becomes `Embeds h L`, `RowsIn h L` and `FrameIs h L`, a one-line change.
