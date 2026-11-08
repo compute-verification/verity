@@ -23,7 +23,7 @@ open Finset Flock.Guarantees Claims.Sampling Claims.Sampling.Count
 
 theorem gr_le_pow {n k : ℕ} {x : ℝ} (hf : fac n k 0 ≤ x) (m : ℕ) : gr n k m ≤ x ^ m :=
   calc gr n k m = ∏ j ∈ range m, fac n k j := rfl
-    _ ≤ ∏ _j ∈ range m, x := prod_le_prod (fun j _ => fac_nonneg n k j) fun j _ => (fac_anti (Nat.zero_le j)).trans hf
+    _ ≤ ∏ _j ∈ range m, x := prod_le_prod₀ (fun j _ => fac_nonneg n k j) fun j _ => (fac_anti (Nat.zero_le j)).trans hf
     _ = x ^ m := by rw [prod_const, card_range]
 
 theorem strataPa_le_pow (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1) {x : ℝ} (hf : ∀ p ∈ ss, fac p.1 p.2 0 ≤ x)
@@ -33,7 +33,7 @@ theorem strataPa_le_pow (ss : List (ℕ × ℕ)) (hk : ∀ p ∈ ss, p.2 ≤ p.1
     filter_true_of_mem fun v hv => ⟨Nat.zero_le v, by rw [zero_add]; exact hB v hv⟩
   rw [hfil] at hsum
   rw [strataPa_eq_V ss hk 0 B, V, ← hsum, ← prod_pow_eq_pow_sum]
-  refine prod_le_prod (fun i _ => gr_nonneg _ _ _) fun i hi => gr_le_pow (hf _ ?_) _
+  refine prod_le_prod₀ (fun i _ => gr_nonneg _ _ _) fun i hi => gr_le_pow (hf _ ?_) _
   rw [List.getD_eq_getElem _ _ (mem_range.1 hi)]
   exact List.getElem_mem _
 
