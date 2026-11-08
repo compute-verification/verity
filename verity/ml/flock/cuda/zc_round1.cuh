@@ -24,7 +24,9 @@ __device__ __forceinline__ u64 zlin_t8(u64 x) {
 // value and the lane's offset. It interleaves the four words' bytes so that the four lane l needs (byte l & 7 of words
 // l >> 3 and (l >> 3) + 4 of a and b: λ = l and l + 32) are one word of its column's row of gbuf, which lane l reads 4 bytes a
 // column. a·b is the table kernel's (clmad on sm_90, the log tables elsewhere; ZC_R1_TABLES forces them). Lane l's bytes v_l
-// and v_{l+32} are bit l of z's columns' halves, each rotated to its column's bit.
+// and v_{l+32} are bit l of z's columns' halves, each rotated to its column's bit. On clmad an outer chunk's fold over j,
+// Σ_j γ^j φ8(r_j) with γ = x, is Σ_i φ8(x^i)·c_i, c_i the 16-bit polynomial whose bit j is bit i of r_j (two 8x8 bit
+// transposes of the chunk's 16 bytes), in place of a φ8 read and a multiplication by γ a step.
 // No shared-memory conflicts: a quarter-warp's 16-byte table reads are 8 slots of one 128-byte row (copy k & 1, word pair
 // w ^ (b & 3)), its gbuf stores 8 slots (odd columns' rows swap their 16-byte halves), a gbuf row read is the row, and a
 // quarter-warp's eight φ8 reads lane l's copy, on bank quad l & 7. The grid is resident (zc_round1_smem bytes a block,
@@ -97,82 +99,120 @@ __global__ void __launch_bounds__(W * 32, ZC_R1_MINB) zc_round1_zlin(const uint8
     F128 pab0{0, 0}, pab1{0, 0}, pw0{0, 0}, pw1{0, 0};
     for (; o < n_out; o += stride) {
         const F128 eq_o = eq_out[o];
-        F128 chunk_ab0{0, 0}, chunk_ab1{0, 0}, chunk_w0{0, 0}, chunk_w1{0, 0};
-        for (int j = 15; j >= 0; j--) {
-            const u64 ca = na, cb = nb;
-            if (w == 0) zw[k] = nz;
-            const long long no = j ? o : o + stride;
-            if (no < n_out) {
-                const int nj = j ? j - 1 : 15;
-                na = __ldg(reinterpret_cast<const unsigned long long*>(a_packed + at(no, nj)));
-                nb = __ldg(reinterpret_cast<const unsigned long long*>(b_packed + at(no, nj)));
-                nz = __ldg(reinterpret_cast<const unsigned long long*>(z_packed + at(no, nj)));
-            }
-            // words w (L) and w + 4 (H) of column k's extensions
-            uint32_t aL0 = 0, aL1 = 0, aH0 = 0, aH1 = 0, bL0 = 0, bL1 = 0, bH0 = 0, bH1 = 0;
+        F128 chunk[4] = {};   // a·b's at λ = l, l + 32; w_s's at s = l, l + 32
+        uint32_t rb[4][4] = {};   // on clmad: byte j & 3 of rb[·][j >> 2] the reduced byte φ8 takes at j
+        for (int jj = 3; jj >= 0; jj--) {
+            uint32_t cur[4] = {};
 #pragma unroll
-            for (int b = 0; b < 8; b++) {
-                const uint32_t sel = 0x5504u | (uint32_t)(b & 3) << 4;
-                const uint4 ta = *reinterpret_cast<const uint4*>(s_t0 + __byte_perm(b < 4 ? (uint32_t)ca : (uint32_t)(ca >> 32), toff[b & 3], sel));
-                const uint4 tb = *reinterpret_cast<const uint4*>(s_t0 + __byte_perm(b < 4 ? (uint32_t)cb : (uint32_t)(cb >> 32), toff[b & 3], sel));
-                if (b < 4) {
-                    aL0 ^= ta.x; aL1 ^= ta.y; aH0 ^= ta.z; aH1 ^= ta.w;
-                    bL0 ^= tb.x; bL1 ^= tb.y; bH0 ^= tb.z; bH1 ^= tb.w;
-                } else {
-                    aL0 ^= ta.z; aL1 ^= ta.w; aH0 ^= ta.x; aH1 ^= ta.y;
-                    bL0 ^= tb.z; bL1 ^= tb.w; bH0 ^= tb.x; bH1 ^= tb.y;
+            for (int i = 3; i >= 0; i--) {
+                const int j = 4 * jj + i;
+                const u64 ca = na, cb = nb;
+                if (w == 0) zw[k] = nz;
+                const long long no = j ? o : o + stride;
+                if (no < n_out) {
+                    const int nj = j ? j - 1 : 15;
+                    na = __ldg(reinterpret_cast<const unsigned long long*>(a_packed + at(no, nj)));
+                    nb = __ldg(reinterpret_cast<const unsigned long long*>(b_packed + at(no, nj)));
+                    nz = __ldg(reinterpret_cast<const unsigned long long*>(z_packed + at(no, nj)));
                 }
-            }
-            // g[e] = bytes e of words L and H of a, then of b
-            const uint32_t pa0 = __byte_perm(aL0, aH0, 0x5140), pa1 = __byte_perm(aL0, aH0, 0x7362);
-            const uint32_t pa2 = __byte_perm(aL1, aH1, 0x5140), pa3 = __byte_perm(aL1, aH1, 0x7362);
-            const uint32_t pb0 = __byte_perm(bL0, bH0, 0x5140), pb1 = __byte_perm(bL0, bH0, 0x7362);
-            const uint32_t pb2 = __byte_perm(bL1, bH1, 0x5140), pb3 = __byte_perm(bL1, bH1, 0x7362);
-            const uint4 g0 = make_uint4(__byte_perm(pa0, pb0, 0x5410), __byte_perm(pa0, pb0, 0x7632), __byte_perm(pa1, pb1, 0x5410),
-                                        __byte_perm(pa1, pb1, 0x7632));
-            const uint4 g1 = make_uint4(__byte_perm(pa2, pb2, 0x5410), __byte_perm(pa2, pb2, 0x7632), __byte_perm(pa3, pb3, 0x5410),
-                                        __byte_perm(pa3, pb3, 0x7632));
-            *reinterpret_cast<uint4*>(grow + ((8 * w) ^ (4 * (k & 1)))) = g0;
-            *reinterpret_cast<uint4*>(grow + ((8 * w + 4) ^ (4 * (k & 1)))) = g1;
-            __syncwarp();
-            uint32_t aacc0 = 0, aacc1 = 0;
-            u64 pl = 0, ph = 0;
+                // words w (L) and w + 4 (H) of column k's extensions
+                uint32_t aL0 = 0, aL1 = 0, aH0 = 0, aH1 = 0, bL0 = 0, bL1 = 0, bH0 = 0, bH1 = 0;
 #pragma unroll
-            for (int c = 0; c < 8; c++) {
-                const uint32_t x = (c & 1 ? glx : gl)[32 * c];
-                const uint32_t aL = x & 0xff, aH = __byte_perm(x, 0, 0x4441), bL = __byte_perm(x, 0, 0x4442), bH = __umulhi(x, 256);
-                if constexpr (cl) {
-                    const u64 A = ((u64)(aH << c) << 32) | (aL << c), B = ((u64)bH << 32) | bL;
-                    pl = clmad_lo(A, B, pl);
-                    ph = clmad_hi(A, B, ph);
-                } else {
-                    const uint32_t p0 = s_antilog[(int)s_log[aL] + s_log[bL]] & (uint32_t)(-(int)(aL && bL));
-                    const uint32_t p1 = s_antilog[(int)s_log[aH] + s_log[bH]] & (uint32_t)(-(int)(aH && bH));
-                    aacc0 ^= p0 << c;
-                    aacc1 ^= p1 << c;
+                for (int b = 0; b < 8; b++) {
+                    const uint32_t sel = 0x5504u | (uint32_t)(b & 3) << 4;
+                    const uint4 ta = *reinterpret_cast<const uint4*>(s_t0 + __byte_perm(b < 4 ? (uint32_t)ca : (uint32_t)(ca >> 32), toff[b & 3], sel));
+                    const uint4 tb = *reinterpret_cast<const uint4*>(s_t0 + __byte_perm(b < 4 ? (uint32_t)cb : (uint32_t)(cb >> 32), toff[b & 3], sel));
+                    if (b < 4) {
+                        aL0 ^= ta.x; aL1 ^= ta.y; aH0 ^= ta.z; aH1 ^= ta.w;
+                        bL0 ^= tb.x; bL1 ^= tb.y; bH0 ^= tb.z; bH1 ^= tb.w;
+                    } else {
+                        aL0 ^= ta.z; aL1 ^= ta.w; aH0 ^= ta.x; aH1 ^= ta.y;
+                        bL0 ^= tb.z; bL1 ^= tb.w; bH0 ^= tb.x; bH1 ^= tb.y;
+                    }
                 }
-            }
-            uint32_t v0 = 0, v1 = 0;
+                // g[e] = bytes e of words L and H of a, then of b
+                const uint32_t pa0 = __byte_perm(aL0, aH0, 0x5140), pa1 = __byte_perm(aL0, aH0, 0x7362);
+                const uint32_t pa2 = __byte_perm(aL1, aH1, 0x5140), pa3 = __byte_perm(aL1, aH1, 0x7362);
+                const uint32_t pb0 = __byte_perm(bL0, bH0, 0x5140), pb1 = __byte_perm(bL0, bH0, 0x7362);
+                const uint32_t pb2 = __byte_perm(bL1, bH1, 0x5140), pb3 = __byte_perm(bL1, bH1, 0x7362);
+                const uint4 g0 = make_uint4(__byte_perm(pa0, pb0, 0x5410), __byte_perm(pa0, pb0, 0x7632),
+                                            __byte_perm(pa1, pb1, 0x5410), __byte_perm(pa1, pb1, 0x7632));
+                const uint4 g1 = make_uint4(__byte_perm(pa2, pb2, 0x5410), __byte_perm(pa2, pb2, 0x7632),
+                                            __byte_perm(pa3, pb3, 0x5410), __byte_perm(pa3, pb3, 0x7632));
+                *reinterpret_cast<uint4*>(grow + ((8 * w) ^ (4 * (k & 1)))) = g0;
+                *reinterpret_cast<uint4*>(grow + ((8 * w + 4) ^ (4 * (k & 1)))) = g1;
+                __syncwarp();
+                uint32_t aacc0 = 0, aacc1 = 0;
+                u64 pl = 0, ph = 0;
 #pragma unroll
-            for (int c = 0; c < 8; c += 2) {
-                const uint4 zz = *reinterpret_cast<const uint4*>(zw + c);
-                v0 |= __funnelshift_r(zz.x, zz.x, rot[c]) & (1u << c);
-                v1 |= __funnelshift_r(zz.y, zz.y, rot[c]) & (1u << c);
-                v0 |= __funnelshift_r(zz.z, zz.z, rot[c + 1]) & (2u << c);
-                v1 |= __funnelshift_r(zz.w, zz.w, rot[c + 1]) & (2u << c);
+                for (int c = 0; c < 8; c++) {
+                    const uint32_t x = (c & 1 ? glx : gl)[32 * c];
+                    const uint32_t aH = __byte_perm(x, 0, 0x4441), bL = __byte_perm(x, 0, 0x4442), bH = __umulhi(x, 256);
+                    if constexpr (cl) {
+                        const u64 A = ((u64)(aH << c) << 32) | __umulhi(x << 24, 256u << c), B = ((u64)bH << 32) | bL;
+                        pl = clmad_lo(A, B, pl);
+                        ph = clmad_hi(A, B, ph);
+                    } else {
+                        const uint32_t aL = x & 0xff;
+                        const uint32_t p0 = s_antilog[(int)s_log[aL] + s_log[bL]] & (uint32_t)(-(int)(aL && bL));
+                        const uint32_t p1 = s_antilog[(int)s_log[aH] + s_log[bH]] & (uint32_t)(-(int)(aH && bH));
+                        aacc0 ^= p0 << c;
+                        aacc1 ^= p1 << c;
+                    }
+                }
+                uint32_t r[4] = {0, 0, 0, 0};   // r0, r1, v0, v1
+#pragma unroll
+                for (int c = 0; c < 8; c += 2) {
+                    const uint4 zz = *reinterpret_cast<const uint4*>(zw + c);
+                    r[2] |= __funnelshift_r(zz.x, zz.x, rot[c]) & (1u << c);
+                    r[3] |= __funnelshift_r(zz.y, zz.y, rot[c]) & (1u << c);
+                    r[2] |= __funnelshift_r(zz.z, zz.z, rot[c + 1]) & (2u << c);
+                    r[3] |= __funnelshift_r(zz.w, zz.w, rot[c + 1]) & (2u << c);
+                }
+                r[0] = cl ? zc_gf8_barrett((uint32_t)pl) : reduce_zerocheck_gf8_polynomial((uint16_t)aacc0);
+                r[1] = cl ? zc_gf8_barrett((uint32_t)ph) : reduce_zerocheck_gf8_polynomial((uint16_t)aacc1);
+#pragma unroll
+                for (int t = 0; t < 4; t++) {
+                    if constexpr (cl) cur[t] += r[t] << (8 * i);
+                    else chunk[t] = f128_add(multiply_zerocheck_value_by_generator(chunk[t]), s_phi[r[t] * 8 + q]);
+                }
+                __syncwarp();
             }
-            const uint8_t r0 = cl ? zc_gf8_barrett((uint32_t)pl) : reduce_zerocheck_gf8_polynomial((uint16_t)aacc0);
-            const uint8_t r1 = cl ? zc_gf8_barrett((uint32_t)ph) : reduce_zerocheck_gf8_polynomial((uint16_t)aacc1);
-            chunk_ab0 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab0), s_phi[r0 * 8 + q]);
-            chunk_ab1 = f128_add(multiply_zerocheck_value_by_generator(chunk_ab1), s_phi[r1 * 8 + q]);
-            chunk_w0 = f128_add(multiply_zerocheck_value_by_generator(chunk_w0), s_phi[v0 * 8 + q]);
-            chunk_w1 = f128_add(multiply_zerocheck_value_by_generator(chunk_w1), s_phi[v1 * 8 + q]);
-            __syncwarp();
+#pragma unroll
+            for (int t = 0; t < 4; t++) {
+                rb[t][3] = rb[t][2]; rb[t][2] = rb[t][1]; rb[t][1] = rb[t][0]; rb[t][0] = cur[t];
+            }
         }
-        pab0 = f128_add(pab0, ghash_mul_karatsuba(eq_o, chunk_ab0));
-        pab1 = f128_add(pab1, ghash_mul_karatsuba(eq_o, chunk_ab1));
-        pw0 = f128_add(pw0, ghash_mul_karatsuba(eq_o, chunk_w0));
-        pw1 = f128_add(pw1, ghash_mul_karatsuba(eq_o, chunk_w1));
+        if constexpr (cl) {
+            // Σ_j x^j φ8(r_j) = Σ_i φ8(x^i)·c_i, bit j of c_i bit i of r_j: c_2m and c_2m+1 are the halves of cw[m]
+            uint32_t cw[4][4];
+#pragma unroll
+            for (int t = 0; t < 4; t++) {
+                const u64 tl = zlin_t8((u64)rb[t][1] << 32 | rb[t][0]), th = zlin_t8((u64)rb[t][3] << 32 | rb[t][2]);
+                cw[t][0] = __byte_perm((uint32_t)tl, (uint32_t)th, 0x5140);
+                cw[t][1] = __byte_perm((uint32_t)tl, (uint32_t)th, 0x7362);
+                cw[t][2] = __byte_perm((uint32_t)(tl >> 32), (uint32_t)(th >> 32), 0x5140);
+                cw[t][3] = __byte_perm((uint32_t)(tl >> 32), (uint32_t)(th >> 32), 0x7362);
+            }
+            u64 s0[4] = {}, s1[4] = {}, s2[4] = {};
+#pragma unroll
+            for (int bit = 0; bit < 8; bit++) {
+                const F128 f = s_phi[(1 << bit) * 8 + q];
+#pragma unroll
+                for (int t = 0; t < 4; t++) {
+                    const u64 ci = bit & 1 ? __umulhi(cw[t][bit >> 1], 65536) : __byte_perm(cw[t][bit >> 1], 0, 0x4410);
+                    s0[t] = clmad_lo(f.lo, ci, s0[t]);
+                    s1[t] = clmad_lo(f.hi, ci, clmad_hi(f.lo, ci, s1[t]));
+                    s2[t] = clmad_hi(f.hi, ci, s2[t]);
+                }
+            }
+#pragma unroll
+            for (int t = 0; t < 4; t++) chunk[t] = F128{clmad_lo(s2[t], 0x87ull, s0[t]), s1[t]};
+        }
+        pab0 = f128_add(pab0, ghash_mul_karatsuba(eq_o, chunk[0]));
+        pab1 = f128_add(pab1, ghash_mul_karatsuba(eq_o, chunk[1]));
+        pw0 = f128_add(pw0, ghash_mul_karatsuba(eq_o, chunk[2]));
+        pw1 = f128_add(pw1, ghash_mul_karatsuba(eq_o, chunk[3]));
     }
     atomicXor((unsigned long long*)&raw_ab[lane].lo, pab0.lo);
     atomicXor((unsigned long long*)&raw_ab[lane].hi, pab0.hi);
