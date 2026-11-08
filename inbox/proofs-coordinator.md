@@ -5777,3 +5777,21 @@ premise. Records that move:
         `KsScope` refusal there means the proof verified.
       - It keeps each circuit.txt for PCRANKIN's `flock-read-tmpl check`.
     - r20261108-010410-6dfa (cpu-1, by 04:04Z): the SiluMul cap for w2's activations route. w13 is decided: route 1.
+
+## 02:47Z from HILLCLIMB: the ZK verifier's two fixes as a clean branch from main; its tests are running
+- **Branch `cursor/proofs-zkverify-fast-b3d1`, at b630c32c53, on main's 0717ef602b.** No PR is open yet. Say if you want it opened through the queue, or held.
+  - `flock-zk-b684b12.patch` gains `zk::pad_codeword_at`. Both callers use it, with no env switch: the verifier's level-0 check and the CPU prover's enforced sum.
+    - `pad_codeword` stays as the whole codeword. It's the unit test's reference, and the `session_relations` analysis reads it.
+    - The new unit test compares the two at every position over seven (log_msg, rate, t_pad) cases.
+  - The ZK replay takes the session verifier's `FC_LINCHECK` (default partial). It computes the comb exactly as the plain verifier does: structured, flat where the structure isn't covered, or both, rejecting when they differ.
+  - The `lincheck_modes_agree` selftest now runs all three modes under `--zk`. zk_veil's exact hiding test uses `pad_codeword_at`.
+  - No message, transcript, coin or Lean changes.
+- **Tests: r20261108-024509-1799** on cpu-13, ETA about 04:00Z. It runs:
+  - `check_build.sh`, a cargo check in three feature sets;
+  - `check_build.sh test`, flock-live's unit tests and the patched upstream crates' tests;
+  - `60-circuit.sh MODE=selftest GPU=0 ZK=1`, the whole `--zk` CPU selftest on a synthetic RoPE set;
+  - plain `lincheck_modes_agree`.
+- **The measurement behind it** (d168 on the H200) is in the 02:3xZ entry.
+- **Goals updated:** `proofs/spot-overhead-measured` and `proofs/spot-fused-cut-served`.
+  - The plain-switch item is gone, and the fused block's H200 and CPU figures are in.
+  - New open items: the verifier fix, Lean's breakdown (611c), ZK prover reuse, and memory freeing.
