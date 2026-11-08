@@ -29,8 +29,9 @@ activation of the circuit's template (``Extract.claimedUnits``), and a class her
 
 A type of `CENSUS` is a block type of the serving rows by its census name (`serving_templates.template`, the name a proof
 overhead card prices it under), one whole Definition a proof block, staged like a `UNITS` type: each parameter one ``row/v2``
-input row of seeded N(0, 1) bf16 words, each output one ``row/v2`` output row, the circuit streamed to circuit.txt once,
-every input's outputs checked against the Program's reference (``twin`` null).
+input row (`interface.unit_rows`, its leaves packed at their widths) of seeded leaves by width (`census_leaves`), each output
+one ``row/v2`` output row, the circuit streamed to circuit.txt once, every input's outputs checked against the Program's
+reference (``twin`` null).
 
 Writes circuit.txt, inst.bin, pub.bin, pin.txt and stage.json under OUT, and a PARTS type's partition.json.
 
@@ -55,6 +56,8 @@ FP8 scale groups of 128, DSA indexer 32 heads of 128, index_topk 2048; per TP8 r
                 the block's inputs instead.
     gq          `CENSUS`: Fp8GroupQuantUe8m0_v1{K,G}, one token row's quantization to E4M3 in groups of G with power-of-two
                 scales, before an FP8 linear of K inputs (K = 6144: the hidden state's); a K below 6144 is a column block.
+    fi          `CENSUS`: FlashInferFp8Linear_v1{K,N}, the FlashInfer FP8 linear's output coordinate (N = 1) on one token row:
+                its bf16 x quantized in the block, an E4M3 weight row and its f32 block scales (K = 2048: q_b and o_proj).
     the rest    `PARTS`: the capture map's Programs (``glm-moe-dsa-eager-hopper-tp8-v0``) at their GLM-5.3 statics; the MoE
                 tiles' KB and SWAP are Triton's 128 and swapped until the H200 capture pins them."""
 from __future__ import annotations
@@ -208,7 +211,23 @@ class Census:
 
 CENSUS: dict[str, Census] = {
     "gq": Census("Fp8GroupQuantUe8m0_v1", {"K": 6144, "G": 128}),
+    "fi": Census("FlashInferFp8Linear_v1", {"K": 2048, "N": 1}),
 }
+
+
+def census_leaves(rng: np.random.Generator, ty, n: int) -> np.ndarray:
+    """``n`` rows of a parameter of type ``ty`` as u16 words, its leaves packed at their width: bf16 of N(0, 1) for 16-bit
+    leaves, E4M3 codes other than NaN for 8-bit ones, f32 powers of two from 2^-10 to 2^-4 (a block scale) for 32-bit ones."""
+    w = set(ty.leaf_widths())
+    if w == {16}:
+        return bf16(rng.standard_normal((n, ty.leaves)))
+    if w == {8} and ty.leaves % 2 == 0:
+        c = rng.integers(0, 256, (n, ty.leaves), dtype=np.uint8)
+        c[(c & 0x7F) == 0x7F] ^= 1
+        return c.view("<u2")
+    if w == {32}:
+        return np.ldexp(np.ones((n, ty.leaves), np.float32), rng.integers(-10, -3, (n, ty.leaves))).astype("<f4").view("<u2")
+    raise SystemExit(f"stage.py: a census parameter of {ty.leaves} leaves of {sorted(w)} bits, which `census_leaves` doesn't draw")
 
 
 def _static(default, v: str):
@@ -270,15 +289,18 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     """``n`` inputs of the census type's Definition, a proof block each, as stage.json's record."""
     from verity_vllm.pipeline.serving_rows import template
 
+    from verity.ml.windows import interface as IF
+
     d = template(cen.name(S)).fn
-    params, ret = d.signature()
-    if any(set(ty.leaf_widths()) != {16} for _p, ty in params):
-        raise SystemExit(f"stage.py: {d.id} has a parameter that isn't 16-bit words, which a census type draws as bf16")
+    params, _ret = d.signature()
+    in_rows, out_rows = IF.unit_rows(d)
+    if [p for p, *_ in in_rows] != [p for p, _ty in params]:
+        raise SystemExit(f"stage.py: {d.id}'s rows {[p for p, *_ in in_rows]} are not one a parameter, which a census type draws")
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
-    rows = {p: bf16(rng.standard_normal((n, ty.leaves))) for p, ty in params}
+    rows = {p: census_leaves(rng, ty, n) for p, ty in params}
+    if any(rows[p].shape != (n, b // 16) for p, _s, b, _ps in in_rows):
+        raise SystemExit(f"stage.py: {d.id}'s drawn rows {[rows[p].shape for p, _ty in params]} are not its rows' words")
     t_draw = time.time() - t0
-    in_rows = [(p, V2, 16 * ty.leaves, [p]) for p, ty in params]
-    out_rows = [(V2, (j,)) for j in range(len(getattr(ret, "fields", None) or (ret,)))]
     st = CS.UnitStager(d, f"unit/served-{tag}", in_rows, out_rows, circuit=out / "circuit.txt")
     t_built = time.time() - t0
     salt_key = hashlib.sha256(f"verity/served-units/salts\0{tag}".encode()).digest()
