@@ -104,6 +104,8 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
     hopens x s Pt d Ω Pv ω r u xS vS w hs hP h2 hin hacc
       ((Claims.SamplingGeneric.mem_ofDeploy_checked (deployOf F c) iroots).1 hu) hsess
       (Claims.SamplingGeneric.flock_check_of_R hR)
+  keys x _ := Finset.card_image_le.trans ((Finset.card_range _).trans_le
+    ((List.length_take_le _ _).trans_eq (Claims.SamplingGeneric.ofDeploy_nSess (deployOf F c) iroots x).symm))
 
 /-- **The two-stage compiler at the deployed record**: `CompiledTwo.KS` from Flock's KS at `F` and its deployed
 decoder's list bound, the commitment's binding and the two-stage contract (`compilerKSTwo`, `flockArgKS`). -/
