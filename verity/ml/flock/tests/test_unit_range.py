@@ -1,4 +1,4 @@
-"""`circuit.refuse_past_range`: a unit whose Definition alone needs more witness bits than C-Flock's proved range of
+"""`circuit.refuse_past_range`: a unit whose Definition alone needs more witness bits than Flock's proved range of
 2^`K_MAX` is refused by `UnitStager` before it is lowered, read off the Definition (`ir_lower.definition_ands`); one in
 range is staged as before. The count is held to the flat lowering's ANDs on staged units, and compose refuses what this
 refuses unless the lowering lays out fewer than half the witness bits counted."""
@@ -26,7 +26,7 @@ def wide(log: int):
 
 
 def test_a_unit_past_the_range_is_refused_before_it_is_lowered(monkeypatch):
-    """A unit of 2^27 - 1 ANDs needs a slot of 2^28 witness bits, past C-Flock's 2^27: `UnitStager` refuses it by name,
+    """A unit of 2^27 - 1 ANDs needs a slot of 2^28 witness bits, past Flock's 2^27: `UnitStager` refuses it by name,
     with the fix, and never lowers it (a flat unit of that size is about 80 GB of Python objects)."""
     def lowered(*_a, **_k):
         raise AssertionError("the unit was lowered before its range was checked")

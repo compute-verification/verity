@@ -24,7 +24,7 @@ bytes `sha512/row/v1` hashes, `keyRow_enc`) and [e2e-const]'s `Const.constCols_k
 (`keysRow_of_parse`), `keyedRowsOfParse`; with the returned outputs' bits for the program's outputs (`outsOf`,
 `outsOut_outsOf`), `keyedRowsOuts`.
 
-What `rs` still takes: an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), the drawn units' sites
+What `rs` still takes: an untyped circuit whose unit returns the outputs (`c.outNet = c.unitNet`), the sampled proof blocks' sites
 (`BcSite`), and `outs` the returned outputs' bits (`OutsOut`); `keyedRowsOfParse` a unit with only its leaf group, and
 every input a unit row reads a port bit (`PortReads`); `keyedRowsOuts` no `OutsOut`.
 -/

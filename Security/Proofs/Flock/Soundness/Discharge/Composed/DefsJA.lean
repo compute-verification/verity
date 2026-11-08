@@ -59,7 +59,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (N : ℕ) (L : Law n)
 
-/-- **The decoder is right at the law's draws, table by table, on the outcomes `acc` accepts** (`DecodesOnZKJ` at
+/-- **The decoder is right at the sampling design's samples, table by table, on the outcomes `acc` accepts** (`DecodesOnZKJ` at
 `acc`). -/
 def DecodesOnZKJA : Prop :=
   ∀ ω R (j : Fin (planZ (L.draw ω) R).length),
@@ -139,7 +139,7 @@ variable {K D Sl : Type} [Field K] [Fintype K] [DecidableEq K] [Inhabited D] [In
   (fin : (S : Finset (Fin n)) → (R : Reg) → Fin (planZ S R).length → Fin 2 → Array ByteArray → List Msg)
   (capOf : (S : Finset (Fin n)) → (R : Reg) → Array ByteArray → Fin (planZ S R).length → Cap D) (L : Law n)
 
-/-- **`RunsOnZCJ` at `acc`**: at the law's draws, on every live outcome `acc` accepts, each table's reps run on their
+/-- **`RunsOnZCJ` at `acc`**: at the sampling design's samples, on every live outcome `acc` accepts, each table's reps run on their
 streams' rounds and the table's compiled verdict accepts. -/
 def RunsOnZCJA : Prop :=
   ∀ ω R (o : LiveOutJ (planZ (L.draw ω) R).length mPts), acc (wr (L.draw ω) R o) →
@@ -160,7 +160,7 @@ theorem runsOnZCJA_accepts (I : Inputs) :
   Iff.rfl
 
 omit [Fintype K] [Inhabited D] [Inhabited Sl] in
-/-- **The decoder at the law's draws, table by table, from `RunsOnZCJA`** (`decodesOnZKJ_of_runsOnZCJ`). -/
+/-- **The decoder at the sampling design's samples, table by table, from `RunsOnZCJA`** (`decodesOnZKJ_of_runsOnZCJ`). -/
 theorem decodesOnZKJA_of_runsOnZCJA (h : RunsOnZCJA A Hs planZ acc wr opn dec fin capOf L) :
     DecodesOnZKJA A Hs planZ acc wr opn dec (fun _ _ _ _ => true) fin capOf L := by
   intro ω R j o ho
@@ -171,8 +171,8 @@ theorem decodesOnZKJA_of_runsOnZCJA (h : RunsOnZCJA A Hs planZ acc wr opn dec fi
 
 end Runs
 
-/-- **`wr` is the coin server's record of the live `--zk` session of `J` tables, at `acc` and `setup`**
-(`RecordsLiveZKJ`): whenever `acc` accepts what `wr` writes for the outcome `o` at draw `S`, the record carries the draw
+/-- **`wr` is the challenger's live-coin part's record of the live `--zk` session of `J` tables, at `acc` and `setup`**
+(`RecordsLiveZKJ`): whenever `acc` accepts what `wr` writes for the outcome `o` at sample `S`, the record carries the sample
 `dj S`, the proof files are `o`'s, and at any session `setup` sets up for the record, the record decodes to a session
 whose link points are `o`'s and whose table `j`'s `root_B` and rep streams' rounds are `o`'s. -/
 def RecordsLiveZKJA (acc : Exec.Transcript → Prop) (setup : String → Flock.V (SessionSpec × Array Flock.Stmt))

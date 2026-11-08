@@ -14,12 +14,12 @@ import Proofs.Population.Determinacy
 meta import Lean.Meta.Tactic.NormCast
 
 /-!
-# Exfiltration before detection: from the draw and the population to the probability of theft
+# Exfiltration before detection: from the sample and the population to the probability of theft
 
-* `indepDraw_escapes`, `indepDraw_isDist`: the draw that catches unit `u` independently with probability `a u` lets the
+* `indepDraw_escapes`, `indepDraw_isDist`: the sample that catches unit `u` independently with probability `a u` lets the
   wrong set `B` escape with probability exactly `Π_{u ∈ B} (1 - a u)`.
-* `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the draw and the cone.** A window whose leak is at
-  most its faulty proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a draw that catches `u` with probability
+* `pressure_of_draw`, `pressure_indepDraw`: **detection pressure from the sample and the cone.** A window whose leak is at
+  most its incorrect proof blocks' cone egress `Σ_{u ∈ B} E(u)`, under a sample that catches `u` with probability
   `a u ≥ κ E(u)`, meets `DetectionPressure κ`.
 * `Dataflow.card_changed_le`: **a checked population is cone-local.** The egress slots where an assignment differs from
   the honest one, with the same inputs, number at most `Σ_{u ∈ wrong} E(u)` (POP1's `eq_off_cone`, `card_coneEgress_le`).
@@ -32,7 +32,7 @@ meta import Lean.Meta.Tactic.NormCast
   with probability at most `exp (-κ (K - Δ - ℓ)) + Σ_{j ≤ K} C(m, j) · |V| ^ K · |Y| · g`, for every `K`.
 * `card_changedThrough_le`, `exfiltration_bound_windows`: **over a deployment's windows.** The slots the windows change
   through the first detection number at most `cum`, so the deviation-size premise holds whenever each window's egress
-  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its faulty proof blocks'
+  differs from honest only on the slots it changes (`Dataflow.card_changed_le` bounds those by its incorrect proof blocks'
   cone egress), plus at most `Δ` slots after the detection. The count is over the deployment's `n · |O|` slots.
 -/
 
@@ -42,9 +42,9 @@ namespace Population.Exfil
 
 open Finset
 
-/-! ## Detection pressure from the draw and the cone -/
+/-! ## Detection pressure from the sample and the cone -/
 
-/-- **The independent draw's acceptance probability**: the wrong set `B` escapes with probability
+/-- **The independent sample's acceptance probability**: the wrong set `B` escapes with probability
 `Π_{u ∈ B} (1 - a u)`. -/
 theorem indepDraw_escapes {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ) (B : Finset U) :
     ∑ c ∈ escapes B, indepDraw a c = ∏ u ∈ B, (1 - a u) := by
@@ -66,7 +66,7 @@ theorem indepDraw_escapes {U : Type} [Fintype U] [DecidableEq U] (a : U → ℝ)
   rw [escapes, sum_filter, sum_congr rfl fun c _ => hpt c, ← Fintype.prod_sum, prod_congr rfl fun u _ => hsum u,
     prod_ite_mem, univ_inter]
 
-/-- The independent draw is a distribution when every catch probability is in `[0, 1]`. -/
+/-- The independent sample is a distribution when every catch probability is in `[0, 1]`. -/
 theorem indepDraw_isDist {U : Type} [Fintype U] [DecidableEq U] {a : U → ℝ} (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) :
     IsDist (indepDraw a) := by
   refine ⟨fun c => prod_nonneg fun u _ => ?_, ?_⟩
@@ -76,7 +76,7 @@ theorem indepDraw_isDist {U : Type} [Fintype U] [DecidableEq U] {a : U → ℝ} 
   · have h := indepDraw_escapes a ∅
     rwa [prod_empty, escapes, filter_true_of_mem fun c _ u hu => absurd hu (notMem_empty u)] at h
 
-/-- **Detection pressure from the draw and the cone**: if each window's leak is at most its faulty proof blocks' cone
+/-- **Detection pressure from the sample and the cone**: if each window's leak is at most its incorrect proof blocks' cone
 egress `Σ_{u ∈ B} E(u)`, and the window escapes with probability at most `Π_{u ∈ B} (1 - a u)` for catch probabilities
 `a u ≥ κ E(u)`, the strategy meets detection pressure `κ`. -/
 theorem pressure_of_draw {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ} (hκ : 0 ≤ κ) (A : Strategy Ω)
@@ -91,8 +91,8 @@ theorem pressure_of_draw {Ω U : Type} [Fintype Ω] {μ : Ω → ℝ} {κ : ℝ}
   have h2 : κ * A.leak h ≤ κ * ∑ u ∈ B h, E u := mul_le_mul_of_nonneg_left (hleak h) hκ
   linarith
 
-/-- **The independent draw gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
-does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the draw catching `u` with probability
+/-- **The independent sample gives detection pressure**: a strategy whose window escapes exactly when its wrong set `B h`
+does, and leaks at most `Σ_{u ∈ B h} E(u)`, meets detection pressure `κ` under the sample catching `u` with probability
 `a u ≥ κ E(u)`. -/
 theorem pressure_indepDraw {U : Type} [Fintype U] [DecidableEq U] {κ : ℝ} (hκ : 0 ≤ κ) (E a : U → ℝ)
     (ha : ∀ u, 0 ≤ a u ∧ a u ≤ 1) (hκE : ∀ u, κ * E u ≤ a u) (A : Strategy (U → Bool))
@@ -160,7 +160,7 @@ theorem card_devBall_le (Slot V : Type) [Fintype Slot] [DecidableEq Slot] [Finty
 /-! ## The end-to-end bound -/
 
 open Classical in
-/-- **The end-to-end bound.** The weights `w` are drawn from `ρ` and the deployment's `n` windows' coins from `μ`. The
+/-- **The end-to-end bound.** The weights `w` are sampled from `ρ` and the deployment's `n` windows' coins from `μ`. The
 prover plays the adaptive strategy `A w`, with detection pressure `κ` and per-window leak at most `ℓ`. The outsider sees
 the egress, which is the honest egress `hon (d, y)` with the deviation `d = dv` applied, and the side channel
 `y = side ∈ Y`. Suppose the deviation changes at most `cum + Δ` slots, where `cum` is what leaves through the first

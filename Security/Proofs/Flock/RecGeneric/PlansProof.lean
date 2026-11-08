@@ -31,7 +31,7 @@ open Claims Claims.Recursion
 
 /-! ## Uniform coins -/
 
-/-- Splitting `M + 1` uniform draws into the first and the rest keeps them uniform. -/
+/-- Splitting `M + 1` uniform samples into the first and the rest keeps them uniform. -/
 theorem Pr_cons_split {U : Type} [Fintype U] (M : ℕ) (Q : U → (Fin M → U) → Prop) :
     Pr (fun us : Fin (M + 1) → U => Q (us 0) (Fin.tail us)) = Pr (fun p : U × (Fin M → U) => Q p.1 p.2) := by
   refine ((UnifMap.equiv (A := U × (Fin M → U)) (B := Fin (M + 1) → U) (Fin.consEquiv fun _ => U)).Pr
@@ -39,7 +39,7 @@ theorem Pr_cons_split {U : Type} [Fintype U] (M : ℕ) (Q : U → (Fin M → U) 
   show Q ((Fin.cons p.1 p.2 : Fin (M + 1) → U) 0) (Fin.tail (Fin.cons p.1 p.2 : Fin (M + 1) → U)) ↔ Q p.1 p.2
   rw [Fin.cons_zero, Fin.tail_cons]
 
-/-- `R + 1` distinct draws among `S + 1` uniform ones are uniform. -/
+/-- `R + 1` distinct samples among `S + 1` uniform ones are uniform. -/
 theorem Pr_emb_split {U : Type} [Fintype U] [Nonempty U] {R S : ℕ} (e : Fin (R + 1) ↪ Fin (S + 1))
     (Q : U → (Fin R → U) → Prop) :
     Pr (fun us : Fin (S + 1) → U => Q (us (e 0)) (fun i => us (e i.succ))) =

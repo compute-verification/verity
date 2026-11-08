@@ -162,10 +162,10 @@ def CallsLogColl (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Fl
     (∀ e ∈ (innerRun H D I x r ws).vLog, e ∈ D.calls x ws) ∨
       ∃ u v, findColl (D.calls x ws) = some (u, v) ∧ Collision H u v
 
-/-- **`CallsLogColl` over the calls a finder searches at a draw** (a code fact): wherever `E_O` gives witnesses `ws` on
+/-- **`CallsLogColl` over the calls a finder searches at a sample** (a code fact): wherever `E_O` gives witnesses `ws` on
 an accepted run at the coins `r`, the inner verifier's calls in the inner view's run are among `cl x r ws`, or two of
 those collide. `CallsLogColl` is it at the recorded calls; `CallsLogCollAt` at `Deploy.callsAt`, which searches the
-inner verifier's own calls at the draw's coins too. -/
+inner verifier's own calls at the sample's coins too. -/
 def CallsLogCollBy (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (cl : (x : Msg) → (Fin (D.V.k x) → Coin) → List Flock.Wit → List (Msg × Msg)) : Prop :=
   ∀ (decO : List (ℕ × Col) → List T) (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin)
@@ -436,7 +436,7 @@ section Forks
 
 variable {Coin W Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
 
-/-- **Two extractions open inner round `j` differently**: at a draw `(ω, r, d, c, c')` of `Be`'s fork at `j`, `E_O`
+/-- **Two extractions open inner round `j` differently**: at a sample `(ω, r, d, c, c')` of `Be`'s fork at `j`, `E_O`
 gives witnesses on both accepted runs, and the inner views read off them differ at message `j`. -/
 def OpensDiffer (H : Msg → Msg) (D : Deploy Coin) (I : Inner Coin W) (DO : Flock.Deploy Coin Col T)
     (decO : List (ℕ × Col) → List T) {Ω : Type} (P : Prover Ω) (x : Msg) (j : ℕ)

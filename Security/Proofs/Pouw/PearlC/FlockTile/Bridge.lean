@@ -4,12 +4,12 @@ public import Definitions.Pouw.PearlC.FlockTile.Bridge
 public import Proofs.Flock.Soundness.Game.Basic
 
 /-!
-# C-Flock's games as core's games: the lemmas
+# Flock's games as core's games: the lemmas
 
 The bridge's definitions (`toVerity`, `stratToVerity`, `stratOfVerity`) are in
 `Definitions.Pouw.PearlC.FlockTile.Bridge`. Here: `stratToVerity` and `stratOfVerity` are inverse to each other, every
 event has the same probability under a strategy and its image (`prob_toVerity`, `prob_ofVerity`), and the same value
-for the optimal prover (`value_toVerity`). So a bound C-Flock proves on `FlockSoundness.Game.prob` is the same bound on
+for the optimal prover (`value_toVerity`). So a bound Flock proves on `FlockSoundness.Game.prob` is the same bound on
 core's game, for the same prover.
 -/
 
@@ -41,8 +41,8 @@ theorem stratToVerity_ofVerity :
       rw [stratToVerity_ofVerity (k m) s']
   | @FlockSoundness.Game.coin _ _ _ _ k, s => funext fun c => stratToVerity_ofVerity (k c) (s c)
 
-/-- **The bridge keeps every event's probability**: core's `prob` of `p` on the image of C-Flock's game, under the
-image of a strategy, is C-Flock's `prob` of `p` under the strategy. -/
+/-- **The bridge keeps every event's probability**: core's `prob` of `p` on the image of Flock's game, under the
+image of a strategy, is Flock's `prob` of `p` under the strategy. -/
 theorem prob_toVerity (p : α → Prop) :
     ∀ (g : FlockSoundness.Game α) (s : FlockSoundness.Game.Strategy g),
       Verity.Game.prob p (toVerity g) (stratToVerity g s) = FlockSoundness.Game.prob p g s
@@ -53,7 +53,7 @@ theorem prob_toVerity (p : α → Prop) :
         ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * FlockSoundness.Game.prob p (k c) (s c)
       exact Finset.sum_congr rfl fun c _ => by rw [prob_toVerity p (k c) (s c)]
 
-/-- `prob_toVerity` from core's side: C-Flock's `prob` under the strategy a core strategy is, is core's. -/
+/-- `prob_toVerity` from core's side: Flock's `prob` under the strategy a core strategy is, is core's. -/
 theorem prob_ofVerity (p : α → Prop) (g : FlockSoundness.Game α) (s : Verity.Game.Strategy (toVerity g)) :
     FlockSoundness.Game.prob p g (stratOfVerity g s) = Verity.Game.prob p (toVerity g) s := by
   rw [← prob_toVerity p g (stratOfVerity g s), stratToVerity_ofVerity]
@@ -70,7 +70,7 @@ theorem value_toVerity (p : α → Prop) :
         ∑ c : C, (Fintype.card C : ℝ≥0∞)⁻¹ * FlockSoundness.Game.value p (k c)
       exact Finset.sum_congr rfl fun c _ => by rw [value_toVerity p (k c)]
 
-/-- Core's soundness of the image is C-Flock's bound on the optimal prover. -/
+/-- Core's soundness of the image is Flock's bound on the optimal prover. -/
 theorem sound_toVerity (g : FlockSoundness.Game α) (accept E : α → Prop) (δ : ℝ≥0∞) :
     Verity.Sound (toVerity g) accept E δ ↔ FlockSoundness.Game.value (fun a => accept a ∧ ¬ E a) g ≤ δ := by
   rw [Verity.Sound, value_toVerity]

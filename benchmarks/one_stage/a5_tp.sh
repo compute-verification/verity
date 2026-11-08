@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # One-stage audit, run A5, over a TP Commit's windows, one per rank (a5.py --tp-commit), on a CPU machine: each rank's served
-# window through registration, the verifier's Lean draw, M0's prover and the Lean verifier of record. M0's flock-circuit and
+# window through registration, the verifier's Lean sample, M0's prover and the Lean verifier. M0's flock-circuit and
 # Lean's flock-verify are built from this tree, in scratch. A5 takes a TP window as served only under a SHA-512 TP run root
 # (tp.serving_rows.source: sha512): a TP Commit's ranks, the stand-in's too, commit under rows-sha512 under the SHA-512 TP run
 # root (tp.run_root, verity/tp-run-root/v2); an old record's SHA-256 v1 root is refused before the sample.
@@ -18,7 +18,7 @@
 #     The STANDIN entry row-tables is a5_row_tables.py: test_row_tables' window (ScaledMmS8Coordinate chunks whose x rows link
 #     its row tables) as rank 0 of a one-rank step, on a local challenger's coins (it needs A5_CHALLENGER for --main).
 #     The STANDIN entries warden and warden:KIND are a5_warden.py: transfer-gate chunks whose ports open the bucket rows of
-#     one connection's cells under the warden's signed roots, beside a drawn rest, on a warden run rehearsed here first (warden_serve.py
+#     one connection's cells under the warden's signed roots, beside a sampled rest, on a warden run rehearsed here first (warden_serve.py
 #     rehearse --fake, about a minute, its prompts up to 2048 tokens so that seed 0's traffic has a connection admitted in its
 #     link-window with a5_warden.py's 16 ingress cells and D·r + 16 egress cells; only its public deployment.json, cells.jsonl
 #     and check.json are kept), on a local challenger's coins (A5_CHALLENGER=local);
@@ -28,15 +28,15 @@
 #     warden), A5_WARDEN_UNITS=N each transfer-gate chunk's units (a5_warden.py --units, default 16).
 #     The STANDIN entries tp-gates and tp-gates:KIND are a5_tp_gates.py: both ranks of a synthetic Llama TP2 step of two
 #     requests, each rank's AllReduce2 chunks reading both ranks' registered partials of each request (layer 0's embedding,
-#     o_proj and down_proj at H = 2048), beside a drawn rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
+#     o_proj and down_proj at H = 2048), beside a sampled rest, on one local challenger session's coins (A5_CHALLENGER=local); tp-gates:altered
 #     moves a bit through rank 1's received partial, and tp-gates:swapped, tp-gates:other-collective, tp-gates:other-request
 #     and tp-gates:own make that port's statement for another read (--made-for); each is to be refused by Lean's registered
 #     reads on rank 1, rank 0 accepted.
 #   A5_FLOCK_WORK=DIR keeps M0's build there across runs (default: scratch); A5_RANKS=0,3 audits those ranks only; A5_JOBS=N
 #   audits up to N ranks at once (a GLM-5.3 rank, SiluMul_v2 at step 16: its window ~16 min and ~11.7 GB, its audit ~10 GB;
 #   the MoE w2 coordinates of one layer, glm53_moe_w2_tp8_step16.json: its window ~4 min and ~13.1 GB, then ~2.5 min of the
-#   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the sample (a drawn chunk's prover file is
-#   staged after it), then each drawn chunk's session ~8 min and ~32 GB, which a loaded machine
+#   verifier's window, ~5 min staging its 768 chunks' public files and ~2.5 min to the sample (a sampled chunk's prover file is
+#   staged after it), then each sampled chunk's session ~8 min and ~32 GB, which a loaded machine
 #   stretched past an hour; a5's --session-timeout, A5_SESSION_TIMEOUT, is each prover's limit and each compose's).
 #   bash benchmarks/one_stage/a5_tp.sh
 #   (a job run from a clone of the tree, 64 GB)
@@ -48,18 +48,18 @@
 #   tree isn't stored and preserved fails the run.
 # A5_DRY=DIR: none of the builds, windows or audits: each session dir DIR/NAME a run's scratch held (a5's --out) is kept and
 #   stored as a run's is.
-# A5_CHALLENGER=local|gate:USER@HOST: each rank draws by its partition file's rule (stratified:K among them) from the auditor's
+# A5_CHALLENGER=local|gate:USER@HOST: each rank samples by its partition file's rule (stratified:K among them) from the auditor's
 #   challenger's coins through its own service.Stream, the proof system's path of record, its outcome held to the Lean's run;
 #   one session on the TP run root (a5.py --challenger, a5_coins.py): local, a development session on this
 #   machine; gate:USER@HOST, the challenger host through infra's gate, with A5_PEER (this machine in its /etc/vy/peers),
-#   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks draw from the one
+#   A5_CHALLENGER_KEY (the challenger's key record) and A5_GATE_KEY (the lane's gate key). The step's ranks sample from the one
 #   session, so A5_JOBS covers every audited rank. It opens once every rank has passed its checks before the sample, with
 #   coins sized from every rank's sample, and not at all if one hasn't. The session's files, the ledger and the host's pins log are kept in
 #   $OUT/<name>/challenger/. The verifier's own copy of main's first-parent history (a5.py --main) is A5_MAIN, else this
 #   clone's fetch of origin/main ($OUT/main.txt, as benchmarks/remote_session/auditor.sh writes it).
 # A5_COMPOSE_CACHE=DIR: this machine's composed circuits (a5.py --compose-cache, compose_circuit.py --cache), so that the ranks
 #   audited here, in this run or another of the same tree, compose each chunked template once, and every later rank takes the
-#   kept circuit with its own partition and program (GLM-5.3's all-families draw composes ~95 min a rank without it).
+#   kept circuit with its own partition and program (GLM-5.3's all-families sample composes ~95 min a rank without it).
 # A5_ADVICE=workload (with A5_WINDOWS=bundles, the stand-in or A5_TP): advice windows. The advice A (I1, the schedule of the
 #   fixed-length workload the Commit served, `advice_windows.advice_of_workload`) and A' (A less its last request) are written
 #   in scratch, each rank's window is committed from its bundle over the stand-in compiler's Programs for A, and for A', its
@@ -220,7 +220,7 @@ if [ -n "${A5_TP:-}" ]; then
   public $WIN $O/$N/window
   audit $N $A5_TP/commit ${A5_BUILD:-$A5_TP/build} "$WL" $WIN $PART "${ADV[@]}" || rc=1
 else
-  for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a draw of all leaves no negative
+  for e in ${STANDIN:-256:subset:4 1536:subset:4}; do   # a rank's stand-in window holds 8 units; a sample of all leaves no negative
     if [ "$e" = row-tables ] || [ "$e" = sparse-mla ]; then
       [ -n "$MAIN" ] || { echo "STANDIN $e draws from a challenger's coins: set A5_CHALLENGER=local"; exit 3; }
       mkdir -p $O/$e
