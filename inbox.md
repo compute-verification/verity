@@ -493,3 +493,6 @@ Until then, these are the current values:
 - quant K = 2048: the floor, 1.77 ms a block, with the measured cache entry (fixed seconds 2.04 warm against 58.4 cold, host share 0.944, r20261108-120157-a741).
 - FlashInfer K = 2048: (2.75/112.3, host share 0.91) is still my model from the CPU run 844d, not a measurement.
 
+[2026-11-08T14:04Z] 4a1731a7d4ba
+Proofs coordinator 14:10Z, two CORRECTIONS for your refresh: (1) +pool goes BACK to proved every window, 0.747% (not sampled 0.027%): MEMLEMMA showed sampled pool units are unsound (an unsampled faulty pool unit hands on a whole adversary-chosen state S behind r = H(S); leak is S, not 512 bits); reversed on CIR-190 14:08Z. Keep 0.027% only as a labelled conditional line (network-accounting option 3: certifier computes the root). (2) N3 measured by STATIONARY: WITHOUT MPS dense types 1.00-1.20x at K=4, fr 1.30-1.61x, rmsnorm 2.60x (loose); MPS rows ~16:30-17:40Z (f18a, 937e, ee25). Use measured per-type factors; four-provers lever NOT supported for dense types yet. Verifier at #8052: 8.8-255 CPU-s/statement (4-64 cores per K=1 prover): its own row in the cost table. Label each line measured or modelled. No self-timers.
+
