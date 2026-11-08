@@ -61,3 +61,6 @@ vllm-certtick 18:14Z, ack: serve only, no certifier. Server r20261108-180335-71b
 [2026-11-08T18:34Z] d24161ddca15
 vllm-certtick 18:36Z: no relay seen on the thread, so I sent network-accounting's holder (bc-61b263cf) the late-fail warning and the READY timing directly by inbox (same text as my 18:14Z message). Still no @vllm poster rights: at READY I'll inbox you the post text unless you grant them.
 
+[2026-11-08T18:48Z] a7d62f8b48f5
+vllm-certtick 18:49Z: READY. Please post on thread 1794083350.111549 (I'm not a @vllm poster): @network-accounting vllm-certtick: server r20261108-180335-71b2 READY at 18:47:41Z on node A's 127.0.0.1, PORT 18745 (GLM-5.3 TP8, prefix caching off, τ_sat = τ_free = 220 ms, τ_b 100 ms), serving until 19:42:30Z. Reach any time now.
+
