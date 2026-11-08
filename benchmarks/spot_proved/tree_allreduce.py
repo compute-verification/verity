@@ -6,10 +6,13 @@ symmetric memory (``multimem.ld_reduce ... acc::f32``, to 64 MiB) and past that 
 every element in one tree of f32 adds, then round to bf16 (`AllReduceMultimem_v1` at the node's TREES, FTZ off). This plugin keeps
 FlashInfer's route, the custom all-reduce and the fused all-reduce + RMSNorm as they are (their order is in software, the same on every node),
 and replaces the other two with an NCCL all-gather (a copy) and that tree's f32 adds on every rank, rounded once to bf16. On a
-replay node without NVLink multicast, two more routes differ from the serving node's, and the plugin restores both:
+replay node without NVLink multicast, three more routes differ from the serving node's, and the plugin restores them:
 - vLLM leaves the custom all-reduce its full size, so it gets the serving node's size cap back (`served_custom_cap`).
 - FlashInfer's workspace falls back from ``mnnvl`` to ``trtllm``, which vLLM calls with bf16 accumulation. So each call
   FlashInfer takes is summed as ``mnnvl`` sums it (`reduce_from_zero`).
+- vLLM's all-reduce + RMSNorm fusion (``fuse_allreduce_rms``, steps of at most 0.5 MiB a rank) runs FlashInfer's fused kernel
+  on that workspace too, with trtllm's sums and norm. So each fused call is computed as ``mnnvl``'s one-shot or two-shot
+  kernels compute it (`mnnvl_add_rmsnorm`).
 It changes what the replay node computes, never the served record: a replay under it says so.
 
     python tree_allreduce.py site DIR --tree '(((((((0,2),3),1),5),6),4),7)' --source WHERE
@@ -83,6 +86,160 @@ def reduce_from_zero(gathered: Any, world: int, out: Any = None, f32: Any = None
     for r in range(world):
         acc.add_(rows[r])
     return acc.to(torch.bfloat16) if out is None else out.copy_(acc)
+
+
+def mnnvl_grid(tokens: int, dim: int, sms: int, elts: int = 8) -> tuple[int, int]:
+    """FlashInfer's `adjustGridConfig` with clusters, as its ``mnnvl`` fused kernels launch over ``tokens`` rows of ``dim``:
+    (threads a block, blocks in a row's cluster). Thread ``p`` of a row's cluster holds elements ``[elts*p, elts*p + elts)``.
+    A shape whose launch the reductions below don't model (a partial warp, padding, several loads a thread) is refused."""
+    need = -(-dim // elts)
+    cluster = 8
+    while need % cluster and cluster > 1:
+        cluster //= 2
+    most = cluster
+    block = -(-need // cluster)
+    while block < 128 and cluster >= 2:
+        block, cluster = block * 2, cluster // 2
+    while tokens * cluster > sms and cluster > 1 and block <= 512:
+        block, cluster = block * 2, cluster // 2
+    while cluster < most:
+        b = -(-need // (cluster * 2))
+        if b < 64 or tokens * cluster * 2 > sms:
+            break
+        block, cluster = b, cluster * 2
+    if block > 1024 or block % 32 or block * cluster * elts != dim:
+        raise NotImplementedError(f"tree-allreduce: mnnvl's launch for {tokens} rows of {dim} ({block} threads x {cluster} "
+                                  "blocks) is one the emulation doesn't model")
+    return block, cluster
+
+
+def butterfly(x: Any) -> Any:
+    """A warp's ``__shfl_xor_sync`` sum over the last axis (32 lanes): every lane ends with the same tree of f32 adds."""
+    for h in (16, 8, 4, 2, 1):
+        x = x[..., :h] + x[..., h:2 * h]
+    return x[..., 0]
+
+
+def mnnvl_add_rmsnorm(ar: Any, residual: Any, gamma: Any, eps: float, weight_bias: float, oneshot: bool, sms: int,
+                      scale: Any) -> tuple[Any, Any]:
+    """``(normed, h)`` as FlashInfer's ``mnnvl`` fused all-reduce + residual + RMSNorm computes them from the bf16 sum ``ar``
+    (`oneshotAllreduceFusionKernel` with RMSNorm, or two-shot's `rmsNormLamport`), read from the source and its SASS:
+    ``h = ar + residual`` rounded to bf16; each thread's 8 squares summed in order from +0 (one-shot squares in bf16, two-shot
+    in f32 by FFMA, exact for a bf16 value); a warp butterfly, a butterfly over the block's warp sums, then the cluster's block
+    sums in order; ``scale(sum, dim, eps)`` for ``rsqrtf(sum / dim + eps)``; then one-shot ``(h * r) * (wb + g)`` and two-shot
+    ``r * (h * (wb + g))``, each product f32, rounded to bf16. Subnormals, which the kernels flush, are taken not to occur."""
+    import torch
+    t, dim = ar.shape
+    block, cluster = mnnvl_grid(t, dim, sms)
+    h = (ar.float() + residual.float()).to(torch.bfloat16)
+    v = h.float()
+    sq = ((v * v).to(torch.bfloat16).float() if oneshot else v * v).view(t, dim // 8, 8)
+    ts = sq[..., 0].clone()
+    for j in range(1, 8):
+        ts += sq[..., j]
+    warps = butterfly(ts.view(t, cluster, block // 32, 32))
+    blocks = butterfly(torch.nn.functional.pad(warps, (0, 32 - block // 32)))
+    full = blocks[:, 0].clone()
+    for i in range(1, cluster):
+        full += blocks[:, i]
+    r = scale(full, dim, eps)[:, None]
+    g = gamma.float() + weight_bias
+    out = (v * r) * g if oneshot else r * (v * g)
+    return out.to(torch.bfloat16), h
+
+
+def device_sms(device: Any) -> int:
+    """The multiprocessors FlashInfer's `GetCudaMultiProcessorCount` sizes the launch by; the serving GPU's, as this node has the
+    same (H200: 132)."""
+    import torch
+    return torch.cuda.get_device_properties(device).multi_processor_count
+
+
+_SCALE: Any = None
+
+
+def mufu_scale() -> Any:
+    """``scale(sum, dim, eps)``: FlashInfer's ``rsqrtf(sum / dim + eps)`` under ``-use_fast_math``, which its SASS computes as
+    ``MUFU.RSQ(FFMA(MUFU.RCP(dim), sum, eps))``; each step is the PTX instruction that compiles to it."""
+    global _SCALE, tl
+    if _SCALE is not None:
+        return _SCALE
+    import torch
+    import triton
+    import triton.language as tl
+
+    @triton.jit(do_not_specialize=["n", "dim"])
+    def kernel(s_ptr, o_ptr, n, dim, eps, BLOCK: tl.constexpr):
+        i = tl.program_id(0) * BLOCK + tl.arange(0, BLOCK)
+        m = i < n
+        s = tl.load(s_ptr + i, mask=m, other=1.0)
+        d = tl.full([BLOCK], dim, tl.int32).to(tl.float32)
+        e = tl.full([BLOCK], eps, tl.float32)
+        r = tl.inline_asm_elementwise(
+            "{ .reg .f32 t; rcp.approx.ftz.f32 t, $2; fma.rn.ftz.f32 t, t, $1, $3; rsqrt.approx.ftz.f32 $0, t; }",
+            "=f,f,f,f", [s, d, e], dtype=tl.float32, is_pure=True, pack=1)
+        tl.store(o_ptr + i, r, mask=m)
+
+    def scale(s, dim, eps):
+        s = s.contiguous()
+        o = torch.empty_like(s)
+        kernel[(triton.cdiv(s.numel(), 256),)](s, o, s.numel(), dim, eps, BLOCK=256)
+        return o
+    _SCALE = scale
+    return scale
+
+
+def install_fused(t: Tree, device: Any) -> None:
+    """Wrap ``flashinfer.comm.allreduce_fusion``, which vLLM's fused all-reduce + RMSNorm op looks up at each call, and compile
+    the scale kernel now: this runs in vLLM's eager profiling forward, before any CUDA graph is captured."""
+    import torch
+    if device.type != "cuda":
+        return
+    try:
+        import flashinfer.comm as fc
+    except ImportError:
+        return
+    if getattr(fc.allreduce_fusion, "__wrapped__", None) is None:
+        fc.allreduce_fusion = fused_from_mnnvl(fc.allreduce_fusion, t)
+    mufu_scale()(torch.ones(1, dtype=torch.float32, device=device), 6144, 1e-5)
+
+
+def fused_from_mnnvl(orig: Any, t: Tree) -> Any:
+    """``flashinfer.comm.allreduce_fusion`` with the all-reduce + residual + RMSNorm calls a workspace other than the serving
+    node's ``mnnvl`` gets computed as ``mnnvl`` computes them: an all-gather summed from +0 in rank order, rounded once (two-shot
+    then clears a -0), and `mnnvl_add_rmsnorm` with the strategy ``mnnvl``'s AUTO picks for the shape. Any other pattern on such
+    a workspace is refused."""
+    def allreduce_fusion(*args, **kw):
+        ws = kw.get("workspace")
+        if args or ws is None or getattr(ws, "backend", None) == SERVED_FI_BACKEND:
+            return orig(*args, **kw)
+        import flashinfer.comm as fc
+        from flashinfer.comm.trtllm_mnnvl_ar import MNNVLAllreduceFusionStrategy as S
+        from vllm.distributed.parallel_state import get_tp_group
+        if kw.get("pattern") != fc.AllReduceFusionPattern.kARResidualRMSNorm or any(
+                kw.get(k) is not None for k in ("quant_out", "scale_out", "scale_factor")):
+            raise RuntimeError(f"tree-allreduce: FlashInfer fusion pattern {kw.get('pattern')} on a {ws.backend} workspace, "
+                               "which the mnnvl emulation doesn't cover")
+        x, res, gamma, eps = kw["input"], kw["residual_in"], kw["rms_gamma"], kw["rms_eps"]
+        norm_out, res_out = kw["norm_out"], kw["residual_out"]
+        if eps is None or norm_out is None or res_out is None or x.dim() != 2:
+            raise RuntimeError("tree-allreduce: a fused all-reduce + RMSNorm call without vLLM's outputs, eps or 2-D input")
+        comm = get_tp_group().device_communicator
+        if not getattr(comm, "_tree_fused_said", False):
+            comm._tree_fused_said = True
+            print(f"[tree-allreduce] FlashInfer's fused all-reduce + RMSNorm runs on a {ws.backend} workspace on this node: "
+                  f"computed as the serving node's {SERVED_FI_BACKEND} kernels compute it", file=sys.stderr, flush=True)
+        ar = gather_reduce(comm, x, t, lambda g, w, out, f32: reduce_from_zero(g, w, out, f32))
+        oneshot = S.select_strategy(comm.world_size, x.shape[0], x.shape[1], x.dtype) == S.ONESHOT
+        if not oneshot:
+            ar = ar + 0.0
+        normed, h = mnnvl_add_rmsnorm(ar, res, gamma, eps, kw.get("weight_bias") or 0.0, oneshot, device_sms(x.device),
+                                      mufu_scale())
+        res_out.copy_(h)
+        norm_out.copy_(normed)
+        return norm_out
+    allreduce_fusion.__wrapped__ = orig
+    return allreduce_fusion
 
 
 def config(d: Path | None = None) -> dict | None:
@@ -174,6 +331,7 @@ def wrap(orig: Any, t: Tree) -> Any:
             if m is not None:
                 print(f"[tree-allreduce] no symmetric memory on this node: the custom all-reduce is capped at {m} bytes, as on the "
                       "serving node", file=sys.stderr, flush=True)
+            install_fused(t, input_.device)
         if input_.dtype != torch.bfloat16:
             return orig(self, input_)
         fi, ca = self.fi_ar_comm, self.ca_comm

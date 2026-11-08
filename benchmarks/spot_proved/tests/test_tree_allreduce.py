@@ -1,7 +1,9 @@
 """`tree_allreduce`: the serving node's tree parsed as its probe prints it, the gathered words summed in that tree's f32 order and
 rounded once to bf16 (against numpy's IEEE f32 adds, and refused by an order that differs), FlashInfer's route under ``mnnvl``
 and other dtypes left to vLLM, FlashInfer's calls under another backend summed as ``mnnvl`` sums them, the custom all-reduce
-given the serving node's cap on a node without symmetric memory, and the plugin's site registering it."""
+given the serving node's cap on a node without symmetric memory, FlashInfer's fused all-reduce + RMSNorm under another backend
+computed as ``mnnvl``'s kernels compute it (against a thread-by-thread model of them, with the launch FlashInfer picks), and the
+plugin's site registering it."""
 from __future__ import annotations
 
 import importlib
@@ -242,6 +244,155 @@ def test_without_symmetric_memory_the_custom_all_reduce_gets_the_serving_nodes_c
     ar(c, inputs[0])
     ar(c, inputs[0])
     assert c.ca_comm.max_size == MiB // 4 and capsys.readouterr().err.count("capped at 262144 bytes") == 1
+
+
+DIM = 6144
+
+
+def _oneshot(t: int) -> bool:
+    """``mnnvl``'s AUTO strategy at TP8: one-shot while ``t * dim * world * 2`` bytes fit `MNNVL_ONE_SHOT_THRESHOLD`."""
+    return t * DIM * 8 * 2 <= 64 * 1024 * 8 * 2
+
+
+def test_the_launch_is_flashinfers_for_every_row_count_vllms_fusion_takes():
+    for t in range(1, 43):
+        want = (96, 8) if t <= 16 else (192, 4) if t <= 33 else (384, 2)
+        assert TA.mnnvl_grid(t, DIM, 132) == want, t
+    assert TA.mnnvl_grid(66, DIM, 132) == (384, 2) and TA.mnnvl_grid(67, DIM, 132) == (768, 1)
+    for dim in (6000, 4104):
+        with pytest.raises(NotImplementedError):
+            TA.mnnvl_grid(4, dim, 132)
+
+
+def _shfl_xor_sum(lanes: np.ndarray) -> np.float32:
+    """32 lanes each doing ``val += __shfl_xor_sync(val, mask)`` for mask 16..1; every lane ends equal."""
+    v = lanes.astype(np.float32)
+    for mask in (16, 8, 4, 2, 1):
+        v = (v + v[np.arange(32) ^ mask]).astype(np.float32)
+    assert (v == v[0]).all()
+    return v[0]
+
+
+def _scale_np(s, dim: int, eps: float):
+    return np.float32((np.float64(s) / dim + eps) ** -0.5)
+
+
+def _scale_torch(s, dim: int, eps: float):
+    return torch.from_numpy(np.array([_scale_np(x, dim, eps) for x in s.numpy()], dtype=np.float32))
+
+
+def _kernel(ar: np.ndarray, res: np.ndarray, gamma: np.ndarray, oneshot: bool, bf16_squares: bool | None = None,
+            sequential: bool = False) -> tuple:
+    """``mnnvl``'s fused kernels thread by thread: thread ``p`` of a row's cluster holds 8 elements, sums their squares from +0,
+    lanes butterfly within a warp, warp 0 butterflies the block's warp sums (zeros past them), and the cluster's block sums add
+    in order. Returns the normed rows, the residual and each row's f32 sum of squares. ``bf16_squares`` (one-shot's rounding
+    by default) and ``sequential`` (one running sum) put other arithmetic in, to show the check can fail."""
+    t = ar.shape[0]
+    block, cluster = TA.mnnvl_grid(t, DIM, 132)
+    h = _rne((_bf16(ar) + _bf16(res)).astype(np.float32))
+    hv, g = _bf16(h), (_bf16(gamma) + np.float32(0)).astype(np.float32)
+    exact = (hv * hv).astype(np.float32)
+    sq = _bf16(_rne(exact)) if (oneshot if bf16_squares is None else bf16_squares) else exact
+    out, fulls = np.empty_like(h), np.empty(t, dtype=np.float32)
+    for row in range(t):
+        full = np.float32(0)
+        if sequential:
+            for x in sq[row]:
+                full = np.float32(full + x)
+        else:
+            threads = sq[row].reshape(cluster * block, 8)
+            ts = np.zeros(cluster * block, dtype=np.float32)
+            for j in range(8):
+                ts = (ts + threads[:, j]).astype(np.float32)
+            for b in range(cluster):
+                warps = [_shfl_xor_sum(w) for w in ts[b * block:(b + 1) * block].reshape(block // 32, 32)]
+                smem = np.zeros(32, dtype=np.float32)
+                smem[:len(warps)] = warps
+                full = np.float32(full + _shfl_xor_sum(smem))
+        fulls[row] = full
+        r = _scale_np(full, DIM, 1e-5)
+        if oneshot:
+            v = ((hv[row] * r).astype(np.float32) * g).astype(np.float32)
+        else:
+            v = (r * (hv[row] * g).astype(np.float32)).astype(np.float32)
+        out[row] = _rne(v)
+    return out, h, fulls
+
+
+def _row_words(rng, t: int, scale: float = 0.3) -> np.ndarray:
+    return _rne((rng.standard_normal((t, DIM)) * scale).astype(np.float32))
+
+
+def test_the_fused_norm_is_the_kernels_arithmetic_at_each_launch_and_strategy():
+    rng = np.random.default_rng(19)
+    gamma = _rne((rng.random(DIM) + 0.5).astype(np.float32))
+    for t in (3, 10, 11, 21, 40):
+        ar, res = _row_words(rng, t, 2.0), _row_words(rng, t)
+        sums = []
+
+        def scale(s, dim, eps):
+            sums.append(s.numpy().copy())
+            return _scale_torch(s, dim, eps)
+        normed, h = TA.mnnvl_add_rmsnorm(_torch_words(ar), _torch_words(res), _torch_words(gamma), 1e-5, 0.0, _oneshot(t), 132,
+                                         scale)
+        want, want_h, fulls = _kernel(ar, res, gamma, _oneshot(t))
+        assert np.array_equal(_words(h), want_h) and np.array_equal(_words(normed), want), t
+        assert np.array_equal(sums[0].view(np.uint32), fulls.view(np.uint32)), t
+        for other in (_kernel(ar, res, gamma, _oneshot(t), sequential=True)[2],
+                      _kernel(ar, res, gamma, _oneshot(t), bf16_squares=not _oneshot(t))[2]):
+            assert not np.array_equal(other, fulls), t
+
+
+def _fused_stubs(monkeypatch, comm):
+    fc = types.ModuleType("flashinfer.comm")
+    fc.AllReduceFusionPattern = SimpleNamespace(kAllReduce=0, kARResidualRMSNorm=1, kARResidualRMSNormFP8Quant=2)
+
+    class Strategy:
+        ONESHOT, TWOSHOT = 0, 1
+
+        @staticmethod
+        def select_strategy(tp, tokens, dim, dtype):
+            return Strategy.ONESHOT if tokens * dim * tp * 2 <= 64 * 1024 * 8 * 2 else Strategy.TWOSHOT
+    mar = types.ModuleType("flashinfer.comm.trtllm_mnnvl_ar")
+    mar.MNNVLAllreduceFusionStrategy = Strategy
+    ps = types.ModuleType("vllm.distributed.parallel_state")
+    ps.get_tp_group = lambda: SimpleNamespace(device_communicator=comm)
+    for m in (fc, mar, ps):
+        monkeypatch.setitem(sys.modules, m.__name__, m)
+    monkeypatch.setitem(sys.modules, "flashinfer", types.SimpleNamespace(comm=fc, __path__=[]))
+    monkeypatch.setattr(TA, "mufu_scale", lambda: _scale_torch)
+    monkeypatch.setattr(TA, "device_sms", lambda device: 132)
+
+
+def test_fused_calls_on_another_workspace_are_computed_as_mnnvl_computes_them_and_other_patterns_refused(monkeypatch, capsys):
+    rng = np.random.default_rng(23)
+    t = 21
+    ranks = np.stack([_row_words(rng, t) for _ in range(8)])
+    inputs = [_torch_words(w) for w in ranks]
+    comm = _Comm(inputs, fi_max=0)
+    _fused_stubs(monkeypatch, comm)
+    seen = []
+    fused = TA.fused_from_mnnvl(lambda *a, **kw: seen.append(kw["workspace"].backend) or "vllm", TA.parse_tree(NODE_A))
+    res_w, gamma_w = _row_words(rng, t), _rne((rng.random(DIM) + 0.5).astype(np.float32))
+
+    def call(backend, pattern=1, **extra):
+        x, res = inputs[3].clone(), _torch_words(res_w)
+        kw = dict(input=x, workspace=SimpleNamespace(backend=backend), pattern=pattern, launch_with_pdl=True, output=None,
+                  residual_out=res, norm_out=x, quant_out=None, scale_out=None, residual_in=res,
+                  rms_gamma=_torch_words(gamma_w), rms_eps=1e-5, scale_factor=None, layout_code=None, use_oneshot=False,
+                  fp32_acc=True, weight_bias=0.0, **extra)
+        return fused(**kw), x, res
+    assert call("mnnvl")[0] == "vllm" and seen == ["mnnvl"]
+    got, x, res = call("trtllm")
+    assert got is x and comm.gathers == 1
+    want, want_h, _ = _kernel(_from_zero(ranks.reshape(8, -1)).reshape(t, DIM), res_w, gamma_w, oneshot=False)
+    assert np.array_equal(_words(res), want_h) and np.array_equal(_words(x), want)
+    comm.at = 0
+    call("trtllm")
+    assert capsys.readouterr().err.count("runs on a trtllm workspace") == 1
+    with pytest.raises(RuntimeError, match="doesn't cover"):
+        call("trtllm", pattern=2)
+    assert fused(1, workspace=SimpleNamespace(backend="trtllm")) == "vllm"
 
 
 def test_site_registers_the_plugin_with_its_tree(tmp_path, monkeypatch):
