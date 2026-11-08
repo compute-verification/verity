@@ -4,7 +4,12 @@ public import Definitions.Core.Game
 public import Definitions.Core.MemCheck
 
 /-!
-# What a fingerprint collision costs a memory check
+# What a memory check establishes, and what a fingerprint collision costs it
+
+`MemoryChecked`: a log that offline memory checking accepts (`Verity.MemCheck.Checked`) read its memory correctly
+(`Verity.MemCheck.ReadsCorrect`): every access found its address's last write before it, or the initial value where there
+was none, and the final contents are the memory the log leaves. Its proof needs no coin: the check's error is only the
+fingerprint's below.
 
 A memory check accepts when two multisets of packed records have equal fingerprints at coins drawn uniformly after both
 are committed (`Verity.MemCheck.fingerprint`), and keys its memory by prints at a coin of their own
@@ -29,6 +34,14 @@ namespace Verity.Guarantees
 
 open Verity.MemCheck
 open scoped ENNReal
+
+/-- **A log offline memory checking accepts read its memory correctly.** For all types of addresses `A` and values `V`,
+initial values `v0`, logs, sets of touched addresses and final contents `fin`: if the check accepts them, each access
+read the value and time its address held before it, the final contents are what the log leaves, and the log touches only
+touched addresses. -/
+def MemoryChecked : Prop :=
+  ∀ {A V : Type} [DecidableEq A] (v0 : A → V) (log : List (Access A V)) (touched : Finset A) (fin : A → V × ℕ),
+    Checked v0 log touched fin → ReadsCorrect v0 log touched fin
 
 /-- **Two different multisets collide with probability at most `max |A| |B| · max 1 (m - 1) / |F|`.** For every finite
 field `F`, number of chunks `m` and multisets `A` and `B` of records packed into `m` chunks: over independent uniform
