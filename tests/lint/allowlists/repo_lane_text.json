@@ -233,7 +233,6 @@
     {"file": "verity/core/difftest/python/verity_difftest/__init__.py", "count": 1},
     {"file": "verity/core/protocols/remote/README.md", "count": 1},
     {"file": "verity/core/protocols/onsite/CoreOnsite.lean", "count": 3},
-    {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3},
-    {"file": "examples/h200/demo.toml", "count": 2}
+    {"file": "verity/core/protocols/remote/CoreRemote.lean", "count": 3}
   ]
 }
