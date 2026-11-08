@@ -8017,3 +8017,40 @@ change."
 - **Tooling PR:** [#8021](https://github.com/compute-verification/verity/pull/8021) (PRF-456). Its suites,
   r20261108-062346-8003 on cpu-9, are also waiting on memory. I'll mark it when they pass.
 - **Next:** the card fix follows the run as its own PR, and BREAKEVEN then gets the measured rate in `inbox/BREAKEVEN.md`.
+
+- 06:29Z (MOEBIND): **Both served read files pass `readUnitDrawn_check`'s file premises (`ht`, `hcheck`, `ho`), by a scratch check rather than the committed command. PCRANKIN's `flock-read-tmpl check` is on no branch, and PCRANKIN is still idle, so it needs resuming, or give the command to me.** proofs/spot-moe-binding is now off-track.
+  - **r20261108-061617-b123** (cpu-11 `--pool research`, at #7927's head 0ac93f72fe, rc 0):
+    - **What it does:** it builds a scratch executable beside Flock and parses each file with `Flock.HmOut.parseTmpl`, at the tags `verify --zk --statement verity/flock-circuit/tmpl` uses (`Zk.tags Tags.circuitTmpl (Zk.maskLogOf bytes) 1`, no lookup tables).
+    - **w13** (`art:0af6dacb…`, sha512 `ff4366b3…`, the staged file's), V = 256, H = 96:
+      - the parse succeeds in 80 s, and `ct.tmpl = some tu`;
+      - the template is `EmbeddingRead_v1(V=256,H=96)`, and its 12 Definitions equal `readTmpl 256 96`'s;
+      - `ReadNet.check 256 96 tu.t = true`;
+      - `outNet = unitNet = 0` of 3 nets, so `hsz` holds too;
+      - peak 12.1 GB, 1 min 37 s.
+    - **w2** (`art:71e9db9a…`, sha512 `fef00533…`), V = 256, H = 4: the same results. The parse took 91 s, peak 11.7 GB, 1 min 48 s.
+    - **Why the session count doesn't matter:** `Zk.tags` sets only `identity`'s hooks, and neither `parseTmpl` nor `HmRow.parse` reads `identity`. `Tags.byName? "verity/flock-circuit/tmpl"` is `Tags.circuitTmpl`.
+    - **Its source** is the run's `out/ReadCheckScratch.lean`, which is the logic the committed command needs.
+    - **Earlier tries:**
+      - c9cd (cpu-11) built but couldn't fetch the arts, because nodes have no store remote. b123 ships the files with `--send` instead.
+      - dd57 (cpu-8) and ca91 (cpu-7) waited on full check slots, and I cancelled both before they started.
+  - **PCRANKIN** has shown idle since about 01:15Z:
+    - It hasn't seen the 01:52Z, 02:52Z or 03:40Z assignments, or my 06:12Z ETA ask in `inbox/PCRANKIN.md`.
+    - D3's branch is still at 6ed03eed32.
+    - Only its launcher can resume it.
+    - **If you give the command to me,** I'll open it as its own PR stacked on #7927, about 2 h after your yes (a records run plus the suite). It would carry the scratch's logic in a Flock module, `FlockReadTmpl.main` as one line, the `exempt` reason and the test in `test_read_tmpl.py`.
+  - **The served files will need restaging:**
+    - #7988 (VERIFYFAST-C, open) moves a templated file's template out of META into a `TEMPLATE n` section right after it.
+    - Its `parseTmpl` refuses a file without that section ("no template section").
+    - Both served files keep the template in META, so once #7988 lands, MOESERVE restages them and I rerun the check.
+    - #7988 also changes the shared writer in `verity_flock/circuit.py`, so restaging needs no other change.
+  - **The goal, off-track:**
+    - **Why off-track:** #7927 is in review, but a served read can't reach the theorem until the verifier accepts one. That takes three changes, and none has a date:
+      - #7999 is waiting to merge behind #7896, with #8008 stacked on it;
+      - MOESERVE-C's #8003, which registers every port of a read so `checkComplete` takes it, is still a draft;
+      - the committed check hasn't started.
+    - **The description** now says what's proved, what's on the served reads and what's left, with no ids or worker names.
+    - **If you'd rather the goal mean the theorem alone,** it's on-track. Set it back, and put the served read's acceptance under proofs/spot-fused-cut-served.
+  - **Run ids and ETAs:**
+    - b123 is done, rc 0, and nothing of mine is running.
+    - #7927 waits on ci's re-review, with nothing left for me on it.
+    - The committed check would be about 2 h from your yes; its rerun after #7988's restaging, about 10 min.
