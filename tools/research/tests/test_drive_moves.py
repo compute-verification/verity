@@ -265,6 +265,35 @@ def test_three_restack_jobs_at_once_in_one_clone_end_clean_with_their_results_th
     assert not list(scratch.iterdir())
 
 
+def test_a_fetch_holds_the_clones_worktree_lock_shared_and_other_git_takes_none(tmp_path, monkeypatch):
+    """A fetch reads every worktree's HEAD, and `git worktree add` writes a placeholder one first: a sync's fetch beside a
+    restack job's add failed on it (`bad object worktrees/restack-…/HEAD`). So each fetch holds the clone's worktree lock
+    shared, which `tools/move/restack.py` holds alone while it adds or forgets a scratch worktree, and fetches side by side,
+    like every other git command, wait on nothing."""
+    _git(tmp_path, "init", "-q", "-b", "main", "origin")
+    _git(tmp_path / "origin", "commit", "-q", "--allow-empty", "-m", "c")
+    _git(tmp_path, "clone", "-q", str(tmp_path / "origin"), "clone")
+    clone, seen, real = tmp_path / "clone", [], subprocess.run
+
+    def probed(argv, *args, **kw):
+        if (sub := Q._subcommand(tuple(argv[1:]))) in ("fetch", "status"):
+            with open(clone / ".git" / Q.WORKTREES_LOCK, "a") as f:
+                for op in (fcntl.LOCK_SH, fcntl.LOCK_EX):
+                    try:
+                        fcntl.flock(f, op | fcntl.LOCK_NB)
+                        fcntl.flock(f, fcntl.LOCK_UN)
+                        seen.append((sub, op, "free"))
+                    except BlockingIOError:
+                        seen.append((sub, op, "held"))
+        return real(argv, *args, **kw)
+
+    monkeypatch.setattr(Q.subprocess, "run", probed)
+    Q._git(clone, *Q.STALL, "fetch", "-q", "origin")
+    Q._git(clone, "status", "--short")
+    assert seen == [("fetch", fcntl.LOCK_SH, "free"), ("fetch", fcntl.LOCK_EX, "held"),
+                    ("status", fcntl.LOCK_SH, "free"), ("status", fcntl.LOCK_EX, "free")]
+
+
 def test_a_restack_job_that_ends_with_no_result_runs_once_more_and_then_its_failure_refuses_the_pr(world, monkeypatch, jobs):
     """A job killed (here with exit 137 and no results) runs once more, still waiting since its first start; when that one
     writes no exit within `RESTACK_LOST_S` too, the restack failed: the PR is refused with the tail, and its owner told, as a
