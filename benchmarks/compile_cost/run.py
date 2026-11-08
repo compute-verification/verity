@@ -179,7 +179,7 @@ def instrument(m: Meter) -> None:
     from verity_vllm.program.predict import batch, build, score, steps
 
     for owner, attrs in ((steps, ("plan_steps", "request_program", "dead_units")),
-                         (build, ("decoder", "drive", "finish_run", "with_checks", "dead_free_form", "Program")),
+                         (build, ("decoder", "drive", "with_checks", "dead_free_form", "Program")),
                          (score, ("request_component",)),
                          (batch, ("check_compiled", "separable", "workload_labels", "_solo"))):
         for a in attrs:
