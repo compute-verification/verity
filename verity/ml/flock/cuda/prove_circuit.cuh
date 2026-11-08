@@ -14,9 +14,6 @@
 
 #define FC_MAX_TYPES 12
 #define FC_MAX_RANGES 32
-// device memory rep 0 leaves free when it keeps its witness for rep 1: outside the arena, the witness's scratch (at most 2 GiB
-// at a time), its inputs, and the first proof's cached type matrices
-#define FC_KEEP_MARGIN ((size_t)4 << 30)
 
 typedef struct {
     FlockChunkParams c;                // link, delta, gamma, phase, host witness (c.host_z / host_a / host_b)
@@ -66,9 +63,9 @@ typedef struct {
     const uint64_t* zk_pads; const uint64_t* zk_extra;
     // the units' slots are among the host slots (host0), so the unit kernel does not run (a deep unit's witness is the host's)
     int u_host;
-    // rep 1 from rep 0's witness and level-0 commitment (both reps bind one level-0 root): 1 keeps them for the next call with
-    // the same reuse_tag, which leaves the device arena open between the two calls; 2 takes them, or proves in full when
-    // nothing was kept (rep 0 had no room)
+    // rep 1 from rep 0's level-0 commitment (both reps bind one level-0 root): 1 keeps it for the next call with the same
+    // reuse_tag, which leaves the device arena open between the two calls; 2 takes it and builds the witness again, or proves
+    // in full when nothing was kept
     int rep_reuse;
     unsigned long long reuse_tag;
     // the compression slots' native witness (the SHA-512 build): per row of the sha512x3 circuit, its a and b sources (two u32:
@@ -211,14 +208,12 @@ __global__ void fc_comb_expand(FcRanges R, const F128* __restrict__ eq, long lon
     }
 }
 
-// What rep 0 keeps for rep 1 (rep_reuse): its witness (z, a, b; rep 1 transposes z for the lincheck again) and level-0
-// codeword, tree and cap, and under M1 level 0's pads and extra lanes (the session's, which rep 1's lane phase reads), live in
-// the device arena, which stays open until rep 1 releases them.
+// What rep 0 keeps for rep 1 (rep_reuse): its level-0 codeword, tree and cap, and under M1 level 0's pads and extra lanes (the
+// session's, which rep 1's lane phase reads), live in the device arena, which stays open until rep 1 releases them.
 struct FcKept {
     bool live = false;
     unsigned long long tag = 0;
     int m = 0, k_log = 0;
-    F128 *df = nullptr, *d_a = nullptr, *d_b = nullptr;
     F128* d_cw0 = nullptr;
     uint8_t* d_tree0 = nullptr;
     long long l0_bl = 0;
@@ -227,34 +222,14 @@ struct FcKept {
     F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;
 };
 static FcKept g_fc_kept;
-// the most this prover has asked of device_arena, which only grows (a larger request by another prover makes the keep check
-// below conservative, never optimistic)
-static size_t g_fc_arena = 0;
 
 // a session that stopped between its reps: release what its rep 0 kept
 static void fc_kept_drop() {
     if (!g_fc_kept.live) return;
-    for (void* p : {(void*)g_fc_kept.df, (void*)g_fc_kept.d_a, (void*)g_fc_kept.d_b, (void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0,
-                    (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
+    for (void* p : {(void*)g_fc_kept.d_cw0, (void*)g_fc_kept.d_tree0, (void*)g_fc_kept.d_zk_pads, (void*)g_fc_kept.d_zk_extra})
         if (p) ffi_free(p);
     device_arena.finish();
     g_fc_kept = FcKept{};
-}
-
-// what keeping rep 0's witness adds to the arena: FC_KEEP_EXTRA_W witness sizes (default 0: z, a and b held past the zerocheck and
-// Ligerito's copy of z fit in the arena's own peak, the zerocheck's buffers, which are freed by then; 3 counts them on top)
-static size_t fc_keep_extra(size_t w) {
-    static const long k = [] { const char* e = std::getenv("FC_KEEP_EXTRA_W"); return e ? atol(e) : 0L; }();
-    return (size_t)k * w;
-}
-
-// whether rep 0 can keep its witness: the arena grows by `extra` and the device keeps `margin` free (FC_KEEP_MARGIN)
-static bool fc_can_keep(size_t arena, size_t extra, size_t margin) {
-    size_t free_b = 0, total_b = 0;
-    if (cudaMemGetInfo(&free_b, &total_b) != cudaSuccess) { cudaGetLastError(); return false; }
-    const size_t want = arena + extra;
-    const size_t after = want <= g_fc_arena ? free_b : (free_b + g_fc_arena >= want ? free_b + g_fc_arena - want : 0);
-    return after >= margin;
 }
 
 // rep 1 opens rep 0's level-0 tree: with hm96 leaves its salts are level 0's (tree 0), and rep 1's own trees count from 1
@@ -845,18 +820,19 @@ __global__ void fc_zk_lane_input(F128* __restrict__ cw, const F128* __restrict__
     cw[i] = v;
 }
 
-// Leaves of w + 4 lanes: the witness's w lanes, then the 4 extra ones.
-__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ cw_w, const F128* __restrict__ cw_x, int w, long long n) {
+// Leaves of `stride` lanes: `width` lanes' codewords (src, position-major) as lanes [off, off + width) of each leaf.
+__global__ void fc_zk_interleave(F128* __restrict__ out, const F128* __restrict__ src, int width, int off, int stride, long long n) {
     long long i = blockIdx.x * (long long)blockDim.x + threadIdx.x;
-    if (i >= n * (w + 4)) return;
-    const long long pos = i / (w + 4);
-    const int lane = (int)(i - pos * (w + 4));
-    out[i] = lane < w ? cw_w[pos * w + lane] : cw_x[pos * 4 + lane - w];
+    if (i >= n * width) return;
+    const long long pos = i / width;
+    out[pos * stride + off + (i - pos * width)] = src[i];
 }
 
 // commit_zk on the device. The padding's upper half is not zero, so the transform runs every layer (M0's commit skips layer 0
-// by reading the message replicated); the witness's lanes and the extra ones go as two batches (the NTT's lane tiles are powers
-// of two), then are interleaved. The pads and extra lanes stay on the device for the lane phase (the caller frees them).
+// by reading the message replicated); the witness's lanes go in four groups and the extra ones in a batch of their own (the
+// NTT's lane tiles are powers of two), each interleaved into the leaves as it's done, so only a quarter of the witness's lane
+// codewords is ever held beside the leaves. The pads and extra lanes stay on the device for the lane phase (the caller frees
+// them).
 static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitParams* N, int log_n, const F128* df, F128** d_pads,
                            F128** d_extra, F128** d_cw0, uint8_t** d_tree0, long long* l0_bl, int* l0_ni, std::vector<MHash>& l0_cap) {
     const int k = P->initial_k, w = 1 << k, t_pad = N->zk_t_pad;
@@ -870,18 +846,21 @@ static int fc_commit_l0_zk(const FlockCudaProveParams* P, const FlockCircuitPara
     const TwiddleTable* tt;
     F128* d_tw;
     CK(get_cached_twiddles(k_code, tt, d_tw));
-    F128 *cw_w, *cw_x;
-    CK(ffi_malloc(&cw_w, (size_t)n * w * sizeof(F128)));
-    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
-    fc_zk_lane_input<<<(unsigned)((n * w + 255) / 256), 256>>>(cw_w, df, w, 1, k, n, l, *d_pads, t_pad);
-    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
-    CK(cudaGetLastError());
-    launch_ntt(cw_w, d_tw, *tt, 0, k_code, w);
-    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
-    CK(cudaGetLastError());
     CK(ffi_malloc(d_cw0, (size_t)n * (w + 4) * sizeof(F128)));
     CK(ffi_malloc(d_tree0, (size_t)(2 * n - 1) * FLOCK_HB));
-    fc_zk_interleave<<<(unsigned)((n * (w + 4) + 255) / 256), 256>>>(*d_cw0, cw_w, cw_x, w, n);
+    const int g_log = k < 2 ? k : 2, wg = w >> g_log;
+    F128 *cw_w, *cw_x;
+    CK(ffi_malloc(&cw_w, (size_t)n * wg * sizeof(F128)));
+    CK(ffi_malloc(&cw_x, (size_t)n * 4 * sizeof(F128)));
+    for (int g = 0; g < w; g += wg) {
+        fc_zk_lane_input<<<(unsigned)((n * wg + 255) / 256), 256>>>(cw_w, df + g, w, 1, k - g_log, n, l, *d_pads + (size_t)g * t_pad, t_pad);
+        launch_ntt(cw_w, d_tw, *tt, 0, k_code, wg);
+        fc_zk_interleave<<<(unsigned)((n * wg + 255) / 256), 256>>>(*d_cw0, cw_w, wg, g, w + 4, n);
+        CK(cudaGetLastError());
+    }
+    fc_zk_lane_input<<<(unsigned)((n * 4 + 255) / 256), 256>>>(cw_x, *d_extra, 1, l, 2, n, l, *d_pads + (size_t)w * t_pad, t_pad);
+    launch_ntt(cw_x, d_tw, *tt, 0, k_code, 4);
+    fc_zk_interleave<<<(unsigned)((n * 4 + 255) / 256), 256>>>(*d_cw0, cw_x, 4, w, w + 4, n);
     CK(cudaGetLastError());
     launch_merkle((const uint8_t*)*d_cw0, *d_tree0, n, (w + 4) * 16);
     CK(cudaStreamSynchronize(0));

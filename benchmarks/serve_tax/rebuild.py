@@ -36,6 +36,20 @@ outputs through S-1 are those processed by then and the record's for S-1, still 
 nothing past a computed prefix is filled in. It refuses a step whose rows run a request the step before finished (async
 scheduling's extra row: the fresh engine would need the finished request back to run it), and compares from S to the
 far edge as rebuild.json does, with the roots at S against the GPU's.
+
+``--shape-only RID`` replays one request with every other request a dummy of its shape (`Dummies`), from the edge or
+from a mirror: a dummy keeps its lengths, its arrival, its prefix-cache hits and its served finish, and nothing of its
+values. Its tokens are substitutes, each full page's derived from that page's chain hash so that pages equal in serving
+stay equal (RID's own pages kept), and its K/V is never loaded: zero or NaN (``--dummy``) at the start, in every page a
+forced hit seeds for it, and in every slot it writes, refilled once the GPU has finished the step. A dummy runs until
+its served output count (``ignore_eos``), so it finishes where serving did. RID's prefix and every page it hits come
+from serving's bytes: the edge's K/V file, or the mirror, which a replay identical to serving wrote. shape.json compares
+RID's tokens and logprob bits and the schedule (a dummy's finish reason aside) up to RID's last step, and records what
+the replay took from the run.
+
+Zero is the replay. NaN probes for reads at weight zero, which no finite dummy can show: FA3's causal varlen prefill
+weights the sequence packed after RID by zero in RID's last partial key tile, so a NaN dummy there turns RID's rows NaN
+where any finite one leaves them exact.
 """
 from __future__ import annotations
 
@@ -45,6 +59,7 @@ import json
 import os
 import sys
 import time
+from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
@@ -58,6 +73,8 @@ import restore as R  # noqa: E402
 import serve_tax as S  # noqa: E402
 
 TAILS = ("copy", "zero", "nan")
+#: substitute token ids for dummies: clear of the low ids and of the special tokens at the top of the vocabulary
+SUBSTITUTE_IDS = (1000, 150000)
 
 
 def layer_offsets(layout: dict[str, Any]) -> list[int]:
@@ -189,9 +206,12 @@ class Hits:
     copy."""
 
     def __init__(self, kvm: Any, rows: list[Any], pages: Any, starts: dict[str, list[tuple[int, int]]], block_size: int,
-                 now: Any) -> None:
+                 now: Any, shape: Dummies | None = None, own: Any = None) -> None:
         self.kvm, self.pool, self.rows, self.pages = kvm, kvm.block_pool, rows, pages
         self.starts, self.bs, self.now = starts, block_size, now
+        # shape-only: a dummy's missing page is seeded poisoned; each page the target hits is written from serving's
+        # bytes (``pages``) even where the fresh cache holds it, or is one the target wrote itself (``own``)
+        self.shape, self.own = shape, own
         self.by_step: dict[int, list[str]] = {}
         for rid, occ in starts.items():
             for s, _ in occ:
@@ -210,11 +230,39 @@ class Hits:
         import torch
         from vllm.v1.core.kv_cache_utils import make_block_hash_with_group_id
 
+        sh = self.shape
         for i in range(n // self.bs):
             key = make_block_hash_with_group_id(q.block_hashes[i], 0)
-            if self.pool.cached_block_hash_to_block.get_one_block(key) is not None:
+            have = self.pool.cached_block_hash_to_block.get_one_block(key)
+            if sh is not None and sh.dummy(q.request_id):
+                if have is None:
+                    (blk,) = self.pool.get_new_blocks(1)
+                    sh.poison([blk.block_id])
+                    self.pool._insert_block_hash(key, blk, self.bs)
+                    self.pool.free_blocks([blk])
+                    sh.taken["pages_seeded_poisoned"] += 1
                 continue
-            src = self.pages(q.block_hashes[i])
+            if sh is not None:
+                src = self.pages(q.block_hashes[i])
+                if src is None:
+                    src = self.own(q.block_hashes[i])
+                    if src is None:
+                        sh.taken["target_pages_unavailable"] += 1
+                        continue
+                    sh.taken["target_pages_own"] += 1
+                    if have is not None:
+                        continue
+                elif have is not None:
+                    for row, dst in zip(src, self.rows, strict=True):
+                        dst[have.block_id].copy_(torch.from_numpy(row).to(dst.device))
+                    sh.taken["target_pages_overwritten"] += 1
+                    continue
+                else:
+                    sh.taken["target_pages_loaded"] += 1
+            elif have is not None:
+                continue
+            else:
+                src = self.pages(q.block_hashes[i])
             if src is None:
                 self.missing += 1
                 continue
@@ -388,8 +436,128 @@ class Saved:
         return [np.ascontiguousarray(x[:, i, :]).reshape(-1) for i in range(x.shape[1])]
 
 
+def page_chain(tokens: list[int], bs: int) -> list[bytes]:
+    """Each page's chain hash (SHA-512 over the previous page's and this page's tokens), the last one partial or not."""
+    out, h = [], b""
+    for i in range(0, len(tokens), bs):
+        h = hashlib.sha512(h + json.dumps(tokens[i:i + bs]).encode()).digest()
+        out.append(h)
+    return out
+
+
+def substitute(tokens: list[int], bs: int, keep: set[bytes], ids: tuple[int, int] = SUBSTITUTE_IDS) -> tuple[list[int], int]:
+    """A dummy's tokens: each full page whose chain hash is in ``keep`` as it is, every other page replaced by tokens drawn
+    from its chain hash, so two requests' pages are equal here exactly where they were; and how many pages were kept."""
+    import random
+
+    out, kept = [], 0
+    for i, h in enumerate(page_chain(tokens, bs)):
+        page = tokens[i * bs:(i + 1) * bs]
+        if len(page) == bs and h in keep:
+            out += page
+            kept += 1
+        else:
+            rng = random.Random(hashlib.sha512(b"dummy" + h).digest())
+            out += [rng.randrange(*ids) for _ in page]
+    return out, kept
+
+
+class Dummies:
+    """Shape-only replay's batch-mates: every request but ``target``. `tokens` substitutes a dummy's tokens, `params` forces
+    its finish (``ignore_eos``, ``max_tokens`` its served output count, ``finish``), `poison` fills blocks with
+    ``mode`` (zero or NaN, in each layer's dtype), and `scheduled` and `flush` refill each slot a dummy wrote once the
+    GPU has finished the step, as `Mirror` copies them, never in a block the target holds."""
+
+    def __init__(self, target: str, mode: str, sched: Any, kvm: Any, rows: list[Any], dtypes: list[Any], block_size: int,
+                 keep_tokens: list[int], finish: dict[str, int]) -> None:
+        import torch
+
+        self.target, self.mode, self.sched, self.kvm, self.bs = target, mode, sched, kvm, block_size
+        self.rows, self.finish = rows, finish
+        self.slot = int(rows[0].shape[1]) // block_size
+        self.flat = [r.view(r.shape[0] * block_size, self.slot) for r in rows]
+        full = len(keep_tokens) // block_size * block_size
+        self.keep = set(page_chain(keep_tokens[:full], block_size))
+        fill = 0.0 if mode == "zero" else float("nan")
+        self.slot_fill = [torch.full((self.slot // dt.itemsize,), fill, dtype=dt, device=r.device).view(torch.int8)
+                          for r, dt in zip(rows, dtypes, strict=True)]
+        self.pending: list[int] = []
+        self.taken = {"dummies": 0, "tokens_substituted": 0, "pages_kept_target_shared": 0, "finishes_forced": 0,
+                      "blocks_poisoned_at_start": 0, "pages_seeded_poisoned": 0, "slots_poisoned": 0,
+                      "target_pages_loaded": 0, "target_pages_overwritten": 0, "target_pages_own": 0,
+                      "target_pages_unavailable": 0}
+
+    def dummy(self, rid: str) -> bool:
+        return rid != self.target
+
+    def tokens(self, prompt: list[int], outs: list[int]) -> tuple[list[int], list[int]]:
+        got, kept = substitute(list(prompt) + list(outs), self.bs, self.keep)
+        self.taken["dummies"] += 1
+        self.taken["tokens_substituted"] += len(got) - kept * self.bs
+        self.taken["pages_kept_target_shared"] += kept
+        return got[:len(prompt)], got[len(prompt):]
+
+    def params(self, rid: str, r: dict) -> dict:
+        """``r`` (sampling and max_tokens) for a dummy: it ignores EOS and its stop tokens and stops at its served output
+        count."""
+        s = {k: v for k, v in r["sampling"].items() if k != "stop_token_ids"} | {"ignore_eos": True}
+        n = self.finish.get(rid)
+        if n is not None:
+            self.taken["finishes_forced"] += 1
+        return {"sampling": s, "max_tokens": n if n is not None else r.get("max_tokens")}
+
+    def target_blocks(self) -> set[int]:
+        return set(self.kvm.get_block_ids(self.target)[0]) if self.target in self.sched.requests else set()
+
+    def poison(self, blocks: Iterable[int]) -> int:
+        import torch
+
+        ids = sorted(set(blocks) - self.target_blocks())
+        if ids:
+            idx = torch.tensor([b * self.bs + j for b in ids for j in range(self.bs)], device=self.flat[0].device)
+            for f, fill in zip(self.flat, self.slot_fill, strict=True):
+                f.index_copy_(0, idx, fill.expand(idx.numel(), -1).contiguous())
+        return len(ids)
+
+    def scheduled(self, so: Any) -> None:
+        from verity_vllm.engine.step_trace import step_geometry
+
+        start, _, _, _ = step_geometry(so)
+        mine = self.target_blocks()
+        bs = self.bs
+        for rid, n in so.num_scheduled_tokens.items():
+            if not self.dummy(rid):
+                continue
+            blocks = self.kvm.get_block_ids(rid)[0]
+            self.pending += [blocks[p // bs] * bs + p % bs for p in range(start[rid], start[rid] + int(n))
+                             if blocks[p // bs] not in mine]
+
+    def flush(self) -> None:
+        import torch
+
+        if not self.pending:
+            return
+        torch.cuda.synchronize()
+        idx = torch.tensor(self.pending, device=self.flat[0].device)
+        for f, fill in zip(self.flat, self.slot_fill, strict=True):
+            f.index_copy_(0, idx, fill.expand(idx.numel(), -1).contiguous())
+        self.taken["slots_poisoned"] += len(self.pending)
+        self.pending.clear()
+
+
+def served_finish(st_requests: dict[str, int], outputs: dict[int, dict], steps: dict[int, dict]) -> dict[str, int]:
+    """Each request the record finishes inside the block: its served output count (``st_requests``, the outputs it had
+    at the start, plus every step's since)."""
+    n = dict(st_requests)
+    for s in sorted(outputs):
+        for rid, v in outputs[s].items():
+            n[rid] = n.get(rid, 0) + len(v[0])
+    done = {rid for rec in steps.values() for rid in (rec.get("finished") or {})}
+    return {rid: n.get(rid, 0) for rid in done}
+
+
 def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], layers: list[Any], block_size: int,
-          tail: str) -> dict[str, Any]:
+          tail: str, shape: Dummies | None = None) -> dict[str, Any]:
     """Every request ``st`` (the served edge's state) holds, added to the fresh engine as `rebuild`'s docstring says;
     what it loaded."""
     import numpy as np
@@ -420,14 +588,18 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
     statuses: dict[str, int] = {}
     fresh_of: dict[int, int] = {}
     shared = 0
+    allocated: set[int] = set()
     for rid in order:
         r = reqs[rid]
         statuses[r.status.name] = statuses.get(r.status.name, 0) + 1
-        a = arrived[rid]
-        eng.add_request(rid, {"prompt_token_ids": list(r.prompt_token_ids)},
-                        R.params({"sampling": a["sampling"], "max_tokens": a["sampling"].get("max_tokens")}))
+        a = {"sampling": arrived[rid]["sampling"], "max_tokens": arrived[rid]["sampling"].get("max_tokens")}
+        prompt, outs = list(r.prompt_token_ids), list(r.output_token_ids)
+        mate = shape is not None and shape.dummy(rid)
+        if mate:
+            prompt, outs = shape.tokens(prompt, outs)
+            a = shape.params(rid, a)
+        eng.add_request(rid, {"prompt_token_ids": prompt}, R.params(a))
         q = sched.requests[rid]
-        outs = list(r.output_token_ids)
         if outs:
             q.append_output_token_ids(outs)
         n = min(r.num_computed_tokens, q.num_tokens - 1)
@@ -439,7 +611,12 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
             raise SystemExit(f"{rid}: {n} tokens in {len(old)} served blocks")
         new, j = alloc_prefix(kvm, pool, q, n, old, fresh_of, block_size)
         shared += j
-        pairs += zip(old[j:], new[j:], strict=True)
+        allocated.update(new)
+        if mate:
+            continue
+        # a shape-only target's leading blocks may be shared with a dummy re-added before it, which loaded nothing
+        lo = 0 if shape is not None else j
+        pairs += zip(old[lo:], new[lo:], strict=True)
         if n % block_size:
             partial.append((new[-1], n % block_size))
     alloc_s = time.monotonic() - t
@@ -455,6 +632,9 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
                 dst[b, j * slot:].zero_()
             elif tail == "nan":
                 dst[b, j * slot:].view(dt).fill_(float("nan"))
+    if shape is not None:
+        shape.taken["blocks_poisoned_at_start"] += shape.poison(allocated)
+        shape.taken["target_prefix_blocks_loaded"] = len(pairs)
     torch.cuda.synchronize()
     return {"requests": len(order), "statuses": statuses, "with_prefix": len({p for p in order if reqs[p].num_computed_tokens > 0}),
             "blocks_loaded": len(pairs), "blocks_shared": shared, "blocks_served": len({b for v in served_blocks.values() for b in v}),
@@ -464,7 +644,7 @@ def readd(eng: Any, core: Any, st: dict[str, Any], arrived: dict[str, dict], lay
 
 
 def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served_outs: dict[int, dict],
-                 layout: dict[str, Any], block_size: int, tail: str) -> dict[str, Any]:
+                 layout: dict[str, Any], block_size: int, tail: str, shape: Dummies | None = None) -> dict[str, Any]:
     """Every request ``start`` (the scheduler's queues when it scheduled step S, `Mirror` mode's start.json) holds and the
     step record doesn't finish before S, added to the fresh engine as `readd` adds an edge's: with its outputs through
     step S-1 (those processed by then, and the record's since), and its computed prefix, the served count when it
@@ -492,16 +672,22 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
     fresh_of: dict[int, int] = {}
     shared = 0
     order = []
+    allocated: set[int] = set()
     for rid in start["order"]:
         if rid in start["finished_before"]:
             continue
         r = start["requests"][rid]
         order.append(rid)
         statuses[r["status"]] = statuses.get(r["status"], 0) + 1
-        eng.add_request(rid, {"prompt_token_ids": r["prompt"]},
-                        R.params({"sampling": r["sampling"], "max_tokens": r["sampling"].get("max_tokens")}))
-        q = sched.requests[rid]
+        a = {"sampling": r["sampling"], "max_tokens": r["sampling"].get("max_tokens")}
+        prompt = list(r["prompt"])
         outs = list(r["outputs"]) + [x for s in range(done + 1, S) for x in (served_outs.get(s, {}).get(rid) or [[]])[0]]
+        mate = shape is not None and shape.dummy(rid)
+        if mate:
+            prompt, outs = shape.tokens(prompt, outs)
+            a = shape.params(rid, a)
+        eng.add_request(rid, {"prompt_token_ids": prompt}, R.params(a))
+        q = sched.requests[rid]
         if outs:
             q.append_output_token_ids(outs)
         n = min(r["computed"], q.num_tokens - 1)
@@ -510,10 +696,14 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
         k = -(-n // bs)
         new, j = alloc_prefix(kvm, pool, q, n, start["blocks"][rid][:k], fresh_of, bs)
         shared += j
+        allocated.update(new)
+        if mate:
+            continue
+        lo = 0 if shape is not None else j
         x = np.zeros((k * bs, L, slot), np.int8)
         x[:n] = mirror.rows(rid, n)
-        chunks.append(x.reshape(k, bs, L, slot).transpose(2, 0, 1, 3).reshape(L, k, bs * slot)[:, j:])
-        ids += new[j:]
+        chunks.append(x.reshape(k, bs, L, slot).transpose(2, 0, 1, 3).reshape(L, k, bs * slot)[:, lo:])
+        ids += new[lo:]
         if n % bs:
             partial.append((new[-1], n % bs))
     alloc_s = time.monotonic() - t
@@ -528,6 +718,9 @@ def readd_mirror(eng: Any, core: Any, start: dict[str, Any], mirror: Any, served
                 dst[b, j * slot:].zero_()
             else:
                 dst[b, j * slot:].view(dt).fill_(float("nan"))
+    if shape is not None:
+        shape.taken["blocks_poisoned_at_start"] += shape.poison(allocated)
+        shape.taken["target_prefix_blocks_loaded"] = len(ids)
     torch.cuda.synchronize()
     served = {b for rid in order for b in start["blocks"].get(rid, ())}
     # the served engine frees a request that finished at S-1 only once S-1's output is processed, after it schedules S:
@@ -605,6 +798,79 @@ def split_outputs(diff_of: Any, served: dict[int, dict], rebuilt: dict[int, dict
             "arrived": diff_of(only(served, False), only(rebuilt, False))}
 
 
+def dummies(a: argparse.Namespace, w: dict[str, Any], st0: dict[str, Any], begin: dict[str, Any] | None, first: int,
+            sched: Any, kvm: Any, rows: list[Any], bs: int) -> tuple[Dummies, int]:
+    """``--shape-only``'s `Dummies`, from the record: the target's tokens (its prompt and every output it has by the
+    block's end, whose pages a dummy keeps where it shares them), each request's output count at the start, and the
+    served count of each request the record finishes; and the last step with an output of the target."""
+    import torch
+
+    rid = a.shape_only
+    if a.hits != "forced":
+        raise SystemExit("--shape-only takes the prefix-cache hits from the record: --hits forced")
+    outs = {s: v for s, v in w["outputs"].items() if s >= first}
+    if begin:
+        done = begin["processed_through"]
+        held = {r: v["prompt"] + v["outputs"] + [x for s in range(done + 1, first) for x in (w["outputs"].get(s, {}).get(r) or [[]])[0]]
+                for r, v in begin["requests"].items() if r not in begin["finished_before"]}
+        base = {r: len(t) - len(begin["requests"][r]["prompt"]) for r, t in held.items()}
+    else:
+        reqs = B.unpickle_requests(st0["requests"], {"block_hasher": None})
+        held = {r.request_id: list(r.prompt_token_ids) + list(r.output_token_ids) for r in reqs}
+        base = {r.request_id: len(r.output_token_ids) for r in reqs}
+    arrival = next((r for r in w["arrive"] if r["engine_id"] == rid and r["before_step"] >= first), None)
+    if rid in held:
+        mine = held[rid]
+    elif arrival is not None:
+        mine = list(arrival["prompt_ids"])
+    else:
+        raise SystemExit(f"{rid}: neither held at step {first} nor arriving inside the block")
+    mine += [x for s in sorted(outs) for x in (outs[s].get(rid) or [[]])[0]]
+    r_end = max((s for s, o in outs.items() if rid in o), default=None)
+    if r_end is None:
+        raise SystemExit(f"{rid}: the record has no output of it from step {first}")
+    finish = served_finish(base, outs, {s: v for s, v in w["steps"].items() if s >= first})
+    dtypes = [getattr(torch, v["dtype"].split(".")[-1]) for v in st0["kv_layout"]["views"]]
+    return Dummies(rid, a.dummy, sched, kvm, rows, dtypes, bs, mine, finish), r_end
+
+
+def shape_view(steps: dict[int, dict], target: str) -> dict[int, dict]:
+    """The steps with each dummy's finish reason dropped (forced to its length, where serving's may be EOS)."""
+    return {s: r | {"finished": {k: (v if k == target else None) for k, v in (r.get("finished") or {}).items()}}
+            for s, r in steps.items()}
+
+
+def shape_report(target: str, shape: Dummies, w: dict[str, Any], steps: dict[int, dict], outs: dict[int, dict], first: int,
+                 r_end: int, readded: set[str], hits: Hits) -> dict[str, Any]:
+    """``--shape-only``'s verdict: the target's tokens and logprob bits against serving's, the schedule (rows, new,
+    resumed, cache hits, preemptions, emitted counts, finishes) up to its last step, and what the replay took."""
+    def only(o: dict[int, dict]) -> dict[int, dict]:
+        return {s: {target: v[target]} for s, v in o.items() if target in v and first <= s <= r_end}
+    want = {s: v for s, v in w["steps"].items() if first <= s <= r_end}
+    got = {s: v for s, v in steps.items() if s <= r_end}
+    life = [s for s in sorted(want) if any(r[0] == target for r in want[s]["rows"])]
+    t0, t1 = (life[0], life[-1]) if life else (first, r_end)
+    lived = [want[s] for s in range(t0, t1 + 1) if s in want]
+    target_out = B.outputs_diff(only(w["outputs"]), only(outs))
+    sched_diff = step_diff(shape_view(want, target), shape_view(got, target), first, readded)
+    taken = shape.taken | {"forced_hits": hits.report(), "arrivals_in_block": sum(1 for r in w["arrive"] if r["before_step"] >= first),
+                           "requests_at_start": len(readded)}
+    return {"shape": {
+        "target": target, "first_step": first, "target_steps": [t0, t1], "target_rows": len(life),
+        "target_outputs": target_out,
+        "schedule": sched_diff,
+        "during_target": {"steps": len(lived), "steps_with_preemption": sum(1 for r in lived if r.get("preempted")),
+                          "preemptions": sum(len(r.get("preempted") or ()) for r in lived),
+                          "target_preempted": [s for s in range(t0, t1 + 1) if target in ((want.get(s) or {}).get("preempted") or ())],
+                          "steps_with_hits": sum(1 for r in lived if r.get("cache_hit")),
+                          "target_hits": {s: want[s]["cache_hit"][target] for s in range(t0, t1 + 1)
+                                          if target in ((want.get(s) or {}).get("cache_hit") or {})},
+                          "max_rows": max((len(r["rows"]) for r in lived), default=0)},
+        "taken": taken},
+        "bit_exact": (target_out["first"] is None and target_out["tokens"] > 0 and sched_diff["steps_differing"] == 0
+                      and shape.taken["target_pages_unavailable"] == 0)}
+
+
 def run(a: argparse.Namespace) -> dict[str, Any]:
     import torch
 
@@ -644,11 +910,16 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     # forced hits read pages written inside the block from the mirror, as lifetime replay reads its host copy, where the
     # fresh pool evicted a page the served one still had cached
     mirror = Mirror(sched, kvm, kv.rows, bs) if a.mirror_out or a.hits == "forced" else None
+    shape, own, target, r_end = None, None, a.shape_only, None
+    if target:
+        shape, r_end = dummies(a, w, st0, begin, first, sched, kvm, kv.rows, bs)
+        # the target's pages come from serving's bytes, or are its own: a page a dummy wrote here never stands in
+        own = lambda h: mirror.page(h) if mirror.hashes.get(h, ("",))[0] == target else None  # noqa: E731
     t = time.monotonic()
     if begin:
         saved = Saved(a.from_mirror / "mirror")
-        pages = first_of(pages, saved.page, *([mirror.page] if mirror else []))
-        out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], st0["kv_layout"], bs, a.tail)
+        pages = first_of(pages, saved.page, *([mirror.page] if mirror and not shape else []))
+        out["rebuilt"] = readd_mirror(eng, core, begin, saved, w["outputs"], st0["kv_layout"], bs, a.tail, shape)
         readded = set(out["rebuilt"].pop("order"))
         held = out["rebuilt"].pop("blocks_held_through_first_schedule")
         out["rebuilt"]["blocks_held_through_first_schedule"] = len(held)
@@ -656,16 +927,19 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
         out["start"] = {k: begin[k] for k in ("step", "processed_through", "finished_before", "mirror_vs_gpu", "preempted_waiting",
                                               "partial_last_pages")}
     else:
-        if mirror:
+        if mirror and not shape:
             pages = first_of(pages, mirror.page)
-        out["rebuilt"] = readd(eng, core, st0, arrived, near_file, bs, a.tail)
+        out["rebuilt"] = readd(eng, core, st0, arrived, near_file, bs, a.tail, shape)
         readded = set(out["rebuilt"].pop("order"))
         held = []
         want0 = roots(near_file, served_spans(st0), bs)
     trace.scheduled = first
     got0 = roots(kv.rows, live_spans(sched, kvm), bs)
+    if shape:
+        want0, got0 = ({k: v for k, v in x.items() if k == target} for x in (want0, got0))
     out["near_edge"] = roots_diff(want0, got0) | {"check_s": time.monotonic() - t}
-    hits = Hits(kvm, kv.rows, pages, recorded_starts(w["steps"], first), bs, lambda: trace.scheduled) if a.hits == "forced" else None
+    hits = Hits(kvm, kv.rows, pages, recorded_starts(w["steps"], first), bs, lambda: trace.scheduled,
+                shape, own) if a.hits == "forced" else None
 
     busy = B.Busy(lambda: torch.cuda.Event(enable_timing=True), first=first)
     runner._verity_busy = busy
@@ -678,11 +952,20 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
     if hits:
         hooks.wrap(kvm, "get_computed_blocks", hits.lookup)
     pending = sorted((r for r in w["arrive"] if r["before_step"] >= first), key=lambda r: r["before_step"])
+    if shape and a.perturb:
+        # a control: one more dummy row than serving ran, from the first step on, so only the batch's shape changes
+        extra = {"engine_id": "shape-perturb-0", "before_step": first, "prompt_ids": [0] * a.perturb, "max_tokens": 2048,
+                 "sampling": {"temperature": 0.0, "ignore_eos": True}}
+        pending.insert(0, extra)
 
     def add_due() -> None:
         while pending and pending[0]["before_step"] == trace.scheduled:
             r = pending.pop(0)
-            eng.add_request(r["engine_id"], {"prompt_token_ids": r["prompt_ids"]}, R.params(r))
+            prompt = r["prompt_ids"]
+            if shape and shape.dummy(r["engine_id"]):
+                prompt, _ = shape.tokens(prompt, [])
+                r = r | shape.params(r["engine_id"], r)
+            eng.add_request(r["engine_id"], {"prompt_token_ids": prompt}, R.params(r))
         if pending and pending[0]["before_step"] < trace.scheduled:
             raise SystemExit(f"the replay passed step {pending[0]['before_step']} before {pending[0]['engine_id']} arrived")
 
@@ -696,6 +979,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                     stop["start"] = start_state(sched, kvm, kv, mirror, arrived, w["steps"], max(outs, default=first - 1),
                                                 a.at_step, bs)
                     raise _Stop(f"stopped right before step {a.at_step}, with its start state taken")
+            if shape:
+                shape.flush()
             add_due()
             if hits:
                 hits.due(sched.requests, trace.scheduled)
@@ -705,6 +990,8 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 held.clear()
             if mirror and so.total_num_scheduled_tokens:
                 mirror.scheduled(so)
+            if shape and so.total_num_scheduled_tokens:
+                shape.scheduled(so)
             return so
         return wrapped
 
@@ -729,11 +1016,18 @@ def run(a: argparse.Namespace) -> dict[str, Any]:
                 if not sched.has_requests():
                     raise SystemExit(f"the replay is idle at step {trace.scheduled} short of {w['hi']}")
             eng.step()
+            if shape and outs and max(outs) >= r_end:
+                break
     except _Stop as e:
         out["stopped"] = str(e)
     steps = {r["step"]: r for r in trace.records if r["kind"] == "step" and first <= r["step"] < w["hi"]}
     block = {"from_edge": a.from_edge, "to_edge": a.to_edge, "from_step": w["lo"], "to_step": w["hi"], "first_step": first,
              "arrivals": len(w["arrive"]), "requests_at_start": len(readded)}
+    if shape:
+        hooks.uninstall()
+        out |= shape_report(target, shape, w, steps, outs, first, r_end, readded, hits)
+        out |= {"replay_wall_s": time.monotonic() - start, "replay_block": block, "dummy": a.dummy}
+        return out
     if a.mirror_out:
         hooks.uninstall()
         st = stop["start"]
@@ -798,10 +1092,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mirror-out", type=Path, metavar="DIR")
     ap.add_argument("--from-mirror", type=Path, metavar="DIR",
                     help="start at the step a --mirror-out run stopped at, from its start state and mirror alone")
+    ap.add_argument("--shape-only", metavar="RID",
+                    help="replay RID with every other request a dummy of its shape (`Dummies`), until its last served "
+                         "output; writes shape.json")
+    ap.add_argument("--dummy", choices=("zero", "nan"), default="zero",
+                    help="what a dummy's K/V holds: zero, or NaN to probe for reads at weight zero")
+    ap.add_argument("--perturb", type=int, default=0, metavar="N",
+                    help="with --shape-only, a control: add one dummy of N prompt tokens at the first step, a row serving "
+                         "never ran")
     ap.add_argument("--out", type=Path, required=True)
     a = ap.parse_args(argv)
     if bool(a.at_step is not None) != bool(a.mirror_out) or (a.mirror_out and a.from_mirror):
         raise SystemExit("--at-step and --mirror-out go together, and not with --from-mirror")
+    if a.shape_only and a.mirror_out:
+        raise SystemExit("--shape-only starts from an edge or --from-mirror, not with --mirror-out")
     if sys.flags.hash_randomization:
         raise SystemExit("run with PYTHONHASHSEED=0, as the served engine did: the scheduler iterates sets of request ids")
     os.environ.update(VLLM_ENABLE_V1_MULTIPROCESSING="0", VLLM_DISABLE_REQUEST_ID_RANDOMIZATION="1")
@@ -810,7 +1114,17 @@ def main(argv: list[str] | None = None) -> int:
         a.mirror_out.mkdir(parents=True, exist_ok=True)
     got = run(a)
     rec = {"schema": "verity-bench/serve-tax/rebuild/v0", "arm_dir": str(a.arm_dir), "run_id": SHARED.RESEARCH_RUN_ID, **got}
-    (a.out / ("mirror.json" if a.mirror_out else "rebuild.json")).write_text(json.dumps(rec, indent=1, default=str))
+    name = "mirror.json" if a.mirror_out else "shape.json" if a.shape_only else "rebuild.json"
+    (a.out / name).write_text(json.dumps(rec, indent=1, default=str))
+    if a.shape_only:
+        sh = rec["shape"]
+        print(json.dumps({"bit_exact": rec["bit_exact"], "target": sh["target"], "dummy": a.dummy, "first_step": sh["first_step"],
+                          "target_steps": sh["target_steps"], "target_tokens": sh["target_outputs"]["tokens"],
+                          "target_first_differing": sh["target_outputs"]["first"],
+                          "steps_differing": sh["schedule"]["steps_differing"], "during_target": sh["during_target"],
+                          "near_differing": rec["near_edge"]["differing"],
+                          "taken": {k: v for k, v in sh["taken"].items() if k != "forced_hits"}}, default=str))
+        return 0
     if a.mirror_out:
         print(json.dumps({k: rec.get(k) for k in ("served_identical_to_start", "at_step", "mirror", "replay_wall_s")} |
                          {"mirror_vs_gpu": {k: rec["start"]["mirror_vs_gpu"][k] for k in ("compared", "differing")},

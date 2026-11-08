@@ -199,3 +199,69 @@ def test_mirror_save_and_saved_read_back_rows_and_pages(tmp_path: Any) -> None:
         s.rows("b", 5)
     with pytest.raises(SystemExit, match="none of its tokens"):
         s.rows("c", 1)
+
+
+def test_substitute_keeps_equal_pages_equal_and_the_target_s_pages_as_they_are() -> None:
+    a = list(range(10, 22))
+    b = list(range(10, 18)) + [7, 7, 7, 7, 5]
+    sa, kept = RB.substitute(a, 4, set())
+    sb, _ = RB.substitute(b, 4, set())
+    assert kept == 0 and len(sa) == len(a) and len(sb) == len(b)
+    assert sa[:8] == sb[:8] and sa[8:12] != sb[8:12]
+    assert all(RB.SUBSTITUTE_IDS[0] <= x < RB.SUBSTITUTE_IDS[1] for x in sa + sb)
+    assert sa[:8] != a[:8] and RB.substitute(a, 4, set())[0] == sa
+    keep = set(RB.page_chain(list(range(10, 18)) + [0, 0, 0, 0], 4))
+    got, kept = RB.substitute(b, 4, keep)
+    assert kept == 2 and got[:8] == b[:8] and got[8:] == sb[8:]
+
+
+def test_served_finish_counts_outputs_at_the_start_and_since_for_the_requests_the_record_finishes() -> None:
+    outs = {5: {"a": [[1, 2], None], "b": [[3], None]}, 6: {"a": [[4], None], "c": [[9], None]}}
+    steps = {5: {"finished": {}}, 6: {"finished": {"a": {"reason": "stop"}, "c": {"reason": "length"}}}}
+    assert RB.served_finish({"a": 10, "b": 1}, outs, steps) == {"a": 13, "c": 1}
+
+
+def test_shape_view_drops_only_the_dummies_finish_reasons() -> None:
+    steps = {4: {"rows": [["t", 0, 1]], "finished": {"t": {"reason": "stop"}, "d": {"reason": "stop"}}}}
+    got = RB.shape_view(steps, "t")
+    assert got[4]["finished"] == {"t": {"reason": "stop"}, "d": None} and got[4]["rows"] == steps[4]["rows"]
+    assert steps[4]["finished"]["d"] == {"reason": "stop"}
+
+
+class Pool:
+    """The fresh pool's prefix cache as `Hits.seed` reads and fills it."""
+
+    def __init__(self, cached: dict[Any, int]) -> None:
+        self.cache, self.next, self.freed = dict(cached), 50, []
+        self.cached_block_hash_to_block = NS(get_one_block=lambda key: NS(block_id=self.cache[key]) if key in self.cache else None)
+
+    def get_new_blocks(self, n: int) -> list[Any]:
+        self.next += 1
+        return [NS(block_id=self.next)]
+
+    def _insert_block_hash(self, key: Any, blk: Any, bs: int) -> None:
+        self.cache[key] = blk.block_id
+
+    def free_blocks(self, blocks: list[Any]) -> None:
+        self.freed += [b.block_id for b in blocks]
+
+
+@pytest.fixture
+def kv_cache_utils(monkeypatch: pytest.MonkeyPatch) -> None:
+    mods = {name: ModuleType(name) for name in ("torch", "vllm", "vllm.v1", "vllm.v1.core", "vllm.v1.core.kv_cache_utils")}
+    mods["vllm.v1.core.kv_cache_utils"].make_block_hash_with_group_id = lambda h, g: (h, g)
+    for name, mod in mods.items():
+        monkeypatch.setitem(sys.modules, name, mod)
+
+
+def test_hits_seed_poisons_a_dummy_s_missing_pages_and_never_lets_one_stand_in_for_the_target(kv_cache_utils: None) -> None:
+    pool = Pool({(b"p0", 0): 7, (b"t1", 0): 8})
+    poisoned: list[int] = []
+    taken = {"pages_seeded_poisoned": 0, "target_pages_unavailable": 0, "target_pages_own": 0}
+    shape = NS(dummy=lambda rid: rid != "t", poison=lambda ids: poisoned.extend(ids), taken=taken)
+    h = RB.Hits(NS(block_pool=pool), [], lambda h: None, {}, 4, lambda: 0, shape, lambda h: None)
+    h.seed(NS(request_id="d", block_hashes=[b"p0", b"p1"]), 8)
+    assert poisoned == [51] and pool.cache[(b"p1", 0)] == 51 and pool.freed == [51]
+    assert taken["pages_seeded_poisoned"] == 1 and h.loaded == 0
+    h.seed(NS(request_id="t", block_hashes=[b"t0", b"t1"]), 8)
+    assert taken["target_pages_unavailable"] == 2 and h.loaded == 0 and (b"t0", 0) not in pool.cache
