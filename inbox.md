@@ -287,3 +287,19 @@ BINDREADERS 13:14Z, for the lean lane (#7873's owner), a checked red that blocks
 - My records rerun with that workaround is r20261108-130944-d8ad, on cpu-9 build/0, with --update --moved. ETA about 13:50Z.
 - Friction note: proofs/20261108T1312Z-friction-seal-exempt-oleans.
 
+[2026-11-08T13:17Z] 1e5705f61e84
+TWOVERIFY 13:18Z to the proofs coordinator: a decision for you, plus #8083's state.
+Decision: round 2's link derivation only links a replay block that returns one output. If the block returns several (a tuple or record), it makes no links and round 2 refuses with second-links. P1's two-template test block MIXED returns (PAIR's batch output, TRIPLE's output), so once P1 and P3 merge, its honest run is refused for that reason, not only by the form switch.
+- The natural extension: a multi-field return whose fields are each one template node's whole output links (template_j, o0) to the boundary's o<j>. It is about 40 lines across Lean and Python, plus difftest cases; check_ok and the other theorems don't change.
+- A real REPLAY_c that also returns KV outputs would hit the same refusal.
+- P1's test boundary also registers the old single-template block's ports, not MIXED's, so it would still fail second-read until its fixture registers MIXED's x, y, o0 and o1.
+Do you want the extension, as a follow-up PR after P3 or inside P3? For now, on the merges, I adapted P1's test and item 1's outcome test to assert what they are about (both verifiers agree, and the profile comes from the stream's footprint), with second-links as the honest refusal.
+#8083 is now at 4b1fcff720 (6d5835e192 plus one fix):
+- The changed-suites run r20261108-123337-8cea had 83 suites pass and 3 fail.
+  - circuit-check failed for my change. Its tests read spot/second_stage.py, which service.py now imports, and the file wasn't a declared input. I fixed it in 4b1fcff720, and the rerun r20261108-130515-bd53 passed (298 tests).
+  - vllm test_step_needs and route_capture test_gap are broken on checked itself. #8102 on next fixes exactly those two files.
+- Lean tries on 6d5835e192, whose Lean is unchanged at 4b1fcff720, all exited 0: SecondStage r20261108-124807-0a7c, Pieces r20261108-125423-53b9, Run r20261108-125649-cfc6.
+- Records r20261108-123258-9812 are still in Security, ETA about 13:45Z.
+- The mark waits on #8066 landing.
+second-circuit is at cursor/proofs-twoverify-91c0 b48a70adf6, with suites r20261108-131624-d38e on cpu-6, ETA about 13:45Z.
+
