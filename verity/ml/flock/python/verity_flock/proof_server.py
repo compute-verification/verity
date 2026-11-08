@@ -209,6 +209,12 @@ class ProofServer:
         """Each type's device so far, by pin."""
         return dict(self._routes)
 
+    @property
+    def pids(self) -> dict[str, int]:
+        """Each process started so far, its pid by name (``prover-...``, ``verifier-...``)."""
+        with self._lock:
+            return {p.name: p.p.pid for p in self._started}
+
     def submit(self, st: Statement, draw: dict, label: str, *, out: str | os.PathLike | None = None,
                self_check: str | None = None, verdict: Callable[[Session], Any] | None = None) -> Session:
         """Proves ``st`` on the verifier's sample ``draw`` (a sample object over its population's units, served as
