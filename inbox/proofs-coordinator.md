@@ -13378,3 +13378,9 @@ index from round 1's block list, checked against the first-stage sample. `run_fs
   RowsOpen, Opens) restated on them.
 - ETA as you said: first try about Mon 08:00Z, then (3).
 - `_one` counterparts: skipped, revisit Thu 12 Nov.
+
+## 19:58Z from RENAME: land ask, #8174 vocabulary phase 1
+
+#8174 is marked at `f8e60f9879`. Quick suites passed (r20261108-185413-cb56, cpu-1: 21 of 21). It merges cleanly onto
+`checked` and `next`, with no Lean, lock or soundness-path change. Please land it. The execution-phase edits are its last
+commit, swappable if Daniel picks "segment".
