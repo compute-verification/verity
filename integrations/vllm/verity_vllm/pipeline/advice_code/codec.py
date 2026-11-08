@@ -99,8 +99,8 @@ from verity_vllm.pipeline.advice_code import window_code as CV
 
 __all__ = ["advice_of_replay", "AdviceCodeError", "arrival_order", "bits_by_window", "book_of", "CAPS", "charged",
     "check_record", "Decision", "decode", "decode_bits", "decode_full", "Decoded", "encode", "length_tails", "length_widths",
-    "lengths", "Lookup", "Record", "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS", "streams", "string_of", "TICK_CAPS",
-    "windows"]
+    "lengths", "Lookup", "Record", "Registered", "release_order", "replay_record", "Request", "residual", "ROW_ORDERS",
+    "streams", "string_of", "TICK_CAPS", "windows"]
 
 T = TypeVar("T")
 
