@@ -2,6 +2,7 @@ module
 
 public import Proofs.Flock.Recursive.InnerRows
 public import Proofs.Flock.Bridge.Lowers
+public import Proofs.Flock.Bridge.Statement
 public import Proofs.Flock.Soundness.Discharge.Const.Inst
 public import Proofs.Flock.Soundness.Discharge.Placed.Keyed
 public import Proofs.Flock.Soundness.Lowering
@@ -17,6 +18,9 @@ import Proofs.Flock.Soundness.Discharge.HiddenExec.Accepts
 import Proofs.Flock.Soundness.Discharge.HiddenExec.SiteH
 import Proofs.Flock.Soundness.Discharge.Placed.Setup
 import Proofs.Flock.Soundness.Discharge.Placed.Wiring
+import Proofs.Flock.Soundness.Discharge.Aliased.Keys
+import Proofs.Flock.Soundness.Discharge.Layout.KeyProg
+import Proofs.Flock.Soundness.Discharge.Zero.Uniform
 import Proofs.Flock.SamplingBoundary
 
 @[expose] public section
@@ -46,7 +50,8 @@ position from committed values that carry them where the unit reads from outside
 rather than the circuit's evaluation): on committed values that carry such values at each wire position the unit computes
 or reads, and the constants the lowering fixes, the unit's lowered gates are correct (`Prog.Correct`). That is what
 `SpotFlock.Decodes` asks of a decoder, at values the decoder gives every position, with no value asked at a row's
-interior XORs.
+interior XORs. A placed unit's decoded values carry those constants wherever it reads them (`decode_consts`): the one
+gate only on its constant column, the zero gate only on inputs with no source key, and no other gate the constants fix.
 -/
 
 namespace SpotFlock
@@ -200,6 +205,101 @@ noncomputable def unitPlace (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (
   col x := a.col hg (Fin.cast (congrArg Rows.w (rows_keyProg hU a hparse u)) x)
   placed := (Placed.placement_rows (rows_keyProg hU a hparse u) (a.placement hg)).sat
   aliased := a.aliased_of_layout (rows_keyProg hU a hparse u) _ o hg (aliased_keyProg hU outs a hparse u hg o)
+
+include hparse in
+/-- **A placed unit carries the lowering's constants** (`Bridge.constsOf`): at a witness the statement accepts, the value
+its block decodes at each input the constants fix that the unit reads is that constant. The unit reads the constant's
+gate only on its constant column, which carries `1` (`UnitPlace.decode_one`), and the zero's only on inputs that read the
+zero, which carry `0` (`AcceptedH.zero_block`); no unit reads the other inputs the constants fix. -/
+theorem decode_consts (u : Fin n) {g : ℕ} (hg : g < a.st.c.g) (o : Fin (2 ^ T.nbl)) {z : Model.Witness T.m}
+    (hz : T.Satisfies z) (x : Fin (Discharge.Layout.keyN c hU n)) (b : Bool) (hk : Bridge.constsOf c hU n x = some b)
+    (hr : ∃ g', ((Placed.keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)).unit g' = some u ∧
+      x ∈ (((Placed.keyProg c hU n).circuit (Discharge.Layout.outsOf c hU n)).op g').args) :
+    (unitPlace hU (Discharge.Layout.outsOf c hU n) a hparse u hg o).decode z x = b := by
+  classical
+  obtain ⟨g', hg'u, hx⟩ := hr
+  have hlt : x.val < 2 + n * Discharge.Layout.keyB c hU := by
+    simp only [Bridge.constsOf] at hk
+    split_ifs at hk with h1 h2
+    · subst h1; show 0 < 2 + n * Discharge.Layout.keyB c hU; omega
+    · rcases h2 with h2 | h2
+      · subst h2; show 1 < 2 + n * Discharge.Layout.keyB c hU; omega
+      · exact h2.1
+  have hxu : ((Placed.keyProg c hU n).partition (Discharge.Layout.outsOf c hU n)).unit x = none :=
+    Discharge.Layout.unit_uniform_input (k := Placed.inGates n (Discharge.Layout.keyB c hU))
+      (R := Placed.circuitRows c hU)
+      (ins := Placed.insOf n (Discharge.Layout.keyB c hU) (Aliased.keyIdx c (Discharge.Layout.keyB c hU)))
+      (one := Placed.oneGate n (Discharge.Layout.keyB c hU))
+      (hone := Placed.insOf_ne_one n (Discharge.Layout.keyB c hU) (Aliased.keyIdx c (Discharge.Layout.keyB c hU)))
+      n x hlt
+  set pl := unitPlace hU (Discharge.Layout.outsOf c hU n) a hparse u hg o with hpl
+  obtain ⟨i, rfl⟩ := pl.inst.onto g' hg'u
+  have hx0 := hx
+  rw [pl.inst.op i] at hx
+  obtain ⟨cc, -, hcx⟩ : ∃ cc, cc ∈ pl.R.a i ++ pl.R.b i ∧ pl.inst.wire cc = x := by
+    have hx' : x ∈ (pl.R.a i).map pl.inst.wire ++ (pl.R.b i).map pl.inst.wire := hx
+    rcases List.mem_append.1 hx' with h | h
+    · obtain ⟨cc, hc, e⟩ := List.mem_map.1 h
+      exact ⟨cc, List.mem_append_left _ hc, e⟩
+    · obtain ⟨cc, hc, e⟩ := List.mem_map.1 h
+      exact ⟨cc, List.mem_append_right _ hc, e⟩
+  subst hcx
+  have hnc : ∀ i', cc ≠ pl.R.comp i' := by
+    rintro i' rfl
+    have h := pl.inst.mem i'
+    rw [hxu] at h
+    exact absurd h (by simp)
+  have hcases : cc.val < pl.R.nIn ∨ cc = pl.R.one := by
+    have hw : cc.val < pl.R.nIn + pl.R.nComp + 1 := cc.isLt
+    by_cases h1 : cc.val < pl.R.nIn
+    · exact Or.inl h1
+    · right
+      by_cases h2 : cc.val < pl.R.nIn + pl.R.nComp
+      · exact absurd (Fin.ext (by simp only [Rows.comp]; omega) : cc = pl.R.comp ⟨cc.val - pl.R.nIn, by omega⟩)
+          (hnc _)
+      · exact Fin.ext (by simp only [Rows.one]; omega)
+  rcases hcases with hin | rfl
+  · have hcc' : cc.val < (Placed.circuitRows c hU).nIn :=
+      lt_of_lt_of_eq hin (congrArg Rows.nIn (Placed.rows_circuitProg c hU n _ _ u))
+    have hv : (pl.inst.wire cc).val = (Placed.insOf n (Discharge.Layout.keyB c hU)
+        (Aliased.keyIdx c (Discharge.Layout.keyB c hU)) u.val ⟨cc.val, hcc'⟩).val := by
+      show ((Const.Prog.instC (Placed.keyProg c hU n) _ u).wire cc).val = _
+      rw [Const.Prog.instC_wire_input _ _ _ cc hin]
+      exact Zero.insAt_uniform n u cc.val hcc'
+    simp only [Bridge.constsOf] at hk
+    split_ifs at hk with h1 h2
+    · exact (Placed.insOf_ne_one n (Discharge.Layout.keyB c hU) (Aliased.keyIdx c (Discharge.Layout.keyB c hU)) u.val
+        ⟨cc.val, hcc'⟩ (Fin.ext (by rw [← hv, h1]; rfl))).elim
+    · rcases h2 with h2 | ⟨-, h2⟩
+      · obtain rfl := Option.some.inj hk
+        have hz0 : Placed.insOf n (Discharge.Layout.keyB c hU) (Aliased.keyIdx c (Discharge.Layout.keyB c hU)) u.val
+            ⟨cc.val, hcc'⟩ = Placed.zeroGate n (Discharge.Layout.keyB c hU) := Fin.ext (by rw [← hv, h2]; rfl)
+        have hsrc := (Placed.insOf_eq_zero_iff u.isLt ⟨cc.val, hcc'⟩).1 hz0
+        have hzero : Zero.ZeroIn c cc.val := by
+          have h1 : cc.val < c.upv * min (c.unit.inWords * WORD) c.unit.constPos := hcc'
+          exact (Zero.srcKey_zero_iff (lt_of_lt_of_le h1 (Nat.mul_le_mul_left _ (Nat.min_le_left _ _)))).1
+            ((Aliased.keyIdx_eq_none ⟨cc.val, hcc'⟩).1 hsrc)
+        have hza : Zero.ZeroIn a.st.c cc.val :=
+          (Hidden.zeroIn_commit a.ht a.committed _).1 (by rw [hparse]; exact hzero)
+        have hxa : (Fin.cast (congrArg Rows.w (rows_keyProg hU a hparse u)) cc).val < a.rows.nIn :=
+          lt_of_lt_of_eq hin (congrArg Rows.nIn (rows_keyProg hU a hparse u))
+        have h0 : T.block z pl.o (pl.col cc) = 0 :=
+          a.zero_block hg (Fin.cast (congrArg Rows.w (rows_keyProg hU a hparse u)) cc) hxa hza hz o
+        show pl.inst.decode _ (pl.inst.wire cc) = false
+        rw [pl.inst.decode_wire (pl.agree hz) cc, h0]
+        rfl
+      · exfalso
+        simp only [Bridge.owner] at h2
+        exact List.find?_eq_none.1 h2 u (List.mem_finRange u) (decide_eq_true ⟨_, pl.inst.mem i, hx0⟩)
+  · have hw : pl.inst.wire pl.R.one = Discharge.Layout.oneG := by
+      show (Const.Prog.instC (Placed.keyProg c hU n) _ u).wire ((Placed.keyProg c hU n).rows u).one = _
+      rw [Const.Prog.instC_wire_one]
+      exact Zero.oneGate_uniform n u
+    simp only [Bridge.constsOf] at hk
+    split_ifs at hk with h1
+    · obtain rfl := Option.some.inj hk
+      exact pl.decode_one hz
+    · exact absurd hw h1
 
 /-- **Bridge's lowering computes a placed unit's decoded values**: at a witness the statement accepts, on committed
 values that carry the decoded values wherever the unit's lowered gates read from outside it, running the unit's lowered
