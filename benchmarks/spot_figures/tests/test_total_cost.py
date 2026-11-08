@@ -70,13 +70,14 @@ def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monke
 
 
 def test_lean_certifies_a_break_even_at_or_past_the_solved_point(monkeypatch):
-    """Lean's certificate is the solved point where Lean's bits are at most the target, else the first step of 1 + rel
-    outward where they are (up in β, down in the overhead), and none past `STEPS` steps; the floor is Lean's bound at
-    the least overhead."""
+    """Lean's certificate is the solved point where Lean's bits are at most the target, else the first step outward
+    where they are (up in β, down in the overhead), each step twice the last, and none past `STEPS` steps; the floor
+    is Lean's bound at the least overhead."""
     monkeypatch.setattr(t, "_bound", _falling(1.0025))
     beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
     cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, beta))
-    assert cert["at"] >= 1002.5 and cert["at"] == pytest.approx(beta * 1.001 ** cert["steps"]) and cert["steps"] >= 2
+    assert cert["at"] >= 1002.5 and cert["at"] == pytest.approx(beta * 1.001 ** (2 ** cert["steps"] - 1))
+    assert cert["steps"] >= 2 and cert["at"] / 1002.5 <= 1.001 ** 2 ** (cert["steps"] - 1)
     assert cert["y"] <= 1e3 and (cert["lean"], cert["binds"]) == (True, "count")
     h = t._solve(("h", 1e3, None, 0.01, 1e-3))
     cert = t._certify(("h", 1e3, None, 0.01, 1e-3, h))
@@ -265,8 +266,8 @@ def test_a_computed_types_fixed_cost_counts_in_its_share_of_proving():
 
 @pytest.fixture(scope="module")
 def measured(tmp_path_factory) -> dict:
-    """One scope at four shares, with (A)'s tax measured, planned without Lean's check of (C)'s designs (`test_figure1.py`
-    stubs it, and the sampled-proofs suite runs it)."""
+    """One scope at four shares, with (A)'s tax measured, planned without Lean's checks (`test_figure1.py` stubs (C)'s,
+    `test_a_two_stage_point_is_what_lean_certifies` the two-stage lines', and the sampled-proofs suite runs both)."""
     mp = pytest.MonkeyPatch()
     load = cards.load
 

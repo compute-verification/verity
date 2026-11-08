@@ -1,4 +1,5 @@
 {
+ "format": 1,
  "roots": [
   "Properties.Pouw",
   "Properties.Pouw.Check",
@@ -84,6 +85,11 @@
  "assumptions_module": "Definitions.Assumptions",
  "assumptions": {},
  "domain": {
+  "Claims.Sampling.InScopeTwo": {
+   "owner": "@proofs",
+   "digest": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
+   "why": "The statements the two-stage bound speaks of: a well-formed two-stage design over a topological program its partitions partition."
+  },
   "Core.Protocol.Accepts": {
    "owner": "@lean",
    "digest": "fbbdd8ad1d1bb7bde0514a7f9ab5927c23b8899438d98c87e59214f559ec2469",
@@ -91,6 +97,7 @@
   },
   "Properties.SampledProofs.ClassesCover": {
    "owner": "@proofs",
+   "digest": "d29ae513fb1dd3324794e0218190901b9bf8b0e721d4900872afdfe3e5c57c2f",
    "why": "The deployments the point describes: replay blocks its classes cover, each class holding at most its count."
   },
   "Properties.SampledProofs.Covers": {
@@ -100,6 +107,7 @@
   },
   "Properties.SampledProofs.FirstStageAt": {
    "owner": "@proofs",
+   "digest": "919d98e1c7b1b606b91e6006e7ae34607111abefaad01160fa51ea061b394e88",
    "why": "The first stages the bound speaks of: those sampling each replay block at the point's rate or more."
   },
   "Properties.SampledProofs.ReadsCover": {
@@ -109,10 +117,12 @@
   },
   "Properties.SampledProofs.RequestsCover": {
    "owner": "@proofs",
+   "digest": "eed3ec598726918a9054f7d61d015c89f0d26f0db8ea7813f88ff6e152cf0e7e",
    "why": "The requests the patterns' point describes: each read in one replay block, disjoint, as many and as wide as its classes say."
   },
   "Properties.SampledProofs.ServedCover": {
    "owner": "@proofs",
+   "digest": "3a2ca54e7de4e48043f423d204ee3ce39c40858eef3687a90405f1a4e8f224da",
    "why": "The requests the capped point describes: disjoint, those reading in each replay block serving at most its class's cap."
   }
  },
@@ -8435,31 +8445,274 @@
    "type_hash": "b4a8966ca0afbf7b46c60166c017c5666268e59ebcdab215fec081980c990f06"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound : Properties.SampledProofs.TwoStageCheckPatternsSound"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.InScopeTwo",
+     "Properties.SampledProofs.ClassesCover",
+     "Properties.SampledProofs.FirstStageAt",
+     "Properties.SampledProofs.RequestsCover"
+    ],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "3c744c148df78a7e50eae19cdf8f51599d0d86e669b697b1a6d83cfae776ca37",
+   "unfolded_hash": "2f591d95fe38df7b367df09f08a8db263f87be259c60b4f9eeab621fb39422ee"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_honest :",
+    "  And",
+    "    (Claims.Sampling.InScopeTwo Properties.SampledProofs.FactorUpperWitness.pairPart",
+    "      Properties.SampledProofs.FactorUpperWitness.pairDesign Properties.SampledProofs.FactorUpperWitness.pairStmt)",
+    "    (And",
+    "      (Properties.SampledProofs.FirstStageAt Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "        (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.patterns).q.cast)",
+    "      (And",
+    "        (Properties.SampledProofs.ClassesCover Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "          Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "          (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.patterns) fun x =>",
+    "          0)",
+    "        (And",
+    "          (Properties.SampledProofs.RequestsCover Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "            Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "            (fun x => Unit.unit)",
+    "            (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.patterns) fun x =>",
+    "            0)",
+    "          (And",
+    "            (Eq",
+    "              (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                  (Properties.SampledProofs.TwoStageCheckWitness.pairPoint",
+    "                    SampledProofs.TwoStageCheck.Form.patterns)).isSome",
+    "              Bool.true)",
+    "            (Eq",
+    "              (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                  (Properties.SampledProofs.TwoStageCheckWitness.deployedPoint",
+    "                    SampledProofs.TwoStageCheck.Form.patterns)).isSome",
+    "              Bool.true)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "ef2f36c406008609f61df84ce162c23ef1dedebbc42492d56898eca6bfa99c31"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      ((Finset.image",
+    "              (fun T r =>",
+    "                Claims.Sampling.lightOf Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "                  Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                  (Claims.Sampling.servedBits Properties.SampledProofs.TwoStageCheckWitness.oneReq r)",
+    "                  (Claims.Sampling.blocksTo Properties.SampledProofs.FactorUpperWitness.emptyStmt.prog",
+    "                    Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                    Properties.SampledProofs.TwoStageCheckWitness.oneReq T r))",
+    "              (Claims.Sampling.admissibleTwo Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                Properties.SampledProofs.TwoStageCheckWitness.nothingDesign (9 / 10))).sum",
+    "          fun p =>",
+    "          instHPow.hPow 2",
+    "            (Finset.univ.sum fun r =>",
+    "              Claims.Sampling.lightBits Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "                Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                (Claims.Sampling.servedBits Properties.SampledProofs.TwoStageCheckWitness.oneReq r) (p r))).cast",
+    "      (instHPow.hPow 2 (Rat.cast 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "04fc59e54a1f68bc01a3965483e3d9e050e093593d0dbbb3c0709e2579e42570"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound : Properties.SampledProofs.TwoStageCheckServedSound"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.InScopeTwo",
+     "Properties.SampledProofs.ClassesCover",
+     "Properties.SampledProofs.FirstStageAt",
+     "Properties.SampledProofs.ServedCover"
+    ],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "cdcc88cc6710cf56e3a4355a79e9f0e5531a322e6ea0c8248a1b3a38e42962bd",
+   "unfolded_hash": "199f59320b46fb72f6bbb64f3ad8322485ea780a5e69db6b0e9e34f1a144010b"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_honest :",
+    "  And",
+    "    (Claims.Sampling.InScopeTwo Properties.SampledProofs.FactorUpperWitness.pairPart",
+    "      Properties.SampledProofs.FactorUpperWitness.pairDesign Properties.SampledProofs.FactorUpperWitness.pairStmt)",
+    "    (And",
+    "      (Properties.SampledProofs.FirstStageAt Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "        (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.capped).q.cast)",
+    "      (And",
+    "        (Properties.SampledProofs.ClassesCover Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "          Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "          (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.capped) fun x => 0)",
+    "        (And",
+    "          (Properties.SampledProofs.ServedCover Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "            Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "            (fun x => Unit.unit)",
+    "            (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.capped) fun x =>",
+    "            0)",
+    "          (And",
+    "            (Eq",
+    "              (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                  (Properties.SampledProofs.TwoStageCheckWitness.pairPoint",
+    "                    SampledProofs.TwoStageCheck.Form.capped)).isSome",
+    "              Bool.true)",
+    "            (Eq",
+    "              (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                  (Properties.SampledProofs.TwoStageCheckWitness.deployedPoint",
+    "                    SampledProofs.TwoStageCheck.Form.capped)).isSome",
+    "              Bool.true)))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "13987dd74df2f9e09ada30a892f740b494f654947a6e435411cf348674b46391"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      ((Claims.Sampling.admissibleTwo Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "              Properties.SampledProofs.TwoStageCheckWitness.nothingDesign (9 / 10)).sum",
+    "          fun T =>",
+    "          instHPow.hPow 2",
+    "            (instMinNat.min",
+    "              (Claims.Sampling.bitsOf Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "                Properties.SampledProofs.TwoStageCheckWitness.soloPart T)",
+    "              ((Finset.filter",
+    "                    (fun r =>",
+    "                      (Claims.Sampling.blocksTo Properties.SampledProofs.FactorUpperWitness.emptyStmt.prog",
+    "                          Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                          Properties.SampledProofs.TwoStageCheckWitness.oneReq T r).Nonempty)",
+    "                    Finset.univ).sum",
+    "                fun r =>",
+    "                instMinNat.min",
+    "                  (Claims.Sampling.bitsOf Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "                    Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                    (Claims.Sampling.blocksTo Properties.SampledProofs.FactorUpperWitness.emptyStmt.prog",
+    "                      Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "                      Properties.SampledProofs.TwoStageCheckWitness.oneReq T r))",
+    "                  (Claims.Sampling.servedBits Properties.SampledProofs.TwoStageCheckWitness.oneReq r)))).cast",
+    "      (instHPow.hPow 2 (Rat.cast 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "bf06bd3a4955afd351d99a584232e167878ccdc565b29be8b4c0d58db3106dd4"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckSound : Properties.SampledProofs.TwoStageCheckSound"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "Claims.Sampling.InScopeTwo",
+     "Properties.SampledProofs.ClassesCover",
+     "Properties.SampledProofs.FirstStageAt"
+    ],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "0a1aaf47418731bf098eb8b1a1480aa25c23006f0721dc861cf3522aa0f8dda0",
+   "unfolded_hash": "668f844d81abfa416b80145687dd46ac83d3048711bcaae36a7048e02ffe535f"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_honest :",
+    "  And",
+    "    (Claims.Sampling.InScopeTwo Properties.SampledProofs.FactorUpperWitness.pairPart",
+    "      Properties.SampledProofs.FactorUpperWitness.pairDesign Properties.SampledProofs.FactorUpperWitness.pairStmt)",
+    "    (And",
+    "      (Properties.SampledProofs.FirstStageAt Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "        (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.sets).q.cast)",
+    "      (And",
+    "        (Properties.SampledProofs.ClassesCover Properties.SampledProofs.FactorUpperWitness.pairStmt",
+    "          Properties.SampledProofs.FactorUpperWitness.pairPart Properties.SampledProofs.FactorUpperWitness.pairDesign",
+    "          (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.sets) fun x => 0)",
+    "        (And",
+    "          (Eq",
+    "            (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                (Properties.SampledProofs.TwoStageCheckWitness.pairPoint SampledProofs.TwoStageCheck.Form.sets)).isSome",
+    "            Bool.true)",
+    "          (Eq",
+    "            (SampledProofs.TwoStageCheck.checkTwoStage",
+    "                (Properties.SampledProofs.TwoStageCheckWitness.deployedPoint",
+    "                  SampledProofs.TwoStageCheck.Form.sets)).isSome",
+    "            Bool.true))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "16694e7ca45377cff0b603b6ccc91b299c44e69c1b1a62f751d2d39afaba6ee3"
   },
   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "Properties.SampledProofs.SecurityProofs.twoStageCheckSound_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      ((Claims.Sampling.admissibleTwo Properties.SampledProofs.TwoStageCheckWitness.soloPart",
+    "              Properties.SampledProofs.TwoStageCheckWitness.nothingDesign (9 / 10)).sum",
+    "          fun T =>",
+    "          instHPow.hPow 2",
+    "            (Claims.Sampling.bitsOf Properties.SampledProofs.FactorUpperWitness.emptyStmt",
+    "              Properties.SampledProofs.TwoStageCheckWitness.soloPart T)).cast",
+    "      (instHPow.hPow 2 (Rat.cast 1)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "20350cdbd54cf2afdafac7f333cb23d0eefea512e61fe756a8260e374d8d92e0"
   },
   "Properties.SampledProofs.SecurityProofs.workCheckSound": {
    "owner": "@proofs",
@@ -10896,6 +11149,18 @@
    "Properties.SampledProofs.SecurityProofs.factorUpperCappedSound": {
     "function": "SampledProofs.FactorUpper.lnFactorUpperCapped",
     "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckPatternsSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.SecurityProofs.twoStageCheckServedSound": {
+    "function": "SampledProofs.TwoStageCheck.checkTwoStage",
+    "outcome": "accept"
    }
   },
   "frozen": {
@@ -13089,7 +13354,7 @@
    }
   },
   "Definitions.Claims.Sampling": {
-   "digest": "475da3b933c4b5f7cc97c569582cededaf9d03886a6822f82d90dc5d98184bb1",
+   "digest": "309c173c0691d7c517ab043fd4cfa99f8b5300e898382eb73bc4af0d89796c98",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.prog": "87b63818a7d980ed2906214d1894f239d7c1f55cf1806d17b654b4b81fcc5108",
@@ -13117,10 +13382,14 @@
     "Claims.Sampling.OneStage.subset": "bf2e04f44f50b7c46497a525b37c17110b9ffb1da46b7fc563c8984c3a1ff6ba",
     "Claims.Sampling.OneStage.work": "8371d99c71acdc6403911795a192f890cc51ebfa95347e6824acd0b75ae721ae",
     "Claims.Sampling.Partition": "3c3c979f1c2f533e20d469bf0a5dc97f8a8c2e7f175ffd238a2be77c959418f4",
+    "Claims.Sampling.Partition.Partitions": "54b1e0dc096a80e5865e3838aaad619e0da82cd8329654b5fcf47a05d92544b1",
     "Claims.Sampling.Partition.blocks": "c3f8849c01316fe1aaf8dce50b3b62c8d87fb01902d6e62d71a629aa9981dedc",
     "Claims.Sampling.Partition.classes": "29fd716148a7711eade08bfcedaa3e27e73db1897070ece8d8cbe987092968f6",
+    "Claims.Sampling.Partition.gates": "a7aa78b4c9df86161d96e5171783aa597b46e54801f533984fa20cccf4193290",
     "Claims.Sampling.Prog": "c2bb2738f48ac496bbcf4942328a7048143095ce1ede1a1ca4e29765a59de40a",
     "Claims.Sampling.Prog.Boundary": "a3c4ad00a2bf2a1dae48b48ca2f5eaa07e43700d2400c180fd61cdbe751f98f2",
+    "Claims.Sampling.Prog.Topological": "9b0082dac715338e90247b18a94dcfdd5b39dbdf84b98a7cb3e8bb4b2dab386b",
+    "Claims.Sampling.Prog.Unread": "e179a09c3f6c344e07c807a849fda34b2c8d3a8136798cd1e4d2baf47c735b5c",
     "Claims.Sampling.Prog.gates": "bc7aee865419900348d693059fdf5c856b713aa70f5030c4937b35ae3017f099",
     "Claims.Sampling.Prog.outs": "0cc9f4472ae76772f7e8e7a914128f502f189e224f7f12ec8712ea600026cf75",
     "Claims.Sampling.Query": "8b0f68d5f4f1e79282adb0797878c15261606d156c382f52a1a52aacb8e609ba",
@@ -13130,6 +13399,9 @@
     "Claims.Sampling.instDecidableEqBGate.decEq": "2c74bd5a38f95e3617d6d030739518e9bd2ae3005c1b022e8e8b87624f8d4c6b",
     "Claims.Sampling.strataPa": "44b2b7abfc5d2db01bc9e2a2bd6f1f600f8e38bb45b19a1a1b01202825ed4de4",
     "Claims.Sampling.strataSizes": "3e65e4ae902fc50503e561c9df3e8d1def7433f99dd2f385d8fe65e581ba6f67",
+    "Claims.Sampling.unitClass": "c3b46ba7dc28d55a350e20d697a814e4d67765dca7e8578f62f54dd7a17e79f7",
+    "Claims.Sampling.unitClassMax": "cfd5d8c6c8bd005b894ca319d8f78f9808a91f83c0af6a3f2379d6369d60addb",
+    "Claims.Sampling.unitClasses": "89b7f705e4da346df3203df4f010562817bcec76189e97c1ce5d9ae80efad2d8",
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d"
    }
   },
@@ -13146,14 +13418,20 @@
    }
   },
   "Definitions.Claims.SamplingTwo": {
-   "digest": "574da9f34c093121ac6dae87836e03c66098922a8518238a7c07656651f2c789",
+   "digest": "3d1df26c2b16d1583feb534b1611f5fc6b30ed58d3d5a50d5c70afee7c36df6f",
    "definitions": {
     "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
+    "Claims.Sampling.Design.Two.M": "f685c3eac9cb1ebfd1f1bbbb8f78fe8368792ef6b2d7193895d63189ec9b51e7",
+    "Claims.Sampling.Design.Two.Pa": "fe77e76e5f11969aff55dce1914e72b14d8d412edf8c4e694ff9e368122a19c4",
+    "Claims.Sampling.Design.Two.WellFormed": "b7cc3dd0a3125939273b4946c219c8e31a97a3acf8cd283f7a1c1f5d6823240f",
     "Claims.Sampling.Design.Two.esc": "db01bb7d132447619f2e9a41c30252de6ce6c789b11831131bbb56c990ed9588",
     "Claims.Sampling.Design.Two.k": "3a1b7d06e5002007728c85700d8d8b29e73a60e4ec35dd036626b7fc7b5e3c7c",
     "Claims.Sampling.Design.Two.part": "62aed119073122d2b64c1924d9477e5a1dabc5b6114f6682a0f76f1aeabe93fc",
+    "Claims.Sampling.Design.Two.replay": "9ccfe1e923e1c1ab4497e4530aaa6d7688d882662069951b6a2744662043aa4a",
+    "Claims.Sampling.InScopeTwo": "54d52ad10bb17118bb32e7c108b7b17656ea700c2e9d8830a07c2d76473e2c0c",
     "Claims.Sampling.Partition.strata": "ef54861ec2e83602e5e78b161f1af421e370618c2c50a7b22b2cb1fb64af6d47",
     "Claims.Sampling.Partition.stratumOf": "f4aab9b02cc5565cc5092a56f17cfbb6e44f697ff270a8d73a116021efba5d4f",
+    "Claims.Sampling.admissibleTwo": "bf76f9290a586852d471c372d660af19a98a695d298296c3fea8a6fc1a0db968",
     "Claims.Sampling.bitsOf": "49e095144b8f61fd9089b7c5c583c9c8e8d6ba2fb0053ecd653876f23c33cdc1",
     "Claims.Sampling.cell": "8907137168290395d637224cfeec928fda35e415f4e3f952fe5cb842d40d585f",
     "Claims.Sampling.counts": "079f9a465074884a4f68c64275ba82d3f35f9294ecfda15689ae1acb4daa31bd",
@@ -22025,6 +22303,23 @@
     "Properties.SampledProofs.secondOf": "f3edb5e3e0b1b05240d63f3b7e0d2e8baec5a3f684879c7a0e60806ba4215b49"
    }
   },
+  "Properties.SampledProofs.TwoStageCheck": {
+   "digest": "497c2e5499abf7192436980703c372ee68a50452b81377ea1891ebd0dd99c5d0",
+   "definitions": {
+    "Properties.SampledProofs.ClassesCover": "d29ae513fb1dd3324794e0218190901b9bf8b0e721d4900872afdfe3e5c57c2f",
+    "Properties.SampledProofs.FirstStageAt": "919d98e1c7b1b606b91e6006e7ae34607111abefaad01160fa51ea061b394e88",
+    "Properties.SampledProofs.RequestsCover": "eed3ec598726918a9054f7d61d015c89f0d26f0db8ea7813f88ff6e152cf0e7e",
+    "Properties.SampledProofs.ServedCover": "3a2ca54e7de4e48043f423d204ee3ce39c40858eef3687a90405f1a4e8f224da",
+    "Properties.SampledProofs.TwoStageCheckPatternsSound": "91e2b68a5ee008cb85d605316931f3e2476fd61cbd246c1d1fdf9f188043803d",
+    "Properties.SampledProofs.TwoStageCheckServedSound": "5639a3bf9ca47158be2c347c64c0de8114a3b043b73b634b15053b374614d098",
+    "Properties.SampledProofs.TwoStageCheckSound": "aa79c2cbf5aaadd23418a01ecd82872a3ef9dd08108c7be066dd7cc00f85e9cd",
+    "Properties.SampledProofs.TwoStageCheckWitness.deployedPoint": "9c0064d4336a902b4417cdee8eaad79a916ba173981c4d6a1f7acfb8228f29fd",
+    "Properties.SampledProofs.TwoStageCheckWitness.nothingDesign": "f94e5fd7b23549719dfda3180387c3bc0652e9b397393cfe1e2c07ac4b7898ad",
+    "Properties.SampledProofs.TwoStageCheckWitness.oneReq": "2c145aea34429997c7ad60f30842eb5924903b7deb309c57c78a66a551958de4",
+    "Properties.SampledProofs.TwoStageCheckWitness.pairPoint": "ae21de2460b7f55d7a553aeed0eca5d59e04ff970bf9a9298e881ce66d9bb1b8",
+    "Properties.SampledProofs.TwoStageCheckWitness.soloPart": "6b10e0f7c52c95626867da5b31defacbfd43a0a5226355449a8f7bd06028e9fe"
+   }
+  },
   "Properties.Verity.Coupling": {
    "digest": "1ae8351e77cd0726a6b071de6244b11e11d99bad8c18ede32f25aac53f25fadb",
    "definitions": {
@@ -23832,17 +24127,17 @@
    }
   },
   "SampledProofs.Select": {
-   "digest": "d5183d2d2f65d188981e368241fa3b937d90a93801b558494577b030f44a59cd",
+   "digest": "f401001363423086a23995fc11a8e50bd176de24f82bfa6f35f79d8c4308a147",
    "definitions": {
     "SampledProofs.Select.Rule": "4d6275879b486259c6334a2786df14db3abbdb1d68f5fc81e4cf8e7366e5b42e",
     "SampledProofs.Select.Rule.all": "2544366e1ae9127d40ce553944a8944f3b817850a309fde4b98ec81121a23c1f",
     "SampledProofs.Select.Rule.casesOn": "291c8380be510951b8c2bc763f394d90676009c7bd9ccc5abd653291d9c3eb17",
     "SampledProofs.Select.Rule.ctorIdx": "bff8b46139414ff6a3abbdbcc82f097eff880717f9f1e60602262b114c128e98",
     "SampledProofs.Select.Rule.law": "39a8d67112af8f387b93fad55d8b851bfbc3c8412a7cbbcfbff6d1b7cbc4748b",
-    "SampledProofs.Select.Rule.lawOver": "b871e1d26c24c18a39cf291e265f4ae03013a5eae64dab93c2ea5cd030c44e1b",
+    "SampledProofs.Select.Rule.lawOver": "1c4f229370a8b12447967011be12009aa8cdf67ebb053488c64214559dc63698",
     "SampledProofs.Select.Rule.rec": "6b86a047e84a8f81717cf905ce6b3fe4789ce2e9f0eabe7f0dd770a0b3088159",
     "SampledProofs.Select.Rule.twoStage": "0fe2600bfc07c6847a00ff955691d1aad66506571afff078dccbe826fb5a4e4e",
-    "SampledProofs.Select.parseLaw": "cc8dbd40bd1f85fe0585814b2e216ba1a54633ae9b6ca3480b51cec1047d6f3e",
+    "SampledProofs.Select.parseDesign": "fca8d1fdcf56cc17540b48227b5c59665d529927869ed8f21921f97258ef71ab",
     "SampledProofs.Select.secondLaw": "d28af09c79c12dc7da2b428d0dfc296686e50622f69349521069853929f9a2a1",
     "SampledProofs.Select.select": "ae11255de4e13f81e340be857bc4cede0d122046a593d11a00b93241a23bd2f4",
     "SampledProofs.Select.selectSecond": "c7856b451e1dd82eca2efca5a2ba53508bdad5c50fe369da3355c47b9c85aeb3",
@@ -23966,6 +24261,36 @@
     "SampledProofs.Supplied.windowSalt": "dae6799e70140a9abeb789e702cf7dd2af18f35cfbef6dc1f3daf93aa473f738",
     "_private.SampledProofs.Supplied.0.SampledProofs.Supplied.decimal?": "86d8b0a22f33d638d7e04f376c63d74da86260a9dc2ed0dfdf0e9106339eed99",
     "_private.SampledProofs.Supplied.0.SampledProofs.Supplied.source": "8ff47cd32c69fb45b46032c9798aed3a142e7d51a222dfa4c08317d596d581d8"
+   }
+  },
+  "SampledProofs.TwoStageCheck": {
+   "digest": "d8a4014a8ec13d759fc3405226195b3552db756e4797f4c5e37883530f73231d",
+   "definitions": {
+    "SampledProofs.TwoStageCheck.Form": "dd2bde90ee3e85f5782f6dd0fdf3372da02248efad20f9c73226d5bf2e70006c",
+    "SampledProofs.TwoStageCheck.Form.capped": "9f28057339dd12f5787a69352a3bcc0a5af1550ba00450143f73f8bc65eda3cb",
+    "SampledProofs.TwoStageCheck.Form.casesOn": "7945d6c31952237aad030ef1249aff0368dc4adf47c30e0917e86526624f37a9",
+    "SampledProofs.TwoStageCheck.Form.patterns": "d09530a44117f472119aa5710a067bc888b851b4dd6eca4948244218ee97c455",
+    "SampledProofs.TwoStageCheck.Form.rec": "f3b635e940f33fda134a04f193d0bd664cd7060d6611247a4ac652818e9a2eaa",
+    "SampledProofs.TwoStageCheck.Form.sets": "368107c979a27d5d7bc15178c79b9fd4d1a2aa80d4ee012043210e8392c44e45",
+    "SampledProofs.TwoStageCheck.Point": "1155991e0005356561705146e862d02a65b5b5cd67010282e9a48643b763f253",
+    "SampledProofs.TwoStageCheck.Point.S": "485c83e0ec8cc4b1191eeddd2f764c8245954f965a38c58ee9a59c17fe53af72",
+    "SampledProofs.TwoStageCheck.Point.classes": "f929edb40522c237a0c621d16a6bf7b3c560b15d8499903b4f6f9bad0bb67e9e",
+    "SampledProofs.TwoStageCheck.Point.form": "891f0dff06dd31ead8b7c4c92150782d411ce975168f227a81d664185856f091",
+    "SampledProofs.TwoStageCheck.Point.p": "66d24c0760fb7fb4337fb50243aee86c33c5106df1c8e33e359aebde71e436e1",
+    "SampledProofs.TwoStageCheck.Point.params": "17d0b7e4c6b958f0aa961ec567cb2d4737cd51af649c22365674f86744ab661e",
+    "SampledProofs.TwoStageCheck.Point.q": "e0ebbaed661678c7401d29acbbbcb9d7dcb1fc46148950325355f2d2cdd3dcf1",
+    "SampledProofs.TwoStageCheck.Point.valid": "4f9715ea60f43929a84d04dc0e9f8ebe668d95b8a6c2011c850582f0cbb3bb5a",
+    "SampledProofs.TwoStageCheck.Point.δ": "782854d0c222d069b1e078111b691ca409b5f8dd709a6c7cbc5f029263cc1463",
+    "SampledProofs.TwoStageCheck.Point.θ": "10ff7b4f6be00f439ef07349ad153472811a4e664c7cca94ab6d8d523239c2dc",
+    "SampledProofs.TwoStageCheck.ReplayClass": "e166deb22db88ed7a5fc264f5b8925facc8baea3fe80bf2b0596bd0c7c9483a2",
+    "SampledProofs.TwoStageCheck.ReplayClass.N": "9d88185dc85ecfbb8fa87987e500ce279972ee057a1650a7a31b772a52863cdf",
+    "SampledProofs.TwoStageCheck.ReplayClass.cells": "a9a8eef374ed54a59b54c6b9bdab2cc97b26b5a5dda09371e322432368b7906c",
+    "SampledProofs.TwoStageCheck.ReplayClass.count": "3faaa26cde76f593a1491cb46463baf91bb4266938b22747475f4a220afbe8ff",
+    "SampledProofs.TwoStageCheck.ReplayClass.reads": "300ff99f23b9e71dbfeb75dd43a1feb824b6961a5c2cf7fa744c173773e19579",
+    "SampledProofs.TwoStageCheck.checkTwoStage": "82944a7fcf84e151b2ab8b3e5e30a3b91469601afedc48447b880bb1e4e46206",
+    "SampledProofs.TwoStageCheck.classFactor": "a7978f2b7082e6036cec4b3ca6b8f461fb8874537d2f04247c400e16ee89113c",
+    "SampledProofs.TwoStageCheck.classSum": "0ea0f4590a46383fc4b04d1d645eb243e2cd910d793a29ac5193bc49ee7c49a6",
+    "SampledProofs.TwoStageCheck.lnCount": "b01c8ac883c806db27c6fb116319583c4612c638b9198071273e4dd338ec59f9"
    }
   },
   "VStar.Algebra": {

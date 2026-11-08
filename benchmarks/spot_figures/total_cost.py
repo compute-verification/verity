@@ -564,6 +564,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
              f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
              if trivial else "")
+    exfil += (" Lean checks every two-stage point's design: its count is the bits Lean certifies there, at a θ Lean "
+              "searched." if out.get("lean") else "")
     bi = conf.get("tokens_bi")
     exfil += (family("tokens", "solid", f"serving commits {a.commits}, a replay block is {a.replay_block}, "
                      f"{priced('tokens')}; {patterns}")
@@ -578,7 +580,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
               "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
-              "states it for two-stage only)" + (", each design checked by Lean" if out.get("lean") else "")
+              "states it for two-stage only)"
+              + (", each design checked by Lean" if out.get("lean") else "")
               + f": {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
     infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
              f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
@@ -595,7 +598,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None, request: str = "census",
         workers: int = 1, lean: bool = True) -> dict:
     """Figure 1's JSON in its total-cost form over the scopes named (default all), planned on `workers` processes, with
-    Lean checking the one-stage line's designs unless `lean` is off."""
+    Lean checking every line's designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
         return _run(model_name, scope_names, request, pool.map if pool else map, lean)
 
@@ -738,22 +741,23 @@ def _solve(job: tuple) -> float | None:
 
 #: the spans a break-even searches: the marginal overhead's multiple, and β
 SPANS = {"h": (1e-12, 1e2), "beta": (1e-6, 1e6)}
-#: the most steps of 1 + `rel` outward from a solved break-even that Lean's certificate takes
-STEPS = 4
+#: the most steps outward from a solved break-even that Lean's certificate takes, the i-th of (1 + `rel`)^(2^i)
+STEPS = 6
 
 
 def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
     """Lean's certificate that a line's exfiltration bound at a break-even's point is at most `target` bits.  `at(x)` is
     the line's point at `x` with Lean's check of its design (`_point`'s exfiltration with `lean`): its count is the
     bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
-    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits a
-    hair above the planner's, at a point the planner puts within a hair of the target), `x` steps outward by 1 + `rel`
-    (down for a bound rising in it, up for one falling) at most `STEPS` times; `at` None says no step reached it."""
+    or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
+    above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
+    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
+    it."""
     for step in range(STEPS + 1):
         pt = at(x)
         if pt["y"] <= target:
             return _certificate(x, step, pt)
-        x = x / (1 + rel) if rising else x * (1 + rel)
+        x = x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
     return _certificate(None, STEPS, pt)
 
 
