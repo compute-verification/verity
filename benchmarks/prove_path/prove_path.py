@@ -73,9 +73,9 @@ Two kinds of committed run:
   sample's receipt and the advice-root-after-the-draw negative (`advice_after_draw`); ``OUT/summary.json`` over the windows.
   ``--forged``: the prover runs with its self-check skipped (``FC_ZK_SELF_CHECK=skip``) so it sends proofs of the false
   witness, and a window passes when its registration passed every check before the sample and Lean refused the outcome
-  (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample over a window of
-  one member, no registered reads or shared rows, Lean `verify --coins tree --stratified K`, no ZK server), and the summary
-  names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
+  (`forged_row`). ``--plain``: the sessions are plain Flock, not `--zk` (a5's ``--plain``: a stratified sample, the partition's
+  law ``stratified-rate:NUM/DEN``, over a window of one member, no registered reads or shared rows, Lean `verify --coins tree
+  --stratified K`, no ZK server), and the summary names the interim (``plain``, `PLAIN_INTERIM`). Each window's row carries the charge terms of an accepted audit
   (``charge``, `charge_terms`): ``advice_bits``; ``c``, the advice's bits where the window's leak count
   (`records_audit.leak_count`: ``other_inputs`` and ``bound``, beside it) is within the charge, else None; ``delta``,
   ``wrong_units``, ``location_bits`` (λ_δ), ``harm_bound`` (β_δ) and ``exfiltration_bound`` (β_δ + λ_δ).
@@ -1765,7 +1765,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--session-timeout", type=float, default=14400)
     p.add_argument("--forged", action="store_true", help="the windows hold a forged unit (commit --forge): every window must be refused")
     p.add_argument("--plain", action="store_true", help="plain Flock sessions, not --zk (a5's --plain): the partition's law "
-                   "stratified, each window one member with no registered reads or shared rows (a5.PLAIN_SCOPE)")
+                   "stratified (stratified-rate:NUM/DEN), each window one member with no registered reads or shared rows "
+                   "(a5.PLAIN_SCOPE)")
     p.add_argument("--challenger", help="draw each window on the auditor's challenger's coins, the run root's one session "
                    "(a5_coins): local (a development session on this machine), or gate:USER@HOST "
                    "(the auditor host through its SSH gate, with --peer and --challenger-key)")
