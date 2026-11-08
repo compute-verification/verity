@@ -21,13 +21,21 @@ def test_the_configurations_are_the_cards():
 
 def test_a_request_line_is_plotted_at_every_registration_and_compared_in_the_sets_form():
     """(A) and (A′) in the patterns' form at each registration, and in the sets' form at their own, which only
-    exfiltration plots; a registration's GPU-seconds are its machines' over the census window."""
+    exfiltration plots; a registration's GPU-seconds are its machines' over the census window.  Each replays its whole
+    batch, and (A) replayed alone, which needs batch-invariant kernels, is a comparison at one machine's that pays
+    their tax."""
     for name in ("tokens", "per_expert"):
-        lines = {n: c for n, c in t.CONFIGURATIONS.items() if n == name or c.variant_of == name}
+        lines = {n: c for n, c in t.CONFIGURATIONS.items()
+                 if (n == name or c.variant_of == name) and c.replay != "request"}
+        assert {c.replay for c in lines.values()} == {"block"}
         assert sorted(c.registration for c in lines.values() if c.form == "patterns") == sorted(t.REGISTRATIONS)
         (sets,) = [c for c in lines.values() if c.form == "sets"]
         assert sets.registration == t.CONFIGURATIONS[name].registration and sets.panels == ("exfiltration",)
         assert all(c.label == t.CONFIGURATIONS[name].label for c in lines.values())
+    (bi,) = [n for n, c in t.CONFIGURATIONS.items() if c.replay == "request"]
+    assert (t.CONFIGURATIONS[bi].variant_of, t.CONFIGURATIONS[bi].registration, t.CONFIGURATIONS[bi].serve) == (
+        "tokens", "machine", None)
+    assert t.CONFIGURATIONS["layer_of_token"].replay == "step"
     c = f1.cards("GLM-5.3")
     window, gpus = c["window"].value, c["machine_gpus"].value
     assert [t.registration_gpu_seconds(r, c) for r in t.REGISTRATIONS] == [
@@ -116,7 +124,7 @@ def test_the_kept_priced_taxes_are_the_generators():
 
 def test_a_card_without_every_configuration_is_refused():
     card = t.priced_card("GLM-5.3")
-    card["value"]["configurations"] = card["value"]["configurations"][:2]
+    card["value"]["configurations"] = card["value"]["configurations"][:-1]
     with pytest.raises(ValueError, match="no tax for \\['every_block'\\]"):
         t.taxes(card)
     with pytest.raises(ValueError, match="low <= tax <= high"):
@@ -237,15 +245,19 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
         samples = [lines[n]["registration_sample"][at] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert samples == sorted(samples), name
     assert "sessions padded to a public cap" in caps["exfiltration"]
+    assert all(f"{f1.ROLES} {f1.TRUST}" in c for c in caps.values())
     served_at = [n for n, s in lines.items() if s["binds"][at] == "served"]
     assert served_at and "tokens" not in served_at
     assert caps["exfiltration"].count("bounded here only by everything the scope serves") == 1
     for name in ("tokens", "per_expert", "layer_of_token"):
         s = lines[name]
         assert all(0 < v < 1 for v in s["computed_proving"])
-        assert f"{t._share(s['computed_proving'][at])} of its sampled replay block's proving" in caps["exfiltration"]
+        assert f"{t._share(s['computed_proving'][at])} of its sampled request's proving" in caps["exfiltration"]
     assert "everything the scope serves (" not in caps["infiltration"]
-    assert "a lower bound, the hashing alone" in caps["skipped_work"]
+    assert "priced, not measured, a lower bound: the hashing alone" in caps["skipped_work"]
+    assert "Replay is full-batch" in caps["exfiltration"] and "batch-invariant kernels (dotted" in caps["exfiltration"]
+    assert all(b <= a for a, b in zip(lines["tokens"]["count"], lines["tokens_bi"]["count"]))
+    assert out["taxes"]["tokens_bi"]["tax"] > out["taxes"]["tokens"]["tax"] + 0.1
     rows = t.at_budgets(out)
     assert {(r["panel"], r["config"]) for r in rows} == {(p, n) for n, c in t.CONFIGURATIONS.items() for p in c.panels}
     paths = t.render(out, scope, tmp_path)

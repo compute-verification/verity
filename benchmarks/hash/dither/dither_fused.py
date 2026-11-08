@@ -239,7 +239,7 @@ class DitherState:
 
     def before(self, m: int) -> None:
         if m > self.t:
-            raise RuntimeError(f"a step of {m} tokens in a window of T = {self.t} slots")
+            raise RuntimeError(f"a step of {m} tokens in an execution phase of T = {self.t} slots")
         self.m = m
         self.flags = 0
         self.cap_step = self.cap_rc = None
@@ -339,7 +339,7 @@ class DitherState:
         self.s += 1
         self.steps += 1
         if self.s == ROUNDS:
-            raise RuntimeError(f"the window's {ROUNDS} rounds are spent")
+            raise RuntimeError(f"the execution phase's {ROUNDS} rounds are spent")
 
     def _side_receipts(self, main, s: int, p: int, salt: bytes) -> None:
         """Step s's seeds, units (`h1r_launch` version 2) and receipt trees on the side stream, after its coin, while the

@@ -94,6 +94,21 @@ def missing_batch(launch: dict | None, LP: int, T: int) -> dict | None:
                      f"(LP, T) co-scheduled differently) has no one Program.")}
 
 
+def bad_chunks(launch: dict | None, wrapper: str, LP: int, T: int, C: int) -> dict | None:
+    """The Build's refusal of prefill chunks (`launch["chunks"]`) that aren't a request's prompt rows in turn, one a step of its
+    batch before its T decodes, else None."""
+    chunks = (launch or {}).get("chunks")
+    if not chunks:
+        return None
+    steps = len(launch["batch_by_step"])
+    if wrapper == "request" and not C and sum(chunks) == LP and steps == len(chunks) + T:
+        return None
+    return {"reason": "launch_context", "phase": "applicability", "node": None, "module_path": None,
+            "hint": (f"prefill chunks {chunks} at a launch batch of {steps} steps: a chunked request's chunks are its {LP} prompt rows in "
+                     f"turn, without a cached prefix, one a step of its batch and then one a decode ({len(chunks) + T} steps); this is a "
+                     f"{wrapper} with C={C}")}
+
+
 def shape_contexts(workload: dict[str, Any]) -> dict[tuple[int, ...], list | str]:
     """{shape: context | 'conflict'} for every request shape of the workload ((LP, T), or (LP, T, C) for a request with C cached prompt
     rows; T = max_tokens - 1, the derive's --T): the batch per step without batch invariance (`batch_dispatch`), else max_seqlen_q
