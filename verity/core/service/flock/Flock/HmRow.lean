@@ -607,6 +607,13 @@ def pinnedCount (mj : Json) : Nat :=
 /-- Why `ProvedScope.check` and `Stmt.setupTables` refuse a statement with pinned outputs (`pinnedCount`). -/
 def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no soundness theorem covers yet"
 
+/-- The lines of a templated statement's (`Tags.isTmpl`) template section, right after META, which `parse` passes over:
+its header `TEMPLATE n` and the template's `n` lines (`HmOut.tmplOf` reads them). Any other statement's file has none,
+its sections starting right after META. -/
+def tmplLines (tags : Tags) (lines : Array String) : Nat :=
+  let h := tokens (lines.getD 2 "")
+  if tags.isTmpl && h.size == 2 && h[0]! == "TEMPLATE" then (h[1]!.toNat?.map (· + 1)).getD 0 else 0
+
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
@@ -641,7 +648,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := 2 + tmplLines tags lines
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -798,7 +805,7 @@ the branch that reads it, which here is the last. -/
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := 2 + tmplLines tags lines
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -1777,6 +1784,25 @@ def metaOf (bytes : ByteArray) : V Json := do
   | .ok j => pure j
   | .error e => throw s!"META: {e}"
 
+/-- A templated file's template: the lines of its template section, right after META (the file's third line `TEMPLATE n`,
+then the template's `n` lines, which `HmRow.parse` passes over: `HmRow.tmplLines`), read off the file's bytes up to the
+section's end alone, as `metaOf` reads META. -/
+def tmplOf (bytes : ByteArray) : V (Array String) := do
+  let bad := "circuit: no template section (TEMPLATE n, then the template's n lines) after META"
+  let some n1 := findByte bytes 10 | throw bad
+  let some n2 := findByte bytes 10 (n1 + 1) | throw bad
+  let some n3 := findByte bytes 10 (n2 + 1) | throw bad
+  let some head := String.fromUTF8? (bytes.extract (n2 + 1) n3) | throw "circuit: not UTF-8"
+  let h := tokens head
+  let some k := (if h.size == 2 && h[0]! == "TEMPLATE" then h[1]!.toNat? else none) | throw bad
+  if k == 0 then return #[]
+  let mut e := n3
+  for _ in [0:k] do
+    let some e' := findByte bytes 10 (e + 1) | throw "circuit: the template section is truncated"
+    e := e'
+  let some text := String.fromUTF8? (bytes.extract (n3 + 1) e) | throw "circuit: not UTF-8"
+  return (text.splitOn "\n").toArray
+
 /-- **A recursion unit's name** (`RecOpen.params`, `RecOpen.stackedParams`, `RecResiduals.params`, `RecSparse.params`,
 `RecOpening.params`): `parseTmpl` refuses a template whose unit carries one, since the recursion's claims read such a
 unit as a flat net. -/
@@ -1784,17 +1810,18 @@ def recUnit (name : String) : Bool :=
   (RecOpen.params name).isSome || (RecOpen.stackedParams name).isSome || (RecResiduals.params name).isSome ||
     (RecSparse.params name).isSome || (RecOpening.params name).isSome
 
-/-- A templated file (`Tags.templated`): META's `template`, a `flock-ir-tmpl/v2` template's lines, and `layout`,
-its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid out, passing `Tmpl.unrollOk`; its
-net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit` circuit where a flat file's
-`CIRCUIT unit` section is (`HmRow.parse`'s `pre`), and carried on the circuit (`Circuit.tmpl`). META is read off its own
-line first (`metaOf`), so the file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows
-itself is refused: none of the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit
-is a recursion unit (`recUnit`). -/
+/-- A templated file (`Tags.templated`): its template section, a `flock-ir-tmpl/v2` template's lines right after META
+(`tmplOf`), and META's `layout`, its mode (`Tmpl.modeOf`). The unit is read from them (`TmplUnit.read`: well-formed, laid
+out, passing `Tmpl.unrollOk`; its net `Tmpl.unitNet`, whose rows are built only when read), parsed as the file's `unit`
+circuit where a flat file's `CIRCUIT unit` section is (`HmRow.parse`'s `pre`, past the template section), and carried on
+the circuit (`Circuit.tmpl`). META and the template are read off the file's head first (`metaOf`, `tmplOf`), so the
+file's lines are split once, by `HmRow.parse`. A file that carries a unit's or a root's rows itself is refused: none of
+the nets `HmRow.parse` read after `pre` is named `unit` or `root`. So is a template whose unit is a recursion unit
+(`recUnit`). -/
 def parseTmpl (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := []) : V Circuit := do
   let mj ← metaOf bytes
   let ctx := "templated statement META"
-  let lines ← (← J.arr mj "template" ctx).mapM fun x => J.asStr x "template line"
+  let lines ← tmplOf bytes
   let some mode := Tmpl.modeOf (← J.str mj "layout" ctx)
     | throw "META: layout is not a layout mode (iv, iv/strict, iv/hybrid, iv/hybrid/T)"
   let tu ← TmplUnit.read (← Tmpl.parse lines) mode
