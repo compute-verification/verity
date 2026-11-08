@@ -20,10 +20,14 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
   (the LM head, from the final norm's output), `rows` (an output-side row at any layer) and `honest` (Carlini et
   al.'s SVD attack with the same observables). `--fp4` quantizes the LM head to NVFP4; `--boxes` clamps every read
   and faults at the box amplitudes; `--differential` subtracts an honest query on the same prompt, which reads
-  in-range faults the faulted response alone doesn't.
+  in-range faults the faulted response alone doesn't. `--peel` has the rows' decoder estimate the LM head and the
+  final norm's g and b from faults on the last layer instead of knowing them: `saturate` unclamped, `box` or `own`
+  under `--boxes` at the final site's box or one FP8 code's reach, repeated over `--peel-contexts` prompts.
 - `attack.py`: a tokens-only attack with chosen in-range interior faults. A decoder that knows every weight but one
   down-projection entry, or one unit's whole column, picks each fault (prompt and value inside the box) to split its
   posterior and keeps the candidates that agree with the served tokens. It reports exact weight bits a fault.
+  `--range own` holds each fault to one FP8 code at its token's own group scale (charged as one element), `box` lets
+  it go anywhere in the box (beyond one code, a block writing the whole group); `--obs` is the served tokens it reads.
 - `report.py`: Markdown tables from their outputs, with λ − 1 = B/(c + ℓ) at the charges `--charge` names.
 
 Each writes under `--out`; under `research run`, give it `"$OUT"`:
