@@ -526,18 +526,43 @@ def report(a) -> int:
         finally:
             S.reprice.apply = apply
 
+    recs = []
     for d in a.runs:
-        rec = json.loads((Path(d) / "server.json").read_text())
+        rec = json.loads((Path(d) / "server.json").read_text()) | {"dir": d}
         if (Path(d) / "live.jsonl").exists():
             samples = [(float(t), None if u == "None" else float(u), m)
                        for t, u, m in (x.split(",") for x in (Path(d) / "busy.csv").read_text().split())]
             rec |= summarize(read_jsonl(Path(d) / "live.jsonl"), samples, rec["types"], rec["provers"]) or {}
-        r = {"dir": d, "provers": rec["provers"], "statements_s": rec.get("statements_s"), "busy": rec.get("busy"),
+        recs.append(rec)
+    if a.combine:
+        # one line from several runs' types (each type from the first run that measured it), e.g. the type groups
+        # whose circuits don't fit one host together, each run at the same K
+        m: dict = {"dir": ",".join(r["dir"] for r in recs), "provers": "+".join(str(r["provers"]) for r in recs),
+                   "types": {}, "gpu_s_by_type": {}}
+        for r in recs:
+            for t, g in (r.get("gpu_s_by_type") or {}).items():
+                if t not in m["gpu_s_by_type"]:
+                    m["gpu_s_by_type"][t], m["types"][t] = g, r["types"][t]
+        g, ty = m["gpu_s_by_type"], m["types"]
+        tot = sum(ty[t]["rb"] for t in g)
+        per_stmt = sum(ty[t]["rb"] / tot * g[t]["mean"] for t in g) if g else None
+        m["statements_s_at_mix"] = round(1 / per_stmt, 4) if per_stmt else None
+        m["statements_s_at_mix_by_type"] = {t: round(ty[t]["rb"] / tot / per_stmt, 4) for t in g} if per_stmt else {}
+        recs.append(m)
+    share = {c["type"]: c["share"] for c in mixrec["cells"] if c["type"]}
+    for rec in recs:
+        gs = rec.get("gpu_s_by_type") or {}
+        r = {"dir": rec["dir"], "provers": rec["provers"], "statements_s": rec.get("statements_s"), "busy": rec.get("busy"),
+             "statements_s_at_mix": rec.get("statements_s_at_mix"),
+             "statements_s_at_mix_by_type": rec.get("statements_s_at_mix_by_type"), "gpu_s_by_type": gs,
+             "statement_blocks": {t: rec["types"][t]["c"] for t in gs},
+             "covered": round(sum(share.get(t, 0.0) for t in gs), 4),
              "beta": {w: S.solve(build(rec, 1.0), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()},
              "beta_prover4": {w: S.solve(build(rec, 0.25), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()}}
         out["runs"].append(r)
-        print(f"REPORT K={r['provers']}: beta {r['beta']} (the line's {out['line_beta']}), with a 4x prover "
-              f"{r['beta_prover4']}", flush=True)
+        print(f"REPORT K={r['provers']} ({r['covered']:.1%} of proving measured): {r['statements_s_at_mix']} statements/s "
+              f"at the mix, beta {r['beta']} (the line's {out['line_beta']}), with a 4x prover {r['beta_prover4']}",
+              flush=True)
     Path(a.out).write_text(json.dumps(out, indent=1))
     return 0
 
@@ -567,6 +592,7 @@ def main() -> int:
     ap.add_argument("--cpu", action="store_true", help="the CPU prover (no --gpu, no device sampling)")
     ap.add_argument("--plain", action="store_true", help="Flock's plain path, a comparison (no --zk, FC_COINS=tree)")
     ap.add_argument("--runs", nargs="*", default=[])
+    ap.add_argument("--combine", action="store_true", help="(report) also one line from all the runs' measured types")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
     return {"mix": mix, "run": run, "report": report}[a.command](a)
