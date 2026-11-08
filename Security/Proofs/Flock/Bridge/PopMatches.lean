@@ -175,7 +175,7 @@ theorem popCount_slotPartition (l : Spot.Slots.Layout) : popCount (slotPartition
   | cons c cs => simp [popCount, slotPartition, popOf, List.length_flatten, Function.comp_def]
 
 /-- `partOf P κ ns`'s population has one slot per unit, at strata that sum to `n`. -/
-theorem popCount_partOf_eq {C : FlockSoundness.Audit.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
+theorem popCount_partOf_eq {C : Verity.Boolean.Circuit} {n : ℕ} (P : FlockSoundness.Audit.Partition C n)
     (κ : Fin C.N → Option Bool) {ns : List ℕ} (hns : ns.sum = n) : popCount (partOf P κ ns) = n := by
   show (ns.splitLengths ((List.finRange n).map (blockOf P κ))).flatten.length = n
   rw [List.flatten_splitLengths ((List.finRange n).map (blockOf P κ)) ns (by simp [hns]), List.length_map,
@@ -186,7 +186,7 @@ game's partition `partOf P κ ns` has population slots, at strata that sum to `n
 theorem popCount_partOf {desc : Claims.Msg} {q : Lean.Json} {n : ℕ} {p : Spot.Program}
     {l : Spot.Slots.Layout} (h : PopMatches desc q n)
     (hp : Spot.Program.parse ⟨desc.toArray⟩ = .ok p) (hl : Spot.Slots.layout p q = .ok l)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    {C : Verity.Boolean.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) :
     popCount (slotPartition l) = popCount (partOf P κ ns) := by
   rw [popCount_slotPartition, popOf_size h hp hl, popCount_partOf_eq P κ hns]
@@ -198,7 +198,7 @@ theorem popCount_regMatches {c : SamplingDeploy.Code} {reg : Claims.Msg → Opti
     (hreg : SamplingDeploy.RegMatches c reg) {x : Claims.Msg} {s : Claims.Sampling.AuditStatement}
     {Pt : Claims.Sampling.Partition} (hx : c.parse x = some s) (hP : c.partition s = some Pt) {n : ℕ}
     (hpop : ∀ g, reg x = some g → PopMatches s.desc g.query n)
-    {C : FlockSoundness.Audit.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
+    {C : Verity.Boolean.Circuit} (P : FlockSoundness.Audit.Partition C n) (κ : Fin C.N → Option Bool)
     {ns : List ℕ} (hns : ns.sum = n) :
     popCount Pt = popCount (partOf P κ ns) := by
   obtain ⟨g, l, hg, hd, hl, hPt, -⟩ := hreg x s Pt hx hP
