@@ -77,9 +77,9 @@ def _record(program: Program, query, names, n: int, law, window, previous) -> di
     return R.record(program, query, law, S.SCHEME, roots, window, previous=previous)
 
 
-def _boundary(n=N, row=0, previous=None) -> tuple[dict, dict]:
+def _boundary(n=N, row=0, previous=None, q=Q) -> tuple[dict, dict]:
     program = P.population_program(BLOCK, n)
-    return (_record(program, GRAIN, BOUNDARY, n, {"law": "subset", "k": Q}, {"kind": "served", "run": RUN, "row": row},
+    return (_record(program, GRAIN, BOUNDARY, n, {"law": "subset", "k": q}, {"kind": "served", "run": RUN, "row": row},
                     previous), _ports(program, GRAIN, BOUNDARY, n))
 
 
@@ -144,6 +144,45 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert p.programs == (reg.record["program"], ireg.record["program"])
     for m in range(N_RHO + 1):
         assert p.accept(m) == 1 - Fraction(Q, N) + Fraction(Q, N) * Fraction(comb(N_RHO - m, K), comb(N_RHO, K))
+
+
+def test_a_rate_first_stage_keeps_one_wrong_proof_blocks_escape_however_the_prover_pads_the_replay_blocks():
+    """`rate:1/2` samples Q = ⌈N/2⌉ of each registration's N replay blocks, so a registration padded tenfold (N = 40 for
+    4) samples Q = 20, and a wrong proof block escapes with probability 1 − (Q/N)·(k/n_rho) = 5/6 at both sizes. The second
+    stage's k/n_rho is the replay Definition's, which the registration can't pad. Under `subset:2` the same padding raises
+    that escape from 5/6 to 59/60."""
+    def run(rule, n, q):
+        stream = _stream(_spec(rule))
+        assert S.selection_law(stream.spec.selection, n) == {"law": "subset", "k": q}
+        reg = stream.register(*_boundary(n, q=q))
+        first = stream.select(reg)
+        assert len(first.units) == q
+        stream.register_interiors(first, *_interior(q * N_RHO, reg.digest))
+        second = stream.select(stream._entries[reg.order].interior)
+        assert len(second.units) == q * K and stream.deliver(second, [SESSION]) is None
+        out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)})
+        assert out.accepted and out.profile.draws == {S.REPLAY: Bernoulli(Fraction(q, n)), "unit": Subset(K)}
+        return out.profile.accept(1)
+
+    rate = S.TwoStage(GRAIN, "rate:1/2", K)
+    assert run(rate, 4, 2) == run(rate, 40, 20) == 1 - Fraction(1, 2) * Fraction(K, N_RHO) == Fraction(5, 6)
+    assert run(RULE, 4, Q) == Fraction(5, 6) and run(RULE, 40, Q) == Fraction(59, 60)
+
+
+@pytest.mark.parametrize("port", BOUNDARY)
+def test_a_replay_block_is_held_to_the_boundary_values_committed_while_serving(port):
+    """A replay block's starting state (`bx`) and its far edge (`bout`) are boundary values, committed in the registration
+    before the first stage's coins. An outcome whose sessions opened either at another root rejects, the registration's
+    audit record failing `roots` on that port, so a replay can't start from, or end at, a state other than the
+    one committed while serving."""
+    stream = _stream()
+    _, second = _stages(stream)
+    assert stream.deliver(second, [SESSION]) is None
+    swapped = {**_roots(BOUNDARY), port: "ee" * 64, **_roots(INTERIOR)}
+    out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots=swapped)
+    assert not out.accepted and out.verdict.codes == ("reject",)
+    assert "roots" in out.verdict.detail["reject"]["replay_sample"] and "roots" not in out.verdict.detail["reject"]["checks"]
+    assert stream.records[0]["replay_sample"]["audit"]["checks"]["roots"]["detail"]["ports"] == [port]
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
