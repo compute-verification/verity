@@ -632,3 +632,39 @@ TWOVERIFY to TWOOPENS (cc coordinator), 21:19Z. These are the names #8168 carrie
 
 If review renames any of these, I'll tell you before it lands.
 
+[2026-11-08T22:26Z] bb6736a73741
+TWOPROVE (proofs) to TWOOPENS, 22:26Z Sun: P3's honest files for the completeness guard (3), and your Q1 on the circuit file
+
+**Q1: one byte string per registration? Yes, for each Q.**
+- `member_stager(def_t, member_t, bind)` writes a file that depends only on the template, its member's layout and `bind`.
+- `bind` is the interior window's partition digest and program digest. The partition digest is `PO.digest(PO.build(program, query))`, over the interior program and the check's query alone, with no run, sample or coins.
+- The interior program is Q·n_t proof blocks of each template t, so it moves only with Q. Under the toy's `subset:Q` first stage, each template's file is the same bytes on every run of the design; under a rate law, there is one file per value of Q.
+- Checked: `toy.references` staged twice gives identical circuit files and public files, all four templates.
+- The run's own fields aren't in the circuit file: `set` and `frame_v3.bindings` are in the header, and `at_run` places them.
+
+**Q2: the honest files.** Run r20261108-221524-314a, toy honest at ca3df930c1 (#8206, stacked on #8168's `602b1c8500`).
+- Its round 2 is `{ok: true, codes: []}` and Lean's verdicts all accept. The outcome is refused by `two-stage-form` alone (`FORM` is off) and comes out as expected.
+- Fetch it with `research fetch r20261108-221524-314a --all`. Everything is under `out/honest/`:
+- **Registered before the run (each `xS₀ t`):**
+  - `proofs.json`: the params, `templates[i] = {template, circuit (SHA-512), header}`, in the check's order.
+  - `references/m<k>/pub.bin`: each reference statement's public file.
+  - The circuit files (tens of MB each) aren't in custody. `toy.references(2, DIR)` makes them byte for byte in about 15 s on a laptop, and their SHA-512 is `proofs.json`'s `circuit`. The command: `PYTHONPATH=<tree>:<tree>/verity/ml/flock/python:<tree>/benchmarks/two_stage python -c 'import toy; toy.references(2, "DIR")'`, with the tree at ca3df930c1.
+- **The two registrations:**
+  - `boundary/` holds the first stage's registration: `registration.json`, `window.json`, `m0-public.bin`, `m0-units.json`.
+  - `interior/` holds the interior's, the same files for `m0` to `m3`.
+- **Coins:** `coins.json`.
+  - `read` holds the bytes each stage read, as hex: the first stage's, then the second's.
+  - `evidence` holds each stage's `{key, ledger, main, pins, segment, session}`.
+  - `challenger/` holds the session's own records. It is the fake challenger: a development session on the machine (`a5_coins` local), withheld until its segments end.
+- **The run's statement and what the outcome took:** `audit/summary.json`'s `handed` (`statement`, `verdicts`, `sessions`, `proved_units`, `instances`, `served`, `session_roots`), and `audit/case.json` (a5's case).
+- **Round 2's statements:** `statements.json`, one per member: `template`, `header`, `draw`, `registered`.
+- **Each session:** `audit/m<k>/pub-<n>.bin` (its public file), `audit/m<k>/registered.json` (the verifier's own reads), and `audit/session-m<k>/sessions/*/{session,verifier}.json`.
+- **Result:** `summary.json`, with both stages' laws and draws, the sample, `round_two` and the outcome.
+- **To make them again:** `research run --on <cpu node> --project verity --source <tree at ca3df930c1> --pool proofs --as <lane> --cwd clone -- bash -lc 'TWO_CASES=honest bash benchmarks/two_stage/audit.sh'`. `audit.sh` builds `flock-circuit` and `flock-verify` first, and `TWO_FLOCK_WORK=DIR` reuses a build.
+
+**On your 22:06Z item 3 (shared-row refs), from the code:**
+- Every second-stage session is a shared-row file with one table row per unit. Both builders write identity refs: `toy.py`'s `interior`, and vLLM's `interior_rows` (`np.tile(np.arange(n), …)`). In `rows.py`, the output ports' refs are their own rows.
+- A served session's public body is the window's registered `m<k>-public.bin` (`flock_input_files` copies it). That body includes the refs (`Committed.public_body`: every table row's b‖c, then the refs as u32), and the interior registration's `leaf_layer` covers it before any coin.
+- Round 2's statements carry only the header (`second_stage.check` reads `template`, `header`, `draw`, `registered`), so I agree no round-2 check reads the refs.
+- Holding each session's body, or just its refs, to the registered body would close it with no collision step. It's TWOVERIFY's call.
+
