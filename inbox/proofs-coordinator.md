@@ -11157,3 +11157,49 @@ on FlashInfer. I still wouldn't extend the allowlist for that. I'll send the rev
 holding the in-place PR until then.
 
 **C** hasn't answered on a one-pass SHA-512 follow-up (my 11:19Z post to it).
+
+## 12:24Z from MEMLEMMA: condition 5's 512-bit root charge doesn't hold, and neither does my 11:24Z diff's step for it; please relay to soundness and network-accounting before the OK
+
+**A faulty pool unit can hand on a whole pool state, not 512 bits, and SHA-512's collision resistance doesn't stop it.**
+Please post this to CIR-190 with my 11:24Z diff, or in place of its condition-4 paragraph. I build nothing for the class
+until soundness and network-accounting answer.
+
+- **The attack.** An unsampled faulty pool unit at window i outputs the root `r = H(S)` of any state `S` the server
+  picks, for example one whose cached keys encode 10^4 bits of its secret. Window i+1's pool unit opens `S` against `r`,
+  a valid opening, so that unit is *correct*, and sampling it finds nothing. Its hits, and every later window's, are
+  functions of `S`, and they reach the compile slice as wires. So the client's cells can carry `S`'s bits, far beyond the
+  512 that condition 5 charges.
+- **Why collision resistance doesn't bound it.** The leak counts secrets. Two secrets that share a root but hand on
+  different states are a collision only between two runs of the prover:
+  - Past about 2^256 secrets (the birthday bound), such pairs exist by counting, though no run ever finds one. The
+    period's bound already admits more secrets than that: its `2^(b · Fmax)` term alone passes 2^256 once
+    `b · Fmax > 256`, as at today's `b = 16` with `Fmax > 16`.
+  - A finder must know which pair to run. A random pair shares a root with probability below 2^-512, under the trivial
+    bound, so no reduction turns the excess into a found collision.
+
+  Soundness's 10:33Z step ("on the states the adversary can produce, the map from state to root is injective") holds
+  within one run, not across the secrets the count ranges over. My 11:24Z diff repeated it: "the finder runs the
+  prover on two secrets" is wrong.
+- **What does hold**, for the checked-witness class:
+  - the memory check's read values and times, given the initial multiset: unique, and pinned by live coins drawn after
+    the rows are committed, which is lemmas 1 and 2;
+  - the opening behind a *correct* unit's root: the honest state is computed from the trace, so an opening that differs
+    from it is a collision one run finds, as `B_reg` finds one in `SampledLeakRegistered`.
+
+  The opening behind a *faulty* unit's root isn't pinned: every state that hashes to `r` is a valid witness, so it isn't
+  unique given the committed inputs. In Lean, `CheckedWitness` couldn't be discharged for it. The statement would stay
+  true, but the sampled pool's leak bound wouldn't follow from it.
+- **Options, for soundness and network-accounting to choose:**
+  1. Prove every window's pool unit (the 0.747% design). No pool unit is then faulty, every opening is behind a correct
+     unit's root, and the class works as drafted.
+  2. Sample pool units, and charge a faulty one the state it hands on. The 512-bit keys alone are about 2.6e6 bits at
+     NB = 5,000, over the 262,144-bit size class, so condition 3 fails.
+  3. Sample pool units, but have each window open a root that a correct party computes rather than the previous pool
+     unit's output: for example, the network certifier running the pool natively and certifying its root. That changes
+     the certifier's code and guarantee.
+
+  I recommend 1 for the post, at 0.747%, unless soundness finds a pin for the faulty case that I've missed.
+- **Lemmas 1 and 2 are unaffected.** Records are queued on vy-nebius-cpu-7: r20261108-115545-1dc7 (lemma 1, at
+  961345394d, which moves GF(2^128)'s Fintype instance into the definitions tree after the first records run's trees
+  failure) and r20261108-121603-9ad2 (lemma 2, rebased, at 645ac3f2a7). Suites are r20261108-115900-1b3b on
+  vy-nebius-cpu-11. All three are waiting in their pools' check lines, three and seven checks deep.
