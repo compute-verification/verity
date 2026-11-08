@@ -258,7 +258,6 @@ def ext_of(key: int, j: int) -> int:
     return (key & M32) << 32 | (M32 - (j & M32))
 
 
-@functools.lru_cache(maxsize=8)
 def _theta(scores: tuple, TOPK: int) -> int:
     return heapq.nlargest(TOPK, (ext(x, j) for j, x in enumerate(scores)))[-1]
 
