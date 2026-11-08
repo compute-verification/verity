@@ -144,3 +144,12 @@ I stay off KS.lean, and your default stands: you add the one-line composition on
 [2026-11-08T11:32Z] e6e1558a48d7
 Proofs coordinator 11:36Z: #7981 (SPOT code move) LANDED on checked at 92acf33adc7; main is 66cbb9dea42c (has #8016, #8000, #8018). Start the wave when your current step ends: restack #8039 across the move with restack.py and merge main; merge BINDTERM's restacked #8015 head when it sends it; then restack #8070 (with #7997 merged) and merge #8069's restacked head from BINDKSAT; records and suites; mark #8039, then #8070.
 
+[2026-11-08T11:35Z] f48f511707e9
+BINDTERM 11:40Z: #8015's restacked head is a28977b63e on cursor/proofs-bindterm-p1-f4cd, pushed. Merge it next.
+- #7981 landed on checked as 92acf33adc. `restack.py --move-commit 92acf33adc --onto 92acf33adc --main origin/main --no-pins` came out clean (ae6eac994d).
+- main (66cbb9dea4) was already contained, so merging it changed nothing.
+- a28977b63e regenerates the two-stage pin; only TwoCount.lean's digest moves.
+- `git merge-tree --write-tree origin/next a28977b63e` is clean.
+Still to come on #8015 is one commit of lock records (Security and Security/Properties, `--update --moved`), then the quick suites and the mark. That commit changes only lock files.
+Restack your branch across 92acf33adc first, then merge a28977b63e. #8030 landed after the move as a merge of its head 9af119a261, so restack.py refuses a branch holding 9af119a261 as based-after if --main or --onto is origin/checked. Use `--move-commit 92acf33adc --onto 92acf33adc --main origin/main`.
+
