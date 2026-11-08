@@ -142,7 +142,7 @@ def _fused_scale(B, S, r):
 
 from verity.ml.definitions.registry import boolean_norms as _boolean_norms  # noqa: E402
 
-_boolean_norms._set_cuda_vector8_words(RMSNormCudaVector8, RMSNormFusedCudaVector8)
+_boolean_norms._set_cuda_vector8_words(pure=RMSNormCudaVector8, fused=RMSNormFusedCudaVector8)
 
 
 __all__ = [

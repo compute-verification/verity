@@ -40,6 +40,11 @@ returns beside its sum (`RMSNormSquare_v1`, `RMSNormSquareFma_v1`, `RMSNormThrea
 own, shared through `forms`' CSE); the rest are the output piece, which reads both decodes. So the row's members share no gate,
 and Triton's output pass recomputes nothing of the thread pass that reads the same x.
 
+The vector-8 paths cut at their scale (`cuda_rmsnorm_split`) are separate units: `RMSNormSumSqCudaVector8_v2` and
+`RMSNormFusedSumSqCudaVector8_v2{N, EPS, BLOCK, RSQRT}` are the path up to s, and `RMSNormApplyCudaVector8_v2` and
+`RMSNormFusedApplyCudaVector8_v2{G}` are the output row on G elements. An apply unit holds no square, so it computes each
+element's decode alone (`RMSNormDecodeCuda_v1`), and the fused one redoes its residual adds.
+
 MUFU: ``RSQRT``, ``SQRT``, ``SCALEA`` and ``RCP`` are statics: Definitions on bits (`verity.ml.circuits.ops.boolean.mufu`) whose
 word Definitions are `RsqrtApprox_v1`, `MufuSqrtFtz_v1`, `DivFullScaleA_v1` (or `_v2`, equal on the numerator 1.0) and
 `DivFullRcp_v1`, or those word ids themselves (`MUFU_WORD`). A word id is called on words: the norm packs a value into its word
@@ -77,8 +82,9 @@ from verity.ml.definitions.registry import value_inputs as VI
 from verity.ml.definitions.registry.sampling import bit_at
 from verity.ml.definitions.registry.traced_parts import replay, split
 
-__all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormCudaVector8", "RMSNormFusedCuda", "RMSNormFusedCudaIn",
-           "RMSNormFusedCudaVector8", "RMSNormTriton", "RMSNormTritonIn", "TRITON_WORD", "UnpackF32", "rmsnorm_cuda_calls",
+__all__ = ["CUDA_WORD", "MUFU_WORD", "PackF32", "RMSNormApplyCudaVector8", "RMSNormCudaVector8", "RMSNormFusedApplyCudaVector8",
+           "RMSNormFusedCuda", "RMSNormFusedCudaIn", "RMSNormFusedCudaVector8", "RMSNormFusedSumSqCudaVector8",
+           "RMSNormSumSqCudaVector8", "RMSNormTriton", "RMSNormTritonIn", "TRITON_WORD", "UnpackF32", "rmsnorm_cuda_calls",
            "rmsnorm_triton_calls"]
 
 BIT = BL.BIT
@@ -191,15 +197,16 @@ def _word_view(word, statics: tuple[str, ...], mufu: tuple[str, ...] = ()) -> Ca
     return view
 
 
-def _set_cuda_vector8_words(pure: CompositeDefinition, fused: CompositeDefinition) -> None:
-    """Link these family Definitions to the CUDA word Definitions without importing that non-family module."""
-    _CUDA_VECTOR8_WORDS.update(pure=pure, fused=fused)
+def _set_cuda_vector8_words(**words: CompositeDefinition) -> None:
+    """Link these family Definitions to the CUDA word Definitions without importing those non-family modules."""
+    _CUDA_VECTOR8_WORDS.update(words)
 
 
-def _cuda_vector8_word(kind: str) -> Callable[[dict], object]:
+def _cuda_vector8_word(kind: str, statics: tuple[str, ...] = ("N", "EPS", "BLOCK"),
+                       mufu: tuple[str, ...] = ("RSQRT",)) -> Callable[[dict], object]:
     def view(b: dict):
-        _check_mufu(b, ("RSQRT",))
-        return bind(_CUDA_VECTOR8_WORDS[kind], **{k: b[k] for k in ("N", "EPS", "BLOCK")})
+        _check_mufu(b, mufu)
+        return bind(_CUDA_VECTOR8_WORDS[kind], **{k: b[k] for k in statics})
     return view
 
 
@@ -338,6 +345,10 @@ RMSNormSquare = _traced("RMSNormSquare", 1, (), _sq_sig(("z", BF16)),
 RMSNormSquareFma = _traced("RMSNormSquareFma", 1, (), _sq_sig(("z", BF16), ("acc", F32)),
                            lambda S: TR.trace(_square_fma, [BF16, F32], Tuple(F32, _bits(_dec_bits("cuda")))),
                            "(F32Fma_v1(f32(z), f32(z), acc), z's decode for `RMSNormOutCuda_v1`): the fused norm's next square")
+RMSNormDecodeCuda = _traced("RMSNormDecodeCuda", 1, (), lambda S: ((("z", BF16),), _bits(_dec_bits("cuda"))),
+                            lambda S: _out_parts("cuda")[1],
+                            "z's decode for `RMSNormOutCuda_v1` without its square: an apply unit's, whose squares another "
+                            "unit computes")
 RMSNormThreadTriton = _traced("RMSNormThreadTriton", 1, (), _thread_sig,
                               lambda S: TR.trace(_thread, [Array(TRITON_COLS, BF16)], _thread_sig(S)[1]),
                               "one Triton thread's 8 columns: acc = x1 * x1, then FFMA x0, x2, ..., x7 (F32Mul_v1, F32Fma_v1), "
@@ -655,7 +666,8 @@ def RMSNormVectorLanesCuda(B, S, x, res=None):
     return tuple_of(array_of([row[e] for e in range(S.N)]), array_of([dec[e] for e in range(S.N)]), array_of(partials))
 
 
-def _vector8_calls(B, S, x, w, res=None):
+def _vector8_scale(B, S, x, res=None) -> tuple[Coll, Coll]:
+    """The lanes and the scale s: the warp sums, `variance / N + EPS` and RSQRT."""
     fused = res is not None
     _check_cuda_vector8(S, fused=fused)
     lanes_spec = bind(RMSNormVectorLanesCuda, N=S.N, BLOCK=S.BLOCK, FUSED=fused)
@@ -663,9 +675,13 @@ def _vector8_calls(B, S, x, w, res=None):
     T = min(S.N // CUDA_VECTOR, S.BLOCK)
     sums = B.call(bind(RMSNormWarpsCuda, T=T), lanes[2])
     arg = B.call(bind(RMSNormArgCuda, N=S.N, EPS=S.EPS, NW=-(-T // WARP)), sums)
-    scale = _mufu(B, S.RSQRT, _F32(B, bits=arg)).bits()
+    return lanes, _mufu(B, S.RSQRT, _F32(B, bits=arg)).bits()
+
+
+def _vector8_calls(B, S, x, w, res=None):
+    lanes, scale = _vector8_scale(B, S, x, res)
     out = B.call(bind(RMSNormOutRowCuda, N=S.N), lanes[0], lanes[1], scale, B.call(RMSNormScaleCuda, scale), w)
-    return tuple_of(out, lanes[0]) if fused else out
+    return tuple_of(out, lanes[0]) if res is not None else out
 
 
 @_on_bits("RMSNormCudaVector8", 2, ["N", "EPS", "BLOCK", "RSQRT"],
@@ -683,6 +699,46 @@ def RMSNormCudaVector8(B, S, x, w):
 def RMSNormFusedCudaVector8(B, S, x, res, w):
     """`RMSNormFusedCudaVector8_v1` on bits, including both in-place output rows."""
     return _vector8_calls(B, S, x, w, res)
+
+
+# --- the vector-8 paths cut at their scale (`cuda_rmsnorm_split`) ------------------------------------------------------------
+
+@_on_bits("RMSNormSumSqCudaVector8", 2, ["N", "EPS", "BLOCK", "RSQRT"],
+          lambda S: ((("x", Array(S.N, BF16)),), F32), _cuda_vector8_word("sumsq"), word_statics=CUDA_WORD)
+def RMSNormSumSqCudaVector8(B, S, x):
+    """`RMSNormSumSqCudaVector8_v1` on bits: `RMSNormCudaVector8_v2` up to its scale."""
+    return _vector8_scale(B, S, x)[1]
+
+
+@_on_bits("RMSNormFusedSumSqCudaVector8", 2, ["N", "EPS", "BLOCK", "RSQRT"],
+          lambda S: ((("x", Array(S.N, BF16)), ("res", Array(S.N, BF16))), F32), _cuda_vector8_word("fused_sumsq"),
+          word_statics=CUDA_WORD)
+def RMSNormFusedSumSqCudaVector8(B, S, x, res):
+    """`RMSNormFusedSumSqCudaVector8_v1` on bits: `RMSNormFusedCudaVector8_v2` up to its scale."""
+    return _vector8_scale(B, S, x, res)[1]
+
+
+def _apply_row(B, G: int, r: Coll, w: Coll, scale: Coll) -> Coll:
+    rd = B.batch(RMSNormDecodeCuda, r, axes=(0,))
+    return B.call(bind(RMSNormOutRowCuda, N=G), r, rd, scale, B.call(RMSNormScaleCuda, scale), w)
+
+
+@_on_bits("RMSNormApplyCudaVector8", 2, ["G"],
+          lambda S: ((("x", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("scale", F32)), Array(S.G, BF16)),
+          _cuda_vector8_word("apply", ("G",), ()))
+def RMSNormApplyCudaVector8(B, S, x, w, scale):
+    """`RMSNormApplyCudaVector8_v1` on bits: each element's decode (`RMSNormDecodeCuda_v1`), then `RMSNormOutRowCuda_v1{G}`."""
+    return _apply_row(B, S.G, x, w, scale)
+
+
+@_on_bits("RMSNormFusedApplyCudaVector8", 2, ["G"],
+          lambda S: ((("x", Array(S.G, BF16)), ("res", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("scale", F32)),
+                     Tuple(Array(S.G, BF16), Array(S.G, BF16))),
+          _cuda_vector8_word("fused_apply", ("G",), ()))
+def RMSNormFusedApplyCudaVector8(B, S, x, res, w, scale):
+    """`RMSNormFusedApplyCudaVector8_v1` on bits: the residual adds, then `RMSNormApplyCudaVector8_v2`'s row on their sums."""
+    r = B.batch(EW.Bf16AddF2fp, x, res, axes=(0, 0))
+    return tuple_of(_apply_row(B, S.G, r, w, scale), r)
 
 
 # --- the Triton norm (vLLM's batch-invariant _rms_norm_kernel) ------------------------------------------------------------------

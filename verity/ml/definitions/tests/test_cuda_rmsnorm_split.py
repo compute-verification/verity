@@ -2,8 +2,9 @@
 row's elements [j·G, (j+1)·G), their weights and the sum of squares' scale), return `RMSNormCudaVector8_v1`'s and
 `RMSNormFusedCudaVector8_v1`'s outputs word for word on `test_rmsnorm_fused_add`'s rows: Gaussian rows at three scales,
 uniformly random words (NaN, ±inf, ±0 and subnormals among them), and rows whose residual add, squares or variance
-overflow, underflow or cancel. Their gates are the kernels' plus the N residual adds the fused apply units redo, and at
-GLM-5.3's hidden width each unit fits a Flock proof block and returns at most G words of a row."""
+overflow, underflow or cancel. Their gates are the kernels' plus the N residual adds the fused apply units redo, their
+Boolean versions (`boolean_norms`' `_v2`) return their words, and at GLM-5.3's hidden width each unit fits a Flock proof
+block and returns at most G words of a row."""
 from __future__ import annotations
 
 import importlib.util
@@ -13,8 +14,12 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.ml.circuits import boolean as BL
+from verity.ml.circuits.boolean import trace as TR
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits.evaluation import evaluate
+from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import cuda_rmsnorm as C
 from verity.ml.definitions.registry import cuda_rmsnorm_split as NS
 from verity.ml.windows import interface as IF
@@ -67,6 +72,25 @@ def test_their_gates_are_the_kernels_and_the_fused_apply_units_redo_the_residual
     sumsq, apply = _units(N, EPS, BLOCK, G, fused)
     split = _gates(sumsq) + Counter({gate: n * (N // G) for gate, n in _gates(apply).items()})
     assert split == _gates(_norm(N, EPS, BLOCK, fused)) + Counter({"Bf16AddF2fp_v1": N if fused else 0})
+
+
+@pytest.mark.parametrize("fused", [False, True])
+def test_on_bits_each_unit_is_the_switchs_boolean_version_and_returns_its_words(fused):
+    """The switch takes each word unit to `boolean_norms`' `_v2`, RSQRT bound to mufu's Boolean version; on every row kind
+    that returns the word unit's words, the apply unit on the row's first G elements."""
+    N, EPS, BLOCK, G = 64, 1e-6, 8, 16
+    rows = _rows(np.random.default_rng(7), N)
+    x, res, w = (np.stack([r[k] for r in rows]) for k in (1, 2, 3))
+    ins = (x, res) if fused else (x,)
+    sumsq, apply = _units(N, EPS, BLOCK, G, fused)
+    for word in (sumsq, apply):
+        bits = boolean_version(word)
+        assert BL.is_boolean(bits) and TR.word_of(bits).id == word.id
+    scale = BS.evaluate_words(boolean_version(sumsq), *ins).reshape(len(rows))
+    assert scale.tolist() == [_flat(evaluate(sumsq, *([int(v) for v in a[i]] for a in ins)))[0] for i in range(len(rows))]
+    part = [a[:, :G] for a in (*ins, w)]
+    got = BS.evaluate_words(boolean_version(apply), *part, scale).reshape(len(rows), -1)
+    assert got.tolist() == [_flat(evaluate(apply, *([int(v) for v in a[i]] for a in part), int(scale[i]))) for i in range(len(rows))]
 
 
 def _row_bytes(fn) -> list[int]:

@@ -5,13 +5,15 @@ reads G elements of the row, their G weights and that scale, and returns those G
 squares is the kernel's own reduction (`cuda_rmsnorm._pure_scale`, `_fused_scale`) and an apply unit is the kernel's own
 epilogue (`cuda_rmsnorm._out`) on its elements, so N / G apply units return the kernel's outputs word for word. The fused
 apply redoes the residual add on its G elements, so the cut adds N residual adds to the fused kernel's gates and none to
-the pure kernel's (`verity/ml/definitions/tests/test_cuda_rmsnorm_split.py`).
+the pure kernel's (`verity/ml/definitions/tests/test_cuda_rmsnorm_split.py`). Their Boolean versions are `boolean_norms`'
+units of the same names, `_v2`.
 """
 from __future__ import annotations
 
 from verity.ml.circuits.defs import composite
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple
+from verity.ml.definitions.registry import boolean_norms as BN
 from verity.ml.definitions.registry import cuda_rmsnorm as C
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry.prims import BF16, F32
@@ -54,6 +56,9 @@ def RMSNormFusedApplyCudaVector8(B, S, x, res, w, scale):
     r = B.batch(P.Bf16AddF2fp, x, res, axes=(0, 0))
     return tuple_of(C._out(B, r, w, scale), r)
 
+
+BN._set_cuda_vector8_words(sumsq=RMSNormSumSqCudaVector8, fused_sumsq=RMSNormFusedSumSqCudaVector8,
+                           apply=RMSNormApplyCudaVector8, fused_apply=RMSNormFusedApplyCudaVector8)
 
 __all__ = ["RMSNormApplyCudaVector8", "RMSNormFusedApplyCudaVector8", "RMSNormFusedSumSqCudaVector8",
            "RMSNormSumSqCudaVector8"]
