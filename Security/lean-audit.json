@@ -3259,6 +3259,11 @@
    "issue": "LEAN-186",
    "due": "2026-11-07"
   },
+  "WeightSecurity.Assumptions.FaultedUseHard": {
+   "owner": "@proofs",
+   "issue": "PRF-413",
+   "due": "2026-11-10"
+  },
   "WeightSecurity.Assumptions.HonestUseHard": {
    "owner": "@proofs",
    "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
@@ -4304,6 +4309,10 @@
   "WeightSecurity.SecurityProofs.TheftServed": {
    "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
    "nontrivial": "WeightSecurity.SecurityProofs.TheftServedNontrivial"
+  },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftFaultedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftFaultedNontrivial"
   },
   "Claims.Encodings.byPosBinds": {
    "honest": ["Claims.Encodings.byPosBinds_honest"],
@@ -24944,6 +24953,39 @@
    "type_hash": "b323b0ddb8d347a1e79ca51622e9dd6ebbc41d28b222cf7d660533cfd063df78",
    "unfolded_hash": "8c615bde1cdacd4dac5a22f58ecda777d30d4f11db7b56f1ea2a1681043f506b"
   },
+  "WeightSecurity.SecurityProofs.TheftFaulted": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaulted : WeightSecurity.Guarantees.TheftFaulted"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["WeightSecurity.Served.UndetectedLe"],
+    "open": ["WeightSecurity.Assumptions.FaultedUseHard", "WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
+    "reads": []
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedHonest": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaultedHonest : WeightSecurity.Guarantees.TheftFaultedHonest"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": ["WeightSecurity.Assumptions.FaultedUseHard", "WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"]
+   }
+  },
+  "WeightSecurity.SecurityProofs.TheftFaultedNontrivial": {
+   "owner": "@proofs",
+   "signature": ["WeightSecurity.SecurityProofs.TheftFaultedNontrivial : WeightSecurity.Guarantees.TheftFaultedNontrivial"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   }
+  },
   "WeightSecurity.SecurityProofs.TheftServed": {
    "owner": "@proofs",
    "signature": ["WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed"],
@@ -25974,6 +26016,7 @@
    "Pouw.SecurityProofs.PeriodBindingPerProver_nontrivial": "lemma: PeriodBindingPerProver's nontrivial witness (LEAN-66): at onePeriod with every proof accepted, opening every slot to the coin bit by a verified path, kappa is 0 and the bound at q = 0, which is 0, fails, since the opened bit moves with every fresh sample; a counterexample about no protocol function (CMP-33).",
    "Flock.SecurityProofs.SampledKSTwo": "frozen (obligation,no-function): ksTwo_code at the deployed round order (SamplingDeploy.codeTwoAt), knowledge sound at SHA-512 from UniformRandomBytes at each challenger call (CallsUniform) and six facts of the code (RegMatchesTwo, Code.RefusesTwo, Code.InteriorFixed, SessionRuns, SessionsIn, SessionOpensTwo), open until Spot.Run.run's checks prove them; it reads SampledKSTwo (Security/Proofs/Flock/SamplingGeneric/Guarantees.lean) over SamplingGeneric's code record, still in Proofs, so the lock records its text, and it takes the shape when its facts are proved at the verifier's run and its statement moves into a Guarantees module of the spec.",
    "WeightSecurity.SecurityProofs.TheftServed": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Served.lean), under honest-use hardness (WeightSecurity.Assumptions.HonestUseHard), the served channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the releases' locality as a probability term that the network certifier and the dataflow are to discharge; it reads no function's acceptance.",
+   "WeightSecurity.SecurityProofs.TheftFaulted": "frozen (no-function): It bounds the probability that an arbitrary outsider steals the weights from an audited deployment whose run is a game of the audit's coins (Security/Definitions/WeightSecurity/Faulted.lean), with the audit's incorrect blocks as fault inputs to a faulted circuit rather than as overwrites of releases, under honest-use hardness on a typical set of weights (WeightSecurity.Assumptions.HonestUseHard), the model claim that the faulted circuit is as hard to use at fault budget M (WeightSecurity.Assumptions.FaultedUseHard), the fault channel's simulability (WeightSecurity.Assumptions.Simulable) and the bound on what the audit leaves undetected (WeightSecurity.Served.UndetectedLe), with the atypical weights and the releases' faithfulness to the faulted run as probability terms, the second of which the network certifier's tie of each release to a trace of a checked dataflow discharges (Population.Dataflow.determinate_of_checked); it reads no function's acceptance.",
    "Pouw.NCP.GameProofs.gapFromTTNCP": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.GapFromTT": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TT, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
    "Pouw.SecurityProofs.NCP.GapFromTTNCP_U_C2": "frozen (conjecture,no-function,hash): It is a consequence of the named open conjecture TTNCP_U, stated over the PoUW game, whose oracle H is drawn uniformly and whose commitments are ideal (Security/Definitions/Pouw/Game/Defs.lean:14, :33), not over a Lean function.",
