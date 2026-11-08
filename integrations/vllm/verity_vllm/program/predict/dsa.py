@@ -28,7 +28,8 @@ select: `common.select_token`).  A row of more than INDEX_TOPK keys selects its 
 does, with no `run` value: at the row's class (`vllm_dsa.long_row_keys`, its keys rounded up to a multiple of INDEX_TOPK, the
 logits past its own `PAD_SCORE` and their history rows zero) DsaTopKMask marks the logits' top-TOPK set, DsaButterflySettings
 sets the concentrator from it, and both kinds of layer read the TOPK rows DsaButterflyRows routes at those settings, the set's in
-ascending index order (the order `VERITY_DSA_TOPK=canonical` serves).  A fact outside it raises
+ascending index order (the order `VERITY_DSA_TOPK=canonical` serves); below its class through DsaButterflyRowsPad, the history and
+its pad two arguments, so a row's history is the row before's plus one part in the descriptor.  A fact outside it raises
 `Unexpressible`, φ's when the decoder is made and a launch's (a step whose prefills the batch does not fix, more context than one
 chunk is sure to hold, a GEMM, all-reduce or MoE tile no record covers) when the launch is written.
 """
@@ -438,8 +439,10 @@ class _Model:
             if n > TOPK:
                 N = long_row_keys(n, TOPK)
                 if N > n:
-                    kv = logs["latent"].cut(n, [self.pad(16, 0, pad_words(TOPK, KVL + R), (N - n) * (KVL + R))])
-                kv = self.call(self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
+                    kv = self.call(self.k("dsa_butterfly_rows_pad", T=n, N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv,
+                                   self.pad(16, 0, pad_words(TOPK, KVL + R), (N - n) * (KVL + R))).refs
+                else:
+                    kv = self.call(self.k("dsa_butterfly_rows", N=N, TOPK=TOPK, W=KVL + R), self.topk[pos0 + i].refs, kv).refs
             att.append(self.call(self.k("sparse_mla_split", T=min(n, TOPK), NS=by_keys[min(n, TOPK)], NH=NH, DR=R, DV=KVL, BN=G["BN"],
                                         DOT=G["DOT"], INV=G["INV"], SM_SCALE=float(C["ATTN_SCALE"])), ql[i], qpe[i], kv).refs)
         return self.fp8_linear(self.absorb(att, w("w_uv"), NH, KVL, VH), w("o_w"), w("o_ws"))

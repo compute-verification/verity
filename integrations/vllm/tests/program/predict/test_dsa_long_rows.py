@@ -1,8 +1,8 @@
 """verity_vllm.program.predict.dsa past INDEX_TOPK: a row of more than INDEX_TOPK keys selects its top-k in the mask form, as
 the Build's `vllm_dsa` rule does, with no `run` input and no checks: at the row's class (`vllm_dsa.long_row_keys`, its keys
 rounded up to a multiple of INDEX_TOPK, the logits past its own `PAD_SCORE`) `DsaTopKMask_v1` of its logits, the settings
-`DsaButterflySettings_v1` computes from that mask, and the TOPK history rows `DsaButterflyRows_v1` routes at them, the top-k set's
-in ascending index order (the canonical row, which an engine under `VERITY_DSA_TOPK=canonical` serves).
+`DsaButterflySettings_v1` computes from that mask, and the TOPK history rows `DsaButterflyRows_v1` routes at them
+(`DsaButterflyRowsPad_v1` below the class, the history and its pad two arguments), the top-k set's in ascending index order (the canonical row, which an engine under `VERITY_DSA_TOPK=canonical` serves).
 
 GLM-5.3's checkpoint is cut to its first 4 layers (three full indexers, then one that shares the third's top-k) and its
 INDEX_TOPK to 4, so a few rows reach past it without the 2,048 keys of the served one."""
@@ -38,7 +38,7 @@ from tests.program.predict.test_steps import GREEDY, HF_CONFIG_DIR, _class_g, _s
 TOPK = 4
 I32 = Value(32)
 BIT = Value(1)
-MASK_FORM = ("DsaTopKMask_v1", "DsaButterflySettings_v1", "DsaButterflyRows_v1")
+MASK_FORM = ("DsaTopKMask_v1", "DsaButterflySettings_v1", "DsaButterflyRowsPad_v1")
 RUN_FORM = ("DsaWaksmanOrder_v1", "DsaTopKLongRow_v1", "DsaWaksmanRows_v1")
 CTX131K = os.environ.get("VERITY_VLLM_CTX131K", "")
 
@@ -75,42 +75,58 @@ def _no_run(r) -> bool:
 def test_a_row_past_index_topk_selects_its_top_k_in_the_mask_form(phi):
     """A step of 6 rows: rows 4 and 5 have 5 and 6 keys, both of class 8. Each full indexer layer marks each such row's top-k
     set (DsaTopKMask) and sets the concentrator from it (DsaButterflySettings); every layer, the shared one included, reads the
-    TOPK rows DsaButterflyRows routes at those settings, and the sparse MLA reads TOPK rows. The Program reads no `run` input
-    and returns no checks."""
+    TOPK rows the concentrator routes at those settings over the row's history padded to 8 (DsaButterflyRowsPad), and the sparse
+    MLA reads TOPK rows. The Program reads no `run` input and returns no checks."""
     r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
     assert _no_run(r) and r.program.fn.signature()[1] == Array(1, I32)
     fam = _families(r)
     assert [fam[f] for f in MASK_FORM] == [6, 6, 8] and fam["DsaTopKShortRow_v1"] == 12 and fam["DsaMqaLogits_v3"] == 18
     assert not any(fam[f] for f in RUN_FORM)
     assert {(n.fn.bindings["N"], n.fn.bindings["TOPK"]) for n in _calls(r, "DsaTopKMask_v1")} == {(8, TOPK)}
-    assert {(n.fn.bindings["N"], n.fn.bindings["K"], n.fn.bindings["W"]) for n in _calls(r, "DsaButterflyRows_v1")} == {(8, TOPK, 576)}
+    assert not fam["DsaButterflyRows_v1"]
+    assert {tuple(n.fn.bindings[k] for k in "TNKW") for n in _calls(r, "DsaButterflyRowsPad_v1")} == {(5, 8, TOPK, 576), (6, 8, TOPK, 576)}
     assert [n.fn.bindings["T"] for n in _calls(r, "SparseMlaSplit_v1")] == [min(i + 1, TOPK) for i in range(6)] * 4
 
 
 def test_a_long_rows_keys_past_its_own_score_the_pad(phi):
     """Row 4's mask reads its 5 logits, then the first 3 words of the Program's one block of PAD_SCORE (a batch of the constant,
-    TOPK - 1 words), one run of references; its rows past its own are the first 3 x 576 words of the one block of zero words.
-    The Program holds those two blocks and no other batch of a constant."""
+    TOPK - 1 words), one run of references; its rows read its 5 history rows, one argument, and the first 3 x 576 words of the
+    one block of zero words, another. The Program holds those two blocks and no other batch of a constant."""
     r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
     nodes = r.program.fn.body.nodes
     first = _calls(r, "DsaTopKMask_v1")[0]
     logits, pad = runs(first.args[0].refs)
     assert logits[0] == "n" and nodes[logits[1]].fn.id.startswith("DsaMqaLogits_v3{N=5,") and logits[2:] == (0, 5)
     assert (nodes[pad[1]].form, nodes[pad[1]].fn.id, nodes[pad[1]].n, pad[2:]) == ("batch", f"Const32[0x{PAD_SCORE:08x}]_v1", TOPK - 1, (0, 3))
-    zero = runs(_calls(r, "DsaButterflyRows_v1")[0].args[1].refs)[-1]
+    rows = _calls(r, "DsaButterflyRowsPad_v1")[0]
+    hist, (zero,) = rows.args[1], runs(rows.args[2].refs)
+    assert rows.fn.bindings["T"] == 5 and hist.type.n == 5 and not any(nodes[x[1]].form == "batch" for x in runs(hist.refs))
     assert (nodes[zero[1]].form, nodes[zero[1]].fn.id, nodes[zero[1]].n, zero[2:]) == ("batch", "Const16[0x0000]_v1", (TOPK - 1) * 576, (0, 3 * 576))
     assert [i for i, n in enumerate(nodes) if n.form == "batch" and n.fn.id.startswith("Const")] == sorted({pad[1], zero[1]})
 
 
 def test_the_shared_layer_reads_the_last_indexer_layers_settings(phi):
-    """Layer 3 (`shared`) selects no top-k of its own: its DsaButterflyRows read layer 2's settings at each row, as the Build's
-    IndexShare layer reads the last indexer layer's selection."""
+    """Layer 3 (`shared`) selects no top-k of its own: its DsaButterflyRowsPad read layer 2's settings at each row, as the
+    Build's IndexShare layer reads the last indexer layer's selection."""
     r = build_program(phi, "step", M=6, pos0=0, with_desc=False)
     nodes = r.program.fn.body.nodes
     settings = [i for i, n in enumerate(nodes) if n.fn.id.startswith("DsaButterflySettings_v1{")]
-    read = [list(runs(n.args[0].refs)) for n in _calls(r, "DsaButterflyRows_v1")]
-    assert all(len(x) == 1 and x[0][0] == "n" for x in read), "each DsaButterflyRows reads one settings call's output"
+    read = [list(runs(n.args[0].refs)) for n in _calls(r, "DsaButterflyRowsPad_v1")]
+    assert all(len(x) == 1 and x[0][0] == "n" for x in read), "each DsaButterflyRowsPad reads one settings call's output"
     assert [x[0][1] for x in read] == [settings[2 * L + k] for L in (0, 1, 2, 2) for k in (0, 1)]
+
+
+def test_a_long_rows_history_is_written_as_the_row_befores_and_its_own_row(phi):
+    """The descriptor writes row 5's history (6 rows) as an alias to row 4's (5 rows) plus row 5's own two parts (its kv_c and its
+    k_pe), in every layer: a row costs the descriptor O(1) at any length. With the pad in the same argument, no earlier argument
+    was a prefix of it, and each row's history was written whole, O(rows^2) a sequence."""
+    r = build_program(phi, "step", M=6, pos0=0, with_desc=True)
+    body = r.desc["definitions"][r.desc["root"]]["body"]["nodes"]
+    pads = [k for k, n in enumerate(body) if str(r.desc["callees"][n["fn"]]).startswith("DsaButterflyRowsPad_v1{")]
+    assert len(pads) == 8
+    for a, b in zip(pads[::2], pads[1::2]):
+        hist = body[b]["args"][1]["refs"]["concat"]
+        assert hist[0] == {"alias": [a, 1]} and len(hist) == 3, hist
 
 
 @pytest.mark.parametrize("n", [5, 6, 7, 8, 9, 13, 16])

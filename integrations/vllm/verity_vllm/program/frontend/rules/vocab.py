@@ -489,6 +489,7 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
            "dsa_topk_mask": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaTopKMask, N=N, TOPK=TOPK),
            "dsa_butterfly_settings": lambda N, TOPK: ir_bind(_dsa_topk_mask.DsaButterflySettings, N=N, K=TOPK),
            "dsa_butterfly_rows": lambda N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRows, N=N, K=TOPK, W=W, E=16),
+           "dsa_butterfly_rows_pad": lambda T, N, TOPK, W: ir_bind(_dsa_topk_mask.DsaButterflyRowsPad, T=T, N=N, K=TOPK, W=W, E=16),
            "dsa_rmsnorm": lambda N, EPS: ir_bind(_dsa_norm.DsaRMSNorm, N=N, EPS=EPS),
            "triton_block_rmsnorm": lambda N, BLOCK, WARPS, EPS: ir_bind(_dsa_norm.TritonBlockRMSNorm, N=N, BLOCK=BLOCK, WARPS=WARPS, EPS=EPS),
            "dsa_kv_rope": lambda D: ir_bind(_rope.RoPEHeadGptJV2, D=D),
@@ -647,6 +648,8 @@ PROFILE_B1_EAGER_V3 = Vocabulary(
                                      "list a mask's members at its first TOPK outputs in index order, computed from the mask",
            "dsa_butterfly_rows": "DsaButterflyRows_v1{N,K=TOPK,W,E=16}: the W-word bf16 rows that butterfly routes to its first "
                                  "TOPK outputs at those settings (one Select and one Xor3 per word a switch)",
+           "dsa_butterfly_rows_pad": "DsaButterflyRowsPad_v1{T,N,K=TOPK,W,E=16}: DsaButterflyRows_v1{N} over a row's T history rows "
+                                     "and then N - T pad rows, the history and the pad two arguments",
            "dsa_rmsnorm": "DsaRMSNorm_v1{N,EPS}: _fused_norm_rope_kernel's cc 9.0 PTX reduction",
            "triton_block_rmsnorm": "TritonBlockRMSNorm_v1{N,BLOCK,WARPS,EPS}: the same reduction over N live elements of a masked BLOCK "
                                    "on 32 WARPS threads (_fused_q_kv_rmsnorm_kernel)",

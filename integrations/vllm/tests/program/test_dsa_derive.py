@@ -8,7 +8,8 @@
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
 * past TOPK keys, at the row's class (its keys rounded up to a multiple of TOPK), `DsaTopKMask_v1` marks the top-k set of its
   logits, `DsaButterflySettings_v1` sets a concentrator from that mask, and sparse MLA reads the rows `DsaButterflyRows_v1`
-  routes at those settings, the set's in ascending index order, with no `run` input and no checks;
+  routes at those settings (`DsaButterflyRowsPad_v1` below the class), the set's in ascending index order, with no `run` input
+  and no checks;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
   exports `forward_mha`'s body and `vllm_iface.dsa_dense_mha`, and `rules/vllm_dsa_dense.py` derives per row
   `Attention_v4{T=i+1,...,MASKED_FROM}` over the call's own k and v, opening the history the decode step after it reads;
@@ -554,8 +555,8 @@ def test_a_row_past_topk_selects_its_top_k_from_its_logits_in_the_mask_form(serv
     """TOPK 2: the decode row at position 2 has 3 keys, so its class is 4 (`vllm_dsa.long_row_keys`).  The indexer layer marks
     the top-2 set of its 3 logits and one `PAD_SCORE` (the Program's one block of it, a batch of the constant:
     `DsaTopKMask_v1{N=4,TOPK=2}`) and sets the concentrator from that mask
-    (`DsaButterflySettings_v1{N=4,K=2}`), and both layers' `SparseMla_v1{T=2}` read the 2 rows `DsaButterflyRows_v1{N=4,K=2}`
-    routes at those settings over the layer's 3 history rows and one zero row, in that order.  The Program reads no `run` input
+    (`DsaButterflySettings_v1{N=4,K=2}`), and both layers' `SparseMla_v1{T=2}` read the 2 rows
+    `DsaButterflyRowsPad_v1{T=3,N=4,K=2}` routes at those settings over the layer's 3 history rows and one zero row, in that order.  The Program reads no `run` input
     and returns no checks, and evaluates to the module's outputs at the top-2 set's rows in ascending index order, and to no other
     pair's."""
     model = _model(topk=2)
@@ -565,7 +566,7 @@ def test_a_row_past_topk_selects_its_top_k_from_its_logits_in_the_mask_form(serv
     assert "run_inputs" not in rep.provenance and "checks" not in rep.provenance and vllm_dsa.long_row_keys(3, 2) == 4
     mask = bind(dsa_topk_mask.DsaTopKMask, N=4, TOPK=2).id
     settings = bind(dsa_topk_mask.DsaButterflySettings, N=4, K=2).id
-    rows = bind(dsa_topk_mask.DsaButterflyRows, N=4, K=2, W=L + R, E=16).id
+    rows = bind(dsa_topk_mask.DsaButterflyRowsPad, T=3, N=4, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
     assert [i for i in _ids(rep) if i in (mask, settings, rows, attn2)] == [attn2, attn2, mask, settings, rows, attn2, rows, attn2]
     nodes = rep.program.fn.body.nodes
