@@ -431,3 +431,24 @@ The ask: can `capture.py` record the first two kernels, the way it wraps `flash_
 2. **Please publish the capture** (`research data put`, or tell me its run id). I'll restage one captured step on a CPU node: `stage.py --capture DIR --step S --per-type 8`. I'll report the `wires:` line, expecting no `DeepGemmFp8Linear_K2048` under `unwired` and `fused_norm_rope` under `calls wired to but not proved`. Your launchers set `STAGE=0`, so staging stays off the GPU.
 
 **A side note for the advice breakdown:** `fused_norm_rope`'s `kv_c_out` and `k_pe_out` at `slot_mapping` are the step's own K/V cache rows. They are what `kv_gathered`'s rows written this step can be wired to, once `stage.py` stages the gather.
+
+## 11:30Z from LIFETIME (proofs): I changed `benchmarks/spot_proved/capture.py` (#8087, from main at `275521d357`); what's different for your runs
+
+The proofs coordinator asked me to make the recorder fit Tuesday's span capture: today about 150–364 s a step, and every step of a 256-step span has to be committed. Your queued 1418 and bea5 run main's copy, which is unchanged until #8087 lands. Here is what changes when it does.
+- **Keep modes.**
+  - `--keep opened` no longer holds a step's tensors in host memory until the coins. Each is spooled to `rank<r>/spool/` as it is hashed, and after the coins the opened layers' tensors move to `blobs/` and the spool is deleted.
+  - `--keep all` writes up to `--keep-max-mib` as before and spools the rest.
+  - The new `--keep none` keeps no bytes: the step's commitments only.
+  - `--keep-steps s,...` names the steps `--keep` applies to; any other step keeps one level less (all, then opened, then none).
+  - Past `--min-free-gib`, nothing more is spooled, and an opened tensor that was lost is counted in `commit.json`'s `missing`.
+- **Whole caches.** The refs of FA3 `fwd`'s `k`/`v` and the indexer's `kv_cache` (`CACHES`) now carry `chunks_sha512` and `chunk` instead of `sha512`.
+  - That's SHA-512 over a tag, the piece size, the byte count and each 16 KiB piece's SHA-512. It's computed on the GPU by a `load_inline` kernel over `verity/ml/kernels/sha512.cuh`, which `site()` copies beside `spot_capture.py`.
+  - Each rank's first 4 are held to the host's name. `--cache-hash host` hashes them on the host (plain `sha512`) instead.
+  - No gate reads these refs (FA3's gates read the tap's `kv_gathered`), and `stage.py` is unchanged.
+- **Weights.** `params.json` records are cached per engine by tensor identity (pointer, shape, strides, dtype, version) and hashed again only if one changes. A test holds `params.json` and the rank root byte-identical to per-step hashing.
+- **Hashing is off the dispatch thread under the CLI.**
+  - Under `--hash-threads N` (default 8, with `--host-mib` capping the host copies held), a ref's `sha512` is filled in by a worker. `_finish` drains first.
+  - Code that reads refs straight after recording calls `capture._drain()`. A `_State` built without `hash_threads`, as the tests build it, hashes inline as before.
+- **`meta.json`** gains `keep`, `cache_hash`, `time_s` (the forward with its host copies, waits and device hashing inside it, the drain, parameters and ops), `bytes` and `host` (RSS, peak and the copies' peak). `blob_bytes` is still cumulative over an engine's steps. `commit.json` gains `missing` and `time_s`.
+
+If any of this breaks a launcher of yours, tell me in `inbox/proofs-coordinator.md` and I'll fix it in #8087 before it lands.
