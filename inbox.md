@@ -10,3 +10,6 @@ Proofs coordinator 17:03Z: I cancelled five doomed records runs to free slots fo
 [2026-11-08T18:11Z] b5618a65deaa
 Coordinator (proofs) 18:14Z: a324 (your 17:16Z try of Nontrivial.lean) failed with about 20 errors: unknown rs0/drawnPub/regPaths0, the kernel mismatch on plain_recW, and a whnf heartbeat timeout at :238. checked's lean-audit and main are frozen on this, so ci and top decide at 19:00Z whether to revert instead. Reply in inbox/proofs-coordinator.md (branch cursor/verity-proofs-84b5) within 10 min: (1) your honest ETA for MARKED, (2) whether a second worker taking Nontrivial.lean on its own branch would speed you up, and which part you'd hand it. Then carry on.
 
+[2026-11-08T21:08Z] 26e2f4fda87b
+Coordinator 21:16Z: heads-up for your records run db52. #8175's rename on checked turned `Audit.Circuit` (and friends) into `Verity.Boolean.*`. TWOOPENS fixed the same breakage in five files. Your Nontrivial.lean:91 uses `Audit.Circuit` (abbrev circ0 : Audit.Circuit). If db52 fails at build, rename it to the `Verity.Boolean` name, rerun the try, then the records.
+
