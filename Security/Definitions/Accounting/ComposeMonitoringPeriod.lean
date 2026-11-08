@@ -36,11 +36,11 @@ import Mathlib.Topology.Sheaves.Init
 /-!
 # PoUW's work over a monitoring period of `n` windows (trusted)
 
-The vocabulary of `Definitions.Accounting.Guarantees.ComposePeriod`. `CircuitWork`'s one window reaches `ε < 1%` only
+The vocabulary of `Definitions.Accounting.Guarantees.ComposeMonitoringPeriod`. `CircuitWork`'s one window reaches `ε < 1%` only
 at about 10,552 equal live rounds, and the served H1 window has 18. A period is up to `n` windows of one declared
 circuit, run in order, each with its own live coins and its own sample, the cheater's play in each window any function
 of the earlier windows' coins. Each window is one round of the period's game, so `ServiceBudget`'s per-window budget
-composes over the period (`Guarantees.ComposePeriod.PeriodBudget`) and the tail is taken once for the period: the
+composes over the period (`Guarantees.ComposeMonitoringPeriod.PeriodBudget`) and the tail is taken once for the period: the
 logical term is divided by the number of windows credited.
 
 Each window says which of its tiles are live. On a masked tile Definition a dead tile's receipt is the canonical empty
@@ -53,7 +53,7 @@ total words.
 A period is credited up to its first window with a refused proof: `n` is the most windows it may hold, and the
 windows from the first failure on count as skipped whole, as dead tiles do. That window is a stopping time of the
 period's coins, which the cheater may steer, and the tail at a stopping time is `budget_tail`'s maximal form
-(`Guarantees.ComposePeriod.PeriodTailMax`, over the game's prefixes: `RoundGame.acceptsUpTo`,
+(`Guarantees.ComposeMonitoringPeriod.PeriodTailMax`, over the game's prefixes: `RoundGame.acceptsUpTo`,
 `RoundGame.deficiencyUpTo`).
 
 * `consGame`: a window's one round, then the rest of the period.

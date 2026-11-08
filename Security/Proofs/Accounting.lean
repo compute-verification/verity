@@ -101,8 +101,8 @@ public import Proofs.Accounting.Responder.Latency
 public import Proofs.Accounting.HMu
 public import Proofs.Accounting.CoinFlow
 public import Proofs.Accounting.Compose
-public import Proofs.Accounting.ComposePeriod
-public import Proofs.Accounting.ComposePeriod.Honest
+public import Proofs.Accounting.ComposeMonitoringPeriod
+public import Proofs.Accounting.ComposeMonitoringPeriod.Honest
 public import Proofs.Accounting.Served
 public import Proofs.Accounting.Additive
 public import Proofs.Accounting.ServingBlocks
@@ -125,8 +125,8 @@ change to the guarantee, or to a definition it reads, changes its record.
 
 * `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
 * `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`: `JointLive.lean`.
-* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposePeriod.CircuitCreditPeriod`:
-  `ComposePeriod.lean`.
+* `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditPeriod`:
+  `ComposeMonitoringPeriod.lean`.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.
 * `CapacityOfStateBound`: `Capacity.lean`; `Memory.Adds`: `Memory.lean`.
 * `BandwidthOfAudit`: `BandwidthAudit.lean`; `Bandwidth.SecurityProofs.AuditRO`: `Bandwidth/AuditRO.lean`.

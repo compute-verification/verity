@@ -1572,6 +1572,15 @@
     },
     {
       "paths": {
+        "Security/Definitions/Accounting/ComposePeriod.lean": "Security/Definitions/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Definitions/Accounting/Guarantees/ComposePeriod.lean": "Security/Definitions/Accounting/Guarantees/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod.lean": "Security/Proofs/Accounting/ComposeMonitoringPeriod.lean",
+        "Security/Proofs/Accounting/ComposePeriod/": "Security/Proofs/Accounting/ComposeMonitoringPeriod/",
+        "Security/Proofs/Accounting/Lemmas/ComposePeriod.lean": "Security/Proofs/Accounting/Lemmas/ComposeMonitoringPeriod.lean"
+      }
+    },
+    {
+      "paths": {
         "benchmarks/numerical/python/verity_numerical/bench/templates.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.py",
         "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.py": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.py",
         "benchmarks/numerical/python/verity_numerical/bench/templates.circuit-check.json": "verity/ml/flock/python/verity_flock/subcircuit_templates.circuit-check.json",
