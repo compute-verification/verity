@@ -11,8 +11,8 @@
     "CoreComposition.Tie",
     "NciCheck.Protocol",
     "PouwCheck.Period",
-    "SampledProofs.OneStage",
-    "SampledProofs.OneStageZk",
+    "Spot.OneStage",
+    "Spot.OneStageZk",
     "VStarRecursive.Sampled"
    ],
    "except": [],

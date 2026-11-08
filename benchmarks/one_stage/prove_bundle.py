@@ -58,7 +58,7 @@ import a0  # noqa: E402
 import a5 as A5  # noqa: E402
 import records_audit as RA  # noqa: E402
 import zk_mutants as ZM  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
 from verity.ml.windows import flock_inputs as FI, rows as CS  # noqa: E402
 from verity_e2e_demo import replay_bundle as RB  # noqa: E402
