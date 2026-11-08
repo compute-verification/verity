@@ -18,6 +18,7 @@ import gzip
 import importlib.util
 import json
 import os
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -1139,11 +1140,16 @@ def test_a_call_whose_partition_is_unchecked_passes_call_status_to_its_callees(c
     (`_unchecked_walk`).  The uncut Calls are the suite's and the range spots' (`circuit_check.ranges`), apart from
     `OVER_PARTITION_BUDGET`'s: they pass nothing, and stay unchecked until their cut lands.  Every other one the walk reaches,
     primitives included, is partitioned by its callees: an uncut primitive callee has none, so it fails here by name rather
-    than leave its Call a ``partition/unchecked`` warning."""
+    than leave its Call a ``partition/unchecked`` warning.  A listed Call that no longer passes a family Call status only warns:
+    it keeps a family a Call, so its partition is checked, never left unchecked."""
     want, _held, gaps = _unchecked_walk(catalog)
-    assert want == {f: set(by) for f, by in TG.CALLEE_CALLS.items()}, (
+    have = {f: set(by) for f, by in TG.CALLEE_CALLS.items()}
+    assert {f: sorted(by - have.get(f, set())) for f, by in want.items() if by - have.get(f, set())} == {}, (
         f"set targets.CALLEE_CALLS to {dict(sorted((f, tuple(sorted(by))) for f, by in want.items()))}, or hold in "
         "OVER_PARTITION_BUDGET, with why, a Call whose callees can't be Calls yet")
+    if stale := {f: sorted(by - want.get(f, set())) for f, by in have.items() if by - want.get(f, set())}:
+        warnings.warn(f"targets.CALLEE_CALLS lists Calls that no longer pass these families Call status: {stale}; drop them",
+                      stacklevel=1)
     assert {f: by for f, by in TG.CALLEE_CALLS.items() if list(by) != sorted(by)} == {}, "list each family's Calls in order"
     assert gaps == {}, ("Calls whose partition nothing checks (`checks.callee_gap`: a callee that is no Call, or a primitive "
                         "over the budget): cut each, or hold it in OVER_PARTITION_BUDGET with why")
