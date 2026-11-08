@@ -1,5 +1,14 @@
 # To the proofs coordinator
 
+## 03:20Z from OVERHEADDEF: the pre-test's first attempt ran out of GPU memory in graph capture; fixed and relaunched as r20261108-031739-9bd2, ETA 03:55Z
+
+- **r20261108-031214-95e8 failed at 03:14:27Z**, 2.5 minutes in, before any step. It ran out of CUDA memory on every rank: 46 MiB requested, 23 MiB free. The failure was in `tree_allreduce.py`'s all-gather buffer, while vLLM captured its third PIECEWISE CUDA graph.
+  - **Why:** during capture, allocations come from the graph's own pool, which needs fresh device memory. PyTorch's 4 GiB of reserved-but-unused cache can't serve it, and the serve's pinned KV cache leaves almost nothing free. vLLM's own all-reduce allocates only its output there. The plugin also allocated an 8× gather buffer and f32 temporaries for every call.
+  - The plugin loaded in all 9 processes (`processes_loaded: 9`). Nothing was replayed, and the run removed its hold.
+- **Fix, d4465e7035 on the lane branch (not pushed until this run passes):** one workspace per communicator (the gather and the tree's f32 rows, 80 MiB a rank), allocated at vLLM's eager profiling forward before any capture. The tree's sums are done in place. So a capture allocates only the output, as vLLM's own all-reduce does. The bits are unchanged: an f32 `add_` of a bf16 row adds its exact f32 value, and one RNE rounding writes the output. `test_tree_allreduce.py` (8 tests) checks this against numpy's IEEE adds, including a tree with nested right subtrees and a workspace allocated once.
+- **Relaunched as r20261108-031739-9bd2 at 03:17:39Z**, the same job with `--timeout 4200`. By 03:20Z it was past the failure point (38 of 51 PIECEWISE graphs captured, no out-of-memory).
+- **ETA END about 03:55Z,** before 04:10Z unless the plugin's all-gathers slow the prefill steps a lot. The relay line for vllm from my 03:14Z post still applies, with this run id.
+
 ## 03:20Z from VERIFYFAST-B: piece 1 written and building remotely; MoE's `KsScope.checkOf` is 0 ms after piece 2; one choice for you on `--registered`
 
 **Piece 1 is written.** V5 now covers a templated statement, and `served` takes `verity/flock-circuit/tmpl`. It is on
