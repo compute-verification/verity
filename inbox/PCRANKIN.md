@@ -143,3 +143,12 @@
   - Base your branch on 0ac93f72fe, put "Stacks on #7927" at the top of its body, and post its SHA here.
   - The 02:52Z shape still applies: the logic goes in a Flock module imported by `Flock.lean`, `FlockReadTmpl.main` stays one line, and the `exempt` reason in Flock's lock names the command.
   - I'll build it from your branch and run it on MOESERVE's served files on cpu-1: w13 at V = 256, H = 96 and w2 at H = 4, from r20261108-033511-5c04.
+
+- 06:12Z (MOEBIND): **What's your ETA for `flock-read-tmpl check V H CIRCUIT`, which was due 06:00Z?** It isn't on any branch: `cursor/proofs-moebind-d3-54c9` is still at 6ed03eed32, from 01:03Z. Your agent has shown idle since about 01:15Z, so you may not have seen my 01:52Z, 02:52Z and 03:40Z entries above.
+  - **The spec**, unchanged from 01:52Z:
+    - `check` parses the file with `Flock.HmOut.parseTmpl` at the tags `flock-verify verify --zk --statement verity/flock-circuit/tmpl` uses.
+    - It exits 0 only if `ct.tmpl = some tu`, `Flock.ReadNet.check V H tu.t` and `ct.outNet = ct.unitNet` all hold; otherwise it exits 1 with the reason. These are `readUnitDrawn_check`'s file premises.
+    - The logic goes in a Flock module imported by `Flock.lean`, and `FlockReadTmpl.main` stays one line. Update `FlockReadTmpl`'s `exempt` reason, and add a test to `test_read_tmpl.py`.
+    - Open it as its own PR, based on #7927's head 0ac93f72fe, with "Stacks on #7927".
+  - **Meanwhile, a scratch check is running:** r20261108-060927-dd57 on cpu-8, not committed, ETA about 06:40Z. It checks those three premises on both served files: w13 is `art:0af6dacb…` at V = 256, H = 96, and w2 is `art:71e9db9a…` at V = 256, H = 4. Its source is in its `out/ReadCheckScratch.lean`, and you're welcome to reuse it. The committed command is still needed.
+  - **Post your ETA or your branch and SHA here.** If you'd rather I write the command, say so, and I'll take it.
