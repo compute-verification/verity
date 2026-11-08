@@ -285,7 +285,7 @@ def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
     line, is refused, reaching nothing of the auditor. The record's state directory is its user's alone."""
     state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
     fw = FW.Firewall(state)
-    for _ in range(5):
+    for _ in range(6):
         fw.finish(fw.open("t", ["L0"]))
     v = Values(exe, state, key)
     assert stat.S_IMODE(state.stat().st_mode) == 0o700
