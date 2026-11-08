@@ -2,6 +2,7 @@ module
 
 public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Toy
+public import Definitions.WeightSecurity.ToyServed
 
 /-!
 # Model weight security
@@ -19,6 +20,12 @@ success is at most the sum over `s` of theirs.
 
 `TheftHonest` and `TheftNontrivial` are its witnesses, and `TheftTight` shows the factor `|S|` is attained, all at the
 toy instance (`Definitions.WeightSecurity.Toy`).
+
+`TheftServed` is `Theft` at an audited deployment (`Definitions.WeightSecurity.Served`). The channel is the served one:
+advice, timing buckets, the overwrites the audit lets through and the halt. The leakage term is the probability `δ` that
+the audit leaves `M` incorrect proof blocks undetected, plus the probability that a release isn't local, which the
+network certifier and the dataflow discharge. Its witnesses
+`TheftServedHonest` and `TheftServedNontrivial` are at the toy deployment (`Definitions.WeightSecurity.ToyServed`).
 -/
 
 @[expose] public section
@@ -68,5 +75,64 @@ def TheftTight : Prop :=
     Claims.Pr (fun z : (Bool × Bool) × Unit =>
         Toy.Stolen (Toy.gen z.1) (Toy.thief.model z.2 (Toy.cheatDC (Toy.gen z.1) z.2) 1)) =
       Fintype.card Toy.oneBit.S * 2⁻¹ + 0
+
+open scoped ENNReal in
+/-- **Model weight security at an audited deployment that serves through the network certifier.** The weights are
+`gen ω` on uniform coins `ω`, and every other coin is one uniform `r` or the audit's own. The deployment serves the
+outsider `Ou`'s `T` queries one per window, and `run θ r` is its run at the weights `θ`, a game of the audit's coins
+(`Served`): each window's release, then its verdict. The deployment halts `L` windows after the first rejection. Suppose:
+
+* every party of the class `A` steals the weights from `T` honest queries with probability at most `p`
+  (`HonestUseHard`);
+* `A` holds `Ou` with each covert string of the served channel written in (`Simulable`): each window's advice and
+  timing bucket, at most `E · M + (L + 1) · |O|` overwritten values and the halt;
+* the audit leaves `M` incorrect proof blocks undetected with probability at most `δ` on every run
+  (`Served.UndetectedLe`).
+
+Then `Ou` outputs a stolen model with probability at most
+$$|S| \cdot p + \delta + \Pr[\neg \mathrm{Local}],$$
+`S` the served channel's covert strings. `Served.Local` says each window's release changes at most `E` slots per
+incorrect proof block. The layers below the composition give it: the network certifier, that what leaves is the
+trace's outputs at its bucket, and the dataflow, that the trace is honest outside the incorrect proof blocks' egress
+cones. Neither layer reads the other. -/
+def TheftServed : Prop :=
+  ∀ {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv] [Fintype O]
+    [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
+    (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
+    (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L E M : ℕ) (δ : ℝ≥0∞)
+    (run : Θ → R → Verity.Game (List (Served O V Tick Adv))),
+    HonestUseHard C gen Stolen T A p →
+    Simulable A Ou (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)) →
+    Served.UndetectedLe M δ run →
+      Verity.Game.avg (fun z : Ω × R => Verity.Game.value
+          (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T))) (run (gen z.1) z.2)) ≤
+        ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) +
+          δ + Verity.Game.avg (fun z : Ω × R =>
+            Verity.Game.value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2))
+
+/-- **`TheftServed`'s premises hold together at the honest toy deployment**, with no halt lag, no slot changed per
+incorrect proof block and the budget `1`. Its served function answers `0`, so two honest queries steal the weights with
+probability at most `1/256` for every party. Every class holds the user with each covert string written in. The honest
+run's audit leaves no incorrect proof block undetected. -/
+def TheftServedHonest : Prop :=
+  HonestUseHard ToyServed.C ToyServed.gen ToyServed.Stolen 2 ToyServed.anyone (1 / 256) ∧
+    Simulable ToyServed.anyone ToyServed.user
+      (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2 (0 * 1 + (0 + 1) * Fintype.card Unit)) ∧
+    Served.UndetectedLe 1 0 ToyServed.honestRun
+
+open scoped ENNReal in
+/-- **`TheftServed`'s bound fails at the verifier that accepts everything.** The leaking toy deployment writes the
+weights into its two releases, one incorrect proof block per window, and its audit accepts on an empty sample. The thief
+then steals the weights on every coin, with every release local and the overwrite budget one value. The bound at
+`p = 1/256` and `δ = 0` is below `1`, so it fails. -/
+def TheftServedNontrivial : Prop :=
+  ¬ Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
+        (fun l => ToyServed.Stolen (ToyServed.gen z.1) (ToyServed.thief.out z.2 (Served.view ToyServed.thief 0 z.2 l 2)))
+        (ToyServed.leakRun (ToyServed.gen z.1) z.2)) ≤
+      ENNReal.ofReal (Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2
+          (1 * 0 + (0 + 1) * Fintype.card Unit)).S * (1 / 256)) + 0 +
+        Verity.Game.avg (fun z : ToyServed.W × Unit => Verity.Game.value
+          (fun l => ¬ Served.Local ToyServed.C 1 ToyServed.thief 0 (ToyServed.gen z.1) z.2 l)
+          (ToyServed.leakRun (ToyServed.gen z.1) z.2))
 
 end WeightSecurity.Guarantees

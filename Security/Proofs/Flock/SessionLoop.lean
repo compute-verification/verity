@@ -35,7 +35,6 @@ public import Proofs.Flock.Claims.ZK.RepCutFw
 public import Proofs.Flock.Claims.ZK.FinishSwMkAny
 public import Proofs.Flock.Claims.ZK.FinishFwL0
 public import Proofs.Flock.SessionLoop.FinishIsLoop
-public import Proofs.Flock.SessionLoop.Phase
 public import Proofs.Flock.SessionLoop.PiopState
 public import Proofs.Flock.SessionLoop.CutPiopLive
 public import Proofs.Flock.SessionLoop.CutInnerLive
@@ -76,6 +75,8 @@ public import Proofs.Flock.SessionLoop.SchedSlot
 public import Proofs.Flock.SessionLoop.LiveSchedOwn
 public import Proofs.Flock.SessionLoop.LiveInnerOwn
 public import Proofs.Flock.SessionLoop.LiveOwn
+public import Proofs.Flock.SessionLoop.Phase
+public import Proofs.Flock.SessionLoop.ZkAny
 public import Proofs.Flock.SessionLoop.VsOfTakes
 public import Proofs.Flock.SessionLoop.VsOfBody
 public import Proofs.Flock.SessionLoop.SwCausalExe
@@ -97,7 +98,6 @@ public import Proofs.Flock.SessionLoop.FinHonest
 public import Proofs.Flock.SessionLoop.RoundsPassInner
 public import Proofs.Flock.SessionLoop.RoundsPassInner0
 public import Proofs.Flock.SessionLoop.RoundsPass
-public import Proofs.Flock.SessionLoop.ZkAny
 
 /-!
 # Proof of Flock's zero knowledge at the session loop's own frames

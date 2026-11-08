@@ -53,8 +53,8 @@ serve at most `∏_r min(Σ_{U of class p r} 2^{b(U)}, 2^{|r|})` outputs, at any
 classes, a request whose `T_r` commits at least `|r|` bits costs `|r|` and its blocks are forgotten, and the count is
 never above the sets'.
 
-* `Prog.Reads.trans`, `Prog.Reads.le`: gate `g` reads gate `j` (`Prog.Reads`, with `servedBits`, `blocksTo`, `lightOf`
-  and `lightBits` in `Definitions.Claims.SamplingServed`), itself or through the wires it reads.
+* `Prog.Reads.trans`, `Prog.Reads.read`, `Prog.Reads.le`: gate `g` reads gate `j` (`Prog.Reads`, with `servedBits`,
+  `blocksTo`, `lightOf` and `lightBits` in `Definitions.Claims.SamplingServed`), itself or through the wires it reads.
 * `Prog.runIn_congr_reads`, `boundary_eq_reads`, `outs_eq_reads`: **the determinism lemma at one returned gate**: two
   traces that make every proof block outside `T` correct and agree at the inputs and at the committed values of `T`
   that a returned gate reads agree at it.
@@ -72,9 +72,9 @@ never above the sets'.
   and the bound to charge is the smaller of that and the served-output cap.
 * `card_influenceTwo_le_classes`, `card_influenceTwo_le_touched`: **patterns**: the influence set counted by the
   admissible sets' patterns under any classes, and by which requests they touch.
-* `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form** at `lightOf`'s classes: a request
-  whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the sets' count. The lock
-  lists it as `Claims.SecurityProofs.InfluenceTwoPatterns`.
+* `lightBits_lightOf`, `card_influenceTwo_le_patterns`, `sum_patterns_le_served`: **the patterns' form** at `lightOf`'s
+  classes: a request whose `T_r` commits at least `|r|` bits costs `|r|`, with its blocks forgotten; never above the
+  sets' count. The lock lists it as `Claims.SecurityProofs.InfluenceTwoPatterns`.
 * `CompiledTwo.exfil_served`: **the corollary of `CompiledTwo.Exfil`**: KS at `RInflTwo`, with the influence set under
   the smaller of the served-output cap and `2^{|outs|}`.
 -/

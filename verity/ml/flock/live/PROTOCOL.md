@@ -31,7 +31,7 @@ value upstream's prover computed, `h` a pad, and `v' = v + h`. `m` is the dense 
 ## 1. Order of one repetition
 
 Everything below is on the rep's live stream (`circuit/rep{r}`), in this order. Items marked ZK are Flock ZK's; the rest is
-M0 and upstream Flock.
+Flock's circuit prover and upstream Flock.
 
 ~~~text
 bind_statement      label flock-r1cs-v0 · bytes statement digest · bytes witness cap (level-0 tree, 68 lanes)
@@ -123,7 +123,7 @@ per session (both reps):
 The level-0 padding of the 64 witness lanes is shared by the reps, as is the codeword; each pair of extra lanes and its
 padding belongs to one rep (§7).
 
-Streams 1–3 belong to M0: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
+Streams 1–3 belong to Flock's circuit prover: mask, padding, and the injected-seed salt tape. None of this is derived from the transcript.
 
 **Several tables** (`--session-tables J`, the CPU prover). Every table's samples are OS reads of its own
 (`ProverRng::for_table`; under an injected seed, table `j` reads every stream above at ChaCha20 stream `purpose | j << 32`).
@@ -249,7 +249,9 @@ What is changed:
    ~~~
 
    It is folded into the induced basis's enforced sum (`zk::enforced_extra`). The induced basis itself is unchanged. The
-   identity holds at every position, as an identity of codewords.
+   identity holds at every position, as an identity of codewords. `Enc(c·ybar^r ‖ ybar^r)` is evaluated at the queries alone
+   (`zk::pad_codeword_at`): its message is nonzero on `2 t_pad` entries, so a query's value needs only the transform's last
+   `⌈log₂ t_pad⌉` layers within its block, never the whole length-`2L` codeword (`zk::pad_codeword`, the test's reference).
 5. **Exposed** (padded, §2): the level-0 OOD value, the six lane-round messages and `e^r`. The prover's lane chain becomes
    the two lane-phase rows (§4).
 6. **Level 0's query count and padding.** The padded code is `RS[2L, L + t_pad]`, of rate `ρ' = (L + t_pad)/2L`, and the
@@ -295,7 +297,7 @@ is the minimum.
 
 **Checked:**
 - `zk_veil` test `exact::a_pair_per_rep_hides_the_witness_and_a_shared_pair_does_not`: at toy size (4 witness lanes of 16
-  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword`, `ybar` and
+  words, 3 queries per rep, 5 distinct positions), with the protocol's own `lane_codeword`, `pad_codeword_at`, `ybar` and
   `enforced_extra`. For fixed coins the view is F128-linear in the witness and the randomness, and it hides the witness
   exactly when the witness's images lie in the span of the randomness's. Even with all of both `y_1'^r` revealed, the
   per-rep pairs hide it; a shared pair does not, nor does `t_pad` below the distinct opened positions. The verifier's row
@@ -411,7 +413,7 @@ degenerate coins as they open (the Claim above).
   with `c = H_ν(SALT_PREFIX ‖ y)`; each stream's leaves under a SHA-512 tree (a subtree), and the streams' roots under
   one more, padded with `H_ν(PAD)`. The 64-byte root and the key are `Hello`'s answer, before the prover's first message
   (`Commit`).
-- Under `serve --tree-from HOST:PORT` (`src/tree_from.rs`) the challenger, on a host the prover doesn't control, samples
+- Under `serve --tree-from HOST:PORT` (`src/tree_from.rs`) the challenger, on a host the developer doesn't control, samples
   the tree instead, under the prover's nonce, and opens each round itself after what it follows: the link points after
   `SHA-512(root_F ‖ each root_B in table-name order)`, every other round after its message's SHA-512 (the record's
   `msg_sha512`). The challenger checks every opening against the tree before it answers, so the record is the one a tree
@@ -420,7 +422,7 @@ degenerate coins as they open (the Claim above).
   the coins the round uses. The prover checks every opening against the root before it uses a coin (`coin_tree::Checked`,
   or under the ZK server the Lean session loop, §10.4) and stops at one that does not open, before it answers anything that
   depends on it.
-- This replaces M0's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
+- This replaces Flock's circuit prover's step 0 (a seed commitment with derived streams): no PRF. The prover's refusals (`β = 0`, the mask
   rank, dependent `ρ`, an outer coin `r_j = 1`) stay functions of committed coins.
 - **Two properties, two roles.** *Hiding* of the unopened coins is what soundness uses: statistical in the standard model
   (hm96 `PROTOCOL.md` §3), since every block and salt comes from `/dev/urandom`; no random oracle. *Binding* is the one
@@ -519,7 +521,7 @@ computed it itself or held it to a relation that leaves the worker nothing to ch
 message kind, by which the ZK server removes every free choice.
 
 Where the boundary runs:
-- **Inner phase** (`rec/inner-transcript/v1`, ZK off): the whole M0 prover is the worker, and `verity_flock.rec_live`'s
+- **Inner phase** (`rec/inner-transcript/v1`, ZK off): the whole circuit prover is the worker, and `verity_flock.rec_live`'s
   proxy is the ZK server, its send check Lean's `flock-firewall live` (`rec_live --lean`). The challenger receives only the
   public schedule and salted hashes (§10.3).
 - **Outer phase** (`flock-circuit prove --zk --gpu`): the device (`flock_cuda_prove_circuit`) is the worker; the host side
@@ -548,7 +550,7 @@ kept as an early tripwire).
 | pads label and root | the ZK server's own | the Lean frame samples the pads and the pads tree's salts, computes the root, and inserts both after the zerocheck's label; only the root reaches the prover |
 | masked algebraic values: `round1_ab'`, `round1_c'`, `G_j`, `final_a'`, `final_b'`, `q_j`, `z_partial'` | masked | the wire carries `v + h` with `h` uniform and the Lean frame's alone, so it is uniform whatever `v` is, and a worker, which never holds `h`, cannot pick what leaves. `v` enters the view only through §4's rows, which the Lean finish evaluates on the pads at the rep's end; a `v` that breaks a row stops the session at its `Finish` |
 | `final_c'` | the ZK server's own | the inner proof sends it, from the host |
-| `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6), whose mask slot holds the words the Lean session loop drew and wrote into it (§10.2), so no worker picks the words that hide it; the claim points are coins |
+| `s_hat_v` of the masked claims (ab, c) | recomputed | `Σ_x eq(p_w, x) z[128x + v]` over the host witness (§6), whose mask slot holds the words the Lean session loop sampled and wrote into it (§10.2), so no worker picks the words that hide it; the claim points are coins |
 | `s_hat_v` of the region claims | recomputed | `Stmt::region_s_hat_v`, from public data |
 | Ligerito's `target` | recomputed | a function of the `s_hat_v` and the opening's coins (`r''`, `γ`) |
 | level 0's OOD value `y'`, lane messages `msg_j'`, `e^r'` | masked | as the algebraic values (`lg_ood`, `lg_msg`, `lg_e`) |
@@ -601,7 +603,9 @@ closes the auditor's connection there, so the auditor sees how many of the sessi
 also leaks its end position: a session of `M` messages has up to `M + 1` stops beside its finish, `log₂(M + 2)` bits rather
 than one. It is counted by position, as `Flock.Guarantees.RecursiveZKLoopAnySum` counts a recursive session's stops
 (`1 + Σ_p (M_p + 1)`, `LoopAny.card_loopStops`), and the bound that holds at a prover that cuts is §10.5's (its table's first
-row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack.
+row a recursive session, and its bound over a stream). A ZK server that refuses is evidence against its rack. It
+never stops serving for good after failed sessions: a worker chooses its sessions' verdicts, so the leak is bounded per
+outcome of each session, and is not capped over a monitoring period (`Flock.Guarantees.SessionLoopZKAnyDeployed`).
 
 What the deferral costs: a bad worker is caught only at its session's `Finish`, one session's latency later than at its
 first bad message, and the rest of a doomed session's device and ZK server work is spent for nothing (the ZK server's share
@@ -674,7 +678,7 @@ commits the codeword the loop did; the loop's root is the root of record. A work
 commits another codeword, and the session stops at its `Finish` (`zk_worker_level0`'s `own-mask`).
 
 **The value commitments' salts are the ZK server's.** A statement's hm96 trees (its public file's `frame_v3` roots under
-an hm96 row schema) are committed by the ZK server's value service (`core-firewall values --state DIR --salt-key FILE`,
+a hiding commitment's schema) are committed by the ZK server's value service (`core-firewall values --state DIR --salt-key FILE`,
 `Flock.Firewall.Values` on the ZK server's record in `DIR`), which holds the server's 64-byte salt key `k` and derives
 each leaf's salt from it: leaf `i` of
 table `j` of the commit session `s` takes `y = SHA-512(k ‖ L ‖ s ‖ be32 j ‖ be64 i ‖ ctr)` for `ctr` 0, 1 and 2
@@ -701,6 +705,15 @@ opened: a stack that commits its values in `m` sessions and registers the one wh
 leak through `m` too. So the service of record fixes `m` at 1, protocol structure: an epoch opens one session, and a
 commit while its session is not yet registered is refused (`err the current epoch's session is not yet registered: …`),
 nothing of it answered. The stack chooses neither `m` nor a session, every record says `m = 1`, and the term is 0.
+
+**Interior commits.** A two-stage audit's interior registration holds values that may follow the auditor's first-stage
+sample, so the service commits it apart (`interior J D₀ N₀ S₀ …`, the commit request's form and body;
+`Salts.interiorAnswer`). Once the request is whole it samples `s` and each leaf's 192-byte salt from the OS, and holds
+the salts by session while it runs, answering them to `salts`; a service started again holds none. The tables' tags and
+the registration's record tag are under the session's own key `SHA-512(k ‖ L' ‖ s)` (`Salts.interiorKey`, `L'` the
+SHA-512 of `verity/zk-server/interior-key/v1\0`), which the release side derives from `k` and the record's session. So
+nothing made under `k` reads a value or a root that may follow the sample: `k` meets the interior only at `s`, sampled
+once the request is whole. The registration is numbered, appended and admitted as any other.
 
 The release side admits each registration once, oldest first (the record's rule 5, `Core.Firewall.admitReads`, §10.5). Given the
 key (`core-firewall session --salt-key FILE`; `FC_FIREWALL_SALT_KEY` for `flock-circuit --firewall-state`), every hm96
@@ -733,7 +746,7 @@ runs them all under one).
 
 ### 10.3 The rule, inner phase (`rec_live`)
 
-| item | rule | why the M0 prover has no free choice |
+| item | rule | why the circuit prover has no free choice |
 |---|---|---|
 | `Hello` | constant | the ZK server compares the prover's, Σ aside, with the pinned schedule's as canonical JSON (`rec_live.canonical`: sorted keys, no spaces, so `2` and `2.0` differ) and forwards the schedule's own, never the prover's text or object |
 | `Commit`'s level-0 roots | salted | each 64-byte node of each root reaches the challenger as a registered row's `b ‖ c` (`rec_live.top_rows`: its 32 u16 words, then 32 zero words; `hm96-sha512/row/v1`) under its own fresh 192-byte salt; the roots and salts stay in `private.json` |
@@ -782,15 +795,15 @@ JSON. The two agree whenever the schedule's `Hello` holds only integers, as `sch
 
 The send check is that program itself. `rec_live --lean BIN` (required) starts one `flock-firewall live` a session (`Flock.Firewall.liveWith`): its first line is the schedule, and
 each request goes to it before the proxy handles it. It answers with the messages the challenger's live-coin part gets for the request and
-the salts it drew for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
+the salts it generated for them (`Flock.Firewall.liveStep`, one step of `run`'s loop, its salts from the operating system, those
 a request doesn't sample kept for the next), or with the refusal that stops the session. The proxy delivers Lean's messages, in Lean's order, and handles the request too,
 for the prover's side (the answers, the session record, `private.json`) on Lean's salts: a message or a salt of its own that
 is not Lean's, or one of Lean's it leaves unused, stops the session. The same test holds the relay to `run` at the salts the
-live session drew, on every case and every whole placement of the `Open`s. On the challenger's coin tree (`--coin-tree`)
+live session generated, on every case and every whole placement of the `Open`s. On the challenger's coin tree (`--coin-tree`)
 the first line also gives the tree's spec: the prover's `Hello` names the tree, with a nonce of its own the session never
 uses, and `Flock.Firewall.treeHello` holds `coins` without its nonce to the spec and hands `step` the `Hello` without
 `coins`, so the challenger's live-coin part gets the live-coin session's messages; the same test holds the proxy, the relay and `run` to
-one another on the tree's sessions. Lean's firewall refuses a binding round of a registered top, so `rec_session.serve`'s
+one another on the tree's sessions. Lean's ZK server refuses a binding round of a registered top, so `rec_session.serve`'s
 sessions, with their stacked table's registered top, keep the Python check that the test holds to `run`.
 
 In the Lean analysis (`Security/Proofs/Flock/Recursive/`), `FirewallTemplate.run_blank` proves that a session `run` finishes
@@ -905,7 +918,7 @@ that reads a sample. The selftest's `zk_worker_level0` holds a worker to that be
 `FC_LEVEL0_TAMPER=second` asks again, every table's witness once the loop answered, and `past` asks first with one
 witness more than the session has tables; the loop refuses each, and the session goes on on its one sample and is
 accepted. The
-session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop drew for that
+session's `Commit` leaves only when its roots are its tables', in order, root `i` the one the loop generated for that
 session's table `i` at its statement's `m` (`Level0.commit`; a root sampled at a smaller `m` would pad too few positions).
 Every `Level0` sampled for a session, committed or not, is freed when it ends (`Level0.Slots.close`).
 The proofs leave just before `Finish`, the loop's finish's file of each table's rep 0 and rep 1 on the level 0 the
@@ -982,7 +995,7 @@ prover. The loop's finish samples them only once the rep's frame took the coins 
 (`Finish.Own.algebraEnded`): the loop then answers the rep's `place` with `salts` until they are sampled, and the ZK server
 asks for them at the round that opens the opening, before the device builds its first tree past level 0. A `salts`
 request before then, on any finish the prover opens, is refused, so no round of the algebraic phase can depend on them,
-and so is one after they were sampled: the loop keeps a rep's salts once, whichever of its finishes drew them, so the
+and so is one after they were sampled: the loop keeps a rep's salts once, whichever of its finishes generated them, so the
 prover never holds two samples of them.
 No request carries the rep's samples: the loop's finish proves each rep with the ones its frame took
 (`Finish.drawsOf`, from `Frames.ownOf`), and refuses a rep no frame holds. After the rep's end check the ZK server sends
@@ -1112,7 +1125,7 @@ a rep's salts instead), and the selftest's `zk_worker_finish` holds each mode to
 | `coins` | the first round's first coin plus one | `… its coins are not the ones the stream answered`; the same |
 | `final-c` | `final_c` plus one | `… proof file is only the one its inner request computed live, and none answers this request`; the same |
 | `salts-early` | none doctored: at table 0 rep 0's first round a finish of the worker's own asks for the rep's salts for levels ≥ 1 | `… its salts for levels ≥ 1, asked for before its algebraic phase ended`; the session goes on on its own finish, and the verifier gets the honest session's every request and accepts |
-| `salts-again` | none doctored: once the session's finish drew table 0 rep 0's salts for levels ≥ 1, a finish of the worker's own asks for them again | `… rep 0's salts for levels ≥ 1 were drawn already, on another finish`: the loop keeps a rep's salts once; the same |
+| `salts-again` | none doctored: once the session's finish generated table 0 rep 0's salts for levels ≥ 1, a finish of the worker's own asks for them again | `… rep 0's salts for levels ≥ 1 were drawn already, on another finish`: the loop keeps a rep's salts once; the same |
 
 The inner proof's rounds that leave are the frame's own: the loop places each at `Frame.innerSched`, the frame's own round
 (`ε`, `β`, its samples and the round's coin count) on the finish's round (`final_c'`, `τ`'s commitment), which the loop's
@@ -1132,7 +1145,7 @@ rep. The selftest's `zk_worker_inner` holds each mode to that, beside an honest 
 
 The selftest's `zk_worker_pads` holds the worker's view to the pads' absence, beside an honest session: under
 `FC_FIREWALL_TAMPER=steer` the worker sets each rep's first masked value to a word of its own, in its round and its proof
-alike, which a worker holding the pads would send to set the word that leaves. In both sessions no firewalled rep drew
+alike, which a worker holding the pads would send to set the word that leaves. In both sessions no ZK-served rep generated
 pads of its own and the word reaches the verifier in no request; the steered session's constraints fail on the pads, so
 it stops at its `Finish` with no proof, the verifier getting the honest session's every other request at its sizes.
 
@@ -1224,7 +1237,7 @@ and refuses a schedule.
 
 **Outer proofs as independent sessions.** AGENTS.md's rule: each staged statement
 is fixed before any session flips coins and gets exactly one session; each session flips its own live coins in its own
-firewall pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
+ZK server pass; no statement reads another session's transcript or coins; every session is recorded and every verdict counts.
 Sessions may therefore run at once (pod 85's `STEP=oprove`, `OPROVE_JOBS`, which enforces the rule). This relay is stricter:
 it has one slot across streams and protocols (`slot.lock` in its state directory, which every relay process of the ZK server
 shares). An outer session takes it at its first request other than `Ping` and holds it until the session is released or

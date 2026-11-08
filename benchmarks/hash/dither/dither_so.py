@@ -128,9 +128,9 @@ OV_ORDER = ("-ov: round s built beside forward s + 1 from ring copies taken afte
 # the faults of the order last: fault_zlate moves round s + 1's z/y leaves, so the step after it is no capture's
 CAPTURES = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_rearly", "fault_zlate")
 CAPTURES_OV = ("gate", "control", "fault", "fault_y", "fault_rr", "fault_ring", "fault_rearly", "fault_zlate")
-END_ORDER = ("-we: at the window's end the tail's units after their coins, their receipt-tail roots under one final round "
-             "sent after the last coin, the manifest root over every round root, then the draw coin after it")
-NO_END = "none: the last D - 1 steps' receipts lie under no round and no draw coin opens; rows pending"
+END_ORDER = ("-we: at the execution phase's end the tail's units after their coins, their receipt-tail roots under one final "
+             "round sent after the last coin, the manifest root over every round root, then the sampling coin after it")
+NO_END = "none: the last D - 1 steps' receipts lie under no round and no sampling coin opens; rows pending"
 END_FAULTS = ("fault_tail", "fault_late_receipt")
 MANIFEST_ENV = "DITHER_MANIFEST_DIR"    # an off-node execution phase's manifest.json goes there (its per-call roots to scratch)
 GRAPH_ENV = "DITHER_SO_GRAPH"           # "0": a step's units launched call by call (`SoSide.dispatch`), else one graph
@@ -403,9 +403,9 @@ class SoWindow(DO.DitherState):
         self.clean_from = None
         at = CO.session()
         if at is not None and self.k >= 0:
-            raise RuntimeError(f"dither-a-so: session {at.id} served this process's one off-node window, which ended at "
-                               f"step {self.s - 1}; a window after it needs a session of its own (more rounds: "
-                               f"${ROUNDS_ENV})")
+            raise RuntimeError(f"dither-a-so: challenge phase {at.id} served this process's one off-node execution phase, "
+                               f"which ended at step {self.s - 1}; an execution phase after it needs a challenge phase of "
+                               f"its own (more rounds: ${ROUNDS_ENV})")
         coins = self.prepared if self.prepared is not None else CO.open_coins(at, 1, rounds_of())
         self.prepared = None
         self.k += 1
@@ -623,7 +623,7 @@ class SoWindow(DO.DitherState):
         t_rr = time.perf_counter()
         i_f = self.pipe.send(froot)
         if i_f != self.ix(s1):
-            raise RuntimeError(f"window {self.k}'s final round went out as round {i_f}, not {self.ix(s1)}")
+            raise RuntimeError(f"execution phase {self.k}'s final round went out as round {i_f}, not {self.ix(s1)}")
         self.pipe.opening(i_f)
         t_final = time.perf_counter()
         mroot = MF.manifest_root(W, self.k, self.open_root, s0, s1, list(self.pipe.roots[:i_f + 1]))
@@ -1038,7 +1038,7 @@ class SoWindow(DO.DitherState):
         if s == self.end_at:
             self.end()
         elif self.ix(self.s) >= self.layout_rounds:
-            raise RuntimeError(f"the window's {self.layout_rounds} rounds are spent")
+            raise RuntimeError(f"the execution phase's {self.layout_rounds} rounds are spent")
 
     def _after_ov(self) -> None:
         """-ov's step end: step s's ring copies on the serving stream (once the rings' last readers are past them), a
@@ -1671,7 +1671,7 @@ class Ov:
             rnd = c.set(list(win.pre["round"].tabs))
             mid = _remap(c, win.pre["mid"], out=leaves(win.pre["mid"], rnd.leaves_addr(0)))
             if mid.level_off != win.pre["mid"].level_off:
-                raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the window's")
+                raise RuntimeError("dither-a-so -ov: the ring's step trees are not laid out as the execution phase's")
             ad = win.pre["admit"]
             self.sets.append({
                 "round": rnd, "mid": mid,
@@ -1997,9 +1997,10 @@ class Spill:
                 n, at = n + 1, 0
             at += -(-b // 512) * 512
         if (self.n_chunks + n) * SPILL_CHUNK > self.max_bytes:
-            raise RuntimeError(f"dither-a-so -we: an off-node window of {steps} steps holds up to {n * SPILL_CHUNK >> 30} "
-                               f"GiB of spill at m = {self.win.t}, past {self.max_bytes >> 30} GiB: open a session of "
-                               f"fewer rounds, spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+            raise RuntimeError(f"dither-a-so -we: an off-node execution phase of {steps} steps holds up to "
+                               f"{n * SPILL_CHUNK >> 30} GiB of spill at m = {self.win.t}, past {self.max_bytes >> 30} GiB: "
+                               f"open a challenge phase of fewer rounds, spill A alone (-wea), or raise ${SPILL_MAX_ENV} "
+                               f"with the lease's memory")
         t0 = time.perf_counter()
         self.free += [torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True) for _ in range(n)]
         self.n_chunks += n
@@ -2021,8 +2022,9 @@ class Spill:
             else:
                 if (self.n_chunks + 1) * SPILL_CHUNK > self.max_bytes:
                     raise RuntimeError(f"dither-a-so -we: the spill's pool would pass {self.max_bytes >> 30} GiB at step "
-                                       f"{self.win.s}, {len(self.held)} steps into its window: serve a shorter window, "
-                                       f"spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's memory")
+                                       f"{self.win.s}, {len(self.held)} steps into its execution phase: serve a shorter "
+                                       f"execution phase, spill A alone (-wea), or raise ${SPILL_MAX_ENV} with the lease's "
+                                       f"memory")
                 t0 = time.perf_counter()
                 c = torch.empty(SPILL_CHUNK, dtype=torch.uint8, pin_memory=True)
                 self.alloc_ms += 1e3 * (time.perf_counter() - t0)
@@ -2306,7 +2308,7 @@ def check_end(win: SoWindow, name: str, lib_h1o: str) -> dict:
     from verity.ml.protocols.pouw.circuit import h1tile as HT
     rec = win.end_recs.get(name)
     if rec is None or rec.get("rows") is None or "last" not in rec:
-        return {"which": name, "ok": False, "complete": False, "why": f"no ended window {name!r} with its rows"}
+        return {"which": name, "ok": False, "complete": False, "why": f"no ended execution phase {name!r} with its rows"}
     pipe, com, rows, kinds = rec["pipe"], rec["coins"].commitment, rec["rows"], win.round_kinds
     W, L, D, key, t = win.window, win.L, win.depth, win.key, win.t
     s0, s1, i_f, li, draw_at = rec["s0"], rec["s1"], rec["i_f"], rec["late_index"], rec["draw_at"]
@@ -2443,7 +2445,7 @@ def open_spill(win: SoWindow, rec: dict, kinds: tuple) -> dict | None:
     held = [s for s in range(s0, s1) if s not in near and s in sp["steps"]]
     doc: dict = {"mode": sp["mode"], "what": SPILLS[sp["mode"]], "held_steps": len(sp["steps"]), "steps": s1 - s0}
     if not held or len(sp["steps"]) != s1 - s0:
-        return {**doc, "ok": False, "why": "the spill holds not every step of the window, or none uncaptured"}
+        return {**doc, "ok": False, "why": "the spill holds not every step of the execution phase, or none uncaptured"}
     h = hashlib.sha512(b"verity/kernels-int12/spill-open/v1" + rec["draw"].coin).digest()
     steps = sorted({held[0], held[int.from_bytes(h[:8], "big") % len(held)], held[-1]})
     ai, zi, L8 = kinds.index("a-step"), kinds.index("z-step"), 8 * L
@@ -2540,7 +2542,7 @@ def write_manifest(win: SoWindow, rec: dict, out_dir: str) -> dict:
     doc = {"schema": MF.SCHEMA, "window": win.window, "index": rec["k"], "depth": win.depth, "first": s0,
            "steps": s1 - s0, "linears": win.L, "round_kinds": list(kinds),
            "open_root": rec["open_root"].hex(),
-           "open_root_is": CO.STAND_IN if coins.source == "off-node" else "the epoch root (in process)",
+           "open_root_is": CO.STAND_IN if coins.source == "off-node" else "the execution-phase root (in process)",
            "b_roots": [x.hex() for x in rec["b_roots"]],
            "rounds": [x.hex() for x in pipe.roots[:i_f + 1]],
            "round_leaves": [[unwords(rows[r][nr * L8 + 8 * i:nr * L8 + 8 * i + 8]).hex() for i in range(nr)]
