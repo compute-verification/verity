@@ -131,7 +131,7 @@ change to the guarantee, or to a definition it reads, changes its record.
 ## Where the top guarantees are proved
 
 * `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
-* `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`: `JointLive.lean`.
+* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`: `JointLive.lean`.
 * `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditPeriod`:
   `ComposeMonitoringPeriod.lean`.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.

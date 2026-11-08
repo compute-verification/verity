@@ -91,7 +91,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    as LANE's holder, let the Cursor agent AGENT (a worker) sign ready marks and
                                                    land verdicts as LANE for N days (default 7, at most 14): see Signed verdicts
     research queue baseline SHA --by ci [--steps STEP,...]
-                                                   fast-forward `main` now to SHA, a commit of `checked` ci knows is green on
+                                                   fast-forward `main` now to SHA, a commit of `checked` known green on
                                                    every step on the merge gate, beside drive's tick (no lock, no state written);
                                                    drive's next tick takes it as verified, and the review landing lands on it
                                                    (on the control pod: `/data/infra/drive.sh queue baseline SHA --by ci`)
@@ -142,7 +142,7 @@ only once that commit's after-landing run, the full check, passed every step on 
                                                    train a later `git revert` names. --out FILE writes them newest first, an
                                                    optional source for the verifier's --main file (`merge.main_line`), for a
                                                    deployment that wants credit's line to be the checked train heads rather than
-                                                   the raw `git rev-list --first-parent origin/main` infra writes by default
+                                                   the raw `git rev-list --first-parent origin/main`, the default
     research queue shadow-report [--tips N]
                                                    with drive.toml's `executor = "shadow"`: the newest N `checked` tips whose
                                                    after-landing run drive compared with the executor's verdicts, each one's
@@ -223,7 +223,7 @@ conflict in it, since keeping either side's text drops the other's.
 So a new push moves its PR to the tip, a dropped PR takes the commits after it
 along (they're merged again), and a `checked` that drive moved outside the sync (a landing, a revert, a merge of `main`) rebuilds
 `next` on it; one drive didn't write holds drive's tick, which syncs nothing on it until `checked` is reset to the last tip
-drive wrote or ci accepts it (`Driver._unwritten`, `accept-checked`).  Only drive syncs (`Queue._drive_only`): `eject` only
+drive wrote or it is accepted (`Driver._unwritten`, `accept-checked`).  Only drive syncs (`Queue._drive_only`): `eject` only
 withdraws the mark, for drive's next tick, and a hand `sync` on the control pod syncs as drive's tick does.  A
 PR whose head contains another open PR's head, or by ancestry an older one (a head the queue saw it at, or its branch merged in:
 `Queue.entries`; never by PR number, never for commits the two merely share, and never for commits admitted members below it on
@@ -401,7 +401,7 @@ GH_TIMEOUT_S = 120
 #: seconds of every `research queue status`
 GH_PAGES = 10
 GH_PER_PAGE = 100
-#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane proofs.`) isn't part of it
+#: the lane's handle ends on a letter or digit, so a sentence's period (`Lane NAME.`) isn't part of it
 LANE_RE = re.compile(r"^[ \t>*_]*Lane[:\s]+`?([A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?)`?", re.M)
 REGISTRY = Path(".agents/skills/using-slack/registry.json")
 AGENT_RE = re.compile(r"\bbc-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b")
@@ -830,8 +830,8 @@ class DriveFlags:
     #: the after-landing run and their verdicts compared (`research queue shadow-report`); "on", its verdicts decide, with a run
     #: of `drive.SLIM_STEPS` alone beside it
     executor: str = "off"
-    #: infra's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it puts
-    #: `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
+    #: the task executor's enqueue command, the words of one argv run with no shell (`research.executor.QueueTransport`): it
+    #: puts `--priority N --check after-landing:SHA` on the executor's queue; none, each tip "shadow" or "on" enqueues fails, told
     executor_enqueue: tuple[str, ...] = ()
     #: a land verdict at an older head of a member's PR carries to its head when the commits since only merge trusted ones
     #: (`research.carry`, `drive.Driver._carry_verdicts`): "off"; "shadow", drive logs what it would carry and writes nothing;
@@ -934,7 +934,7 @@ class DriveFlags:
                 got[k] = doc[k]
         if "land" in doc:
             if doc["land"] == "check":
-                raise bad("land", "train landing was deleted with its code (#5070): drive lands on review only; set "
+                raise bad("land", "train landing was deleted with its code: drive lands on review only; set "
                                   "`land = \"review\"` or remove the key")
             if doc["land"] not in LANDINGS:
                 raise bad("land", f"one of {', '.join(LANDINGS)}")
@@ -4180,7 +4180,7 @@ class LeanTimedOut(str):
 
 
 #: the fix a Lean step that couldn't build names, with where it builds
-LEAN_UNBUILT_FIX = "mark again once {on} builds them (`build` Lean slots are @infra's; `research status` there says why not)"
+LEAN_UNBUILT_FIX = "mark again once {on} builds them in its `build` Lean slots (`research status` there says why not)"
 
 
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
@@ -5547,15 +5547,15 @@ def _move_main(q: Queue, sha: str, verb: str, passed: str, wait: Callable[[], st
 
 def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     """`research queue baseline SHA --by ci [--steps STEP,...]`: fast-forward `main` to SHA, a commit on `checked`'s first-parent
-    chain whose after-landing steps ci knows are green (every one by default; with --steps, those), at once (`_move_main`): it
+    chain whose after-landing steps are known green (every one by default; with --steps, those), at once (`_move_main`): it
     waits for no tick, takes no lock of drive's and writes nothing of drive's state, and drive's next tick takes `main` there as
-    verified (`Driver._main_moved`), so the review landing lands on it.  Refused but by ci, off drive
+    verified (`Driver._main_moved`), so the review landing lands on it.  Refused without `--by ci`, off drive
     (`/data/infra/drive.sh queue baseline SHA --by ci` on the control pod), for --steps that leave out a step on the merge gate
     at SHA (`drive.gating`: not circuit-check), and for a SHA off that chain or below `main`; nothing to do when `main` holds it."""
     from .drive import AFTER_LANDING, gating
 
     if _who(by) != "ci":
-        raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
+        raise QueueError(f"baseline: a green `main` is recorded only with --by ci, not --by {by}")
     green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
     if unknown := [x for x in green if x not in AFTER_LANDING]:
         raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
@@ -5588,12 +5588,12 @@ def promote(q: Queue, states: Callable[[Path, list[str]], dict] | None = None,
 def accept_checked(q: Queue, sha: str, by: str) -> int:
     """`research queue accept-checked SHA --by ci`: record the landing branch (`checked`, `Queue.into`) at SHA, the tip it is at,
     among the tips drive takes (`drive["checked_tips"]`) though drive didn't write it, so drive's ticks, held on it
-    (`Driver._unwritten`), go on from it.  Refused but by ci, for a SHA that isn't the branch's tip, and off drive
+    (`Driver._unwritten`), go on from it.  Refused without `--by ci`, for a SHA that isn't the branch's tip, and off drive
     (`/data/infra/drive.sh queue accept-checked SHA --by ci` on the control pod)."""
     from .drive import CHECKED_TIPS
 
     if _who(by) != "ci":
-        raise QueueError(f"accept-checked: only ci accepts a `{q.into}` drive didn't write (--by ci), not {by}")
+        raise QueueError(f"accept-checked: a `{q.into}` drive didn't write is accepted only with --by ci, not --by {by}")
     q._clone()
     q.fetch()
     full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
@@ -6044,7 +6044,7 @@ def main(argv: list[str]) -> int:
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
                          "(check.py --no-cache --circuit-cache)")
     for old in ("--max-running", "--train-size"):
-        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
+        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
@@ -6236,8 +6236,7 @@ def main(argv: list[str]) -> int:
         own = weakref.WeakMethod(q.own_change)
         labels.change = lambda head: own()(head)
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
-            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
-                  "drive's args")
+            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted; drop them from drive's args")
         if a.command == "drive":
             q._clone()
             q.fetch()

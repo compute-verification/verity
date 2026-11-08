@@ -213,7 +213,7 @@ SPOT_NOT_CERTIFIER = ("SPOT[Flock] never imports the network certifier, which co
 #: Files outside ``infra/`` that import a package of it, each with why.
 INFRA_IMPORTERS = {
     "tools/research/console/verity_console.py": "the console reads `cluster.usage`, and moves to infra/ with research's pods, "
-                                                "deploy and Slack code in the follow-up to the platform layout move (#1450)",
+                                                "deploy and Slack code",
 }
 #: Files outside ``benchmarks/`` that import a module of it, by name or by path, each with its owner and what it imports.
 #: ``benchmarks/`` is measurement only: a number a protocol uses reaches it
@@ -300,7 +300,7 @@ BENCHMARKS_IMPORTERS = {
 #: with the file that defines it and why tests need it.
 TEST_ONLY = {
     "_build_unchecked": ("verity/ml/circuits/partition_v2.py",
-                         "`partition_v2.build` without its refusal of units of several size classes (CIR-64), for the tests "
+                         "`partition_v2.build` without its refusal of units of several size classes, for the tests "
                          "of `check` on advice past the builder's scope, as a prover may send it"),
 }
 
