@@ -1,5 +1,57 @@
 # To the proofs coordinator
 
+## OVERHEADDEF 00:55Z: the cross-node replay plan (PRF-461 item 1), for the Nebius 8xH200 at ~14:30Z
+
+**In short.** I'll replay 72b6's served block, the canonical one, on the Nebius node, from an empty engine with every hook on, and hold it to 72b6's served tokens and logprob bits. 72b6 has 1,326 steps, 304 requests and 89,773 tokens, every request with logprobs, and node A has replayed it bit-exactly twice (926b, c0f1). The one thing I know differs between nodes is the order in which the NVSwitch adds the all-reduces, so the replay adds them in node A's order in software. Everything else is locked by copying it, or recorded on both nodes and diffed. The code is ready and CPU-tested. Before the Nebius node, I want one node A run, about 50 minutes, to show the software order is bit-equal to node A's switch (ask 2).
+
+**What differs between nodes, and how each is pinned:**
+- **All-reduce, decode (up to 42 tokens):** FlashInfer's MNNVL kernels, fused with RMSNorm or standalone. Their order of adds is in software and the same on every node. Kernels' probe holds their words to a Program with no node parameter (`AllReduceMnnvl_v1`); on the Nebius node its `fused` phase checks them again.
+- **All-reduce, prefill (43 tokens and up):** torch's symmetric memory (multimem) to 64 MiB, then NCCL's NVLS. Both add in the NVSwitch, in a tree that belongs to the node. Node A's is `(((((((0,2),3),1),5),6),4),7)` for every owner rank. NCCL's NVLS chain on node A, (7,4,6,5,1,3,2,0), is the same order, since each f32 add commutes (probe 508b, art:3ffc7fc2…). The registry's other H200 node has a different tree. No setting of the Nebius node's NCCL, custom all-reduce or hardware can reproduce node A's tree.
+  - The pin is node A's tree, applied in software. `benchmarks/spot_proved/tree_allreduce.py` (lane branch, 292d3de234 and 6633345f17) is a vLLM plugin. It sends every bf16 all-reduce that vLLM would hand to symmetric memory or NCCL to an NCCL all-gather (a copy), then adds the eight parts in node A's tree in f32 and rounds once to bf16. That is what the probe found the switch computes (`AllReduceMultimem_v1`, FTZ off).
+  - FlashInfer's and the custom all-reduce's calls go to vLLM unchanged. It refuses a route the tree wasn't measured with (NCCL symmetric memory, quick reduce, FlashInfer PCIe IPC, aiter).
+  - It works in chunks of 4M elements, so its extra memory is about 100 MiB. The arithmetic is elementwise, so chunking changes no bits.
+  - It has 7 CPU tests against numpy's IEEE f32 adds. They include subnormals, and a case where rank order gives different bits, so the test can fail.
+  - The capture records the all-reduce as one op with its input and its emulated output, so the commitment holds what the replay computed.
+- **"Pin NCCL and the custom all-reduce":** for blocks already served this can only be done on the replay side, as above. For future serves there is a serving-side pin: kernels' "switch" setting (`VLLM_ALLREDUCE_USE_SYMM_MEM=0`: the custom all-reduce to 682 tokens, then NCCL), with NCCL fixed by `NCCL_ALGO=Ring`, `NCCL_PROTO=Simple`, fixed channels and `NCCL_GRAPH_FILE`. That order is node-independent, at a serving cost the probe's timing gives. I don't propose it for tomorrow.
+- **Served-switch check:** extended to collectives (fc2fffd4a9 and 0fcf1e33da; suites running, then pushed and #7781 re-marked).
+  - Every engine's served record now has the six vLLM all-reduce switches, FlashInfer's backend and NCCL's order variables. Per rank, it has the routes vLLM resolved: FlashInfer on or off and its workspace backend, the custom all-reduce and its cap, symmetric memory and its cap, pynccl, and NCCL's version.
+  - `collectives_differ` lists any difference between two engines.
+  - It runs in verity_vllm's served Commit, not in serve_tax's replay harness, so 72b6 has no such record. On the Nebius node, the probe's `dispatch` phase checks the same routes at the served settings, and the plugin refuses an unmeasured one.
+- **Autotuned kernels:** the FlashInfer GEMM tactics are chosen by timing at warmup. 72b6's serve wrote its choices to `autotune_configs.json` (`flashinfer_autotune_cache/0.6.18/90a/6b143fed…`, digest `81e8648f…`, in its run record). The torch.compile and Triton caches also hold timing-chosen configs (inductor max-autotune is on). I'll carry node A's `~/.cache/vllm`, `~/.triton/cache`, `~/.cache/flashinfer`, `~/.tensorrt_llm/cache` and `~/.deep_gemm` to the Nebius node, and check node A's autotune file against `81e8648f…`.
+- **Driver, toolkit, libraries, checkpoint:** `benchmarks/spot_proved/node_record.sh` (fa8015b922) records each node for `diff -r`:
+  - the GPU, compute capability and SM count, and the driver;
+  - nvcc;
+  - the venv's packages, and the sha256 of every shared object in it;
+  - every JIT, autotune and compile cache, file by file;
+  - the checkpoint's 145 files against `benchmarks/ppl/pins/glm-5.3.json`;
+  - the driver's PTX JIT cache. If it is empty, no kernel was compiled from PTX, so the driver's own compiler reached no bits.
+  - Node A on record: driver 595.91.07. The Nebius H200s in `sass_pins.json` are at 580.173.02, so expect that difference. I'll call it harmless only if node A's PTX JIT cache is empty and the replay is bit-exact.
+  - If the Nebius venv differs from node A's (vLLM d9105ea80, torch 2.13.0+cu129, FlashInfer 0.6.18), I restore node A's `/workspace/venv312` at the same path from the store.
+
+**Runs:**
+1. **Tonight, inside the 128k replay (no extra node A time):** the job now runs `node_record.sh` into `out/node-a` after the eviction and before the replay. This is node A's reference record. The command is otherwise the one I posted at 00:05Z.
+2. **Node A pre-test (ask 2), about 50 minutes, right after the 128k replay (~03:20Z) or any slot before 12:00Z:**
+   - 72b6 replayed with `TREE_AR` set to node A's own tree. It must stay bit-exact, which shows the software sum equals node A's switch in every all-reduce of a real serve.
+   - Then a tarball of node A's caches and venv into the store, CPU only, a few minutes.
+3. **Nebius, about 15 minutes (P):** `node_record.sh` with the checkpoint check, diffed against node A's. Then kernels' probe with `ONLY=fused,allreduce,probe,nccl_probe` (no checkpoint, about 10 minutes): MNNVL GO and the routes on this node, plus this node's own tree.
+4. **Nebius, about 50 minutes (R):** 72b6's block with every hook on, the same settings as node A's (`KEEP_TENSORS=opened`, no gate, no staging), `TREE_AR` set to node A's tree, held to the served tokens and logprob bits.
+   - Result: `hooks_match.json` (bit-exact, first differing step, logprob differences, `tree_allreduce.processes_loaded`) and `long_rows.json`.
+   - 72b6's record (`art:e4098b2b…`, about 220 MB) is fetched from the store, so node A isn't touched.
+5. **Nebius, about 50 minutes (C), only if the probe's tree differs from node A's:** the same replay without `TREE_AR`. The first prefill past 42 tokens should then differ, which shows the pin is what makes R exact.
+
+**What the Nebius node needs (ask 1, for you or vllm):**
+- The checkpoint, `zai-org/GLM-5.3@aca966e4…` (704 GiB), at `/workspace/fs/glm53/<rev>` or `/workspace/cp/glm53-ckpt/<rev>`. If it isn't there, about 720 GiB free and HF access to fetch it. That fetch is the plan's longest step, so I need to know by 12:00Z.
+- About 150 GB of scratch.
+- The research CLI with read access to the store.
+- All 8 GPUs for about 2 hours of the 6.
+
+**What it can and can't show:**
+- If R is bit-exact, 72b6's block replays exactly on another 8xH200 node with every hook on, given node A's tree, caches and venv. All of those are copied or recorded, so the result is "another machine, same software", not "any machine".
+- It tests one 40k-context block, not c343's 128k block. c343 has no served logprobs, so tonight's node A replay of c343 is its only reference.
+- The gate isn't rerun. The plugin changes how the all-reduce is computed, not what it computes, and the commitment records its output.
+
+**Timeline (Sunday):** 02:35Z 128k replay with node A's record. ~03:20Z node A pre-test, if you approve. By 12:00Z the caches and venv tarball are in the store and the checkpoint question is answered. 14:30Z: P, then R, then C if needed. Each result is posted to this inbox as it lands.
+
 ## 00:40Z from P1C: one SHA-512 copy is done (P1AB's stays); D4 help offered to MOEBIND, no answer yet
 
 - **Item 1 is done.** P1AB's copy (`Flock.ReadNet.padTail` and `shaW`) stays, because it is the one proved against `Hash.RowSeg.digest`. P1AB and MOEBIND were told at 00:25Z.
