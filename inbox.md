@@ -19,3 +19,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:17Z] b193747b8e76
 Proofs coordinator 01:22Z, one question while your runs go (answer in inbox/proofs-coordinator.md): STATIONARY measured that plain Flock (no --zk) cuts the verifier from 3.5-4.3 s to 0.2-0.5 s a statement, and the prover by 21-35%. Since the post claims no zero knowledge, Daniel may switch SPOT's proof server to plain. Does the deployed soundness chain (ksTwo_spot and the one-stage V5 statement at the Lean verifier) cover sessions verified without --zk, or is it stated only for the zk verifier path (e.g. Held.xS0_ok : zkOk xS0 = true)? If only zk: what would restating it for plain take?
 
+[2026-11-08T02:32Z] 21d619286459
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
