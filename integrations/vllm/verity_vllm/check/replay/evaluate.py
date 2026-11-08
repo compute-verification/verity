@@ -18,6 +18,8 @@ from verity_vllm.check.replay.compare import _interior_slice, _tp_member_alias, 
 from verity_vllm.check.replay.delegate import DELEGATES, Place
 from verity_vllm.program.compact import is_file_prog
 
+TOPP_SPLITS_OPERAND = 5     # GumbelTopPTokenSelect's split count S: logits, top_p, seed, pos, temperature, S
+
 
 #: a `weights` field's leaf width (its `Value<b>`) -> the word dtype the registered slice is read as (bf16 -> u16, e4m3 -> u8, f32 -> u32)
 _NP_BY_BITS = {8: np.uint8, 16: np.uint16, 32: np.uint32}
@@ -201,7 +203,7 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
     inputs: list[list[np.ndarray]] = []
     wslices: list[np.ndarray | None] = []
     wrefs: list[dict[str, Any] | None] = []
-    for stored in r.get("args") or []:
+    for oi, stored in enumerate(r.get("args") or []):
         runs = _weight_runs(pi, stored)
         if runs is not None:
             wsl, wref = (None, None) if plan else _weight_gather(pi, weights, *runs, inputs_rec)
@@ -250,6 +252,9 @@ def _evaluate_row(pi: ProgramIndex, store: CommittedStore, weights: Callable[[st
                         raise _Unresolved(why)
                     words.append(w)
                     inputs_rec.append({"kind": "committed", "identity": [rid, arrive + d["step"], SAMPLER_OP, pname, [0, 1]]})
+                elif oi == TOPP_SPLITS_OPERAND and fam.startswith("GumbelTopPTokenSelect"):
+                    raise _Unresolved(f"{fam} reads its split count S from Program input {pname!r}: S is the registered constant, "
+                                      f"a Const32[S] of the Program (topp_geometry.registered_splits)")
                 elif pi.kv_prefix and a == pi.kv_prefix["input"]:
                     words.extend(_cached_prefix_words(pi, store, rid, pname, lo, hi, inputs_rec))
                 elif pname == RM.SCHEDULE_PARAM:
