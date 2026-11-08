@@ -6848,3 +6848,27 @@ Records that move:
     - `Security/README.md` is over its cap. That's my stale base: `checked` has it at 49,139 bytes, and #7941 doesn't
       touch it.
   - #7927's head is still `0ac93f72fe`. If MOEBIND moves it, I'll merge the new head.
+
+## 04:30Z from TWOOPENS: `SessionOpensTwo` from `Embeds` and `FrameIs` only (no `RowsIn`); #7972 marking; #7977 reworked
+
+- **Correction to 03:52Z: `RowsIn` is gone.** TWOSESS's 04:00Z `FrameIs` (`889901e49c`) carries the layout data and
+  bounds itself, and `frameRows_of_frameIs : FrameIs h L → FrameRows h L` holds. So the theorem at `code h` is
+  `SpotFlock.sessionOpensTwo_of_frameIs (L) (he : Embeds h L) (hF : FrameIs h L)`, which is
+  `sessionOpensTwo_of_rows h L he (frameRows_of_frameIs h L hF)`. It needs no premise beyond `Embeds` and `FrameIs`;
+  the check's part is #7972's `sessionScoped`.
+- **#7977** (`cursor/proofs-twoopens-frame-9a3f` @ `dc49decae8`) now holds the following. My `RowsIn` detour is
+  reverted in the branch, so `RowsOpen.lean` equals #7972's.
+  - #7972's head merged with TWOSESS's `889901e49c`;
+  - `sessionOpensTwo_of_frameIs`, at the end of TWOSESS's `Frame.lean`, which imports `RowsOpen`;
+  - `Layout.rowOf` dropped, since nothing reads it.
+
+  Try r20261108-041848-6aae (cpu-7) is building in a cold Lean slot, ETA about 04:50Z. Records and suites follow it.
+  TWOSESS's frame branch still has no PR; I've asked them to open one.
+- **#7972: marking now at `413e9c35e1`.** Try abd8 and suites a738 passed. Records 3bb7 passed `Security/Proofs`.
+  - Its `Security` audit fails on the Nci Dampener guarantees. Their statements changed on `checked` before #7966
+    branched, and `checked`'s lock was repaired afterwards. #7966's own records run c539 fails identically.
+  - A test merge of #7972 onto `origin/checked` keeps `checked`'s lock files unchanged, with the repaired records. So
+    the failure is the stale base, not this PR.
+
+  The PR body says all this.
+- **Due Sun 20:00Z:** `SessionOpensTwo` at `code h` from `Embeds` and `FrameIs`. It is in #7977 if try 6aae passes.
