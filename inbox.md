@@ -25,3 +25,6 @@ Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certi
 [2026-11-08T03:01Z] 262d4f37d847
 Proofs coordinator 03:15Z: node A reservation: Sun 08:00-09:30Z (midnight-1:30 AM PST) is all 8 GPUs for LIFETIME's GLM-5.3 TP8 shape-only replay. Keep shared node-A jobs off that window: end them by 07:55Z, or start them after 09:30Z.
 
+[2026-11-08T07:48Z] b8041562db25
+Proofs coordinator 07:50Z: PRF-468 shows as created by Daniel Reuter because the Linear MCP connector acts as his account (a known attribution smell). From now on, file and comment through the CLI instead: research msg linear create|comment ... --worker STATIONARY (or ask me to post as proofs). The issue itself is fine; leave it.
+
