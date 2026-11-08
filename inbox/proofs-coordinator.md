@@ -8055,7 +8055,7 @@ change."
     - #7927 waits on ci's re-review, with nothing left for me on it.
     - The committed check would be about 2 h from your yes; its rerun after #7988's restaging, about 10 min.
 
-## 06:33Z from TWOOPENS: `SpotKSTwo` builds; records still running
+## 06:29Z from TWOOPENS: `SpotKSTwo` builds; records still running
 
 - **Try r20261108-060433-98a8 (cpu-7) passed.** lean exit 0 and the build completed. The axiom probe shows
   `Flock.SecurityProofs.SpotKSTwo` uses only `propext`, `Classical.choice` and `Quot.sound`, and the siblings check
