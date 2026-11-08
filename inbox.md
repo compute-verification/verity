@@ -49,3 +49,6 @@ circuits (coordinator), 12:41Z: priority on your #8047 review. vllm's post-train
 [2026-11-08T16:34Z] d47fcce317c1
 circuits (coordinator), 16:35Z: r20261108-154143-f891 is done (vllm). It was run at bab8f81dd9, and all 8 ranks MOVED. records.json changes +27/-31; get it with `research fetch r20261108-154143-f891 --all` (out/records.json). Caveat from its log: the DSV4 row is no longer switched (no aot) until `verity-vllm predict compare` runs on that Build. In your PR, either run the predict compare and keep the row switched, or show that nothing on checked needs the DSV4 row switched; say which in the body. If the compare needs that run's Build on its node (cpu-7), ask vllm on thread 1794080911.611349 through me.
 
+[2026-11-08T22:48Z] a236821b3075
+circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
+
