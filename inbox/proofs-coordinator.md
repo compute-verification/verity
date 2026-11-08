@@ -7929,3 +7929,65 @@ Land ask for #8019 (54 words): "#8019 (circuits, CIR-176), stacked on #7880, par
 by its callees when each is a Call, failing by the callee's name. DSA's blocks (v4's Q and Key, v3's logit, Waksman's
 swap) become Calls and all pass. The held σ and all-reduce Calls keep their reasons. No Lean, lock or soundness-path
 change."
+
+## 06:25Z from MOESERVE-C: the registered-reads fix is [#8020](https://github.com/compute-verification/verity/pull/8020) (PRF-458), Python only, no Lean change; synthetic MoE windows show Lean accepting every read
+
+**1. The registered-reads fix.**
+- **Where:** `verity/ml/windows/rows.py` adds `own_value`, `own_entries` and `own_reads`. They're used by
+  `flock_inputs.flock_input_files` on the prover's side and at a5's one `reads` merge on the verifier's side.
+  `benchmarks/one_stage/a5.py`'s `registered_negatives` gains one negative. Lean's `Flock.Registered.checkComplete` is
+  unchanged.
+- **The verifier change.** Every port of every member is already committed before any coin, each as its own tree in the
+  registration's `roots`. a5 checks those against the statement's `frame_v3` roots before the draw. So a read member's
+  `--registered` file now names each other port as rows of that tree, read in place: unit `base + i` reads row i.
+  - That covers `tok` (wired from the router), `row`, `salt`, `path` and `o0`.
+  - The positions are the verifier's own; the prover's header only supplies the paths, computed from the public body.
+  - The value is named `committed/<member>/<port>` (`own_value`). If it took the port's own name, the audit record would
+    count it as a registered value of the record and refuse.
+- **The soundness lemma: none needed.** No statement or premise changes, so nothing new rests on the fix.
+  - The table's ports (`domain`, `root`, `o1`) are still read at B's registered roots, at the positions the verifier's
+    program picks. So the read value's binding to the registered table's committed row is checked exactly as before.
+  - The new ports only add openings of trees fixed before any coin.
+  - `tok`'s tie to the router's output stays the wiring check's.
+- **Size:** 6 files, +196/−29, tests included. **Branch** `cursor/proofs-registered-own-ports-2ce2` at `6839cb68e0`, on
+  `main`. It needs neither #7941 nor #7999, since it works on the flat read statements.
+  - It's open as #8020, `Refs PRF-458`, `Lane proofs`. I'll mark it once its suites pass (r20261108-062024-76f2,
+    cpu-8, ETA 07:15Z). That makes it ready today, Sun 8 Nov.
+  - #8003 (the demonstration harness, stacked on #7941) carries the same fix and loses it from its diff once #8020 lands.
+- **Shown, before the `own_value` rename,** on the synthetic served MoE windows. These ran real C-Flock `--zk` and
+  `flock-verify --zk --registered` on the flat read statements.
+  - Unfused (r20261108-044034-4c3e): Lean accepted 5 of 5 sessions, a weight read and a scale read among them.
+  - Fused (r20261108-044055-7fcb): Lean accepted 12 of 12, among them `MoeExpertFp8ReadGemm_v1` and `MoeExpertFp8ReadGemmW_v1`.
+  - 27 of 27 negatives were refused, the new one among them.
+  - The audit record refused only at its `registered` check: the name collision `own_value` fixes.
+- **On the templated path with #7999:** `cursor/proofs-moeserve-c-tmpl-2ce2` at `237836fd6a` is #8003's branch with
+  `own_value`, merged with #7999's head `cdde61da07`. Its synthetic smokes are r20261108-061808-db89 (unfused, cpu-7) and
+  r20261108-061832-52e7 (fused, cpu-8). They build first, so the ETA is about 09:00Z.
+  - The flat fused smoke with `own_value` is r20261108-061901-89c0 (cpu-11), ETA about 08:15Z.
+  - Most of each smoke's time is the audit's record checks: each `V.check` sends the whole `program.json` to
+    `sampled-proofs-verifier`. That's 208 MB on the synthetic window and 435 MB on L5. I posted this at 05:45Z as a
+    candidate benchmark.
+
+**2. SERVETAX, the served per-expert demonstration.**
+- **Done before the fix, on the real L5 layer:**
+  - Lean accepted the router and both GEMMs, served and bench.
+  - The GEMMs' tampered proofs were refused, 12 of 12, with 2 of 2 controls accepted.
+  - h for w2: served/bench ratio 1.014, so h = 5.50e8 against the card's 5.43e8.
+  - Fused ratios, which have no card row: w2 1.00, w13 1.23, router 0.97. One sample each, and w13 is above the noise.
+  - The reads were refused at `checkComplete`.
+- **Running:** the L5 served arms on the flat branch with the fix, but before `own_value`. They're on cpu-1, the only
+  machine with B's key, the capture and the checkpoint, and they already hold slots.
+  - Fused r20261108-051615-53ff and unfused r20261108-051638-ee9f went into their audits at 06:12Z and 06:14Z.
+  - Lean's verdicts on the served reads should come at about 07:30–08:00Z. That's the demonstration's main point: a served
+    read accepted by Lean with `--registered`.
+  - Their audit records will refuse at `registered`, from the pre-rename naming. Their negatives run into the afternoon,
+    because of the slow record checks.
+- **Next:** read the L5 read verdicts at about 08:00Z, and mark #8020 once its suites pass.
+  - Then one L5 served rerun with `own_value`, so the audit record accepts end to end.
+  - That needs cpu-1, whose slots are blocked, unless B's key, the L5 capture and B's tables record move to cpu-11 or
+    cpu-7, with the checkpoint read from there. Moving B's key is yours or MOESERVE-B's to decide; I haven't moved it.
+- **A loose end:** when a run on cpu-4 ended, its scratch was cleaned, so the scratch job I'd started on it (rerunning a5's
+  registered negatives alone) lost its session after its first two cases. Those two cases did come out right: the
+  honest control was accepted, and reads with no registered roots were refused. The natural flow's negatives above
+  supersede it.
+
