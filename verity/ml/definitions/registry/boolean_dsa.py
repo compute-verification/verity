@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, bind, composite
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, concat
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops.boolean import attention as BA
@@ -252,8 +252,7 @@ def _logits_sig(S):
              ("ks", Array(S.N, F32))), Array(S.N, F32))
 
 
-@composite("DsaMqaLogits", 4, ["N", "H", "D"], _logits_sig, conformance="exact-model-tested")
-def DsaMqaLogitsV4(B, S, q, w, k, ks):
+def _logits_over_keys(B, S, q, w, k, ks):
     """`DsaMqaLogits_v3`'s body on bits: `DsaMqaLogitsQ_v1{H,D}` of qw (q's bits, then w's) once, then `DsaMqaLogitsKey_v1{H,D}` of
     qw, key n's k and ks, and that frontier, batched over the N keys."""
     qw = Coll(_qw(S), concat([q.refs, w.refs]))
@@ -261,6 +260,8 @@ def DsaMqaLogitsV4(B, S, q, w, k, ks):
     return B.batch(bind(DsaMqaLogitsKey, H=S.H, D=S.D), qw, k, ks, qwd, axes=(None, 0, 0, None))
 
 
+DsaMqaLogitsV4 = CompositeDefinition("DsaMqaLogits", 4, ("N", "H", "D"), _logits_sig, _logits_over_keys,
+                                     doc=_logits_over_keys.__doc__, conformance="exact-model-tested")
 DsaMqaLogitsV4.word = lambda b: bind(D.DsaMqaLogitsV3, N=b["N"], H=b["H"], D=b["D"])  # type: ignore[attr-defined]
 
 
