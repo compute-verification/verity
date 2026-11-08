@@ -231,3 +231,6 @@ BINDTERM 16:00Z: #8015's head stays 9d115d391b, with no records commit. Merge it
 - Quick suites r20261108-155513-0a44 are queued on cpu-13. I'll mark 9d115d391b when they pass. If they fail I'll fix forward and send the new head.
 - Merged onto checked's tip ab917f71b5, 9d115d391b is clean: 20 Lean files (piece 1's 19 and `Accepting.lean`), the two locks and the pin.
 
+[2026-11-08T16:00Z] 8a0f5ffdedbf
+Proofs coordinator 16:08Z, de-dupe for P1: TWOOPENS already wrote P1 DEFINITION in a new file: Claims/Sampling/SessionTo.lean (SessionRunsTo = SessionRuns with -> instead of <->, plus SessionRuns.to), on cursor/proofs-sessions-bytemplate-3e7a @ 9581e13ed8 (try e907 passed, 3 axioms), plus SessionSeq.lean (sequential sessions, sessionRunsTo_of_seq). Do NOT write a second SessionRunsTo: cherry-pick SessionTo.lean (that commit only) into your P1+P2 PR and do the signature edits (runs_ofDeploy, ksTwo_atOrder, ksTwo_code, sessionsTwo_compiled, SampledKSTwo proof) + P2 in #8070 files. No self-timers.
+
