@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 HERE = Path(__file__).resolve().parents[1] / "breakeven" / "pool_window_hits.py"
 spec = importlib.util.spec_from_file_location("pool_window_hits", HERE)
 pw = importlib.util.module_from_spec(spec)
@@ -27,6 +29,12 @@ def test_a_window_keeps_only_its_own_requests_blocks():
     assert got["lost_tokens"] == [0, 4, 12]
     assert got["lost_requests"] == [0, 1, 2]
     assert got["lost_flops"] == got["lost_tokens"]
+    # B's blocks are 5 buckets after A's, C's 10 after B's: 0.5, 0.5 and 1.0 s, each saving 4 FLOPs
+    assert got["reuse"] == [(5, 4), (5, 4), (10, 4)]
+    d = pw.distances(got["reuse"], [1.0, 2.0])
+    assert d["lost_of_saved"]["1.0"] == pytest.approx(2 / 3)
+    assert d["lost_of_saved"]["2.0"] == pytest.approx(1 / 3)
+    assert d["mean_s"] == pytest.approx(2 / 3)
 
 
 def test_a_request_holds_the_blocks_it_recomputed():

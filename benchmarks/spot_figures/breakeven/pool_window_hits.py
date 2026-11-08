@@ -11,7 +11,9 @@ Per trace (`replay.read_corpus_trace`, `v1.record_of`), its steps walked in orde
   its recomputed blocks from its admission on).
 
 A request's window is its record's ingress bucket over the window's buckets, `(end - phase) // W`, at the trace's own
-phase (0) and at `--phases` phases spread evenly over W. The loss is priced in GLM-5.3's FLOPs (every linear layer, MLA's
+phase (0) and at `--phases` phases spread evenly over W. Each hit block's reuse distance d is the ingress buckets back to
+the latest earlier request covering it; under a uniformly random phase a window of length W loses the block with
+probability min(1, d / W), which prices any W from the distances alone. The loss is priced in GLM-5.3's FLOPs (every linear layer, MLA's
 attention over min(position + 1, index_topk) keys, the indexer's over position + 1, lm_head once a sampling row), as a
 share of the FLOPs the trace computed served with caching on, and of the FLOPs its hits saved. A trace sees only the
 reuse inside its own span, so a window longer than the span is priced on that reuse alone.
@@ -23,6 +25,7 @@ import bisect
 import hashlib
 import importlib.util
 import json
+import math
 import multiprocessing as mp
 import statistics
 import sys
@@ -107,6 +110,7 @@ def replay(requests, steps, block: int, model: dict, windows: list[tuple[float, 
     lost_tokens, lost_flops = [0] * len(windows), [0] * len(windows)
     lost_requests = [0] * len(windows)
     saved = saved_flops = computed_flops = hit_requests = 0
+    reuse: list[tuple[float, int]] = []
 
     def held(key: bytes, lo: float, hi: float) -> bool:
         xs = holders.get(key)
@@ -127,6 +131,10 @@ def replay(requests, steps, block: int, model: dict, windows: list[tuple[float, 
                     saved += start
                     saved_flops += flops(model, 0, start, False)
                     ks = chains[i].upto(start // block)
+                    for u, key in enumerate(ks):
+                        xs = holders.get(key, [])
+                        j = bisect.bisect_right(xs, end) - 1
+                        reuse.append((end - xs[j] if j >= 0 else 0, flops(model, u * block, (u + 1) * block, False)))
                     for c, (W, phase) in enumerate(windows):
                         lo = phase + ((end - phase) // W) * W
                         a, b = 0, len(ks)
@@ -148,7 +156,37 @@ def replay(requests, steps, block: int, model: dict, windows: list[tuple[float, 
                 covered[i] = whole
     return {"saved_tokens": saved, "saved_flops": saved_flops, "computed_flops": computed_flops,
             "hit_requests": hit_requests, "lost_tokens": lost_tokens, "lost_flops": lost_flops,
-            "lost_requests": lost_requests}
+            "lost_requests": lost_requests, "reuse": reuse}
+
+
+#: reuse-distance bins, seconds
+BINS = (1, 10, 60, 300, 600, 1200, 1800, 3600)
+
+
+def distances(reuse: list[tuple[float, int]], seconds: list[float]) -> dict:
+    """The hit blocks' reuse distances, each the ingress buckets back to the latest earlier request covering the block,
+    weighted by the FLOPs the block saves: binned, quantiles, and the share a pool per window of each length loses
+    under a uniformly random phase, min(1, d / W) a block."""
+    total = sum(w for _, w in reuse)
+    if not total:
+        return {}
+    ds = sorted(reuse)
+    s = [d * BUCKET_S for d, _ in ds]
+
+    def quantile(q: float) -> float:
+        acc = 0
+        for x, (_, w) in zip(s, ds):
+            acc += w
+            if acc >= q * total:
+                return x
+        return s[-1]
+
+    edges = (0, *BINS, math.inf)
+    bins = {f"{a}-{b}": sum(w for x, (_, w) in zip(s, ds) if a <= x < b) / total for a, b in zip(edges, edges[1:])}
+    return {"blocks": len(ds), "mean_s": sum(x * w for x, (_, w) in zip(s, ds)) / total,
+            "quantiles_s": {str(q): quantile(q) for q in (0.1, 0.25, 0.5, 0.75, 0.9)}, "bins": bins,
+            "lost_of_saved": {str(W): sum(min(1.0, x / W) * w for x, (_, w) in zip(s, ds)) / total
+                              for W in (*seconds, 7200.0, 86400.0)}}
 
 
 def read_job(job):
@@ -174,7 +212,7 @@ def read_job(job):
            "prefix_caching": tr.engine.enable_prefix_caching, "hit_requests": got["hit_requests"],
            "saved_tokens": got["saved_tokens"], "saved_flops": got["saved_flops"],
            "computed_flops": got["computed_flops"], "saved_share": got["saved_flops"] / got["computed_flops"],
-           "windows": {}}
+           "reuse": distances(got["reuse"], seconds), "windows": {}}
     for k, s in enumerate(seconds):
         cs = range(k * phases, (k + 1) * phases)
         share = [got["lost_flops"][c] / got["computed_flops"] for c in cs]
@@ -212,9 +250,11 @@ def main() -> int:
         rows = pool.map(read_job, [(str(a.src), lb, d, model, seconds, a.phases) for lb, d in dirs])
     for r in rows:
         line = ", ".join(f"{s}: own {w['own_phase']['share_of_saved']:.4f} mean {w['phases']['share_of_saved']['mean']:.4f}"
-                         for s, w in r["windows"].items())
+                         f" analytic {r['reuse']['lost_of_saved'][s]:.4f}" for s, w in r["windows"].items())
+        q = r["reuse"]["quantiles_s"]
         print(f"[pw] {r['trace']}: {r['requests']} requests over {r['span_s']} s, saved {r['saved_share']:.4f} of "
-              f"computed FLOPs; lost of saved by window s: {line}", flush=True)
+              f"computed FLOPs; reuse distance mean {r['reuse']['mean_s']:.1f} s, median {q['0.5']:.1f} s, p90 "
+              f"{q['0.9']:.1f} s; lost of saved by window s: {line}", flush=True)
     Path(a.out).write_text(json.dumps({"seconds": seconds, "phases": a.phases, "flop_model": model, "rows": rows},
                                       indent=1) + "\n")
     return 0
