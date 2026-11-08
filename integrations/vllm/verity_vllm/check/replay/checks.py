@@ -1,5 +1,5 @@
 """The Program's checks (`program.predict.common.with_checks`): bits it computes from its inputs that the verifier requires to be
-`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK and a request's length rule (StopRule_v1, in its last step) among them.
+`accept`, a DSA row's DsaTopKLongRow_v1 past INDEX_TOPK and a request's length rule (StopCheck_v1, in its last step) among them.
 The instances header names them (`checks`: what each checks, its accept value, and under `at` the row and output leaf that
 computes it, `pipeline.build_instances.check_rows`).
 

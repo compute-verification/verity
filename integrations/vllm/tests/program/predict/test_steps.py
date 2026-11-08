@@ -45,6 +45,7 @@ from verity_vllm.program.predict.steps import (
 )
 from verity_vllm.program.prune import dead_free_versions
 from verity.ml.definitions.registry import io_shell as IO
+from verity.ml.definitions.registry import stop_check as SC
 from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
@@ -271,39 +272,49 @@ def _stops(body: dict = GREEDY) -> tuple[I1.Advice, dict]:
                     [[(0, 0, 8), (1, 0, 8)], [(0, 8, 1), (1, 8, 1)], [(0, 9, 1), (1, 9, 1)]])
 
 
+def _spec(LP: int, T: int, m: int, finish: int | None = None, stops: tuple[int, ...] = (255,), M: int = 64) -> dict:
+    """The length rule's config of a TINY request Program with outputs 1..T + 1 under max_tokens `m`, finishing as `_session` has
+    it (on a stop id below `m` outputs, on length at `m`) unless `finish` (a `stop_rule.FINISH` code) says."""
+    f = finish if finish is not None else 2 if T + 1 == m else 1
+    return SR.spec(stops, max_tokens=m, prompt_len=LP, max_model_len=M, outputs=T + 1, finish=f)
+
+
 def _rule(program):
     return program.fn.body.nodes[-1]
 
 
 def test_each_request_program_returns_its_length_rule_as_its_last_check():
-    """Each request Program's last Call is `StopRule_v1` over exactly the outputs it returns, at the registered model's stop ids,
-    FINISH as the request ended: r0 on a stop id (eos), r1 at its max_tokens (length).  It is the Program's last check, at the
+    """Each request Program's last Call is `StopCheck_v1` (of `StopRule_v1`) over exactly the outputs it returns, at the registered
+    model's stop ids, its max_tokens and prompt length and the model's length, FINISH as the request ended: r0 on a stop id (1), r1
+    at its max_tokens (2).  It is the Program's last check, at the
     last returned leaf, and requests of one shape under different finishes are different Programs with different traces."""
     reg, (advice, ingress) = _registered(), _stops()
     c = compile_steps(reg, advice, ingress)
     u0, u1 = c.requests
-    assert (u0.stop, u1.stop) == ({"ids": [255], "finish": "eos"}, {"ids": [255], "finish": "length"})
+    assert (u0.stop, u1.stop) == (_spec(8, 2, 4), _spec(8, 2, 3)) and (u0.stop["finish"], u1.stop["finish"]) == (1, 2)
     assert (u0.LP, u0.T, u0.policy) == (u1.LP, u1.T, u1.policy) and u0.digest != u1.digest and u0.key() != u1.key()
     for u in (u0, u1):
         body = c.programs[u.digest].fn.body
         rule = _rule(c.programs[u.digest])
-        assert rule.fn.id == bind(IO.StopRule, L=3, STOP=(255,), FINISH=u.stop["finish"]).id and rule.name == SR.NAME
+        assert rule.fn.id == bind(SC.StopCheck, T=3, STOP=(255,), MAX_TOKENS=u.stop["max_tokens"], PROMPT_LEN=8, MAX_MODEL_LEN=64,
+                                  FINISH=u.stop["finish"]).id and rule.name == SR.NAME
         assert runs(rule.args[0].refs) == runs(body.ret.slice(0, 3))
         assert check_rows(body, 1) == [[len(body.nodes) - 1, 0, 1]]
         assert request_program(reg, u).checks == {"output": 1, "accept": 1, "of": [SR.what(u.stop)]}
     s = c.summary()["requests"]
     assert [r["stop"] for r in s] == [u0.stop, u1.stop] and trace_dir(s[0]) != trace_dir(s[1])
     cmds = trace_commands(c.summary(), reg, "/out")
-    assert sorted((json.loads(cmd[cmd.index("--stop") + 1]) for cmd in cmds), key=json.dumps) == sorted([u0.stop, u1.stop], key=json.dumps)
+    assert sorted(cmd[cmd.index("--stop") + 1] for cmd in cmds) == sorted(json.dumps(x, sort_keys=True, separators=(",", ":"))
+                                                                          for x in (u0.stop, u1.stop))
 
 
 @pytest.mark.parametrize("finish, ids, ok", [
-    ("eos", [11, 12, 255], 1),        # an honest eos finish
-    ("length", [11, 12, 13], 1),      # an honest length finish
-    ("eos", [11, 12, 13], 0),         # cut short before its first stop
-    ("eos", [11, 255, 255], 0),       # run past a stop to finish on another
-    ("length", [11, 255, 13], 0),     # run past a stop to its cap
-    ("length", [11, 12, 255], 0),     # a stop at its cap read as a length finish
+    (1, [11, 12, 255], 1),        # an honest eos finish
+    (2, [11, 12, 13], 1),         # an honest length finish
+    (1, [11, 12, 13], 0),         # cut short before its first stop
+    (1, [11, 255, 255], 0),       # run past a stop to finish on another
+    (2, [11, 255, 13], 0),        # run past a stop to its cap
+    (2, [11, 12, 255], 0),        # a stop at its cap read as a length finish
 ])
 def test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop(finish, ids, ok):
     """The rule each Program carries, evaluated on the streams its 3 outputs could hold: 1 only for the stream that ends the way
@@ -326,37 +337,41 @@ def test_a_body_with_stops_of_its_own_is_refused_naming_the_fix(body, why):
         compile_steps(reg, advice, ingress)
 
 
-def test_ignore_eos_leaves_a_request_no_stop_ids_and_no_rule():
+def test_ignore_eos_leaves_a_request_no_stop_ids_and_a_rule_over_its_length_caps():
     """Under ignore_eos vLLM stops a request only on its own stop_token_ids (`SamplingParams.update_from_generation_config`), which
-    are refused, so it has none: no rule, and a finish on a stop id is refused.  Empty stops are none, and compile as without them."""
+    are refused, so it has none: its rule reads the length caps alone, and a finish on a stop id is refused.  Empty stops are none,
+    and compile as without them."""
     reg, (advice, ingress) = _registered(), _stops()
     plain = compile_steps(reg, advice, ingress)
     empty = {**ingress, "q1": {**ingress["q1"], "stop": [], "stop_token_ids": [], "ignore_eos": False}}
     assert [u.digest for u in compile_steps(reg, advice, empty).requests] == [u.digest for u in plain.requests]
     ignored = compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": True}})
     u1 = ignored.requests[1]
-    assert u1.stop is None and _rule(ignored.programs[u1.digest]).fn.id.startswith("TokenSelect")
+    assert u1.stop == _spec(8, 2, 3, stops=()) and _rule(ignored.programs[u1.digest]).fn.id == bind(
+        SC.StopCheck, T=3, STOP=(), MAX_TOKENS=3, PROMPT_LEN=8, MAX_MODEL_LEN=64, FINISH=2).id
     with pytest.raises(Unexpressible, match="request 0: finished on a stop token with ignore_eos set"):
         compile_steps(reg, advice, {**ingress, "q0": {**ingress["q0"], "ignore_eos": True}})
     with pytest.raises(Unexpressible, match="request 1: ignore_eos 'yes', not a bool"):
         compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": "yes"}})
 
 
-def test_a_model_that_states_no_stop_ids_has_no_rule_and_refuses_a_finish_on_one():
+def test_a_model_that_states_no_stop_ids_has_a_rule_over_its_length_caps_and_refuses_a_finish_on_one():
     bare = _registered({k: v for k, v in TINY.items() if k != "eos_token_id"})
     advice, ingress = _stops()
     with pytest.raises(Unexpressible, match="request 0: finished on a stop id, and the registered model states none"):
         compile_steps(bare, advice, ingress)
     c = compile_steps(bare, *_session([(8, 3, {**GREEDY, "max_tokens": 3})], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)]]))
     (u,) = c.requests
-    assert u.stop is None and not _rule(c.programs[u.digest]).fn.id.startswith("StopRule")
+    assert u.stop == _spec(8, 2, 3, stops=()) and _rule(c.programs[u.digest]).name == SR.NAME
 
 
-@pytest.mark.parametrize("T, finish", [(4, "eos"), (2, "length"), (0, "length")])
-def test_a_request_finishes_on_eos_only_in_the_program_that_holds_its_last_output(T, finish):
-    """A window that carries a request out before its last output ends its Program on no stop id: FINISH length there."""
-    assert stop_of(0, I1.RequestAdvice("q0", 8, 5, "eos"), T, (255,)) == {"ids": [255], "finish": finish}
-    assert stop_of(0, I1.RequestAdvice("q0", 8, 5, "length"), T, (255,)) == {"ids": [255], "finish": "length"}
+@pytest.mark.parametrize("T, ends", [(4, True), (2, False), (0, False)])
+def test_a_request_ends_only_in_the_program_that_holds_its_last_output(T, ends):
+    """A window that carries a request out before its last output has its Program run on there (finish 0); the one holding its
+    last ends it as it finished: 1 on a stop id, 2 at its max_tokens, 3 at the model's length first, and an abort runs on."""
+    for finished, code, m, M in (("eos", 1, 9, 64), ("length", 2, 5, 64), ("length", 3, 9, 13), ("abort", 0, 9, 64)):
+        want = SR.spec((255,), max_tokens=m, prompt_len=8, max_model_len=M, outputs=T + 1, finish=code if ends else 0)
+        assert stop_of(0, WA.RequestAdvice("q0", 8, 5, finished), T, (255,), m, M) == want
 
 
 def _hit(shared: int, hit: int = 16, body: dict = GREEDY) -> tuple[I1.Advice, dict]:
@@ -393,8 +408,8 @@ def test_an_honest_cache_hit_compiles_to_the_cached_request_program():
     assert c.batch_rule is None and c.summary()["batch_rule"] is None and not c.refused
     assert compile_steps(reg, *_hit(16), partial=True).summary() == c.summary()
     u = c.requests[1]
-    assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), _whole(reg, 24, 2, "length", C=16))
-    assert u.digest != _whole(reg, 24, 2, "length")
+    assert (u.LP, u.T, u.C, u.producers, u.digest) == (24, 2, 16, (0,), _whole(reg, 24, 2, 3, C=16))
+    assert u.digest != _whole(reg, 24, 2, 3)
     params = [(n, t) for n, t in c.programs[u.digest].fn.signature()[0]]
     assert [n for n, _ in params] == ["prompt", "prefix", "weights"] and repr(params[1][1]) == repr(_arr((2, 2, 16, 32), 16))
     assert c.programs[u.digest].fn.bindings["SRC"]["class"] == "verity-vllm/cached-greedy-request/v1"
@@ -465,10 +480,10 @@ def test_positions_past_the_models_are_refused_by_name():
     compile_steps(_registered(), *_session([(60, 4, GREEDY)], [[(0, 0, 60)], [(0, 60, 1)], [(0, 61, 1)], [(0, 62, 1)]]))
 
 
-def _whole(reg: Registered, LP: int, T: int, finish: str | None, C: int = 0) -> str:
-    """The greedy request Program, its length rule at TINY's stop id on `finish` (None: no rule)."""
+def _whole(reg: Registered, LP: int, T: int, m: int, C: int = 0, **kw) -> str:
+    """The greedy request Program under max_tokens `m`, its length rule `_spec`'s."""
     return build_program(Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}}), "request", LP=LP, T=T, C=C,
-                         stop=None if finish is None else SR.spec((255,), finish)).digest
+                         stop=_spec(LP, T, m, **kw)).digest
 
 
 def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
@@ -476,7 +491,7 @@ def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
     each chunk is its prefill rows in turn. Request 1's chunks follow its prefix-cache hit of request 0's first block."""
     reg = _registered()
     c = compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 3)], [(0, 3, 5)], [(0, 8, 1)]]))
-    d = _whole(reg, 8, 1, "eos")
+    d = _whole(reg, 8, 1, 4)
     assert c.requests[0].digest == d and c.requests[0].first_step == 0 and c.discarded == []
     assert c.steps == [[RowRef(0, d, 0, 3, 0)], [RowRef(0, d, 3, 5, 1)], [RowRef(0, d, 8, 1, 1)]]
     assert c.requests[0].digest == compile_steps(reg, *_session([(8, 2, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)]])).requests[0].digest
@@ -487,7 +502,7 @@ def test_a_chunked_prefill_compiles_to_the_whole_prefill_program():
         [(1, 24, 16)],
         [(1, 40, 1)],
     ]))
-    d = _whole(reg, 40, 1, "length", C=16)
+    d = _whole(reg, 40, 1, 2, C=16)
     assert (c.requests[1].digest, c.requests[1].C, c.requests[1].producers) == (d, 16, (0,))
     assert [s[-1] for s in c.steps[1:]] == [RowRef(1, d, 16, 8, 0), RowRef(1, d, 24, 16, 1), RowRef(1, d, 40, 1, 1)]
 
@@ -501,7 +516,7 @@ def test_a_preempted_request_compiles_to_its_program_and_its_recompute_is_discar
     c = compile_steps(reg, *_session([(8, 3, GREEDY), (4, 1, {**GREEDY, "max_tokens": 1})],
                                      [[(0, 0, 8)], [(0, 8, 1)], [(1, 0, 4)], [(0, 0, 10, {"preempted": True})]]))
     d = plain.requests[0].digest
-    assert c.requests[0].digest == d == _whole(reg, 8, 2, "eos")
+    assert c.requests[0].digest == d == _whole(reg, 8, 2, 4)
     assert [[r for r in rows if r.request == 0] for rows in c.steps] == [[RowRef(0, d, 0, 8, 1)], [RowRef(0, d, 8, 1, 1)], [],
                                                                          [RowRef(0, d, 9, 1, 1)]]
     assert c.discarded == [(3, 0, 0, 9)]
@@ -514,7 +529,7 @@ def test_a_resume_reads_its_own_kv_past_its_prompt():
     rows = [[(0, 0, 20)]] + [[(0, 20 + k, 1)] for k in range(13)] + [[(0, 32, 2, {"cache_hit": 32, "preempted": True,
                                                                                "sources": (I1.Source(0, 32),)})], [(0, 34, 1)]]
     c = compile_steps(reg, *_session([(20, 16, {**GREEDY, "max_tokens": 16})], rows))
-    d = _whole(reg, 20, 15, "length")
+    d = _whole(reg, 20, 15, 16)
     assert (c.requests[0].digest, c.requests[0].C) == (d, 0)
     assert c.steps[14] == [RowRef(0, d, 33, 1, 1)] and c.discarded == [(14, 0, 32, 1)] and c.steps[15] == [RowRef(0, d, 34, 1, 1)]
     p = _prompt(0, 20)
@@ -531,7 +546,7 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
     reg = _registered()
     steps = [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]]
     c = compile_steps(reg, *_session([(8, 3, GREEDY)], steps))
-    d = _whole(reg, 8, 2, "eos")
+    d = _whole(reg, 8, 2, 4)
     assert (c.requests[0].digest, c.requests[0].T, c.workload.requests[0].cap) == (d, 2, 3)
     assert c.steps[3] == [] and c.discarded == [(3, 0, 10, 1)] and c.summary()["discarded"] == [[3, 0, 10, 1]]
     c = compile_steps(reg, *_session([(8, 4, GREEDY)], steps))
@@ -540,16 +555,16 @@ def test_the_row_past_a_requests_last_kept_output_is_discarded():
 
 def test_an_aborted_request_compiles_as_one_stopped_at_its_last_kept_output():
     """Request 0's client aborted it after 3 outputs, and the endpoint freed it after the step in flight, whose row (step 3) ran past
-    them: it compiles to the rows of a stop at 3 outputs, that row discarded, with ignore_eos set or not. Its length rule has none
-    of its outputs a stop id (FINISH length) where the stop's has its last one; under ignore_eos it has no rule. At its max_tokens
-    vLLM has finished it on length, so an abort there is refused."""
+    them: it compiles to the rows of a stop at 3 outputs, that row discarded, with ignore_eos set or not. Its length rule runs on
+    past its last output (finish 0) where the stop's ends there on a stop id (1), under ignore_eos over its length caps alone. At its
+    max_tokens vLLM has finished it on length, so an abort there is refused."""
     reg = _registered()
     stopped, ingress = _session([(8, 3, GREEDY)], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)], [(0, 10, 1)]])
     aborted = WA.Advice((WA.RequestAdvice("q0", 8, 3, "abort"),), stopped.steps, stopped.release)
     c = compile_steps(reg, stopped, ingress)
     a, d = compile_steps(reg, aborted, ingress), compile_steps(reg, aborted, {"q0": {**ingress["q0"], "ignore_eos": True}})
     assert [[(u.digest, u.T, u.stop) for u in x.requests] for x in (c, a, d)] == [
-        [(_whole(reg, 8, 2, f), 2, None if f is None else SR.spec((255,), f))] for f in ("eos", "length", None)]
+        [(_whole(reg, 8, 2, 4, **k), 2, _spec(8, 2, 4, **k))] for k in ({}, {"finish": 0}, {"finish": 0, "stops": ()})]
     assert len({tuple((k, r.request, r.start, r.n, r.samples) for k, s in enumerate(x.steps) for r in s) for x in (c, a, d)}) == 1
     assert a.discarded == d.discarded == c.discarded == [(3, 0, 10, 1)]
     with pytest.raises(Unexpressible, match="request 0: 3 kept outputs, finished on abort, against its max_tokens 3"):
@@ -1076,8 +1091,9 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
     """Class G on GLM-5.3's first four layers (three indexer layers and one sharing the last one's indices, as in the model): A whole
     in one window is, call for call in the registered compiler's form, its Program in the window that leaves it after two outputs,
     then its Program in the next, which carries it in at position 4 with its 4 rows of every layer (latent rows and indexer keys and
-    scales) and its last token as Inputs, each but for its length rule over its own outputs (A's 4 there, 2 in each window, none a
-    stop id); each window's batch rules pass, R1 holding that history A's own. What no cheaper test
+    scales) and its last token as Inputs, each but for its length rule over its own outputs (A's 4 there to its max_tokens, 2 in
+    the first window running on, and 2 in the next from its third on, to its max_tokens); each window's batch rules pass, R1
+    holding that history A's own. What no cheaper test
     can: that carrying a request across a Commit window neither drops nor repeats a call, nor moves a sample's position. The seeded
     case takes about two minutes, GLM-5.3's top-p sampler over its whole vocabulary, and is the only one that carries sampler
     state (the seed, each sample's position) across the window."""
@@ -1092,8 +1108,11 @@ def test_a_request_in_flight_compiles_to_its_whole_program_split_at_the_window(b
         params.append(_history_params(p))
     own = [("prompt", 3)] + [("seed", 1)] * (body is not GREEDY)
     assert params == [own, own, own + [("prefix", 4 * 4 * 576), ("prefix_ik", 3 * 4 * 128), ("prefix_iks", 3 * 4), ("last_token", 1)]]
-    stop = SR.stop_ids(reg.phi.hf_config)
-    assert [ids.pop() for ids in calls_of] == [bind(IO.StopRule, L=L, STOP=stop, FINISH="length").id for L in (4, 2, 2)]
+    stop, M = SR.stop_ids(reg.phi.hf_config), min(int(reg.phi.hf_config["max_position_embeddings"]), reg.phi.engine["max_model_len"])
+
+    def rule(T: int, m: int, p: int, f: int) -> str:
+        return bind(SC.StopCheck, T=T, STOP=stop, MAX_TOKENS=m, PROMPT_LEN=p, MAX_MODEL_LEN=M, FINISH=f).id
+    assert [ids.pop() for ids in calls_of] == [rule(4, 4, 3, 2), rule(2, 4, 3, 0), rule(2, 2, 5, 2)]
     assert calls_of[0] == calls_of[1] + calls_of[2]
 
 
@@ -1183,7 +1202,7 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
     cmds = trace_commands(s, reg, str(tmp_path))
     names = [c[c.index("--out") + 1].rsplit("/", 1)[1] for c in cmds]
     assert [n.rpartition("_s")[0] for n in names] == ["build_request_LP8_T3_greedy", "build_request_LP5_T2_t0.8-p1"]
-    assert [json.loads(c[c.index("--stop") + 1]) for c in cmds] == [SR.spec((255,), "length")] * 2
+    assert [json.loads(c[c.index("--stop") + 1]) for c in cmds] == [_spec(8, 3, 4), _spec(5, 2, 3)]
     assert json.loads(cmds[1][cmds[1].index("--sampling") + 1]) == {"temperature": 0.8, "top_p": 1.0, "top_k": 0}
     assert json.loads(cmds[0][cmds[0].index("--target") + 1]) == RTXPRO6000
     (tmp_path / trace_dir(s["requests"][0])).mkdir()
@@ -1197,15 +1216,17 @@ def test_the_traced_side_is_one_build_a_distinct_program(tmp_path):
 
 @pytest.mark.slow
 def test_a_compiled_request_equals_the_traced_build():
-    """SmolLM2-135M, one greedy request of 256 prompt tokens that ran 31 decodes, under ignore_eos: the compiled request Program is
-    the one the Build traced (cov-k01-10, `test_predict`'s pin), which has no length rule; without ignore_eos the request has one,
-    FINISH length at SmolLM2's stop id 0.  About 20 s: the only test holding a compilation to a trace."""
+    """SmolLM2-135M, one greedy request of 256 prompt tokens that ran 31 decodes to its max_tokens: the compiled request Program is
+    the Build at its shape with its length rule (at SmolLM2's stop id 0, finish 2; `test_derive` holds a trace with a rule to that
+    Build), and that Build without the rule is the one the Build traced (cov-k01-10, `test_predict`'s pin).  About 40 s: the only
+    test holding a compilation to a trace."""
     cfg = json.loads((FIX / "smollm2-135m.config.json").read_text())
     reg = _registered(cfg)
     body = {**GREEDY, "max_tokens": 32, "prompt": [k % cfg["vocab_size"] for k in range(256)]}
     advice, ingress = _session([(256, 32, body, body["prompt"])], [[(0, 0, 256)]] + [[(0, 256 + k, 1)] for k in range(31)])
-    c = compile_steps(reg, advice, {"q0": {**ingress["q0"], "ignore_eos": True}})
-    assert c.requests[0].stop is None
-    assert c.requests[0].digest == ("91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b33459979cb706927233124ba258c1043c76a6461ffc91f7d84"
-                                    "11888")
-    assert plan_steps(reg, advice, ingress).requests[0].stop == SR.spec((0,), "length")
+    u = compile_steps(reg, advice, ingress).requests[0]
+    assert u.stop == SR.spec((0,), max_tokens=32, prompt_len=256, max_model_len=model_shape(cfg).max_pos, outputs=32, finish=2)
+    phi = Phi.from_json({**reg.phi.to_json(), "sampling": {"kind": "greedy"}})
+    assert u.digest == build_program(phi, "request", LP=256, T=31, stop=u.stop).digest
+    assert build_program(phi, "request", LP=256, T=31).digest == ("91d5eaf172589c9a5586e4eb7b8a83e047448018a2a14bcd6e0048f0618bc0a31a390b53b3"
+                                                                  "3459979cb706927233124ba258c1043c76a6461ffc91f7d8411888")

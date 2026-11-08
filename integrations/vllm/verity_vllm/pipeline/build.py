@@ -751,18 +751,19 @@ class Options:
                                         "(verity_vllm.pipeline.launch_context) for B >= 2.")
     stop: str | None = option("--stop", default=None,
                               help="the request wrapper's length rule over its outputs, its last check (program.frontend.stop_rule): JSON "
-                                   "'{\"ids\": [stop ids, increasing], \"finish\": \"eos\" | \"length\"}', as predict.steps.compile_steps keys it")
+                                   "'{\"stops\": [stop ids, increasing], \"max_tokens\": m, \"prompt_len\": p, \"max_model_len\": M, "
+                                   "\"outputs\": n, \"finish\": 0-3}', as predict.steps.compile_steps keys it")
 
 
 def _stop_arg(text: str | None) -> dict | None:
     """`--stop`'s JSON as the length rule's config (`stop_rule.spec`); None without it."""
     if text is None:
         return None
-    from verity_vllm.program.frontend.stop_rule import spec
+    from verity_vllm.program.frontend.stop_rule import KEYS, spec
     d = json.loads(text)
-    if not isinstance(d, dict) or set(d) != {"ids", "finish"}:
-        raise ValueError(f"--stop {text!r}: a JSON object of `ids` and `finish`, nothing else")
-    return spec(d["ids"], d["finish"])
+    if not isinstance(d, dict) or set(d) != set(KEYS):
+        raise ValueError(f"--stop {text!r}: a JSON object of {', '.join(f'`{k}`' for k in KEYS)}, nothing else")
+    return spec(d["stops"], **{k: d[k] for k in KEYS[1:]})
 
 
 def main(a: Options) -> int:

@@ -241,7 +241,7 @@ def name_request(raw: Any, net: Any, params: tuple, *, LP: int, T: int, C: int, 
         _forward(w, S, Cm, M, p0)
         _sample(w, S, Cm, sampling)
     if stop is not None:
-        w.bare(lambda f: f.name == "StopRule", "length rule", STOP)
+        w.bare(lambda f: f.name == "StopCheck", "length rule", STOP)
     if w.k != len(w.nodes):
         raise Unexpressible(f"naming: the body has {len(w.nodes)} nodes and the trace names {w.k}, node {w.k} "
                             f"({w.nodes[w.k].fn.id}) first unnamed")

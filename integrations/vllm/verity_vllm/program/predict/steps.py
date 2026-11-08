@@ -52,7 +52,7 @@
   collective's other partials its `peers_*` Inputs in call order (`vllm_meta.WithPeers`), in the registered compiler's form as at
   one rank (`build_program(..., dead_free=True)`, the Build's `--dead-free`). The advice is the node's, the same at every rank.
 - Each request Program returns its length rule over its outputs as its last check, which the verifier requires to be 1
-  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, and one with no stop ids has none.
+  (`frontend.stop_rule.of`, `RequestUnit.stop`): requests share a Program only under one rule, which with no stop ids reads its caps.
 - GP-01 (`program.workload.WorkloadProgram`) composes the request Programs side by side, sharing only the weights, each at its
   first scheduled step and with cap T + 1 (the executed prefix), under the target's lag.
 - On a batch-invariant target, a request a Commit window carries in (admitted in an earlier window) compiles to the Program it has
@@ -192,7 +192,7 @@ class RequestUnit:
     carried_out: bool = False   # left to the next window with outputs to keep
     launch: tuple[tuple[tuple[int, int], ...], ...] | None = None  # class G: per Program step, every row its forward ran, (n, start)
     chunks: tuple[int, ...] = ()  # class G: the prefill's rows per launch, where it ran in more than one
-    stop: dict | None = None    # its length rule over its outputs (`frontend.stop_rule.spec`, `stop_of`); None: no stop ids registered
+    stop: dict | None = None    # its length rule over its outputs (`frontend.stop_rule.spec`, `stop_of`)
 
     def key(self) -> str:
         return json.dumps([self.LP, self.T, self.policy, *([self.C] if self.C else []), *([{"chunks": self.chunks}] if self.chunks else []),
@@ -345,10 +345,10 @@ def request_of(i: int, q: I1.RequestAdvice, body: Any, vocab: int) -> tuple[tupl
     return tuple(prompt), params
 
 
-def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...]) -> dict | None:
+def stop_of(i: int, q: I1.RequestAdvice, T: int, ids: tuple[int, ...], max_tokens: int, max_model_len: int) -> dict:
     """Request `i`'s length rule over its Program's outputs, the last at index T (`frontend.stop_rule.of`), under stop ids `ids`."""
     try:
-        return SR.of(q.finish, T == q.output_len - 1, ids)
+        return SR.of(q.finish, q.output_len, T, ids, max_tokens=max_tokens, prompt_len=q.prompt_len, max_model_len=max_model_len)
     except ValueError as e:
         raise Unexpressible(f"request {i}: {e}") from None
 
@@ -632,7 +632,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                 except Unexpressible as e:
                     refuse(row.request, str(e))
     bs = int((phi0.engine or {}).get("block_size") or PP.DEFAULT_BLOCK_SIZE)
-    stops = SR.stop_ids(phi0.hf_config)
+    stops, mml = SR.stop_ids(phi0.hf_config), min(max_pos, int((phi0.engine or {}).get("max_model_len") or max_pos))
     units: list[RequestUnit | None] = []
     placed: dict[tuple[int, int], Placed] = {}
     spent: set[int] = set()
@@ -666,7 +666,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
                                         f"on: its Program's prefix is bound to the requests that computed it, in the window that "
                                         f"admitted it, which v0 doesn't carry")
                 producers = producers_of(i, s0, rows[i][0][2], bs) if C and carry is None else ()
-                stop = stop_of(i, q, T, () if params[i].get("ignore_eos") is True else stops)
+                stop = stop_of(i, q, T, () if params[i].get("ignore_eos") is True else stops, params[i]["max_tokens"], mml)
             except Unexpressible as e:
                 refuse(i, str(e))
             else:
