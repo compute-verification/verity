@@ -523,6 +523,19 @@ __global__ void fc_host_slots(const uint64_t* __restrict__ zab, const long long*
     }
 }
 
+// z = a & b over the host slots' words (slot i's at at[i]) once their a, b words are in place
+__global__ void fc_host_slots_and(const long long* __restrict__ at, const int* __restrict__ words, long long n, uint4* __restrict__ z,
+                                  const uint4* __restrict__ a, const uint4* __restrict__ b) {
+    for (long long i = blockIdx.x; i < n; i += gridDim.x) {
+        const int w = words[i];
+        const long long o = at[i];
+        for (int k = threadIdx.x; k < w; k += blockDim.x) {
+            const uint4 x = a[o + k], y = b[o + k];
+            z[o + k] = make_uint4(x.x & y.x, x.y & y.y, x.z & y.z, x.w & y.w);
+        }
+    }
+}
+
 static int fc_bad_shape(const FlockCudaProveParams* P, const FlockCircuitParams* N) {
     const int k_log = P->k_log;
     if (k_log < 20 || k_log > 27 || N->n_types < 1 || N->n_types > FC_MAX_TYPES || N->n_ranges < 1 || N->n_ranges > FC_MAX_RANGES) return 1;
@@ -593,42 +606,13 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             const long long hg = (n_h + 31) / 32;
             static cudaStream_t hs_stream = nullptr;
             static cudaEvent_t hs_zeroed = nullptr, hs_done = nullptr;
-            static int n_sm = 0;
+            static int n_sm = 0, hs_max_pitch = 0;
             if (N->n_host0 && !hs_stream) {
                 CK(cudaStreamCreateWithFlags(&hs_stream, cudaStreamNonBlocking));
                 CK(cudaEventCreateWithFlags(&hs_zeroed, cudaEventDisableTiming));
                 CK(cudaEventCreateWithFlags(&hs_done, cudaEventDisableTiming));
                 CK(cudaDeviceGetAttribute(&n_sm, cudaDevAttrMultiProcessorCount, 0));
-            }
-            // Mapped a, b host slots go to the device by the copy engine, in pieces of whole slots of at most FC_HS_PIECE_MB MiB
-            // (default 64) staged one after another in one device buffer, each scattered by fc_host_slots on hs_stream beside the
-            // compressions: no SM waits on PCIe reads, which slow the compression kernels beside them several times over. The
-            // copies are issued after the compression rows' copy, which would otherwise wait behind them on the copy engine.
-            // FC_HS_MAPPED=1 keeps fc_host_slots reading mapped host memory, for a same-job control. The buffer is kept for the
-            // process, since a cudaFree would sync the device, and zeroed on hs_stream once the last piece is read.
-            static const bool hs_mapped = [] { const char* e = std::getenv("FC_HS_MAPPED"); return e && e[0] == '1'; }();
-            static const size_t hs_piece = [] {
-                const char* e = std::getenv("FC_HS_PIECE_MB");
-                const long long mb = e ? std::atoll(e) : 64;
-                return (size_t)(mb > 0 ? mb : 64) << 20;
-            }();
-            static uint64_t* hs_stage = nullptr;
-            static size_t hs_stage_cap = 0;
-            bool staged = false;
-            if (!hs_mapped && N->n_host0 && N->host0_ab && !fc_on_device(N->host0_zab)) {
-                size_t u64s = 0, slot_max = 0;
-                for (long long i = 0; i < N->n_host0; i++) {
-                    u64s += 4 * (size_t)N->host0_words[i];
-                    slot_max = std::max(slot_max, 4 * (size_t)N->host0_words[i]);
-                }
-                const size_t want = std::min(u64s, std::max(slot_max, hs_piece / 8));
-                if (hs_stage_cap < want) {
-                    if (hs_stage) cudaFree(hs_stage);
-                    hs_stage = nullptr; hs_stage_cap = 0;
-                    if (cudaMalloc(&hs_stage, want * 8) == cudaSuccess) hs_stage_cap = want;
-                    else { cudaGetLastError(); hs_stage = nullptr; }
-                }
-                staged = hs_stage != nullptr;
+                CK(cudaDeviceGetAttribute(&hs_max_pitch, cudaDevAttrMaxPitch, 0));
             }
             // the input rows, and the host slots below, may be the device's copies already (copied while the witness was built)
             const bool hin_dev = fc_on_device(N->h_inputs);
@@ -637,15 +621,22 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                 CK(cudaMalloc(&d_hin, (size_t)n_h * N->h_in_words * 16));
                 CK(cudaMemcpy(d_hin, N->h_inputs, (size_t)n_h * N->h_in_words * 16, cudaMemcpyHostToDevice));
             }
-            // the host slots, staged or from mapped host memory, on a stream of their own beside the compressions (other words of
-            // z, a, b), once the memsets are done; pageable host slots take three copies each after the compressions
-            const uint64_t* zab_dev = staged ? hs_stage : nullptr;
-            if (!zab_dev && N->n_host0) {
+            // The host slots, on a stream of their own beside the compressions (other words of z, a, b), once the memsets are done.
+            // Mapped ones go to their words by the copy engine (host_copies, issued once the compressions are queued): no SM waits
+            // on PCIe reads, which slow the compression kernels beside them several times over, and the compression rows' copy
+            // doesn't wait behind them. FC_HS_MAPPED=1 has fc_host_slots read them from mapped memory instead, for a same-job
+            // control. Device ones fc_host_slots reads in place; pageable ones take three copies each after the compressions.
+            static const bool hs_mapped = [] { const char* e = std::getenv("FC_HS_MAPPED"); return e && e[0] == '1'; }();
+            const uint64_t* zab_dev = nullptr;
+            bool hs_copy = false;
+            if (N->n_host0) {
                 if (fc_on_device(N->host0_zab)) {
                     zab_dev = N->host0_zab;
                 } else if (cudaHostGetDevicePointer((void**)&zab_dev, (void*)N->host0_zab, 0) != cudaSuccess) {
                     cudaGetLastError();
                     zab_dev = nullptr;
+                } else {
+                    hs_copy = !hs_mapped;
                 }
             }
             if (N->n_host0 && N->host0_ab && !zab_dev) {
@@ -655,33 +646,55 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             auto host_slots = [&]() -> int {
                 if (!zab_dev) return 0;
                 const long long n = N->n_host0;
-                const long long per = N->host0_ab ? 4LL : 6LL;
-                // staged: slot i's offset is from the start of its piece, slots [cut[j], cut[j + 1]) piece j's, at most the buffer
-                std::vector<long long> off((size_t)n), cut{0};
-                for (long long i = 0, o = 0, p = 0; i < n; i++) {
-                    const long long w = per * N->host0_words[i];
-                    if (staged && o - p + w > (long long)hs_stage_cap) { cut.push_back(i); p = o; }
-                    off[i] = o - (staged ? p : 0);
-                    o += w;
-                }
-                cut.push_back(n);
+                std::vector<long long> off((size_t)n);
+                for (long long i = 0, o = 0; i < n; i++) { off[i] = o; o += (N->host0_ab ? 4LL : 6LL) * N->host0_words[i]; }
                 CK(cudaMalloc(&d_hat, n * sizeof(long long))); CK(cudaMalloc(&d_hoff, n * sizeof(long long)));
                 CK(cudaMalloc(&d_hw, n * sizeof(int)));
                 CK(cudaMemcpy(d_hat, N->host0_at, n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hoff, off.data(), n * sizeof(long long), cudaMemcpyHostToDevice));
                 CK(cudaMemcpy(d_hw, N->host0_words, n * sizeof(int), cudaMemcpyHostToDevice));
                 CK(cudaEventRecord(hs_zeroed, 0));
+                CK(cudaStreamWaitEvent(hs_stream, hs_zeroed, 0));
+                if (hs_copy) return 0;
+                fc_host_slots<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(zab_dev, d_hat, d_hoff, d_hw, n, N->host0_ab,
+                    (uint4*)df, (uint4*)d_a, (uint4*)d_b);
+                CK(cudaGetLastError());
+                CK(cudaEventRecord(hs_done, hs_stream));
+                return 0;
+            };
+            // a copy a run of slots of one width at one stride on the device (a 2D copy where the pitches allow), each of its
+            // z, a, b words' (a, b in the a, b layout, then fc_host_slots_and forms z)
+            auto host_copies = [&]() -> int {
+                if (!hs_copy) return 0;
+                const long long n = N->n_host0, per = N->host0_ab ? 4 : 6;
+                const long long* at = N->host0_at;
+                const int* words = N->host0_words;
+                F128* dst[3] = {df, d_a, d_b};
                 const uint64_t* src = N->host0_zab;
-                for (size_t j = 0; j + 1 < cut.size(); j++) {
-                    const long long i0 = cut[j], i1 = cut[j + 1];
-                    if (staged) {
-                        const long long u64s = off[i1 - 1] + per * N->host0_words[i1 - 1];
-                        CK(cudaMemcpyAsync(hs_stage, src, (size_t)u64s * 8, cudaMemcpyHostToDevice, hs_stream));
-                        src += u64s;
+                for (long long i0 = 0; i0 < n;) {
+                    const long long w = words[i0];
+                    long long i1 = i0 + 1, stride = w;
+                    if (i1 < n && words[i1] == w && at[i1] - at[i0] >= w) {
+                        stride = at[i1] - at[i0];
+                        while (i1 < n && words[i1] == w && at[i1] - at[i1 - 1] == stride) i1++;
                     }
-                    if (j == 0) CK(cudaStreamWaitEvent(hs_stream, hs_zeroed, 0));
-                    fc_host_slots<<<(unsigned)std::min(i1 - i0, 2LL * n_sm), 256, 0, hs_stream>>>(zab_dev, d_hat + i0, d_hoff + i0,
-                        d_hw + i0, i1 - i0, N->host0_ab, (uint4*)df, (uint4*)d_a, (uint4*)d_b);
+                    const bool two_d = i1 - i0 > 1 && stride * 16 <= hs_max_pitch && per * w * 8 <= hs_max_pitch;
+                    for (int k = N->host0_ab ? 1 : 0; k < 3; k++) {
+                        const uint64_t* s = src + 2 * w * (k - (N->host0_ab ? 1 : 0));
+                        if (two_d) {
+                            CK(cudaMemcpy2DAsync(dst[k] + at[i0], (size_t)stride * 16, s, (size_t)(per * w * 8), (size_t)w * 16,
+                                                 (size_t)(i1 - i0), cudaMemcpyHostToDevice, hs_stream));
+                        } else {
+                            for (long long i = i0; i < i1; i++)
+                                CK(cudaMemcpyAsync(dst[k] + at[i], s + per * w * (i - i0), (size_t)w * 16, cudaMemcpyHostToDevice, hs_stream));
+                        }
+                    }
+                    src += per * w * (i1 - i0);
+                    i0 = i1;
+                }
+                if (N->host0_ab) {
+                    fc_host_slots_and<<<(unsigned)std::min(n, 2LL * n_sm), 256, 0, hs_stream>>>(d_hat, d_hw, n, (uint4*)df, (const uint4*)d_a,
+                        (const uint4*)d_b);
                     CK(cudaGetLastError());
                 }
                 CK(cudaEventRecord(hs_done, hs_stream));
@@ -734,6 +747,7 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                             (uint32_t*)d_a, (uint32_t*)d_b);
                     CK(cudaGetLastError());
                 }
+                if (const int e = host_copies()) return e;
                 CK(cudaStreamSynchronize(0));
                 CK(fc_wipe_free(d_tape, (size_t)(batch * per)));
                 d_hs = nullptr;
@@ -754,16 +768,13 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
                         (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, 2, 0, N->h_levels, 0, nullptr, nullptr, 0, nullptr, nullptr, g0);
                     CK(cudaGetLastError());
                 }
+                if (const int e = host_copies()) return e;
             }
             CK(cudaStreamSynchronize(0));
             if (d_hs) CK(fc_wipe_free(d_hs, hs_bytes));
             if (!hin_dev) CK(fc_wipe_free(d_hin, (size_t)n_h * N->h_in_words * 16));
             if (zab_dev) {
                 CK(cudaEventSynchronize(hs_done));
-                if (staged) {
-                    CK(cudaMemsetAsync(hs_stage, 0, hs_stage_cap * 8, hs_stream));
-                    CK(cudaStreamSynchronize(hs_stream));
-                }
                 cudaFree(d_hat); cudaFree(d_hoff); cudaFree(d_hw);
             } else {
                 const uint64_t* p = N->host0_zab;
