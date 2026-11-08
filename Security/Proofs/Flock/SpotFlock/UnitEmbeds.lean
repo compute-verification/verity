@@ -91,4 +91,52 @@ theorem embeds_unitPlace {p : Parsed} {j : ℕ} (hj : j < p.sts.size) (hk : T.kL
   · rw [hval x (Or.inr hr)]
     exact decode_consts hU a hparse u hg o hz x b hb hr
 
+/-! ## A checked proof block is a member's unit -/
+
+/-- **Member `t`'s unit `k`, in Bridge's terms, sits in the members' program**: its proof block in the members'
+partition is its circuit file's proof block `k` of the key program's partition at the circuit's constants,
+`Bits.base ms t` later, and that key program's lowering sits in `bitsProgs ms` from `Bits.base ms t`. -/
+theorem sitsAt_member (ms : Spot.Bits.Members)
+    (htop : ∀ ci ∈ ms, (Properties.Spot.memberProg ci.1 ci.2.size).Topological) {t : ℕ} (ht : t < ms.length)
+    (hU : Built ms[t].1.unit) (hu : ms[t].1.unit.unitLog ≤ 32) (k : Fin ms[t].2.size) {b : List ℕ}
+    (hb : (Properties.Spot.membersPart ms).blocks[Properties.Spot.unitBase ms t + k]? = some b) :
+    _root_.Flock.Bridge.Members.SitsAt (Properties.Spot.bitsProgs ms) (Spot.Bits.base ms t)
+        (_root_.Flock.Bridge.progOf
+          ((Placed.keyProg ms[t].1 hU ms[t].2.size).circuit (Discharge.Layout.outsOf ms[t].1 hU ms[t].2.size))
+          (Bridge.constsOf ms[t].1 hU ms[t].2.size)) ∧
+      b = (_root_.Flock.Bridge.blockOf
+          ((Placed.keyProg ms[t].1 hU ms[t].2.size).partition (Discharge.Layout.outsOf ms[t].1 hU ms[t].2.size))
+          (Bridge.constsOf ms[t].1 hU ms[t].2.size) k).map (Spot.Bits.base ms t + ·) := by
+  refine ⟨?_, ?_⟩
+  · rw [_root_.Flock.Bridge.progOf_keyProg hu]
+    exact _root_.Flock.Bridge.Members.sitsAt_bitsProgs ms htop t ht
+  · rw [_root_.Flock.Bridge.Members.getElem?_blocks_membersPart_bridge ms ht (hU := hU) hu k] at hb
+    exact (Option.some.inj hb).symm
+
+variable (h : Held)
+
+/-- **A checked proof block is a member's unit**: at a statement whose partition and two-stage design evaluate, in
+the two-stage scope, proof block `u`, replayed in request `ρ`, is member `t`'s unit `ρ·n_t + p` for some `p < n_t`,
+which member `t` has (`filesOk`). -/
+theorem member_of_replayOf {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sampling.Partition}
+    {d : Claims.Sampling.Design.Two} {u ρ : ℕ} (hP : SpotFlock.partition h s = some Pt)
+    (hd : SpotFlock.two h s = some d) (hin : Claims.Sampling.InScopeTwo Pt d s) (hu : u < Pt.blocks.length)
+    (hρ : Claims.Sampling.replayOf Pt d.part u = some ρ) :
+    ∃ t, t < h.ms.length ∧ ∃ p, p < h.reg.ns.getD t 0 ∧ ρ * h.reg.ns.getD t 0 + p < h.ms[t].2.size ∧
+      u = Properties.Spot.unitBase h.ms t + (ρ * h.reg.ns.getD t 0 + p) := by
+  obtain rfl := SpotFlock.partition_eq h hP
+  obtain ⟨l, -, -, hdd, -, hfo⟩ := SpotFlock.two_eq h hd
+  obtain ⟨-, -, hfit, -⟩ := SpotFlock.filesOk_sound hfo
+  have hpart : d.part = Properties.Spot.filesReplay h.ms h.reg.ns l := congrArg Claims.Sampling.Design.Two.part hdd
+  have hρl : ρ < l.blocks.size := by
+    have hf := hρ
+    unfold Claims.Sampling.replayOf at hf
+    have := List.mem_range.1 (List.mem_of_find?_eq_some hf)
+    rwa [hpart, _root_.Flock.Bridge.Members.length_blocks_filesReplay] at this
+  rw [hpart] at hρ
+  have hw := (_root_.Flock.Bridge.Members.replayOf_filesReplay h.ms hin.2.1.1 hin.2.1.2.2.2.1 hfit hu hρl).1 hρ
+  obtain ⟨hroom, t, ht, p, hp, rfl⟩ := _root_.Flock.Bridge.Members.exists_of_mem_slotFiles h.ms hfit hw
+  exact ⟨t, ht, p, hp,
+    lt_of_lt_of_le (_root_.Flock.Bridge.Members.rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t ht), rfl⟩
+
 end SpotFlock
