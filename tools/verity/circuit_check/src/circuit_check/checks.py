@@ -47,8 +47,10 @@
                      Both resolve every parameter leaf, so a Definition over ``partition_max_leaves`` is not partitioned,
                      nor is one over ``partition_max_gates`` gates not cut member by member (`uncut`); such a Call is
                      partitioned by its callees where each is a Call (`by_callees`: each callee's partition checked as a
-                     Call's, failing by its name), and is otherwise a warning, ``partition/unchecked``, whose record names
-                     why its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget)
+                     Call's, failing by its name), and otherwise fails by its own name, ``partition/unpartitioned``, with why
+                     its callees can't partition it (`callee_gap`: one is no Call, or is a primitive over the budget): every
+                     gate of a served Call sits in a Call whose partition is checked.  A Definition that is no Call is
+                     partitioned inside the Call that contains it, so over the budget it is a warning, ``partition/unchecked``
     lowering pins    a lowering's AND/XOR/NOT counts and its circuit's digest (``type``, `lowering_type`) against its pin, which
                      must hold both (a piece's, a Boolean Definition's whole lowering's,
                      a template proof block's, in the sidecar of the module that defines it or its file in ``pins/``,
@@ -1062,7 +1064,8 @@ def dead_gates(fn: Any, opts: Options, F: Findings) -> dict:
 
 def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = True, q_word: int = 1) -> tuple[dict, dict]:
     """`Q_word_v1` on one Call of ``fn`` (its record and `word.unit_rule`).  Where the invariant applies (``fn`` is a Call of a
-    served Program) every violation fails by name; elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
+    served Program) every violation fails by name, a member over the budget that `word.unit_rule` leaves whole too
+    (``partition/unpartitioned``); elsewhere the cut of ``fn`` alone is recorded (``isolated``), since its gates
     are partitioned inside the Call that contains it.  With ``q_word=2`` (a Boolean Call: `Q_word` v2) a value computed in two
     proof blocks is no failure: ``recomputed_across`` records how many gates are (the whole cut's v2 view, else
     `word.unit_rule`'s count;
@@ -1090,7 +1093,10 @@ def partition(fn: Any, opts: Options, F: Findings, memo: dict, applies: bool = T
         elif v["class"] == "too-large":
             rec["checked"] = False
             rec["reason"] = f"{v['gates']} gates: over the partition budget {v['limit']}"
-            P.warn("partition", "unchecked", d, 1, rec["reason"])
+            if applies:
+                P.fail("partition", "unpartitioned", d, f"{rec['reason']}, and not cut member by member")
+            else:
+                P.warn("partition", "unchecked", d, 1, rec["reason"])
         else:
             P.fail("partition", "width", d, f"{v['class']}: |out(S)| = {v['out_bits']} b over {v['out_gates']} gate(s), limit "
                    f"{v['limit'][0]} b or one gate of {v['limit'][1]} b", unit_class=v["class"], units=v.get("units"))
@@ -1220,10 +1226,13 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
     violations fail by the callee's name, so every gate of ``fn`` sits in a Call whose partition is checked; and, where ``fn``'s
     body nodes read only its parameters (`cut.separable`), the values two of its members compute (`cross_call.members_check`:
     each a failure under `Q_word` v1, counted under v2).  Values two callees compute in a body that isn't separable are not
-    compared, as between two Calls of a Program.  None, so the partition stays unchecked, where `callee_gap` finds a gap (its
-    record names it).  ``memo`` keeps each callee's record and findings across targets."""
+    compared, as between two Calls of a Program.  ``max_out_bits`` is the widest unit output over its callees' records (a
+    primitive callee's `word.unit_rule`'s: its gate's output, none for a constant, which is wired).  None, so the partition stays
+    unchecked, where `callee_gap` finds a gap (its record names it).  ``memo`` keeps each callee's record and findings across
+    targets."""
     from verity.ml.circuits import boolean as BL
     from verity.ml.circuits.cut import separable
+    from verity.ml.definitions import word as W
 
     if callee_gap(fn, opts, memo.setdefault("callee_gap", {})) is not None:
         return None
@@ -1234,7 +1243,8 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
         if c.id not in done:
             G = Findings()
             if isinstance(c, PrimitiveDefinition):
-                rec = {"checked": True, "q_call": q_call(c, opts, G, word)}
+                rule = W.unit_rule(c, opts.X, opts.W, opts.extras, memo=word, max_gates=opts.partition_max_gates)
+                rec = {"checked": True, "max_out_bits": rule["max_out_bits"], "q_call": q_call(c, opts, G, word)}
             elif (inner := uncut(c, opts)) is not None:
                 rec = by_callees(c, opts, G, memo, inner)
             else:
@@ -1245,7 +1255,8 @@ def by_callees(fn: Any, opts: Options, F: Findings, memo: dict, why: str) -> dic
         F.extend(G)
         out[c.id] = rec
     v2 = BL.is_boolean(fn)
-    part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1, "by_callees": out}
+    part: dict[str, Any] = {"applies": True, "checked": True, "reason": why, "q_word": 2 if v2 else 1,
+                            "max_out_bits": max((r.get("max_out_bits") or 0 for r in out.values()), default=0), "by_callees": out}
     if separable(fn) is not None:
         from verity.ml.definitions.cross_call import members_check
 
@@ -1331,14 +1342,19 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
     if ports is not None:
         entry["ports"] = ports
     why, part = uncut(t, opts), None
-    if as_call and kind == "composite" and why is not None:
-        with spent("partition"):
-            part = by_callees(t, opts, F, memo, why)
+    if as_call and kind != "reference" and why is not None:
+        if kind == "composite":
+            with spent("partition"):
+                part = by_callees(t, opts, F, memo, why)
+        if part is None:
+            gap = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
+            F.fail("partition", "unpartitioned", t.id, f"{why}; {gap}")
+            part = {"applies": True, "checked": False, "q_word": 2 if is_boolean(t) else 1, "reason": why, "callee_gap": gap}
     if part is not None:
         entry["partition"] = part
         entry["redundant_gates"] = {"checked": False}
         with spent("dead-gates"):
-            entry["dead_gates"] = dead_gates(t, opts, F)
+            entry["dead_gates"] = dead_gates(t, opts, F) if kind == "composite" else {"count": 0}
     elif kind != "reference" and sum(pt.leaves for pt in params) > opts.partition_max_leaves:
         F.warn("partition", "unchecked", t.id, 1, why)
         entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
@@ -1361,8 +1377,6 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
-    if as_call and why is not None and entry["partition"].get("checked") is False:
-        entry["partition"]["callee_gap"] = callee_gap(t, opts, memo.setdefault("callee_gap", {}))
     if getattr(getattr(t, "defn", t), "gated", False) or t.id in pins.get("digests", {}):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
