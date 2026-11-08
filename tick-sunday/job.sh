@@ -26,7 +26,7 @@
 # - lanes 256, queue 256: a connection lives D plus its response's cells, about 40 s on average and 2 min at most
 #   (1,024 tokens), so about 70 are open at once at 1.67 a second (Poisson, so rarely past 110); 256 never refuses.
 # - ingress 96 cells within 100 buckets, egress 4096 cells: above the largest request (21) and response (about 1,200).
-# - tail 150 s: the last arrival's D and longest response; windows of 600 buckets (60 s).
+# - tail 300 s: the last arrival's D and longest response (1,024 tokens at about 4.5 tok/s is about 226 s); windows of 600 buckets (60 s).
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run this under research run}; OUT=$D/out; mkdir -p "$OUT"
 SRC=$PWD
@@ -34,7 +34,7 @@ RATE=${RATE:-1.67}; REQUESTS=${REQUESTS:-3000}; SEED=${SEED:-0}
 SCHEDULE=(--cell-bytes 256 --slots 1 --bucket-ms 100 --delay 150 --lanes 256 --queue 256 --window 600
           --ingress-cells 96 --ingress-buckets 100 --egress-cells 4096 --every 1)
 TRAFFIC=(--rate "$RATE" --requests "$REQUESTS" --seed "$SEED" --temperature 0 --prompt-max 1024 --max-tokens 1024
-         --tail "${TAIL:-150}")
+         --tail "${TAIL:-300}")
 W=$(mktemp -d); export TMPDIR=$W
 TUN=
 cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }

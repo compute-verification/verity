@@ -2,12 +2,13 @@
 # Launches tick-sunday/job.sh (the certified tick's network certifier side) on vy-nebius-cpu-11 as a `research run`, its
 # tree this clean checkout's HEAD, from any host with research's credentials (the nodes' ssh key and the store's custody
 # key), once vllm's endpoint is up on the serving node's loopback:
-#   PORT=P [MACHINE=vy-spot-glm53 | PEER=USER@HOST [SSH_PORT=N]] [KEY=FILE] [RATE=1.67] [REQUESTS=3000] \
+#   PORT=P [MACHINE=vy-spot-glm53 | PEER=USER@HOST [SSH_PORT=N]] [KEY=FILE] [RATE=1.67] [REQUESTS=3000] [TAIL=300] \
 #     bash tick-sunday/launch.sh [--reach]
 # --reach runs the job's reach check alone (about a minute, waited on): run it before the slot. PORT is the endpoint's port
 # on the serving node's 127.0.0.1. PEER and SSH_PORT default to MACHINE's ssh endpoint as `research` reaches it: a RunPod
 # pod's (node A, vy-spot-glm53) is root at its public IP and the public port RunPod maps to its 22/tcp, read from the RunPod
 # API at launch (a pod's mapping is its own, so never written down); an ssh machine's is the registry's user, host and port.
+# TAIL is the seconds the job waits after the last arrival for answers still streaming.
 # KEY is the tunnel key's path on cpu-11 (the job's default ~/.ssh/vy-tick-tunnel).
 # The run, not in a pool: a pool's slot runs its job at nice 19, behind the node's checks, which a ticking certifier can't
 # be. 4 GB reserved (waiting up to 5 min for it), 90 min at most (about 36 min of serving and checking), its custody key
@@ -39,7 +40,7 @@ print(p.get("publicIp") or "-", (p.get("portMappings") or {}).get("22") or "-")'
   esac
 fi
 envs=(--env "PEER=$PEER" --env "PORT=$PORT" --env "RATE=${RATE:-1.67}" --env "REQUESTS=${REQUESTS:-3000}"
-      --env "SEED=${SEED:-0}")
+      --env "SEED=${SEED:-0}" --env "TAIL=${TAIL:-300}")
 [ -n "${KEY:-}" ] && envs+=(--env "KEY=$KEY")
 [ -n "${SSH_PORT:-}" ] && envs+=(--env "SSH_PORT=$SSH_PORT")
 run=(research run --on vy-nebius-cpu-11 --project verity --source "$PWD" --cwd source "${envs[@]}")
