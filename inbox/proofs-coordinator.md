@@ -5980,3 +5980,38 @@ premise. Records that move:
 - What lands: `FlockSoundness.Discharge.Hidden.built_of_parseStmt` (new `Soundness/Discharge/Hidden/Built.lean`). `SampledKSLiveV5` binds `hU` to it instead of taking `Built`, so `FlockSoundness.Built` leaves V5's `open`. `SampledKSLiveV5Honest` drops its `Built` conjunct.
 - **Records that move (DM to Daniel):** `Flock.SecurityProofs.SampledKSLiveV5` (its statement; `open` minus `Built`; the `unwitnessed` re-key at 305) and `Flock.SecurityProofs.SampledKSLiveV5Honest` (its statement minus the `Built` conjunct). The three `Nci.SecurityProofs.DampenerRemotePeriod*` `unwitnessed` re-keys are bookkeeping from the `unregisteredShare` rename, not a change here. They're in their own commit, and a test merge with `checked`'s tip `15137ddb2e` is clean. I don't see #7952's re-key on that tip yet; if it lands first with the same hashes, the merge driver takes either.
 - Preflight warned that the records run's regenerated record differs from the head's lock (drive's lock run regenerates it at landing), and that `Security/README.md` is over its cap. That comes from `checked`; this PR doesn't touch the file.
+
+## 03:15Z from VERIFYFAST-A: MoE's verify falls from 21.7 to 10.8 s on vy-nebius-cpu-2; FlashInfer K2048 and quant K6144 are due about 04:00Z
+
+- **How it's measured:** #7826's `flock_served.sh` on vy-nebius-cpu-2, with both sides in one run.
+  - The base side is #7826's head with its own `verity/core/service/flock`. The after side is the same tree with my
+    branch's.
+  - Both verdicts accepted, with the same partition digest.
+- **MoE (r20261108-024140-4078),** without my last two commits (sparse entries and row order; SHA-512 without the copy):
+
+  | step | before | after |
+  |---|---|---|
+  | wall | 21.66 s | 10.83 s |
+  | user | 17.05 s | 8.80 s |
+  | inputs (read, hash, parse) | 11.24 s | 3.55 s |
+  | setup | 0.90 s | 0.74 s |
+  | session | 6.60 s | 5.65 s |
+  | max RSS | 860 MB | 848 MB |
+
+- **Still running on cpu-2:**
+  - FlashInfer K2048 (r20261108-024105-9815) and quant K6144 (r20261108-024130-f515), on the same five commits. ETA
+    about 04:00Z; I'll append their seconds here.
+  - Then one final A/B of all three types at the branch's head.
+- **What changed:** compiled code only, through `@[csimp]` twins proved equal to the definitions. No definition, statement
+  or file format changes.
+  - The circuit file is hashed once. The digest goes to the archive's key check and the parse's pin.
+  - Lines and row numbers are read off the bytes, in `UInt64`s and `USize` indices.
+  - SHA-512 reads its words with `uget` and reads a message's whole blocks in place.
+  - Sparse entries are written from a `UInt32`, and row order is checked without copying rows.
+- **Floors I can't remove without a format change, to be stated in the PR:**
+  - `classOf` hashes META re-serialized plus the bytes after it, a different message from the file, so the file takes
+    two SHA-512 passes.
+  - Piece 4, the fixed nets by digest, gains nothing inside one `verify` while the file carries their text. C has it.
+- **Lean check:** r20261108-025332-e40e on cpu-5 has run since 02:53Z, without the last commit. I'll rerun it at the
+  branch's head.
+- **Branch:** `cursor/proofs-verifyfast-a-6fbe` at 198ad3412c. The PR follows the final A/B and the checks; due Mon 20:00Z.
