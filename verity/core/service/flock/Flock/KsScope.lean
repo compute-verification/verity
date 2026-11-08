@@ -230,10 +230,34 @@ theorem drawWhy_none {count : Nat} {draw : Option Json} (h : drawWhy count draw 
       next hm => exact hm
       next => cases h
 
-/-- **What `checkOf` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `parsed` holds (a templated
-statement's carrying its template, as `ProvedScope.circuitOf` reads it) and the public file `HmOut.loadPublic` loads, the
-circuit is in the unit's form (`unitWhy`: `unitWhy_flat`, `unitWhy_tmpl`), the public file has no shared rows or is in
-V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
+/-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
+public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
+in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
+theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
+    {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
+    (hc : HmOut.parse tags cf tables = .ok c) (hpub : HmOut.loadPublic tags c pf = .ok pub) :
+    tagsWhy tags = none ∧ ProvedScope.scopeOkH c = true ∧ (pub.tables = none ∨ SharedOk tags c pf) ∧
+      drawWhy count draw = none := by
+  unfold check checkOf at h
+  rw [hc] at h
+  cases ht : tagsWhy tags with
+  | some w => simp [ht] at h
+  | none =>
+    simp only [ht, hpub] at h
+    cases hf : filesWhy tags count c pub pf with
+    | some w => simp [hf] at h
+    | none =>
+      simp only [hf] at h
+      cases hd : drawWhy count draw with
+      | some w => simp [hd] at h
+      | none =>
+        obtain ⟨hu, hp⟩ := filesWhy_none hf
+        exact ⟨rfl, unitWhy_flat hu (HmOut.parse_isTmpl hc), hp, rfl⟩
+
+/-- **What `checkOf` passing says of the files**, at any circuit `parsed` holds (a templated statement's carrying its
+template, as `ProvedScope.circuitOf` reads it): the tags pass `tagsWhy`, the circuit is in the unit's form (`unitWhy`:
+`unitWhy_flat`, `unitWhy_tmpl`), the public file `HmOut.loadPublic` loads has no shared rows or is in V5's shared-row
+form (`SharedOk`), and the sample passes `drawWhy`. -/
 theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : Nat} {draw : Option Json}
     {c : Circuit} {pub : Public} (h : checkOf parsed tags pf count draw = .ok ()) (hc : parsed = .ok c)
     (hpub : HmOut.loadPublic tags c pf = .ok pub) :
@@ -254,16 +278,5 @@ theorem checkOf_ok {parsed : V Circuit} {tags : Tags} {pf : ByteArray} {count : 
       | none =>
         obtain ⟨hu, hp⟩ := filesWhy_none hf
         exact ⟨rfl, hu, hp, rfl⟩
-
-/-- **What `check` passing says of the files**: the tags pass `tagsWhy`, and at the circuit `HmOut.parse` reads and the
-public file `HmOut.loadPublic` loads, the circuit is in `scopeOkH`, the public file has no shared rows (V4's form) or is
-in V5's shared-row form (`SharedOk`), and the sample passes `drawWhy`. -/
-theorem check_ok {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : Nat}
-    {draw : Option Json} {c : Circuit} {pub : Public} (h : check tags cf pf tables count draw = .ok ())
-    (hc : HmOut.parse tags cf tables = .ok c) (hpub : HmOut.loadPublic tags c pf = .ok pub) :
-    tagsWhy tags = none ∧ ProvedScope.scopeOkH c = true ∧ (pub.tables = none ∨ SharedOk tags c pf) ∧
-      drawWhy count draw = none :=
-  have ⟨ht, hu, hp, hd⟩ := checkOf_ok (parsed := HmOut.parse tags cf tables) h hc hpub
-  ⟨ht, unitWhy_flat hu (HmOut.parse_isTmpl hc), hp, hd⟩
 
 end Flock.KsScope
