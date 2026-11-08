@@ -65,7 +65,8 @@ theorem schedule_ok_k0 {m : ℕ} {p : _root_.Flock.Schedule × ℕ} (h : _root_.
   | some sch =>
     rw [hf] at h
     cases h
-    exact fast100_k0_le hf
+    have hk := fast100_k0_le hf
+    exact hk
 
 /-- **A rep's frame start leaves its pads and pad row within a `u64`'s count** at a statement with `m` below 68 and
 `k_log` at most 27. -/
@@ -96,7 +97,8 @@ theorem sizesOk_one {st : _root_.Flock.Stmt} (hm0 : 0 < st.mPts) (hm : st.mPts �
   have hrs : st.spec.repStreams.size = 2 := by
     first
     | rfl
-    | simp [_root_.Flock.SessionSpec.repStreams, _root_.Flock.Stmt.spec]
+    | (simp [_root_.Flock.SessionSpec.repStreams, _root_.Flock.Stmt.spec]; done)
+    | (simp [_root_.Flock.SessionSpec.repStreams, _root_.Flock.Stmt.spec]; decide +kernel)
   simp only [sizesOk, List.all_eq_true, List.mem_range, hrs]
   intro k hk
   have hk2 : k / 2 = 0 := by omega
