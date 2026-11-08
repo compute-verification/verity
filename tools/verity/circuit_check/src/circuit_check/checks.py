@@ -197,6 +197,19 @@ def _n_vectors(t: Any, opts: Options, lazy: int | Iterable[int] = ()) -> int:
     return max(1, min(n, opts.input_budget // max(1, leaves)))
 
 
+def _lazy_vectors(t: Any, opts: Options, wide: Sequence[int]) -> tuple[int, bool]:
+    """``(vectors, capped)`` of a Definition whose ``wide`` operands are read lazily (`_wide_correspondence`): `_n_vectors`',
+    which the input budget doesn't bound (a vector reads only what it selects of them), unless the vectors its
+    ``opts.min_vectors`` floor adds past what ``opts.reference_budget`` pays for take the reference's work past
+    ``opts.random_budget``; then, capped, as many as ``opts.reference_budget`` pays for and at least ``opts.random_floor + 1``, at
+    most half of them all-edge and at least ``opts.random_floor`` random, as the word view splits its own past its budget."""
+    n, g = _n_vectors(t, opts, wide), max(1, _gates(t))
+    paid = opts.reference_budget // g
+    if n <= paid or (n - paid) * g <= opts.random_budget:
+        return n, False
+    return min(n, max(paid, opts.random_floor + 1)), True
+
+
 def floored(t: Any, n: int, edge: int, opts: Options, lanes: int = 0) -> tuple[int, int]:
     """``(vectors, all-edge vectors)`` for a realization of ``t`` compared on ``n`` vectors of parameters with ``edge`` edge
     words: the all-edge ones first, as many as fit in ``n``, then the random ones, which the floor makes at least
@@ -297,21 +310,23 @@ def _unread_operand(t: Any, params: Sequence, wide: Sequence[int]) -> str | None
 
 
 def _wide_correspondence(t: Any, params: Sequence, wide: Sequence[int], opts: Options, F: Findings) -> tuple[dict, None, list]:
-    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`): every
-    parameter takes its edge and random words, the wide ones one vector at a time (`vectors.wide_words`), each read lazily as a
-    `RegisteredTable`, then one random vector per index probe (`targets.OPERAND_PROBES`) with its index parameters set.  An
-    operand no vector reads is a warning.  No kernel takes them."""
+    """The reference on the vectors of a Definition with operands over the input budget (`targets.LAZY_OPERANDS`; how many,
+    `_lazy_vectors`): every parameter takes its edge and random words, the wide ones one vector at a time
+    (`vectors.wide_words`), each read lazily as a `RegisteredTable`, then one random vector per index probe
+    (`targets.OPERAND_PROBES`) with its index parameters set.  An operand no vector reads is a warning.  No kernel takes them."""
     from verity.ml.circuits.evaluation import RegisteredTable
     from verity.ml.circuits.types import Value
 
     from .targets import operand_probes
     from .vectors import edges, wide_words
 
-    n = _n_vectors(t, opts, wide)
+    n, capped = _lazy_vectors(t, opts, wide)
     rest = [j for j in range(len(params)) if j not in wide]
     other = [params[j] for j in rest]
-    arrays = vectors(other, n, opts.seed)
     n_edge = min(n, max([edge_count(other)] + [len(edges(params[j].homogeneous_width())) for j in wide]))
+    if capped:
+        n_edge = max(0, min(n_edge, n // 2, n - opts.random_floor))
+    arrays = vectors(other, n, opts.seed, n_edge if capped else None)
     names = [nm for nm, _ in resolve(t).signature()[0]]
     reads = dict.fromkeys(wide, 0)
     probes = operand_probes(t)
