@@ -250,7 +250,9 @@ def Wiring.Reads (c : Wiring) (x y : String × Int) : Prop :=
   ∃ w ∈ c.wires, ∃ e ∈ w.entries, x = (e.2.1, e.2.2.1) ∧ y = (e.1.1, (e.1.2.1 : Int))
 
 /-- **The wires `check` accepts are acyclic**: no unit reads itself through a chain of wires, since along every wire the
-rank of the reader unit's block in the order exceeds the writer's. -/
+rank of the reader unit's block in the order exceeds the writer's: the writer lies in the wire's box over the reader
+indices in the reader unit's block (`Wire.writerAt_mem_box`), and the order's closed form ranks every block meeting that
+box below it. -/
 theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : String × Int) :
     ¬ Relation.TransGen c.Reads x x := by
   obtain ⟨o, ho, hin⟩ := checkRef_order (check_sound h).2
@@ -266,14 +268,32 @@ theorem check_acyclic {c : Wiring} {S : Summary} (h : check c = .ok S) (x : Stri
     have hu := readerUnit_lt hc hd hi
     have hs := w.writerAt_mem_span i hi
     have hcl : orderedWire o w = true := (orderedWire_eq_ref o w).symm ▸ hin w hw
-    simp only [orderedWire, List.all_eq_true, decide_eq_true_eq] at hcl
-    have hq : i / w.cuts < w.readerUnits := hu
-    generalize i / w.cuts = q at hq ⊢
-    obtain ⟨a, ha, ham⟩ := blockOf_some hok hr (u := w.start + q) (by omega)
+    simp only [orderedWire, List.all_eq_true] at hcl
+    obtain ⟨a, ha, ham⟩ := blockOf_some hok hr (u := w.start + i / w.cuts) (by omega)
+    obtain ⟨p0, n, hk, hmeet⟩ := mem_ranksIn.1 ham
+    have hblk := hcl ((w.reader, p0, n), a) (List.mem_zipIdx_iff_getElem?.2 hk)
+    have hreads : w.readsIn (w.reader, p0, n) = true := by
+      simp only [Wire.readsIn, beq_self_eq_true, Bool.true_and, decide_eq_true_eq]
+      generalize i / w.cuts = q at hmeet hu
+      omega
+    simp only [hreads, Bool.not_true, Bool.false_or, List.all_eq_true, decide_eq_true_eq] at hblk
+    have hlo : (w.indicesIn p0 n).1 ≤ i := by
+      have h1 : max p0 w.start - w.start ≤ i / w.cuts := by
+        generalize i / w.cuts = q at hmeet ⊢
+        omega
+      exact Nat.le_trans (Nat.mul_le_mul_right w.cuts h1) (Nat.div_mul_le_self i w.cuts)
+    have hhi : i ≤ (w.indicesIn p0 n).2 := by
+      have h1 : i / w.cuts + 1 ≤ min (p0 + n) (w.start + w.readerUnits) - w.start := by
+        generalize i / w.cuts = q at hmeet hu ⊢
+        omega
+      have h2 := Nat.mul_le_mul_right w.cuts h1
+      have h3 := Nat.lt_mul_div_succ i (show 0 < w.cuts by omega)
+      rw [Nat.mul_comm] at h3
+      show i ≤ (min (p0 + n) (w.start + w.readerUnits) - w.start) * w.cuts - 1
+      omega
+    have hbx := w.writerAt_mem_box hlo hhi
     obtain ⟨b, hb', hbm⟩ := blockOf_some hok hwt (u := (w.writerAt i).toNat) (by omega)
-    have hl := Int.toNat_le_toNat hs.1
-    have hh := Int.toNat_le_toNat hs.2
-    have := hcl b (mem_ranksIn_iff.2 ⟨_, hl, by omega, hbm⟩) a (mem_ranksIn_iff.2 ⟨_, by omega, by omega, ham⟩)
+    have := hblk b (mem_ranksIn_iff.2 ⟨_, Int.toNat_le_toNat hbx.1, by have := Int.toNat_le_toNat hbx.2; omega, hbm⟩)
     simp only [ρ, Int.toNat_natCast, ha, hb', Option.getD_some]
     exact this
   have chain : ∀ a b, Relation.TransGen c.Reads a b → ρ a < ρ b := by

@@ -113,6 +113,25 @@ def highOf : List (Nat × Int) → Int
 /-- The least and the greatest writer the wire reads, in closed form. -/
 def Wire.span (w : Wire) : Int × Int := (w.base + lowOf w.pairs, w.base + highOf w.pairs)
 
+/-- A lower bound on `accum ps i` over indices `lo ≤ i ≤ hi`, digit by digit fastest first: where every such index has
+the same higher digits, its digit's least term and theirs; else the digit's least term over all its values and the bound
+on the higher digits. -/
+def boxLow : List (Nat × Int) → Nat → Nat → Int
+  | [], _, _ => 0
+  | (r, s) :: ps, lo, hi =>
+    if lo / r = hi / r then min (((lo % r : Nat) : Int) * s) (((hi % r : Nat) : Int) * s) + accum ps (lo / r)
+    else min 0 (s * ((r : Int) - 1)) + boxLow ps (lo / r) (hi / r)
+
+/-- The upper bound `boxLow` mirrors. -/
+def boxHigh : List (Nat × Int) → Nat → Nat → Int
+  | [], _, _ => 0
+  | (r, s) :: ps, lo, hi =>
+    if lo / r = hi / r then max (((lo % r : Nat) : Int) * s) (((hi % r : Nat) : Int) * s) + accum ps (lo / r)
+    else max 0 (s * ((r : Int) - 1)) + boxHigh ps (lo / r) (hi / r)
+
+/-- Bounds on the writers of reader indices `lo … hi`, in closed form (`Wire.writerAt_mem_box`). -/
+def Wire.box (w : Wire) (lo hi : Nat) : Int × Int := (w.base + boxLow w.pairs lo hi, w.base + boxHigh w.pairs lo hi)
+
 /-- Reader index `i`'s reader unit and row. -/
 def Wire.readerAt (w : Wire) (i : Nat) : Nat × Nat := (w.start + i / w.cuts, w.cut0 + i % w.cuts)
 
@@ -203,10 +222,11 @@ def rowWords (c : Wiring) (w : Wire) : Nat :=
 A unit's check holds its output to its inputs, so wires with a cycle among units pass every unit's check on a fixed point
 the prover chose: the wires must be acyclic as a graph on units, every reader unit after its writers. An order ranks
 blocks of units: each entry `(tid, at, n)` is template `tid`'s units `[at, at + n)`, its rank its place in the order, and
-each template's blocks tile its units (`orderOk`), in any order of ranks. A wire is in order when every block meeting its
-reader units ranks above every block meeting its span (`orderedWire`, two scans of the order): every unit it reads then
-ranks below every unit reading it (`check_acyclic`). The order is the circuit's own when it states one, else each
-template one block, in a topological order of the templates by their wires (`kahn`). -/
+each template's blocks tile its units (`orderOk`), in any order of ranks. A wire is in order when, for every block meeting
+its reader units, every block meeting the bounds on the writers it reads there (`Wire.box` of the block's reader indices)
+ranks below it (`orderedWire`): every unit a reader unit reads then ranks below it (`check_acyclic`). The order is the
+circuit's own when it states one, else each template one block, in a topological order of the templates by their wires
+(`kahn`). -/
 
 /-- A block of an order: template `tid`'s units `[at, at + n)`. -/
 abbrev Block := String × Nat × Nat
@@ -278,11 +298,21 @@ def orderOf (c : Wiring) : Except Refusal (List Block) :=
   | .ok o => if orderOk c o then .ok o else .error ⟨.order, none⟩
   | .error r => .error r
 
-/-- The wire is in order `o`, in closed form: every block meeting its span ranks below every block meeting its reader
-units. -/
+/-- The first and the last reader index of the wire's reader units in units `[p0, p0 + n)` of its reader. -/
+def Wire.indicesIn (w : Wire) (p0 n : Nat) : Nat × Nat :=
+  ((max p0 w.start - w.start) * w.cuts, (min (p0 + n) (w.start + w.readerUnits) - w.start) * w.cuts - 1)
+
+/-- Block `(t, at, n)` meets the wire's reader units. -/
+def Wire.readsIn (w : Wire) (b : Block) : Bool :=
+  b.1 == w.reader && decide (max b.2.1 w.start < min (b.2.1 + b.2.2) (w.start + w.readerUnits))
+
+/-- The wire is in order `o`, in closed form: for each block meeting its reader units, every block meeting the bounds on
+the writers of its reader indices there ranks below it. -/
 def orderedWire (o : List Block) (w : Wire) : Bool :=
-  let rs := ranksIn o w.reader w.start (w.start + w.readerUnits)
-  (ranksIn o w.writer w.span.1.toNat (w.span.2.toNat + 1)).all fun b => rs.all (b < ·)
+  o.zipIdx.all fun (b, a) =>
+    !w.readsIn b ||
+      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+      (ranksIn o w.writer s.1.toNat (s.2.toNat + 1)).all (· < a)
 
 /-- The order's refusal (`orderOf`), else the first wire `f` doesn't put in it, by index. -/
 def orderCode (c : Wiring) (f : List Block → Wire → Bool) : Option Refusal :=
@@ -340,12 +370,13 @@ def wireCodeRef (c : Wiring) (w : Wire) : Option Code :=
 /-- No reader row twice among `es` (quadratic in the entries). -/
 def distinctRows (es : List Entry) : Bool := decide (es.map (·.1)).Nodup
 
-/-- The wire is in order `o`, unit by unit: each block holding a unit of its span ranks below each block holding one of
-its reader units. -/
+/-- The wire is in order `o`, unit by unit: for each block meeting its reader units, each block holding a unit within
+the bounds on the writers of its reader indices there ranks below it. -/
 def orderedWireRef (o : List Block) (w : Wire) : Bool :=
-  (List.range' w.start w.readerUnits).all fun u =>
-    (List.range' w.span.1.toNat (w.span.2.toNat + 1 - w.span.1.toNat)).all fun v =>
-      (ranksIn o w.writer v (v + 1)).all fun b => (ranksIn o w.reader u (u + 1)).all (b < ·)
+  o.zipIdx.all fun (b, a) =>
+    !w.readsIn b ||
+      let s := w.box (w.indicesIn b.2.1 b.2.2).1 (w.indicesIn b.2.1 b.2.2).2
+      (List.range' s.1.toNat (s.2.toNat + 1 - s.1.toNat)).all fun v => (ranksIn o w.writer v (v + 1)).all (· < a)
 
 /-- **The unrolled reference**: `check`'s refusals with the bounds, the overlap and the order taken entry by entry, else
 every entry. -/

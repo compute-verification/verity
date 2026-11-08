@@ -3,9 +3,9 @@ module
 public import SampledProofs.WiresSpan
 
 /-! **The order's closed form against its units** (`Wires` "The order"). A block meets a range of units exactly when it
-holds one of them (`mem_ranksIn_iff`), so a wire's closed form, every block meeting its span below every block meeting
-its reader units, is its check unit by unit (`orderedWire_eq_ref`). A well-formed order's blocks of a template tile its
-units, so each of its units lies in a block (`ranksIn_ne_nil`). -/
+holds one of them (`mem_ranksIn_iff`), so a wire's closed form, every block meeting the bounds on its writers below the
+block they are read in, is its check unit by unit (`orderedWire_eq_ref`). A well-formed order's blocks of a template tile
+its units, so each of its units lies in a block (`ranksIn_ne_nil`). -/
 
 @[expose] public section
 
@@ -36,17 +36,24 @@ theorem mem_ranksIn_iff {o : List Block} {t : String} {lo hi k : Nat} :
   · rintro ⟨u, h1, h2, p0, n, hk, h⟩
     exact ⟨p0, n, hk, by omega⟩
 
+theorem all_ranksIn {o : List Block} {t : String} {lo hi a : Nat} :
+    (ranksIn o t lo hi).all (· < a) = (List.range' lo (hi - lo)).all fun v => (ranksIn o t v (v + 1)).all (· < a) := by
+  rw [Bool.eq_iff_iff]
+  simp only [List.all_eq_true, List.mem_range'_1, decide_eq_true_eq]
+  constructor
+  · intro h v hv k hk
+    exact h k (mem_ranksIn_iff.2 ⟨v, hv.1, by omega, hk⟩)
+  · intro h k hk
+    obtain ⟨v, hv1, hv2, hk'⟩ := mem_ranksIn_iff.1 hk
+    exact h v ⟨hv1, by omega⟩ k hk'
+
 /-- **The closed form is the check unit by unit.** -/
 theorem orderedWire_eq_ref (o : List Block) (w : Wire) : orderedWire o w = orderedWireRef o w := by
-  rw [Bool.eq_iff_iff]
-  simp only [orderedWire, orderedWireRef, List.all_eq_true, List.mem_range'_1, decide_eq_true_eq]
-  constructor
-  · intro h u hu v hv b hb a ha
-    exact h b (mem_ranksIn_iff.2 ⟨v, by omega, by omega, hb⟩) a (mem_ranksIn_iff.2 ⟨u, hu.1, hu.2, ha⟩)
-  · intro h b hb a ha
-    obtain ⟨v, hv1, hv2, hb'⟩ := mem_ranksIn_iff.1 hb
-    obtain ⟨u, hu1, hu2, ha'⟩ := mem_ranksIn_iff.1 ha
-    exact h u ⟨hu1, hu2⟩ v ⟨hv1, by omega⟩ b hb' a ha'
+  unfold orderedWire orderedWireRef
+  congr 1
+  funext ⟨b, a⟩
+  dsimp only
+  rw [all_ranksIn]
 
 theorem tiles_cover : ∀ {bs : List (Nat × Nat)} {cur units u : Nat}, tiles bs cur units = true → cur ≤ u → u < units →
     ∃ p ∈ bs, p.1 ≤ u ∧ u < p.1 + p.2
