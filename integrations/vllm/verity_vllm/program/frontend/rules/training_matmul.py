@@ -39,9 +39,10 @@ class Matmul(_TrainRule):
     Definition the route's on words, an unsplit one padded with +0 words to whole k16 steps (`cublas_bf16.route_gemm`); a bf16
     `mv` is that GEMM at one row, x[1, K] @ A^T, as torch's CUDA gemv calls cuBLAS's GEMM with one column.  The rule still claims a
     product it can't lower that way and refuses it with the capture it needs, so that no other rule lowers it with torch CPU's
-    arithmetic: at ``cc`` a bf16 `bmm`, a layout no role has, a shape the capture doesn't cover, a route with no Definition on
-    words, with ``tf32`` (cuda.matmul.allow_tf32) an f32 `mm` or `bmm` (cuBLAS's TF32 GEMM); an f32 `mv` (cuBLAS's sgemv, or
-    torch CPU's BLAS gemv, whose order is not its mm's row); and a `dot` (cuBLAS's dot kernel, or torch CPU's f32 BLAS dot)."""
+    arithmetic: at ``cc`` a bf16 `bmm`, a layout no role has, a shape the capture doesn't cover, a route with no Definition
+    (`cublas_bf16.route_gemm` refuses it), with ``tf32`` (cuda.matmul.allow_tf32) an f32 `mm` or `bmm` (cuBLAS's TF32 GEMM); an
+    f32 `mv` (cuBLAS's sgemv, or torch CPU's BLAS gemv, whose order is not its mm's row); and a `dot` (cuBLAS's dot kernel, or
+    torch CPU's f32 BLAS dot)."""
     info = _info("Matmul", "aten.mm / aten.bmm / aten.mv of f32 or bf16 values", "both operands are values of one dtype, f32 or bf16",
                  "one batch of LinearRef rows per matrix")
 
@@ -140,7 +141,7 @@ class Matmul(_TrainRule):
         try:
             route = CB.train_route(role, M, K, N)
             fn = word_of(CB.route_gemm(route, *CB.TRAIN_LINEAR_ROLES[role][2](M, K, N)))
-        except (ValueError, KeyError) as e:
+        except ValueError as e:
             no(f"F.linear's {role} GEMM at x ({M}, {K}), W ({N}, {K}): {e.args[0]}")
         if mv:
             a = ctx.coll(node.args[1]).reshape(Array(1, Array(Km, BF16)))

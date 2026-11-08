@@ -63,10 +63,12 @@ PACKAGE = "training_slowdown"
 DERIVE = "derive the step with step_program, the training-step frontend"
 #: the matrix products the grader reads, and the cells each must be lowered to, one cell a row of the product (N dots of K,
 #: its bindings `K` and `N`): torch CPU's arithmetic (`CELL`), or a cuBLAS route's Definition on words
-#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K)
+#: (`cublas_bf16.route_gemm`'s word: unsplit, split-K with a bf16 workspace, serial split-K, or split-K over grid.z with a
+#: bf16 workspace, an f32 one or none)
 PRODUCTS = ("mm", "bmm")
 CELL = "LinearRef_v1"
-ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1")
+ROWS = (CELL, "Gemm_v2", "CublasSplitKGemmBf16Partials_v1", "CublasSerialSplitKGemm_v1",
+        "CublasSplitKGemmBf16PartialsAligned_v1", "CublasSplitKGemmAligned_v1", "CublasSerialSplitKGemmAligned_v1")
 DIMS = ("batch", "m", "k", "n")
 PHASES = ("forward", "backward", "optimizer")
 

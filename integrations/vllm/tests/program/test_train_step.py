@@ -627,23 +627,33 @@ def test_gpu_gemms_are_the_captured_routes(K: int, N: int) -> None:
 #: stand-in routes at M 32, K 64, N 48, each a kind the capture fitted somewhere: (role, its route)
 TINY_ROUTES = {"fwd": {"kernel": "nosplit"}, "dX": {"kernel": "serialk", "SPLIT_K": 3},
                "dW": {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16"}}
+#: the grid.z kinds at the same shapes, a chunk that isn't whole k-tiles taking its residue words, then constant-0 words to a
+#: whole tile: an f32 workspace over chunks of [24, 24, 16] at k-tile 16, none over [24, 24], and a bf16 workspace over
+#: [16, 16] at k-tile 32
+TINY_GRID_Z_ROUTES = {"fwd": {"kernel": "splitk", "SPLIT_K": 3, "partial": "f32", "align": 8, "tile_k": 16},
+                      "dX": {"kernel": "serialk", "SPLIT_K": 2, "align": 8, "tile_k": 16},
+                      "dW": {"kernel": "splitk", "SPLIT_K": 2, "partial": "bf16", "align": 8, "tile_k": 32}}
 
 
-def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch) -> None:
-    """At stand-in routes (`TINY_ROUTES`), the derived GEMMs evaluated on words are each route's model
-    (`bf16_gemm_check.cublas_route_rows`), the one the capture's words hold to sm_120's (`test_cublas_train`)."""
+@pytest.mark.parametrize("routes", [TINY_ROUTES, TINY_GRID_Z_ROUTES], ids=["split", "grid-z"])
+def test_gpu_gemms_are_their_routes_bit_for_bit(monkeypatch, routes) -> None:
+    """At stand-in routes, the derived GEMMs evaluated on words are each route's model (`bf16_gemm_check.cublas_route_rows`),
+    the one the capture's words hold to sm_120's (`test_cublas_train`), and dX's and dW's are not the unsplit chain's (an f32
+    workspace's words differ from it only in f32 low bits, which the bf16 rounding hides on these words, and
+    `test_cublas_train`'s cancelling words tell apart)."""
     M, K, N = 32, 64, 48
-    for role, route in TINY_ROUTES.items():
+    for role, route in routes.items():
         monkeypatch.setitem(CB.TRAIN_ROUTES, (M, K, N, role), route)
     xs = [_data(*s, seed=20 + i).to(torch.bfloat16) for i, s in enumerate(((M, K), (N, K), (M, N)))]
     prog = _program(_linear_gemms, *xs, rules=training_rules(cc=CC))
     tab = materialize(prog, [_bits(x) for x in xs])
     got = np.array([tab[g] for g in prog.circuit.root_outputs()], dtype=np.uint16)
     x, w, dy = (t.view(torch.int16).numpy().astype(np.uint16) for t in xs)
-    want = [BC.cublas_route_rows(TINY_ROUTES["fwd"], x, w), BC.cublas_route_rows(TINY_ROUTES["dX"], dy, w.T),
-            BC.cublas_route_rows(TINY_ROUTES["dW"], dy.T, x.T)]
-    assert np.array_equal(got, np.concatenate([y.reshape(-1) for y in want]))
-    assert not np.array_equal(BC.cublas_route_rows({"kernel": "nosplit"}, dy, w.T), want[1]), "the routes differ here"
+    operands = {"fwd": (x, w), "dX": (dy, w.T), "dW": (dy.T, x.T)}
+    want = {role: BC.cublas_route_rows(routes[role], *operands[role]) for role in ("fwd", "dX", "dW")}
+    assert np.array_equal(got, np.concatenate([want[role].reshape(-1) for role in ("fwd", "dX", "dW")]))
+    for role in ("dX", "dW"):
+        assert not np.array_equal(BC.linear_rows(*operands[role]), want[role]), f"the routes differ at {role}"
 
 
 #: stand-in routes for the tiny step's linears at M 32: unsplit, but the attention projections' dW (split-K over 2 slices with a
@@ -672,14 +682,23 @@ def test_tiny_bf16_step_on_sm120(monkeypatch) -> None:
     assert all("DT='f32'" in k for k in got if k.startswith("LinearRef_v1")), got
 
 
-def test_gpu_refuses_what_its_capture_does_not_cover() -> None:
+def test_gpu_lowers_smollm2s_grid_z_dw_to_its_route() -> None:
+    """smollm2's dW at B 8 x S 512, sliced over grid.z, is one batch over its rows of its route's Definition on words."""
+    prog = _program(lambda dy, x: (dy.t() @ x,), *_meta((4096, 576), (4096, 576)), rules=training_rules(cc=CC))
+    assert [(nd.fn.id, nd.n) for nd in prog.root.body.nodes[2:]] == [(word_of(CB.train_linear("dW", 4096, 576, 576)).id, 576)]
+    assert word_of(CB.train_linear("dW", 4096, 576, 576)).id.startswith("CublasSplitKGemmBf16PartialsAligned_v1{K=4096,N=576,")
+
+
+def test_gpu_refuses_what_its_capture_does_not_cover(monkeypatch) -> None:
     """On sm_120 a bf16 product is refused, with its fix, where no captured route lowers it: a shape the capture doesn't cover, a
-    layout none of F.linear's GEMMs has, a bmm, and a route with no Definition on words (smollm2's grid.z dW); f32 products
-    are as without `cc`, and a `cc` without captured routes is refused."""
+    layout none of F.linear's GEMMs has, a bmm, and a route with no Definition (split-K over `split_bounds`' chunks with an f32
+    workspace, which no cc 12.0 capture fitted); f32 products are as without `cc`, and a `cc` without captured routes is
+    refused."""
     assert "is not captured" in _gpu_refusal(_linear_gemms, *_meta((32, 64), (48, 64), (32, 48))).hint
     assert "operand layouts ('col', 'col')" in _gpu_refusal(lambda a, b: (a.t() @ b.t(),), *_meta((64, 32), (48, 64))).hint
     assert "only F.linear's GEMMs" in _gpu_refusal(lambda a, b: (torch.bmm(a, b),), *_meta((2, 16, 32), (2, 32, 16))).hint
-    assert "names no word Definition" in _gpu_refusal(lambda dy, x: (dy.t() @ x,), *_meta((4096, 576), (4096, 576))).hint
+    monkeypatch.setitem(CB.TRAIN_ROUTES, (4096, 576, 576, "dW"), {"kernel": "splitk", "SPLIT_K": 2})
+    assert "has no Definition on bits" in _gpu_refusal(lambda dy, x: (dy.t() @ x,), *_meta((4096, 576), (4096, 576))).hint
     b = _data(16, 8, seed=5)
     ids = [[nd.fn.id for nd in _program(lambda x, y: (x @ y,), X, b, rules=r).root.body.nodes[2:]] for r in (None, training_rules(cc=CC))]
     assert ids[0] == ids[1] and ids[0][0].startswith("LinearRef_v1") and "DT='f32'" in ids[0][0], ids
