@@ -6,6 +6,7 @@
 #   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
 #   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit drawn
 #          (zk_cost.py stage), once per KW and UNITS
+#   test   TESTS (default the hm96 trees' and the arena layout's) under pytest, slow ones included, on the pod's nvcc and GPU
 #   ident  prover_is_deterministic pinned to main's digests under M1 and M0; gpu_paths_agree under M1 and M0
 #   tl     one warm process (warm 1 + RUNS M1 dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
@@ -65,6 +66,13 @@ if has build; then
   B=$(sed -n 's/^BINARY=//p' $O/build-$AS.txt | tail -1); SB=$(sed -n 's/^SELFTEST_BINARY=//p' $O/build-$AS.txt | tail -1)
   [ -x "$B" ] && [ -x "$SB" ] || { log "build $AS: no binaries"; tail -30 $O/build-$AS.txt | tee -a $O/job.log; exit 1; }
   sha256sum $B $SB | tee $O/binaries-$AS.sha256 >> $O/job.log; echo "$B $SB" > $W/$AS.env
+fi
+if has test; then
+  $PY -c 'import pytest' 2> /dev/null || $HOME/.local/bin/uv pip install -q --python $PY pytest
+  T=${TESTS:-verity/ml/flock/tests/test_hm96_leaves.py verity/ml/flock/tests/test_arena_layout.py}
+  (cd verity/ml/flock/tests && PYTHONPATH=$PWD:$PYTHONPATH $PY -m pytest -q -p no:cacheprovider $(for t in $T; do echo $REPO/$t; done)) \
+    > $O/test-$AS.txt 2>&1
+  rc=$?; tail -3 $O/test-$AS.txt | sed "s/^/test-$AS /" | tee -a $O/job.log; log "test-$AS rc=$rc"; [ $rc = 0 ] || fail=1
 fi
 if [ -n "${STAGE_PID:-}" ]; then
   wait $STAGE_PID; log "stage rc=$(cat $S/stage.rc): $(grep ZKCOST $O/stage.txt | tail -1)"
