@@ -1,6 +1,6 @@
 """The compile slice (`compile_slice.CompileSlice_v1`) proved in zero knowledge: one window of a few steps as one unit,
-proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, through N2's audit path
-(`n2_zk.py`: its stager, ZK server and received-pieces scan).
+proved by Flock `prove --zk` behind the Lean ZK server and held by Lean `verify --zk`, on the network certifier's
+one-stage path (`warden_zk.py`: its namespace, the ZK server's environment and the session's timing keys).
 
     python benchmarks/network_traces/compile_slice_zk.py prove --bin flock-circuit --lean flock-verify --out DIR
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--dry]
@@ -81,7 +81,7 @@ REPO = HERE.parents[1]
 sys.path.insert(0, str(HERE))
 
 import leak_scan as LS  # noqa: E402
-import n2_zk as N2  # noqa: E402
+import warden_zk as WZ  # noqa: E402
 from verity.core.protocols.certifier import arith_encode as AE  # noqa: E402
 from verity.core.protocols.certifier import charge_chain as CC  # noqa: E402
 from verity.core.protocols.certifier import compile_slice as CS  # noqa: E402
@@ -402,7 +402,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lean_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
     local = sorted(u - m["base"] for u in lean_draw["units"] if m["base"] <= u < m["base"] + n)
     sdir = out / "session"
-    record, live, proc = M.a8.session(a, m, sdir, local, port, env=N2.firewall(M, m))
+    record, live, proc = M.a8.session(a, m, sdir, local, port, env=WZ.firewall(M, m))
     draw_t = (record or {}).get("unit_draw") or {}
     v = V.check_draw(draw_t, {"population": n}, {"law": "subset", "k": len(local)})
     verdicts = {f"m0-verifier/{name}": {"accepted": ((record or {}).get("verdict") or {}).get("accepted") is True
@@ -411,7 +411,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     lv = a0.lean_verify(a.lean, m, n, sdir, zk=True)
     verdicts[f"lean-verify/{name}"] = {**lv, "tool": "flock-verify verify --zk --archive --partition --program"}
     proved = a0.proved_units(m["header"], live or {})
-    timing = {k: (live or {}).get(k) for k in N2.TIMING}
+    timing = {k: (live or {}).get(k) for k in WZ.TIMING}
     statement = {name: {"session_s": proc["wall_s"], **{k: (live or {}).get(k) for k in ("circuit_sha512", "statement_digest",
                                                                                          "sigma")},
                         "timing": timing, "process": proc, "lean_verify_s": lv.get("verify_s")}}
@@ -465,10 +465,14 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
             "audit": {k: result.get(k) for k in ("accepted", "complete", "wrong_units")},
             "verdicts": {k: y.get("accepted") for k, y in verdicts.items()}, "why": {k: y.get("why") for k, y in verdicts.items()},
             "timing": statement[name], "lean_verify_s": lv.get("verify_s"),
-            "per_unit": {"prove_total_s": N2._per(timing.get("prove_total_s"), n), "e2e_s": N2._per(timing.get("e2e_s"), n),
-                         "proof_bytes": N2._per(sum(proofs) if proofs else None, n),
-                         "lean_verify_s": N2._per(lv.get("verify_s"), n)},
+            "per_unit": {"prove_total_s": _per(timing.get("prove_total_s"), n), "e2e_s": _per(timing.get("e2e_s"), n),
+                         "proof_bytes": _per(sum(proofs) if proofs else None, n),
+                         "lean_verify_s": _per(lv.get("verify_s"), n)},
             "opened_rows": list(OPENED)}
+
+
+def _per(x, n: int):
+    return None if x is None else round(x / n, 3)
 
 
 def _u16(words: list[int]) -> bytes:
@@ -584,7 +588,7 @@ def prove(a) -> int:
         Path(a.out).mkdir(parents=True, exist_ok=True)
         (Path(a.out) / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
         return 0 if all(expected(x, u.kind, u.case.flags) for u in units) else 1
-    M = N2._one_stage()
+    M = WZ._one_stage()
     out = Path(a.out)
     CS.CompileSlice.build = CS._build
     probe = stager(M, x, len(a.kinds), out / "probe")
@@ -680,7 +684,7 @@ def rescan(a) -> int:
     each carry row. A salt is sampled by `prove` and not recomputed, so a salt the run found reads leaked."""
     src, out = Path(getattr(a, "from")), Path(a.out)
     summary = json.loads((src / "summary.json").read_text())
-    vdir, M = src / "slice" / "verifier", N2._one_stage()
+    vdir, M = src / "slice" / "verifier", WZ._one_stage()
     x = load(summary["slice"]["name"], summary["statics"].get("G"))
     part = json.loads((vdir / "partition.json").read_text())
     ch = chain(x, part["program"], M.P.digest(part))

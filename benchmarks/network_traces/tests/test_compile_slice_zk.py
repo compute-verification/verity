@@ -1,11 +1,12 @@
 """compile_slice_zk proves w212 at its run's engine class, scheduler included, and its scan of what the verifier
 received judges every found witness piece and carry row by the lane's one rule (`leak_scan.scan`), with no byte-count
-exemption, each row shorter than the scan's 16-byte piece found whole. Nothing here lowers or proves
-(`compile_slice_zk.prove` does, on a node)."""
+exemption, each row shorter than the scan's 16-byte piece found whole, and what `prove` reads off its helpers exists.
+Nothing here lowers or proves (`compile_slice_zk.prove` does, on a node)."""
 
 from __future__ import annotations
 
 import importlib.util
+import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -105,3 +106,17 @@ def test_the_rows_shorter_than_a_piece_are_found_whole_under_the_rule(tmp_path):
     (vdir / "pub-2.bin").write_bytes(Z._u16(srv1) + bytes(4))
     got = Z.received(a8, vdir, tmp_path / "inst.bin", pieces, held)
     assert got["leaked"] == ["srv0 0"] and got["structured"] == {"srv1 0": "public"}
+
+
+def test_what_prove_reads_off_its_helpers_is_there():
+    """`prove` and `rescan` run on a node only, and read the one-stage namespace (``M``, `warden_zk._one_stage`),
+    its modules and `warden_zk` by attribute: each attribute the module reads off them exists, so a helper renamed under it
+    fails here rather than on the node."""
+    Z = _load()
+    src = (HERE / "compile_slice_zk.py").read_text()
+    M = Z.WZ._one_stage()
+    missing = [f"WZ.{k}" for k in set(re.findall(r"\bWZ\.(\w+)", src)) if not hasattr(Z.WZ, k)]
+    missing += [f"M.{k}" for k in set(re.findall(r"\bM\.(\w+)", src)) if not hasattr(M, k)]
+    missing += [f"M.{k}.{j}" for k, j in set(re.findall(r"\bM\.(\w+)\.(\w+)", src))
+                if hasattr(M, k) and not hasattr(getattr(M, k), j)]
+    assert not missing
