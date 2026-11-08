@@ -14,6 +14,7 @@ import pytest
 from tests.program.predict import test_steps as ST
 from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
 from verity_vllm.check.match.instance_sequence import RootView
+from verity_vllm.check.match.program_loaders import check_rows
 from verity_vllm.check.replay import checks as CK, index as IX
 from verity_vllm.check.replay.index import SAMPLER_OP
 from verity_vllm.correspondence.reader_for_query import Correspondence
@@ -84,8 +85,9 @@ def test_the_length_rule_closes_the_last_step(tmp_path):
     assert [(r["spec"], r["step"]) for r in m["unreturned"]] == [("StopRule_v1", 2)]
     with gzip.open(d / "descriptor.json.gz", "rt") as f:
         desc = json.load(f)
+    assert check_rows(str(d)) == [i]
     for compact in (False, True):
-        view = RootView("built", desc, {}, tok_node=0, compact=compact)
+        view = RootView("built", desc, {}, tok_node=0, compact=compact, checks=check_rows(str(d)))
         assert len(view.inst) == len(inst["rows"]) - 1 and len(view.steps) == 3
         assert not any(r["spec"].startswith("StopRule") for r in view.inst)
 

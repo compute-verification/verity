@@ -546,17 +546,18 @@ def is_stochastic_select(family: str) -> bool:
     return is_token_select(family) and family.startswith(STOCHASTIC_SELECT_PREFIXES)
 
 
-def segment_steps(rows: list[dict]) -> list[tuple[int, int]]:
+def segment_steps(rows: list[dict], checks: dict | None = None) -> list[tuple[int, int]]:
     """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`).
-    The Program's output checks after its last sampling event (`sampling_event.is_output_check`) close its last step."""
-    from verity_vllm.program.sampling_event import is_output_check
+    The Program's checks after its last sampling event (`checks`: its instances header's, `at` their rows), which the runtime never
+    runs, close its last step."""
+    at = {int(a[0]) for a in (checks or {}).get("at") or ()}
     segs, lo = [], 0
     for r in rows:
         if is_token_select(spec_family(r["spec"])):
             segs.append((lo, r["i"]))
             lo = r["i"] + 1
     if lo < len(rows):
-        if segs and all(is_output_check(r["spec"]) for r in rows[lo:]):
+        if segs and all(int(r["i"]) in at for r in rows[lo:]):
             segs[-1] = (segs[-1][0], len(rows) - 1)
         else:
             segs.append((lo, len(rows) - 1))                                      # trailing instances without a sampling event (padded wrapper)

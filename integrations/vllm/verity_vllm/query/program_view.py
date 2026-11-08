@@ -107,6 +107,7 @@ class ProgramView:
     outputs: tuple[ValueRef, ...]
     digest: str | None
     source: str                      # "descriptor" | "instances"
+    checks: frozenset[int] = frozenset()   # the Calls of its checks (its instances header's `checks`, `at`), which the runtime never runs
 
     @property
     def inputs(self) -> tuple[ValueRef, ...]:
@@ -497,8 +498,8 @@ class _Builder:
                     out.append(v)
         return tuple(out)
 
-    def view(self, outputs: tuple[ValueRef, ...], digest: str | None, source: str) -> ProgramView:
-        return ProgramView(_Calls(self.c), self._params, outputs, digest, source)
+    def view(self, outputs: tuple[ValueRef, ...], digest: str | None, source: str, checks: frozenset[int] = frozenset()) -> ProgramView:
+        return ProgramView(_Calls(self.c), self._params, outputs, digest, source, checks)
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -665,6 +666,10 @@ def _instances_columns(params: tuple[InputView, ...], rows: Iterable[dict[str, A
     return b
 
 
+def _check_calls(header: dict[str, Any]) -> frozenset[int]:
+    return frozenset(int(a[0]) for a in (header.get("checks") or {}).get("at") or ())
+
+
 def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
     """`instances.json.gz` (or its loaded document) -> ProgramView.  Rows are body positions; the Definition's ports come from the
     registry (`definition_ports`, once per distinct spec); a row of a `batch` form carries no `n`, so its output is read as the
@@ -683,7 +688,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
             with _open_text(path_or_doc) as f:
                 doc = json.load(f)
             return from_instances(doc)
-        return b.view((), hdr.get("digest"), "instances")
+        return b.view((), hdr.get("digest"), "instances", _check_calls(hdr))
     doc = path_or_doc
     params = _params_view(doc.get("params") or [])
     rows = sorted(doc["rows"], key=lambda r: int(r["i"]))
@@ -691,7 +696,7 @@ def from_instances(path_or_doc: str | dict[str, Any]) -> ProgramView:
         b = _instances_columns(params, rows, memo=True)
     except _OutOfOrder as e:
         raise ValueError(f"instance rows are not a body in order: {e}") from None
-    return b.view((), doc.get("digest"), "instances")
+    return b.view((), doc.get("digest"), "instances", _check_calls(doc))
 
 
 def from_descriptor(desc: dict[str, Any] | str, registry=None) -> ProgramView:
