@@ -12,7 +12,7 @@
 
 extern "C" int hm96_leaves(const uint8_t* x, const uint8_t* salts, long long n, long long base, int tpb, const uint8_t* prefixes,
                            const uint64_t* tables, uint8_t* out) {
-    if (n < 1 || base < 0 || base >= n || tpb < 4 || tpb > HM96_TPB || tpb % 4) return 1;
+    if (n < 1 || base < 0 || base >= n || tpb < 32 || tpb > HM96_TPB || tpb % 32) return 1;
     const size_t tb = (size_t)192 * 256 * 8 * sizeof(uint64_t);
     uint8_t *d_x = nullptr, *d_s = nullptr, *d_pre = nullptr;
     uint64_t *d_t = nullptr, *d_mid = nullptr;

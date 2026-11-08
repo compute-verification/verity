@@ -157,17 +157,20 @@ __global__ void hm96_midstates(const uint8_t* prefixes, uint64_t* mid) {
 static constexpr int HM96_TPB = 256;
 
 // Leaves [base, n) of `tree`, leaf i's salt at salts[48 (i - base)] (little-endian words, the host's bytes); blocks of at most
-// HM96_TPB threads, a multiple of 4, block b finishing the blockDim.x leaves from base + b blockDim.x.
+// HM96_TPB threads, a multiple of 32, block b finishing the blockDim.x leaves from base + b blockDim.x.
 // The mask reads one 64-byte table entry per salt byte, at a random value: four lanes share a leaf and each reads one 16-byte
 // quarter of every entry, so a warp's load touches 8 entries' lines rather than 32. Each lane XORs its quarter (the order of
-// the XORs changes no bit), the block meets in shared memory, and each thread then hashes its own leaf.
-__global__ void __launch_bounds__(HM96_TPB) hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ salts, long long base,
-                                                              long long n, const uint64_t* __restrict__ tables,
-                                                              const uint64_t* __restrict__ mid) {
+// the XORs changes no bit) for 4 of its warp's 32 leaves, the warp meets in shared memory, and each lane then hashes its own
+// leaf. Four blocks an SM (64 registers, a few spilled) keep enough warps hashing while others wait on the table.
+__global__ void __launch_bounds__(HM96_TPB, 4) hm96_finish_leaves(uint8_t* tree, const uint32_t* __restrict__ salts,
+                                                                 long long base, long long n, const uint64_t* __restrict__ tables,
+                                                                 const uint64_t* __restrict__ mid) {
     __shared__ ulonglong2 sm[HM96_TPB * 4];
-    const long long first = base + blockIdx.x * (long long)blockDim.x;
-    const int k = threadIdx.x & 3;
-    for (int l = threadIdx.x >> 2; l < (int)blockDim.x; l += blockDim.x >> 2) {
+    const int lane = threadIdx.x & 31, k = lane & 3;
+    const long long first = base + blockIdx.x * (long long)blockDim.x + (threadIdx.x - lane);
+    if (first >= n) return;
+    ulonglong2* ws = sm + 4 * (threadIdx.x - lane);
+    for (int l = lane >> 2; l < 32; l += 8) {
         ulonglong2 acc = make_ulonglong2(0, 0);
         if (first + l < n) {
             const uint4* sy = (const uint4*)(salts + 48 * (first + l - base));
@@ -186,47 +189,46 @@ __global__ void __launch_bounds__(HM96_TPB) hm96_finish_leaves(uint8_t* tree, co
                 }
             }
         }
-        sm[4 * l + k] = acc;
+        ws[4 * l + k] = acc;
     }
-    __syncthreads();
-    const long long i = first + threadIdx.x;
+    __syncwarp();
+    const long long i = first + lane;
     if (i >= n) return;
-    uint32_t yw[48];
+    // the salt's words are read again just before each compression and b only for the last, so few stay live across the hash
     const uint4* sy = (const uint4*)(salts + 48 * (i - base));
-#pragma unroll
-    for (int q = 0; q < 12; q++) {
-        const uint4 v = __ldg(sy + q);
-        yw[4 * q] = v.x; yw[4 * q + 1] = v.y; yw[4 * q + 2] = v.z; yw[4 * q + 3] = v.w;
-    }
-    const uint64_t* x = (const uint64_t*)(tree + i * 64);   // the digest's bytes as little-endian words, as the mask's limbs
-    uint64_t b[8];
-#pragma unroll
-    for (int q = 0; q < 4; q++) {
-        const ulonglong2 v = sm[4 * threadIdx.x + q];
-        b[2 * q] = x[2 * q] ^ v.x;
-        b[2 * q + 1] = x[2 * q + 1] ^ v.y;
-    }
     uint64_t st[8], w[16];
 #pragma unroll
     for (int j = 0; j < 8; j++) st[j] = mid[j];
 #pragma unroll
-    for (int j = 0; j < 16; j++) w[j] = s512_be(yw[2 * j], yw[2 * j + 1]);
+    for (int q = 0; q < 8; q++) {
+        const uint4 v = __ldg(sy + q);
+        w[2 * q] = s512_be(v.x, v.y);
+        w[2 * q + 1] = s512_be(v.z, v.w);
+    }
     s512_compress(st, w);
 #pragma unroll
-    for (int j = 0; j < 8; j++) w[j] = s512_be(yw[32 + 2 * j], yw[32 + 2 * j + 1]);
+    for (int q = 0; q < 4; q++) {
+        const uint4 v = __ldg(sy + 8 + q);
+        w[2 * q] = s512_be(v.x, v.y);
+        w[2 * q + 1] = s512_be(v.z, v.w);
+    }
     w[8] = 0x8000000000000000ull;
 #pragma unroll
     for (int j = 9; j < 15; j++) w[j] = 0;
     w[15] = (128 + 192) * 8;
     s512_compress(st, w);                                   // st = c's words
-    uint64_t lt[8];
+    const ulonglong2* x = (const ulonglong2*)(tree + i * 64);   // the digest's bytes as little-endian words, as the mask's limbs
 #pragma unroll
-    for (int j = 0; j < 8; j++) lt[j] = mid[8 + j];
+    for (int q = 0; q < 4; q++) {
+        const ulonglong2 a = x[q], m = ws[4 * lane + q];
+        w[2 * q] = s512_bswap(a.x ^ m.x);
+        w[2 * q + 1] = s512_bswap(a.y ^ m.y);
+    }
 #pragma unroll
-    for (int k = 0; k < 8; k++) { w[k] = s512_bswap(b[k]); w[8 + k] = st[k]; }
-    s512_compress(lt, w);
-    s512_pad_block(lt, 256);
-    s512_out(lt, tree + i * 64);
+    for (int j = 0; j < 8; j++) { w[8 + j] = st[j]; st[j] = mid[8 + j]; }
+    s512_compress(st, w);
+    s512_pad_block(st, 256);
+    s512_out(st, tree + i * 64);
 }
 
 // The salts of `d_tree`'s leaves at `q` (192 bytes each, in order), copied from the host's; empty when unsalted.
