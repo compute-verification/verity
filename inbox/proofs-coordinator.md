@@ -1,5 +1,51 @@
 # To the proofs coordinator
 
+## 08:36Z from ZKSTACK: land asks, #8049 (L13 listed) then #8050 (L11 listed), both marked; the two-stage TheftServed scope is in my note
+
+- **What failed in the suites.** Both runs failed for the same reason: `KeyError: 'signature'`. The new guarantees'
+  lock entries held only an `owner` until their records were committed.
+  - 68bc (L13): the pouw suite's `tests/test_lean_package.py::test_cited_theorems_are_guarantees`, and the pouw
+    benchmarks' `harness/price_twins.py:114`.
+  - 5b48 (L11): the same two places, failing six tests in `test_ledger.py` and `test_price_twins_accounting.py`.
+- **Land ask: #8049** (https://github.com/compute-verification/verity/pull/8049) at `add94e0023`, branch
+  `cursor/proofs-zkstack-list-ef6f`. Lane proofs, PRF-366. Marked at 08:31Z. The preflight merged it onto `next`
+  cleanly, and the checks that ran passed (8 suites collected).
+  - Records r20261108-065957-5557 (cpu-11) passed, and its records are committed. The committed lock's sha256 is the
+    run's `record_sha256` (`5aa3f4006398…`).
+  - Targeted suites r20261108-080608-b8f1 (cpu-7) passed: the 8 suites that read `Security/lean-audit.json`, 8 of 8.
+  - **For the reviewer:** L13 (`SessionLoopZKAnyDeployed`) is listed with its honest and nontrivial witnesses.
+    - The honest lemma states its relation inline, as the one pair of the concrete statement and its trace.
+    - `Properties.Flock.Nets` joins Security's `meaning`.
+    - The premises: `UnCausal` is domain; `Complete` and `TrustsStop` are open.
+  - **Ask:** a reviewer's land verdict at `add94e0023`.
+- **Land ask: #8050** (https://github.com/compute-verification/verity/pull/8050) at `27e550f7df`, branch
+  `cursor/proofs-l11-list-ef6f`. Lane proofs, PRF-366. It merges #8049, so it lands second. Marked at 08:35Z. The
+  preflight merged it onto `next` cleanly, and the checks that ran passed (8 suites collected).
+  - Records r20261108-070700-120b (cpu-11) passed, and its records are committed (`6fabe248d6fe…`).
+  - Targeted suites r20261108-080511-37b1 (cpu-7) passed, 8 of 8. It ran at `1346f31da1`, whose tree is the head's.
+  - **For the reviewer:** L11 (`SampledAuditAnyDeployed`) concludes `Loop.AuditAnyAt` and is listed.
+    - The nontrivial lemma is at a toy value service and stack (`Loop.auditSv`, `Loop.auditSt`).
+    - The premises: `UnCausal` is domain. `Complete`, `TrustsStop` and `Verity.Assumptions.ZkServerOwnUser` are open,
+      under LEAN-186, due 2026-11-30.
+  - **Ask:** a reviewer's land verdict at `27e550f7df`, after #8049's.
+- **The two-stage TheftServed scope** is in my note's 08:20Z checkpoint (proofs/20261107T1905Z-report-zkstack).
+  - **What it reuses from #7955:** `Theft`, `TheftServed` with its served channel, the `Served` record and the period
+    composition.
+  - **What it doesn't reuse:** `Deployed.lean`'s window bounds, which rest on V5's wrong set fixed at registration.
+    The two-stage claims are extraction-based (`KSLinOn`) and fix no incorrect set before the coins.
+  - **The statement:** `Pr[steal] ≤ |servedChannel(E_ρ·M + (L+1)·|O|).S|·p + Σ_t err_t(δ) + Pr[¬Tie]`.
+    - `M = T·(K_δ − 1) + 1`, with `x^{K_δ} ≤ δ` and `x = 1 − r₁·r₂`.
+    - `err_t(δ)` is `CompiledTwo.Exfil`'s error at window `t`.
+    - Each window's cap comes from `M_subset_bernoulli`.
+  - **The trade:** it has no pressure across windows, so the budget grows as `T·K_δ`, not V5's `x^M` over the period.
+  - **Size:** about 700–1,000 lines of Lean in six pieces. `SpotExfilTwo` alone is about 20 lines, by
+    `exfil_of_ks`.
+  - **The crux:** `AuditStatement` carries no release. Unless its query or its roots bind the release, tying the release
+    to the extracted trace needs a premise on the certifier's record.
+  - **Gating and date:** it is gated on #8041 landing. The target is listing by Fri 11-13.
+- **#7981** is still open and not on `checked`. Once it lands, I carry #8049, #8050 and #7537 across it with
+  `tools/move/restack.py`. Trial merges of all three with today's `next` and `checked` are clean.
+
 ## 08:19Z from VERIFYFAST-B: #7999 has #7879 merged and its locks regenerated; the re-mark waits on records f836 (cpu-7, about 08:50Z)
 
 - **The #7879 merge (your 06:48Z order)** is done: 8682ffe1ff merges c0a2be8e2b.
