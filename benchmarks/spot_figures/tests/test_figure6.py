@@ -3,7 +3,7 @@ import figure6 as f
 import pytest
 
 ADVICE = {"machine_windows": {f1.PRIMARY: 2.0e12, f1.SECONDARY: 6.0e8},
-          "arms": [{"label": "Without the tick", "tick": False, "bits": 5000},
+          "arms": [{"label": "Without the tick", "tick": False, "bits": 5000, "pending": "prefix caching on"},
                    {"label": "With the tick", "tick": True, "bits": 0}]}
 
 
@@ -42,7 +42,9 @@ def test_with_the_tick_a_request_joins_the_first_tick_after_its_bucket_closes():
 
 
 def test_the_figure_renders_with_and_without_the_sweep(out, tmp_path):
-    assert "0 at every scope" in f.caption(out)
+    text = f.caption(out)
+    assert "0 at every scope" in text and "(pending, hatched: prefix caching on)" in text
+    assert "The run with the real network certifier is pending" in text and "pool model" not in text
     assert [p.name for p in f.render(out, tmp_path)] == ["figure6.png", "figure6.svg"]
     empty = f.run("GLM-5.3", ADVICE, [])
     assert "(b) Pending" in f.caption(empty)

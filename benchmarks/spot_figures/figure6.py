@@ -6,7 +6,8 @@ exfiltration bound, with and without the tick, over the headline and secondary s
 (b) reads the sweep's points (`point.json`: `load`, `rate`, `tick` with `sat_ms` and `free_ms`, or null without the
 tick, `ttft_p50_s`, `ttft_p99_s`, `itl_p50_s`, `output_tok_per_s`, `goodput_ttft_req_per_s`) and is pending without
 them. (c) reads an advice file: `machine_windows` by scope and `arms`, each a `label`, `tick` (true or false) and
-`bits`, the advice a machine window is charged, so its term is that times the scope's windows.
+`bits`, the advice a machine window is charged, so its term is that times the scope's windows, and a `pending` reason
+where the arm's figure isn't a result yet, drawn hatched.
 
     uv run python benchmarks/spot_figures/figure6.py --model GLM-5.3 --advice ADVICE.json [--points POINT.json...]
         [--out DIR]
@@ -105,16 +106,20 @@ def caption(out: dict) -> str:
     rows = []
     for arm in out["arms"]:
         v, w = arm["by_scope"][p], arm["by_scope"][s]
-        rows.append(f"{arm['label'][0].lower()}{arm['label'][1:]}, {arm['bits']:,.4g} bits a machine window: "
+        bits = f"{arm['bits']:,.0f}" if arm["bits"] >= 100 else f"{arm['bits']:.4g}"
+        rows.append(f"{arm['label'][0].lower()}{arm['label'][1:]}, {bits} bits a machine window: "
                     + ("0 at every scope" if v == 0 else
                        f"{_bytes(v)} over a {p} ({_times(v / t['bits'])} the weights) and {_bytes(w)} over a {s} "
-                       f"({_times(w / t['bits'])})"))
+                       f"({_times(w / t['bits'])})")
+                    + (f" (pending, hatched: {arm['pending']})" if arm.get("pending") else ""))
     c = (f"(c) The advice's term in the bound is a window's bits times the scope's machine windows "
          f"({out['windows'][p]:.3g} over a {p}, {out['windows'][s]:.3g} over a {s}), against {t['label']}: "
-         + "; ".join(rows) + ". The tick's 0 takes the certifier's release buckets as the arrivals: without them the "
-         "server could hold a request back by whole ticks, which is advice again. It also takes the prefix-cache hits "
-         "as the registered pool model derives them: the verifier recomputes them in Python, which the advice claim "
-         "trusts; Lean doesn't check that step.")
+         + "; ".join(rows) + ". The tick's arms take the certifier's release buckets as the arrivals: without them the "
+         "server could hold a request back by whole ticks, which is advice again. The run with the real network "
+         "certifier is pending: in the measured runs a client stood in for it. Until a circuit checks the stop rule, "
+         "each response's length is advice with the tick too, charged today at log2(max_tokens) + 1 bits a request. "
+         "The 0 holds with prefix caching off, once the length rule is checked in-circuit (pending); with prefix "
+         "caching on, its alternative is each hit sent whole and charged as advice, also pending.")
     return a + b + c
 
 
@@ -210,7 +215,8 @@ def _advice(ax, out: dict) -> None:
         for a, color in zip(arms, colors):
             v = a["by_scope"][sc]
             if v > 0:
-                ax.barh(y, v, left=lo, color=color, alpha=1 if sc == p else .55, height=.7, log=True)
+                ax.barh(y, v, left=lo, color=color, alpha=(1 if sc == p else .55) * (.6 if a.get("pending") else 1),
+                        height=.7, log=True, hatch="//" if a.get("pending") else None, edgecolor="white", lw=0)
                 ax.text(v * 1.15, y, _bytes(v), va="center", ha="left", fontsize=12, color="#333333")
             else:
                 ax.text(lo * 1.3, y, "0 bits in every window", va="center", ha="left", fontsize=12, color=color,
@@ -248,7 +254,7 @@ def render(out: dict, outdir: Path) -> list[Path]:
                          "mathtext.fontset": "stix", "font.size": 16, "axes.labelsize": 15, "xtick.labelsize": 12,
                          "ytick.labelsize": 12, "savefig.facecolor": "white", "figure.facecolor": "white"})
     fig = plt.figure(figsize=(18, 22))
-    grid = fig.add_gridspec(3, 4, height_ratios=(1.25, 1, 1.1), hspace=.42, wspace=.32, left=.2, right=.97,
+    grid = fig.add_gridspec(3, 4, height_ratios=(1.25, 1, 1.1), hspace=.42, wspace=.32, left=.26, right=.97,
                             top=.94, bottom=.2)
     _timeline(fig.add_subplot(grid[0, :]), out["schematic"])
     _sweep([fig.add_subplot(grid[1, k]) for k in range(4)], out["sweep"])
