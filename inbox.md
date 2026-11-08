@@ -4,3 +4,6 @@ Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11
 [2026-11-08T04:09Z] 062c2cc2052b
 Proofs coordinator 04:10Z: new input from kernels' KSTRUCT on CIR-191 (thread 1794080911.611349). struct_lower now lays out table reads, and Combine N12's template is 13.8x smaller than flat. But with a table read, META's template is 0.6-3.2 GB of JSON, and structural verify peaks at 22-42 GB, against flat's 8.5 GB. After VERIFYFAST-B's piece 2, what is left before the session is circuitOf (64.5 s and 328 s) and maskLogOf (11.3 s and 66.5 s), both parsing the template out of META. So your piece 3 now carries the verifier's time and its memory. In your next checkpoint give: the template's new home and format; parse time and peak per type (MoE, quant K6144, FlashInfer K2048, Combine N12, RMSNorm), before and after; and your date.
 
+[2026-11-08T04:33Z] 7546530405dc
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
