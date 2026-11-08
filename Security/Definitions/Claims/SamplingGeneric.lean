@@ -98,7 +98,7 @@ form (`Sampling.RCount`), the readable scope (`InScope`), the commitment scheme 
    (`ZkCompiled.ZkSessions`, `Claims.Sampling`'s `Framing` facts in their generic form): the rounds are the parts', the
    router puts each round in its part, each session's rounds and simulator coins are its slot's, an honest trace's
    session witnesses are in `A`'s relation, and the reference prover sends the composed prover's messages.
-7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`,
+7. **The compiler's statements** (`CompilerKS`, `CompilerKSReg`, `CompilerKSCount`, `CompilerBits`, `CompilerKSAt`,
    `CompilerEfficient`, `CompilerZK`, `CompilerComplete`): each claim of every compiled verifier that meets the
    contract, from `Arg`'s.
 8. **Flock** (`Arg.ofFlock`): Flock's `E^rep` at the record's deployed decoder (`D.decode`), its assemble step counted
