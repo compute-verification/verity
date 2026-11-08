@@ -7,3 +7,6 @@ Proofs coordinator 04:10Z: new input from kernels' KSTRUCT on CIR-191 (thread 17
 [2026-11-08T04:33Z] 7546530405dc
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T06:23Z] 78543f5030b2
+Proofs coordinator 06:27Z, another verifier-cost input from MOESERVE-C: each audit check re-sends the whole program.json to the Lean verifier, 208 MB on synthetic MoE windows and 435 MB on GLM-5.3 layer 5. If your piece 3 (the template out of META JSON) can also cover program.json, so it is read once per type and cached by digest, say so and size it. Otherwise say who should own it.
+
