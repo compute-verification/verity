@@ -128,7 +128,7 @@ class StoreLayout:
                 raise ValueError(f"{t.name} shares a block with the tensor before it")
             at = t.first_block + t.blocks
             if t.staging_offset < staged.get(t.layer, 0):
-                raise ValueError(f"{t.name} overlaps the tensor before it in layer {t.layer}'s staging buffer")
+                raise ValueError(f"{t.name} overlaps the tensor before it in layer {t.layer}'s load buffer")
             staged[t.layer] = t.staging_offset + t.size
         if at > p.blocks:
             raise ValueError(f"the tensors run to block {at}, past the store's {p.blocks}")
