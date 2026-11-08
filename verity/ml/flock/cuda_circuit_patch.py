@@ -51,6 +51,16 @@ body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
 body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",
            "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));\n        CK(cudaGetLastError());\n"
            "        CKI(fc_fold(P, N, d_eq_inner, alpha, k_log, d_comb));\n")
+# the compression CSC and Δ on the device once per circuit (FcUploads), not once per process: one prover proves many circuits
+body = cut(body, "        static std::once_flag chunk_matrix_once;\n", "        CK(chunk_matrix_error);\n",
+           "        static FcUploads chunk_matrix_up;\n        uint32_t* cm[6];\n        {\n"
+           "            const uint32_t* h[6] = {P->a_col_ptr, P->a_rows, P->b_col_ptr, P->b_rows, C->delta_a, C->delta_b};\n"
+           "            const size_t len[6] = {(size_t)KS + 1, (size_t)P->a_nnz, (size_t)KS + 1, (size_t)P->b_nnz,\n"
+           "                                   2 * (size_t)C->n_delta_a, 2 * (size_t)C->n_delta_b};\n"
+           "            CK(chunk_matrix_up.get(h, len, 6, cm));\n        }\n"
+           "        uint32_t *d_acp = cm[0], *d_ar = cm[1], *d_bcp = cm[2], *d_br = cm[3], *d_da = cm[4], *d_db = cm[5];\n"
+           "        (void)d_acp; (void)d_ar; (void)d_bcp; (void)d_br;\n", keep_b=False)
+assert "call_once" not in body.split("CK(zerocheck_setup_error);", 1)[1], "a per-process upload left in the circuit prover"
 # M1: level 0's commitment with its hiding, lincheck's folded comb, the ladder's zk argument, the zk section
 body = put(body, "    std::vector<MHash> l0_cap;\n    {\n        int k_code = (log_n - P->initial_k) + P->log_inv_rates[0];",
            "    std::vector<MHash> l0_cap;\n    F128 *d_zk_pads = nullptr, *d_zk_extra = nullptr;\n    if (N->zk_on) {\n"
