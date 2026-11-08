@@ -3,8 +3,8 @@ Python reference (`reference.py`: the trial's composition rule, in which any rej
 core interface and the subprotocols' own Python). Hypothesis samples each subprotocol's case to accept, reject, be
 undecided or fail to decode (from its own difftest's generator: PoUW's periods, made once from
 `pouw_period_cases`, the network certifier's period `build`, the inference-only policy's `drawn`, which is
-never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `empty_draws`
-(an audit whose sample at its challenger's coins is empty, which names no session) with one of `V2_BREAKS` or the form's
+never undecided, sampled proofs' audits under the form ``one-stage``, `form_case`: one-stage v2's over `sessionless_draws`
+(an audit whose sample at its challenger's coins is one proof block, which names no session) with one of `V2_BREAKS` or the form's
 breaks, and one-stage v1's `changed_audits`, which the form refuses by name, the wipe's signed wipes,
 `wipe_protocol_case.case`; space's and
 bandwidth's from the small periods of their hooks, `periods.py`, all on one committed `C*` but PoUS's run on another
@@ -80,17 +80,19 @@ def _sha(b: bytes) -> str:
 
 
 @functools.cache
-def _empty_audit(i: int) -> tuple[dict, dict, dict]:
+def _sessionless_audit(i: int) -> tuple[dict, dict, dict]:
     """One-stage v2's audit of `OS.SETUPS[i]`, a program that reads no registered value, its params but δ, its record
     and its evidence: its sample at its challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin
-    tree) sampled no proof block (a subset of none), so it names no session and no proved unit, and its params name the circuit
-    and public files `BLOBS` hold. Made once each: a challenger's signed session is slow to make."""
-    s, law = OS.SETUPS[i], {"k": 0, "law": "subset"}
+    tree) is one proof block (a subset of one, the least a subset law draws), its proved unit, and it names no session,
+    and its params name the circuit and public files `BLOBS` hold. Made once each: a challenger's signed session is slow
+    to make."""
+    s, law = OS.SETUPS[i], {"k": 1, "law": "subset"}
     part = {"program": s.sha512, "query": s.query}
     rec = OS.R.record(s.program, s.query, law, OS.SCHEME, [{"port": p, "root": OS.ROOTS[p], **s.ports[p]} for p in s.ports],
                       OS.WINDOW, leaf_layer=OS.LEAF, partition=part)
-    ch, d, coins = OS._challenger_draw(random.Random(f"composition/empty/{i}"), s, law, rec, trees=0)
-    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"sessions": []}, "proved_units": [],
+    ch, d, coins = OS._challenger_draw(random.Random(f"composition/sessionless/{i}"), s, law, rec, trees=0)
+    proved = OS.DR.proved(d)
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}}
     params = {"anchors": [], "challenger": {"key": ch.s.key.to_json(), "label": "draw"}, "law": law,
@@ -101,10 +103,11 @@ def _empty_audit(i: int) -> tuple[dict, dict, dict]:
 
 
 @st.composite
-def empty_draws(draw) -> dict:
-    """A one-stage v2 audit whose sample is empty (`_empty_audit`) at a sampled δ: it names no session, which v2 refuses
-    at its challenger's coins before it reads a tree (`oneSession`: the sampled proof blocks are proved in one session)."""
-    params, rec, evidence = _empty_audit(draw(st.integers(0, len(OS.SETUPS) - 1)))
+def sessionless_draws(draw) -> dict:
+    """A one-stage v2 audit whose sample is one proof block (`_sessionless_audit`) at a sampled δ: it names no session, which
+    v2 refuses at its challenger's coins before it reads a tree (`oneSession`: the sampled proof blocks are proved in one
+    session)."""
+    params, rec, evidence = _sessionless_audit(draw(st.integers(0, len(OS.SETUPS) - 1)))
     params = {**params, "delta": draw(st.sampled_from(["1/1000", "1/10", "1/2"]))}
     return OS._json({"params": params, "record": rec, "evidence": evidence})
 
@@ -120,7 +123,7 @@ def _v1(a: dict) -> dict:
             "evidence": {**_without(a["evidence"], "proofs"), "verdicts": {}}}
 
 
-#: One change to v2's audit (`empty_draws`) that sampled proofs refuses at another step than its refusal of no
+#: One change to v2's audit (`sessionless_draws`) that sampled proofs refuses at another step than its refusal of no
 #: session: the audit as v1's (refused by name at the params), v1's evidence under v2's params (refused by name at the
 #: evidence), v2's evidence naming verdicts, params naming no challenger or no partition, the public file named by the
 #: evidence rather than the params, one session whose coins are no tree the challenger logged, coins on another window
@@ -165,11 +168,11 @@ def broken_case(a: dict, br: str) -> dict:
     return form_case(V2_BREAKS[br](a))
 
 
-#: Sampled proofs' cases, each refused: v2's audit whose sample is empty (naming no session), the same with one change or
+#: Sampled proofs' cases, each refused: v2's audit naming no session (`sessionless_draws`), the same with one change or
 #: one break of the form, or v1's audit with up to two changes (refused by name).
-SAMPLED_CASES = st.one_of(empty_draws().map(form_case),
-                          st.builds(broken_case, empty_draws(), st.sampled_from(list(V2_BREAKS))),
-                          st.builds(form_case, empty_draws(), st.sampled_from(FORM_BREAKS)),
+SAMPLED_CASES = st.one_of(sessionless_draws().map(form_case),
+                          st.builds(broken_case, sessionless_draws(), st.sampled_from(list(V2_BREAKS))),
+                          st.builds(form_case, sessionless_draws(), st.sampled_from(FORM_BREAKS)),
                           OS.changed_audits(most=2).map(form_case))
 
 NP = R.PERIOD
@@ -533,8 +536,8 @@ def product_case(product: R.Product, cases: list[dict]) -> dict:
 
 @pytest.mark.parametrize("name", ["remote", pytest.param("onsite", marks=pytest.mark.slow)])
 def test_sampled_proofs_refuses_one_stage_v1(name, request):
-    """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, on an
-    empty sample at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
+    """Sampled proofs' one-stage form is one-stage v2: v1's audit under it, one v1 itself decides (undecided, for want of
+    the verifier, at its challenger's coins), is refused by name (`VStar.Recursive.Sampled.V1_REFUSED`) at its params,
     and v1's evidence under v2's params at the evidence. Remote and onsite, every other subprotocol aimed at acceptance
     on the audit's record, reject with that refusal as sampled proofs' reason, in Lean as in Python. Onsite's case is
     slow for its space and bandwidth cases (`recorded`)."""
@@ -548,7 +551,7 @@ def test_sampled_proofs_refuses_one_stage_v1(name, request):
     seen = collections.Counter()
 
     @settings(max_examples=3, database=None, deadline=None, suppress_health_check=list(HealthCheck))
-    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), empty_draws())
+    @given(st.tuples(*[component_case(C, R.ACCEPT) for C in others]), sessionless_draws())
     def check(drawn, audit):
         assert OS.answer(OS._case(_v1(audit)))["verdict"] == R.UNDECIDED
         for br, why in want.items():
@@ -565,8 +568,8 @@ def test_sampled_proofs_refuses_one_stage_v1(name, request):
     assert set(seen) == set(want), dict(seen)
 
 
-#: `reusing`'s R's law: a subset of none, so v2's audit of R samples nothing at its challenger's coins
-REUSING_LAW = {"k": 0, "law": "subset"}
+#: `reusing`'s R's law: a subset of one, so v2's audit of R samples R's one proof block at its challenger's coins
+REUSING_LAW = {"k": 1, "law": "subset"}
 
 
 def reusing(made: list[dict]):
@@ -599,11 +602,12 @@ def reusing(made: list[dict]):
 
 def reusing_audit(m: dict) -> dict:
     """Sampled proofs' one-stage v2 case on `reusing`'s R (`m`) over the log [W], with R's outputs: its sample at its
-    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is empty, so it names no
-    session and no proved unit, its params name the circuit and public files `BLOBS` hold, and its registered file names
-    R's tables, which no proof block of R's program reads."""
+    challenger's coins (`_challenger_draw`, a session whose challenger sampled no coin tree) is R's one proof block, its
+    proved unit, and it names no session, its params name the circuit and public files `BLOBS` hold, and its registered
+    file names R's tables, which no proof block of R's program reads."""
     s, rec = m["setup"], m["record"]
     ch, d, coins = OS._challenger_draw(random.Random("remote/reusing"), s, REUSING_LAW, rec, trees=0)
+    proved = OS.DR.proved(d)
     reads = {"format": "verity/registered-reads/v1", "ports": {
         e["value"]: {k: e[k] for k in ("domain", "leaves", "root", "value", "words")} | {"reads": [None]}
         for e in rec["registered"]}}
@@ -613,7 +617,7 @@ def reusing_audit(m: dict) -> dict:
               "program": s.desc, "proofs": {"circuit": _sha(CIRCUIT), "public": _sha(PUBLIC), "registered": reads},
               "query": s.query, "registered": s.values[0], "scheme": OS.SCHEME,
               "window_root": ch.ledger.window["root"], "work_table": None}
-    evidence = {"coins": coins, "draw": d, "instances": 0, "proofs": {"sessions": []}, "proved_units": [],
+    evidence = {"coins": coins, "draw": d, "instances": len(proved), "proofs": {"sessions": []}, "proved_units": proved,
                 "receipt": OS.R.receipt(rec, "v", received=OS.RECEIVED), "served": None, "session_roots": None,
                 "sessions": [], "statement": {}}
     return form_case(OS._json({"params": params, "record": rec, "evidence": evidence}))
