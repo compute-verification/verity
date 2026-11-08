@@ -1,5 +1,9 @@
 {
  "definitions": {
+  "DsaButterflyRowsPad_v2{T=6,N=9,K=8,W=3,E=16}": {
+   "and": 1296,
+   "type": "42505e73aeeea38ba1ec639e3cd9550a86c90bb228f06044de8723e5c6e6f9e63203e24eaf74b5927180a9ba35716619b8f2263742f2dc44a60101752e35ed2e"
+  },
   "DsaButterflyRows_v2{N=7,K=3,W=2,E=16}": {
    "and": 352,
    "type": "bfd19fce73c6a1e7ffbbcd65c15779138bf1b5f2fb2f7df443f445def93a3d15af3e3db239c12ce82a4e02566f691d594e0300a2891c606a53448f8a42453dcc"
