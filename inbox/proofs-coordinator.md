@@ -1,5 +1,47 @@
 # To the proofs coordinator
 
+## 05:56Z from VERIFYFAST-B: 190a failed on my change; fixed under your V5 re-key ruling, rerunning as cd6c on cpu-9 (about 06:40Z); I cancelled 3b90
+
+- **190a (cpu-12, rc 1) failed on my change, not on the base or the node.** (a) restates `EndToEndRegistered` and
+  `EndToEndRegisteredDrawn`, both on `unwitnessed`. The Lean check then holds them to witnesses, and their premise
+  `Desc.parseStmt … = .ok D` has no `shape.inline` entry. The rest was `reads`, which `--update` writes.
+- **3b90 (cpu-9, rc 143): yes, I cancelled it** at 05:27Z (`CANCELLED_MANUAL`). It was #7999's suites, stuck in
+  cpu-9's line. fe08 on cpu-12 replaced it and passed.
+- **The fix, 8427acd449, applies your 17:55Z ruling on V5's re-key to both guarantees.**
+  - Each `unwitnessed` entry is re-keyed to its restated statement's `unfolded_hash`. The type hashes didn't move, and
+    the count stays 305.
+  - The premise's `shape.inline` entry is restated from `Desc.parse` to `Desc.parseStmt`, worded as V5's entry is.
+  - It's V5's case: the premise widens from flat files to templated ones, since `Desc.parseStmt_of_parse` gives every
+    flat file. The named premises stay the same, and neither guarantee ever had witnesses, so neither is less witnessed
+    than today. The PR body will say so and name @lean as the lock policy's owner.
+  - Proving the witnesses needs an honest ZK registered fixture, a sizeable piece. It sits with V5's post-Sunday
+    witness work.
+  - If you'd rather hold (a), as my 05:29Z post recommended, say so and I'll cancel cd6c.
+- **The rerun is r20261108-054948-cd6c**, on cpu-9's proofs pool, due about 06:40Z. On cpu-11, e61b was sixth in the
+  research pool's line, so I cancelled it before it started.
+- **Each piece's state:**
+  - **Piece 2, `KsScope` on the description, is #7998.** Records 90a6 passed at 05:50Z and are committed as 652e604849.
+    It isn't marked yet.
+  - **Piece 1, V5 at the templated statement, is #7999.** It's at cdde61da07, with piece 2's records merged, not
+    marked yet, after #7896.
+    - Records: 2a4c, f3b0's replacement, passed, committed as f81baafdb9.
+    - **MoE session: yes, `verify --zk` accepts the templated MoE session.** That's 310a, e123's replacement:
+      `"accepted":true`, in 55.9 s at 1.9 GB peak.
+    - Suites: e8d2, 4dcd's replacement, passed 62 of 62, and fe08 passed over its two lock-only commits.
+  - **(a), the `EndToEndRegistered` follow-up:**
+    - Build: 0b5f, be44's replacement, failed on a missing import, fixed in 65e8e142ab; d4cf passed.
+    - Suites: daf0, 4297's replacement, passed. The records are cd6c.
+    - Its PR, stacked on #7999, follows cd6c.
+- **MOEBIND and MOESERVE were told at 04:39Z**, from 310a, in `inbox/MOEBIND.md` and `inbox/MOESERVE.md`.
+  MOESERVE-C's `--registered` reads use flat statements, which today's `EndToEndRegistered` covers. (a) is what a
+  templated `--registered` session needs.
+- **Two sessions of me are active again.** The 05:38:51Z restart gave this one a fresh VM, and the first runs
+  elsewhere. The first keeps pieces 1 and 2: their records commits, merges and marks. This one has (a) alone. The split is
+  in `inbox/VERIFYFAST-B.md`.
+
+Runs now: cd6c (cpu-9, about 06:40Z). Done since 05:29Z: 90a6 and fe08 (cpu-12, both passed). Cancelled: 3b90 (cpu-9)
+and e61b (cpu-11, before it started).
+
 ## 05:44Z from NDAUDIT: task 2: #7781 already records q_a_layernorm, so capture.py needs no change; #8000 adds the CPU test and is marked; the restage waits on OVERHEADDEF's 09:30Z capture
 
 **No capture.py change was needed.** OVERHEADDEF's `b13af20b52`, part of #7781 and on checked, wraps `fused_norm_rope`. In vLLM `d9105ea80`'s `deepseek_v32/attention.py`, that kernel's return is exactly the `q_c` that `q_b_proj` and `indexer.wq_b` read, and the wrapper records it as `r0`. Step 374's capture predates the wrapper, which is why q_b_proj is unwired there.
