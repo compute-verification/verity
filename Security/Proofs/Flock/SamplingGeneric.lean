@@ -20,6 +20,7 @@ public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
+public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
 
