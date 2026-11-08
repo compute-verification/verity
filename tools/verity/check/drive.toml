@@ -11,8 +11,6 @@
 command_line = ["on"]
 # the machines train.sh launches drive's lock run and its after-landing run on (a machine, or `auto`)
 on = ["vy-nebius-cpu-1", "vy-nebius-cpu-2", "vy-nebius-cpu-4", "vy-nebius-cpu-5"]
-# ready marks written before this don't count
-marked_after = "2026-10-12T06:00:00Z"
 # after a landing that changes Lean, a lock or the spec, run lean-audit alone on `checked`'s tip (the lock run, `train.sh TIP
 # MACHINES --deferred lean-audit`) and commit the lock records it regenerated onto `checked` (`Lock records regenerated for
 # ...`), ahead of the after-landing run, which then checks a commit with those records (`--no-regenerate`): `main` moves only

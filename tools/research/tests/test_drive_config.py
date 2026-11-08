@@ -242,6 +242,28 @@ def test_the_command_line_overrides_only_the_keys_drive_toml_lets_it(world, driv
     assert drive(world, "--on", "m9") == 1 and "set only nothing (its `command_line`)" in capsys.readouterr().err
 
 
+def test_without_marked_after_in_drive_toml_the_tick_takes_the_rules_cutoff(world, monkeypatch):
+    """The ready-mark cutoff is set once, in the rules at `main` (queue.toml), which every VM's queue reads: a drive.toml that
+    sets none leaves drive's tick that cutoff."""
+    cutoffs: list[str | None] = []
+
+    class Driver:
+        def __init__(self, q, **kw):
+            cutoffs.append(q.before_cutoff.__self__.since)
+
+        def tick(self, dry_run=False):
+            return ""
+
+    monkeypatch.setattr(D, "Driver", Driver)
+    sha = world.change({DRIVE_FLAGS: FLAGS.replace('marked_after = "2026-10-12T06:00:00Z"\n', ""),
+                        "gates/g.py": "import sys\nsys.exit(0)\n",
+                        "ci/queue.toml": 'hold_label = "hold"\nmarked_after = "2026-10-20T06:00:00Z"\n'})
+    _git(world.dev, "push", "-q", "origin", f"{sha}:refs/heads/main")
+    monkeypatch.chdir(world.dev)
+    assert drive(world) == 0
+    assert cutoffs == ["2026-10-20T06:00:00Z"]
+
+
 def test_without_drive_toml_at_main_drive_takes_the_defaults_and_its_on(world, driven, monkeypatch, capsys):
     rules = world.tmp / "rules.toml"
     rules.write_text('hold_label = "hold"\nmarked_after = "2026-10-12T06:00:00Z"\n')
