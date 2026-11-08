@@ -160,6 +160,28 @@ def test_the_sweep_reads_the_remote_branch_not_the_checkout(tmp_path):
     assert M.sweep(repo, gh=gh, log=lambda *_: None) == ([3], [4])
 
 
+def test_a_sweep_in_a_partial_clone_fetches_no_head_it_lacks_and_keeps_that_pr_open(tmp_path):
+    """drive.sh's code checkout is a `blob:none` clone of main alone: the heads of open PRs not on main aren't in it, and a lazy
+    fetch of each (its whole history, with no negotiation, in a pack git never repacks there) filled the pod's disk.  The sweep
+    closes what landed and retargets onto main as in a full clone, and keeps the rest open with no object fetched."""
+    _repo, gh, tips, _merge = _world(tmp_path)
+    origin, partial = tmp_path / "origin.git", tmp_path / "partial"
+    _git(origin, "config", "uploadpack.allowFilter", "true")
+    _git(origin, "config", "uploadpack.allowAnySHA1InWant", "true")
+    _git(tmp_path, "clone", "-q", "--filter=blob:none", "--single-branch", "-b", "main", f"file://{origin}", str(partial))
+    lacks = {name: tips[name] for name in ("C", "D", "E")}
+
+    def missing(sha: str) -> bool:
+        return subprocess.run(["git", "cat-file", "-e", f"{sha}^{{commit}}"], cwd=partial, capture_output=True,
+                              env={**os.environ, "GIT_NO_LAZY_FETCH": "1"}).returncode != 0
+
+    packs = sorted(os.listdir(partial / ".git" / "objects" / "pack"))
+    assert all(missing(sha) for sha in lacks.values())
+    assert M.sweep(partial, gh=gh, log=lambda *_: None) == ([1, 2], [5])
+    assert sorted(gh.open) == [3, 4, 5] and all(missing(sha) for sha in lacks.values())
+    assert sorted(os.listdir(partial / ".git" / "objects" / "pack")) == packs
+
+
 def test_landed_in_names_the_merge_or_the_commit_itself(tmp_path):
     repo, _gh, tips, merge = _world(tmp_path)
     assert M.landed_in(repo, tips["A"], merge) == merge

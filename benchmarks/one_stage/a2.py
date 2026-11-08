@@ -88,7 +88,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     rec = json.loads((served / "registration.json").read_text())
     n = int(rec["population"])
-    law = D.parse_law(f"subset:{a.k}")
+    law = D.parse_design(f"subset:{a.k}")
     template = InputSet.open(a.template_set).subcircuit.definition()
     program = P.population_program(template, n)
     query = P.template_instance_query(template)

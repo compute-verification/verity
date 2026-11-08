@@ -132,6 +132,26 @@ theorem Partition.localEval_ofAudit (xs : Fin C.N → Bool) (u : Fin n) (g : Fin
       (show (Partition.ofAudit P).unit g ≠ some u from hu), P.localEval_of_not_mem xs hu]
     rfl
 
+/-- Every transcript of core's circuit of a game circuit is a transcript of bits. -/
+theorem Circuit.ofBits_getLsbD (tr : (Circuit.ofAudit C).Transcript) :
+    Circuit.ofBits (fun g => (tr g).getLsbD 0) = tr := by
+  funext g
+  apply BitVec.eq_of_getLsbD_eq
+  intro i hi
+  have hi0 : i = 0 := by
+    have : i < 1 := hi
+    omega
+  subst hi0
+  simp [Circuit.ofBits]
+
+/-- A unit's local evaluation in core's view of a game partition is the game's, at the transcript's bits. -/
+theorem Partition.localEval_ofAudit_bit (tr : (Circuit.ofAudit C).Transcript) (u : Fin n) (g : Fin C.N) :
+    ((Partition.ofAudit P).localEval tr u g).getLsbD 0 = P.localEval (fun g => (tr g).getLsbD 0) u g := by
+  have e := Partition.localEval_ofAudit P (fun g => (tr g).getLsbD 0) u g
+  rw [Circuit.ofBits_getLsbD] at e
+  rw [e]
+  simp
+
 /-- **The incorrect proof blocks are the game's**: core's partition of a game circuit has the game partition's incorrect proof blocks, on
 the same bits. -/
 theorem Partition.wrong_ofAudit (xs : Fin C.N → Bool) :
