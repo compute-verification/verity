@@ -10853,3 +10853,56 @@ and drive's lock run reconciles the two locks after landing. One risk is BINDTER
 - r20261108-114629-ff1f took GPU 4 again at 11:47Z, ending by 14:20Z. It runs fr-w13, fr-w2 and rmsnorm-v8 at K = 2 and 4, then ar-multimem, sm-fp8-k6144, sm-fp8-k2048, dsa-logits-v3 and residual-add at K = 1, 2 and 4, with Lean at K = 1. ETA about 13:30Z.
 
 **The PR branch's suites:** the first run, r20261108-111753-be92, passed 51 of 52. The repository suite failed on two lints in `server_rate.py`, an environment read and three swallowing handlers. Both are fixed, with no allowlist added, and the rerun is r20261108-114913-cf47.
+
+## 11:55Z from MOESERVE-C: the firewall takes the templated statement (#8081), and both synthetic templated reads are accepted proved behind it
+
+- **The firewall fix: [#8081](https://github.com/compute-verification/verity/pull/8081)** (from main, `Lane proofs`,
+  CIR-185), at `262a390ecc`. It isn't stacked on #7999.
+  - `Hello.Setup.ofArgs`, behind `hello` and the session loop, and `Finish.cmd` now look `--statement` up with
+    `Tags.byName?`. That is the lookup `verify` and `statement` already use: `Tags.all`, else `Tags.templated`.
+  - The setup behind it is already `verify --zk`'s: `Stmt.setupTablesOf` on `parseCommitFast`, which reads a
+    templated unit from its template.
+  - **It stays exactly as checked.** `Flock.zk_server_lean_loop` and `Proofs/Flock/ZkAny` are stated over any set-up
+    session, so no guarantee, property or lock record reads the accepted names.
+  - The Lean fast path passed on the flock package and its four requirers (r20261108-105100-8a4c): 20,283
+    declarations, standard axioms, all 11 records unchanged. The lock gains only its `format` line.
+  - New `test_lean_hello.py` cases:
+    - `hello` and `finish` take the templated name;
+    - its `Hello` equals the flat statement's except for the link's Σ;
+    - a bad layout mode is refused at the setup.
+  - The pod toy `90-tmpl-unit.sh` gains a `zkfw` mode. On #8081 alone it proves behind the firewall, and the live
+    verifier and the audit accept it, but Lean's `verify` refuses it at main's version gate (r20261108-105207-4d34).
+    Merged with #7999, `zk` and `zkfw` both pass Lean, live and audit (r20261108-111851-8034).
+  - **Not marked yet.** Its quick suites plus the slow Hello case are in r20261108-105147-0b41 (cpu-6). Every suite
+    finished so far has passed, `verity-flock` among them. I mark it when the run passes, ETA about 12:30Z.
+- **`--templated-direct` is gone, not kept as a test-only flag.** I deleted it from `a5.py`, `records_audit.py` and
+  `run_moe_window.sh` on `cursor/proofs-moeserve-c-tmplreg-2ce2` (`fb7307dc61`, which merges #8081). Templated members'
+  provers now take `a0.prover_env` like every other member.
+- **The synthetic window behind the firewall, r20261108-104925-dd42 (cpu-11): both templated reads accepted.**
+  - m14, `EmbeddingRead_v1{V=32,H=256}`, and m37, `{V=32,H=4}`, were each proved under `FC_FIREWALL=1`:
+    108 + 216 device rounds, no firewall failure, proving 35.9 s and 29.4 s.
+  - Lean `verify --statement verity/flock-circuit/tmpl --zk --registered` accepted both.
+  - All 8 ports of each open at the roots `registered.json` names, and every one of those roots is in the window's
+    registration.
+  - The router m0 and the GEMMs m44 and m55 were accepted too: 5 of 5.
+  - Its record checks, negatives and proof edits are running. ETA about 12:50Z.
+- **354e's audit ended accepted** (r20261108-091506-354e, 5,779 s; its reads ran unfirewalled, before #8081).
+  - Record checks: the record verifier accepted, `fixed_before_draw` held, and so did every check before the draw
+    (57 members, the registration, the source; population 146).
+  - Negatives: 26 of 26 refused. They include `registered-reads-leaving-a-port-committed-afresh`,
+    `registered-read-against-another-root` and `chunk-without-registered-reads`.
+  - Proof edits: 6 of 6 refused, all on member m0, the flat router:
+    - `--flip-proofs 4` made the 4 ZK edits, each refused with "zk inner: the batched constraint fails";
+    - the 2 public-file bit flips were refused at the setup.
+  - No proof edit yet hits a templated member.
+- **The L5 arms:** I cancelled 53ff and ee9f. Their one unique result, Lean accepting the real-L5 reads under
+  `--zk --registered`, is already reported.
+- **The real-L5 rerun is behind the firewall,** with the naming fix and templated reads (`MW_READ_LAYOUT=iv/hybrid/4`).
+  It is not the flat-firewall-plus-direct fallback.
+  - r20261108-104955-706b is the fused arm (cpu-1): population 193,568, warm 1,059 s, audit since 11:27Z.
+  - r20261108-105019-2605 is the unfused arm (cpu-1): population 373,792, 7 templates, audit since 11:26Z.
+  - ETA: read verdicts about 13:00–14:00Z. The full audits run into the afternoon; the old arms hadn't finished
+    theirs after 327 min.
+  - My session watcher looked at every window on the node, so the two arms copied each other's files. I stopped both
+    watchers by PID; both audits are untouched. A pinned watcher run, r20261108-114903-e4c4 (cpu-1, proofs pool),
+    copies each arm's own window instead.
