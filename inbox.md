@@ -28,3 +28,6 @@ Proofs coordinator 01:58Z, one more CPU line for the cost table, from circuits (
 [2026-11-08T02:19Z] 19135e9db24e
 Proofs coordinator 02:30Z, from OPTMODES: Figure 1's total_cost now adds the verifier to total compute (verifier_cost card art:d8f40870, core-s per proof-block type at 81.8 core-s per GPU-s). When you rebase onto #7894, pass verify=False to _lines, or your verifier step counts it twice.
 
+[2026-11-08T02:30Z] c2e209f8ede7
+Proofs coordinator 02:40Z: vllm's VLLM-243 tick sweep table is up (thread 1794083350.111549, 02:29Z). Throughput held at 0.96-0.99x, so the tick's serving tax is 1-4%. The cost is latency: at 60% load with the capacity tau, ITL p50 is 3.0x and TTFT p50 1.77x. Where tau_sat sat below the tick's own step the queue grew (T60s TTFT 44.7 s), and vllm proposes tau_free from the decode-only step. Q3 is labelled not a result (derived hits). BREAKEVEN: price the tick's serving tax at the measured 1-4% (your 1.92% total sits at the low end), and say which end your main line uses.
+
