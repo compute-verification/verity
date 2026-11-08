@@ -119,7 +119,9 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     (`window_charge.session` at D = 32, a length slot for each of the window's requests with the trace's max_tokens and
     output_len) charges exactly that on each of windows 0 … 212, and CompileSlice_v4 on w212 at its own statics
     (`compile_slice_w212.json`), from the chain's carry into it, accepts that charge, carries out the chain's carry and
-    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v4``)."""
+    refuses one bit less. The served windows name it (`serve_commit.SERVED_SLICE`, ``CompileSlice_v4``). code_v1's term
+width, width(m + 1) + 1, is the slot's bitlen(m) + 1 (`window_charge.length_bits`) for every max_tokens up to 4,096 and
+at each power of two to 2^32 − 1."""
     from types import SimpleNamespace
 
     from verity.core.protocols.certifier import served_rows as SR
@@ -159,6 +161,8 @@ def test_the_length_charging_slice_charges_code_v1s_segment_and_its_length_tails
     low = V4.case(S, sl, book, charge=honest.length - 1, **kw)
     assert V4.evaluate(st, [honest, low]) == [V4.ACCEPT, V4.ACCEPT & ~(1 << 3)]
     assert V4.CompileSlice.id == "CompileSlice_v4"
+    around = {m for k in range(WC.MW + 1) for m in ((1 << k) - 1, 1 << k) if m <= WC.MT_CAP}
+    assert all(width(m + 1) + 1 == WC.length_bits(m) for m in sorted(around | set(range(4097))))
 
 
 def test_a_window_on_a_busy_engine_is_refused(recs):

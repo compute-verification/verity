@@ -2,8 +2,9 @@
 ChargeLink_v2{D, 0, 0, K} in place of ChargeLink_v1{D}. Its charge is v1's for the window's decisions plus each certified
 arrival's length term, bitlen(max_tokens) + 1 bits, read from ``cert``'s certified output length and max_tokens. On both
 demonstration slices and on window 212 of the served run the circuit accepts that charge and refuses one bit less, and a
-max_tokens the certified output length doesn't fit is refused by ``code``. A max_tokens other than the certified one is
-another ``cert`` row, so the b‖c of ``cert`` to the certified record refuses it."""
+max_tokens the certified output length doesn't fit is refused by ``code``, at each power of two. The circuit bounds
+max_tokens only from above: a lower one the output still fits is another ``cert`` row, which only ``cert``'s binding to the
+certified record can refuse, and that binding is a stand-in (`compile_slice_v4`'s docstring)."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -73,6 +74,40 @@ def test_max_tokens_is_cert_s(x):
     assert lower.verdict == V4.ACCEPT and lower.length < honest.length
     assert lower.rows["cert"] != honest.rows["cert"]
     assert V4.evaluate(x.st, [lower]) == [V4.ACCEPT]
+
+
+def test_the_length_term_at_powers_of_two(x):
+    """The arrival with the longest output, O < 2^b: max_tokens at O, 2^b − 1, 2^b, 2^(b+1) − 1, 2^(b+1) and 2^32 − 1
+    charges bitlen(max_tokens) + 1 bits for its term, one more at each power of two, and the circuit accepts each at that
+    charge; at 2^(b−1) − 1, whose width O doesn't fit, ``code`` is refused by both."""
+    honest = V4.case(x.S, x.sl, BOOK)
+    k = max(range(len(x.sl.arrivals)), key=lambda j: x.sl.arrivals[j][2])
+    O, b = x.sl.arrivals[k][2], x.sl.arrivals[k][2].bit_length()
+    rest = honest.length - WC.length_bits(x.sl.max_tokens[k])
+    cases = []
+    for mt in sorted({O, (1 << b) - 1, 1 << b, (1 << b + 1) - 1, 1 << b + 1, WC.MT_CAP}):
+        c = V4.case(x.S, replace(x.sl, max_tokens=tuple(mt if j == k else m for j, m in enumerate(x.sl.max_tokens))), BOOK)
+        assert (c.verdict, c.length) == (V4.ACCEPT, rest + mt.bit_length() + 1), mt
+        cases.append(c)
+    short = _with_mt(x.S, honest, k, (1 << b - 1) - 1)
+    assert V4.check(x.S, short.rows)["code"] is False
+    got = V4.evaluate(x.st, cases + [short])
+    assert got[:-1] == [V4.ACCEPT] * len(cases) and got[-1] & (1 << 2) == 0
+
+
+def test_a_term_is_charged_in_its_bodys_window_when_its_output_ends_later():
+    """A length term is charged in the window its request's body lands in, as `lengths.terms` places it, wherever the
+    output ends: on the demo all three requests outlive the window (0 and 1 still running, 2 still queued) and the window
+    charges all three terms. The slice loads every window from the empty state, so the window after it, which would open
+    with those requests unfinished, is no slice: the encodings' `replay_vectors.served_window` refuses it by name ("N
+    requests unfinished"), and no term is charged twice."""
+    st, sl = V4.demo()
+    S = SimpleNamespace(**st)
+    sc = CS.scan(S, sl)
+    end = sc.states[-1]
+    assert sorted([r[0] for r in end.running] + [a[0] for a in sc.window.queue[end.qh:]]) == [0, 1, 2]
+    honest = V4.case(S, sl, BOOK)
+    assert honest.verdict == V4.ACCEPT and honest.length == CS.case(S, CS.demo()[1], BOOK).length + _tails(sl)
 
 
 @pytest.mark.slow
