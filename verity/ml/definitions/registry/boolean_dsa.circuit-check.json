@@ -30,6 +30,9 @@
   }
  },
  "digests": {
+  "DsaMqaLogitsKey_v1{H=32,D=128}": {
+   "sha512": "f6017b25b308c09e9775cab86a1357ad18193c2868d2fc7453f75b72941cf6d136fde9255489d6a368d95e0f38002d28b17a3316f2253df9483fceabcfb932a8"
+  },
   "DsaMqaLogitsQ_v1{H=32,D=128}": {
    "sha512": "783d881e997c742b2a2c339fde7fc13d552632fbe4c10bf47ebaaa78bbd72dc0e5fa39d57f33fc90a5f796050ac851adddeb618838e3917fb6beddd7394ee97d"
   }
