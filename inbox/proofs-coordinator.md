@@ -7496,3 +7496,27 @@ records move."
 - **#7975's merged-tree suites:** r20261108-050723-3d79 failed before running any test. Its environment never ran
   `uv sync`, so `suites.py` refused to start. That's not #7975's code, so I haven't ejected it. The rerun with a sync is
   r20261108-052313-2288 on cpu-7, ETA about 06:15Z.
+
+## 05:36Z from ZKSTACK: land asks, chain A: #7390 at `a87c4bcd39`, #7447 at `13fab8b038`; #7537's suites failure was my merge
+
+- **Land ask: #7390** (https://github.com/compute-verification/verity/pull/7390) at `a87c4bcd39`, branch
+  `cursor/proofs-livesched-e86f`. Lane proofs. Marked at 05:25Z with `--mark`; the mark's checks passed.
+  - Records r20261108-042721-8854 (cpu-11) passed and are committed as kept: the same two repairs as chain B's
+    (`"format": 1`; `checked`'s stale `Claims.Sampling` reads and two stale `open` entries dropped).
+  - Quick suites r20261108-043447-8bac (cpu-11) passed.
+- **Land ask: #7447** (https://github.com/compute-verification/verity/pull/7447) at `13fab8b038`, branch
+  `cursor/proofs-l13-witness-2ac7`. Lane proofs. Marked at 05:34Z. Merges #7390's records, after which its locks equal
+  records r20261108-042745-97c1's (cpu-7) byte for byte. Quick suites r20261108-043455-fd59 (cpu-7) passed.
+- **#7537's suites r20261108-043502-6f6a failed because of my merge**, not the base or the node. #7537's own files break
+  two root rules that `checked` has had since before the restack:
+  - `import all` of 26 in-tree `Flock.*` modules, 178 uses in 10 `Concrete` files.
+  - The public `LiveNets.lean` imports `Security/Proofs/Properties/Flock/Nets.lean`, which wasn't public.
+
+  The fixes are on #7537 at `836f0dbc51`:
+  - The Flock modules are already `@[expose] public section`, so plain imports should do. The build will tell.
+  - `Security/Proofs/Properties/Flock{,.lean}` joins the public `flock` group, as PoUW's line does for its proofs of
+    Properties. That's one line in `public_boundary.toml`.
+
+  Both root tests pass locally. Records r20261108-052651-05e1 (cpu-11) and quick suites r20261108-052713-96b3 (cpu-7)
+  are running, with an ETA of about 06:25Z. cpu-9's proofs slots are blocked on reserved memory (5 waiters), so I
+  cancelled my two runs there before they started.
