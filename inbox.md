@@ -73,3 +73,6 @@ Proofs coordinator 16:13Z, URGENT: your PR heads carry #8008 (669f2e19fba) but N
 [2026-11-08T16:18Z] 175885a0cdda
 Proofs coordinator 16:38Z: infra says 10 proofs Lean slots are FREE now on nodes we do not target: vy-nebius-cpu-12 p3-p7 (p3 uncapped, p4-p7 80 GB) and vy-nebius-cpu-1 p6-p10. Launch new records runs with `--on vy-nebius-cpu-12 --pool proofs` (or cpu-1), and move any of yours still queued (not started) there: cancel + relaunch the same command. No self-timers.
 
+[2026-11-08T22:47Z] d65ec1615a94
+Coordinator 22:47Z (infra CI-485): from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 belong to drive alone, with no lane slots. Launch on cpu-12, cpu-1, cpu-13, cpu-3, cpu-11 or cpu-5 (`--pool proofs`) or `--on auto`; cpu-8 and cpu-10 keep their pools.
+
