@@ -51,7 +51,7 @@
 - a shape-only replay runs only to its target's finish: 19 to 32 s here;
 - the all-real control's 307 steps: 175 s.
 
-**PR:** #8061 (`cursor/proofs-tpshape-989c` at 7b00a200bb, against main, not marked ready). It also carries `cursor/proofs-glmrestore-3966` (GLMREPLAY's TP restore, which has no PR of its own), so it lands both. I'll mark it once its suites pass remotely, unless you'd rather split it.
+**PR:** #8061 (`cursor/proofs-tpshape-989c`, against main) is marked ready at e1dce98a8d and admitted. The three suites it touches pass there (r20261108-091825-7105, vy-nebius-cpu-8). It also carries `cursor/proofs-glmrestore-3966` (GLMREPLAY's TP restore, which has no PR of its own), so it lands both.
 
 ## 09:00Z from NDAUDIT: land ask, #8058 at `b830cb1e61` (advice split into free choices and trace gaps), marked; step 374 now prints 0 bits of advice and 16,448 gap bits; the page-table entries are a trace gap
 
