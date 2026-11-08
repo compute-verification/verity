@@ -9064,30 +9064,17 @@
    "unfolded_hash": "5ab5dac9f433b138c96aff2fa912d782c0851c443e80bf9aaef448996b75b49f"
   },
   "Properties.Spot.acceptMeans_honest": {
-   "owner": "@proofs"
-  },
-  "Properties.Spot.acceptMeans_nontrivial": {
    "owner": "@proofs",
    "signature": [
-    "Properties.Spot.acceptMeans_nontrivial (law : Lean.Json) (d : Core.Draw) (n : Nat) :",
-    "  Not",
-    "    (And (Properties.Spot.Registered Properties.Spot.bareParams.verifier Properties.Spot.nullCommitment.record law)",
-    "      (And",
-    "        (Properties.Spot.Drawn Properties.Spot.bareEvidence.draw",
-    "          (Spot.getD Properties.Spot.nullCommitment.record \"population\") law)",
-    "        (And (Properties.Spot.UnitsProved Properties.Spot.nullCommitment Properties.Spot.bareEvidence)",
-    "          (And (Properties.Spot.VerdictsAccept Properties.Spot.bareEvidence.verdicts)",
-    "            (And (Eq (Spot.Record.profileDraw law) (Option.some d))",
-    "              (And (Eq (Spot.nat? (Spot.getD Properties.Spot.nullCommitment.record \"population\")) (Option.some n))",
-    "                (And",
-    "                  (Eq Properties.Spot.barePublic",
-    "                    (Properties.Spot.publicOf Properties.Spot.bareParams Properties.Spot.bareEvidence law d n))",
-    "                  (And",
-    "                    (Eq Properties.Spot.bareProfile",
-    "                      (Properties.Spot.profileOf Properties.Spot.bareParams Properties.Spot.nullCommitment",
-    "                        Properties.Spot.bareEvidence d n))",
-    "                    (Properties.Spot.SeedSaltNamed Properties.Spot.bareParams Properties.Spot.nullCommitment",
-    "                      Properties.Spot.bareEvidence)))))))))"
+    "Properties.Spot.acceptMeans_honest :",
+    "  Eq",
+    "    (Spot.OneStage.check Properties.Spot.Honest.params Properties.Spot.Honest.commitment",
+    "      Properties.Spot.Honest.evidence)",
+    "    (Core.Outcome.accept",
+    "      (Properties.Spot.publicOf Properties.Spot.Honest.params Properties.Spot.Honest.evidence Properties.Spot.Honest.law",
+    "        (Core.Draw.subset 1) 1)",
+    "      (Properties.Spot.profileOf Properties.Spot.Honest.params Properties.Spot.Honest.commitment",
+    "        Properties.Spot.Honest.evidence (Core.Draw.subset 1) 1))"
    ],
    "assumptions": [],
    "premises": {
@@ -9096,7 +9083,42 @@
     "open": [],
     "reads": []
    },
-   "type_hash": "c0530b54a3fd71f4de7f94b5eff8f4d99f58b5ac261ab692cfc37cea21eb5f76"
+   "type_hash": "9589f85b3568c56d54f556732426fd659ea58460f6357144911336ff4019b0f1"
+  },
+  "Properties.Spot.acceptMeans_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Properties.Spot.acceptMeans_nontrivial (law : Lean.Json) (d : Core.Draw) (n : Nat) :",
+    "  Not",
+    "    (And",
+    "      (Properties.Spot.Registered Properties.Spot.Honest.saltParams.verifier Properties.Spot.Honest.commitment.record",
+    "        law)",
+    "      (And",
+    "        (Properties.Spot.Drawn Properties.Spot.Honest.evidence.draw",
+    "          (Spot.getD Properties.Spot.Honest.commitment.record \"population\") law)",
+    "        (And (Properties.Spot.UnitsProved Properties.Spot.Honest.commitment Properties.Spot.Honest.evidence)",
+    "          (And (Properties.Spot.VerdictsAccept Properties.Spot.Honest.evidence.verdicts)",
+    "            (And (Eq (Spot.Record.profileDraw law) (Option.some d))",
+    "              (And (Eq (Spot.nat? (Spot.getD Properties.Spot.Honest.commitment.record \"population\")) (Option.some n))",
+    "                (And",
+    "                  (Eq Properties.Spot.barePublic",
+    "                    (Properties.Spot.publicOf Properties.Spot.Honest.saltParams Properties.Spot.Honest.evidence law d",
+    "                      n))",
+    "                  (And",
+    "                    (Eq Properties.Spot.bareProfile",
+    "                      (Properties.Spot.profileOf Properties.Spot.Honest.saltParams Properties.Spot.Honest.commitment",
+    "                        Properties.Spot.Honest.evidence d n))",
+    "                    (Properties.Spot.SeedSaltNamed Properties.Spot.Honest.saltParams Properties.Spot.Honest.commitment",
+    "                      Properties.Spot.Honest.evidence)))))))))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "05b15f071e77e07a7666104cb439acb13cb3610ad494b8f099a412ee6269511a"
   },
   "Properties.Spot.bernoulliBounds": {
    "owner": "@proofs",
@@ -16396,7 +16418,7 @@
    }
   },
   "Flock.Program": {
-   "digest": "c58f02b776635b3605f5b02e1197fc01aa6616e60186ade46ccede2ea9c71947",
+   "digest": "67b2f6d1603a4003d7b00031a22008935d2c2a59e7b090d6168e41adfa39f312",
    "definitions": {
     "Flock.Program.Arg": "ec25eed79967a37f47bfab16d75800bb417f725b6060db8885c981bbfb54549d",
     "Flock.Program.Arg.dims": "27996c560a07b5131152e1e961d1ebeae325f7e0e78513b43fe9eb8f0763bb7a",
@@ -16568,8 +16590,6 @@
     "Flock.Program.instInhabitedNode.default": "90087c8548b74aedf2903e98c3d1613b89f1e12e6201d305de1d50467b4e65d8",
     "Flock.Program.instInhabitedPart": "0b7ca048ca1aa72dc8591d2540283ba3927be44e28d1d27d57a7199c92760f07",
     "Flock.Program.instInhabitedPart.default": "b1a4359667fb3f89ac4a78a72bdd01cc8816e7529044348e2d4d048bb0c1accb",
-    "Flock.Program.instInhabitedProg": "5bfd48881a5f8b8cf826da3e1e1138cf3dcd7a1cb9d42e44cbe7265599be3858",
-    "Flock.Program.instInhabitedProg.default": "572d7263a581c92159f3557a5928253fb7a31760c7b3bd707f3b3dc2c469072b",
     "Flock.Program.instInhabitedRef": "875b5fccdcb52dedacbffaab09e93430a18280cd3a79a8456ec68defb16f9f2c",
     "Flock.Program.instInhabitedRef.default": "eef78b2bcb99eb1ec96b276c3c1aa42a2b3b8434101edd5718bf58c7199aac74",
     "Flock.Program.instInhabitedScope": "01a5117ab24799884790559edd75d8852bd4922fa90ebf6855609f15bb347e34",
@@ -18064,7 +18084,7 @@
    }
   },
   "Flock.TemplateQuery": {
-   "digest": "bbaee9bf170d1e4ab3db56ebaa1519702fcc24b846b82084d7c6d7589f207420",
+   "digest": "f36bb1942986ba1df17f166198cdca467d976a54a047342a59d54d697d94c60f",
    "definitions": {
     "Flock.TemplateQuery.DDef": "645f008e487ba991572c3d7659e26904c597f4992a45203064a039b8390c5c25",
     "Flock.TemplateQuery.DDef.nodes": "b1e5faa09c8fdd900e35d000003880cda625866e44f4dbade582562d61802677",
@@ -18094,8 +18114,6 @@
     "Flock.TemplateQuery.gates": "5834244410f77b6e314f8c92aea6efb071fdc9eabdfeb24029bb1e9b202771ac",
     "Flock.TemplateQuery.instInhabitedDNode": "1d2ed3dda22709ce0a00c64c4cb97c5e33bcf5033920f6dc47ae79bcd0570ad5",
     "Flock.TemplateQuery.instInhabitedDNode.default": "94198a736ebb97161ae0924e4fce4e54396152761848cd6e2aea2603ff42b3aa",
-    "Flock.TemplateQuery.instInhabitedDesc": "5d999acce1f71e4da7d72f1751c56f784a259dae1f3160fca57967bfa3124c56",
-    "Flock.TemplateQuery.instInhabitedDesc.default": "ea44ee18314e79ba14256dc9a48d0f3eb10b75363aea4713a6a8c3c7df2bb59b",
     "Flock.TemplateQuery.isInput": "29caeb43e127d913345bc65d15694f773611b983afc9af9f50f1efb06edd37ee",
     "Flock.TemplateQuery.locate": "cbf34d266611b55bf150b9f1e4191ea6a805fc0dbc1821238d7cefd3565649f3",
     "Flock.TemplateQuery.population": "95d5a1b2851487e31ad71ba9b16aa179bd7fd3addcc3f06abfb9b01c15d93fa7",
@@ -22290,7 +22308,7 @@
    }
   },
   "Properties.Spot": {
-   "digest": "8f1c77cdfc316a61beb872fdfff4e20c124bee4bcd966c95cdbff1be77a1a993",
+   "digest": "eb900d404d24b1ed8883e4e9e1955ea81cbb49933478bad5770129f430eafa69",
    "definitions": {
     "Properties.Spot.AcceptMeans": "e1fdb21df49bfb5eb6f73be0351a6d7bdaada6de61d229012829977e8295bbda",
     "Properties.Spot.Ascending": "17557ee116948293242d3e7d9a046a27b45ccee692aee0277b044c6c256cac37",
@@ -22301,6 +22319,29 @@
     "Properties.Spot.EarlierIs": "08c5eca6c8ef860be4d9a64a2a32a80a3cfe67fc6322349a984a2bd48af8cbd2",
     "Properties.Spot.EntryIs": "9675c96de5ab50b49b35b82a0cd85b3b90da9e06bf6f8ce891ba3f4c52096b63",
     "Properties.Spot.ExpectsV2": "5decb60f004e45a0fab69c7ac19ae8c391d2bc8947e6bc591cc06a8eaa92f672",
+    "Properties.Spot.Honest.commitment": "98277409dce5a3ab42a47265eb74fa08831bd129c850b2f2b0cf774229f8768c",
+    "Properties.Spot.Honest.draw": "6d3e89c8d29b09cbb5d007f9d2121a056d7c7e65666f8ef02a26c436928f6755",
+    "Properties.Spot.Honest.evidence": "9a2fa6972f8041b0bf3d7d1d65f05d4f096c753dfb676382fc5ea199af7ec946",
+    "Properties.Spot.Honest.hex": "24c552c68db486fd20fb88eaa26d0f7dd08c641b4d477173626507e846177ef6",
+    "Properties.Spot.Honest.law": "2c4f043b868764389ebfe8a83b80f30ea4e8c0e7ff28c7fb948d39725d7815ff",
+    "Properties.Spot.Honest.params": "f622fdfc82516b59c79832126f7377d5083380c2a185bb8b5cfb2fe738248157",
+    "Properties.Spot.Honest.partitionHex": "359094269b0a48c6eb4c877db75b53ab357ed37918ff31b3269ab8837e49e8cf",
+    "Properties.Spot.Honest.partitionItems": "401a2a6ce71d10ea6705e9bef08280a4e43c78332adf1573b7bfed9be5defba1",
+    "Properties.Spot.Honest.port": "8489454378e7ac7696c994c5cac8ea1afc37393a2c50c28e8f5e794a966cc943",
+    "Properties.Spot.Honest.prog": "1250e369ccd100f7d7eb1a5113e0349de4a490b0bab71bf787368619fae04e5c",
+    "Properties.Spot.Honest.program": "26d80f5d3d4c8a2904a74cfbdc85b5325cce7c24506c7a4e9cdffc5cd9aef661",
+    "Properties.Spot.Honest.query": "3dcf6f8ed8c80d4b9e2be0ff35cd7ff8629c741de83453e1da7146c678902c2b",
+    "Properties.Spot.Honest.queryHex": "e60c74077d2857904eab07ce881167f77ec1850422627ab12fe07e369e57aa9c",
+    "Properties.Spot.Honest.queryItems": "e8fedec2d64462fc51a4d36cfab0d965e29ede2ac38eb99706a934ced87818f6",
+    "Properties.Spot.Honest.record": "7ed157e397ccfa563cd9c9c288e79a6548798d100dc1172a18c185e947469c4c",
+    "Properties.Spot.Honest.recordItems": "9e5eca43c8ecaa358b834d095d00a664480dfdbbf6b4b3cf45a482c05f3df240",
+    "Properties.Spot.Honest.rootDefn": "d58a68e52e4ea3ddc962d474d923463634ca710d968b0ad6cb6c923808933948",
+    "Properties.Spot.Honest.rootEntry": "4c3915a185464620577192d05c5469019a614640f16f070d9c54ae89c8e2fbd7",
+    "Properties.Spot.Honest.saltParams": "71ea975efc569ce8d86fe39976b6f9d3d03d00f52fbb01b4d1946b72df2c8e4c",
+    "Properties.Spot.Honest.templateDefn": "cd2053d1703c7be57770c4e0e2c2d7a89d5b787a385212023ed3d2a1515a7b19",
+    "Properties.Spot.Honest.templateParams": "96f7ff6b312d3173ba33dc6859e6f6f8555c70d0c4406cc8636cbbebdc71eb67",
+    "Properties.Spot.Honest.verifier": "a793ea73d49e76eed9f010deb67e940c4de052a4c84a67db2b30038f79b7897e",
+    "Properties.Spot.Honest.window": "ffe27e7a40523c366a94c581139804b5bb5edd268beb9db1ffa52b88d33e44d9",
     "Properties.Spot.OutputPortIs": "69e9c64f0d70a6135d57a70b0963f50428987244bf24670857fc5d9030545cc5",
     "Properties.Spot.OutputValueIs": "90ab70f71002f771f6f9c78f08fcca72cfdb8c6c60ba2ab41aa1f14bb6cdd994",
     "Properties.Spot.R1": "0764beacb9d1d9a8301f1b6438608bcca0332b24e66f35277f8d2e01d91dbf54",
@@ -22320,8 +22361,6 @@
     "Properties.Spot.ValuesAre": "4058ea6e8af11872789795b149d28eb08c8035c5c5a2e7dd0528ca95e301ad54",
     "Properties.Spot.VerdictsAccept": "34b867ead682a8fb33d06c83bff29b8cb6b40e1bfe25ffa3d539c6aea55cf64d",
     "Properties.Spot.WindowSeedSalt": "f8befd751622ab99c5ceff69bfb319361dc588878621d43b6d22d29a30bdf272",
-    "Properties.Spot.bareEvidence": "67c1054476d180eb257d0f70c318206e940e4f54a899d006b64412153910a074",
-    "Properties.Spot.bareParams": "bed77c9b46d120efdaee193fee43262903bd921877fe1b29547c5eff3932e255",
     "Properties.Spot.bareProfile": "47ce6d69beff69256f54861409a48f590c72dfd7d1149c88deaf55bfdb996ee6",
     "Properties.Spot.barePublic": "07fdbb405eff7a821eeda6da85872cadab5738ef228a4c1763dc3915c22b3055",
     "Properties.Spot.countIn": "faa83c52bd2f5a5fb63e2c96ac6ece56f290884808b872ce634a0a45682bc79d",
@@ -22331,7 +22370,6 @@
     "Properties.Spot.heldFor": "b2d9fddbb4e5931487115070257e8cbe445cae65badc1c52d464fa8aa100e0d9",
     "Properties.Spot.kindOf": "8e0910919e17e10883ac4d886bcf8e96e6e81a2ccbb277fa85988c9bb100fb07",
     "Properties.Spot.namesOf": "5d4e6ed4a4044a57e7ae4e206ffa81b0d1ea42f0fbbe6e9c73c146a53aeb9afc",
-    "Properties.Spot.nullCommitment": "ccb4f5132909b2e713c7535a79df10d9ae31b88143ee2c710f98bfe72a3c10f0",
     "Properties.Spot.openedRoots": "e2d68bb566f91c9179db59d6a38e735027a83044a126ee3f0fbd941f38f11b9c",
     "Properties.Spot.partitionOf": "b4a18ea0eb7c1f381225d6798d864f91527650d6307d34088bb4a771fa9cbc65",
     "Properties.Spot.portsOf": "7e699c8c8be74caaf1f5172c9527c70c0b213a98fbe0f1579147054006c4e5d0",
@@ -23907,7 +23945,7 @@
    }
   },
   "Spot.OneStage": {
-   "digest": "2e550aea82bfeb27b87089f31599c039d2c97e8ad0dab45ae7e18057df3a1744",
+   "digest": "006390bdb2632fa98bb66c3e37d36dd1aef56107462602018d61a4ce109361d0",
    "definitions": {
     "Spot.OneStage.Commitment": "a73c4a90f1c2b83c2840decc48593e672266092719b09da7b4c08282e3862285",
     "Spot.OneStage.Commitment.digest": "5ad7187d0b69df894ed454b1cef1a4593b7e2e8dd1d831e2b80ef6726c4b6e46",
@@ -23951,7 +23989,7 @@
     "Spot.OneStage.publicJson": "1eecfca42c0f31de9d361496f31e2620a0c17671e0b9ff47d59552ef11d92e14",
     "Spot.OneStage.recordChecks": "c8f06b53e4b19f87065742547208d843a2f54ebaa146f2581da7b9fceca4eb39",
     "Spot.OneStage.rule": "7ba31f61033f83f3ac5b2be2fd9efd65b893824765e65ede6a53be4109fd4abb",
-    "Spot.OneStage.seedSaltOf": "791776196480c07d489bc4ab3eeb2dcf5f19e3589d00890d254ddec50169e45a",
+    "Spot.OneStage.seedSaltOf": "c527e93bc380bf5bf195de534f9217a8d7bc4aaf39464868eee656583b3632da",
     "Spot.OneStage.verdictOf": "18d0fce756ee32d56c3f2a76b8e9da6bff8006b1a53065e72b3c5b8812d1873f",
     "_private.Spot.OneStage.0.Spot.OneStage.exactly": "0052a3b70d642e0d7d44d12f180aca07ba2bbecb0ae93b13f89adbf2ee1ef22f",
     "_private.Spot.OneStage.0.Spot.OneStage.logRecord": "2ee6c89989a0e9077f6e2e3d565fe9401b48d3c2e0fabc52908e0333e765517e",
@@ -24106,15 +24144,13 @@
    }
   },
   "Spot.Program": {
-   "digest": "f262a7d8ec3005c45d2803e376d51a916bb0a5db72739661f3cd81725631f573",
+   "digest": "c293455ac1be9aad2a720278db0fabc9228bae04474a408b3cbd0f351170d45e",
    "definitions": {
     "Spot.Program": "997385550babe01e373b0b5b3217446f9640698dcf7e7fb3ab558b807b25323f",
     "Spot.Program.desc": "ec47a1ebcdae3b2731be154511a300ad80573f3d9b696567798df9d53a2ecfb4",
     "Spot.Program.parse": "a268cbb113082c945016c9677340221655a552db0fb6dd1a8940c875b7da00c6",
     "Spot.Program.prog": "d3cfd3297f912edc8b11aeaaa71d4ab6f99da5fcf28d8e1b1e1f52a2a785cc43",
-    "Spot.Program.sha512": "37c659194ef53703389f8d9de2ee25355336168bb6802c46717120a05990fcf8",
-    "Spot.instInhabitedProgram": "3f742903e00aa6d6f92876daea26a114c145661a35207a098807b15f0176d85a",
-    "Spot.instInhabitedProgram.default": "5882fef8760b4213079d806e229b3091ada6bc8d5c87f95bdb9493269d693a36"
+    "Spot.Program.sha512": "37c659194ef53703389f8d9de2ee25355336168bb6802c46717120a05990fcf8"
    }
   },
   "Spot.PyJson": {
