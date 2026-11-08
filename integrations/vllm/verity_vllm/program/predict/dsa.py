@@ -192,9 +192,9 @@ class Net:
         return [(r, H)] * (1 + 2 * self.NL) + [(1, int(self.C["V"]))]
 
     def edge_groups(self, keys: int) -> tuple[str, ...]:
-        """The history groups of a request whose rows read up to `keys` keys that some row of it reads, which a Commit window's edge
-        carries (`segment.edge_of`): the latent rows' two halves, and the indexer's keys and scales where a row reads past INDEX_TOPK
-        (below, its top-k selection keeps every key and reads no logit: `reads_run`)."""
+        """The history groups a Commit window's edge carries (`segment.edge_of`) of a request whose rows may read up to `keys` keys
+        (at its certified max_tokens, `segment.edge_groups`): the latent rows' two halves, and the indexer's keys and scales where a
+        row may read past INDEX_TOPK (below, its top-k selection keeps every key and reads no logit: `reads_run`)."""
         return ("prefix_kv_c", "prefix_kv_pe", *(("prefix_ik", "prefix_iks") if self.reads_run(keys) else ()))
 
     def prefix_params(self, C: int) -> list[tuple[str, Type]]:
