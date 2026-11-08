@@ -139,6 +139,13 @@ template-major, so each cell is a range of the interior's proof blocks and the s
 holds of that code (`SamplingDeploy.ksTwo_code`, `Security/Proofs/Flock/SamplingGeneric/TwoCode.lean`). Its premises
 are that the registration is the design's (`RegMatchesTwo`), that each stage's coin bytes are uniform and the sessions'
 rounds don't move them, and the refusals, interior roots and sessions that one-stage's `SamplingDeploy.ks_masked` takes.
+Round 2 holds each second-stage session's statement to its template (`second_stage.check`, the Lean's
+`SecondStage.check`). A port that the replay block's Definition passes across its boundary reads only that boundary
+value, at its sampled replay block's rows. The verifier derives these links from the Definition
+(`second_stage.replay_links`), and no party supplies them. Any other port reads its own interior port or a registered
+value. Round 2 reads the statements by position, one for each part in the parts' order (the interior program's
+strata's), and refuses any other list (`second-order`, `second-cover`). The two-stage form itself stays refused until
+`second_stage.FORM` allows it.
 
 Not built yet: the security function and its review, and composition checks such as PoUW's tiles
 per proof block matching this partition (a tile family built with `each` over the proof blocks nests in them by construction).
