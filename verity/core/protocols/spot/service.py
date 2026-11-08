@@ -723,8 +723,21 @@ def _reads_positions(supplied: Mapping[str, Any] | None) -> bool:
         return False
 
 
+def selection_sizes(rule: Selection, program: Program, query: Mapping[str, Any]) -> list[int]:
+    """The strata sizes a stratified rate's K reads (`draw.strata_sizes` of `program` under `query`), none for any other rule.
+    Raises `Refused` (`rate`) where the query doesn't apply to a stratified rate, as `selection_table` does for a work rate.
+    The Lean verifier's `Select.strataSizes`, which `Rule.over` reads only for a stratified rate, is this."""
+    strata = D.parse_strata_rate(rule.text) if isinstance(rule, Law) else None
+    if strata is None or strata[0]:
+        return []
+    try:
+        return D.strata_sizes(program, query)
+    except P.QueryRefused as e:
+        raise _refuse("rate", {"law": rule.text, "reason": str(e)}) from None
+
+
 def selection_law(rule: Selection, n: int, sizes: Sequence[int] = ()) -> dict[str, Any]:
-    """The sampling design a selection rule names over `n` proof blocks in strata of `sizes` (`draw.strata_sizes` of the check's
+    """The sampling design a selection rule names over `n` proof blocks in strata of `sizes` (`selection_sizes` of the check's
     program and query), before `draw.derive` expands it over them: `subset:n` for `All` and a `Law`'s own. A rate sampling
     design is `subset:K` at K = `draw.rate_count` over `n`, a stratified rate `stratified:K` at K = `draw.strat_k` over
     `sizes`, and a work rate `work:K` at K = ceil(NUM n / DEN) over `selection_table`'s work table, each raising `Refused`
@@ -776,7 +789,7 @@ def params_law(law: Any, program: Program, query: Mapping[str, Any],
                          f"not {law!r}")
     rule = Law(law)
     try:
-        law = selection_law(rule, P.units(program, query), D.strata_sizes(program, query))
+        law = selection_law(rule, P.units(program, query), selection_sizes(rule, program, query))
         return law, selection_table(rule, program, query, work_table)
     except (P.QueryRefused, Refused) as e:
         raise ValueError(str(e)) from None
@@ -1846,7 +1859,7 @@ class Stream:
                                                [P.template_id(t) for t in self.templates]}).verdict
             if v.ok:
                 try:
-                    law = selection_law(self.spec.selection, n, D.strata_sizes(program, self.query))
+                    law = selection_law(self.spec.selection, n, selection_sizes(self.spec.selection, program, self.query))
                 except Refused as r:
                     v = r.verdict
             if v.ok:
@@ -2277,7 +2290,8 @@ class Stream:
                        "audit": {k: x for k, x in rec.items() if k != "verifiers"}},
                       reg.record, e.program, self.spec.check.query,
                       selection_law(self.spec.selection, reg.record["population"],
-                                    D.strata_sizes(e.program, self.spec.check.query)), SCHEME, ports, leaf_layer, anchors,
+                                    selection_sizes(self.spec.selection, e.program, self.spec.check.query)),
+                      SCHEME, ports, leaf_layer, anchors,
                       earlier, e.work_table, registered, self.spec.selection.to_json(),
                       [(x.name, x.registered) for x in self.spec.values], [p.item for p in self.spec.public],
                       self.challenger, reg.receipt["received"], e.read, e.closure, e.sessions, verdicts, outputs,
@@ -2324,7 +2338,8 @@ class Stream:
                        "interior": {"receipt": dict(ireg.receipt), "draw": dict(second.draw),
                                     "read": len(e.second_read), "audit": within}},
                       reg.record, e.program, self.query,
-                      selection_law(self.spec.selection, reg.record["population"], D.strata_sizes(e.program, self.query)),
+                      selection_law(self.spec.selection, reg.record["population"],
+                                    selection_sizes(self.spec.selection, e.program, self.query)),
                       SCHEME, ports, leaf_layer, anchors, earlier, e.work_table, registered,
                       self.spec.selection.to_json(), [(x.name, x.registered) for x in self._values()],
                       [p.item for p in self.spec.public], self.challenger, reg.receipt["received"], e.read, e.closure,

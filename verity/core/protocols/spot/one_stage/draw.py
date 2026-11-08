@@ -152,11 +152,9 @@ def strat_k(num: int, den: int, sizes: Sequence[int], n: int) -> int:
 
 def strata_sizes(program: Program, query: Mapping[str, Any]) -> list[int]:
     """The proof blocks of each stratum of the program under the query (`partition.strata`), which the stratified rate's K reads
-    (`strat_k`); none where the query doesn't apply. The Lean's `Select.strataSizes` is this."""
-    try:
-        return [_size(rs) for _, rs in P.strata(program, query)]
-    except P.QueryRefused:
-        return []
+    (`strat_k`). Raises `partition.QueryRefused` when the query doesn't apply, where the Lean's `Select.strataSizes`, this
+    elsewhere, is empty and `Rule.over` refuses a stratified rate (`service.selection_sizes`)."""
+    return [_size(rs) for _, rs in P.strata(program, query)]
 
 
 def rate_table(program: Program, query: Mapping[str, Any], num: int, den: int,

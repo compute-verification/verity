@@ -384,7 +384,8 @@ def test_a_stratified_or_work_rate_keeps_each_strata_rate_however_the_prover_pad
 def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need():
     """`stratified-rate:NUM/DEN` over strata of n_s proof blocks of N is `stratified:K` at `draw.strat_k`, the least K at which
     every stratum's `stratum_k` reaches ⌈NUM·n_s/DEN⌉ (Lean's `Rate.stratK_ge`), at most N, whatever strata the prover
-    registers; with no strata (a query that doesn't apply) it is refused (`rate`), and so is a work rate without a table."""
+    registers; with no strata it is refused (`rate`), and so is a work rate without a table. `selection_sizes` reads the
+    strata for a stratified rate alone, and refuses one (`rate`, with the query's reason) where the query doesn't apply."""
     rng = random.Random("stratified-rate")
     for _ in range(2000):
         sizes = [rng.choice([1, 2, 3, rng.randrange(1, 40), rng.randrange(1, 5000)]) for _ in range(rng.randrange(1, 6))]
@@ -397,6 +398,12 @@ def test_a_stratified_rate_is_the_stratified_law_at_the_least_k_its_strata_need(
         assert k == 1 or any(D.stratum_k(k - 1, s, n) < D.rate_count(num, den, 1, s) for s in sizes), (sizes, num, den, k)
     assert _refused(lambda: S.selection_law(S.Law("stratified-rate:1/3"), 6, [])) == ("rate",)
     assert _refused(lambda: S.selection_table(S.Law("work-rate:1/3"), P.population_program(PAIR, 6), QUERY, None)) == ("rate",)
+    program, word = P.population_program(PAIR, 6), {"name": "Q_word", "version": 1, "params": {"X": 8}}
+    assert S.selection_sizes(S.Law("stratified-rate:1/3"), program, QUERY) == [6]
+    assert [S.selection_sizes(S.Law(t), program, word) for t in ("rate:1/3", "work-rate:1/3")] == [[], []]
+    with pytest.raises(S.Refused) as e:
+        S.selection_sizes(S.Law("stratified-rate:1/3"), program, word)
+    assert e.value.verdict.codes == ("rate",) and "query" in e.value.verdict.detail["rate"]["reason"]
 
 
 def test_a_rate_count_its_tables_dont_divide_rounds_up_and_one_past_n_is_refused():
