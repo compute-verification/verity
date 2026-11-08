@@ -1,0 +1,23 @@
+{"steps": [
+ {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured",
+  "cases": {"two-stage": "R0"},
+  "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer modeled)"},
+ {"label": "the fused per-expert cut", "status": "modeled", "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
+  "note": "each expert's table read fused into its GEMM, priced from the measured read and GEMM"},
+ {"label": "the statement cache", "status": "measured", "cases": {"two-stage": "R2"},
+  "note": "fixed seconds a statement 8-10x lower on the H200 (experts measured; 5 types priced from H200 splits)"},
+ {"label": "4 provers on one H200, verify-ahead", "status": "measured", "cases": {"two-stage": "R3"},
+  "note": "on the expert types: marginal x0.58/0.54, fixed x0.045/0.043 a statement, a quarter-statement each"},
+ {"label": "a 3.5x GPU prover", "status": "modeled", "cases": {"two-stage": "R4"},
+  "note": "device parts only; the host witness stays"},
+ {"label": "lifetime replay", "status": "modeled", "cases": {"two-stage": "R5"},
+  "note": "458 GPU-s a sampled request at 128k, no edge pause, pages committed when written"},
+ {"label": "a 4x GPU prover", "status": "modeled", "cases": {"two-stage": "R5x4", "one-stage": "R5x4-1s"},
+  "note": "device parts only"},
+ {"label": "4 provers on every type, full statements", "status": "assumed", "cases": {"two-stage": "R5x4+all+arena"},
+  "note": "the experts' overlap factor taken for every type, and the prover freeing its arena between sessions"},
+ {"label": "the dense types' host witness 3.5x lower", "status": "assumed",
+  "cases": {"two-stage": "R5x4+all+arena+host"}, "note": "CPU's cache cut the witness 2-4x; the H200 run is pending"},
+ {"label": "hashing cut 4x", "status": "assumed", "cases": {"two-stage": "R5x4+all+arena+host+hash4"},
+  "note": "no owner: in-proof hashing at a half share of the marginal, cut 4x"}
+]}
