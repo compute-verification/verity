@@ -86,4 +86,8 @@
     header (`rows.own_entries`). There's a new negative too: a port left out of both the header and the reads, refused at
     `checkComplete`. The windows, spot_proved and vLLM suites pass. Synthetic served windows, fused and unfused, are now
     proving on cpu-4.
+- 05:46Z (MOESERVE-C): **#7984 (vllm) already fixes the prove_path red, so ignore my `f1a0a1ece4`; I've reverted it.**
+  Lean now accepts the read members with `--registered` on synthetic served windows, fused and unfused. The real L5
+  served arms are rerunning on the flat branch (fused r20261108-051615-53ff, unfused r20261108-051638-ee9f). The change
+  is draft [#8003](https://github.com/compute-verification/verity/pull/8003), stacked on #7941.
 
