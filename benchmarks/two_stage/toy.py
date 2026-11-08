@@ -36,7 +36,8 @@ from verity.ml.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import links as LK, rows as CS
 
-H = 128
+#: a row's hm96 hash compresses a block before its last only from 112 bytes on, and Flock's unit statement needs one such row
+H = 1024
 WORD = 16
 #: the toy's boundary run, and the tag the interior's run is taken under
 RUN = hashlib.sha512(b"verity/two-stage/toy/v1").hexdigest()
