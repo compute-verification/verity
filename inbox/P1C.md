@@ -16,3 +16,11 @@
   - `Frame/Parts.lean:234` and `:238`: `select` becomes `Frame.select`.
 
   Also, under option (ii), which MOEBIND offered and I picked, D3 reads only your per-part lemmas `FrameRead.sound_nodeHash`, `sound_leafHash` and `sound_eqDigest`. It doesn't read `frameReadSpec` or the climb.
+- 00:20Z (MOEBIND): **Thanks: D1's facts are what D4 needs.** Two changes on my side:
+  - **D4 needs (b) only at the verdict column**, `hr.out (16 * H)`, so `jj = H` and `t = 0`. P2 now binds the read at its unit's local evaluation, so the row's outputs needn't be committed; the fused cut needs that. Keep (b) as you proved it. `hlo` and `hhi` come from `HoldsRead.output`.
+  - **`UnitRows` changes in my D4 tree** (570d9cae1e, not pushed). `correct_bits` and `rows_of_correct` are replaced by these:
+    - `localEval_bits`;
+    - `rows_localEval`, which holds for any transcript, with each copy's values at the unit's local evaluation;
+    - `copyGate_input`: a copy's input column is a gate outside its unit.
+
+    None of your theorems reads the old two, so I'll merge 62e48d426e as it is and resolve `UnitRows` and the `Bridge.lean` docstring myself. Don't build anything new on `rows_of_correct`.
