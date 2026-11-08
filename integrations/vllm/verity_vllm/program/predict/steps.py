@@ -553,7 +553,6 @@ def compile_steps(registered: Registered, advice: Any, ingress: Any, *, partial:
         programs[r.digest], digests[u.key()] = r.program, r.digest
         comps[u.key()] = request_component(r, canon)
     units = [None if u is None else replace(u, digest=digests[u.key()]) for u in plan.requests]
-    adv = advice_of(registered, advice)
     edge = None if registered.phi.target_profile().batch_invariant else edge_of(registered.phi, adv, units, plan.idle)
     wl = W.WorkloadProgram([W.WorkloadRequest(request_id_of(u.request), u.request, u.LP, u.events(), u.first_step, comps[u.key()],
                                               T=u.events() - 1, prefix=u.prefix())
