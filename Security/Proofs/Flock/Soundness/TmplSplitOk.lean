@@ -434,8 +434,8 @@ theorem refStepK_exp (D : Def) (pt : FoldPt) {s : ℕ} (L H A B : ℕ) (as : Arr
       congr 2
       unfold pendK
       refine Finset.sum_congr rfl fun k _ => ?_
-      rw [sum_modify_add _ (by simp) hi64]
-      simp [getD_replicate, of_zero']
+      rw [sum_modify_add _ (by simpa using hi64) hi64]
+      simp only [getD_replicate, of_zero', zero_mul, Finset.sum_const_zero, zero_add]
   · simp only [Tab.refStepK, hv, ↓reduceIte]
     have h := foldl_val (tabExp pt s L H iv) (fun o k => Tab.ref D pt false A B as gL pos o k cx (ws.getD k 0) v)
       (fun k => of (ws.getD k 0) * (hiE pt L H cx * refX D pt s L H A B as gL pos iv k v))
@@ -471,8 +471,7 @@ theorem refsK_tabExp (D : Def) (pt : FoldPt) {s : ℕ} (L H A B : ℕ) (as : Arr
   have h := key vs.toList (o, 0, Array.replicate 64 0) (by simp)
   dsimp only at h ⊢
   rw [flushK_tabExp, h]
-  unfold pendK
-  simp [getD_replicate, of_zero']
+  simp only [pendK, getD_replicate, of_zero', zero_mul, Finset.sum_const_zero, add_zero]
 
 theorem getD_map_range {α : Type} (f : ℕ → α) (n : ℕ) {k : ℕ} (hk : k < n) (d : α) :
     ((Array.range n).map f).getD k d = f k := by
@@ -496,7 +495,8 @@ theorem rows_val (V : Tab → GF128) (hW : ∀ (o : Tab) (n : ℕ), V { o with w
   unfold Tab.rows
   split_ifs with hc
   · simp at hc
-    obtain ⟨⟨hs, hB⟩, has⟩ := hc
+    obtain ⟨⟨hs, hB⟩, has'⟩ := hc
+    have has : ∀ k < nk, as.getD k 0 < B := fun k hk => by simpa using has' k hk
     rw [← Array.foldl_toList]
     refine foldl_val V _ (fun r : ℕ × Array ℕ × Array ℕ => ∑ k ∈ Finset.range nk,
         ((r.2.1.toList.map fun v => of (alpha * rowLow k (pos r.1)) * Z k (pos r.1 / A) v).sum +
