@@ -23,9 +23,9 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The outcome** (`outcome_of`): the sessions delivered to the stream and its outcome on what the interior's audit
   record took, with both stages' coin evidence once the session has ended: the boundary's audit record over the replay
   sample and the interior's over the second sample, and the run of record over both.
-* **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off, so b_in's row and b_out's output
-  are not the boundary's at S[0], every circuit and wire holding: Lean's registered reads refuse both link members ("does not
-  open"), the fold and flips accepted.
+* **Refused run** ``--altered``: the proof server replays span S[0] on an ingress one bit off (`toy.one_bit_off`, a bit the
+  fold's AND carries to the egress), so b_in's row and b_out's output are not the boundary's at S[0], every circuit and wire
+  holding: Lean's registered reads refuse both link members ("does not open"), the fold and flips accepted.
 
 Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record and the outcome
 accepted or refusing only the sessions' reads of their registrations' own ports (`own_reads_only`: one-stage's record takes
@@ -330,9 +330,7 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
     summary.update(boundary=bd, first_stage=stage_of(reg, first))
     replayed = None
     if a.altered:
-        port = T.LK.Port.of(bc, T.boundary_ports(bc.window)["ingress"])
-        replayed = port.rows_at(sample).copy()
-        replayed[0, -1] ^= 1
+        replayed = T.one_bit_off(T.LK.Port.of(bc, T.boundary_ports(bc.window)["ingress"]).rows_at(sample))
     it = T.interior(bc, bd, sample, {"law": "subset", "k": len(sample) * T.N_RHO}, replayed=replayed)
     irec = T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
                    registered=it.registered)

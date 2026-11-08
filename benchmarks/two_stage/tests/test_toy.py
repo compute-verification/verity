@@ -59,7 +59,7 @@ def test_each_template_and_the_replay_block_are_their_models():
     for defn, x, y in ((T.LINK_IN, u, u), (T.FOLD, u, r["fold"]), (T.FLIP, r["fold"], r["flip0"]),
                        (T.FLIP, r["flip0"], r["flip1"]), (T.LINK_OUT, r["flip1"], r["flip1"]), (T.REPLAY, u, r["egress"])):
         assert np.array_equal(np.asarray(evaluate_bits(defn, T.bits(x))).reshape(len(u), -1), T.bits(y)), defn.id
-    assert np.array_equal(r["egress"], u[:, :T.H // T.WORD] ^ u[:, T.H // T.WORD:])
+    assert np.array_equal(r["egress"], u[:, :T.H // T.WORD] & u[:, T.H // T.WORD:])
 
 
 def test_the_replay_block_is_its_templates_instances():
@@ -160,8 +160,8 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
     path = bytes.fromhex(port.header(SAMPLE)["paths"][0])
     assert REG.verify_read(bc.domains[value], port.root, SAMPLE[0], honest[0], path, T.V2)
     assert not REG.verify_read(bc.domains[value], port.root, SAMPLE[1], honest[0], path, T.V2)
-    off = port.rows_at(SAMPLE).copy()
-    off[0, -1] ^= 1
+    off = T.one_bit_off(port.rows_at(SAMPLE))
+    assert int((T.bits(off) != T.bits(port.rows_at(SAMPLE))).sum()) == 1
     bad = T.interior(bc, run["digest"], SAMPLE, salt_key=b"\x08" * 32, replayed=off)
     x = rows_bc(bad.committed, lin.port("row"), Q)[0]
     assert x != honest[0] and not REG.verify_read(bc.domains[value], port.root, SAMPLE[0], x, path, T.V2)

@@ -2,10 +2,10 @@
 serving commits) and its interior registration from replay (what the proof server commits), laid out as the second stage
 proves them (`audit.py`).
 
-* **The replay block** `REPLAY` (`TwoStageToyReplay{H}`): a span's ingress u (2H bits) in, its egress u[0:H] ^ u[H:2H] out,
+* **The replay block** `REPLAY` (`TwoStageToyReplay{H}`): a span's ingress u (2H bits) in, its egress u[0:H] & u[H:2H] out,
   in five proof blocks, every root node an instance of one of `TEMPLATES`: `LINK_IN` (b_in, u through two NOTs a bit),
-  `FOLD` (the halves' XOR), two `FLIP` (a NOT a bit) and `LINK_OUT` (b_out, through two NOTs a bit). Every edge is a whole
-  row, so the interior wires each one.
+  `FOLD` (the halves' AND, H AND gates), two `FLIP` (a NOT a bit) and `LINK_OUT` (b_out, through two NOTs a bit). Every edge
+  is a whole row, so the interior wires each one.
 * **The boundary registration** (`boundary_window`, `boundary`): N replay blocks, one member of REPLAY's instances under the
   replay block's query, its ``ingress`` and ``o0`` ports a row a span (`BOUNDARY_PORTS`), under fresh salts.
 * **The interior registration** (`interior_window`, `interior`): the replay sample S's Q·n_rho proof blocks, template-major,
@@ -68,8 +68,8 @@ LinkOut = CompositeDefinition(
         "record's egress at the span's leaf")
 Fold = CompositeDefinition(
     "TwoStageToyFold", 1, ("H",), lambda S: ((("x", Array(2 * S.H, BL.BIT)),), Array(S.H, BL.BIT)),
-    lambda B, S, x: B.batch(BL.XOR, x.reshape(Array(2, Array(S.H, BL.BIT))), axes=(1,)), conformance="exact-model-tested",
-    register=False, doc="TwoStageToyFold{H}: a 2H-bit row's halves' XOR")
+    lambda B, S, x: B.batch(BL.AND, x.reshape(Array(2, Array(S.H, BL.BIT))), axes=(1,)), conformance="exact-model-tested",
+    register=False, doc="TwoStageToyFold{H}: a 2H-bit row's halves' AND")
 Flip = CompositeDefinition(
     "TwoStageToyFlip", 1, ("H",), lambda S: ((("x", Array(S.H, BL.BIT)),), Array(S.H, BL.BIT)),
     lambda B, S, x: B.batch(BL.NOT, x, axes=(0,)), conformance="exact-model-tested", register=False,
@@ -87,7 +87,7 @@ def _replay_body(B, S, ingress):
 Replay = CompositeDefinition(
     "TwoStageToyReplay", 1, ("H",), lambda S: ((("ingress", Array(2 * S.H, BL.BIT)),), Array(S.H, BL.BIT)), _replay_body,
     conformance="exact-model-tested", register=False,
-    doc="TwoStageToyReplay{H}: a span's 2H-bit ingress to its H-bit egress, the halves' XOR, in five proof blocks: b_in, "
+    doc="TwoStageToyReplay{H}: a span's 2H-bit ingress to its H-bit egress, the halves' AND, in five proof blocks: b_in, "
         "a fold, two flips and b_out")
 
 LINK_IN, FOLD, FLIP, LINK_OUT, REPLAY = (bind(LinkIn, W=2 * H), bind(Fold, H=H), bind(Flip, H=H), bind(LinkOut, W=H),
@@ -111,13 +111,22 @@ def ingress(n: int, seed: bytes = b"toy") -> np.ndarray:
 
 
 def replay(u: np.ndarray) -> dict[str, np.ndarray]:
-    """REPLAY on rows ``u`` (``(n, 2H/16)`` u16), each proof block's rows: ``fold`` (u's halves' XOR), ``flip0``, ``flip1`` and
+    """REPLAY on rows ``u`` (``(n, 2H/16)`` u16), each proof block's rows: ``fold`` (u's halves' AND), ``flip0``, ``flip1`` and
     ``egress`` (flip1's, through b_out)."""
     u = np.asarray(u, dtype=np.uint16)
-    fold = u[:, :H // WORD] ^ u[:, H // WORD:]
+    fold = u[:, :H // WORD] & u[:, H // WORD:]
     flip0 = ~fold
     flip1 = ~flip0
     return {"ingress": u, "fold": fold, "flip0": flip0, "flip1": flip1, "egress": flip1}
+
+
+def one_bit_off(rows: np.ndarray) -> np.ndarray:
+    """Ingress rows ``rows`` (``(q, 2H/16)`` u16) with the first one bit off: the last bit of its upper half whose
+    lower-half bit is set, which the fold's AND carries to the egress, so both its link rows leave the boundary's."""
+    out = np.asarray(rows, dtype=np.uint16).copy()
+    j = H + int(np.flatnonzero(bits(out[0])[:H])[-1])
+    out[0, j // WORD] ^= np.uint16(1 << (j % WORD))
+    return out
 
 
 def bits(words: np.ndarray) -> np.ndarray:
