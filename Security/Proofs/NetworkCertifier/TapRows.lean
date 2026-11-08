@@ -217,6 +217,7 @@ open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- **At the network certifier's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at a trace that agrees
 with the network certifier wherever both open a gate gives the leak relation at the network certifier's rows, at any
 inputs `As` that suffice (`AdviceIn`). -/

@@ -72,6 +72,7 @@ open Claims.SamplingGeneric (Arg Compiled)
 
 variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Compiled Coin A} {L K S : ℕ}
     {lay : AuditStatement → BoundaryGates L S} {k : AuditStatement → ℕ} {δ : ℝ} {reg : AuditStatement → Finset ℕ}
     {Dj : ℕ} {s₀ : AuditStatement} {P₀ : Partition}

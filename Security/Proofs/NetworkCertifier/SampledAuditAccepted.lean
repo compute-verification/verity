@@ -464,7 +464,7 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
   rw [heq σ _ (by simp [slotGates]),
     List.map_congr_left fun g hg => heq σ g (by simp [slotGates, hg])]
 
-variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Claims.SamplingGeneric.Arg Coin}
+variable {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin}
 
 /-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
 theorem rAcc_of_r (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}

@@ -235,9 +235,11 @@ noncomputable def leakL (Coin : Type) : Compiled Coin (toyA Coin) :=
 noncomputable def tapL (Coin : Type) : Compiled Coin (toyA Coin) :=
   { leakL Coin with commit := trueCm }
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem leakL_scopeAcc (x : Msg) : ScopeAcc (leakL Coin) (fun _ => notLay) (fun _ => 1) x :=
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
+omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem tapL_scopeAcc (x : Msg) : ScopeAcc (tapL Coin) (fun _ => notLay) (fun _ => 1) x :=
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
