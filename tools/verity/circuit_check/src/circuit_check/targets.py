@@ -682,7 +682,6 @@ CALLEE_CALLS: dict[str, tuple[str, ...]] = {
     "DsaMqaLogitsKey_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogitsQ_v1": ("DsaMqaLogits_v4",),
     "DsaMqaLogit_v3": ("DsaMqaLogits_v3",),
-    "DsaWaksmanSwap_v1": ("DsaWaksmanRows_v1",),
 }
 
 
