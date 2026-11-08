@@ -17,14 +17,18 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   hands out no coin commitment root before the session's end, its hello answers the layout alone, each coin comes as its
   raw bytes, and at the close the challenger releases its commitment and every coin's full opening, which the client
   checks (`remote.RemoteChallenger.close`) and settles each sample's segment to (`ChallengerCoins.settle`), and which must
-  be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with one family
-  `FAMILY`, sized from the samples before anything opens (`families`): one coin, then each rank's `need`, at least
-  `COINS_PER_RANK` coins. The session opens once every rank has passed its checks before the sample and planned it
-  (`Draws.plan`) and the layout covers every need (`reserve_reason`). Otherwise nothing opens and every rank's sample is
-  refused, so a refusal before the sample never spends the root's one session.
-* **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first one
-  coin after the window's root itself, before any registration (`pre`: the negatives' coin opened before the registration),
-  then each rank's sample once, by its own `service.Stream` on `RankCoins`: the stream registers the rank's window, the coins
+  be the commitment the session's record signs once it has ended (`start`). The layout is `SCHEME` with two families,
+  sized from the samples before anything opens (`families`): `FAMILY`, one coin, then each rank's `need`, at least
+  `COINS_PER_RANK` coins; and the window's seed salt's, `coins.SEED_SALT_FAMILY`, one coin. The session opens once every
+  rank has passed its checks before the sample and planned it (`Draws.plan`) and the layout covers every need
+  (`reserve_reason`). Otherwise nothing opens and every rank's sample is refused, so a refusal before the sample never
+  spends the root's one session.
+* **The samples** (`Draws`, in a `multiprocessing` manager's process, so every rank's process reads the one client): first the
+  window's seed salt, at the window's open (`coins.draw_seed_salt`: its family's first coin, after the window's root), which
+  every rank's plan returns (`RankCoins.salt`), each rank's stream takes (`Stream.seed_salt_released`) and each rank's
+  registration names (`registration.SEED_SALT`); then one coin after the window's root itself, before any registration
+  (`pre`: the negatives' coin opened before the registration); then each rank's sample once, by its own `service.Stream`
+  on `RankCoins`: the stream registers the rank's window, the coins
   commit to the registration's digest (`ChallengerCoins.commit`), and the stream's `select` reads them, in the rank's turn
   on the one client until `drawn` returns its segment, which is settled once the session has closed (`Draws.released`).
   Once every rank has sampled or won't (`skip`), the client closes the
@@ -34,7 +38,8 @@ of record, from whose coins each rank's registration samples once (`spot.coins.C
   first-parent history (`start`'s ``main``, never the host's or the prover's), `remote.trusted_session`'s check of the files the
   ledger's end sealed and `challenger.pinned_session`'s of the open's pin. `evidence` is one sample's `{key, ledger, main, pins,
   segment, session}` (`coins.coins_reason`'s, and the Lean run's), its segment the settled one, and `negatives` its altered
-  copies.
+  copies; `seed_salt_evidence` is the window's seed salt's in the same form (`coins.seed_salt_in`'s, which the Lean run
+  reads it from), and `challenger_negatives` the refusals of both on a stream.
 * **The verifier's own coins** (`a5.py --coins verifier`): no session. Each rank's `service.Stream` samples on `VerifierCoins`, the
   service's default coins (`verifier.coins`: the Lean verifier's `IO.getRandomBytes`, assumption A3), read by its
   `select` once the stream has received the rank's registration and written its receipt. The stream's coin source is then
@@ -65,7 +70,7 @@ from pathlib import Path
 from typing import Any
 
 from verity.core.protocols.spot import challenger as Ch, coins as CC, remote as R, service as S
-from verity.core.protocols.spot.one_stage import draw as D, verifier as V
+from verity.core.protocols.spot.one_stage import draw as D, registration as RG, verifier as V
 from verity.ml.circuits.program import Program
 from verity.ml.crypto import lms
 
@@ -114,22 +119,26 @@ def need(rule: str, program: Program, query: Mapping[str, Any], population: int,
 
 def families(needs: Mapping[int, int]) -> list[list[Any]]:
     """The session's layout for the samples `needs` (rank -> `need`): the family `FAMILY`, with the coin after the window's
-    root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins."""
-    return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())]]
+    root (`Draws.pre`) and each rank's need, at least `COINS_PER_RANK` coins; and the window's seed salt, the one coin of
+    `coins.SEED_SALT_FAMILY` (`Draws.connect`)."""
+    return [[FAMILY, 1 + sum(max(COINS_PER_RANK, n) for n in needs.values())], [CC.SEED_SALT_FAMILY, 1]]
 
 
 def reserve_reason(layout: list, needs: Mapping[int, int]) -> str | None:
-    """Why the challenger's reserve `layout` can't cover the coin after the window's root and every rank's sample (`needs`,
-    rank -> `need`), naming the need and the reserve; None when it can."""
+    """Why the challenger's reserve `layout` can't cover the window's seed salt, the coin after the window's root and every
+    rank's sample (`needs`, rank -> `need`), naming the need and the reserve; None when it can."""
     want = 1 + sum(needs.values())
     why = Ch.layout_problem(SCHEME, 0, tuple(tuple(f) for f in layout))
     if why is not None:
         return f"the draws need {want} {FAMILY} coins, and the challenger can't reserve {layout}: {why}"
-    have = dict(tuple(f) for f in layout).get(FAMILY, 0)
-    if have < want:
+    have = dict(tuple(f) for f in layout)
+    if have.get(FAMILY, 0) < want:
         per_rank = ", ".join(f"rank {r} {n}" for r, n in sorted(needs.items()))
         return (f"the draws need {want} {FAMILY} coins (1 after the window's root, then {per_rank}), and the reserve "
-                f"{layout} holds {have}")
+                f"{layout} holds {have.get(FAMILY, 0)}")
+    if have.get(CC.SEED_SALT_FAMILY, 0) < 1:
+        return (f"the window's seed salt needs 1 {CC.SEED_SALT_FAMILY} coin, released at the window's open, and the reserve "
+                f"{layout} holds none")
     return None
 
 
@@ -165,15 +174,19 @@ class Draws:
         self._unplanned, self._needs, self._planned = set(ranks), {}, threading.Event()
         self._opened, self._refused = threading.Event(), None
         self._client = self._coins = self._pre = None
+        self._salts: CC.ChallengerCoins | None = None
+        self._salt: bytes | None = None
+        self._salted_at: float | None = None
         self._turn, self._current, self._segment = threading.Lock(), None, None
         self._ended: str | None = None
         self._evidence: dict | None = None
         if not ranks:
             self._planned.set()
 
-    def plan(self, rank: int, coins: int) -> None:
-        """Rank `rank`'s sample reads at most `coins` coins (`need`). It returns once the session has opened, and raises
-        `CoinError` when none opened (`refuse`)."""
+    def plan(self, rank: int, coins: int) -> tuple[str, float]:
+        """Rank `rank`'s sample reads at most `coins` coins (`need`). It returns once the session has opened: the window's
+        seed salt the session released at its open (lowercase hex) and when, on this machine's monotonic clock
+        (`time.monotonic`, every stream's here); and raises `CoinError` when none opened (`refuse`)."""
         with self._lock:
             if rank not in self._unplanned:
                 raise Ch.CoinError(f"rank {rank} has planned its draw, or ended: a rank plans once, before its draw")
@@ -182,6 +195,8 @@ class Draws:
         self._opened.wait()
         if self._refused is not None:
             raise Ch.CoinError(self._refused)
+        assert self._salt is not None and self._salted_at is not None
+        return self._salt.hex(), self._salted_at
 
     def _settled(self, rank: int) -> None:
         self._unplanned.discard(rank)
@@ -195,10 +210,11 @@ class Draws:
 
     def connect(self, address: str, secret: str | None, commitment: str | None, withheld: bool = False) -> None:
         """The opened session's client at `address` (its hello with `secret`, its commitment the gate's open's `commitment`
-        when given), then the one coin after the window's root itself, before any rank registers. A `withheld` session's
-        hello must answer its layout alone: its commitment comes at the close (`_close`), checked against the record its
-        challenger signed once the session has ended (`start`). Raises `CoinError`, refusing every rank's sample, when either
-        fails."""
+        when given), then the window's seed salt (`coins.draw_seed_salt`, the first coin of `coins.SEED_SALT_FAMILY` after
+        the window's root) and the one coin after the window's root itself, both before any rank registers. A `withheld`
+        session's hello must answer its layout alone: its commitment comes at the close (`_close`), checked against the
+        record its challenger signed once the session has ended (`start`). Raises `CoinError`, refusing every rank's sample,
+        when any fails."""
         client = None
         try:
             client = connect_when_listening(address, None if secret is None else bytes.fromhex(secret))
@@ -208,6 +224,9 @@ class Draws:
             if commitment is not None and not client.withheld and client.commitment.root.hex() != commitment:
                 raise Ch.CoinError(f"the challenger's hello answered commitment {client.commitment.root.hex()[:16]}…, not "
                                    f"the gate's {commitment[:16]}…")
+            salts = CC.ChallengerCoins(Ch.LiveRecord(client, CC.SEED_SALT_FAMILY))
+            salt = CC.draw_seed_salt(salts, self._root)
+            salted_at = time.monotonic()
             coins = CC.ChallengerCoins(Ch.LiveRecord(client, FAMILY))
             pre = coins.commit(bytes.fromhex(self._root))
             coins(Ch.COIN_BYTES)
@@ -220,6 +239,7 @@ class Draws:
             self.refuse(f"the challenger's session opened, and its client failed: {e}")
             raise Ch.CoinError(str(e)) from e
         self._client, self._coins, self._pre = client, coins, pre
+        self._salts, self._salt, self._salted_at = salts, salt, salted_at
         self._opened.set()
         with self._lock:
             if not self._left and self._current is None:
@@ -279,14 +299,15 @@ class Draws:
                 self._close()
 
     def _close(self) -> None:
-        """Close the session, then settle every segment's coins to the full openings a withheld session released at its
-        close (`ChallengerCoins.settle`), before any evidence is published."""
+        """Close the session, then settle every segment's coins, the seed salt's too, to the full openings a withheld
+        session released at its close (`ChallengerCoins.settle`), before any evidence is published."""
         if self._closed.is_set():
             return
         try:
             if self._client is not None:
                 self._client.close()
                 self._coins.settle()
+                self._salts.settle()
         except Ch.CoinError as e:
             self._ended = str(e)
         self._closed.set()
@@ -297,11 +318,13 @@ class Draws:
 
     def released(self) -> dict:
         """Once the client has closed the session: the commitment its challenger answered (a withheld session's, released
-        at its close; None when the close failed first) and every sample's segment, settled (`_close`), in order."""
+        at its close; None when the close failed first), every sample's segment, settled (`_close`), in order, and the
+        seed salt's (None when no session opened)."""
         self._closed.wait()
         c = None if self._client is None else self._client.commitment
         return {"commitment": None if c is None else c.root.hex(),
-                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments]}
+                "segments": [] if self._coins is None else [s.to_json() for s in self._coins.segments],
+                "seed_salt": None if self._salts is None else self._salts.segments[0].to_json()}
 
     def wait_closed(self) -> str | None:
         """Once the client has closed the session: None, or why its close failed."""
@@ -329,15 +352,30 @@ _Manager.register("Draws", Draws)
 class RankCoins(CC.ChallengerCoins):
     """Rank `rank`'s coins of the step's session (`draws`, the `Draws` proxy) as its `service.Stream` reads them: a
     `ChallengerCoins`, so the stream's coin source is the challenger, whose commitment and reads go to the one client in
-    `Draws`, in the rank's turn until `drawn`. `read` is every byte it read, `need` the coins it planned (`plan`)."""
+    `Draws`, in the rank's turn until `drawn`. `read` is every byte it read, `need` the coins it planned (`plan`), and
+    `salt` and `salted_at` the window's seed salt and its release once it has planned, which the rank's stream takes
+    (`take_salt`)."""
 
     def __init__(self, draws: Any, rank: int) -> None:
         self._draws, self._rank, self.read, self.need = draws, rank, bytearray(), None
+        self.salt: bytes | None = None
+        self.salted_at: float | None = None
 
     def plan(self, coins: int) -> None:
-        """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`)."""
+        """The sample reads at most `coins` coins (`need`): once every rank has planned, the session opens (`Draws.plan`),
+        releasing the window's seed salt (`salt`, `salted_at`)."""
         self.need = coins
-        self._draws.plan(self._rank, coins)
+        salt, self.salted_at = self._draws.plan(self._rank, coins)
+        self.salt = bytes.fromhex(salt)
+
+    def take_salt(self, stream: S.Stream, window_root: str) -> str:
+        """The window's seed salt taken by the rank's `stream` (`Stream.seed_salt_released`, at its release) for the window
+        `window_root`, once the rank has planned: -> the salt (lowercase hex), which the rank's registration names
+        (`salted`)."""
+        if self.salt is None or self.salted_at is None:
+            raise Ch.CoinError("the window's seed salt comes with the session's open: a rank plans its draw first (plan)")
+        stream.seed_salt_released(self.salt, window_root, self.salted_at)
+        return self.salt.hex()
 
     def commit(self, after: bytes) -> None:
         self._draws.commit(self._rank, bytes(after).hex())
@@ -396,6 +434,14 @@ class OwnReplay:
 #: Evidence of the challenger's form that a prover might attach to a sample from the verifier's own coins.
 FOREIGN_EVIDENCE = {"key": None, "ledger": [], "main": [], "pins": [], "segment": None, "session": {}}
 SELECT_COINS = ("select", ["coins"])
+#: the Lean run's refusal of a registration whose window's seed salt its evidence doesn't show (`Run.seedSaltOf`)
+REGISTER_SEED_SALT = ("register", ["seed-salt"])
+#: the public item of a window that names its seed salt (`salted`), which a stream's Spec declares of kind `coins`
+SEED_ITEM = S.Public(RG.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
+#: a window no session opened, which the negatives register in (`challenger_negatives`)
+ANOTHER_WINDOW = "00" * 64
+#: `Run.seedSaltOf`'s refusal of a run on a window whose seed salt it carries no evidence of
+SEED_SALT_MISSING = "missing: the verifier names a window root, and the run carries no evidence of its seed salt"
 
 
 def lean_side(audit: dict | None) -> dict | None:
@@ -727,7 +773,8 @@ def start(challenger: str, root: str, ranks: list[int], dest: Path, main: str | 
             except Ch.CoinError as e:
                 pinned = str(e)
             draws.publish({"key": key.to_json(), "ledger": led, "main": first_parent, "pins": pins,
-                           "segments": released["segments"], "session": R.session_files(directory),
+                           "segments": released["segments"], "seed_salt": released["seed_salt"],
+                           "session": R.session_files(directory),
                            "trusted": {"commitment": commitment_.root.hex(), "released": {k: len(v) for k, v in roots.items()},
                                        "close": ended, "ledger_sha512": hashlib.sha512(ledger.read_bytes()).hexdigest(),
                                        "pin": opened_pin(led, session.session), "pins_lines": len(pins),
@@ -759,6 +806,48 @@ def evidence(published: dict, segment: dict) -> dict | None:
             "segment": settled, "session": published["session"]}
 
 
+def seed_salt_evidence(published: dict) -> dict | None:
+    """The window's seed salt's evidence, `coins.seed_salt_in`'s {key, ledger, main, pins, segment, session}, its segment
+    the salt's coin as the session released it at its close (`Draws.released`), from which the stream's run reads the
+    salt (`Run.seedSaltOf`); None when the session gave none."""
+    s = published.get("seed_salt")
+    return None if s is None else evidence(published, s)
+
+
+def seed_salt_reason(evidence: Any, window: str, salt: str) -> str | None:
+    """Why `evidence` doesn't show `salt` (lowercase hex) as the seed salt the challenger released for the window whose
+    open root is `window`, read as the stream's run reads it (`coins.seed_salt_in`; no evidence `Run.seedSaltOf`'s
+    missing); None when it does."""
+    if evidence is None:
+        return SEED_SALT_MISSING
+    try:
+        got = CC.seed_salt_in(evidence, window, lms_verify).hex()
+    except (Ch.CoinError, ValueError) as e:
+        return str(e)
+    return None if got == salt else f"the challenger's log shows seed salt {got[:16]}…, not the window's {salt[:16]}…"
+
+
+def case_form(ev: dict | None, salt_ev: dict | None, window: str) -> dict | None:
+    """A sample's case in the challenger's form (`Spot.OneStage`'s, `replay.params` and `replay.evidence`): the params'
+    challenger, its key and the draws' family `FAMILY`, and the window's open root `window`; the evidence of the sample's
+    coins `ev` and of the window's seed salt `salt_ev`, each without the key (`coins.DRAW_FORM`, the case's key being the
+    params'). None without both."""
+    if ev is None or salt_ev is None:
+        return None
+    return {"challenger": {"key": ev["key"], "label": FAMILY}, "window_root": window,
+            "coins": {k: v for k, v in ev.items() if k != "key"}, "seed_salt": {k: v for k, v in salt_ev.items() if k != "key"}}
+
+
+def salted(record: Mapping[str, Any], salt: str) -> dict:
+    """`record` with its window naming the window's seed salt `salt` (lowercase hex, `registration.SEED_SALT`), a certified
+    input the window's circuits read, which R6 holds each registration of the window to (`R6-seed-salt`). A window that
+    names one already is left as it is, for R6 to hold."""
+    w = record.get("window")
+    if not isinstance(w, Mapping) or RG.SEED_SALT in w:
+        return dict(record)
+    return {**record, "window": {**w, RG.SEED_SALT: salt}}
+
+
 def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
     """`ev` altered as a prover would alter it: a tampered opening, the coin opened before the registration (`pre`'s, its
     `after` rewritten to the registration's) added in front, a segment that skips a coin released after the registration,
@@ -777,3 +866,51 @@ def negatives(ev: dict, pre: dict) -> dict[str, dict | None]:
         "coins-no-pins-log": {**ev, "pins": None},
         "coins-no-evidence": None,
     }
+
+
+def challenger_negatives(stream_of: Callable[[CC.ChallengerCoins], S.Stream],
+                         register: Callable[[S.Stream, str], S.WindowCommitmentRecord],
+                         outcome: Callable[[S.Stream, S.Draw, dict | None, dict | None], tuple[S.Outcome, dict | None]],
+                         draw: S.Draw, coins: RankCoins, ev: dict | None, salt_ev: dict | None, pre: dict | None,
+                         window: str) -> dict[str, dict]:
+    """The refusals of the challenger's sample `draw` in the window whose open root is `window`, its coins' evidence `ev`
+    and its seed salt's `salt_ev` (`coins`: the rank's, its `read` and its `salt`), once its outcome is final, each its own
+    stream's: a fresh stream of the same Spec on the honest sample's bytes (`stream_of(Replay(coins.read))`) takes the
+    window's salt at its release (`Stream.seed_salt_released`), receives the honest registration (`register(stream,
+    window)`), samples the honest units and decides on the altered evidence (`outcome(stream, draw, coins, seed_salt)`:
+    the outcome and its audit record).
+
+    * each of `negatives(ev, pre)`: refused where Python's `coins.coins_reason` refuses and the Lean's run refuses at its
+      select (`coins`);
+    * ``coins-for-another-window``: the honest evidence for a registration in a window no session opened
+      (`ANOTHER_WINDOW`), naming the honest salt: refused where `coins_reason` refuses it there and the Lean's run refuses at
+      its register (`seed-salt`), since the salt's evidence is the honest window's too and the run reads it first;
+    * ``seed-salt-missing``: the honest coins' evidence and none of the salt's: refused where `seed_salt_reason` refuses and
+      the Lean's run refuses at its register (`seed-salt`: `Run.seedSaltOf` finds the evidence missing).
+
+    -> {name: {refused, accepted, python, lean}}; none without `ev`."""
+    if ev is None:
+        return {}
+    read, after, salt = bytes(coins.read), bytes.fromhex(draw.registration.digest), coins.salt
+
+    def coins_py(evidence: dict | None, w: str) -> str | None:
+        return CC.coins_reason(evidence, w, after, read, lms_verify)
+    cases = {**{name: (bad, salt_ev, window, SELECT_COINS, coins_py(bad, window)) for name, bad in negatives(ev, pre).items()},
+             "coins-for-another-window": (ev, salt_ev, ANOTHER_WINDOW, REGISTER_SEED_SALT, coins_py(ev, ANOTHER_WINDOW)),
+             "seed-salt-missing": (ev, None, window, REGISTER_SEED_SALT, seed_salt_reason(None, window, salt.hex()))}
+    neg: dict[str, dict] = {}
+    for name, (bad, seeds, w, expect, py) in cases.items():
+        s = stream_of(Replay(read))
+        try:
+            s.seed_salt_released(salt, w, coins.salted_at)
+            d = s.select(register(s, w))
+            if d.draw != draw.draw:
+                raise ValueError(f"the replayed draw {d.units} is not the honest draw {draw.units}")
+            got, audit = outcome(s, d, bad, seeds)
+            accepted, side = got.accepted, lean_side(audit)
+        except (S.Refused, S.Pending, ValueError, Ch.CoinError) as e:
+            accepted, side = None, {"refused": _refusal(e)}
+        at = ((side or {}).get("step"), (side or {}).get("codes"))
+        neg[name] = {"refused": py is not None and accepted is False and at == expect, "accepted": accepted, "python": py,
+                     "lean": side}
+    return neg

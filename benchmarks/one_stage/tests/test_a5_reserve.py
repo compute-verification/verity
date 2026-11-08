@@ -1,7 +1,8 @@
 """a5's challenger reserve (`a5_coins.need`, `families`, `reserve_reason`) and the session `a5_coins.start` opens on it.
 
 A rank's need is the coins its `service.Stream` sample reads for its sampling design over its window's counts, plus its longest stream
-once more, known before anything opens. The windows are toy templates at the counts of record. One is 38b2's step-16
+once more, known before anything opens; the reserve adds the window's seed salt, one coin of its own family, which the
+session releases at its open. The windows are toy templates at the counts of record. One is 38b2's step-16
 SiluMul_v2 window (675 + 3 units a rank under `stratified:4`, the stratified SiluMul partition). The other is the 18-family
 partition's rank-0 window at step 16 (`glm53_all_families_tp8_step16.json` before EmbeddingShard_v2 rejoined it: 179,552 units
 under `stratified:1`), whose sample reads more than the 16 coins a rank the old reserve held."""
@@ -87,12 +88,12 @@ def reads(rule: str, counts: list[int], seed: int) -> int:
 def test_the_silu_mul_window_keeps_todays_reserve():
     """38b2's SiluMul window reads 226 bytes a rank (a stratum of 675 at k 4, 144 bytes, and one of 3 at its floor of 1,
     82), so its need with the margin is 6 coins. The reserve keeps the current 16 coins a rank and one more: 129 for 8
-    ranks."""
+    ranks, beside the window's seed salt."""
     assert reads("stratified:4", SILU_MUL, 0) == 226
     need = need_of("stratified:4", SILU_MUL)
     assert need == -(-(226 + 144) // Ch.COIN_BYTES) == 6
     needs = dict.fromkeys(range(8), need)
-    assert AC.families(needs) == [[AC.FAMILY, 16 * 8 + 1]]
+    assert AC.families(needs) == [[AC.FAMILY, 16 * 8 + 1], [CC.SEED_SALT_FAMILY, 1]]
     assert AC.reserve_reason(AC.families(needs), needs) is None
 
 
@@ -104,7 +105,7 @@ def test_the_18_family_window_needs_more_coins_than_todays_reserve():
     assert {reads("stratified:1", ALL_FAMILIES, seed) for seed in range(4)} == {1496}
     assert 1496 > AC.COINS_PER_RANK * Ch.COIN_BYTES
     assert need_of("stratified:1", ALL_FAMILIES) == -(-(1496 + 86) // Ch.COIN_BYTES) == 25
-    assert AC.families({0: 25}) == [[AC.FAMILY, 26]]
+    assert AC.families({0: 25}) == [[AC.FAMILY, 26], [CC.SEED_SALT_FAMILY, 1]]
 
 
 def test_todays_reserve_runs_out_on_the_18_family_draw_and_its_need_does_not():
@@ -138,9 +139,13 @@ def test_a_work_laws_need_is_its_draw_under_the_work_table_the_rank_registers_wi
 
 def test_a_reserve_that_cant_cover_the_draws_is_refused_naming_need_and_reserve():
     """`reserve_reason` names the need (the coin after the root, then each rank's) and the reserve when the reserve is
-    short, and the challenger's own limit when the layout is past it."""
+    short, the window's seed salt when the reserve holds no coin of its family, and the challenger's own limit when the
+    layout is past it."""
     assert AC.reserve_reason([[AC.FAMILY, 17]], {0: 25}) == (
         "the draws need 26 draw coins (1 after the window's root, then rank 0 25), and the reserve [['draw', 17]] holds 17")
+    assert AC.reserve_reason([[AC.FAMILY, 26]], {0: 25}) == (
+        f"the window's seed salt needs 1 {CC.SEED_SALT_FAMILY} coin, released at the window's open, and the reserve "
+        "[['draw', 26]] holds none")
     big = {r: Ch.MAX_COINS // 2 for r in range(2)}
     assert AC.reserve_reason(AC.families(big), big).endswith(f"a live coin layout holds at most {Ch.MAX_COINS} coins")
 
@@ -164,8 +169,11 @@ def nothing_reserved(tmp_path: Path) -> bool:
 
 
 def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_path, monkeypatch):
-    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins). The
-    18-family sample reads its 24 coins after the rank's commitment, and its coins' evidence holds (`coins.coins_reason`)."""
+    """The local challenger opens the session once the rank has planned its sample, on the layout of its need (26 coins) and
+    the window's seed salt (1). The 18-family sample reads its 24 coins after the rank's commitment, and its coins'
+    evidence holds (`coins.coins_reason`). The salt is the one coin released at the open, after the window's root, which
+    the rank's plan returns and the session's log shows for the window and no other (`seed_salt_evidence`, read as the
+    stream's run reads it, `coins.seed_salt_in`); a run without that evidence finds it missing."""
     rule, law, n = "stratified:1", law_of("stratified:1", ALL_FAMILIES), sum(ALL_FAMILIES)
     manager, draws, opener = local(tmp_path, monkeypatch, [0])
     try:
@@ -182,21 +190,30 @@ def test_the_local_challenger_opens_on_the_needs_reserve_and_the_draw_holds(tmp_
     assert "error" not in published, published.get("error")
     assert (tmp_path / "coins.log").read_text(), "the session's coins came from the stub, not a Lean build"
     plan = published["plan"]
-    assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26]] and plan["session"]
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24} and len(coins.read) == 1496
+    assert plan["needs"] == {"0": 25} and plan["families"] == [[AC.FAMILY, 26], [CC.SEED_SALT_FAMILY, 1]]
+    assert plan["session"]
+    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 24, CC.SEED_SALT_FAMILY: 1} and len(coins.read) == 1496
     assert CC.coins_reason(AC.evidence(published, segment), ROOT, AFTER, bytes(coins.read), AC.lms_verify) is None
+    salt_ev = AC.seed_salt_evidence(published)
+    assert len(coins.salt) == Ch.COIN_BYTES and CC.seed_salt_in(salt_ev, ROOT, AC.lms_verify) == coins.salt
+    assert AC.seed_salt_reason(salt_ev, ROOT, coins.salt.hex()) is None
+    assert AC.seed_salt_reason(salt_ev, AC.ANOTHER_WINDOW, coins.salt.hex()) is not None
+    assert AC.seed_salt_reason(None, ROOT, coins.salt.hex()) == AC.SEED_SALT_MISSING
 
 
 def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch):
-    """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33), and each
-    rank samples in its turn, 4 coins for SiluMul's 226 bytes, as 38b2's gate run did on each of its 8 ranks."""
+    """Rank 1's plan waits for rank 0's; then the session opens on both needs' layout (16 coins a rank and one, 33, and the
+    window's seed salt), both ranks' plans return the one salt, and each rank samples in its turn, 4 coins for SiluMul's
+    226 bytes, as 38b2's gate run did on each of its 8 ranks."""
     rule, law, n = "stratified:4", law_of("stratified:4", SILU_MUL), sum(SILU_MUL)
     manager, draws, opener = local(tmp_path, monkeypatch, [0, 1])
     segments: dict[int, dict] = {}
+    salts: dict[int, bytes | None] = {}
 
     def rank(r: int) -> None:
         coins = AC.RankCoins(draws, r)
         coins.plan(need_of(rule, SILU_MUL))
+        salts[r] = coins.salt
         coins.commit(bytes([r]) * Ch.COIN_BYTES)
         S.select_draw(S.Law(rule), law, n, coins)
         segments[r] = coins.drawn()
@@ -211,9 +228,11 @@ def test_two_ranks_open_the_session_once_both_have_planned(tmp_path, monkeypatch
     finally:
         manager.shutdown()
     assert "error" not in published, published.get("error")
-    assert published["plan"]["needs"] == {"0": 6, "1": 6} and published["plan"]["families"] == [[AC.FAMILY, 33]]
+    assert published["plan"]["needs"] == {"0": 6, "1": 6}
+    assert published["plan"]["families"] == [[AC.FAMILY, 33], [CC.SEED_SALT_FAMILY, 1]]
     assert sorted(segments) == [0, 1] and all(len(s["openings"]) == 4 for s in segments.values())
-    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4}
+    assert published["trusted"]["released"] == {AC.FAMILY: 1 + 4 + 4, CC.SEED_SALT_FAMILY: 1}
+    assert salts[0] == salts[1] == CC.seed_salt_in(AC.seed_salt_evidence(published), ROOT, AC.lms_verify)
 
 
 def test_a_too_small_reserve_is_refused_before_the_session_opens(tmp_path, monkeypatch):
