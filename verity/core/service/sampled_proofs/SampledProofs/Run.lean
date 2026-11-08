@@ -6,7 +6,7 @@ check the stream ran on it, in the stream's order.
 * `register`: the public-items rule on the Spec's values (`Service.checkPublic`), the population (a positive integer),
   the rule's rate law over it (`Select.Rule.over`: `rate`, a count of none or more than the population), then R1–R7
   (`Registration.check`) against the challenger's copies under the sampling design the rule names over that population
-  (`Select.Rule.lawOver`, whatever law the copies carry), a sampling design whose sampled count varies (`Draw.countVaries`: `shapes`), a
+  (`Select.Rule.lawOver`, whatever law the copies carry), a `bernoulli` sampling design at any `p` (`Draw.bernoulli`: `bernoulli`), a
   program and query whose population is not the registration's units in order (`Slots.popOk`: `population-order`), and
   the receipt (`registration.receipt`);
 * `select`: a closure map, refused before any coin is read (`closure`: a work sample widened by one is outside the
@@ -189,7 +189,7 @@ def run (i : Input) : V Json := do
   let v := { v with law }
   let codes := Registration.check i.record v
   if !codes.isEmpty then return refused "register" codes
-  if Draw.countVaries law then return refused "register" #["shapes"]
+  if Draw.bernoulli law then return refused "register" #["bernoulli"]
   if !Slots.popOk v.program v.query n then return refused "register" #["population-order"]
   let receipt ← receipt i.record i.challenger i.received
   let derived ← Draw.derive v.program v.query law v.workTable

@@ -41,6 +41,10 @@
   "Proofs.Properties.SampledProofs",
   "Proofs.Properties.SampledProofs.Halt",
   "Proofs.Properties.SampledProofs.Bits",
+  "Proofs.Properties.SampledProofs.Interval",
+  "Proofs.Properties.SampledProofs.FactorUpper",
+  "Proofs.Properties.SampledProofs.TwoStageCheck",
+  "Proofs.Properties.SampledProofs.PlanCheck",
   "Proofs.Properties.Pous.TimedAudit",
   "Proofs.Properties.Pous.MemoryChallenger",
   "Proofs.Properties.Pous.MemoryChallenger.Attest",
@@ -134,9 +138,9 @@
   "Proofs.Properties.Verity.Recursive.Target",
   "Proofs.Properties.Verity.Recursive.Refusals",
   "Proofs.Properties.Verity.Recursive.Audit",
-  "Proofs.Properties.Flock.Nets",
   "Proofs.Properties.Verity.Subprotocols",
-  "Proofs.Properties.Verity.Coupling"
+  "Proofs.Properties.Verity.Coupling",
+  "Proofs.Properties.Flock.Nets"
  ],
  "exempt": {
   "Proofs.Pouw.Bulk": "the bulk FP8 conformance test, under `runs`: compiled evaluation of the pins' predicates, a test and not a proof",
