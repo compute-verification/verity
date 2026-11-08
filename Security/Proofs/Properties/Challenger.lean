@@ -83,28 +83,28 @@ theorem drawnByDevice_nontrivial : ¬ DrawnByDeviceAt (fun _ _ _ _ _ => .ok Byte
     cases hw
 
 /-- What one-stage's protocol accepts, its coin-free `check` accepts: `checkAt` only adds the coins' refusals. -/
-theorem oneStage_check_of_accept {p : SampledProofs.OneStage.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStage.Evidence} {pub : SampledProofs.OneStage.Public} {prof : Core.Integrity}
-    (h : SampledProofs.OneStage.protocol.check p c e = .accept pub prof) :
-    SampledProofs.OneStage.check p c e = .accept pub prof := by
-  change Core.atCoins (SampledProofs.OneStage.coinsOf p c e)
-    (fun ξ => SampledProofs.OneStage.checkAt p c ξ e) = _ at h
-  cases hξ : SampledProofs.OneStage.coinsOf p c e with
+theorem oneStage_check_of_accept {p : Spot.OneStage.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStage.Evidence} {pub : Spot.OneStage.Public} {prof : Core.Integrity}
+    (h : Spot.OneStage.protocol.check p c e = .accept pub prof) :
+    Spot.OneStage.check p c e = .accept pub prof := by
+  change Core.atCoins (Spot.OneStage.coinsOf p c e)
+    (fun ξ => Spot.OneStage.checkAt p c ξ e) = _ at h
+  cases hξ : Spot.OneStage.coinsOf p c e with
   | error r => rw [hξ] at h; simp [Core.atCoins] at h
   | ok ξ =>
     rw [hξ] at h
-    simp only [Core.atCoins, SampledProofs.OneStage.checkAt] at h
-    cases hw : ξ.bind (SampledProofs.OneStage.coinsWhy p c e) with
+    simp only [Core.atCoins, Spot.OneStage.checkAt] at h
+    cases hw : ξ.bind (Spot.OneStage.coinsWhy p c e) with
     | some why => rw [hw] at h; simp at h
     | none => rw [hw] at h; exact h
 
 /-- v2's coins read only under the challenger and the window its parameters name (`oneStageZkSource`). -/
-theorem oneStageZk_source {p : SampledProofs.OneStageZk.Params} {c : SampledProofs.OneStage.Commitment}
-    {e : SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} (hξ : SampledProofs.OneStageZk.coinsOf p c e = .ok ξ) :
+theorem oneStageZk_source {p : Spot.OneStageZk.Params} {c : Spot.OneStage.Commitment}
+    {e : Spot.OneStageZk.Evidence} {ξ : ByteArray} (hξ : Spot.OneStageZk.coinsOf p c e = .ok ξ) :
     ∃ d, oneStageZkSource p c = some d := by
-  unfold SampledProofs.OneStageZk.coinsOf at hξ
+  unfold Spot.OneStageZk.coinsOf at hξ
   unfold oneStageZkSource oneStageSource
-  cases h1 : SampledProofs.OneStage.coinsOf p.base c e.base with
+  cases h1 : Spot.OneStage.coinsOf p.base c e.base with
   | error r => simp [h1, bind, Except.bind] at hξ
   | ok o =>
     cases o with
@@ -119,7 +119,7 @@ theorem oneStageZk_source {p : SampledProofs.OneStageZk.Params} {c : SampledProo
       have hthrow : ∀ s : String, (throw s : Except String (Option ByteArray)) ≠ .ok (some ξ') := by
         intro s h
         simp [throw, throwThe, MonadExceptOf.throw] at h
-      unfold SampledProofs.OneStage.coinsOf at h1
+      unfold Spot.OneStage.coinsOf at h1
       revert h1
       generalize p.base.challenger = ch
       generalize p.base.verifier.windowRoot = w
@@ -138,17 +138,17 @@ read under the challenger and window its parameters name (`d`); `ξ` is what a r
 of the family after the registration's digest, a run the device's own ledger opens on the window, or the fixed finder
 outputs a break from the record and the device. -/
 theorem oneStageZk_drawn (hd : DrawnByDevice) (bs : Array ByteArray) (dev : History) (a b e : ByteArray)
-    (h : ((SampledProofs.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
-    ∃ (p : SampledProofs.OneStageZk.Params) (c : SampledProofs.OneStage.Commitment)
-      (ev : SampledProofs.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
-      (Core.canonicalJson a >>= SampledProofs.OneStageZk.paramsOfJson) = .ok p ∧
-      SampledProofs.OneStageZk.protocol.commitment b = .ok c ∧ SampledProofs.OneStageZk.protocol.evidence e = .ok ev ∧
-      ((SampledProofs.OneStageZk.protocol.on bs).answerAt (SampledProofs.OneStageZk.live bs) a b ξ e).verdict =
+    (h : ((Spot.OneStageZk.protocol.on bs).answer a b e).verdict = .accept) :
+    ∃ (p : Spot.OneStageZk.Params) (c : Spot.OneStage.Commitment)
+      (ev : Spot.OneStageZk.Evidence) (ξ : ByteArray) (d : Draws),
+      (Core.canonicalJson a >>= Spot.OneStageZk.paramsOfJson) = .ok p ∧
+      Spot.OneStageZk.protocol.commitment b = .ok c ∧ Spot.OneStageZk.protocol.evidence e = .ok ev ∧
+      ((Spot.OneStageZk.protocol.on bs).answerAt (Spot.OneStageZk.live bs) a b ξ e).verdict =
         .accept ∧
       oneStageZkSource p c = some d ∧
       ((∃ s ∈ dev.runs d.key.pub, OpensOn dev d.key.pub d.window s.id ∧ s.released d.label d.after = ξ) ∨
         Break dev d.key d.label ev.base.coins) := by
-  obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer _ (SampledProofs.OneStageZk.live bs) a b e h
+  obtain ⟨p, c, ev, ξ, hp, hc, hev, hξ, hacc⟩ := liveAnswer _ (Spot.OneStageZk.live bs) a b e h
   obtain ⟨d, hd'⟩ := oneStageZk_source (p := p) (c := c) (e := ev) hξ
   obtain ⟨raw, hraw, hdec⟩ := oneStageZk_reads p c d hd' ev ξ hξ
   refine ⟨p, c, ev, ξ, d, hp, hc, hev, hacc, hd', ?_⟩

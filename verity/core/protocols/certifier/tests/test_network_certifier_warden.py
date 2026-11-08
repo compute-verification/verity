@@ -1,9 +1,10 @@
-"""The active network certifier (`warden`), a relay that knows bytes only: driven tick by tick on a `VirtualClock`, its
-clients in-memory connections speaking cells and its server an in-memory one whose bytes the test schedules, it releases
-honest traffic exactly on its schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that
-window's records from `publish`), passes both directions'
-bytes unchanged (the server's copy of a request adding only its place in the release order), and puts the same number
-of same-size cells in the same buckets however the server times its bytes."""
+"""The active network certifier (`warden`): driven tick by tick on a `VirtualClock`, its clients in-memory connections
+speaking cells and its server an in-memory one whose bytes the test schedules, it releases honest traffic exactly on its
+schedule, fails a late byte closed, queues past its lanes then refuses (and withholds that window's records from
+`publish`), passes both directions' bytes unchanged (the server's copy of a request adding only its place in the release
+order), and puts the same number of same-size cells in the same buckets however the server times its bytes. The
+schedule's tests relay any bytes, in the bytes egress form (`PARAMS`); in the id form (`GATED`) it releases an honest
+id-form server's cells and fails any other at its first cell (format), none of whose bytes leaves."""
 
 from __future__ import annotations
 
@@ -14,16 +15,20 @@ import socket
 
 import pytest
 
+from verity.core.protocols.certifier import active, io_tie as IT
 from verity.core.protocols.certifier.active import DATA, HEADER, PAD, VirtualClock, encode_frame
 from verity.core.protocols.certifier.grid import Reason
 from verity.core.protocols.certifier.release import read_watermark, release_of, watermark_head, with_release
-from verity.core.protocols.certifier.warden import (END, FAIL, KIND_NAMES, REASONS, REFUSED, WRITE_BACKLOG, Shim,
-                                                    Warden, WardenParams, audit, cell, cells, read_cell, read_reason,
-                                                    reason_frame)
+from verity.core.protocols.certifier.warden import (END, FAIL, INTEGER_FIELDS, KIND_NAMES, REASONS, REFUSED,
+                                                    WRITE_BACKLOG, Shim, Warden, WardenParams, audit, cell, cells,
+                                                    read_cell, read_reason, reason_frame)
 
 PARAMS = WardenParams(cell_bytes=64, slots=2, bucket_ms=100, delay=3, lanes=2, queue=2, window=24, ingress_cells=8,
-                      ingress_buckets=6, egress_cells=12)
+                      ingress_buckets=6, egress_cells=12, egress="bytes")
 B, P, R, D = PARAMS.cell_bytes, PARAMS.payload, PARAMS.slots, PARAMS.delay
+#: the id egress form at cells that hold an id event: PARAMS' schedule otherwise
+GATED = dataclasses.replace(PARAMS, cell_bytes=256, egress="id")
+GB, GP = GATED.cell_bytes, GATED.payload
 TAU = PARAMS.bucket_ms / 1000
 EOF = None
 
@@ -133,7 +138,7 @@ class Client:
 
     def cells(self) -> list[tuple[int, int, bytes]]:
         """(bucket, kind, payload) of every cell written, each exactly B bytes."""
-        out = []
+        out, B = [], self.warden.params.cell_bytes
         for t, data in self.writes:
             assert len(data) % B == 0
             for i in range(0, len(data), B):
@@ -146,7 +151,7 @@ class Client:
             reader = asyncio.StreamReader()
             reader.feed_data(b"".join(d for _, d in self.writes))
             reader.feed_eof()
-            return await Shim(B).read(reader)
+            return await Shim(self.warden.params.cell_bytes).read(reader)
         return asyncio.run(read())
 
 
@@ -175,7 +180,7 @@ class SocketClient(Client):
 
 
 def settled(warden: Warden, server: Server) -> bool:
-    cap = PARAMS.egress_cells * P
+    cap = warden.params.egress_cells * warden.params.payload
     if sum(c.server is None and c.upstream is None for c in warden.active) != len(server.held):
         return False
     for c in warden.active:
@@ -225,7 +230,8 @@ def records(warden: Warden):
 
 def reasons(warden: Warden) -> list[tuple[int, int, str]]:
     """(bucket, ordinal, reason) of every frame of the `fails` record."""
-    return [(r.window * PARAMS.window + b, *read_reason(f, B)) for r in records(warden)[2]
+    p = warden.params
+    return [(r.window * p.window + b, *read_reason(f, p.cell_bytes)) for r in records(warden)[2]
             for b, row in enumerate(r.grid) for f in row if f is not None]
 
 
@@ -439,6 +445,120 @@ def test_the_audit_refuses_a_record_whose_cells_are_not_the_schedules():
     moved = dataclasses.replace(record, grid=tuple(tuple(row) for row in rows))
     verdict = audit(PARAMS, ingress, [moved], fails)
     assert not verdict["accepted"] and "egress isn't padding to s + D" in verdict["windows"][0]["problems"][0]
+
+
+# --- the egress form -------------------------------------------------------------------------------------------------
+
+
+def id_answer(ids: list[int]) -> bytes:
+    """An honest id-form response: one `io_tie.id_event` of P bytes an output id, then `io_tie.TRAILER`."""
+    return b"".join(IT.id_event(x, GP) for x in ids) + IT.TRAILER
+
+
+def live_cells(client: Client) -> list[bytes]:
+    """The client's cells other than padding, as bytes."""
+    data = b"".join(d for _, d in client.writes)
+    return [c for c in (data[i:i + GB] for i in range(0, len(data), GB)) if c[0] != PAD]
+
+
+def test_an_honest_id_form_server_leaves_one_event_a_cell_and_its_end_holds_the_trailer():
+    """In the id form an honest server's response, however its writes split it, leaves as one `io_tie.data_cell` an
+    output id on the connection's ordinal, then the `io_tie.end_cell`, each in its slot of the schedule; a response of
+    no outputs is its `END` alone. The bytes form puts out the same cells, and the audit accepts the records."""
+    ids = [0, 7, 42, 1 << 31, (1 << 32) - 1]
+    body = id_answer(ids)
+    answers = [[(0, body[:100]), (0, body[100:600]), (1, body[600:]), (1, EOF)], [(0, IT.TRAILER), (0, EOF)]]
+    arrivals = {1: [cells(request(5), GB), cells(request(9, 1), GB)]}
+    warden, clients, _ = run(answers, arrivals, params=GATED)
+    assert [(e["failed"], e["egress_cells"]) for e in sorted(warden.log, key=lambda e: e["ordinal"])] == \
+        [(None, len(ids) + 1), (None, 1)]
+    for q, (client, outputs) in enumerate(zip(clients, (ids, [])), 1):
+        assert live_cells(client) == [IT.data_cell(x, q, GB) for x in outputs] + [IT.end_cell(q, GB)]
+        assert [(t, k) for t, k, _ in client.cells()] == expected_egress(1, len(outputs) + 1)
+    verdict = audit(GATED, *records(warden))
+    assert verdict["accepted"], verdict["windows"]
+    _, plain, _ = run(answers, arrivals, params=dataclasses.replace(GATED, egress="bytes"))
+    assert [c.writes for c in plain] == [c.writes for c in clients]
+
+
+def departures() -> dict[str, tuple[bytes, int]]:
+    """Responses out of the id form, each with the egress cell it first leaves the form at."""
+    e = [IT.id_event(x, GP) for x in (3, 4, 5)]
+    ordinal = active.id_event(1, 4)
+    spaced = e[1].replace(b'"token_id":', b'"token_id": ')
+    named = b'"id":"cmpl-1",'
+    error = b'data: {"error":{"message":"overloaded","type":"server_error","code":503}}\n\n'
+    return {
+        "an HTTP head": (b"HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\n\r\n" + b"".join(e) + IT.TRAILER, 0),
+        "an HTTP error": (b"HTTP/1.1 503 Service Unavailable\r\ncontent-length: 0\r\n\r\n", 0),
+        "a created time": (e[0] + e[1].replace(b'"created":0', b'"created":1') + e[2] + IT.TRAILER, 1),
+        "a response id": (e[0] + e[1][:7] + named + e[1][7:-2 - len(named)] + b"\n\n" + e[2] + IT.TRAILER, 1),
+        "the ordinal event": (e[0] + ordinal[:-2].ljust(GP - 2) + b"\n\n" + e[2] + IT.TRAILER, 1),
+        "a non-canonical id": (e[0] + e[1].replace(b"         4", b"0000000004") + e[2] + IT.TRAILER, 1),
+        "extra spaces": (e[0] + spaced[:-3] + b"\n\n" + e[2] + IT.TRAILER, 1),
+        "a chunk split across cells": (e[0] + IT.id_event(4, GP + 1) + e[2] + IT.TRAILER, 1),
+        "an error body": (e[0] + error + IT.TRAILER, 1),
+        "no trailer": (e[0] + e[1], 1),
+        "bytes past the trailer": (b"".join(e) + IT.TRAILER + b"x", 3),
+    }
+
+
+@pytest.mark.parametrize("name", sorted(departures()))
+def test_each_departure_from_the_id_form_fails_format_at_its_cell_and_none_of_its_bytes_leaves(name):
+    """In the id form a response that leaves the form fails its connection at the first cell out of it (format), whose
+    bytes never leave: the client gets the response's cells before it, each the id form's, then one `FAIL` in that
+    cell's slot and padding, byte for byte what a server late at that cell gives it, so the server picks one of the
+    same (cells + 1) outcomes and the leak bound's failure charge is unchanged. The `fails` record holds the reason and
+    the audit names it. The bytes form relays the same response whole."""
+    response, k = departures()[name]
+    assert len(response) >= k * GP and all(IT.parse_cell(cell(DATA, 1, response[i * GP:(i + 1) * GP], GB))
+                                           for i in range(k))
+    warden, (client,), _ = run([[(0, response), (0, EOF)]], {1: [cells(request(5), GB)]}, params=GATED)
+    (e,) = warden.log
+    assert (e["failed"], e["failed_at"]) == ("format", k)
+    assert live_cells(client) == [cell(DATA, 1, response[i * GP:(i + 1) * GP], GB) for i in range(k)] + \
+        [cell(FAIL, 1, b"", GB)]
+    assert [(t, kind) for t, kind, _ in client.cells()] == expected_egress(1, k + 1, FAIL)
+    shim = client.shim()
+    assert (bytes(shim.data), shim.outcome) == (response[:k * GP], "fail")
+    assert reasons(warden) == [(e["ended"], 1, "format")]
+    egress = [f for r in records(warden)[1] for row in r.grid for f in row if f is not None]
+    assert response[k * GP:(k + 1) * GP] not in b"".join(egress)
+    verdict = audit(GATED, *records(warden))
+    assert verdict["windows"][0]["problems"] == [f"connection 1 failed closed (format) at egress cell {k}"]
+
+    _, (late,), _ = run([[(0, response[:k * GP]), (40, response[k * GP:]), (40, EOF)]], {1: [cells(request(5), GB)]},
+                        params=GATED)
+    assert late.writes == client.writes
+
+    _, (plain,), _ = run([[(0, response), (0, EOF)]], {1: [cells(request(5), GB)]},
+                         params=dataclasses.replace(GATED, egress="bytes"))
+    assert (bytes(plain.shim().data), plain.shim().outcome) == (response, "end")
+
+
+def test_the_id_form_releases_no_cell_smaller_than_an_event():
+    """A cell of fewer than `io_tie.CELL_USED` bytes holds no id event, so in the id form at such a B every connection
+    fails at its first egress cell, the trailer alone included."""
+    assert B < IT.CELL_USED <= GB
+    warden, (client,), _ = run([[(0, IT.TRAILER), (0, EOF)]], {1: [cells(request(5), B)]},
+                               params=dataclasses.replace(PARAMS, egress="id"))
+    assert [(e["failed"], e["failed_at"]) for e in warden.log] == [("format", 0)]
+
+
+def test_the_audit_refuses_an_egress_cell_out_of_the_id_form():
+    """A record whose egress holds a `DATA` cell `io_tie.parse_cell` doesn't read is refused in the id form, which the
+    network certifier never sends, and read as any bytes in the bytes form."""
+    warden, _, _ = run([[(0, id_answer([1, 2])), (0, EOF)]], {1: [cells(request(5), GB)]}, params=GATED)
+    ingress, (record,), fails = records(warden)
+    t, j = next((t, j) for t, row in enumerate(record.grid) for j, f in enumerate(row)
+                if f is not None and f[0] == DATA)
+    row = list(record.grid[t])
+    row[j] = cell(DATA, 1, b"x" * GP, GB)
+    forged = dataclasses.replace(record, grid=record.grid[:t] + (tuple(row),) + record.grid[t + 1:])
+    assert audit(GATED, ingress, [record], fails)["accepted"]
+    verdict = audit(GATED, ingress, [forged], fails)
+    assert verdict["windows"][0]["problems"] == [f"egress bucket {t}: a cell out of the id egress form"]
+    assert audit(dataclasses.replace(GATED, egress="bytes"), ingress, [forged], fails)["accepted"]
 
 
 # --- admission -------------------------------------------------------------------------------------------------------
@@ -837,7 +957,15 @@ def test_the_watermark_moves_nothing_certified_and_never_waits_on_the_server():
 
 
 def test_the_parameters_digest_binds_every_parameter():
-    fields = [f.name for f in dataclasses.fields(WardenParams)]
-    digests = {PARAMS.digest} | {dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}).digest for f in fields}
-    assert len(digests) == len(fields) + 1 and all(len(d) == 64 for d in digests)
+    """Each integer parameter and the egress form move the digest, as do the cell kinds and the reasons it binds; an
+    egress form other than id or bytes is refused."""
+    moved = [dataclasses.replace(PARAMS, **{f: getattr(PARAMS, f) + 1}) for f in INTEGER_FIELDS]
+    moved.append(dataclasses.replace(PARAMS, egress="id"))
+    digests = {PARAMS.digest} | {p.digest for p in moved}
+    assert len(digests) == len(moved) + 1 and all(len(d) == 64 for d in digests)
+    assert {*INTEGER_FIELDS, "egress"} == {f.name for f in dataclasses.fields(WardenParams)}
     assert set(KIND_NAMES) == {PAD, DATA, END, FAIL, REFUSED} and len(set(REASONS)) == len(REASONS)
+    assert WardenParams().egress == "id" and REASONS[-1] == "format"
+    for bad in ("", "text", "ID", 1, None):
+        with pytest.raises(ValueError, match="egress is one of id, bytes"):
+            WardenParams(egress=bad)

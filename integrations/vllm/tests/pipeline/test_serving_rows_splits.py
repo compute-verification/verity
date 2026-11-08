@@ -33,7 +33,7 @@ from verity.ml.definitions.registry import sparse_mla_split as W
 from verity_vllm.query.manifest import format as MF
 from verity_vllm.query.program_view import spec_statics
 
-from verity.core.protocols.sampled_proofs.one_stage import draw as D
+from verity.core.protocols.spot.one_stage import draw as D
 from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.defs import bind
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2

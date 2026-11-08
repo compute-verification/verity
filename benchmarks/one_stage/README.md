@@ -1,6 +1,6 @@
 # One-stage audit runs
 
-The one-stage audit (`verity.core.protocols.sampled_proofs.one_stage`) end to end: serving's committed values through registration, the verifier's
+The one-stage audit (`verity.core.protocols.spot.one_stage`) end to end: serving's committed values through registration, the verifier's
 sample, Flock's circuit prover and the Lean verifier, to the audit record with its integrity profile, then the
 negatives.
 
@@ -10,7 +10,7 @@ Figure 1 prices); and the challenger's live coins, its signed log and the Lean v
 server and no recursion on that path. The core protocols' path, every prover behind the Lean ZK server's send check, is
 `--firewall` on `a5.py`, its variants and `prove_bundle.py`, and `ZK_SERVER=1` on their shell entry points. The network
 certifier, where a run has one (`a5_warden.py`), is a layer of its own, whose signed stamp SPOT[Flock] reads as a certified
-input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README.md`.
+input. What the guarantee rests on: `verity/core/protocols/spot/README.md`.
 
 - `a<N>.py`: the driver of run A<N>; its docstring says what the run adds and how to call it.
 - `compose_circuit.py`, `stage_subset.py`, `stage_tampered.py`: helpers that run inside the circuit prover's tree (its `verity_flock`).
@@ -207,7 +207,8 @@ input. What the guarantee rests on: `verity/core/protocols/sampled_proofs/README
 - `block_census.py` (run by `block_census.sh ROW_DIR` on the machine holding the row's Build): the proof-block census of
   a TP Commit's Build. Every rank's `m1_families.py --steps all --estimate`, each Program row cut into proof blocks (the
   row itself when it fits Flock's block and a size class, else each slot of its split at its coarsest fitting unit, else
-  a gap with the reason), and per proof-block Definition its count in the prefill step and the decode steps, output bits
+  a gap with the reason; a `COLS` row or slot at its fitting width of least leakage-weighted proving cost, `cols_pick`),
+  and per proof-block Definition its count in the prefill step and the decode steps, output bits
   and size class, estimated ANDs, served MACs and opened row bytes, with the totals per token and per request, the gaps
   and the rows that are no proof block (`census.json`, `table.md`), and the planner's card (`card.json`,
   `benchmarks/sampling_plan/glm53.py`).

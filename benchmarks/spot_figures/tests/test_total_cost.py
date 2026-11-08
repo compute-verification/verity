@@ -9,7 +9,7 @@ import cards
 import figure1 as f1
 import pytest
 import total_cost as t
-from verity.core.protocols.sampled_proofs.optimize import Cell
+from verity.core.protocols.spot.optimize import Cell
 
 
 def test_the_configurations_are_the_cards():
@@ -108,6 +108,21 @@ def test_every_line_prices_its_blocks_one_way():
     stray = c["partition"].value | {"strata": [{"block": "Unstaged_v1{K=3}", "per_token": 1, "macs": 3, "out_bits": 16}]}
     with pytest.raises(ValueError, match="no k_log"):
         t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
+
+
+def test_a_block_measured_at_another_size_of_its_definition_scales_with_its_k_log():
+    """A residual add of 384 columns, which the card measures only at 6144, 2^4 times smaller as the strata size both:
+    the card's seconds a block over 2^4 and its cap times 2^4, its statement's fixed seconds unchanged."""
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    b = next(b for b in po["value"]["blocks"] if b["block"] == "ResidualAdd_v1{N=6144}")
+    strata = c["partition"].value["strata"]
+    k = next((x["k_log"] for x in strata if x["block"] == b["block"]), b["k_log"])
+    narrow = {"block": "ResidualAdd_v1{N=384}", "per_token": 16, "macs": 0, "out_bits": 6144, "k_log": k - 4}
+    part = f1.InputCard(c["partition"].value | {"strata": [*strata, narrow]}, "", "measured", "a column block more")
+    p = t.priced(c | {"partition": part}, po)
+    got = next(x for x in p["partition"].value["strata"] if x["block"] == narrow["block"])
+    assert (got["priced"], got["seconds_per_block"]) == ("measured", b["seconds_per_block"] / 16)
+    assert (got["fixed_seconds"], got["statement_blocks"]) == (b["fixed_seconds"], b["statement_blocks"] * 16)
 
 
 def test_the_kept_priced_taxes_are_the_generators():

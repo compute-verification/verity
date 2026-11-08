@@ -1,4 +1,4 @@
-"""Stale PRs (TOP-90 row 36): an open PR that isn't marked ready at its head and has been idle `stale_days` (drive.toml) is
+"""Stale PRs: an open PR that isn't marked ready at its head and has been idle `stale_days` (drive.toml) is
 stale.  Idle is since the latest of its head commit's date and the ready (an eject's `ready = false` too) and review labels on
 that head.  `research queue status` says so, drive rings its owner once a day, and at `stale_close_days` drive closes it with
 `close_comment` unless it carries the `hold` label, is a draft that says "keep open", or is on `next`; its branch stays

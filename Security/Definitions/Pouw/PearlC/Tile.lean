@@ -99,26 +99,6 @@ noncomputable def goodTiles (P : Protocol Q R S) (TR : TileRules Q R S) (U : Wor
   (range (TR.tiling U.layout).NT).filter fun g =>
     ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGood P TR U H s g c
 
-/-- A good tile under U-only binding (the `-h1` format's U-only messages): `TileGood` without its ticket conjunct. Its
-replayed debit is within the cap, each of its weight rows passes the rules and each useful word of its credited rows has
-the reference FP32 value; its ticket words are not read. -/
-def TileGoodU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S) (g : ℕ) (c : Commit) :
-    Prop :=
-  TR.capOK H s U g c.act ∧
-    (∀ j ∈ (TR.tiling U.layout).cols g,
-      P.fixedOK (U.layout.shape ((TR.tiling U.layout).unit g))
-        (U.fixed (U.layout.fixedId ((TR.tiling U.layout).unit g))) j) ∧
-    ∀ i ∈ (TR.tiling U.layout).rows g, TR.rowOK (U.layout.shape ((TR.tiling U.layout).unit g)) c.act i →
-      ∀ j ∈ (TR.tiling U.layout).cols g,
-        wordQ (c.useful i j) = P.useful H s U ((TR.tiling U.layout).unit g) c.act i j
-
-open Classical in
-/-- The good tiles of `τ` under U-only binding. -/
-noncomputable def goodTilesU (P : Protocol Q R S) (TR : TileRules Q R S) (U : Workload) (H : Q → R) (s : S)
-    (τ : Transcript) : Finset ℕ :=
-  (range (TR.tiling U.layout).NT).filter fun g =>
-    ∃ c, τ ((TR.tiling U.layout).unit g) = some c ∧ TileGoodU P TR U H s g c
-
 open Classical in
 /-- The tiles of the units `τ` leaves blank (declared uncredited): the audit never checks them, and they earn nothing. -/
 noncomputable def blankTiles (TR : TileRules Q R S) (U : Workload) (τ : Transcript) : Finset ℕ :=
@@ -152,19 +132,6 @@ def GGapSampled [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostMo
     ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
       pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
           AuditAccepts (goodTiles P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
-            blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
-          T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
-        ≤ (1 - εs) ^ t + δ q U.layout.N
-
-/-- **The gap property under the sampled audit with U-only binding**: `GGapSampled` with the audit accepting a sampled tile
-when it is good under U-only binding (`goodTilesU`) or of a blank unit. -/
-def GGapSampledU [Fintype Q] [DecidableEq Q] [Fintype R] [Fintype S] (CM : CostModel Q R S) (P : Protocol Q R S)
-    (TR : TileRules Q R S) (D : Layout → Prop) (g : ℝ) (δ : ℕ → ℕ → ℝ) : Prop :=
-  ∀ U : Workload, U.InDomain P D → ∀ T : ℝ, 0 ≤ T → ∀ q : ℕ, q ≤ 2 ^ 64 → ∀ A : Adversary CM, A.Bounded U T q →
-    ∀ (w : ℕ → ℕ) (κ : ℝ), 0 < κ → (∀ i < (TR.tiling U.layout).NT, (w i : ℝ) = κ * TR.Wref U.layout i) →
-    ∀ (t : ℕ) (εs : ℝ), εs ≤ 1 →
-      pr (fun x : (Q → R) × S × (Fin t → Ticket w (TR.tiling U.layout).NT) =>
-          AuditAccepts (goodTilesU P TR U x.1 x.2.1 (A.transcript U x.1 x.2.1) ∪
             blankTiles TR U (A.transcript U x.1 x.2.1)) x.2.2 ∧
           T < (1 - g) * (claimedWref TR U (A.transcript U x.1 x.2.1) - εs * tileWrefTotal TR U.layout))
         ≤ (1 - εs) ^ t + δ q U.layout.N
