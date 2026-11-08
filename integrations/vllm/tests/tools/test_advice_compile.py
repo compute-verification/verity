@@ -14,7 +14,6 @@ from typing import Any
 import pytest
 
 from tests.pipeline.test_window_advice import W1, W2
-from verity.core.protocols.certifier import advice as I1
 from verity_vllm.pipeline import window_advice as WA
 
 SCRIPT = Path(__file__).resolve().parents[2] / "tools" / "advice_compile.py"
@@ -47,10 +46,10 @@ def test_a_window_reads_its_own_requests_when_a_user_is_served_again(tmp_path):
     assert bodies == {"u": {"max_tokens": 16, "prompt": [4, 5]}}
 
 
-def _served(out: Path, **kw: Any) -> tuple[Path, dict, I1.Advice]:
+def _served(out: Path, **kw: Any) -> tuple[Path, dict, WA.Advice]:
     """One unseeded stochastic request from user ``q0`` served in serve-openai's window 0 (`test_serve_openai.Serving`, ``kw``
     its options), with the `_run` stubs beside its records: the run, the request's record and its window's advice, made from
-    the rows the window committed."""
+    the rows the window committed, every output released in bucket 0."""
     from tests.pipeline.test_serve_openai import Serving, records
 
     with Serving(out, **kw) as s:
@@ -60,8 +59,8 @@ def _served(out: Path, **kw: Any) -> tuple[Path, dict, I1.Advice]:
     _run(out, [])
     (out / "requests.jsonl").write_text(json.dumps(rec) + "\n")
     T = len(rec["streamed_ids"])
-    steps = tuple(I1.StepAdvice((I1.Row(0, kind, start, hi - lo),)) for _w, _s, lo, hi, start, _lp, kind in rec["rows"])
-    return out, rec, I1.Advice((I1.RequestAdvice("q0", len(rec["prompt_ids"]), T, "length"),), steps, tuple(rec["streamed_ids"]))
+    steps = tuple(WA.StepAdvice((WA.Row(0, kind, start, hi - lo),)) for _w, _s, lo, hi, start, _lp, kind in rec["rows"])
+    return out, rec, WA.Advice((WA.RequestAdvice("q0", len(rec["prompt_ids"]), T, "length"),), steps, (0,) * T)
 
 
 @pytest.mark.usefixtures("code_versions_stood_in")
