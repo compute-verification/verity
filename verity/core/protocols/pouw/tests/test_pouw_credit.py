@@ -1,6 +1,6 @@
 """`credit.py`'s rules on a served window and its period: each mutation of
 `pouw_credit_cases` is refused by the rule it aims at, its message naming the fix, and the honest windows and periods are
-accepted. The drawn units are the draw coin's over the window's own layout, read from the descriptor of the circuit the
+accepted. The sampled proof blocks are the sampling coin's over the window's own layout, read from the descriptor of the circuit the
 period committed (`credit.layout_of`), whose strata are the compiled `h1window.program`'s, and the weights a window
 registers are the ones its open root binds, every code and s_w of its B rows. The Lean (`PouwCheck.Credit`) is held to
 the same cases by `lean/check/tests/test_difftest.py`."""
@@ -42,7 +42,7 @@ for _name, _dir in (("pouw_rounds_cases", PKG), ("pouw_credit_cases", PKG), ("te
 cases, rc, h1 = (sys.modules[n] for n in ("pouw_credit_cases", "pouw_rounds_cases", "test_circuit_h1window"))
 
 SEEDS = range(3)
-#: a draw root no withheld session opened on: its draw coin was never drawn after it
+#: a sample root no withheld session opened on: its sampling coin was never sampled after it
 NO_DRAW_SESSION = "the draw's session is not trusted: the auditor's ledger opens no challenger session for this window"
 
 #: each `_credited` mutation's refusal: its code and its reason's start
@@ -285,9 +285,9 @@ def test_honest_window_credits_its_bits(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_credit_bit_changed_after_draw_is_refused(seed):
-    """A verdict withdrawn (or granted) after the draw coin, the draw root recomputed over the new bits, is no root the
-    ledger opened a withheld draw session on; a draw coin opened after another root than the draw root is not the one
-    the challenger's log shows the draw followed."""
+    """A verdict withdrawn (or granted) after the sampling coin, the sample root recomputed over the new bits, is no root the
+    ledger opened a withheld sample session on; a sampling coin opened after another root than the sample root is not the one
+    the challenger's log shows the sample followed."""
     for name in ("withdrawn", "changed"):
         _, (got, refused) = _credited(name, seed)
         assert got is None and refused == ("coin", NO_DRAW_SESSION)
@@ -393,8 +393,8 @@ def test_window_drawn_mutation(name):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_window_draw_is_its_coins(seed):
-    """`credit._window_drawn` draws the units `credit.drawn` does at the draw coin it opens, the window's root as the
-    stream, the draw's root as the registration and its receipts, over the strata of the descriptor's layout."""
+    """`credit._window_drawn` samples the units `credit.drawn` does at the sampling coin it opens, the window's root as the
+    stream, the sample's root as the registration and its receipts, over the strata of the descriptor's layout."""
     d, (got, refused) = _window_drawn("honest", seed)
     lay, _ = Cr.layout_of(bytes.fromhex(d["descriptor"]))
     want, why = Cr.drawn(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
@@ -428,7 +428,7 @@ def _period(name: str, seed: int):
 
 def test_a_draw_at_the_record_k():
     """At a committed K = `plan.RECORD_K` (the least K with (1 − ε)^K ≤ δ at ε = 0.1% and δ = 2⁻⁴⁰) over a larger
-    population, the work law draws K units, each stratum's k_s rounded up, so at most one more a stratum."""
+    population, the work sampling design samples K units, each stratum's k_s rounded up, so at most one more a stratum."""
     assert cases.PLAN_K == plan.RECORD_K == plan.record_k(plan.Fraction(1, 1000), plan.Fraction(1, 2 ** 40))
     for seed in range(2):
         got, refused = _drawn("budget", seed)
@@ -439,8 +439,8 @@ def test_a_draw_at_the_record_k():
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_the_drawn_units_are_the_draw_coins(seed):
-    """`credit.drawn` derives the drawn units from the draw coin: each stratum's units are its own, its count the work
-    law's k_s, and another coin, stream, registration or receipt draws another set; never a list handed in."""
+    """`credit.drawn` derives the sampled proof blocks from the sampling coin: each stratum's units are its own, its count the work
+    sampling design's k_s, and another coin, stream, registration or receipt samples another set; never a list handed in."""
     d = cases.drawn_instance(random.Random(f"honest/{seed}"))
     args = [d[k] for k in cases.DRAWN_KEYS]
     got, refused = Cr.drawn(*args)
@@ -576,7 +576,7 @@ def test_the_registered_file_is_h1windows_from_the_descriptor_alone(prefix, unit
 
 
 def test_a_word_read_at_another_width_refuses():
-    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one C-Flock's decoder
+    """A descriptor whose template's A or B row of bits reads the root's 16-bit input words is one Flock's decoder
     refuses (``E_REINTERPRET``), so `credit.layout_of` refuses it as no descriptor (`credit.DESCRIPTOR_FORM`), and
     accepts the same window wired at each leaf's own width; the difftest's ``reinterpret`` cases hold the Lean to it."""
     for seed in SEEDS:
@@ -591,7 +591,7 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
     """The layout is the committed circuit's, never the window's evidence: a window presenting a layout beside its
     descriptor is not a window's evidence; a compiled descriptor whose record names another layout (another slot,
     another n, the calls in another order) over the same body is refused (`credit.BODY`), so another layout can't bring
-    other strata or another drawn set; and the descriptor of the other layout is another circuit than the period's."""
+    other strata or another sampled set; and the descriptor of the other layout is another circuit than the period's."""
     linears, calls, m = COMPILED[0]
     raw = _compiled(linears, calls, m)
     lay, _ = Cr.layout_of(raw)
@@ -615,7 +615,7 @@ def test_an_alternative_layout_with_the_same_descriptor_refuses():
 
 def test_window_and_period_credit_are_the_only_entries():
     """A caller can't credit a window with a step skipped: the steps `window` composes are internal, and so are the
-    forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier of record)."""
+    forms that take proof outcomes in place of proof files (the Lean's, until it runs the verifier)."""
     for step in ("credited", "outcome", "a_link", "registration", "verified", "asks", "lean_verified",
                  "live_verified", "live_asks", "lean_live_verified", "window_outcomes", "period_outcomes"):
         assert not hasattr(Cr, step) and callable(getattr(Cr, f"_{step}")), step
@@ -628,7 +628,7 @@ def test_window_and_period_credit_are_the_only_entries():
 @pytest.mark.parametrize("seed", SEEDS)
 def test_entries_of_another_registration_refuse(seed):
     """Entries from another registration: A values registered under another window's open root or another circuit,
-    their trees under those domains, so the round roots commit them (`_a_link` accepts) and the drawn units' proofs
+    their trees under those domains, so the round roots commit them (`_a_link` accepts) and the sampled proof blocks' proofs
     opened them at those roots. Their domains are not the ones the window's registration gives them, so the window is
     refused."""
     d = cases.window_instance(random.Random(f"other-registration/{seed}"), "other-registration")
@@ -660,7 +660,7 @@ def test_mains_call_tables_are_the_windows_own_and_the_weights_held():
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_honest_window_of_call_tables_credits_its_bits(seed):
     """Main's served form: each round's A table of each K ``…/a/<K>@<s>`` committed whole under its round's root and each
-    call's z table ``…/zy@<c>``, both under domains that bind the window's open root, and each drawn unit's proof opening its own
+    call's z table ``…/zy@<c>``, both under domains that bind the window's open root, and each sampled proof block's proof opening its own
     call's. The window is credited."""
     d = cases.window_instance(random.Random(f"per-call/{seed}"), "honest")
     assert any(Cr.a_value(e["value"]) and Cr.a_value(e["value"])[1] is not None for e in d["entries"])
@@ -671,7 +671,7 @@ def test_an_honest_window_of_call_tables_credits_its_bits(seed):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_table_the_served_commit_did_not_commit_refuses(seed):
     """ROOTS1: a round's A table of a K with every row zero, one row off or its rows offset by one call, or a round's
-    input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the drawn units'
+    input-ids table with one row off, each tied to the round roots (`_a_link` accepts) and opened by the sampled proof blocks'
     proofs at its root, is not the Commit's value of the same rows, so the window is refused before any proof is read;
     one with a call missing has fewer rows than the layout gives it, which `_a_link` refuses first. The honest window's tables are the Commit's, by its names: each round's A table of each K
     ``row-table/<round>/k<K>`` and each round's ``input-ids/<round>``."""
@@ -689,6 +689,22 @@ def test_a_table_the_served_commit_did_not_commit_refuses(seed):
             assert got is None and refused[0] == "a-link" and "the window's layout gives it" in refused[1], refused
         else:
             assert got is None and refused[0] == "arow" and "(ROOTS1)" in refused[1], (name, refused)
+
+
+def test_each_commit_table_is_its_rounds_window_table():
+    """`window_table` is ROOTS1's one map from the Commit's names to the window's tables, the one the records audit ties
+    them by: round s's ``row-table/<s>/k<K>`` is the window's A table ``a/<K>@<s>`` (a table `table_rows` sizes) and
+    ``input-ids/<s>`` its ``ids@<s>``, under the descriptor's prefix. Any other name is refused."""
+    d = cases.window_instance(random.Random("honest/0"))
+    lay, steps = Cr.layout_of(bytes.fromhex(d["descriptor"]))[0], len(d["rounds"])
+    sized = Cr.table_rows(lay, steps, "h1/")
+    for s, k, _cs in Cr.step_tables(lay, steps):
+        assert Cr.window_table(Cr.commit_rows(s, k), "h1/") == f"h1/a/{k}@{s}"
+        assert f"h1/a/{k}@{s}" in sized
+    assert [Cr.window_table(Cr.commit_ids(s), "") for s in range(steps)] == [f"ids@{s}" for s in range(steps)]
+    for bad in ("row-table/0/k0", "row-table/01/k8", "row-table/0/k8/", "input-ids/-1", "a/8@0", "h1/ids@0", 7, None):
+        with pytest.raises(ValueError, match="no Commit name of a window's table"):
+            Cr.window_table(bad, "h1/")
 
 
 def _no_pads(*_args, **_kwargs):
@@ -821,7 +837,7 @@ def test_round_0s_request_table_is_its_request_table_under_the_session():
 
 def test_the_live_program_is_read_from_its_compiled_descriptor():
     """`credit.live_of` reads the compiled `live.program_v2`'s T, S and PREFIX back from its descriptor (canonical JSON
-    without annotations, the bytes its program digest hashes), its unit the one template its query draws, unit s round
+    without annotations, the bytes its program digest hashes), its unit the one template its query samples, unit s round
     s's; the cases' stand-in descriptor (`live_program`) reads the same. The v1 Program, whose units don't bind each
     request's cap to its public max_tokens, is no live Program credit reads."""
     from verity.ml.protocols.pouw.circuit import live as LV
@@ -884,7 +900,7 @@ def test_the_commit_record_is_bound_under_calls_root():
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_call_table_registered_without_the_window_root_refuses(seed):
     """A round's A table registered under a domain that binds no window root (main's h1_prove registration, its synthetic
-    window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the drawn units' proofs
+    window), its tree under that domain so the round roots commit it (`_a_link` accepts), and the sampled proof blocks' proofs
     opened it: its domain is not the one the window's registration gives it, so the window is refused."""
     d = cases.window_instance(random.Random(f"a-call-unbound/{seed}"), "a-call-unbound")
     assert Cr._a_link(d["rounds"], d["entries"]) is None
@@ -894,7 +910,7 @@ def test_a_call_table_registered_without_the_window_root_refuses(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_proof_verified_against_another_registration_refuses(seed):
-    """A drawn unit's proof is accepted, of a drawn unit, but its session opened a value against another registration's
+    """A sampled proof block's proof is accepted, of a sampled proof block, but its session opened a value against another registration's
     root: the window, and its period, earn nothing."""
     d = cases.window_instance(random.Random(f"proof-other-registration/{seed}"), "proof-other-registration")
     assert Cr._outcome(d["draw"]["coin"]["coin"], d["window"]["root"], d["draw"]["root"],
@@ -908,7 +924,7 @@ def test_a_proof_verified_against_another_registration_refuses(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
-    """An opened B entry whose registered root differs from the one the drawn units' sessions opened is refused before
+    """An opened B entry whose registered root differs from the one the sampled proof blocks' sessions opened is refused before
     any proof is read: its root no longer folds to the weights' root the window's open root binds (`_weights`). The
     entries are held to the window's open root and the verified sessions, never taken from the evidence as presented."""
     d = cases.window_instance(random.Random(f"entry-root/{seed}"), "entry-root")
@@ -919,7 +935,7 @@ def test_an_entry_whose_root_is_not_the_sessions_refuses(seed):
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_round_log_the_challenger_never_received_refuses(seed):
     """The composed check's counterexample: a round log the challenger never received, its coins carried as if opened
-    after its roots and the draw root over it, has every credit bit fixed before the draw coin (`_credited` credits its
+    after its roots and the sample root over it, has every credit bit fixed before the sampling coin (`_credited` credits its
     calls) and its A trees tied to its roots (`_a_link` accepts). Only `core_check.rounds` holds the log's roots to the
     ones the challenger received, and `window` runs it, so the window, and the period it's in, earn nothing."""
     d = cases.window_instance(random.Random(f"never-received/{seed}"), "never-received")
@@ -935,8 +951,8 @@ def test_a_round_log_the_challenger_never_received_refuses(seed):
 
 
 def test_a_refused_outcome_credits_nothing_though_credited_would():
-    """No partial credit is `window`'s, not its caller's: with a drawn unit's proof rejected, `_credited` still returns
-    the calls whose bits were fixed before the draw coin, and `window` returns none of them."""
+    """No partial credit is `window`'s, not its caller's: with a sampled proof block's proof rejected, `_credited` still returns
+    the calls whose bits were fixed before the sampling coin, and `window` returns none of them."""
     credited = 0
     for seed in range(6):
         d = cases.window_instance(random.Random(f"failed/{seed}"), "failed")
@@ -1031,7 +1047,7 @@ def test_the_reported_eps_is_window_samplings_at_the_committed_k(seed):
     """PoUW carries no ε target: the period's open commits K, and the credit reports the ε that K establishes at
     `DELTA` over each window's credited work C, each credited call's m_s·n·K at its m_s served rows (the window's
     ``work``), `window.k_prime` inverted at (C, W, 1), W the window's work, every unit's: K′ at that
-    ε is at most K, and at the next grid point down more than K, and a window whose draw establishes no ε <= 1 reports
+    ε is at most K, and at the next grid point down more than K, and a window whose sample establishes no ε <= 1 reports
     none. At K = `plan.RECORD_K` and u = 1 it is at most 0.1%."""
     d = cases.period_instance(random.Random(f"honest/{seed}"))
     got, refused = Cr._period_outcomes(*(d[k] for k in cases.PERIOD_KEYS), rc.lms_verify)
@@ -1078,7 +1094,7 @@ def test_the_reported_eps_is_of_the_credited_work():
 def test_a_padded_step_is_credited_its_served_rows_not_its_slots():
     """Every call has the window's M slot rows and its step's m_s served rows first; the empty rows' units prove
     trivially. A credited call of a step serving m_s = 2 of M = 16 rows is credited m_s·n·K, not M·n·K, so the ε its
-    draw establishes is the one over that work, and the draw's population stays every slot's units."""
+    sample establishes is the one over that work, and the sample's population stays every slot's units."""
     k, n = 4096, 1 << 20
     lay = {"calls": [["w", 0]] * 2, "linears": [["w", k, n]], "m": 16, "tile": [16, 16]}
     total = sum(size * work for size, work in Cr.call_work(lay))
@@ -1103,7 +1119,7 @@ def test_an_empty_call_is_credited_nothing():
 
 def test_an_empty_step_of_a_window_credits_none_of_its_calls():
     """A served window whose step served no rows is accepted, and none of that step's calls is credited, though its
-    credit bits are set: they were fixed before the draw coin, beside each call's m_s."""
+    credit bits are set: they were fixed before the sampling coin, beside each call's m_s."""
     seen = 0
     for seed in range(40):
         d = cases.window_instance(random.Random(f"empty/{seed}"))
@@ -1153,7 +1169,7 @@ def test_the_record_k_establishes_about_0_1125_percent_at_u_eight_ninths():
 
 
 def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -> Fraction:
-    """The largest probability that the work law's draw (each stratum (n_s, w_s, k_s) drawn k_s of its n_s units
+    """The largest probability that the work sampling design's sample (each stratum (n_s, w_s, k_s) sampled k_s of its n_s units
     without replacement) misses a set holding at least a share `eps` of the work `total`, over two strata: for each
     count b_1 of the second stratum's units in the set, the fewest of the first's that reach the share (a set's miss
     only falls as it grows)."""
@@ -1171,8 +1187,8 @@ def _worst_miss(strata: list[tuple[int, int, int]], eps: Fraction, total: int) -
 
 
 def test_the_eps_holds_at_the_work_laws_cap():
-    """At K = n the work law draws a stratum of little work only in part, so the cap is K >= W, not the unit count:
-    1,000 units of work 1 and 1,000 of work 1,000, all credited, drawn at K = n = 2,000. The reported ε, `eps_at` at
+    """At K = n the work sampling design samples a stratum of little work only in part, so the cap is K >= W, not the unit count:
+    1,000 units of work 1 and 1,000 of work 1,000, all credited, sampled at K = n = 2,000. The reported ε, `eps_at` at
     (C, W, 1), about 1.38%, holds: every set holding that share of the work is missed with probability at most δ. The
     unit-count form `eps_at(K, δ, C, n, w_max)` would report 2^-32, yet a set of 500 work-1 units, 0.05% of the work,
     is missed with probability about 1/4."""
@@ -1193,9 +1209,9 @@ def test_the_eps_holds_at_the_work_laws_cap():
 @pytest.mark.parametrize("light, heavy", [((1000, 1), (1000, 1000)), ((400, 1), (100, 100)), ((600, 2), (200, 300)),
                                           ((300, 1), (300, 64)), ((500, 1), (50, 1000))])
 def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
-    """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work law
-    draws a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
-    share of the work is missed with probability above 9/10. At the same draw the work form (C, W, 1) holds, every set
+    """The ε of `eps_at(K, δ, C, n, w_max)`, the unit count n in place of the work W, is refuted wherever the work sampling design
+    samples a stratum of light work only in part at K = n: there it reports 2^-32, and a set of light units holding that
+    share of the work is missed with probability above 9/10. At the same sample the work form (C, W, 1) holds, every set
     of its share missed with probability at most δ (`Properties.Pouw.Credit.WorkDrawMisses`)."""
     (n_a, w_a), (n_b, w_b) = light, heavy
     lay = {"calls": [["a", 0], ["b", 0]], "linears": [["a", w_a, n_a], ["b", w_b, n_b]], "m": 1, "tile": [1, 1]}
@@ -1213,7 +1229,7 @@ def test_the_unit_count_form_is_refuted_at_its_cap(light, heavy):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_period_open_with_no_k_refuses(seed):
-    """K is the proof system's selection, committed in the period-open before any draw: a period whose open commits
+    """K is the proof system's selection, committed in the period-open before any sample: a period whose open commits
     none, or a malformed one, earns nothing."""
     for name in ("no-k", "k-form"):
         got, refused = _period(name, seed)
@@ -1222,8 +1238,8 @@ def test_a_period_open_with_no_k_refuses(seed):
 
 @pytest.mark.parametrize("seed", SEEDS)
 def test_a_drawn_count_other_than_k_refuses(seed):
-    """A window is drawn at its period's committed K: one with fewer units than K (its draw would be sized at N, not
-    K) is refused, and so is one whose proofs are of a draw at another K."""
+    """A window is sampled at its period's committed K: one with fewer units than K (its sample would be sized at N, not
+    K) is refused, and so is one whose proofs are of a sample at another K."""
     got, refused = _window("k-past-units", seed)
     assert got is None and refused[0] == "budget" and FEWER in refused[1]
     for name in ("k-past-units", "other-k"):
@@ -1367,7 +1383,7 @@ def test_a_window_on_other_b_rows_than_its_periods_refuses_the_period(seed):
 
 def test_a_window_whose_s_w_differs_from_the_registered_is_refused():
     """Each K's b/<K>, its linears' B rows (each row its int8 codes then its f32 s_w) committed as the served path
-    registers the weights (`registered.Registered`, the domain that binds no window, salts drawn once), folded by
+    registers the weights (`registered.Registered`, the domain that binds no window, salts sampled once), folded by
     `weights_root` into the window's open root, is accepted. The same window whose b/32 has one row's s_w changed, every
     code and salt kept, is refused, and so is one with a code changed instead: the open root fixes both before the
     salt. So is a b/32 registered under another circuit's domain, or missing a row, though the open root binds it."""

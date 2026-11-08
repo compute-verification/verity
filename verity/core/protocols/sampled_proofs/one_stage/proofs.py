@@ -1,4 +1,4 @@
-"""A statement's proof files, verified by C-Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
+"""A statement's proof files, verified by Flock's Lean verifier (`flock-verify verify --zk`, the Lake package
 `verity/core/service/flock`, built with `lake` on first use): the proof system's own run of the verifier, so a protocol
 reads each session's verdict from that run, never from a verdict record the prover hands in.
 
@@ -233,7 +233,7 @@ def verify(proof: Proof, *, circuit_sha512: str, program: bytes, partition: Mapp
            registered: Mapping[str, Any] | None = None,
            strata: Sequence[tuple[str, Sequence[Sequence[int]]]] | None = None,
            ) -> tuple[list[Finding] | None, tuple[str, str] | None]:
-    """Each of `proof`'s sessions verified by C-Flock's Lean verifier against the verifier's own `program` (its
+    """Each of `proof`'s sessions verified by Flock's Lean verifier against the verifier's own `program` (its
     descriptor's bytes), `partition` and `registered` file (None only for a program that reads no registered value, such
     as N2's, whose proof block opens the committed value inside its circuit), on the circuit file the auditor committed as
     `circuit_sha512`; the findings in session order and None, or None and the refusal (``registered``: `registered` is
@@ -394,7 +394,7 @@ def check_v2(params: Mapping[str, Any], record: Mapping[str, Any], evidence: Map
     auditor's circuit and public files' digests, committed before any coin, and the verifier's registered file, the
     registration `record`, and v1's `evidence` with its ``verdicts`` replaced by `proof`'s ``proofs`` (`evidence_v2`,
     under the evidence's ``sessions``); the outcome line. `params` must name the auditor's challenger and its window
-    (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the draw reads: v2 refuses
+    (``challenger``, ``window_root``), whose signed release in the evidence's ``coins`` the sample reads: v2 refuses
     parameters naming none. The evidence names one session (v2 refuses none or several). That release log must release
     the sample, then the link, then the other rounds (`challenger.sample_link_first`, `order_why`), and the session's
     record must be on the one coin tree it shows the challenger sampled and opened, its link opened after the roots of

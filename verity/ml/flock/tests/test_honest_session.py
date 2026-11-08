@@ -1,12 +1,12 @@
 """A recorded honest session held to the honest worker's Lean (`Flock.Firewall.honestReqs`, `FirewallHonest.honestRows`):
 every request `rec_live` relayed to Lean's live firewall on an honest recursive session of the unmodified prover, in order,
-the firewall's answer to each with the salts it drew, and the coin server's record (`fixtures/honest-session/`, from
+the ZK server's answer to each with the salts it drew, and the challenger's live-coin part's record (`fixtures/honest-session/`, from
 `pod/93-rec-honest-session.sh`, which keeps `flock-firewall live`'s stdin and stdout through a tee: RoPE d64, one head).
 
 The relayed requests, read back to what the worker brought (`test_honest_reqs.honest_of`), are Lean's `honestReqs` of it
-byte for byte (`firewall-honest-difftest`, whose reference is `rec_live`'s encoder); each commitment the firewall sent is
+byte for byte (`firewall-honest-difftest`, whose reference is `rec_live`'s encoder); each commitment the ZK server sent is
 the worker's row's (`honestRows`, mirrored here, through the bytes `rowBytes` gives its digest) under the salt it drew for
-it, in salt order; and the firewall at those salts gives the live record again on Lean's requests."""
+it, in salt order; and the ZK server at those salts gives the live record again on Lean's requests."""
 from __future__ import annotations
 
 import hashlib
@@ -28,7 +28,7 @@ lean = pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchai
 
 
 def recorded() -> tuple[dict, list[bytes], list[dict]]:
-    """The session's schedule, every request `rec_live` relayed, in order, and the firewall's answer to each. The binary
+    """The session's schedule, every request `rec_live` relayed, in order, and the ZK server's answer to each. The binary
     starts twice, each start a schedule line and its `ok`: `rec_live serve`'s load check of the schedule, then the
     session."""
     assert (FIX / "firewall-in.txt").is_file(), (
@@ -41,7 +41,7 @@ def recorded() -> tuple[dict, list[bytes], list[dict]]:
 
 
 def drawn(answers: list[dict]) -> tuple[list[bytes], list[bytes]]:
-    """Every salt the firewall drew, in order, and every commitment it sent under them, in the same order."""
+    """Every salt the ZK server drew, in order, and every commitment it sent under them, in the same order."""
     salts = [bytes.fromhex(x) for a in answers for x in a["salts"]]
     sent = []
     for a in answers:
@@ -83,7 +83,7 @@ def test_rec_lives_relayed_requests_are_honest_reqs_byte_for_byte(server):
 
 
 def test_the_firewalls_commitments_are_of_the_workers_rows():
-    """As many rows as the schedule's (`rowCount`), each commitment the firewall sent `hm96-sha512`'s of its row's digest
+    """As many rows as the schedule's (`rowCount`), each commitment the ZK server sent `hm96-sha512`'s of its row's digest
     under the salt it drew for it, the digest `sha512_row_digest`'s and of `rowBytes`' bytes."""
     schedule, reqs, answers = recorded()
     salts, sent = drawn(answers)
@@ -99,7 +99,7 @@ def test_the_firewalls_commitments_are_of_the_workers_rows():
 @lean
 def test_the_firewall_gives_the_live_record_on_lean_honest_reqs(server, built):
     """`flock-firewall` (`Flock.Firewall.run`) on Lean's requests for the session, at the salts the live firewall drew,
-    finishes with the coin server's live record (its coins and the link's points, which it draws, left out)."""
+    finishes with the challenger's live-coin part's live record (its coins and the link's points, which it samples, left out)."""
     schedule, reqs, answers = recorded()
     salts, _ = drawn(answers)
     kind, out = D.replay(PORT, {"schedule": schedule, "honest": honest_of(schedule, reqs)}, server)

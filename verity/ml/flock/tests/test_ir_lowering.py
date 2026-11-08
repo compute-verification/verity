@@ -109,7 +109,7 @@ def test_pieces_match_the_ir_primitives(name, widths, out, piece, ref):
 
 
 def test_a_primitive_without_a_piece_lowers_through_the_boolean_definition_of_its_word():
-    """A primitive C-Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
+    """A primitive Flock has no piece for, computed by a registered Boolean Definition (``.word`` the primitive), lowers by
     running that Definition's ``build``: found through core's registry, not imported from its owner."""
     from types import SimpleNamespace
 

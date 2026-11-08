@@ -282,7 +282,11 @@ mark and a land verdict like any PR, and is a Lean change when it moves Lean, so
 that one commit, under the after-landing run.  Each PR merged above a move, on `next` or among `checked`'s last
 `LANDED_WINDOW` first-parent commits, whose head lacks it is merged across it (`_merge_through`): restacked onto it by
 `tools/move/restack.py` when its change names a word of the move's map or its plain merge conflicts, so only its own
-conflicts refuse it.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
+conflicts refuse it.  A restack runs in the background, one `restack.py` a head and at most drive.toml's `restack_jobs` at
+once (`_restack`, the state's `restacking`), and its PR waits off `next` meanwhile (`RESTACKING`), a wait that refuses nothing
+and rings no one; a later sync reads its result (the state's `restacks`) and merges the PR, drops the result once the PR's head
+changed, and runs a job that ended with none (it died, or ran past `RESTACK_WAIT_S`) once more before that failure refuses the
+PR.  A move or a restacked PR lands at a commit that isn't its head: the trailers keep it off `next` once
 landed (`queue_log`), and drive closes it once `main` reaches it (`Driver._close_carried`).  The low-risk lane stops at a
 move on `next`.  The preflight merges no move PR's head, and notes rather than refuses a conflict only in files a move changed.
 
@@ -375,7 +379,7 @@ PINS_FILES = ("ci/pins.py", "tools/verity/check/pins.py")
 #: the codemod that puts the in-tree Lake packages' Lean on Lean's module system, and the one reading of a Lean header it reads
 #: with: a merge into a tree on the module system runs the codemod over the merged tree (`ported`)
 MODULES, HEADERS = "tools/verity/lean/modules.py", "tools/verity/lean/headers.py"
-#: the root modules of Security's `Definitions` library and C-Flock's `Flock`, which the port makes modules: a tree holding
+#: the root modules of Security's `Definitions` library and Flock's `Flock`, which the port makes modules: a tree holding
 #: the codemod is on the module system when each is a module (`on_modules`)
 PORTED_ROOTS = ("Security/Definitions.lean", "verity/core/service/flock/Flock.lean")
 #: what the codemod's run over a tree reads besides the codemod and its header reader: a merge that changes none of these onto
@@ -431,6 +435,18 @@ RENAME, MOVE_CHECK, RESTACK = "tools/move/rename.py", "tools/verity/check/move_c
 #: what those scripts import from their own checkout: `tools/move/`'s other scripts (rename.py's `layout`), and the pins list
 #: move_check.py reads to tell a pin's rewritten digest from an edit
 MOVE_DIR, MOVE_PINS = "tools/move/", "tools/verity/check/pins.py"
+#: how long a restack job runs at most (`Queue._launch_restack`): `timeout` interrupts `restack.py` then, so it removes its
+#: scratch worktrees, and kills it a minute on; a job with no exit written `RESTACK_LOST_S` after its start died (its process
+#: gone, or its pid another's after a restart of the pod)
+RESTACK_WAIT_S = 2 * 3600
+RESTACK_LOST_S = RESTACK_WAIT_S + 300
+#: a restack job: the rest of its arguments (`restack.py`'s copy and its own) with `--json`'s results in `RESTACK_OUT` in the
+#: job's directory ($1)
+RESTACK_OUT = "restack.json"
+RESTACK_JOB = f'd=$1; shift; exec timeout -s INT -k 60 {RESTACK_WAIT_S} "$@" > "$d/{RESTACK_OUT}"'
+#: why a PR waits off `next` while it is restacked in the background (`Restacking`): it refuses nothing, so nothing caches it and
+#: drive tells no one (`drive.Driver.tell_out`)
+RESTACKING = "restacking across the move"
 #: how many first-parent commits of the landing branch a sync reads for the queue's landings (`queue_log`): the heads it
 #: landed, and the moves a PR based before them is restacked through
 LANDED_WINDOW = 2000
@@ -456,16 +472,48 @@ class QueueError(Exception):
     pass
 
 
+class Restacking(Exception):
+    """A head a job in the background is carrying across a move (`Queue._restack`): its PR waits off `next` this sync, for
+    this reason (`RESTACKING`)."""
+
+
 def _git(repo: Path, *args: str, check: bool = True, env: dict | None = None) -> subprocess.CompletedProcess:
     full = git_env(GIT_TERMINAL_PROMPT="0", **(env or {}))
     if env is IDENTITY:                     # the queue's merges carry the time they're made: a date a caller pins stops `log --since`
         for k in DATES:
             full.pop(k, None)
-    r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
-                       errors="surrogateescape", env=full)
+    with _worktrees_shared(repo, full) if _subcommand(args) == "fetch" else contextlib.nullcontext():
+        r = subprocess.run(["git", "-c", "commit.gpgsign=false", *args], cwd=repo, capture_output=True, text=True,
+                           errors="surrogateescape", env=full)
     if check and r.returncode:
         raise QueueError(f"git {' '.join(args)}: {(r.stderr or r.stdout).strip()[-400:]}")
     return r
+
+
+def _subcommand(args: tuple[str, ...]) -> str:
+    """The git subcommand of ``args``: their first word past the `-c NAME=VALUE` settings."""
+    i = 0
+    while args[i:i + 1] == ("-c",):
+        i += 2
+    return args[i] if i < len(args) else ""
+
+
+#: the clone's worktree lock, in its git directory: `tools/move/restack.py` adds and forgets each scratch worktree holding it
+#: alone, because `git worktree add` writes a placeholder HEAD before the real one, and a fetch, whose connectivity check
+#: reads every worktree's HEAD, holds it shared
+WORKTREES_LOCK = "research-worktrees.lock"
+
+
+@contextlib.contextmanager
+def _worktrees_shared(repo: Path, env: dict[str, str]):
+    common = subprocess.run(["git", "rev-parse", "--git-common-dir"], cwd=repo, capture_output=True, text=True,
+                            env=env).stdout.strip()
+    if not common:
+        yield
+        return
+    with open(Path(repo, common) / WORKTREES_LOCK, "a") as f:
+        fcntl.flock(f, fcntl.LOCK_SH)
+        yield
 
 
 def _out(repo: Path, *args: str) -> str:
@@ -782,6 +830,8 @@ class DriveFlags:
     #: its author delegated to (`research.labelauth`, `StoreLabels`); `ready`, `judge` and `review` then refuse to write one they
     #: can't sign.  On only while the low-risk lane can't change who holds a handle or how a label is judged (`SIGNED_GUARDS`)
     signed_verdicts: bool = False
+    #: the restacks across a move the syncs run at once in the background, each `restack.py` on one head (`Queue._restack`)
+    restack_jobs: int = 3
 
     @classmethod
     def parse(cls, text: str, source: str = "drive.toml", strict: bool = False) -> "DriveFlags":
@@ -842,6 +892,10 @@ class DriveFlags:
             if type(doc["lowrisk_per_tick"]) is not int or doc["lowrisk_per_tick"] < 1:
                 raise bad("lowrisk_per_tick", "a whole number, 1 or more (`lowrisk_lane = false` turns the lane off)")
             got["lowrisk_per_tick"] = doc["lowrisk_per_tick"]
+        if "restack_jobs" in doc:
+            if type(doc["restack_jobs"]) is not int or doc["restack_jobs"] < 1:
+                raise bad("restack_jobs", "a whole number, 1 or more")
+            got["restack_jobs"] = doc["restack_jobs"]
         if "lowrisk_excludes" in doc:
             v = doc["lowrisk_excludes"]
             if not (isinstance(v, list) and v and all(isinstance(x, str) and LOWRISK_EXCLUDE_RE.fullmatch(x)
@@ -1215,10 +1269,10 @@ LEAN_SOURCES = (".lean", "lakefile.lean", "lakefile.toml", "lean-toolchain", "la
 #: after-landing run, a failure blaming it; Lean anywhere else runs as code (Flock's verifier and the ZK server, the PoUS
 #: grader, the certifier program, the inference-only check, the remote audit's verifier), and a lock run follows its landing
 LEAN_PROOFS_TREE = "Security/"
-#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions and Models libraries, and the Lake files of
-#: their package.  A change to it, like a lock's, is a Lean change with or without a lock change
-LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/Models.lean", "Security/lakefile.toml",
-             "Security/lake-manifest.json", "Security/lean-toolchain")
+#: the spec: the Lean the guarantees' statements read, `Security/`'s Definitions library, and the Lake files of its package.
+#: A change to it, like a lock's, is a Lean change with or without a lock change
+LEAN_SPEC = ("Security/Definitions/", "Security/Definitions.lean", "Security/lakefile.toml", "Security/lake-manifest.json",
+             "Security/lean-toolchain")
 
 
 def lean_change(repo: Path, commit: str, base: str | None = None) -> bool:
@@ -1621,14 +1675,18 @@ class Queue:
         #: every open PR the last `status` listed, `main`-based or not (its entries leave out an unmarked PR on another branch)
         self.listed: list[PR] = []
         #: a sync's moves below the member it merges (`queue_log`'s, then each it regenerates), the heads it merges after it
-        #: (`_restack` batches them), and its regenerated moves and restacks by key (the state's `moves_made` and `restacks`,
-        #: kept while a sync uses them: `_used`)
+        #: (`_restack` starts their restacks too), its regenerated moves and restacks by key (the state's `moves_made` and
+        #: `restacks`, kept while a sync uses them: `_used`), and the restack jobs running by key (the state's `restacking`)
         self._moves: list[Move] = []
         self._upcoming: list[str] = []
         self._made: dict[str, dict] = {}
         self._restacks: dict[str, dict] = {}
+        self._restacking: dict[str, dict] = {}
         self._used: set[str] = set()
         self._words_of: dict[str, set[str]] = {}
+        #: how many restack jobs run at once (drive.toml's `restack_jobs`), and whether this sync starts any (a dry run doesn't)
+        self.restack_jobs = DriveFlags.restack_jobs
+        self._restack_starts = False
         #: each merge's record by its key (`_merge`, `_merge_key`; the state's `merges`), each stamped with the count of the last
         #: sync that used it (`_merge_serial`); the key of each (tip, head) and what every merge reads (`_merge_context`), both
         #: read once a sync; the record and head of each merge commit `_merge` made (`_lock_drops`); the merges a sync reused
@@ -2273,9 +2331,9 @@ class Queue:
 
     def _merge_through(self, tip: str, pr: PR, members: list[Member]) -> tuple[str | None, str]:
         """`_merge` of ``pr`` onto ``tip``, carried across each move below it (`_moves`) that its head lacks: restacked through
-        them (`_restack`) when its own change names a word of a move's map (`_sensitive`: a plain merge would leave a file it
-        adds or a name it writes where the move no longer has it) or its plain merge conflicts, so a conflict that remains is
-        its own."""
+        them (`_restack`, `Restacking` until its restack ends) when its own change names a word of a move's map (`_sensitive`:
+        a plain merge would leave a file it adds or a name it writes where the move no longer has it) or its plain merge
+        conflicts, so a conflict that remains is its own."""
         if not (pending := [mv for mv in self._moves if not self._contains(mv.commit, pr.head)]):
             return self._merge(tip, pr, members)
         if not any(self._sensitive(pr.head, mv) for mv in pending):
@@ -2284,7 +2342,7 @@ class Queue:
                 return commit, why
         head, names = pr.head, ", ".join(f"{mv.commit[:12]} ({mv.map})" for mv in pending)
         for mv in pending:
-            head, why = self._restack(head, mv)
+            head, why = self._restack(head, mv, pr.head)
             if head is None:
                 return None, f"it doesn't cross the move {mv.commit[:12]} ({mv.map}): {why}"
         commit, why = self._merge(tip, pr, members, head)
@@ -2305,48 +2363,98 @@ class Queue:
         low = r.stdout.lower()
         return bool(r.returncode) or any(w in low for w in self._words_of[mv.map])
 
-    def _restack(self, head: str, mv: Move) -> tuple[str | None, str]:
-        """(``head`` carried across ``mv`` by `restack.py` onto the move, "") or (None, why not), once per head and
-        move (the state's `restacks`).  One run takes every head merged after it this sync that lacks ``mv`` (and every move
-        below it), whose change names a word of its map: the script checks the move against its base once a run."""
+    def _restack(self, head: str, mv: Move, of: str) -> tuple[str | None, str]:
+        """(``head`` carried across ``mv`` by `restack.py` onto the move, "") or (None, why not), once per head and move (the
+        state's `restacks`), for PR head ``of``; `Restacking` until a job in the background has carried it (`_launch_restack`,
+        the state's `restacking`).  The job that starts then starts one for each head merged after it this sync that lacks ``mv``
+        (and has every move below it) and whose change names a word of its map, while fewer than `restack_jobs` run."""
         key = f"{head}:{mv.commit}"
-        if key not in self._restacks or (self._restacks[key].get("result") and not self._has(self._restacks[key]["result"])):
-            before = self._moves[:self._moves.index(mv)] if mv in self._moves else []
-            batch = [head] + [h for h in dict.fromkeys(self._upcoming) if h != head and f"{h}:{mv.commit}" not in self._restacks
-                              and all(self._contains(b.commit, h) for b in before) and not self._contains(mv.commit, h)
-                              and self._sensitive(h, mv)]
-            self._restacks.update(self._run_restack(batch, mv))
         self._used.add(key)
-        got = self._restacks[key]
+        got = self._restacks.get(key)
+        if got is None or (got.get("result") and not self._has(got["result"])):
+            self._restacks.pop(key, None)
+            if key not in self._restacking and self._launch_restack(head, mv, of):
+                before = self._moves[:self._moves.index(mv)] if mv in self._moves else []
+                for h in dict.fromkeys(self._upcoming):
+                    k = f"{h}:{mv.commit}"
+                    if h == head or k in self._restacks or k in self._restacking or self._contains(mv.commit, h) \
+                            or not all(self._contains(b.commit, h) for b in before) or not self._sensitive(h, mv):
+                        continue
+                    if not self._launch_restack(h, mv, h):
+                        break
+            if (got := self._restacks.get(key)) is None:
+                raise Restacking(self._restacking_why(key, mv))
         return got.get("result"), got.get("why", "")
 
-    def _run_restack(self, heads: list[str], mv: Move) -> dict[str, dict]:
-        """`restack.py HEAD... --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
-        branch's copy run in the clone: {f"{head}:{move}": {"result": the restacked commit} or {"why": what it says}}.  It runs
-        the move's base's `tools/move/` scripts, which `_regenerated` held to the landing branch's when it made the move."""
-        keys = [f"{h}:{mv.commit}" for h in heads]
+    def _launch_restack(self, head: str, mv: Move, of: str, tries: int = 1, since: float | None = None) -> bool:
+        """Start `restack.py HEAD --move-commit MOVE --script rename.py --script-arg=--map --script-arg=MAP --json`, the landing
+        branch's copy run in the clone, in the background (`RESTACK_JOB`, `drive.detach`), unless this sync starts none or
+        `restack_jobs` run: whether it started.  It runs the move's base's `tools/move/` scripts, which `_regenerated` held to
+        the landing branch's when it made the move.  A landing branch without the script is the restack's failure."""
+        key = f"{head}:{mv.commit}"
+        if not self._restack_starts or len(self._restacking) >= self.restack_jobs:
+            return False
         script = _git(self.workdir, "show", f"{self.base}:{RESTACK}", check=False)
         if script.returncode:
-            return dict.fromkeys(keys, {"why": f"`{self.into}` has no {RESTACK}"})
-        with tempfile.TemporaryDirectory(prefix="queue-restack-", ignore_cleanup_errors=True) as tmp:
-            path = Path(tmp, "restack.py")
-            path.write_text(script.stdout, errors="surrogateescape")
-            r = subprocess.run([sys.executable, str(path), *heads, "--move-commit", mv.commit, "--script", RENAME,
-                                "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"],
-                               cwd=self.workdir, capture_output=True, text=True, env=_script_env())
-        try:
-            results = json.loads(r.stdout)
-        except ValueError:
-            return dict.fromkeys(keys, {"why": f"{RESTACK} failed (exit {r.returncode}): {_tail(r)}"})
-        out = {}
-        for key, x in zip(keys, results, strict=True):
-            if x.get("status") in ("clean", "up-to-date"):
-                out[key] = {"result": x["result"]}
-            elif x.get("status") == "conflicted":
-                out[key] = {"why": f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"}
+            self._restacks[key] = {"why": f"`{self.into}` has no {RESTACK}"}
+            return False
+        from .drive import LAUNCHES, detach
+
+        root = Path(tempfile.gettempdir()) / LAUNCHES
+        root.mkdir(parents=True, exist_ok=True)
+        out = tempfile.mkdtemp(prefix="restack-", dir=root)
+        path = Path(out, "restack.py")
+        path.write_text(script.stdout, errors="surrogateescape")
+        argv = ["sh", "-c", RESTACK_JOB, "sh", out, sys.executable, str(path), head, "--move-commit", mv.commit, "--script", RENAME,
+                "--script-arg=--map", f"--script-arg={mv.map}", "--main", "refs/remotes/origin/main", "--json"]
+        now = self.now()
+        self._restacking[key] = {**detach(self.workdir, argv, _script_env()), "out": out, "of": of, "map": mv.map, "at": now,
+                                 "since": now if since is None else since, "tries": tries}
+        self._save_restacks()
+        self.log(f"research queue: restacking {head[:12]} across the move {mv.commit[:12]} ({mv.map}) in the background"
+                 + (f", try {tries}" if tries > 1 else ""))
+        return True
+
+    def _save_restacks(self) -> None:
+        """The restack jobs running and the results read (the state's `restacking` and `restacks`) saved at once, as drive saves
+        its launches: a sync that fails after starting or reading one neither starts it again nor loses its result."""
+        self.save_state({**self.load_state(), "restacks": self._restacks, "restacking": self._restacking})
+
+    def _restacking_why(self, key: str, mv: Move) -> str:
+        """Why the PR whose restack is ``key`` waits off `next` (`RESTACKING`)."""
+        from .drive import _hhmm
+
+        what = f"{RESTACKING} {mv.commit[:12]} ({mv.map})"
+        if job := self._restacking.get(key):
+            return f"{what} since {_hhmm(job['since'])}"
+        if not self._restack_starts:
+            return f"{what}: a dry run starts no restack"
+        return f"{what} once one of the {len(self._restacking)} restacks running ends"
+
+    def _collect_restacks(self, wanted: set[str]) -> None:
+        """Read each restack job that ended (`restack_end`) into `_restacks`, dropping its result once its PR's head is none of
+        ``wanted``.  A job that ended with no result (it died, or ran past `RESTACK_WAIT_S`) runs once more, and then that is
+        the restack's failure."""
+        ended = False
+        for key, job in list(self._restacking.items()):
+            if (end := restack_end(job, self.now())) is None:
+                continue
+            ended = True
+            del self._restacking[key]
+            (head, move), (said, how) = key.split(":"), end
+            if job["of"] not in wanted or not self._has(head):
+                self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} is dropped: "
+                         + (f"its PR's head {job['of'][:8]} changed" if job["of"] not in wanted else "the clone lost it"))
+            elif said is not None:
+                self._restacks[key] = said
+            elif job["tries"] < 2:
+                self.log(f"research queue: the restack of {head[:12]} across the move {move[:12]} ended with no result ({how}); "
+                         "once more")
+                self._launch_restack(head, Move(move, job["map"]), job["of"], job["tries"] + 1, job["since"])
             else:
-                out[key] = {"why": f"{RESTACK}: {x.get('status')}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"}
-        return out
+                self._restacks[key] = {"why": f"{RESTACK} failed ({how})"}
+        if ended:
+            self._save_restacks()
 
     def _has(self, commit: str) -> bool:
         return not _git(self.workdir, "cat-file", "-e", f"{commit}^{{commit}}", check=False).returncode
@@ -2445,6 +2553,7 @@ class Queue:
         prs = [p for p in prs if p.head not in landed
                and _git(self.workdir, "merge-base", "--is-ancestor", p.head, self.base, check=False).returncode]
         self._made, self._restacks, self._used = state.get("moves_made") or {}, state.get("restacks") or {}, set()
+        self._restacking, self._restack_starts = state.get("restacking") or {}, not dry_run
         merges = state.get("merges") or {}
         self._merge_records = {**(merges.get("of") or {}), **self._merge_records}
         self._merge_serial, self._merges_reused = int(merges.get("serial") or 0) + 1, 0
@@ -2497,7 +2606,9 @@ class Queue:
         merged = False
         if tip != main:                                         # the moves among the members `next` keeps
             self._moves = queue_log(self.workdir, tip)[1]
-        self._upcoming = [heads[n] for n in order[k:]]
+        self._upcoming = [heads[n] for n in order[k:] if not entries[n].pr.move]
+        if not dry_run:
+            self._collect_restacks({*heads.values(), *open_heads.values()})
 
         def refuse(n: int, why: str) -> None:
             e = entries[n]
@@ -2524,7 +2635,11 @@ class Queue:
             if e.pr.move:
                 commit, why = self._regenerate(tip, e.pr, main)
             else:
-                commit, why = self._merge_through(tip, e.pr, members)
+                try:
+                    commit, why = self._merge_through(tip, e.pr, members)
+                except Restacking as r:
+                    wait(n, str(r))
+                    continue
             merged = True
             # a regenerated move is `rename.py`'s output that `move_check.py` certified, lock texts included: what its map
             # rewrites in a premise or a frozen entry's reason is no drop
@@ -2569,6 +2684,7 @@ class Queue:
             state["moves_made"] = {k: v for k, v in self._made.items() if k in self._used}
             moves = {mv.commit for mv in self._moves}
             state["restacks"] = {k: v for k, v in self._restacks.items() if k in self._used or k.rpartition(":")[2] in moves}
+            state["restacking"] = self._restacking
             for key, gs, kept, new in (("gate_verdicts", gates, before, verdicts), ("warn_verdicts", warns, warn_before,
                                                                                    warn_verdicts)):
                 if gs:
@@ -3218,6 +3334,35 @@ def _script_env() -> dict[str, str]:
 
 def _tail(r: subprocess.CompletedProcess, n: int = 6) -> str:
     return " | ".join(((r.stdout or "") + (r.stderr or "")).strip().splitlines()[-n:])
+
+
+def restack_end(job: dict, now: float) -> tuple[dict | None, str] | None:
+    """A restack job's end (`Queue._launch_restack`), its directories removed: (what `restack.py` said of its head, as a sync
+    caches it, {"result": the restacked commit} or {"why": what it says}, else None; how the job ended, with its output's tail,
+    and why its results don't read when it exited 0).  None while it runs, up to `RESTACK_LOST_S` after its start."""
+    from .drive import _job_end
+
+    if (end := _job_end(job, RESTACK_OUT)) is None and now - job["at"] <= RESTACK_LOST_S:
+        return None
+    if not isinstance(end, tuple):
+        shutil.rmtree(job["dir"], ignore_errors=True)
+        end = end or f"no exit written {RESTACK_LOST_S // 60} min after its start"
+    unread = ""
+    try:
+        (x,) = json.loads(Path(job["out"], RESTACK_OUT).read_text())
+        said = ({"result": x["result"]} if x["status"] in ("clean", "up-to-date") else
+                {"why": f"{RESTACK} conflicts at its {x.get('step')} merge in {', '.join(x.get('files') or [])}"}
+                if x["status"] == "conflicted" else
+                {"why": f"{RESTACK}: {x['status']}: {((x.get('error') or '').splitlines() or [''])[0][:300]}"})
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as e:
+        said, unread = None, f"; its results don't read ({type(e).__name__}: {e})"
+    shutil.rmtree(job["out"], ignore_errors=True)
+    if isinstance(end, str):
+        return said, end
+    rc, tail, _ = end
+    stopped = f", stopped {RESTACK_WAIT_S // 60} min after its start" if rc == "124" else ""
+    tail = " | ".join(tail.splitlines()[-6:])
+    return said, f"exit {rc}{stopped}" + (f": {tail}" if tail else "") + (unread if rc == "0" else "")
 
 
 def changed(repo: Path, base: str, commit: str) -> set[str]:
@@ -4788,7 +4933,7 @@ class LeanCheck:
 class RecordsGate:
     """`ready`'s records gate, before the preflight and the mark, which warns and never refuses: a head whose change against the
     landing branch (`into_at` `main`: `checked` under `land_into = "checked"`, else `main`, whose locks the PRs that landed there
-    were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) draws a warning, naming the run that
+    were held to; from their merge base) touches a Lake package's lock (`lean-audit.json`) samples a warning, naming the run that
     would record it, for each such package unless the store holds a records run of that exact head in which the package passed
     on the head's own lock (as PKG, or as a requirer PKG's run audited), or a Lean check of the head that audited the package
     and passed it on that lock (`_checked`).  The lock run after its landing regenerates the records (`RECORDS_AFTER_LANDING`),
@@ -6342,7 +6487,7 @@ def main(argv: list[str]) -> int:
             if not flags.on:
                 raise QueueError(f"drive needs a machine for the checks it launches: set `on` in {DRIVE_FLAGS} at `main`, or pass "
                                  "--on MACHINE")
-            q.verdict_first = flags.verdict_first
+            q.verdict_first, q.restack_jobs = flags.verdict_first, flags.restack_jobs
             q.land_into = flags.land_into
             a.marked_after = flags.marked_after
             labels.since = a.marked_after

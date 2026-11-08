@@ -94,7 +94,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Digest": (f"{CORE}Digest.lean::Verity.Digest", f"{FLOCK}Hash.lean::Flock.Digest"),
     "Draw": (f"{CORE}Draw.lean::Verity.Draw", "verity/core/protocols/sampled_proofs/service.py::Draw"),
     "Game": (f"{CORE}Game.lean::Verity.Game",),
-    "Gate": (),
+    "Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate",),
     "Hardware": (),
     "Hash": (),
     "InteractiveDevice": (),
@@ -110,7 +110,7 @@ CANONICAL: dict[str, tuple[str, ...]] = {
     "Op": (f"{CORE}Boolean.lean::FlockSoundness.Audit.Op",),
     "Opening": ("Security/Definitions/Hash/RowLeaf.lean::Hash.RowLeaf.Opening", "verity/ml/commitments/merkle.py::Opening"),
     "Outcome": (f"{PROTOCOL}::Core.Outcome",),
-    "Partition": (f"{CORE}Partition.lean::Verity.Partition",),
+    "Partition": (f"{CORE}Partition.lean::Verity.Partition", f"{FLOCK}Evaluated.lean::Flock.Extract.Partition"),
     "Period": (),
     "Placement": (f"{REQ}::CircuitRequirement.Placement", f"{REQ_PY}::Placement"),
     "Prog": (f"{CORE}Accel/Machine.lean::Verity.Accel.Machine.Prog", f"{FLOCK}Program.lean::Flock.Program.Prog"),
@@ -166,6 +166,10 @@ MIRRORS: dict[str, tuple[str, str, str]] = {
                                               "the memory challenger's port"),
     f"{MC_PY}streamed_wipe.py::Verdict": (f"{MC}StreamedWipe.lean::MemoryChallenger.StreamedWipe.Verdict",
                                           "memory-challenger-difftest", "the memory challenger's port, for the streamed wipe"),
+    "verity/ml/circuits/layout.py::Gate": (f"{FLOCK}Gate.lean::Flock.Program.Gate", "verity-evaluate",
+                                           "the evaluator's `gate` answers each gate of the Python's layout"),
+    "verity/ml/circuits/partition_object.py::Partition": (f"{FLOCK}Evaluated.lean::Flock.Extract.Partition", "verity-evaluate",
+                                                          "the evaluator's `partition` answers the Python's Q_word evaluation"),
 }
 
 
@@ -519,7 +523,7 @@ KNOWN: dict[str, str] = {
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
     "Security/Definitions/NetworkCertifier/WindowCharge.lean::NetTiming.WindowCharge.Window":
         "homonym, one window's timing advice: rename (network-accounting)",
-    "Security/Definitions/Population/Exfiltration.lean::Population.Exfil.Strategy":
+    "Security/Definitions/SampledProofs/Exfiltration.lean::Population.Exfil.Strategy":
         "homonym, an adaptive exfiltration strategy, each window's leak and escaping coins from the earlier coins: rename (lean)",
     "Security/Definitions/Pous/Game/Oracle.lean::Pous.Prog":
         "homonym, PoUS's parallel oracle program: rename (memory-accounting)",
@@ -584,7 +588,7 @@ KNOWN: dict[str, str] = {
     "Security/Proofs/Flock/Claims/Recursion/VStar.lean::Claims.Recursion.VStar.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Sampled/Defs.lean::FlockSampled.Trace":
-        "homonym, the sampled proofs' committed units, each one's type and values: rename (proofs)",
+        "homonym, SPOT's committed units, each one's type and values: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout":
         "homonym, proof-internal layout: rename (proofs)",
     "Security/Proofs/Flock/Soundness/Binding/Layout.lean::FlockSoundness.Binding.Layout.Opening":
@@ -624,9 +628,9 @@ KNOWN: dict[str, str] = {
         "homonym, the memory challengers a property ranges over: rename (lean)",
     "Security/Properties/Pous/Period.lean::Pous.Period.Strategy":
         "homonym, a PoUS prover in the ring model (what survives setup, and each round's answer): rename (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Node":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Node":
         "duplicate of the Site (`Verity.Site`): becomes what `Accounting.Remote.Node` becomes (lean)",
-    "Security/Properties/RemoteAudit/Line/Record.lean::Properties.RemoteAudit.Line.Record":
+    "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`SampledProofs.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
     "benchmarks/bandwidth/gpu.py::Commitment":
@@ -718,9 +722,6 @@ KNOWN: dict[str, str] = {
     "benchmarks/sampling_plan/h200.py::Window": "homonym, one subcircuit's sampling block: rename (proofs)",
     "benchmarks/sampling_plan/transformer.py::Dag": "homonym, a block's Definition DAG for the plan: rename (proofs)",
     "benchmarks/tc_probe_fp4/f1_rates.py::Op": "homonym, one CUDA-core multiplier a probe times: rename (circuits)",
-    "benchmarks/torch_gpu/p2_stage/stage.py::Store":
-        "duplicate of `CircuitRequirement.Store`: becomes a client of it (kernels)",
-    "benchmarks/torch_gpu/s8_dec_linear/run.py::Device": "homonym, slices of a device byte buffer: rename (kernels)",
     # demos/
     "demos/h200/e2e_h200/store.py::Store": "homonym, where a demo's weights live: rename (compute-accounting)",
     "demos/h200/interfaces/verity_e2e_demo/replay_bundle.py::Commitment":
@@ -973,10 +974,6 @@ KNOWN: dict[str, str] = {
     "verity/ml/circuits/defs.py::Registry": "homonym, the registered Definitions by id: rename (proofs)",
     "verity/ml/circuits/layout.py::Circuit":
         "duplicate of `Flock.Circuit`: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/layout.py::Gate":
-        "duplicate of `Flock.Program`'s gate: becomes its Python mirror, held by a difftest (proofs)",
-    "verity/ml/circuits/partition_object.py::Partition":
-        "duplicate of `Verity.Partition`: becomes its Python mirror, held by a difftest (proofs)",
     "verity/ml/circuits/requirement.py::Layout":
         "homonym, each value's place in the store: rename (`Accounting.Requirement.Layout`'s mirror) (proofs)",
     "verity/ml/circuits/stacking.py::Verdict": "homonym, whether a stacking property holds: rename (proofs)",

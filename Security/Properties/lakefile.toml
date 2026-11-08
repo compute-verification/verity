@@ -1,7 +1,7 @@
 # The security analysis's properties of the Lean code: what each component's executable Lean does, stated against its
 # functions, one `Properties.<Protocol>` module per component, whose docstring says what it states. It may require
-# `security` (Definitions, Models) and the code it states properties of, never `security_proofs`. Its modules sit beside
-# the trusted text's (`srcDir = ".."`) under a root of their own, `Properties`: `Properties.<Protocol>` states,
+# `security` (the spec, Definitions) and the code it states properties of, never `security_proofs`. Its modules sit
+# beside the spec's (`srcDir = ".."`) under a root of their own, `Properties`: `Properties.<Protocol>` states,
 # `Proofs.Properties.<Protocol>` proves. A property whose proof needs `security_proofs` is stated here and proved there.
 # This comment lists no component, so two branches that each add one change only `[[require]]` and `roots`, which
 # `tools/verity/lean/merge.py --lakefile` merges.
@@ -88,21 +88,22 @@ roots = ["Properties.Pouw", "Properties.Pouw.Check", "Properties.Pouw.Commit", "
   "Properties.Pouw.Period", "Properties.Pouw.PeriodJ10R", "Properties.Pouw.PeriodJ10RStrata",
   "Properties.Pouw.ServedFreed", "Properties.Pouw.ServedWork", "Properties.Pouw.ServedValues", "Properties.Pouw.Strata",
   "Properties.Pouw.Credit",
-  "Properties.Nci", "Properties.Nci.Threads", "Properties.CertifierDevice", "Properties.Pous",
+  "Properties.Nci", "Properties.Nci.Threads", "Properties.NetworkCertifier.Device", "Properties.Pous",
   "Properties.Pous.TimedAudit", "Properties.Pous.MemoryChallenger", "Properties.Pous.Wipe", "Properties.Pous.EndToEnd",
   "Properties.Pous.Period", "Properties.Pous.EndToEndAt", "Properties.Pous.PeriodAt", "Properties.Pous.PeriodDeployed",
   "Properties.Accounting.JointBridge.SpaceOfPeriodHeld", "Properties.Attest", "Properties.Pous.Component",
-  "Properties.NetworkCertifier", "Properties.NetworkCertifier.LinkWindow", "Properties.CertifierNetwork",
-  "Properties.CertifierNetwork.Runs", "Properties.Identity", "Properties.Annot", "Properties.NciDesc",
-  "Properties.NciDesc.Verdict", "Properties.NciDesc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
+  "Properties.NetworkCertifier.Check", "Properties.NetworkCertifier.Check.LinkWindow", "Properties.NetworkCertifier.DeviceOutput",
+  "Properties.NetworkCertifier.DeviceOutput.Runs", "Properties.Hash.Identity", "Properties.Annot", "Properties.Nci.Desc",
+  "Properties.Nci.Desc.Verdict", "Properties.Nci.Desc.Cover", "Properties.Nci.Baseline", "Properties.Nci.Count",
   "Properties.SampledProofs", "Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits",
-  "Properties.SampledProofs.Halt", "Properties.SampledProofs.Second", "Properties.Evaluate",
-  "Properties.NetworkRecords", "Properties.NetworkPeriod",
+  "Properties.SampledProofs.Interval", "Properties.SampledProofs.FactorUpper", "Properties.SampledProofs.Halt",
+  "Properties.SampledProofs.Second", "Properties.Core.Evaluate", "Properties.NetworkCertifier.Records",
+  "Properties.NetworkPeriod",
   "Properties.NetworkScan", "Properties.Accounting.Requirement", "Properties.Accounting.Compose",
-  "Properties.RemoteAudit",
-  "Properties.RemoteAudit.Coins", "Properties.RemoteAudit.Pooled", "Properties.Accounting.Served",
-  "Properties.Accounting.DeclaredCircuit", "Properties.RemoteAudit.Line", "Properties.RemoteAudit.Schedule",
-  "Properties.RemoteAudit.Shared", "Properties.RemoteAudit.Live", "Properties.RemoteAudit.Subprotocol",
+  "Properties.Accounting.Remote",
+  "Properties.Accounting.Remote.Coins", "Properties.Accounting.Remote.Pooled", "Properties.Accounting.Served",
+  "Properties.Accounting.DeclaredCircuit", "Properties.Accounting.Remote.Line", "Properties.Accounting.Remote.Schedule",
+  "Properties.Accounting.Remote.Shared", "Properties.Accounting.Remote.Live", "Properties.Accounting.Remote.Subprotocol",
   "Properties.Composition", "Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod",
   "Properties.Accounting.JointBridge.WorkOfCreditedWords", "Properties.Pous.WipeSigned", "Properties.Challenger",
   "Properties.Firewall", "Properties.Core.Site", "Properties.Flock.Circuit", "Properties.Nci.Protocol",

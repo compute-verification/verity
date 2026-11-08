@@ -21,16 +21,16 @@
   client refuses a commitment of any other, or of another root than the gate's open answered.
   Each coin opens there, after the root the serving loop sends, and the challenger logs both before the coin leaves its
   host. `RoundPipe` sends a window's round roots without waiting on each coin (a ring of steps whose units wait on their
-  round's coin), every coin still opened after its own root and checked as it comes back. The window's draw coin is
-  not that session's: once the prover's draw root is in, `gate_draw` reserves a withheld draw session
+  round's coin), every coin still opened after its own root and checked as it comes back. The window's sampling coin is
+  not that session's: once the prover's sample root is in, `gate_draw` reserves a withheld sample session
   (`window.DRAW_FAMILIES`, ``reserve --withhold``: the gate's ledger marks its reserve and open ``withheld: true`` and
   serves it with `remote.open_session(..., withhold=True)`) and opens it on that root. The gate's open answers no root
   for it (``commitment`` null until the session's end), its challenger answers the hello with the layout alone and the
-  draw coin raw, and releases its commitment and the coin's full opening only at its close, after the prover's
-  commitment; a draw session the gate opens plain is refused before any coin. The prover's record says only
+  sampling coin raw, and releases its commitment and the coin's full opening only at its close, after the prover's
+  commitment; a sample session the gate opens plain is refused before any coin. The prover's record says only
   ``coins=off-node session ID at HOST:PORT (unchecked)``: what it writes about its coins is the prover's.
 * **In-process** (no address): `window.live_challenger` and `window.draw_challenger` in the serving process, on the
-  prover's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
+  developer's node. It stays for CPU tests, and every run that uses it carries `IN_PROCESS`, ``coins=in-process (not
   certified)``.
 
 `check` is the verifier's side. It reads the session as infra's gate publishes it (``fetch SESSION``: the challenger's
@@ -46,8 +46,8 @@ commit the host's pins log records (``--pins``, infra's published `challenger-pi
 first-parent history of main (``--main``, `challenger.pinned_session`), so a session the log doesn't record is refused
 though this check credits nothing. On top of it `check` holds the manifest's session and window to that session's, the open's
 layout to the signed commitment's, and its period to the verifier's; then the salt coin after the window's root, round
-s's coin after round s's root for every round the challenger logged, and the draw coin from the draw session the
-ledger opens withheld on the draw root (``--draw-out``, `draw_reason`). The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
+s's coin after round s's root for every round the challenger logged, and the sampling coin from the sample session the
+ledger opens withheld on the sample root (``--draw-out``, `draw_reason`). The key record, the window's root and its period are the verifier's to name; while it names any not, the coins
 are ``off-node HOST (checked; key, root, period unanchored)`` (under key.json's own key, the manifest's root, any
 period), and only with all three are they ``off-node HOST (checked)``.
 
@@ -143,7 +143,7 @@ def session(address: str | None = None, sid: str | None = None, secret_file: str
 
 def layout(epoch: int, rounds: int | None) -> dict:
     """A live window's coin layout, the challenger session's SCHEME, EPOCH and FAMILIES: its window session's for
-    `rounds` rounds, or its draw session's (`window.DRAW_FAMILIES`) for None."""
+    `rounds` rounds, or its sample session's (`window.DRAW_FAMILIES`) for None."""
     families = Wd.DRAW_FAMILIES if rounds is None else Wd.live_families(rounds)
     return {"scheme": Wd.LIVE_SCHEME, "epoch": epoch, "families": [list(f) for f in families]}
 
@@ -170,9 +170,9 @@ def reserve(gate: str, peer: str, epoch: int, rounds: int | None, minutes: int |
             for_lane: str | None = None, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run,
             withhold: bool = False) -> dict:
     """A window's session reserved at infra's gate `gate` (``ssh GATE reserve``), its layout the window's (`layout` of
-    `epoch` and `rounds`, None for its draw session) and its challenger to listen on `peer`'s 127.0.0.1, where the
+    `epoch` and `rounds`, None for its sample session) and its challenger to listen on `peer`'s 127.0.0.1, where the
     window's client runs; `for_lane` is vy-admin's (``--for``), and `withhold` reserves a withheld session (``--withhold``,
-    a draw session's), whose challenger hands out no coin commitment's root until it closes.  The gate's answer,
+    a sample session's), whose challenger hands out no coin commitment's root until it closes.  The gate's answer,
     {session, seq, peer, by, for?, expires_utc, period, withheld?}; a refusal (the period's cap among them) raises, and
     so does a reserve asked withheld that the gate didn't mark ``withheld``.  Nothing serves until `open_window`."""
     lay = layout(epoch, rounds)
@@ -240,7 +240,7 @@ def stand_in_root(sid: str) -> bytes:
 
 def gate_draw(gate: str, peer: str, epoch: int, ssh: Sequence[str] = SSH, run: Callable[..., Any] = subprocess.run
               ) -> Callable[[bytes], Endpoint]:
-    """The opener of a window's draw session at infra's gate `gate`: given the draw root, it reserves a withheld draw
+    """The opener of a window's sample session at infra's gate `gate`: given the sample root, it reserves a withheld sample
     session (`layout` of `epoch` and None, ``--withhold``) listening on `peer`'s 127.0.0.1 and opens it on that root."""
     def opener(root: bytes) -> Endpoint:
         got = reserve(gate, peer, epoch, None, ssh=ssh, run=run, withhold=True)
@@ -256,7 +256,7 @@ def env_draw(epoch: int) -> Callable[[bytes], Endpoint] | None:
 
 
 def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int | None) -> str | None:
-    """Why `commitment` is not the coin commitment of a live window of `rounds` rounds at `epoch` (None: its draw
+    """Why `commitment` is not the coin commitment of a live window of `rounds` rounds at `epoch` (None: its sample
     session's); None when it is."""
     want = layout(epoch, rounds)
     got = {"scheme": commitment.scheme, "epoch": commitment.epoch, "families": [list(f) for f in commitment.families]}
@@ -268,8 +268,8 @@ def layout_reason(commitment: Ch.LiveCommitment, epoch: int, rounds: int | None)
 class Coins:
     """A window's live coins from `challenger` (`LiveChallenger`'s commitment and open: a `RemoteChallenger`, or the
     in-process `LiveChallenger`), `source` "off-node" or "in-process": its salt coin and its rounds through `LiveRecord`
-    (`rounds`), and its draw coin from a draw session of its own (`draw`): in process `window.draw_challenger` over
-    `entropy`, off the node the session `open_draw` opens withheld on the draw root (`gate_draw`)."""
+    (`rounds`), and its sampling coin from a sample session of its own (`draw`): in process `window.draw_challenger` over
+    `entropy`, off the node the session `open_draw` opens withheld on the sample root (`gate_draw`)."""
 
     def __init__(self, challenger: Any, source: str, session: Endpoint | None = None, epoch: int = 0,
                  entropy: Callable[[int], bytes] | None = None,
@@ -288,7 +288,7 @@ class Coins:
         return self.challenger.open(Wd.SALT, 0, after)
 
     def draw(self, after: bytes) -> Ch.LiveOpening:
-        """The window's draw coin, opened after `after` (the draw root, the prover's commitment) in a draw session of its
+        """The window's sampling coin, opened after `after` (the sample root, the prover's commitment) in a sample session of its
         own. Off the node the session is opened withheld on `after`, so its challenger released no commitment before
         it: the coin comes back raw, and its commitment and full opening at the session's close, which `close` checks."""
         if self.source != "off-node":
@@ -328,9 +328,9 @@ class RoundPipe:
     once it is back (`wait=False`: None until then).  Off the node the opens go out on the session's one stream without
     waiting on the answers, since `remote.serve` answers each after its own root and in order; a thread of the pipe's
     reads them back and holds each to `live_reason` (a refusal, a broken stream or a bad opening ends the session and
-    refuses every later coin: a retry never redraws).  In process each opens at once.  `roots` and `openings` are
+    refuses every later coin: a retry never resamples).  In process each opens at once.  `roots` and `openings` are
     `LiveRecord`'s, `reason` its `order_reason`, and `sent_at` / `got_at` each round's times on `clock`; `draw` opens the
-    window's draw coin with its time on the same clock."""
+    window's sampling coin with its time on the same clock."""
 
     def __init__(self, coins: Coins, clock: Callable[[], float] = time.monotonic) -> None:
         rec = coins.rounds
@@ -432,9 +432,9 @@ class RoundPipe:
             return None
 
     def draw(self, after: bytes) -> tuple[Ch.LiveOpening, float]:
-        """The window's draw coin opened after `after` once every sent round's coin is back, and the time it was asked
-        for on `clock`, read under the lock `send` records each round's root and time under and held through the draw:
-        every round sent before the draw has an earlier time and every round sent after it a later one, whatever thread
+        """The window's sampling coin opened after `after` once every sent round's coin is back, and the time it was asked
+        for on `clock`, read under the lock `send` records each round's root and time under and held through the sample:
+        every round sent before the sample has an earlier time and every round sent after it a later one, whatever thread
         sends it."""
         with self._cv:
             while self._pending and self._error is None:
@@ -470,8 +470,8 @@ def open_coins(at: Endpoint | None, epoch: int, rounds: int, entropy: Callable[[
     commitment held to `layout` and to the root the gate's open answered when `at` holds one, or with no session the
     in-process challenger over `entropy` (the Lean verifier's coins by default).  The client connects once
     the session's tunnel listens (`remote.connect_when_listening` over `connect`, for up to `wait_s`: a caller that knows
-    the window's coin deadline passes the time left to it).  The draw coin's session is `open_draw`'s (default
-    `env_draw`), opened on the draw root when the window asks for its draw (`Coins.draw`)."""
+    the window's coin deadline passes the time left to it).  The sampling coin's session is `open_draw`'s (default
+    `env_draw`), opened on the sample root when the window asks for its sample (`Coins.draw`)."""
     if at is None:
         if entropy is None:
             from verity.core.protocols.pouw import verifier
@@ -565,9 +565,9 @@ def key_record(path: str | os.PathLike) -> Ch.ChallengerKey:
 
 def draw_reason(directory: str | os.PathLike | None, heads: Sequence[str | os.PathLike], after: bytes | None,
                 draw: list[Ch.LiveOpening], key: Ch.ChallengerKey, pins: Any, main: Any) -> str | None:
-    """Why the draw coins `draw` the prover received are not its window's draw session's: none when `after` is None, else
-    the one the session `directory` (as infra's gate publishes it) opens after `after`, the draw root, where the ledger
-    opens that session on `after`, withheld, with a draw session's layout; None when they are."""
+    """Why the sampling coins `draw` the prover received are not its window's sample session's: none when `after` is None, else
+    the one the session `directory` (as infra's gate publishes it) opens after `after`, the sample root, where the ledger
+    opens that session on `after`, withheld, with a sample session's layout; None when they are."""
     if after is None:
         return None if not draw else "the window opened no draw, and the manifest carries a draw coin"
     if directory is None:
@@ -593,17 +593,17 @@ def check(directory: str | os.PathLike, coins: dict, heads: Sequence[str | os.Pa
     `main`, which the session's pin must be on (`audited_window`).
     `coins` is the manifest's ``coins`` item (the openings the prover received, the session id and the window's root and
     period), and the rest is what the verifier recomputes from the window's committed roots: the round roots `rounds` in
-    order, round r's unit salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the draw coin follows
-    (None: the window opened no draw); `key` is the challenger's key from its deployment record (`key_record`), `period`
+    order, round r's unit salt `salts[r]` (hex) where it holds them, and `draw_after`, the root the sampling coin follows
+    (None: the window opened no sample); `key` is the challenger's key from its deployment record (`key_record`), `period`
     the window's period and `root` the window's root, each None while the verifier names none (`root` then the
     manifest's).  It holds: key.json is `key`; core's verifier takes the session the ledger opens on the window's root
     under it (`audited_window`); that session and its period are the manifest's, its open asked for the signed layout,
     and its period is `period` (`window_reasons`); the window's commitment is the record's, a live epoch's; the salt coin
     opened after the window's root; the challenger received exactly `rounds`, and round r's coin opened once after round
     r's root (`rounds_reason` over the challenger's roots); each salt is `h1tile.live_salt` of the opened coin; and the
-    draw coin, or none opened when `draw_after` is None, is its own draw session's, `draw_out` as infra's gate publishes
+    sampling coin, or none opened when `draw_after` is None, is its own sample session's, `draw_out` as infra's gate publishes
     it: the session the ledger opens on `draw_after` (`audited_window`), opened withheld (`challenger.withheld_on`), a
-    draw session's layout (`window.draw_epoch_reason`), and its draw coin opened once after `draw_after`.  ``ok`` only
+    sample session's layout (`window.draw_epoch_reason`), and its sampling coin opened once after `draw_after`.  ``ok`` only
     when all hold."""
     from verity.ml.protocols.pouw.circuit import h1tile as HT
     d = published(directory)

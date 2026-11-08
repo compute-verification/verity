@@ -11,19 +11,22 @@ its y the bound at β on Figure 1's model (`figure1.model`).  So each line start
 proof block the same way (`priced`): at its type's seconds on the `proof_overhead` card, or computed from its staged
 witness bits where the card doesn't measure the type; a line's marginal overhead is what its blocks come to.
 
-* `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each window edge; a replay block
-  is a request, and the design the width-stratified two-stage one.  Exfiltration is its patterns' form
+* `tokens` (A): serving commits the token ids, the schedule record and the KV cache at each replay block's edge; a
+  sampled request is replayed with its whole batch from its replay block's edge, one machine's window, since the
+  model's tokens come out bit-exact only in their served batch (`REPLAYS`), and the design is the width-stratified
+  two-stage one.  `tokens_bi` replays a request alone, which needs batch-invariant kernels and pays their tax, the
+  comparison.  Exfiltration is its patterns' form
   (`card_influenceTwo_le_patterns`), never above the scope's served bits (`card_influenceTwo_le_two_pow_outs`), at
   one machine's registration and, as `tokens_pod` and `tokens_datacenter`, at a pod's and a datacenter's
   (`REGISTRATIONS`); `tokens_sets` is the capped sets' form (`card_influenceTwo_le_served_min`, at most the served bits
   by `card_influenceTwo_le_min`) at one machine's, the comparison.  Infiltration is its write form (`write_form`) at a
   footprint of a request's served bits: an incorrect request is charged at most the cheapest explanation of what it
   serves.
-* `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; a replay block is one
-  layer of one token, holding its share of the token's proof blocks and replayed at its share of its request's
-  replay.  Exfiltration is the planner's design on that grain in the capped sets' form, each replay block charged at
-  most its request's served bits, which is at least the lemma's charge because min(·, S) is subadditive, and never
-  above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
+* `layer_of_token` (B): serving also commits each layer's residual stream, K/V and indexer keys; the audit samples a
+  layer of one token, holding its share of the token's proof blocks, and its replay block is its engine step's whole
+  batch at that layer.  Exfiltration is the planner's design on that grain in the capped sets' form, each sampled
+  layer charged at most its request's served bits, which is at least the lemma's charge because min(·, S) is
+  subadditive, and never above the scope's served bits.  Infiltration is its write form at a footprint of the layer's boundary bits.
 * `per_expert` (A′): (A)'s serving, tax, forms and registrations on another cut of the circuit, the model's
   `partition` card `per-expert` (the MoE cut per expert: the router's slots, table reads at each slot's expert and
   per-expert GEMMs), labelled with the card's `label`; lines only for a model with that card.
@@ -73,8 +76,21 @@ TICKS = (0.984, 0.960)
 LIVE = (0.15, 0.05, 0.5)
 #: SHA-512 at 3.1 and 4.79 G compressions a second, 44 a 4 KiB row (`benchmarks/prove_path/window_cost.py`'s `RATES`)
 HASH_RATES = (4096 / 44 * 4.79e9, 4096 / 44 * 3.1e9)
-#: GLM-5.3's K/V and indexer keys a token, the state a later token reads (576 BF16 a layer and the indexer keys)
-KV_BYTES = 92_628
+#: the pause at a replay block's edge, seconds, measured on GLM-5.3 at TP8 over 21 edges (rank 0's copy of its 37.26 GB
+#: KV pool to pinned host memory, each rank's SHA-512 rows of its own, the runner rows and the scheduler state): the
+#: median and the most
+EDGE_PAUSE = (0.98, 1.06)
+#: the same server's throughput tax against stock compiled vLLM with the step record, the token commits and an edge each
+#: 30 s, measured within noise at every load: the 95% interval's top at saturation, which 3 reps can't rule out
+SERVED_HIGH = 0.024
+#: the measured serving run of `SERVED_HIGH` and `EDGE_PAUSE`
+SERVED_RUNS = ["r20261107-155724-3f53"]
+#: the deterministic DSA top-k that makes GLM-5.3's replay bit-exact, a share of serving (kernel-modeled)
+TOPK_SHARE = 0.0025
+#: batch-invariant kernels' throughput tax against stock compiled vLLM at saturation on one H200: the MoE's
+#: (Qwen3-30B-A3B), the least (Moonlight, dense MLA) and the most (Llama-3.1-8B, dense); GLM-5.3's sparse MLA has no
+#: batch-invariant backend on the H200
+BATCH_INVARIANT = (0.237, 0.141, 0.311)
 #: the witness bits a full statement holds: the H200's ceiling, at which the `proof_overhead` card's statements are
 #: proved
 STATEMENT_BITS = 2 ** 35
@@ -85,7 +101,8 @@ class Configuration:
     """A line: its label, what serving commits, its replay block and design, and the panels it bounds; the `partition`
     card it cuts the circuit by (else the `workload` card's cut) and the configuration whose serve tax it pays (else
     its own).  A two-stage line charges each request in the capped sets' or patterns' `form` and shares statements
-    within its `registration` (`REGISTRATIONS`); a variant of another line (`variant_of`) differs from it only there."""
+    within its `registration` (`REGISTRATIONS`); a variant of another line (`variant_of`) differs from it only there.
+    Its `replay` is what a sampled replay block re-runs (`REPLAYS`)."""
 
     label: str
     commits: str
@@ -97,6 +114,14 @@ class Configuration:
     form: str | None = None
     registration: str | None = None
     variant_of: str | None = None
+    replay: str = "block"
+
+
+#: what replaying a sampled replay block re-runs: without batch-invariant kernels a request's tokens come out right only
+#: in their served batch, so a sampled request replays one machine's whole replay block from its edge ("block") and a
+#: sampled layer of one token its engine step's whole batch at that layer, the requests in flight ("step"); with them, a
+#: request replays alone ("request")
+REPLAYS = ("block", "step", "request")
 
 
 #: a 64-machine pod: one committer gathering its machines' boundary rows into one registration
@@ -124,15 +149,20 @@ def _spans(name: str, line: Configuration) -> dict[str, Configuration]:
                                                            serve=line.serve or name, variant_of=name)}
 
 
-TOKENS = "the token ids, the schedule record and the KV cache at window edges"
+TOKENS = "the token ids, the schedule record and the KV cache at replay-block edges"
+REQUEST = "one machine's 600 s, its whole batch re-run from its edge for each sampled request"
 CONFIGURATIONS = {
-    **_spans("tokens", Configuration("(A) Tokens only", TOKENS, "a request", "two-stage, width-stratified",
+    **_spans("tokens", Configuration("(A) Tokens only", TOKENS, REQUEST, "two-stage, width-stratified",
                                      ("exfiltration", "infiltration"), form="patterns", registration="machine")),
+    "tokens_bi": Configuration("(A) Tokens only, batch-invariant kernels", TOKENS, "a request, replayed alone",
+                               "two-stage, width-stratified", ("exfiltration",), form="patterns",
+                               registration="machine", variant_of="tokens", replay="request"),
     "layer_of_token": Configuration("(B) Each layer's state",
                                     "the tokens and each layer's residual stream, K/V and indexer keys",
-                                    "one layer of one token", "two-stage, width-stratified",
-                                    ("exfiltration", "infiltration"), form="sets", registration="machine"),
-    **_spans("per_expert", Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, "a request",
+                                    "one engine step's whole batch at one layer, re-run for each sampled layer of one token",
+                                    "two-stage, width-stratified", ("exfiltration", "infiltration"), form="sets",
+                                    registration="machine", replay="step"),
+    **_spans("per_expert", Configuration("(A′) Tokens only, the MoE cut per expert", TOKENS, REQUEST,
                                          "two-stage, width-stratified", ("exfiltration", "infiltration"),
                                          partition="per-expert", serve="tokens", form="patterns",
                                          registration="machine")),
@@ -144,7 +174,8 @@ CONFIGURATIONS = {
 def priced_card(model: str = "GLM-5.3") -> dict:
     """The model's `serve_tax` card priced from its parts: each part's GPU-seconds a token over a token's at serving's
     MFU, hashing at the `commitment` card's rate (and at `HASH_RATES` for the range), the tick rule's throughput loss
-    (`TICKS`) and the K/V alive at a window edge (`LIVE`).  (C)'s is a lower bound: hashing alone."""
+    (`TICKS`), the pause at a replay block's edge (`EDGE_PAUSE`), the deterministic top-k (`TOPK_SHARE`) and, for the
+    batch-invariant comparison, `BATCH_INVARIANT`.  (C)'s is a lower bound: hashing alone."""
     c = f1.cards(model)
     sc = f1.slot_cards(model)
     token_s = 2 * c["partition"].value["served_macs_per_token"] / (c["mfu_serve"].value * c["peak_flops"].value)
@@ -159,10 +190,26 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     ticks = {"part": "certified-tick rule", "share": 1 / TICKS[0] - 1, "low": 1 / TICKS[0] - 1,
              "high": 1 / TICKS[1] - 1,
              "source": f"throughput {TICKS[0]} of vLLM's on the mean run and {TICKS[1]} on the worst, a queue-dependent "
-                       "tick on Llama-3.2-1B traces, simulated and validated against them; it makes the advice 0 bits"}
+                       "tick on Llama-3.2-1B traces, simulated and validated against them; on GLM-5.3 at TP8 it leaves "
+                       "at most 44 bits of advice a 600 s window, the references card's tick line"}
     tokens = hashed("token ids", c["token_bytes"].value, "the design card's token_bytes")
-    kv = hashed("K/V at window edges", KV_BYTES, f"the K/V alive at an edge, a request's lifetime over the 600 s "
-                f"window: {LIVE[0]}, from {LIVE[1]} to {LIVE[2]}", (LIVE[0], LIVE[1], LIVE[2]))
+    window = c["window"].value
+    edge = {"part": "step record, token commits and replay-block edge snapshot",
+            "share": EDGE_PAUSE[0] / window, "low": EDGE_PAUSE[0] / window,
+            "high": max(EDGE_PAUSE[1] / window, SERVED_HIGH),
+            "source": f"measured on {model} at TP8 against stock compiled vLLM: the serving pause at each {window:g} s "
+                      f"replay block's edge to copy and hash the KV pool, {EDGE_PAUSE[0]:.2f} s at the median and "
+                      f"{EDGE_PAUSE[1]:.2f} s at most; the throughput with the record, the token commits and an edge "
+                      f"each 30 s within noise at every load, up to {SERVED_HIGH:.1%} at saturation"}
+    topk = {"part": "deterministic top-k", "share": TOPK_SHARE, "low": TOPK_SHARE, "high": TOPK_SHARE,
+            "source": "the canonical DSA top-k that makes GLM-5.3's replay bit-exact at TP8 mid-traffic, "
+                      "kernel-modeled"}
+    invariant = {"part": "batch-invariant kernels", "share": BATCH_INVARIANT[0], "low": BATCH_INVARIANT[1],
+                 "high": BATCH_INVARIANT[2],
+                 "source": "throughput against stock compiled vLLM at saturation on one H200, measured on these "
+                           f"models: Qwen3-30B-A3B (MoE) {BATCH_INVARIANT[0]:.1%}, Moonlight (dense MLA) "
+                           f"{BATCH_INVARIANT[1]:.1%}, Llama-3.1-8B (dense) {BATCH_INVARIANT[2]:.1%}; unavailable for "
+                           "GLM-5.3, whose sparse MLA has no batch-invariant backend on the H200"}
     layers = hashed("each layer's state", sc["infiltration"]["value"]["boundary_bytes_per_token"],
                     "the infiltration card's boundary_bytes_per_token")
     blocks = hashed("every proof block's outputs", sc["workload"]["value"]["boundaries"]["every_block"],
@@ -171,16 +218,17 @@ def priced_card(model: str = "GLM-5.3") -> dict:
     def entry(config: str, parts: list[dict], lower_bound: bool = False) -> dict:
         return {"config": config, "status": "priced", "tax": sum(p["share"] for p in parts),
                 "low": sum(p["low"] for p in parts), "high": sum(p["high"] for p in parts), "lower_bound": lower_bound,
-                "parts": parts}
+                "parts": parts} | ({"runs": SERVED_RUNS} if edge in parts else {})
 
     return spot_cards.check({
         "schema": spot_cards.SCHEMA, "slot": "serve_tax", "model": model, "status": "modeled", "provisional": True,
         "source": "priced from each configuration's parts against a token's GPU-seconds at serving's MFU on the H200's "
                   "dense FP8 peak (total_cost.priced_card); measured values replace it configuration by configuration",
-        "runs": [], "owner": "@proofs",
+        "runs": SERVED_RUNS, "owner": "@proofs",
         "value": {"baseline": "stock vLLM, compiled, on the model's served circuit",
-                  "configurations": [entry("tokens", [ticks, tokens, kv]),
-                                     entry("layer_of_token", [ticks, tokens, layers]),
+                  "configurations": [entry("tokens", [ticks, edge, topk]),
+                                     entry("tokens_bi", [ticks, edge, topk, invariant]),
+                                     entry("layer_of_token", [ticks, tokens, layers, topk]),
                                      entry("every_block", [ticks, blocks], lower_bound=True)]}})
 
 
@@ -304,12 +352,21 @@ class Grain:
     footprint: float
 
 
-def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: float) -> Grain:
+def batch(conf: Configuration, s: f1.Scope, c: dict[str, f1.InputCard]) -> float:
+    """The requests a sampled replay block's replay re-runs (`REPLAYS`): one machine's replay block's, its share of the
+    scope's requests; the requests in flight in an engine step, a request's lifetime over the window (`LIVE`) of
+    those; or the request alone."""
+    per_block = s.requests / s.gpu_seconds * registration_gpu_seconds("machine", c)
+    return {"block": per_block, "step": per_block * LIVE[0], "request": 1.0}[conf.replay]
+
+
+def grain(m: f1.Model, name: str, layers: float, boundary_bits: float, tokens: float, replays: float = 1.0) -> Grain:
+    """A configuration's grain, its replay `replays` times its own replay block's."""
     if name != "layer_of_token":
-        return Grain(m.replay.replay_blocks, m.cells, m.replay.cost, m.served)
+        return Grain(m.replay.replay_blocks, m.cells, m.replay.cost * replays, m.served)
     per = tokens * layers
-    return Grain(round(m.scope.requests * per), tuple(replace(c, n=c.n / per) for c in m.cells), m.replay.cost / per,
-                 boundary_bits)
+    return Grain(round(m.scope.requests * per), tuple(replace(c, n=c.n / per) for c in m.cells),
+                 m.replay.cost * replays / per, boundary_bits)
 
 
 def _plan(row: dict | None) -> dict | None:
@@ -374,7 +431,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
 
     def priced(name: str) -> str:
         t = tax[name]
-        kind = "a lower bound, the hashing alone" if t["lower_bound"] else t["status"]
+        kind = "priced, not measured, a lower bound: the hashing alone" if t["lower_bound"] else t["status"]
         parts = ", ".join(f"{p['part']} {_share(p['share'])}" for p in t["parts"])
         return f"serve tax {_share(t['tax'])} ({_share(t['low'])} to {_share(t['high'])}; {kind}: {parts})"
 
@@ -389,40 +446,47 @@ def captions(out: dict, scope: str) -> dict[str, str]:
         shared = (f"{_share(s['shared'][at])} of its proving in the registration's statements, "
                   f"{_share(s['padding'][at])} padding" if s["shared"][at] else "its own statements")
         return (f" {_size(s['y'][at])}; Q = {s['registration_sample'][at]:.2g}, K0 = {s['registration_cap'][at]:,}: "
-                f"{shared}; {_share(s['computed_proving'][at])} of its sampled replay block's proving computed;")
+                f"{shared}; {_share(s['computed_proving'][at])} of its sampled request's proving computed;")
 
     head = ("x is the serve tax, what each configuration's change to the production server costs on every token, plus "
             "β, the share of compute spent on replays and proofs of the sampled proof blocks; each line starts at its "
             "tax, hollow where the tax is priced. Every line proves a proof block at its type's measured seconds, a "
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
-            f"{_share(conf['tokens']['computed_share'])} of it computed. Every β has its own plan, the one with the "
-            "least bound.")
+            f"{_share(conf['tokens']['computed_share'])} of it computed, measured on benchmark values, which a "
+            "replayed served step's values cost the same as. Every β has its own plan, the one with the "
+            "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
+            f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
+            f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
+            "serving's busy GPU-seconds (0.97× to 1.02× measured), and a sampled layer of one token its engine step's "
+            "whole batch at that layer.")
     regs, window = out["registrations"], out["inputs"]["window"]["value"]
-    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled replay block or of a "
-             f"registration's: a registration spans the {window:g} s window on one machine "
+    head += (f" A two-stage statement holds one Definition's sampled proof blocks of a sampled request (of (B), a "
+             f"sampled layer of one token) or of a registration's: a registration spans the {window:g} s window on one machine "
              f"({out['inputs']['machine_gpus']['value']:g} GPUs), on a {POD}-machine pod or on a datacenter's "
              f"{regs['datacenter']['machines']:,.0f} machines, its statements' sessions padded to a public cap of K0 "
-             "replay blocks' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
+             "sampled requests' blocks, the least with P(K > K0) ≤ 2^−40 at the Q it samples, a sample past it refused; "
              "every registration proves its padding, whatever it samples, and each Definition takes the "
              "registration's statements only where they cost less than its own. The registration and its statements' "
              "split are the protocol's, fixed before any coin, never the prover's. Each two-stage line gives at "
              f"β = {_share(f1.RATIO_BUDGET)} its bound, Q and K0, the shares of its proving in the registration's "
-             "statements and on padding, and the share of its sampled replay block's proving, the statements' fixed "
+             "statements and on padding, and the share of its sampled request's proving, the statements' fixed "
              "costs included, that is computed.")
     a, b, c = CONFIGURATIONS["tokens"], CONFIGURATIONS["layer_of_token"], CONFIGURATIONS["every_block"]
     short = a.label.split(" ")[0]
     served, betas = out["served_bits_request"], out["betas"]
 
     def variants(name: str, form: str) -> list[str]:
-        return [n for n, k in conf.items() if (n == name or k["variant_of"] == name) and k["form"] == form]
+        return [n for n, k in conf.items() if (n == name or k["variant_of"] == name) and k["form"] == form
+                and k["replay"] != "request"]
 
     def tag(name: str) -> str:
         k = conf[name]
         if not k["variant_of"] and not any(v["variant_of"] == name for v in conf.values()):
             return k["label"].split(" ")[0]
         return (f"{k['label'].split(' ')[0]} at {regs[k['registration']]['label']}"
-                + (" in the sets' form" if k["form"] == "sets" else ""))
+                + (" in the sets' form" if k["form"] == "sets" else "")
+                + (" with batch-invariant kernels" if k["replay"] == "request" else ""))
 
     def binds(name: str) -> str:
         return f"{at_ratio(name)} {_binds(betas, lines['exfiltration'][name]['binds'])}."
@@ -447,7 +511,7 @@ def captions(out: dict, scope: str) -> dict[str, str]:
                 f"request costs {served:,.0f} bits, and the bound is at most the {sc['served_bits']:.2g} bits the "
                 f"scope serves ({f1.OUTS_STATUS}). It takes two modeling conditions: each request serves at most "
                 f"S = {served:,.0f} bits, and no proof block is shared across requests, so a request's served outputs "
-                "read only its own replay block's proof blocks.")
+                "read only its own proof blocks.")
     cuts = {n: k["cut"] for n, k in conf.items() if "cut" in k and not k["variant_of"]}
     exfil_cuts = "".join(family(n, "dash-dot", f"{short}'s serving and serve tax on the partition card {k['name']}'s "
                                 f"cut ({k['label']}), its marginal proof overhead {conf[n]['overhead']:.3g}×, "
@@ -464,17 +528,23 @@ def captions(out: dict, scope: str) -> dict[str, str]:
              f"({_size(sc['served_bits'])}), the trivial bound: the audit's {'count is' if one else 'counts are'} "
              f"above it, so {'that value is not a result' if one else 'those values are not results'} of the audit."
              if trivial else "")
+    bi = conf.get("tokens_bi")
     exfil += (family("tokens", "solid", f"serving commits {a.commits}, a replay block is {a.replay_block}, "
                      f"{priced('tokens')}; {patterns}")
+              + (f" {bi['label']} (dotted; {regs[bi['registration']]['label']}), for comparison: {bi['replay_block']}, "
+                 f"which needs batch-invariant kernels, whose tax is measured on three other models at one H200 "
+                 f"({_share(BATCH_INVARIANT[1])} to {_share(BATCH_INVARIANT[2])}) and which GLM-5.3's sparse MLA has "
+                 f"none of on the H200, {priced('tokens_bi')}; the patterns' form:{binds('tokens_bi')}"
+                 if bi and "tokens_bi" in lines["exfiltration"] else "")
               + f"{exfil_cuts} {b.label} ({regs[b.registration]['label']}): serving commits {b.commits}, a replay "
-              f"block is {b.replay_block}, {priced('layer_of_token')}; the capped sets' form, each replay block "
-              f"charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
+              f"block is {b.replay_block}, {priced('layer_of_token')}; the capped sets' form, each sampled layer of "
+              f"one token charged at most its request's served bits, at least the lemma's charge:{binds('layer_of_token')}"
               f" {c.label} (dashed): serving commits {c.commits}, sampled one-stage, a statement a sampled proof "
               f"block, {priced('every_block')}; consumers.exfiltration_bound's form, which bits are incorrect and "
               "where, at most the served bits by the same count (an influence set is a set of served outputs; Lean "
               f"states it for two-stage only): {_binds(betas, lines['exfiltration']['every_block']['binds'])}.")
-    infil = (f" The write form: the bits the incorrect proof blocks write, each replay block charged at most its "
-             f"footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
+    infil = (f" The write form: the bits the incorrect proof blocks write, each sampled request or layer charged at "
+             f"most its footprint, at the design its exfiltration line plans. {a.label} (solid, dark to light: its "
              f"registrations): a footprint of a request's {served:,.0f} served bits, the cheapest explanation of what "
              f"it serves (the served form).{infil_cuts} {b.label} ({regs[b.registration]['label']}): a footprint of "
              f"its {out['footprint_bits'][1]:,.0f} boundary bits, written wherever they sit. {c.label} (dashed): the K "
@@ -531,7 +601,7 @@ def _run(model_name: str, scope_names: tuple[str, ...] | None, request: str, eac
         for name, conf in confs.items():
             tb, fl, oh = lines[name]
             m = f1.model(inputs[name], tb, s, oh, fl) if conf.partition else base
-            g = None if name == "every_block" else grain(m, name, layers, boundary, tokens)
+            g = None if name == "every_block" else grain(m, name, layers, boundary, tokens, batch(conf, s, c))
             span = 0.0 if g is None or conf.registration is None else (
                 g.replay_blocks * registration_gpu_seconds(conf.registration, c) / s.gpu_seconds)
             plans.append((s, name, conf, [(name, m, g, beta * s.gpu_seconds, computed[name], conf.form, span)
@@ -591,9 +661,9 @@ def weights(c: dict[str, f1.InputCard]) -> dict[str, float]:
 def _bound(line: tuple, scale: float, beta: float) -> float:
     """A request-grain line's exfiltration bound at β with its marginal overhead times `scale`: `_point`'s, at most the
     scope's served bits."""
-    name, i, (tb, fl, oh), s, computed, conf, gpu_s = line
+    name, i, (tb, fl, oh), s, computed, conf, gpu_s, replays = line
     m = f1.model(i, tb, s, oh * scale, fl)
-    g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost, m.served)
+    g = Grain(m.replay.replay_blocks, m.cells, m.replay.cost * replays, m.served)
     job = (name, m, g, beta * s.gpu_seconds, computed, conf.form, g.replay_blocks * gpu_s / s.gpu_seconds)
     return _point(job)["exfiltration"]["y"]
 
@@ -636,7 +706,7 @@ def breakeven(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None =
     chosen = [s for s in f1.scopes(c, lines["tokens"][0]) if scope_names is None or s.name in scope_names]
     keys = [(n, s) for s in chosen for n, conf in confs.items() if conf.form == "patterns"]
     jobs = [(what, t, (n, inputs[n], lines[n], s, computed[n], confs[n],
-                       registration_gpu_seconds(confs[n].registration, c)), f1.RATIO_BUDGET, rel)
+                       registration_gpu_seconds(confs[n].registration, c), batch(confs[n], s, c)), f1.RATIO_BUDGET, rel)
             for n, s in keys for what, t in [("h", None)] + [(w, t) for w in SPANS for t in targets.values()]]
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
         it = iter(list((pool.map if pool else map)(_solve, jobs)))
@@ -660,7 +730,9 @@ def breakeven_table(be: dict) -> str:
     def fmt(v: float | None, end: float) -> str:
         return "none" if v is None else (">" if v >= end else "") + f"{v:.3g}"
 
-    rows = [[CONFIGURATIONS[r["config"]].label.split(" ")[0], r["registration"], r["scope"], f"{r['overhead']:.3g}",
+    rows = [[CONFIGURATIONS[r["config"]].label.split(" ")[0]
+             + (" batch-invariant" if CONFIGURATIONS[r["config"]].replay == "request" else ""),
+             r["registration"], r["scope"], f"{r['overhead']:.3g}",
              _size(r["floor"])] + [fmt(r["h"][n], be["spans"]["h"][1] * r["overhead"]) for n in names]
             + [fmt(r["beta"][n], be["spans"]["beta"][1]) for n in names] for r in be["rows"]]
     return "\n".join(" | ".join(x) for x in [head] + rows) + "\n"
@@ -690,7 +762,7 @@ STYLE = {"tokens": ("#08306B", "-", 4.2), "tokens_pod": ("#2171B5", "-", 2.8),
          "tokens_datacenter": ("#9ECAE1", "-", 1.4), "tokens_sets": ("#08306B", SETS, 1.6),
          "per_expert": ("#00441B", CUT, 4.2), "per_expert_pod": ("#238B45", CUT, 2.8),
          "per_expert_datacenter": ("#A1D99B", CUT, 1.4), "per_expert_sets": ("#00441B", SETS, 1.6),
-         "layer_of_token": ("#D95F02", "-", 2.4),
+         "tokens_bi": ("#6BAED6", (0, (1, 1.6)), 2.4), "layer_of_token": ("#D95F02", "-", 2.4),
          "every_block": ("#555555", (0, (6, 3)), 2.4)}
 YLABELS = {"exfiltration": "Exfiltration capacity", "infiltration": "Infiltration, bits written",
            "skipped_work": "Skipped work (H100-hours)"}
@@ -771,7 +843,7 @@ def legend(out: dict, name: str) -> str:
     the cut's own line."""
     k = out["configurations"][name]
     if name == "every_block":
-        return k["label"] + " (priced)"
+        return k["label"] + " (priced, not measured)"
     text = k["label"] if k["variant_of"] else k["label"] + (f" ({k['cut']['label']})" if "cut" in k else "")
     if k["registration"] is None:
         return text
@@ -787,7 +859,7 @@ def plt_line(style: tuple):
 
 
 def render(out: dict, scope: str, outdir: Path) -> list[Path]:
-    """Draw `scope`'s Figure 1 (exfiltration and infiltration) and its skipped-work figure from `out` into `outdir`,
+    """Sample `scope`'s Figure 1 (exfiltration and infiltration) and its skipped-work figure from `out` into `outdir`,
     as `stem(scope, panel)`.png and .svg; returns their paths."""
     import matplotlib
 
