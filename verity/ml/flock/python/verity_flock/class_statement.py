@@ -1211,9 +1211,13 @@ def member_stager(definition, member, bind: dict | None, circuit: Path | None = 
     `UnitStager` named ``unit/<definition id>``, over each of ``member``'s input rows (its Definition's input of that name)
     and each of its output rows, ``(row, words)`` in ``member.rows`` and ``member.outs``, at ``member.schema(row)`` and 16
     bits a word, bound to ``bind`` (``{"partition", "program"}``). Its file, and so its SHA-512 (``pin``), is a function of
-    those alone and of the leaf scheme, so FLOCK_PLAIN_LEAVES=1, which makes another file, is refused."""
-    if PLAIN_LEAVES:
-        raise ValueError(f"{definition.id}: FLOCK_PLAIN_LEAVES=1 makes another file than the one a member's sessions prove")
+    those alone, the one an auditor rebuilds from public data with every switch this module reads at import unset: so a
+    process with any of them set (FLOCK_PACK_WORDS, FLOCK_CORE_ROWS, FLOCK_PLAIN_LEAVES, FLOCK_OWN_ROWS,
+    FLOCK_GEMM_TILE) is refused, naming each one set."""
+    switched = [v for v, on in (("FLOCK_PACK_WORDS", PACK_WORDS), ("FLOCK_CORE_ROWS", CORE_ROWS), ("FLOCK_PLAIN_LEAVES", PLAIN_LEAVES),
+                                ("FLOCK_OWN_ROWS", OWN_ROWS), ("FLOCK_GEMM_TILE", GEMM_TILE)) if on]
+    if switched:
+        raise ValueError(f"{definition.id}: {', '.join(switched)} set: a member's file is the one made with all five unset")
     return UnitStager(definition, f"unit/{definition.id}", [(r, member.schema(r), w * 16, [r]) for r, w in member.rows],
                       [(member.schema(r), (j,)) for j, (r, _w) in enumerate(member.outs)], circuit=circuit, bind=bind)
 
