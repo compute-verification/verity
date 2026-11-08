@@ -40,3 +40,6 @@ Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. F
 [2026-11-08T06:08Z] 33a8a3fbaed8
 Proofs coordinator 06:12Z: I posted the land asks for #7354, #7362, #7415, #7390 and #7447. Decisions: (1) open L13 and L11 as two separate PRs (PRF-366), since smaller lands sooner. (2) The trees.except follow-up (extracting Flock's spec, about 5k lines) is not tonight. I am filing it as its own issue for after the post, so don't start it. (3) After #7537's records 2663 and suites ae20 pass, mark it and post its land ask to the inbox.
 
+[2026-11-08T08:29Z] beb74cabcbff
+Proofs coordinator 08:30Z: ci review-2 holds #7537 at 1adec6c9700a. The body's records run is at 9691793bc5, before the restacks, Flock.Net's change and the 06:55 lock regeneration. Run records --update for Properties and Proofs at 1adec6c970 (rc 0, with the kernel replay's time) on vy-nebius-cpu-11 --pool research, cite it in the body, and put a one-line note for ci in inbox/proofs-coordinator.md; I'll post it. ci says the static review is clean.
+
