@@ -4,9 +4,9 @@
 Run from the flock checkout after `git apply` of flock-link-b684b12.patch and flock-gpu-link-b684b12.patch and after
 copying verity/ml/flock/live to crates/flock-live. It applies the CUDA half of cuda_live_patch.py (the live hook in
 challenger.hpp, pow_grind.cuh and prove_ffi.cu; its gpu_roundtrip.rs half needs flock-128's harness and is skipped),
-copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, moves zerocheck round 1's GF(2^8) products from its
-shared-memory log tables onto clmad on sm_90 (zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and
-CUDA (default /usr/local/cuda-13.3).
+copies prove_chunk.cuh next to prove_ffi.cu and includes it at the end, has the device arena take small blocks from its top,
+moves zerocheck round 1's GF(2^8) products from its shared-memory log tables onto clmad on sm_90
+(zerocheck_round1_cpustyle.cuh), and points build.rs at SM (default 90) and CUDA (default /usr/local/cuda-13.3).
 """
 import os
 import pathlib
@@ -23,21 +23,53 @@ except AssertionError as e:
     print("cuda_live_patch.py: CUDA half applied, harness half skipped")
 
 assert "live_cb" in pathlib.Path("cuda-ghash/challenger.hpp").read_text(), "live hook missing"
-for f in ("prove_chunk.cuh", "pure_sha256.cuh"):
+for f in ("prove_chunk.cuh", "pure_sha256.cuh", "zerocheck_fused.cuh"):
     shutil.copy(here / "cuda" / f, f"cuda-ghash/{f}")
 pf = pathlib.Path("cuda-ghash/prove_ffi.cu")
 s = pf.read_text()
 if '#include "prove_chunk.cuh"' not in s:
-    pf.write_text(s.rstrip("\n") + '\n\n#include "prove_chunk.cuh"\n')
+    s = s.rstrip("\n") + '\n\n#include "prove_chunk.cuh"\n'
     print("prove_ffi.cu includes prove_chunk.cuh")
+# the device arena takes blocks under 64 MiB from the top of the highest free block that holds them and larger ones first fit
+# from the bottom, so the small buffers one phase leaves live don't split the space the next phase's large ones need
+first_fit = """        for (auto block = free_.begin(); block != free_.end(); block++) {
+            if (block->second < aligned) continue;
+            size_t offset = block->first;
+            size_t remaining = block->second - aligned;
+            free_.erase(block);
+            if (remaining) free_.emplace(offset + aligned, remaining);
+            *ptr = base_ + offset;
+            live_.emplace(*ptr, Block{offset, aligned});
+            return cudaSuccess;
+        }
+        return cudaErrorMemoryAllocation;
+"""
+if first_fit in s:
+    s = s.replace(first_fit, """        const bool top = aligned < ((size_t)64 << 20);
+        auto block = free_.end();
+        for (auto b = free_.begin(); b != free_.end(); b++) {
+            if (b->second < aligned) continue;
+            block = b;
+            if (!top) break;
+        }
+        if (block == free_.end()) return cudaErrorMemoryAllocation;
+        const size_t start = block->first, remaining = block->second - aligned;
+        const size_t offset = top ? start + remaining : start;
+        free_.erase(block);
+        if (remaining) free_.emplace(top ? start : start + aligned, remaining);
+        *ptr = base_ + offset;
+        live_.emplace(*ptr, Block{offset, aligned});
+        return cudaSuccess;
+""", 1)
+    print("prove_ffi.cu: the arena's small blocks from the top")
+assert "const bool top = aligned < ((size_t)64 << 20);" in s, "DeviceArena::allocate changed upstream"
 # the device arena zeroes, when a prove call finishes, every byte the call allocated (up to its high-water mark since begin()),
 # so no value outlives the call in device memory; the next call, or the regrow that frees it, finds zeros
-s = pf.read_text()
 if "    size_t high_ = 0;\n" not in s:
     for a, b in (("        free_.clear();\n        free_.emplace(0, capacity_);\n",
                   "        free_.clear();\n        free_.emplace(0, capacity_);\n        high_ = 0;\n"),
-                 ("            *ptr = base_ + offset;\n",
-                  "            *ptr = base_ + offset;\n            if (offset + aligned > high_) high_ = offset + aligned;\n"),
+                 ("        *ptr = base_ + offset;\n",
+                  "        *ptr = base_ + offset;\n        if (offset + aligned > high_) high_ = offset + aligned;\n"),
                  ("        active_ = false;\n        return live_.empty() ? cudaSuccess : cudaErrorInvalidValue;\n",
                   "        active_ = false;\n        if (!live_.empty()) return cudaErrorInvalidValue;\n"
                   "        const size_t used = high_;\n        high_ = 0;\n        if (!used) return cudaSuccess;\n"
@@ -46,8 +78,8 @@ if "    size_t high_ = 0;\n" not in s:
                  ("    bool active_ = false;\n", "    bool active_ = false;\n    size_t high_ = 0;\n")):
         assert s.count(a) == 1, f"prove_ffi.cu's DeviceArena changed: {a!r}"
         s = s.replace(a, b)
-    pf.write_text(s)
     print("prove_ffi.cu: the device arena zeroes what each prove call used")
+pf.write_text(s)
 
 # Round 1 folds each lane's eight k's as Σ_k x^k·(a_k·b_k) in GF(2^8) (AES polynomial), reduced once. Under clmad the eight
 # products stay unreduced: one carry-less product of (aL·x^k + aH·x^(32+k)) and (bL + bH·x^32) puts aL·bL·x^k in its low

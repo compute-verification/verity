@@ -1,5 +1,5 @@
-"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or drive's landing: a change to what a
-guarantee says waits on nobody, and he is shown it.
+"""The DM a spec change sends the person who reads the spec (the Slack registry's `daniel` entry) when it lands on main, by
+`research merge --push` or drive's landing: a change to what a guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its
@@ -370,8 +370,8 @@ def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[in
 
 def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[int] | None = None, api=None,
           reg: dict | None = None, log=print) -> bool:
-    """DM Daniel what the push from ``old`` to ``new`` changed in the spec; True when it was sent or there was nothing to
-    send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
+    """DM the spec's reader (`human_entry(reg, "daniel")`) what the push from ``old`` to ``new`` changed in the spec; True when
+    it was sent or there was nothing to send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
     and the caller still has its own steps after a landing to run."""
     from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 

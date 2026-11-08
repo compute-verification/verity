@@ -514,7 +514,7 @@ def test_a_conflicting_pr_is_left_out_with_the_queued_pr_that_touched_the_file_a
 
 
 POUS = "verity/core/protocols/pous/lean"
-TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/sampled_proofs/tests/fixtures/exfiltration_lean.json"
+TRUSTED, EXFIL = f"{POUS}/TRUSTED.sha256", "verity/core/protocols/spot/tests/fixtures/exfiltration_lean.json"
 UP = "../../../../../Security/Proofs/lakefile.toml"
 #: what `_pin_main`'s pins record: PoUS's, relative to its directory, and the JSON pin's
 MAIN_TRUSTED, MAIN_EXFIL = ["lean-toolchain", "lakefile.toml", "Old.lean", UP], ["Security/Proofs/lakefile.toml", "x.lean"]
@@ -4862,7 +4862,7 @@ def _restated(d: dict) -> None:
 
 #: the head's lock -> what its merge onto `next` drops that `next` needs; None: the head leaves the lock alone
 LOCK_DROPS = {
-    # the record driver keeps a premise one side dropped while the merged record lists its guarantee
+    # the record driver drops a premise the head dropped where `next` didn't restate its guarantee: the head's own drop
     "a dropped premise": (lambda d: d["shape"]["inline"]["G"].pop("p1"), []),
     "a dropped frozen key": (lambda d: d["shape"]["frozen"].pop("F"), ["pkg/lean-audit.json: shape.frozen[F]"]),
     "a renamed guarantee": (_renamed, []),

@@ -32,8 +32,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.spot import challenger as Ch, coins as CC
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -193,6 +193,13 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -209,9 +216,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     tables = d / "tables"
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
-    senv = {**os.environ, **(env or {})}
     ch = None
-    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+    if own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")

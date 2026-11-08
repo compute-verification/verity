@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.core.protocols.sampled_proofs import remote as R
+from verity.core.protocols.spot import remote as R
 
 from test_serve import Auditor, finish, session, start, trusted
 

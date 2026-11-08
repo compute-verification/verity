@@ -46,7 +46,7 @@ theorem finFc_of_rows (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flo
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS : Loop.RepSrc L₀ src x w) (hS0 : Level0Src src x w)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hRows : FinRepRows vs L₀ src (realOf src) wk x w) : FinFc vs L₀ src wk x w := by
   intro ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms j r hexts hprev tb hi q f hRep extras hext ic hic l hl
     res tr₁ l₁ hpiop hcap hroot
@@ -129,7 +129,7 @@ next rep's first round (`viewRep_size`). -/
 theorem finRepRounds_of_erased (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hS0 : Level0Src src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs) (hEr : FinRepErased vs L₀ src (realOf src) wk x w) :
     FinRepRounds vs L₀ src (realOf src) wk x w := by
   intro ν t κ m₀ ρ₀ ops hF s0 spec hsx schs hs cms hcms
@@ -173,7 +173,7 @@ and the pads' openings (`finRepOpen`); with level 0's openings (`FinRepL0`) they
 theorem finishIs_of_consumed (hsc : Claims.Flock.Scope (FlockDeploy.deployZk _root_.Flock.Readable.relation) x)
     (hR : Claims.Flock.R (FlockDeploy.deployZk _root_.Flock.Readable.relation).parse x w) (hServe : Serves x)
     (hL0 : _root_.Flock.Guarantees.LoopInnerRound0 Masked.dataE L₀ (realOf src) x w) (hSrc : Loop.Src L₀ src x w)
-    (hE : LeanRelease.LiveRoundEq finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
+    (hE : LeanRelease.LiveRoundEqOwn finS vs (LeanRelease.ofLoopLink L₀ src (realOf src)) CoinOpen.shaH wk x w)
     (hc : finS.SwCausalOn (Loop.SwOk Masked.dataE) vs)
     (hM : FinRepMsgs vs L₀ src (realOf src) wk x w) (hV : FinRepLanes vs L₀ src (realOf src) wk x w)
     (hT : FinRepTarget vs L₀ src (realOf src) wk x w) (hTP : FinRepRestart vs L₀ src (realOf src) wk x w)

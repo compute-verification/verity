@@ -32,7 +32,7 @@ import pytest
 from verity.ml.circuits.codec import canonical_json, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.sampled_proofs.one_stage import registration as R
+from verity.core.protocols.spot.one_stage import registration as R
 
 HERE = Path(__file__).resolve().parents[1]
 PERIOD_CASE = HERE.parents[1] / "verity" / "core" / "protocols" / "network" / "tests" / "period_case.py"
@@ -678,10 +678,13 @@ def test_a_row_shorter_than_a_piece_is_found_whole_and_held_to_the_pieces_rule(t
 
 @pytest.mark.parametrize("name", sorted(sz.SETUPS))
 def test_schedule_prints_the_classs_schedule_as_warden_serves_flags(capsys, name):
+    """Its integer fields, which `rehearse --ids` runs in the id egress form: the class's schedule whole."""
     assert sz.main(["schedule", "--class", name]) == 0
     flags = capsys.readouterr().out.split()
-    assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(v)
-                                                  for k, v in asdict(sz.SETUPS[name].params).items()}
+    params = sz.SETUPS[name].params
+    assert dict(zip(flags[::2], flags[1::2])) == {f"--{k.replace('_', '-')}": str(getattr(params, k))
+                                                  for k in sz.W.INTEGER_FIELDS}
+    assert WS._params(WS.parser().parse_args(["rehearse", "--fake", "--ids", "--out", "o", *flags])) == params
 
 
 def test_w63k4_is_w63s_class_at_a_window_circuits_ko_and_ki_its_certifier_w63s_at_egress_cells_ko_plus_1():

@@ -1,0 +1,20 @@
+{
+ "definitions": {
+  "AllReduceResidualMnnvlAt_v2{WORLD=8,N=32,C=8,AT=2,SHOT=1}": {
+   "and": 49640,
+   "type": "5450cee66bd1bc0208c4fbb875626314145d51d17dabb2686d0ccce93e89cee46f7e79b0bf801d02e5689f1e2cfb47f3dfa783b187d489a23f651631fc5cd0ec"
+  },
+  "AllReduceResidualMnnvlAt_v2{WORLD=8,N=32,C=8,AT=3,SHOT=2}": {
+   "and": 49648,
+   "type": "341fe1a80bc1ec02d7399ff62d9b3b62de423a8a414e75b6ae17b03f1022a96ad40225904f9c832bc00baef1f0209c923916b849d4ffe95929825c5f5ac7cefa"
+  },
+  "AllReduceResidualMnnvlCoordinate_v2{WORLD=8,SHOT=1}": {
+   "and": 6205,
+   "type": "8269eacf2aa4079fedf1929d82ec01c4e1b7a1420e746e257de7e3ba00c311e10b99063426a1e741ec7212e0240f548355e10bd282da0fe2d854fee802be99b6"
+  },
+  "AllReduceResidualMnnvlCoordinate_v2{WORLD=8,SHOT=2}": {
+   "and": 6206,
+   "type": "01f6260ede11c14ebe89a2471a274ce7a65535e706d3a071b2e63ed6725a73b9910679a88de1bdffb105e5a7b6adf3f0a169ca7dfdc9e0492cadde83c1058c9f"
+  }
+ }
+}
