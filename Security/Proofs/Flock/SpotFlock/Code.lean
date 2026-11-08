@@ -40,14 +40,15 @@ roots the boundary values are committed under (`portRoots`).
 * round 0: the verifier's coin is the first stage's bytes (the replay sample, `RegTwo.sample`);
 * round 1: the prover's message is the interior registration's record, as JSON (`jsonMsg`): the roots of its ports,
   whose cells hold the sampled replay blocks' interiors, and those blocks in the order its cells lay them out
-  (`replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order, then those roots
+  (`window.replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order, then those roots
   (`irootsOf`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
 * round 2: the prover's message is the session statements, one per template in template order (`stmtsOf`), which the
   verifier checks (`stmtOk`): the run's statement decodes and its partition and design evaluate, and template `t`'s
   statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked scope, in the scope Flock's
   soundness proof covers and with hidden outputs, and with `xS₀ t`'s table shapes (`sessionOk`); round 1's record lists
-  the replay sample in its order (`orderOk`); round 2's statement check passes the statement against template `t`'s
-  part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s but for the run's fields, names
+  the replay sample in its order (`SecondStage.interiorOrderOk`); round 2's statement check passes the statement against
+  template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s placed in the run
+  (`SecondStage.atRun`) but for the run's fields, names
   the part's slots and the interior record's roots, its sample is the second stage's draw within the part, and each
   registered read is one it may read); and it is `xS₀ t` but for its sample, its registered reads and its public file
   (`pinOk`); it refuses the message otherwise;
@@ -137,18 +138,12 @@ structure Roots where
 /-- **The run's statement's decoder**: the boundary registration's record, `x` read as JSON. -/
 def decode (x : Msg) : Option Roots := (jsonMsg x).map fun rec => ⟨rec, portRoots rec⟩
 
-/-- **The replay blocks the interior record lists**, in its order (`replay_sample`); none where it lists none. -/
+/-- **The replay blocks the interior record lists**, in its order (`window.replay_sample`, which round 2's
+`second-interior-order` holds to the replay sample); none where it lists none. -/
 def blocksOf (rec : Json) : List ℕ :=
-  match Spot.getD rec "replay_sample" with
+  match Spot.getD (Spot.getD rec "window") "replay_sample" with
   | .arr bs => bs.toList.map fun b => (Spot.nat? b).getD 0
   | _ => []
-
-/-- **Round 1 lists the replay sample in its order**: the interior record's replay blocks are the first stage's
-sample, so that the `i`-th sampled block's cells are the `i`-th of each template's. -/
-def orderOk (rec : Json) (sample : Array ℕ) : Bool :=
-  match Spot.getD rec "replay_sample" with
-  | .arr bs => bs.toList.map Spot.nat? == sample.toList.map some
-  | _ => false
 
 /-- **Replay block `ρ`'s interior roots** as the round-1 message `m₁` states them: `ρ`'s place among the interior
 record's replay blocks, then the record's ports' roots; none where `m₁` isn't JSON. -/
@@ -340,22 +335,28 @@ def ownOf (st : Roots) (rec draw : Json) (c₀ : FlockDeploy.Coin) : Spot.Second
   { sample := h.reg.sample (src c₀), parts := none, interior := rec, boundary := st.record,
     drawn := (Spot.Draw.proved draw).map Int.toNat, links := h.links, refs := refsOf h }
 
+/-- **The second stage's parts** in a replay sample of `q` blocks, one per template in template order (`partAt`). -/
+def partsAt (q : ℕ) : Array Spot.SecondStage.Part := ((List.range h.ms.length).map (partAt h q)).toArray
+
 /-- **Round 2's statement check passes template `t`'s statement `S`** against the template's part, with what the
-verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the interior record's port
-names as `stmtFailures` reads them). -/
+verifier holds of the run (`own`): no failing check (`SecondStage.stmtCodes` at `partAt`, the header placed at the
+template's position among the parts as `stmtFailures` places it (`posOf`), the interior record's port names as
+`stmtFailures` reads them). -/
 def codesOk (own : Spot.SecondStage.Own) (t : ℕ) (S : Spot.SecondStage.Stmt) : Bool :=
-  (Spot.SecondStage.stmtCodes own (Spot.SecondStage.byTemplate own.interior) (partAt h own.sample.size t) S).isEmpty
+  (Spot.SecondStage.stmtCodes own (Spot.SecondStage.byTemplate own.interior)
+    (Spot.SecondStage.posOf (partsAt h own.sample.size) (h.names.getD t "")) (partAt h own.sample.size t) S).isEmpty
 
 /-- **Template `t`'s session statement reads the run's**, at the run's statement `x`, the round-1 message `m₁` and the
-coins of rounds 0 and 1: round 1's record lists the replay sample in its order (`orderOk`); round 2's statement check
-passes the statement against template `t`'s part (`codesOk`: its public file's header is `xS₀ t`'s but for the run's
-fields, names the part's slots and the interior record's roots, its sample is the second stage's draw within the part,
-and each registered read is one it may read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
+coins of rounds 0 and 1: round 1's record lists the replay sample in its order (`SecondStage.interiorOrderOk`, round
+2's `second-interior-order`); round 2's statement check passes the statement against template `t`'s part (`codesOk`:
+its public file's header is `xS₀ t`'s placed in the run but for the run's fields, names the part's slots and the
+interior record's roots, its sample is the second stage's draw within the part, and each registered read is one it may
+read); and it is otherwise template `t`'s reference statement (`pinOk`). -/
 def readsOk (t : ℕ) (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
   match decode x, jsonMsg m₁, secondDraw h c₀ c₁, FlockDeploy.decode xS with
   | some st, some rec, some draw, some w =>
     let own := ownOf h st rec draw c₀
-    orderOk rec own.sample && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
+    Spot.SecondStage.interiorOrderOk own && ((stmtJsonOf h t w).map (codesOk h own t)).getD false && pinOk h t w
   | _, _, _, _ => false
 
 /-- **The round-2 message's session statements**, one per template in template order, each a byte string; kept only
