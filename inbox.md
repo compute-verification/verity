@@ -4,3 +4,6 @@ Coordinator 23:18Z: #8083 at 96673b11 is now OUT of next. It conflicts in verity
 [2026-11-08T23:27Z] ebc3f73fc04c
 Coordinator 23:29Z, adding to 23:18Z: #8083 also conflicts with #8204 (PRTRIAGE's pool-chain rule, admitted head 935c643452) in Pieces.lean and test_difftest.py. Merge both admitted heads, #7497 and #8204, then resolve.
 
+[2026-11-08T23:31Z] 9805775826af
+Coordinator 23:33Z, an addendum to 23:19Z. ci now says #8083 at 96673b11 conflicts with next in Spot/Pieces.lean and tests/test_difftest.py through BOTH #7497 and #8204, and both are admitted. Merge both heads (never next), carry the merge up #8114/#8119/#8168, rerun records only if a lock moved, and re-mark. Tell me the heads.
+
