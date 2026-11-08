@@ -258,7 +258,7 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str, fused: bool = Fa
     the second's). With ``fused`` (`templates`') a projection's weight read is its GEMM's own: one unit a (block, slot,
     token), table-major, reads its block's rows and multiplies by them, and holds the read's declarations and ``tok`` wire;
     its ``ws`` and w2's ``g`` are wired as the unfused GEMM's are, in that order."""
-    from verity_vllm.pipeline.expert_rows import table_param
+    from verity_vllm.pipeline.expert_tables import table_param
 
     T, topk, E = len(v["tokens"]), v["topk"], v["up"]["E"]
     rid = descriptor_id(fns["router"])
@@ -318,7 +318,7 @@ def cut(v: dict, fns: dict, lab: dict, blocks: dict, name: str, fused: bool = Fa
 
 def commit_tables(v: dict, plan: dict, committer: dict) -> dict:
     """Each table the cut reads, committed from ``v``'s weights as `pipeline.expert_tables` registers it, by parameter."""
-    from verity_vllm.pipeline.expert_rows import table_words
+    from verity_vllm.pipeline.expert_tables import table_words
     from verity_vllm.protocols.pouw.h1 import registered as H1R
 
     out = {}
@@ -397,7 +397,7 @@ def record(win: WI.Window, v: dict, fns: dict, plan: dict, tables: dict, forge: 
 
 def registration(committer: dict, world: int, rank: int, values: dict, blocks: dict, repo: str, revision: str):
     """A self-registration (`records.expert_tables`; ``prefix`` "": its names are the capture's parameters')."""
-    from verity_vllm.records.expert_tables import ExpertTables
+    from verity_vllm.pipeline.expert_tables import ExpertTables
 
     return ExpertTables(program=committer["program"], repo=repo, revision=revision, world=world, rank=rank, prefix="",
                         blocks=dict(sorted(blocks.items())), values=dict(sorted(values.items())),
@@ -406,9 +406,7 @@ def registration(committer: dict, world: int, rank: int, values: dict, blocks: d
 
 def main(argv: list[str] | None = None) -> int:
     from verity_vllm import TargetProfile
-    from verity_vllm.pipeline import expert_rows as EX
     from verity_vllm.pipeline import expert_tables as XT
-    from verity_vllm.records import expert_tables as XR
 
     ap = argparse.ArgumentParser(prog="moe_window.py")
     ap.add_argument("--capture", required=True)
@@ -451,7 +449,7 @@ def main(argv: list[str] | None = None) -> int:
         raise SystemExit(f"layer {a.layer} is not opened at step {a.step}: {cap.layers}")
     profile = TargetProfile(compute_capability=tuple(map(int, a.cc.split("."))), batch_invariant=False)
     v = served(cap, a.rank, a.layer, a.tokens, profile)
-    reg = XR.ExpertTables.of(json.loads(Path(a.tables).read_text()), a.tables) if a.tables else None
+    reg = XT.ExpertTables.of(json.loads(Path(a.tables).read_text()), a.tables) if a.tables else None
     if reg is not None:
         if reg.rank != a.rank:
             raise SystemExit(f"{a.tables}: the registration of rank {reg.rank}, not {a.rank}")
@@ -493,7 +491,7 @@ def main(argv: list[str] | None = None) -> int:
                   for p in ("up", "down") for k, part in (("w", "rows"), ("ws", "scales"))}
         committer = {"key": key, "program": program, "nonces": XT.nonces(stacks, list(stacks), a.rank)}
     else:
-        committer = EX.committer(reg, key)
+        committer = XT.committer(reg, key)
     t1 = time.time()
     tables = commit_tables(v, plan, committer)
     report["tables_s"] = round(time.time() - t1, 1)
