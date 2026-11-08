@@ -1,23 +1,32 @@
 """Experiment 5: a tokens-only attack with chosen in-range interior faults, in exact weight bits a fault.
 
-The decoder knows every weight but one, w = W_down[l][i, j] (the down projection of an interior layer l, as its bf16
-code), and its prior is the empirical distribution of the other codes of that matrix. It sees served greedy tokens
-only. Its faults are in range: hidden unit j of layer l (`mlph`), at a prompt's last position, set to a value inside
-that unit's box (clamp.py's boxes.pt, whose clamps every forward applies), a 16-bit fault in an interior layer.
+The decoder knows every weight but one unknown U of the down projection W_down[l] of an interior layer l, and holds a
+prior over U taken from the same matrix (--unknowns):
+  entry   U = W_down[l][i, j], as a bf16 code; the prior is the empirical distribution of the matrix's bf16 codes;
+  column  U = W_down[l][:, j], unit j's whole column; the prior is uniform over the matrix's columns, so an exact read
+          is log2(ff) bits, and a fault's bits say how much of the column the served token is a function of.
+It sees served greedy tokens only. Its faults are in range: hidden unit j of layer l (`mlph`), at a prompt's last
+position, set to a value inside that unit's box (clamp.py's boxes.pt, whose clamps every forward applies), a 16-bit
+fault in an interior layer.
+
+Prompts (--prompts): the first half from PROMPTS, the rest prefixes of held-out traffic (traffic.HELDOUT_TEXTS), one a
+text, ending where the honest greedy token's margin over the runner-up is smallest, where a fault moves it most easily.
 
 First honest use: the decoder reads each prompt's honest greedy continuation (--obs tokens), which narrows the prior
-where an honest output already depends on w. Then each round:
+where an honest output already depends on U. Then each round:
   - plan: for each prompt and each value on a grid across the box, the outcome (the first --obs served tokens) of
-    `--reps` posterior quantiles of w, simulated exactly (`lm.Edit` sets the weight; the clamps are public); pick the
-    fault whose outcome splits the posterior's mass most evenly (the largest outcome entropy), then refine its value;
+    `--reps` representatives of the posterior (an entry's quantiles, a random sample of a column's candidates),
+    simulated exactly (`lm.Edit` sets U; the clamps are public); pick the fault whose outcome splits their mass most
+    evenly (the largest outcome entropy), then refine its value;
   - fault: the server serves the faulted request, and the decoder keeps the candidates whose simulated outcome is the
     one served.
-It stops when one code remains (w read exactly), when no fault on the grid splits the posterior, or after --max-faults.
-Bits are the posterior's entropy drop, so a fault's bits are what its outcome told the decoder beyond honest use.
+It stops when one candidate remains (U read exactly), when no fault on the grid splits the posterior, or after
+--max-faults. Bits are surprisals: a round's is -log2 of the posterior mass its served outcome keeps, so a read ending on
+the true candidate has taken -log2 of its prior probability in all.
 
 The decoder here is generous: it knows the rest of the model exactly and simulates the serving stack bit for bit, so
 the measured bits a fault bound from above what an attack of this form gets without that knowledge, and from below
-what chosen in-range faults can give.
+what chosen in-range faults can give a decoder with this prior.
 
   uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/attack.py --model qwen2.5-0.5b \\
       --boxes "$OUT/clamp/boxes.pt" --out "$OUT"
@@ -36,31 +45,48 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import LM, MODELS, Boxes, Cache, Edit, Fault, position_class, served_logprobs
 from prompts import PROMPTS
+from traffic import HELDOUT_TEXTS
 
 
 class Prompt:
     """One prompt's honest prefix: its ids, a batch-1 cache of every layer and the residual stream into each layer."""
 
-    def __init__(self, lm: LM, tok, text: str, l: int):
-        self.ids = torch.tensor([tok.encode(text).ids])
-        self.t0 = self.ids.shape[1] - 1
+    def __init__(self, lm: LM, ids: torch.Tensor, l: int):
+        self.ids = ids
+        self.t0 = ids.shape[1] - 1
         self.cache = Cache()
         key = ("resid", l - 1) if l > 0 else ("emb", -1)
         taps = {key: None, ("mlph", l): None}
-        lm.forward(self.ids, self.cache, taps=taps)
+        lm.forward(ids, self.cache, taps=taps)
         self.x_in = taps[key]
         self.a_j = taps[("mlph", l)][0, self.t0]
 
 
-def outcomes(lm: LM, p: Prompt, l: int, i: int, j: int, cands: torch.Tensor, w_true: float, v: float | None,
-             n_obs: int, batch: int) -> torch.Tensor:
-    """(len(cands), n_obs): the first n_obs greedy tokens served for p with W_down[l][i, j] = cands[k], and, unless v
-    is None, the fault mlph[l][j] := v at p's last position."""
+def pick_prompts(lm: LM, tok, n: int, l: int, cap: int = 48) -> list[Prompt]:
+    """The first (n + 1) // 2 of PROMPTS, then held-out prefixes at their smallest honest margin, smallest first. The
+    prefixes are short because every candidate recomputes every position from layer l up."""
+    out = [Prompt(lm, torch.tensor([tok.encode(t).ids]), l) for t in PROMPTS[:(n + 1) // 2]]
+    cands = []
+    for text in HELDOUT_TEXTS:
+        ids = torch.tensor([tok.encode(text).ids[:cap]])
+        top = served_logprobs(lm.forward(ids, Cache())[0], "bf16").topk(2, -1).values
+        margin = top[:, 0] - top[:, 1]
+        margin[:8] = math.inf
+        p = int(margin.argmin())
+        cands.append((float(margin[p]), ids[:, :p + 1]))
+    cands.sort(key=lambda c: c[0])
+    return out + [Prompt(lm, ids, l) for _, ids in cands[:n - len(out)]]
+
+
+def outcomes(lm: LM, p: Prompt, l: int, j: int, edit_of, cands: torch.Tensor, v: float | None, n_obs: int,
+             batch: int) -> torch.Tensor:
+    """(len(cands), n_obs): the first n_obs greedy tokens served for p with the unknown set to each candidate
+    (`edit_of`), and, unless v is None, the fault mlph[l][j] := v at p's last position."""
     out = []
     for s in range(0, len(cands), batch):
         cs = cands[s:s + batch]
         k = len(cs)
-        edit = Edit(l, i, j, (cs - w_true).float())
+        edit = edit_of(cs)
         ck = Cache({m: p.cache.kv[m] for m in range(l)})
         fault = Fault.of(p.t0, [("mlph", l, j, v)] * k) if v is not None else None
         z = lm.forward(None, ck, fault=fault, edit=edit, x_in=p.x_in.expand(k, -1, -1), first_layer=l, pos0=0,
@@ -97,38 +123,61 @@ def quantile_reps(vals: torch.Tensor, mass: torch.Tensor, n: int) -> tuple[torch
     return vals[idx], torch.ones(len(idx), dtype=torch.float64)
 
 
-def attack(lm: LM, tok, l: int, i: int, j: int, a, prompts: list[Prompt]) -> dict:
-    """Bits are surprisals: a round's is -log2 of the posterior mass the served outcome keeps, so a read ending on the
-    true code has taken -log2 of its prior probability in all, H(prior) on average over targets."""
+def sample_reps(vals: torch.Tensor, mass: torch.Tensor, n: int, gen: torch.Generator) -> tuple[torch.Tensor, torch.Tensor]:
+    """n candidates drawn without replacement in proportion to their mass, each then carrying an equal share."""
+    if len(vals) <= n:
+        return vals, mass
+    idx = torch.multinomial(mass.double(), n, replacement=False, generator=gen)
+    return vals[idx], torch.ones(n, dtype=torch.float64)
+
+
+def attack(lm: LM, l: int, i: int, j: int, unknown: str, a, prompts: list[Prompt], gen: torch.Generator) -> dict:
     W = lm.down_proj(l)
-    w_true = float(W[i, j])
-    vals, counts = torch.unique(W.to(torch.bfloat16).float(), return_counts=True)
-    mass = counts.double() / counts.sum()
-    if not bool((vals == w_true).any()):
-        raise ValueError("the target's code is not in its matrix's codes")
+    if unknown == "entry":
+        stored, truth = float(W[i, j]), float(W[i, j].to(torch.bfloat16))
+        vals, counts = torch.unique(W.to(torch.bfloat16).float(), return_counts=True)
+        mass = counts.double() / counts.sum()
+
+        def edit_of(cs):
+            return Edit(l, i, j, (cs - stored).float())
+
+        def reps_of(vs, ms):
+            return quantile_reps(vs, ms, a.reps)
+    else:
+        truth = j
+        vals = torch.arange(W.shape[1])
+        mass = torch.ones(len(vals), dtype=torch.float64) / len(vals)
+        col = W[:, j].float()
+
+        def edit_of(cs):
+            return Edit(l, None, j, W[:, cs].T.float() - col)
+
+        def reps_of(vs, ms):
+            return sample_reps(vs, ms, a.reps, gen)
     hi = lm.boxes.hi[("mlph", l)][int(position_class(torch.tensor(prompts[0].t0)))].float()
     box = float(hi[j])
-    rec = {"layer": l, "i": i, "j": j, "w": w_true, "box": box, "candidates": len(vals), "prior_bits": entropy(mass),
-           "target_bits": -math.log2(float(mass[vals == w_true])), "a_j": [float(p.a_j[j]) for p in prompts],
+    rec = {"layer": l, "unknown": unknown, "i": i if unknown == "entry" else None, "j": j,
+           "w": truth if unknown == "entry" else None, "box": box, "candidates": len(vals), "prior_bits": entropy(mass),
+           "target_bits": -math.log2(float(mass[vals == truth])), "a_j": [float(p.a_j[j]) for p in prompts],
            "rounds": []}
     t_start = time.time()
     honest_bits, honest = 0.0, []
     for p in prompts:
-        o = outcomes(lm, p, l, i, j, vals, w_true, None, a.obs, a.batch)
-        truth = o[(vals == w_true).nonzero()[0, 0]]
-        honest.append(truth)
-        ok = (o == truth).all(1)
+        o = outcomes(lm, p, l, j, edit_of, vals, None, a.obs, a.batch)
+        served = o[(vals == truth).nonzero()[0, 0]]
+        honest.append(served)
+        ok = (o == served).all(1)
         honest_bits += -math.log2(float(mass[ok].sum() / mass.sum()))
         vals, mass = vals[ok], mass[ok]
     rec["honest_bits"] = honest_bits
     grid = torch.linspace(-box, box, a.grid)
     faults, fault_bits = 0, 0.0
     while len(vals) > 1 and faults < a.max_faults:
-        rv, rm = quantile_reps(vals, mass, a.reps)
+        rv, rm = reps_of(vals, mass)
         best = (0.0, None, None)
         for pi, p in enumerate(prompts):
             for v in grid.tolist():
-                h, _ = split(outcomes(lm, p, l, i, j, rv, w_true, v, a.obs, a.batch), rm)
+                h, _ = split(outcomes(lm, p, l, j, edit_of, rv, v, a.obs, a.batch), rm)
                 if h > best[0] + 1e-9:
                     best = (h, pi, v)
         if best[1] is None or best[0] < a.min_bits:
@@ -138,25 +187,27 @@ def attack(lm: LM, tok, l: int, i: int, j: int, a, prompts: list[Prompt]) -> dic
         step = 2 * box / (a.grid - 1)
         for v2 in torch.linspace(v - step / 2, v + step / 2, a.refine).tolist():
             if abs(v2) <= box:
-                h2, _ = split(outcomes(lm, prompts[pi], l, i, j, rv, w_true, v2, a.obs, a.batch), rm)
+                h2, _ = split(outcomes(lm, prompts[pi], l, j, edit_of, rv, v2, a.obs, a.batch), rm)
                 if h2 > h + 1e-9:
                     h, v = h2, v2
-        o = outcomes(lm, prompts[pi], l, i, j, vals, w_true, v, a.obs, a.batch)
-        truth = o[(vals == w_true).nonzero()[0, 0]]
-        ok = (o == truth).all(1)
+        o = outcomes(lm, prompts[pi], l, j, edit_of, vals, v, a.obs, a.batch)
+        served = o[(vals == truth).nonzero()[0, 0]]
+        ok = (o == served).all(1)
         got = -math.log2(float(mass[ok].sum() / mass.sum()))
+        classes = int(torch.unique(o, dim=0).shape[0])
         vals, mass = vals[ok], mass[ok]
         faults += 1
         fault_bits += got
         rec["rounds"].append({"prompt": pi, "value": v, "value_over_box": v / box, "planned_bits": h, "bits": got,
-                              "candidates": len(vals), "direct": bool((truth != honest[pi]).any()),
-                              "seconds": time.time() - t_start})
-        print(f"target l={l} i={i} j={j}: fault {faults} prompt {pi} v={v:.4g} ({v / box:+.3f} box) planned "
-              f"{h:.2f} got {got:.2f} bits, {len(vals)} left, {time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
-    rec.update({"faults": faults, "exact": len(vals) == 1, "found": bool(float(vals[0]) == w_true) if len(vals) == 1
-                else bool((vals == w_true).any()), "fault_bits": fault_bits,
-                "bits_per_fault": fault_bits / faults if faults else 0.0, "posterior_candidates": len(vals),
-                "seconds": time.time() - t_start})
+                              "outcome_classes": classes, "candidates": len(vals),
+                              "direct": bool((served != honest[pi]).any()), "seconds": time.time() - t_start})
+        print(f"target {unknown} l={l} i={i} j={j}: fault {faults} prompt {pi} v={v:.4g} ({v / box:+.3f} box) "
+              f"planned {h:.2f} got {got:.2f} bits of {classes} outcomes, {len(vals)} left, "
+              f"{time.time() - t_start:.0f} s", file=sys.stderr, flush=True)
+    rec.update({"faults": faults, "exact": len(vals) == 1, "found": bool((vals == truth).any()),
+                "fault_bits": fault_bits, "bits_per_fault": fault_bits / faults if faults else 0.0,
+                "max_fault_bits": max((r["bits"] for r in rec["rounds"]), default=0.0),
+                "posterior_candidates": len(vals), "seconds": time.time() - t_start})
     return rec
 
 
@@ -166,13 +217,15 @@ def main() -> int:
     ap.add_argument("--boxes", type=Path, required=True, help="clamp.py's calibrated boxes.pt")
     ap.add_argument("--out", type=Path, required=True)
     ap.add_argument("--layers", type=int, nargs="+", default=[-12, -2], help="interior layers (negative from the end)")
-    ap.add_argument("--targets", default="widest,random", help="per layer: the widest-box unit's largest entry, "
-                    "and a random unit's random entry")
+    ap.add_argument("--unknowns", default="entry,column", help="what the decoder doesn't know: one weight, or the "
+                    "faulted unit's whole column")
+    ap.add_argument("--targets", default="widest,random", help="per layer: the widest-box unit (and for an entry its "
+                    "largest), and a random unit (and a random entry)")
     ap.add_argument("--prompts", type=int, default=4)
     ap.add_argument("--obs", type=int, default=1, help="served tokens a request returns that the decoder reads")
     ap.add_argument("--grid", type=int, default=13, help="fault values across the box, planned per round")
     ap.add_argument("--refine", type=int, default=9)
-    ap.add_argument("--reps", type=int, default=64, help="posterior quantiles planned per round")
+    ap.add_argument("--reps", type=int, default=64, help="posterior representatives planned per round")
     ap.add_argument("--min-bits", type=float, default=0.05, help="stop when no planned fault splits off more")
     ap.add_argument("--max-faults", type=int, default=24)
     ap.add_argument("--batch", type=int, default=512)
@@ -193,7 +246,7 @@ def main() -> int:
     for l in [x if x >= 0 else L + x for x in a.layers]:
         if not 0 <= l < L - 1:
             raise ValueError(f"layer {l} is not interior")
-        prompts = [Prompt(lm, tok, t, l) for t in PROMPTS[:a.prompts]]
+        prompts = pick_prompts(lm, tok, a.prompts, l)
         hi = lm.boxes.hi[("mlph", l)][1].float()
         W = lm.down_proj(l)
         for kind in a.targets.split(","):
@@ -204,12 +257,15 @@ def main() -> int:
             else:
                 j = int(torch.randint(0, W.shape[1], (1,), generator=gen))
                 i = int(torch.randint(0, W.shape[0], (1,), generator=gen))
-            r = attack(lm, tok, l, i, j, a, prompts)
-            r["target"] = kind
-            res["targets"].append(r)
-            (a.out / "attack.json").write_text(json.dumps(res, indent=1))
-    done = [t for t in res["targets"] if t["faults"]]
-    res["bits_per_fault"] = (sum(t["fault_bits"] for t in done) / sum(t["faults"] for t in done)) if done else 0.0
+            for unknown in a.unknowns.split(","):
+                r = attack(lm, l, i, j, unknown, a, prompts, gen)
+                r["target"] = kind
+                res["targets"].append(r)
+                (a.out / "attack.json").write_text(json.dumps(res, indent=1))
+    for unknown in a.unknowns.split(","):
+        done = [t for t in res["targets"] if t["faults"] and t["unknown"] == unknown]
+        res[f"bits_per_fault_{unknown}"] = (sum(t["fault_bits"] for t in done) / sum(t["faults"] for t in done)
+                                            if done else 0.0)
     (a.out / "attack.json").write_text(json.dumps(res, indent=1))
     print(json.dumps({k: v for k, v in res.items() if k != "targets"}, indent=1))
     for t in res["targets"]:

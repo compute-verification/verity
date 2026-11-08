@@ -120,6 +120,16 @@ def main() -> int:
     res["edit_zero_vs_honest"] = max_abs(e[0], full[0])
     ok &= res["edit_vs_changed_weight"] < 1e-3 and res["edit_zero_vs_honest"] < 1e-3
 
+    c0 = W[:, j].clone()
+    c1 = (c0.float() + 0.05 * torch.randn(W.shape[0], generator=torch.Generator().manual_seed(1))).to(W.dtype)
+    col = c1.float() - c0.float()
+    e = lm.forward(ids.expand(2, -1), Cache(), edit=Edit(l, None, j, torch.stack([torch.zeros_like(col), col])))
+    W[:, j] = c1
+    changed = lm.forward(ids, Cache())
+    W[:, j] = c0
+    res["column_edit_vs_changed_weights"] = max_abs(e[1], changed[0])
+    ok &= res["column_edit_vs_changed_weights"] < 1e-3
+
     k = 3
     taps = {("resid", k - 1): None}
     lm.forward(ids, Cache(), taps=taps)

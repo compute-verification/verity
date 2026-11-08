@@ -197,9 +197,10 @@ class Fault:
 
 @dataclass
 class Edit:
-    """W_down[layer][i, j] += delta[row] for each batch row: a decoder's hypotheses about one weight, side by side."""
+    """W_down[layer][i, j] += delta[row] for each batch row, or with i None column j += delta[row] (delta (B, d)): a
+    decoder's hypotheses about one weight or one column, side by side."""
     layer: int
-    i: int
+    i: int | None
     j: int
     delta: torch.Tensor
 
@@ -287,6 +288,8 @@ class LM:
     def _edited(o: torch.Tensor, m: torch.Tensor, l: int, edit: Edit | None) -> torch.Tensor:
         if edit is None or edit.layer != l:
             return o
+        if edit.i is None:
+            return o + m[:, :, edit.j, None] * edit.delta.to(o.dtype)[:, None, :]
         o = o.clone()
         o[:, :, edit.i] += m[:, :, edit.j] * edit.delta.to(o.dtype)[:, None]
         return o
