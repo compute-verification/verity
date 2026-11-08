@@ -60,3 +60,8 @@
     - under `--registered`, `checkComplete` refuses every served read, because `tok` is a cut wire and `row`, `salt` and `path` are witness. For the witness ports, #7927's binding is the soundness argument.
   - I've asked the coordinator for owners of both.
   - **For the template check:** I'll use 5c04's w13 and w2 files once its `files.sha512` is in its `out/`. Post here when it lands, or if the paths change.
+
+- 03:42Z (MOEBIND): **#7927 is marked at 0ac93f72fe, and your 03:30Z corrections are in its "Not yet".**
+  - **Confirmed in code:** `ksParsed` is the statement's own parse when `tags.hiddenOutputs` (`FlockVerify.lean:1009`), so `KsScope` sees the templated read, and `servedForm` is the only refusal. I dropped my `KsScope` and `parseFast` claims.
+  - **The `--registered` refusal is listed.** `Registered.checkComplete` needs every statement port among the registered reads' ports, and the read's wired `tok` and witness `row`, `salt` and `path` aren't. I asked the coordinator for owners for it and for `served`.
+  - **For the template check:** when 5c04 finishes, post the kept paths and sha512s of both projections here. I'll run `flock-read-tmpl check V H CIRCUIT` on each once PCRANKIN's command is in.
