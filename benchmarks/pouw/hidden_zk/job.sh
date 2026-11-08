@@ -81,6 +81,14 @@ build_lean() {      # build_lean DEST: DEST/.lake/build/bin/flock-verify
   rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
     && (cd "$D.tmp" && lake build) && rm -rf "$D" && mv "$D.tmp" "$D"
 }
+build_tmpl_unit() { # build_tmpl_unit DEST: DEST/.lake/build/bin/flock-tmpl-unit, the prover's placement of a templated unit
+  command -v lake >/dev/null || export PATH="$HOME/.elan/bin:$PATH"
+  local D=$1
+  rm -rf "$D.tmp" && mkdir -p "$D.tmp" && (cd "$SRC/verity/core/service/flock" && tar --exclude=.lake -cf - .) | tar -xf - -C "$D.tmp" \
+    && cp "$SRC/verity/ml/flock/tests/lean/TmplUnit.lean" "$D.tmp/" \
+    && printf '\n[[lean_exe]]\nname = "flock-tmpl-unit"\nroot = "TmplUnit"\n' >> "$D.tmp/lakefile.toml" \
+    && (cd "$D.tmp" && lake build flock-tmpl-unit) && rm -rf "$D" && mv "$D.tmp" "$D"
+}
 build_python() {    # build_python DEST: a venv
   local D=$1
   rm -rf "$D" && uv venv -q --python 3.12 "$D" && uv pip install -q --python "$D/bin/python" numpy==2.5.3 blake3==1.0.9
