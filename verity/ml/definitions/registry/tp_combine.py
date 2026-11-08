@@ -115,6 +115,29 @@ def _call(defn, statics: dict) -> tuple[str, dict, int, int]:
     return name, s, TA.ranks(s["WORLD"]), int(s[_SIZE[name]])
 
 
+def _owner(runs, pos: int):
+    return next(x for lo, hi, x in runs if lo <= pos < hi)
+
+
+def _mnnvl_coordinate(unit):
+    return lambda s, W, size, pos: (unit, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])})
+
+
+#: by route, its coordinate unit at (statics, WORLD, the call's element count, the position)
+_COORDINATE = {
+    "AllReduceMnnvl_v1": _mnnvl_coordinate(TA.AllReduceMnnvlCoordinate),
+    "AllReduceResidualMnnvl_v1": _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    "AllReduceRmsNormMnnvl_v1": _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    "AllReduceMultimem_v1": lambda s, W, size, pos: (
+        TA.AllReduceMultimemCoordinate,
+        {"WORLD": W, "TREE": _owner(TA.multimem_runs(W, size, s["TREES"]), pos), "FTZ": bool(s["FTZ"])}),
+    "AllReduceCustom_v1": lambda s, W, size, pos: (
+        TA.AllReduceCustomCoordinate, {"WORLD": W, "START": _owner(TA.custom_owners(W, size, int(s["STAGE"])), pos)}),
+    "AllReduceNcclTree_v1": lambda s, W, size, pos: (
+        TA.AllReduceNcclTreeCoordinate, {"WORLD": W, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
+}
+
+
 def coordinate_binding(defn, statics: dict, pos: int) -> tuple[object, dict]:
     """The Definition and statics of the unit reducing element `pos` of the all-reduce `defn` at `statics` (`route_binding`'s, or
     the fused `AllReduceRmsNormMnnvl_v1`'s or its `AllReduceResidualMnnvl_v1`'s): the call's element `pos` is that unit on every
@@ -122,17 +145,29 @@ def coordinate_binding(defn, statics: dict, pos: int) -> tuple[object, dict]:
     name, s, W, size = _call(defn, statics)
     if not 0 <= int(pos) < size:
         raise ValueError(f"position {pos}: {name}'s elements are 0..{size - 1}")
-    owner = lambda runs: next(x for lo, hi, x in runs if lo <= int(pos) < hi)  # noqa: E731
-    if name == "AllReduceMnnvl_v1":
-        return TA.AllReduceMnnvlCoordinate, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])}
-    if name in ("AllReduceResidualMnnvl_v1", "AllReduceRmsNormMnnvl_v1"):
-        return AllReduceResidualMnnvlCoordinate, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])}
-    if name == "AllReduceMultimem_v1":
-        return TA.AllReduceMultimemCoordinate, {"WORLD": W, "TREE": owner(TA.multimem_runs(W, size, s["TREES"])),
-                                                "FTZ": bool(s["FTZ"])}
-    if name == "AllReduceCustom_v1":
-        return TA.AllReduceCustomCoordinate, {"WORLD": W, "START": owner(TA.custom_owners(W, size, int(s["STAGE"])))}
-    return TA.AllReduceNcclTreeCoordinate, {"WORLD": W, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}
+    return _COORDINATE[name](s, W, size, int(pos))
+
+
+def _multimem_row(s, W, N, rows, row):
+    if len(set(TA.multimem_trees(s["TREES"], W))) == 1:
+        return TA.AllReduceMultimem, {"WORLD": W, "SIZE": N, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
+    return AllReduceMultimemRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
+
+
+def _custom_row(s, W, N, rows, row):
+    if int(s["STAGE"]) == 1:
+        return TA.AllReduceCustom, {"WORLD": W, "SIZE": N, "STAGE": 1}
+    return AllReduceCustomRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "STAGE": int(s["STAGE"])}
+
+
+#: by route, its row unit at (statics, WORLD, the row's width, the row count, the row); the fused calls, one token a call, have none
+_ROW = {
+    "AllReduceMnnvl_v1": lambda s, W, N, rows, row: (TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}),
+    "AllReduceNcclTree_v1": lambda s, W, N, rows, row: (
+        TA.AllReduceNcclTree, {"WORLD": W, "SIZE": N, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
+    "AllReduceMultimem_v1": _multimem_row,
+    "AllReduceCustom_v1": _custom_row,
+}
 
 
 def row_binding(defn, statics: dict, rows: int, row: int) -> tuple[object, dict]:
@@ -141,19 +176,8 @@ def row_binding(defn, statics: dict, rows: int, row: int) -> tuple[object, dict]
     one row (`route_binding` at rows = 1), so every row of it is one template; the others' take ROWS and ROW."""
     name, s, W, size = _call(defn, statics)
     rows, row = int(rows), int(row)
-    if name in ("AllReduceResidualMnnvl_v1", "AllReduceRmsNormMnnvl_v1"):
+    if name not in _ROW:
         raise ValueError(f"{name}: one token a call, whose coordinates are its units (`coordinate_binding`)")
     if rows < 1 or size % rows or not 0 <= row < rows:
         raise ValueError(f"{name} of {size} elements: {rows} rows of equal width, row {row} one of them")
-    N = size // rows
-    if name == "AllReduceMnnvl_v1":
-        return TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}
-    if name == "AllReduceNcclTree_v1":
-        return TA.AllReduceNcclTree, {"WORLD": W, "SIZE": N, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}
-    if name == "AllReduceMultimem_v1":
-        if len(set(TA.multimem_trees(s["TREES"], W))) == 1:
-            return TA.AllReduceMultimem, {"WORLD": W, "SIZE": N, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
-        return AllReduceMultimemRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
-    if int(s["STAGE"]) == 1:
-        return TA.AllReduceCustom, {"WORLD": W, "SIZE": N, "STAGE": 1}
-    return AllReduceCustomRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "STAGE": int(s["STAGE"])}
+    return _ROW[name](s, W, size // rows, rows, row)
