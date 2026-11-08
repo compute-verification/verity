@@ -1,6 +1,7 @@
 module
 
 public import Proofs.WeightSecurity.Deployed
+public import Proofs.WeightSecurity.Faulted
 public import Proofs.WeightSecurity.Pressure
 public import Proofs.WeightSecurity.Served
 public import Proofs.WeightSecurity.Stop
