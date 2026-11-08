@@ -141,7 +141,7 @@ def _h1_live():
 def live_part(T: int, S: int, prefix: str) -> dict:
     """The partition object of the live Program a window of S rounds at T rows under `prefix` proves on: v2's, or past
     `live.PIECE_ROWS` rows the pieced one (``h1_prove/live.py``'s `program_of`)."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     return P.partition(*_h1_live().program_of({"T": T, "S": S, "prefix": prefix}))
 
 
@@ -179,7 +179,7 @@ def leaf_bound(win: Any, k: int, kind: str) -> tuple[Any, bytes, dict, dict]:
     descriptor (`served.descriptor`), its partition object and what its file is bound to, ``{"partition",
     "program"}``."""
     from verity.ml.protocols.pouw.circuit import h1window as HW
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_vllm.protocols.pouw.h1 import served as SV
     program, query = HW.leaf_program(win, k, kind)
     part = P.partition(program, query)
@@ -270,7 +270,7 @@ def build(program_dir: Path, out: Path, lower: Lower = lower, live: tuple[int, i
     files, extra = {}, {}
     if live is not None:
         from verity.core.protocols.pouw import credit as CR
-        from verity.core.protocols.sampled_proofs.one_stage import partition as P
+        from verity.core.protocols.spot.one_stage import partition as P
         T, S = live
         part = live_part(T, S, CR._prefix(descriptor))
         extra["live_bind"] = {"T": T, "S": S, "partition": P.digest(part), "program": part["program"]}

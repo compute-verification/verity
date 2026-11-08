@@ -846,7 +846,7 @@ def test_a_k_1_paced_root_asks_the_challenger_for_its_two_coins_in_one_round_tri
 
     import challengers
     import replay
-    from verity.core.protocols.sampled_proofs import challenger as C
+    from verity.core.protocols.spot import challenger as C
 
     asked = []
 

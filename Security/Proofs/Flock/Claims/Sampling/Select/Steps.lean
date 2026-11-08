@@ -1,7 +1,7 @@
 module
 
 public import Proofs.Flock.Claims.Sampling.Select.Layout
-public import Properties.SampledProofs.Draw
+public import Properties.Spot.Draw
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -40,9 +40,9 @@ import Proofs.Flock.Claims.Sampling.Select.Take
 
 @[expose] public section
 
-open SampledProofs
+open Spot
 
-namespace Properties.SampledProofs.SecurityProofs
+namespace Properties.Spot.SecurityProofs
 
 open Lean (Json)
 
@@ -267,8 +267,8 @@ theorem slots_select_ok (rule : Select.Rule) (d : Program) (query : Json) (table
 theorem slotDesign_all (d : Program) (query : Json) (table : Option Json) (n : ℕ) (named : Json)
     (derived : Option Flock.Draw.Law) (hn : Partition.units d query = .ok n) (hnamed : Select.Rule.all.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) :
-    Properties.SampledProofs.slotDesign .all d query table = .ok ⟨[.all, .all]⟩ := by
-  unfold Properties.SampledProofs.slotDesign
+    Properties.Spot.slotDesign .all d query table = .ok ⟨[.all, .all]⟩ := by
+  unfold Properties.Spot.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   rfl
 
@@ -277,9 +277,9 @@ theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table 
     (named : Json) (derived : Option Flock.Draw.Law) (parsed : Flock.Draw.Law) (hne : rule ≠ .all)
     (hn : Partition.units d query = .ok n) (hnamed : rule.lawOver n = .ok named)
     (hd : Draw.deriveLaw d query named table = .ok derived) (hp : Draw.flockLaw (lawObj named derived) n = .ok parsed) :
-    Properties.SampledProofs.slotDesign rule d query table =
-      .ok ⟨[Properties.SampledProofs.oneStageOf (derived.getD parsed), .all]⟩ := by
-  unfold Properties.SampledProofs.slotDesign
+    Properties.Spot.slotDesign rule d query table =
+      .ok ⟨[Properties.Spot.oneStageOf (derived.getD parsed), .all]⟩ := by
+  unfold Properties.Spot.slotDesign
   rw [hn, bind_ok, hnamed, bind_ok, hd, bind_ok]
   split
   · exact absurd rfl hne
@@ -287,4 +287,4 @@ theorem slotDesign_law (rule : Select.Rule) (d : Program) (query : Json) (table 
     rw [hp, bind_ok]
     rfl
 
-end Properties.SampledProofs.SecurityProofs
+end Properties.Spot.SecurityProofs
