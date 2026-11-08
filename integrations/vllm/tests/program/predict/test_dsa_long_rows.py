@@ -261,7 +261,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     stated) and one output, which its prefill's last row samples (no decode position: T 0), its prompt prefilled alone in chunks
     of the long-prefill threshold, its last row of KEYS keys. The step compiler plans it and builds its request Program on the meta device, every row past
     INDEX_TOPK (2,048) in the mask form at its class: no `run` input and no checks, one DsaTopKMask per full indexer layer and row
-    past INDEX_TOPK, at most KEYS / INDEX_TOPK classes. What no cheaper test can: that a request at the served limit compiles, at
+    past INDEX_TOPK (in the last layer only its last chunk's: the rest are dead units, `prune`), at most KEYS / INDEX_TOPK classes. What no cheaper test can: that a request at the served limit compiles, at
     the real INDEX_TOPK; a run of it measures its time and memory. GLM-5.3's 78 layers don't fit one machine unrolled at 131,072
     positions, so LAYERS cuts the checkpoint (3: its dense full-indexer layers; 4: then a MoE layer sharing the third's top-k)."""
     layers, _, keys = CTX131K.partition(":")
@@ -277,5 +277,7 @@ def test_class_g_compiles_one_request_at_its_served_max_model_len(tmp_path):
     (prog,) = c.programs.values()
     assert (unit.LP, unit.T) == (LP, 0) and "run" not in dict(prog.fn.signature()[0]) and prog.fn.signature()[1] == Array(1, I32)
     masks = Counter(n.fn.bindings["N"] for n in prog.fn.body.nodes if n.fn.id.startswith("DsaTopKMask_v1{"))
-    assert sum(masks.values()) == full * max(LP - topk, 0)
+    long, last = max(LP - topk, 0), LP - CH * ((LP - 1) // CH)
+    dead = long - min(last, long) if hf["indexer_types"][int(layers) - 1] == "full" else 0
+    assert sum(masks.values()) == full * long - dead
     assert set(masks) == set(range(2 * topk, long_row_keys(LP, topk) + 1, topk)) if LP > topk else not masks
