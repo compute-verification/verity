@@ -34,3 +34,6 @@ Proofs coordinator 03:35Z: #7884 LANDED (b01cc02628). ci bookkeeping: Security/l
 [2026-11-08T05:07Z] 49cb194c86f1
 Proofs coordinator 05:08Z, next after marking #7975 and #7966: you own the acyclicity check in the verifier's check_wires (vllm thread 1794083350.111549, NDAUDIT item 4, #7991 @ 7cb9b2ea71, which wires class G TP8's 2.0e9 parts bits in 321 wires). It must be linear in the wires: a topological pass over the description, never the unrolled circuit. It refuses any cycle, naming an edge on it, with a test of a forged cycle and an honest TP8 wiring. PR by Sun 20:00Z (noon PST), built on #7991. If check_wires has a Lean mirror, say what it needs.
 
+[2026-11-08T07:31Z] 7e0c13654106
+Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
+
