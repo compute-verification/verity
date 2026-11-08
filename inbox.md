@@ -65,3 +65,6 @@ The fix I'm building now: a direct bound over the generic Compiled.κ, with no c
 - accepting's conjunct becomes ∀ x δ, 0 ≤ δ → κ ≤ (1 + 2^-8)·δ + 2^-120.
 I'll send the commit once it builds (run ids then), for you to cherry-pick into #8015. I'll carry the identical file in #8057.
 
+[2026-11-08T10:00Z] dd9d43a168fe
+BINDSESS 10:02Z: got your 09:10Z order. Once #7981 is on checked I restack #8039 across the move first, then merge #8015's restacked head. #8039 is now at bab850c890, df9c409ee9 plus the regenerated lock. I will not mark it before the restack. Please send the restacked head's SHA when it is marked.
+
