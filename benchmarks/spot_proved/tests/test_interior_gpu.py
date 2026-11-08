@@ -1,6 +1,6 @@
 """`interior_gpu`'s commit is `verity.ml.windows.rows.commit_ports`'s, byte for byte: every port's root and every row's
-``b || c`` under ``hm96-sha512/row/v1``, salted by `rows.salts` under the window's key at the port's index. Its CPU twin is
-held to it here; its device, where a GPU is."""
+``b || c`` under ``hm96-sha512/row/v1``, salted by `rows.salts` under the window's key at the port's index, or by given
+salts (`rows.commit`'s ``salts_of``). Its CPU twin is held to it here; its device, where a GPU is."""
 from __future__ import annotations
 
 import importlib.util
@@ -55,6 +55,19 @@ def test_rows_added_a_step_at_a_time_commit_as_the_whole_port(monkeypatch) -> No
     assert it.finish() == want
 
 
+def test_given_salts_commit_as_commit_ports_with_them(monkeypatch) -> None:
+    ig = _module(monkeypatch)
+    key, index, domains, rows, _ = _case(5)
+    rng = np.random.default_rng(5)
+    ys = {p: rng.bytes(192 * n) for p, (n, _) in SHAPES.items()}
+    assert ig.commit_ports(domains, rows, None, index, salts=ys, device=False) == CS.commit_ports(domains, rows, {}, ys)
+    some = {p: ys[p] for p in ("b", "f")}
+    mixed = {p: some.get(p) or CS.salts(key, index[p], n) for p, (n, _) in SHAPES.items()}
+    assert ig.commit_ports(domains, rows, key, index, salts=some, device=False) == CS.commit_ports(domains, rows, {}, mixed)
+    with pytest.raises(ValueError, match="no given salts"):
+        ig.commit_ports(domains, rows, None, index, salts=some, device=False)
+
+
 def test_another_key_or_index_changes_every_string(monkeypatch) -> None:
     ig = _module(monkeypatch)
     key, index, domains, rows, want = _case(3)
@@ -72,3 +85,7 @@ def test_the_device_commits_as_commit_ports(monkeypatch) -> None:
     key, index, domains, rows, want = _case(4)
     dev = {p: torch.from_numpy(r.view(np.int16)).cuda() for p, r in rows.items()}
     assert ig.commit_ports(domains, dev, key, index) == want
+    rng = np.random.default_rng(4)
+    ys = {p: rng.bytes(192 * n) for p, (n, _) in SHAPES.items()}
+    given = {p: torch.frombuffer(bytearray(y), dtype=torch.uint8).cuda() for p, y in ys.items()}
+    assert ig.commit_ports(domains, dev, None, index, salts=given) == CS.commit_ports(domains, rows, {}, ys)

@@ -118,13 +118,17 @@ def _be(words: np.ndarray) -> bytes:
 class Interior:
     """One interior's row ports, committed as `commit_ports` commits them: ``ports`` maps each port to its domain (its
     ``count`` the port's rows) and its words a row, ``index`` to its salt nonce (`rows.salts`'s port index), ``key`` the
-    window's 32-byte salt key. ``device``: hash on the current CUDA device (rows given as CUDA tensors), else on the CPU twin
-    (rows as NumPy arrays)."""
+    window's 32-byte salt key. ``salts``: by port, its rows' given salts, ``count`` x 192 bytes (`rows.commit`'s
+    ``salts_of``), in place of the key's. ``device``: hash on the current CUDA device (rows and salts given as CUDA tensors),
+    else on the CPU twin (as NumPy arrays or bytes)."""
 
-    def __init__(self, ports: Mapping[str, tuple[Any, int]], key: bytes, index: Mapping[str, int], *, device: bool = True,
-                 nvcc: str | None = None) -> None:
+    def __init__(self, ports: Mapping[str, tuple[Any, int]], key: bytes | None, index: Mapping[str, int], *,
+                 salts: Mapping[str, Any] | None = None, device: bool = True, nvcc: str | None = None) -> None:
         from verity.ml.commitments.merkle import merkle_depth
-        if len(key) != 32:
+        salts = salts or {}
+        if key is None and set(salts) != set(ports):
+            raise ValueError(f"no salt key, and no given salts for {sorted(set(ports) - set(salts))}")
+        if key is not None and len(key) != 32:
             raise ValueError("a window's salt key is 32 bytes")
         self.device = device
         hm, prefixes = _tables()
@@ -142,14 +146,21 @@ class Interior:
             self.hm = hm
             self.ms = np.zeros(16, dtype=np.uint64)
             self._check(self.lib.ir_midstates_host(prefixes.ctypes.data, self.ms.ctypes.data), "ir_midstates_host")
-        kw = np.frombuffer(key, "<u4").tolist()
+        kw = np.frombuffer(key or bytes(32), "<u4").tolist()
         self.ports: dict[str, tuple[Table, Any, Any]] = {}
+        self.salts: list[Any] = []
         for p, (dom, words) in ports.items():
             n, depth = int(dom.count), merkle_depth(int(dom.count))
             if not 0 < n < 1 << 31 or words < 1:
                 raise ValueError(f"{p}: {n} rows of {words} words")
             t = Table(n=n, row_bytes=2 * int(words), W=1 << depth, depth=depth)
             t.key[:] = kw
+            if p in salts:
+                s = self._bytes(salts[p])
+                if self._size(s) != 192 * n:
+                    raise ValueError(f"{p}: given salts are not 192 bytes for each of its {n} rows")
+                self.salts.append(s)
+                t.salts = self._ptr(s)
             i = int(index[p])
             t.nonce[:] = [i & M32, (i >> 32) & M32, (i >> 64) & M32, 0]
             t.did[:] = np.frombuffer(dom.domain_id, ">u8").tolist()
@@ -163,6 +174,14 @@ class Interior:
     def _ptr(self, x: Any) -> int:
         return x.data_ptr() if self.device else x.ctypes.data
 
+    def _bytes(self, x: Any) -> Any:
+        if self.device:
+            return x.detach().contiguous().view(self.torch.uint8).reshape(-1)
+        return np.frombuffer(x, np.uint8) if isinstance(x, bytes | bytearray) else np.ascontiguousarray(x).view(np.uint8).reshape(-1)
+
+    def _size(self, x: Any) -> int:
+        return x.numel() if self.device else x.size
+
     def _stream(self) -> int:
         return self.torch.cuda.current_stream().cuda_stream
 
@@ -175,12 +194,9 @@ class Interior:
         """Rows ``j0`` .. ``j0 + m - 1`` of ``port``: ``rows`` (m, 2 words) bytes, or any contiguous tensor or array whose
         rows are the units' words little-endian."""
         t = self.ports[port][0]
-        if self.device:
-            r = rows.detach().contiguous().view(self.torch.uint8).reshape(-1)
-        else:
-            r = np.ascontiguousarray(rows).view(np.uint8).reshape(-1)
-        m = r.numel() // t.row_bytes if self.device else r.size // t.row_bytes
-        if m < 1 or m * t.row_bytes != (r.numel() if self.device else r.size) or j0 < 0 or j0 + m > t.n:
+        r = self._bytes(rows)
+        m = self._size(r) // t.row_bytes
+        if m < 1 or m * t.row_bytes != self._size(r) or j0 < 0 or j0 + m > t.n:
             raise ValueError(f"{port}: {m} rows of {t.row_bytes} bytes at {j0} of {t.n}")
         self.pending.append((port, j0, r))
 
@@ -205,7 +221,7 @@ class Interior:
             t, bcs, levels = self.ports[p]
             tt = Table.from_buffer_copy(t)
             tt.rows = self._ptr(r)
-            m = (r.numel() if self.device else r.size) // t.row_bytes
+            m = self._size(r) // t.row_bytes
             segs.append(Seg(tt, self._ptr(bcs), self._ptr(levels), total, j0, m))
             total += m
         self._launch(segs, total, True)
@@ -236,11 +252,11 @@ class Interior:
         return roots, strings
 
 
-def commit_ports(domains: Mapping[str, Any], rows: Mapping[str, Any], key: bytes, index: Mapping[str, int], *,
-                 device: bool = True) -> tuple[dict[str, bytes], dict[str, bytes]]:
-    """`rows.commit_ports(domains, rows, {}, {p: rows.salts(key, index[p], count)})` by `Interior`: ``rows[p]`` (count, words)
-    u16 (CUDA tensors under ``device``)."""
-    it = Interior({p: (domains[p], int(r.shape[1])) for p, r in rows.items()}, key, index, device=device)
+def commit_ports(domains: Mapping[str, Any], rows: Mapping[str, Any], key: bytes | None, index: Mapping[str, int], *,
+                 salts: Mapping[str, Any] | None = None, device: bool = True) -> tuple[dict[str, bytes], dict[str, bytes]]:
+    """`rows.commit_ports(domains, rows, {}, ys)` by `Interior`, ``ys[p]`` ``salts[p]`` if given, else
+    ``rows.salts(key, index[p], count)``: ``rows[p]`` (count, words) u16 (CUDA tensors under ``device``)."""
+    it = Interior({p: (domains[p], int(r.shape[1])) for p, r in rows.items()}, key, index, salts=salts, device=device)
     for p, r in rows.items():
         it.add(p, 0, r)
     return it.finish()
