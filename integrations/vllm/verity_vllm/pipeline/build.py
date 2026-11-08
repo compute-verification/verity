@@ -327,16 +327,19 @@ def _cuda_available() -> bool:
 
 def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool = True, wrapper: str = "step", LP: int = 8, T: int = 4, eos: int = 0, model_id: str | None = None, revision: str | None = None, max_model_len: int = 2048,
         target=None, sampling: dict | None = None, tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, device_name: str | None = None, batch_dispatch: bool = False, cached: int = 0,
-        dead_free: bool = False) -> dict:
+        dead_free: bool = False, stop: dict | None = None) -> dict:
     """`emit`: an `emit_ranks.Emit` (`--emit-ranks`): the other ranks' files are written from this rank's derivation.  `engine_args`:
     the row's engine arguments the meta config takes (`workload_engine_args`).  `device_name`: the name the declared target's GPU
     reports, answered on a GPU-free host (`--device-name`, else the workload row class's: `engine.profiles.devices`;
     `export_compat.select_cuda_platform`).  `batch_dispatch`: see `LC.missing_batch`.
     `cached`: the request's prefix-cached rows C (`vllm_meta.CachedGreedyRequest`; `prefix_cache.json`, `program.prefix_plan`).
     `dead_free`: a TP rank's request wrapper in the registered compiler's form too (`program.prune.dead_free`), as one rank's always is:
-    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row)."""
+    the rank Programs `predict.steps.compile_steps` compiles.  A TP row of record keeps every unit (its Match counts every collective row).
+    `stop`: the request's length rule over its outputs (`frontend.stop_rule.spec`), the derive config's ``stop``: its last check."""
     from verity_vllm.program.frontend.target_profile import TargetProfile
     os.makedirs(out, exist_ok=True)
+    if stop is not None and wrapper != "request":
+        raise ValueError(f"--stop is a request's length rule over its outputs, not --wrapper {wrapper}'s")
     t_start = time.time()
     sampling = dict(sampling) if sampling is not None else {"kind": "greedy", "source": "default"}
     if tp < 1 or not (0 <= rank < tp):
@@ -357,7 +360,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
                  "tp": {"world": int(tp), "rank": int(rank), **({"dead_free": True} if dead_free else {})},
                  # the LAUNCH CONTEXT (structural input): per request step the varlen launch's max_seqlen_q over every
                  # co-scheduled sequence (frontend.targets.parse_launch_context).  FA3's tile rule reads it; None = own rows (B1 semantics, digests unchanged)
-                 "launch_context": launch}
+                 "launch_context": launch, **({"stop": stop} if stop is not None else {})}
     try:
         res["code_rev"] = json.load(open("EXPORT.json"))
     except Exception:  # noqa: BLE001
@@ -393,7 +396,7 @@ def run(out: str, M: int, pos0: int, profile: str, backend: str, intercept: bool
             from verity_vllm.program.frontend.export_compat import select_cuda_platform
             print(f"[derive_step] declared target {target.sm_arch} x{tp}: vLLM platform {select_cuda_platform(tp, device_name)}", file=sys.stderr)
         _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
-                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free)
+                   tp=tp, rank=rank, launch=launch, emit=emit, engine_args=engine_args, C=cached, dead_free=dead_free, stop=stop)
     except _Refused:
         pass
     res = _finish(out, res, t_start)
@@ -412,7 +415,7 @@ class _Refused(Exception):
 
 def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, LP, T, eos, model_id, revision, max_model_len, t_start, sampling,
                tp: int = 1, rank: int = 0, launch: dict | None = None, emit=None, engine_args: dict | None = None, C: int = 0,
-               dead_free: bool = False) -> None:
+               dead_free: bool = False, stop: dict | None = None) -> None:
     from verity_vllm.program.frontend.target_profile import ArtifactIdentity, applied_kernels, profile_mismatches
     with InputsTrace(os.path.join(out, "inputs.json")), contextlib.ExitStack() as tp_stack:
         from verity_vllm.program.frontend import loader_parity, vllm_meta as vm
@@ -523,7 +526,8 @@ def _construct(out, res, target, M, pos0, profile, backend, intercept, wrapper, 
             session: list | None = [] if emit is not None else None
             with _derive_context(vm, cfg, ntok, target, model):
                 # the rank coordinate goes to the runtime correspondence only (`annotations["correspondence"].rank`): the Program is unchanged
-                rep = derive_report(mod, inputs, mode="profile", profile=profile, config={"chunks": chunks} if chunks else None,
+                config = {**({"chunks": chunks} if chunks else {}), **({"stop": stop} if stop is not None else {})}
+                rep = derive_report(mod, inputs, mode="profile", profile=profile, config=config or None,
                                     rules=vllm_ruleset(), name=f"{_WRAPPER_NAMES[wrapper]}[{res['model_class'].rsplit('.', 1)[-1]}]",
                                     check_registry=True, rank=(tp, rank) if tp > 1 else None, exported=ep, registered_values=bool(target.registered_values),
                                     session=session, dead_free=wrapper == "request" and (tp == 1 or dead_free))
@@ -593,7 +597,7 @@ def _write_program(out: str, res: dict, rep, *, target, applied: dict, sampling:
     if (pfx := KP.layout_of(rep.provenance)) is not None:   # the cached prefix's input and layer order, for Match
         res["prefix"] = json.dump(pfx, open(os.path.join(out, "prefix_cache.json"), "w"), indent=1) or pfx
     json.dump(rep.to_json(), open(os.path.join(out, "derive-report.json"), "w"), indent=1, default=str)
-    write_instances(out, program, digest, corr_digest, supplied)
+    write_instances(out, program, digest, corr_digest, supplied, checks=rep.provenance.get("checks"))
     if res.get("wrapper") == "request":
         from verity_vllm.pipeline.memory_map import census_entry
         res["census"] = census_entry(out, program, digest)
@@ -666,7 +670,8 @@ def _write_manifest(out: str, res: dict) -> None:
          # `sampling` is the row's declared policy (manifest / --sampling / default-by-omission), never a literal
          "structural_inputs": {"LP": res.get("LP"), "T": res.get("T"), "M": res.get("M"), "pos0": res.get("pos0"), "eos": res.get("eos"),
                                "sampling": res.get("sampling"), "tp": (res.get("tp") or {}).get("world", 1), "rank": (res.get("tp") or {}).get("rank", 0),
-                               "launch_context": res.get("launch_context"), **({"C": res["C"]} if res.get("C") else {})},
+                               "launch_context": res.get("launch_context"), **({"C": res["C"]} if res.get("C") else {}),
+                               **({"stop": res["stop"]} if res.get("stop") else {})},
          # world > 1: the rank's collectives (peer-input signature), embedding shard, engine args + env the admitted TP path requires,
          # the sharded parameter shapes and the cross-rank binding summary (full record: result.json `tp`, tp_links.json)
          "tp": ({k: v for k, v in res["tp"].items() if k != "collectives"} | {"collectives": {k: v for k, v in res["tp"].get("collectives", {}).items() if k != "record"}}
@@ -741,6 +746,21 @@ class Options:
                                         "reads (required then), with '\"chunks\": [n0, n1, ...]' for a prefill that ran in launches of those rows in turn (the chunked request "
                                         "wrapper, its steps the chunks then the decodes).  Omitted = own rows (a batch of one).  The row derives it from the workload "
                                         "(verity_vllm.pipeline.launch_context) for B >= 2.")
+    stop: str | None = option("--stop", default=None,
+                              help="the request wrapper's length rule over its outputs, its last check (program.frontend.stop_rule): JSON "
+                                   "'{\"stops\": [stop ids, increasing], \"max_tokens\": m, \"prompt_len\": p, \"max_model_len\": M, "
+                                   "\"outputs\": n, \"finish\": 0-3}', as predict.steps.compile_steps keys it")
+
+
+def _stop_arg(text: str | None) -> dict | None:
+    """`--stop`'s JSON as the length rule's config (`stop_rule.spec`); None without it."""
+    if text is None:
+        return None
+    from verity_vllm.program.frontend.stop_rule import KEYS, spec
+    d = json.loads(text)
+    if not isinstance(d, dict) or set(d) != set(KEYS):
+        raise ValueError(f"--stop {text!r}: a JSON object of {', '.join(f'`{k}`' for k in KEYS)}, nothing else")
+    return spec(d["stops"], **{k: d[k] for k in KEYS[1:]})
 
 
 def main(a: Options) -> int:
@@ -759,7 +779,7 @@ def main(a: Options) -> int:
                   max_model_len=a.max_model_len, target=parse_target_arg(a.target) if a.target else None, sampling=sampling_policy(a.sampling, a.workload),
                   tp=a.tp, rank=a.rank, launch=parse_launch_context(a.launch_context), emit=emit,
                   engine_args=workload_engine_args(a.workload, a.tp), device_name=a.device_name or named, batch_dispatch=LC.batch_dispatch_of(a.workload),
-                  cached=a.cached, dead_free=a.dead_free)
+                  cached=a.cached, dead_free=a.dead_free, stop=_stop_arg(a.stop))
     except BaseException as e:  # noqa: BLE001
         tb = traceback.format_exc()
         os.makedirs(a.out, exist_ok=True)

@@ -62,7 +62,7 @@ def _doc() -> dict:
     return {"schema": "cb-a/instance-sequence/v2", "digest": "d" * 64, "correspondence_digest": None,
             "params": [["run", f"{{{FIELD}: Array<{LEAVES},Value<1>>}}"],
                        ["weights", f"{{{X}: Array<{N},Value<32>>, {Y}: Array<{N},Value<32>>, {LOGITS}: Array<4,Value<16>>}}"]],
-            "supplied": {"run": [run]}, "checks": {"output": 1, "accept": 1, "of": [f"{ATTN} t={POS}: canonical"], "rows": [[2, 0, 1]]},
+            "supplied": {"run": [run]}, "checks": {"output": 1, "accept": 1, "of": [f"{ATTN} t={POS}: canonical"], "at": [[2, 0, 1]]},
             "rows": [{"i": i, "spec": s, "form": "call", "name": n, "args": a} for i, (s, n, a) in enumerate(rows)]}
 
 
@@ -237,8 +237,8 @@ def test_the_aot_build_writes_its_run_layout_and_each_checks_row(phi, tmp_path):
     args = {int(x["i"]): x["args"] for x in doc["rows"]}
     specs = {int(x["i"]): x["spec"] for x in doc["rows"]}
     fields = {(int(r.run["param"]), int(f["offset"]), int(f["offset"]) + int(f["leaves"])): f["name"] for f in r.run["fields"]}
-    assert len(doc["checks"]["rows"]) == len(r.checks["of"]) > 0
-    for (i, lo, hi), what in zip(doc["checks"]["rows"], r.checks["of"]):
+    assert len(doc["checks"]["at"]) == len(r.checks["of"]) > 0
+    for (i, lo, hi), what in zip(doc["checks"]["at"], r.checks["of"]):
         assert specs[i].startswith("DsaTopKLongRow_v1{") and (lo, hi) == (0, 1)
         ((_n, j, _lo, _hi),) = expanded_file_args(args[i])[1]
         assert specs[int(j)].startswith("DsaWaksmanOrder_v1{")

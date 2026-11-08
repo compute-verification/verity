@@ -685,7 +685,7 @@ class _Decoder:
 
 def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | None = None, M: int = 1, pos0: int = 8,
                   with_desc: bool = True, C: int = 0, dead_free: bool = False, finish: Callable | None = None,
-                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = ()) -> BuildResult:
+                  batch: list | None = None, chunks: tuple[int, ...] | None = None, edge: tuple[str, ...] = (), stop: dict | None = None) -> BuildResult:
     """The Program of the Build's `wrapper` for φ: `step` (one engine step, M token rows at pos0.., the last row sampled) or
     `request` (prefill of LP rows, then T decode steps each fed the previous greedy sample; returns the T+1 samples). `C` > 0: the
     request's first C positions are a history it reads and doesn't compute, every layer's rows of them Inputs after its own
@@ -693,7 +693,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
     the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
     traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
-    before the prefill's last, which no sample reads.
+    before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
     `BuildResult.named`), as `naming.named_program` names a request Program. `batch`: the request's launch batch (`common._Launch`,
@@ -760,7 +760,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
-    params, (out, checks) = finish_run(run, params, B), with_checks(model, out)
+    params, (out, checks) = finish_run(run, params, B), with_checks(model, out, B, stop)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None
@@ -776,7 +776,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     src_static = {"class": src_class, "mode": "profile", "profile": phi.profile,
                   "inputs": [list(_arr_shape(t)) for nm, t in params[:-1] if nm != "run"],
                   "config_sha256": hashlib.sha256(canonical_json({**({"chunks": list(chunks)} if chunks else {}), **edge_config(edge),
-                                                                  **({"history": C} if C and not dense else {})})).hexdigest()[:16]}
+                                                                  **({"history": C} if C and not dense else {}), **({"stop": stop} if stop else {})})).hexdigest()[:16]}
     from verity.ml.definitions.replay import replayer
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S, _p=params, _r=out.type: (tuple(_p), _r), replayer(body),
                                doc=f"predicted ahead of time by verity_vllm.program.predict.build ({BUILDER_ID})", conformance="derived: predicted, a switched row's, checked by its trace (predict.aot)",
