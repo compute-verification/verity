@@ -191,6 +191,7 @@ KNOWN = frozenset({
     "verity_vllm.protocols.pouw.pearl_c.screen",
     "verity_vllm.protocols.pouw.pearl_c.whole",
     "verity_vllm.protocols.remote_bandwidth.binder",
+    "verity_vllm.protocols.remote_bandwidth.commit_map",
     "verity_vllm.protocols.remote_bandwidth.interface",
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",

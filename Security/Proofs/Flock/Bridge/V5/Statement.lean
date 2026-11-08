@@ -5,6 +5,7 @@ public import Proofs.Flock.Bridge.LeafRoots
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Bridge.DrawnLaw
 public import Proofs.Flock.Soundness.Discharge.ZkHidden.CustodyJP
+public import Proofs.Flock.Soundness.Discharge.Hidden.Built
 
 /-!
 # `SampledKSLiveV5`: the sampled audit's knowledge soundness at the verifier's public inputs (stated)
@@ -299,12 +300,14 @@ Bernoulli law, though `Draw.flockLaw` parses one: `drawnFrom` refuses it (`OneSt
 (`cTZC`), one run's SHA-512 evaluations, the prover's and the verifier's: V2's `t' + v`. No hypothesis is taken on the
 registration's roots: two ports with one root and different domains are a SHA-512 collision that recomputing the roots finds, so the
 bound carries `ecr/sha-512`'s term at that finder (`Bridge.rootsFinderL`, no coins, `Bridge.rootsCostL` SHA-512 calls),
-at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. -/
+at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. Nor is one taken on the
+proof block's circuit: its unit is built because the circuit file parses (`Discharge.Hidden.built_of_parseStmt`). -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)
-    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D) (hU : Built D.unroll.unit)
-    (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
+    (D : Flock.Desc) (hD : Flock.Desc.parseStmt (zkTags I) I.circuitFile I.tables = .ok D),
+    let hU : Built D.unroll.unit := Discharge.Hidden.built_of_parseStmt hD ((zkTags_typed I).trans ht)
+    ∀ (pi : HmIn.Ports) (hpi : HmIn.parse D.unroll = .ok pi)
     (pub : Public) (hpub : HmIn.loadPublic (zkTags I) D.unroll pi I.publicFile = .ok pub)
     (hscope : Discharge.Layout.scopeOkH D.unroll = true)
     (_hrows : Bridge.RowsOk D.unroll)

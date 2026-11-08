@@ -1,12 +1,9 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
-Security/Proofs/Flock/Claims/Sampling/Path.lean -> Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
-integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm
-integrations/vllm/tests/engine/int8_attention_sass.py -> benchmarks/pouw/harness/sass_gate.py
 integrations/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
 integrations/vllm/tests/pipeline/test_serve_openai.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
@@ -20,11 +17,7 @@ integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/h1_prov
 integrations/vllm/tests/protocols/pouw_h1_circuits.py -> benchmarks/pouw/hidden_zk
 integrations/vllm/tests/protocols/pouw_h1_gpu.py -> benchmarks/pouw/served_h1/producer.py
 integrations/vllm/tests/protocols/test_pouw_h1_circuits.py -> benchmarks/live_challenger/auditor.py
-integrations/vllm/verity_vllm/commit/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/commit/memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
 integrations/vllm/verity_vllm/pipeline/advice.py -> verity/core/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/pipeline/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/pipeline/memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
 integrations/vllm/verity_vllm/pipeline/research.py -> tools/research/pyproject.toml
 integrations/vllm/verity_vllm/pipeline/research_tools.py -> tools/research/src/research/pythonpath.py
 integrations/vllm/verity_vllm/pipeline/research_tools.py -> tools/research/src/research/store/tool.py
@@ -38,16 +31,6 @@ integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/core/proto
 integrations/vllm/verity_vllm/program/predict/scan_state.py -> verity/ml/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/steps.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/verity_vllm/program/predict/window_rows.py -> verity/ml/protocols/certifier/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/binder.py -> verity/core/protocols/remote_bandwidth/audit.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/in_place.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/memory_map.py -> verity/core/protocols/remote_bandwidth/memory_map.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py -> verity/core/protocols/remote_bandwidth/receipts.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/registry.py -> verity/core/protocols/remote_bandwidth/store.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/remote.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/verify.py -> verity/core/protocols/remote_bandwidth/__init__.py
-integrations/vllm/verity_vllm/protocols/remote_bandwidth/verify.py -> verity/core/protocols/remote_bandwidth/receipts.py
 pyproject.toml -> verity/core/protocols/certifier/calibration.py
 verity/core/protocols/pouw/lean/check/PouwCheck/Credit.lean -> verity/core/primitives/identity/Identity/Domains.lean
 verity/core/protocols/pouw/lean/check/PouwCheck/Inputs.lean -> verity/core/primitives/identity/Identity/Domains.lean
@@ -57,20 +40,6 @@ verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/prim
 verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/identity/Identity/Tagged.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean -> verity/core/primitives/identity/Identity/Domains.lean
 verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/window/tests/test_known_rows.py -> benchmarks/pouw/h1_lanes/run.py
-verity/core/protocols/pouw/tests/epoch_coins_vectors.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_audit.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/__init__.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/active.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/certificate.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/grid.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/schedule.py
 verity/ml/commitments/tests/test_block_check.py -> verity/core/protocols/remote_bandwidth/__init__.py
 verity/ml/definitions/registry/b1.circuit-check.py -> tools/verity/circuit_check/src/circuit_check/targets.py
 verity/ml/definitions/registry/b1_tp2.circuit-check.py -> tools/verity/circuit_check/src/circuit_check/targets.py
