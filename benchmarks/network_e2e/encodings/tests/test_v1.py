@@ -134,8 +134,9 @@ def test_a_trace_corpus_trace_round_trips(smallkv):
         V.encode(adv, rec, dataclasses.replace(reg, row_order="scheduling"))
 
 
-def _string(wins, reg) -> bytes:
-    return CV.pack(V.string_of(wins, reg)[0])[0]
+def _string(wins, reg, rec) -> bytes:
+    """The string of `wins` under `reg`, with the record's length terms where `reg` sends them."""
+    return CV.pack(V.string_of(wins, reg, V.length_tails(rec, reg))[0])[0]
 
 
 def _ordinals(t, rec) -> list[int]:
@@ -167,7 +168,7 @@ def test_the_order_is_sent_as_its_deviations_from_release_order():
     assert [rec.requests[o].id for o in got.streams] == [q.id for q in adv.requests]
     w = next(j for j, x in enumerate(wins) if x.order)
     for p, r, refused in ((k, 2, False), (k, len(rec.requests) - k, True), (len(rec.requests), 1, True)):
-        bad = _string(wins[:w] + [dataclasses.replace(wins[w], order=((p, (r,)),))] + wins[w + 1:], reg)
+        bad = _string(wins[:w] + [dataclasses.replace(wins[w], order=((p, (r,)),))] + wins[w + 1:], reg, rec)
         try:
             other = V.decode(bad, rec, reg)
         except V.AdviceCodeError as e:
@@ -210,7 +211,7 @@ def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
     wins = V.residual(adv, rec, reg)
     hits = [h for w in wins for h in w.hits]
     assert len(hits) > sum(len(st.new) for st in t.steps) and min(hits) == 0 < max(hits)
-    assert _string(wins, reg) == V.encode(adv, rec, reg)
+    assert _string(wins, reg, rec) == V.encode(adv, rec, reg)
     w = next(k for k, x in enumerate(wins) if x.hits)
     s = next((k, j) for k, x in enumerate(wins) for j, h in enumerate(x.hits) if h)
     short = list(wins[s[0]].hits)
@@ -219,19 +220,20 @@ def test_hits_past_the_bound_are_sent_and_held_to_the_replay(smallkv):
                         (w, wins[w].hits + (0,)), (s[0], tuple(short))):
         bad = wins[:at] + [dataclasses.replace(wins[at], hits=changed)] + wins[at + 1:]
         with pytest.raises(V.AdviceCodeError, match="replay's residual"):
-            V.decode(_string(bad, reg), rec, reg)
+            V.decode(_string(bad, reg, rec), rec, reg)
 
 
 def test_the_pool_is_registered_never_sent(smallkv):
     """The KV pool's size was a header field the prover set, about 20 bits, and a bigger declared
     pool bought derived hits. Now the registration holds it (no `pinned`, no header): the string is code_v1's encoding
-    of the residual alone, nothing in it moves the pool, and the same string under another registered pool decodes to
+    of the residual and the record's length terms alone, nothing in it moves the pool, and the same string under another registered pool decodes to
     another advice or is refused."""
     t, rec, adv, reg = smallkv
     assert not {"pinned", "max_gpu_blocks"} & {f.name for f in dataclasses.fields(V.Registered)}
     assert not hasattr(V, "registered_of")
     data = V.encode(adv, rec, reg)
-    assert data == CV.pack(CV.encode(V.residual(adv, rec, reg), CV.Book.uniform(V.CAPS)).bitlist())[0]
+    tails = V.length_tails(rec, reg)
+    assert data == CV.pack(CV.encode(V.residual(adv, rec, reg), CV.Book.uniform(V.CAPS), tails).bitlist())[0]
     for blocks in (t.engine.num_gpu_blocks + 60, t.engine.num_gpu_blocks - 20):
         other = dataclasses.replace(reg, engine=dataclasses.replace(t.engine, num_gpu_blocks=blocks))
         try:
@@ -358,13 +360,15 @@ def test_the_corpus_table(tmp_path, capsys):
 
 def _tiny(windows: int):
     """Three requests into an engine of two sequences and an 8-token budget, so the replay asks about each arrival; the
-    book fit on windows of a few decisions each, as a registration fits it on history."""
+    book fit on windows of a few decisions each, as a registration fits it on history. It sends no length terms: their
+    12 bits would put every string past the 16 an exhaustive enumeration reaches, and their fixed-width tail is the
+    record's alone (`advice_code.lengths`)."""
     e = R.Engine(max_num_seqs=2, max_num_batched_tokens=8, max_model_len=64, num_gpu_blocks=32, block_size=4)
     reqs = tuple(V.Request(f"u{k}", (10 + k,) * 6, 4, (5, 5, EOS), end, (end, end, end + 1))
                  for k, end in enumerate((0, 0, 3 * (windows - 1))))
     history = [[CV.Window(arrived=bits)] * windows for n in range(4) for bits in product((False, True), repeat=n)]
     caps = CV.Caps(arrived=7, hits=1, hit_units=1, resumes=1, order=1, order_len=1, gap=1, index=1, lag=1)
-    return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps))
+    return V.Record(reqs), V.Registered(e, (EOS,), T=3, book=CV.fit_book(history, caps), send_lengths=False)
 
 
 @pytest.mark.parametrize("w", (1, 2))
@@ -432,7 +436,7 @@ def test_decode_is_total():
         for _ in range(rng.randrange(1, 6)):
             b[rng.randrange(len(b))] = rng.randrange(256)
         tries.append(bytes(b[:rng.randrange(1, len(b) + 1)]))
-    tries += [_string(wins[:w] + [x] + wins[w + 1:], reg) for w, x in edits]
+    tries += [_string(wins[:w] + [x] + wins[w + 1:], reg, rec) for w, x in edits]
     decoded = set()
     for x in tries:
         try:

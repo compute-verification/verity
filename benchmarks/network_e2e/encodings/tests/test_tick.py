@@ -237,7 +237,7 @@ def test_v1_sends_no_timing_under_the_tick(asy):
     data = V.encode(adv, rec, reg)
     assert V.decode(data, rec, reg) == adv
     assert sum(V.bits_by_window(data, rec, reg).values()) == sum(V.string_of([CV.Window(hits=w.hits) for w in wins],
-                                                                             reg)[1])
+                                                                             reg, V.length_tails(rec, reg))[1])
 
 
 def test_without_the_tick_the_same_run_needs_decisions():

@@ -8,7 +8,8 @@ context, bit) from the book's priors (`kt`) and each window's charge (`charge`).
 - `decisions(trace, stops, T=)`: advice v1's windows (`v1.residual`: the replay's decisions, the arrival order's
   deviations and the hits sent past the pool bound) under a book fit to them at v1's registered caps (`v1.TABLE_CAPS`; a
   skewed book: the difftest is the coder's, not the book's), with v1's charges (`v1.string_of`). It checks that they are
-  `v1.encode`'s string;
+  `v1.encode`'s string under a registration that sends no length terms (`advice_code.lengths`): the charge circuits
+  count the window code's segments, and a length term's fixed-width tail isn't among them;
 - `fields(trace)`: the derived rules' still-sent fields (`derived.residual`: the hits past the pool bound, the resumes,
   the order misses and async's lag bits), each field cut into windows of 64 values, under a book fit to them.
 
@@ -140,7 +141,7 @@ def decisions(trace: Any, stops: Sequence[int], *, T: int, row_order: str = "bat
     its whole windows' (`window_charges`)."""
     rec = V.record_of(trace, stops)
     adv = V.advice_of(trace, rec)
-    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order)
+    reg = V.Registered(trace.engine, tuple(stops), T=T, row_order=row_order, send_lengths=False)
     wins = V.residual(adv, rec, reg)
     reg = dataclasses.replace(reg, book=CV.fit_book([wins], V.TABLE_CAPS))
     bits, charge = V.string_of(wins, reg)
