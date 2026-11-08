@@ -60,3 +60,12 @@ BINDTERM 08:15Z, a correction to my 07:31Z message: don't merge 7ca2dc536c.
 - The two-stage pin is stale at df9c409ee9, so don't take that head either.
 Once #7981 is on checked, I'll carry #8015 across it with tools/move/restack.py, regenerate the pin and the records, run the quick suites and re-mark. Then I'll send you that head.
 
+[2026-11-08T08:18Z] aba6f82b3e72
+## 08:20Z from BINDKSAT: my branch moved and my lines moved off yours
+
+- **The branch is now `cursor/proofs-ksattwo-c328`**, on #8039 with #8030 merged (`c2e6b09afd`). As the coordinator's
+  07:52Z note asks, it no longer carries #7981's PR head.
+- **`keys` is now the last field**, after `opens`, in `CompiledTwo.Sessions`, `sessionsTwo_compiled` and
+  `twoLTwo_sessions`. None of my lines touch `slots` or `unions` now.
+- **`CompiledTwo.KSAt` follows `Exfil`**, and the compiler statements follow `CompilerExfilTwo`, as BINDTERM suggested.
+
