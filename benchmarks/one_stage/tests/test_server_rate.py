@@ -92,7 +92,7 @@ def test_a_clean_row_keeps_its_rate(monkeypatch, tmp_path):
 
 def test_one_refused_session_voids_the_row_and_the_run(monkeypatch, tmp_path, capsys):
     rc, row = run(monkeypatch, tmp_path, refuse={4})
-    assert (rc, row["statements_per_s"], row["accepted"]) == (1, None, 8)
+    assert (rc, row["statements_per_s"], row["accepted"], row["refused_n"]) == (1, None, 8, 1)
     assert row["void"] == ["1 of 9 sessions refused"]
     assert [r["label"] for r in row["refused"]] == ["t/k1/4"]
     assert "VOID t K=1: 1 of 9 sessions refused" in capsys.readouterr().out

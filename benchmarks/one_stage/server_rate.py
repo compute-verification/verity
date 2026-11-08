@@ -261,7 +261,9 @@ def one(a, dev: str, t: str, K: int) -> dict:
     done.sort(key=lambda r: r["t"])
     bad = [r for r in done if r["error"] or not r["s"].accepted]
     rec["accepted"] = len(done) - len(bad)
+    # the first 8 refused sessions; refused_n counts them all
     rec["refused"] = [{"label": r["s"].label, "error": r["error"], "why": (r["s"].live or {}).get("why")} for r in bad][:8]
+    rec["refused_n"] = len(bad)
     rec["warm_per_prover"] = dict(Counter(r["s"].prover for r in done if r["i"] < K * a.warm))
     # the clock is each session's filing by its verifier (its record directory's mtime): a prover reports a session
     # only once it collects its verdict, ``verify_ahead`` sessions later, and its last ones all at once
