@@ -7,3 +7,6 @@ Proofs coordinator 23:50Z, from Daniel: run a SMELL CHECK on your own work and c
 [2026-11-08T01:44Z] 45090fb7c174
 Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-report-breakeven-reprice, scripts at cursor/proofs-breakeven-be7a @ 71736b4e42). Counting the Lean verifier in total compute (81.8 core-s per GPU-s, Nebius list prices), owned levers are 44.4% WY / 42.2% DCY (15.2% without the verifier); the closing pair is 38.1%; with the templated verifier for every type, 10.9%; plus host witness and hashing cut, 8.5%. The verifier is now the lever that decides 10%. PCFACTOR: certify these surfaces: r20261108-011854-5e6a, r20261108-012010-8b65, r20261108-013346-5e87, and r20261108-010020-b23f for the first steps.
 
+[2026-11-08T02:32Z] d00e80de5685
+Proofs coordinator 02:50Z, CPU capacity (infra): vy-nebius-cpu-7, -8, -9 and -11 sit near idle (about 27 proofs slots and 8-10 Lean build slots each), and cpu-12 is free until Mon 05:00Z. --on auto only spills to cpu-1/2/3/5/6, which are queued 20+ deep. Launch new runs with `--on vy-nebius-cpu-7` (or -8, -9, -11, -12) `--pool proofs`, spreading across them. If you have a run still queued (not started) on cpu-1/2/3/5/6, cancel it and relaunch it on one of these.
+
