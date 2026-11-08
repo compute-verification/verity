@@ -141,15 +141,19 @@ session of that kind sent (a `.tar` of its session directory), it times `archive
 (`inputs:`, `setup (drawn):`, the session) split the profile, a templated statement's as well as a flat one's, since
 `verify` runs its session before refusing it. `--phases`, and every templated statement (which `verify`
 refuses last, `ProvedScope.servedForm`), add `flock_served/Main.lean`'s timing of verify's work before the session a step
-at a time: the read, SHA-512, `Zk.maskLogOf`, `ProvedScope.circuitOf`, `ProvedScope.checkOf`, `PortRoots.checkOf`,
-`KsScope.checkOf` and `Stmt.setupTablesOf` with the draw, each with its RSS. `build.json` has the unit's ANDs and matrix
-entries, k_log, the circuit file's bytes and lines, and its Program descriptor's bytes, the size a description-cost
-verifier would read.
+at a time: the read, SHA-512, `Zk.maskLogOf`, the circuit's parse as `verify` reads it (`circuitOfKnowing`, the pin
+known), `ProvedScope.checkOf`, `PortRoots.checkOf`, `KsScope.checkOf` and `Stmt.setupTablesOf` with the draw, each with
+its RSS. `build.json` has the unit's ANDs and matrix entries, k_log, the circuit file's bytes and lines, and its Program
+descriptor's bytes, the size a description-cost verifier would read. On a templated statement, `--stmt` times that parse
+instead with `flock-tmpl stmt` (`flock_tmpl/Main.lean`): whole, then a stage at a time (`tmplOf`, `Tmpl.parse`, each of
+`TmplUnit.read`'s checks, `HmRow.parseWith`'s decode, split, class digest and sections), with the template's size
+against the unrolled unit's (rows and entries, the copies multiplied through the calls) into stmt.jsonl; `--base REV`
+first times the same `flock-tmpl` built against REV's verifier on the same staged statement (stmt-base.jsonl).
 
 ~~~sh
 research run --as proofs --project verity --on auto --mem-gb 128 --timeout 7200 --source . --cwd clone \
   --send values.tar.gz [--send session.tar] -- bash benchmarks/verifier_cost/flock_served.sh KIND [N] [--phases] \
-  [--layout iv/hybrid/4 [--structural]]
+  [--layout iv/hybrid/4 [--structural] [--stmt [--base REV]]]
 ~~~
 
 `qcall.sh CONFIG X...` measures `Q_call` v1 (`Flock.Qcall`, an open walk in `tests/test_verifier_cost.py`) on one Serve_v1
