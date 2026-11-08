@@ -1,0 +1,3 @@
+[2026-11-08T10:39Z] bd2efd703bbe
+Proofs coordinator 10:41Z: the pool is now SAMPLED, not proved every window (CIR-190: network-accounting 10:31Z conditions 1-3, soundness 10:33Z conditions 4-5, proofs accepted 10:40Z). Your checked-witness statement diff must also carry: pool units joining the tied audit population at their public size class; a faulty pool unit leaking hit bits + 512 (root) + the SHA-512 collision term at the prover hash budget; and each unit reading the previous pool only through its input root (initial multiset = in-circuit opening of the previous root). Read those two comments before drafting.
+
