@@ -17,7 +17,7 @@
 # MW_THREADS is the prover's thread count (default the slot's cores): arms timed in separate runs compare at one count.
 # MW_FUSED=1 stages the fused cut (moe_window.py --fused): each GEMM reads its own weight rows.
 # MW_READ_LAYOUT=MODE (iv/hybrid/4, the served path's) states each table read as the verifier's read template at MODE
-# (moe_window.py --read-layout), and builds flock-tmpl-unit for the audit's provers.
+# (moe_window.py --read-layout), and builds flock-read-tmpl for its compose and flock-tmpl-unit for the audit's provers.
 # MW_PORTS (default 64) is the audit's --ports: a session a member with a sampled unit, its closure's included (stratified:1
 # samples one unit a template), and an audit needing more refused before any session listens (a5.port_refusal).
 # records_audit's default, one a member, finds no free run of ports for a real layer's thousands of members.
@@ -89,6 +89,9 @@ if [ -n "${MW_READ_LAYOUT:-}" ]; then
   tu=$(cached tmplunit "$(tree_key verity/core/service/flock verity/ml/flock/tests/lean/TmplUnit.lean)" build_tmpl_unit)/.lake/build/bin/flock-tmpl-unit
   [ -x "$tu" ] || { log "flock-tmpl-unit build FAILED: $(tail -20 "$OUT/build-tmplunit.log")"; exit 7; }
   TU=(--tmpl-unit-bin "$tu")
+  export FLOCK_READ_TMPL=${LEAN%/*}/flock-read-tmpl   # the verifier's read template, which a structural read's compose reads
+  (flock 9; cd "${LEAN%/.lake/*}" && lake build flock-read-tmpl) 9> "$HZ_CACHE/.lock-read-tmpl" > "$OUT/build-read-tmpl.log" 2>&1 \
+    || { tail -40 "$OUT/build-read-tmpl.log"; exit 7; }
 fi
 if [ -n "${MW_TABLES:-}" ]; then REG=(--tables "$MW_TABLES" --key "${MW_KEY:?}")
 elif [ "${MW_SELF:-0}" = 1 ]; then
