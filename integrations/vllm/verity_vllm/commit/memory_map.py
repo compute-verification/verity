@@ -1,6 +1,7 @@
-"""memory-map/v1 from the circuit (`verity.core.protocols.remote_bandwidth.memory_map`): the KV blocks each serving step wrote
-and freed, from the Program of record and the engine's page layout, with each block's digest from the values served (the
-Commit's committed words, `pipeline.memory_map`), as `Lines` builds it (`protocols.remote_bandwidth.memory_map`: j and the rules).
+"""A request Program's KV rows from the circuit, and the pages the engine wrote them to: each row's leaves, the step it is born
+at and its last structural reader's, from the Program of record and its census (`census_of`, `rows`, cached beside each
+request Build by `pipeline.memory_map`), and each request's pages from the slots the Commit committed (`tables`) in the
+engine's page layout (`page_of`).  A memory map lays its blocks out from them (PoUB's, opt-in, `commit --memory-map`).
 
 ~~~text
 row       one position's K (or V) in a layer: a row of an attention Call's `kc` (`vc`), `Array(T, row)`, or MLA's latent row
@@ -15,43 +16,22 @@ cached    a warm request's positions 0..C-1 (`Rows.cached`): rows its Program re
           [L, 2, C, row], `kv_prefix.seed`: layer l's K and V rows at the l-th history opened), which other requests computed,
           one a cached page (its producer, the prefix plan's); such a row's `born` and `last` are its first and last reader's
           in the warm Program.  The warm request writes none of them: its first C / block_size pages are its producers'
-          (`tables`), and a block there is its producer's, freed at the last structural reader of its rows over every
-          request that reads it (`record`), so a page two requests share is written and counted once
+          (`tables`), so a page two requests share is written once
 page      `block_size` slots in each layer as the engine lays them out (`page_of`, from its cache tensor): a K plane then a
           V plane, a slot one row ("planes"), one plane whose slot holds a position's K and V head by head ("packed",
           `packed`), or one plane of latent rows ("latent"); a request's position q sits at slot
           `tables[request][q // block_size] * block_size + q % block_size`, its pages the ones the engine wrote its KV to
           (`tables`, from the slots the Commit committed) or, for its cached positions, its producers', vLLM's null block
           being page 0
-block     4,096 bytes of a plane (`store.registry._page_blocks`), at slot `firsts[layer] + ids[page, c]` (the `NodeMemory`'s
-          numbering: a KV pool of one region per layer)
-appended  a block whose rows are all born, at the step of the last (its completion), if a later step reads it: a step's
-          record, its frees then its writes, takes effect after the step's reads (remote_bandwidth's convention),
-          so a block whose last structural reader is the step that completes it is never read while resident and is in
-          no record; nor is a block with a row no step writes (it stays dirty).  A step's blocks are one append, by slot
-written   an appended block, where its append's encode landed (the session's `Deferral`; without one, at its completion)
-freed     a written block at its rows' last structural reader (memory-map/v1's free).  And a slot's registered block (a KV
-          page's filler, registered before the seed) at the step a write first reaches it, even the one completing it: its
-          bytes are no longer that block's, and a block not yet written is uncredited (the `NodeMemory`'s dirty).  A page's
-          untouched blocks stay held, counting against capacity, until then: a request's end frees only the blocks it wrote
-re-key    a live written block as old as the session's lifetime cap, its old j freed in the record of the step before its
-          append's.  Which appends are re-keys is the session's (`Deferral`); the blocks they take are the live written
-          ones of the oldest appends (a window is a prefix of them), not freed at that step
-d_j       `codec.digest` of the block's payload: its rows' served words in slot order, each word little-endian
 step      the engine's: request r's step s is `arrive[r] + s`
 ~~~
-
-The map is the prover's witness (d_j hashes user data): it goes to the prover's own file and is never published.
 """
 from __future__ import annotations
 
-from collections import deque
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from verity.core.protocols.remote_bandwidth import codec
-from verity.core.protocols.remote_bandwidth.memory_map import SLOT_LIMIT, Header, Step
 from verity.ml.circuits.census import census, step_ends
 from verity.ml.circuits.defs import PrimitiveDefinition
 from verity.ml.circuits.program import Program, is_input
@@ -59,9 +39,6 @@ from verity.ml.circuits.refs import runs
 from verity.ml.circuits.requirement import from_census
 from verity.ml.circuits.types import Array
 from verity_vllm.query.required import SAMPLING_EVENTS
-from verity_vllm.protocols.remote_bandwidth.interface import PageLayout
-from verity_vllm.protocols.remote_bandwidth.memory_map import Lines
-from verity_vllm.protocols.remote_bandwidth.registry import _page_blocks
 
 #: an attention Call's cached K and V parameters
 KV = ("kc", "vc")
@@ -101,39 +78,6 @@ class Rows:
     @property
     def positions(self) -> int:
         return len(self.layers[0][0]) if self.layers else 0
-
-
-@dataclass(frozen=True)
-class KvPool:
-    """The engine's KV pool: `pages` pages of `block_size` slots in each layer's region, layer l's from store index
-    `firsts[l]`, in a registered store of `blocks` blocks.  Unset, the pool is the whole store, its regions layer by layer,
-    with the pages the session takes."""
-
-    block_size: int = 16
-    pages: int | None = None
-    firsts: tuple[int, ...] | None = None
-    blocks: int | None = None
-
-
-@dataclass(frozen=True)
-class Deferral:
-    """A remote session's deferred residency (`store.remote.Serving.deferral`, its record's ``memory_map.deferral``): each
-    append's ``(step made, step landed, first, count)`` in append order, landed None while its encode is out, on the
-    session's steps, whose first is the engine's step 0 (``first_step``), under the session's lifetime cap ``lifetime``.
-    An append is made at its completion step, a re-key at the step after the one whose record frees its old indices."""
-
-    encodes: tuple[tuple[int, int | None, int, int], ...]
-    first_step: int
-    lifetime: int
-
-
-@dataclass(frozen=True)
-class _Append:
-    made: int
-    landed: int | None
-    count: int
-    rekey: bool
-    blocks: list[tuple[int, bytes, int]]
 
 
 @dataclass(frozen=True)
@@ -354,170 +298,3 @@ def tables(requests: Mapping[str, Rows], arrive: Mapping[str, int], slots: Calla
         if len(set(pages)) != len(pages):
             raise ValueError(f"request {r}'s {requests[r].positions} positions took pages {pages[:8]}{'...' if len(pages) > 8 else ''}")
     return out
-
-
-@dataclass(frozen=True)
-class _Pool:
-    """The session's pages in the store: page p's c-th block of layer l at slot ``firsts[l] + ids[p, c]``, covering a plane's
-    slots ``[lo[c], hi[c])`` (`_page_blocks`)."""
-
-    ids: Any
-    lo: Any
-    hi: Any
-    per_plane: int
-    firsts: tuple[int, ...]
-    region: int
-    row_bytes: int
-    pages: int
-
-    def slot(self, layer: int, page: int, c: int) -> int:
-        return self.firsts[layer] + int(self.ids[page, c])
-
-
-def _pool(requests: Mapping[str, Rows], layout: KvPool, tables: Mapping[str, Sequence[int]]) -> _Pool:
-    shapes = {(len(rs.layers), len(rs.layers[0]), rs.row_bytes) for rs in requests.values()}
-    if len(shapes) != 1:
-        raise ValueError(f"the requests' KV differs in (layers, planes, row bytes): {sorted(shapes)}")
-    ((nl, planes, sb),) = shapes
-    pages = layout.pages if layout.pages is not None else 1 + max(max(t, default=NULL_PAGE) for t in tables.values())
-    ids, lo, hi = _page_blocks(PageLayout(pages, layout.block_size, sb, planes=planes), codec.BLOCK_BYTES)
-    region = int(ids.max()) + 1
-    firsts = layout.firsts if layout.firsts is not None else tuple(layer * region for layer in range(nl))
-    if len(firsts) != nl:
-        raise ValueError(f"{len(firsts)} layer regions for {nl} layers of KV")
-    return _Pool(ids, lo, hi, ids.shape[1] // planes, tuple(firsts), region, sb, pages)
-
-
-def record(requests: Mapping[str, Rows], arrive: Mapping[str, int], payload: Callable[[str, Row], bytes], registration: bytes,
-           layout: KvPool, tables: Mapping[str, Sequence[int]], deferral: Deferral | None = None,
-           producers: Mapping[str, Sequence[str]] | None = None) -> tuple[Header, list[Step]]:
-    """The session's memory map beside the registered store `registration` digests: each request's rows from its arrival step,
-    a row's served bytes `payload(request, row)`, its pages `tables[request]` (`tables`), its writes where `deferral` has
-    their encodes land.  A warm request's cached pages are its `producers`' (as `tables` takes them): it writes no block of
-    them, and it holds each to its last structural reader there, so a page two requests share is written once and freed after
-    the last reader of either; one it reads before its producer completes it is refused.  A slot written while another
-    request's rows in it are still read is refused, and so is a deferral under lifetime cap 1 or one whose appends aren't the
-    circuit's."""
-    if deferral is not None and deferral.lifetime < 2:
-        raise ValueError(f"a session deferring residency under lifetime cap {deferral.lifetime} is refused (memory accounting): "
-                         "a block whose encode lands in the window after its append's would be credited at the cap")
-    pool = _pool(requests, layout, tables)
-    ids, lo, hi, sb, pages, bs = pool.ids, pool.lo, pool.hi, pool.row_bytes, pool.pages, layout.block_size
-    producers = _producers(requests, producers, bs)
-    filler: dict[int, list[int]] = {}
-    done: dict[int, list[tuple[int, bytes, int]]] = {}
-    #: each slot's blocks: the step a write first reaches it, the step completing it (None: it stays dirty), its rows' last
-    #: structural reader and its digest
-    uses: dict[int, list[tuple[int, int | None, int, bytes]]] = {}
-    #: each request's block in `uses[slot]`, by (request, slot), and each cached block a warm request reads: (request, its
-    #: producer, slot, first and last read)
-    at: dict[tuple[str, int], int] = {}
-    cached: list[tuple[str, str, int, int, int]] = []
-    for r, rs in requests.items():
-        if len(tables[r]) * bs < rs.positions or any(not NULL_PAGE < p < pages for p in tables[r]):
-            raise ValueError(f"request {r}'s pages {list(tables[r])[:8]} don't hold its {rs.positions} positions in pages 1 to {pages - 1}")
-        for q, page in enumerate(tables[r]):
-            for c in range(ids.shape[1]):
-                plane, i = divmod(c, pool.per_plane)
-                p0, p1 = q * bs + int(lo[c]), q * bs + int(hi[c])
-                if p0 >= rs.positions:
-                    continue
-                off = i * codec.BLOCK_BYTES - int(lo[c]) * sb
-                for layer, kv in enumerate(rs.layers):
-                    got, slot = kv[plane][p0:p1], pool.slot(layer, page, c)
-                    reach, last = arrive[r] + min(x.born for x in got), arrive[r] + max(x.last for x in got)
-                    if q < len(producers.get(r, ())):
-                        cached.append((r, producers[r][q], slot, reach, last))
-                        continue
-                    at[r, slot] = len(uses.setdefault(slot, []))
-                    if p1 > rs.positions:
-                        uses[slot].append((reach, None, last, b""))
-                        continue
-                    data = b"".join(payload(r, x) for x in got)
-                    if len(data) != len(got) * sb:
-                        raise ValueError(f"request {r}'s rows are {sb} bytes, and its payload gave {len(data)} for {len(got)}")
-                    uses[slot].append((reach, arrive[r] + max(x.born for x in got), last, codec.digest(data[off:off + codec.BLOCK_BYTES])))
-    for r, p, slot, first, last in cached:
-        n = at.get((p, slot))
-        reach, w, held, d = uses[slot][n] if n is not None else (None, None, None, None)
-        if w is None or first <= w:
-            raise ValueError(f"request {r} reads cached slot {slot} from step {first}, a block its producer {p} "
-                             f"{'never completes there' if w is None else f'completes at step {w}'}")
-        uses[slot][n] = (reach, w, max(held, last), d)
-    for slot, us in uses.items():
-        held = -1
-        for n, (reach, w, last, d) in enumerate(sorted(us, key=lambda u: u[0])):
-            if reach <= held:
-                raise ValueError(f"slot {slot} is written at step {reach} while a request's rows in it are read to step {held}")
-            if n == 0:
-                filler.setdefault(reach, []).append(slot)
-            held = last
-            if w is not None and w < last:
-                done.setdefault(w, []).append((slot, d, last))
-    head = Header(registration, layout.blocks if layout.blocks is not None else len(pool.firsts) * pool.region)
-    steps = _lines(filler, _appends(done, deferral, head.blocks), head.blocks)
-    if any(x >= SLOT_LIMIT for st in steps for x in (*st.freed, *(w.slot for w in st.written))):
-        raise ValueError(f"a slot past memory-map/v1's {SLOT_LIMIT}")
-    return head, steps
-
-
-def _appends(done: Mapping[int, list[tuple[int, bytes, int]]], deferral: Deferral | None, n: int) -> list[_Append]:
-    """The session's appends, each step's completed blocks `done[step]` by slot: without `deferral` landing at once, else
-    as its encodes have them, which must be the circuit's in order from index `n` up to the last made (the circuit's after
-    it the session never made); a re-key's blocks are taken when its line closes (`_lines`)."""
-    if deferral is None:
-        return [_Append(w, w, len(done[w]), False, sorted(done[w])) for w in sorted(done)]
-    es = [(m - deferral.first_step, None if r is None else r - deferral.first_step, f, c) for m, r, f, c in deferral.encodes]
-    out, j, last = [], n, -1
-    for u, (m, r, f, c) in enumerate(es):
-        whole = m in done and (u + 1 == len(es) or es[u + 1][0] != m)
-        prev = out[-1].landed if out else 0
-        if f != j or c < 1 or m < max(last, 0 if whole else 1) or (r is not None and (prev is None or r < max(prev, m))):
-            raise ValueError(f"the session's append {u}, {list(deferral.encodes[u])}, is no append of the store's next blocks from {j}, "
-                             "made at a step of the session in step order (a re-key after its first) and landing in append order, "
-                             "none before it is made")
-        if whole and c != len(done[m]):
-            raise ValueError(f"the session's append at step {m} is of {c} blocks, and the circuit completed {len(done[m])} there")
-        out.append(_Append(m, r, c, not whole, sorted(done[m]) if whole else []))
-        j, last = j + c, m
-    missed = [w for w in done if w <= last and not any(a.made == w and not a.rekey for a in out)]
-    if missed:
-        raise ValueError(f"the session made no append of the blocks the circuit completed at steps {sorted(missed)[:8]}")
-    return out
-
-
-def _lines(filler: Mapping[int, list[int]], appends: list[_Append], n: int) -> list[Step]:
-    """The record's lines (`Lines`, from index `n`) from the slots whose filler a write first reaches at each step and the
-    session's `appends`, step by step: each step's frees, its re-key (of the next step's append: the live blocks of the oldest
-    appends, read past the step), the appends it makes, then the writes of those landed by then."""
-    lines, landing, out, k, t, end = Lines(n), deque(), [], 0, 0, max(filler, default=-1)
-    while t <= end or k < len(appends) or landing or lines.busy:
-        lines.free(filler.get(t, ()))
-        while k < len(appends) and appends[k].made == (t + 1 if appends[k].rekey else t):
-            a, k = appends[k], k + 1
-            if a.rekey:
-                old = sorted(lines.held(t).items(), key=lambda xb: xb[1].index)[:a.count]
-                if len(old) < a.count:
-                    raise ValueError(f"the session re-keys {a.count} blocks at step {t}, and the circuit holds {len(old)} live")
-                made = lines.rekey(sorted(x for x, _ in old))
-            else:
-                made = lines.append(*zip(*a.blocks))
-            if a.landed is not None:
-                landing.append((a.landed, made.first))
-        while landing and landing[0][0] <= t:
-            lines.land(landing.popleft()[1])
-        if (line := lines.close(t)) is not None:
-            out.append(line)
-        t += 1
-    return out
-
-
-def engine_agrees(requests: Mapping[str, Rows], layout: KvPool, tables: Mapping[str, Sequence[int]], steps: Sequence[Step],
-                  block: Callable[[int, int, int], bytes]) -> dict[str, int]:
-    """How many of the session's pages' blocks the engine's KV holds as the map's last write of each left them: `block(layer,
-    page, c)` the bytes the engine's cache of layer `layer` holds at page `page`'s c-th 4 KiB (a page's planes in order).  A
-    block written again outside the session, or rewritten in part by a later request (in no step), differs."""
-    pool, last = _pool(requests, layout, tables), {w.slot: w.digest for st in steps for w in st.written}
-    got = [codec.digest(block(layer, page, c)) == last[s] for page in sorted({p for t in tables.values() for p in t})
-           for layer in range(len(pool.firsts)) for c in range(pool.ids.shape[1]) if (s := pool.slot(layer, page, c)) in last]
-    return {"compared": len(got), "equal": sum(got)}

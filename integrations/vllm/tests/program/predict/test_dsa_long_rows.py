@@ -263,10 +263,9 @@ def test_gp01_composes_a_rank_program_past_index_topk_beside_one_within_it(phi):
     """At TP8 GP-01 composes a request past INDEX_TOPK with one within it, and R1's labels hold every request-local Input of each
     to its own request: the long one's selection reads its own logits alone.  What no cheaper test can: that the composition and
     R1 take a rank Program that selects past INDEX_TOPK."""
-    canon: dict = {}
     rs = [build_program(phi, "request", LP=lp, T=0) for lp in (5, 3)]
     assert [_families(r.program.fn.body.nodes)["DsaTopKMask_v1"] for r in rs] == [3, 0]
-    comps = [request_component(r, canon) for r in rs]
+    comps = [request_component(r) for r in rs]
     assert not any("run" in c.groups for c in comps)
     wl = W.WorkloadProgram([W.WorkloadRequest(f"r{i}", i, lp, 1, 0, c, T=0) for i, (lp, c) in enumerate(zip((5, 3), comps))], lag=1)
     params, ret = wl.fn.signature()

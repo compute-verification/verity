@@ -31,6 +31,10 @@ A verifier bound to a stream and a prover (`binding`: its stream's digest and th
 holds the record's window to name both (`R6-stream`, `R6-prover`), and a window salt is bound to them, so a tile seeded
 for one prover's stream is refused in any other's.
 
+A verifier holds the record's window to name the window's seed salt it read from the challenger's log (`seedSalt`,
+`Challenger.seedSaltOf`: the one coin of the seed-salt family released after the window's open root), and to name none
+when it read none (`R6-seed-salt`), so a seed salt the server chose is refused by name.
+
 A verifier that reads the registration log's declarations (`declared`: the window's day and the log's `(day, program)`
 declarations) holds R2's program to the day's one declared circuit (`declaredCode`): `R2-undeclared` when the day has no
 declaration, `R2-declared-twice` when it has more than one, and `R2-declared` when the record's program is not the
@@ -42,6 +46,10 @@ digest, whose leaf count must be the value's rows (`R7-output` otherwise). One m
 registered value (`Earlier.value`): its entry has the domain and root of that value's entry in the `registered` of the
 log's record with that digest, whose leaves, words and word bits must be the value's own (`R7-output` otherwise), so
 nothing is registered afresh.
+
+An output value the parameters give only a port (`{"port"}`, a window's history) is that port of the previous record, the
+log's last, which R6 holds `previous` to (`lastDigest`): the verifier names the record itself, so the value is held to the
+previous window's root and domain for that port, and with no previous record it is `R7-output`.
 -/
 module
 
@@ -122,6 +130,9 @@ structure Verifier where
   /-- the window's day and the registration log's declarations as `(day, program)` each, from the log it holds when it
   samples; none when it reads no declarations -/
   declared : Option (Nat × Array (Nat × String)) := none
+  /-- the window's seed salt, lowercase hex of 64 bytes: the coin of the challenger's seed-salt family it read from the
+  challenger's log (`Challenger.seedSaltOf`), which the window must name; none when it read none -/
+  seedSalt : Option String := none
 
 /-- The programs the declarations declare for `day`, in the log's order. -/
 def declaredOf (day : Nat) (ds : Array (Nat × String)) : List String :=
@@ -169,6 +180,15 @@ def unwindowed (v : Verifier) : Array String :=
   if v.windowRoot.isSome then #[] else
     let fixed := fixedOf v
     ((heldRoots v.log (ownEntries v)).map (·.1)).filter (!fixed.contains ·)
+
+/-- **The previous record's digest**, the one R6 holds `previous` to: the log's last record's, and empty, which names no
+record, when the log is empty or that record has no digest. An output value the parameters give only a port is that port
+of this record (`OneStage.paramsParsed`), so a window's history is the previous window's output whatever else the log
+holds. -/
+def lastDigest (log : Array Json) : String :=
+  match log.back? with
+  | some e => (digestHex e).toOption.getD ""
+  | none => ""
 
 /-- `registration._output_port`: the `roots` entry for `port` of the log's first record with digest `record` (its last,
 as a dict reads it). -/
@@ -375,6 +395,8 @@ def check (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
+  -- a term, not a statement: a statement's join point doubles what `check_eq_checkRef`'s `simp` unfolds
+  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -443,6 +465,7 @@ def checkRef (rec : Json) (v : Verifier) : Array String := Id.run do
   if let some (stream, prover) := v.binding then
     if !jeq (getD (get "window") "stream") (Json.str stream) then c := addCode c "R6-stream"
     if !jeq (getD (get "window") "prover") (Json.str prover) then c := addCode c "R6-prover"
+  c := if jeq (getD (get "window") "seed_salt") (optStr v.seedSalt) then c else addCode c "R6-seed-salt"
   -- R7
   if v2 then
     c := checkOutputs c (get "registered") (ownEntries v) (v.pinned ++ heldRoots v.log (ownEntries v)) v.supplied
@@ -541,6 +564,7 @@ theorem portIndex_find (roots : Array Json) (p : String) :
     rw [(inv_portIndex roots).2.2 k, ← Array.find?_toList, Array.toList_reverse]
     congr 1; funext r; rw [jeq_of_canon hp]; rfl
 
+set_option maxHeartbeats 400000 in -- its `simp` unfolds each join point of both checks into both of its branches
 /-- **R3 at `O(n)` hash-map operations is R3 as first written**: everything a guarantee reads of `check` is `checkRef`'s. -/
 theorem check_eq_checkRef (rec : Json) (v : Verifier) : check rec v = checkRef rec v := by
   simp only [check, checkRef, portIndex_count, portIndex_has, portIndex_find]

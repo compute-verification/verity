@@ -135,6 +135,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "integrations/vllm/verity_vllm/observe", "integrations/vllm/verity_vllm/query", "integrations/vllm/verity_vllm/records",
           "integrations/vllm/verity_vllm/engine/hooks.py", "integrations/vllm/verity_vllm/engine/spec.py",
           "integrations/vllm/verity_vllm/llm.py", "integrations/vllm/verity_vllm/pipeline/program_graph.py",
+          # boundary_rows defines TemplateInlined_v1, which its sidecar binds
+          "integrations/vllm/verity_vllm/pipeline/__init__.py", "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
+          "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
           "integrations/vllm/tests/check/test_sampled_replay.py", "benchmarks/numerical/python/verity_numerical",
           "verity/core/protocols/spot/__init__.py",
           "verity/core/protocols/certifier/cache_step.py", "verity/core/protocols/certifier/cache_step.circuit-check.py",
@@ -149,6 +152,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v3.py",
           "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v3.circuit-check.json",
+          "verity/ml/protocols/certifier/compile_slice_v4.py",
+          "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.py",
+          "verity/ml/protocols/certifier/compile_slice_v4.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
           "verity/core/protocols/certifier/release.py"]
 

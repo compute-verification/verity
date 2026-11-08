@@ -11,9 +11,9 @@ refactor item that changes it, and what has landed since.
 | Protocol | Config | Status | Refactor item; what has landed |
 |---|---|---|---|
 | Sampled proofs / Flock | `--zk` | Proved. `sampling_assembled` is not a lock guarantee | item 1, landed: `sampling_assembled` is the `deployZk` instance of `sampling_assembled_of`, and `sampling_deployed_of` gives one deployed record over any Flock record |
-| | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, FINTAU, landed: #4037's `sampling_assembled_plain`, at the trimmed record. Flock's KS at the untrimmed record is on main (#4081), without a sampling instance there yet. The game-to-claims link is the broken shared row: E2EMAP's plan, 22:00Z 25 Oct |
+| | plain | Proved in the game form. No sampling theorem at plain in claims form | item 1, landed: `sampling_assembled_plain`, at the trimmed record. Flock's KS at the untrimmed record is on main, without a sampling instance there yet. The game-to-claims link is the broken shared row |
 | | recursive | Effectively none: proved, but near-vacuous. No KS-to-sampling for recursion | item 12, after the `vcalls` escape (the compiled verifier's own evaluations in the V* parts' collision escape). Item 1's recursive instance follows it |
-| PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, proofs (ZKFIN, after FinishIs): `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances, Tue 27 Oct. `AcceptedLive` on a served path needs FinishIs (Mon 26 Oct) and a served window whose lanes all verify (PRF-131's first pass verified 9 of 32): Wed 28 Oct |
+| PoUW | `--zk` | Chain broken at KS → A: `SessionSoundAt` needs `AcceptedLive`, which no served path meets yet | item 9, after FinishIs: `SessionSoundAt` to `ProofSoundAt` (δs + δ), with the TS headlines its instances. `AcceptedLive` on a served path needs FinishIs and a served window whose lanes all verify (the first pass verified 9 of 32) |
 | | plain, recursive | none | none posted |
 | PoUS | all | none (ideal model only) | item 11, over item 1 as a hypothesis |
 | Bandwidth (over PoUS's store) | all | none with a session layer | item 11 |
@@ -28,9 +28,9 @@ Items 1 and 9–12 are the refactor's statement-changing steps: KS to sampling o
 recursion's knowledge form (12). The rest (2–6, 8 and 13) are the refactor plan's other steps.
 
 **Premises in `Proofs/`.** `trees.except` (`Security/lean-audit.json`) exempts module prefixes from the tree rule
-until Flock's spec is extracted (RECKSLOCK, Wed 4 Nov). Each is there for Flock's definitions in `Proofs/`, and one
+until Flock's spec is extracted. Each is there for Flock's definitions in `Proofs/`, and one
 of them, `Proofs.Accounting.TS.Session`, is on PoUW's chain, so this is a Flock question.
-- **lean's list** (run r20261025-031300-0fcc, in CHAINMAP's note): 40 `Prop`-valued definitions under `trees.except`
+- **lean's list** (run r20261025-031300-0fcc): 40 `Prop`-valued definitions under `trees.except`
   that a locked statement takes without a lock entry. 39 are Flock's, and one, `SoundAtBridge.RowsSession.CanonRead`,
   is PoUW's.
 - **A first sort** gives each of the 40 a verdict: 10 premises and 30 conclusions.

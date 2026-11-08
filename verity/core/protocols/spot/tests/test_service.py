@@ -4,6 +4,7 @@ stream asked to sample from coins other than a challenger's refuses: the verifie
 
 from __future__ import annotations
 
+import itertools
 import random
 
 import pytest
@@ -13,7 +14,7 @@ import verity.ml.circuits.ops.scalar  # noqa: F401
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
-from verity.core.protocols.spot import coins as T, service as S
+from verity.core.protocols.spot import challenger as C, coins as T, service as S
 from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V
 
 import fake_challenger as FC
@@ -331,8 +332,8 @@ def test_a_bernoulli_law_is_refused_at_register():
         assert "R1-law" in _refused(lambda: stream.register(_record(), _ports(6)))
         assert stream.log == () and stream.records == ()
     for selection, law, table in ((S.Law("subset:2"), {"law": "subset", "k": 2}, None),
-                                  (S.Law("stratified:2"), D.parse_law("stratified:2"), None),
-                                  (S.Law("work:2"), D.parse_law("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
+                                  (S.Law("stratified:2"), D.parse_design("stratified:2"), None),
+                                  (S.Law("work:2"), D.parse_design("work:2"), WORK), (S.All(), {"law": "subset", "k": 6}, None)):
         stream = _stream(_spec(selection, public=(*RECORD_ITEMS, STRATUM)))
         assert stream.register(_record(law=law, work_table=table), _ports(6), work_table=table).order == 0, law
 
@@ -604,6 +605,50 @@ def test_a_released_salt_is_never_in_the_future_and_is_the_epochs_one_salt():
             _stream().salt_released(b"\x01", at)
 
 
+#: the window's seed salt as the Spec declares it public: the challenger's coin
+SEED_ITEM = S.Public(R.SEED_SALT, "coins", "the window's seed salt: the challenger's coin, released at the window's open")
+
+
+def _seed_coins(seed: str = "seed") -> T.ChallengerCoins:
+    """The seed-salt family of a challenger of the test's own."""
+    ch = C.LiveChallenger(FC.SCHEME, 0, [(T.SEED_SALT_FAMILY, 2)], FC.entropy(seed))
+    return T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
+
+
+def test_a_windows_seed_salt_is_drawn_once_before_it_serves_and_named_by_each_registration():
+    """The stream draws the window's seed salt at its open (`Stream.seed_salt`): the seed-salt family's first coin after
+    the window's open root, logged on the challenger's clock, drawn once and before the window's first registration.
+    Both verifiers hold each registration of the window to it: a window naming it runs round to an accepted outcome, and
+    one naming another or none is refused (`R6-seed-salt`); where the stream drew no salt, a window naming one (a salt
+    the server chose) is refused by name. The Spec declares the salt public, of kind `coins`, or a seeded window is
+    refused as undeclared."""
+    clock = Clock()
+    clock.now = 3.0
+    spec = _spec(public=RECORD_ITEMS + (SEED_ITEM,))
+    stream, root = _stream(spec, clock=clock), FC.WINDOW["root"]
+    salt = stream.seed_salt(_seed_coins(), root)
+    assert len(salt) == 64
+    assert stream.epoch_log == ({"event": "seed-salt", "window_root": root, "seed_salt": salt.hex(), "seeded_at": 3.0},)
+    assert _refused(lambda: stream.seed_salt(_seed_coins("again"), root)) == ("seed-salted",)
+    rec = _record()
+    named = lambda s: {**rec, "window": {**rec["window"], R.SEED_SALT: s}}  # noqa: E731
+    for wrong in (rec, named("5b" * 64), named(salt.hex().upper())):
+        assert _refused(lambda: stream.register(wrong, _ports(6))) == ("R6-seed-salt",)
+    draw = stream.select(stream.register(named(salt.hex()), _ports(6)))
+    assert stream.deliver(draw, [SESSION]) is None
+    out = stream.outcome(draw, _lean(), {"statement": "stub"})
+    assert out.accepted and out.verdict.ok and len(stream.epoch_log) == 1
+    late = _stream(spec)
+    late.register(rec, _ports(6))
+    assert _refused(lambda: late.seed_salt(_seed_coins(), root)) == ("seed-salt-late",) and late.epoch_log == ()
+    assert _refused(lambda: _stream(spec).register(named(salt.hex()), _ports(6))) == ("R6-seed-salt",)
+    undeclared = _stream()
+    undeclared.seed_salt(_seed_coins(), root)
+    assert "undeclared" in _refused(lambda: undeclared.register(named(salt.hex()), _ports(6)))
+    with pytest.raises(ValueError, match="of kind 'coins'"):
+        _spec(public=RECORD_ITEMS + (S.Public(R.SEED_SALT, "structure", "the window's seed salt"),))
+
+
 def test_the_stream_stops_at_its_budgeth_failure():
     stream = _stream(budget=2)
     assert not _round(stream, accepted=False).accepted and not stream.stopped
@@ -716,6 +761,6 @@ def test_the_default_draw_is_draw_first_on_the_challengers_bytes(text):
     table = WORK if text.startswith("work") else None
     for seed in range(8):
         stream = _stream(_spec(S.Law(text), public=(*RECORD_ITEMS, STRATUM)), coins=random.Random(seed).randbytes)
-        reg = stream.register(_record(law=D.parse_law(text), work_table=table), _ports(6), work_table=table)
+        reg = stream.register(_record(law=D.parse_design(text), work_table=table), _ports(6), work_table=table)
         draw = stream.select(reg)
         assert dict(draw.draw) == T.draw_first(T.OwnRandomness(random.Random(seed).randbytes), draw.law, 6)
