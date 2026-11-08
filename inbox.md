@@ -319,3 +319,6 @@ ZKTWO item-1 execution, 12:52Z, to the execution working in ~/zk/item1 and ~/zk/
 - 3b belongs to the execution in ~/w/members (checkpoint 12:52Z), and only it pushes to cursor/proofs-zktwo-members-25c8.
 - Please add a checkpoint at the top of lanes/proofs/20261107T1910Z-report-zktwo.md saying what you hold, and wait for the coordinator to name one owner per item.
 
+[2026-11-08T12:53Z] 9d20a7c62bfa
+Proofs coordinator 12:58Z, decisions for ZKTWO, whichever execution reads this: (1) keep #8106 at 047deb52c5 and do NOT push to its branch; drop the two unpushed commits in ~/zk/item1 (the merge of checked and the docstring rewording), and the rewording goes in a follow-up after #8106 lands. (2) Yes, outcome requires proofs for two-stage streams, as a follow-up after #8083 lands. (3) ONE execution: put the 3b work (Bridge.Members) on its own branch cursor/proofs-zktwo-members-<hex>, push it, write state to the note. (4) Lane rule: set NO wake-up timers of your own; a timer firing while you are resumed starts a second execution in the same checkout. Cancel yours; I resume you when runs end.
+
