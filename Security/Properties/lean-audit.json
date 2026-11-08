@@ -40,6 +40,7 @@
   "Properties.Spot.TwoStageCheck",
   "Properties.Spot.Halt",
   "Properties.Spot.Second",
+  "Properties.Spot.Members",
   "Properties.Spot.PlanCheck",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
@@ -2015,7 +2016,8 @@
     "Properties.Spot.Interval",
     "Properties.Spot.FactorUpper",
     "Properties.Spot.PlanCheck",
-    "Properties.Spot.TwoStageCheck"
+    "Properties.Spot.TwoStageCheck",
+    "Properties.Spot.Members"
    ],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
@@ -2280,6 +2282,11 @@
    "imports": ["Definitions.Accounting", "Properties.Accounting.Remote.Schedule"],
    "except": [],
    "why": "the declared circuit's requirement at the committed steering cap is stated over the memory model's game and premises (`Definitions.Accounting`, `Accounting.Guarantees.RegisteredCircuitRequirement`'s module) and the schedule check's statements and gap (`Properties.RemoteAudit.Schedule`), never a proof"
+  },
+  "Properties.Spot.Members": {
+   "imports": ["Properties.Spot.Bits", "Spot.Slots"],
+   "except": [],
+   "why": "the members' program side by side (`bitsProgs`), their partition (`membersPart`) and their replay partition over a replay layout (`filesReplay`) are stated against Bits' members read as the claims' program (`Properties.Spot.Bits`) and the replay layout's slots (`Spot.Slots`), never a proof"
   }
  },
  "reads_exempt": {
