@@ -281,8 +281,8 @@ def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
     record's `register` line holds that key and its tag, SHA-512 under `k` of the key and the record, and the service
     answers neither. The loop, which holds `k`, checks the key's tag, then the record tag under the key: a statement
     reading the registration is admitted, and one reading it under another salt key, with the line's key or its tag
-    changed, or with neither on the line, is refused, reaching nothing of the auditor. The record's state directory is
-    its user's alone."""
+    changed, with a key one byte longer (its record and both tags made as the server would), or with neither on the
+    line, is refused, reaching nothing of the auditor. The record's state directory is its user's alone."""
     state, key, other = tmp_path / "state", tmp_path / "salt.key", tmp_path / "other.key"
     fw = FW.Firewall(state)
     for _ in range(5):
@@ -307,10 +307,15 @@ def test_an_interior_registration_is_under_its_sessions_own_key(exe, tmp_path):
     Values(exe, tmp_path / "other-state", other).close()
     roots = [r for r, _ in got]
     bare = {name: x for name, x in ev.items() if name not in ("key", "key_tag")}
+    long = tk + b"\0"
+    rec_long = reference(long, 0, 1, s, [(r, tag_of(long, s, j, dom, sc, r))
+                                         for j, ((_, dom, sc), r) in enumerate(zip(TREES, roots))])
+    longer = {**ev, "key": long.hex(), "key_tag": hashlib.sha512(k + KEY_TAG_LABEL + long + rec_long).hexdigest(),
+              "record": rec_long.hex()}
     refused = f"registration 0: {NOT_TAGGED}"
     cases = [("r0000", other, ev, refused), ("r0001", key, {**ev, "key": _flip(ev["key"])}, refused),
              ("r0002", key, {**ev, "key_tag": _flip(ev["key_tag"])}, refused), ("r0003", key, bare, refused),
-             ("r0004", key, ev, None)]
+             ("r0004", key, longer, refused), ("r0005", key, ev, None)]
     for sid, kf, line, why in cases:
         _put(state, at, line)
         got_why, sent = _session(exe, state, sid, public(tmp_path / f"{sid}.pub", roots), kf, tmp_path)

@@ -714,8 +714,9 @@ runs, answering the salts to `salts` with an interior table's tag checked under 
 again holds none. The tables' tags and the registration's record tag are under `ks`. At `register S` the service writes
 `ks` on the registration's `register` event in the ZK server's record (`key`), with `ks`'s tag: SHA-512 under `k` of
 `ks` and the record (`key_tag`, `Salts.keyTagOf`, its label the SHA-512 of
-`verity/zk-server/interior-key-tag/v1\0`). The release side checks the record tag under `ks` only where that tag is the
-server's (`Salts.RegistrationRecord.valid`). So a writer of the record without `k` adds no interior registration the
+`verity/zk-server/interior-key-tag/v1\0`). The release side checks the record tag under `ks` only where `ks` is 64 bytes,
+so the tagged message splits into key and record one way, and that tag is the server's
+(`Salts.RegistrationRecord.valid`). So a writer of the record without `k` adds no interior registration the
 loop admits, and a `register` event without a key is checked under `k`, which no interior record's tags are under. The
 registration is numbered, appended and admitted as any other.
 

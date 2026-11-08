@@ -281,9 +281,10 @@ def recordTagOf (k : ByteArray) (n m T : Nat) (trefs : ByteArray) : ByteArray :=
   Sha512.hash (k ++ REG_LABEL ++ be64 n.toUInt64 ++ be64 m.toUInt64 ++ be32 T.toUInt32 ++ trefs)
 
 /-- **The tag of an interior session's own key** `ks`, beside its registration's record `record` on the ZK server's
-record, under the key `k`: `SHA-512(k ‖ L ‖ ks ‖ record)`, `L = SHA-512("verity/zk-server/interior-key-tag/v1\0")`.
-By it the release side knows the key the record's tags are under is one the service drew; it stays on the ZK server's
-record, and nothing released reads it. -/
+record, under the key `k`: `SHA-512(k ‖ L ‖ ks ‖ record)`, `L = SHA-512("verity/zk-server/interior-key-tag/v1\0")`,
+`ks` of `KEY_BYTES` bytes, so the message splits into key and record one way only. By it the release side knows the key
+the record's tags are under is one the service drew; it stays on the ZK server's record, and nothing released reads
+it. -/
 def keyTagOf (k ks record : ByteArray) : ByteArray := Sha512.hash (k ++ KEY_TAG_LABEL ++ ks ++ record)
 
 /-- **The record of registration `n`**, the session `o` of an epoch that opened `m` commit sessions, under the key `k`:
@@ -310,13 +311,13 @@ structure RegistrationRecord where
 
 /-- Whether `r`'s record tag is the server's for its number, session count and table refs. Where the ZK server's record
 holds no key beside it (`own` none), the tag is checked under the key `k`. Where it holds an interior session's own key
-`ks` and that key's tag, the tag is checked under `ks`, and only once `ks`'s tag is the server's under `k` for `ks` and
-the record (`keyTagOf`). -/
+`ks` and that key's tag, the tag is checked under `ks`, and only once `ks` is `KEY_BYTES` long and its tag is the
+server's under `k` for `ks` and the record (`keyTagOf`). -/
 def RegistrationRecord.valid (k : ByteArray) (r : RegistrationRecord) (own : Option (ByteArray × ByteArray)) : Bool :=
   let tag := fun key => ctEq r.tag (recordTagOf key r.n r.m r.tables.size r.trefs)
   match own with
   | none => tag k
-  | some (ks, kt) => ctEq kt (keyTagOf k ks r.bytes) && tag ks
+  | some (ks, kt) => ks.size == KEY_BYTES && ctEq kt (keyTagOf k ks r.bytes) && tag ks
 
 /-- **A registration's record**, exactly `be64 n ‖ be64 m ‖ be32 T ‖ T table refs ‖ tag`, `T` at least one. -/
 def RegistrationRecord.parse (b : ByteArray) : Except String RegistrationRecord := do
