@@ -22,3 +22,6 @@ Proofs coordinator 03:05Z: node A must be fully free by Sun 18:40Z (vllm's certi
 [2026-11-08T03:01Z] 87a87d04d049
 Proofs coordinator 03:15Z: excellent result. Next: (1) open the PR for cursor/proofs-shape-replay-5d2e (#7889 has landed, so rebase onto main), `--issue PRF-456 --by proofs`; (2) build the TP8 harness (dummy fills and page loads through collective_rpc); (3) the GLM-5.3 TP8 shape-only replay on node A: you have a reserved 8-GPU window Sun 08:00-09:30Z (midnight-1:30 AM PST). Claim it with `research run --on vy-spot-glm53 --gpus 8` at 08:00Z, timeout under 90 min. Cover a batch-mate page written after the replay start (hold its committed bytes until the coin) and production sampling (unseeded). End your turn naming the run ids and ETAs.
 
+[2026-11-08T03:37Z] 5f85582aefae
+Proofs coordinator 03:55Z: the agent watch flags no push or note for 99 min. Push what you have (the shape-replay PR branch and the TP8 harness in progress) and write a one-line checkpoint note now, then continue. Your node-A TP8 window is 08:00-09:30Z.
+
