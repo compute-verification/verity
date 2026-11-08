@@ -9,7 +9,10 @@ from math import log, sqrt
 from common import *
 
 PEAK_MAC_S = sc["proof_overhead"]["value"]["peak_mac_s"]
-WEIGHTS = tc.weights(c)  # {"FP8": bits, "FP4": bits}
+#: the measured compressed size of the FP8 checkpoint, a share of its 8 bits a weight: what an FP8 theft must recover
+FP8_COMPRESSED = 0.83
+#: the bits a break-even reaches: FP4 at 4 bits a parameter, FP8 at its compressed size
+WEIGHTS = tc.weights(c) | {"FP8": FP8_COMPRESSED * tc.weights(c)["FP8"]}
 MACHINE_GPUS = c["machine_gpus"].value
 WINDOW = c["window"].value
 
