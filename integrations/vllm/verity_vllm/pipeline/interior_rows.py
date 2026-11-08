@@ -13,9 +13,11 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
   the committed store (`serving_rows.population`, `serving_rows.read_all`).
 * `interior`: the replay sample's spans, each padded to n_rho with copies of its last unit, committed as one window
-  (`ml.windows.rows`) and registered after ``previous``, the boundary registration's digest. Its run is `interior_run`
-  of that digest and the replay sample, so every port's domain binds which replay block each n_rho units are; the
-  challenger derives the same ports from what it holds (`interior_ports`).
+  (`ml.windows.rows`, every leaf's salt fresh from the OS) and registered after ``previous``, the boundary registration's
+  digest, under the window ``{kind, run, row, interior: true[, replay]}``. Its run is `interior_run` of that digest and
+  the replay sample, so every port's domain binds which replay block each n_rho units are; the challenger derives the
+  same ports from what it holds (`interior_ports`). The spans must share one Program, as a size class's spans share its
+  replay Definition.
 * `register`: the record on the two-stage stream after its first stage.
 
 A span reads one template's units, one member of word rows; a chunked or shared-row template's span is refused by name.
@@ -24,6 +26,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
@@ -178,11 +181,13 @@ def _words(v: Any, dtype: str, width: int, fam: str, what: str) -> np.ndarray:
 @dataclass(frozen=True)
 class Span:
     """One request span's units of one template: its member (``n`` units), the units' rows and outputs as
-    `ml.windows.rows.commit` takes them, and `serving_rows.read`'s index entries, which say which row each unit is."""
+    `ml.windows.rows.commit` takes them, `serving_rows.read`'s index entries, which say which row each unit is, and the
+    digest of the Program it was replayed from."""
     rid: str
     member: CS.Member
     data: dict[str, dict[str, np.ndarray]]
     entries: list[list[Any]]
+    program: str
     seconds: dict[str, float] = field(default_factory=dict)
 
     @property
@@ -214,7 +219,8 @@ def span(inst: dict[str, Any], replay: Replay, template: str, *, program_dir: st
                          "shared-row template's interior is not built)")
     t1 = time.perf_counter()
     (data, entries), = SRW.read_all(m, rows, replay, replay.weights, arrivals)
-    return Span(rid, m[0], data, entries, {"index_s": round(t1 - t0, 3), "read_s": round(time.perf_counter() - t1, 3)})
+    return Span(rid, m[0], data, entries, str(inst["digest"]),
+                {"index_s": round(t1 - t0, 3), "read_s": round(time.perf_counter() - t1, 3)})
 
 
 def interior_run(boundary: str, sample: Sequence[int]) -> str:
@@ -249,25 +255,31 @@ class Interior:
     entries: list[list[list[Any]]]
 
 
-def interior(spans: Sequence[Span], n_rho: int, boundary: str, sample: Sequence[int], *, previous: str | None = None,
-             kind: str = "served", salt_key: bytes | None = None) -> Interior:
+def interior(spans: Sequence[Span], n_rho: int, boundary: str, sample: Sequence[int], *, row: str, replay: str | None = None,
+             previous: str | None = None, kind: str = "served", salt_key: bytes | None = None) -> Interior:
     """The replay sample's spans (``spans[i]`` replay block ``sample[i]``'s), each padded to ``n_rho`` units, committed
-    and registered after ``previous`` (the boundary registration's digest ``boundary`` by default), its window naming
-    the boundary and the replay sample. ``salt_key``: tests only (`ml.windows.rows.commit`)."""
+    and registered after ``previous`` (the boundary registration's digest ``boundary`` by default) under the window
+    ``{kind, run, row, interior: true}``: ``row`` the served workload's row, ``replay`` the replay's run when given.
+    Every leaf's salt is fresh from the OS; ``salt_key``: tests only, the salts derived from it (`ml.windows.rows.commit`)."""
     if not spans or len(spans) != len(sample):
         raise ValueError(f"{len(spans)} spans for a replay sample of {len(sample)}")
+    if len({s.program for s in spans}) != 1:
+        raise ValueError(f"the spans were replayed from Programs {sorted({s.program[:16] for s in spans})}, not one: a size "
+                         "class's spans share its replay Definition")
     first = spans[0].member
     if any((s.member.template, s.member.rows, s.member.outs, s.member.schemas) !=
            (first.template, first.rows, first.outs, first.schemas) for s in spans):
         raise ValueError("the spans' units are not one template's in one layout")
     window = interior_window(first, n_rho, boundary, sample)
+    ports = CS.expected_ports(window)
     padded = [s.padded(n_rho) for s in spans]
     data = {kind_: {p: np.concatenate([d[kind_][p] for d in padded]) for p in padded[0][kind_]} for kind_ in ("rows", "outs")}
-    c = CS.commit(window, [data], salt_key=salt_key)
-    provenance = {"interior": True, "boundary": boundary, "replay_sample": [int(u) for u in sample]}
+    fresh = None if salt_key is not None else {p: os.urandom(v["leaves"] * CS.SALT_BYTES) for p, v in ports.items()}
+    c = CS.commit(window, [data], salt_key=salt_key, salts_of=fresh)
+    provenance = {"row": row, "interior": True, **({"replay": replay} if replay is not None else {})}
     rec = CS.registration(c, provenance, boundary if previous is None else previous, kind=kind, registrar=R)
     layer = CS.leaf_layer({m.key: c.public_body(k) for k, m in enumerate(window.members)})
-    return Interior(rec, CS.expected_ports(window), layer, c, [s.entries for s in spans])
+    return Interior(rec, ports, layer, c, [s.entries for s in spans])
 
 
 def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:

@@ -4,9 +4,11 @@ reproduces the RoPE heads serving committed, bit for bit, evaluating only its re
 `Stream` over RoPE heads, after a stand-in boundary registration over the three request spans and its first stage, the
 replay sample's interior registration is accepted and the second stage samples k in each sampled span, while a forged
 leaf, a wrong `previous`, a wrong population and the spans in another order than the replay sample's are refused by
-name."""
+name, and spans replayed from two Programs are not committed."""
 
 from __future__ import annotations
+
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -27,6 +29,7 @@ PROMPTS = {"r0": [1, 2], "r1": [5, 3], "r2": [4, 6]}
 UNITS = 16                        # a request's RoPE heads: 4 tokens (2 prefill, 2 decode) x (3 query + 1 key heads)
 N_RHO, Q, K = 16, 2, 1
 SALT = bytes(range(32))
+ROW = "interior-rows-test"
 DELTA = 2.0 ** -40
 
 
@@ -188,15 +191,18 @@ def _first(world, spans):
 def test_the_replay_samples_interior_registers_after_its_boundary_and_the_second_stage_samples_it(world, spans):
     """The interior of spans 0 and 2, committed from their replays, registers after the boundary on the challenger's
     own ports (from the size class, the boundary's digest and its replay sample) and the leaf layer of the bodies it
-    received; the second stage then samples k heads in each sampled span. By both verifiers, so it builds the Lean."""
+    received; the second stage then samples k heads in each sampled span. Every leaf's salt is fresh from the OS, so two
+    commitments of one replay share their ports and no root. By both verifiers, so it builds the Lean."""
     stream, reg, first = _first(world, spans)
     assert first.units == [0, 2]
-    it = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, salt_key=SALT)
-    assert it.ports == IR.interior_ports(spans["r0"].member, N_RHO, reg.digest, first.units)
+    it = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, replay="replay-test")
+    again = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW)
+    assert it.ports == again.ports == IR.interior_ports(spans["r0"].member, N_RHO, reg.digest, first.units)
+    assert not set(it.committed.roots.values()) & set(again.committed.roots.values())
     ireg = IR.register(stream, first, it)
     assert ireg.record["population"] == Q * N_RHO and ireg.record["previous"] == reg.digest and stream.log[-1] == ireg.record
-    assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "interior": True,
-                                     "boundary": reg.digest, "replay_sample": [0, 2]}
+    assert ireg.record["window"] == {"kind": "served", "run": IR.interior_run(reg.digest, [0, 2]), "row": ROW,
+                                     "interior": True, "replay": "replay-test"}
     second = stream.select(ireg)
     assert second.replay_sample == first and [u // N_RHO for u in second.units] == [0, 1]
 
@@ -206,19 +212,22 @@ def test_an_interior_registration_is_refused_by_name(world, spans):
     the one of the bodies it released), a record not chained after the boundary (`R6-previous`), spans committed at
     another size class (`interior-population`), and the replay sample's spans in another order, whose record names
     another run (`R3-domain`). Which span's values sit at which n_rho units is the second stage's proof's to hold: the
-    registration hides them."""
+    registration hides them. Spans replayed from two Programs are refused before any commitment."""
     stream, reg, first = _first(world, spans)
-    honest = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, salt_key=SALT)
+    with pytest.raises(ValueError, match="not one: a size class's spans share its replay Definition"):
+        IR.interior([spans["r0"], replace(spans["r2"], program="p" * 64)], N_RHO, reg.digest, first.units, row=ROW)
+    honest = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
     bad = spans["r2"].data["outs"]["out"].copy()
     bad[3, 5] ^= 1
-    forged = IR.Span("r2", spans["r2"].member, {**spans["r2"].data, "outs": {"out": bad}}, spans["r2"].entries)
-    lie = IR.interior([spans["r0"], forged], N_RHO, reg.digest, first.units, salt_key=SALT)
+    forged = replace(spans["r2"], data={**spans["r2"].data, "outs": {"out": bad}})
+    lie = IR.interior([spans["r0"], forged], N_RHO, reg.digest, first.units, row=ROW, salt_key=SALT)
     assert lie.ports == honest.ports and lie.leaf_layer != honest.leaf_layer
     assert _refused(lambda: IR.register(stream, first, lie, leaf_layer=honest.leaf_layer)) == ("R4-leaf-layer",)
-    late = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, previous="00" * 64, salt_key=SALT)
+    late = IR.interior([spans["r0"], spans["r2"]], N_RHO, reg.digest, first.units, row=ROW, previous="00" * 64,
+                       salt_key=SALT)
     assert _refused(lambda: IR.register(stream, first, late)) == ("R6-previous",)
-    wide = IR.interior([spans["r0"], spans["r2"]], N_RHO + 1, reg.digest, first.units, salt_key=SALT)
+    wide = IR.interior([spans["r0"], spans["r2"]], N_RHO + 1, reg.digest, first.units, row=ROW, salt_key=SALT)
     assert _refused(lambda: IR.register(stream, first, wide)) == ("interior-population",)
-    swapped = IR.interior([spans["r2"], spans["r0"]], N_RHO, reg.digest, [2, 0], salt_key=SALT)
+    swapped = IR.interior([spans["r2"], spans["r0"]], N_RHO, reg.digest, [2, 0], row=ROW, salt_key=SALT)
     assert _refused(lambda: IR.register(stream, first, swapped, ports=honest.ports)) == ("R3-domain",)
     assert IR.register(stream, first, honest).record["population"] == Q * N_RHO
