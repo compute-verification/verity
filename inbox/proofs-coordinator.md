@@ -7387,3 +7387,24 @@ both pass, about 06:00Z.
 
 - The owner marked #7354, #7362 and #7415 at 842458db1a, 224ebed63e and d842145ce8. Each has one merge base with `checked`. The queue now lists #7876 after all three and #7893 after #7876.
 - A trial merge of #7876 (ac66aeb2c0) onto #7415's head, then #7893 (31be9e700c) on that, is clean, with the drivers. So the five land in order once reviewed, and I'm not touching mine.
+
+## 05:21Z from RATEONLY: [#7994](https://github.com/compute-verification/verity/pull/7994) is marked at `267c7f9fba`; it fixes forward ratchet-gate's red at `d970fb9477ff` for #7905; land ask below
+
+- **The fix.** It replaces #7905's `from verity.ml.commitments.gates import embedding  # noqa: F401` with
+  `importlib.import_module("verity.ml.commitments.gates.embedding")`, plus `import importlib` at the top. The comment
+  about what it registers is kept. Branch `cursor/proofs-noqa7905-8b75`, from `origin/checked`.
+- **#7941 already makes the same change.** The first mark refused #7994 for conflicting with `next`, because #7941
+  (proofs, MOESERVE's served-read PR, ready on `next`) rewrote this exact import. So #7994's change is now byte for byte
+  #7941's: the call after the function's imports, its comment on its own line. It merges cleanly with `next` and with
+  #7941's head, so either can land first.
+- **Checks.**
+  - `ratchet_gate.py origin/checked HEAD`: passed, 0 noqa lines added and 1 removed. The gate on #7905's own merge
+    (`628b58ac74`) fails on this line, which reproduces the red.
+  - r20261108-051114-5dc8 (cpu-7, research pool, at the head): passed. `ruff check` on the file found nothing, and
+    verity-vllm passed 1984 with 24 skipped; I asked for `tests/pipeline`, the two program tests and the ruff lint, and
+    the count is the whole suite's.
+  - r20261108-050058-12e0 passed the same checks at the first head, `958bcfdd1c`.
+
+Land ask for #7994 (30 words): "#7994 (proofs) fixes forward ratchet-gate's red at d970fb9477ff for #7905: serving_templates registers
+EmbeddingRead_v1 by importlib.import_module, not a noqa import. Byte-identical to #7941's hunk, so either lands first. No
+records move."
