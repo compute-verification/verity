@@ -114,6 +114,8 @@ theorem sessionsTwo_compiled (H : Msg → Msg) (hrd : c.ReplayDraws two rs) (hsd
   replayDraws := hrd
   secondDraws := hsd
   slots _ _ := List.length_take_le _ _
+  unions x := ⟨(Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le,
+    (Claims.SamplingGeneric.ofDeploy_nPU (deployOf F c) iroots x).le⟩
   refuses := hr
   interior := hi
   fixed := Claims.SamplingGeneric.fixed_ofDeploy (deployOf F c) iroots hf

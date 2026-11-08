@@ -242,6 +242,7 @@ theorem twoLTwo_sessions {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited
       refine (Pr_le_one _).trans (le_of_eq (Finset.prod_eq_one fun ρ _ => Finset.prod_eq_one fun t _ => ?_).symm)
       rw [hc ρ t, Finset.card_empty, Claims.Sampling.escCell_zero]
   slots _ _ := le_rfl
+  unions _ := ⟨le_rfl, le_rfl⟩
   refuses x _ _ _ _ _ := twoLTwo_scope x
   interior _ _ _ _ _ _ _ := rfl
   fixed := (twoL_sessions (Coin := Coin) H).fixed
