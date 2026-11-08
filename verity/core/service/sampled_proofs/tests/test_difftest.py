@@ -38,7 +38,6 @@ import copy
 import functools
 import hashlib
 import json
-import os
 import random
 import re
 import shutil
@@ -51,6 +50,7 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
+import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
@@ -3954,7 +3954,7 @@ REAL_TEMPLATES = [
 ]
 
 
-@pytest.mark.skipif(not os.environ.get("VERITY_SAMPLED_PROOFS_REAL_TEMPLATES"),
+@pytest.mark.skipif(not settings.REAL_TEMPLATES,
                     reason="about 15 minutes and 30 GB: set VERITY_SAMPLED_PROOFS_REAL_TEMPLATES=1")
 @pytest.mark.parametrize("n", UNIT_GATES_AT)
 def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
