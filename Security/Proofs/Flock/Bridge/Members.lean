@@ -115,9 +115,9 @@ theorem runIn (hA : SitsAt Q b P) (htop : P.Topological) (ref : ℕ → Option B
     have hiP : i < P.gates.length := by omega
     try dsimp only
     by_cases hiu : i ∈ u
-    · rw [if_pos ((mem_map_add (b := b)).2 hiu), if_pos hiu, if_pos (show b + i < b + g by omega), if_pos hig,
+    · rw [ite_eq_left ((mem_map_add (b := b)).2 hiu), ite_eq_left hiu, ite_eq_left (show b + i < b + g by omega), ite_eq_left hig,
         ih i hig hiP]
-    · rw [if_neg (mt (mem_map_add (b := b)).1 hiu), if_neg hiu, hA.read hiP]
+    · rw [ite_eq_right (mt (mem_map_add (b := b)).1 hiu), ite_eq_right hiu, hA.read hiP]
 
 /-- `Q` commits gate `b + g` for gates `u` `b` later exactly when `P` commits `g` for `u`. -/
 theorem boundary (hA : SitsAt Q b P) (u : List ℕ) {g : ℕ} (hg : g < P.gates.length) :
@@ -244,8 +244,8 @@ theorem sitsAt_sideBySide_zero (p : Claims.Sampling.Prog) (ps : List Claims.Samp
     omega
 
 theorem sitsAt_sideBySide_succ {p : Claims.Sampling.Prog} {ps : List Claims.Sampling.Prog} (hp : p.Topological)
-    {o : ℕ} {X : Claims.Sampling.Prog} (hA : SitsAt (sideBySide ps) o X) :
-    SitsAt (sideBySide (p :: ps)) (p.gates.length + o) X where
+    {o : ℕ} {Pm : Claims.Sampling.Prog} (hA : SitsAt (sideBySide ps) o Pm) :
+    SitsAt (sideBySide (p :: ps)) (p.gates.length + o) Pm where
   gates i hi := by
     rw [sideBySide_gates, List.getElem?_append_right (show p.gates.length ≤ p.gates.length + o + i by omega),
       List.getElem?_map, show p.gates.length + o + i - p.gates.length = o + i by omega, hA.gates i hi,
