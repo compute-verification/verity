@@ -6,10 +6,12 @@ from typing import Any, Callable
 
 #: GLM-5.3's rows past INDEX_TOPK in the mask form at its TOPK = K = 2,048, over every key count from the first row past
 #: INDEX_TOPK to the longest row at 128k context, with its latent rows (W = KV_LORA + QK_ROPE = 576 bf16 words) for the rows'
-#: read, checked at these spots (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaTopKMask_v1 ...``).  Past 7,281
-#: keys the rows are over circuit-check's input budget and read lazily (`circuit_check.targets.LAZY_OPERANDS`).  No kernel
+#: read, checked at these spots (`circuit_check.ranges`; ``circuit-check --as-call --ranges DsaTopKMask_v1 ...``).  No kernel
 #: realizes these word Definitions: their Boolean Definitions' word views compare them, at the same spots
-#: (`boolean_dsa_topk_mask`'s sidecar)
+#: (`boolean_dsa_topk_mask`'s sidecar).  The rows' read spans the row width too: at every W it is one network
+#: (`dsa_topk_mask.rows`, by N and K) of `DsaWaksmanSwap_v1{W,E}` and `DsaWaksmanPick_v1{W,E}`, so the spots check it at the
+#: latent rows' 576 words to 65,537 keys, past 7,281 of them read lazily (`circuit_check.targets.LAZY_OPERANDS`), and at one
+#: word to 131,072 (at 576 words a spot there takes about 12 h)
 RANGES = {
     "DsaTopKMask_v1{N=2049..131072,TOPK=2048}": (
         # the ends: the first row past INDEX_TOPK, and the longest row at 128k context
@@ -22,11 +24,11 @@ RANGES = {
         "N=2049", "N=131072",
         "N=2050", "N=4096", "N=4097", "N=16385", "N=65537", "N=100001",
     ),
-    "DsaButterflyRows_v1{N=2049..131072,K=2048,W=576,E=16}": (
-        "N=2049", "N=131072",
-        "N=2050", "N=4096", "N=4097", "N=16385", "N=65537", "N=100001",
+    "DsaButterflyRows_v1{N=2049..131072,K=2048,W=1..576,E=16}": (
+        "N=2049,W=576", "N=131072,W=1",
+        "N=2050,W=576", "N=4096,W=576", "N=4097,W=576", "N=16385,W=576", "N=65537,W=576", "N=100001,W=1",
         # the last row whose rows are read whole and the first read lazily
-        "N=7281", "N=7282",
+        "N=7281,W=576", "N=7282,W=576",
     ),
     "DsaTopKRow_v1{N=2049..131072,TOPK=2048}": (
         "N=2049", "N=131072",
