@@ -758,18 +758,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Circuit.BitFaninPos": {
-   "owner": "@soundness",
-   "digest": "45512e8df059ed91e18686bc0566c1fea60a580b592f5f8090ed5983c13f0d3e",
-   "issue": "LEAN-210",
-   "due": "2026-11-11"
-  },
-  "Verity.Circuit.Boolean": {
-   "owner": "@soundness",
-   "digest": "a995dfb38aab58517bf9c93b3b0d18603dd69feadf4fc73472ad6f28f1a17ede",
-   "issue": "LEAN-210",
-   "due": "2026-11-11"
-  },
   "Verity.Site.Boundary": {
    "owner": "@lean",
    "digest": "50c25787a970be9a17ca64fb4e05503a0761b0713bc7559c426f3103eb93fa35",
@@ -13415,7 +13403,7 @@
    }
   },
   "Definitions.Claims.Sampling": {
-   "digest": "309c173c0691d7c517ab043fd4cfa99f8b5300e898382eb73bc4af0d89796c98",
+   "digest": "fcb7e04e6c7848cee7490e309f74ce779306be9dc75ca427d12b61dc353df349",
    "definitions": {
     "Claims.Sampling.AuditStatement": "14dca2945e169db647822bc5ada687c2bc9d3c764e14fe1a86a63ed6862061f8",
     "Claims.Sampling.AuditStatement.prog": "87b63818a7d980ed2906214d1894f239d7c1f55cf1806d17b654b4b81fcc5108",
@@ -13458,11 +13446,11 @@
     "Claims.Sampling.committed": "22df212fb72ce74a19e26f8872e3485f5f8121ae32b0a01d4e3d5afb27e0a4e3",
     "Claims.Sampling.instDecidableEqBGate": "9352d07d9bab8e8f6b39d537474b7c73b29fdd005cef32a21b1c2c38d8b26bd9",
     "Claims.Sampling.instDecidableEqBGate.decEq": "2c74bd5a38f95e3617d6d030739518e9bd2ae3005c1b022e8e8b87624f8d4c6b",
+    "Claims.Sampling.sizeClasses": "f898953555d0661bf8e2ce06a5df94403560e382191d0928ad74501c9770ab71",
     "Claims.Sampling.strataPa": "44b2b7abfc5d2db01bc9e2a2bd6f1f600f8e38bb45b19a1a1b01202825ed4de4",
     "Claims.Sampling.strataSizes": "3e65e4ae902fc50503e561c9df3e8d1def7433f99dd2f385d8fe65e581ba6f67",
-    "Claims.Sampling.unitClass": "c3b46ba7dc28d55a350e20d697a814e4d67765dca7e8578f62f54dd7a17e79f7",
+    "Claims.Sampling.unitClass": "16f9b7da38b462edafe377f64af7c18d1139bd7ea4dab3e1e5fd306e2f3a00fb",
     "Claims.Sampling.unitClassMax": "cfd5d8c6c8bd005b894ca319d8f78f9808a91f83c0af6a3f2379d6369d60addb",
-    "Claims.Sampling.unitClasses": "89b7f705e4da346df3203df4f010562817bcec76189e97c1ce5d9ae80efad2d8",
     "Claims.Sampling.window": "d11d808843864bb4dc6ce0ebb8a26c85eb2d72bf5f633396f7e6f269d091137d"
    }
   },
@@ -23599,8 +23587,9 @@
    }
   },
   "SampledProofs.ChallengerTrees": {
-   "digest": "b3feb2583eb137d45fc0575ad263ba89b6fc129b5a5bd28abd8d90faa1b9b566",
+   "digest": "a3e7c2be4136a06facc5bb2774683ed24d2bd6db91384ba4d0aac0864bc193e9",
    "definitions": {
+    "SampledProofs.Challenger.EXTRA_OPENING": "63641ef1b7831157804cf5d426e6dc54bca69556d77b67b980781dbcde21b59a",
     "SampledProofs.Challenger.LINK_ROOT_LEN": "1f8fe31e355f018a53a514f119ab08ada8488ed6acb6643ec9c8df82a7dc045a",
     "SampledProofs.Challenger.LINK_TABLES": "8af716a484dd7ab4f4e315c2eeb20f7828c8781f86bb7275cf827566b638e88d",
     "SampledProofs.Challenger.LoggedTree": "885ea6f8fcb5591d9bbb4b603865b76ffdf652083bbbff692a634efdf096f032",
@@ -23632,10 +23621,11 @@
     "SampledProofs.Challenger.linkLine": "1c43c5cbc5e0405b6043bcaafede1833bd144b901ff999faed53e217bd553195",
     "SampledProofs.Challenger.openLine": "09d16a5e50d4e79db09f5449eebeadc0d8508e5db08e042c085f41accbd32433",
     "SampledProofs.Challenger.recordCoins?": "e0b5d72ec7b5b6e2b4ac1cc5739121ba32d466004d30d0cc62210f159f0daed6",
+    "SampledProofs.Challenger.recordRounds": "4d1fb3f6172fdcfbb5bc140cb0eb67058cd83356ea2e7ec6dc69f4b2db24a327",
     "SampledProofs.Challenger.rootOf": "c4d3c8b6790f148c96e38fcab9c4397ca2a945003ebcdb5744c521e1b9deef5b",
     "SampledProofs.Challenger.sampleLinkFirst": "40656b6be631ea6f9a640acc31340a2ed42770721553ba22f105a015d7ad3c05",
     "SampledProofs.Challenger.sampleLinkFirstFrom": "255274d7cc03d77c7fe2588909d98e5a073fa55f7b294c7bcc504f3cb0f0bd6e",
-    "SampledProofs.Challenger.sessionTreeReason": "6be4668e903ca6cd80b2ad63566fa313a290f14ee1a2ad9e46eaec0f6dca610d",
+    "SampledProofs.Challenger.sessionTreeReason": "0c48477f66a9bb5173d400e135b4a2b9e778c1a631918a3156c76892f154c593",
     "SampledProofs.Challenger.sessionsTreeReason": "c3e4f69c083dcf5e29e5c718e8b9d559d668b72ad652c9bc28f6d3e5878967e1",
     "SampledProofs.Challenger.trustedTreesOf": "b68a1fcd5206defc96c6413db71389f77ec1703dfc3f204a85d564ed1148d794",
     "_private.SampledProofs.ChallengerTrees.0.SampledProofs.Challenger.isHexN": "2dcd137ccdf67fb110c9b12c5c48d9cb3d84a940e1316b7093818f79c566d4cc",
@@ -23644,7 +23634,7 @@
    }
   },
   "SampledProofs.Draw": {
-   "digest": "83171ac42bb107150d5faa31e072021c5e1280d88e0d6358c3cdd6fbe484da5e",
+   "digest": "e9a6fb746a2d6412f2583c44085162f4a9e6e343f2d9bb1222dc913967b26c58",
    "definitions": {
     "SampledProofs.Draw.BERNOULLI": "e2c9adff20ef4d107fc4a91b10ad53dc1ffe2ba8c4407255086a717517db7ba4",
     "SampledProofs.Draw.bernoulli": "276ec3f2c4a63b0c5e760cc6ac4e51500d165a6af7b8fc1d8e46a93f5a9e3348",
@@ -23655,7 +23645,7 @@
     "SampledProofs.Draw.deriveLaw": "037f17a61be7d0c0db3be8df7550dc58de6fc692ba9556f7ba2643d59962e01b",
     "SampledProofs.Draw.drawFirstRead": "4f1b24e7b1eebe61ca78e82a4516e74d3224129d0cfc1dffb16f756f6c4cd11c",
     "SampledProofs.Draw.drawUnits": "9acd484c97afa785cb08b2f96e3f16f652133691588bf90ca9a0b22fe17ba3f2",
-    "SampledProofs.Draw.flockLaw": "5f2426561c22794e41fe091662543ddb6ec8e231d6515e81f98c2c51005c2d82",
+    "SampledProofs.Draw.flockLaw": "cf85fedf4b8faf6c165a923dbfed68d43b532fb0fb8dd77eed74f40a26ad9335",
     "SampledProofs.Draw.lawOf": "5e9f1cd98e9e3edae16e0e2bc0580a246fb14292f58970ddbe7acf485e2269c9",
     "SampledProofs.Draw.probability?": "218ab03fa02c33a5101ee45ece031299e9aa51f16ca54744eceaf1029bbc2d51",
     "SampledProofs.Draw.proved": "0760af8118a5c2ae8bb3112dbb5b528d6e527f930a3bd879737cb5d60f743e2e",
