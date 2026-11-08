@@ -6,7 +6,7 @@ is the outline and the entry points.
 
 ## What runs today
 
-A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the prover
+A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the developer
 doesn't control (`verifier_party.py`), or every party in one process (`period.py`), against the prover's passes over
 its registered store. A period's case replays through the Lean (`RemoteAudit.Protocol`), and the session harness runs
 the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
@@ -43,7 +43,7 @@ The verifier's definition is the Lean package `lean/` (`RemoteAudit`), the verif
 every event's result, the session's outcome and its record, the registry (`Registry`: one live registration a node,
 each session's index `k`, the outcomes `close` counts, and `registry/v0`), and the pieces (registration and its codec
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
-the Lean's verdicts are `Security/Properties/RemoteAudit.lean`.
+the Lean's verdicts are `Security/Properties/Accounting/Remote.lean`.
 
 `benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
@@ -105,7 +105,7 @@ group's reads by kind beside it; and
 `line.py` computes it beside it from the same inputs (`line_of_record`): `auditor_line.py` holds the two exactly equal
 and refuses the line where they differ, and `lean/tests/test_line.py`'s difftest holds them together, every refusal
 compared word for word. The Lean statement that the line is true of the trace that produced the record is
-`Security/Properties/RemoteAudit/Line.lean`'s `LineHeld`.
+`Security/Properties/Accounting/Remote/Line.lean`'s `LineHeld`.
 
 ## Replay
 
@@ -145,7 +145,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
   reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
   `lean/tests/test_p2.py`, and its session's is `lean/RemoteAudit/P2Session.lean`, of record.
-- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
+- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the developer doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
   or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
   store's padding past them, which is PoUS's: MEM-72), holds each session to the auditor's parameters (`SESSION`,
@@ -179,7 +179,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 - `period.py`: one session a period on one node (`run`, `session`), its core case and its answer.
-- `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the prover doesn't control,
+- `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the developer doesn't control,
   one line of JSON a message and each window's openings in the openings frame (`main`, `period_with`).
 - `opening.py`: check 3 through the opening unit (`verity.ml.commitments.gates.block_check`) on the honest witness,
   the stand-in for the unit's proofs.

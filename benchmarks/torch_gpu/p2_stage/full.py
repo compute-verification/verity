@@ -230,7 +230,7 @@ def digests(src: L.Weights, t: L.Tensor, host: np.ndarray) -> dict[str, bool]:
 
 
 def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit | None = None
-           ) -> tuple[torch.Tensor | None, S.Store, dict]:
+           ) -> tuple[torch.Tensor | None, S.EncodedRows, dict]:
     """`t`'s rows onto the device and decoded into a fresh buffer: the buffer (None if refused), the store and timings.
     With `audit`, the rows are of whole units and the decode sketches them."""
     t0 = time.perf_counter()
@@ -238,7 +238,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     rows = segs.rows(r)
     sync()
     rows_s = time.perf_counter() - t0
-    store = S.Store(lay, rows, r.start, args.lib, chunk=args.chunk)
+    store = S.EncodedRows(lay, rows, r.start, args.lib, chunk=args.chunk)
     store.sketch = audit.P if audit else None
     w = torch.empty(t.n, t.k, dtype=torch.int8, device=DEVICE)
     S.flat(w).fill_(0xA5)
@@ -252,7 +252,7 @@ def decode(args, lay: L.StoreLayout, segs: Segments, t: L.Tensor, audit: Audit |
     return w, store, rec
 
 
-def sketched(store: S.Store, sk, layer: int, name: str, w: torch.Tensor) -> None:
+def sketched(store: S.EncodedRows, sk, layer: int, name: str, w: torch.Tensor) -> None:
     store.sketch = sk
     S.decode_matrix(store, layer, name, w)
 
@@ -481,7 +481,7 @@ def main(argv=None) -> int:
         read = L.reader(args.w) if args.w else L.generator_reader(args.generator, args.shape, args.weights_seed)
         ok &= gemm_pass(args, lay, src, read, out)
     rc = summary.get("receipts")
-    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors staged and held to the manifest's SHA-256, "
+    print(f"full {'PASS' if ok else 'FAIL'}: {summary['tensors']} tensors loaded and held to the manifest's SHA-256, "
           f"decode step {summary['decode_step_s']} s"
           + (f"; receipts pass {rc['pass']} over the tensors' {rc['units']} units of the store's {rc['store_units']} "
              f"({rc['padding_units_left_out']} padding units left out), root {rc['root'][:16]}..., step with receipts "

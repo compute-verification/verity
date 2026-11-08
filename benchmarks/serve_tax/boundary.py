@@ -22,7 +22,9 @@ and nothing is scheduled meanwhile, so nothing is on the GPU and the host has ev
 `restore` puts each back into a fresh engine core. `dump` renders the live state, and more (every attribute the walk
 reaches, captured or not), as comparable leaves, so that what a restore missed shows in `diff`. `save_edge` and
 `load_edge` do the same through files at any tensor-parallel degree: the engine core's part in one file, and each rank's
-runner rows and generators in its own (`save_rank`, `load_rank`, run on every rank by ``collective_rpc``).
+runner rows and generators in its own (`save_rank`, `load_rank`, run on every rank by ``collective_rpc``). At an edge of a
+tensor-parallel engine each rank takes its own part where it lies (`rank_pool` once, then `rank_take` at each edge): its
+KV pool hashed and copied, and its runner rows and generators, kept in the rank's process.
 """
 from __future__ import annotations
 
@@ -34,6 +36,7 @@ import io
 import json
 import pickle
 import re
+import time
 from collections import Counter, deque
 from collections.abc import Callable, Iterable
 from pathlib import Path
@@ -575,7 +578,13 @@ def dump(root: Any, path: str, out: dict[str, Any] | None = None, *, seen: dict[
         out[path] = "@" + seen[id(root)]
         return out
     if isinstance(root, (dict, list, tuple, deque, set, frozenset)):
-        items = list(root.items()) if isinstance(root, dict) else list(enumerate(root))
+        if isinstance(root, dict):
+            items = list(root.items())
+        elif isinstance(root, (set, frozenset)):
+            # a set's iteration order follows its hash table's history, which no restore carries: compare elements
+            items = list(enumerate(sorted(root, key=repr)))
+        else:
+            items = list(enumerate(root))
         if len(items) > 16 and is_plain(root):
             out[path] = f"{type(root).__name__}{len(items)}#" + _digest(repr(items).encode())
             return out
@@ -685,11 +694,11 @@ class KvPool:
 
         return torch.empty(self.nbytes, dtype=torch.uint8, pin_memory=True)
 
-    def take(self, host: Any = None, group: int = 9) -> dict[str, Any]:
-        """The pool's root (the row-table kernels': one table a layer, one row a block, under a zero key, so equal bytes
-        give equal roots in any process), each block's fingerprint (int64 per block and layer, a fixed random linear
-        form of its words: only to locate a difference), and, with ``host``, its bytes copied there; all at once on three
-        streams, waited on."""
+    def take(self, host: Any = None, group: int = 9, key: bytes = bytes(32), fingerprint: bool = True) -> dict[str, Any]:
+        """The pool's root (the row-table kernels': one table a layer, one row a block, under ``key``; the zero key by
+        default, so equal bytes give equal roots in any process), unless ``fingerprint`` is false each block's
+        fingerprint (int64 per block and layer, a fixed random linear form of its words: only to locate a difference),
+        and, with ``host``, its bytes copied there; all at once on three streams, waited on."""
         import torch
 
         from verity_vllm.commit import row_tables_device as RTD
@@ -703,7 +712,7 @@ class KvPool:
             zero = torch.zeros(self.num_blocks, dtype=torch.float32, device=dev)
             for lo in range(0, len(self.rows), group):
                 tabs = {f"model.layers.{i}.kv": (ids, self.rows[i], zero) for i in range(lo, min(lo + group, len(self.rows)))}
-                pend.append(RTD.step_roots(bytes(64), 0, tabs, bytes(32), timing=True))
+                pend.append(RTD.step_roots(bytes(64), 0, tabs, key, timing=True))
         else:
             k = 1 << 20
             for f in self.storages:
@@ -712,7 +721,7 @@ class KvPool:
                     c = r[lo:lo + 4096]
                     pend.append(RTD.step_roots(bytes(64), 0, {"kv": ([("kv", i) for i in range(c.shape[0])], c,
                                                                    c.new_zeros(c.shape[0], dtype=torch.float32))},
-                                               bytes(32), timing=True))
+                                               key, timing=True))
         copy_ms = None
         if host is not None:
             ready = torch.cuda.Event()
@@ -728,7 +737,7 @@ class KvPool:
                     off += f.numel()
                 marks[1].record(side)
         fp = None
-        if self.rows:
+        if self.rows and fingerprint:
             gen = torch.Generator().manual_seed(0)
             coef = torch.randint(-(1 << 62), 1 << 62, (self.rows[0].shape[1] // 8,), generator=gen, dtype=torch.int64).to(dev)
             fp = torch.empty(self.num_blocks, len(self.rows), dtype=torch.int64, device=dev)
@@ -793,6 +802,44 @@ def write_host(host: Any, path: str, chunk: int = 1 << 30) -> int:
     return n
 
 
+#: each rank's KV pool, host buffer and last edge's rows (`rank_pool`, `rank_take`), by the worker's rank
+RANKS: dict[int, dict[str, Any]] = {}
+#: which ranks copy their KV pool to host memory at an edge (``first``: rank 0 alone, for a model whose ranks all hold
+#: the same KV bytes, as MLA's replicated latent cache does)
+KV_COPY = ("all", "first", "none")
+
+
+def rank_pool(worker: Any, num_blocks: int, copy: str = "all") -> dict[str, Any]:
+    """This rank's `KvPool` over its model runner's KV cache, kept for `rank_take`, with a pinned host buffer if ``copy``
+    (`KV_COPY`) names the rank; hashed once here, so that the hash kernels are built before the first edge. What it
+    holds and the first hash's seconds. ``worker`` is as ``collective_rpc`` hands it."""
+    if copy not in KV_COPY:
+        raise ValueError(f"copy is one of {KV_COPY}, not {copy!r}")
+    kv = KvPool(worker.model_runner.kv_caches, num_blocks)
+    host = kv.host() if copy == "all" or (copy == "first" and worker.rank == 0) else None
+    t = time.perf_counter()
+    kv.take(fingerprint=False)
+    RANKS[worker.rank] = {"kv": kv, "host": host}
+    return {"rank": worker.rank, "bytes": kv.nbytes, "storages": len(kv.storages), "layers": len(kv.views),
+            "rows": kv.rows is not None, "host_bytes": kv.nbytes if host is not None else 0,
+            "build_s": time.perf_counter() - t}
+
+
+def rank_take(worker: Any, key: bytes) -> dict[str, Any]:
+    """At a drained edge, this rank's part of the boundary state where it lies: its KV pool (`rank_pool`'s) hashed under
+    ``key`` and copied to its host buffer if it has one, then its runner rows and the process's generators, all kept here
+    until the next edge replaces them. The pool's root, the bytes copied and each part's seconds."""
+    me = RANKS[worker.rank]
+    t0 = time.perf_counter()
+    kv = me["kv"].take(me["host"], key=key, fingerprint=False)
+    t1 = time.perf_counter()
+    me["rows"] = {"runner": runner_state(worker.model_runner), "rng": rng_state()}
+    t2 = time.perf_counter()
+    return {"rank": worker.rank, "root": kv["root"], "hash_kernel_ms": kv["hash_kernel_ms"], "copy_ms": kv["copy_ms"],
+            "copied_bytes": kv["bytes"] if me["host"] is not None else 0, "kv_s": t1 - t0, "runner_s": t2 - t1,
+            "runner_bytes": sum(nbytes(s) for _k, s in me["rows"]["runner"]["leaves"].values())}
+
+
 # --------------------------------------------------------------------------------------------------------- the edges
 
 def drain_one(orig: Callable[[Any], Any], core: Any) -> Any:
@@ -839,17 +886,39 @@ class Edges:
         return orig(core)
 
 
-def at_times(at_s: list[float], clock: Callable[[], float]) -> tuple[Callable[[Edges], bool], Callable[[], None]]:
+def at_times(at_s: list[float], clock: Callable[[], float]) -> tuple[Callable[[Edges], bool], Callable[..., None]]:
     """Edges due ``at_s`` seconds after a start (the second function, called at the first request of the traffic the edges
-    fall in); none before it."""
+    fall in, with its load, which it ignores); none before it."""
     t0: list[float] = []
 
     def due(e: Edges) -> bool:
         return bool(t0) and e.edge < len(at_s) and clock() - t0[0] >= at_s[e.edge]
 
-    def start() -> None:
+    def start(load: str | None = None) -> None:
         if not t0:
             t0.append(clock())
+    return due, start
+
+
+def every(period_s: float, clock: Callable[[], float]) -> tuple[Callable[[Edges], bool], Callable[[str | None], None]]:
+    """An edge each ``period_s`` seconds of a load's serving: the replay blocks of one length. Each falls ``period_s``
+    after the end of the edge before it, or after its load's first request (the second function, called at each request
+    with its load); a new load starts the count again, so the idle time between loads brings no edge."""
+    st: dict[str, Any] = {"load": None, "t": None, "edge": 0, "started": False}
+
+    def due(e: Edges) -> bool:
+        if e.edge != st["edge"]:
+            st["edge"] = e.edge
+            if not st["started"]:
+                st["t"] = clock()
+        if st["t"] is None or clock() - st["t"] < period_s:
+            return False
+        st["started"] = False
+        return True
+
+    def start(load: str | None) -> None:
+        if st["t"] is None or load != st["load"]:
+            st["load"], st["t"], st["started"] = load, clock(), True
     return due, start
 
 

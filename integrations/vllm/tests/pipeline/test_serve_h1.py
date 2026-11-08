@@ -1,4 +1,4 @@
-"""serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit window's H1 window
+"""serve-openai's PoUW H1 arm (`pipeline.serve_h1`, ``--protocols pouw:eps1-sm120-h1fx1``): each Commit period's H1 window
 taps the server's own rows-sha512 Commit (its step-input port and the bench row's int8 source) and ties at ROOTS1, on the
 epoch's in-process coins, which credit nothing, or with ``--challenger-gate`` on a session of its own on the auditor host's
 challenger, which the auditor's ledger opens and ends for it; `CommitWindows` opens the arm once the committer is
@@ -500,7 +500,8 @@ def test_the_arm_is_ready_before_the_server_listens(tmp_path, monkeypatch):
     monkeypatch.setattr(TD, "available", lambda: False)
     monkeypatch.setattr(verifier, "executable", lambda: built.append(len(calls)))
     opts = SimpleNamespace(protocols=SH.ENTRY, max_num_batched_tokens=ROWS, window_steps=STEPS, protocols_config=None,
-                           gate=SimpleNamespace(h1_prover=None, h1_receipts=False, h1_model=None, h1_weights_root=None))
+                           gate=SimpleNamespace(h1_prover=None, h1_receipts=False, h1_model=None, h1_weights_root=None,
+                                                h1_window_commit=None))
     arm = SH.arm_of(opts, SimpleNamespace(model=srv.model, vllm=object()), srv.com, tmp_path)
     (held,) = sessions.held
     assert arm.describe()["ready"] == {"tables": "off", "kernels": 3, "session": held["session"],
@@ -826,7 +827,7 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert "needs --protocols" in refusal(*gate)
     for flag in (("--h1-prover", str(tmp_path / "p")), ("--h1-receipts",)):
         assert refusal(*h1, *flag) is None
-        assert "--h1-receipts are PoUW H1's window's: they need --protocols" in refusal(*flag)
+        assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in refusal(*flag)
     assert "(pouw)" in refusal(*h1, "--protocols-config", json.dumps({"pous": {}}))
     assert "'admission' is one of" in refusal(*h1, "--protocols-config", json.dumps({"pouw": {"admission": "never"}}))
     assert "--protocols-config {" in refusal(*h1, "--protocols-config", "{not json")
@@ -838,6 +839,14 @@ def test_serve_openai_refuses_protocols_it_cant_serve_before_the_model_loads(tmp
     assert h1_refusal(*h1, *device) is None
     assert f"--release-after {SH.DRAWER} waits for PoUW H1's draw" in h1_refusal(*device)
     assert h1_refusal(*device[:-1], "other") is None, "a drawer other than H1's comes in through --draws-dir"
+    tie = ("--h1-window-commit", "bash commit.sh \"$@\"")
+    sealed = ("--seal", "--h1-prover", str(tmp_path / "p"))
+    assert h1_refusal(*h1, *sealed, *tie) is None
+    assert "--h1-window-commit are PoUW H1's window's: they need --protocols" in h1_refusal(*sealed, *tie)
+    for less in (sealed[1:], sealed[:1]):
+        assert "--h1-window-commit commits the sealed window from H1's prover state: it needs --seal and --h1-prover" \
+            in h1_refusal(*h1, *less, *tie)
+    assert f"--release-after {SH.DRAWER} holds the seal until that coin's draw" in h1_refusal(*h1, *device, *sealed[1:], *tie)
 
 
 def test_the_window_program_holds_a_tile_unit_for_each_32_rows_of_slot_and_32_columns_of_each_linear_at_each_step():

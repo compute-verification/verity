@@ -22,7 +22,7 @@ def _load(name: str):
 
 
 LIVE = _load("live")
-T0 = 1_793_000_000.0                    # 2026-10-26T07:33:20Z
+T0 = 1_793_000_000.0                    # the injected clock's start, a fixed epoch second
 
 
 class Clock:

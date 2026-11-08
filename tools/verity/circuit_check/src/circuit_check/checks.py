@@ -47,7 +47,7 @@
                      commits), a template proof block's circuit digest against its Flock module's `PINS`, and the Boolean
                      export's gate lists checked against the proof block's circuit (`verity_flock.boolean_export`); a gated
                      Definition's circuit digest (``gated``: a Program holds it as one gate naming the digest, such as N2's
-                     head check) against its ``digests`` pin
+                     head check) against its ``digests`` pin, as is any Definition's that holds one (a served-size binding)
     block            the witness bits a whole Definition needs as one Flock unit, read off it (its ANDs and port bits,
                      `verity_flock.circuit.unit_witness`), within Flock's proved range of 2^``K_MAX`` (`block_range`): past
                      it, `UnitStager` refuses the unit before lowering, and `compose` would have refused it after.  Failed
@@ -772,13 +772,13 @@ def whole_lowering(t: Any, params: Sequence, arrays: Sequence[np.ndarray], ref: 
         if t.id.startswith("TopPMaskWordx") and t.id not in IL.PIECES:
             return _topp_word(t, arrays, ref, F)
         if t.id not in IL.PIECES:
-            return {"lowered": False, "reason": f"C-Flock has no piece for {t.id}"}
+            return {"lowered": False, "reason": IL.no_piece([t.id])}
     elif t.gates > opts.lower_max_gates and not is_boolean(t):
         return {"lowered": False, "reason": f"{t.gates} IR gates: lowered as a template's units, not whole (budget {opts.lower_max_gates})"}
     else:
         used, missing, est = _pieces_used(t, pins)
         if missing:
-            return {"lowered": False, "reason": "C-Flock has no piece for " + ", ".join(sorted(missing))}
+            return {"lowered": False, "reason": IL.no_piece(sorted(missing))}
         if est > opts.lower_max_ands:
             return {"lowered": False, "reason": f"about {est} ANDs: over the whole-Definition budget ({opts.lower_max_ands})"}
         for p in used:
@@ -1100,7 +1100,7 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
                               "q_call": q_call(t, opts, F, memo.setdefault("word", {}))}
         entry["redundant_gates"] = {"count": 0}
         entry["dead_gates"] = {"count": 0}
-    if getattr(getattr(t, "defn", t), "gated", False):
+    if getattr(getattr(t, "defn", t), "gated", False) or t.id in pins.get("digests", {}):
         with spent("digest"):
             entry["digest"] = circuit_digest_pin(t, pins, F)
     if kind != "reference":
@@ -1139,7 +1139,8 @@ def block_range(t: Any, F: Findings, applies: bool = True) -> dict:
 def circuit_digest_pin(t: Any, pins: dict, F: Findings) -> dict:
     """A gated Definition's circuit digest, core's `program_digest` of its Program, which the gate a Program holds it as
     names (`verity.core.protocols.certifier.head_check.gate`), against its ``digests`` pin: the pin a verifier reads in
-    place of the digest is the Definition's."""
+    place of the digest is the Definition's.  Any other Definition holding a ``digests`` pin (a binding at served statics
+    over `targets.MAX_GATES`, which the pin keeps in ``--all``) is held to it the same way, so every held pin is compared."""
     from verity.ml.circuits.codec import program_digest
     from verity.ml.circuits.program import Program
 

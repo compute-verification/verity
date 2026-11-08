@@ -227,6 +227,19 @@ def test_dump_and_diff_find_what_a_restore_missed_and_set_clock_readings_apart()
     assert d["patterns"] == {"sched.requests[*].num_computed_tokens": 1, "sched.requests[*].tokens": 1}
 
 
+def test_dump_renders_a_set_by_its_elements_not_its_iteration_order():
+    ids = [f"cmpl-{i}" for i in range(40)]
+    a, b = Scheduler(Request(5, 1.0)), Scheduler(Request(5, 1.0))
+    a.finished_req_ids, b.finished_req_ids = set(ids[:3]), set()
+    for x in ids[3:]:
+        b.finished_req_ids.add(x)
+    b.finished_req_ids.clear()
+    b.finished_req_ids.update(reversed(ids[:3]))
+    da, db = B.dump(a, "sched"), B.dump(b, "sched")
+    assert B.diff(da, db)["differing"] == 0
+    assert [da[f"sched.finished_req_ids[{i}]"] for i in range(3)] == sorted(ids[:3])
+
+
 def test_diff_sets_paths_on_one_side_apart_and_dump_leaves_out_the_harness():
     s = Scheduler(Request(5, 1.0))
     a = B.dump(s, "sched")
@@ -466,3 +479,76 @@ def test_rng_state_puts_back_what_the_next_draws_read():
     random.random()
     B.set_rng(pickle.loads(pickle.dumps(st)))
     assert (np.random.randint(0, 1 << 62), random.random()) == want
+
+
+def test_every_puts_an_edge_each_period_of_a_loads_serving_and_none_between_loads():
+    now = [0.0]
+    due, start = B.every(30.0, lambda: now[0])
+    e = NS(edge=0)
+    now[0] = 100.0
+    assert not due(e)
+    start("light1")
+    now[0] = 129.0
+    assert not due(e)
+    now[0] = 130.0
+    assert due(e)
+    e.edge, now[0] = 1, 132.0
+    assert not due(e)
+    start("light1")
+    now[0] = 161.0
+    assert not due(e)
+    now[0] = 162.0
+    assert due(e)
+    e.edge, now[0] = 2, 500.0
+    start("medium1")
+    now[0] = 520.0
+    assert not due(e)
+    now[0] = 530.0
+    assert due(e)
+    e.edge, now[0] = 3, 531.0
+    assert not due(e)
+    now[0] = 561.0
+    assert due(e)
+
+
+class FakePool:
+    """A stand-in `KvPool`: its bytes, and a take whose root is the key and the rank's bytes, so that ranks holding the
+    same bytes agree."""
+
+    def __init__(self, kv_caches, num_blocks):
+        self.data, self.num_blocks = bytes(kv_caches), num_blocks
+        self.nbytes, self.storages, self.views, self.rows = len(self.data), [self.data], [0, 1], [0, 1]
+        self.takes: list[tuple] = []
+
+    def host(self):
+        return bytearray(self.nbytes)
+
+    def take(self, host=None, group=9, key=bytes(32), fingerprint=True):
+        self.takes.append((key, fingerprint))
+        if host is not None:
+            host[:] = self.data
+        return {"root": (key + self.data).hex(), "tables": [], "hash_kernel_ms": 2.0, "copy_ms": 3.0 if host is not None
+                else None, "bytes": self.nbytes, "fingerprint": None}
+
+
+def test_each_rank_hashes_its_pool_under_the_edges_key_and_keeps_its_part(monkeypatch):
+    pytest.importorskip("numpy")
+    monkeypatch.setattr(B, "KvPool", FakePool)
+    monkeypatch.setattr(B, "RANKS", {})
+    ex = Executor(3)
+    for w in ex.workers:
+        w.model_runner.kv_caches = [7, 7] if w.rank < 2 else [7, 8]
+    with pytest.raises(ValueError, match="copy is one of"):
+        B.rank_pool(ex.workers[0], 4, "some")
+    init = ex.collective_rpc(B.rank_pool, args=(4, "first"))
+    assert [(r["rank"], r["bytes"], r["host_bytes"], r["rows"]) for r in init] == [(0, 2, 2, True), (1, 2, 0, True),
+                                                                                  (2, 2, 0, True)]
+    assert all(B.RANKS[r]["kv"].takes == [(bytes(32), False)] for r in range(3))
+    got = ex.collective_rpc(B.rank_take, args=(b"k" * 32,))
+    assert [g["root"] for g in got] == [(b"k" * 32 + bytes([7, 7])).hex()] * 2 + [(b"k" * 32 + bytes([7, 8])).hex()]
+    assert [(g["copied_bytes"], g["copy_ms"]) for g in got] == [(2, 3.0), (0, None), (0, None)]
+    assert B.RANKS[0]["host"] == bytearray([7, 7]) and B.RANKS[0]["kv"].takes[-1] == (b"k" * 32, False)
+    assert set(B.RANKS[1]["rows"]) == {"runner", "rng"} and B.RANKS[1]["rows"]["runner"]["leaves"]
+    assert all(g["runner_bytes"] > 0 for g in got)
+    every = ex.collective_rpc(B.rank_pool, args=(4, "all"))
+    assert [r["host_bytes"] for r in every] == [2, 2, 2]
