@@ -306,9 +306,10 @@ private def grantedOf (rec : Json) (e : Spot.OneStageZk.Evidence) : Array (Strin
   e.sessions.map fun s => (s!"flock-verify/{s.name}", Json.mkObj [("accepted", true), ("of_record", true),
     ("registered", Json.mkObj reads), ("session", s.name)])
 
-/-- Sampled proofs with its sample's coins and its sessions' proofs granted: `VStar.Recursive.Sampled.protocol`'s decoders
-and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt` ends in, v1's `check` on the verdicts the
-sessions' run gives (`grantedOf`); the recursive form refused. -/
+/-- Sampled proofs with its sample's coins, its window's seed salt and its sessions' proofs granted:
+`VStar.Recursive.Sampled.protocol`'s decoders and digest, and in the one-stage form the check `OneStageZk.checkBlobsAt`
+ends in, v1's `check` on the verdicts the sessions' run gives (`grantedOf`), under params naming no challenger to read a
+seed salt from, as `R`'s window names none; the recursive form refused. -/
 private def proved : Core.Protocol where
   id := VStar.Recursive.Sampled.PROTOCOL
   Params := VStar.Recursive.Sampled.Params
@@ -321,7 +322,8 @@ private def proved : Core.Protocol where
   evidence := VStar.Recursive.Sampled.evidenceOf
   digest c := c.digest
   check p c e := match p, e with
-    | .inl p, .inl e => Spot.OneStage.check p.base c { e.base with verdicts := grantedOf c.record e }
+    | .inl p, .inl e =>
+      Spot.OneStage.check { p.base with challenger := none } c { e.base with verdicts := grantedOf c.record e }
     | _, _ => .reject "the one-stage form only"
   publicJson := Spot.OneStage.publicJson
   profileJson := Core.Integrity.toJson
@@ -342,10 +344,10 @@ private def provedOn (log : Array Json) (outputs : Option Json) : Answer := answ
     evidence := (textOf (Json.mkObj [("form", "one-stage"), ("verdicts", Json.mkObj [])])).toUTF8 }).reason ==
   some s!"evidence: the evidence names no proofs: {VStar.Recursive.Sampled.V1_REFUSED}"
 
--- with the coins and the session's proofs granted, v2 accepts `R` after `W`, its tables output values that reuse `W`'s
--- entries; it refuses `R` without the outputs (`R7-domain`: R7 holds the tables to the audited circuit's own domains,
--- which `W`'s are not), with outputs naming a record that isn't the log's (`R7-output`), and with no `W` in the log
--- (`R6-previous` too)
+-- with the coins, the seed salt and the session's proofs granted, v2 accepts `R` after `W`, its tables output values
+-- that reuse `W`'s entries; it refuses `R` without the outputs (`R7-domain`: R7 holds the tables to the audited
+-- circuit's own domains, which `W`'s are not), with outputs naming a record that isn't the log's (`R7-output`), and with
+-- no `W` in the log (`R6-previous` too)
 #guard (provedOn #[recW] (some (outputsOf (digestOf recW)))).verdict == .accept
 #guard (provedOn #[recW] none).verdict == .reject
 #guard (provedOn #[recW] none).reason == some "registration: R7-domain"
@@ -397,8 +399,8 @@ private def credited : Core.Protocol where
   publicJson := PouwCheck.Credit.PeriodCredit.toJson
   profileJson := PouwCheck.Period.profileJson
 
-/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins and
-proofs granted. -/
+/-- Remote's composition (`tiedSame` over its records and its tie) with the period's credit and sampled proofs' coins, seed
+salt and proofs granted. -/
 private def crediting : Core.Protocol :=
   tiedSame "verity/remote/v0" tied [windows] [NciCheck.Protocol.protocol, credited, proved]
 

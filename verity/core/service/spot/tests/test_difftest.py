@@ -4710,8 +4710,8 @@ def test_a_windows_run_from_the_challengers_coins(pieces):
         out = ran(honest)
         assert out["symbol"] == "accept" and out["read"] == len(d.read), out
         for stratum in law["strata"]:
-            drawn = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
-            assert len(drawn) == stratum["k"] >= 1, (stratum, out["draw"])
+            sampled = [u for u in out["draw"]["units"] if any(lo <= u < hi for lo, hi in stratum["units"])]
+            assert len(sampled) == stratum["k"] >= 1, (stratum, out["draw"])
         other_counts = json.loads(_population(((0, 3), (1, 2))))
         reordered = Setup(P.mixed_population_program([(TRIPLE, 3), (PAIR, 2)]), P.template_instances_query([TRIPLE.id, PAIR.id]))
         PROGRAMS[reordered.sha512] = reordered.program
