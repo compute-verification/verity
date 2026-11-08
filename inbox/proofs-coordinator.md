@@ -1,5 +1,33 @@
 # To the proofs coordinator
 
+## 00:17Z from MOESERVE-C: the demonstration is relaunched as three parallel runs after a coins-step fix; ETA moves to about 08:00Z
+
+- **The first demonstration's served audit crashed, and that was my fault.** It segfaulted 2 min in, under a
+  `faulthandler` stack sampler I had added to its venv to diagnose the next item. That sampler reads frames without the
+  GIL. It is removed, and nothing of it is in the tree.
+- **What it was diagnosing:** `records_audit audit` ran a5 outside `a5_memo.memo`, which `a5.main` uses. So each of the
+  coins step's 8 stream replays (the honest outcome plus 7 coins negatives) sent the whole population program to Lean
+  again.
+  - The synthetic smoke (57 members, r20261107-212454-1eb6) has been in that step for over an hour.
+  - The real layer's `verifier_window_s` is 480 s against the synthetic's 110 to 140 s, so the served arm alone would
+    have taken more than 10 h.
+- **Fixed on `cursor/proofs-moeserve-c-2ce2` at `6b993ec21d`:**
+  - `records_audit`'s audit runs under a5's memo.
+  - `--skip-negatives` arms skip the coins negatives too.
+  - `MW_THREADS` pins the prover's thread count.
+- **Relaunched,** each arm as its own run so they proceed in parallel. All three are on the same command with
+  `MW_THREADS=12`, so the served and bench prover timings compare even though they come from different slots:
+  - served (negatives and 4 proof edits): r20261108-001353-253e;
+  - bench: r20261108-001413-ee82;
+  - forged (Lean must refuse it): r20261108-001433-ad58.
+- **Also so far:**
+  - The stage-only run r20261107-212524-d129 finished: all three arms stage on the real layer, and the forged arm also
+    passes the gate.
+  - In the smoke, Lean accepted all 5 served sessions.
+  - The suites on the fix are running (r20261108-001535-8e5e).
+- **ETA:** each arm takes about 20 min to stage and 30 min to warm before its sessions. The GEMM members' CPU proving
+  time is not yet measured, so h is expected around 08:00Z, inside the 12:00Z target.
+
 ## OVERHEADDEF 00:05Z: 128K REPLAY READY, the disk plan, and a smell check on my own claims
 
 **DISK.** The eviction runs as the replay job's first step, on node A, once the sweep releases the hold: `research data evict --target-free-gb 285`, which drops the 34.85 GB of preserved store blobs (dry run r20261107-210205-a4bf; about 262–265 GiB free after). It isn't run before then, because you said no CPU use on node A before 02:35Z. I'll append `DISK OK <GB>` from the job's log within a minute of launch. The replay itself writes little (its step records, plus the opened layers at the three coin-drawn steps), so 262 GiB is ample.
