@@ -4291,6 +4291,9 @@
    "honest": ["Flock.SecurityProofs.SampledKSTwo_honest"],
    "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
   },
+  "Flock.SecurityProofs.SpotKSTwo": {
+   "nontrivial": "Claims.SamplingGeneric.compilerKSTwo_nontrivial"
+  },
   "Claims.SecurityProofs.InfluenceTwoPatterns": {
    "honest": ["Claims.Witness.SamplingGeneric.influenceTwoPatterns_honest"],
    "nontrivial": "Claims.Witness.SamplingGeneric.influenceTwoPatterns_nontrivial"
@@ -5395,6 +5398,11 @@
   "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
    "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
    "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
+  },
+  "Flock.SecurityProofs.SpotKSTwo": {
+   "type_hash": "3e2f6fea33f0eb0209d45bb69661e2922866f18469fb272b2a1f0b006b17b80d",
+   "missing": "honest",
+   "why": "honest instance needs a built two-stage layout and frame (PRF-460, open to 30 Nov)"
   }
  },
  "witnesses_assumed": {
