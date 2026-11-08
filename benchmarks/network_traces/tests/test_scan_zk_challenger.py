@@ -39,8 +39,8 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     registration of the generator form's digest and partition, and coins whose evidence holds against the group's root
     and the registration's digest. A stream that rebuilt the templates' mixed population instead refused it at R2
     (``R2-program``, ``R2-partition``) and drew nothing. Each member's registered reads, the verifier's file and its
-    statement's header, name every port of its circuit, its o0 at the registration's root for it, as Lean's
-    `Registered.checkComplete` requires.
+    statement's header (the prover's and the verifier's alike, or their statement digests differ), name every port of
+    its circuit, its o0 at the registration's root for it, as Lean's `Registered.checkComplete` requires.
 
     Runs a few minutes (lowering the scan's three templates at the test class, and the Lean's checks of each stream's
     registration, sample and run), and catches what the stream's own window tests can't: that the scan's registered
@@ -98,5 +98,7 @@ def test_the_honest_round_on_a_local_challengers_coins_registers_its_generator_f
     for m in members:
         ports = json.loads(m["registered_file"].read_text())["ports"]
         head = json.loads((m["dir"] / f"pub-{m['n']}.bin").read_bytes().split(b"\n", 1)[0])
+        inst = json.loads((m["dir"] / f"inst-{m['n']}.bin").read_bytes().split(b"\n", 1)[0])
         assert sorted(ports) == sorted(head["registered"]) == sorted(p.name for p in m["ports"]), m["name"]
+        assert inst["registered"] == head["registered"], m["name"]
         assert ports["o0"]["root"] == roots[f"{m['at']}/o0"] and ports["o0"]["reads"] == list(range(m["n"]))

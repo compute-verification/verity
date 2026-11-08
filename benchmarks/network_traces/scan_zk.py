@@ -676,13 +676,15 @@ def registered_file(mr: SimpleNamespace, own: dict | None = None) -> dict:
     return WR.reads_file({**mr.ports, **(own or {})})
 
 
-def own_rows(mr: SimpleNamespace, path: Path, ports: list, at: str) -> dict:
+def own_rows(mr: SimpleNamespace, out: Path, ports: list, at: str) -> dict:
     """Member `mr`'s ports that read neither a warden row nor a scan tree (a public o0, the block's free ``x``, the
     group's last unit's o1), each as rows of its own frame tree at the root the round's registration holds for it
     (``<at>/<port>``, `audit`'s roots, registered before any coin), unit ``base + i`` its row i: Lean takes registered
     reads only when they name every port of the circuit (`Flock.Registered.checkComplete`). Adds their paths to the
-    staged public file's header (`rows.own_entries`, which refuses rows that aren't the frame root) and returns the
-    verifier's ports for them. Refused where a port is left with no registered read."""
+    header of the staged statement under ``out`` (`rows.own_entries`, which refuses rows that aren't the frame root),
+    the prover's and the verifier's file alike, each written as Flock writes it (`verity_flock.circuit.write`), and
+    returns the verifier's ports for them. Refused where a port is left with no registered read."""
+    path, inst = out / f"pub-{mr.n}.bin", out / f"inst-{mr.n}.bin"
     head, body = path.read_bytes().split(b"\n", 1)
     h = json.loads(head)
     fv, reg = h["frame_v3"], h.get("registered") or {}
@@ -697,9 +699,15 @@ def own_rows(mr: SimpleNamespace, path: Path, ports: list, at: str) -> dict:
         raise SystemExit(f"{mr.round}/{mr.name}: ports {left} have no registered read, and Lean refuses a statement "
                          "whose registered reads leave a port out (Flock.Registered.checkComplete)")
     if entries:
-        h["registered"] = {**reg, **entries}
-        path.unlink()
-        path.write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode() + b"\n" + body)
+        ih, private = inst.read_bytes().split(b"\n", 1)
+        ih = json.loads(ih)
+        if {k: v for k, v in ih.items() if k != "rows"} != {k: v for k, v in h.items() if k != "rows"}:
+            raise SystemExit(f"{mr.round}/{mr.name}: its prover's and verifier's headers differ")
+        for f, x in ((inst, json.dumps({**ih, "registered": {**reg, **entries}}, sort_keys=True).encode() + b"\n" + private),
+                     (path, json.dumps({**h, "registered": {**reg, **entries}}, sort_keys=True, separators=(",", ":"),
+                                       ensure_ascii=False).encode() + b"\n" + body)):
+            f.unlink()
+            f.write_bytes(x)
     words = {p.name: p.words for p in ports}
     return {p: produced.port(e["value"], {"leaves": mr.n, "words": words[p], "word_bits": 16,
                                           "domain": fv["domain_ids"][p]}, fv["roots"][p], range(mr.n), fv["schemas"][p])
@@ -1005,7 +1013,7 @@ def stage(M, pg: SimpleNamespace, mr: SimpleNamespace, out: Path) -> dict:
     (out / "pub.bin").rename(out / f"pub-{n}.bin")
     (out / "tables").mkdir(exist_ok=True)
     os.link(sg.out / "circuit.txt", out / "circuit.txt")
-    own = own_rows(mr, out / f"pub-{n}.bin", st.ports, port_prefix(sg.defn, mr))
+    own = own_rows(mr, out, st.ports, port_prefix(sg.defn, mr))
     (out / "registered.json").write_text(json.dumps(registered_file(mr, own), sort_keys=True))
     m = {"tag": f"{mr.round}-{mr.name}", "name": mr.name, "at": port_prefix(sg.defn, mr), "template": mr.template,
          "window": mr.window, "buckets": mr.buckets, "dir": out, "meta": st.meta, "pin": st.pin,
