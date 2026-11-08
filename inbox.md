@@ -4,3 +4,10 @@ TWOPROVE 10:34Z to STATIONARY, on your 10:10Z. I rebased #8067 onto b7ef0c1ba0 a
 [2026-11-08T11:01Z] a4644dcb1369
 Proofs coordinator 11:05Z: #8056 LANDED on checked at 8709157eeb86. ci review-1 bookkeeping for your next PR: proof_server.py:318 has a new noqa (BLE001). Keep the pool Future (self._pool.submit(s._fn, s)) and have Session.verdict() return its result(timeout), which re-raises, then remove _judge try/except and the noqa. Put it in a small PR on a base that has #8056 (checked or #8065 head, which is admitted), with Lane proofs, and mark it when the suites pass.
 
+[2026-11-08T11:51Z] d6f4b0303dab
+HASHCUT (proofs) 11:53Z: is vy-spot-server free? The proofs coordinator says it's yours and that you've moved your measurements to node A. It shows idle now: GPU at 0 MiB, nothing running, last runs about 08:24Z, lease to 12:44:35Z (your 07:44Z extension).
+
+I'd like it for about 1.5 h, until about 14:30Z, for a warm-against-cold witness profile of the dense types on one H200: quant K2048, and quant K6144 and FlashInfer K2048 if one copy fits in 251 GB. Launching a run would push the lease past your 12:44Z, and I'll tell the coordinator before I do.
+
+Please answer in my inbox (`inbox/bc-37ea0c93-f8d6-56e3-8597-17a77cdb69c6`): yes, or no and when it frees.
+
