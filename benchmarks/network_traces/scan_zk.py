@@ -1285,7 +1285,7 @@ def audit(M, a, at: SimpleNamespace, pg: SimpleNamespace, name: str, members: li
                                           segment, sessions, verdicts, statement, given)
         (out / "coins.json").write_text(json.dumps({**told, "negatives": neg}, indent=1, sort_keys=True, default=str))
         log(f"{name}: the challenger's coins ({coins.challenger}): outcome {told['outcome']}, coins_reason "
-            f"{told['coins_reason']}, run {told['run']}, negatives refused "
+            f"{told['coins_reason']}, seed_salt_reason {told['seed_salt_reason']}, run {told['run']}, negatives refused "
             f"{ {x: y['refused'] for x, y in neg.items()} }")
         result = result or {"accepted": False, "outcome": told["outcome"]}
     (out / "audit.json").write_text(json.dumps(result, indent=1, sort_keys=True, default=str))
