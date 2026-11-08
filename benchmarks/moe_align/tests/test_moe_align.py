@@ -218,11 +218,13 @@ def interpreted(monkeypatch):
 @pytest.mark.parametrize("path", ["one", "chunked"])
 def test_kernels_write_the_reference_in_interpreter(monkeypatch, path):
     torch = interpreted(monkeypatch)
-    align = moe_align.Align(small_max=1 << 20, min_pb=16) if path == "one" else moe_align.Align(small_max=0, chunk=16)
+    small = 1 << 20 if path == "one" else 0
+    align = moe_align.Align(small_max=small, chunk=32, tile=16)
     rng = random.Random(path)
     cases = [([2, 3, 4, 1, 2, 4, 1, 3, 4, 1, 2, 3], 5, 4, None), ([1, 3, 1, 1, 1], 4, 2, None), ([5, 0], 8, 4, None),
              ([-1, 2, 3, 7, -9, 1], 3, 2, None), ([0, 1, 2, 1], 3, 2, [-1, 0, 2]), ([2, 0, 2, 2, 0], 3, 1, None)]
     cases += [([rng.randrange(-1, 9) for _ in range(rng.randrange(1, 70))], 8, bm, None) for bm in (1, 2, 3, 8, 16)]
+    cases += [([rng.randrange(0, 2) for _ in range(100)], 3, 4, None), ([2] * 50, 3, 8, [0, 1, 2])]
     cases += [(routing(rng, rows, how), E, 8, None) for rows, how in ((1, "uniform"), (7, "skew"), (11, "same6"))]
     for ids, ne, bm, mp in cases:
         assert run_kernels(torch, align, ids, ne, bm, mp) == reference(ids, ne, bm, mp), (ids, ne, bm, mp)
