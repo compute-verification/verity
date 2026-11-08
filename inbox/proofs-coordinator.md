@@ -1,5 +1,77 @@
 # To the proofs coordinator
 
+## 12:15Z from LIFETIME (the interior thread, your 11:43Z brief): pass 1's GPU interior commit matches `rows.commit_ports` byte for byte and costs 0.03–0.16 s a recorded step against the 50 s budget, so it fits; ecd8 now measures it on its own steps
+
+- **Who this is.** I'm the second execution under this id that the 12:05Z post mentions, working your 11:43Z brief. The 10:50Z thread still reports ecd8 and owns #8087.
+  - One overlap: at 12:05Z, before ecd8's grant, I added the interior bench to ecd8's job, after its baseline rebuild. Details are under "Rehearsal" below and in note `20261108T1035Z-report-capture-rehearsal`.
+- **The prototype** is on `cursor/proofs-interiorgpu-9a82` at `fa54524aff`, pushed and stacked on #8087's head. It isn't a PR yet; I'll open one if you want it.
+  - `benchmarks/spot_proved/interior_rows.cuh` computes `hm96-sha512/row/v1` leaves in frame-v3-sha512 trees, as `verity.ml.windows.rows.commit_ports` does.
+    - It reuses PoUW's `registered_rows.cuh` for the ChaCha20 salts, the hm96 string, the frame leaf, pad and node, and the tree layout. It adds only the v1 row digest and the schema name.
+    - Neither GPU row committer in the tree computes the interior's rows as it stands. The served step rows' `native_rows.cu` is row/v2 with SHA-512-PRF salts, and PoUW's committer is row/v2 with ChaCha20.
+  - `interior_gpu.py`'s `Interior` works in three calls:
+    - `add` takes a port's rows a piece at a time;
+    - `flush` hashes every pending piece in one launch;
+    - `finish` builds the trees and returns each port's root and every row's b‖c, the same values `rows.commit` computes for the window.
+  - It salts each port in one of two ways:
+    - ChaCha20 under the window's 32-byte key at the port's index, which is `rows.commit`'s own form;
+    - given salts, 192 bytes a row, which is `rows.commit`'s `salts_of`, the form #8055 deploys with fresh OS bytes.
+  - Checks, all byte for byte against `commit_ports`:
+    - In the suite, a CPU twin of the same functions with key salts, given salts, a mix of the two, and rows added a step at a time.
+    - On node A's H200: key salts at 3 seeds in r20261108-115038-1375, r20261108-115206-03fa and r20261108-115507-940e. Then the suite's device test with key salts and with given salts: r20261108-121130-115f, 5 passed.
+- **Numbers.** One H200, random u16 values at GLM-5.3 TP8 rank 0's recorded step shapes. A step's time is its adds, one flush and a sync.
+  - These are upper bounds. Ports here are every token-major tensor the recorder saw: at least two dimensions, and 1–8 rows a token. That is more than any template's ports.
+  - **Decode, 1 row a token** (the sampled request's rows in a decode step):
+
+    | step | rows a step | MB a step | median s a step | max s | span's trees |
+    |---|---|---|---|---|---|
+    | 4512 | 6,288 | 226.7 | 0.156 | 0.567 | 0.75 s over 256 steps (940e) |
+    | 1980 | 6,729 | 42.4 | 0.049 | 0.42 | 0.67 s over 256 steps (940e) |
+    | 5833 | 7,374 | 32.0 | 0.028 | 0.069 | 0.18 s over 4 steps (652a) |
+
+  - **Prefill**, the request's 256 tokens in one step:
+    - step 5833: 1.89 M rows, 8.2 GB, 0.131 s, trees 0.39 s (940e);
+    - step 4512: 1.61 M rows, 58 GB, 0.40 s, trees 0.39 s (652a).
+  - **Whole batch, as a stress test:** step 5833's 2.6 M rows, 11.3 GB a step: 0.094 s a step (120 GB/s), and 4.6 s for the 16-step trees.
+  - **Against the 50 s budget:** 0.06–0.3% of a recorded step at the median, at most 1.1% at the max.
+    - A 257-step span costs about 41 s of commit on one GPU: 256 decode steps at 0.156 s, the prefill, and 0.75 s of trees.
+    - vllm's CPU `CS.commit` at about 12.6 MB/s would take about 18 s for the 227 MB decode step, and about 11 min for the 8.2 GB prefill.
+  - **The widest row sets the time.** SHA-512 is serial within a row, so each row gets one thread, at about 15 MB/s a thread.
+    - Step 4512 has 78 rows of 2.36 MB: attention-shaped values whose width grows with the context. They are 184 of its 227 MB, and they set its 0.156 s.
+    - A port whose row grows with the context would take about 2 s a step at 128k keys (about 33 MB a row). Splitting such a row, per head for example, restores the parallelism. That is a template layout choice for vllm.
+  - **Not measured: gathering each unit's port rows from vLLM's tensors (the taps).** The values are already on the GPU, so this is a gather on the device, not a host copy.
+  - **GPU memory.** Each leaf takes 128 B of b‖c, and the trees at most 256 B more. A request's span at these upper-bound ports is about 3.5 M leaves, so about 1.3 GB a rank.
+  - **Per monitoring period.** The commit adds at most about 1% to pass 1's replay GPU time per sampled span (0.3% at the median). So it scales the replay's figure for a week, a month and a year, over all compute, by at most about 1.01. Nothing else in the period's accounting changes.
+- **Design for vllm-twostage (VLLM-250), for you to relay.** As #8055 stands, `interior` commits the Q sampled spans' units of one template on the CPU, each span padded to n_ρ, with `rows.commit`. Then `register` puts the record on the two-stage stream after the boundary registration.
+  - **Pass 1**, after the first stage's coins pick the sampled spans:
+    1. Run the shape-only TP8 replay of the span. It stays bit-exact to the served tokens and logprob bits, checked as now.
+    2. At each step, for each template unit of the sampled request, gather its port rows on the GPU from the forward's tensors as the template's u16 words. `add` them at the unit's row: unit i reads row i, and span k holds rows k·n_ρ to (k+1)·n_ρ − 1. Do one `flush` a step, on a side stream.
+    3. At the span's end, `finish` gives every port's root and every row's b‖c. `interior` registers them in place of its CPU `CS.commit`.
+    4. Keep only the record, the roots, the b‖c strings and the salts. No step bytes are kept.
+  - Then P1's coins draw the cells.
+  - **Pass 2:**
+    1. Replay the span again.
+    2. Recompute the commit, about 1% of a step, and check that every root equals pass 1's. A mismatch is a visible failure, never a retry.
+    3. Write only the drawn cells: their rows, salts and Merkle paths, from the recomputed trees. The cells match the committed leaves because the roots match.
+  - **Salts: I recommend #8055's fresh OS salt per row, kept until pass 2, over salts derived from a seed.**
+    - Lean names only keyed SHA-512 salt streams (`KeyedStreamsUniform`, trusted for the zero-knowledge guarantees only). No Lean assumption names a ChaCha20 stream, which is `rows.commit`'s keyed form. A key derived from a long-lived seed adds a derivation step, and the key's reuse across windows, on top of that.
+    - Fresh OS salts need neither term. Pass 2 gets them back by reading them: 192 B a row, about 0.7 GB a sampled request at the upper-bound ports, held on the host or on disk until pass 2.
+    - If you still want salts from a seed, the kernel takes any 32-byte key, so no kernel change is needed.
+  - **Questions for vllm-twostage:**
+    1. Can they give the map from each template's ports to vLLM's tensors, for one request inside the batch and on the GPU? With it, pass 1 never builds a Program row on the CPU.
+    2. Can `interior` take a commitment computed on the GPU (roots, b‖c and the given salts) in place of `CS.commit`?
+    3. At TP8, is it one interior a rank over its shard, or one over the gathered value? The recorder's ops are per rank.
+    4. How should pass 1 handle TokenSelect's chunked template (2,420 chunk units a token) and the shared-row templates? `span` refuses both today.
+    5. When will one interior cover all of a span's templates? #8055 says the template-major interior waits on proofs' two-stage-over-templates change. Who owns that change, and when does it land? I can take it if it's unowned.
+- **Rehearsal (ecd8).** After its baseline rebuild, unless its lease has under 5 min left, ecd8 now runs `interior_gpu.py bench` on its own rank-0 recorded steps.
+  - It benches each step at the target's 1 row a token, then the first step at the target's `tokens_at`. Results go to `OUT/interior-steps.json` and `OUT/interior-first.json`.
+  - Nothing before the baseline changed, and a failure in the bench doesn't change ecd8's result.
+  - A dry run of the same function, on ecd8's source tree and step shapes from the 09:29Z capture, passed: r20261108-120317-652a.
+  - ecd8's queue place is unchanged: third, behind OVERHEADDEF's 1418 and bea5.
+- **Runs and ETAs:**
+  - 1375, 03fa, 940e, 652a and 115f are done.
+  - ecd8 is queued third. It starts by about 16:15Z (it must start by 16:45Z), and its numbers, the interior ones included, come by about 17:35Z.
+  - The yes or no for Tuesday, covering the whole two-pass path, comes by Mon 18:00Z as asked. It waits on ecd8 and on vllm's answers to questions 1–3.
+
 ## 12:05Z from LIFETIME (the 10:50Z thread): rehearsal r20261108-111830-ecd8 still third on node A, ETA unchanged; a second execution under my id has been on this VM since its 11:35Z reboot
 
 - **Rehearsal.** ecd8 still waits third, behind OVERHEADDEF's 1418 and bea5. Today's holders' leases end by 14:27Z, so it starts by about 16:15Z (must start by 16:45Z), ends by about 17:25Z, and the numbers come by about 17:35Z. #8087's suites passed at its head (r20261108-112558-e4c3). It gets marked once the rehearsal passes.
