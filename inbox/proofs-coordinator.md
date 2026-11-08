@@ -10789,3 +10789,42 @@ no rename pass and no `ks_record` port.
 I won't wait for BINDTERM's lock-only commit on #8015. Merging it after my records run would mean another records run,
 and drive's lock run reconciles the two locks after landing. One risk is BINDTERM's: #8015 sits below #7997, so if piece
 1 lands without the Accepting patch, `Accepting.lean` goes red. BINDTERM has the patch.
+
+## 11:52Z from TSVERIFY: #8074 and #8043 carried across #7981; reruns queued on cpu-7
+- **#8074, now at `e43d49b05a`.** `restack.py` refuses it as based-after: #7991's head c4909513 is on checked, after
+  the move's base. So, as it advises, `e43d49b05a` is a plain merge of checked d61bcea171, whose merge base is
+  c4909513, then the move's `rename.py` over the merged tree.
+  - The diff from checked is my own change with the move's names, file for file, and no pin is stale.
+  - `WiresOrder.lean` is at `verity/core/service/spot/Spot/`.
+  - One fix-up: the merge had kept both the `WiresSpan` and `WiresOrder` imports in `WiresSound.lean`; it now has
+    `WiresOrder` alone, as my change did.
+  - Merging main is a no-op: main 66cbb9dea4 is under checked.
+- **#8043, now at `b9446b73dc`.** It merges `e43d49b05a`, then `rename.py`. The modules are at
+  `Security/{Properties,Proofs/Properties}/Spot/Wires.lean`.
+  - The lock merge had left `layers[Properties.Spot]` twice, with my `except` in the copy JSON drops. Fixed: one entry,
+    checked's, plus `Properties.Spot.Wires`.
+  - Bodies and titles now use the Spot names.
+- **Runs, all on cpu-7's proofs pool.** cpu-11's research pool was 9 to 11 deep, so I cancelled hedges 9dfc, 929b and
+  4c28 there.
+  - #8074 spot records r20261108-113917-2619: 1 check ahead at 11:46Z, ETA about 12:45Z.
+  - #8074 quick suites r20261108-113949-902d (windows, spot, protocols/spot, one_stage, vllm, repository): 2 ahead,
+    ETA about 12:30Z.
+  - #8043 records r20261108-114320-4bb4, with `--update --moved` and the move's own `rename.py --moves` map: 8 ahead,
+    ETA about 13:30Z.
+  - #8043 repository suite r20261108-114352-b4ae: 9 ahead, ETA about 13:00Z.
+  - Cancelled: flock records 4633, which was at the old head.
+  - Marking order: #8074 when 2619 and 902d pass, then #8043 when 4bb4 and b4ae pass.
+- **Land asks:**
+  - #8074 (supersedes #8029): `check_wires` and its Lean `Spot.Wires.check` refuse wires whose unit dataflow has a
+    cycle, naming a wire on it: Kahn over templates, or a stated order of unit ranges. `check_acyclic` is proved (three
+    standard axioms). Carried across #7981 at `e43d49b05a`. Stacked on #7991.
+  - #8043: `Properties.Spot.WiresAcyclic`, proved from `check_acyclic`: every wiring `Spot.Wires.check` accepts has an
+    acyclic dataflow in `Population.Dataflow`, with honest and nontrivial witnesses. Three new `Security/Properties`
+    records; no existing record moves. Stacked on #8074. Statement change: Daniel's DM at landing.
+- **For Daniel's DM (#8043): the records that move.** Three are added to `Security/Properties/lean-audit.json`:
+  `Properties.Spot.wiresAcyclic`, `wiresAcyclic_honest` and `wiresAcyclic_nontrivial`. No existing record changes.
+- **For vllm-twostage:** `cursor/proofs-tsverify-8063-adapt-827f` (`58eadac76a`) should merge #8074's restacked head
+  `e43d49b05a`. It already contains `15867b66ef`, which is under it.
+  - That merge brings #7981's move, so #8063 crosses it the same way: a plain merge, then
+    `python3 tools/move/rename.py --map tools/move/spot_names_map.toml` over the merged tree.
+  - The adaptation itself, `order=` and the test, names nothing the move renames.
