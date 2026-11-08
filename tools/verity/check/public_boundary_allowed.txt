@@ -2,19 +2,10 @@
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
 Security/Proofs/Flock/Claims/Sampling/Path.lean -> Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean
-benchmarks/one_stage/served_composite.sh -> benchmarks/pous/served_case.sh
-benchmarks/one_stage/served_composite.sh -> verity/core/devices/memory_challenger/lean
-benchmarks/one_stage/served_composite.sh -> verity/core/protocols/pous/check
 benchmarks/one_stage/served_verdicts.py -> examples/h200/interfaces
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/network_traces/certifier_piece.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/served_piece.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/streamed_wipe/served_wipe.sh
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
-benchmarks/one_stage/served_verdicts.sh -> tools/research/pyproject.toml
 integrations/vllm/tests/engine/fattn_oracle.py -> benchmarks/pouw/edited_gemm
 integrations/vllm/tests/engine/int8_attention_sass.py -> benchmarks/pouw/harness/sass_gate.py
 integrations/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
