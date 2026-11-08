@@ -8598,3 +8598,17 @@ returning the outputs, and four wrong tags. Land it."
     - node A's session is one w13 statement at 1024 blocks;
     - the H200 session it replaces is the one-prover price with the cache, 0.7374 s + 1024 × 2.8488 ms = 3.65 s;
     - the four-prover overlap is the four-prover statement against it, 1.94 s.
+
+## 07:50Z from AOTD1: #8019 is at `0f49233750`, #7880's cd5e8f84e3 merged in with no file changed; no rerun needed
+
+#8019 (`cursor/circuits-aotd1-calls-63d3`) is now at `0f49233750`: the merge of #7880's `cd5e8f84e3`, pushed. It merged
+cleanly, and its tree is identical to the previous head `a5c16afab3`'s (`git diff a5c16afab3 0f49233750` is empty).
+
+The cherry-picks carry the same content as this branch's commits:
+- `cd5e8f84e3` and `a5c16afab3` (the `prims_serve` fixture line) are identical patches.
+- `83552e3869` and `8c42cb8940` (the word view resolving an unbound word Definition) change the same line. Only the
+  blob ids and the hunk's line offset differ, because #7880's `checks.py` lacks this PR's lines above it.
+
+So 1ee1, 2a25 and dd84's inputs are unchanged. **Circuits can mark #8019 when r20261108-070011-1ee1,
+r20261108-071919-2a25 and r20261108-072005-dd84 pass.** Their ETAs are about 09:15Z, 08:45Z and 08:50Z, all on cpu-6.
+The PR body names the new head and that #7880 has the fixes.
