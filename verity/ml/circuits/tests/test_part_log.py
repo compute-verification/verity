@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import random
 
-from verity.ml.circuits.codec import decode_program, encode_program
+from verity.ml.circuits.codec import SCHEMA_V1, _BodyEncoder, decode_program, encode_program
 from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, Registry
 from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.program import Program
@@ -148,6 +148,18 @@ def test_a_cut_costs_the_same_memory_at_any_length():
 
     small, large = cost(20), cost(2000)
     assert large < 1.2 * small, (small, large)
+
+
+def test_the_writer_holds_one_entry_a_cut_of_a_history():
+    """Each cut of a history one row longer than the one before is written as an alias to it plus the new row, and the writer
+    keeps one interned part list a cut, never a cut's whole list of part keys (O(rows^2) a history, holding each)."""
+    log, enc = PartLog(), _BodyEncoder(SCHEMA_V1, tables=object())
+    for t in range(300):
+        log.append(Affine("n", t, 0, 4))
+        out = enc.refs(log.cut(t + 1), (t, 0))
+        if t >= 2:
+            assert out == {"concat": [{"alias": [t - 1, 0]}, Affine("n", t, 0, 4).to_json()]}
+    assert len(enc.trie) == 300 and len(enc.seqs) == 299
 
 
 Neg16 = PrimitiveDefinition("TPLNeg16", 1, (("a", V16),), V16, lambda a: -a & 0xFFFF, register=False)
