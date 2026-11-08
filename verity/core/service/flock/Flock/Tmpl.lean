@@ -235,6 +235,92 @@ def parse (lines : Array String) : V Tmpl := do
   if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
   return t
 
+/-- Row `i` of definition `d`, the line `s`, as numbers, as `parse` reads it (`rowNums_eq`): `Net.lineNums`, which
+compiled code reads off the line's bytes (`Net.lineNums_eq_fast`). -/
+def rowNums (d i : Nat) (s : String) : V (Array Nat) :=
+  match Net.lineNums s with
+  | some v => pure v
+  | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers"
+
+theorem rowNums_eq (d i : Nat) (s : String) : rowNums d i s = (tokens s).mapM fun t => match t.toNat? with
+    | some n => pure n
+    | none => throw s!"{FORMAT}: definition {d}: row {i} is not numbers" :=
+  (Net.mapM_toNat_arr (tokens s) s!"{FORMAT}: definition {d}: row {i} is not numbers").symm
+
+/-- `parse`, each row's numbers read by `rowNums`. -/
+def parseFast (lines : Array String) : V Tmpl := do
+  let h := tokens (lines.getD 0 "")
+  if h[0]? != some FORMAT then throw s!"not a {FORMAT} unit"
+  let name := h.getD 1 ""
+  let root ← num h 2 "header"
+  let (inGroups, at1) ← groups h 3
+  let (outGroups, at2) ← groups h at1
+  if at2 != h.size then throw s!"{FORMAT}: trailing header fields"
+  let mut defs : Array Def := #[]
+  let mut leaves := none
+  let mut at_ := 1
+  while at_ < lines.size do
+    if at_ + 1 == lines.size && lines[at_]!.startsWith "LEAVES " then
+      leaves := some lines[at_]!
+      break
+    let dh := tokens lines[at_]!
+    if dh.size != 5 || dh[0]! != "DEF" then throw s!"{FORMAT}: line {at_} is not a DEF line"
+    let cols ← num dh 1 "DEF"
+    let ins ← num dh 2 "DEF"
+    let nrows ← num dh 3 "DEF"
+    let ncalls ← num dh 4 "DEF"
+    let refs := cols + ins + 1
+    let mut rows := #[]
+    for i in [0:nrows] do
+      let v ← rowNums defs.size i (lines.getD (at_ + 1 + i) "")
+      let na := v.getD 1 0
+      let nb := v.getD (2 + na) 0
+      if v.size < 2 || v.size != 3 + na + nb then throw s!"{FORMAT}: definition {defs.size}: row {i} is malformed"
+      let (col, a, b) := (v[0]!, v.extract 2 (2 + na), v.extract (3 + na) (3 + na + nb))
+      if col ≥ cols then throw s!"{FORMAT}: definition {defs.size}: row {i} is not at one of its columns"
+      if (a ++ b).any (· ≥ refs) then throw s!"{FORMAT}: definition {defs.size}: row {i} reads past its references"
+      rows := rows.push (col, a, b)
+    let mut calls := #[]
+    for i in [0:ncalls] do
+      let ct := tokens (lines.getD (at_ + 1 + nrows + i) "")
+      if ct[0]? != some "CALL" then throw s!"{FORMAT}: definition {defs.size}: call {i} is not a CALL line"
+      let e ← num ct 1 "CALL"
+      let count ← num ct 2 "CALL"
+      let base ← num ct 3 "CALL"
+      let stride ← num ct 4 "CALL"
+      let nseg ← num ct 5 "CALL"
+      if ct.size != 6 + 5 * nseg then throw s!"{FORMAT}: definition {defs.size}: call {i} is malformed"
+      let mut segs := #[]
+      for s in [0:nseg] do
+        segs := segs.push ⟨← num ct (6 + 5 * s) "CALL", ← num ct (7 + 5 * s) "CALL", ← num ct (8 + 5 * s) "CALL",
+          ← num ct (9 + 5 * s) "CALL", ← num ct (10 + 5 * s) "CALL"⟩
+      let some callee := defs[e]? | throw s!"{FORMAT}: definition {defs.size}: call {i} names no earlier definition"
+      if count == 0 || (count > 1 && stride < callee.cols) || base + (count - 1) * stride + callee.cols > cols then
+        throw s!"{FORMAT}: definition {defs.size}: call {i}'s copies overlap, or overrun its columns"
+      if segs.foldl (fun n s => n + s.reps * s.len) 0 != callee.ins then
+        throw s!"{FORMAT}: definition {defs.size}: call {i}'s segments do not bind its callee's inputs"
+      if segs.any (fun s => s.len > 0 && s.reps > 0 && s.hi count > refs) then
+        throw s!"{FORMAT}: definition {defs.size}: call {i} binds past its references"
+      calls := calls.push { def_ := e, count, base, stride, segs }
+    defs := defs.push { cols, ins, rows, calls }
+    at_ := at_ + 1 + nrows + ncalls
+  if root ≥ defs.size then throw s!"{FORMAT}: the root names no definition"
+  if (defs.getD root default).ins != 0 || (defs.getD root default).cols == 0 then
+    throw s!"{FORMAT}: the root has inputs, or no constant"
+  let t : Tmpl := { name, root, inGroups, outGroups, defs, leaves }
+  if !t.ordered then
+    throw s!"{FORMAT}: a row or a binding reads a later column, input padding, or both its caller's own columns and its inputs"
+  if !t.wellFormed then throw s!"{FORMAT}: a definition has 2^64 columns or calls, or a call the fold's proof does not cover"
+  return t
+
+/-- Compiled code runs `parseFast`; the kernel and every proof see `parse`. `@[csimp]` rewrites only code compiled after
+it, so it stays directly below `parse`. -/
+@[csimp] theorem parse_eq_fast : @parse = @parseFast := by
+  funext lines
+  unfold parse parseFast
+  simp only [rowNums_eq]
+  all_goals rfl
+
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
 def dropPairs : List Nat → List Nat
   | [] => []
