@@ -258,7 +258,8 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the guarantees (GLOSSARY.md), and any lemma still listed beside them.
+- `guarantees`: the guarantees (GLOSSARY.md), and the theorems that witness them (`witnesses`, `claims.witnesses`), so
+  their records show in the landing DM; no other lemma or completeness theorem.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
   hypotheses, the `premises` (its named assumptions, open premises, and the `Prop`s it only `reads`), a hash of the type, and for each module the
   definitions the guarantees read, with a hash each (not who
@@ -291,8 +292,11 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
-  `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
-  guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
+  `falsified`, or `unstated` for a statement no guarantee states), so a record counts its guarantees by category. The
+  lock lists what is assumed and what is proved, so a reason starting `lemma` or `completeness` is refused with its fix:
+  a lemma comes off `guarantees` (its theorem stays in `Proofs/`, and a spec statement only it states moves to
+  `Proofs/<Area>/Lemmas/`), and a completeness theorem goes under its guarantee's `witnesses` entry when it is that
+  guarantee's honest witness, else comes off too. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
   its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs

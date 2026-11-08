@@ -3160,9 +3160,17 @@ def trust_gap_kept(lock: dict) -> dict[str, list[str]]:
 OUTCOMES = ("accept", "undecided", "reject", "none")
 
 #: what a `shape.frozen` reason starts with (`restatable: …`, `frozen (hash): …`): a guarantee that a restatement makes fit,
-#: one frozen on a question still open, one leaving the list (a lemma, a completeness theorem, one resting on a falsified
-#: premise), and a spec statement that no guarantee states
-CATEGORIES = ("restatable", "frozen", "lemma", "completeness", "falsified", "unstated")
+#: one frozen on a question still open, one leaving the list (resting on a falsified premise), and a spec statement that
+#: no guarantee states
+CATEGORIES = ("restatable", "frozen", "falsified", "unstated")
+#: what a `shape.frozen` reason may no longer start with, each with its fix: the lock lists what is assumed and what is
+#: proved, and a lemma or a completeness theorem is neither
+UNLISTED = {
+    "lemma": "a lemma is not listed: remove it from `guarantees`; its theorem stays in `Proofs/`, and a statement of the "
+             "spec that only it states moves to `Proofs/<Area>/Lemmas/`",
+    "completeness": "a completeness theorem is not listed: name it under its guarantee's `witnesses` entry if it is that "
+                    "guarantee's honest witness, else remove it from `guarantees`",
+}
 
 #: a `shape.conjectures` entry's status: an open conjecture is a premise of the properties that rest on it, a falsified
 #: one refuses them
@@ -3195,7 +3203,8 @@ def shape(policy: dict, facts: dict) -> list[str]:
     doesn't fit yet}) is exempt until it fits, and then its entry must go. Every statement (`def G : Prop`) of a
     spec module that holds statements (`shape.statements`, module prefixes; by default a module with a `Guarantees`
     component) is one that a listed guarantee states (a named assumption aside), or is under `shape.frozen` until
-    one does. Each reason starts with its category (`CATEGORIES`). A named conjecture under `shape.conjectures`
+    one does. Each reason starts with its category (`CATEGORIES`); one starting `lemma` or `completeness` is refused with
+    its fix (`UNLISTED`), since the lock lists neither. A named conjecture under `shape.conjectures`
     ({name: {status, test, why}}, a premise the lock lists or an assumptions module's `Prop` a guarantee reads,
     `read_props`) is a premise too, of a property that is then conditional and lists it under its entry's `rests_on`;
     one marked falsified refuses every property resting on it.
@@ -3230,7 +3239,11 @@ def shape(policy: dict, facts: dict) -> list[str]:
             fails.append(Failure("shape.conjecture-test", name, f"shape: shape.conjectures[{name}] is open and names no "
                                  f"falsification test that runs"))
     for name, why in sorted(frozen.items()):
-        if why.strip() and category(why) is None:
+        head = why.split(":", 1)[0].split(" (", 1)[0].strip()
+        if ":" in why and head in UNLISTED:
+            fails.append(Failure("shape.frozen-unlisted", name, f"shape: {where}[{name}] starts with `{head}`: "
+                                 f"{UNLISTED[head]}"))
+        elif why.strip() and category(why) is None:
             fails.append(Failure("shape.frozen-category", name, f"shape: {where}[{name}] starts with no category: "
                                  f"`<category>: why`, one of {', '.join(CATEGORIES)}"))
     guarantees = set(policy.get("guarantees", {}))
