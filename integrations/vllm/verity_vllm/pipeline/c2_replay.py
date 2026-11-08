@@ -271,7 +271,7 @@ def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
     """Each request Program's steps of record: its Build result's T + 1, else its rows' segment steps."""
     from verity_vllm.query.manifest import format as MF
 
-    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"])) if k in progs else None)
+    return {k: (int(v["result"]["T"]) + 1) if (v.get("result") or {}).get("T") is not None else (len(MF.segment_steps(progs[k]["rows"], progs[k].get("checks"))) if k in progs else None)
             for k, v in loaded.items()}
 
 

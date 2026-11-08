@@ -75,7 +75,7 @@ def bindings(partition: dict, program: dict, vstar=None) -> dict:
     partition object is ``partition``: `ValueError` unless the object names the program, its query names one template of it,
     and the program is `population_program` of that template; with ``vstar`` (V*'s Definition of the statement,
     `vstar_definition`), unless that template is ``vstar``, whose digest is then taken."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
 
     prog = program_digest(program)
     if partition.get("program") != prog:

@@ -60,7 +60,7 @@ def _write_request(rep, d: Path, LP: int, STEPS: int, S: int) -> None:
     with gzip.open(d / "descriptor.json.gz", "wb") as f:
         f.write(canonical_json(desc))
     with gzip.open(d / "instances.json.gz", "wt") as f:
-        json.dump({"params": [[n, repr(t)] for n, t in rep.flat_definition.signature()[0]]}, f)
+        json.dump({"params": [[n, repr(t)] for n, t in rep.flat_definition.signature()[0]], "rows": []}, f)
     sampling = {"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": S}
     json.dump({"program": {"digest": program_digest(desc)}, "sampling": sampling,
                "applicability": {"execution": "bi-eager", "numerics_profile": "stand-in", "sampler": "stochastic",

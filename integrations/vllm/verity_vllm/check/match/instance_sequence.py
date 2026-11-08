@@ -6,6 +6,7 @@ from __future__ import annotations
 import collections
 import re
 import sys
+from collections.abc import Iterable
 
 from verity.ml.circuits.program import RUN, input_id
 from verity_vllm.check.match import compiler_form
@@ -47,13 +48,14 @@ def _registry():
 
 
 class RootView(PeerReads, PX.PrefixInput):
-    """A decoded root body as an instance sequence."""
+    """A decoded root body as an instance sequence: its nodes but its inputs and its checks (`checks`: their instance rows, the
+    body's nodes past its inputs, `program_loaders.check_rows`), which the runtime never runs."""
 
     compact = False   # operand representation: runs (record) | run progressions (cb_a.compact); set per instance in __init__
     fold_form: dict | None = None   # a fold's `compiler_form.fold_in_form` record, set by its loader's caller
 
     def __init__(self, label: str, desc: dict, weight_fields: dict[int, str], tok_node: int, oracle_rows: list[dict] | None = None,
-                 compact: bool = False):
+                 compact: bool = False, checks: Iterable[int] = ()):
         from verity.ml.circuits.codec import program_digest
         self.label = label
         self.compact = bool(compact)
@@ -66,9 +68,12 @@ class RootView(PeerReads, PX.PrefixInput):
             # the root, no per-row expansion of a Strided (compact.lean_root; the non-root Definitions are decoded as decode_program does)
             from verity_vllm.program.compact import lean_root
             lr = lean_root(desc, registry)
+            row, skip = -1, frozenset(checks)
             for k, fid, form, args6, out, n in lr["nodes"]:
                 if form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n)
+                    continue
+                if (row := row + 1) in skip:
                     continue
                 self.inst.append({"k": k, "spec": fid if form != "batch" else f"batch:{fid}", "form": form, "args": args6, "out": out})
             self.n_nodes = lr["n_nodes"]
@@ -81,10 +86,13 @@ class RootView(PeerReads, PX.PrefixInput):
             dec = decode_program(desc, registry)
             root = dec.root
             body = root.body if hasattr(root, "body") else root.defn.body
+            row, skip = -1, frozenset(checks)
             for k, n in enumerate(body.nodes):
                 fid = descriptor_id(n.fn)
                 if n.form == "batch" and input_id(fid) is not None:
                     self.inputs[k] = (fid, n.n)
+                    continue
+                if (row := row + 1) in skip:
                     continue
                 self.inst.append({"k": k, "spec": fid if n.form != "batch" else f"batch:{fid}", "form": n.form,
                                   "args": [runs(a.refs) for a in n.args], "out": str(n.out)})

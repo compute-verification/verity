@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from verity.ml.circuits.defs import Builder, bind
+from verity.ml.circuits.defs import Builder, PrimitiveDefinition, bind
 from verity.ml.circuits.refs import Affine, Coll
 from verity.ml.circuits.types import Array, Value
 from verity.ml.definitions.registry import dsa_topk
@@ -18,11 +18,10 @@ ROOT = Path(__file__).resolve().parents[4]
 FIX = "serve it canonically"
 
 #: the list only shrinks: lower the cap with the entry that goes
-ALLOWED_CAP = 2
+ALLOWED_CAP = 1
 
 #: where each `ALLOWED` entry is still made or read, so an entry nothing makes is stale
 MADE_AT = {
-    "schedule": ("integrations/vllm/verity_vllm/program/predict/build.py", '("schedule", '),
     "run.survey_hole": ("integrations/vllm/verity_vllm/program/frontend/rules/training_survey.py", '"survey_hole"'),
 }
 PACKAGE = ROOT / "integrations/vllm/verity_vllm"
@@ -35,9 +34,12 @@ def test_a_declared_parameter_has_its_kind(name, kind):
 
 
 def test_an_allowed_parameter_returns_its_reason_and_an_undeclared_one_is_refused_with_the_fix():
-    assert "MoeAlignRanks" in IN.parameter("rank0.schedule")
+    assert "check_identity" in IN.parameter("run.survey_hole")
     with pytest.raises(IN.Free, match=FIX):
         IN.parameter("tile_choice")
+    for retired in ("rank0.schedule", "rank0.splits"):
+        with pytest.raises(IN.Free, match=repr(retired)):
+            IN.parameter(retired)
     with pytest.raises(IN.Free, match="'rank1.tile_choice'"):
         IN.check_params([("prompt", None), ("run", None), ("rank1.tile_choice", None), ("weights", None)])
     IN.check_params([("prompt", None), ("seed", None), ("run", None), ("peers_0", None), ("weights", None)])
@@ -60,18 +62,22 @@ def test_every_run_declaration_is_read(declared):
     assert readers, f"no rule reads a run field under {declared!r}: remove its declaration from RUN"
 
 
-def _call(defn):
-    fn = bind(defn, N=5, TOPK=3)
+#: a relation `RELATIONS` doesn't list: any permutation of the top-3 set of 5 scores (log2(3!) free bits), a test's own
+ANY_ORDER = PrimitiveDefinition("TAnyTopKOrder", 1, (("scores", Array(5, Value(32))), ("order", Array(3, Value(32)))), Value(1),
+                                lambda *w: dsa_topk.order_ok(w[:5], w[5:], 3), register=False)
+
+
+def _call(fn):
     params, ret = fn.signature()
     B = Builder(tuple(params), ret)
     return B, B.call(fn, *(Coll(t, Affine("p", i, 0, t.leaves)) for i, (_, t) in enumerate(params)))
 
 
 def test_a_check_bit_is_a_declared_relations_verdict():
-    B, ok = _call(dsa_topk.DsaTopKLongRow)
+    B, ok = _call(bind(dsa_topk.DsaTopKLongRow, N=5, TOPK=3))
     IN.check(B, ok, "the long row")
-    B, ok = _call(dsa_topk.DsaTopKOrder)
-    with pytest.raises(IN.Free, match="DsaTopKOrder_v1, which RELATIONS doesn't list"):
+    B, ok = _call(ANY_ORDER)
+    with pytest.raises(IN.Free, match="TAnyTopKOrder_v1, which RELATIONS doesn't list"):
         IN.check(B, ok, "any permutation")
     B = Builder((("b", Value(1)),), Value(1))
     with pytest.raises(IN.Free, match="no call's output"):
@@ -82,7 +88,7 @@ def test_advice_needs_a_charging_term_and_a_witness_a_listed_relation():
     with pytest.raises(ValueError, match="charged by a term of the window charge"):
         IN.Kind("advice", "a choice", charge="decisions")
     with pytest.raises(ValueError, match="names its relation in RELATIONS"):
-        IN.Kind("witness", "an order", relation="DsaTopKOrder_v1")
+        IN.Kind("witness", "an order", relation="TAnyTopKOrder_v1")
 
 
 @pytest.mark.parametrize("relation", sorted(IN.RELATIONS))

@@ -3,7 +3,7 @@
     verity-vllm serve-openai --model REPO --revision SHA --out DIR [--port 18082] [--precision verity_int8|int8_exact|pin]
         [--protocol vllm|plain|ids [--id-payload 503]] [--no-commit] [--window-steps 64] [--no-learn-warmup]
         [--force-include-usage | --no-force-include-usage] [--retain-exclude hidden_m1] [--learn-host-budget-mb 4096]
-        [--retain host|device [--retain-device-gb 32] [--release-after sampled_proofs,pouw_h1 [--draws-dir DIR]]]
+        [--retain host|device [--retain-device-gb 32] [--release-after spot,pouw_h1 [--draws-dir DIR]]]
         [--required-manifest PREDICTED/manifest.json --hidden-so SO --norm-tap-so SO] [--seal]
         [--no-seal-off-loop] [--no-seal-process] [--seal-hold-gb 64] [--seal-warm-gb 0] [--window-gb 32] [--disk-floor-gb 300]
         [--copy-records-to $OUT] [--admit arrival|release-order|tick [--admit-hold-ms 5000]] [--switch-interval-ms 0.1] [--async-scheduling]
@@ -20,7 +20,9 @@ validation, ``to_sampling_params``) and every chunk is its ``CompletionStreamRes
 (``--protocol plain``) is the same framing without vLLM, for the CPU tests; `serve_protocol.framing_agrees` holds the two to
 each other and the server records the result at start. ``--protocol ids`` (`serve_protocol.IdsProtocol`) answers a network
 certifier's id request (exactly ``active.id_request`` in its ``--id-payload`` + 9-byte cells, its release headers aside) in the
-scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``. Every
+scan's id form: no HTTP head, one ``io_tie.id_event`` of ``--id-payload`` bytes a token, no usage chunk, then ``data: [DONE]``; a stream the
+engine fails stops after its ids so far and the connection closes, with no ``[DONE]`` and no text (its reason only in
+``summary.json``'s ``stream_errors`` and the log), so the network certifier sees it unterminated. Every
 other request (the network certifier's shim and probes, the load) is answered as ``--protocol vllm`` answers it.
 
 Sampling parameters are values the request brings: the server applies vLLM's neutral
@@ -253,6 +255,7 @@ class Server:
         self.model_root, self.clock = model_root or served_name, clock
         self.served = 0
         self.streaming: set[asyncio.StreamWriter] = set()      # responses whose head is written
+        self.stream_errors: dict[str, Any] = {"n": 0, "first": []}
 
     async def handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         try:
@@ -387,6 +390,14 @@ class Server:
         return req, Admission(http_id, engine_id_of(http_id), prompt_ids, params, deliver, ingress_of(proto.brought(req), params),
                               user_of(req.raw), release, dict(times or {}))
 
+    def stream_error(self, adm: Admission, proto: Any, error: str) -> None:
+        """A stream the engine failed, in the server's record (``summary.json``'s ``stream_errors``: the count and the
+        first ten) and its log, whatever the protocol puts on the wire."""
+        self.stream_errors["n"] += 1
+        if len(self.stream_errors["first"]) < 10:
+            self.stream_errors["first"].append({"http_id": adm.http_id, "engine_id": adm.engine_id, "protocol": proto.name, "error": error})
+        print(f"SERVE-OPENAI stream error ({proto.name}) {adm.http_id}: {error}", file=sys.stderr, flush=True)
+
     async def completions(self, b: Any, writer: asyncio.StreamWriter, release: tuple[str, int] | None = None,
                           proto: Any = None, times: Mapping[str, float] | None = None) -> None:
         proto = proto or self.proto
@@ -422,7 +433,11 @@ class Server:
                 d = await deltas.get()
                 finished = d.finished
                 if d.error:
-                    writer.write(frame(sse(error_body(d.error, 500, "InternalServerError").decode())))
+                    self.stream_error(adm, proto, d.error)
+                    end = proto.error_end(d.error)
+                    if end is None:
+                        return
+                    writer.write(frame(end))
                     break
                 if not d.text and not d.token_ids and not n_out:
                     continue                                     # vLLM: no empty chunk before the first token
@@ -665,7 +680,7 @@ def main(opts: Options) -> int:
         if mirror is not None:
             mirror()                                     # the requests closed at the stop, before the seals still pending
         def stopped(final: bool) -> dict[str, Any]:
-            got = {"final": final, "served": server.served, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
+            got = {"final": final, "served": server.served, "stream_errors": server.stream_errors, "engine_steps": loop.steps, "engine_error": loop.error, "stopped_by": loop.draining,
                    "commit": windows.summary() if windows is not None else None, "admit": order and order.summary(),
                    "tick": loop.gate.summary() if loop.gate is not None else None,
                    "sealer": sealer.summary() if sealer is not None else None, "pauses": watchdog.summary(),

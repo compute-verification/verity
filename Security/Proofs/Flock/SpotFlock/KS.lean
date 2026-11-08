@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.SpotFlock.Facts
+public import Proofs.Flock.SpotFlock.Coins
 public import Proofs.Flock.SpotFlock.Sessions
 public import Proofs.Flock.SamplingGeneric.TwoAt
 public import Proofs.Flock.Claims.Sampling.Deployed
@@ -16,8 +17,9 @@ public import Proofs.Flock.Claims.NumbersDeploy
   `Code.InteriorFixed`;
 * `sessionsIn_code`: `SessionsIn`, the reference statement being in Flock's masked scope (`Held.xS₀_ok`): every
   session's statement has its shapes, so its `N₀` is the code's;
-* `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from A3 at the coins' bytes (`CallsUniform`)
-  and the sessions' openings (`SessionOpensTwo`); the sessions' runs are `SpotFlock.sessionRuns`.
+* `ksTwo_spot`: `CompiledTwo.KS` at Flock's masked record and SHA-512, from the sessions' openings
+  (`SessionOpensTwo`); A3 at the coins' bytes is `SpotFlock.callsUniform` and the sessions' runs are
+  `SpotFlock.sessionRuns`.
 -/
 
 @[expose] public section
@@ -47,16 +49,15 @@ theorem sessionsIn_code : SamplingDeploy.SessionsIn (code h) := by
     rw [FlockDeploy.tables_eq hset, hset]
     simp [FlockDeploy.tableLen, List.map_map, Function.comp_def]
 
-/-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, its
-code's facts and its sessions' runs proved, from A3 at the coins' bytes and the sessions' openings. -/
-theorem ksTwo_spot (hA : SamplingDeploy.CallsUniform (fun _ => L) fun _ => coinByte)
-    (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
+/-- **SPOT[Flock]'s two-stage knowledge soundness at its code**: `ksTwo_atOrder` at `SpotFlock.code h`, A3 at its
+coins' bytes, its code's facts and its sessions' runs proved, from the sessions' openings. -/
+theorem ksTwo_spot (hopens : Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512
       (SamplingDeploy.deploy _root_.Flock.Readable.relation (code h)) (two h) iroots) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h) (rs h)).KS
       FlockDeploy.sha512 :=
-  SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte) (fun _ => coinByte)
-    iroots hA hA (regMatchesTwo_code h) (refusesTwo_code h _) (interiorFixed_code h _)
-    (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
+  SamplingDeploy.ksTwo_atOrder (base h) (reg h) (two h) (fun _ => L) (fun _ => L) (order h) (fun _ => coinByte)
+    (fun _ => coinByte) iroots callsUniform callsUniform (regMatchesTwo_code h) (refusesTwo_code h _)
+    (interiorFixed_code h _) (sessionRuns h _root_.Flock.Readable.relation FlockDeploy.sha512) (sessionsIn_code h)
     hopens
 
 end SpotFlock

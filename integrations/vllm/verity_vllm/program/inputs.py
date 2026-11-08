@@ -38,6 +38,9 @@ CHARGED: frozenset[str] = frozenset()
 RELATIONS: dict[str, str] = {
     "DsaTopKLongRow_v1":
         "integrations/vllm/tests/program/test_dsa_topk.py::test_the_long_row_accepts_exactly_the_top_set_in_ascending_order",
+    "StopCheck_v1":
+        "integrations/vllm/tests/program/predict/test_steps.py::"
+        "test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop",
 }
 
 
@@ -86,13 +89,6 @@ RUN: dict[str, Kind] = {
 
 #: what is free today, a Program parameter's name or a `run` declaration (``run.<declared>``) -> its reason, its bound and its fix
 ALLOWED: dict[str, str] = {
-    "schedule":
-        "the Marlin MoE decoder's `MoeAlignRanks` key of each (token, slot) pair, the position serving's atomicAdd gave it, "
-        "which no check holds. The key puts the pair in one of its expert's moe blocks, and the block sets the Marlin split-K "
-        "cut bits (`MarlinMoeSchedule`), so it moves output bits: at most sum_e log2(c_e! / prod_b s_b!) bits a MoE layer a "
-        "step, c_e the expert's pairs and s_b its blocks' sizes. `predict.batch.check_compiled` refuses it (R1) in every "
-        "compiled session. Fix: serve the align in pair order and key `MoeAlignRanks` by the pair index, or charge the key "
-        "as advice",
     "run.survey_hole":
         "a survey's stand-in for a node every rule refuses (`frontend.rules.training_survey.Hole`): `check_identity` refuses "
         "every Program with one, so no registered Program reads it",

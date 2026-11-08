@@ -13,10 +13,10 @@ public import PouwCheck.Pass
 public import PouwCheck.Rounds
 public import PouwWindow.Draw
 public import PouwWindow.Rounds
-public import SampledProofs.ChallengerCoins
-public import SampledProofs.ChallengerSession
-public import SampledProofs.PyJson
-public import SampledProofs.Registered
+public import Spot.ChallengerCoins
+public import Spot.ChallengerSession
+public import Spot.PyJson
+public import Spot.Registered
 public import Identity.Domains
 
 /-!
@@ -37,7 +37,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   every round's root and coin (`drawRoot`) must be the one root the challenger's log shows its sampling coin followed, read
   through the sample's own session (`draw`'s `session`), the one the auditor's signed ledger opens on that root, run from
   a commit the host's pins log records on main's first-parent line (`trustedSessionOf`, over `pinnedSession`), and
-  opened withheld (`SampledProofs.Challenger.withheldOn`), so its challenger released no coin root before the prover's
+  opened withheld (`Spot.Challenger.withheldOn`), so its challenger released no coin root before the prover's
   sample root. So a credit bit changed after the sampling coin is refused.
 * `drawn` is `credit.drawn`: the units the sampling coin samples from the window's own layout, `drawCheck`'s rule under the
   sampling design `work:k` (`workUnits`), one stratum per K (`strata`, over `h1window.program`'s unit order) at the K the period's
@@ -95,7 +95,7 @@ round log's roots, which only `roundsCheck` (`core_check.rounds`) holds to the o
   session's registered finding, each registered port's value and the root its reads were opened against). The entries
   are the window's registration's: each A value's domain, and each other value's a proof opened, is `domainOf` the
   committed descriptor's SHA-512 and, for every value but the weights' `…/b/<K>` (`isHeld`) and round 0's `…/ids@0`,
-  the window's open root (`SampledProofs.Registered.domainAt`), for `…/ids@0` the window's session; each
+  the window's open root (`Spot.Registered.domainAt`), for `…/ids@0` the window's session; each
   proof was verified against that descriptor, opened only values
   the window registers once, each at its registered root, and opened its unit's K's A value, the window's `…/a/<K>` or
   its call's round's `…/a/<K>@<s>`, and its K's weights `<PREFIX>b/<K>`. So the A rows `Internal.aLink` ties to the round roots are the ones each sampled proof block's
@@ -125,7 +125,7 @@ namespace PouwCheck.Credit
 
 open Lean (Json)
 open PouwCommit (Part tagged Domain)
-open SampledProofs.Challenger (ChallengerKey LiveOpening trustedSessionOf liveReason)
+open Spot.Challenger (ChallengerKey LiveOpening trustedSessionOf liveReason)
 
 def CALLS_TAG : ByteArray := "verity/pouw/h1/calls/v2".toUTF8.push 0
 def DRAW_TAG : String := "verity/pouw/h1/draw/v1"
@@ -285,10 +285,10 @@ def dumps : Nat → Json → String
   | _ + 1, .null => "null"
   | _ + 1, .bool b => if b then "true" else "false"
   | _ + 1, .num n => toString n.mantissa
-  | _ + 1, .str s => SampledProofs.PyJson.str s
+  | _ + 1, .str s => Spot.PyJson.str s
   | d + 1, .arr a => "[" ++ ", ".intercalate (a.toList.map (dumps d)) ++ "]"
   | d + 1, j@(.obj _) =>
-    "{" ++ ", ".intercalate ((fields j).map fun (k, v) => SampledProofs.PyJson.str k ++ ": " ++ dumps d v) ++ "}"
+    "{" ++ ", ".intercalate ((fields j).map fun (k, v) => Spot.PyJson.str k ++ ": " ++ dumps d v) ++ "}"
 
 /-- `calls_root`: SHA-512 over each row as `json.dumps(row, sort_keys=True)` and a newline, under `CALLS_TAG` and the
 window's Program salt; with the served trees' digest, SHA-512 of that and it; with the Commit record's digest, SHA-512
@@ -313,7 +313,7 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
     (hex? commit).bind fun raw =>
     (String.fromUTF8? raw).bind fun text =>
     (Json.parse text).toOption.bind fun j =>
-    (SampledProofs.PyJson.canonical j).toOption.bind fun t =>
+    (Spot.PyJson.canonical j).toOption.bind fun t =>
     (Json.getArr? (get j "registered")).toOption.bind fun xs =>
     if t == text && isObj j && get j "format" == Json.str COMMIT_FORMAT && xs.all isObj then
       some (Flock.Sha512.hash ((COMMIT_FORMAT.toUTF8.push 0) ++ raw), xs)
@@ -324,10 +324,10 @@ def commitOf? (commit : Json) : Option (ByteArray × Array Json) :=
 sample root `root` (its hex) under `k`, from the session's files `session` (`trustedSessionOf`), when the ledger opens it
 withheld (`withheldOn`); else the refusal (`coin`). -/
 def drawSession (ledger : Json) (k : ChallengerKey) (pins main session : Json) (root : String) :
-    R (SampledProofs.Challenger.LiveCommitment × SampledProofs.Challenger.Roots) := do
+    R (Spot.Challenger.LiveCommitment × Spot.Challenger.Roots) := do
   let got ← (trustedSessionOf ledger (Json.mkObj [("root", Json.str root)]) k pins main session).mapError
     fun e => ("coin", s!"the draw's session is not trusted: {e}")
-  unless SampledProofs.Challenger.withheldOn ledger root do throw ("coin", SampledProofs.Challenger.WITHHELD)
+  unless Spot.Challenger.withheldOn ledger root do throw ("coin", Spot.Challenger.WITHHELD)
   pure got
 
 /-- `credit._credited` up to the sample root: the verifier's challenger key, the credited calls' indices and the root
@@ -502,11 +502,11 @@ def tileK (k : Nat) : String :=
   s!"the window's tile at K = {k} is outside the K its proof covers, multiples of {TILE_K_STEP} below " ++
     s!"{TILE_K_LIMIT} (the K its GemmAccumulatorS8 binds): {fix}"
 
-/-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`SampledProofs.PyJson.canonical`,
+/-- `credit._loads`: `text` read as JSON, when it is that value's canonical JSON (`Spot.PyJson.canonical`,
 Python's `canonical_json`), so every reading of it is the same. -/
 def loads? (text : String) : Option Json :=
   match Json.parse text with
-  | .ok j => match SampledProofs.PyJson.canonical j with
+  | .ok j => match Spot.PyJson.canonical j with
     | .ok s => if s == text then some j else none
     | .error _ => none
   | .error _ => none
@@ -1010,7 +1010,7 @@ def entryOk (e : Json) : Bool :=
 
 /-- `credit.domain_of`: the domain (hex) one-stage's registration gives the registered value `e` (an entry `entryOk`
 holds) of the window whose open root is `window`, under the circuit whose descriptor's SHA-512 is `program`
-(`SampledProofs.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
+(`Spot.Registered.domainAt`): the weights' (`…/b/<K>`, `isHeld`) are held across windows and bind none;
 round 0's input-ids table (`…/ids@0`, `idsStep?` 0) and request table (`…/requests@0`, `isRequests`), whose roots the
 window's open root contains (`requestsRoot`, `Internal.arow`), bind the window's session `session` in that root's place
 (`domainBound` at `"session"`); every
@@ -1021,8 +1021,8 @@ def domainOf (program window session : String) (e : Json) : R String := do
   let (words, leaves, bits) := ((nat? (get e "words")).getD 0, (nat? (get e "leaves")).getD 0,
     (nat? (get e "word_bits")).getD 16)
   let d ← (if idsStep? (.str v) == some 0 || isRequests (.str v) then
-      SampledProofs.Registered.domainBound program v words leaves bits "session" session
-    else SampledProofs.Registered.domainAt program v words leaves bits
+      Spot.Registered.domainBound program v words leaves bits "session" session
+    else Spot.Registered.domainAt program v words leaves bits
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
   pure (Flock.hexOf d)
 
@@ -1221,7 +1221,7 @@ when the window registers the call's receipt table
 row t, so the receipts the round roots commit are the ones the units return; every other unit reads none of them: each
 port's reads start at the call's first unit u0 (`READS_FROM`) and end at its last (`Flock.Registered.Port.readAt` reads
 none below `reads_from` or past `reads`). Each value is a
-row/v2 value of 16-bit leaves under `SampledProofs.Registered.domainAt` of its name, rows and words, binding the
+row/v2 value of 16-bit leaves under `Spot.Registered.domainAt` of its name, rows and words, binding the
 window's open root `window` but for the weights' (`isHeld`), at the root `roots` (`{value: [root, ...]}`) gives it. Its
 reads cost the call's units, once a port; only the ok rows' known content is the window's. The statement's public row `pub`
 (`PUB_PORT`) is the verifier's own: unit u0 + t reads row t of the call's public table `<prefix>pub@<call>`, which the
@@ -1300,7 +1300,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     let reads := (List.range size).map fun t => Lean.toJson (row t)
     let lw : Nat × Nat := ((shapes.find? (·.1 == v)).map (·.2)).getD (0, 0)
     let (leaves, words) := lw
-    let d ← (SampledProofs.Registered.domainAt program v words leaves 16
+    let d ← (Spot.Registered.domainAt program v words leaves 16
       (if isHeld (.str v) then none else some window)).mapError fun why => ("registration", why)
     out := out ++ [(port, Json.mkObj [("value", Json.str v), ("root", Json.str ((root.lookup v).getD "")),
       ("leaves", Lean.toJson leaves), ("words", Lean.toJson words), ("word_bits", Lean.toJson (16 : Nat)),
@@ -1318,7 +1318,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
     if tile.j10r then some (u0, j10rBlocks m k (r, c) (t / per) (t % per)) else none
   let ks : Array (Array Nat × ByteArray) := (Array.range size).map fun t =>
     (publicWords sb (u0 + t) (ra, rb) (j10r t), PouwCheck.publicRowSalt window (u0 + t))
-  let d ← (SampledProofs.Registered.domainAt program pv words size 16 (some window)).mapError fun why =>
+  let d ← (Spot.Registered.domainAt program pv words size 16 (some window)).mapError fun why =>
     ("registration", why)
   let reg : Flock.Registered.Port :=
     { name := PUB_PORT, value := pv, root := ByteArray.empty, leaves := size, words := some words, wordBits := 16,
@@ -1332,7 +1332,7 @@ def registeredFile (program : String) (layout : Json) (shape : Shape) (call : Na
       ("salts", Json.arr (ks.map fun k => Json.str (Flock.hexOf k.2)))])])]
   let population := sizes.foldl (· + ·) 0
   let oks : Array (Array Nat × ByteArray) := (Array.range population).map fun u => (OK_ROW, okSalt window u)
-  let od ← (SampledProofs.Registered.domainAt program ov OK_ROW.size population 16 (some window)).mapError fun why =>
+  let od ← (Spot.Registered.domainAt program ov OK_ROW.size population 16 (some window)).mapError fun why =>
     ("registration", why)
   let oreg : Flock.Registered.Port :=
     { name := OK_PORT, value := ov, root := ByteArray.empty, leaves := population, words := some OK_ROW.size,
@@ -1564,7 +1564,7 @@ def otherWeightsEntry (v : String) (k n : Nat) : String :=
   "descriptor), binding no window (registered.domain)"
 
 /-- `credit._weights`: the weights' root the window registered, exactly `<prefix>b/<K>` for each K of its layout once
-and no other `…/b/<K>`, each the registration of K's B rows under `SampledProofs.Registered.domain` of its name and
+and no other `…/b/<K>`, each the registration of K's B rows under `Spot.Registered.domain` of its name and
 the circuit `program`, binding no window, when `weightsRoot` of their roots, its round-0 request table's root
 `requests` and its session `session` are its open root (`windowOpenRoot`); else the refusal (`weights` or
 `layout`). Each K's B rows are x = `chunks?` K leaves each, x·Σn leaves of `leafWords` K words; a K with no chunks is
@@ -1603,7 +1603,7 @@ def Internal.weights (window layout entries requests session program prefix_ : J
         weightsRefuse (s!"the window registers K = {k}'s weights twice ({name}): each K's B rows are one registered " ++
           s!"value {pre}b/<K>")
       let (x, w) := ((chunks? k).getD 1, leafWords k)
-      let d ← (SampledProofs.Registered.domain prog name w (x * n) 16).mapError fun why => ("weights", why)
+      let d ← (Spot.Registered.domain prog name w (x * n) 16).mapError fun why => ("weights", why)
       let some h := digest? (get e "root") | weightsRefuse (otherWeightsEntry name k n)
       unless keys e == some ["domain", "leaves", "root", "value", "words"] && nat? (get e "leaves") == some (x * n)
           && nat? (get e "words") == some w && str? (get e "domain") == some (Flock.hexOf d) do
@@ -1649,7 +1649,7 @@ the auditor's ledger, one the challenger's checks have trusted, its open naming 
 (`MODEL_FIELD`), a role `PINNED_MODELS` pins with the same checkpoint; else the refusal (`weights`). -/
 def committedWeights (ledger : Json) (name : String) : R String := do
   let .arr lines := ledger | throw ("weights", noWeights name)
-  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+  let body := ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some w := body.bind fun b => if (digest? (get b WEIGHTS_FIELD)).isSome then str? (get b WEIGHTS_FIELD) else none
     | throw ("weights", noWeights name)
@@ -1666,7 +1666,7 @@ def prefixOf (P : Flock.Program.Prog) : Json :=
 
 private def periodBody (ledger : Json) (name : String) : Option Json :=
   match ledger with
-  | .arr lines => ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+  | .arr lines => ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
       e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   | _ => none
 
@@ -1753,7 +1753,7 @@ to the weights' root its period's open signed (`committedWeights`); else the ref
 def periodWeights (key ledger window rounds layout entries : Json) (program : String) (prefix_ : Json) :
     R (String × String) := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  let a ← (SampledProofs.Challenger.auditedSession ledger window k).mapError fun e =>
+  let a ← (Spot.Challenger.auditedSession ledger window k).mapError fun e =>
     ("coin", s!"the challenger's session is not trusted: {e}")
   let some name := a.period
     | weightsRefuse ("the window is in no period of the auditor's ledger, so no period-open signed the weights' " ++
@@ -1907,10 +1907,10 @@ def liveRoots (entries : Json) (pre : String) (t steps : Nat) : R (List (String 
   pure out
 
 /-- `live_reads.m_table`'s root, or `ok_table`'s: the known rows `rows` of the value `v` (each its salt), a row/v2
-value of 16-bit leaves under `SampledProofs.Registered.domainAt` of `program` binding the window's open root
+value of 16-bit leaves under `Spot.Registered.domainAt` of `program` binding the window's open root
 `window`. -/
 def knownRoot (program window v : String) (rows : Array (Array Nat × ByteArray)) (words : Nat) : R String := do
-  let d ← (SampledProofs.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
+  let d ← (Spot.Registered.domainAt program v words rows.size 16 (some window)).mapError fun why =>
     (LIVE, why)
   let reg : Flock.Registered.Port :=
     { name := v, value := v, root := ByteArray.empty, leaves := rows.size, words := some words, wordBits := 16,
@@ -2090,12 +2090,12 @@ their open roots in its order (each window's, then its sample's: `periodCredit`)
 under the pinned key `key`); else the refusal (`coin`, `period`, `missing` or `order`). -/
 def period (key ledger name roots : Json) : R Unit := do
   let k ← (ChallengerKey.ofJson key).mapError fun e => ("coin", s!"the verifier's challenger key is malformed: {e}")
-  discard <| (SampledProofs.Challenger.checked ledger k).mapError fun e =>
+  discard <| (Spot.Challenger.checked ledger k).mapError fun e =>
     ("coin", s!"the auditor's ledger is not trusted: {e}")
   let .str name := name | throw ("period", "the period is not named")
   let .arr lines := ledger | throw ("period", "the period is not named")
-  let es := lines.filterMap SampledProofs.Challenger.ledgerEntry?
-  let named := fun (e : SampledProofs.Challenger.LedgerEntry) => get e.body "period" == Json.str name
+  let es := lines.filterMap Spot.Challenger.ledgerEntry?
+  let named := fun (e : Spot.Challenger.LedgerEntry) => get e.body "period" == Json.str name
   unless es.any (fun e => e.kind == "period-open" && named e) do
     throw ("period", s!"the auditor's ledger opens no period {name}: credit counts only a period the ledger opens " ++
       "and closes")
@@ -2137,7 +2137,7 @@ def period (key ledger name roots : Json) : R Unit := do
 auditor's ledger, one `period` has trusted; else the refusal (`budget`). -/
 def committedK (ledger : Json) (name : String) : R Nat := do
   let .arr lines := ledger | throw ("period", "the period is not named")
-  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+  let body := ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some k := (body.bind fun b => nat? (get b K_FIELD)).filter (fun k => 1 ≤ k && k ≤ MAX_K)
     | throw ("budget", s!"period {name}'s open commits no draw K ({K_FIELD}, a positive integer at most 2^24), so " ++
@@ -2150,7 +2150,7 @@ round's request and slot tables' leaves) in the auditor's ledger, one `period` h
 (`layout`). -/
 def committedRows (ledger : Json) (name : String) : R Nat := do
   let .arr lines := ledger | throw ("period", "the period is not named")
-  let body := ((lines.filterMap SampledProofs.Challenger.ledgerEntry?).find? fun e =>
+  let body := ((lines.filterMap Spot.Challenger.ledgerEntry?).find? fun e =>
     e.kind == "period-open" && get e.body "period" == Json.str name).map (·.body)
   let some t := (body.bind fun b => nat? (get b ROWS_FIELD)).filter (1 ≤ ·) | layoutRefuse (noRows name)
   pure t
@@ -2221,7 +2221,7 @@ def PeriodCredit.toJson (c : PeriodCredit) : Json :=
 committed K (`committedK`) and the table rows T (`committedRows`) and signed the weights' root every window's registered B rows fold to (`committedWeights`),
 each window's session ran a commit the host's pins log `pins` records on the verifier's copy of main's first-parent
 history `main` and the window proves the circuit the period's open committed (`circuit`: the pin first, then its
-descriptor hashing to it, `SampledProofs.Challenger.creditedSession`, and likewise its sample session), each window's
+descriptor hashing to it, `Spot.Challenger.creditedSession`, and likewise its sample session), each window's
 session and its sample session pinned within the period's
 freshness floor (`committedFloor`, first-parent commits, default 0) of the commit the period's open recorded
 (`committedPin`), counted from that pin and never from main's head, both optional and refused with `pin` (`pinHygiene`),
@@ -2251,10 +2251,10 @@ def periodCredit (key ledger pins main name windows : Json) : R PeriodCredit := 
     let some d := (match f "descriptor" with
         | .str s => if isHexBytes s then hex? (.str s) else none
         | _ => none) | throw ("circuit", s!"window {i} of period {nm}: {DESCRIPTOR_HEX}")
-    let a ← (SampledProofs.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
+    let a ← (Spot.Challenger.creditedSession ledger (f "window") k pins main d).mapError fun e =>
       ("circuit", s!"window {i} of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main a.pinned periodPin floor then throw why
-    let dr ← (SampledProofs.Challenger.creditedSession ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
+    let dr ← (Spot.Challenger.creditedSession ledger (Json.mkObj [("root", rootOf (f "draw"))]) k pins main
       d).mapError fun e =>
       ("circuit", s!"window {i}'s draw session of period {nm} doesn't count toward it, so the period earns nothing: {e}")
     if let some why := pinHygiene nm i main dr.pinned periodPin floor DRAW_UNIT then throw why

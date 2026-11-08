@@ -24,11 +24,12 @@ runs, extractors, finders, simulators and the shared claim forms `KS`, `Complete
   own count (`Flock.Deploy.dec`, a named, counted program), at the encoded length of the word it decodes
   (`Flock.wordLen`). The form first frozen (`DecoderComplexity`) took the decoder, its count and its size as arguments,
   so a count of `0` met it.
-* Nontriviality (`Nontrivial`) is established by a test against recorded sessions, and no Lean proof of it is expected:
-  Lean's kernel can't evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job
-  (`tools/verity/check/ci.toml`), which runs the compiled Lean verifier on every recorded honest session
-  (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. `Flock.Nontrivial` states what that test
-  checks.
+* Nontriviality (`Nontrivial`) is for a test against recorded sessions to establish, and no Lean proof of it is
+  expected: Lean's kernel can't evaluate SHA-512 over real proofs. The test is `check`'s `lean-agreement` job
+  (`tools/verity/check/ci.toml`), which holds the compiled Lean verifier's checks on every recorded session to upstream's
+  verdicts (`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each honest one passes them.
+  Its sessions are of forms the verifier then refuses, so it reaches the acceptance `Flock.Nontrivial` states only up
+  to those refusals.
 * List decoding is in its radius form (`Flock.ListWithin`): the opened columns are written into the
   zero-filled word of the trace's codeword length (`Flock.fill`: at each position the first opened column there, the
   positions from the length on ignored), and the decoder lists every trace whose encoding agrees with that word on at
@@ -365,9 +366,10 @@ def Efficient {F : Type} [Fintype F] [DecidableEq F] [Zero (List F)] (H : Msg �
     ∀ os, (D.decode os).length ≤ p.eval (wordLen os)
 
 /-- **Flock: nontriviality**: recorded honest runs, each of a statement the scope check takes, that the verifier
-accepts. It is established by a test against recorded sessions, not by a Lean proof, and none is expected:
-`check`'s `lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier on recorded honest
-sessions (`verity/ml/flock/verifier/agree.py`) and fails unless it accepts each. This states what that test checks. -/
+accepts. It is for a test against recorded sessions to establish, not a Lean proof, and none is expected: `check`'s
+`lean-agreement` job (`tools/verity/check/ci.toml`) runs the compiled Lean verifier's checks on recorded honest sessions
+(`flock-verify agree`, `verity/ml/flock/verifier/agree.py`) and fails unless each passes them. Its sessions are of
+forms the verifier then refuses, so it reaches this acceptance only up to those refusals. -/
 def Nontrivial (H : Msg → Msg) (D : Deploy Coin Col T) (recs : List (Recorded D.V)) : Prop :=
   Claims.Nontrivial H D.V recs ∧ ∀ e ∈ recs, D.scopeCheck e.x = true
 

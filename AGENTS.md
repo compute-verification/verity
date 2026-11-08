@@ -239,13 +239,13 @@ bookkeeping: it repairs it in that commit, with a warning for each repair (The l
 - **The Lean check** (`tools/verity/lean/check.py`) builds every file and replays every declaration through the kernel:
   only `propext`, `Classical.choice` and `Quot.sound`; no `sorry`, `axiom`, `native_decide` or kernel bypass; a
   premise is a named `Prop`, taken as a hypothesis or read in a guarantee's statement, listed by name in the lock: a
-  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean`, and every other premise is
-  open (`open`, with the Linear issue that discharges it and its due date), a list a PR's `--update` never adds to, unless
-  it is part of what its guarantee says (`domain`, with a one-line why; an honest witness must conclude it). Each
-  deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's collision resistance, uniform
-  randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on (`trust.extra`, each with its
-  reason), only on the premises its `trust_gap` entry lists, which `--update` never adds to; the check prints each one's
-  gap, the number Daniel drives to zero.
+  named assumption (`assumptions`) is declared in `Security/Definitions/Assumptions.lean` or a module under it, and
+  every other premise is open (`open`, with the Linear issue that discharges it and its due date), a list a PR's
+  `--update` never adds to, unless it is part of what its guarantee says (`domain`, with a one-line why; an honest
+  witness must conclude it). Each deployed guarantee (`deployed`) rests, outside the trust base (`trust.base`: SHA-512's
+  collision resistance, uniform randomness, an honest verifier) and the premises a ruling's rule lets it alone rest on
+  (`trust.extra`, each with its reason), only on the premises its `trust_gap` entry lists, which `--update` never adds
+  to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails

@@ -36,7 +36,7 @@ from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain
 from verity.ml.commitments.merkle import CommitmentDomain
-from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row
+from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2, bit_row, row_leaf
 from verity.ml.windows import flock_inputs as FI, interface as I, rows as CS, wiring as WI
 
 K = 64
@@ -278,6 +278,17 @@ def test_the_verifiers_window_is_the_circuit_records(templates):
     assert CS.expected_ports(mine) == CS.expected_ports(win.window)
     assert doc["statements"][TID] == {"in_rows": [list(r[:3]) + [r[3]] for r in I.unit_rows(COORD)[0]],
                                       "out_rows": [[V2, [0]]], "reads": "inline"}
+
+
+def test_a_templated_statement_is_recorded_by_its_layout_and_a_flat_one_by_its_reads():
+    """A template whose unit is a templated statement records its layout mode and ``structural`` in place of ``reads``, as
+    Flock's `UnitStager` takes the one or the other; a flat one keeps ``reads``."""
+    win = I.Window(I.Circuit("rec", ((COORD, 3), (ACC, 2))), RUN, LAW, 4)
+    rows = {t: dict(zip(("in_rows", "out_rows"), I.unit_rows(fn))) for t, fn in ((TID, COORD), (AID, ACC))}
+    sts = {TID: {**rows[TID], "layout": "iv/hybrid/4", "structural": True}, AID: {**rows[AID], "reads": "slots"}}
+    doc = json.loads(I.circuit_bytes(I.circuit_record(win.window, "rec", [(TID, 3), (AID, 2)], sts)))
+    assert {t: {k: v for k, v in st.items() if k not in ("in_rows", "out_rows")} for t, st in doc["statements"].items()} == {
+        TID: {"layout": "iv/hybrid/4", "structural": True}, AID: {"reads": "slots"}}
 
 
 def test_a_circuit_record_its_templates_dont_make_is_refused():
@@ -1189,8 +1200,9 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
             "subcircuit": "gemm"}
     got = FI.flock_input_files(tmp_path, k, "flock-circuit v2\nMETA " + json.dumps(meta) + "\n", tmp_path / "staged")
     head, body = Path(got["inst"]).read_bytes().split(b"\n", 1)
-    assert json.loads(head)["registered"] == win._entries[ms[k].key] and body == c.private_body(k) + c.public_body(k)
-    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == win._entries[ms[k].key]
+    entries = {**win._entries[ms[k].key], **CS.own_entries(mem, c.public_body(k), win._entries[ms[k].key])}
+    assert json.loads(head)["registered"] == entries and body == c.private_body(k) + c.public_body(k)
+    assert json.loads(Path(got["pub"]).read_bytes().split(b"\n", 1)[0])["registered"] == entries
     row = mem["registered"]["w"]["positions"][0]
     feed = _first(win.window, SID)
     for edit, read, why in [
@@ -1218,6 +1230,65 @@ def test_a_windows_value_rows_and_paths_are_written_once_and_a_drawn_members_bod
     win._entries[ms[k].key] = {"w": {**win._entries[ms[k].key]["w"], "paths": ["00" * 64]}}
     with pytest.raises(ValueError, match="given two paths"):
         win.write(c, tmp_path / "again", {"by": "test"}, registrar=reg)
+
+
+def _climb(dom: CommitmentDomain, position: int, leaf: bytes, path: bytes) -> bytes:
+    """The root ``leaf`` at ``position`` climbs to through ``path``, as Lean's `Registered.opensLeaf` climbs it."""
+    digest, i = leaf, position
+    for level in range(len(path) // 64):
+        sib = path[64 * level:64 * (level + 1)]
+        digest = dom.node(level, i >> 1, *((digest, sib) if i % 2 == 0 else (sib, digest)))
+        i >>= 1
+    return digest
+
+
+def test_a_member_reading_a_registered_value_registers_every_other_port_at_the_registrations_root(tmp_path):
+    """Lean checks a statement against registered reads only when they name every port of its circuit
+    (`Flock.Registered.checkComplete`), so `fed_chain`'s chained GEMMs, which read ``w``, are staged with each other port
+    registered as rows of its own tree: the header (`rows.own_entries`) gives row i at position i, its path climbing to
+    the root the registration holds for ``<member>/<port>``, and the verifier's file (`rows.own_reads`) reads that root,
+    unit ``base + i`` row i, as a value no registration port is named (`rows.own_value`). A member reading nothing gains
+    no reads, a port the registration holds no root for is refused, and so is a body whose rows don't make the registered
+    root."""
+    circuit, w, feed_ins, feed, _ins, outs = fed_chain()
+    win = I.Window(circuit, RUN, LAW, 2, registered={"w": w})
+    win.record(SRC, feed_ins, feed)
+    win.record(GEMM, [None, None], outs)
+    c = win.close(salt_key=bytes(32))
+    reg = type("R", (), {"KINDS": ("served",), "FORMAT": "f", "digest": staticmethod(lambda rec: "d"),
+                         "record": staticmethod(lambda *x, **k: {"leaf_layer": "l", "window": x[5]})})
+    win.write(c, tmp_path, {"by": "test"}, registrar=reg)
+    doc, ms = json.loads((tmp_path / "window.json").read_text()), win.window.members
+    roots = {m.port(p): {"root": c.roots[m.port(p)].hex(), "domain": c.domains[m.port(p)].domain_id.hex(),
+                         "leaves": c.domains[m.port(p)].count} for m in ms for p, _w in m.all_rows}
+    chained = [k for k, m in enumerate(ms) if m.template == GID]
+    for k in chained:
+        m, mem = ms[k], doc["members"][k]
+        got = CS.own_entries(mem, c.public_body(k), mem["registered"])
+        assert set(got) == {p for p, _w in m.all_rows} - {"w"}
+        for p, e in got.items():
+            dom, bc = c.domains[m.port(p)], c.bc[m.port(p)]
+            assert e["value"] == CS.own_value(m.port(p)) not in roots and e["positions"] == list(range(m.n))
+            leaves = [row_leaf(dom, i, CS.INST.tree_leaf(CS.INST.default_key, bc[CS.BC_BYTES * i:CS.BC_BYTES * (i + 1)]),
+                               m.schema(p)) for i in range(m.n)]
+            assert all(_climb(dom, i, leaves[i], bytes.fromhex(x)) == c.roots[m.port(p)] for i, x in enumerate(e["paths"]))
+    reads = {ms[k].key: {"format": REG.READS_V1, "ports": {"w": {"value": "w"}}} for k in chained}
+    files = CS.own_reads(reads, win.window, roots, registered=REG)
+    assert set(files) == set(reads)
+    for k in chained:
+        m = ms[k]
+        ports = files[m.key]["ports"]
+        assert list(ports) == sorted(p for p, _w in m.all_rows) and ports["w"] == {"value": "w"}
+        assert all(ports[p] == {"value": CS.own_value(m.port(p)), "root": roots[m.port(p)]["root"], "leaves": m.n, "words": n,
+                                "word_bits": 16, "domain": roots[m.port(p)]["domain"], "row_schema": m.schema(p),
+                                "reads": list(range(m.n)), "reads_from": m.base} for p, n in m.rows + m.outs if p != "w")
+    k = chained[0]
+    with pytest.raises(ValueError, match="holds no root for it"):
+        CS.own_reads(reads, win.window, {x: e for x, e in roots.items() if x != ms[k].port("x")}, registered=REG)
+    body = bytearray(c.public_body(k))
+    body[len(body) - 4 * ms[k].n * len(ms[k].all_rows) - 1] ^= 1   # the last port's last string: an output row's
+    with pytest.raises(ValueError, match="not its frame_v3 root"):
+        CS.own_entries(doc["members"][k], bytes(body), doc["members"][k]["registered"])
 
 
 def test_a_cut_ports_rows_recorded_by_reference_are_each_its_writers_output_row(tmp_path):

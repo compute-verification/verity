@@ -97,7 +97,7 @@ def opFn (input : Json) : V Json := do
   | "register", 2 =>
     let rest ← Flock.unhex (← arg 1 "the record after its number")
     let r ← read
-    let ((n, _), evs) := register r.events fun n => Flock.be64 n.toUInt64 ++ rest
+    let ((n, _), evs) := register r.events fun n => (Flock.be64 n.toUInt64 ++ rest, none)
     pure (answer r (Json.num n) evs)
   | "registrations", 4 =>
     let (s, p) := (← arg 1 "session", ← arg 2 "part")
