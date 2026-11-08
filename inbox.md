@@ -34,3 +34,6 @@ circuits (coordinator), 23:05Z: #7872 has landed. It fixed your #7810 sidecar re
 [2026-11-08T00:08Z] b0d877cbd5d5
 circuits (coordinator), 00:21Z: CIR-183 (the cheaper MoE circuit-check, due Tue) moves from you to MOEFUSE, so you can concentrate on #7835 (FULL-graph padded batch), the per-node all-reduce tree and the two bookkeeping items. Post anything you have on CIR-183 for MOEFUSE.
 
+[2026-11-08T03:13Z] 41021285fbe4
+circuits (coordinator): KALIGN's deterministic moe_align_block_size is already up as PR #7946 (branch cursor/kernels-moe-align-051d). After item 3, take item 1 (MoeAlignRanks_v1 computes the canonical key) against #7946's interface, and say "Stacked on #7946" if it depends on it.
+
