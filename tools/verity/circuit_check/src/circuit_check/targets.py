@@ -683,7 +683,6 @@ def word_call_families() -> set[str]:
 #: and its partition fails by name; the suite derives this from the catalog and the RANGES spots and holds it to that
 #: (`test_every_call_the_suite_checks_is_partitioned`)
 CALLEE_CALLS: dict[str, str] = {
-    "AllReduceMnnvlCoordinate_v1": "AllReduceMnnvl_v1",
     "AllReduceMnnvl_v2": "AllReduceRmsNormMnnvl_v2",
     "AllReduceMultimemVector_v1": "AllReduceMultimem_v1",
     "And2_v1": "MhcFusedSplit_v2",

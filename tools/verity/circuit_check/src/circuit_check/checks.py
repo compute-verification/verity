@@ -1298,7 +1298,9 @@ def check_definition(fn: Any, opts: Options = DEFAULTS, *, memo: dict | None = N
         entry["ports"] = ports
     if kind != "reference" and (why := over_leaves(t, opts)) is not None:
         entry["partition"] = {"applies": as_call, "checked": False, "reason": why}
-        if (got := by_callees(t, opts, F, memo.setdefault("word", {})) if as_call and kind == "composite" else None) is None:
+        with spent("partition"):
+            got = by_callees(t, opts, F, memo.setdefault("word", {})) if as_call and kind == "composite" else None
+        if got is None:
             F.warn("partition", "unchecked", t.id, 1, why)
         else:
             entry["partition"]["by_callees"] = got
