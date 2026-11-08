@@ -26,12 +26,15 @@ it.
 * **Proving.** Each sampled member's units are one `--zk` session on SPOT's proof server (`verity_flock.proof_server`):
   one long-lived streaming prover a device and one queued verifier a block type, ``FC_VERIFY_AHEAD`` 2, every member's
   session submitted before any is collected. The run's server (`proof_server`, the CLI's ``--gpus``) serves every leg
-  inside it; a leg outside one runs its own CPU server. Behind the ZK server (``FC_FIREWALL=1``, its Lean frame
-  ``FC_FIREWALL_LEAN``, when `Tools.firewall` names one) or a challenger of its own (``FLOCK_CHALLENGER=1``) a session is
-  one `serve --zk --draw-file` / `prove --zk` process pair instead (`a0.session`).
+  inside it; a leg outside one runs its own CPU server. Under ``FLOCK_CHALLENGER=1`` a leg runs a server of its own whose
+  verifiers take their coin trees from challengers, and closes it before its verdicts, since a challenger's audit holds
+  every session it served at once. Behind the ZK server (``FC_FIREWALL=1``, its Lean frame ``FC_FIREWALL_LEAN``, when
+  `Tools.firewall` names one) a session is one `serve --zk --draw-file` / `prove --zk` process pair instead
+  (`a0.session`).
 * **The verdict of record** is Lean's `verify --zk --archive --partition --program [--registered]` on the session, run on the
   server's verdict pool as each session ends, off the provers' path. A unit is accepted when its session's Lean and M0
-  verdicts accept it and its held and expected rows open to the verifier's own.
+  verdicts accept it, its verifier's challenger's audit passed (``challenger/<member>``, with a challenger), and its held
+  and expected rows open to the verifier's own.
   The audit record (`verifier.audit_record`) holds every verdict, the sample and the roots.
 
 Negatives (`negatives`), each refused at the proof layer:
@@ -346,7 +349,7 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
     K (default every unit). ``program``/``query``: the window's, else the members' population program. ``window``: the
     registration's window (default a stand-in's). ``mutate``: the registration record as the verifier is handed it (a
     negative's), from the honest one. ``server``: the proof server to prove on (default the run's, `proof_server`, else
-    one of the leg's own on the CPU)."""
+    one of the leg's own on the CPU; under FLOCK_CHALLENGER=1 always the leg's own, with challengers)."""
     out = Path(out)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
@@ -419,9 +422,12 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                  {s["name"]: (s["base"], s["n"]) for s in staged})
     (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
     served, proved, n_inst, verdicts, statement, sessions, session_roots = [], [], 0, {}, {}, [], {}
-    pairs = tools.firewall is not None or a0.own_challenger(zk=True)
+    pairs = tools.firewall is not None
+    chall = not pairs and a0.own_challenger(zk=True)
     with contextlib.ExitStack() as stack:
-        if not pairs and server is None:
+        if chall:
+            server = stack.enter_context(ProofServer(tools.bin, out / "proof-server", env=a0.DIRECT, challenger=True))
+        elif not pairs and server is None:
             server = _SERVER or stack.enter_context(ProofServer(tools.bin, out / "proof-server", env=a0.DIRECT))
         submitted = {}
         for m, s in zip(members, staged):
@@ -438,12 +444,21 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                           instances=s["dir"] / f"inst-{s['n']}.bin", public=s["dir"] / f"pub-{s['n']}.bin"),
                 sample, str(sdir.resolve()), out=sdir / "sessions", self_check="skip" if m.forge else None,
                 verdict=lambda _, s=s, sdir=sdir: a0.lean_verify(tools.lean, s, s["n"], sdir, zk=True))
+        got = {m.name: _session(m, s, submitted[m.name], leg["members"][m.name]["drawn"], tools, out / f"session-{m.name}")
+               for m, s in zip(members, staged) if m.name in submitted}
+        if chall:
+            stack.close()
         for m, s in zip(members, staged):
             if m.name not in submitted:
                 continue
             ml, sdir = leg["members"][m.name], out / f"session-{m.name}"
             local = ml["drawn"]
-            record, live, lv, session_s = _session(m, s, submitted[m.name], local, tools, sdir)
+            record, live, lv, session_s = got[m.name]
+            h = submitted[m.name]
+            ch = h.challenger if h is not None else (live or {}).get("challenger")
+            if ch is not None:
+                verdicts[f"challenger/{m.name}"] = {**ch, "accepted": ch.get("ok") is True}
+            ch_ok = ch is None or ch.get("ok") is True
             draw_t = (record or {}).get("unit_draw") or {}
             v = V.check_draw(draw_t, {"population": s["n"]}, {"law": "subset", "k": len(local)})
             served += [s["base"] + u for u in draw_t.get("units", [])]
@@ -462,15 +477,17 @@ def prove_units(members: Sequence[Member], coins: str | Mapping[str, Sequence[in
                                                                                              "sigma")},
                                  "timing": {x: (live or {}).get(x) for x in TIMING}, "lean_verify_s": lv.get("verify_s")}
             sessions += [a0.sha512_file(f) for f in sorted((sdir / "sessions").glob("*/session.json"))]
-            ml["units"] = [{"unit": s["base"] + i, "verdict": "accept" if m0["accepted"] and lv["accepted"] and not op[i] else
+            ml["units"] = [{"unit": s["base"] + i, "verdict": "accept" if m0["accepted"] and lv["accepted"] and ch_ok and not op[i] else
                             "refused: " + "; ".join(x for x in (None if m0["accepted"] else f"m0 {m0['why']}",
                                                                 None if lv["accepted"] else f"lean {lv.get('why')}",
+                                                                None if ch_ok else f"challenger {json.dumps(ch)[:300]}",
                                                                 f"opening {op[i]}" if op[i] else None) if x)} for i in local]
             ml.update(session_s=session_s, timing=statement[m.name]["timing"], m0=m0["accepted"], lean=lv["accepted"],
+                      challenger=None if ch is None else ch_ok,
                       prover_stopped=(live or {}).get("prover_stopped"), children_maxrss_gb=maxrss_gb(resource.RUSAGE_CHILDREN),
                       lean_why=lv.get("why"), lean_verify_s=lv.get("verify_s"), openings=verdicts[f"openings/{m.name}"])
             log(f"{m.name}: drawn {local}, M0 {m0['accepted']}, Lean {lv['accepted']} ({lv.get('why')}), openings "
-                f"{verdicts[f'openings/{m.name}']['accepted']}, session {session_s} s")
+                f"{verdicts[f'openings/{m.name}']['accepted']}{'' if ch is None else f', challenger {ch_ok}'}, session {session_s} s")
 
     result = V.audit_record(rec, receipt, draw, rec["law"], sorted(proved), n_inst, statement, verdicts, tools.delta,
                             sessions=sessions, served=sorted(served), session_roots=session_roots)
