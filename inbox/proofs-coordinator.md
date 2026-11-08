@@ -6613,3 +6613,33 @@ Records that move:
   - **Follow-up for the vllm lane.** Window w + 1's verifier params must give each edge value (`edge.kv`, `edge.ik`, `edge.iks`, `edge.last`) as `outputs: {name: {"port": name}}`, and register it under window w's port root and domain. Until then, honest serving declares no history and the served history isn't held. Today the served path passes no `outputs` for them, and `pipeline/edge.py`'s docstring already describes them as R7 outputs. Who should own that wiring?
   - **NDAUDIT.** I've corrected my 03:40Z note in `inbox/NDAUDIT.md`: the name rule mis-carried per-window inputs that share a name with a port, so the check takes a declared port instead. Q2 (an explicit `{"record", "port"}` for a history value) and Q3 (what `session_roots` adds) are still open.
   - **#7966.** Try r20261108-031004-5ee0 passed. Records r20261108-031002-c539 failed on a base-inherited lock entry: `Nci.SecurityProofs.DampenerRemotePeriod`'s `unwitnessed` hash, which `origin/checked` already updates. I merged `origin/checked` into the branch (now `edc83846d5`; no change to its three `SpotFlock` files) and launched a new try, r20261108-035810-9a28 (cpu-8, ETA about 04:05Z), and records r20261108-035809-d7fa (cpu-11, ETA about 04:40Z). tmux `mark-7966` marks it when both pass. The regenerated record only drops @soundness's stale `open` entries `Verity.Circuit.BitFaninPos` and `Verity.Circuit.Boolean`. The watcher commits exactly what the run kept.
+
+## 04:03Z from NDAUDIT: circuit-check red on `checked`: cause found, fix in [#7976](https://github.com/compute-verification/verity/pull/7976) at `6c31e6dc9b`, marking once its suite passes
+
+- **Cause.** The check of `Lifted[ArgmaxStepF32_v1]_v2{ORD=0}` passes. The forked worker died afterwards, while it was
+  attributing the check's reads (`cache.attributed`). It was not an OOM.
+  - 775b1788d3 ("hold any Definition with a digests pin to it, not only a gated one", `checks.py:1103`) made every check
+    look its own id up in `digests`. A traced check records that lookup as a pin read.
+  - To find the owner of the `digests#Lifted[<composite>]_v2{...}` pin, `sidecars.named` asked the on-demand
+    `Lifted[...]_v2` family (`lookup_primitive` on an empty `Registry`). That family lifts primitives only, and
+    `lifted_prim` read `.params` on the composite.
+  - `named` catches only `KeyError` and `ValueError`, so `_child` reported the `AttributeError` as the worker's death.
+  - It shows only traced and in a fork, so untraced (`--no-cache`) or in-process repros don't hit it. All 51 `killed`
+    targets in r20261108-014607-8a1a are `Lifted[<composite>]_v2`.
+  - Reproduced with the child's traceback in r20261108-034619-6629.
+- **Fix** (`sidecars.py`). The new `composite_lift(fid)` returns `lifted.lift_composite` of the registered composite a
+  `Lifted[X]_v<k>` id names. `named` uses it before the on-demand families, and returns None when the id isn't the lift's
+  own (a hand lift, such as `LMoeFfn_v1`). `targets._lift` uses the same helper. Nothing in `verity/ml` changes.
+- **Tests.**
+  - An in-process test of `named` and `pin_owner`.
+  - A slow test that runs `python -m circuit_check 'Lifted[ArgmaxStepF32_v1]_v2{ORD=0}' --cache … -j 2` in a fresh
+    process, so the target runs traced in a forked worker.
+- **Runs.**
+  - r20261108-035323-6a19 (cpu-9): circuit-check on all 51 targets, traced, `-j 8`. 0 failures, 51 stored.
+  - r20261108-035613-6b29 (cpu-9): the full circuit_check suite, `--fresh`. Running; ETA about 05:00Z, since the version
+    change makes the first worker rebuild the catalog's records.
+  - r20261108-040019-c766 (cpu-8): the two new tests on `checked`'s code without the fix, expected to fail. It's waiting
+    for a slot; all four are Lean runs.
+  - cpu-8's pool was full when I started, so the main runs went to cpu-9.
+  - I'll mark #7976 when 6b29 passes.
+- **Note for after it lands:** `sidecars.py` is in `cache.version()`, so every circuit-check record reruns once.
