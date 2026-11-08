@@ -51,6 +51,7 @@ from unittest import mock
 import pytest
 from hypothesis import strategies as st
 
+import settings
 import verity_difftest as D
 from verity_difftest import protocol as PR
 from verity.core.protocols.pouw import audit as PA
@@ -2575,6 +2576,24 @@ def committed_bits(j):
     return out
 
 
+def unit_gates(j):
+    """Each unit's root gates `[lo, hi)` over a program and query (`partition.unit_gates`), twice, as Lean gives them a
+    template query's instances a range at a time and by the walk unit by unit that replaced (`Partition.unitGates`,
+    `Partition.unitGatesRef`)."""
+    j = _json(j)
+    if not isinstance(j, dict):
+        raise D.Reject("not an object")
+    desc, query = _obj(j.get("program"), "program"), _obj(j.get("query"), "query")
+    sha = PO.program_sha512(desc)
+    if sha not in PROGRAMS:
+        raise RuntimeError(f"the strategy drew a descriptor this file has no program for: {sha[:16]}")
+    try:
+        gates = [[lo, hi] for lo, hi in P.unit_gates(PROGRAMS[sha], query)]
+    except (P.QueryRefused, ValueError) as e:
+        raise D.Reject(str(e)) from None
+    return [gates, gates]
+
+
 PIECES = "sampled-proofs-difftest"
 
 
@@ -2604,6 +2623,8 @@ COMMITTED_BITS = D.Port(PIECES, "committed_bits", committed_bits, st.one_of(
     st.builds(lambda m, x: {"program": json.loads(_calls(tuple(m))), "X": x},
               st.lists(st.sampled_from(range(len(CALLEES))), min_size=1, max_size=5), st.sampled_from([4, 8, 16, 32])),
     JSON), package=PACKAGE)
+UNIT_GATES = D.Port(PIECES, "unit_gates", unit_gates, st.one_of(
+    st.builds(lambda c: {"program": c[0], "query": c[1]}, partitions()), JSON), package=PACKAGE)
 _REGISTRATION_OF = lambda a: {"params": a["params"], "record": a["record"]}  # noqa: E731
 REGISTRATION = D.Port(PIECES, "registration", registration, st.one_of(
     _audit_inputs(_REGISTRATION_OF, [RECORD, PARAMS, ENTRIES, REGISTERED_PARAMS, SUPPLIED], 2),
@@ -3913,7 +3934,8 @@ HIDDEN_WITNESS = D.Port(PIECES, "hidden_witness", hidden_witness, st.one_of(*[hi
 pieces = D.server_fixture(DECODE)
 
 
-PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
+PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (UNIT_GATES, 300),
+              (REGISTRATION, 700), (REGISTERED_ENTRIES, 300), (DOMAIN, 300),
               (PRODUCED, 500), (KNOWN_PORT, 300),
               (CHECK_DRAW, 500), (DRAW, 500), (SELECT, 600), (SLOTS, 400), (FILE_POPULATION, 400),
               (CHECK_PROVED, 300), (BOUND, 500),
@@ -4012,6 +4034,63 @@ def test_the_slots_follow_the_strata(pieces):
     units = [b["unit"] for b in blocks]
     drawn = [units.index(u) for u in select(case)["draw"]["units"]]
     assert out["checked"] == [[v, 0] for v in sorted(drawn + [v for v, u in enumerate(units) if u is None])]
+
+
+#: Units of the toy and the real-template populations `unit_gates` is held to its walk at: L5's population on one
+#: GPU, and past it.
+UNIT_GATES_AT = [147, 1001]
+
+
+@pytest.mark.parametrize("n", UNIT_GATES_AT)
+def test_the_unit_gates_by_range_are_the_walks(pieces, n):
+    """At `n` units of `PAIR`, `TRIPLE` and `QUAD` at 1 : 6 : 3, Lean's unit gates laid out a range at a time are its walk's
+    unit by unit and Python's (`unit_gates`), and its slots, which lay those gates out, are Python's (`slots`)."""
+    members = tuple((t, max(1, round(n * w / 10))) for t, w in ((0, 1), (1, 6), (2, 3)))
+    desc = json.loads(_population(members))
+    query = _json(P.template_instances_query([t.id for t in TEMPLATES]))
+    kind, out = D.replay(UNIT_GATES, {"program": desc, "query": query}, pieces)
+    assert kind == "output"
+    gates, walk = json.loads(out)
+    assert len(gates) == n and gates == walk
+    case = {"closure": None, "program": desc, "query": query, "rule": {"law": "subset:4", "rule": "law"},
+            "source": hashlib.shake_256(b"slots").hexdigest(400), "work_table": None}
+    assert D.replay(SLOTS, case, pieces) == ("output", D.canonical(slots(copy.deepcopy(case))))
+
+
+#: A served model's template mix, per template its units in the population: L5's seven, at their shares of its units.
+REAL_TEMPLATES = [
+    ('MoeRouterSigmoidBiasSlots_v2{E=256,TOPK=8,SCALE={"f64":"0x1.4000000000000p+1"},KERNEL="block"}', 32),
+    ("EmbeddingRead_v1{V=256,H=3072}", 131072),
+    ("EmbeddingRead_v1{V=256,H=96}", 1024),
+    ('MoeExpertFp8BlockGemm_v4{K=6144,N=1,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 131072),
+    ("EmbeddingRead_v1{V=256,H=4096}", 49152),
+    ("EmbeddingRead_v1{V=256,H=4}", 12288),
+    ('MoeExpertFp8BlockGemmW_v4{K=256,N=32,G=128,KB=128,SWAP=true,DOT={"fn":"HopperE4m3QgmmaDot32_v2"}}', 49152),
+]
+
+
+@pytest.mark.skipif(not settings.REAL_TEMPLATES,
+                    reason="about 18 minutes and 34 GB: set VERITY_SPOT_REAL_TEMPLATES=1")
+@pytest.mark.parametrize("n", UNIT_GATES_AT)
+def test_the_unit_gates_by_range_are_the_walks_on_real_templates(pieces, n):
+    """At `n` units of `REAL_TEMPLATES`, whose Definitions call one another as the catalog's do (the toy's call nothing),
+    Lean's unit gates laid out a range at a time are its walk's unit by unit. Python's `partition.unit_gates` isn't asked:
+    its partition over these templates takes more memory than a suite has."""
+    from verity.ml.circuits.population import mixed_population_program
+    from verity.ml.definitions.registry.catalog import load
+    from verity.ml.windows import interface as IF
+
+    load()
+    total = sum(c for _t, c in REAL_TEMPLATES)
+    counts = [max(1, n * c // total) for _t, c in REAL_TEMPLATES]
+    counts[counts.index(max(counts))] += n - sum(counts)
+    templates = [IF.resolve(t) for t, _c in REAL_TEMPLATES]
+    program = mixed_population_program(list(zip(templates, counts)))
+    case = {"program": _json(codec.encode_program(program)), "query": _json(PO.template_instances_query(templates))}
+    kind, out = pieces.call("unit_gates", case)
+    assert kind == "output", out
+    gates, walk = json.loads(out)
+    assert len(gates) == n and gates == walk
 
 
 def test_the_call_queries_cut_call_by_call(pieces):

@@ -17,7 +17,7 @@
 //! - Every other input row of a part is bound to its form over the unit's columns ([`Instance::bind`]), the block's Δ.
 //! - The unit's own rows read its parts' output columns directly: in the block those entries cross slots.
 //! - A table read (attention's MUFU reads) is a part too, placed in the range of a generated layout: its rows are
-//!   `table/v2`'s (`LookupNet::build_v2`, the verifier's `Lookup.buildV2`) over the held table, its index inputs are always
+//!   `table/v2`'s (`LookupNet::read_v2`, the verifier's `Lookup.buildV2`) over the held table, its index inputs are always
 //!   bound, and its product rows' B side is the table's, folded from it ([`TableSide`]) and listed empty.
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -578,21 +578,18 @@ fn held(dir: Option<&str>, sha: &str, n: usize) -> Result<&'static [u32], String
     Ok(w)
 }
 
-/// A generated read's slot, `LookupNet::build_v2` over its held table: its rows with the product rows' B side left to the
+/// A generated read's slot, `LookupNet::read_v2` over its held table: its rows with the product rows' B side left to the
 /// table (as `verity_flock.derive.gen_read` lists them, with the `READ` record), the slot's net for the block (the same
 /// rows), its fast witness, and its AND rows (every row with an entry, outside its words and constant).
 fn gen_rows(name: &str, sha: &str, words: &'static [u32], n: usize, lo: usize, bits: usize) -> Result<(Rows, IrUnitNet, LookupNet, usize), String> {
-    // once per process and shape: `build_v2` holds the table's side as explicit rows until they're cleared here
+    // once per process and shape
     type Slot = (Rows, IrUnitNet, LookupNet, usize);
     static BUILT: std::sync::OnceLock<std::sync::Mutex<BTreeMap<(String, usize, usize, usize), Slot>>> = std::sync::OnceLock::new();
     let key = (sha.to_string(), n, lo, bits);
     if let Some(x) = BUILT.get_or_init(Default::default).lock().unwrap().get(&key) {
         return Ok(x.clone());
     }
-    let (mut net, ln) = LookupNet::build_v2(name, sha, words, n, lo, bits)?;
-    for r in ln.prod0()..ln.prod0() + (ln.k << (n - lo)) {
-        net.b[r] = Vec::new();
-    }
+    let (net, ln) = LookupNet::read_v2(name, sha, words, n, lo, bits)?;
     let group = |g: &crate::ir_block::Group| (g.col, g.words, g.bits.clone());
     let out0 = net.out_groups[0].col * WORD;
     let rows = Rows {
@@ -940,7 +937,7 @@ mod tests {
         let (_, n, lo, k, prod0, lo_top) = rows.read.clone().unwrap();
         assert_eq!((n, lo, k), (8, 4, 5), "a program table keeps every value bit");
         assert!(inst.layout_text(0).ends_with(&format!("READ {sha} 8 4 5 {prod0} {lo_top}\n")));
-        assert!((prod0..prod0 + (k << (n - lo))).all(|r| rows.rows[r].1.is_empty() && nets[&0].b[r].is_empty()));
+        assert!((prod0..prod0 + (k << (n - lo))).all(|r| rows.rows[r].1.is_empty() && nets[&0].b.row(r).is_empty()));
         assert_eq!(inst.bind[0].len(), 8, "a read's index is bound, never exported");
     }
 
