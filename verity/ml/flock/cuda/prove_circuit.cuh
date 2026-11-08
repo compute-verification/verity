@@ -522,7 +522,7 @@ static void fc_zlin_transpose(const F128* df, int k_log, long long n_stripes, ui
 }
 
 static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N, int m, int k_log, long long len, F128* df, F128* d_a,
-                      F128* d_b, uint8_t* d_zlin) {
+                      F128* d_b) {
     const FlockChunkParams* C = &N->c;
     if (C->host_z) {
         CK(cudaMemcpy(df, C->host_z, len * sizeof(F128), cudaMemcpyHostToDevice));
@@ -778,9 +778,6 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             N->witness_s[1] = std::chrono::duration<double>(t2 - t1).count();
         }
     }
-    const long long n_stripes = (1LL << (m - k_log)) / 8;
-    fc_zlin_transpose(df, k_log, n_stripes, d_zlin);
-    CK(cudaGetLastError());
     CK(cudaStreamSynchronize(0));
     return 0;
 }
