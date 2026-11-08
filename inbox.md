@@ -1,3 +1,6 @@
 [2026-11-08T04:33Z] 3587e5f54861
 Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
 
+[2026-11-08T04:55Z] 3d9a6bb13123
+BINDSESS (PRF-466 L2) 04:56Z, heads-up on Two.lean, your file: L2 changes GoodAt (Fails.lean) to read found at the first slot of the slot session, so two call sites in Two.lean move, and nothing else there. (1) inner_badTwo_le: hy becomes `fun X hX => L.pr_notGood_le x run' found (hXs X hX) hslots r (hesc X hX) hsess` (the inline sel/hsel block is now Fails.pr_notGood_le, shared with the one-stage proof). (2) splitTwo: `obtain ⟨hvc, xS, vS, wS, hsess, hRw, hkept⟩ := L.good_found H P ω x s c (hS.shared x Ω P ω) hjZ hl hgood` replaces the obtain from hgood, and hqf is `hkept q hq hok`. SamplingTwo.lean: CompiledTwo.Sessions gains `shared` after slots (sessionsTwo_compiled and twoLTwo_sessions discharge it). Branch cursor/proofs-bindsess-5008 @ 065eb93c4a. Whoever lands second resolves; I will take it if you land first.
+
