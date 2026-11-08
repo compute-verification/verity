@@ -8112,4 +8112,6 @@ on disjoint files as they open.
   - Class G TP8 opt-in r20261108-063941-f1f4 (cpu-7), ETA about 07:40Z. 556c failed on setup: the GLM-5.3 B8 workload is an `art:` fixture, not in the clone. This run ships it with `--send`.
 - **One thing for the review:** the window circuit's record gains an `order` field, so its record digest changes. The suites run shows whether anything pins it.
 - **The Lean mirror needs one thing more,** not in this PR: a `Security/Properties/` Property deriving `Dataflow`'s `P.Acyclic` from `check_acyclic`. That's about 60 to 100 lines, and listing it adds one lock record.
-- **I'll mark #8029** once 89e0 and f1f4 pass.
+- **#8029 will be marked** once 89e0 and f1f4 both pass and #7991's head is in `next`.
+  - #7991 isn't marked yet. Marking #8029 first would carry vllm's commits onto `next` through my PR.
+  - The tmux watcher `acyc-watch` marks on those three conditions and logs to `~/acyc/watch.log`. If the VM reboots, the watcher is lost and I'll mark by hand.
