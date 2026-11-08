@@ -3505,3 +3505,38 @@ vllm's own files changed beyond the import lines (pipeline/window_advice.py, the
 [2026-11-07T23:46Z] bcb06aea672e
 ODTICKS -> coordinator. Corpus tick-through-warden piece started (branch cursor/net238-corpus-tick-warden-061a off origin/main 0717ef602b0); code under way, PR well before Sun 18:00Z. Blocker to flag now: this VM lost its injected secrets (research doctor: R2_*, AWS_*, RUNPOD_SSH_KEY_B64, SLACK_BOT_TOKEN, RESEARCH_NOTES_TOKEN, LINEAR_* not set, and the tmux server lacks them too: an exec-daemon restart). git push and gh still work. So I cannot run suites remotely (research run --on auto refuses: no ssh key), cannot post on Slack or Linear, cannot push lane notes or fetch store artifacts. I will push the branch and run the touched test files locally one file at a time (each well under a minute). If you want the full suites run, the Slack line posted, or the PR marked, someone with credentials needs to do it, or tell me to wait for a fresh VM.
 
+[2026-11-08T00:04Z] 897f48874f5d
+ODTICKS -> network-accounting coordinator (bc-5c916421). Corpus tick through the network certifier is up and marked.
+
+PR: https://github.com/compute-verification/verity/pull/7891, head 99b3d5d3eb4 (branch cursor/net238-corpus-tick-warden-061a, off main 0717ef602b0). Body: Lane network-accounting, Refs NET-238, Goal proofs/weight-security.
+- `research queue ready 7891 --mark` preflight merged it onto next (93cda1d5588) and refused nothing; it collected 6 suites.
+- The ready mark is NOT preserved: R2_ENDPOINT and R2_BUCKET aren't in this shell, so it is pending a `research data push --pending`. If drive reads marks from the store, please re-mark it from a machine that has them: `research queue ready 7891 --mark --by network-accounting`.
+- The Linear link failed (no Linear credentials). It needs `research queue link 7891 --issue NET-238`.
+
+What it does:
+1. `run --admit tick` takes warden-heavy and warden-smallkv and still refuses the hostile traces. It also refuses unless WARDEN_SCHEDULE bucket_ms * 1000 == the tick's bucket_us (`corpus.tick_for`). `start_warden` passes --watermark under the tick, and the server keeps TICK_MIDDLEWARE and VERITY_TICK. meta.tick's `where` is the network certifier (WARDEN_WHERE; warden_serve.py serve --watermark), its `run` is deployment.run_id, its `origin_unix` is the deployment's, and after the run `watermark` holds warden.json's {last, lost, error}.
+2. `summary.feed_releases`: a warden tick trace's release and bucket per request come from raw/tick-feed.jsonl, kept where the feed's run is run_id and warden.json's [release, ingress_end] for the client's ordinal matches, or is absent (`unlogged`). A disagreeing one is left out of requests.jsonl, so read_corpus_trace refuses the trace. The counts go to summary.json tick.releases and the README's gate section.
+3. D is kept (300 / 1200), and the WARDEN comment says why. D (30 s, 120 s) is 2.8x and 2.15x the no-certifier send-to-last-token (10.7 s, 55.7 s). The tick adds at most a bucket plus the clock's lag before admission and stretches steps to at most tau_free; vllm reports ITL +4-8% and median TTFT +0.27 s. This is an estimate, not measured on these traces. A shortfall shows as connections failed `late` (warden.failed).
+4. Tests in traces/tests/test_tick_corpus.py:
+   - the run-argument refusals;
+   - --watermark only under the tick;
+   - the certifier's real with_release, watermark_head and watermark_chunk through the server's real TickFeed;
+   - the summarize join with agreeing, unlogged, disagreeing and other-run releases.
+   No wall clock.
+5. serve_admit.py and tick_plugin.py are untouched.
+
+Suites. Remote runs are impossible: this VM lost every injected secret (RUNPOD_SSH_KEY_B64, R2_*, SLACK_BOT_TOKEN, LINEAR_*, RESEARCH_NOTES_TOKEN), and `research run` refuses. Locally at the head:
+- the traces suite under suites.py with its read guard: 50/50;
+- encodings tests/test_tick.py: 9/9;
+- replay_ladder test_ladder.py and test_prod_plan.py: 17/17;
+- root test_no_wall_clock.py and test_doc_paths.py: pass.
+Not run: the encodings suite's other files (they need fetched fixtures), verity-network-traces, replay_ladder's torch files, repository and verity-graph. Outside traces/ the diff is one docstring in encodings/replay.py. Please run `suites.py --changed 0717ef602b0 --quick` on a node.
+
+Refused:
+(a) `research run` (no secrets).
+(b) The Slack line: `research msg reply --as network-accounting` says @network-accounting is held by you and I'm not a poster. SLACK_BOT_TOKEN is unset anyway. Please post this on thread 1794083350.111549, or add me with `research msg names open --as network-accounting --poster bc-e521c569-d2e2-5779-b493-8d369f32299a`:
+   "<https://github.com/compute-verification/verity/pull/7891|#7891>: `corpus.py run --admit tick` now serves the warden traces with the network certifier's own release headers and watermark (`warden_serve.py serve --watermark`), not the client's stand-in; a run behind it shows the network certifier's code in front of the server on the serving host (`corpus.WARDEN_WHERE`), not the `trusted-host` placement."
+(c) The Linear comment on NET-238 (no Linear credentials).
+
+Known gap, on vllm's side: their strict watermark parser still refuses a line naming lost releases. The feed then records an error and the gate opens (`opened`), and meta tick.watermark.lost names them. The PR body says so.
+
