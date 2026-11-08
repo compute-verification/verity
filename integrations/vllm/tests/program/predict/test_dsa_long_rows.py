@@ -188,7 +188,7 @@ def test_class_g_compiles_a_prompt_past_index_topk_at_its_launch_context(tmp_pat
     assert sigs == [(False, str(Array(2, I32))), (False, str(Array(3, I32)))]
     alone = build_program(Phi.from_json({**reg.phi.to_json(), "sampling": long.policy}), "request", LP=10, T=2, dead_free=True,
                           batch=long.batch(), chunks=long.chunks)
-    assert alone.digest in c.programs and _families(alone)["DsaTopKMask_v1"] == 3 * 7
+    assert alone.digest in c.programs and _families(alone)["DsaTopKMask_v1"] == 3 * 8
 
 
 def _step(*rows: tuple[int, int, int, int]):
@@ -199,7 +199,7 @@ def _step(*rows: tuple[int, int, int, int]):
 @pytest.mark.slow
 def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_path):
     """Class G (about 40 s): A (a 3-token prompt, 5 outputs: its rows past INDEX_TOPK from position 4) and B (2 and 3, within it)
-    whole in one window are, call for call, their Programs across three: the first leaves A at position 6 and B at 3, the second
+    whole in one window are, call for call, their Programs across three, each with its own pad constants: the first leaves A at position 6 and B at 3, the second
     runs B's last row with A carried through it idle, and the third runs A's last. A's rows read the indexer's keys and scales
     past INDEX_TOPK, so the edges carry them for A alone: the first window's A returns its samples, then every layer's latent rows, index-K slots and scales so far, out-ports `edge.kv`, `edge.ik`, `edge.iks` and `edge.last`,
     while B's index-K history stays its own unread Inputs; the idle window passes A's fields through to its own edge, and the
@@ -226,8 +226,12 @@ def test_class_g_carries_a_request_past_index_topk_with_its_indexer_history(tmp_
           for adv in (WA.Advice((a, b), tuple(steps), (0,) * 8), out, idle, into)]
     assert all(c.batch_rule is None for c in cs) and cs[2].idle == (0,)
     prog = [{u.request: c.programs[u.digest] for u in c.requests if u is not None} for c in cs]
+
+    def calls(p) -> list[str]:
+        return [n.fn.id for n in p.fn.body.nodes if not n.fn.id.startswith("Const")]
+
     for r in (0, 1):
-        assert [n.fn.id for n in prog[0][r].fn.body.nodes] == [n.fn.id for p in prog[1:] if r in p for n in p[r].fn.body.nodes]
+        assert calls(prog[0][r]) == [i for p in prog[1:] if r in p for i in calls(p[r])]
     assert [u.edge for u in cs[1].requests] == [("prefix", "prefix_ik", "prefix_iks"), ("prefix",)]
     ret = field_types(prog[1][0].fn.signature()[1])
     assert ret[1:] == (Array(4, Array(6, Array(576, Value(16)))), Array(3, Array(6, Array(128, Value(8)))), Array(3, Array(6, Value(32))))

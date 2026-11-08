@@ -10,7 +10,8 @@ Call that routes them (`check.replay.evaluate`).  Every check the Program return
 VU replays bit-exactly.
 
 No replay row kernel is registered for DsaWaksmanOrder_v1 or DsaTopKLongRow_v1, so the tests install stand-ins built from the
-registry's own references (`dsa_topk.waksman_apply` over the row indices, `dsa_topk.canonical_ok`)."""
+registry's own references (`dsa_topk.waksman_apply` over the row indices, `dsa_topk.canonical_ok`).  The step compiler's own rows past
+INDEX_TOPK read no `run` value: they select their top-k in the mask form (the last test)."""
 from __future__ import annotations
 
 import gzip
@@ -33,7 +34,6 @@ from verity_vllm.commit import binding as B
 from verity_vllm.commit.committer.native_host import GPU_CHUNK_BYTES, TensorMeta
 from verity_vllm.commit.committer.run_values import RunValues
 from verity_vllm.correspondence.reader_for_query import Correspondence
-from verity_vllm.program.compact import expanded_file_args
 from verity_vllm.program.instances_file import read_instances
 from verity_vllm.program.predict import dsa as D
 from verity_vllm.query.manifest.bind import Binder
@@ -225,23 +225,13 @@ def _trace(r, path) -> str:
     return str(path)
 
 
-def test_the_aot_build_writes_its_run_layout_and_each_checks_row(phi, tmp_path):
-    """A step Program whose rows read past INDEX_TOPK, written by `aot.emit`: the header holds the predictor's `run` layout and, for
-    each check in output order, the DsaTopKLongRow_v1 row that computes it, whose order is routed from the `run` field of the same
-    layer and position."""
+def test_the_aot_build_of_a_program_past_index_topk_writes_no_run_layout(phi, tmp_path):
+    """A step Program whose rows read past INDEX_TOPK selects their top-k in the mask form (`test_dsa_long_rows`), so `aot.emit`
+    writes its header with no `run` layout and no checks: the replay reads no run value of it."""
     from verity_vllm.program.predict.aot import emit, predict
     r = predict(phi, "step", M=6, pos0=0)
     emit(phi, "step", _trace(r, tmp_path / "trace"), str(tmp_path / "out"), M=6, pos0=0)
     doc = read_instances(str(tmp_path / "out" / "instances.json.gz"), expand=False)
-    assert doc["supplied"]["run"] == [r.run] and {k: doc["checks"][k] for k in ("output", "accept", "of")} == r.checks
-    args = {int(x["i"]): x["args"] for x in doc["rows"]}
-    specs = {int(x["i"]): x["spec"] for x in doc["rows"]}
-    fields = {(int(r.run["param"]), int(f["offset"]), int(f["offset"]) + int(f["leaves"])): f["name"] for f in r.run["fields"]}
-    assert len(doc["checks"]["rows"]) == len(r.checks["of"]) > 0
-    for (i, lo, hi), what in zip(doc["checks"]["rows"], r.checks["of"]):
-        assert specs[i].startswith("DsaTopKLongRow_v1{") and (lo, hi) == (0, 1)
-        ((_n, j, _lo, _hi),) = expanded_file_args(args[i])[1]
-        assert specs[int(j)].startswith("DsaWaksmanOrder_v1{")
-        ((kind, a, flo, fhi),) = expanded_file_args(args[int(j)])[0]
-        name = fields[(int(a), int(flo), int(fhi))]
-        assert kind == "p" and what.startswith(name.replace("/topk_switches[t=", " t=").removesuffix("]") + ":")
+    assert r.run is None and not r.checks and "supplied" not in doc and not doc.get("checks")
+    assert not any(x["spec"].startswith(("DsaWaksmanOrder_v1{", "DsaTopKLongRow_v1{")) for x in doc["rows"])
+    assert any(x["spec"].startswith("DsaTopKMask_v1{") for x in doc["rows"])
