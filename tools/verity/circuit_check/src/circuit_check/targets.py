@@ -241,13 +241,10 @@ def _lift(fam: str) -> None:
     """Register ``Lifted[<composite>]_v2``, the lift a body that calls the composite makes (`lifted.lift_composite`), where no body
     has yet: unregistered, `word.specialization` takes it for a lifted primitive.  An id whose composite is lifted otherwise (by hand,
     `lifted.register_hand_lift`, or at another version) names no Definition, and is refused by name."""
-    from verity.ml.circuits.defs import REGISTRY, CompositeDefinition
-    from verity.ml.definitions.registry import lifted as L
+    from . import sidecars as SC
 
-    m = re.fullmatch(r"Lifted\[(.+)\]_v\d+", fam)
-    inner = REGISTRY.defs.get(m[1]) if m else None
-    if isinstance(inner, CompositeDefinition) and (made := L.lift_composite(inner).id) != fam:
-        raise LookupError(f"{fam} names no Definition: {inner.id}'s lift is {made}")
+    if (made := SC.composite_lift(fam)) is not None and made.id != fam:
+        raise LookupError(f"{fam} names no Definition: {made.lifted_from.id}'s lift is {made.id}")
 
 
 def definition(spec: str) -> Any:
@@ -472,8 +469,9 @@ LAZY_OPERANDS: dict[str, tuple[str, ...]] = {
     "MoeExpertFp8Gemm_v1": ("w",),
     "MoeExpertFp8GemmW_v1": ("w",),
     "ScaledMmFp8BlockGrouped_v1": ("w",),
-    # activations: every rank's partial sums
+    # activations: every rank's partial sums, and the latent rows DSA's top-k routes past INDEX_TOPK keys
     "AllReduceMultimem_v1": ("parts",),
+    "DsaWaksmanRows_v1": ("rows",),
 }
 
 

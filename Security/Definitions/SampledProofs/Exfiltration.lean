@@ -42,7 +42,7 @@ miss the wrong set `B`. A deployment's egress is its honest egress with a deviat
 slots that differ, and their values. `changedThrough` collects the slots each window changes, through the first
 detection.
 
-When a guarantee states these, they move to a `Models/Population/Assumptions` module with their records.
+When a guarantee states these, they move to a `Definitions/SampledProofs/Assumptions` module with their records.
 -/
 
 @[expose] public section

@@ -12,7 +12,7 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   `mla_check.bmm_rows`;
 * `cublas_splitk_rows`: cuBLAS 12.9.1's H200 route in `cublas_bf16`: equal 64-element-aligned contiguous chunks, a final
   remainder, f32 partials and a serial increasing-order f32 reduction. `default_cublas_route` reads the selected route at
-  every decode batch to `CUBLAS_ROUTES["m_max"]` tokens out of `cublas_routes.json`, the capture's decode-batch scan
+  every launch to `CUBLAS_ROUTES["m_max"]` tokens out of `cublas_routes.json`, the capture's scan over M
   (`glm53_bf16_gemm_capture_gpu.scan_routes`), in which `fit_cublas_split_k` names the split counts whose route computes a
   launch's observed words exactly, so the split count is read out of the words (Kineto reports grid.z = 1 for these launches,
   so no profile field carries it).  Any other model's bf16-output routes are the cc 9.0 device pin's (`pinned_routes`,
@@ -20,10 +20,11 @@ vLLM d9105ea80's choice of kernel for the MoE gate (`GateLinear.forward`, `LLBf1
   under the scan's conditions only (`ROUTE_CONDITIONS`): `route_departures` names how a serving process's facts differ, which a
   Commit's verdict, TP1's and each TP rank's, refuses for a Program that binds one of the `ROUTE_DEFINITIONS`
   (`check.cublas_route_pin`).  So a torch or cuBLAS upgrade in the serving venv refuses every such Program until the scan
-  reruns under it, on an H200 with the serving venv's python, as the run of record (`CUBLAS_ROUTES["run_record"]`) ran:
-  `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run --served-default --models glm53,dsv4-pro --scratch DIR --out OUT` with
-  `--only linear,bmm,f32out --scan-m 1:2048`, then `--only router --scan-m 17:2048`; its cases' `routes`, its `switch` facts and the
-  device's are then copied into `cublas_routes.json` (no tool writes it);
+  reruns under it, on an H200 with the serving venv's python: one `tests/properties/glm53_bf16_gemm_capture_gpu.py --scan-run
+  --served-default --scan-m LO:HI` process per model of `glm53,dsv4-pro`, phase of `linear,f32out,router` and M range,
+  the ranges tiling 1:HI (the router's from 17; HI the largest launch served, which becomes `m_max`), then its
+  `--write-routes` over their scan.json files, which writes `cublas_routes.json` under that run's record (`CUBLAS_ROUTES["run_record"]`, which `evidence.json`'s `cublas_route_scan`
+  names too) and refuses a gap, an overlap or two scans' conditions that differ;
 * the cc 12.0 routes beside it: `cublas_splitk_rows(partial="bf16")` (a bf16 workspace), `cublas_aligned_splitk_rows` (the
   same over grid.z slices at an alignment, each slice's k-tiles residue first), `cublas_serial_splitk_rows` (slices meeting through the bf16 output) and
   `cublas_gemv_rows` (M = 1 gemvx lanes); `cublas_route_rows` is a device pin route's twin, and `cublas_routes_at` with
