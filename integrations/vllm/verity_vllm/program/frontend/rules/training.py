@@ -20,7 +20,7 @@ with no Definition to lower it to is refused with the Definition it needs (`_log
     training_rules(min_view_leaves, cc, tf32) -> RuleSet     the training rule set
 
 Views and static float tensors are `rules.training_views`'s, matrix products `rules.training_matmul`'s, comparisons, masks,
-integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s, draws `rules.training_draws`'s and the helpers
+integer sums, conversions, table lookups and `kthvalue` `rules.training_masks`'s, samples `rules.training_draws`'s and the helpers
 the rules emit with `rules.training_emit`'s; a survey of what the rules refuse is `rules.training_survey`'s.
 """
 
@@ -557,7 +557,7 @@ class EmbeddingDenseBackward(_TrainRule):
 def training_rules(min_view_leaves: int = 0, cc: tuple[int, int] | None = None, tf32: bool = False) -> RuleSet:
     """The default rules with the training rules: views of static floats, `BoxPermute` (views of more than `min_view_leaves` leaves
     that are not one run) and `Matmul` before them, the element-wise, reduction, softmax, loss, embedding, comparison, mask,
-    integer, conversion, lookup, order-statistic and draw rules after. `min_view_leaves` is 0 by default: the default views write a
+    integer, conversion, lookup, order-statistic and sample rules after. `min_view_leaves` is 0 by default: the default views write a
     permuted view of fewer leaves than their limit as a list of its leaves, which the root's replay then substitutes as one
     reference part per leaf.  `cc` (`cublas_bf16.TRAIN_CC`): bf16 `mm`s and `mv`s as that GPU's cuBLAS computes them (`Matmul`),
     every add, sub, mul and div as its kernels do (`Binary`) and the conversions to bf16 and to and from f16 as its kernels do
