@@ -34,6 +34,7 @@ public import Proofs.Flock.SessionLoop.Concrete.Live
 public import Proofs.Flock.SessionLoop.Concrete.LiveNets
 public import Proofs.Flock.SessionLoop.ZkAnyHonest
 public import Proofs.Flock.SessionLoop.ZkAnyNontrivial
+public import Proofs.Flock.SessionLoop.SampledAuditNontrivial
 public import Proofs.Flock.Recursive
 public import Proofs.Flock.RecGeneric
 public import Proofs.Flock.C3

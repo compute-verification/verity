@@ -73,10 +73,10 @@ accepts everything. Each builds its instance and takes no hypothesis.
   carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
   `PeriodLeakAccepted`'s at `certL`, `leakL` under a commitment whose openings of `true` pass (`trueCm`): the network
   certifier's openings (`certOps`) register a frame at the input `true`, where the circuit's negation holds none, and no
-  witness is in `RLeakTap`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`, `leakL`,
+  witness is in `RLeakCertifier`. These statements read the toy verifiers of `Witnesses.SamplingGeneric` (`sksL`, `leakL`,
   `certL`) and the layouts and openings of `Definitions.NetworkCertifier.Witness` (`trivLay`, `notLay`, `certOps`), and
   no definition of this module: a statement the lock lists reads no proof-only definition outside the excepted toys.
-* `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
+* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
@@ -238,7 +238,7 @@ theorem certL_btap (H : Msg → Msg) (x : Msg) :
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
     simp only [Btap, ownLog_noHash _ _ _ (noHash_compiledE (certL Coin) (fun _ _ _ => rfl) _ _ _)]
-    simp [tapLog, certL, leakL, certOps, trueCm, OC.eval, findColl])]
+    simp [certifierLog, certL, leakL, certOps, trueCm, OC.eval, findColl])]
   exact Pr_false
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -294,17 +294,17 @@ theorem leakL_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   simp at h1
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **No witness is in `RLeakTap`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the network
+/-- **No witness is in `RLeakCertifier`** at `certL`, at one step at `δ = 0`, whatever the inputs `As` admits: the network
 certifier's openings (`certOps`) register a frame at the input `true`, where the circuit, the negation of that ingress,
 holds none, and the only possible incorrect set is empty, since the one unit is sampled `all`. -/
 theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (ℕ → Bool) → Set (ℕ → Bool))
     (x : Msg) (w : Claims.Sampling.Wit) :
-    ¬ RLeakTap H (certL Coin).commit (certL Coin).parse (certL Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As
+    ¬ RLeakCertifier H (certL Coin).commit (certL Coin).parse (certL Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0 As
       1 (fun _ => certOps) x w := by
   rintro ⟨s, P, hs, hP, h⟩
   simp only [certL, leakL, Option.some.injEq] at hs hP
   subst hs hP
-  have hop : TapOpens H trueCm notLay 1 (fun _ _ => [true]) notStmt certOps [obs1] := by
+  have hop : CertifierRegisters H trueCm notLay 1 (fun _ _ => [true]) notStmt certOps [obs1] := by
     refine ⟨fun q hq => ?_, fun t ht => ?_⟩
     · simp only [certOps, List.mem_cons, List.not_mem_nil, or_false] at hq
       rcases hq with rfl | rfl <;> rfl
@@ -317,8 +317,8 @@ theorem certL_noWit (H : Msg → Msg) (As : Claims.Sampling.AuditStatement → (
         subst hg
         exact ⟨⟨0, true, []⟩, by simp [certOps], rfl⟩
       · funext σ
-        simp [obs1, rowOf, notLay, tapVal, certOps]
-      · simp [notLay, tapVal, certOps]
+        simp [obs1, rowOf, notLay, certifierVal, certOps]
+      · simp [notLay, certifierVal, certOps]
   have hcov : Covered 1 [obs1] := by
     intro t ht _ κ
     obtain rfl : t = 0 := by omega
@@ -434,7 +434,7 @@ theorem SampledLeakRegistered_nontrivial :
 with no input registered: at the statement `[]`, its silent prover's bound fails (`certL_noWit`). -/
 theorem PeriodLeakAccepted_nontrivial :
     ¬ PrBad shaD (certL Bool).V
-        (RLeakTap shaD (certL Bool).commit (certL Bool).parse (certL Bool).partition 1 1 1 (fun _ => notLay)
+        (RLeakCertifier shaD (certL Bool).commit (certL Bool).parse (certL Bool).partition 1 1 1 (fun _ => notLay)
           (fun _ => 1) 0 (fun s => AsReg s.prog notLay 1 ∅) 1 (fun _ => certOps))
         (certL Bool).E [] silentP ≤
       (certL Bool).κ 0 [] + Real.sqrt ((certL Bool).γ [] * PrB shaD (certL Bool).V silentP []) +
@@ -445,9 +445,9 @@ theorem PeriodLeakAccepted_nontrivial :
 
 /-! ## The monitoring period -/
 
-/-- **`PooledWrongUnitsLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
+/-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
 and each `k`-subset with share `1 / C(n, k)`. -/
-theorem uniform_draw (n k : ℕ) :
+theorem uniform_sample (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
         (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S).card * n.choose k =
@@ -458,17 +458,17 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
-(`uniform_draw`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
-theorem PooledWrongUnitsLe_honest (n k : ℕ) :
+/-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
+(`uniform_sample`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
+theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
   simp [Pr]
 
-/-- **`PooledWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
+/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
-theorem PooledWrongUnitsLe_nontrivial :
+theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by

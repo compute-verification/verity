@@ -17,12 +17,13 @@ import all Lean.Data.Json.Basic
 /-!
 # `SecondMisses` says something: the second stage accepts, and a stage that accepts everything breaks its bound
 
-* `secondMisses_honest`: the deployed `Select.selectSecond` accepts one sampled replay block of two proof blocks, one
-  sampled, on 82 zero bytes. The kernel evaluates it (`decide +kernel`) once the definitions it can't unfold are their
+* `secondMisses_honest`: the deployed `Select.selectSecond` accepts one sampled replay block whose one cell holds two
+  proof blocks, one sampled, on 82 zero bytes. The kernel evaluates it (`decide +kernel`) once the definitions it can't
+  unfold are their
   twins: `Array.qsort` and `Flock.canon` with fuel (`qsort_fuel`, `canon_fuel`), `Flock.Draw.onWith`'s `repeat` with
   fuel (`onWith_fuel`) and `Flock.Draw.subset` with its map a function (`subset_fn`).
 * `secondMisses_nontrivial`: at `acceptAllSecond`, which accepts everything and proves nothing, both proof blocks of
-  the sampled replay block escape with probability 1, above `escCell 2 1 2 = 0`.
+  the sampled replay block's one cell escape with probability 1, above `escCell 2 1 2 = 0`.
 -/
 
 @[expose] public section
@@ -31,8 +32,8 @@ set_option backward.privateInPublic.warn false
 
 open Spot
 open private Array.qpartition.loop Array.qsort.sort from Init.Data.Array.QSort.Basic
-open private Spot.Draw.STRATUM_KEYS Spot.Draw.lawKeys Spot.Draw.stratum?
-  from Spot.Draw
+open private Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS Spot.Draw.lawKeys
+  Spot.Draw.stratum? from Spot.Draw
 
 namespace Properties.Spot.SecurityProofs
 
@@ -289,14 +290,14 @@ theorem subset_fn : Flock.Draw.subset = subsetFn := by
 
 /-! ## The witnesses -/
 
-/-- **`SecondMisses`'s honest lemma**: the deployed second stage accepts one sampled replay block of two proof blocks,
-one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond` (`decide +kernel`) once its
-well-founded sorts and canonical JSON, its `repeat` and its map are their fuelled twins. -/
-theorem secondMisses_honest : (Select.selectSecond #[0] 2 1 ⟨Array.replicate 82 0⟩).isOk = true := by
+/-- **`SecondMisses`'s honest lemma**: the deployed second stage accepts one sampled replay block whose one cell holds
+two proof blocks, one sampled, on 82 zero bytes (its stratum's `need`). The kernel evaluates `selectSecond`
+(`decide +kernel`) once its well-founded sorts and canonical JSON, its `repeat` and its map are their fuelled twins. -/
+theorem secondMisses_honest : (Select.selectSecond #[0] #[2] #[1] ⟨Array.replicate 82 0⟩).isOk = true := by
   unfold Select.selectSecond Draw.drawFirstRead Draw.drawUnits Flock.Draw.drawWith Flock.Draw.stratifiedWith
-    Draw.flockLaw Draw.strataProblem Flock.Draw.strataProblem Draw.checkDraw Draw.checkDrawFull
+    Draw.flockLaw Draw.strataProblem Flock.Draw.workProblem Draw.checkDraw Draw.checkDrawFull
     Draw.strataMessage Draw.sameLaw Draw.lawOf Spot.Draw.lawKeys Spot.Draw.stratum?
-    Spot.Draw.STRATUM_KEYS keys? sortStrings jeq
+    Spot.Draw.STRATUM_KEYS Spot.Draw.WORK_STRATUM_KEYS keys? sortStrings jeq
   simp only [onWith_fuel _ _ _ 2, canon_fuel 16, qsort_fuel, subset_fn]
   decide +kernel
 
@@ -306,25 +307,31 @@ theorem proved_null : Draw.proved Json.null = #[] := by
   decide +kernel
 
 /-- **`SecondMisses`'s nontrivial lemma**: its bound fails at a second stage that accepts everything
-(`acceptAllSecond`): the sample proves nothing, so both proof blocks of the one sampled replay block escape whatever the
-bytes, with probability 1, and `escCell 2 1 2 = 0`. -/
+(`acceptAllSecond`): the sample proves nothing, so both proof blocks of the one sampled replay block's one cell escape
+whatever the bytes, with probability 1, and `escCell 2 1 2 = 0`. -/
 theorem secondMisses_nontrivial : ¬ Claims.Pr (fun src : Fin 0 → Fin 256 =>
-      (acceptAllSecond #[0] 2 1 (bytesOf src)).isOk = true ∧
-        ∀ j ∈ ({0, 1} : Finset ℕ), (j : Int) ∉ secondOf (acceptAllSecond #[0] 2 1 (bytesOf src))) ≤
-      ∏ i ∈ Finset.range (#[0] : Array ℕ).size,
-        escCell 2 1 (({0, 1} : Finset ℕ).filter fun j => i * 2 ≤ j ∧ j < (i + 1) * 2).card := by
+      (acceptAllSecond #[0] #[2] #[1] (bytesOf src)).isOk = true ∧
+        ∀ j ∈ ({0, 1} : Finset ℕ), (j : Int) ∉ secondOf (acceptAllSecond #[0] #[2] #[1] (bytesOf src))) ≤
+      ∏ t ∈ Finset.range (#[2] : Array ℕ).size, ∏ i ∈ Finset.range (#[0] : Array ℕ).size,
+        escCell ((#[2] : Array ℕ).getD t 0) ((#[1] : Array ℕ).getD t 0)
+          (({0, 1} : Finset ℕ).filter fun j =>
+            cellOff (#[0] : Array ℕ).size #[2] t + i * (#[2] : Array ℕ).getD t 0 ≤ j ∧
+              j < cellOff (#[0] : Array ℕ).size #[2] t + (i + 1) * (#[2] : Array ℕ).getD t 0).card := by
   have h1 : Claims.Pr (fun src : Fin 0 → Fin 256 =>
-      (acceptAllSecond #[0] 2 1 (bytesOf src)).isOk = true ∧
-        ∀ j ∈ ({0, 1} : Finset ℕ), (j : Int) ∉ secondOf (acceptAllSecond #[0] 2 1 (bytesOf src))) = 1 :=
+      (acceptAllSecond #[0] #[2] #[1] (bytesOf src)).isOk = true ∧
+        ∀ j ∈ ({0, 1} : Finset ℕ), (j : Int) ∉ secondOf (acceptAllSecond #[0] #[2] #[1] (bytesOf src))) = 1 :=
     (Claims.Pr_congr fun _ => ⟨fun _ => trivial, fun _ => ⟨rfl, fun j _ => by
       simp [acceptAllSecond, secondOf, proved_null]⟩⟩).trans Pr_true
-  have hc : ∀ i ∈ Finset.range (#[0] : Array ℕ).size,
-      (({0, 1} : Finset ℕ).filter fun j => i * 2 ≤ j ∧ j < (i + 1) * 2).card = 2 := by decide
+  have hc : (({0, 1} : Finset ℕ).filter fun j => cellOff 1 #[2] 0 + 0 * (#[2] : Array ℕ).getD 0 0 ≤ j ∧
+      j < cellOff 1 #[2] 0 + (0 + 1) * (#[2] : Array ℕ).getD 0 0).card = 2 := by decide
   have he : escCell 2 1 2 = 0 := by
     have h0 : (2 - 2).choose (min 1 2) = 0 := by decide
     unfold escCell
     rw [h0, Nat.cast_zero, zero_div]
-  rw [h1, Finset.prod_congr rfl fun i hi => by rw [hc i hi], he]
+  rw [h1, show (#[2] : Array ℕ).size = 1 from rfl, show (#[0] : Array ℕ).size = 1 from rfl,
+    Finset.prod_range_one, Finset.prod_range_one]
+  change ¬ (1 : ℝ) ≤ escCell 2 1 _
+  rw [hc, he]
   norm_num
 
 end Properties.Spot.SecurityProofs

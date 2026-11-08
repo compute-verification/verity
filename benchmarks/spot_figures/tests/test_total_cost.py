@@ -149,6 +149,35 @@ def test_a_card_without_every_configuration_is_refused():
              "parts": []}]}})
 
 
+def test_each_statement_pays_its_verify_at_the_cards_ratio():
+    """A statement's verify is its type's measured core-seconds, its family's line (through two members, or through the
+    fixed seconds and one), else the measured median, at the card's core-seconds a GPU-second, added to the
+    statement's fixed seconds and nothing else; a family member that isn't measured is refused."""
+    vc = cards.load("verifier_cost", "GLM-5.3")
+    v = vc["value"]
+    by = {x["block"]: x["core_seconds"] for x in v["types"]}
+    assert t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=2048,N=1}") == (by["FlashInferFp8Linear_v1{K=2048,"],
+                                                                         "measured")
+    k4096, how = t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=4096,N=1}")
+    assert how == "family" and k4096 == pytest.approx(v["fixed_seconds"] + 2 * (by["FlashInferFp8Linear_v1{K=2048,"]
+                                                                                 - v["fixed_seconds"]))
+    lo, hi = by["SparseMlaCombine_v1{NSPLIT=2,"], by["SparseMlaCombine_v1{NSPLIT=12,"]
+    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=5,DV=512}")[0] == pytest.approx(lo + 3 * (hi - lo) / 10)
+    assert t.verifier_seconds(v, "MoeExpertFp8BlockGemm_v4{K=6144}") == (by["MoeExpertFp8GemmW_v1{"], "family")
+    assert t.verifier_seconds(v, "Unseen_v1{K=3}")[1] == "assumed"
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    p = t.priced(c, po)
+    q = t.verified(p, vc)
+    for x, y in zip(p["partition"].value["strata"], q["partition"].value["strata"]):
+        assert y["fixed_seconds"] == pytest.approx(x["fixed_seconds"] + y["verify_core_seconds"]
+                                                   / v["core_seconds_per_gpu_second"])
+        assert y["seconds_per_block"] == x["seconds_per_block"] and y["price_macs"] == x["price_macs"]
+    assert q["verifier_cost"].value == pytest.approx(5.40 / (2 * 0.015 + 8 * 0.0045))
+    bad = v | {"families": [{"types": ["X"], "size": None, "members": ["Unmeasured_v1{"]}]}
+    with pytest.raises(ValueError, match="none of the measured"):
+        cards.check(vc | {"value": bad})
+
+
 def most_written(cells, k, q, replay_blocks, delta, footprint):
     """The most bits any set of incorrect proof blocks escaping with probability at least δ writes, every replay
     block's incorrect blocks counted by stratum, each replay block charged at most `footprint`."""
@@ -246,9 +275,9 @@ def measured(tmp_path_factory) -> dict:
 def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     """The planned scope: each line's x is its tax plus β, a measured tax as it comes; the exfiltration lines never
     above the served bits, saying which term binds, a wider registration never above a narrower one, sampling more
-    requests under a cap past them, and the patterns' form below the sets'; both infiltration lines plotted, and (C)'s
-    falling with β; skipped work only for (C); the
-    captions name what each rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
+    requests under a cap past them, and the patterns' form below the sets' wherever it doesn't reach the served bits;
+    both infiltration lines plotted, and (C)'s falling with β; skipped work only for (C); the captions name what each
+    rests on and the lines the served bits bound at β = 1%; and it renders.  It plans every
     configuration at four shares, about a minute on four workers, the only test of the series end to end."""
     out, scope = measured, "datacenter week"
     served = out["scopes"][scope]["served_bits"]
@@ -277,7 +306,8 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
     for name in ("tokens", "per_expert"):
         spans = [lines[n]["y"] for n in (name, f"{name}_pod", f"{name}_datacenter")]
         assert all(b <= a * (1 + 1e-9) for x in zip(*spans) for a, b in zip(x, x[1:])), name
-        assert lines[name]["y"][at] < lines[f"{name}_sets"]["y"][at]
+        patterns, sets = lines[name]["y"][at], lines[f"{name}_sets"]["y"][at]
+        assert patterns <= sets and (patterns < sets or lines[name]["binds"][at] == "served"), name
         for n in (name, f"{name}_pod", f"{name}_datacenter"):
             assert all(k >= 1 and k >= q for q, k in zip(lines[n]["registration_sample"], lines[n]["registration_cap"]))
             assert all(0 <= p <= s <= 1 for s, p in zip(lines[n]["shared"], lines[n]["padding"]))
@@ -304,4 +334,4 @@ def test_each_line_starts_at_its_own_tax(measured, tmp_path):
                                        "figure1_skipped_work_datacenter_week.png",
                                        "figure1_skipped_work_datacenter_week.svg"]
     assert all(p.stat().st_size > 0 for p in paths)
-    assert (t.stem("datacenter year"), t.stem("datacenter year", "skipped_work")) == ("figure1", "figure1_skipped_work")
+    assert (t.stem("world year"), t.stem("world year", "skipped_work")) == ("figure1", "figure1_skipped_work")

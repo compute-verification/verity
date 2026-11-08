@@ -193,6 +193,17 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     assert PO.refusals(_serve("pouw:ncp-v2")) == ("pouw:ncp-v2: pouw registers no scheme 'ncp-v2' (registered: ncp-v1)",)
 
 
+def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
+    """A protocol serving drives by flag (`driver`, PoUB's ``--remote-verifier`` and ``--memory-map``) is imported by name,
+    so a tree without its package refuses the flag by name rather than failing to import."""
+    monkeypatch.setitem(PO.DRIVERS, "remote-bandwidth", "not_landed_here")
+    with pytest.raises(PO.Refused, match=r"remote-bandwidth: its driver verity_vllm\.protocols\.not_landed_here\.commit_map is "
+                                         "not on this tree"):
+        PO.driver("remote-bandwidth", "commit_map")
+    with pytest.raises(PO.Refused, match="no driver of protocol 'pous'"):
+        PO.driver("pous", "remote")
+
+
 def test_spot_alone_at_the_commit_adds_no_hooks():
     ctx = PO.Context(stage="commit", enabled=ALL[2:])
     assert PO.refusals(ctx) == () and PO.adapter("sampled-proofs").schemes() == ("rows-sha512", "vllm-v1")

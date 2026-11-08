@@ -79,8 +79,8 @@ bound `Dj`, at `δ`, with the claim at `K`. Every field is a property of the dep
 * at each window and every value of the other coins, the network audit's own coins are a run of the sampled verifier
   at the window's statement against a prover (`prover`, on a finite tape `Tape`, the rest of the coins), and the
   probability over the audit's own coins that the network certifier accepts while the window fails `WindowGood` is at
-  most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakTap` (`window_le`). Past
-  `RLeakTap` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
+  most that run's `PrBad` at the leak relation at the network certifier's rows, `RLeakCertifier` (`window_le`). Past
+  `RLeakCertifier` and the scope, `WindowGood` holds the trace's values at the registered inputs and the records' coverage
   (`Covered`, length and jitter): `window_le` holds them on acceptance. The registered values are the gap
   `PeriodLeakAccepted` names, which the registration's commitment binds; no proof here gives it. `window_le` is the
   per-window bound that the trusted network certifier's records give; deriving it from `PeriodLeakAccepted` at the
@@ -126,16 +126,16 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
   /-- what reaches the network certifier from the server on each connection, at the server's state -/
   arr : Srv → Conn → Arrivals Cell
   /-- the network certifier's record format over the period's windows -/
-  fmt : TapRecord Conn Cell (Fin n → List (Obs L Kₒ S))
+  fmt : RecordFormat Conn Cell (Fin n → List (Obs L Kₒ S))
   /-- the deployed network certifier -/
   device : Dev
   /-- what the network certifier does on a schedule and the server's state: the cells the client receives and its
   records of the period's windows -/
-  run : Dev → WardenSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
-  /-- the network certifier runs its code (`tapCode`) on its host: `trusted-host`, the trust the network audit rests
+  run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin n → List (Obs L Kₒ S))
+  /-- the network certifier runs its code (`recordingCode`) on its host: `trusted-host`, the trust the network audit rests
   on. Its records are what `window_le`'s per-window bound comes from; deriving `window_le` from `PeriodLeakAccepted`
   at this deployed period and this premise, not at the period of no windows, is the follow-up. -/
-  trusted : Verity.Assumptions.TrustedHost device run fun p => tapCode fmt p.1 (arr p.2)
+  trusted : Verity.Assumptions.TrustedHost device run fun p => recordingCode fmt p.1 (arr p.2)
   /-- the network audit's acceptance with window `i` failing its good event, over the audit's own coins, is at most
   the sampled verifier's `PrBad` at the window's statement and prover: the per-window bound that the trusted network
   certifier's records (`trusted`) give. It is a field until it is derived from `PeriodLeakAccepted` at the deployed
@@ -145,7 +145,7 @@ structure RealizesCommOfPeriodLeakAccepted {ι : Type} {d : Device ι} {α : Typ
         ¬ WindowGood H D L Kₒ S lay k δ reg Dj (sw i) (ρ i) tops (stmt (Function.update ξ (r.own .network) x) i)
           (wit (Function.update ξ (r.own .network) x) i) (obs (Function.update ξ (r.own .network) x) i)) ≤
     PrBad H D.V
-      (RLeakTap H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
+      (RLeakCertifier H D.commit D.parse D.partition L Kₒ S lay k δ (fun s => AsReg s.prog (lay s) (k s) (reg s)) Dj tops)
       D.E (stmt ξ i) (prover ξ i)
 
 attribute [instance] RealizesCommOfPeriodLeakAccepted.tapeFintype RealizesCommOfPeriodLeakAccepted.tapeNonempty

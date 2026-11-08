@@ -4969,6 +4969,39 @@ def test_a_seal_takes_a_fresh_directory_so_a_reused_pid_reads_no_stale_copy(tmp_
         "sweep removes a directory whose pid prefix names a gone process, old `<pid>` and new `<pid>-<suffix>` alike"
 
 
+@pytest.mark.slow
+@pytest.mark.skipif(shutil.which("lake") is None, reason="no Lean toolchain")
+def test_a_seal_skips_an_exempt_module_with_no_olean(tmp_path):
+    """The regression #7873 landed: the seal seeded every module under the lock's roots, an `exempt` one under them
+    included, but an exempt module (a scratch file, a `runs` test) is not built, so `Graph.lean` was sent after an
+    `.olean` that is not there and the seal, and every audit of the package, failed.  Here a package has an exempt module
+    `Control.Stub` under its root that nothing imports or builds; the sealed audit passes, and the seal seeds and copies
+    no `Control/Stub.olean`.  A non-exempt module with no `.olean` still fails, by name, with the fix in the message."""
+    S = tmp_path / "control"
+    shutil.copytree(HERE / "fixtures" / "control", S, ignore=shutil.ignore_patterns(".lake"))
+    (S / "Control" / "Stub.lean").write_text("namespace Control\n\ndef stub : Nat := 0\n")
+    pol = A.load(S)
+    A.dump(S, pol | {"exempt": pol["exempt"] | {"Control.Stub": "a stub under the root that nobody builds"}})
+    subprocess.run(["lake", "build"], cwd=S, check=True, capture_output=True, env=A.lake_env())
+    stub_olean = S / ".lake" / "build" / "lib" / "lean" / "Control" / "Stub.olean"
+    assert not stub_olean.is_file(), "the stub is unbuilt: nothing imports it, so the test exercises an exempt module with no `.olean`"
+    seals = A.Seals(tmp_path / "sealed")
+    try:
+        rep = A.audit(S, tmp_path / "out", update=True, seals=seals, replay=False, runs=False, log=lambda *_: None)
+        assert rep["failures"] == [], rep["failures"]
+        assert list(seals.dir.rglob("Control/Stub.olean")) == [], "the seal copied the exempt module it should not seed"
+        # a module under the roots that is *not* exempt and has no `.olean` still fails, naming the module and the fix
+        A.dump(S, pol)
+        seals2 = A.Seals(tmp_path / "sealed2")
+        try:
+            bad = A.audit(S, tmp_path / "out2", seals=seals2, replay=False, runs=False, log=lambda *_: None)
+            assert any("Control.Stub" in f and "under `exempt`" in f for f in bad["failures"]), bad["failures"]
+        finally:
+            seals2.close()
+    finally:
+        seals.close()
+
+
 def test_the_closure_plan_joins_every_module_above_one_that_has_not_passed():
     """A dependency module that has not passed is checked, and every module importing it joins the replay unchecked, since
     an import of one would bring it in unchecked; the rest stay imported."""

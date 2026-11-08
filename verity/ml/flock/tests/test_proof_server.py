@@ -151,6 +151,30 @@ def test_a_verifier_that_never_serves_fails_its_session(binary, tmp_path, monkey
         ps.submit(statement(tmp_path, "11" * 64), draw([0]), "s1")
 
 
+def test_each_verifier_on_its_own_challenger_audited_at_close(binary, tmp_path, monkeypatch):
+    """With challengers, each type's verifier is started with its challenger's flags, and `close` hands each challenger
+    every session its verifier filed, at once, and gives each session its verifier's result (a stand-in challenger: the
+    real one is `challengers`', whose audit `prove_leg`'s FLOCK_CHALLENGER=1 run checks)."""
+    from verity_flock import proof_server as PS
+
+    started, ended = [], {}
+    monkeypatch.setattr(PS.CH, "start", lambda d: (started.append(d), (object(), ["--tree-from", f"127.0.0.1:{len(started)}",
+                                                                              "--tree-secret-file", str(d / "s")]))[1])
+    monkeypatch.setattr(PS.CH, "end", lambda d, p, sessions: ended.setdefault(d.name, {"ok": d.name.startswith("verifier-33"),
+                                                                                        "sessions": sorted(sessions)}))
+    pins = ["33" * 64, "44" * 64]
+    with ProofServer(binary, tmp_path / "ps", challenger=True) as ps:
+        sessions = [ps.submit(statement(tmp_path, pins[i % 2]), draw([i]), f"s{i}").result() for i in range(4)]
+        assert ps.challengers == {}
+    names = [f"verifier-{p[:16]}" for p in pins]
+    assert [d.name for d in started] == [f"{n}-challenger" for n in names] and set(ps.challengers) == set(names)
+    for s in sessions:
+        name = f"verifier-{s.pin[:16]}"
+        assert record(s)["argv"][-4:-2] == ["--tree-from", f"127.0.0.1:{names.index(name) + 1}"]
+        assert s.challenger is ps.challengers[name] and s.challenger["ok"] == (s.pin == pins[0])
+        assert s.challenger["sessions"] == sorted(str(x.dir) for x in sessions if x.pin == s.pin)
+
+
 def test_a_failed_verdict_of_record_is_the_session_verdict_error(binary, tmp_path):
     def boom(s):
         raise RuntimeError("lean refused")
