@@ -469,6 +469,20 @@ theorem sum_modify_add (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin :
   rw [Finset.sum_congr rfl (fun t _ => h t), Finset.sum_add_distrib, Finset.sum_ite_eq (Finset.range n) i,
     if_pos (Finset.mem_range.2 hin)]
 
+theorem sum_modify_add' (acc : Array F128) {i n : ℕ} (hi : i < acc.size) (hin : i < n) (g : F128) (c : ℕ → GF128) :
+    ∑ t ∈ Finset.range n, of ((acc.modify i (g + ·)).getD t 0) * c t =
+      ∑ t ∈ Finset.range n, of (acc.getD t 0) * c t + of g * c i := by
+  have h : ∀ t, of ((acc.modify i (g + ·)).getD t 0) * c t =
+      of (acc.getD t 0) * c t + if i = t then of g * c t else 0 := by
+    intro t
+    rw [getD_modify _ _ hi]
+    split_ifs
+    · simp only [of_add]
+      ring
+    · simp only [add_zero]
+  rw [Finset.sum_congr rfl (fun t _ => h t), Finset.sum_add_distrib, Finset.sum_ite_eq (Finset.range n) i,
+    if_pos (Finset.mem_range.2 hin)]
+
 /-- **A run's sums, added at every copy** (explicit). -/
 theorem flushK_tabExp (pt : FoldPt) (s L H : ℕ) (iv : ℕ → ℕ → GF128) (as : Array ℕ) (nk : ℕ) (o : Tab) (cx cy : ℕ)
     (ws acc : Array F128) :
@@ -819,7 +833,7 @@ theorem colT_exp (D : Def) (pt : FoldPt) (s L H A B : ℕ) (as : Array ℕ) (gL 
   · simp only [Tab.colT, hv, ↓reduceIte]
     refine ⟨by rw [Array.size_modify, hst], ?_⟩
     unfold pendW
-    rw [sum_modify_add W (by rw [hst]; exact hv) hv]
+    rw [sum_modify_add' W (by rw [hst]; exact hv) hv]
     ring
   · simp only [Tab.colT, hv, ↓reduceIte]
     refine ⟨hst, ?_⟩

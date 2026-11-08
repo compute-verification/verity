@@ -283,12 +283,13 @@ def Tab.rowsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
   Tab.flushP st.1 st.2.1 st.2.2.1 st.2.2.2
 
 /-- One reference of `Tab.rowsT`'s rows, weight `w`: an own column's weight summed into its column's `W[v]`, any
-other reference through `Tab.ref` at copy `0`. -/
+other reference through `Tab.ref` at copy `0`. The sum is `w + W[v]`, so the compiled code reuses `W[v]`'s cell, which
+the array alone holds, where `W[v] + w` would allocate one for each reference. -/
 @[specialize]
 def Tab.colT (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (cx : Nat) (w : F128)
     (st : Tab × Array F128) (v : Nat) : Tab × Array F128 :=
   let (o, W) := st
-  if v < D.cols then (o, W.modify v (· + w)) else (Tab.ref D pt false A B as gL pos o 0 cx w v, W)
+  if v < D.cols then (o, W.modify v (w + ·)) else (Tab.ref D pt false A B as gL pos o 0 cx w v, W)
 
 /-- One row `(x, ra, rb)` of `Tab.rowsT`: its weight formed once, an `A` reference's times `α`, its references through
 `Tab.colT`. -/
