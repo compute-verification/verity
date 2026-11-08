@@ -16,6 +16,7 @@ from types import SimpleNamespace as NS
 import pytest
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
+from verity_vllm.engine.served_seed import derived
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program.predict import batch as B
@@ -55,7 +56,8 @@ TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_si
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
         "max_position_embeddings": 64, "hidden_act": "silu"}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
-STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
+STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": 11, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
+COIN = bytes(range(64))
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
 SERVED = "served-model"
 GLM53_B8 = "glm53__fp8__h200__tp8__b8__i256__o32__mixed-arrivals__greedy__eager"
@@ -158,13 +160,37 @@ def test_a_plan_is_the_compilation_before_its_programs_are_built():
 def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_top_p():
     """Top-p takes the registered split count registered_splits(num_SMs) at any top_p, the S serving pins (`engine.topp_pin`), never
     the batch's; a greedy body's top_p is never read."""
-    assert policy_of(0, {**STOCH, "seed": 123}, 7, 188) == (STOCH_POLICY, 123)
-    assert policy_of(0, {**STOCH, "top_p": 0.95}, 7, 188) == ({**STOCH_POLICY, "top_p": 0.95}, 7)
+    assert policy_of(0, {**STOCH, "seed": 123}, 188) == (STOCH_POLICY, 123)
+    assert policy_of(0, {**STOCH, "top_p": 0.95}, 188) == ({**STOCH_POLICY, "top_p": 0.95}, 11)
     assert registered_splits(188) == 32
-    assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 7, 188) == (STOCH_POLICY, 7)
-    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, 7, None) == ({"kind": "greedy"}, None)
+    assert policy_of(0, {**STOCH, "top_k": -1, "top_p": None}, 188) == (STOCH_POLICY, 11)
+    assert policy_of(0, {**GREEDY, "top_p": 0.5, "stop": ["\n"], "ignore_eos": False}, None) == ({"kind": "greedy"}, None)
     with pytest.raises(Unexpressible, match="top-p on a target that declares no num_sms"):
-        policy_of(0, STOCH, 7, None)
+        policy_of(0, STOCH, None)
+
+
+def test_an_unseeded_stochastic_requests_seed_is_derived_from_its_id_and_the_window_coin_or_refused_by_name():
+    """A seed is its certified body's or derived from the request's id and the window's verifier coin, never one serving fills in
+    or draws: with no coin, or for a request the window carries in (whose admitting window's coin this compile doesn't read), an
+    unseeded stochastic request is refused by name. The derived seed is the request's alone and in its batch."""
+    unseeded = {**STOCH, "seed": None}
+    assert policy_of(0, unseeded, 188, request_id="q1", coin=COIN) == (STOCH_POLICY, derived(COIN, "q1"))
+    assert derived(COIN, "q1") != derived(COIN, "q2") and derived(COIN, "q1") != derived(COIN[::-1], "q1")
+    assert policy_of(0, {**unseeded, "seed": 5}, 188, request_id="q1", coin=COIN) == (STOCH_POLICY, 5)
+    with pytest.raises(Unexpressible, match=r"request 0 \('q1'\): stochastic with no seed in its certified body, and the compile has "
+                                            r"no window coin to derive one from: a seed serving fills in \(`served_seed.DEFAULT_SEED`\) "
+                                            r"or draws"):
+        policy_of(0, unseeded, 188, request_id="q1")
+    with pytest.raises(Unexpressible, match="request 0 \\('a'\\): stochastic with no seed in its certified body, and the window carries "
+                                            "it in, so its seed derives from its admitting window's coin"):
+        plan_steps(_registered(), A_IN, {"a": {**unseeded, "max_tokens": 4, "prompt": [1, 2, 3]}}, coin=COIN)
+    reg, (advice, ingress) = _registered(), _mixed()
+    ingress = {**ingress, "q1": {**ingress["q1"], "seed": None}}
+    with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): stochastic with no seed in its certified body"):
+        compile_steps(reg, advice, ingress)
+    assert compile_steps(reg, advice, ingress, coin=COIN).requests[1].seed == derived(COIN, "q1")
+    with pytest.raises(Unexpressible, match=r"request 1 \('q1'\): .* the window's verifier coin isn't non-empty bytes \(bytes b''\)"):
+        compile_steps(reg, advice, ingress, coin=b"")
 
 
 @pytest.mark.parametrize("sampling,fact", [
@@ -178,14 +204,14 @@ def test_the_bodys_seed_is_the_seed_input_and_the_policy_reads_temperature_and_t
     ({**STOCH, "bad_words": ["x"]}, "bad_words (a parameter this compiler doesn't know)"),
     ({**STOCH, "temperature": 1e-6}, "temperature 1e-06"),
     ({"top_p": 1.0}, "no temperature"),
-    ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed None aren't"),
+    ({**STOCH, "temperature": "0.8"}, "temperature '0.8', top_p 1.0 and seed 11 aren't"),
     ({**STOCH, "top_p": 0.0}, "top_p 0.0"),
     ({**STOCH, "seed": -1}, "seed -1"),
     (["temperature"], "aren't an object of named values"),
 ])
 def test_sampling_v0_cannot_express_is_refused_by_name(sampling, fact):
     with pytest.raises(Unexpressible, match=f"request 0: .*{fact}".replace("(", r"\(").replace(")", r"\)").replace("[", r"\[")):
-        policy_of(0, sampling, 7, 188)
+        policy_of(0, sampling, 188)
 
 
 def test_sampling_is_the_bodys_never_the_advices():
@@ -764,7 +790,7 @@ def test_class_g_samples_by_the_selects_circuit_check_binds_at_its_vocabulary(tm
 
     reg = _class_g(tmp_path)
     V = reg.phi.hf_config["vocab_size"]
-    policy, _ = policy_of(0, {"temperature": 1.0, "top_p": 0.95, "seed": 1}, 7, reg.phi.target_profile().num_sms)
+    policy, _ = policy_of(0, {"temperature": 1.0, "top_p": 0.95, "seed": 1}, reg.phi.target_profile().num_sms)
     table = dead_free_versions()
     compiled = {bind(table[f.base_id], **f.bindings).id
                 for f in (kind("token_select_stochastic_split", V=V, S=policy["splits"]), kind("token_select", V=V))}

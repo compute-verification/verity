@@ -1067,7 +1067,8 @@ Each assumption, and what breaks without it:
   of these:
   - a certified input, through an exhaustive tie. The prompt's token ids are the registered tokenizer and chat template
     applied to the certified request body. The request's parameters (temperature, top-p, seed, maximum tokens, stops)
-    are read from the body;
+    are read from the body, and a stochastic request whose body names no seed takes one derived from its id and the
+    window's verifier coin, never one the server fills in or draws;
   - the weights' committed root;
   - a constant the advice fixes: positions, shapes and the wiring;
   - the committed output of exactly one proof block earlier in the advice's order. A decode row's input id is the
@@ -1372,8 +1373,8 @@ charge (the composition below): what the bound counts is the charge, not the com
 5. `AdviceCheck_v1{L}` specifies what 1–4 give. The tests hold every advice v1 decodes, random and
    bit-flipped strings' too, to I1's `advice.decode`, whose refusals that circuit makes. So it holds wherever 2 and 4
    derive their rows rather than take them as witness, and needn't run at v0's length.
-6. `compile_steps(registered, advice, ingress)` turns the advice into the Programs, with `ingress` the certified
-   bodies by id.
+6. `compile_steps(registered, advice, ingress, coin=)` turns the advice into the Programs, with `ingress` the certified
+   bodies by id and `coin` the window's verifier coin.
 
 **The encoder in the circuit** (`arith_encode`: `ArithCountStep_v1{K, BIN, CW}`, `ArithCountFinish_v1{CW}` and
 `BookKT_v1{C}`, with their references as specs; its docstring has the mechanics).

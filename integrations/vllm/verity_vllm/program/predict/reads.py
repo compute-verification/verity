@@ -7,8 +7,14 @@ The output accounting bounds what the compiled circuit can carry of the served o
 registration, by the advice's length and the wrong blocks' bits. That holds where each field the compiler reads is one of
 `ACCOUNTS`:
 - ``output``: a checked circuit output, one a request Program returns and the audit holds to y;
-- ``certified``: a field of x, a request's certified body, or a field of the advice held to one;
+- ``certified``: a field of x, a request's certified body, or a field of the advice held to one, or the window's verifier coin,
+  public and nobody serving's choice;
 - ``advice``: a field of the committed advice, charged in its length, whether or not y fixes it.
+
+**A stochastic request's seed** is certified: its body's ``seed``, else derived from its certified id and the window's verifier
+coin (``window.coin``, `engine.served_seed.derived`), never one the server draws or fills in. `seed_of` refuses by name any
+other: a request with no seed in its body where the compile has no coin, and one the window carries in, whose seed is its
+admitting window's.
 
 A field is read ``ahead`` where it shapes a request's unit (`steps.RequestUnit`, the fields named) before the step that outputs
 the part of y it fixes. Such a field is advice, its bits charged whatever the circuit does with it. Read from y instead, as a
@@ -43,12 +49,18 @@ from __future__ import annotations
 from dataclasses import fields
 from typing import Any, NamedTuple
 
+from verity_vllm.engine import served_seed
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.program.predict.common import Unexpressible
 
 ACCOUNTS = ("output", "certified", "advice")
 #: the advice's records by name, as `window_advice.decode` builds them
 RECORDS = {"advice": WA.Advice, "request": WA.RequestAdvice, "step": WA.StepAdvice, "row": WA.Row, "source": WA.Source,
            "carried": WA.Carried}
+#: what the compiler reads of the window beside its advice and bodies: its verifier coin (`steps.compile_steps`'s ``coin``)
+WINDOW = ("coin",)
+#: the fields a stochastic request's seed is read from, the only two (`seed_of`)
+SEED = (("body", "seed"), ("window", "coin"))
 #: a certified body's field roles: the prompt (read apart, `steps.request_of`); how the response travels, which computes nothing;
 #: what only finishes a request (its T, which the advice's rows carry; `max_tokens` and `ignore_eos` hold its `output_len` and
 #: `finish`); what the sampling policy reads (`steps.policy_of`); and a parameter refused off its inert values
@@ -56,10 +68,10 @@ ROLES = ("prompt", "transport", "finish", "policy", "inert")
 
 
 class Field(NamedTuple):
-    """A field the compiler reads: ``record`` one of `RECORDS`, ``body`` (a certified body's) or ``program`` (a request Program's
-    outputs), its ``account`` (`ACCOUNTS`), the part of y it fixes (``y``, empty for none), the request unit's fields it shapes
-    ahead of the step that outputs that part (``ahead``), and a body field's ``role`` (`ROLES`) and, for an inert one, the values
-    that leave a Program unchanged (``inert``)."""
+    """A field the compiler reads: ``record`` one of `RECORDS`, ``body`` (a certified body's), ``window`` (`WINDOW`) or
+    ``program`` (a request Program's outputs), its ``account`` (`ACCOUNTS`), the part of y it fixes (``y``, empty for none), the
+    request unit's fields it shapes ahead of the step that outputs that part (``ahead``), a body field's ``role`` (`ROLES`) and,
+    for an inert one, the values that leave a Program unchanged (``inert``)."""
 
     record: str
     name: str
@@ -89,6 +101,7 @@ READS: tuple[Field, ...] = (
         ("min_p", (None, 0, 0.0)), ("presence_penalty", (None, 0, 0.0)), ("frequency_penalty", (None, 0, 0.0)),
         ("repetition_penalty", (None, 1, 1.0)), ("min_tokens", (None, 0)), ("logit_bias", (None, {})), ("n", (None, 1)),
         ("top_k", (None, 0, -1)))),
+    Field("window", "coin", "certified"),
 )
 
 
@@ -97,11 +110,27 @@ def body(*roles: str) -> tuple[Field, ...]:
     return tuple(f for f in READS if f.record == "body" and f.role in roles)
 
 
+def seed_of(i: int, request_id: str, seed: int | None, coin: bytes | None, carried: bool = False) -> int:
+    """Request ``i``'s seed, a stochastic request's, read from `SEED`: its certified body's ``seed``, else `served_seed.derived`
+    from its certified ``request_id`` and the window's ``coin``. Refused by name where it would be neither: with no coin, and for
+    a request the window carries in (``carried``), whose seed is derived from its admitting window's coin."""
+    if seed is not None:
+        return int(seed)
+    if coin is None or carried or type(coin) is not bytes or not coin:
+        why = ("the window carries it in, so its seed derives from its admitting window's coin, which this compile doesn't read"
+               if carried else "the compile has no window coin to derive one from" if coin is None else
+               f"the window's verifier coin isn't non-empty bytes ({type(coin).__name__} {coin!r})")
+        raise Unexpressible(f"request {i} ({request_id!r}): stochastic with no seed in its certified body, and {why}: a seed serving "
+                            f"fills in (`served_seed.DEFAULT_SEED`) or draws is neither its body's nor derived from its id and the "
+                            f"window's verifier coin (`served_seed.derived`)")
+    return served_seed.derived(coin, request_id)
+
+
 def refusals(table: tuple[Field, ...] = READS) -> list[str]:
     """Each field of ``table`` the output accounting can't take, by name and why: declared twice; of an account other than
     `ACCOUNTS`; of no record the compiler receives; an advice record's field its encoding doesn't carry (neither committed nor
     held to x); an advice or body field declared a circuit output; a body field off a role, or with inert values off the inert
-    role; or a field read ahead that isn't advice."""
+    role; a field read ahead that isn't advice; or a seed read from anything but `SEED`, certified."""
     out, seen = [], set()
     for f in table:
         at = f"{f.record}.{f.name}"
@@ -110,6 +139,9 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
         seen.add((f.record, f.name))
         if f.account not in ACCOUNTS:
             out.append(f"{at}: account {f.account!r}, none of {', '.join(ACCOUNTS)}: a read the output accounting can't charge")
+        if ((f.record, f.name) in SEED or f.name == "seed") and ((f.record, f.name) not in SEED or f.account != "certified"):
+            out.append(f"{at}: a stochastic request's seed is certified, its body's seed or derived from its id and the window's "
+                       f"coin: never a value the server draws or fills in")
         if f.record in RECORDS:
             if f.name not in {x.name for x in fields(RECORDS[f.record])}:
                 out.append(f"{at}: not a field of the advice's {f.record} record, so neither committed nor held to x")
@@ -121,9 +153,12 @@ def refusals(table: tuple[Field, ...] = READS) -> list[str]:
             if f.role not in ROLES or bool(f.inert) != (f.role == "inert"):
                 out.append(f"{at}: role {f.role!r} with inert values {f.inert!r}, not one of {', '.join(ROLES)} (inert values only "
                            f"for an inert one)")
+        elif f.record == "window":
+            if f.name not in WINDOW or f.account != "certified":
+                out.append(f"{at}: of the window the compiler reads only its verifier coin, certified ({', '.join(WINDOW)})")
         elif f.record != "program" or f.account != "output":
-            out.append(f"{at}: of no record the compiler receives (the advice's {', '.join(RECORDS)}, a certified body, or a request "
-                       f"Program's outputs, account output)")
+            out.append(f"{at}: of no record the compiler receives (the advice's {', '.join(RECORDS)}, a certified body, the window's "
+                       f"coin, or a request Program's outputs, account output)")
         if f.ahead and f.account != "advice":
             out.append(f"{at}: read ahead of the step that outputs it (it shapes {', '.join(f.ahead)}), so it must be committed "
                        f"advice: the circuit before that step may depend on it (class G's edge does)")

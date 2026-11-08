@@ -63,6 +63,11 @@ def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
                                                                    "(it shapes T), so it must be committed advice"),
     (R.Field("body", "temperature", "advice", role="policy"), "body.temperature: a certified body's field, account 'advice'"),
     (R.Field("body", "min_p", "certified", role="policy", inert=(0,)), "body.min_p: role 'policy' with inert values (0,)"),
+    (R.Field("body", "seed", "advice", role="policy"), "body.seed: a stochastic request's seed is certified, its body's seed or "
+                                                       "derived from its id and the window's coin"),
+    (R.Field("served", "seed", "output"), "served.seed: a stochastic request's seed is certified"),
+    (R.Field("window", "salt", "certified"), "window.salt: of the window the compiler reads only its verifier coin"),
+    (R.Field("window", "coin", "advice"), "window.coin: a stochastic request's seed is certified"),
 ])
 def test_a_field_the_accounting_cant_take_is_refused_by_name(field, why):
     table = tuple(f for f in R.READS if (f.record, f.name) != (field.record, field.name)) + (field,)
