@@ -34,6 +34,7 @@ pouw = [
     "verity/ml/protocols/pouw",
     "Security/*/Pouw{,.lean}",
     "Security/Proofs/Properties/Pouw{,.lean}",
+    "Security/Definitions/Assumptions/Pouw.lean",
 ]
 # the firewall (the ZK server's release side) and the recursion
 firewall = [
@@ -75,6 +76,14 @@ benchmarks = [
 ]
 
 [private]
+# PoUW's tests and difftest vectors that run the clear audit (`benchmarks/pouw/clear`, a reference tool), H1's lanes
+# (`benchmarks/pouw/h1_lanes`) or the network certifier
+pouw_tests = [
+    "verity/core/protocols/pouw/tests/test_pouw_{audit,epoch_coins,pearl_c,pearl_c4,pearl_c_sm120,pearl_c_work,pearl_kw}.py",
+    "verity/core/protocols/pouw/tests/{epoch_coins_vectors,test_pouw_salt}.py",
+    "verity/core/protocols/pouw/lean/commit/tests/{difftest_vectors,test_pouw_commit_lean_difftest}.py",
+    "verity/core/protocols/pouw/lean/window/tests/test_known_rows.py",
+]
 protocols = [
     "verity/core/protocols/{pous,bandwidth,remote_bandwidth,certifier,network}",
     "verity/ml/protocols/{pous,certifier}",
@@ -82,7 +91,11 @@ protocols = [
     "Security/Proofs/Properties/Nci{,.lean}",
     "verity/core/primitives/identity",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
+    # vLLM's PoUB session tests run PoUB's verifier side in process
+    "integrations/vllm/tests/protocols/remote_bandwidth/{test_remote_session,test_in_place_gpu}.py",
     "integrations/vllm/tests/pipeline/test_registration_log.py",
+    # vLLM's PoUS option test runs the memory challenger's party in process
+    "integrations/vllm/tests/protocols/test_pous_option.py",
     # J10-R's binding reads PoUS's model, through Accounting's remote draw and sampler
     "Security/Proofs/Pouw/PeriodJ10R/Binding.lean",
 ]

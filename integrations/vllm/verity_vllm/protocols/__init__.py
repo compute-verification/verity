@@ -239,7 +239,7 @@ def refusals(ctx: Context) -> tuple[str, ...]:
             executors.setdefault(site, entry)
         if sites and ctx.scheme("sampled-proofs") is not None and not _has_circuit(name, scheme, out):
             out.append(f"{entry}: executes {', '.join(sites)}, and the Program has no Definition for what it computes there, so "
-                       f"sampled proofs would trace it as the stock computation (refused until the option names one: traced_as)")
+                       f"SPOT would trace it as the stock computation (refused until the option names one: traced_as)")
         if ctx.scheme("pous") is not None and name != "pous" and getattr(mod, "keeps_weight_copy", lambda s, c: False)(scheme, ctx):
             out.append(f"{entry}: keeps a weight-derived copy resident across forwards, so with pous on its GEMMs would not read "
                        f"what POUS stores (prepare its weight operands per forward from the weight it is handed)")

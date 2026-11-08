@@ -186,7 +186,7 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     assert any("TP 2" in r for r in got) and any("['zk']" in r for r in got)
     assert "pouw:ncp-v1: compiled execution" in got
     assert any("verity_vllm.protocols.not_landed_here is not on this tree" in r for r in got)
-    assert any(r.startswith("sampled-proofs:rows-sha512: sampled proofs runs in the Commit stage") for r in got)
+    assert any(r.startswith("sampled-proofs:rows-sha512: SPOT runs in the Commit stage") for r in got)
     with pytest.raises(PO.Refused) as e:
         PO.install(Model(), ctx)
     assert e.value.reasons == got
@@ -456,7 +456,7 @@ POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4")
 
 def _refused_beside_sampled_proofs(scheme):
     """The refusal of an executor whose scheme has no circuit, word for word."""
-    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so sampled proofs "
+    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so SPOT "
             f"would trace it as the stock computation (refused until the option names one: traced_as)")
 
 

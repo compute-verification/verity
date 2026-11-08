@@ -1,20 +1,10 @@
 # Each edge from a public file to one the export doesn't copy, `SOURCE -> TARGET`, that the boundary check
 # (`public_boundary.py`) allows. It only shrinks: cut an edge, then `--prune`.
 Security/Proofs/Flock/Claims/Recursion/LabelsDeployed.lean -> Security/Proofs/Properties/Nci/ReadsExact.lean
-Security/Proofs/Flock/Claims/Sampling/Path.lean -> Security/Proofs/Properties/NetworkCertifier/Check/Bytes.lean
-benchmarks/one_stage/served_composite.sh -> benchmarks/pous/served_case.sh
-benchmarks/one_stage/served_composite.sh -> verity/core/devices/memory_challenger/lean
-benchmarks/one_stage/served_composite.sh -> verity/core/protocols/pous/check
 benchmarks/one_stage/served_verdicts.py -> examples/h200/interfaces
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/network_traces/certifier_piece.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.py
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/one_stage/served_bandwidth.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/served_piece.sh
-benchmarks/one_stage/served_verdicts.sh -> benchmarks/pous/streamed_wipe/served_wipe.sh
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/prove_path.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/records_audit.py
 benchmarks/one_stage/served_verdicts.sh -> benchmarks/prove_path/run.sh
-benchmarks/one_stage/served_verdicts.sh -> tools/research/pyproject.toml
 integrations/vllm/tests/engine/ppl_oracle.py -> benchmarks/ppl
 integrations/vllm/tests/pipeline/test_serve_openai.py -> verity/core/protocols/certifier/__init__.py
 integrations/vllm/tests/program/predict/test_steps.py -> verity/core/protocols/certifier/__init__.py
@@ -51,20 +41,6 @@ verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/prim
 verity/core/protocols/pouw/lean/commit/PouwCommit/Frame.lean -> verity/core/primitives/identity/Identity/Tagged.lean
 verity/core/protocols/pouw/lean/commit/PouwCommit/Rows.lean -> verity/core/primitives/identity/Identity/Domains.lean
 verity/core/protocols/pouw/lean/window/PouwWindow/Side.lean -> verity/core/primitives/identity/Identity/Domains.lean
-verity/core/protocols/pouw/lean/window/tests/test_known_rows.py -> benchmarks/pouw/h1_lanes/run.py
-verity/core/protocols/pouw/tests/epoch_coins_vectors.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_audit.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_epoch_coins.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c4.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c_sm120.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_c_work.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_pearl_kw.py -> benchmarks/pouw/clear
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/__init__.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/active.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/certificate.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/grid.py
-verity/core/protocols/pouw/tests/test_pouw_salt.py -> verity/core/protocols/certifier/schedule.py
 verity/ml/commitments/tests/test_block_check.py -> verity/core/protocols/remote_bandwidth/__init__.py
 verity/ml/definitions/registry/b1.circuit-check.py -> tools/verity/circuit_check/src/circuit_check/targets.py
 verity/ml/definitions/registry/b1_tp2.circuit-check.py -> tools/verity/circuit_check/src/circuit_check/targets.py
