@@ -2,17 +2,17 @@
 registration of N spans, the first stage's sample S of Q replay blocks after it, the proof server's interior registration of
 S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 
-* **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, held to the verifier's own
-  window (`verifier.check`) before the first stage.
-* **The first stage**: Lean's sample of Q (``flock-verify draw``) on a development challenger's coins opened after the boundary
-  registration (`a0.challenger_draw`), held to it by `verifier.check_draw`. Until the stream takes a replay block of several
-  templates, the stages are drawn here and not by `service.Stream`'s `TwoStage`.
+* **The stream** (`stream_of`): the challenger's `service.Stream` over the toy's design (`toy.spec`), its `TwoStage` drawing
+  both stages with Lean (`Select.select`, `Select.selectSecond`) on a development challenger's coins, each opened after its
+  registration's digest.
+* **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, registered on the stream
+  (`Stream.register`, held to the challenger's own window), and the first stage's sample S of Q of them.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
-  replay block's edges, each link member's boundary port under the boundary's salts at S, its registration chained after the
-  boundary's; its window names the boundary registration and S, which the verifier holds it to (`source_of`).
+  replay block's edges, each link member's boundary port under the boundary's salts at S, registered on the stream after the
+  boundary (`Stream.register_interiors`); its window names the boundary registration and S, which the verifier holds it to
+  (`source_of`). The stream's second stage samples ``--k`` proof blocks in each (replay block, template) cell.
 * **The second stage** (`second_stage`, over any interior window of word-row members, its two records and the verifier's
-  reads): `a5.audit` of the interior on its own Lean sample (its law ``subset:K``, ``--k``, every unit by
-  default) on a development challenger's coins opened after the interior registration: a ``--zk`` session per member with
+  reads): `a5.audit` of the stream's second sample: a ``--zk`` session per member with
   sampled proof blocks, run by ``flock-circuit prove --zk`` itself as SPOT[Flock]'s proof server does (`a0.DIRECT`; under
   ``--firewall`` behind the ZK server), Lean's verdicts on each against the verifier's own ``--registered`` reads of every
   port (`toy.reads`: the link ports at the boundary record, every other at the interior record), the audit record, the
@@ -26,8 +26,9 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 Exit 0 when the run is as expected: every Lean verdict accepted with every negative refused, the record accepted or refusing
 only the sessions' reads of the interior's own ports (`own_reads_only`: one-stage's record takes reads of earlier values
 alone), or (``--altered``) refused at both link members by Lean's registered reads and nowhere else. ``--out`` holds both
-windows (``boundary/``, ``interior/``, their private files too), the first stage (``first/``), a5's records (``audit/``),
-the sessions' statements (``statements.json``) and ``summary.json``.
+windows (``boundary/``, ``interior/``, their private files too), a5's records (``audit/``), the sessions' statements
+(``statements.json``) and ``summary.json`` (both stages' registrations, laws and draws among it). The stream's outcome
+(`Stream.deliver`, `Stream.outcome`) is not taken: it needs the coins' evidence from a pinned challenger session.
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --out DIR [--altered]
@@ -36,6 +37,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import secrets
 import sys
 from pathlib import Path
 
@@ -45,10 +47,12 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 import toy as T  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S  # noqa: E402
 
 #: what Lean's registered reads refuse each link member of an ``--altered`` run by
 ALTERED = "does not open"
+#: the development challenger's layout: one family, the coins both stages' samples read
+DEV_SCHEME, DEV_FAMILY, DEV_COINS = "verity/two-stage/toy/dev-draw/v1", "draw", 8
 
 
 def composer(defn, member: T.CS.Member, name: str):
@@ -79,23 +83,25 @@ def publics(c: T.CS.Committed) -> dict[str, bytes]:
     return {m.key: c.public_body(k) for k, m in enumerate(c.window.members)}
 
 
-def first_stage(a: argparse.Namespace, bc: T.CS.Committed, brec: dict, out: Path) -> tuple[list[int] | None, dict]:
-    """The boundary registration under the verifier's own window, then Lean's sample of Q after it: -> (S, what it read)."""
-    import a0
+def stream_of(a: argparse.Namespace) -> tuple[S.Stream, CC.ChallengerCoins]:
+    """The challenger's two-stage stream over the toy (`toy.spec`, its second stage ``a.k`` proof blocks a cell), on a
+    development challenger's coins: an in-process `LiveChallenger` on its own entropy, committed before any coin opens,
+    whose coins each stage's sample reads after its registration's digest. They show the path, not an auditor's coins."""
+    ch = Ch.LiveChallenger(DEV_SCHEME, 0, [(DEV_FAMILY, DEV_COINS)], secrets.token_bytes)
+    coins = CC.ChallengerCoins(Ch.LiveRecord(ch, DEV_FAMILY))
+    stream = S.Stream(T.spec(a.n, a.q, a.k, a.session_timeout * len(T.TEMPLATES)), list(T.TEMPLATES), replay=T.REPLAY,
+                      budget=1, delta=a.delta, challenger="two-stage toy: development challenger", coins=coins)
+    return stream, coins
 
-    out.mkdir(parents=True, exist_ok=True)
-    w = bc.window
-    v = V.check(brec, w.program, w.query, w.law, T.CS.SCHEME, T.CS.expected_ports(w), leaf_layer=T.CS.leaf_layer(publics(bc)))
-    got = {"registration": R.digest(brec), "check": v.to_json()}
-    if not v.ok:
-        return None, got
-    p = a0.challenger_draw(a.lean, ["--population", str(a.n), "--k", str(a.q)], dict(w.law), a.n, R.digest(brec),
-                           out / "draw.log")
-    draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])
-    (out / "draw.json").write_text(json.dumps(draw, sort_keys=True))
-    d = V.check_draw(draw, brec, dict(w.law))
-    got.update(draw=draw["units"], draw_check=d.to_json())
-    return (sorted(int(u) for u in draw["units"]) if d.ok else None), got
+
+def drawn(stream: S.Stream, coins: CC.ChallengerCoins, registration: S.WindowCommitmentRecord) -> S.Draw:
+    """The stream's one sample of ``registration``, on the coins opened after its digest."""
+    coins.commit(bytes.fromhex(registration.digest))
+    return stream.select(registration)
+
+
+def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
+    return {"registration": registration.digest, "law": dict(draw.law), "draw": draw.units}
 
 
 def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
@@ -149,20 +155,21 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
 
 
 def second_stage(a: argparse.Namespace, sets: dict, window: T.CS.Binding, window_dir: Path, source, brec: dict, irec: dict,
-                 sample: list[int], reads: dict[str, dict], links: list[dict], out: Path,
+                 sample: list[int], second: tuple[dict, dict, dict], reads: dict[str, dict], links: list[dict], out: Path,
                  provenance: dict) -> tuple[dict, bool, dict, dict]:
     """The second stage over the interior registration ``irec`` of ``window`` (written at ``window_dir``), chained after
-    the boundary registration ``brec`` and its replay sample: `a5.audit` on its own Lean sample, each member's session
-    verified against ``reads`` (by member key, the verifier's own ``--registered`` files), the audit record, and each
-    session's statement held to round 2 under the design's ``links`` (``{"template", "port", "value"}``). -> (a5's
-    summary, its acceptance, the audit record, what the run reports)."""
+    the boundary registration ``brec`` and its replay sample: `a5.audit` of the stream's second sample ``second`` (its
+    draw, law and the interior registration's receipt), each member's session verified against ``reads`` (by member
+    key, the verifier's own ``--registered`` files), the audit record, and each session's statement held to round 2
+    under the design's ``links`` (``{"template", "port", "value"}``). -> (a5's summary, its acceptance, the audit
+    record, what the run reports)."""
     import a5
     import records_audit as RA
 
     a.coins, a.rule, a.window_root, a.compose_cache, a.transfer_gate = None, None, None, None, []
     a.tie = {"log": [brec]}
     port = a.port or RA.free_ports(a5.RANK_PORTS)
-    s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads)
+    s, ok = a5.audit(a, sets, out / "audit", window, window_dir, source, port, provenance, registered=reads, drawn=second)
     rec_file = out / "audit" / "audit.json"
     record = json.loads(rec_file.read_text()) if rec_file.exists() else {}
     got = {"audit": {x: s.get(x) for x in ("checks_before_draw", "refused", "audit", "draw", "draw_counts", "negatives",
@@ -198,7 +205,7 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(prog="audit.py", description=__doc__.splitlines()[0])
     ap.add_argument("--n", type=int, default=4, help="N: the spans serving commits")
     ap.add_argument("--q", type=int, default=2, help="Q: the replay blocks the first stage samples")
-    ap.add_argument("--k", type=int, default=None, help="the second stage's units of the interior's Q·n_rho (default all)")
+    ap.add_argument("--k", type=int, default=1, help="the second stage's proof blocks in each (replay block, template) cell")
     ap.add_argument("--m0-pythonpath", required=True)
     ap.add_argument("--bin", required=True, help="flock-circuit")
     ap.add_argument("--lean", required=True, help="flock-verify")
@@ -212,27 +219,43 @@ def main(argv=None) -> int:
     a = ap.parse_args(argv)
     out = a.out
     out.mkdir(parents=True, exist_ok=True)
+    stream, coins = stream_of(a)
+    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "k": a.k, "altered": a.altered,
+               "stream": {"digest": stream.digest, "cells": list(stream.cells), "counts": list(stream.counts)}}
+
+    def refused(stage: str, e: S.Refused) -> int:
+        summary[stage] = {"refused": list(e.verdict.codes), "detail": e.verdict.detail}
+        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
+        print("TWO " + json.dumps({f"{stage}_refused": list(e.verdict.codes)}, default=str))
+        return 1
     bc = T.boundary(T.ingress(a.n), a.q)
     brec = T.write(bc, out / "boundary", {"toy": "two-stage boundary"})
-    bd = R.digest(brec)
-    sample, first = first_stage(a, bc, brec, out / "first")
-    summary = {"n": a.n, "q": a.q, "n_rho": T.N_RHO, "altered": a.altered, "boundary": bd, "first_stage": first}
-    if sample is None:
-        (out / "summary.json").write_text(json.dumps(summary, indent=1, sort_keys=True, default=str))
-        print("TWO " + json.dumps({"first_stage_refused": first}, default=str))
-        return 1
-    k = a.k or a.q * T.N_RHO
+    try:
+        reg = stream.register(brec, T.CS.expected_ports(bc.window), leaf_layer=T.CS.leaf_layer(publics(bc)))
+        first = drawn(stream, coins, reg)
+    except S.Refused as e:
+        return refused("first_stage", e)
+    bd, sample = reg.digest, first.units
+    summary.update(boundary=bd, first_stage=stage_of(reg, first))
     replayed = None
     if a.altered:
         port = T.LK.Port.of(bc, T.boundary_ports(bc.window)["ingress"])
         replayed = port.rows_at(sample).copy()
         replayed[0, -1] ^= 1
-    it = T.interior(bc, bd, sample, {"law": "subset", "k": k}, replayed=replayed)
+    it = T.interior(bc, bd, sample, {"law": "subset", "k": len(sample) * T.N_RHO}, replayed=replayed)
     irec = T.write(it.committed, out / "interior", {"interior": True, "boundary": bd, "replay_sample": sample}, previous=bd,
                    registered=it.registered)
+    try:
+        ireg = stream.register_interiors(first, irec, T.CS.expected_ports(it.window),
+                                         leaf_layer=T.CS.leaf_layer(publics(it.committed)))
+        second = drawn(stream, coins, ireg)
+    except S.Refused as e:
+        return refused("second_stage", e)
+    summary["second_stage"] = stage_of(ireg, second)
     sets = {m.template: (composer(t, m, "two-stage-toy"), t) for m, t in zip(it.window.members, T.TEMPLATES)}
     s, ok, record, got = second_stage(a, sets, it.window, out / "interior", source_of(it.window, bd, sample), brec, irec,
-                                      sample, T.reads(brec, irec, it.window, sample), T.links(it.window), out,
+                                      sample, (second.draw, second.law, ireg.receipt),
+                                      T.reads(brec, irec, it.window, sample), T.links(it.window), out,
                                       {"toy": "two-stage interior", "altered": a.altered})
     summary.update(interior={"population": it.window.population, "law": it.window.law, "run": it.window.run,
                              "members": [{"key": m.key, "n": m.n, "base": m.base} for m in it.window.members],

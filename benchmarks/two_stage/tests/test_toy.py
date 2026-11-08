@@ -1,6 +1,7 @@
 """The two-stage toy before anything is lowered or proved (`audit.py` proves it, on a node): each template and the replay
-block are their numpy models; the replay block is its templates' instances; the interior is template-major and wired as
-the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
+block are their numpy models; the replay block is its templates' instances; the challenger's stream over the toy's design
+has its cells, its interior program and one second-stage stratum a (span, template) cell of the interior; the interior is
+template-major and wired as the replay block's edges; each link member's registered rows are the boundary record's at the replay sample's leaves, under
 its salts, and open its root there, at the boundary port the design's links name, and every other port's rows open the
 interior record's at their own leaves, as the verifier's own reads (from the two records and S alone) name them; both
 registrations pass the verifier's check; and a link
@@ -15,6 +16,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC, service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R, \
     verifier as V
 from verity.ml.circuits.evaluation.bits import evaluate_bits
@@ -65,6 +67,18 @@ def test_the_replay_block_is_its_templates_instances():
     got = P.ranges(Program(T.REPLAY), P.template_instances_query(T.TEMPLATES))
     assert [t for t, _, _ in got] == [ids[0], ids[1], ids[2], ids[2], ids[3]] and [n for *_, n in got] == [1] * T.N_RHO
     assert [sum(1 for t, _, _ in got if t == i) for i in ids] == list(T.N_T)
+
+
+def test_the_challengers_stream_has_the_toys_cells_and_its_interior_program():
+    ch = Ch.LiveChallenger("verity/two-stage/toy/test/v1", 0, [("draw", 1)], bytes)
+    stream = S.Stream(T.spec(N, Q, 1), list(T.TEMPLATES), replay=T.REPLAY, budget=1, delta=0.5, challenger="test",
+                      coins=CC.ChallengerCoins(Ch.LiveRecord(ch, "draw")))
+    assert (stream.cells, stream.counts, stream.n_rho) == (T.N_T, (1,) * len(T.N_T), T.N_RHO)
+    win = T.interior_window("00" * 64, SAMPLE)
+    assert P.program_digest(stream.interior_program(Q)) == P.program_digest(win.program)
+    law = S.second_law(list(SAMPLE), stream.cells, stream.counts)
+    assert [tuple(u) for s in law["strata"] for u in s["units"]] == [
+        (m.base + i * n, m.base + (i + 1) * n) for m, n in zip(win.members, T.N_T) for i in range(Q)]
 
 
 def test_the_interior_is_template_major_and_wired_as_the_replay_blocks_edges(run):

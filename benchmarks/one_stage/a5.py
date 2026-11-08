@@ -607,7 +607,7 @@ def stage(served: Path, mm: dict, files: tuple[dict, dict]) -> None:
 def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served: Path, source: Callable[[dict], dict], port: int,
           summary: dict, more_negatives: dict | None = None, rank: int | None = None,
           step_roots: dict[int, bytes] | None = None, registered: dict[str, dict] | None = None,
-          ports: int | None = None) -> tuple[dict, bool]:
+          ports: int | None = None, drawn: tuple[dict, dict, dict] | None = None) -> tuple[dict, bool]:
     """One window's audit: serving's window ``served`` held to the verifier's own ``mine`` (and its registration's ``window`` to
     ``source``; a window with row tables, its tables to its linked members' strings, its registered `row-table` root and
     ``step_roots``, what serving recorded before each step's coin, `tables.check_row_tables`), one Lean sample by its sampling design
@@ -619,13 +619,15 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     Definition, a member of bit rows too; a bit-row member's template with no composer is vLLM's (`vllm_template`). ``registered``: by member key, the verifier's own ``--registered`` file of a member reading an outside
     registered value, at the root its owner signed (a warden's cells), which the caller read before calling. ``ports``: how
     many ports from ``port`` the caller reserved, a sample whose sessions need more refused before any listens
-    (`port_refusal`); None for no reservation to hold them to."""
+    (`port_refusal`); None for no reservation to hold them to. ``drawn``: the sample a caller's stream drew of this
+    registration (a two-stage design's second stage of its interior registration), its draw, law and receipt, proved in
+    place of a5's own."""
     out.mkdir(parents=True, exist_ok=True)
     program, query, part, pd, n_all, law = mine.program, mine.query, mine.partition, mine.partition_digest, mine.population, mine.law
     table = mine.work_table
     if (why := plain_refusal(a, mine, registered)) is not None:
         raise SystemExit(f"--plain: {why}")
-    if not streamed(a) and law.get("law") != "subset":
+    if drawn is None and not streamed(a) and law.get("law") != "subset":
         raise SystemExit(f"a5 draws by the subset law with Lean on a development challenger's coins; the partition "
                          f"file's is {law}: draw it through a rank's service.Stream (--challenger or --coins verifier, "
                          "a TP Commit)")
@@ -745,7 +747,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
             mm["st"]["registered_file"].write_text(json.dumps(reads[mm["m"].key], sort_keys=True))
 
     # one sample over the whole population; each member serves its share under --zk
-    if not streamed(a):
+    if drawn is not None:
+        union_draw, drawn_law, receipt = (dict(x) for x in drawn)
+        (out / "receipt.json").write_text(json.dumps(receipt, indent=1, sort_keys=True))
+    elif not streamed(a):
         p = a0.challenger_draw(a.lean, ["--population", str(n_all), "--k", str(law["k"])],
                                {"law": "subset", "k": law["k"]}, n_all, R.digest(rec), out / "draw.log")
         union_draw = json.loads(next(x for x in p.stdout.splitlines() if x.startswith("DRAW ")).split(" ", 1)[1])

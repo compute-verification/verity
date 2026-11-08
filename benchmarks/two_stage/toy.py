@@ -18,6 +18,10 @@ proves them (`audit.py`).
   the leaves S and each one's path to the boundary root; every other port at the interior record, unit i reading its own
   leaf i.
 * **The verifier's reads** (`reads`): each member's ``--registered`` file from the two registration records and S alone.
+* **The challenger's design** (`spec`): `service.TwoStage` over REPLAY's instances, the boundary ports committed while
+  serving and the interior's after the first stage, each sampled proof block checked as an instance of its template, for a
+  `service.Stream` over `TEMPLATES` with ``replay=REPLAY``, whose cells are `N_T` and whose interior program is the
+  interior window's.
 """
 from __future__ import annotations
 
@@ -29,9 +33,11 @@ from pathlib import Path
 
 import numpy as np
 
+from verity.core.protocols.sampled_proofs import service as S
 from verity.core.protocols.sampled_proofs.one_stage import partition as P, registered as REG, registration as R
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, bind
+from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
 from verity.ml.windows import links as LK, rows as CS
@@ -134,6 +140,24 @@ def boundary_ports(window: CS.Binding) -> dict[str, str]:
     """The boundary record's port of each boundary row name (``ingress``, ``o0``)."""
     m, = window.members
     return {p: m.port(p) for p, _ in BOUNDARY_ROWS + BOUNDARY_OUTS}
+
+
+def spec(n: int, q: int, k: int | Mapping[str, int], proof_deadline: float = 3600.0) -> S.Spec:
+    """The challenger's two-stage design over ``n`` spans: the first stage samples ``q`` of them, the second ``k`` proof
+    blocks in each (replay block, template) cell (an int, or one count a template id), each proof by ``proof_deadline``
+    seconds after its sample."""
+    names = {}
+    for phase, w in (("serve", boundary_window(n, q)), ("interior", interior_window("00" * 64, range(q)))):
+        names |= {m.port(p): (m.schema(p), phase) for m in w.members for p in CS.port_leaves(m)}
+    public = (S.Public("population", "structure", "N, the sample's range"),
+              S.Public("window", "structure", "provenance: the two-stage toy"),
+              S.Public("leaf_layer", "structure", "the members' public bodies' digest"),
+              *(S.Public(f"{x}:{p}", "structure", f"{p}'s layout") for p in sorted(names) for x in ("leaves", "domain")))
+    return S.Spec(tuple(S.Value(p, s, phase) for p, (s, phase) in sorted(names.items())),
+                  S.TwoStage(P.template_instance_query(REPLAY), f"subset:{q}", k),
+                  S.Check(tuple(P.program_digest(Program(t)) for t in TEMPLATES), P.template_instances_query(TEMPLATES),
+                          proof_deadline=proof_deadline),
+                  public, RUN_TAG)
 
 
 def links(window: CS.Binding) -> list[dict[str, str]]:

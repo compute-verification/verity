@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# The two-stage toy's audit on a CPU node (audit.py): flock-circuit and flock-verify built from this tree, then the honest run
-# and the --altered run, each one's records under $OUT/<case> (never a circuit, a prover file or a private body).
+# The two-stage toy's audit on a CPU node (audit.py): flock-circuit, flock-verify and the sampled-proofs verifier (the
+# stream's draws) built from this tree, then the honest run and the --altered run, each one's records under $OUT/<case>
+# (never a circuit, a prover file or a private body).
 #   research run --on vy-nebius-cpu-11 --pool research --as proofs --project verity --source . --cwd clone -- \
 #     bash benchmarks/two_stage/audit.sh
 #   TWO_FLOCK_WORK=DIR keeps flock-circuit's build there across runs (default: scratch); TWO_CASES="honest" runs those only;
@@ -15,7 +16,8 @@ command -v uv >/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh >/de
 command -v lake >/dev/null || curl -sSfL https://raw.githubusercontent.com/leanprover/elan/master/elan-init.sh | sh -s -- -y --default-toolchain none >/dev/null
 uv sync --all-packages --extra torch-cpu > "$O/sync.log" 2>&1 || { tail -20 "$O/sync.log"; exit 5; }
 
-(cd verity/core/service/flock && lake build flock-verify flock-firewall) > "$O/build-lean.log" 2>&1 &
+{ (cd verity/core/service/flock && lake build flock-verify flock-firewall) \
+    && (cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier); } > "$O/build-lean.log" 2>&1 &
 LP=$!
 mkdir -p "$O/m0-build"
 FW=${TWO_FLOCK_WORK:-$W}
