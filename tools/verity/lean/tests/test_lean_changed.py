@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -968,13 +967,30 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
+def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
+    files = {"a": "build 3\naudit 2\n", "b": "check 4\naudit 4\n", "c": "# NAME N\nbuild 2   # a note\n"}
+
+    def read(ssh):
+        if ssh[-1] not in files:
+            raise OSError("exit 255: Permission denied (publickey).")
+        return files[ssh[-1]]
+
+    peers = {name: ["-i", "KEY", name] for name in ("c", "b", "a", "self")}
+    monkeypatch.setattr(LC.LEAN_SLOT.SLOT, "peers", lambda: peers)
+    monkeypatch.setattr(LC, "slots_there", read)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
-    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
+    assert calls["build"] == [], "nothing runs without a build slot"
+    [line] = [s for s in said if "nothing ran" in s]
+    assert "have `build`: a, c (`verity lean try Sec/Proofs/Flock/X.lean --on MACHINE`)" in line, line
+    assert line.endswith("; not read: self"), "a machine it can't read is named, never counted as having none"
+    assert LC.pool_machines("build", {}, read) == ([], {})
+    peers.clear()
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert any("no machine in" in s and "lean_slot.py --status" in s for s in said), "none read: how to list a machine's pools"
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):

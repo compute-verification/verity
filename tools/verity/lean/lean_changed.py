@@ -20,7 +20,8 @@ status on FILE's own lines (with `--siblings`, that copy's build then goes throu
 status it takes); when that status is an import clash (an
 import declaring what an earlier one did), the two modules it names lose their traces (`clashed`), so the next try rebuilds
 them against the outputs in place. It never runs check.py, so it reads and writes
-no record; where the node grants no `build` slot it refuses, naming how to list a machine's Lean pools. Dependencies the
+no record; where the node grants no `build` slot it refuses, naming the machines whose Lean slots file has that pool (each
+one `slot.py`'s PEERS lists, read over ssh: `pool_machines`), else how to list a machine's Lean pools. Dependencies the
 slot tree holds that no `--records` run took (not in its `links.json`) are kept as they are; without a sandbox Lake runs
 unsandboxed, and fetches dependencies the node does not keep.
 
@@ -48,7 +49,7 @@ run, whose source tree the commit's other runs share: there it is in the run's `
 record that changed is also kept as `lean-audit/record/<path>/lean-audit.json` (PKG's also as
 `lean-audit/record/lean-audit.json`), which `research queue`'s records gate reads, each with a line saying what to commit it
 over. A run marks the slot tree (`DIRTY`: its id, package and phase) while it works there and clears the mark when it ends
-without a check.py killed, so the next run knows a tree left mid-way (a run cancelled, timed out or killed for memory) and
+without a check.py killed, so the next run knows a slot tree left mid-way (a run cancelled, timed out or killed for memory) and
 says so. Before each build it `repair`s the slot tree: a module an interrupted build or a restore from Lake's cache left half-written (an output its trace lists missing, an `.olean` that is
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
 it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
@@ -100,7 +101,7 @@ one without the replay (`check.lean_fast`), and `research merge` refuses an atte
 The step tree holds the tracked files of each package whose audit misses, and those of the packages it requires by path or
 names under `proved_in`, at their paths in this repository, with each package's own `.lake`: Lake rebuilds only the modules that changed since its last build there and
 what imports them. A package's fetched dependencies are hard links to the ones the audit keeps (`--deps`, `lean_audit.WarmDeps`),
-taken under their lock while the tree has none for its manifest and toolchain; the build runs in the audit's sandbox
+taken under their lock while the step tree has none for its manifest and toolchain; the build runs in the audit's sandbox
 (`tools/verity/lean/sandbox.sh`), where they are mounted read-only, so it cannot write what the audit reads, and a concurrent audit can
 move them away without touching the links. The first build of a package here is cold; later ones are not.
 
@@ -113,7 +114,7 @@ build reaches it.
 The audit still builds and audits every package cold and decides the run: a pass here vouches for nothing. So this step fails
 only on a Lean error at a position in one of the step tree's own `.lean` files, or on a guarantee the audit fails (`judge`'s
 failures whose code is under `guarantees.` or `assumptions.`). Anything else that stops a build (no sandbox or `lake` here, dependencies this machine doesn't keep
-yet, another check holding the tree, a dependency the links lack) skips the package by name and drops its links, so the next
+yet, another check holding the step tree, a dependency the links lack) skips the package by name and drops its links, so the next
 run takes the audit's again; anything that stops a reading (a policy that can't be read, `Facts.lean` failing) skips its
 guarantees by name.
 `check.py` ends the run when this step fails, even under `--keep-going`. Delete the step tree to start it over.
@@ -130,12 +131,14 @@ import json
 import os
 import posixpath
 import re
+import shlex
 import shutil
 import subprocess
 import sys
 import tempfile
 import time
 import tomllib
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -1243,8 +1246,47 @@ def dev_records(pkg: str, todo: list[str], update: bool, moved: Path | None, out
     return finish(pkg, outcome, (rc or 1) if outcome == FAILED else 0, out, update, "dev-cache", records, log, passes)
 
 
-#: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot
+#: what lists a machine's Lean pools, which `--try` names when it is refused a `build` slot and no machine's could be read
 SLOTS_STATUS = "python3 tools/verity/check/lean_slot.py --status"
+
+
+def slots_there(ssh: list[str]) -> str:
+    """The Lean slots file (LEAN_SLOT.SLOTS, at one path on every machine) of the machine ``ssh`` reaches (its PEERS line's ssh
+    options and destination), as `slot.py` reaches a twin; OSError or a SubprocessError when it can't be read."""
+    r = subprocess.run(["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", *ssh, f"cat {shlex.quote(str(LEAN_SLOT.SLOTS))}"],
+                       capture_output=True, text=True, timeout=LEAN_SLOT.SLOT.TWIN_SSH_S)
+    if r.returncode:
+        raise OSError(f"exit {r.returncode}: {(r.stderr.strip().splitlines() or ['no output'])[-1]}")
+    return r.stdout
+
+
+def pool_machines(pool: str, peers: dict[str, list[str]] | None = None, read=None) -> tuple[list[str], dict[str, str]]:
+    """The machines `slot.py`'s PEERS lists whose Lean slots file grants ``pool`` a slot, each read at once with ``read``
+    (`slots_there`), and why each it couldn't read wasn't (this machine's own line among them, where its key doesn't reach
+    itself)."""
+    peers = LEAN_SLOT.SLOT.peers() if peers is None else peers
+    read = read or slots_there
+
+    def one(name: str) -> tuple[int, str | None]:
+        try:
+            return LEAN_SLOT.parse(read(peers[name])).get(pool, 0), None
+        except (OSError, subprocess.SubprocessError) as e:
+            return 0, str(e) or type(e).__name__
+
+    with ThreadPoolExecutor(max_workers=max(1, len(peers))) as ex:
+        got = dict(zip(peers, ex.map(one, peers)))
+    return sorted(n for n, (k, _) in got.items() if k > 0), {n: why for n, (_, why) in sorted(got.items()) if why}
+
+
+def pool_hint(pool: str, file: str) -> str:
+    """Where ``file``'s `--try` can take a slot of ``pool``: the machines `pool_machines` finds, else how to list a machine's
+    pools."""
+    have, unread = pool_machines(pool)
+    if have:
+        return (f"the machines whose Lean slots have `{pool}`: {', '.join(have)} (`verity lean try {file} --on MACHINE`)"
+                + (f"; not read: {', '.join(unread)}" if unread else ""))
+    return (f"no machine in {LEAN_SLOT.SLOT.PEERS} has `{pool}`" + (f" that could be read ({len(unread)} not)" if unread else "")
+            + f"; `{SLOTS_STATUS}` on a machine lists its Lean pools")
 
 
 def owner(file: str, pkgs: list[str]) -> str | None:
@@ -1293,7 +1335,7 @@ def try_file(file: str, deps: Path, tree: Path | None = None, log=print, sibling
     try:
         slot = LEAN_SLOT.hold(FAST_POOL, or_any=False)
     except LEAN_SLOT.Refused as e:
-        log(f"lean-try: no `{FAST_POOL}` Lean slot here ({e}): nothing ran; `{SLOTS_STATUS}` on a machine lists its Lean pools")
+        log(f"lean-try: no `{FAST_POOL}` Lean slot here ({e}): nothing ran; {pool_hint(FAST_POOL, file)}")
         return 2
     try:
         tree = tree or records_tree()
