@@ -39,8 +39,8 @@ SERVED_EXTRAS = [
     ("fusedfront", "the fused blocks' front overlap at the kernels' split (device 0.55 of the session)",
      "modeled, unmeasured under contention", "@kernels"),
     ("card", "the quant K6144 at its card's 0.233 s a block (load)", "superseded", "HASHCUT"),
-    ("host+tmplgoal", "host + tmplgoal", "assumed; goal", ""),
-    ("host+hash4+tmplgoal", "host + hash4 + tmplgoal", "assumed; goal", ""),
+    ("host+tmplgoal", "host + tmplgoal", "assumed; goal", "HASHCUT, VERIFYFAST-C"),
+    ("host+hash4+tmplgoal", "host + hash4 + tmplgoal", "assumed; goal", "HASHCUT, VERIFYFAST-C"),
 ]
 #: the memory-checked KV pool, priced on the last step: proved every window (the design), or only on the windows the
 #: plan samples
