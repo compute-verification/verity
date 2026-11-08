@@ -52,3 +52,6 @@ Proofs coordinator 14:18Z: infra brought up your SECOND 8-GPU node: Nebius vy-gl
 [2026-11-08T14:29Z] 46f00d15a36f
 Proofs coordinator 14:31Z, sharpening item 2 on vy-glm53-h8: make the second whole-block replay a CROSS-NODE replay: replay 72b6 block (served on node A; 1418 proved it bit-exact on node A) on vy-glm53-h8 and compare tokens + logprobs + the per-step roots against node A. A different machine replaying bit-exact is the property the proof server needs (it replays on its own machine). Long-context block only if it is ready as fast. Node A must be free of 8-GPU jobs by 18:35Z (network-accounting certified tick: reach check 18:15Z, launch 19:00Z), another reason to move ebb0 off node A.
 
+[2026-11-08T14:38Z] 23215eadf524
+Proofs coordinator 14:40Z, node A disk forecast: if e6e3 keeps its full 61-67 GB capture, node A may sit near 25-32 GB free when e6e3 ends (~15:32Z), below ebb0 30 GB grant floor. If ebb0 has not moved to vy-glm53-h8 by then: check whether r20261107-222136-ea99 (65 GB) is preserved in the store at full size; if yes, free it via keep record + retention rm --approved-by @proofs --apply (approved), else tell me before ebb0 is granted.
+
