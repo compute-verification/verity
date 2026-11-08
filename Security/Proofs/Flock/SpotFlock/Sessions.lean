@@ -111,7 +111,7 @@ theorem sessStep_eval (H : Msg → Msg) (t : ℕ) (xS : Msg) (as : List Msg) (cs
       (markOut [] ((FlockDeploy.next true xS (as.drop (off h t)) (cs.drop (off h t))).eval H).1,
         ((FlockDeploy.next true xS (as.drop (off h t)) (cs.drop (off h t))).eval H).2) := by
   unfold sessStep
-  rw [if_neg]
+  rw [ite_eq_right]
   · rw [OC.eval_bind]
     exact Prod.ext rfl (List.append_nil _)
   · simp only [List.any_eq_true, List.mem_range, Bool.and_eq_true, decide_eq_true_eq, not_exists, not_and]
@@ -374,15 +374,15 @@ noncomputable def seq (rel : _root_.Flock.Readable.Parsed → _root_.Flock.Reada
     have hok : stmtOk h x a₁ a₂ c₀ c₁ = true := stmtOk_of_next h (a₀ := a₀) (c₂ := c₂) (m := m) hm
     have hsess := (stmtOk_at h hok hidx).2
     unfold session
-    rw [htake, hdrop, if_pos ⟨hle, hall⟩]
+    rw [htake, hdrop, ite_eq_left ⟨hle, hall⟩]
     change (if sessionOk h (templateOf h.ms u) (stmtAt h a₂ (templateOf h.ms u)) = true then _ else _) = _
-    rw [if_pos hsess]
+    rw [ite_eq_left hsess]
     rfl
   session_refused x u ms a hlen hms := by
     change ms.length < off h (templateOf h.ms u) at hlen
     change session h u ⟨ms ++ [(a, .rej)], .rej⟩ = some (h.xS₀ (templateOf h.ms u), refusedSeen)
     unfold session
-    rw [if_neg]
+    rw [ite_eq_right]
     rintro ⟨hle, hall⟩
     simp only [List.length_append, List.length_singleton] at hle
     have he : off h (templateOf h.ms u) = (ms ++ [(a, Out.rej)]).length := by

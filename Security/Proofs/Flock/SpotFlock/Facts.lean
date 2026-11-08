@@ -20,8 +20,9 @@ public import Proofs.Flock.Bridge.Members
 * `regMatchesTwo`: the registration is the statement's two-stage design (`RegMatchesTwo` at `SpotFlock.code h`), since
   the design evaluates only where the replay layout fits the members' files, whose replay partition has the layout's
   shape (`shape_filesReplay`) and whose cells are the registration's blocks (`Flock.Bridge.Members.cell_filesReplay`).
-* `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and the reference statement's
-  shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statement is in scope (`Held.xS₀_ok`).
+* `sessionsIn`: every session is in Flock's masked scope with at most the code's tables and its template's reference
+  statement's shapes (`SessionsIn`'s clauses at `SpotFlock.code h`), since the reference statements are in scope
+  (`Held.xS₀_ok`).
 -/
 
 @[expose] public section
@@ -279,21 +280,24 @@ theorem two_eq {s : AuditStatement} {d : Design.Two} (hd : two h s = some d) :
         exact ⟨l, ok_of_toOption hl, by simp [hr], rfl, hc.1, hc.2⟩
       · cases hd
 
-/-- **The statement round 2 takes is in scope**: it parses, its partition and design evaluate, and so the two-stage
+/-- **The statement round 2 checks is in scope**: it parses, its partition and design evaluate, and so the two-stage
 scope holds. -/
-theorem stmtOk_scope {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+theorem stmtOk_scope {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) :
     ∃ s Pt d, parse h x = some s ∧ partition h s = some Pt ∧ two h s = some d ∧ InScopeTwo Pt d s := by
   unfold stmtOk at hok
   cases hs : parse h x with
   | none => simp [hs] at hok
   | some s =>
-    simp only [hs, Bool.and_eq_true] at hok
-    obtain ⟨⟨⟨⟨hP, hd⟩, -⟩, -⟩, -⟩ := hok
-    obtain ⟨Pt, hPt⟩ := Option.isSome_iff_exists.1 hP
-    obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hd
-    obtain rfl := partition_eq h hPt
-    obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h hd
-    exact ⟨s, _, d, by simp [hs], hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
+    cases hx : stmtsOf m₂ with
+    | none => simp [hs, hx] at hok
+    | some xs =>
+      simp only [hs, hx, Bool.and_eq_true] at hok
+      obtain ⟨⟨⟨hP, hd⟩, -⟩, -⟩ := hok
+      obtain ⟨Pt, hPt⟩ := Option.isSome_iff_exists.1 hP
+      obtain ⟨d, hd⟩ := Option.isSome_iff_exists.1 hd
+      obtain rfl := partition_eq h hPt
+      obtain ⟨l, -, -, -, hsc, -⟩ := two_eq h hd
+      exact ⟨s, _, d, rfl, hPt, hd, scopeOk_sound hsc s (parse_prog h hs)⟩
 
 /-- **Refuses at two stages** at SPOT[Flock]'s code (`Code.RefusesTwo`): an accepting run passed round 2, whose check
 (`stmtOk`) puts its statement in the two-stage scope. -/
@@ -303,10 +307,10 @@ theorem refusesTwo (H : Msg → Msg) :
   intro x Ω P ω r hacc
   obtain ⟨as, cs, has, hcs, hne⟩ :=
     run_acc_at H P (code h).V x ω r 3 (by omega) (fun as cs hl h3 => next_short h H x as cs hl h3) hacc
-  obtain ⟨a₀, m₁, xS, rfl⟩ := List.length_eq_three.1 has
+  obtain ⟨a₀, m₁, m₂, rfl⟩ := List.length_eq_three.1 has
   obtain ⟨c₀, c₁, c₂, rfl⟩ := List.length_eq_three.1 hcs
-  change ((next h x [a₀, m₁, xS] [c₀, c₁, c₂]).eval H).1 ≠ .rej at hne
-  cases hok : stmtOk h x m₁ xS c₀ c₁ with
+  change ((next h x [a₀, m₁, m₂] [c₀, c₁, c₂]).eval H).1 ≠ .rej at hne
+  cases hok : stmtOk h x m₁ m₂ c₀ c₁ with
   | false =>
     unfold next at hne
     simp [OC.eval, hok] at hne
@@ -371,18 +375,37 @@ theorem regMatchesTwo :
 
 /-! ## The sessions are in scope -/
 
+theorem le_foldr_max {l : List ℕ} {a : ℕ} (ha : a ∈ l) : a ≤ l.foldr max 0 := by
+  induction l with
+  | nil => simp at ha
+  | cons b l ih =>
+    rw [List.mem_cons] at ha
+    rw [List.foldr_cons]
+    rcases ha with rfl | ha
+    · exact le_max_left _ _
+    · exact (ih ha).trans (le_max_right _ _)
+
+theorem templateOf_le (ms : Spot.Bits.Members) (u : ℕ) : templateOf ms u ≤ ms.length := by
+  unfold templateOf
+  cases hf : (List.range ms.length).find? (fun t => decide (u < Properties.Spot.unitBase ms (t + 1))) with
+  | none => simp
+  | some t =>
+    have := List.mem_range.1 (List.mem_of_find?_eq_some hf)
+    simp only [Option.getD_some]
+    omega
+
 /-- **Every session is in Flock's masked scope** at SPOT[Flock]'s code (`SessionsIn`'s clauses, `FlockDeploy.ZkIn`
-unfolded): with at most the code's tables and the reference statement's shapes, the reference statement being in
-scope (`Held.xS₀_ok`). -/
+unfolded): with at most the code's tables and its template's reference statement's shapes, the reference statements
+being in scope (`Held.xS₀_ok`). -/
 theorem sessionsIn :
     ∀ x u v xS vS, (code h).session x u v = some (xS, vS) →
       (∃ s spec sts, FlockDeploy.setupOf true xS = some (s, spec, sts) ∧ 0 < sts.size ∧ sts.size ≤ 200 ∧
         spec.points ≤ 2 ∧
         (∀ st ∈ sts.toList, 25 ≤ st.m ∧ st.m ≤ 35 ∧ st.c.kLog ≤ 27 ∧ st.regions.size ≤ 1024 ∧ spec.mPts ≤ 64) ∧
-        sts.size ≤ (code h).tables x) ∧ shapeOf xS = shapeOf h.xS₀ := by
+        sts.size ≤ (code h).tables x) ∧ shapeOf xS = shapeOf (h.xS₀ (templateOf h.ms u)) := by
   intro x u v xS vS hv
-  have hok : zkOk xS = true ∧ shapeOf xS = shapeOf h.xS₀ := by
-    change session h v = some (xS, vS) at hv
+  have hok : zkOk xS = true ∧ shapeOf xS = shapeOf (h.xS₀ (templateOf h.ms u)) := by
+    change session h u v = some (xS, vS) at hv
     unfold session at hv
     split at hv
     · split at hv
@@ -391,15 +414,18 @@ theorem sessionsIn :
         simp only [sessionOk, Bool.and_eq_true, beq_iff_eq] at hs
         exact hs.1.1
       · cases hv
-        exact ⟨h.xS₀_ok, rfl⟩
+        exact ⟨h.xS₀_ok _, rfl⟩
     · cases hv
-      exact ⟨h.xS₀_ok, rfl⟩
+      exact ⟨h.xS₀_ok _, rfl⟩
   obtain ⟨s, spec, sts, hset, h1, h2, h3, h4⟩ := zkOk_sound hok.1
   refine ⟨⟨s, spec, sts, hset, h1, h2, h3, h4, ?_⟩, hok.2⟩
-  change sts.size ≤ (shapeOf h.xS₀).length
-  rw [← hok.2]
-  unfold shapeOf
-  rw [hset]
-  simp
+  have hlen : sts.size = (shapeOf (h.xS₀ (templateOf h.ms u))).length := by
+    rw [← hok.2]
+    unfold shapeOf
+    rw [hset]
+    simp
+  rw [hlen]
+  exact le_foldr_max (List.mem_map.2
+    ⟨templateOf h.ms u, List.mem_range.2 (Nat.lt_succ_of_le (templateOf_le h.ms u)), rfl⟩)
 
 end SpotFlock

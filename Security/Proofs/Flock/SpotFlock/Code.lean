@@ -401,7 +401,7 @@ noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2
 
 /-- **The code before its samples**: the verifier, the statement and its evaluation, each unit's session on its
 template's session's rounds, one session per template, its tables the most any template's reference statement has,
-its `N₀` template 0's, and the commitment's layout and reference prover's framing `frame`'s. -/
+the template past the last (a unit past the members') included, its `N₀` template 0's, and the commitment's layout and reference prover's framing `frame`'s. -/
 noncomputable def base : Code :=
   { h.frame with
     V := V h
@@ -414,7 +414,7 @@ noncomputable def base : Code :=
       off h (templateOf h.ms u) ≤ t.val ∧ t.val < off h (templateOf h.ms u) + k₀ h (templateOf h.ms u)
     session := fun _ u v => session h u v
     sessions := fun _ => h.ms.length
-    tables := fun _ => ((List.range h.ms.length).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
+    tables := fun _ => ((List.range (h.ms.length + 1)).map fun t => (shapeOf (h.xS₀ t)).length).foldr max 0
     innerN₀ := fun _ => n₀ h 0 }
 
 /-- The registration the samples read, at a statement that decodes. -/
