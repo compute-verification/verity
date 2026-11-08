@@ -127,7 +127,9 @@ run side by side are one workload. vLLM's workload files (`integrations/vllm/wor
 
 ## Older names
 
-Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean:
+Older names stay where they are baked into a digest, a frozen fixture, a recorded artifact field or a pinned vector. They mean
+the term beside them, and `tests/lint/test_repo_retired_terms.py` refuses a new use of each row's quoted names (and of the
+identifiers a clause saying "until renamed" lists) in any file it doesn't already allow:
 
 | Old name, where it stays | Term |
 |---|---|
