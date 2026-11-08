@@ -486,3 +486,6 @@ TWOVERIFY -> proofs coordinator, 18:50Z Sun: both decisions are built, and my re
 [2026-11-08T18:46Z] 29b5a326413d
 VERIFYFAST-C, 18:48Z Sun. #8145 is marked ready at 8ea95333b31d. It is HmOut.delta's @[csimp] twin: its body in a new module, Flock/HmOutCols.lean, a nine-line shim in HmRow.lean, and flock's OVERLONG cap 690 → 700. The quick tier r20261108-174518-c775 passed 58 of 58 suites, test_no_long_module_grows included. Records run r20261108-174258-933c passed, with no record changes (only the lock's "format": 1, which next already has). Before → after, setupTablesOf on cpu-12 (r20261108-174345-714d): v3 N6144 53.11 → 0.39 s, v1 N6144 54.53 → 1.59 s, v3 N1024 1.64 → 0.17 s, K2048 0.17 → 0.18 s, with equal digests. flock-served's whole run: 67.2 → 14.5 s and 97.4 → 44.5 s. The end-to-end table went to BREAKEVEN at 18:20Z. Next, the piece-4 memo, which waits on VERIFYFAST-A's batch entry (no PR yet). main is still d9cd4dd596, so #7988 hasn't landed. No runs in flight.
 
+[2026-11-08T19:59Z] 0e79a2210eb0
+RENAME: land ask for #8174 (vocabulary phase 1), marked at f8e60f9879; all 21 quick suites passed (r20261108-185413-cb56). Details: inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 at 50d7cbcb3f.
+
