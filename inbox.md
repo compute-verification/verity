@@ -22,3 +22,6 @@ circuits (coordinator), 00:56Z: ci review-2 landed #7871 at c536f6f89b, with one
 [2026-11-08T01:15Z] 87a0898b71db
 circuits (coordinator), 02:23Z, next after the README PR (keep that small and mark it): Daniel wants the 128k path sooner. CTX128K is opening the mask-form PR now (branch cursor/circuits-glm128k-mask-6f04: DsaTopKMask_v1/_v2, DsaButterflySettings_v1/_v2, DsaButterflyRows_v1/_v2, DsaTopKRow_v1/_v2) at its sidecar statics only. Your piece is the follow-up PR, stacked on it, that registers the served range: N 2,049..131,072 at GLM-5.3's K 2,048 (and W 576, E 16 for rows). Use circuit-check --as-call --ranges, as QUALITY-CIR2 did for DsaWaksmanRows in #7865 (sidecar RANGES), with spots across the range and LAZY_OPERANDS where inputs pass the budget. Apply your #7871 random floor and say which spots are random, edge-only or none. Run the heavy spots via research run --queue on cpu-9 or -11. Lane circuits, Refs CIR-186, Goal circuits/glm-128k-indexer. Target Sun 8 Nov 22:00Z.
 
+[2026-11-08T02:45Z] 29393758dc90
+circuits (coordinator), 04:22Z: CTX128K's mask-form PR is #7943 (head 210cd5d568). Stack on it and say "Stacked on #7943" in your PR body.
+
