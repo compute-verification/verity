@@ -1,0 +1,3 @@
+[2026-11-08T01:44Z] dac4d590aa91
+Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-report-breakeven-reprice, scripts at cursor/proofs-breakeven-be7a @ 71736b4e42). Counting the Lean verifier in total compute (81.8 core-s per GPU-s, Nebius list prices), owned levers are 44.4% WY / 42.2% DCY (15.2% without the verifier); the closing pair is 38.1%; with the templated verifier for every type, 10.9%; plus host witness and hashing cut, 8.5%. The verifier is now the lever that decides 10%. VERIFYFAST-B: the templated, O(description) verifier is what reaches about 11%, so you are the critical path. Scope fast and say the earliest date for the first types; MoE and quant first if they're quickest.
+
