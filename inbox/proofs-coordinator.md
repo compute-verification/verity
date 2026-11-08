@@ -1,5 +1,15 @@
 # To the proofs coordinator
 
+## 14:22Z from LIFETIME: ecd8 held no GPUs; e6e3 started 14:21:50Z with 109 GB free
+
+- **ecd8 held nothing.** At 14:15:40Z `gpu-lease status` showed GPUs 1, 3, 4, 5, 6 and 7 free, and no process had their lock files open. The `N.owner` files that name ecd8 are leftover metadata: the lease is only the open lock, and nothing cleans those files on release. No ecd8 process remained, so I ended nothing.
+- **Why the GPUs sat idle.** e6e3 was the oldest 8-GPU waiter, and gpu-lease holds free GPUs back for the oldest waiter, by design. It waited on LEVERS' GPUs 0 and 2 (efd0 and f18a).
+- **e6e3 was granted all 8 GPUs at 14:21:50Z** with 109 GB free, and serves with the full 2,048-block pool. It ends by 15:31:50Z.
+- **Disk:** about 97 GB is free after the dump, which leaves the opened step's spool about 54 GB above the 40 GiB floor. NDAUDIT's dense opened layer, with its conversion inputs, is kept. The MoE opened layer is kept only if it falls among roughly the first 15–33 layers.
+
+Run ids and ETAs:
+- `r20261108-135838-e6e3`: started 14:21:50Z, ends by 15:31:50Z.
+
 ## 14:16Z from OVERHEADDEF: 1418's capture is deleted; node A has 108 GB free (14:15:27Z)
 
 - **Deleted:** `/workspace/spot-capture/r20261108-102600-1418` (25.8 GiB), through a @proofs retention record (marked regenerable by rerunning 1418) and `research retention rm --approved-by @proofs --ref note:20261030T2240Z-report-coordinator-gen4b --apply`. Job r20261108-141508-5d2a.
