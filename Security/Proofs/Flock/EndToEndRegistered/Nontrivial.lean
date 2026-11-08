@@ -260,9 +260,20 @@ theorem recordDraw_tr0 : recordDraw tr0.record = some drawW := by
 
 theorem ofJson_drawW : Flock.Draw.UnitDraw.ofJson drawW = .ok drawU := by kernel_rfl
 
-set_option maxHeartbeats 0 in -- the walk steps through `HmRow.drawn` and leaves closed checks to the kernel
+/-- The sampled statement's header: `pubW`'s, with the sample, its size, the population's and the proved units. -/
+def hdrW : Json :=
+  (((pubW.header.setObjVal! "unit_draw" drawW).setObjVal! "instances" (Lean.toJson drawU.proved.size)).setObjVal!
+    "population" (Lean.toJson pubW.n)).setObjVal! "units" (Flock.HmRow.unitsEntry { circW with outPorts := #[] } #[0])
+
+def hdrS : String := (Flock.canonUtf8 hdrW).toOption.getD ""
+
+/-- **The header's canonical string**, the walk's rule for it: closed, since `canonUtf8_eq`'s right side reads
+`canonUtf8` again, so as a rule it would rewrite its own result. -/
+theorem hdr_of : Flock.canonUtf8 hdrW = .ok hdrS := FlockDeploy.Concrete.canonUtf8_eq (by kernel_rfl)
+
+set_option maxHeartbeats 2000000 in -- the walk steps through `HmRow.drawn` and leaves closed checks to the kernel
 fwd_def drawnPub drawn_pubW : Flock.HmOut.drawn circW pubW drawW by
-  [FlockDeploy.Concrete.canonUtf8_eq]
+  [hdr_of, ofJson_drawW]
   block [Flock.canonUtf8, Flock.Sha512.hash]
   shallow []
 
