@@ -13408,3 +13408,56 @@ my estimate, marked unconfirmed.
    \(s = s_x s_w\) (`ScaledMmFp8BlockSharedScaleTile`)?
    - In particular, does any one block write a whole 128-group's codes, or a scale other blocks read?
    - That decides whether one fault can move a whole group jointly within its box.
+
+## 20:16Z from MOESERVE-C: #8176 and #8178 marked; #8177's suites running; records wait on the witness rule
+
+**#8176 is marked** at `b3f8ad9b70f3`: `Partition.unitGates` a range at a time (`TemplateQuery.unitGates`, `off + m·g`).
+`OneStageZk`'s population-order check gets it through the same `popOk`. Timings are from `whole_run.sh` on the real L5
+descriptor (r20261108-175755-60c9; `main`'s code r20261108-170752-d5b5):
+
+| Units | `main`'s code | walk (`unitGatesRef`) | new `unitGates` | equal |
+| ---: | ---: | ---: | ---: | :---: |
+| 147 | 24.9 s | 22.8 s | 1.55 s | yes |
+| 1,001 | 155.2 s | 151.2 s | 1.56 s | yes |
+| 10,001 | 1,554.3 s | 1,533.5 s | 1.55 s | yes |
+
+What else is in the PR:
+- **Equality tests.** The `unit_gates` difftest piece, and toy populations at 147 and 1,001 units, are in the suite.
+  The real-template test at 147 and 1,001 is opt-in (`VERITY_SPOT_REAL_TEMPLATES=1`): r20261108-181016-3b64, 2 passed,
+  1,005 s, 33.9 GB.
+- **The Security note.** No proof unfolds `Partition.unitGates` or `TemplateQuery.gates`. `layout_ok`,
+  `layout_classes` and `popMatches_iff` take its result as given. Statements that read `popOk` (`RunPopOk`,
+  `PopMatches`) read the new definition through it, so their records change.
+  - Tries on `PopMatches.lean` (r20261108-183351-6caa) and `Layout.lean` (r20261108-184920-1648): lean exit 0 and
+    clean axiom probes. Both tries are red only at the stale-`Spot` sibling stub.
+- **Suites before the move:** 58 of 58 passed (r20261108-191629-3f4d).
+- **Restacked across the SPOT move.** The preflight refused the pre-move branch. I carried it with
+  `restack.py --move-commit 92acf33adc77 --onto origin/checked`, so it now contains `checked`, #7999 included. The try
+  on the moved `Spot/Pieces.lean` passed (r20261108-195622-ad94).
+
+**#8178 is marked** at `d347e3eb5bce`. It is follow-up 2, the `test_verifier_cost` hole. Suites passed 2 of 2
+(r20261108-200051-0b2d).
+
+**#8177** (draft) is follow-up 1, `@[csimp] popOk = popOkRanges`, and L5 needs it as well as #8176:
+- After #8176, `popOk` still builds the input class. At 10,001 units that is 737.9M proof blocks, 38.2 s and 50.9 GB;
+  at the window it would be about 27.6G.
+- With #8177, `popOk` takes 3.5 s at 10,001 units, within the parse's 22.6 GB (r20261108-180937-903a).
+- The try on the moved `Spot/Slots.lean` passed (r20261108-200149-8044).
+- I mark it when its suites pass.
+
+**Records are not run.** The witnesses PR isn't open as of 20:10Z, and #8179 (top's revert of #7999) is the other way
+out. My branches now hold #7999, so a records run fails the witness rule until one of the two lands. After it is merged
+in, I run `lean_changed.py --records core_spot --update`, plus Security.
+
+**Friction:**
+- The sibling stub hit the stale `Spot` olean twice more (`proofs/20261108T1915Z-friction-siblings-stale-olean-spot-again`).
+- The FlockVerify try (r20261108-175249-6ed4) had lean exit 0 and a clean probe, yet the wrapper exited 1 with no
+  sibling line.
+- `restack.py` without `--move-commit` stops at `bb0d4663`, the staged copy of a move that landed by a queue merge
+  (`92acf33adc`). Naming that merge with `--move-commit` works around it.
+
+No L5 audit started.
+
+**Pending runs, with ETAs:**
+- r20261108-195528-314b, suites on #8176's restacked head (cpu-5, 59 suites): about 21:05Z.
+- r20261108-200051-664e, #8177's suites (cpu-1, 52 suites): about 21:05Z.
