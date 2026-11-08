@@ -150,7 +150,7 @@ def test_dsa_launch_batch_equals_the_traced_build(wrapper, shape, digest, tmp_pa
     (GLM53_S8, "step", {"M": 8, "pos0": 8},
      "eeed9ef4e8974d1a9f00fd133423624192ddb2d760d4d5d1da9dc9c73e45f215f274c5d00ce1b5f2a216a9fc2c08c95c1bd7ad5e7a8b37c19510eb68cfb69662"),
     (GLM53_S8, "request", {"LP": 25, "T": 6},
-     "3dbdcba648e1177ea694fd6cbd4d772ffd9b12c539180cd0811d92d87f05fab6c84738c00b1b3cb90472721214768ff3be13b0231fa0ebbb0405a27442d68f2d"),
+     "7d9521da26e2e86634bdc8e86c679fc44d2744c7d17553f5ad4b93e4fe8068ceceba24430c94575d50d979f42f3d05517c5ff4643b212635ebba25ecdfea40f5"),
 ])
 def test_dsa_stochastic_equals_the_traced_build(row, wrapper, shape, digest, tmp_path):
     """GLM-5.3's seeded top-p rows (t0.8 p0.95) at rank 0: the B1 step as the Build traced it, and the B8 step

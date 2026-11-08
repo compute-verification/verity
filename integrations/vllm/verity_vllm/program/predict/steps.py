@@ -114,7 +114,7 @@ from verity.ml.circuits.defs import bind
 from verity_vllm.engine.profiles.engine_classes import CLASS_G, CLASS_G_EXECUTIONS, CLASS_G_LIMITS
 from verity_vllm.pipeline import window_advice as WA
 from verity_vllm.program import prefix_plan as PP
-from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
 from verity_vllm.program.prune import dead_units
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.definitions.registry.topp_geometry import registered_splits
@@ -266,12 +266,13 @@ def _number(x: Any) -> bool:
     return type(x) in (int, float) and math.isfinite(x)
 
 
-def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "", salt: bytes | None = None,
+def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str, salt: bytes | None = None,
               carried: bool = False) -> tuple[dict, int | None]:
     """Request `i`'s sampling policy as φ.sampling takes it, and its seed Input's value (None when greedy), from the parameters its
     body carries (`SamplingParams` names), refused where its Program wouldn't be the Build's. Top-p takes the registered split
     count S = registered_splits(num_SMs), the S serving pins every top-p launch to (`engine.topp_pin`), at any top_p. The seed is
-    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's seed ``salt`` (`reads.seed_of`), else refused."""
+    `reads.SEED`'s, the body's or derived from ``request_id`` and the window's seed ``salt`` (`reads.seed_of`), else refused, and
+    the policy's ``rid`` is the id's length, which its Program's seed rule reads (`seed_rule.rid_of`)."""
     if not isinstance(sampling, Mapping) or any(type(k) is not str for k in sampling):
         raise Unexpressible(f"request {i}: its sampling parameters aren't an object of named values")
     s = dict(sampling)
@@ -292,7 +293,7 @@ def policy_of(i: int, sampling: Any, num_sms: int | None, *, request_id: str = "
     if t == 0:
         return {"kind": "greedy"}, None
     return ({"kind": "stochastic", "temperature": float(t), "top_p": float(p), "top_k": 0, "seeded": True,
-             "splits": registered_splits(int(num_sms))}, reads.seed_of(i, request_id, seed, salt, carried))
+             "splits": registered_splits(int(num_sms)), "rid": SEED.rid_of(request_id)}, reads.seed_of(i, request_id, seed, salt, carried))
 
 
 def advice_of(registered: Registered, advice: Any) -> Any:
@@ -729,7 +730,7 @@ def plan_steps(registered: Registered, advice: Any, ingress: Any, *, partial: bo
 
 
 def _label(policy: dict) -> str:
-    return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}"
+    return "greedy" if policy["kind"] == "greedy" else f"t{policy['temperature']:g}-p{policy['top_p']:g}" + (f"-r{policy['rid']}" if "rid" in policy else "")
 
 
 NO_EDGE_TRACE = "no trace: the Build's request wrapper returns its samples alone, never a window's edge rows"
@@ -767,7 +768,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
             continue
         seen.add(d)
         pol, ctx = u["policy"], {"batch": u.get("launch"), **({"chunks": list(u["chunks"])} if u.get("chunks") else {})}
-        sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k")}, sort_keys=True)
+        sampling = "greedy" if pol["kind"] == "greedy" else json.dumps({k: pol[k] for k in ("temperature", "top_p", "top_k", "rid") if k in pol}, sort_keys=True)
         cmds.append(["verity-vllm", "build", "--out", os.path.join(root, d), "--wrapper", "request", "--LP", str(u["LP"]), "--T", str(u["T"]),
                      *(["--cached", str(u["C"])] if u.get("C") else []),
                      *(["--launch-context", json.dumps(ctx, separators=(",", ":"))] if u.get("launch") else []),

@@ -52,7 +52,7 @@ from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refu
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
-from verity_vllm.program.frontend import stop_rule as SR
+from verity_vllm.program.frontend import seed_rule as SEED, stop_rule as SR
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
@@ -826,7 +826,8 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
-    SR.in_derive(ctx, outs, out_node)    # the length rule under the config's `stop`: the last Call and check
+    SEED.in_derive(ctx, out_node)        # a stochastic request's seed rule (its `seed_rule.PARAMS`), then the length rule under
+    SR.in_derive(ctx, outs, out_node)    # the config's `stop`: the Program's last Calls and checks
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))
