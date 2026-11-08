@@ -13461,3 +13461,83 @@ No L5 audit started.
 **Pending runs, with ETAs:**
 - r20261108-195528-314b, suites on #8176's restacked head (cpu-5, 59 suites): about 21:05Z.
 - r20261108-200051-664e, #8177's suites (cpu-1, 52 suites): about 21:05Z.
+
+## 20:20Z MEMLEMMA carried pool
+
+**Short answer.** Carry the proved pool across windows. Each window opens the previous window's closing root and closes into its own, and the pool stays proved every window, so no unit ever hands on a state it chose, and an incorrect unit's leak doesn't widen. Each window pays #8132's open and close, 5.8e8 ANDs at NB = 5,000, about 0.01 to 0.02 of the 1.76 points. The boundary's lost hits go to zero, so the net is about −4.35 points. A priced design exists now. Built and proved can't make Wednesday: it needs a chained period count in Lean (mine, on top of #8173), the every-window unit with #8132's open and close (MEMPOOL), and a record change that pins each window's opening root to the previous window's closing root (not started).
+
+**1. What carrying takes.**
+- **The boundary commitment** is #8132's, as built:
+  - The root is `pout = Sha512RowSeg_v1(row)`, unsalted, a 512-bit registered row under the service's hiding leaf.
+  - The row is head and tail plus, per block, B's four links, `mlast` and the 512-bit BlockKey. That's 577 bits a block, and 2,884,449 bits at NB = 5,000.
+  - It carries no prints (δ is per window) and no memo. It also drops ref, owner and stamp: the close refuses a window that doesn't end quiescent, with every block free. The quiescent windows today's empty-pool design relies on already give that.
+  - The row exceeds the largest public size class (262,144 bits), so the boundary has to be the root, never the row.
+- **How the next window's reads check against it.**
+  - The window opens the row in-circuit: its digest must equal `pin`.
+  - It builds its memory check's initial multiset from the row:
+    - B's initial values are the links.
+    - K's are `KeyPrint(key, δ)` under the window's own δ.
+    - The stream's head and tail registers start from the row's.
+    - Each carried first copy's M cell comes in as a time-0 pair.
+  - A hit on a block cached in an earlier window consumes that initial record, so R = W fails unless the read returns the opened value.
+- **Coins and the Blum check.** No Blum check spans windows. Each window's check is its own, with its own live coins in its own rounds: the rows, `pin` and `pout` are committed before δ, `chk` after δ, and α and γ after `chk`. Windows compose through the root alone. A multiset spanning windows would need coins drawn after every window's commitments, which per-window sessions don't have. And with any window unchecked, it lets that window's fake write through, as network-accounting noted at 10:31Z.
+- **Lean beyond #8113, #8123 and #8173:**
+  1. A small bridging lemma. MEMPOOL's time-0 pair for a carried M cell equals, as multisets, an initial content at time 0, which is what #8123's `MemoryChecked` takes. Alternatively, MEMPOOL sets M's initial value to the carried cell, and no lemma is needed.
+  2. The carried class. A window's checked inputs include the opened row, pinned through the registered `pin`. Its uniqueness holds up to a SHA-512 collision, which a finder like `B_reg` in `SampledLeakRegistered` extracts from two adjacent windows' proofs. That finder's probability joins the error.
+  3. A chained period bound beside `PooledLeakChecked`. Each window's count is taken given the previous window's closing state, and the period's count is the product of today's per-window counts, by induction over windows. This is the new proof, and the main risk.
+  4. Witnesses and lock entries, as in #8173.
+
+  #8113's bounds apply per window unchanged. N grows by 3 a block and 1 an M entry, and print collisions range over K·CU + NB − 1 keys, all fixed before δ.
+- **The deployed check:**
+  1. The every-window unit takes #8132's `PoolOpen_v1`, `PoolClose_v1`, `PoolCopies_v1` and `KeyPrint`, which were built for the sampled `PoolWindow_v1`. That makes v5 plus open and close, a v6.
+  2. The record makes window i's `pin` window i−1's `pout` by reference: one registered row both units read, fixed before window i's coins. The verifier refuses any other `pin`. Without this, the 12:24Z attack returns through the input.
+  3. A public restart rule. The first window, and the first after a failed or missing window, opens the empty pool's root, which anyone recomputes. There are no retries.
+  4. Serving keeps vLLM's pool across the boundary, instead of dropping its cached blocks' hashes at each boundary, and commits the closing row before the coins.
+
+**2. Soundness and leakage across windows.** With the pool proved every window, carrying doesn't widen what one incorrect unit can leak:
+- **No pool unit is incorrect.** The exception is a pool proof that passes wrongly, the per-window soundness error today's design already carries. With carrying, such a miss corrupts the chain until it restarts, but the bound still pays it once a window as probability.
+- **The opening is the previous window's computed closing state.** Another preimage of `pin` is a SHA-512 collision the run exhibits. So the state behind the root is never the adversary's choice. In the sampled case, by contrast, an unproved unit made the root.
+- **The carried state is a function of what's already counted:**
+  - certified inputs;
+  - explained outputs, since generated tokens enter the keys;
+  - incorrect prefill and decode units' held values, counted in the window that committed them.
+
+  An incorrect unit's wrong tokens can change later windows' hits. But those windows compute their hits from the state, so the wrong tokens add no free bits there.
+- **The statement has to be chained.** The period's count then stays the product of today's per-window counts, and the error gains one collision term a window. Taking `pin` as a free input would let the attack back in. Taking it as registered without the chain would be unsound.
+- **One channel does widen, outside the bound.** The cross-tenant prefix-cache timing channel now spans windows. Earlier certified inputs explain those hits, so it isn't exfiltration. A deployment that cares can salt BlockKeys per tenant, as vLLM's cache salt does, with no proof change.
+
+**3. Cost against today's, and lost hits.**
+- **Open and close are linear in NB, the pool's fixed capacity.** They don't grow with the carried history or with the hits.
+  - The cost is about 1.0e5 ANDs a block: two row digests of 3,346 SHA-512 compressions each, plus `PoolOpen_v1`, `PoolClose_v1` and two KeyPrints. Each M entry adds 3,280.
+  - #8132 measured 5.8e8 a window at NB = 5,000. That's 0.47% of v5's chat unit (1.24e11) and 1.0% of its pool side (5.55e10).
+- **Everything else grows with the window's operations, as it does today.** B and K are already listed whole each window. The M run's carried first copies stay inside the touched list's class on both loads (MEMPOOL, 12:31Z).
+- **A Merkle commitment is no better here.** It would make open and close grow with the touched blocks instead of NB, at about 54 compressions a touched block. That pays only below about NB/40 = 125 touched blocks a window, and these loads touch far more.
+- **Lost hits go to zero.** The row holds every cached block's key and its place in vLLM's free queue, so the next window hits and evicts as an unwindowed vLLM would. MEMPOOL's replay `r20261108-152016-db0a` is exactly that comparison. Carrying recovers its 3.3% of hit blocks on chat and 5.9% on pressure, which are +2.1% and +1.9% of prefill tokens. The only residual is a restart from empty after a failed window.
+
+**4. When.**
+- **(a) A priced design: now.** The parts are measured in #8132 and the loss in MEMPOOL's replay. MEMPOOL can price v6 with `cost.py` once v5 marks (its ETA is 21:00Z today), and BREAKEVEN can put it into P5 for the post.
+- **(b) Built and proved: not by Wednesday.** It has three pieces, and none is built yet:
+  - **Lean (mine):** the carried class and the chained count. It extends #8173's class, so it starts once #8173 lands and network-accounting has OK'd the statement. The chained count is new proof work: an induction over windows, with the collision finder over adjacent windows.
+  - **Circuits (MEMPOOL):** v6, which composes v5 with #8132's built parts. Its slow step is circuit-check on the SHA-512-heavy parts.
+  - **The record (the certifier and record owners):** the by-reference `pin` and the restart rule, a change to what the verifier checks each window.
+
+  The post can state the carried pool as designed and priced.
+
+**5. The alternatives.**
+- **Hits as sampled proof blocks with content-addressed tags.** The tag would be BlockKey_v1 (SHA-512), not vLLM's own hash.
+  - The content is fine. The replay recomputes a sampled request's prefix anyway, and a wrong KV block is caught like any wrong block.
+  - The hit decision isn't covered. No unit computes which lookups hit, so a request's hit length (0 to CU blocks) is the server's choice. That's advice at log2(CU + 1), about 9 bits a request. At K = 1,024 that's 9.2e3 bits a window. Per machine, with every window full, that's 9.3e6 bits a week, 4.0e7 a month and 4.8e8 a year.
+  - That is the channel CIR-190's pool was built to close ("hits cost no advice bits"). Tags also work across windows, so this removes both the 1.76 and the 4.37 points. It's the cheapest in compute, and whether the leakage is acceptable is Daniel's call.
+- **Registered system-prompt prefixes.**
+  - Their blocks are registered information, pinned in the pool by a public rule. Hits on them are computed, with no advice and no chain.
+  - It composes with the per-window pool as a registered warm start: each window opens a registered row instead of the empty one. The Lean needs only the bridging lemma, since #8173's class takes registered inputs.
+  - It recovers only system-prompt hits. MEMPOOL's loads reuse 8 system prompts and recent conversations heavily, and nobody has measured how the 3.3% to 5.9% splits between the two. CACHEOPT or MEMPOOL can get the split from one replay with the 8 prompts' blocks pinned.
+- **Why the design went to a proved pool:**
+  - Proofs' 01:55Z ruling made a hit a computed check under live coins, so a hit costs 0 advice bits.
+  - Sampled pool units (0.027%) were accepted at 10:40Z and withdrawn at 14:08Z, after the 12:24Z attack: an unproved pool unit hands on any state behind its root.
+  - One pool a window was chosen for the post because carrying needed the registered root and the chained count.
+- **My view.**
+  - Carry the proved pool. At −4.35 points, it's the big lever, with no new trust and no advice.
+  - Registered prefixes are a cheap partial step if their share turns out large.
+  - Content-addressed hits are worth it only if Daniel accepts about 9 bits a request.
+  - NET-269, with the certifier computing the root, is the long-run way to cut the 1.76 points too. Behind a certified root, the pool's units could be sampled again, and the carried state would be a certified input, so it would compose with carrying without the chained count. That's network-accounting's to confirm.
