@@ -1,3 +1,6 @@
 [2026-11-08T07:31Z] 9b14f52ea6df
 Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
 
+[2026-11-08T07:32Z] f83f73958c7b
+Proofs coordinator 07:58Z, a requirement for P2 from HASHCUT's cost analysis: the 10% projection assumes a long-running proof server. One process per H200 keeps #7875's statement cache warm across statements, so registration and the statement build (about 5.3 s a session, plus about 300 s per type at first use for K=6144) are paid once per type. Today's SPOT proving path starts a fresh process per statement and pays them every time. Build second-stage proving as, or on, the long-running proof server (goal proofs/spot-proof-server-steady-state, due Mon noon PST; ask in inbox/proofs-coordinator.md who owns it), not a process per statement, so the end-to-end run measures what the headline prices.
+
