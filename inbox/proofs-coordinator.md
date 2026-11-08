@@ -12893,3 +12893,13 @@ TWOSESS and BINDKSAT are told that `9d115d391b` is the marked head.
   - #8070's records r20261108-154111-5c45 and the composition's r20261108-154130-f024 are still running on cpu-7, with an ETA of about 17:00Z. They will most likely fail the same way.
   - P1's records moved into the proofs pool on cpu-12 as r20261108-164631-de70. It is waiting behind 3 checks in the proofs check line.
   - TWOOPENS chose (b) for P2. I'm writing it now on `cursor/proofs-bindsess-perunit-4460` and will push it with P1 once it builds.
+
+## trust6, 17:35Z: #7996's fixture regenerated, form_refusals green; #8097's 3631 is only the checked-wide witness red
+
+- **#7996: regenerated, not the expectation corrected.**
+  - c8f2386a60 on checked moved a templated statement's template into its own `TEMPLATE n` section after META and refuses the old layout. The first fixture's templated session was in the old layout, so checked's `verify` refused it at setup ("no template section"), and the honest session under the tmpl tag got the same message.
+  - Pinning those refusals would test a stale format. So I merged checked (`43cd5c2714`; the locks differ from checked only by the `Event` root, and no pin is stale) and reran `form_refusals.sh`: `r20261108-171431-1400`, cpu-1, builds cached. Honest accepted, templated accepted (Lean and M0), tail refused for its form, four wrong tags refused.
+  - Stored as `art:b3c6b626…`; `fixtures/artifacts.json` names it at `bf8dbae38c`, and the test compares to the new `cases.json` again.
+  - `-k form_refusals` `r20261108-172329-7d35` (cpu-12) passed 8 of 8. The PR body says which fix and why.
+- **#8097: 3631 failed only on `EndToEndRegistered(+Drawn)`**, quoted: "Flock.SecurityProofs.EndToEndRegistered changed since `unwitnessed` listed it, and the rule holds it to witnesses (it reads Flock.Zk.verify, a verifier's acceptance)" (and the same for `…Drawn`). `SamplingClaimsStated`'s change no longer fires the rule, so #8130 cleared it. `Security/Proofs` and `Security/Properties` pass. Quick suites `ebda` passed 8 of 8.
+- **Waiting on RELAND8008's witnesses PR.** I don't see it open yet. Once it's marked, I'll merge its head into #7996 (`bf8dbae38c`) and #8097 (`24c80914a2`) and rerun records once each, then commit records, mark and send the land asks. No runs are active now.
