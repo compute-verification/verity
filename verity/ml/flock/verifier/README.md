@@ -125,7 +125,7 @@ part read one set of the other shared inputs, in the compiled verifier's form, a
 compiled verifier's parts).
 
 It also holds the parts to one run, C10 `OneRun`, through `--rec-run`: the challenger's interactive-run record
-(`verity/rec-run/v1`, written by `sampled_proofs.challenger.RunRecord`). The record stages the rows file and `rec_shared`
+(`verity/rec-run/v1`, written by `spot.challenger.RunRecord`). The record stages the rows file and `rec_shared`
 before any session, logs every session the challenger opened for the run's parts (a retry's too) and is closed after the
 last; it holds no coin, since each part's coins are flipped fresh at its own Hello and never committed before the run. The
 live challenger writes it: its operator stages it before any session and closes it after the last, and Flock's
