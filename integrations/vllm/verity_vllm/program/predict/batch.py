@@ -255,7 +255,7 @@ def _solo(advice: Any, ingress: Mapping[str, Any], r: int) -> tuple[WA.Advice, d
                 raise BatchDependent(f"request {r}: step {s} resumes it on KV another request computed (v0 has no solo form for it)")
             _check_hit(advice, ingress, s, row)
     k = int(any(src.request != r for src in rows[0][1].sources))
-    own = sum(o.request == r for o in sys.modules[type(advice).__module__].outputs(advice))
+    own = sum(o.request == r for o in (WA if hasattr(advice, "carried") else sys.modules[type(advice).__module__]).outputs(advice))
     steps = [WA.StepAdvice((_row(row, k, tuple(WA.Source(k, src.n) for src in row.sources)),)) for _, row in rows]
     requests, bodies = (WA.RequestAdvice(q.id, q.prompt_len, q.output_len, q.finish),), {q.id: ingress[q.id]}
     if k:
