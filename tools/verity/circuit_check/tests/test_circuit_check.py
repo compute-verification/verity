@@ -636,6 +636,66 @@ def test_a_definition_over_the_partition_budget_is_an_unchecked_warning():
     assert CK.summarize([e])["unchecked"] == {"items": len(e["warnings"]), "definitions": 1}
 
 
+def _two_callees():
+    """A Call over a budget of 2 gates whose body (not separable: its second node reads the first's output) calls a 2-gate
+    callee that computes one value twice, each copy returned by its own proof block, and a 1-gate one."""
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+    from verity.ml.definitions.registry import prims as P
+
+    twice = _composite("CircuitCheckTwice", (_f32x2(), Array(2, Value(32))),
+                       lambda B, S, x: array_of([B.call(P.F32Add, x[0], x[1]), B.call(P.F32Add, x[0], x[1])]))
+    mul = _composite("CircuitCheckMul", (_f32x2(), Value(32)), lambda B, S, x: B.call(P.F32Mul, x[0], x[1]))
+    top = _composite("CircuitCheckByCallees", (_f32x2(), Value(32)), lambda B, S, x: B.call(mul, B.call(twice, x)))
+    return top, twice, mul, dataclasses.replace(OPTS, partition_max_gates=2)
+
+
+def test_a_call_over_the_budget_whose_callees_are_calls_is_partitioned_by_them(monkeypatch):
+    """Over ``partition_max_gates`` and not cut member by member, a Call whose every callee is a Call (`targets.CALLEE_CALLS`) has
+    each callee's partition checked as a Call's: a violation fails by the callee's name, and no ``partition/unchecked`` warning
+    is left; the report's summary names the callees."""
+    top, twice, mul, opts = _two_callees()
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, twice, mul)})
+    assert CK.uncut(top, opts) == "3 gates: over the partition budget 2" and CK.uncut(twice, opts) is None
+    e = CK.check_definition(top, opts, memo={}, pins=PINS, as_call=True)
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [f"partition/gate-recomputed {twice.id} (1 gate(s))"]
+    assert not [w for w in e["warnings"] if w["check"] == "partition"]
+    p = e["partition"]
+    assert p["checked"] and p["reason"] == "3 gates: over the partition budget 2" and sorted(p["by_callees"]) == sorted([twice.id, mul.id])
+    assert p["by_callees"][mul.id]["checked"] and e["redundant_gates"] == {"checked": False}
+    assert CK.summarize([e])["by_callees"] == {top.id: sorted([twice.id, mul.id])}
+
+
+def test_a_call_over_the_budget_with_a_callee_that_is_no_call_stays_unchecked(monkeypatch):
+    """A callee that is no Call is partitioned inside the Call that contains it, which here is over the budget: the partition
+    stays a ``partition/unchecked`` warning."""
+    top, twice, mul, opts = _two_callees()
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (top, mul)})
+    e = CK.check_definition(top, opts, memo={}, pins=PINS, as_call=True)
+    assert e["partition"]["checked"] is False and "by_callees" not in e["partition"] and not e["failures"]
+    assert [w["name"] for w in e["warnings"] if w["check"] == "partition"] == [
+        f"partition/unchecked {top.id}: 1 3 gates: over the partition budget 2"]
+
+
+def test_a_call_over_the_leaf_budget_partitioned_by_its_callees_still_compares_its_members(monkeypatch):
+    """Over ``partition_max_leaves`` a Call whose body nodes read only its parameters is partitioned by its callees too, and a
+    value two of its members compute fails under `Q_word` v1 by the Call's name (`cross_call.members_check`), as `word.unit_rule`
+    fails it for one cut member by member."""
+    from verity.ml.circuits.refs import array_of
+    from verity.ml.circuits.types import Array, Value
+
+    _top, _twice, mul, _opts = _two_callees()
+    pair = _composite("CircuitCheckPairByCallees", ((("x", Array(3, Value(32))),), Array(2, Value(32))),
+                      lambda B, S, x: array_of([B.call(mul, array_of([x[0], x[1]])), B.call(mul, array_of([x[0], x[1]]))]))
+    monkeypatch.setattr(TG, "is_call", lambda fam: fam in {TG.family(f) for f in (pair, mul)})
+    opts = dataclasses.replace(OPTS, partition_max_leaves=2)
+    e = CK.check_definition(pair, opts, memo={}, pins=PINS, as_call=True)
+    assert e["partition"]["reason"].startswith("its parameters' 3 leaves are over the partition's leaf budget 2")
+    assert list(e["partition"]["by_callees"]) == [mul.id] and not [w for w in e["warnings"] if w["check"] == "partition"]
+    assert [f["name"] for f in e["failures"] if f["check"] == "partition"] == [
+        f"partition/gate-recomputed {pair.id} (1 gate(s) between node members)"]
+
+
 #: a Boolean Call family (`RoPEHead_v1`'s Boolean version) whose cut computes 1,120 values in two proof blocks
 BOOL_RECOMPUTE = "RoPEHead_v2{D=8}"
 
