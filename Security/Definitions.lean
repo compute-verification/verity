@@ -38,7 +38,7 @@ public import Definitions.NetworkCertifier.RecordRows
 public import Definitions.NetworkCertifier.Period
 public import Definitions.Accounting.Sheets
 public import Definitions.Accounting
-public import Definitions.SampledProofs
+public import Definitions.Spot
 public import Definitions.Claims
 public import Definitions.Claims.Encodings
 public import Definitions.Claims.Recursion
