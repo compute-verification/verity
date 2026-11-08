@@ -206,6 +206,81 @@ def test_compiled_code_newly_allowed_on_a_verifiers_path_is_shown():
     assert spec._tally(["compiled", "compiled", "new"]) == "guarantees: 1 new; verifier: 2 allowed"
 
 
+TRUST_KINDS = {"grown", "deployed", "undeployed", "trusted", "untrusted", "shrunk", "trust"}
+
+
+def _trust(doc: dict, deployed: list[str], gap: dict, base: dict | None = None, extra: dict | None = None) -> dict:
+    return doc | {"deployed": deployed, "trust": {"base": base or {}, "extra": extra or {}}, "trust_gap": gap}
+
+
+def test_a_trust_gap_grown_by_hand_comes_first_and_one_that_shrank_is_shown_after_the_statements():
+    """An update only shrinks `trust_gap`, so a premise a deployed guarantee newly rests on outside its trust was added by
+    hand, the one way past that ratchet: it leads the DM, ahead of a restated guarantee."""
+    old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G", "A.H"], {"A.G": ["P1"], "A.H": ["Q1", "Q2"]})
+    new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H'", "h3")}), ["A.G", "A.H"], {"A.G": ["P1", "P2"], "A.H": ["Q1"]})
+    got = spec.changes(old, new)
+    assert got[0] == "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `P2`"
+    assert got[1].startswith("• changed guarantee `A.H`, before:")
+    assert got[2] == "• trust gap shrunk: `A.H` no longer rests outside its trust on `Q2`"
+    assert spec._tally([k for k, _ in spec._entries(old, new)]) == "trust: 1 gap grown by hand, 1 gap shrunk; guarantees: 1 changed"
+
+
+def test_a_guarantee_deployed_or_no_longer_and_a_premise_trusted_or_no_longer_are_shown():
+    old = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.G"], {}, {"C.CR": "collision resistance",
+                                                                                   "C.Old": "an old bound"},
+                 {"A.G": {"C.Src": "the firewall's randomness"}})
+    new = _trust(_doc({"A.G": _g("G", "h1"), "A.H": _g("H", "h2")}), ["A.H"], {}, {"C.CR": "collision resistance, strict",
+                                                                                   "C.New": "a new bound"},
+                 {"A.H": {"C.Src": "the firewall's randomness"}})
+    assert spec.changes(old, new) == [
+        "• deployed guarantee `A.H` listed: it states the deployed system",
+        "• `A.G` no longer listed as deployed",
+        "• trust base `C.CR`: collision resistance, strict (was: collision resistance)",
+        "• trust base `C.New`: a new bound, listed",
+        "• deployed guarantee `A.H` also trusts `C.Src`: the firewall's randomness",
+        "• trust base `C.Old` no longer listed (it stated: an old bound)",
+        "• deployed guarantee `A.G` no longer trusts `C.Src`"]
+    assert spec._tally([k for k, _ in spec._entries(old, new)]) == \
+        "trust: 1 deployed, 1 no longer deployed, 3 trusted, 2 no longer trusted"
+
+
+def test_a_rename_carries_the_trust_with_it_and_changes_nothing_of_it():
+    """A guarantee renamed with its type hash and a premise renamed with its digest keep their places in `deployed`, the
+    trust and `trust_gap`: no trust entry, though the renamed assumption itself still shows as listed and no longer listed."""
+    def doc(g: str, p: str) -> dict:
+        d = _trust(_doc({g: _g("G", "h1")}), [g], {g: [p, "A.Assumptions.Kept"]}, {p: "a trusted bound"}, {g: {p: "a ruling"}})
+        return d | {"assumptions": {p: {"digest": "d1"}, "A.Assumptions.Kept": {"digest": "d2"}}}
+
+    old, new = doc("A.SampledProofsSound", "A.Assumptions.SampledHash"), doc("A.SpotSound", "A.Assumptions.SpotHash")
+    kinds = [k for k, _ in spec._entries(old, new)]
+    assert not TRUST_KINDS & set(kinds), spec.changes(old, new)
+    assert sorted(kinds) == ["assumed", "unassumed"]
+
+
+def test_a_gap_premise_renamed_with_its_text_is_no_growth_and_one_the_records_already_held_is():
+    """A rename that changes a premise's text changes its hash too (`DrawIsCoin` to `SampleIsCoin`): a name no old record
+    held, in place of one no new record holds, is that rename. A premise the records already held, newly in the gap, was
+    put there by hand."""
+    def doc(renamed: str, h: str, gap: list[str]) -> dict:
+        d = _trust(_doc({"A.G": _g("G", "h1")}, {renamed: h, "A.Other": "h2"}), ["A.G"], {"A.G": gap})
+        return d | {"open": {renamed: {"issue": "X-1"}, "A.Other": {"issue": "X-2"}}}
+
+    old = doc("A.DrawIsCoin", "h3", ["A.DrawIsCoin"])
+    new = doc("A.SampleIsCoin", "h4", ["A.SampleIsCoin", "A.Other"])
+    assert [t for k, t in spec._entries(old, new) if k in TRUST_KINDS] == [
+        "• trust gap grown, by hand: deployed guarantee `A.G` now also rests outside its trust on `A.Other`"]
+
+
+def test_a_record_that_holds_a_trust_for_the_first_time_is_tallied_and_sends_nothing(tmp_path):
+    old = _doc({"A.G": _g("G", "h1")})
+    new = _trust(_doc({"A.G": _g("G", "h1")}), ["A.G"], {"A.G": ["P1"]}, {"C.CR": "collision resistance"})
+    assert spec._entries(old, new) == [] and [k for _, k, _ in spec._across({"x": old}, {"x": new})] == ["trust"]
+    repo = _repo(tmp_path)
+    a = _commit(repo, "Security/lean-audit.json", old, "a")
+    b = _commit(repo, "Security/lean-audit.json", new, "b")
+    assert spec.message(repo, a, b) is None
+
+
 def test_a_record_from_before_the_rename_compares_by_what_it_says():
     new = _doc({"P.t": _g("P.t : D", H1)}, {"P.D": H1})
     old = {"pins": new["guarantees"], "reads": {"P.Defs": {"digest": "x", "definitions": {"P.D": H1}, "pins": ["P.t"]}}}
