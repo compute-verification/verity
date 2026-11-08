@@ -6921,3 +6921,48 @@ Land ask for #7918 (47 words): "#7918 (proofs, PRF-461) makes the verifier refus
 prover sizes the population, and adds `stratified-rate` and `work-rate`, proved like `Rate.count_ge`. No guarantee's
 statement changes. Records move by reads only: 33 in Security/Properties (committed), and Security's RecursiveAuditC3,
 SampledKSLiveV5, SampledKSTwo and SampledKSTwo_honest (drive's lock run)."
+## 04:40Z from BINDTERM: piece 1 written and building; piece 5: weight security reads nothing the rerun cut changes, but NetworkCertifier reads the copy's KS
+
+**Piece 1** is on `cursor/proofs-bindterm-p1-f4cd` at `f2bba95639`, from `origin/main`. It touches 19 Lean files, and the
+Lean try on the Flock root is running as r20261108-042715-675e on vy-nebius-cpu-7. I'm aiming to mark it by 10:00Z
+(due 18:00Z).
+- `slackExp = 10` is one constant: `slack = 2^{2^-10}` and `Deploy.k = 2^10·(2·n_PU + 1)`. The one-stage copy keeps one
+  count for both waits.
+- The generic `Compiled` gets two fields, `nOut` and `nIn`: the bits of each wait's union. They set `kOut`/`kIn` and
+  the caps, through `E`, `ECoins`, `κ`, `work` and `Efficient`.
+- The contract gains `Sessions.unions : nPU ≤ nOut`. The two-stage contract also requires `nPU ≤ nIn`, the clause
+  BINDFOOT replaces.
+- `ofDeploy` sets both fields to `nPU D`, so its counts and caps are `D.k` and `D.cap` by definition, and the coupling
+  in `Instance.lean` stands unchanged.
+
+**Piece 5: weight security needs neither option.** `Pressure.lean` (#7955) uses only the sampling design's miss
+probabilities from `Claims.Sampling.Count`: `fac`, `gr`, `V`, `strataPa_eq_V` and `sum_card_window`. That file's
+imports never reach the copy's extractor, `κ`, `slack`, `Bext` or `KS`. `TheftServedDeployedRate`'s hash term is V5's
+`(W t).eps = Σ_m (epsKs + link)`, with
+
+  `link = δ_link = Q_s/(1 − ρ)·(2t'(1 + k)/2^256 + 1/(eM) + k/(eR_w))`
+
+under `ecr/sha-512`, not the claims core's `Pr[B_ext]`. So making the fix reach the copy costs nothing for #7955, and
+moving weight security onto `CompiledTwo` would mean re-deriving V5's per-window bound, which this cut doesn't call
+for.
+
+**For FORMALDOC:** the weight-security theorem's binding term is `δ_link`. It's already in time-read form (t' calls) and
+has a number today from `(t', k, M, R_w, ρ, Q_s)`. "No deployed ε_bind until this lands" applies to SPOT's soundness
+bound, so it's worth checking which of the two the page states.
+
+**Where the choice does bite is piece 2.** The copy's `Claims.Sampling.KS` is a premise of NetworkCertifier's
+`SampledAudit`, `SampledCharge`, `Pooled` and `Period`, Accounting's `CommOfPeriodLeakAccepted`, and `SamplingClaims`.
+It has two proofs: the direct `KS_of` in `KS.lean`, which the witnesses use, and `samplingKS` through `Instance.lean`'s
+coin coupling (about 730 lines). Piece 2's per-session `E^rep` breaks that coupling. The options:
+- **(a′) The copy follows.** Mirror piece 2 in `Claims.Sampling.E` and its direct proof (`KS.lean`, `Runs`, `RunsExp`,
+  `Bext`, about 2.2k lines). This about doubles piece 2, and the copy's records change.
+- **(b′) The readers move.** Those six guarantee families take `Compiled.KS` at the deployed record instead (their
+  records change). The copy's `E`/`κ`/`KS`, its direct proof and `Instance.lean` then retire, about 3k lines; the
+  shared wait lemmas stay. Those readers get the cut bound.
+- **(c′) The stopgap.** Drop only `samplingKS`'s derivation. No lock entry or other module reads it, and `KS_of` proves
+  the same statement. The copy stays frozen with the uncut bound.
+
+My recommendation is (b′), with (c′) done inside piece 2 so piece 2 doesn't wait on (b′). I'm retiring nothing until
+you confirm. Full note: `lanes/proofs/20261108T0435Z-checkpoint-bindterm-p1`.
+
+**Running:** r20261108-042715-675e (Lean try, Flock root, vy-nebius-cpu-7).
