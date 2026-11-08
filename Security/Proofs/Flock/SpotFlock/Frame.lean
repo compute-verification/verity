@@ -67,18 +67,18 @@ which the frame checks at the registered read `reg` that the table's port `q` is
 position the session header gives for the row, among ports whose first with that root is `reg`, through the path the
 header gives for it. -/
 def FrameIs (L : Layout) : Prop :=
-  ∀ x s Pt d (m₀ m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts own,
+  ∀ x s Pt d (m₀ m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) (rest : List (Msg × Out)) wF u b ρ rb ins spec sts own,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
-    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) xS wF = true →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    Claims.Flock.check (FlockDeploy.parse true _root_.Flock.Readable.relation) (unitStmt h m₂ u) wF = true →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
-    FlockDeploy.setupOf true xS = some (ins, spec, sts) → ins.registered = some own →
-    ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ xS u = some β ∧ ∃ hj : j < sts.size,
+    FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts) → ins.registered = some own →
+    ∀ g, s.prog.Needs b g → ∃ β j y n q reg, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∃ hj : j < sts.size,
       y < 2 ^ sts[j].c.kLog ∧ L.wire u g = j * 2 ^ sts[j].c.kLog + y ∧ n < sts[j].pub.n ∧ reg ∈ own ∧
       (List.range sts[j].c.ports.size).find? (fun q => sts[j].c.ports[q]!.name == reg.name) = some q ∧
-      ∃ o ∈ h.frame.reveal s u (seenAt m₀ m₁ xS c₀ c₁ rest) wF, o.2.pos = g ∧
+      ∃ o ∈ h.frame.reveal s u (seenAt m₀ m₁ m₂ c₀ c₁ rest) wF, o.2.pos = g ∧
         o.2.val = _root_.Flock.InnerRows.bitAt { ins.read with sts } wF j β y ∧
-        o.1 = (if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ xS c₀ c₁ rest) ρ
+        o.1 = (if g ∈ rb ∧ s.prog.Boundary rb g = false then iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ
           else s.roots) ∧
         SamplingDeploy.row h.frame.place h.frame.bits o.2 =
           _root_.Flock.InnerRows.rowBytes { ins.read with sts } wF j n q ∧
@@ -93,9 +93,9 @@ def FrameIs (L : Layout) : Prop :=
 /-- **`FrameRows` from `FrameIs`**: an opening whose row and salt are the session row's, which the frame checks at the
 row's registered read, passes the deployed check wherever that read opens the row's commit string. -/
 theorem frameRows_of_frameIs (L : Layout) (hF : FrameIs h L) : FrameRows h L := by
-  intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
+  intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
   obtain ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot, hrow, hsalt, hchk⟩ :=
-    hF x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
+    hF x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
   refine ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot,
     fun t positions paths ht hent hop => ?_⟩
   obtain ⟨hat, hfind, hπ⟩ := hchk t positions paths ht hent

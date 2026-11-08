@@ -184,6 +184,55 @@ theorem scoped_at {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmt
   simp only [sessionOk, Bool.and_eq_true] at hs
   exact ⟨hs.1.2, hs.2⟩
 
+/-- **The round-2 check holds template by template** (`stmtOkAt`), at the statement `m₂` states for each template. -/
+theorem stmtOkAt_of {x m₁ m₂ : Msg} {c₀ c₁ : FlockDeploy.Coin} (hok : stmtOk h x m₁ m₂ c₀ c₁ = true) {t : ℕ}
+    (ht : t < h.ms.length) : stmtOkAt h x m₁ (stmtAt h m₂ t) c₀ c₁ t = true := by
+  obtain ⟨s, hp⟩ : ∃ s, parse h x = some s := by
+    cases hp : parse h x with
+    | none => simp [stmtOk, hp] at hok
+    | some s => exact ⟨s, rfl⟩
+  obtain ⟨xs, hx⟩ : ∃ xs, stmtsOf m₂ = some xs := by
+    cases hx : stmtsOf m₂ with
+    | none => simp [stmtOk, hp, hx] at hok
+    | some xs => exact ⟨xs, rfl⟩
+  simp only [stmtOk, hp, hx, Bool.and_eq_true, beq_iff_eq, List.all_eq_true, List.mem_range] at hok
+  have hall := hok.2 t ht
+  have e : stmtAt h m₂ t = xs.getD t (h.xS₀ t) := by unfold stmtAt; rw [hx]
+  rw [e]
+  simp only [stmtOkAt, hp, Bool.and_eq_true, beq_iff_eq]
+  exact ⟨⟨⟨⟨hok.1.1.1, hok.1.1.2⟩, hall.1.1⟩, hall.1.2⟩, hall.2⟩
+
+section At
+
+variable {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ}
+
+theorem parse_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : ∃ s, parse h x = some s := by
+  cases hp : parse h x with
+  | none => simp [stmtOkAt, hp] at hok
+  | some s => exact ⟨s, rfl⟩
+
+/-- **A checked statement has its template's rounds.** -/
+theorem k_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : (FlockDeploy.V true).k xS = k₀ h t := by
+  obtain ⟨s, hp⟩ := parse_of_stmtOkAt h hok
+  simp only [stmtOkAt, hp, Bool.and_eq_true, beq_iff_eq] at hok
+  exact hok.1.1.2
+
+/-- **A checked statement is in scope** (`sessionOk`). -/
+theorem sessionOk_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) : sessionOk h t xS = true := by
+  obtain ⟨s, hp⟩ := parse_of_stmtOkAt h hok
+  simp only [stmtOkAt, hp, Bool.and_eq_true] at hok
+  exact hok.1.2
+
+/-- **A checked statement is in the scope Flock's soundness proof covers, with hidden outputs** (`sessionOk`'s scope
+check and hidden-outputs tag). -/
+theorem scoped_of_stmtOkAt (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
+    FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true := by
+  have hs := sessionOk_of_stmtOkAt h hok
+  simp only [sessionOk, Bool.and_eq_true] at hs
+  exact ⟨hs.1.2, hs.2⟩
+
+end At
+
 /-- **Round 2 passed**: the prefix's last answer is a message only where the check passes. -/
 theorem stmtOk_of_next {x a₀ a₁ a₂ : Msg} {c₀ c₁ c₂ : FlockDeploy.Coin} {m : Msg}
     (hm : next h x [a₀, a₁, a₂] [c₀, c₁, c₂] = .ret (.msg m)) : stmtOk h x a₁ a₂ c₀ c₁ = true := by

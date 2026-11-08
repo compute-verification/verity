@@ -24,9 +24,10 @@ Bridge lowers it at constants `κ` (`Bridge.blockOf`), and that lowering sits in
 position `o` (`SitsAt`). At every hidden-value list Flock's relation accepts, `C`'s values at the wires the layout gives
 the positions of `C'`'s wires (`unitVals`) hold each of `v`'s gates (`Audit.Op.apply`) and carry `κ` wherever `v` reads
 it. These are `C'`'s gates, not the lowered program's: no value is asked at a row's two XORs, which no wire of `C`
-holds and `Prog.Correct` never reads. It holds of every accepted list, not of one witness: it reads only the session
-statement's circuit, inputs and public values, which the verifier's check fixes to `xS₀`'s but for the sample and the
-registered reads (`pin_of_stmtOk`), and the layout. So it is a property of the registration. The relation, not `C`'s
+holds and `Prog.Correct` never reads. It holds of every accepted list, not of one witness: it reads only the unit's
+session statement's circuit, inputs and public values, which the verifier's check fixes to its template's reference
+statement's (`xS₀ t`) but for the sample and the registered reads (`pin_of_stmtOkAt`), and the layout. So it is a
+property of the registration. The relation, not `C`'s
 evaluation alone, has to carry it: where a wire is an input of `C`, only the outputs Flock's relation checks tie its
 value to the others.
 
@@ -111,22 +112,23 @@ def unitVals (L : Layout) (S : Claims.Flock.Stmt) (β : ℕ) (w : Claims.Flock.W
 
 variable (h : Held)
 
-/-- **The session statement holds each checked unit's circuit gates at a layout's wires**: at a run's statement in the
-two-stage scope and a session statement the verifier's check passes, each checked unit's proof block is unit `v` of a
-circuit `C'` as Bridge lowers it at constants `κ`, from a position `o` of the statement's program where that lowering
-sits; the unit has its block, and at every hidden-value list Flock's relation accepts, the block circuit's values at
-the unit's wires (`unitVals`) hold each of `v`'s gates and carry `κ` wherever `v` reads it. -/
+/-- **The session statements hold each checked unit's circuit gates at a layout's wires**: at a run's statement in the
+two-stage scope and session statements `m₂` the verifier's check passes, each checked unit's proof block is unit `v` of
+a circuit `C'` as Bridge lowers it at constants `κ`, from a position `o` of the statement's program where that lowering
+sits; the unit has its block in its own session statement (`unitStmt`), and at every hidden-value list Flock's relation
+accepts, the block circuit's values at the unit's wires (`unitVals`) hold each of `v`'s gates and carry `κ` wherever
+`v` reads it. -/
 def Embeds (L : Layout) : Prop :=
-  ∀ x s Pt d (m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) u b ρ rb S,
+  ∀ x s Pt d (m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) u b ρ rb S,
     parse h x = some s → partition h s = some Pt → two h s = some d → InScopeTwo Pt d s →
-    stmtOk h x m₁ xS c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
-    FlockDeploy.parse true _root_.Flock.Readable.relation xS = some S →
+    stmtOk h x m₁ m₂ c₀ c₁ = true → u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁) →
+    FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h m₂ u) = some S →
     Pt.blocks[u]? = some b → replayOf Pt d.part u = some ρ → d.part.blocks[ρ]? = some rb →
     ∃ (C' : FlockSoundness.Audit.Circuit) (κ : Fin C'.N → Option Bool) (n : ℕ)
       (P : FlockSoundness.Audit.Partition C' n) (v : Fin n) (o : ℕ),
       _root_.Flock.Bridge.Members.SitsAt s.prog o (_root_.Flock.Bridge.progOf C' κ) ∧
       b = (_root_.Flock.Bridge.blockOf P κ v).map (o + ·) ∧
-      ∃ β, L.blockOf x m₁ xS u = some β ∧ ∀ w : Claims.Flock.Wit, Claims.Flock.RelS S w →
+      ∃ β, L.blockOf x m₁ (unitStmt h m₂ u) u = some β ∧ ∀ w : Claims.Flock.Wit, Claims.Flock.RelS S w →
         (∀ a, P.unit a = some v → unitVals L S β w u o C' a = (C'.op a).apply (unitVals L S β w u o C')) ∧
         ∀ a c, κ a = some c → (∃ g, P.unit g = some v ∧ a ∈ (C'.op g).args) → unitVals L S β w u o C' a = c
 
@@ -134,15 +136,16 @@ def Embeds (L : Layout) : Prop :=
 unit's lowered gates are correct on the decoded values (`Bridge.correct_unitGates_of`), so is its proof block
 (`Bridge.correct_blockOf`), and so is that block where it sits in the statement's program (`SitsAt.correct`). -/
 theorem decodes_of_embeds (L : Layout) (he : Embeds h L) : Decodes h (decOf L) := by
-  intro x s Pt d m₁ xS c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
-  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation xS with
+  intro x s Pt d m₁ m₂ c₀ c₁ wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h m₂ u) with
   | none => simp [Claims.Flock.check, hS] at hck
   | some S =>
     obtain ⟨C', κ, n, P, v, o, hsit, rfl, β, hβ, hw⟩ :=
-      he x s Pt d m₁ xS c₀ c₁ u b ρ rb S hx hP h2 hin hok hu hS hb hρ hrb
+      he x s Pt d m₁ m₂ c₀ c₁ u b ρ rb S hx hP h2 hin hok hu hS hb hρ hrb
     obtain ⟨hV, hκ⟩ := hw wF (by simpa [Claims.Flock.check, hS] using hck)
-    have href : s.prog.refIn rb (fun g => some (decOf L x m₁ xS wF u g)) (decOf L x m₁ xS wF u) =
-        fun g => some (decOf L x m₁ xS wF u g) := funext fun g => by simp only [Prog.refIn, ite_self]
+    have href : s.prog.refIn rb (fun g => some (decOf L x m₁ (unitStmt h m₂ u) wF u g))
+        (decOf L x m₁ (unitStmt h m₂ u) wF u) = fun g => some (decOf L x m₁ (unitStmt h m₂ u) wF u g) :=
+      funext fun g => by simp only [Prog.refIn, ite_self]
     rw [href]
     refine hsit.correct _root_.Flock.Bridge.Members.topological_progOf (fun p hp => ?_) ?_
     · rcases _root_.Flock.Bridge.mem_blockOf.1 hp with hp | ⟨a, -, rfl⟩

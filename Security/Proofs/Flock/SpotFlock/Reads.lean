@@ -6,10 +6,11 @@ public import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
 /-!
 # The session's registered reads are the run's
 
-`checkRegistered_of_stmtOk`: at a run's statement and a session statement the verifier's check passes (`stmtOk`), the
-session statement sets up as a masked Flock statement whose registered ports are the ones `h.registered` gives at the
-run's roots and the interior registration's, read as Flock's verifier reads them (`Registered.ofJson`), and every
-statement of its setup passes Flock's registered check against those ports (`checkRegistered`).
+`checkRegistered_of_stmtOkAt`: at a run's statement and template `t`'s session statement as the verifier's round-2
+check passes it (`stmtOkAt`), the session statement sets up as a masked Flock statement whose registered ports are the
+ones `h.registered` gives for `t` at the run's roots and the interior registration's, read as Flock's verifier reads
+them (`Registered.ofJson`), and every statement of its setup passes Flock's registered check against those ports
+(`checkRegistered`).
 
 With `FlockSoundness.Discharge.ZkReg.checkRegistered_ok`, `check_tables` and `checkPort_at`, each instance's table row
 then opens its port's root, at the position the port gives for the instance's unit, through the path the session header
@@ -109,19 +110,19 @@ theorem insOf_ok {zk : Bool} {x : Claims.Msg} {s : FlockDeploy.Ins} (h : FlockDe
 
 variable (h : Held)
 
-/-- **The session's registered reads are the run's**: at a run's statement and a session statement the verifier's check
-passes, the session statement sets up as a masked Flock statement, its registered ports are Flock's reading of
-`h.registered` at the run's roots and the interior registration's, and every statement of its setup passes Flock's
-registered check against them. -/
-theorem checkRegistered_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {s : AuditStatement}
-    (hx : parse h x = some s) (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+/-- **The session's registered reads are the run's**: at a run's statement and template `t`'s session statement as the
+verifier's check passes it, the session statement sets up as a masked Flock statement, its registered ports are Flock's
+reading of `h.registered` for `t` at the run's roots and the interior registration's, and every statement of its setup
+passes Flock's registered check against them. -/
+theorem checkRegistered_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ} {s : AuditStatement}
+    (hx : parse h x = some s) (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     ∃ it ins spec sts own, interiorsOf m₁ = some it ∧ FlockDeploy.setupOf true xS = some (ins, spec, sts) ∧
       ins.registered = some own ∧
-      (FlockDeploy.jsonOf "registered reads" (h.registered s.roots it.roots) >>= _root_.Flock.Registered.ofJson) =
-        .ok own ∧
+      (FlockDeploy.jsonOf "registered reads" (h.registered t s.roots it.roots) >>=
+        _root_.Flock.Registered.ofJson) = .ok own ∧
       ∀ st ∈ sts, _root_.Flock.checkRegistered st (some own) = .ok () := by
-  have hr : readsOk h s m₁ xS c₀ c₁ = true := by
-    simp only [stmtOk, hx, Bool.and_eq_true] at hok
+  have hr : readsOk h t s m₁ xS c₀ c₁ = true := by
+    simp only [stmtOkAt, hx, Bool.and_eq_true] at hok
     exact hok.2
   unfold readsOk at hr
   split at hr
@@ -135,10 +136,10 @@ theorem checkRegistered_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coi
       cases hw'
       exact hi
     obtain ⟨b, hb, hbd⟩ := Option.map_eq_some_iff.1 hreg
-    have hbe : b = h.registered s.roots it.roots := by
+    have hbe : b = h.registered t s.roots it.roots := by
       calc b = ⟨b.data⟩ := rfl
-        _ = ⟨(h.registered s.roots it.roots).data⟩ := by rw [hbd]
-        _ = h.registered s.roots it.roots := rfl
+        _ = ⟨(h.registered t s.roots it.roots).data⟩ := by rw [hbd]
+        _ = h.registered t s.roots it.roots := rfl
     subst hbe
     obtain ⟨own, hown, hj⟩ := ins_registered hwi hb
     refine ⟨it, ins, spec, sts, own, hit, hset, hown, hj, fun st hst => ?_⟩
@@ -146,31 +147,32 @@ theorem checkRegistered_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coi
     exact setup_checkRegistered hsetup st hst
   · simp at hr
 
-/-- **Each row the session reads from a registered port opens under the run's ports**: at a run's statement and a
-session statement the verifier's check passes, for every statement of the session's setup and every port of the run's
-registered reads, the circuit has the port by name, and each instance's table row opens the port's commitment at the
-position the port reads for the instance's unit, through the path the session header gives for that row. -/
-theorem opens_of_stmtOk {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {s : AuditStatement}
-    (hx : parse h x = some s) (hok : stmtOk h x m₁ xS c₀ c₁ = true) :
+/-- **Each row the session reads from a registered port opens under the run's ports**: at a run's statement and
+template `t`'s session statement as the verifier's check passes it, for every statement of the session's setup and every
+port of the run's registered reads, the circuit has the port by name, and each instance's table row opens the port's
+commitment at the position the port reads for the instance's unit, through the path the session header gives for that
+row. -/
+theorem opens_of_stmtOkAt {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {t : ℕ} {s : AuditStatement}
+    (hx : parse h x = some s) (hok : stmtOkAt h x m₁ xS c₀ c₁ t = true) :
     ∃ it ins spec sts own, interiorsOf m₁ = some it ∧ FlockDeploy.setupOf true xS = some (ins, spec, sts) ∧
       ins.registered = some own ∧
-      (FlockDeploy.jsonOf "registered reads" (h.registered s.roots it.roots) >>= _root_.Flock.Registered.ofJson) =
-        .ok own ∧
-      ∀ st ∈ sts, ∃ t idx, st.pub.tables = some t ∧ _root_.Flock.Registered.unitIndices st.pub = .ok idx ∧
+      (FlockDeploy.jsonOf "registered reads" (h.registered t s.roots it.roots) >>=
+        _root_.Flock.Registered.ofJson) = .ok own ∧
+      ∀ st ∈ sts, ∃ tb idx, st.pub.tables = some tb ∧ _root_.Flock.Registered.unitIndices st.pub = .ok idx ∧
         ∀ reg ∈ own, ∃ p positions paths,
           (List.range st.c.ports.size).find? (fun p => st.c.ports[p]!.name == reg.name) = some p ∧
           _root_.Flock.Registered.entry st.pub reg = .ok (positions, paths) ∧ ∀ i < st.pub.n,
-            _root_.Flock.Registered.ref t st.c.ports.size p i < t.counts.getD p 0 ∧
+            _root_.Flock.Registered.ref tb st.c.ports.size p i < tb.counts.getD p 0 ∧
             reg.reads[idx.getD i 0]? =
-              some (some (positions.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) 0)) ∧
+              some (some (positions.getD (_root_.Flock.Registered.ref tb st.c.ports.size p i) 0)) ∧
             _root_.Flock.Registered.opens reg
-              (_root_.Flock.Registered.tableRow st.pub t p (_root_.Flock.Registered.ref t st.c.ports.size p i))
-              (positions.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) 0)
-              (paths.getD (_root_.Flock.Registered.ref t st.c.ports.size p i) ByteArray.empty) = true := by
-  obtain ⟨it, ins, spec, sts, own, hit, hset, hown, hj, hck⟩ := checkRegistered_of_stmtOk h hx hok
+              (_root_.Flock.Registered.tableRow st.pub tb p (_root_.Flock.Registered.ref tb st.c.ports.size p i))
+              (positions.getD (_root_.Flock.Registered.ref tb st.c.ports.size p i) 0)
+              (paths.getD (_root_.Flock.Registered.ref tb st.c.ports.size p i) ByteArray.empty) = true := by
+  obtain ⟨it, ins, spec, sts, own, hit, hset, hown, hj, hck⟩ := checkRegistered_of_stmtOkAt h hx hok
   refine ⟨it, ins, spec, sts, own, hit, hset, hown, hj, fun st hst => ?_⟩
-  obtain ⟨t, idx, ht, hidx, hp⟩ := FlockSoundness.Discharge.ZkReg.check_tables
+  obtain ⟨tb, idx, ht, hidx, hp⟩ := FlockSoundness.Discharge.ZkReg.check_tables
     (FlockSoundness.Discharge.ZkReg.checkRegistered_ok (hck st hst))
-  exact ⟨t, idx, ht, hidx, fun reg hreg => FlockSoundness.Discharge.ZkReg.checkPort_at (hp reg hreg)⟩
+  exact ⟨tb, idx, ht, hidx, fun reg hreg => FlockSoundness.Discharge.ZkReg.checkPort_at (hp reg hreg)⟩
 
 end SpotFlock

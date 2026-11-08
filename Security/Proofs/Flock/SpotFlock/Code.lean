@@ -56,10 +56,11 @@ each member has room for its units, and the registration's blocks are theirs); e
 verifier refuses every statement out of scope.
 
 So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
-refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The coins are the verifier's own
-here; that the deployed challenger's bytes are such coins is the assumptions' (`ChallengerLogsCoins`,
-`FlipsAfterRecorded`, `VerifierReadsLog`), and `Run.run`'s registration and outcome steps, which read the challenger's
-logs and the sessions' verdicts, are not in this verifier: it accepts every run they accept whose session Flock accepts.
+refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
+coins are the verifier's own here; that the deployed challenger's bytes are such coins is the assumptions'
+(`ChallengerLogsCoins`, `FlipsAfterRecorded`, `VerifierReadsLog`), and `Run.run`'s registration and outcome steps,
+which read the challenger's logs and the sessions' verdicts, are not in this verifier: it accepts every run they accept
+whose sessions Flock accepts.
 -/
 
 @[expose] public section
@@ -317,6 +318,16 @@ def stmtOk (x m₁ m₂ : Msg) (c₀ c₁ : FlockDeploy.Coin) : Bool :=
           readsOk h t s m₁ (xs.getD t (h.xS₀ t)) c₀ c₁
   | _, _ => false
 
+/-- **What the round-2 check establishes of template `t`'s session statement `xS`**: the run's statement decodes and
+its partition and design evaluate, and `xS` has `k₀ t` rounds, is in scope (`sessionOk`) and reads the run's
+(`readsOk`). -/
+def stmtOkAt (x m₁ xS : Msg) (c₀ c₁ : FlockDeploy.Coin) (t : ℕ) : Bool :=
+  match parse h x with
+  | some s =>
+    (partition h s).isSome && (two h s).isSome && (FlockDeploy.V true).k xS == k₀ h t && sessionOk h t xS &&
+      readsOk h t s m₁ xS c₀ c₁
+  | none => false
+
 /-- **Flock decides the first `j` of a session's messages**: its masked verifier's step there is not a coin. -/
 def decidedAt (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) (j : ℕ) : Bool :=
   match FlockDeploy.act true xS (as.take j) (cs.take j) with
@@ -332,7 +343,8 @@ def slotOf (n : ℕ) : Option ℕ :=
 decided a shorter prefix of the session's messages, else Flock's masked verifier on the session's messages, its
 acceptance answered `[]`. -/
 def sessStep (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : OC Out :=
-  if (List.range (as.length - off h t)).any fun j => decide (0 < j) && decidedAt xS (as.drop (off h t)) (cs.drop (off h t)) j
+  if (List.range (as.length - off h t)).any fun j =>
+      decide (0 < j) && decidedAt xS (as.drop (off h t)) (cs.drop (off h t)) j
   then .ret (.msg [])
   else (FlockDeploy.next true xS (as.drop (off h t)) (cs.drop (off h t))).bind fun o => .ret (markOut [] o)
 
@@ -340,7 +352,8 @@ def sessStep (t : ℕ) (xS : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) :
 have a prefix Flock decides. -/
 def verdict (m₂ : Msg) (as : List Msg) (cs : List FlockDeploy.Coin) : Bool :=
   (List.range h.ms.length).all fun t =>
-    (List.range (k₀ h t + 1)).any fun j => decide (0 < j) && decidedAt (stmtAt h m₂ t) (as.drop (off h t)) (cs.drop (off h t)) j
+    (List.range (k₀ h t + 1)).any fun j =>
+      decide (0 < j) && decidedAt (stmtAt h m₂ t) (as.drop (off h t)) (cs.drop (off h t)) j
 
 /-- **The verifier's step** at the prover's messages `as` and the coins `cs`, one per message: rounds 0 and 1 answer
 their coins; round 2 answers nothing when the session statements are the run's (`stmtOk`) and refuses otherwise; a
@@ -400,8 +413,9 @@ def session (u : ℕ) (v : Seen) : Option (Msg × Seen) :=
 noncomputable def n₀ (t : ℕ) : ℝ := ((shapeOf (h.xS₀ t)).map fun m => (2 : ℝ) ^ (Claims.Flock.zkLevel0 m).d).sum
 
 /-- **The code before its samples**: the verifier, the statement and its evaluation, each unit's session on its
-template's session's rounds, one session per template, its tables the most any template's reference statement has,
-the template past the last (a unit past the members') included, its `N₀` template 0's, and the commitment's layout and reference prover's framing `frame`'s. -/
+template's session's rounds, one session per template, its tables the most any template's reference statement has
+(the template past the last, a unit past the members', included), its `N₀` template 0's, and the commitment's layout
+and reference prover's framing `frame`'s. -/
 noncomputable def base : Code :=
   { h.frame with
     V := V h

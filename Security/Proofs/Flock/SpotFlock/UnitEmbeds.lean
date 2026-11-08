@@ -19,7 +19,7 @@ such a map.
 
 `shape_of_checked`: a checked proof block, replayed in request `ρ`, is member `t`'s unit `k` (`member_of_replayOf`),
 and in Bridge's terms it is the key program's block `k`, `Bits.base` later, whose lowering sits in the statement's
-program (`sitsAt_member`): the shape half of `Embeds`. `parsed_of_stmtOk`: a checked session's statement is the
+program (`sitsAt_member`): the shape half of `Embeds`. `parsed_of_stmtOkAt`: a checked session's statement is the
 readable form of a parsed statement that passes its check with hidden outputs, the session `embeds_unitPlace` reads.
 -/
 
@@ -175,16 +175,16 @@ theorem shape_of_checked
 /-- **A checked session statement, parsed**: at a run that passed round 2, the session statement the claims' parser
 reads is the readable form of the statement the verifier's parser returns (`parsed_setupOf`), whose statement check
 passes and whose outputs are hidden (`sessionScoped`), as `accepted_check` reads it. -/
-theorem parsed_of_stmtOk {x m₁ xS c₀ c₁} {S : Claims.Flock.Stmt} (hok : SpotFlock.stmtOk h x m₁ xS c₀ c₁ = true)
-    (hS : FlockDeploy.parse true relation xS = some S) :
+theorem parsed_of_stmtOkAt {x m₁ xS c₀ c₁ t} {S : Claims.Flock.Stmt}
+    (hok : SpotFlock.stmtOkAt h x m₁ xS c₀ c₁ t = true) (hS : FlockDeploy.parse true relation xS = some S) :
     ∃ p : Parsed, S = toReadable relation p ∧ Parses p ∧ p.check = .ok () ∧ p.tags.hiddenOutputs = true := by
   unfold FlockDeploy.parse parseOf at hS
   obtain ⟨p, hp, rfl⟩ := Option.map_eq_some_iff.1 hS
-  have hs := sessionOk_of_stmtOk h hok
+  have hs := sessionOk_of_stmtOkAt h hok
   simp only [sessionOk, Bool.and_eq_true] at hs
   obtain ⟨ins, spec, sts, hset, -⟩ := zkOk_sound hs.1.1.1
   obtain ⟨rfl, hpp⟩ := parsed_setupOf hset hp
-  obtain ⟨hc, hh⟩ := sessionScoped h x m₁ xS c₀ c₁ hok ins spec sts hset
+  obtain ⟨hc, hh⟩ := sessionScoped h x m₁ xS c₀ c₁ t hok ins spec sts hset
   exact ⟨_, rfl, hpp, hc, hh⟩
 
 end SpotFlock

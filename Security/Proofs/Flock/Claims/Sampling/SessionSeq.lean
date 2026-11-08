@@ -8,20 +8,20 @@ public import Proofs.Flock.Claims.Sampling.SessionTo
 # `SessionRunsTo` from a sampled verifier that runs its sessions in sequence
 
 `SessionSeq D`: the sampled verifier `D.V` answers its first `pre x` rounds itself, with no `H` call and never
-accepting; then runs `nS x` sessions back to back, session `i` on its `kS x i` rounds from `sessOff (pre x) (kS x) i`, each
-round as Flock's verifier `D.flock.V` at the statement the prefix's prover messages name for it (`stmt x as i`), on the
-session's messages and coins, with Flock's acceptance shown as the message `mark`, which Flock never answers; and decides
-in one last round, the only one that may accept, which accepts only where each session's messages have a prefix at which
-Flock does not answer with a message. Every checked unit's session is one of the sessions (`idx`), and the session read
-off a run's transcript is that session's statement and its rounds' transcript cut at its first decision (`cutSeen`) where
-the prefix passed and the run answered every round before the session with a message, and else a refused run: `xR x i`,
-at which Flock refuses the first message `[]`.
+accepting; then runs `nS x` sessions back to back, session `i` on its `kS x i` rounds from `sessOff (pre x) (kS x) i`,
+each round as Flock's verifier `D.flock.V` at the statement the prefix's prover messages name for it (`stmt x as i`), on
+the session's messages and coins, with Flock's acceptance shown as the message `mark`, which Flock never answers; and
+decides in one last round, the only one that may accept, which accepts only where each session's messages have a prefix
+at which Flock does not answer with a message. Every checked unit's session is one of the sessions (`idx`), and the
+session read off a run's transcript is that session's statement and its rounds' transcript cut at its first decision
+(`cutSeen`) where the prefix passed and the run answered every round before the session with a message, and else a
+refused run: `xR x i`, at which Flock refuses the first message `[]`.
 
 `sessionRunsTo_of_seq`: such a verifier runs each session as Flock runs (`SessionRunsTo`). At any coins, a session's
-Flock rounds are its rounds in the run, in order; Flock's prover plays the sampled prover's messages after the transcript
-before them; the session the run shows is that Flock run's transcript, whose `H` calls the run makes; and the run accepts
-only where that Flock run accepts: a Flock run that refuses ends the run, and one that answers all its rounds with
-messages leaves the last round no decision to find in the session's messages.
+Flock rounds are its rounds in the run, in order; Flock's prover plays the sampled prover's messages after the
+transcript before them; the session the run shows is that Flock run's transcript, whose `H` calls the run makes; and the
+run accepts only where that Flock run accepts: a Flock run that refuses ends the run, and one that answers all its
+rounds with messages leaves the last round no decision to find in the session's messages.
 -/
 
 @[expose] public section
@@ -30,17 +30,17 @@ namespace Claims.Sampling
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
 
-/-- **The sampled verifier's sequential structure**: a prefix of `pre x` rounds the verifier answers with no `H` call and
-no acceptance; then `nS x` sessions back to back, session `i` on its `kS x i` rounds from `sessOff (pre x) (kS x) i`, each
-round Flock's verifier at the statement the prefix's prover messages name for the session (`stmt`), on the session's
-messages and coins, with an acceptance shown as `mark`, a message Flock never answers, wherever Flock answered every
-shorter prefix of the session's messages with a message; no acceptance before the last round; and a last round that
-accepts only where each session's messages have a prefix at which Flock does not answer with a message. Where the
-prefix's last answer is a message, session `i`'s statement has its `kS x i` rounds. A checked unit's session is one of
-the sessions (`idx`) and its rounds that session's, and the session read off a transcript is that session's statement and
-its rounds' transcript cut at their first decision (`cutSeen`) where the prefix passed and every round before the session
-was answered with a message, and the refused run of `xR x i` (`kS x i` rounds, refusing the message `[]` at once) where
-the run refused before the session. -/
+/-- **The sampled verifier's sequential structure**: a prefix of `pre x` rounds the verifier answers with no `H` call
+and no acceptance; then `nS x` sessions back to back, session `i` on its `kS x i` rounds from
+`sessOff (pre x) (kS x) i`, each round Flock's verifier at the statement the prefix's prover messages name for the
+session (`stmt`), on the session's messages and coins, with an acceptance shown as `mark`, a message Flock never
+answers, wherever Flock answered every shorter prefix of the session's messages with a message; no acceptance before the
+last round; and a last round that accepts only where each session's messages have a prefix at which Flock does not
+answer with a message. Where the prefix's last answer is a message, session `i`'s statement has its `kS x i` rounds. A
+checked unit's session is one of the sessions (`idx`) and its rounds that session's, and the session read off a
+transcript is that session's statement and its rounds' transcript cut at their first decision (`cutSeen`) where the
+prefix passed and every round before the session was answered with a message, and the refused run of `xR x i` (`kS x i`
+rounds, refusing the message `[]` at once) where the run refused before the session. -/
 structure SessionSeq (D : Deploy Coin Col T) where
   pre : Msg → ℕ
   nS : Msg → ℕ
@@ -167,8 +167,8 @@ theorem acc_of_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC
       simp at h
 
 /-- **A run's transcript, its acceptance shown as `mark`, cut back**: where the verifier never answers the message
-`mark`, the entries a run of `k` rounds adds, its acceptance shown as `mark` and followed by anything, cut at `k` entries
-(`cutSeen`), are those entries and the run's decision. -/
+`mark`, the entries a run of `k` rounds adds, its acceptance shown as `mark` and followed by anything, cut at `k`
+entries (`cutSeen`), are those entries and the run's decision. -/
 theorem cutSeen_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → OC Out) (mark : Msg)
     (hne : ∀ bs, ((v bs).eval H).1 ≠ .msg mark) (k : ℕ) :
     ∀ (hist : List (Msg × Msg)) (as : List Msg) (t : Trace), ∃ new : List (Msg × Out),
@@ -197,12 +197,12 @@ theorem cutSeen_stepWith (P : Prover Ω) (x : Msg) (ω : Ω) (v : List Msg → O
       rw [stepWith_rej_of H P x ω v k hist as t _ rfl l hvb]
       exact ⟨[(((P.next x hist ω).eval H).1, .rej)], rfl, fun rest => by simp [markE, markOut, cutSeen]⟩
 
-/-- **A session's rounds inside a run**: rounds against `v`, which at the messages `as₀` followed by `bs` (at most `K` of
-them, where `v'` answered every shorter prefix of `bs` with a message) answers what `v'` answers at `bs`, an acceptance
-shown as `mark`, with `v'`'s calls, of a prover that after `hist₀` plays `P'`: the run shows `P'`'s run against `v'`, its
-acceptance shown as `mark`, after the transcript `m₀`, makes its calls after `l₀`, and accepts only where that run
-accepts or, that run having answered all `K` of its rounds with messages, `v` accepts at `as₀`, those `K` messages and
-at most `n` more. -/
+/-- **A session's rounds inside a run**: rounds against `v`, which at the messages `as₀` followed by `bs` (at most `K`
+of them, where `v'` answered every shorter prefix of `bs` with a message) answers what `v'` answers at `bs`, an
+acceptance shown as `mark`, with `v'`'s calls, of a prover that after `hist₀` plays `P'`: the run shows `P'`'s run
+against `v'`, its acceptance shown as `mark`, after the transcript `m₀`, makes its calls after `l₀`, and accepts only
+where that run accepts or, that run having answered all `K` of its rounds with messages, `v` accepts at `as₀`, those `K`
+messages and at most `n` more. -/
 theorem stepWith_session (P : Prover Ω) (P' : Prover Ω') (x x' : Msg) (ω : Ω) (ω' : Ω') (v v' : List Msg → OC Out)
     (mark : Msg) (hist₀ : List (Msg × Msg)) (as₀ : List Msg) (m₀ : List (Msg × Out)) (p₀ l₀ : List (Msg × Msg))
     (K n : ℕ) (hP : ∀ hist, P.next x (hist₀ ++ hist) ω = P'.next x' hist ω')
@@ -639,5 +639,85 @@ theorem sessionRunsTo_of_seq {D : Deploy Coin Col T} (S : SessionSeq D) (H : Msg
     · rw [h2]
       simp only [List.mem_append]
       exact Or.inl (Or.inr hq)
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+/-- **An accepted run shows each unit's session as its statement's**: at a run that accepts, the session read off its
+transcript for a unit of session `idx x u < nS x` is that session's statement at the prefix's prover messages, with the
+transcript from the session's first round on cut at its rounds (`cutSeen`). -/
+theorem SessionSeq.session_acc {D : Deploy Coin Col T} (S : SessionSeq D) (H : Msg → Msg) (x : Msg) {Ω : Type}
+    (P : Prover Ω) (ω : Ω) (r : Fin (D.V.k x) → Coin) (u : ℕ) (hi : S.idx x u < S.nS x)
+    (hacc : (run H P D.V x ω r).out = .acc) :
+    ∃ ms rest, (run H P D.V x ω r).msgs = ms ++ rest ∧ ms.length = sessOff (S.pre x) (S.kS x) (S.idx x u) ∧
+      D.session x u (run H P D.V x ω r).seen =
+        some (S.stmt x ((ms.take (S.pre x)).map Prod.fst) (S.idx x u), cutSeen S.mark (S.kS x (S.idx x u)) rest) := by
+  have hoK : sessOff (S.pre x) (S.kS x) (S.idx x u) + S.kS x (S.idx x u) < D.V.k x := by
+    have := sessOff_add_le (S.pre x) (S.kS x) hi
+    rw [S.k_eq]
+    omega
+  have hpo : S.pre x ≤ sessOff (S.pre x) (S.kS x) (S.idx x u) := le_sessOff _ _ _
+  have hrun : run H P D.V x ω r =
+      stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r)))
+        (S.pre x + (D.V.k x - S.pre x)) [] [] ⟨[], [], [], .rej⟩ := by
+    rw [Nat.add_sub_of_le (by omega)]
+    rfl
+  have hnaA : ∀ (as : List Msg) (cs : List Coin), as ≠ [] → as.length ≤ S.pre x → cs.length = as.length →
+      ((D.V.next x as cs).eval H).1 ≠ .acc := fun as cs h1 h2 h3 => by
+    obtain ⟨o, ho, hne⟩ := S.next_pre x as cs h1 h2 h3
+    rw [ho]
+    exact hne
+  rcases run_upto H x P ω r (S.pre x) (D.V.k x - S.pre x) hnaA (S.pre x) [] [] [] (by simp) (by simp) (by simp) with
+    ⟨msA, psA, lsA, hlenA, -, hmsA, hlastA, hA⟩ | ⟨ms, a, ps, ls, -, -, hA⟩
+  swap
+  · have h0 := hA r fun _ _ => rfl
+    simp only [List.map_nil] at h0
+    rw [hrun, h0] at hacc
+    simp at hacc
+  have hA0 := hA r fun _ _ => rfl
+  simp only [List.map_nil] at hA0
+  have hAne : msA ≠ [] := by
+    rintro rfl
+    have := S.pre_pos x
+    simp at hlenA
+    omega
+  obtain ⟨mA, hmA⟩ := hlastA hAne
+  obtain ⟨oA, hoA, -⟩ := S.next_pre x (msA.map Prod.fst) ((List.range msA.length).map (coinSeq r))
+    (by simpa using hAne) (by simp [hlenA]) (by simp)
+  rw [hoA] at hmA
+  simp only [OC.eval] at hmA
+  subst hmA
+  have hnaB : ∀ (as : List Msg) (cs : List Coin), as ≠ [] → as.length ≤ sessOff (S.pre x) (S.kS x) (S.idx x u) →
+      cs.length = as.length → ((D.V.next x as cs).eval H).1 ≠ .acc := fun as cs h1 h2 h3 => by
+    by_cases hp : as.length ≤ S.pre x
+    · exact hnaA as cs h1 hp h3
+    · exact S.next_mid H x as cs (by omega) (by omega) h3
+  have hsplit : D.V.k x - S.pre x =
+      (sessOff (S.pre x) (S.kS x) (S.idx x u) - S.pre x) + (D.V.k x - sessOff (S.pre x) (S.kS x) (S.idx x u)) := by
+    omega
+  rcases run_upto H x P ω r (sessOff (S.pre x) (S.kS x) (S.idx x u)) (D.V.k x - sessOff (S.pre x) (S.kS x) (S.idx x u))
+      hnaB (sessOff (S.pre x) (S.kS x) (S.idx x u) - S.pre x) msA psA lsA (by omega) hmsA
+      (fun _ => ⟨mA, by rw [hoA]; rfl⟩) with
+    ⟨ms, ps, ls, hlen, hpref, hms, -, hB⟩ | ⟨ms, a, ps, ls, -, -, hB⟩
+  swap
+  · rw [hrun, hA0, hsplit, hB r fun _ _ => rfl] at hacc
+    simp at hacc
+  have htake : (ms.take (S.pre x)).map Prod.fst = msA.map Prod.fst := by
+    obtain ⟨l, rfl⟩ := hpref
+    rw [List.take_left' hlenA]
+  have hpass : D.V.next x ((ms.take (S.pre x)).map Prod.fst) ((List.range (S.pre x)).map (coinSeq r)) =
+      .ret (.msg mA) := by
+    rw [htake, ← hlenA]
+    exact hoA
+  have hW : run H P D.V x ω r = stepWith H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r)))
+      (D.V.k x - sessOff (S.pre x) (S.kS x) (S.idx x u)) (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst)
+      ⟨ms, ps, ls, .rej⟩ := by
+    rw [hrun, hA0, hsplit, hB r fun _ _ => rfl]
+  obtain ⟨rest, lm, h1, -⟩ := stepWith_ext H P x ω (fun as => D.V.next x as ((List.range as.length).map (coinSeq r)))
+    (D.V.k x - sessOff (S.pre x) (S.kS x) (S.idx x u)) (ms.map fun e => (e.1, msgOf e.2)) (ms.map Prod.fst)
+    ⟨ms, ps, ls, .rej⟩
+  refine ⟨ms, rest, by rw [hW]; exact h1, hlen, ?_⟩
+  rw [hW]
+  simp only [Trace.seen]
+  rw [h1]
+  exact S.session_pass x u ms rest _ ((List.range (S.pre x)).map (coinSeq r)) mA hlen hi hms (by simp) hpass
 
 end Claims.Sampling
