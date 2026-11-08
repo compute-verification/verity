@@ -20,9 +20,9 @@ its accesses, whatever the pool's size.
   each placed slot's returns), and the stream's witness: its NS slots (start, kind, r, a, b, the read's v and t) and
   its touched list's final values and times.
 A registered row is padded to whole words (`compile_slice.WORD`); its padding must be zero. `CLASSES` names each input's
-class. The checked class is proofs' ruling on CIR-190 (01:55Z, 8 Nov): the valid witness is unique, its coins are drawn
-after it is committed, and a wrong one passes only with the fingerprints' collision probability, which enters the
-soundness error, so it is a computed check and not advice. `free_width` counts the inputs of no class but advice.
+class. The checked witness is a computed check, not advice: the valid witness is unique, its coins are drawn after it
+is committed, and a wrong one passes only with the fingerprints' collision probability, which enters the soundness
+error. `free_width` counts the inputs of no class but advice.
 
 **The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
 calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its
@@ -717,10 +717,7 @@ def _returns(S, stream: V3S.Stream, st: RS.State, rnum: dict[int, int]) -> list[
         r = st.running[j]
         held = RS.cdiv(r.comp, S.B)
         if held and r.id in rnum:
-            try:
-                out[j] = trial.call(V3S.Call("free", rnum[r.id], held))[0]
-            except (V3S.Refused, ValueError):
-                pass
+            out[j] = trial.call(V3S.Call("free", rnum[r.id], held))[0]
     return out
 
 
@@ -744,14 +741,14 @@ def rk_keys(S, sl: CS.Slice, delta: int) -> dict[int, int]:
 
 
 def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
-    """The window as a prover runs it from `sl` (the module's docstring); raises `Refused` (ValueError for a slice the
-    load refuses)."""
+    """The window as a prover runs it from `sl` (the module's docstring). ``refused`` says why the load, a step or a call
+    refuses the slice, where one does, and the run ends there; it is None otherwise."""
     sh = shape(S)
     Sc, St = CS.chain(S), CS.step_statics(S)
     arrivals = tuple(map(tuple, sl.arrivals))
     loaded = RC.load(Sc, RC.empty(Sc), RC.QueueRow(), arrivals, sl.decisions, sl.steps)
     if loaded is None:
-        raise ValueError("the load refuses the slice")
+        return SimpleNamespace(refused="the load refuses the slice")
     cur, win = loaded
     rnum = request_numbers(sl)
     stream = V3S.Stream(sh.S3, V3S.empty_pool(sh.S3, rk_keys(S, sl, delta)), 1, S.NB - 1)
@@ -774,7 +771,7 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
             inp = RS.Inputs(reqs, tuple(bits), tuple(h), tuple(e), tuple(r))
             out = RS.reference(St, st, inp)
             if not out.ok:
-                raise Refused(f"step {u} refuses: the slice's class can't take it")
+                return SimpleNamespace(refused=f"step {u} refuses: the slice's class can't take it")
             trial, refused = copy.deepcopy(stream), None
             try:
                 got = pool_step(S, trial, st, inp, nc, fl, rnum)
@@ -792,12 +789,12 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
                     r[k[1]] = dr[k[1]]
                 continue
             if refused is not None:
-                raise Refused(f"step {u}: {refused}")
+                return SimpleNamespace(refused=f"step {u}: {refused}")
             if (got.hit, got.ev, got.ret) == (tuple(h), tuple(e), tuple(r)):
                 break
             h, e, r = list(got.hit), list(got.ev), list(got.ret)
         else:
-            raise Refused(f"step {u}'s hits and returns don't settle")
+            return SimpleNamespace(refused=f"step {u}'s hits and returns don't settle")
         stream, nc, fl, t = trial, got.nc, got.fl, got.tap
         backs = tuple(r[j] if t.popped[j] else 0 for j in range(R))
         rets = tuple(r[p] if (t.update[p] or {}).get("leave") else 0 for p in range(R))
@@ -808,7 +805,8 @@ def scan(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace:
         steps.append(out.rows)
         states.append(nxt)
         cur = nxt
-    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, pools=pools, wit=wit, stream=stream)
+    return SimpleNamespace(states=states, window=win, fronts=fronts, steps=steps, pools=pools, wit=wit, stream=stream,
+                           refused=None)
 
 
 def _encode_pool(S, nc: Sequence[int], fl: Sequence[int]) -> list[int]:
@@ -823,9 +821,8 @@ def reference(S, sl: CS.Slice, delta: int = COINS[2]) -> SimpleNamespace | None:
     window's), a call or the class (the stream past NS slots or NM M entries, an access outside the touched list's
     runs) refuses the slice."""
     sh = shape(S)
-    try:
-        sc = scan(S, sl, delta)
-    except (ValueError, Refused):
+    sc = scan(S, sl, delta)
+    if sc.refused is not None:
         return None
     for u, (cur, nxt) in enumerate(zip(sc.states, sc.states[1:])):
         if cur.steps:
