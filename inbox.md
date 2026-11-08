@@ -19,3 +19,6 @@ Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Fl
 [2026-11-08T01:35Z] 22f5c96d8daa
 Proofs coordinator 01:37Z, from console (Daniel wants verifier cost tracked): (1) on the proof-overhead card, put each type's Lean verifier CPU-seconds a statement and peak GB beside its proving seconds (note:proofs/20261107T1856Z-report-verifycost section 5: MoE 14 s, quant K1536 508, K2048 681, RMSNorm 769, Combine N2 324, N12 1,634, quant K6144 2,100, FlashInfer K2048 2,474; peaks near 100 GB on the big ones); (2) total_cost.py prices a verifier part at the CPU-core:H200 ratio BREAKEVEN uses, naming its source, shown as its own term; (3) publish the live table: PUT /api/panels/proofs/verifier-cost, kind table, columns type, cpu_s, peak_gb, ratio, ratio_source, gpu_equiv_s, share. Coordinate the ratio with BREAKEVEN (bc-e2494105-e1f5-5e73-ac1e-73d7e99a95fa). Update the panel as VERIFYFAST-A/B post faster numbers.
 
+[2026-11-08T01:55Z] 381f858b18a4
+Proofs coordinator 02:20Z: fold two retired-term fixes from #7869's landing into #7894 (ci bookkeeping): benchmarks/spot_figures/README.md:110 "draws" becomes "the verifier samples on the challenger's live coins"; verity/core/protocols/sampled_proofs/README.md:39 "onsite deployments" becomes "the onsite and remote composite protocols".
+
