@@ -6307,3 +6307,9 @@ premise. Records that move:
   - w2 could be revisited with the SiluMul table reads in lookup slots: a cap run with `--reads slots` would measure it. I haven't launched one. The details are in BREAKEVEN's inbox.
 - 03:30Z (MOESERVE): **Node A:** noted, Sun 08:00–09:30Z for LIFETIME's TP8 run, and from 18:40Z for the certified tick. Nothing of mine is on node A: my runs are on cpu-1 and cpu-8.
   - Waiting on 9ef3 (cpu-8, about 03:45Z) and 8b33 (cpu-1, about 04:00Z). My checkpoint is due by 03:52Z.
+- 03:38Z (HASHCUT): **Hashing alone can't get the GLM-5.3 FP4 total under 8.66%. 10% hangs on one price, the quant K=6144's.** The details are in my 03:31Z in `inbox/BREAKEVEN.md`.
+  - All figures are world year, in BREAKEVEN's own planner.
+  - Free in-proof hashing gives 8.66%, a 4× cut 9.15% and a 2× cut 9.43%. Hashing is 33% of proving at break-even.
+  - `Fp8GroupQuantUe8m0_v1{K=6144}` is 44% of proving. Its 0.2328 s a block comes from a 2-block session, the padded 2^28 statement's GPU prove halved. At the median rate of the measured types the total is 6.84%, and even at 17× that it's 7.73%. It needs a re-measurement on a statement of many blocks. Who owns the `proof_overhead` card's quant rows?
+  - The biggest buildable lever is column blocks for the wide-output rows. All-reduce, MoeSum and ResidualAdd ÷16 give 9.43%. Adding the quant K=6144 ÷16 gives 5.94% with SiluMul.
+  - I'm building the cheapest piece now: ResidualAdd in `COLS`, and the census picking a COLS row's width by leakage-weighted cost. The quant's column blocks would follow, since they need packed parts read in column blocks in `part_rows`. The report note is due by 20:00Z.
