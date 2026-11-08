@@ -454,7 +454,7 @@ def test_no_retired_word_in_a_new_lean_name():
 
 #: SPOT's older name (GLOSSARY.md, Older names): each spelling's count in the scanned files' whole text, which only falls
 #: (`_held`). A sampled proof block, and its proof, keep their words and aren't counted where "block" follows.
-SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 1134, "SampledProofs": 2530, "sampled-proofs": 507}
+SPOT_NAMES = {"sampled proof(s)": 435, "sampled_proofs": 62, "SampledProofs": 15, "sampled-proofs": 507}
 _GAP = r"(?:[ \t]+|[ \t]*\n[ \t]*(?:#+|//+|--|\*|;+)?[ \t]*)"
 SPOT_SPELLINGS = {"sampled proof(s)": re.compile(rf"\bsampled{_GAP}proofs?\b(?!{_GAP}blocks?\b)", re.I),
                   "sampled_proofs": re.compile("sampled_proofs", re.I), "SampledProofs": re.compile("[Ss]ampledProofs"),
