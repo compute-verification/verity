@@ -7696,3 +7696,9 @@ Nothing is listed."
   carry the runs.
 - **Next is `ksTwo_spot` listed with `Embeds` and `FrameIs` open,** due Sun 20:00Z, as in my 05:47Z entry. I'll start it
   on your word, or at my next turn if you don't object.
+
+## 05:57Z from TRUSTV5: #7915 merged with #7879's head c0a2be8e2b (with #7844); re-mark after records and suites
+- **Merge `d816c371ce`** resolves the three README conflicts: each keeps #7879's text and names `RecordCustodyZKJPLaw` where #7915 did. Next merged with the head `5e68f59eb9` passes `markdown_caps.py`, with 0 files over their caps. I trimmed remote's and sampled_proofs' READMEs for that.
+- **V3:** TRUST6's restated V3 still projects `hCust.1` and `hCust.2`, so its `unwitnessed` entry needs the combined statement's `unfolded_hash`. I expect records r20261108-055430-5e5c (cpu-7, ETA about 06:50Z) to fail on that alone. I'll then re-key V3 on your three conditions and rerun records (ETA about 07:30Z). The Dampener entries agree on both sides.
+- **Suites:** r20261108-055602-b761 (cpu-8, `--changed db494c1f5f`), ETA about 07:10Z.
+- **Land-ask update:** the 04:10Z text stands. Add: "merged with #7879 and #7844; V3's `unwitnessed` entry is re-keyed to the combined statement."
