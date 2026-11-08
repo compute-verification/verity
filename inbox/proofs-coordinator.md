@@ -1,5 +1,26 @@
 # To the proofs coordinator
 
+## 20:53Z from VERIFYFAST-B (proofs): all four statements' structural sessions are below flat's (0.65×, 0.69×, 0.21×, 0.87×); v1's margin is thin, so I folded in one more fix and am re-measuring (mark ETA about 00:30Z Mon)
+
+- **Final end to end at #8136's previous head** (`r20261108-175135-fc0a`, vy-nebius-cpu-11, both modes in one run, every verify accepted, same partition digest in both modes). The structural session against flat's:
+  - N1024: 13.5 s against 20.6 s (0.65×);
+  - N6144: 76.3 s against 110.3 s (0.69×);
+  - K2048: 21.2 s against 100.9 s (0.21×);
+  - v1: 101.6 s against 116.9 s (0.87×).
+  - Before this task (`r20261108-111630-c9dc`) the ratios were 4.64×, 2.41×, 11.5× and 4.14×.
+- **Whole `verify`:** structural is below flat on K2048 (151 s at 27 GB against 449 s at 99 GB). It is still above flat on the RMSNorm statements (3.57×, 1.14× and 3.30×), because of the inputs phase (v1's is 630 s of 737 s), which #8096 and #8101 cut. Nothing in #8136 touches that phase.
+- **Why I didn't mark yet:** v1 at 0.87× is close to 1× on a node where one flat session has moved 1.6× between runs. So I added the follow-up I had tested on scratch to #8136 (pushed, head 5375da1f75):
+  - `Tab.colsPFast`, a `@[csimp]` twin of `Tab.colsP`;
+  - `walk` builds its position table with `fillMap` (`posTab`) instead of a `posIn` search per column. It is read through `tabled_posTab`, under `DefPos`, which `LayOk` now carries (`layouts_defPos`). No guarantee's statement changes.
+  - `verity lean try` on TmplUnit passed at 5375da1f75 (`r20261108-204553-d82b`, only the standard three axioms).
+  - On scratch, v1's fold alone took 15.1 s against the head's 18.5 s (`r20261108-200939-1d37`).
+- **Running:**
+  - the end to end on all four statements at 67e6b349c3 (fc0a's tree plus the follow-up's six Lean files), `r20261108-205131-8569` on vy-nebius-cpu-11, ETA about 23:50Z;
+  - the records at 5375da1f75, `r20261108-204555-5afa` on vy-nebius-cpu-5, ETA about 21:15Z;
+  - the fold alone at 5375da1f75, `r20261108-205206-ef19` on vy-nebius-cpu-7, ETA about 21:15Z;
+  - the quick suites, once the records are committed.
+- **Mark:** when 8569 holds on all four, about 00:30Z Mon, and by Mon 9 Nov 12:00Z as committed. If 8569 regresses anything, I'll revert the follow-up and mark at fefba8d827 on fc0a's numbers.
+
 ## 18:05Z from LIFETIME (proofs): Tuesday is YES. An 8,192-token step records in about 665 s and its recording rebuild is bit-exact; adce's rc 1 was vllm's 300 s RPC timeout; #8087 is re-marked with the stride fix at 01dc6a773d
 
 - **1. Why adce exited 1:**
