@@ -141,6 +141,8 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/core/protocols/certifier/cache_step.circuit-check.json",
           "verity/ml/protocols/certifier/cache_step_v2.py", "verity/ml/protocols/certifier/cache_step_v2.circuit-check.py",
           "verity/ml/protocols/certifier/cache_step_v2.circuit-check.json",
+          "verity/ml/protocols/certifier/cache_step_v3.py", "verity/ml/protocols/certifier/cache_step_v3.circuit-check.py",
+          "verity/ml/protocols/certifier/cache_step_v3.circuit-check.json",
           "verity/ml/protocols/certifier/compile_slice_v2.py",
           "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v2.circuit-check.json",

@@ -1,5 +1,5 @@
 """What every decoder of `build.decoder` writes with: the refusal (`Unexpressible`), the vocabulary's kinds (`kind`), the served
-class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials and of the schedule (`_Peers`), the
+class, the circuit types of a shape, the tensor-parallel rank's view of the other ranks' partials (`_Peers`), the
 batch a request's calls run in (`launch_batch`, `_Launch`) or a batch-invariant row's launch context (`launch_rows`, `launch_seqlen_q`) and the
 token select over a row's whole-vocabulary logits (`select_token`), and a wrapper's forwards over a decoder (`drive`)."""
 
@@ -85,13 +85,15 @@ def finish_run(run, params: tuple, B) -> tuple:
     return B.params
 
 
-def with_checks(model, out: Coll) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
+    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
+    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
     refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
     from verity_vllm.program import inputs
-    checks = getattr(model, "checks", None)
+    from verity_vllm.program.frontend import stop_rule as SR
+    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
     for c, what in checks:
@@ -203,12 +205,10 @@ def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, po
 
 class _Peers:
     """A tensor-parallel rank's view of the other ranks' partials (`vllm_meta.WithPeers`): world - 1 peer Inputs per collective, in
-    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read.  `schedule` is the rank's schedule
-    Input (`CollectiveBus.schedule_key`, the MoE align's key per pair), read in call order; `k` counts the words read."""
+    call order, the other ranks in rank order; `n` counts the Inputs the collectives have read."""
 
-    def __init__(self, inputs: list[Coll], world: int, rank: int, schedule: Coll | None = None) -> None:
+    def __init__(self, inputs: list[Coll], world: int, rank: int) -> None:
         self.inputs, self.world, self.rank, self.n = list(inputs), world, rank, 0
-        self.schedule, self.k = schedule, 0
 
     def take(self, own: list) -> list[list]:
         """One collective's rows per rank, in rank order: this rank's `own` rows (refs) and each of the next world - 1 peer Inputs'."""
@@ -226,12 +226,6 @@ class _Peers:
     def whole(self, own: list):
         """The operand of one collective over all rows: every rank's rows, rank-major (`collectives.AllReduceRule`'s parts)."""
         return concat([concat(r) for r in self.take(own)])
-
-    def key(self, n: int):
-        """The next n words of the schedule."""
-        out = self.schedule.refs.slice(self.k, self.k + n)
-        self.k += n
-        return out
 
 
 class _Launch:

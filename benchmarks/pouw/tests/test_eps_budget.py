@@ -53,7 +53,7 @@ def test_two_sided_meets_the_target_everywhere():
     for m, c, ph in CELLS:
         s = E.summary(m, c, ph, design("dither-2s"), credit="floor")
         assert s.eps_mac < 1e-2 and s.eps_time < 1e-2, (m, c, ph)
-        assert s.gamma < 2.2, (m, c, ph)
+        assert s.gamma < 1.2, (m, c, ph)
         skipped = {r["component"] for r in s.rows if r["eps_mac"] or r["eps_time"]}
         assert skipped == {"P·V"}, (m, c, ph)
 
@@ -236,9 +236,9 @@ def test_the_peel_is_priced_at_bc_kernels_measured_kernel():
 def test_pv_units_price_as_checked_strip_without_the_scaling_and_the_sink(monkeypatch):
     monkeypatch.setattr(E, "PV_SCALE_OPS", 0.0)
     monkeypatch.setattr(E, "pv_ts", E.pv_ts.__wrapped__)
-    for m, c, eps, gamma in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
-        e, g = E.pv_ts(m, c, 0, sink=False)
-        assert eps <= e < eps + 1e-4 and g == pytest.approx(gamma, abs=1e-4)   # the zero-instance routes add < 0.01%
+    for m, c, eps, ratio in (("llama-3.1-8b", 2048, 0.043914, 1.4080), ("llama-3.1-70b", 8192, 0.010158, 1.2985)):
+        e, r = E.pv_ts(m, c, 0, sink=False)
+        assert eps <= e < eps + 1e-4 and r == pytest.approx(ratio, abs=1e-4)   # the zero-instance routes add < 0.01%
 
 
 def test_smaller_p_blocks_cost_more_eps_and_gamma():
@@ -256,7 +256,7 @@ def test_smaller_p_blocks_cost_more_eps_and_gamma():
 
 def test_decode_hides_the_edit_under_dram_and_the_zero_weight_gap_is_reported():
     for m, c, _ in CELLS:
-        assert E.summary(m, c, "decode", design("dither-2s")).gamma < 1.05
+        assert E.summary(m, c, "decode", design("dither-2s")).gamma < 0.05
         assert E.decode_dram(m, c) > 1
 
 

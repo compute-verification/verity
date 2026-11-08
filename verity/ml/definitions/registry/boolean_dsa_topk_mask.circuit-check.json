@@ -1,0 +1,28 @@
+{
+ "definitions": {
+  "DsaButterflyRows_v2{N=7,K=3,W=2,E=16}": {
+   "and": 352,
+   "type": "bfd19fce73c6a1e7ffbbcd65c15779138bf1b5f2fb2f7df443f445def93a3d15af3e3db239c12ce82a4e02566f691d594e0300a2891c606a53448f8a42453dcc"
+  },
+  "DsaButterflyRows_v2{N=9,K=8,W=3,E=16}": {
+   "and": 1296,
+   "type": "42505e73aeeea38ba1ec639e3cd9550a86c90bb228f06044de8723e5c6e6f9e63203e24eaf74b5927180a9ba35716619b8f2263742f2dc44a60101752e35ed2e"
+  },
+  "DsaButterflySettings_v2{N=33,K=8}": {
+   "and": 310,
+   "type": "032040580063d1f14d764d1e39cb6070f81ef4aced4481a46c2e6728f3f02ed2b217e8031057b2497556814bfe25fd789c436bfee596fb4cf06c9487cb5d6abf"
+  },
+  "DsaButterflySettings_v2{N=9,K=8}": {
+   "and": 78,
+   "type": "df5977d498141f1be82ace3c913d1efac171706daaf8519e863f3078eb15dbdf57ae3d485b4fbbf83558a883176959f6b61b380ff4acd8916b022ac44ac6772a"
+  },
+  "DsaTopKMask_v2{N=20,TOPK=16}": {
+   "and": 3096,
+   "type": "a744206a8658da58533741295e0cd1e6dfff50772a5a06af01809d1ba5f5f4be9a3bda43c7116bc84ebcf6c3cf7a7716a87af0f8f488a1c8e76b8270f20f0267"
+  },
+  "DsaTopKRow_v2{N=20,TOPK=16}": {
+   "and": 3505,
+   "type": "6e13f6fcdc209a61769af56427986febd5297a64a4fec32e6943f42b7fd45b956012e495becc9ff8af4f3d55c19936ae5afb4648428c641b049f02d7f1abab7a"
+  }
+ }
+}
