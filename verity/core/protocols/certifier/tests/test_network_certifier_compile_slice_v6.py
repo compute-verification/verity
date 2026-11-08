@@ -296,17 +296,17 @@ def test_random_chains(request, which):
 
 def test_size(synth, asynth):
     """What each unit costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileWindow and the
-    calls row's check, 13,241 and 14,333 ANDs. The pool window, 4,539,123 and 3,656,807, is CompileSlice_v5's stream, bus
-    and ragged keys (3,857,177 at the synchronous demo's class with NM = 8) with 8 more M entries, the arrivals' counts,
-    the two rows' digests (four compressions each at 2,641 bits), their ten keys' prints, five open and five close steps
-    and 16 copy steps. Its free input is the left row and the stream's witness."""
+    calls row's check (a CallsEq a record), 13,242 and 14,334 ANDs. The pool window, 4,539,123 and 3,656,807, is
+    CompileSlice_v5's stream, bus and ragged keys (3,857,177 at the synchronous demo's class with NM = 8) with 8 more M
+    entries, the arrivals' counts, the two rows' digests (four compressions each at 2,641 bits), their ten keys' prints,
+    five open and five close steps and 16 copy steps. Its free input is the left row and the stream's witness."""
     common = {"adv_bits": 8, "ing_bits": 27, "req_bits": 160, "srv_bits": 160, "res_bits": 208, "pin_bits": 512,
               "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "compile_free_bits": 8}
-    assert V6.size(**synth.st) == {**common, "compile_ands": 13241, "pool_ands": 4539123, "cout_bits": 160,
+    assert V6.size(**synth.st) == {**common, "compile_ands": 13242, "pool_ands": 4539123, "cout_bits": 160,
                                    "calls_bits": 1984, "chk_bits": 34684, "pool_free_bits": 37325}
-    assert V6.size(**asynth.st) == {**common, "compile_ands": 14333, "pool_ands": 3656807, "cout_bits": 176,
+    assert V6.size(**asynth.st) == {**common, "compile_ands": 14334, "pool_ands": 3656807, "cout_bits": 176,
                                     "calls_bits": 2208, "chk_bits": 25084, "pool_free_bits": 27725}
-    assert ands(V6.chain_unit(**synth.st)) == 2 * (13241 + 4539123)
+    assert ands(V6.chain_unit(**synth.st)) == 2 * (13242 + 4539123)
 
 
 def test_the_parts_price_the_units(synth, asynth):
