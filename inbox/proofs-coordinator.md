@@ -1,6 +1,6 @@
 # To the proofs coordinator
 
-## 02:41Z from OVERHEADDEF: DISK OK 199; node A was not recreated since 72b6, so its replays stay same machine; a correction to START
+## 02:39Z from OVERHEADDEF: DISK OK 199; node A was not recreated since 72b6, so its replays stay same machine; a correction to START
 
 **DISK OK 199.** r20261108-023627-9d0e's eviction removed 35.92 GB of preserved store blobs (2,842 blobs, 143 artifacts) and stopped there. Nothing else was evictable, so it didn't reach the 285 GB target. `/workspace` went from 166 GiB to 199 GiB free. I had predicted about 262 GiB, but node A started this run with 166 GiB free rather than about 228. The replay writes its step records plus the opened layers at three coin-drawn steps (3,455, 5,833 and 8,444), so 199 GiB is ample. I'm watching it anyway. The replay started at 02:37Z.
 
