@@ -45,7 +45,8 @@ theorem leaf_commitString (r y : List UInt8) :
   rw [bytes_digBytes, FlockSoundness.Refine.H512_val]
   show _root_.Flock.Sha512.hash ⟨(FlockSoundness.Refine.K512.leafPrefix ++
       FlockSoundness.Binding.commitString r y).toArray⟩ =
-    _root_.Flock.Sha512.hash (_root_.Flock.Hm96.Default512.leafPrefix ++ bytes (FlockSoundness.Binding.commitString r y))
+    _root_.Flock.Sha512.hash
+      (_root_.Flock.Hm96.Default512.leafPrefix ++ bytes (FlockSoundness.Binding.commitString r y))
   congr 1
 
 variable (h : Held)
