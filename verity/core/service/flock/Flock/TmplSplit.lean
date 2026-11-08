@@ -495,10 +495,17 @@ def walkCall (t : Tmpl) (lays : Array Lay) (pt : FoldPt)
       pure (Tab.binds bind (Tab.slots pt W EL (nk * c.count) o ch rm cm) c.count ch rm fun _ j =>
         (List.range nk).map fun k => (k, eLow (as.getD k 0 + B * j)))
 
+/-- Definition `d`'s own columns' positions at local offset `off`, `m` of them (none, or all its columns): `fillMap`
+over its copy, which writes each column's position once along its layout's runs and its calls' copies, where `posIn`
+would search for each. -/
+def posTab (t : Tmpl) (lays : Array Lay) (d off m : Nat) : Array Nat :=
+  if m = 0 then #[] else fillMap t lays (t.defs.size + 1) d 0 off 1 (Array.replicate m 0)
+
 /-- **Walk Definition `d`'s class** `(β, as)` at local offset `off` in chunks of `2^al` (`fuel` bounds the depth;
 `multi`: reached on more than one path): its own rows, then each call's (`walkCall`), a call's class `walkChild`'s. Its
-columns' positions, and its halves' values at the low parts of its columns' factors and its rows', are tabled once (at
-most one entry per column, and per row for the rows'), so a column or row reads them without a product. -/
+columns' positions (`posTab`), and its halves' values at the low parts of its columns' factors and its rows', are tabled
+once (at most one entry per column, and per row for the rows'), so a column or row reads them without a search or a
+product. -/
 def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     Nat → Nat → Nat → Array Nat → Nat → Nat → SV Tab
   | 0, _, _, _, _, _ => throw "split fold: calls nest deeper than the definitions"
@@ -514,7 +521,7 @@ def walk (t : Tmpl) (lays : Array Lay) (multi : Array Bool) (pt : FoldPt) :
     let B := 2 ^ β
     let m := if D.cols ≤ D.rows.foldl (fun r (_, ra, rb) => r + ra.size + rb.size) 0 then D.cols else 0
     let posD := fun (y : Nat) => off + posIn t lays (t.defs.size + 1) d y
-    let pa := (Array.range m).map posD
+    let pa := posTab t lays d off m
     let pos := tabled pa posD
     let nh := if summed then 0 else B * m / 64 + 1
     let gA := (Array.range nh).map gL.at

@@ -7,6 +7,7 @@ import Proofs.Flock.Level3.FoldedBase
 import Proofs.Flock.Level3.Nodes
 import Proofs.Flock.Soundness.TmplFoldDef
 import Proofs.Flock.Soundness.TmplFoldRef
+import Proofs.Flock.Soundness.TmplPosMap
 import Std.Data.HashMap.Lemmas
 
 /-!
@@ -458,6 +459,39 @@ theorem walkCall_sum {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : Fo
 
 /-! ## The walk -/
 
+/-- `walk`'s position table: with every layout in order (`DefPos`), `posTab`'s entries are `posIn`'s, so a position read
+from it is `posIn`'s. -/
+theorem tabled_posTab {t : Tmpl} {lays : Array Lay} (hpos : ∀ d < t.defs.size, DefPos t lays d) (d off m : ℕ)
+    (hm : m = 0 ∨ m = (t.defs.getD d default).cols) :
+    tabled (posTab t lays d off m) (fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y) =
+      fun y => off + Flock.Tmpl.posIn t lays (t.defs.size + 1) d y := by
+  funext y
+  by_cases h0 : m = 0
+  · simp [tabled, posTab, h0]
+  have hm' : m = (t.defs.getD d default).cols := hm.resolve_left h0
+  by_cases hd : d < t.defs.size
+  · have hok := writes_ok t lays hpos (t.defs.size + 1) d 0 off 1 hd
+    have htree := treeAt_writes t lays hpos (writes t lays (t.defs.size + 1) d 0 off 1) (Array.replicate m 0) hok.2
+      (fun w hw => by
+        have := (hok.1 w.1 (List.mem_map_of_mem hw)).2
+        rw [Array.size_replicate, hm']
+        omega)
+      (t.defs.size + 1) d 0 off 1 hd (by omega) (fun w hw => hw)
+    rw [← fillMap_writes] at htree
+    simp only [TreeAt] at htree
+    unfold tabled posTab
+    rw [if_neg h0]
+    by_cases hy : y < (fillMap t lays (t.defs.size + 1) d 0 off 1 (Array.replicate m 0)).size
+    · rw [if_pos hy]
+      have hy' : y < (t.defs.getD d default).cols := by
+        rw [fillMap_writes, setAll_size, Array.size_replicate] at hy
+        omega
+      have := htree.1 y hy'
+      rw [Nat.zero_add, Nat.one_mul] at this
+      exact this
+    · rw [if_neg hy]
+  · exact absurd (hm'.trans (by simp [Array.getD, hd] <;> rfl)) h0
+
 /-- **A walk's step**: every class's walk at depth `F + 1` means its class's, from every walk's at `F`. -/
 theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldPt} {s : ℕ} (hs : s < 64)
     (hT : pt.rhoT = Tmpl.halves pt.rho) (hR : pt.rT = Tmpl.halves pt.r) (hlay : LayOk t lays)
@@ -468,6 +502,7 @@ theorem walk_step {t : Tmpl} {lays : Array Lay} {multi : Array Bool} {pt : FoldP
   rw [walk] at h
   simp only [show (!decide (6 ≤ β) && decide (β + al < 6)) = false by simp; omega, Bool.false_eq_true,
     ↓reduceIte, tabled_eq] at h
+  rw [tabled_posTab hlay.pos d off _ (by split <;> simp)] at h
   obtain ⟨eL, st1, hE, h⟩ := sv_bind_ok h
   obtain ⟨gL, st2, hG, h⟩ := sv_bind_ok h
   obtain ⟨rfl, hH1, ht1⟩ := half_ok hE hst.1

@@ -1,6 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.TmplFoldClass
+public import Proofs.Flock.Soundness.TmplPosMap
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.Data.Nat.Totient
 import Proofs.Flock.Level3.FoldedBase
@@ -177,8 +178,9 @@ theorem lanes_call (t : Tmpl) (lays : Array Lay) (fuel d i : ℕ) (hi : i < (t.d
       else ((lays.getD d default).places.getD i default).ms.log2) +
         lanes t lays fuel ((t.defs.getD d default).calls.getD i default).def_) _ 0).2 i (List.mem_range.mpr hi)
 
-/-- What the fold reads of the layout: each copy binds its callee's inputs, and a run of lanes takes `2^m ≥ count`
-lanes, its copies side by side (`cs = 1`). -/
+/-- What the fold reads of the layout: each copy binds its callee's inputs, a run of lanes takes `2^m ≥ count`
+lanes, its copies side by side (`cs = 1`), and every Definition's layout is in order (`DefPos`), which the split fold's
+position tables read. -/
 structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
   bound : ∀ d i j, i < (t.defs.getD d default).calls.size →
     (((t.defs.getD d default).calls.getD i default).bound id j).length =
@@ -187,6 +189,7 @@ structure LayOk (t : Tmpl) (lays : Array Lay) : Prop where
     ((lays.getD d default).places.getD i default).cs = 1 ∧
       2 ^ ((lays.getD d default).places.getD i default).ms.log2 = ((lays.getD d default).places.getD i default).ms ∧
       ((t.defs.getD d default).calls.getD i default).count ≤ ((lays.getD d default).places.getD i default).ms
+  pos : ∀ d < t.defs.size, DefPos t lays d
 
 theorem getD_lanes (as : Array ℕ) (B n k : ℕ) (hk : k < as.size * n) :
     ((Array.range (as.size * n)).map fun i => as.getD (i / n) 0 + B * (i % n)).getD k 0 =

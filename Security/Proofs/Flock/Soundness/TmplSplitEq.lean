@@ -150,7 +150,8 @@ theorem foldSplit_eq_foldRef_wf {t : Tmpl} {mode : Mode} {lays : Array Lay} {alp
     (hr2 : log2ceil (lays.getD t.root default).size - 6 ≤ r.size) {s : ℕ} (hs : s < 64) :
     of P[s]! = of P''[s]! := by
   have hlay : LayOk t lays :=
-    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2⟩
+    ⟨fun d i j hi => wf_bound hwf d i j hi, layouts_lanes (layoutM_layouts hL) fun d hd i hi => (wf_call hwf d hd i hi).2,
+      layouts_defPos (layoutM_layouts hL) (wf_call hwf) (wf_small hwf)⟩
   have hcall : ∀ d i, i < (t.defs.getD d default).calls.size →
       ((t.defs.getD d default).calls.getD i default).def_ < d := fun d i hi => by
     by_cases hd : d < t.defs.size
