@@ -185,9 +185,6 @@ def test_the_execution_label_names_the_batch_invariance(tmp_path):
 
 
 @pytest.mark.slow
-@pytest.mark.xfail(strict=True, raises=AssertionError, reason="records.json's DSV4 row pins step Programs recorded with the "
-                   "atomics-order Marlin align, which read a `schedule` input; the predicted Program keys the align by pair index (the "
-                   "deterministic align). Delete this mark when the DeepSeek-V4-Pro row is re-recorded with the deterministic align served.")
 @pytest.mark.parametrize("rank", [0, 7])
 def test_mhc_rank_step_equals_the_record(rank, tmp_path):
     """DeepSeek-V4-Pro at TP8 on H200 (block FP8, MXFP4 experts, cc 9.0): the first and last rank's step through the hyper-connected

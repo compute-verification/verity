@@ -63,9 +63,9 @@ variable {S : Type} (P : Dataflow U S)
 (`E(u) ≤ C · π(u)` for `u ∉ A`, anything on `A`), an accepted run differs from the honest run on more than `C ε` egress
 slots with probability at most `(1 − ε)^k`. -/
 theorem integrity_inferred_off [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns V) (a : S → V) {honest : S → V}
-    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : U → ℝ} (hπ : Dist π)
+    (hh : ∀ s ∈ P.input, honest s = a s) (hc : ∀ u, P.Correct f honest u) {π : PMF U}
     (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) (O : Finset S) {C : ℝ} (hC : 0 ≤ C)
-    (hE : ∀ u, u ∉ A → ((P.coneEgress O {u}).card : ℝ) ≤ C * π u) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
+    (hE : ∀ u, u ∉ A → ((P.coneEgress O {u}).card : ℝ) ≤ C * (π u).toReal) (σ : S → V) (hσ : ∀ s ∈ P.input, σ s = a s) :
     prob π k (fun d => Accepts (corr P f) A d σ ∧ C * ε < (damaged O σ honest).card) ≤ (1 - ε) ^ k := by
   classical
   let c : U → ℝ := fun u => if u ∈ A then 0 else ((P.coneEgress O {u}).card : ℝ)
@@ -80,14 +80,14 @@ theorem integrity_inferred_off [Fintype U] (h : P.Checked) {V : Type} (f : P.Fns
     split_ifs with hτ
     · exact_mod_cast card_damaged_le P h f a hh hc hτ O
     · exact sum_nonneg fun _ _ => Nat.cast_nonneg _
-  have hc' : ∀ u, c u ≤ C * π u := by
+  have hc' : ∀ u, c u ≤ C * (π u).toReal := by
     intro u
     by_cases hu : u ∈ A
     · simp only [c, ite_eq_left hu]
-      exact mul_nonneg hC (hπ.nonneg u)
+      exact mul_nonneg hC ENNReal.toReal_nonneg
     · simp only [c, ite_eq_right hu]
       exact hE u hu
-  have := inferable_of_amp π k hπ zero_le_one hC hamp hc' hε σ
+  have := inferable_of_amp π k zero_le_one hC hamp hc' hε σ
   rw [ite_eq_left hσ, one_mul] at this
   exact this
 
@@ -166,18 +166,18 @@ theorem card_widthSets_le [Fintype U] (hw : ∀ u, 1 ≤ (P.writes u).card) (M :
 lies outside the width-`M` egress values, for any `M ≥ C ε`, with probability at most `(1 − ε)^k`. With
 `card_egressWidth_le`, control is at most `log #{B : Σ_B w ≤ M} + M log |V|` bits. -/
 theorem control_inferred [Fintype U] [Fintype S] {V : Type} [Fintype V] (f : P.Fns V) (a : S → V) (X O : Finset S)
-    {π : U → ℝ} (hπ : Dist π) (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) {C : ℝ} (hC : 0 ≤ C)
-    (hw : ∀ u, ((P.writes u).card : ℝ) ≤ C * π u) (M : ℕ) (hM : C * ε ≤ M) (σ : S → V) (hσ : P.Holds a X σ) :
+    {π : PMF U} (A : Finset U) (k : ℕ) {ε : ℝ} (hε : ε ≤ 1) {C : ℝ} (hC : 0 ≤ C)
+    (hw : ∀ u, ((P.writes u).card : ℝ) ≤ C * (π u).toReal) (M : ℕ) (hM : C * ε ≤ M) (σ : S → V) (hσ : P.Holds a X σ) :
     prob π k (fun d => Accepts (corr P f) A d σ ∧ (fun o : O => σ o) ∉ egressWidth P f a X O M) ≤ (1 - ε) ^ k := by
   classical
-  refine (prob_mono π k hπ.nonneg
+  refine (prob_mono π k
     (E' := fun d => Accepts (corr P f) A d σ ∧ ¬ Certified (corr P f) π A ε σ)
-    fun d hd => ⟨hd.1, fun hcert => hd.2 ?_⟩).trans (certificate π k hπ (corr P f) A hε σ)
+    fun d hd => ⟨hd.1, fun hcert => hd.2 ?_⟩).trans (certificate π k (corr P f) A hε σ)
   have hle : ((∑ u ∈ P.wrong f σ, (P.writes u).card : ℕ) : ℝ) ≤ M := by
     push_cast
-    calc ∑ u ∈ P.wrong f σ, ((P.writes u).card : ℝ) ≤ ∑ u ∈ P.wrong f σ, C * π u :=
+    calc ∑ u ∈ P.wrong f σ, ((P.writes u).card : ℝ) ≤ ∑ u ∈ P.wrong f σ, C * (π u).toReal :=
           sum_le_sum fun u _ => hw u
-      _ = C * mass π (P.wrong f σ) := by rw [mass, mul_sum]
+      _ = C * mass π (P.wrong f σ) := by rw [mass_eq_sum, mul_sum]
       _ ≤ C * ε := mul_le_mul_of_nonneg_left hcert.2 hC
       _ ≤ M := hM
   simp only [egressWidth, mem_image, mem_filter, mem_univ, true_and]
