@@ -36,6 +36,7 @@
   "Properties.SampledProofs.Bits",
   "Properties.SampledProofs.Halt",
   "Properties.SampledProofs.Second",
+  "Properties.SampledProofs.Wires",
   "Properties.Pous.TimedAudit",
   "Properties.Pous.MemoryChallenger",
   "Properties.Pous.Wipe",
@@ -997,6 +998,10 @@
    "honest": ["Properties.SampledProofs.haltEndsOpen_honest"],
    "nontrivial": "Properties.SampledProofs.haltEndsOpen_nontrivial"
   },
+  "Properties.SampledProofs.wiresAcyclic": {
+   "honest": ["Properties.SampledProofs.wiresAcyclic_honest"],
+   "nontrivial": "Properties.SampledProofs.wiresAcyclic_nontrivial"
+  },
   "Verity.soundness_at_of_componentBounds": {
    "honest": ["Verity.soundness_at_of_componentBounds_honest"],
    "nontrivial": "Verity.soundness_at_of_componentBounds_nontrivial"
@@ -1843,7 +1848,7 @@
   },
   "Properties.SampledProofs": {
    "imports": ["SampledProofs"],
-   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second"],
+   "except": ["Properties.SampledProofs.Draw", "Properties.SampledProofs.Bits", "Properties.SampledProofs.Second", "Properties.SampledProofs.Wires"],
    "why": "the properties are stated against the one-stage audit's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
   "Properties.NetworkCertifier.DeviceOutput": {
@@ -1881,6 +1886,11 @@
     "Properties.Accounting.JointBridge.WorkOfCreditedWords"
    ],
    "why": "the requirement code's equalities are stated against its functions and the `Definitions.Accounting.Requirement` definitions they copy, never a proof"
+  },
+  "Properties.SampledProofs.Wires": {
+   "imports": ["Definitions.SampledProofs.Dataflow", "SampledProofs"],
+   "except": [],
+   "why": "a wiring's dataflow is stated against the wiring check's own types and function (`SampledProofs.Wires`) and the population vocabulary's acyclicity (`Definitions.SampledProofs.Dataflow`), never a proof"
   },
   "Properties.SampledProofs.Draw": {
    "imports": ["Definitions.Claims", "SampledProofs"],
@@ -9609,6 +9619,10 @@
    },
    "Properties.SampledProofs.haltEndsOpen": {
     "function": "SampledProofs.Stream.run",
+    "outcome": "accept"
+   },
+   "Properties.SampledProofs.wiresAcyclic": {
+    "function": "SampledProofs.Wires.check",
     "outcome": "accept"
    },
    "Properties.SampledProofs.noAcceptAfterHalt": {
