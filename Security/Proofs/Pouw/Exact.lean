@@ -210,7 +210,7 @@ theorem refAct_eq (hN : P.NoiseRange) {H : Q → R} {s : S} {U : Workload} {u : 
   refine ⟨h.trans rfl, ?_, ?_⟩ <;> rw [h] <;> omega
 
 theorem refWt_eq (hN : P.NoiseRange) {H : Q → R} {s : S} {U : Workload} {u : ℕ}
-    (hB : ∀ l < (U.layout.shape u).k, ∀ j < (U.layout.shape u).n, InInt7 (U.weight (U.layout.wid u) l j))
+    (hB : ∀ l < (U.layout.shape u).k, ∀ j < (U.layout.shape u).n, InInt7 (U.fixed (U.layout.fixedId u) l j))
     {l j : ℕ} (hl : l < (U.layout.shape u).k) (hj : j < (U.layout.shape u).n) :
     P.refWt H s U u l j = P.noisedWt H s U u l j ∧ -127 ≤ P.refWt H s U u l j ∧ P.refWt H s U u l j ≤ 126 := by
   have hn : InNoise (mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j) := hN.2 _ _ l hl j hj
@@ -218,7 +218,7 @@ theorem refWt_eq (hN : P.NoiseRange) {H : Q → R} {s : S} {U : Workload} {u : �
   unfold InNoise at hn; unfold InInt7 at hb
   have hW : mmW P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j = mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j :=
     mmW_eq_of_mem (by unfold InInt32; omega)
-  have h : P.refWt H s U u l j = U.weight (U.layout.wid u) l j + mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j := by
+  have h : P.refWt H s U u l j = U.fixed (U.layout.fixedId u) l j + mm P.r (P.wtF H s U u).1 (P.wtF H s U u).2 l j := by
     unfold D1.Params.refWt; rw [hW]; exact wrap32_of_mem (by unfold InInt32; omega)
   refine ⟨h.trans rfl, ?_, ?_⟩ <;> rw [h] <;> omega
 
@@ -242,7 +242,7 @@ theorem d1Complete : Pinned.D1Complete := by
     refine Finset.sum_congr rfl fun l hl => ?_
     have hl' : l < (U.layout.shape u).k := by rw [Finset.mem_range] at hl; omega
     rw [(refAct_eq P hN hA hi hl').1, (refWt_eq P hN hB hl' hj).1]
-  · exact int32Decode _ P.r A (U.weight (U.layout.wid u)) (P.actF H s U u A).1 (P.actF H s U u A).2
+  · exact int32Decode _ P.r A (U.fixed (U.layout.fixedId u)) (P.actF H s U u A).1 (P.actF H s U u A).2
       (P.wtF H s U u).1 (P.wtF H s U u).2 i j (by omega) (fun l hl => hA i hi l hl) (fun l hl => hB l hl j hj)
 
 end D1
