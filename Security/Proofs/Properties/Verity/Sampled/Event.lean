@@ -17,9 +17,9 @@ accepts, every outcome whose transcript is the session's record and proof files 
 * **v2's verdict, whole** (`verdictOf_event`, `step_event`, `run_event`): a session's verdict accepts only where
   `Zk.verify` accepts, the files' ports and roots pass (`Flock.PortRoots.checkOf`), the files' form and the record's
   sample pass (`Flock.KsScope.checkOf`), and the population check passes.
-* **v2's circuit is the one the events read** (`circuitOf_parse`, `statement_zkTags`): at a statement with hidden
-  outputs that is not templated, as v2's is, the circuit v2's checks read (`ProvedScope.circuitOf`) is `HmOut.parse`'s,
-  which `PortRoots.check` and `KsScope.check` read.
+* **v2's circuit is the one the events read** (`circuitOf_parse`, `statement_zkTags`): V5's event reads
+  `ProvedScope.circuitOf`'s circuit, as v2's checks do, and at a statement with hidden outputs that is not templated,
+  as v2's is, that circuit is `HmOut.parse`'s, which V3's (`PortRoots.check`, `KsScope.check`) reads.
 * **What acceptance gives** (`Accepted`, `checkBlobsAt_event`, `checkBlobs_event`): at the session's inputs and
   transcript, `AcceptsZK`, `PortRoots.check`, `KsScope.check` at the record's sample, the program's proof blocks under
   the verifier's query the record's population `n` in order (`popHeld`), and every public file the session's file
@@ -287,7 +287,7 @@ theorem Accepted.liveAcceptsScoped (h : Accepted I t v n) {m : ℕ} {Reg : Type}
 session's. -/
 theorem Accepted.liveAcceptsKSP (h : Accepted I t v n) {m : ℕ} {Reg : Type} (R : Reg) (S : Finset (Fin m)) :
     Flock.Bridge.LiveAcceptsKSP I none (R, S, t) :=
-  ⟨h.accepts, h.portsCheck, _, _, h.formCheck⟩
+  ⟨h.accepts, h.ports, _, _, h.form⟩
 
 /-- **`Accepted` passes the run's population check** at a descriptor that parses to the verifier's program. -/
 theorem Accepted.runPopOk (h : Accepted I t v n) {desc : Claims.Msg}
