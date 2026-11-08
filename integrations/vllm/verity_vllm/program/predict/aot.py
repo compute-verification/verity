@@ -146,13 +146,13 @@ def _predict_rank(task: tuple[str, int, str, str, list[tuple[str, int, int]]]) -
     phi = phi_at(row, rank, config)
     st = json.loads(Path(step_dir, "result.json").read_text())
     out["step"] = getattr(timed("step", lambda: predict(phi, "step", M=int(st["M"]), pos0=int(st["pos0"]))), "digest", None)
-    canon, comps = {}, {}
+    comps = {}
     for name, LP, T in requests:
         if (r := timed(name, lambda: predict(phi, "request", LP=LP, T=T))) is not None:
             out["requests"][name] = r.digest
-            if (c := timed("workload", lambda: S.request_component(r, canon))) is not None:
+            if (c := timed("workload", lambda: S.request_component(r))) is not None:
                 comps[(LP, T)] = c
-    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, comps, canon)) or {}).get("digest")
+    out["workload"] = (timed("workload", lambda: S.predict_workload(phi, comps)) or {}).get("digest")
     return out
 
 
@@ -242,15 +242,15 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
         raise UsageError(f"{out} is a traced row's dir: a predicted row's Build is written into a dir of its own")
     phi = S.phi_of({"row": row, "workload": w}, config=str(config))
     os.makedirs(out, exist_ok=True)
-    t0, canon, comps, requests = time.time(), {}, {}, {}
+    t0, comps, requests = time.time(), {}, {}
     for LP, T in phi.request_shapes():
         r = named_program(phi, LP, T)
         name = f"build_request_{PP.shape_name(PP.shape(LP, T))}"
         write_build(os.path.join(out, name), r.program, r.named)
-        requests[name], comps[(LP, T)] = r.digest, S.request_component(r, canon)
+        requests[name], comps[(LP, T)] = r.digest, S.request_component(r)
         if log:
             log(f"[predict] {name}: {r.digest[:16]}… ({r.n_root_nodes} nodes)")
-    wl = write_workload(phi, comps, canon, os.path.join(out, "build_workload"))
+    wl = write_workload(phi, comps, os.path.join(out, "build_workload"))
     policy = dict(word="16/32", norm_scales=True, taps=MN.taps_of(True, True), query=QUERY_OF_RECORD,
                   jobs=jobs or MN.cpus(), log=log)
     if len(phi.requests) > 1:
@@ -269,13 +269,13 @@ def write_row(row: str, out: str, *, config: str | None = None, jobs: int = 1, l
     return rec
 
 
-def write_workload(phi: Phi, comps: dict, canon: dict, out: str):
+def write_workload(phi: Phi, comps: dict, out: str):
     """GP-01's workload Program over the predicted request components (`score.workload_program`) at `out`, as GP-01 writes its
     own: `workload_program.json`, the Program's artifact (`WorkloadProgram.artifact`) with the `lag` block and
     `applicability.engine.async_scheduling` the declared target resolves, and `descriptor.json.gz`, from which GM-01's
     `check.match.declaration.from_gprog` recomputes the workload digest and the `lag` static the block claims."""
     from verity.ml.circuits.codec import canonical_json, descriptor_size
-    wl = S.workload_program(phi, comps, canon)
+    wl = S.workload_program(phi, comps)
     lag = phi.target_profile().async_scheduling_declaration()
     desc = wl.descriptor
     os.makedirs(out, exist_ok=True)
