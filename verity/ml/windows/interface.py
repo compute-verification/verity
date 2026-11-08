@@ -1368,7 +1368,8 @@ def circuit_record(w: CS.Binding, name: str, templates: Sequence[tuple[str, int]
                    blocks: Mapping[str, Any] | None = None) -> dict[str, Any]:
     """``circuit.json``: everything the verifier's window is (`of_records`), none of its values. ``templates``: each
     ``(descriptor id, units)`` in the program's order; ``statements``: by template, how its unit's statement reads its rows
-    (``in_rows``, ``out_rows``, ``reads``, as Flock's `UnitStager` takes them), for a template whose members are bit rows.
+    (``in_rows``, ``out_rows``, and a flat statement's ``reads`` or a templated one's ``layout`` and ``structural``, as Flock's
+    `UnitStager` takes them), for a template whose members are bit rows.
     The members are listed, or with ``cap`` stated: the verifier derives them from the templates, ``cap``, ``wires``, cuts
     and server blocks (`members`), so the record grows with its templates and wires, not its units. ``boundary``: the
     circuit's I/O layout (`Circuit.boundary`), carried as given; ``declared``: its cuts, registered reads and ingress
@@ -1395,7 +1396,9 @@ def _record(name: str, templates: Sequence[tuple[str, int]], statements: Mapping
             "row_tables": [{"segment": t.segment, "name": t.name, "template": t.template, "words": t.words,
                             "keys": [list(k) for k in t.keys], "label": [[k, v] for k, v in t.label]} for t in row_tables],
             "statements": {t: {"in_rows": [[p, s, b, list(ps)] for p, s, b, ps in st["in_rows"]],
-                               "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]], "reads": st.get("reads", "inline")}
+                               "out_rows": [[s, list(ix)] for s, ix in st["out_rows"]],
+                               **({"layout": st["layout"], "structural": bool(st.get("structural"))} if st.get("layout")
+                                  else {"reads": st.get("reads", "inline")})}
                            for t, st in sorted((statements or {}).items())}}
 
 

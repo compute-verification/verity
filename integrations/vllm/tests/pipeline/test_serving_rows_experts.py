@@ -387,6 +387,20 @@ def test_a_reads_statement_is_the_verifiers_read_template_and_every_other_templa
         assert tp.layout != "read" and CR.statement(tp) == {"reads": CR.reads(tp)}, t
 
 
+def test_the_circuit_record_states_each_templates_statement_as_compose_composes_it(monkeypatch):
+    """`serving_rows.circuit_record` records each template's `chunk_rows.statement`, the statement ``compose_circuit.py
+    --template`` composes and a5's composer (`records_audit.composer`) reads back: a read's layout mode and ``structural``,
+    every other template's ``reads``."""
+    monkeypatch.setattr(IF, "templates_of", lambda _w: [])
+    monkeypatch.setattr(SRW, "registered", lambda _ms, _rows: None)
+    monkeypatch.setattr(IF, "circuit_record", lambda _w, _name, _templates, sts, **_kw: sts)
+    tmpls = [SLOTS, READ_W, READ_WS, BLOCK, PROJ["w13"].fused]
+    sts = SRW.circuit_record(SimpleNamespace(members=[SimpleNamespace(template=t, schemas=True) for t in tmpls], row_tables=()), [])
+    for t in tmpls:
+        assert {k: v for k, v in sts[t].items() if k not in ("in_rows", "out_rows")} == CR.statement(SRW.template(t)), t
+    assert "reads" not in sts[READ_WS] and sts[BLOCK]["reads"] == CR.reads(SRW.template(BLOCK))
+
+
 @pytest.mark.parametrize("proj", PROJ)
 def test_the_fused_blocks_are_cut_as_reads_and_wired_to_the_router_and_the_scale_reads(monkeypatch, proj):
     tmpls, caps = fused(proj)
