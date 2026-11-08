@@ -219,7 +219,7 @@ def test_a_decode_row_at_the_served_index_topk_selects_its_top_k_at_its_class(se
     assert "run" not in [x for x, _ in r.program.fn.signature()[0]] and r.checks is None
     assert [m.fn.bindings["T"] for m in nodes if m.fn.id.startswith("SparseMlaSplit_v1{")] == [2048] * 4
     if n <= 2048:
-        assert [fam[f] for f in LONG] == [0, 0, 0] and fam["DsaTopKShortRow_v1"] == 3
+        assert [fam[f] for f in LONG] == [0] * len(LONG) and fam["DsaTopKShortRow_v1"] == 3
         return
     N = long_row_keys(n, 2048)
     assert [fam[f] for f in LONG] == ([3, 3, 0, 4] if N > n else [3, 3, 4, 0]) and fam["DsaTopKShortRow_v1"] == 0
