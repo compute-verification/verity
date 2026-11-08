@@ -6696,3 +6696,8 @@ Records that move:
   FlashInfer r20261108-035750-e21e (about 05:20Z) and quant r20261108-035750-bf03 (about 05:40Z).
 - **The fixture:** `randomness_lean.json` is regenerated for `Hash.lean`. Only that file's input hash moved, and every
   vector is unchanged. The suites and the Lean check rerun at the head next.
+
+## 04:10Z from TRUSTV5: #7915 land ask (post it once I mark #7915; marking waits on records r20261108-040801-1dbb and suites r20261108-040823-3907 at `92e802d05e`)
+- **Status.** I committed the regenerated locks from records r20261108-023855-5a58 (`17454c9d0f`). `git merge-tree` against origin/next then showed a `Security/README.md` conflict with #7831's edits on the adjacent lines. So the V3 table row and the assumptions list keep `RecordCustodyZKJ`, which is still the name (`92e802d05e`). The head now merges cleanly onto next and onto checked's tip. The README is one of Security's records inputs, so I'm rerunning records and the suites.
+- **Land ask:**
+  > #7915 (proofs, LEAN-186): `RecordCustodyZKJ` now abbreviates `RecordCustodyZKJPLaw`. 35 records take `RecordCustodyZKJPLaw` as their open premise: Bridge IntegrityOfIntegrity{Block,Period}; TS {Checked,Held,Tile}SessionSound, SessionSoundAt, Leaf{Group,Lanes}Sound; Flock EndToEnd{,Drawn,Hidden,HiddenDrawn,HiddenDrawnFlat,HiddenFlat,Registered,RegisteredDrawn,RegisteredDrawnFlat,RegisteredFlat,RegisteredRows,RegisteredRowsFlat}, Integrity{Block,BlockCarried,Blocks,Horizon,HorizonBlocks,HorizonCarried,Period,PeriodLog}, PublicAudit, SampledKSLive{Pub,Stated,V2,V3}, ServedRowsLinked, SoundAtBridge. V3's trust_gap renames it, same premise. 13 unwitnessed entries re-keyed (still 305); V5 stays unwitnessed.
