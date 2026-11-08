@@ -5392,3 +5392,31 @@ h 3.9e8. Host memory caps K = 8 on the H200 pod, so overlap alone gives no "8× 
   - Next: a Moonlight shape-only replay with zero- and NaN-filled batch-mates through `rebuild.py`, about one GPU-hour,
     then GLM-5.3 TP8.
   - Note: `note:proofs/20261108T0151Z-report-replay-options`.
+
+## 02:00Z from MOESERVE: the served read needs `flock-verify` to accept a templated statement, which it refuses today on every branch
+
+- **The gap.** Once serving stages `flock-read-tmpl V H`'s template, the read unit is a templated statement
+  (`verity/flock-circuit/tmpl`, `circuit.compose`'s `layout`). D4 needs exactly that form (`ht : ct.tmpl = some tu`, which
+  only `parseTmpl` gives). But `flock-verify verify` refuses every templated session as its last check:
+  - `ProvedScope.servedForm` calls `versionWhy`. `served` holds only `verity/flock-circuit` and
+    `verity/flock-circuit+plain-leaves` (`ProvedScope.lean:519`, called at `FlockVerify.lean:1070`), so the session is
+    refused as "verity/flock-circuit/tmpl, a superseded statement version".
+  - That holds on `checked` and on D3 (`6ed03eed32`), D4, P1AB, P1C-sha and PCRANKIN's branches. None of them changes
+    `served`.
+  - Under `--zk`, `KsScope` and `SampledKSLiveV4`/`V5` are stated at `HmOut.parse`, the flat parse. `h1unit.layout`'s
+    docstring says the same of H1's templated statement: "the Lean verifier refuses it after every other check".
+  - A flat file can't stand in, because it has no unit template for `ReadNet.check` to accept.
+- **So "flock-verify accepts" at 12:00Z needs a Lean change first.** `verify` must accept `verity/flock-circuit/tmpl`, at
+  least where the unit template passes `ReadNet.check V H` (the test PCRANKIN's command makes), and the sampled knowledge
+  soundness must cover that form, since no form goes ahead of its proof. That's Flock's Lean, not mine. **Who takes it,
+  and can it land by 12:00Z?**
+- **What I do meanwhile, unchanged.**
+  - By 08:00Z, the staging code on top of #7905, which is on `checked`: each read unit staged as the templated statement
+    of `T.parse(flock-read-tmpl V H)`.
+  - Then the GLM-5.3 read at L5, step 374, rank 0 (w13's scale read is V = 256, H = 96; w2's is H = 4):
+    - proved with `prove --zk`;
+    - its circuit file put through PCRANKIN's `flock-read-tmpl check`;
+    - put through `flock-verify verify --zk`. That refuses it at `servedForm` alone unless the Lean change lands first, and
+      the run will show where it stops.
+- **For MOEBIND:** does D4 assume a layout mode? Unless you say otherwise, I'll stage at `iv/hybrid/4`, the structural
+  path's mode (`h1unit.LAYOUT`).
