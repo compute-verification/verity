@@ -70,18 +70,21 @@ def test_a_break_even_bisects_to_its_target_and_says_when_none_is_in_reach(monke
 
 
 def test_lean_certifies_a_break_even_at_or_past_the_solved_point(monkeypatch):
-    """Lean's certificate is the solved point where Lean's bits are at most the target, else the first step outward
-    where they are (up in β, down in the overhead), each step twice the last, and none past `STEPS` steps; the floor
-    is Lean's bound at the least overhead."""
+    """Lean's certificate is the solved point where Lean's bits are at most the target, else a point past it (up in β,
+    down in the overhead) within 1 + rel of where they first are: steps outward, each twice the last, then bisection
+    between the last two; none past `STEPS` steps.  The floor is Lean's bound at the least overhead."""
     monkeypatch.setattr(t, "_bound", _falling(1.0025))
     beta = t._solve(("beta", 1e3, None, 0.01, 1e-3))
     cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, beta))
-    assert cert["at"] >= 1002.5 and cert["at"] == pytest.approx(beta * 1.001 ** (2 ** cert["steps"] - 1))
-    assert cert["steps"] >= 2 and cert["at"] / 1002.5 <= 1.001 ** 2 ** (cert["steps"] - 1)
+    assert 1002.5 <= cert["at"] <= 1002.5 * 1.001 and cert["steps"] >= 2
     assert cert["y"] <= 1e3 and (cert["lean"], cert["binds"]) == (True, "count")
+    monkeypatch.setattr(t, "_bound", _falling(1.02))
+    cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, beta))
+    assert 1020 <= cert["at"] <= 1020 * 1.001 and cert["steps"] == 5
     h = t._solve(("h", 1e3, None, 0.01, 1e-3))
     cert = t._certify(("h", 1e3, None, 0.01, 1e-3, h))
-    assert cert["at"] <= 1e-5 / 1.0025 and cert["y"] <= 1e3
+    assert 1e-5 / 1.02 / 1.001 <= cert["at"] <= 1e-5 / 1.02 and cert["y"] <= 1e3
+    monkeypatch.setattr(t, "_bound", _falling(1.0025))
     assert t._certify(("beta", 1e3, None, 0.01, 1e-3, None)) is None
     monkeypatch.setattr(t, "_bound", _falling(1.1))
     cert = t._certify(("beta", 1e3, None, 0.01, 1e-3, t._solve(("beta", 1e3, None, 0.01, 1e-3))))

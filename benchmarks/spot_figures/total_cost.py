@@ -751,14 +751,24 @@ def certify(at, x: float, target: float, rising: bool, rel: float) -> dict:
     bits Lean certifies for the design the planner picks there (`lean_two`), rounded up to a float, so `y`, that count
     or the served bits if fewer, at most the target is the certificate.  Where it is above the target (Lean's bits
     above the planner's, at a point the planner puts near the target), `x` steps outward (down for a bound rising in
-    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times; `at` None says no step reached
-    it."""
+    it, up for one falling), the i-th step by (1 + `rel`)^(2^i), at most `STEPS` times, and then bisects in log
+    between the last step it failed at and the one it holds at, keeping the end it holds at, to within 1 + `rel`;
+    `at` None says no step reached it."""
     for step in range(STEPS + 1):
         pt = at(x)
         if pt["y"] <= target:
-            return _certificate(x, step, pt)
-        x = x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
-    return _certificate(None, STEPS, pt)
+            break
+        miss, x = x, x / (1 + rel) ** 2 ** step if rising else x * (1 + rel) ** 2 ** step
+    else:
+        return _certificate(None, STEPS, pt)
+    for _ in range(step - 1):
+        mid = (x * miss) ** 0.5
+        q = at(mid)
+        if q["y"] <= target:
+            x, pt = mid, q
+        else:
+            miss = mid
+    return _certificate(x, step, pt)
 
 
 def _certificate(x: float | None, steps: int, pt: dict) -> dict:
