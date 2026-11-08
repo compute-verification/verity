@@ -129,6 +129,7 @@
   "Proofs.Properties.Verity.Sampled.Charge",
   "Proofs.Properties.Verity.Sampled.CouplingAt",
   "Proofs.Properties.Verity.Sampled.CountsLayout",
+  "Proofs.Properties.Verity.Sampled.Event",
   "Proofs.Properties.Verity.SampledDraw",
   "Proofs.Properties.Verity.SampledLog",
   "Proofs.Properties.Verity.SampledRead",
