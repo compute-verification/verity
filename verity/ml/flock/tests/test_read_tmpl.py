@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import random
 import re
 import shutil
@@ -24,6 +23,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+import settings
 from verity.ml.commitments import row_table as RT
 from verity.ml.commitments.gates import embedding as E
 from verity.ml.commitments.indexed import RangeIndexedDomain
@@ -40,7 +40,8 @@ USAGE = "usage: flock-read-tmpl V H | flock-read-tmpl check V H CIRCUIT"
 #: the served reads' circuit files by name, each with its SHA-512, its art id and the (V, H) it reads at, and the
 #: (file, V, H) the check must refuse
 SERVED = json.loads((Path(__file__).parent / "fixtures" / "served_reads.json").read_text())
-served = pytest.mark.skipif(not os.environ.get("FLOCK_READ_SERVED"),
+SERVED_DIR = settings.served_reads()
+served = pytest.mark.skipif(SERVED_DIR is None,
                             reason="reads the served reads' circuit files, about 340 MB each, from the directory "
                                    "FLOCK_READ_SERVED names; a check takes about 90 s and 12 GB")
 
@@ -159,7 +160,7 @@ def test_the_check_refuses_a_templated_statement_of_another_unit(built, tmp_path
 
 def _served(name: str) -> Path:
     f = SERVED["files"][name]
-    path = Path(os.environ["FLOCK_READ_SERVED"]) / name
+    path = SERVED_DIR / name
     assert path.is_file(), f"{path}: fetch it with `research data fetch {f['art']} --path circuit.txt`"
     h = hashlib.sha512()
     with path.open("rb") as fh:
