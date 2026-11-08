@@ -68,21 +68,23 @@ def lam_tables(ex: list[dict], charges: list[float], ks: tuple[int, ...] = (20,)
         for r in f["rows"]:
             hb = honest.get((r["precision"], r["k"]), 0.0)
             B = r["bits_per_fault"]
-            rows.append([r["amp"], r["precision"], r["k"], r["faults"], r["mse_over_var"], r["bits_per_entry"], B,
-                         hb] + [B / x for x in charges] + [(B - hb) / x for x in charges])
-        out.append(f"Unembedding-input attack, {f['model']}, {f['columns']} columns:\n\n" + table(
-            ["A", "precision", "k", "faults", "mse/var", "bits/entry", "B bits/fault", "honest bits/query"] + lh
+            rows.append([r["amp"], r["precision"], r["k"], r["faults"], r["mse_over_var"], r.get("capped", "-"),
+                         r["bits_per_entry"], B, hb] + [B / x for x in charges] + [(B - hb) / x for x in charges])
+        out.append(f"Unembedding-input attack, {f['model']}, {f['columns']} columns, stored code "
+                   f"{f.get('code_bits', float('nan')):.3g} bits an entry:\n\n" + table(
+            ["A", "precision", "k", "faults", "mse/var", "exact", "bits/entry", "B bits/fault", "honest bits/query"] + lh
             + [f"net {x}" for x in lh], rows))
     for e in ex:
         if e["part"] != "rows":
             continue
         rows = [[r["site"], r["layer"], r["value"], r["precision"], r["k"], r["units"], r["read_tokens"],
-                 r["faults_per_row"], r["contamination_mse"], r["mse"], r["bits_per_row"], r["mi_bits_per_row"],
+                 r["faults_per_row"], r["contamination_mse"], r["mse"], r.get("capped", "-"), r["bits_per_row"],
+                 r["mi_bits_per_row"],
                  r["bits_per_fault"]] + [r["bits_per_fault"] / x for x in charges] for r in e["rows"]
                 if r["k"] in ks]
         out.append(f"Row readout, {e['model']}:\n\n" + table(
             ["site", "layer", "value", "precision", "k", "units", "logits read", "faults/row", "contamination mse",
-             "mse", "bits/row", "Gaussian MI bits/row", "B bits/fault"] + lh, rows))
+             "mse", "exact", "bits/row", "Gaussian MI bits/row", "B bits/fault"] + lh, rows))
     return "\n\n".join(out)
 
 

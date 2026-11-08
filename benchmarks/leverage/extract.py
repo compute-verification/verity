@@ -2,8 +2,9 @@
 
 Bits of W are rate-distortion bits: an estimate of n weights at mean squared error D, against weights of variance s^2,
 counts n/2 log2(s^2/D) bits (pooled over a group, so a conservative count), the rate a Gaussian source of that variance
-needs at that distortion. A symmetry no observation can see is aligned away before the error is taken, and its degrees
-of freedom are not counted. Observed logprobs are the served ones: log_softmax of the logits, rounded to bf16 first when
+needs at that distortion, and at most the entropy of the weights' stored codes an entry (`code_bits`: an estimate finer
+than the code's spacing is an exact read). A symmetry no observation can see is aligned away before the error is taken,
+and its degrees of freedom are not counted. Observed logprobs are the served ones: log_softmax of the logits, rounded to bf16 first when
 --precision bf16 (an unembedding run in bf16).
 
 Parts (--part):
@@ -50,6 +51,14 @@ def rd_bits(n: float, ratio: float) -> float:
     return max(0.0, 0.5 * n * math.log2(1.0 / max(ratio, 1e-300)))
 
 
+def code_bits(w: torch.Tensor) -> float:
+    """The entropy of the empirical distribution of w's stored codes: the most an exact read of one entry gives, the cap
+    on its rate-distortion bits (an estimate below the code's spacing is the code itself)."""
+    _, counts = torch.unique(w.float().contiguous().view(torch.int32), return_counts=True)
+    p = counts.double() / counts.sum()
+    return float(-(p * p.log2()).sum())
+
+
 def prefix(lm: LM, tok, text: str) -> tuple[Cache, torch.Tensor, int]:
     ids = torch.tensor([tok.encode(text).ids])
     t0 = ids.shape[1] - 1
@@ -90,15 +99,18 @@ def part_final(lm: LM, tok, a) -> dict:
     groups = {}
     for pi, amp, sign, prec, k, i, r in out:
         groups.setdefault((amp, prec, k), []).append(r)
+    cap = code_bits(lm.E)
     rows = []
     for (amp, prec, k), rs in sorted(groups.items()):
         r = sum(rs) / len(rs)
-        bits = rd_bits(k - 1, r)
+        rd = rd_bits(k - 1, r)
+        bits = min(rd, (k - 1) * cap)
         obs = k * (math.log2(V) + LOGPROB_BITS)
         rows.append({"amp": amp, "precision": prec, "k": k, "faults": len(rs), "mse_over_var": r,
-                     "bits_per_fault": bits, "bits_per_entry": bits / max(k - 1, 1),
+                     "rd_bits_per_fault": rd, "capped": rd > bits, "bits_per_fault": bits,
+                     "bits_per_entry": bits / max(k - 1, 1),
                      "observed_bits_per_fault": obs, "bits_per_observed_bit": bits / obs})
-    return {"part": "final", "columns": len(cols), "rows": rows}
+    return {"part": "final", "columns": len(cols), "code_bits": cap, "rows": rows}
 
 
 def honest_states(lm: LM, tok, prompts: int, new: int) -> torch.Tensor:
@@ -129,6 +141,7 @@ def part_honest(lm: LM, tok, a) -> dict:
     Ep = Ec @ Q.T
     var = Ep.var(0)
     per_dir = V - d - 1
+    cap = code_bits(lm.E)
     rows = []
     for prec in a.precisions:
         Z = H @ E.T
@@ -140,7 +153,7 @@ def part_honest(lm: LM, tok, a) -> dict:
             Eh = Vh[:d].T * S[:d]
             M = torch.linalg.lstsq(Eh, Ep).solution
             ratio = (Ep - Eh @ M).pow(2).mean(0) / var
-            bits = sum(rd_bits(per_dir, float(x)) for x in ratio)
+            bits = min(sum(rd_bits(per_dir, float(x)) for x in ratio), per_dir * d * cap)
             spec = (S[max(d - 4, 0):min(d + 4, n)] / S[0]).tolist()
             for k in a.ks:
                 q = n * math.ceil((V - 1) / (k - 1))
@@ -157,10 +170,14 @@ def target_row(lm: LM, site: str, l: int, j: int) -> torch.Tensor:
     the unit vector itself, which makes the readout the final-site attack and leaves only its contamination to read."""
     if site == "resid":
         return torch.eye(lm.spec.d)[j]
+    w = target_matrix(lm, site, l)
+    return (w[j] if lm.spec.arch == "gpt2" else w[:, j]).float()
+
+
+def target_matrix(lm: LM, site: str, l: int) -> torch.Tensor:
     if lm.spec.arch == "gpt2":
-        return lm.W[f"h.{l}.{'mlp' if site == 'mlph' else 'attn'}.c_proj.weight"][j].float()
-    name = "mlp.down_proj" if site == "mlph" else "self_attn.o_proj"
-    return lm.W[f"layers.{l}.{name}.weight"][:, j].float()
+        return lm.W[f"h.{l}.{'mlp' if site == 'mlph' else 'attn'}.c_proj.weight"]
+    return lm.W[f"layers.{l}.{'mlp.down_proj' if site == 'mlph' else 'self_attn.o_proj'}.weight"]
 
 
 def final_norm_params(lm: LM) -> tuple[torch.Tensor, torch.Tensor]:
@@ -214,13 +231,16 @@ def part_rows(lm: LM, tok, a) -> dict:
     groups = {}
     for l, v_spec, prec, m, j, r_c, r, mi in out:
         groups.setdefault((l, v_spec, prec, m), []).append((r_c, r, mi))
+    caps = {l: 32.0 if site == "resid" else code_bits(target_matrix(lm, site, l)) for l in layers}
     for (l, v_spec, prec, m), rs in sorted(groups.items()):
         rc, r, mi = (sum(x[i] for x in rs) / len(rs) for i in range(3))
+        rd = rd_bits(d - lost, r)
+        bits = min(rd, (d - lost) * caps[l])
         for k in a.ks:
             F = math.ceil(m / (k - 1))
-            bits = rd_bits(d - lost, r)
             rows.append({"site": site, "layer": l, "value": v_spec, "precision": prec, "k": k, "units": len(rs),
                          "read_tokens": m, "faults_per_row": F, "contamination_mse": rc, "mse": r,
+                         "code_bits": caps[l], "rd_bits_per_row": rd, "capped": rd > bits,
                          "bits_per_row": bits, "bits_per_fault": bits / F, "mi_bits_per_row": mi,
                          "mi_bits_per_fault": mi / F,
                          "bits_per_observed_bit": bits / (F * k * (math.log2(V) + LOGPROB_BITS))})
