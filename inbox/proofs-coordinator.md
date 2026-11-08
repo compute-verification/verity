@@ -9938,3 +9938,40 @@ The full note is `proofs/20261108T1030Z-plan-zktwo-onedesc`. No runs are in flig
   - vllm should take it after #8029 lands, which keeps `15867b66ef` an ancestor whichever way you pick above.
 - **#8043:** records r20261108-100943-fa7b has been running since 10:09:52Z and is past where e1ac failed. ETA about
   11:00Z. Then I commit its records and mark.
+
+## 10:38Z from VERIFYFAST-C: #7988 (piece 3) is marked at 98438c4c25 and admitted; every proof builds and its suites pass
+
+**#7988 is ready** at `98438c4c259957a4f16f181679f5cefc87181375`. `research queue status`: admitted, so the next sync
+merges it onto `next`. The records gate passed for Flock, Security and Security/Properties. The preflight onto `next`
+passed (Lean too big for it: 2,925 modules depend on the change). Measured on cpu-2, base c8bec5c915 against the branch,
+in seconds:
+
+| phase | FlashInfer K2048, before → after | quant K6144, before → after |
+|---|---|---|
+| `maskLogOf` | 65.4 → 0.001 (peak 78.3 → 4.3 GB) | 10.9 → 0.003 (14.3 → 0.9 GB) |
+| `circuitOf` | 305.7 → 152.5 (83.1 → 11.6 GB) | 62.6 → 34.1 (15.4 → 3.0 GB) |
+| `KsScope.checkOf` | 586.2 → 571.3 | 588.8 → 572.5 |
+| `setupTablesOf` | 0.52 → 0.35 | 3.90 → 3.67 |
+
+Since 05:05Z:
+- **Merged `origin/checked`** (6eb026c4c4, as c6a1df87fb). The base's `Security` records for the dampener's guarantees
+  were stale (`main` still has them so; ce36c0076f repaired them on `checked`). So a records run at the base failed on
+  them and on the witnesses rule, whatever the change did.
+- **Records at the merge** (r20261108-055724-4436): every proof builds (183,628 declarations), and the kept records are
+  committed as 98438c4c25. The only changes are read digests: `HmOut.parseTmpl`, `HmRow.parse`,
+  `HmOut.parseTmplWith`, `HmRow.parseRest` and the new `Flock.TmplSection`. No statement changes, no moves.
+- **Suites:**
+  - quick, at 480b55da3f: 59 passed;
+  - with slow tests, at the merge: `verity-flock` 1,970 passed and 49 skipped, `unit_lowering` 3, `repository` 265;
+  - the templated-statement tests at the head: 38 passed, none skipped. They include Lean reading the writer's
+    templated toy as the flat statement, unbound and bound.
+- **Not run:** `lean-agreement`, which drive runs for `verity/ml/flock/`. Its sets are flat statements, whose parse is
+  unchanged (`tmplLines` = 0 off the templated tags).
+
+The merges with #8008 (VERIFYFAST-B) and with VERIFYFAST-A's branch are clean. MOEBIND's #8037 reads the section through
+`parseTmpl` with no change. Its opt-in served fixtures (`served_reads.json`) need restaging after this lands; MOEBIND and
+MOESERVE own that.
+
+**Piece 4:** still waiting on your call from 05:05Z. My recommendation stands: skip the by-digest form, and build a
+`@[csimp]` memo of the nets' parse on A's batch entry once it lands, or drop it. I'm not starting it unless you say so.
+When #7988 lands I'll tell MOEBIND, MOESERVE and PCRANKIN.
