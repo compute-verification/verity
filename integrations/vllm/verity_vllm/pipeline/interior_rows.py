@@ -49,11 +49,12 @@ from verity_vllm.check.replay.index import IDS_MEMBER, SAMPLER_OP, ProgramIndex,
 from verity_vllm.check.replay.opening import _ITEMSIZE, _NPDTYPE
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.query.manifest import format as RM
+from verity_vllm.records.logits_capture import LogitsCapture
 
 #: the tag `interior_run` hashes under
 RUN_TAG = b"verity-vllm/interior-run/v1\x00"
-#: a sampler capture's index file and format (`write_capture`, `captured`)
-CAPTURE, CAPTURE_FORMAT = "capture.json", "verity-vllm/logits-capture/v1"
+#: a sampler capture's record (`write_capture`, `captured`)
+CAPTURE = "capture.json"
 
 Given = Callable[[int, str, str, int, int], tuple[np.ndarray | None, str]]
 
@@ -238,16 +239,16 @@ def write_capture(directory: Path, template: str, spans: Mapping[str, Mapping[st
     ``tokens`` (the n ids selected), ``steps`` (the n engine steps) and ``program`` (what fixes its Program: the
     Program's digest, or its launch's). ``template`` is the token-select row template the rows are units of."""
     directory.mkdir(parents=True, exist_ok=True)
-    doc = {"format": CAPTURE_FORMAT, "template": template, "spans": {}}
+    out = {}
     for k, (rid, s) in enumerate(spans.items()):
         a = np.ascontiguousarray(s["logits"], dtype="<u2")
-        if a.ndim != 2 or a.shape[0] != len(s["tokens"]) or len(s["steps"]) != len(s["tokens"]):
-            raise ValueError(f"request {rid}: logits {a.shape}, {len(s['tokens'])} tokens and {len(s['steps'])} steps")
         (directory / f"{k}.u16").write_bytes(a.tobytes())
-        doc["spans"][rid] = {"file": f"{k}.u16", "sha256": hashlib.sha256(a.tobytes()).hexdigest(), "rows": a.shape,
-                             "tokens": [int(t) for t in s["tokens"]], "steps": [int(t) for t in s["steps"]],
-                             "program": str(s["program"])}
+        out[rid] = {"file": f"{k}.u16", "sha256": hashlib.sha256(a.tobytes()).hexdigest(), "rows": list(a.shape),
+                    "tokens": [int(t) for t in s["tokens"]], "steps": [int(t) for t in s["steps"]],
+                    "program": str(s["program"])}
     path = directory / CAPTURE
+    doc = LogitsCapture(template, out).dump()
+    LogitsCapture.of(doc, str(path))
     path.write_text(json.dumps(doc, indent=1))
     return path
 
@@ -256,10 +257,8 @@ def captured(directory: Path, rid: str, served: Sequence[int] | None = None) -> 
     """Request ``rid``'s span of the capture's token-select template (`write_capture`): unit j reads logits row j and
     outputs token j, laid out as `span` reads a token select's units from a Program. ``served``: the ids serving emitted,
     which the captured tokens must be, or the replay didn't reproduce the span and nothing is committed."""
-    doc = json.loads((directory / CAPTURE).read_text())
-    if doc.get("format") != CAPTURE_FORMAT:
-        raise ValueError(f"{directory / CAPTURE}: not a {CAPTURE_FORMAT} capture")
-    s, t = doc["spans"][rid], doc["template"]
+    cap = LogitsCapture.of(json.loads((directory / CAPTURE).read_text()), str(directory / CAPTURE))
+    s, t = cap.spans[rid], cap.template
     params, ret = SRW.template(t).fn.signature()
     ins, out = [sum(ty.leaf_widths()) // 16 for _n, ty in params], sum(ret.leaf_widths()) // 16
     if len(ins) != 1 or out != 2 or tuple(s["rows"]) != (len(s["tokens"]), ins[0]):

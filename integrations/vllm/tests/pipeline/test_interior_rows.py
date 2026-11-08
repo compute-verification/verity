@@ -11,6 +11,7 @@ selects."""
 
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import numpy as np
@@ -284,4 +285,9 @@ def test_a_sampler_capture_is_the_token_select_span_and_registers_as_its_interio
     raw[0] ^= 1
     (tmp_path / "1.u16").write_bytes(bytes(raw))
     with pytest.raises(ValueError, match="is not the capture's"):
+        IR.captured(tmp_path, "r1")
+    doc = json.loads((tmp_path / IR.CAPTURE).read_text())
+    doc["spans"]["r1"]["steps"] = doc["spans"]["r1"]["steps"][:-1]
+    (tmp_path / IR.CAPTURE).write_text(json.dumps(doc))
+    with pytest.raises(ValueError, match="for 3 tokens at 2 steps"):
         IR.captured(tmp_path, "r1")
