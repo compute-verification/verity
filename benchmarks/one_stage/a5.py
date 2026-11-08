@@ -131,10 +131,13 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   sharedRowsOk`): each chunk reads one table, so a5 gives each linked chunk's verify the reads of its ``x`` port
   (`tables.registered_reads`: its table's root as the members' strings recompute it, which the check above tied to the
   registration and the step roots, and the row each unit reads), and the chunk's header gives each ``x`` row a path to that
-  root. The audit record's ``registered_reads`` carries each sampled chunk's table and root from that file beside the
+  root. Lean takes registered reads only when they name every port of the circuit (`Flock.Registered.checkComplete`), so
+  each such member's reads also name its other ports, each as rows of its own tree at the registration's root, unit
+  ``base + i`` its row i (`rows.own_reads`), and its header gives their paths (`rows.own_entries`). The audit record's
+  ``registered_reads`` carries each sampled chunk's table and root from that file beside the
   ``registered`` finding Lean's verdict reports opening its rows against (`tables.reported_reads`), and a5 accepts only
-  when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row
-  (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
+  when they are one. Negatives on one sampled chunk: no registered reads, another root, its units reading another row, a
+  port committed afresh (`registered_negatives`), and a verdict reporting another root. No TP window of record has row tables yet (`tp.serving_rows.window_of_record` names no serve-time
   context); `a5_row_tables.py` is their stand-in.
 * **Wiring across statements** (`commit.wiring`, `HmOut` ``Wiring``): a w13 coordinate's K-chunks
   (`pipeline.kchunk_rows`) are three templates, each chunk's ``acc`` row the output row of the chunk before it, committed under
@@ -485,22 +488,38 @@ def registered_negatives(a: argparse.Namespace, mm: dict, sdir: Path) -> dict[st
     """A sampled chunk's honest session, a chunk that reads a row table or an outside registered value, re-verified by Lean against
     registered reads it must refuse: none (its header names registered reads the verifier holds no root for), its first port's
     value's root replaced, and (a value of more than one row) every unit reading that value's next row, each with its other
-    ports' reads as registered."""
+    ports' reads as registered; and its last port committed afresh, left out of both its header's registered rows and the
+    verifier's reads (`Flock.Registered.checkComplete`)."""
     st, n = mm["st"], mm["m"].n
     honest = json.loads(st["registered_file"].read_text())
-    port = next(iter(honest["ports"]))
+    port, last = next(iter(honest["ports"])), next(reversed(honest["ports"]))
     p = honest["ports"][port]
-    cases = {"chunk-without-registered-reads": (None, "holds no registered roots"),
-             "registered-read-against-another-root": ({"root": "00" * 64}, "does not open")}
+
+    def changed(change: dict) -> dict:
+        return {**honest["ports"], port: {**p, **change}}
+
+    cases = {"chunk-without-registered-reads": (None, "holds no registered roots", None),
+             "registered-read-against-another-root": (changed({"root": "00" * 64}), "does not open", None)}
     if p["leaves"] > 1:
-        cases["registered-reads-another-row"] = ({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}, "the verifier's program reads")
+        cases["registered-reads-another-row"] = (changed({"reads": [(r + 1) % p["leaves"] for r in p["reads"]]}),
+                                                 "the verifier's program reads", None)
+    if last != port:
+        d = sdir / "port-committed-afresh"
+        shutil.copytree(st["dir"], d, copy_function=os.link, dirs_exist_ok=True)
+        head, body = (d / f"pub-{n}.bin").read_bytes().split(b"\n", 1)
+        h = json.loads(head)
+        h["registered"].pop(last)
+        (d / f"pub-{n}.bin").unlink()
+        (d / f"pub-{n}.bin").write_bytes(json.dumps(h, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
+                                         + b"\n" + body)
+        cases["registered-reads-leaving-a-port-committed-afresh"] = (
+            {q: e for q, e in honest["ports"].items() if q != last}, "registered reads (complete)", d)
     out = {}
-    for name, (change, why) in cases.items():
-        alt = {x: y for x, y in st.items() if x != "registered_file"}
-        if change is not None:
+    for name, (ports, why, d) in cases.items():
+        alt = {x: y for x, y in st.items() if x != "registered_file"} | ({"dir": d} if d else {})
+        if ports is not None:
             alt["registered_file"] = sdir / f"{name}.json"
-            alt["registered_file"].write_text(json.dumps({**honest, "ports": {**honest["ports"], port: {**honest["ports"][port], **change}}},
-                                                         sort_keys=True))
+            alt["registered_file"].write_text(json.dumps({**honest, "ports": ports}, sort_keys=True))
         v = a0.lean_verify(a.lean, alt, n, sdir, zk=True, log=name)
         out[name] = {"refused": a0.lean_refused(v, why), "why": v.get("why")}
     return out
@@ -740,8 +759,10 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         print("A5 " + json.dumps({"refused_before_draw": summary["checks_before_draw"], "checks": checks}, default=str))
         return summary, False
     # each row-table chunk's Lean verify reads its x rows against its table's root, which the checks above tied to the registration;
-    # a member reading an outside registered value, against the root its owner signed
-    reads = {**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})}
+    # a member reading an outside registered value, against the root its owner signed; and either's other ports, against the
+    # registration's own roots, since Lean takes registered reads only when they name every port
+    reads = CS.own_reads({**(TB.registered_reads(mine, publics, registered=REG) if mine.row_tables else {}), **(registered or {})},
+                         mine, roots, registered=REG)
     for mm in members:
         if mm["m"].key in reads:
             mm["st"]["registered_file"] = mm["st"]["dir"] / "registered.json"
