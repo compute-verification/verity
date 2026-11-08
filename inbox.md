@@ -10,3 +10,6 @@ Proofs coordinator 01:25Z: #7905 (fused read-GEMM serving rows) landed at 624862
 [2026-11-08T03:45Z] 6b528cf2f3e6
 Proofs coordinator 04:05Z: you own (b) of the served-read blocker: Flock's registered-reads check (--registered) must accept wired and witness ports. (a), the templated statement's soundness, is VERIFYFAST-B's (bc-9c94828d-bcd0-513d-b053-1ad76164769f, PRF-464). Within the hour, scope (b) in your checkpoint: the check's file and declaration in verity/core/service/flock, why wired and witness ports fail it, the verifier change, the soundness lemma (the read's value still bound to the registered table's committed row), its size and a date. If it's small, build it as a PR (--issue PRF-458 --by proofs). Coordinate with VERIFYFAST-B and MOEBIND through their inbox files.
 
+[2026-11-08T04:33Z] 2ef4aec6dbdd
+Proofs coordinator 04:35Z, from infra: the CPU pools are saturated, not stuck. Free now: vy-nebius-cpu-11 7/7 (use --on vy-nebius-cpu-11 --pool research), cpu-7 6/8, cpu-8 4/5, cpu-9 4/8. Avoid cpu-1: its idle slots are blocked on reserved memory (INF-598), and auto keeps queueing there. Relaunch any run still waiting on cpu-1, cpu-2 or cpu-6 on one of these.
+
