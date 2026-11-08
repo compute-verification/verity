@@ -314,7 +314,7 @@ def source(w: Mapping[str, Any] | None, held: Mapping[str, Any]) -> dict[str, An
 
 #: what the window figure rests on and the run figure doesn't (`declared_count`), named beside it wherever it is printed
 WINDOW_PREMISE = ("the earlier rows' committed activations the window reads (its window ingress) are its writers' outputs: "
-                  "the link checks bind them (sampled proofs' wiring; the binding error ε_bind)")
+                  "the link checks bind them (SPOT's wiring; the binding error ε_bind)")
 
 
 def leak_count(members: Iterable[Any], external: Iterable[str], bits: int) -> dict[str, Any]:

@@ -170,10 +170,8 @@ def _digests(root: Path, read: list[str]) -> dict[str, str | None]:
     """{each of ``read``: its content's SHA-512, None where there is no file}."""
     out: dict[str, str | None] = {}
     for f in read:
-        try:
-            out[f] = hashlib.sha512((root / f).read_bytes()).hexdigest()
-        except (FileNotFoundError, IsADirectoryError, NotADirectoryError):
-            out[f] = None
+        p = root / f
+        out[f] = hashlib.sha512(p.read_bytes()).hexdigest() if p.is_file() else None
     return out
 
 

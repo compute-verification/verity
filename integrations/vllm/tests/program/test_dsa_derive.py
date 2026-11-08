@@ -6,7 +6,7 @@
 * `rules/vllm_dsa.py` derives an indexer layer and an IndexShare layer over a prefill and a decode step: per token the norms and
   RoPEs, `DsaIndexerKRow_v1` and `DsaIndexerQ_v1`, per row `DsaMqaLogits_v3{N}` and `DsaTopKShortRow_v1`, and either the explicitly
   pinned `SparseMla_v1{T=n}` or default `SparseMlaSplit_v1{T=n,NS}` over the layer's first n history rows;
-* past TOPK keys the settings of a Waksman network over the row's history are a field of the `run` input, `DsaTopKOrder_v1`
+* past TOPK keys the settings of a Waksman network over the row's history are a field of the `run` input, `DsaTopKLongRow_v1`
   checks the order they route (`DsaWaksmanOrder_v1`) against the row's logits (one of the Program's checks, an output after the
   source's), and sparse MLA reads the rows `DsaWaksmanRows_v1` routes at them;
 * a layer with a dense-MHA prefill backend serves a prefill (above the decode threshold, at most TOPK keys) by dense MHA: the shim
@@ -553,9 +553,9 @@ def test_an_indexer_and_an_indexshare_layer_derive_over_prefill_and_decode(serve
 def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_logits_and_reads_its_rows(served):
     """TOPK 2: the decode row at position 2 has 3 keys.  The indexer layer reads the 3 settings of a Waksman network over its 3
     rows from the `run` input's one field, routes the row indices through them (`DsaWaksmanOrder_v1{N=3,TOPK=2}`) and checks that
-    order by `DsaTopKOrder_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when it is a permutation of the logits' top-2
-    set), and both layers' `SparseMla_v1{T=2}` read the rows `DsaWaksmanRows_v1{N=3,K=2}` routes at the same settings, in that
-    order.  Every one of the 8 settings is evaluated."""
+    order by `DsaTopKLongRow_v1{N=3,TOPK=2}` (the Program's last output, 1 exactly when it is the logits' top-2 set in ascending
+    index order), and both layers' `SparseMla_v1{T=2}` read the rows `DsaWaksmanRows_v1{N=3,K=2}` routes at the same settings, in
+    that order.  Every one of the 8 settings is evaluated: one order passes, the set's other permutation is refused."""
     model = _model(topk=2)
     xs = _inputs(model)
     rep = _derive(model, xs)
@@ -565,7 +565,7 @@ def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_
         {"name": f"{NAMES[0]}/topk_switches[t=2]", "type": repr(Array(3, Value(1))), "offset": 0, "leaves": 3}]}
     assert rep.provenance["checks"]["accept"] == 1 and len(rep.provenance["checks"]["of"]) == 1
     routed = bind(dsa_topk.DsaWaksmanOrder, N=3, TOPK=2).id
-    check = bind(dsa_topk.DsaTopKOrder, N=3, TOPK=2).id
+    check = bind(dsa_topk.DsaTopKLongRow, N=3, TOPK=2).id
     rows = bind(dsa_topk.DsaWaksmanRows, N=3, K=2, W=L + R, E=16).id
     attn2 = bind(sparse_mla.SparseMla, T=2, NH=NH, DR=R, DV=L, BN=BN, DOT=DOT, INV=hopper.Fa3InvSum, SCALE=SCALE).id
     assert [i for i in _ids(rep) if i in (routed, check, rows, attn2)] == [attn2, attn2, routed, check, rows, attn2, rows, attn2]
@@ -581,13 +581,13 @@ def test_a_row_past_topk_reads_the_runs_settings_checks_their_order_against_its_
         sw = [bits >> i & 1 for i in range(3)]
         order = dsa_topk.waksman_apply(sw, [0, 1, 2], 2)
         out = _run(rep, model, xs, sw)
-        assert out[-1] == int(set(order) == top), (sw, order)
+        assert out[-1] == int(order == sorted(top)), (sw, order)
         if out[-1]:
             assert out[:-1] == _reference(model, xs, orders={2: order}), order
             accepted.append(tuple(order))
-    assert sorted(accepted) == sorted({tuple(sorted(top)), tuple(sorted(top, reverse=True))})
-    for order in (sorted(top), sorted(top, reverse=True)):
-        assert _run(rep, model, xs, dsa_topk.waksman_settings(order, 3))[-1] == 1
+    assert set(accepted) == {tuple(sorted(top))}
+    for order, ok in ((sorted(top), 1), (sorted(top, reverse=True), 0)):
+        assert _run(rep, model, xs, dsa_topk.waksman_settings(order, 3))[-1] == ok
 
 
 class _LargeMlaAbsorb(nn.Module):

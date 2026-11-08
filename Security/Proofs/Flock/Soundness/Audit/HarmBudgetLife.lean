@@ -192,7 +192,7 @@ theorem drawn_term {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n
     exact le_antisymm (prob_mono (fun _ ho => ⟨ho, fun h' => hd h'.symm⟩) _ _) (prob_mono (fun _ ho => ho.1) _ _)
 
 theorem drawn_roundPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (t : Strategy ((audit L Reg session).bind (afterAudit next))) :
     (roundPlay A rest t).Drawn err := by
@@ -228,7 +228,7 @@ theorem laws_goPlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S L)
   | false, _ => trivial
 
 theorem drawn_goPlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) :
     ∀ (go : Bool) (t : Strategy (cond go ((audit L Reg session).bind (afterAudit next)) (.ret true))),
@@ -259,7 +259,7 @@ theorem laws_stagePlay (A : Analysis L Reg session) {S : Law n → Prop} (hL : S
   laws_goPlay A hL hrest s.1 s.2
 
 theorem drawn_stagePlay (A : Analysis L Reg session) {εks δlink : ℝ≥0∞} (hks : A.KnowledgeSound εks)
-    (hlink : A.LinkSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
+    (hlink : A.BindSound δlink) {next : Game Bool} {N : ℕ} {rest : Strategy next → Play n N}
     {err : ℕ → ℝ≥0∞} (hpass : ∀ t, (rest t).pass = 1) (hrest : ∀ t, (rest t).Drawn err)
     (hN : εks + δlink ≤ err N) (s : Strategy (stage L Reg session next)) : (stagePlay A rest s).Drawn err :=
   drawn_goPlay A hks hlink hpass hrest hN s.1 s.2
@@ -301,7 +301,7 @@ theorem pass_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) :
   | N + 1, s => pass_stagePlay (A N) (lifePlay A N) s
 
 theorem drawn_lifePlay (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).LinkSound (δlink m)) :
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m)) :
     ∀ (N : ℕ) (s : Strategy (life L Reg session N)), (lifePlay A N s).Drawn fun m => εks m + δlink m
   | 0, _ => trivial
   | N + 1, s => drawn_stagePlay (A N) (hks N) (hlink N) (pass_lifePlay A N) (drawn_lifePlay A hks hlink N) le_rfl s
@@ -318,7 +318,7 @@ condition with weights `π`, harms `h` with `λ h ≤ π` and `λ ≥ 0`, and ev
 lifetime accepts with total harm `Σ_t h(wrong(X_t))` at least `H` with probability at most
 `e^{−λH} + Σ_{m<N} (ε_ks,m + δ_link,m)`. -/
 theorem life_harm_budget (A : (m : ℕ) → Analysis (L m) (Reg m) (session m)) {εks δlink : ℕ → ℝ≥0∞}
-    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).LinkSound (δlink m))
+    (hks : ∀ m, (A m).KnowledgeSound (εks m)) (hlink : ∀ m, (A m).BindSound (δlink m))
     {π h : Fin n → ℝ} (hL : ∀ m, (L m).Design π) {lam : ℝ} (hlam0 : 0 ≤ lam) (hlam : ∀ u, lam * h u ≤ π u)
     (H : ℝ) (N : ℕ) (s : Strategy (life L Reg session N)) :
     (lifePlay A N s).prEv h (fun acc x => acc = true ∧ H ≤ x) 0 ≤

@@ -19,16 +19,28 @@ def _model_roots() -> list[tuple[str, Callable[[], Any]]]:
     `targets.MAX_GATES`, so ``--all`` checks it at its served statics only through the callees it reaches; its whole
     served-statics check is named."""
     from verity.ml.circuits.defs import bind
-    from verity.ml.circuits.ops import prims
     from verity.ml.circuits.ops.prims import BlackwellE4m3QmmaDot32, HopperE4m3MmaV2Dot32, HopperE4m3QgmmaDot32
     from verity.ml.definitions.registry import fp8_moe_experts
 
-    served = [(f"{name}/served-{label}", lambda d=d, K=K, N=N, swap=swap, dot=dot: bind(d, E=256, K=K, N=N, G=128, KB=128, SWAP=swap,
-                                                                                        DOT=getattr(prims, dot)))
-              for name, d, K, N in (("MoeExpertFp8Gemm_v1", fp8_moe_experts.MoeExpertFp8Gemm, 6144, 512),
-                                    ("MoeExpertFp8GemmW_v1", fp8_moe_experts.MoeExpertFp8GemmW, 256, 6144))
-              for label, swap, dot in SERVED_GLM53_H200]
-    return served + [
+    return [
+        # GLM-5.3's served expert GEMMs, one entry a (SWAP, DOT) of `SERVED_GLM53_H200`: literal labels, so each is its own
+        # cache unit (`circuit_check.cache._model_list`)
+        ("MoeExpertFp8Gemm_v1/served-nonswap-mmav2",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=256, K=6144, N=512, G=128, KB=128, SWAP=False, DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8Gemm_v1/served-swap-mmav2",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=256, K=6144, N=512, G=128, KB=128, SWAP=True, DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8Gemm_v1/served-swap-qgmma",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=256, K=6144, N=512, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32)),
+        ("MoeExpertFp8Gemm_v1/served-nonswap-qgmma",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8Gemm, E=256, K=6144, N=512, G=128, KB=128, SWAP=False, DOT=HopperE4m3QgmmaDot32)),
+        ("MoeExpertFp8GemmW_v1/served-nonswap-mmav2",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=256, K=256, N=6144, G=128, KB=128, SWAP=False, DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8GemmW_v1/served-swap-mmav2",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=256, K=256, N=6144, G=128, KB=128, SWAP=True, DOT=HopperE4m3MmaV2Dot32)),
+        ("MoeExpertFp8GemmW_v1/served-swap-qgmma",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=256, K=256, N=6144, G=128, KB=128, SWAP=True, DOT=HopperE4m3QgmmaDot32)),
+        ("MoeExpertFp8GemmW_v1/served-nonswap-qgmma",
+         lambda: bind(fp8_moe_experts.MoeExpertFp8GemmW, E=256, K=256, N=6144, G=128, KB=128, SWAP=False, DOT=HopperE4m3QgmmaDot32)),
         # the expert-indexed pair forms the derive rule and the fold bind: Qwen3-235B-A22B's 128 experts at the served w2 coordinate,
         # and pairs over a whole and a partial weight block
         ("MoeExpertFp8CoordinateW_v1", lambda: bind(fp8_moe_experts.MoeExpertFp8CoordinateW, E=128, K=192, G=64, KB=32, SWAP=False,

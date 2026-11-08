@@ -3,9 +3,10 @@ Sampled proofs' one-stage audit as a `Core.Protocol` (`one_stage.audit.audit_rec
 
 * **params**: the verifier's own copies, canonical JSON with exactly the keys `program` (its descriptor), `query`, `law`
   (the agreed rule: `{"law": "subset", "k"}`, `{"law": "bernoulli", "p": "NUM/DEN"}`, `{"law": "stratified" | "work",
-  "k"}`; the protocol refuses `bernoulli` at `0 < p < 1`, `paramsOfJson`, and its sample under `bernoulli` at any `p`,
-  `drawnFrom`, as the sampled audit's soundness statement doesn't cover it), `work_table` (or null), `scheme`, `ports`
-  (`{port: {"leaves", "domain"}}`, what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's `registered`, when truthy, a list of
+  "k"}`; the protocol refuses `bernoulli` at every `p`, `paramsOfJson` and `drawnFrom`, as the sampled audit's
+  soundness statement doesn't cover it), `work_table` (or null), `scheme`, `ports` (`{port: {"leaves", "domain"}}`,
+  what its layout derives), `leaf_layer` (or null), `anchors`, `log` (this prover's earlier records; a record's
+  `registered`, when truthy, a list of
   objects with a string `value` and `root`), `partition` (its own partition object, or null for the canonical one),
   `registered` (null, or `{parameter: words}`, the values it expects registered: empty or null expects a v1 record) and
   `delta` (an exact ratio in (0, 1)); with `registered` not null, also `parameters`, its program function's `[[name,
@@ -135,8 +136,8 @@ private def logRecord (j : Json) : V Json := do
     throw "a record of the log registers values that are not objects with a string value, root and domain"
   return j
 
-/-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and refuses the sampling design
-itself (`Run.run`, `shapes`). -/
+/-- The parameters as parsed, before `paramsOfJson`'s refusal of the sampling design: the stream's run reads them and
+refuses the sampling design its rule names itself (`Run.run`, `bernoulli`). -/
 def paramsParsed (j : Json) : V Params := do
   let v2 := !(getD j "registered" matches .null)
   let keys := if v2 then PARAM_KEYS.push "parameters" else PARAM_KEYS
@@ -270,12 +271,11 @@ def paramsParsed (j : Json) : V Params := do
       "windows is named in held (or pinned)")
   pure p
 
-/-- The parameters (`paramsParsed`), with a `bernoulli` law at `0 < p < 1` refused (`Draw.countVaries`): its sampled count
-varies, which the sampled audit's soundness statement doesn't cover. -/
+/-- The parameters (`paramsParsed`), with every `bernoulli` sampling design refused, at any `p` (`Draw.bernoulli`): the
+sampled audit's soundness statement covers none. -/
 def paramsOfJson (j : Json) : V Params := do
   let p ← paramsParsed j
-  if Draw.countVaries p.verifier.law then
-    throw "the law is bernoulli at 0 < p < 1, which the sampled audit's soundness statement doesn't cover (its drawn count varies)"
+  if Draw.bernoulli p.verifier.law then throw Draw.BERNOULLI
   return p
 
 def commitmentOf (b : ByteArray) : V Commitment := do
@@ -357,15 +357,15 @@ def coinsOf (p : Params) (c : Commitment) (e : Evidence) : V (Option ByteArray) 
 
 /-- The sampling design `law`, refused when it is a Bernoulli one: the sampled audit's soundness statement covers none,
 at any `p`. -/
-def coveredLaw : Flock.Draw.Law → V Flock.Draw.Law
-  | .bernoulli _ _ => throw "the law is bernoulli, which the sampled audit's soundness statement doesn't cover"
+def coveredDesign : Flock.Draw.Law → V Flock.Draw.Law
+  | .bernoulli _ _ => throw Draw.BERNOULLI
   | law => pure law
 
 /-- The sample the coins `src` give over `population` units under the expanded `law` (`Select.select`'s for a sampling design rule):
-its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredLaw`). -/
+its units, and the number of bytes of `src` it read. A Bernoulli sampling design is refused (`coveredDesign`). -/
 def drawnFrom (v : Registration.Verifier) (law : Json) (population : Nat) (src : ByteArray) : V (Array Nat × Nat) := do
   let derived ← Draw.deriveLaw v.program v.query v.law v.workTable
-  let l ← coveredLaw (derived.getD (← Draw.flockLaw law population))
+  let l ← coveredDesign (derived.getD (← Draw.flockLaw law population))
   Draw.drawUnits l population src
 
 /-- Why the sample is not the one the coins `src` give under `law` (`drawnFrom`), every coin opened read; none when it is. -/
