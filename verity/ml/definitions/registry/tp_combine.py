@@ -3,6 +3,9 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
 
     AllReduceResidualMnnvlCoordinate_v1{WORLD,SHOT}
                             (col: Array<WORLD, bf16>, res: bf16) -> r: bf16   (one coordinate of AllReduceResidualMnnvl_v1)
+    AllReduceResidualMnnvlAt_v1{WORLD,N,C,AT,SHOT}
+                            (parts: Array<WORLD, Array<C, bf16>>, res: Array<N, bf16>) -> r: Array<C, bf16>
+                                                                              (chunk AT of AllReduceResidualMnnvl_v1's r)
     AllReduceMultimemRow_v1{WORLD,N,ROWS,ROW,TREES,FTZ}
                             (parts: Array<WORLD, Array<N, bf16>>) -> Array<N, bf16>   (row ROW of AllReduceMultimem_v1)
     AllReduceCustomRow_v1{WORLD,N,ROWS,ROW,STAGE}
@@ -22,7 +25,10 @@ straight into the unit that reduces it (a combine's grain is its producer unit's
   cut.
 * A row. An offset-free route (`tp_allreduce.offset_free`) reduces every row of an n-row call alike, so its row unit is the route's
   Definition at one row (`route_binding` at rows = 1). Multimem with more than one tree and the custom 2-stage kernel reduce an
-  element by its offset in the call, so their row units take the call's ROWS and the row's position ROW.
+  element by its offset in the call, so their row units take the call's ROWS and the row's position ROW. A row of a call may be
+  a chunk of one token's elements: a fused MNNVL call is one token, and its chunk AT of C elements is
+  `AllReduceResidualMnnvlAt_v1`, which reads the residual row whole, as `rmsnorm_fused_split.RMSNormFusedCudaAdd_v1` does, so a
+  residual written as one row (the MoE's) is read without being cut.
 """
 from __future__ import annotations
 
@@ -33,8 +39,8 @@ from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import tp_allreduce as TA
 from verity.ml.definitions.registry.prims import BF16
 
-__all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlCoordinate", "coordinate_binding",
-           "row_binding"]
+__all__ = ["AllReduceCustomRow", "AllReduceMultimemRow", "AllReduceResidualMnnvlAt", "AllReduceResidualMnnvlCoordinate",
+           "coordinate_binding", "row_binding"]
 
 
 @composite("AllReduceResidualMnnvlCoordinate", 1, ["WORLD", "SHOT"],
@@ -47,6 +53,30 @@ def AllReduceResidualMnnvlCoordinate(B, S, col, res):
     fused kernel's new residual, which is all its norm reads of the coordinate."""
     a = B.call(bind(TA.AllReduceMnnvlCoordinate, WORLD=S.WORLD, SHOT=TA.strategy(S.SHOT)), col)
     return B.call(P.Bf16AddF2fp, a, res)
+
+
+def _at_refuse(S: dict) -> str | None:
+    """Why `AllReduceResidualMnnvlAt_v1`'s statics bound so far name no chunk of the residual row, or None."""
+    N, C, AT = (S.get(k) for k in ("N", "C", "AT"))
+    if None in (N, C, AT):
+        return None
+    if not (all(type(v) is int for v in (N, C, AT)) and C >= 1 and N % C == 0 and 0 <= AT < N // C):
+        return f"chunk AT={AT!r} of C={C!r} elements is not one of the N / C whole chunks of a residual row of N={N!r}"
+    return None
+
+
+@composite("AllReduceResidualMnnvlAt", 1, ["WORLD", "N", "C", "AT", "SHOT"],
+           lambda S: ((("parts", Array(int(S.WORLD), Array(S.C, BF16))), ("res", Array(S.N, BF16))), Array(S.C, BF16)),
+           conformance="not-yet-established: elements [AT*C, (AT+1)*C) of AllReduceResidualMnnvl_v1, the r of the "
+                       "exact-model-tested AllReduceRmsNormMnnvl_v1, node for node; not captured on its own "
+                       "(verity/ml/definitions/tests/test_tp_combine.py)",
+           refuse=_at_refuse)
+def AllReduceResidualMnnvlAt(B, S, parts, res):
+    """`AllReduceResidualMnnvl_v1{WORLD,N,SHOT}`'s r on its elements [AT·C, (AT+1)·C): that Definition at width C on the ranks'
+    chunk ``parts`` and the chunk of ``res``, the whole residual row (element-wise, so any chunk of its columns is it at that
+    width on those columns)."""
+    at = bind(TA.AllReduceResidualMnnvl, WORLD=S.WORLD, N=S.C, SHOT=TA.strategy(S.SHOT))
+    return B.call(at, parts, res[S.AT * S.C:(S.AT + 1) * S.C])
 
 
 def _row(S) -> tuple[int, int, int]:
@@ -101,18 +131,41 @@ def AllReduceCustomRow(B, S, parts):
     return outs[0] if len(outs) == 1 else coll_concat(Array(N, BF16), outs)
 
 
-#: each route's static holding the call's element count
-_SIZE = {"AllReduceMnnvl_v1": "N", "AllReduceResidualMnnvl_v1": "N", "AllReduceRmsNormMnnvl_v1": "N", "AllReduceMultimem_v1": "SIZE",
-         "AllReduceCustom_v1": "SIZE", "AllReduceNcclTree_v1": "SIZE"}
+#: by all-reduce Definition, its static holding the call's element count
+_SIZE = {TA.AllReduceMnnvl: "N", TA.AllReduceResidualMnnvl: "N", TA.AllReduceRmsNormMnnvl: "N", TA.AllReduceMultimem: "SIZE",
+         TA.AllReduceCustom: "SIZE", TA.AllReduceNcclTree: "SIZE"}
 
 
 def _call(defn, statics: dict) -> tuple[str, dict, int, int]:
     """(``Name_vN``, statics, WORLD, the call's element count) of one of `tp_allreduce`'s all-reduces."""
     name = f"{defn.name}_v{defn.version}"
-    if name not in _SIZE:
+    if defn not in _SIZE:
         raise ValueError(f"{name}: not one of tp_allreduce's all-reduces, whose combine units are stated here")
     s = dict(statics)
-    return name, s, TA.ranks(s["WORLD"]), int(s[_SIZE[name]])
+    return name, s, TA.ranks(s["WORLD"]), int(s[_SIZE[defn]])
+
+
+def _owner(runs, pos: int):
+    return next(x for lo, hi, x in runs if lo <= pos < hi)
+
+
+def _mnnvl_coordinate(unit):
+    return lambda s, W, size, pos: (unit, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])})
+
+
+#: by all-reduce Definition, its coordinate unit at (statics, WORLD, the call's element count, the position)
+_COORDINATE = {
+    TA.AllReduceMnnvl: _mnnvl_coordinate(TA.AllReduceMnnvlCoordinate),
+    TA.AllReduceResidualMnnvl: _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    TA.AllReduceRmsNormMnnvl: _mnnvl_coordinate(AllReduceResidualMnnvlCoordinate),
+    TA.AllReduceMultimem: lambda s, W, size, pos: (
+        TA.AllReduceMultimemCoordinate,
+        {"WORLD": W, "TREE": _owner(TA.multimem_runs(W, size, s["TREES"]), pos), "FTZ": bool(s["FTZ"])}),
+    TA.AllReduceCustom: lambda s, W, size, pos: (
+        TA.AllReduceCustomCoordinate, {"WORLD": W, "START": _owner(TA.custom_owners(W, size, int(s["STAGE"])), pos)}),
+    TA.AllReduceNcclTree: lambda s, W, size, pos: (
+        TA.AllReduceNcclTreeCoordinate, {"WORLD": W, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
+}
 
 
 def coordinate_binding(defn, statics: dict, pos: int) -> tuple[object, dict]:
@@ -122,38 +175,47 @@ def coordinate_binding(defn, statics: dict, pos: int) -> tuple[object, dict]:
     name, s, W, size = _call(defn, statics)
     if not 0 <= int(pos) < size:
         raise ValueError(f"position {pos}: {name}'s elements are 0..{size - 1}")
-    owner = lambda runs: next(x for lo, hi, x in runs if lo <= int(pos) < hi)  # noqa: E731
-    if name == "AllReduceMnnvl_v1":
-        return TA.AllReduceMnnvlCoordinate, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])}
-    if name in ("AllReduceResidualMnnvl_v1", "AllReduceRmsNormMnnvl_v1"):
-        return AllReduceResidualMnnvlCoordinate, {"WORLD": W, "SHOT": TA.strategy(s["SHOT"])}
-    if name == "AllReduceMultimem_v1":
-        return TA.AllReduceMultimemCoordinate, {"WORLD": W, "TREE": owner(TA.multimem_runs(W, size, s["TREES"])),
-                                                "FTZ": bool(s["FTZ"])}
-    if name == "AllReduceCustom_v1":
-        return TA.AllReduceCustomCoordinate, {"WORLD": W, "START": owner(TA.custom_owners(W, size, int(s["STAGE"])))}
-    return TA.AllReduceNcclTreeCoordinate, {"WORLD": W, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}
+    return _COORDINATE[defn](s, W, size, int(pos))
 
 
-def row_binding(defn, statics: dict, rows: int, row: int) -> tuple[object, dict]:
-    """The Definition and statics of the unit reducing row `row` of the all-reduce `defn` at `statics` (`route_binding`'s) over
-    `rows` rows of equal width: the call's row `row` is that unit on every rank's row `row`. An offset-free route's is the route at
-    one row (`route_binding` at rows = 1), so every row of it is one template; the others' take ROWS and ROW."""
-    name, s, W, size = _call(defn, statics)
-    rows, row = int(rows), int(row)
-    if name in ("AllReduceResidualMnnvl_v1", "AllReduceRmsNormMnnvl_v1"):
-        raise ValueError(f"{name}: one token a call, whose coordinates are its units (`coordinate_binding`)")
-    if rows < 1 or size % rows or not 0 <= row < rows:
-        raise ValueError(f"{name} of {size} elements: {rows} rows of equal width, row {row} one of them")
-    N = size // rows
-    if name == "AllReduceMnnvl_v1":
-        return TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}
-    if name == "AllReduceNcclTree_v1":
-        return TA.AllReduceNcclTree, {"WORLD": W, "SIZE": N, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}
-    if name == "AllReduceMultimem_v1":
-        if len(set(TA.multimem_trees(s["TREES"], W))) == 1:
-            return TA.AllReduceMultimem, {"WORLD": W, "SIZE": N, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
-        return AllReduceMultimemRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
+def _multimem_row(s, W, N, rows, row):
+    if len(set(TA.multimem_trees(s["TREES"], W))) == 1:
+        return TA.AllReduceMultimem, {"WORLD": W, "SIZE": N, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
+    return AllReduceMultimemRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "TREES": s["TREES"], "FTZ": bool(s["FTZ"])}
+
+
+def _custom_row(s, W, N, rows, row):
     if int(s["STAGE"]) == 1:
         return TA.AllReduceCustom, {"WORLD": W, "SIZE": N, "STAGE": 1}
     return AllReduceCustomRow, {"WORLD": W, "N": N, "ROWS": rows, "ROW": row, "STAGE": int(s["STAGE"])}
+
+
+def _fused_row(s, W, N, rows, row):
+    return AllReduceResidualMnnvlAt, {"WORLD": W, "N": N * rows, "C": N, "AT": row, "SHOT": TA.strategy(s["SHOT"])}
+
+
+#: by all-reduce Definition, its row unit at (statics, WORLD, the row's width, the row count, the row); a fused call is one token,
+#: so its rows are chunks of that token's elements
+_ROW = {
+    TA.AllReduceResidualMnnvl: _fused_row,
+    TA.AllReduceRmsNormMnnvl: _fused_row,
+    TA.AllReduceMnnvl: lambda s, W, N, rows, row: (TA.AllReduceMnnvl, {"WORLD": W, "N": N, "SHOT": TA.strategy(s["SHOT"])}),
+    TA.AllReduceNcclTree: lambda s, W, N, rows, row: (
+        TA.AllReduceNcclTree, {"WORLD": W, "SIZE": N, "CHAIN": TA.nccl_chain(s["CHAIN"], W)}),
+    TA.AllReduceMultimem: _multimem_row,
+    TA.AllReduceCustom: _custom_row,
+}
+
+
+def row_binding(defn, statics: dict, rows: int, row: int) -> tuple[object, dict]:
+    """The Definition and statics of the unit reducing row `row` of the all-reduce `defn` at `statics` (`route_binding`'s, or the
+    fused `AllReduceRmsNormMnnvl_v1`'s or its `AllReduceResidualMnnvl_v1`'s) over `rows` rows of equal width: the call's row `row`
+    is that unit on every rank's row `row` (and, fused, the whole residual row). An offset-free route's is the route at one row
+    (`route_binding` at rows = 1), so every row of it is one template; the others' take ROWS and ROW, and a fused call's, its
+    chunk AT = `row` of the token's N = C · `rows` elements (`AllReduceResidualMnnvlAt_v1`), whose r a separate
+    `tp_allreduce.RmsNormMnnvl_v1` reads as one row."""
+    name, s, W, size = _call(defn, statics)
+    rows, row = int(rows), int(row)
+    if rows < 1 or size % rows or not 0 <= row < rows:
+        raise ValueError(f"{name} of {size} elements: {rows} rows of equal width, row {row} one of them")
+    return _ROW[defn](s, W, size // rows, rows, row)
