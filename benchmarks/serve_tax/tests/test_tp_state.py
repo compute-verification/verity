@@ -185,3 +185,40 @@ def test_restored_requests_keep_their_served_seeds_and_new_ones_draw_as_served()
 def test_the_seed_hook_refuses_the_v1_runner():
     with pytest.raises(ValueError, match="VLLM_USE_V2_MODEL_RUNNER=1"):
         S.SeedHook(S.runner_of(worker(0)), {"a": 1})
+
+
+def test_copy_blocks_loads_dumped_blocks_into_other_ids_and_refuses_a_missing_one(tmp_path):
+    served, fresh = worker(1), worker(2)
+    S.dump(served, str(tmp_path), [0, 3, 4, 9], ranks=[0])
+    before = [t.clone() for t in tensors(fresh)]
+    assert S.copy_blocks(fresh, str(tmp_path), [[3, 7], [9, 1]]) == {"rank": 0, "blocks": 2}
+    for a, b, c in zip(tensors(served), tensors(fresh), before):
+        assert torch.equal(a[[3, 9]].view(torch.uint8), b[[7, 1]].view(torch.uint8))
+        rest = [k for k in range(BLOCKS) if k not in (7, 1)]
+        assert torch.equal(b[rest].view(torch.uint8), c[rest].view(torch.uint8))
+    with pytest.raises(ValueError, match=r"blocks \[5\] aren't in the dump"):
+        S.copy_blocks(fresh, str(tmp_path), [[5, 2]])
+
+
+def test_fill_blocks_sets_every_byte_of_those_blocks_only():
+    w = worker(1)
+    before = [t.clone() for t in tensors(w)]
+    assert S.fill_blocks(w, [2, 5], 0) == 2 and S.fill_blocks(w, [], 0) == 0
+    for t, b in zip(tensors(w), before):
+        assert (t[[2, 5]].view(torch.uint8) == 0).all()
+        assert torch.equal(t[[0, 1, 3]].view(torch.uint8), b[[0, 1, 3]].view(torch.uint8))
+    S.fill_blocks(w, [1], S.FILL)
+    assert torch.isnan(tensors(w)[0][1].float()).all()
+
+
+def test_block_roots_on_a_rank_equal_dump_roots_over_the_served_blocks(tmp_path):
+    served, fresh = worker(1), worker(2)
+    S.dump(served, str(tmp_path), list(range(BLOCKS)), ranks=[0])
+    want = S.dump_roots(str(tmp_path), {"a": [3, 4], "b": [9]})
+    assert S.block_roots(served, {"a": [3, 4], "b": [9]})["roots"] == want
+    S.copy_blocks(fresh, str(tmp_path), [[3, 0], [4, 6], [9, 2]])
+    assert S.block_roots(fresh, {"a": [0, 6], "b": [2]})["roots"] == want
+    assert S.block_roots(fresh, {"a": [6, 0], "b": [2]})["roots"]["a"] != want["a"]
+    tensors(fresh)[1][2, 0, 0] ^= 1
+    got = S.block_roots(fresh, {"a": [0, 6], "b": [2]})["roots"]
+    assert got["a"] == want["a"] and got["b"] != want["b"]

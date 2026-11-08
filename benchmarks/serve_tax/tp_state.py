@@ -15,8 +15,10 @@ At an edge `tp_edge` drains, each rank holds:
 block that differs), `dump` writes the blocks, `load` writes them back into a fresh engine at the same block ids and
 fills every other block with ``FILL`` (NaN in bf16 and in e4m3), so a read outside the set shows as a divergence, and
 `set_rng` puts the RNG back (and, for a restore that adds its requests to the fresh worker again rather than restoring
-the runner's rows, keeps each one's served seed: `SeedHook`). torch and numpy are imported inside the functions: the
-workers have them, the CPU tests stand in.
+the runner's rows, keeps each one's served seed: `SeedHook`). For a replay that adds the edge's requests to a fresh engine
+again (`rebuild`), `copy_blocks` loads a dump's blocks into other block ids, `fill_blocks` fills blocks byte by byte and
+`block_roots` hashes each request's whole blocks (`dump_roots`, the same over a dump). torch and numpy are imported
+inside the functions: the workers have them, the CPU tests stand in.
 """
 from __future__ import annotations
 
@@ -329,3 +331,112 @@ def differing_blocks(a: bytes, b: bytes, layers: Sequence[Mapping[str, Any]], id
             got.update(int(ids[i]) for i in range(len(ids))
                        if x[i * BLOCK_DIGEST:(i + 1) * BLOCK_DIGEST] != y[i * BLOCK_DIGEST:(i + 1) * BLOCK_DIGEST])
     return sorted(got)
+
+
+# ------------------------------------------------------------------- pages for a replay that re-adds its requests
+
+def dump_dir(edge_dir: str | Path, rank: int) -> Path:
+    """An edge's dump for ``rank``: its own when the edge kept every rank's (they differed), else rank 0's."""
+    own = Path(edge_dir) / f"kv.rank{rank}"
+    return own if own.is_dir() else Path(edge_dir) / "kv.rank0"
+
+
+def _dumped(d: Path, mine: Sequence[Mapping[str, Any]] | None = None) -> tuple[dict[int, int], list[Mapping[str, Any]]]:
+    """A dump's block positions (block id -> row) and layers, refused unless its layers are ``mine``."""
+    meta = json.loads((d / "layers.json").read_text())
+    if mine is not None and list(mine) != meta["layers"]:
+        raise ValueError(f"tp_state: the dump at {d} has {len(meta['layers'])} layers and this engine {len(mine)}, or "
+                         "their names, dtypes or block shapes differ: replay in an engine built from the served engine's header")
+    return {int(b): i for i, b in enumerate(meta["ids"])}, meta["layers"]
+
+
+def _rows(d: Path, i: int, spec: Mapping[str, Any], n: int) -> Any:
+    import numpy as np
+
+    return np.memmap(d / f"{i:03d}.bin", dtype=np.uint8, mode="r", shape=(n, spec["block_bytes"]))
+
+
+def _sync() -> None:
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+
+def copy_blocks(worker: Any, edge_dir: str, pairs: Sequence[Sequence[int]]) -> dict[str, Any]:
+    """Blocks of an edge's `dump` into this rank's layers at other block ids: each (dumped id, fresh id) of ``pairs``, as
+    a replay that re-adds the edge's requests loads their pages. Refuses a dump whose layers aren't this engine's or that
+    lacks a block. The device has finished every step before, and finishes the copy before the call returns."""
+    import numpy as np
+    import torch
+
+    rank = rank_record(worker)["rank"]
+    d = dump_dir(edge_dir, rank)
+    layers = kv_layers(runner_of(worker))
+    pos, specs = _dumped(d, layer_spec(layers))
+    missing = [int(s) for s, _ in pairs if int(s) not in pos]
+    if missing:
+        raise ValueError(f"tp_state.copy_blocks: blocks {missing[:8]} aren't in the dump at {d} ({len(missing)} missing)")
+    if not pairs:
+        return {"rank": rank, "blocks": 0}
+    sel = np.asarray([pos[int(s)] for s, _ in pairs], dtype=np.int64)
+    _sync()
+    for i, ((_, t), spec) in enumerate(zip(layers, specs)):
+        u8 = t.view(torch.uint8)
+        rows = np.ascontiguousarray(_rows(d, i, spec, len(pos))[sel])
+        dst = torch.as_tensor([int(n) for _, n in pairs], dtype=torch.long, device=t.device)
+        u8.index_copy_(0, dst, torch.from_numpy(rows).to(t.device).view(len(pairs), *u8.shape[1:]))
+    _sync()
+    return {"rank": rank, "blocks": len(pairs)}
+
+
+def fill_blocks(worker: Any, ids: Sequence[int], byte: int) -> int:
+    """Every layer's blocks ``ids`` set to ``byte`` in every byte (0, or `FILL`: NaN in bf16 and in e4m3), once the device
+    has finished every step before, and finished before the call returns: a replay's batch-mate K/V."""
+    import torch
+
+    if not ids:
+        return 0
+    _sync()
+    for _, t in kv_layers(runner_of(worker)):
+        t.view(torch.uint8).index_fill_(0, torch.as_tensor([int(b) for b in ids], dtype=torch.long, device=t.device), int(byte))
+    _sync()
+    return len(ids)
+
+
+def _roots(spans: Mapping[str, Sequence[int]], layers: Iterable[Callable[[list[int]], Any]]) -> dict[str, str]:
+    """Each request's SHA-512 over its blocks' rows, layer by layer: ``layers`` gives each layer's rows of a block list."""
+    import numpy as np
+
+    order = sorted(spans)
+    ids = [int(b) for r in order for b in spans[r]]
+    hs = {r: hashlib.sha512() for r in order}
+    if not ids:
+        return {r: h.hexdigest() for r, h in hs.items()}
+    for rows_of in layers:
+        got, at = rows_of(ids), 0
+        for r in order:
+            k = len(spans[r])
+            hs[r].update(np.ascontiguousarray(got[at:at + k]).tobytes())
+            at += k
+    return {r: h.hexdigest() for r, h in hs.items()}
+
+
+def block_roots(worker: Any, spans: Mapping[str, Sequence[int]]) -> dict[str, Any]:
+    """Each request's root over whole blocks: SHA-512 over every layer's rows of its blocks (``spans``: request -> block
+    ids), layer by layer, on this rank; `dump_roots` reads the same from a dump."""
+
+    _sync()
+    rows = [lambda ids, t=t: _host_bytes(t, ids) for _, t in kv_layers(runner_of(worker))]
+    return {"rank": rank_record(worker)["rank"], "roots": _roots(spans, rows)}
+
+
+def dump_roots(edge_dir: str | Path, spans: Mapping[str, Sequence[int]], rank: int = 0) -> dict[str, str]:
+    """`block_roots` over an edge's dump for ``rank`` (served block ids)."""
+    d = dump_dir(edge_dir, rank)
+    pos, specs = _dumped(d)
+    missing = [int(b) for v in spans.values() for b in v if int(b) not in pos]
+    if missing:
+        raise ValueError(f"tp_state.dump_roots: blocks {missing[:8]} aren't in the dump at {d} ({len(missing)} missing)")
+    rows = [lambda ids, i=i, s=s: _rows(d, i, s, len(pos))[[pos[b] for b in ids]] for i, s in enumerate(specs)]
+    return _roots(spans, rows)
