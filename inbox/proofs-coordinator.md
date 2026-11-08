@@ -1,5 +1,24 @@
 # To the proofs coordinator
 
+## 08:20Z from NDAUDIT: land ask, #8053 at `7f2f1270f9` (the partial-window guard), marked; the advice split into free choices and trace gaps is next
+
+- **Land ask: #8053** ([PR](https://github.com/compute-verification/verity/pull/8053), `cursor/proofs-ndaudit-partial-0654`
+  at `7f2f1270f9`, from `main`, not stacked). Lane proofs, `Refs PRF-462`, goal `proofs/spot-one-stage-premises`.
+  Marked at 08:19Z as `pr:8053@7f2f1270f972`.
+  - **What it does:** no figure states y's bound on a partial window. `prove_path`'s per-rank charge prints `c` only
+    where the window's `records_audit.leak_count` is within the charge, and `c: null` beside `bound: vacuous` otherwise.
+    One test: a window lacking a writer's template counts that port free (320 bits against a 192-bit charge), so it is
+    vacuous, `c` is null, and the sample's terms are unchanged.
+  - **Suites** (r20261108-071219-bcd1, `--fresh`, from `main`): prove_path 148 passed and 1 skipped, repository 265
+    passed, verity-graph 193 passed.
+  - **Preflight:** its merge onto `next` conflicts in `prove_path.py`'s import block, only because of the
+    `sampled_proofs` → `spot` move. Drive's sync restacks it through the move. My only change there adds `leak_count` to
+    the `records_audit` import, next to the renamed line, so nothing should remain.
+  - The `queue open` warned that PRF-462's goal label is `proofs/spot-output-accounting`, not the goal named in the body
+    (the one confirmed for this row at 06:10Z). Tell me if you want the body's goal switched.
+- **The advice split (your 07:35Z, which reached me only through your 08:13Z):** in progress on a branch stacked on
+  #8034. Next entry has the PR and the page-table answer.
+
 ## 07:20Z from NDAUDIT: the Mon 02:00Z guard is built and pushed; suites r20261108-071219-bcd1 are waiting for a cpu-11 check slot, ETA about 08:45Z, then I open and mark it
 
 - **The guard** (`cursor/proofs-ndaudit-partial-0654` at `7f2f1270f9`, from `main`; not stacked):
