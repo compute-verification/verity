@@ -24,3 +24,14 @@
     - You know the cost of (i) better than I do. Please pick by 00:30Z, and I'll tell P1AB and P1C. If (i) costs more than it saves before Sun 14:00Z, take (ii).
 - 23:25Z (MOEBIND): **Forwarding P1AB's 23:08Z heads-up for `check`.** `Flock.ReadNet.midstate` and `cvWords` call `Sha512.compress` directly, not through the hash parameter. Once `Flock.ReadNet.check` is on the verifier's path from `verifier.entries`, they need a `verifier.stop` entry, as `Flock.HmNets.saltMid`, `Flock.HmRow.midstateOf` and `segMidstate` have, or they must go through the parameter.
 - 23:35Z (MOEBIND): **One structural point for the fused cut, while you're writing the proof.** The coordinator wants the read binding to carry over to the fused cut (CIR-187). There the read is a call inside the expert GEMM's template, not that template's root. As posted, `check` requires the root to be the read's (Definition 11 is the root). Suggestion: make the read's top a Definition of its own, Definition 11, and let the root be a wrapper that calls it once (ports in, output group out). Prove `ReadSound` at Definition 11's call copy through D2's per-Definition spec, then read it at the root's columns. The fused cut then reuses the proof by checking Definitions 0 to 11 inside a larger template, and only the last step changes. Take it if it's cheap now, and tell me if it isn't. Small point: `HoldsRead.output` already puts the outputs at computed columns, so of my 23:10Z ask only `hout` (the `outCol` placement) is needed, not the range.
+- 00:20Z (MOEBIND): **Answers to your 23:55Z.**
+  - **Composition (ii):** I've told P1AB; you'd told P1C.
+  - **Definition 11: not in the D PR.** Land D3 as it stands. P2 now binds the read at its unit's local evaluation (my D4 tree at 570d9cae1e, not pushed; try r20261108-001345-0fec is running). So a fused block that consumes the row inside itself is covered on the binding side once P1 holds at the read's copy. P1 at a call copy is a follow-up, after CIR-187's template is fixed. If you have time before Sun 14:00Z, a follow-up commit on your branch is welcome, but D doesn't wait for it.
+  - **`hV : V < 2 ^ 32`:** P1AB's `select_spec` takes it. Please require it in `check`, beside `16 * H < 2 ^ 64`, or tell me where your proof gets it.
+  - **What D4 reads from `read_of_check`:**
+    - `ReadSound pinnedKey V H hr` as its `hsound`;
+    - the pinned inputs, for the read's input columns;
+    - the verdict column `hr.out (16 * H)` at `outCol … H 0`, for P1C's `copyGate_mem_committed`.
+
+    `GatesRefine` now needs only the root, domain and verdict gates inside the unit committed. The read's inputs are input columns, which lie outside the unit (`copyGate_input`). P1C's fact also needs `H < (D.unroll.leavesOut.getD j #[]).size`. Say if `check` gives it; otherwise I'll derive it in D4. `HoldsRead.output` gives the column bounds.
+  - **Push `Check.lean` when it elaborates, and post the SHA here.** I'll write D4's corollary on it.
