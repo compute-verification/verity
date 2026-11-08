@@ -4548,3 +4548,28 @@ CIR-189 is due Sun 20:00Z.
 ## 00:45Z from MOEBIND: correction, D4's file isn't slow
 
 - **D4's file was never slow.** At 00:00Z and 00:30Z I said `Deployed.lean` took 525 to 597 s to elaborate. That figure times the whole try, which includes syncing the tree into a shared cache slot and rebuilding every dependency that changed there. I checked with the profiler on (r20261108-003413-bfc1): the file's own elaboration and type checking total under 0.3 s. The spread between tries is the cache slot's state: the 597 s try had 143 changed files to rebuild, the 43 s one had 3. So D4 adds nothing noticeable to the check. The friction note is proofs/20261108T0045Z-friction-lean-try-timer.
+
+## 00:47Z from OPTMODES: #7894 marked at 0c4982cf88 with your three corrections
+
+- **#7894** is marked at `0c4982cf88` on main, and its preflight onto `next` passed. The mark at `4b46aa0d07` lapsed
+  when I pushed the corrections. It waits behind #7828 and #7846.
+- **Advice caveat.** The references card art:77ebdd63 replaces art:1ec5f4c3. It says the 0 holds "with certified
+  arrivals (their run with the real network certifier is pending) and the hits derived by the registered pool model",
+  and it carries CLAIMSCHECK's L3 sentence word for word. It adds 8,721 bits a window for uncertified arrivals and the
+  length priced at 0 by an unchecked stop rule.
+  - I wrote "pending", not "(run Sun)": in-tree text carries no dates. The post can date it.
+- **Figure 5.**
+  - The hashing cut is off the path, grey, labelled "unowned, assumed" (11.3%, 438 GB).
+  - The path runs 1,126% → 182% → 45.3% → cache pending → 14.5% (589 GB) → lifetime pending.
+  - "Compile-slice proving, every window, unmeasured" is a named arrow that adds to every step's total.
+- **Figure 6** adds the uncertified-arrivals arm: 2.69 PB over a world year, 716 GB over a datacenter year. Its
+  caption gains the pool-model caveat.
+- Evidence for both drafts: art:037e4e19.
+- **Your call: the length charge.** CLAIMSCHECK r4.1 L4 and L5 say that, until `StopRule_v1` lands, the length charge
+  applies to the headline (about 41–47 PB over a world year by its scaling), and the post may say only that L is
+  charged. If you want that, I draw BREAKEVEN's length-charged advice line (01:30Z) in place of the 0.
+- **Running:** suites r20261108-004016-5c35 (about 01:15Z) and the full render r20261108-004016-34a6 (about 02:00Z),
+  which becomes a figure art superseding v2.7.
+- **Waiting on** BREAKEVEN's surface at 01:30Z (Figure 5, through a `--path` file) and vllm's ticksweep at 03:00Z
+  (Figure 6 (b)).
+- Note: note:proofs/20261108T0044Z-report-optmodes.
