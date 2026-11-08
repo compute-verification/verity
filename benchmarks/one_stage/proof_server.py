@@ -45,7 +45,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from zk_cost import Busy, Peak, environ, free_port, jsonl  # noqa: E402
+from zk_cost import Busy, Peak, environ, free_port, jsonl, read_jsonl  # noqa: E402
 
 #: the cells `benchmarks/served_units/stage.py` stages, by type: a census type by its descriptor, a fused per-expert
 #: block by its read's and GEMM's
@@ -427,19 +427,21 @@ def summarize(lives: list[dict], samples, types: dict, K: int, warm: int, n: int
                 and x.get("stmt_cache")]
         step = max(1, len(mine) // 4)
         pts = mine[step - 1::step]
-        prev = next((x["stmt_cache"] for x in sorted(lives, key=lambda x: x["t_end"]) if x["p"] == i and x["warm"]
-                     and x.get("stmt_cache")), {"hits": 0, "misses": 0})
+        prev = ([x["stmt_cache"] for x in sorted(lives, key=lambda x: x["t_end"]) if x["p"] == i and x["warm"]
+                 and x.get("stmt_cache")] or [{"hits": 0, "misses": 0}])[-1]
+        # a record's counters are read when it is emitted, after verify-ahead's next lookups: a window can be empty
         rates = []
         for c in pts:
             dh, dm = c["hits"] - prev["hits"], c["misses"] - prev["misses"]
-            rates.append(round(dh / (dh + dm), 4) if dh + dm else None)
-            prev = c
+            if dh + dm:
+                rates.append(round(dh / (dh + dm), 4))
+                prev = c
         windows.append(rates)
     waits = [x["verdict_wait_s"] for x in inside if x.get("verdict_wait_s") is not None]
     return {"steady_s": round(span, 3), "statements_s": round(len(inside) / span, 4), "statements_s_by_type": rate,
             "blocks_s_by_type": blocks, "busy": round(sum(busy) / len(busy) / 100, 4) if busy else None,
             "gpu_s_by_type": by_type(gpu_s), "hit_windows": windows,
-            "flat": all(len(w) >= 2 and None not in w[-2:] and abs(w[-1] - w[-2]) < 0.01 for w in windows),
+            "flat": all(len(w) >= 2 and abs(w[-1] - w[-2]) < 0.01 for w in windows),
             "verdict_wait_s": round(sum(waits), 3), "verdict_wait_share": round(sum(waits) / (span * K), 4) if span else None,
             "e2e_s_by_type": by_type([(x["label"], x["e2e_s"]) for x in inside if x.get("e2e_s") is not None])}
 
@@ -484,6 +486,11 @@ def report(a) -> int:
 
     for d in a.runs:
         rec = json.loads((Path(d) / "server.json").read_text())
+        if (Path(d) / "live.jsonl").exists():
+            samples = [(float(t), None if u == "None" else float(u), m)
+                       for t, u, m in (x.split(",") for x in (Path(d) / "busy.csv").read_text().split())]
+            rec |= summarize(read_jsonl(Path(d) / "live.jsonl"), samples, rec["types"], rec["provers"], rec["warm"],
+                             rec["sessions"]) or {}
         r = {"dir": d, "provers": rec["provers"], "statements_s": rec.get("statements_s"), "busy": rec.get("busy"),
              "beta": {w: S.solve(build(rec, 1.0), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()},
              "beta_prover4": {w: S.solve(build(rec, 0.25), t, mixrec["scope"], case.scale) for w, t in WEIGHTS.items()}}
