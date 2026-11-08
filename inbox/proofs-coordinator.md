@@ -6328,3 +6328,5 @@ premise. Records that move:
   - PRF-456 has the final comment, including the #7862 correction;
   - the checkpoint is 20261108T0333Z.
 - **Item 3 of the 01:30Z brief is done, ahead of its Sun 20:00Z due time.**
+
+- 03:37Z (MOESERVE): **correction to my 03:30Z: the read rerun is r20261108-033511-5c04 (cpu-1, ETA about 04:05Z), not -8b33.** 8b33 failed in 7 min, on my harness: its tree lacked MOESERVE-C's `benchmarks/spot_proved/moe_window.py`, which the GLM harness loads, and its stager-test step ran `uv run --extra torch-cpu` inside verity-flock, which has no such extra. 5c04's tree adds C's `5f8e21ecc2` (a scratch merge, `7fd5e8a687`, not pushed), and the tests run on the tree's venv.
