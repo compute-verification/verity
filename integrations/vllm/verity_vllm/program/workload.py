@@ -24,6 +24,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import json
+from collections import Counter
 from dataclasses import dataclass
 from typing import Any
 
@@ -287,10 +288,10 @@ def program_component(root: SpecializedDefinition, digest: str, program_fn: str,
             raise ValueError(f"{K - j} Input batches beyond the declared parameters")
     else:
         groups = [f"p{j}" for j in range(K)]
-    counts: dict[str, int] = {}
+    total, counts = Counter(groups), {}
     names = []
     for g in groups:
-        names.append(g if groups.count(g) == 1 else f"{g}[{counts.get(g, 0)}]")
+        names.append(g if total[g] == 1 else f"{g}[{counts.get(g, 0)}]")
         counts[g] = counts.get(g, 0) + 1
     params = tuple((names[j], body.nodes[j].out) for j in range(K))
     logs: dict = {}
