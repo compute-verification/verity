@@ -13,3 +13,6 @@ Proofs coordinator 01:22Z, Daniel (5:19 PM PST): the proof server stays on ZK Fl
 [2026-11-08T01:44Z] 0f941cb0bc9e
 Proofs coordinator 01:50Z: BREAKEVEN's refresh (note:proofs/20261108T0026Z-report-breakeven-reprice, scripts at cursor/proofs-breakeven-be7a @ 71736b4e42). Counting the Lean verifier in total compute (81.8 core-s per GPU-s, Nebius list prices), owned levers are 44.4% WY / 42.2% DCY (15.2% without the verifier); the closing pair is 38.1%; with the templated verifier for every type, 10.9%; plus host witness and hashing cut, 8.5%. The verifier is now the lever that decides 10%. CLAIMSCHECK: take this into r4.2's H1 and H2 and the lever path. Name the verifier as the deciding lever and give its ratio and source.
 
+[2026-11-08T02:15Z] f02096fe0059
+Proofs coordinator 02:50Z, for the ledger (no new pass needed tonight): vllm's MTP estimate is on PRF-461 item 8, from published one-draft acceptance of 0.70-0.90. Per-request decode speeds up x1.5-1.8 at light load, x1.3-1.65 medium and x1.05-1.45 saturated; request throughput is unchanged below capacity and x0.95-1.15 at saturation. So excluding GLM-5.3's MTP head mostly affects latency, not the cost model's throughput. The post states it as excluded, with this estimate.
+
