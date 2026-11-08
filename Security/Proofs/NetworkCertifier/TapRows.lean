@@ -59,9 +59,10 @@ gate depends on an input in none (an unread input, `Prog.Unread`), so the inputs
 values (`rLeakTap_of_r`).
 
 An extracted trace that disagrees with the network certifier opens a transfer gate to a value the network certifier's
-opening there doesn't. The extractor checked that opening with its own calls (`Passes.found`, `ownLog_E`), so under
-`CommitmentScheme.Binds` its calls and those that check the network certifier's opening collide, and `B_tap` finds the
-collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`). `sampledLeak_tap` is the bound:
+opening there doesn't. The compiled sampled verifier's extractor checked that opening with its own calls
+(`Compiled.passes_found`, `Compiled.ownLog_E`), so under `CommitmentScheme.Binds` its calls and those that check the
+network certifier's opening collide, and `B_tap` finds the collision (`tapColl_of_disagree`, `Pr_tapColl_le_Btap`, at
+any compiled sampled verifier). `sampledLeak_tap` is the bound:
 `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`.
 
 The registered-input and collision steps follow the registration's (proofs' P1b), at the network certifier's openings.
@@ -279,39 +280,43 @@ theorem tapLog_valid (H : Msg → Msg) (Cm : CommitmentScheme Bool) (roots : Lis
   obtain ⟨o, -, hpo⟩ := List.mem_flatMap.1 hp
   exact OC.eval_log H _ p hpo
 
-variable [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+end Deploy
+
+section Compiled
+
+open Claims.SamplingGeneric (Compiled Arg)
+
+variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg Coin}
 
 /-- A collision against the network certifier's openings: the extraction's own calls and the checks of the network
 certifier's openings hold two different inputs with one output. -/
-def TapColl (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) : Prop :=
-  LogColl (ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) ++
-    ((D.parse x).map fun st => tapLog H D.commit st.roots (tops st)).getD [])
+def TapColl (H : Msg → Msg) (L : Compiled Coin A) (tops : AuditStatement → List (Opening Bool)) {Ω : Type}
+    (P : Prover Ω) (x : Msg) (s : Ω × (Fin (L.V.k x) → Coin) × L.E.C x) : Prop :=
+  LogColl (ownLog H (run H P L.V x s.1) (L.E.ext x s.2.1 s.2.2) ++
+    ((L.parse x).map fun st => tapLog H L.commit st.roots (tops st)).getD [])
 
-omit [DecidableEq Col] [Zero Col] in
 /-- **A disagreement with the network certifier is a collision**: at an accepted run, an extracted trace that opens a
 gate the network certifier opens to a value other than the network certifier's makes, with the network certifier's
 opening there, calls that collide among the extraction's own and the checks of the network certifier's openings. -/
-theorem tapColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H)
-    (decode : List (ℕ × Col) → List T) (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x) {st : AuditStatement} (hst : D.parse x = some st)
-    (hpass : ∀ q ∈ tops st, D.commit.Opens H st.roots q = true) (hacc : (run H P D.V x s.1 s.2.1).out = .acc)
-    {w : Wit} (hw : ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 = some w) {g : ℕ} (hq : ∃ q ∈ tops st, q.pos = g)
-    {b : Bool} (hwb : w.val H D.commit st g = some b) (hne : b ≠ tapVal (tops st) g) : TapColl H D decode tops P x s := by
-  rw [E_eval H D decode P x s.1 s.2.1 s.2.2 hst hacc, Option.some.injEq] at hw
+theorem tapColl_of_disagree (H : Msg → Msg) (L : Compiled Coin A) (hb : L.commit.Binds H)
+    (tops : AuditStatement → List (Opening Bool)) {Ω : Type} (P : Prover Ω) (x : Msg)
+    (s : Ω × (Fin (L.V.k x) → Coin) × L.E.C x) {st : AuditStatement} (hst : L.parse x = some st)
+    (hpass : ∀ q ∈ tops st, L.commit.Opens H st.roots q = true) (hacc : (run H P L.V x s.1 s.2.1).out = .acc)
+    {w : Wit} (hw : (L.E.eval H P x s.1 s.2.1 s.2.2).1 = some w) {g : ℕ} (hq : ∃ q ∈ tops st, q.pos = g)
+    {b : Bool} (hwb : w.val H L.commit st g = some b) (hne : b ≠ tapVal (tops st) g) : TapColl H L tops P x s := by
+  rw [Compiled.E_eval H L P x s.1 s.2.1 s.2.2 hst hacc, Option.some.injEq] at hw
   subst hw
   obtain ⟨q, hq', hqr, hqp, hqv⟩ := mem_assemble_of_val hwb
-  obtain ⟨hqo, hql⟩ := passes_of_mem_found H D decode P x s.1 s.2.1 s.2.2 hst hacc hq'
+  obtain ⟨hqo, hql⟩ := passes_of_mem_found H L P x s.1 s.2.1 s.2.2 hst hacc hq'
   obtain ⟨o', ho', ho'p, ho'v⟩ := tapVal_mem hq
-  have hqo' : D.commit.Opens H st.roots q.2 = true := by rw [← hqr]; exact hqo
-  have hql' : ∀ t ∈ ((D.commit.opens st.roots q.2).eval H).2,
-      t ∈ ownLog H (run H P D.V x s.1) ((E D decode).ext x s.2.1 s.2.2) := by
+  have hqo' : L.commit.Opens H st.roots q.2 = true := by rw [← hqr]; exact hqo
+  have hql' : ∀ t ∈ ((L.commit.opens st.roots q.2).eval H).2,
+      t ∈ ownLog H (run H P L.V x s.1) (L.E.ext x s.2.1 s.2.2) := by
     intro t ht
     rw [← hqr] at ht
     exact hql t ht
-  have htl : ((D.parse x).map fun st => tapLog H D.commit st.roots (tops st)).getD [] =
-      tapLog H D.commit st.roots (tops st) := by
+  have htl : ((L.parse x).map fun st => tapLog H L.commit st.roots (tops st)).getD [] =
+      tapLog H L.commit st.roots (tops st) := by
     rw [hst]
     rfl
   unfold TapColl
@@ -320,50 +325,58 @@ theorem tapColl_of_disagree (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.co
     (fun t ht => List.mem_append_left _ (hql' t ht))
     (fun t ht => List.mem_append_right _ (List.mem_flatMap.2 ⟨o', ho', ht⟩))
 
-omit [DecidableEq Col] [Zero Col] in
 /-- **The reduction's probability step**: the collisions against the network certifier's openings have probability at
 most `B_tap`'s. -/
-theorem Pr_tapColl_le_Btap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) → List T)
-    (tops : AuditStatement → List (Opening Bool)) {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
-    Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x => TapColl H D decode tops P x s) ≤
-      (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H := by
+theorem Pr_tapColl_le_Btap (H : Msg → Msg) (L : Compiled Coin A) (tops : AuditStatement → List (Opening Bool))
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (x : Msg) :
+    Pr (fun s : Ω × (Fin (L.V.k x) → Coin) × L.E.C x => TapColl H L tops P x s) ≤
+      (Btap H L.V L.E L.commit L.parse tops Ω P x).Pr H := by
   unfold Btap Finder.Pr
   refine Pr_mono fun s h => ?_
   obtain ⟨⟨u, v⟩, huv⟩ := Option.isSome_iff_exists.1 (findColl_isSome _ h)
   refine ⟨u, v, huv, findColl_spec H _ (fun p hp => ?_) u v huv⟩
   rcases List.mem_append.1 hp with hp | hp
   · exact ownLog_valid H _ _ p hp
-  · cases hx : D.parse x with
+  · cases hx : L.parse x with
     | none => rw [hx] at hp; exact absurd hp (by simp)
-    | some st => rw [hx] at hp; exact tapLog_valid H D.commit st.roots (tops st) p hp
+    | some st => rw [hx] at hp; exact tapLog_valid H L.commit st.roots (tops st) p hp
 
-/-- **The leak bound at the network certifier's rows**, at any deployment `D` of the sampled verifier where `KS` holds
-and the trace's commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
-within Flock's radius, inputs `As` that suffice (`AdviceIn`), and the network certifier's openings `tops s` at each
-statement. On the statements in the audit's scope: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
-theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
-    (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
-    (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
+end Compiled
+
+section DeployTap
+
+open Claims.SamplingGeneric (ofDeploy)
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col]
+
+/-- **The leak bound at the network certifier's rows**, at any deployed record `D` of the sampled verifier and roots
+`iroots` where the compiled sampled verifier `ofDeploy D iroots` is knowledge sound (`Compiled.KS`) and the trace's
+commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, inputs `As` that suffice (`AdviceIn`), and the
+network certifier's openings `tops s` at each statement. On the statements in the audit's scope:
+`Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
+theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
+    (hks : (ofDeploy D iroots).KS H) (hb : D.commit.Binds H) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) (δ : ℝ) (hδ : 0 ≤ δ) (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ)
     (tops : AuditStatement → List (Opening Bool)) (x : Msg) (hx : ScopeAcc D lay k x) (Ω : Type) [Fintype Ω] [Nonempty Ω]
     (P : Prover Ω) :
-    PrBad H D.V (RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops) (E D decode) x P ≤
-      κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
-        (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H := by
-  have hks' := hks δ decode hδ hdec x hx.1 Ω P
+    PrBad H D.V (RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops) (ofDeploy D iroots).E x P ≤
+      (ofDeploy D iroots).κ δ x + Real.sqrt ((ofDeploy D iroots).γ x * PrB H D.V P x) +
+        (Bext H D.V (ofDeploy D iroots).E Ω P x).Pr H +
+        (Btap H D.V (ofDeploy D iroots).E D.commit D.parse tops Ω P x).Pr H := by
+  have hks' := hks δ hδ x hx.1 Ω P
   rw [one_mul] at hks'
   unfold PrBad at hks' ⊢
-  calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
+  calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (ofDeploy D iroots).E.C x =>
         (run H P D.V x s.1 s.2.1).out = .acc ∧
           ¬ (RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops).ext x
-            ((E D decode).eval H P x s.1 s.2.1 s.2.2).1)
-      ≤ Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
+            ((ofDeploy D iroots).E.eval H P x s.1 s.2.1 s.2.2).1)
+      ≤ Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (ofDeploy D iroots).E.C x =>
           ((run H P D.V x s.1 s.2.1).out = .acc ∧
-            ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x s.1 s.2.1 s.2.2).1) ∨
-            TapColl H D decode tops P x s) := by
+            ¬ (R H D.commit D.parse D.partition δ).ext x ((ofDeploy D iroots).E.eval H P x s.1 s.2.1 s.2.2).1) ∨
+            TapColl H (ofDeploy D iroots) tops P x s) := by
         refine Pr_mono fun s ⟨hac, hR⟩ => ?_
-        rcases hw : ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 with _ | w
+        rcases hw : ((ofDeploy D iroots).E.eval H P x s.1 s.2.1 s.2.2).1 with _ | w
         · exact Or.inl ⟨hac, by simp [Rel.ext]⟩
         · rw [hw] at hR
           by_cases hA : R H D.commit D.parse D.partition δ x w
@@ -371,11 +384,11 @@ theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D)
             by_contra hnc
             refine hR (rLeakTap_of_r H D lay k hδ tops hin hx hA fun st hst hpass g hq b hwb => ?_)
             by_contra hne
-            exact hnc (tapColl_of_disagree H D hb decode tops P x s hst hpass hac hw hq hwb hne)
+            exact hnc (tapColl_of_disagree H (ofDeploy D iroots) hb tops P x s hst hpass hac hw hq hwb hne)
           · exact Or.inl ⟨hac, hA⟩
     _ ≤ _ := Pr_union_le _ _
-    _ ≤ _ := add_le_add hks' (Pr_tapColl_le_Btap H D decode tops P x)
+    _ ≤ _ := add_le_add hks' (Pr_tapColl_le_Btap H (ofDeploy D iroots) tops P x)
 
-end Deploy
+end DeployTap
 
 end NetTiming.TapProof

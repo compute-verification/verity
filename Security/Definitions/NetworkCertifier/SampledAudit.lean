@@ -1,6 +1,7 @@
 module
 
 public import Definitions.Claims.Sampling
+public import Definitions.Claims.SamplingGeneric
 public import Definitions.NetworkCertifier.Run
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
@@ -74,6 +75,7 @@ reads (`Covered`).
 namespace NetTiming
 
 open Claims Claims.Sampling
+open Claims.SamplingGeneric (ofDeploy)
 
 /-- **The boundary gates**, the layout of the run's boundary in a program's gates: at step `t`, slot `σ` of egress link
 `ℓ` is a presence gate and its frame's bit gates (`egress t ℓ σ`), and step `t`'s ingress is the gates `ingress t`, in
@@ -189,15 +191,18 @@ horizon (`BoundaryGates.Fits`). -/
 def ScopeAcc {L S : ℕ} (D : Deploy Coin Col T) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (x : Msg) : Prop :=
   Scope D x ∧ ∃ s, D.parse x = some s ∧ (lay s).Fits s.prog (k s)
 
-/-- **The sampled audit implies `Accepted`** at the deployment `D`, at the public layout `lay` and horizon `k` of each
-statement. It holds on the statements in its scope (`ScopeAcc`), at every `δ ≥ 0`, at the sampling extractor and every
-decoder that lists every trace within Flock's radius: `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with `KS`'s errors
-(`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection enters only
-through `M_δ`. -/
-def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) : Prop :=
-  ∀ (δ : ℝ) decode, 0 ≤ δ → Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode →
-    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ) (γ D)
-      (fun _ => 1) (Bext H D.V (E D decode))
+/-- **The sampled audit implies `Accepted`** at the deployed record `D` and the roots `iroots` a run shows for a proof
+block's interior values, at the public layout `lay` and horizon `k` of each statement. It holds on the statements in its
+scope (`ScopeAcc`), at every `δ ≥ 0`, at the extractor of the compiled sampled verifier at the record
+(`SamplingGeneric.ofDeploy D iroots`, at its deployed decoder): `Pr[acc ∧ ¬RAcc δ] ≤ δ + ε_ks + ε_bind`, with its
+errors (`ε_ks = κ − δ + √(γ·Pr[B])`, Flock's error at the proof blocks' sessions; `ε_bind = Pr[B_ext]`). The selection
+enters only through `M_δ`. -/
+def KSAccepted (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) : Prop :=
+  ∀ δ : ℝ, 0 ≤ δ →
+    KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ)
+      (ofDeploy D iroots).E ((ofDeploy D iroots).κ δ) (ofDeploy D iroots).γ (fun _ => 1)
+      (Bext H D.V (ofDeploy D iroots).E)
 
 end Claim
 

@@ -44,6 +44,8 @@ import Mathlib.Topology.Sheaves.Init
 import Proofs.Flock.Claims.KS.ZkExtend
 import Proofs.Flock.Claims.Prob
 import Proofs.Flock.Claims.Witnesses.Meets
+import Proofs.Flock.Claims.Witnesses.SamplingGeneric
+import Proofs.Flock.SamplingGeneric
 import Proofs.NetworkCertifier.SampledAuditAccepted
 import Std.Tactic.BVDecide.Normalize.Bool
 
@@ -54,15 +56,17 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 `G_honest`, its hypotheses at the honest deployed instance, and `G_nontrivial`, its conclusion false at an instance
 whose verifier accepts everything.
 
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `Claims.Sampling.KS` holds at
-  SHA-512 at a sampling record over the masked Flock record at the deployed relation, under the assembled record's
-  hypotheses (`ks_deployed`: `KS_of` at `sampling_assembled_of`'s, Flock's KS `FlockDeploy.KS.zk_KS_untrim`). So do
-  the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible incorrect set's
-  committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at
-  the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no
-  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
-  with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
+* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise, the knowledge soundness of
+  the deployed record's compiled sampled verifier (`Compiled.KS` at `ofDeploy D iroots`), holds at SHA-512 at a
+  sampling record over the masked Flock record at the deployed relation, under the record's hypotheses
+  (`ks_deployed`: `Claims.SamplingGeneric.ks_ofDeploy`, with Flock's KS `FlockDeploy.KS.zk_KS_untrim` and its
+  decoder's list bound). So do the rest: a charge `β` bounds every possible incorrect set's committed bits at every
+  `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at the accepting verifier's
+  compiled form: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no witness
+  is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There, with
+  nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
+  At both, `κ < 1/3` at `δ = 0` (`sksD_ofDeploy_κ`) and no session makes a call, so `B_ext` and `B_reg` are empty.
 * `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
@@ -75,6 +79,7 @@ The count conjuncts of the leak bounds read no verifier: they hold at every depl
 namespace NetTiming.Witness
 
 open Claims Claims.Sampling Claims.Witness Claims.Witness.Sampling
+open Claims.SamplingGeneric (ofDeploy)
 
 local notation "relD" => _root_.Flock.Readable.relation
 local notation "shaD" => FlockDeploy.sha512
@@ -84,22 +89,25 @@ local notation "shaD" => FlockDeploy.sha512
 section Honest
 
 set_option synthInstance.maxSize 1024 in
-/-- **`Claims.Sampling.KS` at the deployed record**: at SHA-512, at a sampling record over the masked Flock record at
-the deployed relation, under the assembled record's hypotheses, with Flock's KS there
-(`FlockDeploy.KS.zk_KS_untrim`). -/
+/-- **`Compiled.KS` at the deployed record**: at SHA-512, of the compiled sampled verifier (`ofDeploy D iroots`) of a
+sampling record over the masked Flock record at the deployed relation, under the record's hypotheses, with Flock's KS
+there (`FlockDeploy.KS.zk_KS_untrim`) and its decoder's list bound (`Sampling.decoder_meets_zk`). -/
 theorem ks_deployed
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
-    (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hflock : D.flock = FlockDeploy.deployZk relD)
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    Claims.Sampling.KS shaD D :=
-  Claims.Sampling.KS_of iroots (Binding_of_hm96 D own at_ row salt π layer hcommit hrow shaD)
-    (SessionKS_of (by rw [hflock]; exact FlockDeploy.KS.zk_KS_untrim) hfixed hsessions hnum hε) hopens hfix
-    (drawLaw_of_slots D hslots) (refuses_of shaD D (scopeMatches_of D hslots hprog) hchecks) hε
+    (ofDeploy D iroots).KS shaD := by
+  have hKS : Claims.Flock.KS shaD D.flock := by
+    rw [hflock]
+    exact FlockDeploy.KS.zk_KS_untrim
+  exact Claims.SamplingGeneric.ks_ofDeploy iroots hKS (Claims.Sampling.decoder_meets_zk relD D hflock)
+    (Binding_of_hm96 D own at_ row salt π layer hcommit hrow shaD) hopens hfix (drawLaw_of_slots D hslots)
+    (refuses_of shaD D (scopeMatches_of D hslots hprog) hchecks) hfixed hsessions hnum
 
 /-- **A charge bounds every possible incorrect set**, at every deployment and `δ`: each statement's partition's units'
 committed bits, all of them. -/
@@ -118,63 +126,59 @@ theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T
   exact Finset.sum_le_sum_of_subset hF.1
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**: `KS` (`ks_deployed`). -/
+/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**: `Compiled.KS` (`ks_deployed`). -/
 theorem SampledAuditAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
-    (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hflock : D.flock = FlockDeploy.deployZk relD)
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    Claims.Sampling.KS shaD D :=
-  ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
+    (ofDeploy D iroots).KS shaD :=
+  ks_deployed D hflock own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
     hchecks
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledLeakAccepted`'s hypotheses at the deployed record**: `SampledAuditAccepted`, `KS`, the record's decoder
-within Flock's radius (`Sampling.decoder_meets_zk`), and at every `δ` a charge bounding every possible incorrect set
-(`charge_bounds`). -/
+/-- **`SampledLeakAccepted`'s hypotheses at the deployed record**: `SampledAuditAccepted`, `Compiled.KS`, and at every
+`δ` a charge bounding every possible incorrect set (`charge_bounds`). -/
 theorem SampledLeakAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
-    (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hflock : D.flock = FlockDeploy.deployZk relD)
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧
-      Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ (ofDeploy D iroots).KS shaD ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
-    ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
+    ks_deployed D hflock own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
       hchecks,
-    Claims.Sampling.decoder_meets_zk relD D hflock, charge_bounds D⟩
+    charge_bounds D⟩
 
 set_option synthInstance.maxSize 1024 in
 /-- **`SampledLeakRegistered`'s hypotheses at the deployed record**: `SampledLeakAccepted`'s, and the hm96 commitment
 binds (`Binding_of_hm96`). -/
 theorem SampledLeakRegistered_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
-    (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
+    (hflock : D.flock = FlockDeploy.deployZk relD)
     (own : Array _root_.Flock.Registered.Port) (at_ : List Msg → ℕ → Option (Msg × ℕ))
     (row salt π : Opening Bool → Msg) (layer : (Msg → Msg) → List Msg → List (Opening Bool) → List Msg)
     (hcommit : D.commit = pathCommit at_ (hm96Leaf row salt) π (regPath own) layer) (hrow : RowPlaces row)
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧ D.commit.Binds shaD ∧
-      Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ (ofDeploy D iroots).KS shaD ∧ D.commit.Binds shaD ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
-    ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
+    ks_deployed D hflock own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
       hchecks,
-    Binding_of_hm96 D own at_ row salt π layer hcommit hrow shaD,
-    Claims.Sampling.decoder_meets_zk relD D hflock, charge_bounds D⟩
+    Binding_of_hm96 D own at_ row salt π layer hcommit hrow shaD, charge_bounds D⟩
 
 end Honest
 
@@ -247,25 +251,58 @@ omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem leakD_scopeAcc (x : Msg) : ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1) x :=
   ⟨⟨notStmt, notPart, rfl, rfl, inScope_not⟩, notStmt, rfl, notLay_fits⟩
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-theorem leakD_κ (x : Msg) : Claims.Sampling.κ (leakD Coin) 0 x < 1 / 3 :=
-  sksD_κ (Coin := Coin) x
+omit [Inhabited Coin] in
+/-- **`κ < 1/3` at `sksD`'s compiled verifier**, at `δ = 0`: its one proof block's session bound is `κF ≤ 1/20`
+(`sksD_κF`), and each wait counts `sksD`'s `k` (`sksD_outer`). -/
+theorem sksD_ofDeploy_κ (iroots : Msg → Seen → ℕ → List Msg) (x : Msg) :
+    (ofDeploy (sksD Coin) iroots).κ 0 x < 1 / 3 := by
+  have hs := slack_le_two
+  have hs0 := slack_pos
+  have hF := sksD_κF (Coin := Coin) x
+  have hF0 := sksD_κF_nonneg (Coin := Coin) x
+  have ho := sksD_outer (Coin := Coin) x
+  have ho0 : 0 ≤ 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) := by
+    positivity
+  have hκs : (ofDeploy (sksD Coin) iroots).κs x = κF (sksD Coin) x := by
+    show ((List.range 1).map fun _ => κF (sksD Coin) x).foldr max 0 = κF (sksD Coin) x
+    simp [hF0]
+  have hko : (ofDeploy (sksD Coin) iroots).kOut x = (sksD Coin).k x := rfl
+  have hki : (ofDeploy (sksD Coin) iroots).kIn x = (sksD Coin).k x := rfl
+  have hco : (ofDeploy (sksD Coin) iroots).capOut x = (sksD Coin).cap x := rfl
+  have hci : (ofDeploy (sksD Coin) iroots).capIn x = (sksD Coin).cap x := rfl
+  have he : (ofDeploy (sksD Coin) iroots).κ 0 x = slack ^ 2 * κF (sksD Coin) x + (1 + slack) *
+      (2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8)) := by
+    unfold Compiled.κ
+    rw [hκs, hko, hki, hco, hci]
+    ring
+  rw [he]
+  have h1 : slack ^ 2 * κF (sksD Coin) x ≤ 4 * (1 / 20) := by
+    have : slack ^ 2 ≤ 4 := by nlinarith
+    calc slack ^ 2 * κF (sksD Coin) x ≤ 4 * κF (sksD Coin) x := by gcongr
+      _ ≤ 4 * (1 / 20) := by gcongr
+  generalize 2 * ((sksD Coin).k x : ℝ) / ((sksD Coin).cap x : ℝ) + Real.exp (-((sksD Coin).k x : ℝ) / 8) = X
+    at ho ho0 ⊢
+  have h2 : (1 + slack) * X ≤ 3 * (1 / 50) := by
+    calc (1 + slack) * X ≤ 3 * X := by gcongr; linarith
+      _ ≤ 3 * (1 / 50) := by gcongr
+  linarith
 
-theorem leakD_bext (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H = 0 := by
-  simp only [Bext]
-  rw [dite_eq_left (show 0 < (leakD Coin).V.k x from Nat.one_pos)]
-  unfold Finder.Pr
-  rw [Pr_congr fun s => iff_false_intro (by
-    simp [ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _), findColl])]
-  exact Pr_false
+omit [Inhabited Coin] in
+theorem leakD_κ (iroots : Msg → Seen → ℕ → List Msg) (x : Msg) : (ofDeploy (leakD Coin) iroots).κ 0 x < 1 / 3 :=
+  sksD_ofDeploy_κ iroots x
 
-theorem leakD_breg (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (x : Msg) :
-    (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) (leakD Coin).commit (leakD Coin).parse
+theorem leakD_bext (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) (x : Msg) :
+    (Bext H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E Unit silentP x).Pr H = 0 :=
+  Claims.Witness.SamplingGeneric.bext_pr H (ofDeploy (leakD Coin) iroots) (fun _ _ _ => rfl) (fun _ => Nat.one_pos)
+    Unit silentP x
+
+theorem leakD_breg (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) (x : Msg) :
+    (Breg H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E (leakD Coin).commit (leakD Coin).parse
       (fun _ => []) Unit silentP x).Pr H = 0 := by
   unfold Finder.Pr
   rw [Pr_congr fun s => iff_false_intro (by
-    simp only [Breg, ownLog_noHash _ _ _ (noHash_E (leakD Coin) (fun _ _ _ => rfl) _ _ _ _)]
+    simp only [Breg, ownLog_noHash _ _ _
+      (Claims.Witness.SamplingGeneric.noHash_compiledE (ofDeploy (leakD Coin) iroots) (fun _ _ _ => rfl) _ _ _)]
     simp [regLog, leakD, findColl])]
   exact Pr_false
 
@@ -321,14 +358,30 @@ theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   rw [hrow, notProg_val _ hin] at h1
   simp at h1
 
-/-- `KSLin`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x` and a bound `κ' < 1`. -/
-theorem leakD_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (Rx : Rel Claims.Sampling.Wit)
+/-- `KSLin`'s bound fails at `sksD`'s silent prover, at a relation with no witness at `x` and a bound `κ' < 1`. -/
+theorem sksD_ofDeploy_bound_fails (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) (Rx : Rel Claims.Sampling.Wit)
     (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
-    ¬ PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP ≤
-      κ' + Real.sqrt (Claims.Sampling.γ (leakD Coin) x * PrB H (leakD Coin).V silentP x) +
-        1 * (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H := by
+    ¬ PrBad H (sksD Coin).V Rx (ofDeploy (sksD Coin) iroots).E x silentP ≤
+      κ' + Real.sqrt ((ofDeploy (sksD Coin) iroots).γ x * PrB H (sksD Coin).V silentP x) +
+        1 * (Bext H (sksD Coin).V (ofDeploy (sksD Coin) iroots).E Unit silentP x).Pr H := by
+  have hb0 : (Bext H (sksD Coin).V (ofDeploy (sksD Coin) iroots).E Unit silentP x).Pr H = 0 :=
+    Claims.Witness.SamplingGeneric.bext_pr H (ofDeploy (sksD Coin) iroots) (fun _ _ _ => rfl) (fun _ => Nat.one_pos)
+      Unit silentP x
   intro h
-  have hp : PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP = 1 :=
+  have hp : PrBad H (sksD Coin).V Rx (ofDeploy (sksD Coin) iroots).E x silentP = 1 :=
+    prBad_accV H Rx _ x silentP hR
+  have hb : PrB H (sksD Coin).V silentP x = 0 := prB_accV H silentP x
+  simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, hb0] at h
+  linarith
+
+/-- `KSLin`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x` and a bound `κ' < 1`. -/
+theorem leakD_bound_fails (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) (Rx : Rel Claims.Sampling.Wit)
+    (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
+    ¬ PrBad H (leakD Coin).V Rx (ofDeploy (leakD Coin) iroots).E x silentP ≤
+      κ' + Real.sqrt ((ofDeploy (leakD Coin) iroots).γ x * PrB H (leakD Coin).V silentP x) +
+        1 * (Bext H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E Unit silentP x).Pr H := by
+  intro h
+  have hp : PrBad H (leakD Coin).V Rx (ofDeploy (leakD Coin) iroots).E x silentP = 1 :=
     prBad_accV H Rx _ x silentP hR
   have hb : PrB H (leakD Coin).V silentP x = 0 := prB_accV H silentP x
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext] at h
@@ -336,15 +389,15 @@ theorem leakD_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → Lis
 
 /-- `SampledLeakRegistered`'s bound fails at `leakD`'s silent prover, at a relation with no witness at `x`, a bound
 `κ' < 1` and no registration. -/
-theorem leakD_reg_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) → List Unit) (Rx : Rel Claims.Sampling.Wit)
+theorem leakD_reg_bound_fails (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) (Rx : Rel Claims.Sampling.Wit)
     (κ' : ℝ) (x : Msg) (hR : ∀ w, ¬ Rx x w) (hκ : κ' < 1) :
-    ¬ PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP ≤
-      κ' + Real.sqrt (Claims.Sampling.γ (leakD Coin) x * PrB H (leakD Coin).V silentP x) +
-        (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) Unit silentP x).Pr H +
-        (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) decode) (leakD Coin).commit (leakD Coin).parse
+    ¬ PrBad H (leakD Coin).V Rx (ofDeploy (leakD Coin) iroots).E x silentP ≤
+      κ' + Real.sqrt ((ofDeploy (leakD Coin) iroots).γ x * PrB H (leakD Coin).V silentP x) +
+        (Bext H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E Unit silentP x).Pr H +
+        (Breg H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E (leakD Coin).commit (leakD Coin).parse
           (fun _ => []) Unit silentP x).Pr H := by
   intro h
-  have hp : PrBad H (leakD Coin).V Rx (Claims.Sampling.E (leakD Coin) decode) x silentP = 1 :=
+  have hp : PrBad H (leakD Coin).V Rx (ofDeploy (leakD Coin) iroots).E x silentP = 1 :=
     prBad_accV H Rx _ x silentP hR
   have hb : PrB H (leakD Coin).V silentP x = 0 := prB_accV H silentP x
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext, leakD_breg] at h
@@ -352,26 +405,26 @@ theorem leakD_reg_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) →
 
 /-- **`SampledAuditAccepted`'s conclusion fails at the accepting verifier** `sksD`, at a horizon of no step: no opening
 passes, so no witness is in `RelS`, and `RAcc` reads `RelS`. -/
-theorem SampledAuditAccepted_nontrivial (H : Msg → Msg) :
-    ¬ KSAccepted H (sksD Coin) 1 1 1 (fun _ => trivLay) (fun _ => 0) := by
+theorem SampledAuditAccepted_nontrivial (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) :
+    ¬ KSAccepted H (sksD Coin) iroots 1 1 1 (fun _ => trivLay) (fun _ => 0) := by
   intro h
-  have h1 := h 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _)
+  have h1 := h 0 le_rfl
   have hscope : ScopeAcc (sksD Coin) (fun _ => trivLay) (fun _ => 0) [] :=
     ⟨sksD_scope [], toyStmt, rfl, fun t ht => absurd ht (Nat.not_lt_zero t), fun t ht => absurd ht (Nat.not_lt_zero t),
       fun t ht => absurd ht (Nat.not_lt_zero t)⟩
-  exact sksD_bound_fails (Coin := Coin) H (fun _ => [()]) _ _ []
+  exact sksD_ofDeploy_bound_fails H iroots _ _ []
     (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Coin) H 0 le_rfl [] w ⟨s, P, hs, hP, hrel⟩)
-    (by linarith [sksD_κ (Coin := Coin) []]) (h1 [] hscope Unit silentP)
+    (by linarith [sksD_ofDeploy_κ (Coin := Coin) iroots []]) (h1 [] hscope Unit silentP)
 
 /-- **`SampledLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at `δ = 0`,
 with no input registered (`leakD_noRLeak`). -/
-theorem SampledLeakAccepted_nontrivial (H : Msg → Msg) :
+theorem SampledLeakAccepted_nontrivial (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) :
     ¬ KSLinOn H (leakD Coin).V (ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1))
       (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0
         (fun s => AsReg s.prog notLay 1 ∅) 1)
-      (Claims.Sampling.E (leakD Coin) fun _ => [()]) (Claims.Sampling.κ (leakD Coin) 0) (Claims.Sampling.γ (leakD Coin))
-      (fun _ => 1) (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()])) := fun h =>
-  leakD_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
+      (ofDeploy (leakD Coin) iroots).E ((ofDeploy (leakD Coin) iroots).κ 0) (ofDeploy (leakD Coin) iroots).γ
+      (fun _ => 1) (Bext H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E) := fun h =>
+  leakD_bound_fails H iroots _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) iroots []])
     (h [] (leakD_scopeAcc []) Unit silentP)
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
@@ -383,17 +436,17 @@ theorem leakD_regOpens (H : Msg → Msg) (x : Msg) :
 /-- **`SampledLeakRegistered`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at
 `δ = 0`, with no input registered: at the statement `[]`, in scope (`leakD_scopeAcc`) with its registration opening
 (`leakD_regOpens`), its silent prover's bound fails. -/
-theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) :
+theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) (iroots : Msg → Seen → ℕ → List Msg) :
     ¬ PrBad H (leakD Coin).V
         (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay)
           (fun _ => 1) 0 (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1)
-        (Claims.Sampling.E (leakD Coin) fun _ => [()]) [] silentP ≤
-      Claims.Sampling.κ (leakD Coin) 0 [] +
-          Real.sqrt (Claims.Sampling.γ (leakD Coin) [] * PrB H (leakD Coin).V silentP []) +
-        (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) Unit silentP []).Pr H +
-        (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) (leakD Coin).commit
+        (ofDeploy (leakD Coin) iroots).E [] silentP ≤
+      (ofDeploy (leakD Coin) iroots).κ 0 [] +
+          Real.sqrt ((ofDeploy (leakD Coin) iroots).γ [] * PrB H (leakD Coin).V silentP []) +
+        (Bext H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E Unit silentP []).Pr H +
+        (Breg H (leakD Coin).V (ofDeploy (leakD Coin) iroots).E (leakD Coin).commit
           (leakD Coin).parse (fun _ => []) Unit silentP []).Pr H :=
-  leakD_reg_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
+  leakD_reg_bound_fails H iroots _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) iroots []])
 
 end Toy
 

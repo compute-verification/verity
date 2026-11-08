@@ -890,4 +890,40 @@ def FlockKSReg : Prop :=
 
 end Flock
 
+section OfDeploy
+
+variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
+
+/-- **A frozen sampled record as a compiled sampled verifier over Flock**, at its deployed decoder and the roots a run
+shows for a proof block's interior values (`iroots`, which the record leaves to its hypotheses): `D`'s verifier, parser,
+scope check, partition, commitment, sample layout, sessions, reveal, opening count, reference prover and completeness
+error; its sample the checked units' first `n_PU`; a proof block's shape the record's inner waits, truncation and `N₀`
+and its session's rounds; the bounds on its session's errors `κ_F` and Flock's `γ` at those rounds and the record's
+weight; both waits' unions over its `n_PU` proof blocks. The guarantees stated at a deployed record read its errors and
+extractor here. -/
+noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) :
+    Compiled Coin (Arg.ofFlock D.flock) where
+  V := D.V
+  parse := D.parse
+  scopeCheck := D.scopeCheck
+  partition := D.partition
+  commit := D.commit
+  stage2 := D.stage2
+  checked x r := (D.checked x r).take (Claims.Sampling.nPU D x)
+  sh x u := (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
+  κb x _ := Claims.Sampling.κF D x
+  γb x u := 16 * (Real.sqrt (2 * ((D.rounds x u).card : ℝ) * D.weight x) + (D.rounds x u).card) ^ 2
+  rounds := D.rounds
+  session := D.session
+  iroots := iroots
+  reveal := D.reveal
+  openCalls := D.openCalls
+  nOut x := Claims.Sampling.nPU D x
+  nIn x := Claims.Sampling.nPU D x
+  Tape := D.Tape
+  P := D.P
+  δc := D.δc
+
+end OfDeploy
+
 end Claims.SamplingGeneric

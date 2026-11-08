@@ -6,13 +6,14 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 /-!
 # The sampled compiler at a frozen sampled record
 
-`ofDeploy D iroots`: a frozen sampled record `D` (`Claims.Sampling.Deploy`) as a compiled sampled verifier over Flock
-at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run shows for a proof block's interior
-values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier, parser, scope check, partition,
-commitment, sample layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
-are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots the frozen hypotheses read); a proof
-block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
-session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). At every `D`:
+`ofDeploy D iroots` (`Definitions.Claims.SamplingGeneric`): a frozen sampled record `D` (`Claims.Sampling.Deploy`) as a
+compiled sampled verifier over Flock at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run
+shows for a proof block's interior values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier,
+parser, scope check, partition, commitment, sample layout (`stage2`, `rounds`), sessions, reveal, opening count,
+reference prover and completeness error are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots
+the frozen hypotheses read); a proof block's shape is the record's inner waits, truncation and `N₀` and its session's
+rounds (`sh`); and the bounds on its session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight
+(`κb`, `γb`). At every `D`:
 
 * its proof blocks and scope are `D`'s (`ofDeploy_nPU`, `ofDeploy_scope`); both waits' unions have `n_PU` bits, so each
   wait's `k` and `K` are `D`'s (`ofDeploy_kOut`, `ofDeploy_kIn`, `ofDeploy_capOut`, `ofDeploy_capIn`); and its opening
@@ -64,34 +65,6 @@ theorem mem_take_iff_slot {l : List ℕ} {n u : ℕ} : u ∈ l.take n ↔ ∃ p 
 section OfDeploy
 
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
-
-/-- **A frozen sampled record as a compiled sampled verifier over Flock**, at its deployed decoder and the roots a run
-shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, sample layout,
-sessions, reveal, opening count, reference prover and completeness error; its sample the checked units' first `n_PU`;
-a proof block's shape the record's inner waits, truncation and `N₀` and its session's rounds; the bounds on its
-session's errors `κ_F` and Flock's `γ` at those rounds and the record's weight. -/
-noncomputable def ofDeploy (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) :
-    Compiled Coin (Arg.ofFlock D.flock) where
-  V := D.V
-  parse := D.parse
-  scopeCheck := D.scopeCheck
-  partition := D.partition
-  commit := D.commit
-  stage2 := D.stage2
-  checked x r := (D.checked x r).take (Claims.Sampling.nPU D x)
-  sh x u := (D.innerWaits x, D.innerCap x, (D.rounds x u).card, D.innerN₀ x)
-  κb x _ := Claims.Sampling.κF D x
-  γb x u := 16 * (Real.sqrt (2 * ((D.rounds x u).card : ℝ) * D.weight x) + (D.rounds x u).card) ^ 2
-  rounds := D.rounds
-  session := D.session
-  iroots := iroots
-  reveal := D.reveal
-  openCalls := D.openCalls
-  nOut x := Claims.Sampling.nPU D x
-  nIn x := Claims.Sampling.nPU D x
-  Tape := D.Tape
-  P := D.P
-  δc := D.δc
 
 variable (D : Claims.Sampling.Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg)
 

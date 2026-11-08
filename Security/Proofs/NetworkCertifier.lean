@@ -145,11 +145,11 @@ theorem EncardAccSeqsSampledLe : NetTiming.Guarantees.EncardAccSeqsSampledLe := 
 theorem SampledLeakAccepted : NetTiming.Guarantees.SampledLeakAccepted :=
   fun hSA => NetTiming.sampledLeak_reg hSA
 theorem SampledLeakRegistered : NetTiming.Guarantees.SampledLeakRegistered := by
-  intro hSA _ _ _ _ _ _ _ _ H D hks hb L K S lay k δ decode hδ hdec reg ops β Dj hβ
+  intro hSA _ _ _ _ _ _ _ _ H D iroots hks hb L K S lay k δ hδ reg ops β Dj hβ
   exact ⟨fun x hx hreg Ω _ _ P =>
-      NetTiming.sampledLeak_registered hSA H D hks hb L K S lay k δ decode hδ hdec reg ops Dj x hx hreg Ω P,
+      NetTiming.sampledLeak_registered hSA H D iroots hks hb L K S lay k δ hδ reg ops Dj x hx hreg Ω P,
     fun x hx s P hs hP op =>
-      (NetTiming.sampledLeak_reg hSA H D hks L K S lay k δ decode hδ hdec reg β Dj hβ).2 x hx s P hs hP op _⟩
+      (NetTiming.sampledLeak_reg hSA H D iroots hks L K S lay k δ hδ reg β Dj hβ).2 x hx s P hs hP op _⟩
 
 theorem PeriodLeakAccepted : NetTiming.Guarantees.PeriodLeakAccepted := NetTiming.periodLeak
 theorem PooledWrongUnitsLe : NetTiming.Guarantees.PooledWrongUnitsLe := NetTiming.horizonWrongUnits

@@ -114,6 +114,17 @@ theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSR
 /-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
 
+/-- **The compiler at a deployed record**: `Compiled.KS` of its compiled sampled verifier (`ofDeploy`), from Flock's KS
+at its Flock record and that record's decoder's list bound, the commitment's binding, and the record's draw, refusal,
+interior and session facts (`flockKS`, `sessions_ofDeploy`). -/
+theorem ks_ofDeploy {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
+    (hKS : Claims.Flock.KS H D.flock) (hlist : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode)
+    (hbind : D.commit.Binds H) (hopens : Claims.Sampling.SessionOpens H D iroots)
+    (hfix : Claims.Sampling.InteriorFixed H D iroots) (hdraw : Claims.Sampling.DrawLaw D)
+    (hrefuse : Claims.Sampling.Refuses H D) (hdfix : Claims.Sampling.DrawFixed D)
+    (hruns : Claims.Sampling.SessionRuns H D) (hnum : Claims.Sampling.InnerNumbers D) : (ofDeploy D iroots).KS H :=
+  flockKS H D.flock _ hKS hlist hbind (sessions_ofDeploy D iroots H hdraw hrefuse hfix hdfix hruns hnum hopens)
+
 /-- **`Sampling.KS` from the compiler**: `flockKS` at `ofDeploy` (`samplingKS_of_flockKS`). -/
 theorem samplingKS [Zero Col] {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T}
     (iroots : Msg → Seen → ℕ → List Msg) (hKS : Claims.Flock.KS H D.flock) (hbind : D.commit.Binds H)

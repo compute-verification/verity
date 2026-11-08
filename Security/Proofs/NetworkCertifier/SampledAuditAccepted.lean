@@ -491,11 +491,11 @@ open NetTiming.SampledAuditProof in
 (`NetTiming.Guarantees.SampledAuditAccepted`): `KS`'s bound at the stronger relation on the smaller scope, `R δ` giving
 `RAcc δ` there (`rAcc_of_r`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
-  intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  intro Coin Col T _ _ _ _ _ H D iroots L K S lay k hKS δ hδ x hx Ω _ _ P
+  have h := hKS δ hδ x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR
-  cases ((Claims.Sampling.E D decode).eval H P x s.1 s.2.1 s.2.2).1 with
+  cases ((Claims.SamplingGeneric.ofDeploy D iroots).E.eval H P x s.1 s.2.1 s.2.2).1 with
   | none => exact id
   | some w => exact rAcc_of_r H D lay k hδ hx
