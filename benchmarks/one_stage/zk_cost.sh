@@ -2,7 +2,8 @@
 # Flock's zero-knowledge session cost on the run's GPU (zk_cost.py): A6's W8A8 coordinates in statements of 1-512 units, sessions
 # by `flock-circuit prove --zk --gpu` with and without the ZK server's send check, the Lean verifier on them, and the fit. Run
 # from the verity tree on a GPU node, as a GPU host job (the GPU taken by gpu-lease around the sessions only, where the node
-# runs gpu-lease; a one-GPU pod without it lends the run its GPU for the whole run):
+# runs gpu-lease: its installed one, else the tree's gpu_lease.sh where /run/gpu-lease holds the node's locks; a one-GPU pod
+# without either lends the run its GPU for the whole run):
 #   bash benchmarks/one_stage/zk_cost.sh
 #   (a job run from a clone of the tree, on a GPU host, 32 CPUs, 96 GB, up to 240 min)
 # (a guest job on a shared GPU node is preemptible; one arm a run, ZK_ARMS=fw, takes about 3.5 h with its verification, the builds cached)
@@ -13,6 +14,8 @@
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
 #      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
+#      LEASE_MEM_GB (the lease's memory cap, gpu-lease's --mem-gb; else gpu-lease's own per-GPU default)
+#      ZK_NICE=0 (the staging's and the builds' nice; the sessions run at the job's own)
 #      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server; with ZK_UNITS and no fw
 #      arm, no Lean build either: nothing then reads flock-verify or the ZK server's Lean frame)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
@@ -47,7 +50,8 @@ keep() {
 if [ -n "${ZK_UNITS:-}" ]; then
   : "${ZK_SIZES:=half,full}" "${ZK_DRAWS:=c:dev+nofw,8:dev+nofw+fw,64:dev+nofw+fw}" "${ZK_ARMS:=dev,nofw,fw}"
   log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}; stage: units $ZK_UNITS, sizes $ZK_SIZES, draws $ZK_DRAWS"
-  ZK stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" --draws "$ZK_DRAWS" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+  nice -n "${ZK_NICE:-0}" "$PY" benchmarks/one_stage/zk_cost.py stage --units "$ZK_UNITS" --sizes "$ZK_SIZES" \
+    --draws "$ZK_DRAWS" --out "$Z" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
   rc=${PIPESTATUS[0]}
   if [ "${ZK_STAGE_ONLY:-0}" = 1 ] || [ "$rc" != 0 ]; then keep; log "zk-cost: staged only, rc $rc"; exit "$rc"; fi
 fi
@@ -80,8 +84,10 @@ if [ -n "${ZK_UNITS:-}" ] && [ "${ZK_VERIFY:-1}" = 0 ] \
   && ! echo ",${ZK_ARMS:-fw,nofw},${ZK_DRAWS:-}," | tr ':+' ',,' | grep -q ',fw,'; then NEED_LEAN=0; fi
 log "zk-cost: source ${RESEARCH_SOURCE_SHA:-$(git rev-parse HEAD 2>/dev/null)}, builds under $FLOCK_WORK$([ "$NEED_LEAN" = 1 ] \
   && echo " and $PT_WORK" || echo " (no Lean: nothing reads it)")"
-OUT=$O/build bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" > "$O/build.txt" 2>&1 &
-[ "$NEED_LEAN" = 1 ] && OUT=$O/lean bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
+OUT=$O/build nice -n "${ZK_NICE:-0}" bash verity/ml/flock/pod/70-class-sweep.sh BUILD_ONLY=1 GPU=1 SM="${ZK_SM:-}" \
+  > "$O/build.txt" 2>&1 &
+[ "$NEED_LEAN" = 1 ] && OUT=$O/lean nice -n "${ZK_NICE:-0}" bash benchmarks/proof_throughput/verify.sh BUILD_ONLY=1 \
+  PT_WORK="$PT_WORK" > "$O/lean-build.txt" 2>&1 &
 wait
 BIN=$(sed -n 's/^BINARY=//p' "$O/build.txt" | tail -1)
 BINS=("$BIN")
@@ -112,10 +118,12 @@ if [ "$rc" = 0 ]; then
     LEASE=(env GPU_LEASE_DIR=/run/gpu-lease GPU_LEASE_ALLOWED_FILE=/run/gpu-lease/pool.gpus /workspace/verity-guest/bin/gpu-lease)
   elif command -v gpu-lease > /dev/null; then
     LEASE=(gpu-lease)
+  elif [ -d /run/gpu-lease ]; then
+    LEASE=(bash "$REPO/tools/research/src/research/pods/sh/gpu_lease.sh")
   else
     LEASE=()
   fi
-  [ ${#LEASE[@]} -gt 0 ] && LEASE+=(1 --wait --max-min "${LEASE_MAX_MIN:-30}" --)
+  [ ${#LEASE[@]} -gt 0 ] && LEASE+=(1 --wait --max-min "${LEASE_MAX_MIN:-30}" ${LEASE_MEM_GB:+--mem-gb "$LEASE_MEM_GB"} --)
   export GPU_LEASE_WHO=${GPU_LEASE_WHO:-proofs/zk-cost/${RESEARCH_RUN_ID:-local}}
   log "prove: arms ${ZK_ARMS:-fw,nofw}, ${ZK_COLD:-2} cold, ${ZK_WARM:-1}+${ZK_RUNS:-3} warm ($([ ${#LEASE[@]} -gt 0 ] \
     && echo "waiting for a GPU" || echo "no gpu-lease on this node: the run's own GPU"))"
