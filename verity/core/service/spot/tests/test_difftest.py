@@ -945,6 +945,18 @@ def select_second(j):
     return {"draw": obj, "read": at}
 
 
+def template_circuits(j):
+    """A two-stage run's params naming each template's circuit file (`service.template_circuits`), as pairs in the order
+    the check's template query names the templates; a missing `proofs` names none."""
+    j = _json(j)
+    proofs, query = (j.get("proofs"), j.get("query")) if isinstance(j, dict) else (None, None)
+    try:
+        pairs = service.template_circuits(proofs, query)
+    except ValueError as e:
+        raise D.Reject(str(e)) from None
+    return {"circuits": [[t, c] for t, c in pairs]}
+
+
 def slots(j):
     """`Slots.select`: the claims' partition over the select piece's program and query, two classes, and its sample's
     checked proof blocks. The population's strata are `partition.strata`'s, each unit a proof block, its gates
@@ -1607,8 +1619,8 @@ def audits(draw, setups=(*SETUPS, *REGISTERED_SETUPS)) -> tuple[dict, dict, dict
     if isinstance(s, RegisteredSetup) and s.supplied(values):
         params["supplied"] = s.supplied(values)
     if output:
-        params["outputs"] = {"W": {**({"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}),
-                                   "record": R.digest(log[-1])}}
+        kind = {"value": EARLIER_VALUE} if reuse else {"port": EARLIER_OUT}
+        params["outputs"] = {"W": kind if not reuse and draw(st.booleans()) else {**kind, "record": R.digest(log[-1])}}
     elif pin:
         params["pinned"] = {"W": next(e["root"] for e in rec["registered"] if e["value"] == "W")}
     if values and s.formats and draw(st.integers(0, 3)):
@@ -1845,11 +1857,13 @@ def _earlier_value(a: dict, x: int) -> None:
 
 
 def _repoint(a: dict) -> None:
-    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value)."""
+    """`outputs`, if any, naming the log's last record in the form it had (a port, else a registered value; a port alone
+    names the last record already)."""
     if "outputs" in a["params"]:
         o = a["params"]["outputs"]
         kind = {"value": EARLIER_VALUE} if isinstance(o, dict) and "value" in (o.get("W") or {}) else {"port": EARLIER_OUT}
-        a["params"]["outputs"] = {"W": {**kind, "record": _earlier(a)}}
+        last = isinstance(o, dict) and isinstance(o.get("W"), dict) and set(o["W"]) == {"port"}
+        a["params"]["outputs"] = {"W": kind if last else {**kind, "record": _earlier(a)}}
 
 
 def _earlier(a: dict) -> str:
@@ -1891,7 +1905,8 @@ REGISTERED_PARAMS = [
         {"W": {"value": "W", "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE, "record": _earlier(a)}},
         {"W": {"value": EARLIER_VALUE, "record": R.digest(a["record"])}}, {"W": {"value": 1, "record": _earlier(a)}},
         {"W": {"value": EARLIER_VALUE, "port": EARLIER_OUT, "record": _earlier(a)}}, {"W": {"value": EARLIER_VALUE}},
-        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}][x % 24]),
+        {"S": {"value": EARLIER_VALUE, "record": _earlier(a)}}, {"W": {"port": "nope"}}, {"W": {"port": 1}},
+        {"S": {"port": EARLIER_OUT}}, {"W": {"port": "x"}}][x % 28]),
     lambda a, x: a["params"].pop("outputs"),
     _earlier_out,
     _earlier_value,
@@ -2793,7 +2808,7 @@ DRAW = D.Port(PIECES, "draw", draw, st.one_of(
               st.integers(0, 40), SHORT_SOURCE),
     st.builds(lambda law, n, src: {"law": law, "population": n, "source": src}, JSON, st.integers(0, 6) | JSON,
               SHORT_SOURCE | st.sampled_from(["", "0", "zz", "AB", "ab cd"]) | JSON)), package=PACKAGE)
-#: Law texts `draw.parse_law` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
+#: Law texts `draw.parse_design` or `draw.parse_rate` refuses or reads oddly: digits of other scripts, signs, spaces, a
 #: second separator, leading zeros, a missing or zero argument.
 ODD_LAW_TEXTS = ["subset:", "subset", "", "subset:\u0663", "work:\u00b2", "stratified:\uff11", "bernoulli:1/\u0662",
                  "bernoulli:\u00b9/2", "bernoulli:01/04", "bernoulli:0/0", "bernoulli:3/2", "bernoulli:1", "bernoulli:1/2/3",
@@ -2926,6 +2941,54 @@ def second_stages(draw) -> dict:
 
 SELECT_SECOND = D.Port(PIECES, "select_second", select_second, st.one_of(second_stages(), second_stages(), JSON),
                        package=PACKAGE)
+
+_PARAMS_CHANGES = {
+    "a template dropped": lambda p, q: ({"templates": p["templates"][:-1]}, q),
+    "a template added": lambda p, q: ({"templates": [*p["templates"], {"template": "z/9", "circuit": "0" * 128}]}, q),
+    "the templates reversed": lambda p, q: ({"templates": p["templates"][::-1]}, q),
+    "a template twice": lambda p, q: ({"templates": [*p["templates"], p["templates"][0]]}, q),
+    "a circuit in capitals": lambda p, q: ({"templates": [{**p["templates"][0], "circuit": "AB" * 64},
+                                                          *p["templates"][1:]]}, q),
+    "a circuit short": lambda p, q: ({"templates": [{**p["templates"][0], "circuit": "ab" * 63 + "a"},
+                                                    *p["templates"][1:]]}, q),
+    "a circuit and a newline": lambda p, q: ({"templates": [{**p["templates"][0], "circuit": "ab" * 64 + "\n"},
+                                                            *p["templates"][1:]]}, q),
+    "a circuit a number": lambda p, q: ({"templates": [{**p["templates"][0], "circuit": 5}, *p["templates"][1:]]}, q),
+    "an entry with another key": lambda p, q: ({"templates": [{**p["templates"][0], "x": 1}, *p["templates"][1:]]}, q),
+    "an entry without its circuit": lambda p, q: ({"templates": [{"template": p["templates"][0]["template"]},
+                                                                 *p["templates"][1:]]}, q),
+    "an entry not an object": lambda p, q: ({"templates": ["a", *p["templates"][1:]]}, q),
+    "the params with another key": lambda p, q: ({**p, "circuit": "0" * 128}, q),
+    "the params empty": lambda p, q: ({}, q),
+    "the params a list": lambda p, q: (p["templates"], q),
+    "templates not a list": lambda p, q: ({"templates": "a"}, q),
+    "no params": lambda p, q: (None, q),
+    "another query": lambda p, q: (p, {**q, "name": "Q_call"}),
+    "another version": lambda p, q: (p, {**q, "version": 1}),
+    "no version": lambda p, q: (p, {k: v for k, v in q.items() if k != "version"}),
+    "no query": lambda p, q: (p, None),
+}
+
+
+@st.composite
+def template_circuit_cases(draw) -> dict:
+    """The template_circuits piece's input: the check's template query over one to three templates, one template's
+    query or several's, and the params naming each one's circuit file in its order; or, half the time, one named change
+    (`_PARAMS_CHANGES`) to a form the params or the query refuse, or one that still holds (no params, one template
+    reversed, a version missing that reads as 0)."""
+    ids = draw(st.lists(st.sampled_from(["a/1", "b/2", "c/3", "d/4"]), min_size=1, max_size=3, unique=True))
+    query = {"name": "Q_template_instance", "version": 0, "params": {"template": ids[0]}} \
+        if len(ids) == 1 and draw(st.booleans()) else \
+        {"name": "Q_template_instances", "version": 0, "params": {"templates": ids}}
+    circuits = draw(st.lists(st.binary(min_size=64, max_size=64).map(bytes.hex), min_size=len(ids), max_size=len(ids)))
+    proofs = {"templates": [{"template": t, "circuit": c} for t, c in zip(ids, circuits)]}
+    if draw(st.booleans()):
+        proofs, query = _PARAMS_CHANGES[draw(st.sampled_from(sorted(_PARAMS_CHANGES)))](proofs, query)
+    return {"query": query} if proofs is None else {"proofs": proofs, "query": query}
+
+
+TEMPLATE_CIRCUITS = D.Port(PIECES, "template_circuits", template_circuits,
+                           st.one_of(template_circuit_cases(), template_circuit_cases(), JSON), package=PACKAGE)
 SELECT = D.Port(PIECES, "select", select, st.one_of(selections(), selections(), changed_selections(1),
                                                      changed_selections(2), JSON), package=PACKAGE)
 SLOTS = D.Port(PIECES, "slots", slots, st.one_of(selections(), selections(), changed_selections(1), JSON), package=PACKAGE)
@@ -3819,7 +3882,8 @@ PIECE_RUNS = [(DECODE, 300), (PARTITION, 500), (COMMITTED_BITS, 300), (REGISTRAT
               (CHECK_PROVED, 300), (BOUND, 500),
               (BERNOULLI_BOUND, 500), (HIDDEN_OFFSETS, 300), (HIDDEN_LOCATE, 400), (HIDDEN_WITNESS, 400), (VERDICT, 300),
               (MATCHES_PUBLIC, 400), (SESSION_REGISTERED, 400), (RECORD_PORT, 600), (CHECK_PUBLIC, 500), (CHECK_VERDICTS, 400),
-              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300)]
+              (RUN, 500), (HELLO, 500), (STREAM, 800), (FLEET, 400), (SELECT_SECOND, 300),
+              (TEMPLATE_CIRCUITS, 300)]
 
 
 @pytest.mark.parametrize("port, examples", PIECE_RUNS, ids=[p.fn for p, _ in PIECE_RUNS])

@@ -23,14 +23,14 @@ from dataclasses import dataclass, fields, replace
 from pathlib import Path
 from typing import Any
 
-from verity.core.protocols.pous import wipe_monitoring
+from verity.core.protocols import reporting
 
 DATA = Path(__file__).resolve().parent.parent / "data"
 
 STATUSES = frozenset({"datasheet", "measured", "declared", "assumed", "ruled", "conjecture", "derived"})
 
-#: core's monitoring periods (`wipe_monitoring`), seconds by name
-PERIODS = dict(wipe_monitoring.PERIODS)
+#: core's monitoring periods (`reporting`), seconds by name
+PERIODS = dict(reporting.PERIODS)
 
 
 @dataclass(frozen=True)
@@ -68,7 +68,7 @@ class Registry:
     @classmethod
     def load(cls, paths: Iterable[Path] | None = None) -> Registry:
         params = {f"horizon.{name}.seconds": Param(f"horizon.{name}.seconds", s, "s",
-                                                   source="verity.core.protocols.pous.wipe_monitoring PERIODS",
+                                                   source="verity.core.protocols.reporting PERIODS",
                                                    status="declared")
                   for name, s in PERIODS.items()}
         for path in sorted(paths if paths is not None else DATA.glob("*.toml")):

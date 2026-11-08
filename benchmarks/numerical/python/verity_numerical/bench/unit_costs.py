@@ -4,7 +4,7 @@ work weight.
 
     python -m verity_numerical.bench.unit_costs --out DIR [--exact-nnz 4e8] [--jobs 8] [--workload SUBSTRING] [--reuse JSON]
 
-**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``bench.lowerings``,
+**Registered lowerings (the primary count).** Where the template has a registered Flock lowering (``verity_flock.lowerings``,
 :func:`registered`), a subcircuit is that lowering's ``units.n`` identical units, each one ``flock-ir-unit/v2`` layout: the
 matrix a session evaluates, with the intermediates the lowering commits as rows and the native tail outside it. A unit's
 committed rows are ``units x rows`` and its nonzeros ``units x (nnz_a + nnz_b + rows)`` (C = I over rows). Attention's
@@ -167,10 +167,10 @@ ATTENTION_REG_T = (1, 15, 16, 17, 100, 128, 129, 1000)
 
 
 def registered(template: str, params: Mapping[str, Any], T: int | None = None) -> dict[str, Any]:
-    """The template's registered Flock lowering (``bench.lowerings``): its units per subcircuit and the unit's
+    """The template's registered Flock lowering (``verity_flock.lowerings``): its units per subcircuit and the unit's
     ``flock-ir-unit/v2`` layout counts, the matrix a session evaluates per unit with the intermediates the lowering commits.
     The native tail (``tail_gates``) is evaluated by the verifier and has no rows. ``{"none": why}`` without one."""
-    from . import lowerings
+    from verity_flock import lowerings
     from verity_flock import subcircuit_templates as TM
 
     mod = lowerings.registry("C-Flock").module(template)

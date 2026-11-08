@@ -47,13 +47,25 @@ def test_an_allowed_parameter_returns_its_reason_and_an_undeclared_one_is_refuse
 
 def test_a_run_field_is_read_only_under_a_declaration():
     r = RunInputs.declare([])
-    sw = r.value("model.layers.3.self_attn.attn/topk_switches[t=2049]", Array(3, Value(1)), "dsa_topk_switches")
-    assert sw.type == Array(3, Value(1))
-    assert IN.run_field("layer/topk_switches[t=2049]", "dsa_topk_switches").relation == "DsaTopKLongRow_v1"
+    hole = r.value("hole0.1:add_3", Array(3, Value(1)), "survey_hole")
+    assert hole.type == Array(3, Value(1))
     assert "check_identity" in IN.run_field("hole0.1:add_3", "survey_hole")
     with pytest.raises(IN.Free, match=FIX):
         r.value("model.layers.3.mlp/align_key[t=7]", Value(32), "moe_align_key")
-    assert [f["name"] for f in r.fields] == ["model.layers.3.self_attn.attn/topk_switches[t=2049]"]
+    with pytest.raises(IN.Free, match=FIX):
+        r.value("model.layers.3.self_attn.attn/topk_switches[t=2049]", Array(3, Value(1)), "dsa_topk_switches")
+    assert [f["name"] for f in r.fields] == ["hole0.1:add_3"]
+
+
+def test_run_fields_are_laid_out_in_first_read_order_and_read_once():
+    r = RunInputs.declare([])
+    names = [f"hole{i}.0:add_{i}" for i in range(3)]
+    for name, n in zip(names, (3, 5, 2)):
+        r.value(name, Array(n, Value(1)), "survey_hole")
+    assert [(f["name"], f["offset"]) for f in r.fields] == list(zip(names, (0, 3, 8)))
+    with pytest.raises(ValueError, match="read twice"):
+        r.value(names[1], Array(5, Value(1)), "survey_hole")
+    assert r.value("hole9.0:add_9", Value(1), "survey_hole").refs[0] == ("p", 0, 10)
 
 
 @pytest.mark.parametrize("declared", sorted(IN.RUN))
