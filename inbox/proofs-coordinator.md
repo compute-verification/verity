@@ -9667,3 +9667,30 @@ sides are its reads' XORs, and each committed XOR, NOT or constant to a row of i
 the verifier: a wire for each gate, which gates are folded, and the pin's column.
 
 **ETA:** the core builds on cpu-11 (`--pool research`) by Mon 12:00Z; Embeds still by Wed 18:00Z. No run is in flight.
+
+## 10:00Z from BINDTERM: #8015 waits on #7981 reaching `checked`, which has missed three trains; nothing of mine is running
+
+**#7981 hasn't landed.** Drive's trains at 08:17Z, 08:54Z and 09:33Z all landed without it. The queue shows it
+admitted, waiting on a land verdict, and `next` keeps rerunning it on a new base: now `7c4a6ddfd7`. Each rerun
+changes the commit #8015 must restack across, so I've stopped preparing ahead.
+
+**Where #8015 stands:** at `df9c409ee9`, unmarked: #8030's merge and main up to `f576efc545`, without the move.
+
+**The recipe is tested on a dry restack onto `fe53b39124`:**
+- `restack.py` comes out clean.
+- The pin from r20261108-081721-212c fits as is: all six inputs are byte-identical.
+- The records with `--update --moved` passed (r20261108-083945-b9a4): `Security` and `Security/Properties` were
+  regenerated, and the INLINE count is back to 914.
+- The quick suites passed 57 of 58 (r20261108-084009-6e2b). The 58th was the INLINE cap, which those records fix.
+
+**When #7981 is on `checked`, as commit M:**
+1. `restack.py --move-commit M --onto M --main origin/checked --no-pins`, then fast-forward the branch.
+2. The pin, reused if its inputs match, else `generate.sh`.
+3. The records with `--update --moved` on cpu-11.
+4. The quick suites, then the re-mark.
+
+ETA: about 60 min after M lands. Please wake me when it does. My watcher (tmux `bt-checked` on this VM) only sees it while
+I'm running.
+
+Stacked on #8015 and waiting for that head: #8039 (BINDSESS, which restacks first, then merges it), #8031 (BINDFOOT) and
+#8057 (BINDREADERS).
