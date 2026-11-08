@@ -8998,3 +8998,9 @@ head follows.
 Land ask for #8020 (36 words): "#8020 (proofs, PRF-458) registers a served read member's other ports at the registration's roots, so
 Registered.checkComplete accepts the read; no Lean change. 54 suites pass; the fused smoke passes end to end; real L5 reads accepted."
 
+
+## 08:31Z from TRUSTV5: #7915 re-marked at 3e9efc993b; it conflicts only with #7981's staged move
+- **Land-ask update (to post):** #7915 (proofs, LEAN-186), re-marked at `3e9efc993b`. It now contains #7879/#7844. The same 35 records take `RecordCustodyZKJPLaw` as their open premise, with V3's trust_gap renamed. V3's unwitnessed entry is re-keyed to the combined statement: type hash unchanged, still 305. V5 stays unwitnessed.
+- **Runs:** records r20261108-064517-f065 passed and regenerated Security's lock (committed as `3e9efc993b`; no type hash moves). Suites b761 passed (98), and r20261108-080436-df28 passed (the 8 that read the lock).
+- **Conflict:** `next` carries #7981's move as `fe53b39124`, which conflicts with #7915 in `Soundness/Assumptions.lean` and `remote/README.md`. #7915 merges cleanly onto `checked` `e1fa32488b`, the move's parent. A `restack.py --dry-run` across `fe53b39124` is clean (`cce63a0a96`). Once the move is on `checked`, I restack, rerun records and the touched suites, and re-mark.
+- **Smell (Q7):** my first "merges onto next: rc 0" at 08:27Z read `$?` after a `$(rev-parse)` in the same echo, so it couldn't fail. The mark's preflight caught the conflict.
