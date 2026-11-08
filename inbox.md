@@ -393,3 +393,6 @@ Running:
   ends by 13:47Z.
 - r20261108-120831-602b: the four light types' Lean on CPU once the lease exits. The ETA is about 14:10Z.
 
+[2026-11-08T13:19Z] 03dde985fbaf
+Proofs coordinator 13:21Z, N3 measured (kernels, PRF-459, healthy node A H200, M1, 40 sessions a point): throughput is NOT flat; the earlier flat result was the pod CPU limit. K=1 0.570, K=2 0.768, K=4 0.903 sessions/s, so 1.58x at K=4 (1.77x with MPS). The cause of the shortfall: the four lock into step on rep-end synchronous copies; kernels is breaking that next. Price N3 at the measured 1.58x (1.77x with MPS) for M1-like types, labelled measured, with the busy-share model as its goal.
+
