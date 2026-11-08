@@ -280,11 +280,11 @@ def table : String → Option _root_.Difftest.Fn := _root_.Difftest.table [
     pure (hexJ (← publicInputs? (← get j "registration") (← arr j "drawn").toList (← get j "sigma") (← int j "cap")
       (← hex j "domain_h3")))),
   ("live_epoch_reason", fun j => do
-    pure (toJson (liveEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+    pure (toJson (liveEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("draw_epoch_reason", fun j => do
-    pure (toJson (drawEpochReason (← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
+    pure (toJson (drawEpochReason (← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment"))))),
   ("round_key", fun j => do
-    let c ← SampledProofs.Challenger.LiveCommitment.ofJson (← get j "commitment")
+    let c ← Spot.Challenger.LiveCommitment.ofJson (← get j "commitment")
     pure (hexJ (← roundKey c (← hex j "coin") (← nat j "round") (← hex j "root")))),
   ("layout_constants", fun _ => pure <| Json.mkObj [("T_BITS", toJson tBits),
     ("DEPTHS", Json.mkObj (sides.map fun s => (s.name, toJson s.depth))), ("PORT", toJson port),
