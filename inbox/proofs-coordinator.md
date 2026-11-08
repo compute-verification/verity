@@ -8374,3 +8374,36 @@ Land ask for #7996, once marked (56 words): "#7996 (proofs, PRF-206, on #7879) p
 check accepts, its session is in the events V3 and V5 bound (`Verity.Sampled.checkBlobs_event`). It is a theorem, not a
 guarantee, so no record moves. A stored fixture shows that `verify --zk` itself refuses a templated session, a tail
 returning the outputs, and four wrong tags. Land it."
+
+## 07:25Z from AOTD1: #8019 has #7880's 8d2165960e merged in, CC-KEY's gap closed, three inherited failures fixed; head `a5c16afab3`, five runs out
+
+**New head `a5c16afab3`** (`cursor/circuits-aotd1-calls-63d3`, pushed). The commits since `0f52f19ef9`:
+- `626bbf7a39` merges `8d2165960e`. Its one conflict, in `checks.py`'s summary and `__all__`, is resolved as unions (`by_callees` beside `vectors`). The callee-Call rule is unchanged.
+- `b962803597` closes CC-KEY's gap (below).
+- `8c42cb8940`, `a9658f4b67` and `a5c16afab3` fix three failures the old head's runs found (below).
+
+**CC-KEY: yes, it failed open.** It never falsely passed a partition as checked: a composite Call with a primitive callee over budget stayed a `partition/unchecked` warning. But only suite Calls were enforced. The derivation walk skipped Definitions without a body, so a range spot, or a callee the walk reached, with such a primitive passed on that warning. `callees_are_calls` also raised on a primitive.
+
+Now:
+- `checks.callee_gap` names the gap: a callee that is no Call, a primitive callee over budget, or an uncut composite callee with a gap of its own.
+- An unchecked Call's record carries the gap.
+- The walk visits primitives and fails on every gap it reaches outside `OVER_PARTITION_BUDGET`, so the fix is a cut or a hold with a reason.
+- A fast test covers it.
+
+**Three failures from the old head's runs, all fixed:**
+- **`circuit-check --all`** (r20261108-054944-839a): 2 failures, `ArgmaxStep_v2` and `PouwZyDequant_v2`, each an `AttributeError`. The cause was #7880's word view reading an unbound word Definition's gates. `8c42cb8940` resolves the word first and adds a test. **#7880 has this bug and can cherry-pick `8c42cb8940`.**
+- **Suites** (r20261108-061203-f288):
+  - `test_units.py` pinned `units.call_families` without `CALLEE_CALLS`: mine, fixed in `a9658f4b67`.
+  - `test_split_prims_serve.py`'s fixture lacks #7880's `struct_max_gates` pin section: **#7880 has this too.** It was rewritten by the `pins.py --write` command the failure names (`a5c16afab3`, one line), so #7880 can cherry-pick that commit as well.
+  - `benchmarks/prove_path` (5 tests) was fixed by the merge from `checked`.
+
+Runs (all on cpu-6 unless stated):
+- r20261108-070011-1ee1: circuit-check on the 8 bindings and the three rules' spots, at `b962803597` (later commits don't touch those targets). ETA about 09:15Z; the long pole is v4 at N = 131,072.
+- r20261108-071919-2a25: `suites.py --changed 0f52f19ef9`, the 61 suites the merge and fixes touch, at `a5c16afab3`. ETA about 08:45Z.
+- r20261108-072005-dd84: `circuit-check --all` at `a5c16afab3`. ETA about 08:50Z.
+- r20261108-071932-f53f: `ArgmaxStep_v2` and `PouwZyDequant_v2` alone at `a5c16afab3`. ETA about 07:45Z.
+- At the pre-merge head, left running on cpu-7:
+  - r20261108-054914-3079 has 29 of 32 targets with 0 failures. Its 3 unchecked warnings are `correspondence/unchecked` (#7880's Boolean-composite input-budget warning), not partition. ETA about 08:30Z.
+  - r20261108-061203-f288 has 42 of 53 suites done.
+
+#8019's body is updated with all of this (`research queue edit`). Circuits can mark it once 1ee1, 2a25 and dd84 pass; wake me if any goes red. CIR-176's goal label (`circuits/glm-production-compile` against the body's `circuits/glm-128k-indexer`) is still as I flagged it.
