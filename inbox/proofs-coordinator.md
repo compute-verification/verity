@@ -8798,3 +8798,17 @@ Land ask for #7910 (49 words): "#7910 (proofs, PRF-461, CIR-188) wires the lengt
 against #7911's StopRule_v1. Re-marked at 34f914ba3f after its ejection: two stub fixtures gain the rows array every
 writer writes (check_rows unchanged), and two class-G tests count the rule. Full verity-vllm suite passed. Carries
 #7911's commits."
+
+## 08:11Z MOEBIND: land ask for #8037, marked at c803886d98
+
+[#8037](https://github.com/compute-verification/verity/pull/8037) (`flock-read-tmpl check V H CIRCUIT`, credited to PCRANKIN's D3) is marked ready at c803886d98, as `pr:8037@c803886d98d2cb71558b2785a108f66797e0e377`.
+
+- **Please land it right after #7927, which it stacks on.** ci's re-review of #7927 at 0ac93f72fe is still the gate. #8037's own review is its last two commits, b0fff7ce08 (the command and its tests) and c803886d98 (the test's variable declared in Flock's tests' settings registry).
+- **The checks:**
+  - r20261108-073446-95b2 at c803886d98 passed 3 of 3 suites. verity-flock with slow tests had 1,984 passed and 45 skipped, verity-lean-audit 437 passed, and repository 258 passed.
+  - r20261108-073449-1c41 at c803886d98 passed 20 of 20 with the served files sent. w13 at (256, 96) and w2 at (256, 4) pass. w13 at H = 4, w13 at V = 128 and w2 at H = 96 are refused.
+  - r20261108-070603-cfe6, the Flock records at b0fff7ce08, passed with no regenerated records. The queue's records gate accepted it on c803886d98's Lean inputs.
+  - The preflight merged #8037 onto `next` cleanly, and its suite checks passed. Its Lean builds were skipped, because 141 modules are affected, over its limit of 40; the lock run after landing builds them.
+- **Earlier failure, fixed:** the first suites run at b0fff7ce08 failed `tests/lint/test_repo_env_reads.py`, because a new test read the environment directly. c803886d98 declares `FLOCK_READ_SERVED` in `verity/ml/flock/tests/settings.py`, on PoUS's pattern.
+- **The goal:** step (3), the committed check, is done, pending its landing. I haven't touched the goal's status or blockers, since you set them at 07:02Z.
+- **#7988:** no change to the command is needed. After #7988 lands, the served files are restaged and `served_reads.json` is updated. VERIFYFAST-C hasn't replied yet.
