@@ -408,9 +408,9 @@ def main() -> None:
     p.add_argument("--out", required=True)
     p.add_argument("--tag", default="0")
     p.add_argument("--reps", type=int, default=100)
-    p.add_argument("--variants", default="default,4096:1024:128:32:slow,2048:1024:128:32,8192:1024:128:32,"
-                                         "4096:2048:128:32,4096:512:128:32,4096:1024:64:32,4096:1024:256:32,"
-                                         "4096:1024:128:16,4096:1024:128:64",
+    p.add_argument("--variants", default="default,4096:1024:64:32:slow,1024:1024:64:32,2048:1024:64:32,"
+                                         "8192:1024:64:32,4096:512:64:32,4096:2048:64:32,4096:1024:128:32,"
+                                         "4096:1024:32:32,4096:1024:64:16",
                    help="stress.py time: `Align`'s parameters (`variant`), by comma")
     args = p.parse_args()
     if args.mode == "plugin":

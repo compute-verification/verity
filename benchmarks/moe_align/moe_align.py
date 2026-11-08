@@ -41,12 +41,14 @@ OP = "moe_align_block_size"
 SMALL_MAX = 4096
 #: pairs a chunk of the long path, pairs a tile (a program), and the pairs each step of a tile's rank compare reads
 CHUNK = 1024
-TILE = 128
+TILE = 64
 COLS = 32
-#: the chunk rows and experts `scan_chunks` reads at a time, and the slots a pad-store loop writes at a time
+#: the chunk rows and experts `scan_chunks` reads at a time, the slots a tail-store loop writes at a time, and the
+#: pad slots of an expert a pad store writes at a time
 SCAN_ROWS = 32
 SCAN_EXPERTS = 64
 STORE = 1024
+PAD_STORE = 16
 #: vLLM's op refuses ``padded_num_experts >= 1024`` (moe_align_sum_kernels.cu): E rounded up to 32 below 1024
 MAX_EXPERTS = 992
 #: `log_to` rewrites its record every this many calls outside a CUDA graph's capture
@@ -183,8 +185,9 @@ class Align:
             raise TypeError(f"{OP}: sorted_token_ids, experts_ids, num_tokens_post_pad and expert_map must be int32")
         if not all(t.is_contiguous() for t in (topk_ids, *outs)):
             raise ValueError(f"{OP}: topk_ids and the outputs must be contiguous (a pair is its slot in memory order)")
-        if experts_ids.numel() < NB or num_tokens_post_pad.numel() < 1 or L >= 1 << 31:
-            raise ValueError(f"{OP}: experts_ids holds {experts_ids.numel()} blocks, {NB} needed; or {L} slots overflow int32")
+        if experts_ids.numel() < NB or num_tokens_post_pad.numel() < 1 or max(P, L) >= 1 << 30:
+            raise ValueError(f"{OP}: experts_ids holds {experts_ids.numel()} blocks, {NB} needed; or {P} pairs or {L} "
+                             "slots overflow the kernels' int32 offsets")
         if not self._launch:
             self._launch.update({k: _Launch(fn, self.fast_launch) for k, fn in kernels().items()})
         K, EP, has_map = self._launch, next_pow2(E + 1), expert_map is not None
@@ -195,19 +198,20 @@ class Align:
             PB = max(next_pow2(P), 16)
             T = min(self.tile, PB)
             K["align_small"]((cdiv(P, T),), (topk_ids, mp, *bufs), (P, L, NB, E, BM),
-                             {"HAS_MAP": has_map, "PB": PB, "T": T, "JB": min(self.cols, T), "EP": EP, "TB": STORE},
-                             warps(PB))
+                             {"HAS_MAP": has_map, "PB": PB, "T": T, "JB": min(self.cols, T), "EP": EP, "TB": STORE,
+                              "PW": PAD_STORE}, warps(PB))
         else:
             self.calls["chunked"] += 1
             CH, T = self.chunk, self.tile
             C, ES = cdiv(P, CH), min(SCAN_EXPERTS, EP)
+            if (2 * C + 1) * EP >= 1 << 31:
+                raise ValueError(f"{OP}: {C} chunks of {CH} pairs overflow the workspace's int32 offsets")
             ws = torch.empty((2 * C + 1) * EP, dtype=torch.int32, device=topk_ids.device)
-            hist, prefix, total = ws[:C * EP], ws[C * EP:2 * C * EP], ws[2 * C * EP:]
-            K["count_chunks"]((C,), (topk_ids, mp, hist), (P, E), {"HAS_MAP": has_map, "CHUNK": CH, "EP": EP}, warps(CH))
-            K["scan_chunks"]((EP // ES,), (hist, prefix, total), (C,), {"EP": EP, "ES": ES, "CB": SCAN_ROWS}, 4)
-            K["place_chunks"]((C, CH // T), (topk_ids, mp, prefix, total, *bufs), (P, L, NB, E, BM),
-                              {"HAS_MAP": has_map, "CHUNK": CH, "T": T, "JB": self.cols, "EP": EP, "TB": STORE},
-                              warps(CH))
+            K["count_chunks"]((C,), (topk_ids, mp, ws), (P, E), {"HAS_MAP": has_map, "CHUNK": CH, "EP": EP}, warps(CH))
+            K["scan_chunks"]((EP // ES,), (ws,), (C,), {"EP": EP, "ES": ES, "CB": SCAN_ROWS}, 4)
+            K["place_chunks"]((C, CH // T), (topk_ids, mp, ws, *bufs), (P, L, NB, E, BM, C),
+                              {"HAS_MAP": has_map, "CHUNK": CH, "T": T, "JB": self.cols, "EP": EP, "TB": STORE,
+                               "PW": PAD_STORE}, warps(CH))
         if self.on_flush is not None and sum(self.calls.values()) % FLUSH_EVERY == 0 and not _capturing():
             self.on_flush()
 

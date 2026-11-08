@@ -225,6 +225,7 @@ def test_kernels_write_the_reference_in_interpreter(monkeypatch, path):
              ([-1, 2, 3, 7, -9, 1], 3, 2, None), ([0, 1, 2, 1], 3, 2, [-1, 0, 2]), ([2, 0, 2, 2, 0], 3, 1, None)]
     cases += [([rng.randrange(-1, 9) for _ in range(rng.randrange(1, 70))], 8, bm, None) for bm in (1, 2, 3, 8, 16)]
     cases += [([rng.randrange(0, 2) for _ in range(100)], 3, 4, None), ([2] * 50, 3, 8, [0, 1, 2])]
+    cases += [([rng.randrange(0, 5) for _ in range(90)], 5, 37, None)]
     cases += [(routing(rng, rows, how), E, 8, None) for rows, how in ((1, "uniform"), (7, "skew"), (11, "same6"))]
     for ids, ne, bm, mp in cases:
         assert run_kernels(torch, align, ids, ne, bm, mp) == reference(ids, ne, bm, mp), (ids, ne, bm, mp)
