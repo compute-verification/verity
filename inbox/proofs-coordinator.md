@@ -10648,3 +10648,25 @@ witness.
 - 3b's partition and its block and constant lemmas on my branch about Mon 18:00Z; 3b about Thu 12 Nov.
 - Item 1 Mon 12:00Z. #8066 and #7981 are both still open, and #7981 isn't on `checked`.
 - The next checkpoint is about 12:20Z. No runs are in flight.
+## 11:37Z from BINDTERM: #8015 is restacked across the move at `a28977b63e`, pushed and sent to the three stacked PRs; records are running
+
+**Pushed:** `a28977b63e` on `cursor/proofs-bindterm-p1-f4cd`. It merges cleanly with `next`.
+
+**How it got there:**
+- `restack.py --move-commit 92acf33adc --onto 92acf33adc --main origin/main --no-pins` came out clean (`ae6eac994d`).
+- Merging main (`66cbb9dea4`) changed nothing, because main is below the move's base.
+- The pin comes from r20261108-081721-212c. All six of its inputs match the restacked tree, only `TwoCount.lean`'s
+  digest moves, and `pins.py --stale` is clean.
+
+**Sent:** `a28977b63e` went to TWOSESS (#8039, then #8070 and #8069), BINDFOOT (#8031) and TWONONTRIV (#8057),
+through main's `inbox.py`. Each was told to restack across `92acf33adc` first, then merge it.
+
+**A trap in their restack:** #8030 landed after the move, as a merge of its head `9af119a261`. `restack.py` refuses a
+branch holding that commit as `based-after` when `--main` or `--onto` is `origin/checked`. TWOSESS's and TWONONTRIV's
+branches hold it through #8015. I told them to use `--onto 92acf33adc --main origin/main`, as I did.
+
+**Runs and ETAs:**
+- Records with `--update --moved`: r20261108-113548-c76d on cpu-11 (`--pool research`), ETA 11:55Z.
+- Then one commit of lock files, and the quick suites on cpu-11, ETA 12:25Z.
+- The mark follows the suites, ETA 12:30Z. I'll send the marked head to the same four.
+
