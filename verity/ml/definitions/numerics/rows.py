@@ -197,19 +197,6 @@ def token_select_first_max(logits: np.ndarray) -> int:
     return 0 if np.isnan(f[0]) else int(np.argmax(np.where(np.isnan(f), -np.inf, f)))   # np.argmax returns the FIRST maximal index
 
 
-def token_select_chunk_bests(x: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-    """`TokenSelectChunk_v2{C}` on each row of bf16 words ``x`` (its last axis): (best, its index), the first maximum above
-    -inf, a NaN never taken, and (-inf, 0) where there is none."""
-    from verity.ml.definitions.registry.b1 import NEG_INF_BF16
-    x = np.asarray(x, dtype=np.uint16)
-    f = _bf16_to_f32(x)
-    f = np.where(np.isnan(f), -np.inf, f)
-    i = np.argmax(f, axis=-1)
-    none = ~(f > -np.inf).any(axis=-1)
-    best = np.take_along_axis(x, i[..., None], axis=-1)[..., 0]
-    return np.where(none, np.uint16(NEG_INF_BF16), best).astype(np.uint16), np.where(none, 0, i)
-
-
 #: the registered stochastic selector's operands, in signature order (verity.ml.definitions.registry.sampling.GumbelTopPTokenSelect): word width in bits
 _GUMBEL_TOPP_OPERANDS = (("logits", 16), ("top_p", 32), ("seed", 64), ("pos", 64), ("temp", 32), ("splits", 32))
 

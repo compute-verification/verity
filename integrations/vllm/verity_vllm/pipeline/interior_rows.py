@@ -43,7 +43,8 @@ from typing import Any
 import numpy as np
 
 from verity.core.protocols.spot.one_stage import registration as R
-from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER, token_select_chunk_bests
+from verity.ml.definitions.numerics.rows import SAMPLED_MEMBER
+from verity.ml.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.ml.definitions.registry.dead_free import CHUNK
 from verity.ml.windows import rows as CS
 from verity_vllm.check.replay import evaluate as EV
@@ -278,7 +279,7 @@ def pieces(s: Span, c: int | None = None) -> tuple[Span, Span]:
     """A token select's span ``s`` as the units Flock proves it by, as `TokenSelect_v4` calls them: each token's V / c
     `TokenSelectChunk_v2{C=c}` units, one a chunk of its logits row, then its `TokenSelectCombine_v2{V, C=c}` unit over
     logits[0] and the chunks' (best, idx). Each piece's member is its template's bit rows, as Flock stages a unit
-    (`serving_rows.unit_member`). The chunks' outputs are computed here (`numerics.rows.token_select_chunk_bests`), and the combine's must
+    (`serving_rows.unit_member`). The chunks' outputs are computed here (`numerics.token_select_rows`), and the combine's must
     be ``s``'s tokens, or nothing is committed.
     ``c``: `TokenSelect_v4`'s chunk, ``min(CHUNK, V)``."""
     ((port, V),), ((out, _),) = s.member.rows, s.member.outs

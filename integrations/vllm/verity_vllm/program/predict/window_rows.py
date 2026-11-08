@@ -50,7 +50,8 @@ from verity.ml.circuits.codec import descriptor_id
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.refs import runs
 from verity.ml.commitments.gates import embedding as E
-from verity.ml.definitions.numerics.rows import ROWS, token_select_chunk_bests
+from verity.ml.definitions.numerics.rows import ROWS
+from verity.ml.definitions.numerics.token_select_rows import token_select_chunk_bests
 from verity.ml.definitions.registry import io_shell as IO
 from verity.ml.windows import interface as IF
 from verity_vllm.protocols.pouw.h1 import registered as H1R
@@ -124,7 +125,7 @@ def _be_words(b: bytes) -> np.ndarray:
 
 
 def chunk_best(x: np.ndarray) -> tuple[int, int]:
-    """`TokenSelectChunk_v2{C}` on one chunk of bf16 words (`numerics.rows.token_select_chunk_bests`)."""
+    """`TokenSelectChunk_v2{C}` on one chunk of bf16 words (`numerics.token_select_rows`)."""
     best, i = token_select_chunk_bests(x)
     return int(best), int(i)
 
