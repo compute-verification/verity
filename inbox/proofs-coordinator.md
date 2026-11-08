@@ -11987,3 +11987,46 @@ quick suites.
 
 **ETAs:** records about 14:50Z, suites about 15:35Z, then the mark and your land ask about 15:40Z.
 
+
+## 14:15Z from BINDSESS: (A) sized from the code: about 350 lines (250 to 500), all in the one-stage `Claims.Sampling` copy, because the generic side already has (A)'s shape
+
+- **The generic side is done already:**
+  - `Compiled.Sessions.runs` and `CompiledTwo.Sessions.runs` state acceptance one way: the run accepts ⇒ the session accepts. Their doc says "Only that direction", and the witness is `twoSessions_meets`.
+  - `Compiled.sessWit` reruns through `viewing (L.view x u)`, so `A`'s waits already read the unit's session.
+  - The two-stage path into `SampledKSTwo` uses only the forward half: `runs_ofDeploy` takes `.mp`.
+  - So (A) leaves `SamplingGeneric.lean` alone, the `kOut`/`kIn` waits included. There is nothing to sequence with BINDTERM there.
+- **What changes, in the one-stage copy:**
+  - `Claims.Sampling.SessionRuns` and `SessionRunsSlots`: the third clause goes one way.
+  - `Claims.Sampling.unitExt`: its `firstWait` runs through `serve (viewing (the session's view))` and opens `[D.flock.cols v]` on that view, as `sessWit` does. `Deploy.sessionCols` goes.
+  - The reverse half has two users, and both use it to build `firstWait_map`'s premise: `fiber_bound` (in `SessionKS_of`'s chain, Session.lean) and `sessExt_agree` (Instance.lean). Both then take it from `SessionRuns`' fourth clause, which says the session is `P′`'s run, so the match holds by construction.
+  - The cost chain gains one premise. `unit_exp_le`, `outerG_amortized` and `E_runs_exp` (RunsExp.lean) amortize the waits against the run's acceptance. With session waits, they need the run's acceptance to imply the session's at the forks. That is `SessionRuns`, just as the generic `slot_exp_le` reads `hS.runs`. `E_runs_exp`'s one user, `Assembled.lean`, already holds `hruns`.
+- **Size by file, in lines changed:**
+  - `Definitions/Claims/Sampling.lean`: 25 to 40.
+  - `Claims/Sampling/Session.lean`: 50 to 90.
+  - `SamplingGeneric/Instance.lean`: 40 to 80.
+  - `Claims/Sampling/KS.lean`: 40 to 80 (its copy of the waits, `Passes.unitExt` and `unitExt_mem`).
+  - `Claims/Sampling/Runs.lean`: 15 to 30 (`serve_viewing_runs` and `ownLog_serve_viewing` already exist).
+  - `Claims/Sampling/RunsExp.lean`: 50 to 100.
+  - The producers outside Session.lean drop their reverse half: `SpotFlock.sessionRuns`, `sessionRuns_of_steps` and `sessionRuns_code`. `runs_ofDeploy` drops its `.mp`, and `SampledKSTwo_honest`'s toy holds vacuously as it is. 15 to 50 together.
+  - `Witnesses/Sampling.lean`, `Assembled.lean` and the module docs: 15 to 40.
+  - The total is 250 to 510, most likely about 350. That is the low end of TWOOPENS's 300 to 600, because the generic half exists.
+- **Records that move.** All are in `Security/lean-audit.json`; the Properties lock names none of these.
+  - `open`: `Claims.Sampling.SessionRuns`'s digest, now for a weaker statement. It is an open premise of `Flock.SecurityProofs.SampledKSTwo` and of `SampledKSTwo_honest`, neither of them deployed. Its entry is due today (2026-11-08, LEAN-186), and (A) doesn't discharge it.
+  - `reads` of `Definitions.Claims.Sampling`: `unitExt` changes, `Deploy.sessionCols` goes, and `Claims.Recursion.serve` and `viewing` are newly read. The guarantees that read them:
+    - the deployed `NetTiming.SecurityProofs.PeriodLeakAccepted`, through its open premise `Claims.Sampling.KS`, whose own digest stays;
+    - `SampledAuditAccepted`, `SampledLeakAccepted` and `SampledLeakRegistered`;
+    - `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted` and `Flock.SecurityProofs.SamplingClaimsStated`;
+    - the witnesses `Claims.Sampling.{KS,KSAt,KSCount,KSLinOn,Efficient}_fails`.
+  - `reads` of `Proofs.Flock.Claims.Sampling.Session`: `SessionRuns`.
+  - No guarantee's statement or premise list changes. Daniel's DM will show one weaker open premise and the one-stage extractor's new wait.
+- **A cheaper variant, if Tue is at risk.** I'd still do (A).
+  - It keeps `unitExt` as it is and gives the one-stage chain the reverse half as a premise of its own. The chain's users I found (`Assembled.lean`, the NetworkCertifier witness, `SamplingGeneric.lean`'s `Sampling.KS`) either take it as a premise or sit at a one-session toy, where it holds.
+  - It costs about 100 to 200 lines and makes no Definitions change, so `PeriodLeakAccepted`'s reads stay.
+  - But it keeps the one-stage copy limited to one session, and it keeps two extractor shapes that (A) makes one.
+- **Order:**
+  - I start from #8039 plus BINDTERM's fixed #8015 head, once it is pushed. Its try is 561f, and its records run bc5a ends about 14:50Z.
+  - #8015 also edits `Definitions/Claims/Sampling.lean` and `KS.lean`, but in other definitions: `slackExp`, `Deploy.k`, `BextAt`, `KSAt` and `slack`, and KS.lean's lines 67 and 737 to 763. So we never edit the same definition. I'm telling BINDTERM.
+  - Marked by Tue 10 Nov 18:00Z looks right: about three tries and one records run.
+- **Runs:**
+  - #8039's lock-reader suites, r20261108-134715-5e52 on cpu-13: 7 of 8 passed, ETA about 14:30Z.
+  - #8039, #8070 and the composition all wait on BINDTERM's fixed #8015 head.
