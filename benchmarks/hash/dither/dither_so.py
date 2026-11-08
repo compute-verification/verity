@@ -115,8 +115,8 @@ import dither_one as DO
 import forms as F
 import h1c as H1CM
 import j10r_ws as JWS
+from dither_a import auto_j
 from dither_fused import CM, CO, H1R, Call, Dom, Tab, unwords, words
-from hb_side import auto_j
 from verity_config.settings import of
 
 settings = of(__file__)
@@ -168,8 +168,7 @@ UNITS_FORMS = {"today": "each unit's own seed_j stream", "j10r": "J10-R: each ca
 # read both (h1u.cu's kh_units_multi_j10rc, an h1u build with H1U_JRC=1, each call's workspace kh_j10r_ws_bytes at T
 # rows; under $DITHER_SO_UNITS_SMQ without a cap, kh_units_multi_j10rc_sm); the same receipts.  Unset, never: J10-R's
 # units hash a column tile once in each row tile
-# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference (unitsbench
-# --j10r, H1U_JSWZ 32: faster at T 2048 and 512, slower at T 64, M 32 unswizzled)
+# they compute, so it pays at prefill's 64 and costs at decode's one, where its own launch is the difference
 J10RC_MIN_T_ENV = "DITHER_SO_J10RC_MIN_T"
 # J10-R's layout rows of a call (h1tile.j10r_blocks' m; j10r_so.M_MODES), open until J10R rules: "slot" (default) or "live"
 J10R_M_ENV = "DITHER_SO_J10R_M"

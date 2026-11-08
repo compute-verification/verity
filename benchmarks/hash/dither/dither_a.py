@@ -86,13 +86,17 @@ import forms as F
 from dither_fused import CM, CR, H1R, Call, unwords
 import h1c as H1CM
 from h1c import Dom, Tab
-from hb_side import auto_j
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "exactlin"))
 import exactlin as EL
 from verity_config.settings import of
 
 settings = of(__file__)
+
+
+def auto_j(units: int, nb: int, sms: int) -> int:
+    """The largest J (noise chunks a lane) that still leaves about 64 warps an SM."""
+    return max(1, min(32, (units * nb) // (32 * sms * 64)))
 
 
 def arm_label() -> dict:

@@ -112,7 +112,7 @@ Arms:
                  recomputed from them at an opening
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
-                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
+                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh runs exactlin's
                  kgate.py in the lease before an -xl or exact-fused arm is timed
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
@@ -124,7 +124,7 @@ Arms:
                  own worker's environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
     ARM-zy1      a dither-a-hbc arm with DITHER_ZY1_KC=1 (its z and y tables in one h1c_build), whatever the run's
                  environment sets
-    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
+    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, sbench.sh's from HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
