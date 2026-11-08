@@ -147,7 +147,7 @@ class LazyOperands(Sequence):
     """Operand references of a gate, resolved on demand by ``res`` (`resolve` in ``scope`` when None): a wide-fan-in gate's
     (e.g. an embedding column of 151,936 weight values), and on a walk that asks (`Circuit.gates`' ``lazy``) a gate whose
     primitive reads its operands through ``evaluate_lazy`` (an expert GEMM's gather reads 2 of its E + 1).  `len`, `ops[j]`,
-    iteration.  Semantically identical to the tuple `_prim_member_args` returns."""
+    iteration.  Semantically identical to the tuple `_prim_member_args` returns, down to the `IndexError` past either end."""
 
     __slots__ = ("scope", "node", "m", "_segments", "_n", "_res")
 
@@ -179,11 +179,11 @@ class LazyOperands(Sequence):
         if j < 0:
             j += self._n
         if not (0 <= j < self._n):
-            raise IndexError(j)
+            raise IndexError("tuple index out of range")
         for start, n, refs in self._segments:
             if j < start + n:
                 return self._res(refs[j - start])
-        raise IndexError(j)
+        raise IndexError("tuple index out of range")
 
     def __iter__(self):
         for start, n, refs in self._segments:

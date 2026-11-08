@@ -139,8 +139,9 @@ def test_the_gates_of_any_range_are_the_gates_found_one_by_one():
 
 def test_a_lazy_walk_is_the_same_gates_with_a_lazy_readers_operands_resolved_on_demand():
     """`Circuit.gates(lazy=True)` over any range is the plain walk's gates, operand for operand; a gate whose primitive reads
-    through `evaluate_lazy` holds its operands as `LazyOperands`, which index (from either end) and iterate as the tuple does,
-    and every other gate holds what the plain walk gives it (a wide gate's `LazyOperands`, a tuple)."""
+    through `evaluate_lazy` holds its operands as `LazyOperands`, which index (from either end, raising past either end what
+    the tuple raises) and iterate as the tuple does, and every other gate holds what the plain walk gives it (a wide gate's
+    `LazyOperands`, a tuple)."""
     C = Program(EVERY).circuit
     n = C.size
 
@@ -157,8 +158,12 @@ def test_a_lazy_walk_is_the_same_gates_with_a_lazy_readers_operands_resolved_on_
         if g.prim is Pick:
             ops = g.operands
             assert len(ops) == 6 and [ops[j] for j in range(-6, 6)] == list(p.operands) * 2 and ops[1:4] == p.operands[1:4]
-            with pytest.raises(IndexError):
-                ops[6]
+            for j in (6, -7):
+                with pytest.raises(IndexError) as lazy_err:
+                    ops[j]
+                with pytest.raises(IndexError) as plain_err:
+                    p.operands[j]
+                assert str(lazy_err.value) == str(plain_err.value)
     for lo, hi in [(0, n), (n - 12, n), (n - 3, n - 1), (n - 1, n + 1), (-1, 3)]:
         assert untyped(C.gates(lo, hi, lazy=True)) == untyped(C.gates(lo, hi)), (lo, hi)
 
