@@ -14,8 +14,8 @@ $$\sum_t \sum_m (\varepsilon_{ks,t,m} + \varepsilon_{bind,t,m}) + x^M$$
 by `period_escapes`. A window is accepted with a drawn incorrect proof block with probability at most its members'
 knowledge and binding terms (`JointAuditV5.accepted_drawnWrong_le`). Its sample misses its `w` incorrect proof blocks
 with probability at most `P_a ≤ x^w` (`JointAuditV5.drawMiss_le`, with `x` the law's per-block miss: a premise on its
-`P_a`, which `pa_le_pow` discharges at the strata laws). The named assumptions are `JointHorizonV5`'s, at every window,
-and weight security's own.
+`P_a`, which `pa_le_pow_of_fac` discharges at every registered law whose strata each have `(n − k)/n ≤ x`). The named
+assumptions are `JointHorizonV5`'s, at every window, and weight security's own.
 -/
 
 @[expose] public section
