@@ -122,7 +122,7 @@ def main() -> int:
                 pass
         os._exit(128 + sig)
 
-    signal.signal(signal.SIGTERM, stop)
+    was = signal.signal(signal.SIGTERM, stop)
     host = SR.Host(ps)
 
     def wait(s, i: int, k: int, phase: str, t_sub: float) -> None:
@@ -156,6 +156,7 @@ def main() -> int:
             t.join()
     finally:
         rec["exits"] = ps.close()
+        signal.signal(signal.SIGTERM, was)
         rec["host"] = host.stop()
         gpu.stop()
     rec["wall_s"] = round(time.monotonic() - t0, 1)
