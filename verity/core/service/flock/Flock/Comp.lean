@@ -274,31 +274,135 @@ def zeros (n : Nat) : ByteArray := zerosF (n.log2 + 1) n
   let o := (16 * c).toUSize
   ⟨rd64 b o, rd64 b (o + 8)⟩
 
-/-- `b` with column `c` (`colB`) increased by `x`. -/
-@[inline] def addB (b : ByteArray) (c : Nat) (x : F128) : ByteArray :=
-  let o := (16 * c).toUSize
-  let lo := rd64 b o ^^^ x.lo
-  let hi := rd64 b (o + 8) ^^^ x.hi
-  wr64 (wr64 b o lo) (o + 8) hi
+theorem setU_eq (b : ByteArray) (i : USize) (x : UInt8) : setU b i x = b.set! i.toNat x := by
+  unfold setU
+  split
+  · rename_i h
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.uset, ByteArray.set!, Array.uset, Array.set!_eq_setIfInBounds, Array.setIfInBounds,
+      show i.toNat < bs.size from h, dite_true]
+  · rename_i h
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.set!, Array.set!_eq_setIfInBounds, Array.setIfInBounds, show ¬ i.toNat < bs.size from h,
+      dite_false]
+
+theorem getU_eq (b : ByteArray) (i : USize) : getU b i = b[i.toNat]!.toUInt64 := by
+  unfold getU
+  split
+  · rename_i h
+    rw [uget_eq_get! b i i.toNat rfl h]
+    obtain ⟨bs⟩ := b
+    simp only [ByteArray.get!]
+    rw [getElem!_pos (ByteArray.mk bs) i.toNat h, getElem!_pos bs i.toNat h]
+    rfl
+  · rename_i h
+    rw [getElem!_neg b i.toNat h]
+    rfl
+
+theorem getU_pos (b : ByteArray) (i : USize) (h : i.toNat < b.size) : getU b i = (b.uget i h).toUInt64 := dite_eq_left h
+
+theorem uset_eq_setU (b : ByteArray) (i : USize) (x : UInt8) (h : i.toNat < b.size) : b.uset i x h = setU b i x :=
+  (dite_eq_left h).symm
+
+theorem size_uset (b : ByteArray) (i : USize) (x : UInt8) (h : i.toNat < b.size) : (b.uset i x h).size = b.size := by
+  rw [uset_eq_setU, setU_eq, ByteArray.size_set!]
+
+theorem size_setU (b : ByteArray) (i : USize) (x : UInt8) : (setU b i x).size = b.size := by
+  rw [setU_eq, ByteArray.size_set!]
+
+theorem size_wr64 (b : ByteArray) (o : USize) (w : UInt64) : (wr64 b o w).size = b.size := by
+  simp only [wr64, size_setU]
+
+theorem toNat_add_lit (o : USize) (k : Nat) (h : o.toNat + k < USize.size) :
+    (o + (OfNat.ofNat k : USize)).toNat = o.toNat + k :=
+  toNat_add_ofNat o k h
+
+theorem toNat_toUSize (n : Nat) (h : n < USize.size) : n.toUSize.toNat = n := by
+  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
+  simp only [Nat.toUSize, USize.toNat_ofNat']
+  exact Nat.mod_eq_of_lt (by omega)
+
+/-- `rd64` with no bounds check: the caller proves bytes `o, …, o + 7` inside `b` (`rd64P_eq`). -/
+@[inline] def rd64P (b : ByteArray) (o : USize) (h : o.toNat + 8 ≤ b.size) (hs : o.toNat + 8 ≤ USize.size) : UInt64 :=
+  (b.uget o (by omega)).toUInt64 ^^^
+    (b.uget (o + 1) (by rw [toNat_add_lit o 1 (by omega)]; omega)).toUInt64 <<< 8 ^^^
+    (b.uget (o + 2) (by rw [toNat_add_lit o 2 (by omega)]; omega)).toUInt64 <<< 16 ^^^
+    (b.uget (o + 3) (by rw [toNat_add_lit o 3 (by omega)]; omega)).toUInt64 <<< 24 ^^^
+    (b.uget (o + 4) (by rw [toNat_add_lit o 4 (by omega)]; omega)).toUInt64 <<< 32 ^^^
+    (b.uget (o + 5) (by rw [toNat_add_lit o 5 (by omega)]; omega)).toUInt64 <<< 40 ^^^
+    (b.uget (o + 6) (by rw [toNat_add_lit o 6 (by omega)]; omega)).toUInt64 <<< 48 ^^^
+    (b.uget (o + 7) (by rw [toNat_add_lit o 7 (by omega)]; omega)).toUInt64 <<< 56
+
+/-- `wr64` with no bounds check: the caller proves bytes `o, …, o + 7` inside `b` (`wr64P_eq`). -/
+@[inline] def wr64P (b : ByteArray) (o : USize) (w : UInt64) (h : o.toNat + 8 ≤ b.size)
+    (hs : o.toNat + 8 ≤ USize.size) : ByteArray :=
+  let b1 := b.uset o w.toUInt8 (by omega)
+  have h1 : b1.size = b.size := size_uset ..
+  let b2 := b1.uset (o + 1) (w >>> 8).toUInt8 (by rw [toNat_add_lit o 1 (by omega)]; omega)
+  have h2 : b2.size = b.size := (size_uset ..).trans h1
+  let b3 := b2.uset (o + 2) (w >>> 16).toUInt8 (by rw [toNat_add_lit o 2 (by omega)]; omega)
+  have h3 : b3.size = b.size := (size_uset ..).trans h2
+  let b4 := b3.uset (o + 3) (w >>> 24).toUInt8 (by rw [toNat_add_lit o 3 (by omega)]; omega)
+  have h4 : b4.size = b.size := (size_uset ..).trans h3
+  let b5 := b4.uset (o + 4) (w >>> 32).toUInt8 (by rw [toNat_add_lit o 4 (by omega)]; omega)
+  have h5 : b5.size = b.size := (size_uset ..).trans h4
+  let b6 := b5.uset (o + 5) (w >>> 40).toUInt8 (by rw [toNat_add_lit o 5 (by omega)]; omega)
+  have h6 : b6.size = b.size := (size_uset ..).trans h5
+  let b7 := b6.uset (o + 6) (w >>> 48).toUInt8 (by rw [toNat_add_lit o 6 (by omega)]; omega)
+  have h7 : b7.size = b.size := (size_uset ..).trans h6
+  b7.uset (o + 7) (w >>> 56).toUInt8 (by rw [toNat_add_lit o 7 (by omega)]; omega)
+
+theorem rd64P_eq (b : ByteArray) (o : USize) (h : o.toNat + 8 ≤ b.size) (hs : o.toNat + 8 ≤ USize.size) :
+    rd64P b o h hs = rd64 b o := by
+  simp only [rd64P, rd64]
+  rw [getU_pos b o (by omega), getU_pos b (o + 1) (by rw [toNat_add_lit o 1 (by omega)]; omega),
+    getU_pos b (o + 2) (by rw [toNat_add_lit o 2 (by omega)]; omega),
+    getU_pos b (o + 3) (by rw [toNat_add_lit o 3 (by omega)]; omega),
+    getU_pos b (o + 4) (by rw [toNat_add_lit o 4 (by omega)]; omega),
+    getU_pos b (o + 5) (by rw [toNat_add_lit o 5 (by omega)]; omega),
+    getU_pos b (o + 6) (by rw [toNat_add_lit o 6 (by omega)]; omega),
+    getU_pos b (o + 7) (by rw [toNat_add_lit o 7 (by omega)]; omega)]
+
+theorem wr64P_eq (b : ByteArray) (o : USize) (w : UInt64) (h : o.toNat + 8 ≤ b.size) (hs : o.toNat + 8 ≤ USize.size) :
+    wr64P b o w h hs = wr64 b o w := by
+  unfold wr64P wr64
+  -- outermost first, so no rewritten term sits under a later write's bound proof
+  simp only [↓uset_eq_setU]
+
+theorem size_wr64P (b : ByteArray) (o : USize) (w : UInt64) (h : o.toNat + 8 ≤ b.size) (hs : o.toNat + 8 ≤ USize.size) :
+    (wr64P b o w h hs).size = b.size := by
+  rw [wr64P_eq, size_wr64]
+
+/-- `b` with column `c` (`colB`) increased by `x`, its bounds checked once (`addB_eq`). -/
+@[inline] def addB (b : ByteArray) (c : Nat) (x : F128) (hc : 16 * c + 16 < USize.size) : ByteArray :=
+  if h : 16 * c + 16 ≤ b.size then
+    have ho : (16 * c).toUSize.toNat = 16 * c := toNat_toUSize _ (by omega)
+    have ho8 : ((16 * c).toUSize + 8).toNat = 16 * c + 8 := by rw [toNat_add_lit _ 8 (by omega), ho]
+    let lo := rd64P b (16 * c).toUSize (by omega) (by omega) ^^^ x.lo
+    let hi := rd64P b ((16 * c).toUSize + 8) (by omega) (by omega) ^^^ x.hi
+    wr64P (wr64P b (16 * c).toUSize lo (by omega) (by omega)) ((16 * c).toUSize + 8) hi
+      (by rw [size_wr64P]; omega) (by omega)
+  else b
 
 /-- `foldRow` on an unboxed accumulator (`colB`). -/
-def foldRowB (m : Sparse) (i : Nat) (ei : F128) : Nat → Nat → ByteArray → ByteArray
+def foldRowB (m : Sparse) (i : Nat) (ei : F128) (hw : 16 * m.width + 16 < USize.size) :
+    Nat → Nat → ByteArray → ByteArray
   | 0, _, acc => acc
   | fuel + 1, t, acc =>
     let c := m.col i t
-    foldRowB m i ei fuel (t + 1) (if c < m.width then addB acc c ei else acc)
+    foldRowB m i ei hw fuel (t + 1) (if h : c < m.width then addB acc c ei (by omega) else acc)
 
 /-- `foldRows` on an unboxed accumulator (`colB`). -/
-def foldRowsB (m : Sparse) (e : Array F128) : Nat → Nat → ByteArray → ByteArray
+def foldRowsB (m : Sparse) (e : Array F128) (hw : 16 * m.width + 16 < USize.size) : Nat → Nat → ByteArray → ByteArray
   | 0, _, acc => acc
   | fuel + 1, i, acc =>
     let ei := e[i]!
-    foldRowsB m e fuel (i + 1) (if ei.isZero then acc else m.foldRowB i ei m.len[i]! 0 acc)
+    foldRowsB m e hw fuel (i + 1) (if ei.isZero then acc else m.foldRowB i ei hw m.len[i]! 0 acc)
 
 /-- `foldT` with its accumulator unboxed (`foldT_eq_fast`): no `F128` is allocated until the result. -/
 def foldTFast (m : Sparse) (e : Array F128) : Array F128 :=
-  if 16 * m.width + 16 < USize.size then
-    let acc := m.foldRowsB e (min m.rows e.size) 0 (zeros (16 * m.width))
+  if hw : 16 * m.width + 16 < USize.size then
+    let acc := m.foldRowsB e hw (min m.rows e.size) 0 (zeros (16 * m.width))
     (Array.range m.width).map fun c =>
       let v := colB acc c
       if v.lo == 0 && v.hi == 0 then 0 else v
@@ -336,41 +440,6 @@ theorem zerosF_spec : ∀ (fuel n : Nat), n < 2 ^ fuel →
 
 theorem zeros_spec (n : Nat) : (zeros n).size = n ∧ ∀ p : Nat, (zeros n)[p]! = 0 :=
   zerosF_spec _ n (Nat.lt_log2_self)
-
-theorem setU_eq (b : ByteArray) (i : USize) (x : UInt8) : setU b i x = b.set! i.toNat x := by
-  unfold setU
-  split
-  · rename_i h
-    obtain ⟨bs⟩ := b
-    simp only [ByteArray.uset, ByteArray.set!, Array.uset, Array.set!_eq_setIfInBounds, Array.setIfInBounds,
-      show i.toNat < bs.size from h, dite_true]
-  · rename_i h
-    obtain ⟨bs⟩ := b
-    simp only [ByteArray.set!, Array.set!_eq_setIfInBounds, Array.setIfInBounds, show ¬ i.toNat < bs.size from h,
-      dite_false]
-
-theorem getU_eq (b : ByteArray) (i : USize) : getU b i = b[i.toNat]!.toUInt64 := by
-  unfold getU
-  split
-  · rename_i h
-    rw [uget_eq_get! b i i.toNat rfl h]
-    obtain ⟨bs⟩ := b
-    simp only [ByteArray.get!]
-    rw [getElem!_pos (ByteArray.mk bs) i.toNat h, getElem!_pos bs i.toNat h]
-    rfl
-  · rename_i h
-    rw [getElem!_neg b i.toNat h]
-    rfl
-
-theorem size_setU (b : ByteArray) (i : USize) (x : UInt8) : (setU b i x).size = b.size := by
-  rw [setU_eq, ByteArray.size_set!]
-
-theorem size_wr64 (b : ByteArray) (o : USize) (w : UInt64) : (wr64 b o w).size = b.size := by
-  simp only [wr64, size_setU]
-
-theorem toNat_add_lit (o : USize) (k : Nat) (h : o.toNat + k < USize.size) :
-    (o + (OfNat.ofNat k : USize)).toNat = o.toNat + k :=
-  toNat_add_ofNat o k h
 
 theorem getElem!_setU (b : ByteArray) (i : USize) (x : UInt8) (p : Nat) (h : i.toNat < b.size) :
     (setU b i x)[p]! = if i.toNat = p then x else b[p]! := by
@@ -448,17 +517,24 @@ theorem rd64_wr64_ne (b : ByteArray) (o o' : USize) (w : UInt64) (h : o.toNat + 
 def Agree (w : Nat) (acc : Array F128) (bs : ByteArray) : Prop :=
   acc.size = w ∧ bs.size = 16 * w ∧ ∀ c < w, colB bs c = acc[c]!
 
-theorem toNat_col (c w : Nat) (hc : c < w) (hw : 16 * w + 16 < USize.size) : (16 * c).toUSize.toNat = 16 * c := by
-  have hsz : USize.size = 2 ^ System.Platform.numBits := rfl
-  simp only [Nat.toUSize, USize.toNat_ofNat']
-  exact Nat.mod_eq_of_lt (by omega)
+theorem toNat_col (c w : Nat) (hc : c < w) (hw : 16 * w + 16 < USize.size) : (16 * c).toUSize.toNat = 16 * c :=
+  toNat_toUSize _ (by omega)
+
+theorem addB_eq (b : ByteArray) (c : Nat) (x : F128) (hc : 16 * c + 16 < USize.size) (h : 16 * c + 16 ≤ b.size) :
+    addB b c x hc = wr64 (wr64 b (16 * c).toUSize (rd64 b (16 * c).toUSize ^^^ x.lo)) ((16 * c).toUSize + 8)
+      (rd64 b ((16 * c).toUSize + 8) ^^^ x.hi) := by
+  unfold addB
+  rw [dite_eq_left h]
+  simp only [↓wr64P_eq, ↓rd64P_eq]
 
 theorem agree_addB (w : Nat) (acc : Array F128) (bs : ByteArray) (c : Nat) (x : F128) (hw : 16 * w + 16 < USize.size)
-    (hc : c < w) (ha : Agree w acc bs) : Agree w (acc.modify c (· + x)) (addB bs c x) := by
+    (hc : c < w) (hcs : 16 * c + 16 < USize.size) (ha : Agree w acc bs) :
+    Agree w (acc.modify c (· + x)) (addB bs c x hcs) := by
   obtain ⟨hs, hb, hv⟩ := ha
+  rw [addB_eq bs c x hcs (by omega)]
   have ho := toNat_col c w hc hw
   have ho8 : ((16 * c).toUSize + 8).toNat = 16 * c + 8 := by rw [toNat_add_lit _ 8 (by omega), ho]
-  refine ⟨by rw [Array.size_modify, hs], by simp only [addB, size_wr64, hb], fun c' hc' => ?_⟩
+  refine ⟨by rw [Array.size_modify, hs], by simp only [size_wr64, hb], fun c' hc' => ?_⟩
   have ho' := toNat_col c' w hc' hw
   have ho8' : ((16 * c').toUSize + 8).toNat = 16 * c' + 8 := by rw [toNat_add_lit _ 8 (by omega), ho']
   have hsz : ∀ v, (wr64 bs (16 * c).toUSize v).size = 16 * w := fun v => by rw [size_wr64, hb]
@@ -466,13 +542,13 @@ theorem agree_addB (w : Nat) (acc : Array F128) (bs : ByteArray) (c : Nat) (x : 
   · subst hcc
     rw [getElem!_pos _ c (by rw [Array.size_modify]; omega), Array.getElem_modify_self, ← getElem!_pos acc c (by omega),
       ← hv c hc]
-    simp only [addB, colB]
+    simp only [colB]
     rw [rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [hsz]; omega) (by omega),
       rd64_wr64 _ _ _ (by omega) (by rw [ho]; omega), rd64_wr64 _ _ _ (by omega) (by rw [hsz]; omega)]
     rfl
   · rw [getElem!_pos _ c' (by rw [Array.size_modify]; omega), Array.getElem_modify_of_ne hcc,
       ← getElem!_pos acc c' (by omega), ← hv c' hc']
-    simp only [addB, colB]
+    simp only [colB]
     have d1 : 16 * c + 8 + 8 ≤ 16 * c' ∨ 16 * c' + 8 ≤ 16 * c + 8 := by omega
     have d2 : 16 * c + 8 ≤ 16 * c' ∨ 16 * c' + 8 ≤ 16 * c := by omega
     have d3 : 16 * c + 8 + 8 ≤ 16 * c' + 8 ∨ 16 * c' + 8 + 8 ≤ 16 * c + 8 := by omega
@@ -483,13 +559,13 @@ theorem agree_addB (w : Nat) (acc : Array F128) (bs : ByteArray) (c : Nat) (x : 
       rd64_wr64_ne _ _ _ _ (by omega) (by omega) (by rw [ho]; omega) (by rw [ho, ho8']; exact d4)]
 
 theorem agree_foldRow (m : Sparse) (i : Nat) (ei : F128) (hw : 16 * m.width + 16 < USize.size) :
-    ∀ fuel t acc bs, Agree m.width acc bs → Agree m.width (m.foldRow i ei fuel t acc) (m.foldRowB i ei fuel t bs)
+    ∀ fuel t acc bs, Agree m.width acc bs → Agree m.width (m.foldRow i ei fuel t acc) (m.foldRowB i ei hw fuel t bs)
   | 0, _, _, _, h => h
   | fuel + 1, t, acc, bs, h => by
     simp only [foldRow, foldRowB]
     apply agree_foldRow m i ei hw fuel (t + 1)
     split
-    · exact agree_addB _ _ _ _ _ hw (by assumption) h
+    · exact agree_addB _ _ _ _ _ hw (by assumption) _ h
     · rename_i hc
       have : acc.modify (m.col i t) (· + ei) = acc := by
         apply Array.ext (by rw [Array.size_modify])
@@ -498,7 +574,7 @@ theorem agree_foldRow (m : Sparse) (i : Nat) (ei : F128) (hw : 16 * m.width + 16
       rw [this]; exact h
 
 theorem agree_foldRows (m : Sparse) (e : Array F128) (hw : 16 * m.width + 16 < USize.size) :
-    ∀ fuel i acc bs, Agree m.width acc bs → Agree m.width (m.foldRows e fuel i acc) (m.foldRowsB e fuel i bs)
+    ∀ fuel i acc bs, Agree m.width acc bs → Agree m.width (m.foldRows e fuel i acc) (m.foldRowsB e hw fuel i bs)
   | 0, _, _, _, h => h
   | fuel + 1, i, acc, bs, h => by
     simp only [foldRows, foldRowsB]
@@ -536,7 +612,7 @@ it, so it stays above every caller of `foldT` but `foldTFast`'s own fallback. -/
     split
     · rename_i hz
       simp only [Bool.and_eq_true, beq_iff_eq] at hz
-      cases hcol : colB (m.foldRowsB e (min m.rows e.size) 0 (zeros (16 * m.width))) c
+      cases hcol : colB (m.foldRowsB e hw (min m.rows e.size) 0 (zeros (16 * m.width))) c
       rw [hcol] at hz
       simp only at hz
       rw [hz.1, hz.2]
