@@ -110,9 +110,9 @@ def partDefs (V H : Nat) : Array Tmpl.Def := (parts V H).map fun p => defOf p.in
 /-- The root's Definition index. -/
 def ROOT : Nat := 11
 
-/-- The read's input bits in port order: the token (32), the root (512), the domain id (512), the row (`16 H`), the
-salt (1536) and the path (`512 D`). -/
-def portBits (V H : Nat) : Array Nat := #[32, 512, 512, 16 * H, 1536, 512 * depth V]
+/-- The read's input ports: its input bits, the token (32), the root (512), the domain id (512), the row (`16 H`), the
+salt (1536) and the path (`512 D`), as u16 words, the ports a served unit's rows give it. -/
+def portBits (V H : Nat) : Array Nat := Array.replicate (162 + H + 32 * depth V) 16
 
 /-- Where each port starts. -/
 def ROOT_AT : Nat := 32
