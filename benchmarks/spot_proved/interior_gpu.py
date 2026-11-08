@@ -42,6 +42,8 @@ BUILD_DIR = Path.home() / ".cache" / "verity" / "interior_rows"
 NVCC_FLAGS = ("-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared")
 CFLAGS = ("-O2", "-std=c++17", "-fPIC", "-shared")
 M32 = 0xFFFFFFFF
+#: the most rows a token's value has in a recorded step (GLM-5.3's routed experts a token)
+TOPK = 8
 _vp, _u32, _u64 = ctypes.c_void_p, ctypes.c_uint32, ctypes.c_uint64
 
 
@@ -248,9 +250,9 @@ def commit_ports(domains: Mapping[str, Any], rows: Mapping[str, Any], key: bytes
 
 def step_ports(ops: Path, tokens: int | None) -> tuple[dict[str, tuple[int, int]], dict[str, int]]:
     """A recorded step's values as interior ports: every distinct tensor an op reads or writes (by its name), not a parameter
-    nor a whole cache, whose leading dimension is a multiple k of the step's tokens (the most common leading dimension of its
-    ops' tensors), as k ``tokens`` rows a step (``None``: all the step's) of its bytes per leading index, rounded up to whole
-    u16 words. Returns them, ``{name: (rows a step, words)}``, and what was left out by reason (bytes)."""
+    nor a whole cache, of at least two dimensions whose leading one is k = 1 .. `TOPK` times the step's tokens (the most common
+    leading dimension of its ops' tensors), as k ``tokens`` rows a step (``None``: all the step's) of its bytes per leading
+    index, rounded up to whole u16 words. Returns them, ``{name: (rows a step, words)}``, and what was left out (bytes)."""
     refs: list[dict] = []
 
     def walk(v: Any) -> None:
@@ -281,7 +283,8 @@ def step_ports(ops: Path, tokens: int | None) -> tuple[dict[str, tuple[int, int]
         name = r.get("sha512") or r.get("chunks_sha512") or f"big{len(left)}"
         if "chunks_sha512" in r:
             left["whole caches"] = left.get("whole caches", 0) + nb
-        elif "big" in r or not shape or not el or not shape[0] or shape[0] % batch or name in ports:
+        elif ("big" in r or len(shape) < 2 or not el or not shape[0] or shape[0] % batch or shape[0] > TOPK * batch
+              or name in ports):
             left["not token-major, or seen"] = left.get("not token-major, or seen", 0) + nb
         else:
             k = shape[0] // batch
