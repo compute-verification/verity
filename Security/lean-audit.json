@@ -34,6 +34,21 @@
    "digest": "a2f9ca8ead083d11f9937e2fd80dc649424b2019e285152d33872bba4df794f4",
    "why": "The proof system for proof blocks is complete: `CompilerComplete` is stated for such a system and says the compiled verifier inherits its completeness. (met by `compilerComplete_honest`)"
   },
+  "Claims.Encodings.CodeScheme.ColBinds": {
+   "owner": "@proofs",
+   "digest": "157433c3e83ee999a64f3d452ed973c2ad40a38b813725cf713498dc884b573a",
+   "why": "`CodeBinds` is stated for a code whose column check binds, as a collision reduction: two different columns that pass at one position make colliding `H` calls. (met by `codeBinds_honest`)"
+  },
+  "Claims.Encodings.CodeScheme.Distance": {
+   "owner": "@proofs",
+   "digest": "4e51a00bae01ffe9a329fed2d0ff0cc16b7c9e36353e5fb48a41ce04f27aef02",
+   "why": "`CodeBinds` is stated for a code of distance `d`, decoded within the unique radius. (met by `codeBinds_honest`)"
+  },
+  "Claims.Encodings.Linked": {
+   "owner": "@proofs",
+   "digest": "0390b5ad3eeb7d91eccc07c56f944e1d3496823566bd1330d27ee5a0b6ce5ea5",
+   "why": "`RelinkR` is stated for pairs that link every encoded position. (met by `relinkR_honest`)"
+  },
   "Claims.Flock.R": {
    "owner": "@proofs",
    "digest": "39a998376610568bb4825338378d4b880a8a4bc958af68b35bb563d2f1715826",
@@ -48,6 +63,11 @@
    "owner": "@proofs",
    "digest": "3721109897c7352486ba0cc4c2d6a6c330af86f384b982fe0bb34b397ca8e748",
    "why": "Binding as a deterministic reduction to an explicit collision, a property of the scheme; the deployed scheme meets it. (met by `NetTiming.binds_deployOf`)"
+  },
+  "Claims.Sampling.RelS": {
+   "owner": "@proofs",
+   "digest": "33cd8ec6255a0a63bb4a6b0176309bf1929fa939087aec157093b63b954854ab",
+   "why": "`RelinkR` is stated for a trace in the sampling relation under the sum, which it carries to the record. (met by `relinkR_honest`)"
   },
   "Claims.SamplingGeneric.Compiled.CompleteSessions": {
    "owner": "@proofs",
