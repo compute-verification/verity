@@ -20,7 +20,7 @@ applies:
   (`UniformRandomBytes`), with `Law.stratified`'s count curve for `miss(K)`.
 
 The incorrect proof blocks are those of the simulated prover's committed values (`ZkLink.XplurZC` at `simAuditZC … τ`). Open,
-named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, R11b at `--zk`), `hj : JointZC …`
+named in the hypotheses: `hdec : DecodesZK …` (the per-transcript refinement, the decoder premise at `--zk`), `hj : JointZC …`
 (`ε_ks`), and `hlow : LoweringSoundZK …` with the value binding `vb`, as at `Discharge/ZkLink`; `δ_link` is `⊤` at a
 prover outside A2 (`linkBoundZC`). Open and not a hypothesis: the coin tree (the live audit flips each round's coins
 fresh; `Discharge/ZkCoins`), and `J > 1` (the plan has one table).

@@ -167,12 +167,12 @@ TRACKS = ("A", "B", "C", "shared", "scout", "baseline")
 BACKEND_FAMILIES = ("A-GKR", "B-Ligero", "C-Flock", "D-SP1")
 #: The backend families, then the values the frozen ledger's import derived from a ledger lane, which recorded labels carry
 #: and so stay valid: `B-AIR`, `C` (the VOLE candidate in `archive/vole`, not Flock), `SP1` (D-SP1 as the frozen ledger and
-#: tables spell it) and `shared`.  `A` was the ledger import's spelling until 2026-09-23 (`VALUE_ALIASES`): read as `A-GKR`, no longer written.
+#: tables spell it) and `shared`.  `A`, the ledger import's older spelling (`VALUE_ALIASES`), is read as `A-GKR` and no longer written.
 CANDIDATES = (*BACKEND_FAMILIES, "B-AIR", "C", "SP1", "shared")
 APPROACH_STATUSES = ("live", "parked", "killed", "superseded", "merged")
 APPROACH_TYPES = ("scheme", "route", "attack")
 
-# ---- old spellings (2026-09-23 hygiene): accepted on read, never written anew ----------------------------------------------------------------
+# ---- old spellings: accepted on read, never written anew ----------------------------------------------------------------
 
 #: label key written -> the key it means.  Writers (`research data label`) store the canonical key only; readers (`vocab-check`)
 #: map an old key to its canonical one with `canonical_key`.
@@ -183,11 +183,11 @@ VALUE_ALIASES: dict[tuple[str, str], str] = {(CANDIDATE, "A"): "A-GKR"}
 #: Keys whose value names another store object: that is a `ref` (in the manifest at `put`, `--ref name=art:...`), not a label.
 #: `research data label` refuses them (without `--off-vocab`); `vocab-check` lists the ones already written.
 REF_KEYS = ("path", "result_artifact", "constructed_from_attempt")
-#: Measurements and run parameters lanes have written as labels (2026-09-22/23).  The number is already in the result (or goes in
+#: Measurements and run parameters lanes have written as labels.  The number is already in the result (or goes in
 #: the artifact's meta at `put`); a label is what a table selects on or a judgement about the result, so these are refused.
 MEASUREMENT_KEYS = ("l", "n", "subbatches", "per_proof_vus", "R_proved", "threads", "window", "rtt_ms_path", "native_peak", "accumulate",
                     "replicate", "encoder")
-#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (`note:kb/<name>` for kb/) or the notes
+#: A note in the notes repo, as a label's ref names it: `note:<lane>/<file name without .md>` (with `kb` as the lane for kb/) or the notes
 #: README's `note:<campaign>/<lane>/<name>`, either the same whichever month folder the file has moved to.  Not a bare name (a handoff
 #: sent to several lanes has the same name in each), and not a path (`.md`, a `YYYY-MM` or `DD` folder).
 NOTE_REF_RE = re.compile(r"^note:(?:(?![\d-]+/)[A-Za-z0-9][\w.-]*/){1,2}(?![\w.-]*\.md$)[\w.-]+$")

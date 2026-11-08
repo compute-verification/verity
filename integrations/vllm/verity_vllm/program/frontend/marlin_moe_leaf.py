@@ -9,8 +9,8 @@ launch over the checkpoint's [E][N][K/2] packed e2m1 bytes and [E][N][K/32] scal
 construction: `MarlinExperts` has no post-load step), and `fused_marlin_moe` is its own steps with each `ops.moe_wna16_marlin_gemm`
 as `vllm_iface.marlin_moe_mxfp4_gemm` on those weights: `moe_align_block_size` at the block size `fused_marlin_moe` picks as
 `vllm_iface.marlin_moe_align`, the w13 launch, the experts' activation, the w2 launch (top_k 1, the router weights multiplied in)
-and the experts' `moe_sum`.  The align kernel ranks each expert's pairs in atomicAdd's order, so `marlin_moe_align` reads a key
-per pair, the TP rank Program's `schedule` input (`CollectiveBus.schedule_key`): a TP1 export has no such input and refuses.
+and the experts' `moe_sum`.  The served align ranks each expert's pairs in pair-index order (the deterministic
+`moe_align_block_size`, not atomicAdd's order), so `marlin_moe_align` reads the router ids alone.
 Only W4A16 float4_e2m1f weights without bias, zero points, act order, global scales or an expert map are modelled; anything else
 refuses at export.
 """
@@ -31,7 +31,6 @@ __models__ = ("deepseek-ai/DeepSeek-V4-Pro",)
 _MXFP4 = "vllm.model_executor.layers.quantization.mxfp4"
 _MARLIN_MOE = "vllm.model_executor.layers.fused_moe.experts.marlin_moe"
 _ORACLE = "vllm.model_executor.layers.fused_moe.oracle.mxfp4"
-_PARALLEL_STATE = "vllm.distributed.parallel_state"
 
 #: the operands of `fused_marlin_moe` the leaf does not model, each refused unless None
 _UNMODELLED = ("bias1", "bias2", "global_scale1", "global_scale2", "input_global_scale1", "input_global_scale2", "w1_zeros", "w2_zeros",
@@ -70,7 +69,7 @@ def mxfp4_marlin_moe_leaf(model=None):
         yield
         return
     from verity_vllm.program.frontend.rules.vllm_iface import iface
-    oracle, site, parallel_state = (importlib.import_module(m) for m in (_ORACLE, _MARLIN_MOE, _PARALLEL_STATE))
+    oracle, site = (importlib.import_module(m) for m in (_ORACLE, _MARLIN_MOE))
     e2m1 = importlib.import_module("vllm.scalar_type").scalar_types.float4_e2m1f
 
     def fused_marlin_moe(hidden_states, w1, w2, bias1, bias2, w1_scale, w2_scale, topk_weights, topk_ids, quant_type_id,
@@ -81,14 +80,10 @@ def mxfp4_marlin_moe_leaf(model=None):
         if quant_type_id != e2m1.id or given or apply_router_weight_on_input or activation_func is None or moe_sum is None:
             raise NotImplementedError(f"mxfp4_marlin_moe_leaf: fused_marlin_moe beyond W4A16 float4_e2m1f with the experts' activation "
                                       f"and moe_sum (given {given}, router weight on input {apply_router_weight_on_input})")
-        bus = getattr(parallel_state.get_tp_group(), "bus", None)
-        if bus is None:
-            raise NotImplementedError("mxfp4_marlin_moe_leaf: the moe schedule's key per pair is a TP rank Program's `schedule` input "
-                                      "(CollectiveBus.schedule_key); this export has no TP bus")
         M, K = hidden_states.shape
         E, topk, N = w1.shape[0], topk_ids.shape[1], w2.shape[2] * 2
         block_m = marlin_block_size_m(M, topk, E, global_num_experts)
-        blk, par = iface.marlin_moe_align(topk_ids, bus.schedule_key(topk_ids), E if global_num_experts == -1 else global_num_experts, block_m)
+        blk, par = iface.marlin_moe_align(topk_ids, E if global_num_experts == -1 else global_num_experts, block_m)
         up = iface.marlin_moe_mxfp4_gemm(hidden_states, w1, w1_scale, topk_ids, blk, par, topk_weights, block_m, topk, False)
         act = torch.empty((M * topk, N), dtype=hidden_states.dtype, device=hidden_states.device)
         activation_func(activation, act, up, topk_ids=topk_ids, expert_map=None)

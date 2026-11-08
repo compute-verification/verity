@@ -1,7 +1,7 @@
 """verity_vllm.program.prune: a body's dead units (the nodes no output reads) and the body without them, each reference renumbered
 in its own form; on one rank, the request wrapper's dead units are the last layer's rows before the prefill's last, its
-RMSNormTriton and TokenSelect Calls are at their versions without dead gates, and those rows' fused qkv is narrowed to their keys
-and values (`dead_free`)."""
+RMSNormTriton and TokenSelect Calls are at their versions without dead gates (on bits, at the v1s their lift reads), and those rows'
+fused qkv is narrowed to their keys and values (`dead_free`)."""
 from __future__ import annotations
 
 from collections import Counter
@@ -12,6 +12,7 @@ from verity_vllm.program.predict import build as PB
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program import prune as PR
 from verity_vllm.program.prune import _read, _renumbered, dead_free, dead_units, kept_records, narrowed, swapped, without_dead_units
+from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import b1, gemm_bias, topp_words as TW
 
 from verity.ml.circuits.defs import Body, Node, bind
@@ -104,6 +105,21 @@ def test_the_dead_free_form_binds_fa2_attention_to_v18():
         assert dead == (2 * TINY["num_attention_heads"] if a.fn.bindings["T"] == 16 else 0)
         assert (b.form, b.args, b.out, b.n, b.fn.bindings, b.gates) == (a.form, a.args, a.out, a.n, a.fn.bindings, a.gates - dead)
         assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0
+
+
+def test_a_request_on_bits_keeps_the_v1s_its_lift_reads(monkeypatch):
+    """A request wrapper the Build lifts to bits (`registered_form("boolean")`) takes the registered compiler's form without its
+    swaps: its dead units dropped and its linears narrowed alike, its RMSNormTriton, TokenSelect and Attention at the v1s, and every
+    node's Definition with a Boolean version, as the lift needs. On words (`ir` None) it takes the registered compiler's form."""
+    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    body = PB.build_program(PHI, "request", LP=8, T=3).program.fn.body
+    assert PR.registered_form(None) is True
+    form, _, _ = kept_records(body, None, {}, registered=PR.registered_form("boolean"))
+    assert _shape(form) == _shape(narrowed(without_dead_units(body)[0])[0]) != _shape(dead_free(body)[0])
+    assert Counter(n.fn.base_id for n in form.nodes if n.fn.name in ("RMSNormTriton", "TokenSelect", "Attention")) == {
+        "Attention_v5": 15, "RMSNormTriton_v1": 11, "TokenSelect_v1": 4}
+    for fn in {n.fn.id: n.fn for n in form.nodes}.values():
+        boolean_version(fn)
 
 
 def test_each_reference_is_renumbered_in_its_own_form():

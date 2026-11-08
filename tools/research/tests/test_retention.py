@@ -122,7 +122,7 @@ def test_a_file_records_beside_itself(tmp_path):
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into every directory")
 def test_a_read_only_directory_records_beside_itself_and_gc_leaves_it_whole(tmp_path):
-    """compute-accounting's dr-xr-xr-x cancel-pair units (1 Oct): keep failed on `.retention.json.tmp` inside them."""
+    """A lane's dr-xr-xr-x units: keep must not fail writing `.retention.json.tmp` inside them."""
     d = data(tmp_path, "pouw/gpu3-fp8/cancel-pair@flat@1")
     d.chmod(0o555)
     try:
@@ -263,7 +263,7 @@ def test_the_report_marks_an_invalid_sidecar_and_keeps_it_out_of_unowned(tmp_pat
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root reads every directory")
 def test_a_directory_the_report_cannot_read_is_unknown_not_a_record_to_rewrite(tmp_path):
-    """Node 2's root-only lost+found (1 Oct): the report told the user to rewrite a record that doesn't exist."""
+    """A root-only lost+found: the report must not tell the user to rewrite a record that doesn't exist."""
     locked = data(tmp_path, "lost+found")
     locked.chmod(0)
     try:
@@ -337,7 +337,7 @@ def test_gc_does_nothing_unless_the_filesystem_is_over_high_pct_or_forced(tmp_pa
 
 
 def test_gc_acts_on_a_filesystem_out_of_inodes_with_blocks_to_spare(tmp_path):
-    """vy-dc-h200, 26 Oct: inodes at 100% with blocks at 32%, and gc skipped every path as "not needed"."""
+    """Inodes at 100% with blocks at 32%: gc must not skip every path as "not needed"."""
     a = kept(tmp_path, "pouw/a")
     disk = Disk(100 * UNIT, 31 * UNIT, [a])                                   # blocks 32%
     full = lambda _p: (1000, 990 if a.exists() else 0)                         # inodes 99% while a exists
@@ -548,7 +548,8 @@ BY = "https://cursor.com/agents/bc-test"
 
 
 def passes(root: Path, preserved: str | None = ART) -> list[Path]:
-    """The 3 Oct shape: one record on pouw/mvp-e2e, owned by @compute-accounting and unexpired, over pass dirs without their own."""
+    """The shape a bare `rm -rf` lost: one record on pouw/mvp-e2e, owned by another lane and unexpired, over pass dirs without
+    their own."""
     area = data(root, "pouw/mvp-e2e")
     R.keep(area, root=root, owner="@compute-accounting", expires=FUTURE, priority="normal", preserved=preserved,
            why="PoUW served-path e2e", now=clock, node=NODE)
@@ -687,7 +688,7 @@ def test_rm_through_research(tmp_path, monkeypatch, capsys):
 
 
 def test_expires_now_is_what_rm_tells_an_owner_to_record():
-    """17 Oct: rm's refusal tells the owner to record `--expires now`, and keep refused that word, so 34 records failed."""
+    """rm's refusal tells the owner to record `--expires now`, so keep takes that word."""
     now = datetime(2026, 10, 17, 14, 20, tzinfo=timezone.utc)
     assert R.parse_expires("now", now) == R.fmt_utc(now) == R.parse_expires("0h", now)
     with pytest.raises(R.RecordError, match="never, now, a date"):
@@ -695,8 +696,8 @@ def test_expires_now_is_what_rm_tells_an_owner_to_record():
 
 
 def test_a_python_package_named_passes_or_anything_in_a_venv_is_no_retained_pass(tmp_path):
-    """INF-264: torch's `fx/passes` and vLLM's `compilation/passes` in every venv refused proofs' twelve approved trees on cpu-1
-    (4.47M inodes). A data dir named passes still is one, wherever it lies."""
+    """torch's `fx/passes` and vLLM's `compilation/passes` sit in every venv, and taken for passes they would refuse every
+    approved tree holding one. A data dir named passes still is one, wherever it lies."""
     root = tmp_path / "ws"
     tree = root / "src" / ("a" * 40)
     for pkg in (".venv/lib/python3.12/site-packages/torch/fx/passes", "vllm/compilation/passes"):

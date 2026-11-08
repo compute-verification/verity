@@ -8,7 +8,7 @@ import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import VCVio.Prelude.Core
 
 /-!
-# Ligerito's rounds, as frames (R11b; `Flock.Ligerito`)
+# Ligerito's rounds, as frames (for the decoder premise; `Flock.Ligerito`)
 
 `ligerito_frames`: a Ligerito run that succeeds on retained rounds emits `ligFrames`, in order: the label, `T` and the
 cap; level 0's out-of-domain sample, first message, folding challenges, the level-1 cap, two intros, queries, query

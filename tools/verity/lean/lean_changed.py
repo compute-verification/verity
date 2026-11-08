@@ -135,6 +135,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import tomllib
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -761,9 +762,19 @@ def blob_reader(blobs: dict[str, str], repo: Path | None = None):
     return lambda f: data.get(blobs[f]) if f in blobs else None
 
 
-def matching(name: str, pkgs: list[str]) -> list[str]:
-    """The packages of ``pkgs`` that ``name`` names: the one it is, else each it is a part of."""
-    return [p for p in pkgs if p == name.rstrip("/")] or [p for p in pkgs if name in p]
+def lake_name(pkg: Path) -> str | None:
+    """The Lake package name ``pkg``'s `lakefile.toml` declares (its top-level ``name``), or None without one."""
+    f = pkg / "lakefile.toml"
+    return tomllib.loads(f.read_text()).get("name") if f.is_file() else None
+
+
+def matching(name: str, pkgs: list[str], root: Path | None = None) -> list[str]:
+    """The packages of ``pkgs`` that ``name`` names: the one it is, else (with ``root``, the checkout they are in) the one
+    whose Lake package is named ``name``, else each it is a part of."""
+    name = name.rstrip("/")
+    return ([p for p in pkgs if p == name]
+            or ([p for p in pkgs if lake_name(root / p) == name] if root is not None else [])
+            or [p for p in pkgs if name in p])
 
 
 def keys_at(names: list[str], commit: str = "HEAD", repo: Path | None = None) -> dict[str, str]:
@@ -1086,7 +1097,7 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
     if files is None:
         return refused("the tree's files cannot be listed")
     pkgs = LA.packages(files)
-    match = matching(name, pkgs)
+    match = matching(name, pkgs, ROOT)
     if len(match) != 1:
         return refused(f"{name!r} matches {len(match)} packages: {', '.join(match or pkgs)}")
     pkg = match[0]

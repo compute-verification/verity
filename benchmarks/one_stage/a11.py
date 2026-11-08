@@ -35,9 +35,9 @@ DIR`` stages from them without the fold, which is most of a run's time on a shar
 * **Statement form.** Each template is a flat statement (its unit's whole netlist in the circuit file, which the verifier
   reads line by line), or with ``--layout MODE`` (``iv/hybrid/4``) a templated one (`UnitStager`'s ``layout``, statement
   ``verity/flock-circuit/tmpl``; with ``--structural``, `struct_lower`'s template, which not every Definition lowers yet),
-  whose scope the verifier checks on its template and which `verify` refuses last as a
-  version it doesn't serve (`ProvedScope.servedForm`): the sampled audit's knowledge-soundness form (`KsScope.check`)
-  reads only a flat file. The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
+  which `verify --zk` takes (`ProvedScope.served`): its scope and the sampled audit's knowledge-soundness form are
+  checked on its template (`ProvedScope.scopeOkT`, `KsScope.checkOf`, on the template's parse `ProvedScope.circuitOf`
+  reads). The prover reads a templated unit's rows at their positions from ``--tmpl-unit-bin``
   (`flock-tmpl-unit`, which unrolls the template; no part of the verifier).
 
 The window is a stand-in: the Commit (``retain=host``) kept no values, so these are the Match capture's, an independent
@@ -77,7 +77,7 @@ from verity.ml.circuits.program import Program  # noqa: E402
 from verity.ml.circuits.refs import runs  # noqa: E402
 from verity_flock import circuit as FC  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 ROW = "glm53__fp8__h200__tp8__b1__i256__o32__mixed__greedy__eager"
 WINDOW_OF = ("GLM-5.3 TP8 B1 rank 0's step values: the Match capture's activation snapshots of row " + ROW
@@ -634,8 +634,8 @@ def kind_values(res, store, vals, rec: dict, a) -> dict:
 
 def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     """A templated statement's reads beyond a flat one's (none for a flat one): `verify`'s statement, and the prover's unit
-    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the template and layout
-    mode META holds (``d/unit.tmpl``, ``d/unit.layout``)."""
+    rows at their positions (``d/unit.placed``, `--tmpl-unit`), which `flock-tmpl-unit` places from the circuit's template
+    section and META's layout mode (``d/unit.tmpl``, ``d/unit.layout``)."""
     if st.meta.get("statement") != FC.TMPL_STATEMENT:
         return {}
     if not tmpl_unit_bin:
@@ -643,7 +643,7 @@ def templated(st, d: Path, tmpl_unit_bin: str | None) -> dict:
     placed = d / "unit.placed"
     if not placed.exists():
         d.mkdir(parents=True, exist_ok=True)
-        (d / "unit.tmpl").write_text("\n".join(st.meta["template"]) + "\n")
+        (d / "unit.tmpl").write_text(FC.template_of(st.text))
         (d / "unit.layout").write_text(st.meta["layout"])
         p = a0.run([tmpl_unit_bin, str(d / "unit.tmpl"), "--layout", st.meta["layout"], "--out", str(placed)], d / "tmpl-unit.log")
         if p.returncode:

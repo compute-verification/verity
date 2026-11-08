@@ -26,10 +26,10 @@ import Proofs.Flock.Soundness.Refine.Walk
 /-!
 # flock-verify's acceptance under either tag
 
-`setupTables_okH` and `setupTables_retainH` are e2e-exec's `setupTables_ok` and `setupTables_retain` under hidden outputs
+`setupTables_okH` and `setupTables_retainH` are `Exec.setupTables_ok` and `Exec.setupTables_retain` under hidden outputs
 (`hh : tags.hiddenOutputs = true`), by the same walk with `Stmt.setupHidden` for `Stmt.setupH`; `setupTables_okAny` and
 `setupTables_retainAny` put the two tags together through `setupOne`. The acceptance lemmas follow from them as
-e2e-exec's do from `setupTables_ok`, with no `hh`.
+`Discharge/Exec`'s do from `setupTables_ok`, with no `hh`.
 -/
 
 @[expose] public section

@@ -1,6 +1,7 @@
 """`stage.Wires` on a committed capture: a staged instance's input is wired to the latest earlier call that output its bytes
-(``block`` when a population gates that call, ``call`` when none does), or that output a tensor it is a strided view of, or
-whose output is a strided view into its real rows, its padding rows uncharged; a parameter is ``registered`` with its
+(``block`` when a population reads that call, ``call`` when none does; a call that only passed its input's bytes on is passed
+over), or that output a tensor it is a strided view of, or to the calls whose outputs are strided views into its real rows,
+one or several, its padding rows uncharged; a parameter is ``registered`` with its
 committed SHA-512; a `GAPS` input (a computed value the capture doesn't record) is counted at the union of the parts
 instances read (`Capture.part`), else at its width, as gap bits, never as advice, and an `ADVICE` input (a free choice)
 is charged so; anything else, and an output of the call enclosing the reader, is `Unwired` with the fix. `traced` records
@@ -111,13 +112,68 @@ def test_a_buffer_a_call_wrote_through_a_view_is_wired_to_it_and_its_padding_row
     ev = cap.events[0]
     src = wires.source(0, ev[8]["in"]["input"])
     assert src == {"kind": "block", "rank": 0, "seq": 7, "op": "aten::bmm", "out": "out",
-                   "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "rows": 4}}
+                   "into": {"seq": 8, "op": "vllm::linear", "in": "input"}, "cover": {"stride": [4, 8, 1], "offset": 0, "rows": 4}}
     quant = wires.source(0, ev[9]["in"]["input"])
     assert (quant["seq"], quant["into"]["seq"], quant["cover"]) == (7, 9, src["cover"]), "the enclosing call is skipped"
     w = stage.wiring({"A": {"gate": [{"key": [0, 8, 0], "sources": [src]}, {"key": [0, 9, 0], "sources": [quant]}]}})
     assert w["advice_bits"] == 0, "the padding rows past the 4 real rows are in no population"
     with pytest.raises(stage.Unwired, match="reads self"):
         wires.source(0, ev[11]["in"]["self"])
+
+
+@pytest.fixture()
+def mixed(tmp_path, monkeypatch):
+    """A mixed step's attention output: 2 decode rows written by the absorb's ``out=``, 2 prefill rows copied in from dense
+    FA3's output, 2 padding rows nothing writes; a sparse FA3 output an identity ``aten::to`` passes on; and a value only an
+    identity call outputs."""
+    stage = _stage(monkeypatch)
+    rng = np.random.default_rng(5)
+    b = _Blobs(tmp_path)
+    o, sp, u, q = (rng.integers(0, 2 ** 16, s, dtype=np.uint16) for s in ((6, 8), (2, 8), (2, 8), (2, 8)))
+    dense = o[2:4].copy()
+    events = [
+        _ev(0, "_vllm_fa3_C::fwd", {"q": b.ref(q)}, {"ret0": b.ref(dense)}),
+        _ev(1, "aten::copy_", {"self": b.ref(q + 1), "src": b.ref(dense)}, {"self": b.ref(dense)}),
+        _ev(2, "aten::bmm", {}, {"out": b.ref(o[:2].reshape(2, 2, 4).transpose(1, 0, 2), stride=[4, 8, 1])}),
+        _ev(3, "vllm::linear", {"input": b.ref(o)}, {}),
+        _ev(4, "_vllm_fa3_C::fwd", {"q": b.ref(q + 2), "q_v": b.ref(q + 3)}, {"ret0": b.ref(sp)}),
+        _ev(5, "aten::to", {"self": b.ref(sp)}, {"ret0": b.ref(sp)}),
+        _ev(6, "aten::gelu", {"self": b.ref(sp)}, {}),
+        _ev(7, "aten::gelu", {"self": b.ref(dense)}, {}),
+        _ev(8, "aten::to", {"self": b.ref(u)}, {"ret0": b.ref(u)}),
+        _ev(9, "aten::gelu", {"self": b.ref(u)}, {}),
+    ]
+    _commit(tmp_path, events, {})
+    cap = stage.Capture(tmp_path, 0)
+    return stage, cap, stage.Wires(cap)
+
+
+def test_a_buffer_several_calls_wrote_in_parts_is_wired_to_each_call_for_its_rows(mixed) -> None:
+    stage, cap, wires = mixed
+    ev = cap.events[0]
+    into = {"seq": 3, "op": "vllm::linear", "in": "input"}
+    assert wires.source(0, ev[3]["in"]["input"]) == [
+        {"kind": "block", "rank": 0, "seq": 2, "op": "aten::bmm", "out": "out", "into": into,
+         "cover": {"stride": [4, 8, 1], "offset": 0, "rows": 4}},
+        {"kind": "call", "rank": 0, "seq": 1, "op": "aten::copy_", "out": "self", "into": into,
+         "cover": {"stride": [8, 1], "offset": 16, "rows": 4}}]
+    sources = wires.of([(0, ev[3]["in"]["input"])])
+    assert [s["seq"] for s in sources] == [2, 1], "`of` lists a source per call"
+    w = stage.wiring({"A": {"gate": [{"key": [0, 3, 0], "sources": sources}]}})
+    assert (w["unproved_calls"], w["advice_bits"], w["gap_bits"]) == ({"aten::copy_": 1}, 0, 0)
+
+
+def test_a_call_that_passes_its_inputs_bytes_on_is_passed_over_and_dense_fa3_is_no_populations(mixed) -> None:
+    stage, cap, wires = mixed
+    ev = cap.events[0]
+    sparse = wires.source(0, ev[6]["in"]["self"])
+    assert (sparse["kind"], sparse["seq"], sparse["op"]) == ("block", 4, "_vllm_fa3_C::fwd"), "aten::to only passed it on"
+    dense = wires.source(0, ev[7]["in"]["self"])
+    assert (dense["kind"], dense["seq"]) == ("call", 0), "copy_ passed FA3's bytes on; dense FA3 is committed, not proved"
+    only = wires.source(0, ev[9]["in"]["self"])
+    assert (only["kind"], only["seq"], only["op"]) == ("call", 8, "aten::to"), "no earlier call output them"
+    gated, other, _ = stage.op_coverage(cap)
+    assert (gated.get("_vllm_fa3_C::fwd"), other.get("_vllm_fa3_C::fwd")) == (1, 1)
 
 
 def test_a_parameter_is_registered_and_a_gap_input_counted_at_its_width(step) -> None:

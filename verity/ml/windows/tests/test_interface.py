@@ -280,6 +280,17 @@ def test_the_verifiers_window_is_the_circuit_records(templates):
                                       "out_rows": [[V2, [0]]], "reads": "inline"}
 
 
+def test_a_templated_statement_is_recorded_by_its_layout_and_a_flat_one_by_its_reads():
+    """A template whose unit is a templated statement records its layout mode and ``structural`` in place of ``reads``, as
+    Flock's `UnitStager` takes the one or the other; a flat one keeps ``reads``."""
+    win = I.Window(I.Circuit("rec", ((COORD, 3), (ACC, 2))), RUN, LAW, 4)
+    rows = {t: dict(zip(("in_rows", "out_rows"), I.unit_rows(fn))) for t, fn in ((TID, COORD), (AID, ACC))}
+    sts = {TID: {**rows[TID], "layout": "iv/hybrid/4", "structural": True}, AID: {**rows[AID], "reads": "slots"}}
+    doc = json.loads(I.circuit_bytes(I.circuit_record(win.window, "rec", [(TID, 3), (AID, 2)], sts)))
+    assert {t: {k: v for k, v in st.items() if k not in ("in_rows", "out_rows")} for t, st in doc["statements"].items()} == {
+        TID: {"layout": "iv/hybrid/4", "structural": True}, AID: {"reads": "slots"}}
+
+
 def test_a_circuit_record_its_templates_dont_make_is_refused():
     win = I.Window(I.Circuit("rec", ((COORD, 10),)), RUN, LAW, 4)
     doc = json.loads(I.circuit_bytes(win.circuit_record()))

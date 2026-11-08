@@ -339,7 +339,7 @@ def test_the_registered_reads_message_round_ports_are_the_statements(tmp_path):
 def _l16_h1(d: Path, n: int, name: str | None = None) -> Path:
     """`RecOpen{16, 1}` over ``n`` openings (under ``name``, else `rec-open/l16-h1`) as `compose` writes it under its population
     program's partition, staged in ``d`` (`_staged`): the verifier's own bindings of it."""
-    from verity.core.protocols.sampled_proofs.one_stage import partition as P
+    from verity.core.protocols.spot.one_stage import partition as P
     from verity_flock import circuit as FC
     from verity_flock import rec_open as R
 

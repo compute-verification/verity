@@ -32,8 +32,8 @@ from verity.ml.commitments.merkle import CommitmentDomain
 from verity.ml.circuits.codec import canonical_json, encode_program, program_digest
 from verity.ml.circuits.program import Program
 from verity_flock.input_sets import InputSet
-from verity.core.protocols.sampled_proofs import challenger as Ch, coins as CC
-from verity.core.protocols.sampled_proofs.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
+from verity.core.protocols.spot import challenger as Ch, coins as CC
+from verity.core.protocols.spot.one_stage import audit, draw as D, partition as P, registration as R, served as SV, verifier as V
 
 import r2_population as R2
 
@@ -193,6 +193,13 @@ def stand_in(set_dir: str) -> dict:
             "link": "provenance, not proof: vu_export read these values under run_root and replayed each bit-exact"}
 
 
+def own_challenger(env: dict | None = None, zk: bool = False) -> bool:
+    """Whether `session`, given ``env`` and ``zk``, takes its coin tree from a challenger of its own (FLOCK_CHALLENGER=1 on the
+    keyed coin tree)."""
+    senv = {**os.environ, **(env or {})}
+    return senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree")
+
+
 def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_file: Path | None = None,
             zk: bool = False, env: dict | None = None, prove_timeout: float = 3600) -> tuple[dict | None, dict | None]:
     """One live session: `serve --draw` (the verifier's side: registration, the sample, coins, the verdict) and `prove`.
@@ -209,9 +216,8 @@ def session(bin_: str, st: dict, n: int, law: str, port: int, out: Path, draw_fi
     tables = d / "tables"
     zf = ["--zk"] if zk else []
     tu = ["--tmpl-unit", str(st["tmpl_unit"])] if st.get("tmpl_unit") else []
-    senv = {**os.environ, **(env or {})}
     ch = None
-    if senv.get("FLOCK_CHALLENGER") == "1" and (zk or senv.get("FC_COINS") == "tree"):
+    if own_challenger(env, zk):
         from verity_flock import challengers as CH
         ch = CH.start(out / "challenger")
     serve_log = open(out / "serve.log", "w")
@@ -437,9 +443,10 @@ def main() -> int:
     ap.add_argument("--port", type=int, default=7511)
     ap.add_argument("--bind", action="store_true", help="run A1's M0 half: the statement binds the partition, program and unit indices")
     ap.add_argument("--statement", default=STATEMENT_ID,
-                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit and "
-                         "verity/flock-circuit+plain-leaves, and refuses a superseded one (verity/flock-circuit@967b8d06, "
-                         "for files staged at M0 68ae79f2 or later) once every check has passed")
+                    help="the Lean verifier's statement name; verify takes only verity/flock-circuit, "
+                         "verity/flock-circuit+plain-leaves and verity/flock-circuit/tmpl, and refuses a superseded one "
+                         "(verity/flock-circuit@967b8d06, for files staged at M0 68ae79f2 or later) once every check has "
+                         "passed")
     ap.add_argument("--binding", default=STAND_IN_BINDING, choices=sorted(STAND_IN_BINDINGS),
                     help="M0's frame-domain binding tag (verity/flock-ir-frame/binding/v1 for an M0 tree before 64-byte bindings)")
     a = ap.parse_args()
