@@ -199,6 +199,52 @@ class Gpu:
         return self.peak
 
 
+class Guard:
+    """Stops the run's process groups once the host's free memory (the cgroup's room under memory.max, else
+    MemAvailable) falls under ``floor_gib``, so host RAM ends the run as a recorded limit and not as an OOM kill."""
+
+    def __init__(self, pids: list[int], floor_gib: float, every: float = 1.0) -> None:
+        self.pids, self.floor, self.hit, self.low_gib = pids, floor_gib * 2**30, None, None
+        self._stop = threading.Event()
+        self._every = every
+        self._t = threading.Thread(target=self._run, daemon=True)
+        self._t.start()
+
+    @staticmethod
+    def free() -> float | None:
+        try:
+            rel = Path("/proc/self/cgroup").read_text().strip().split("::", 1)[1]
+            d = Path("/sys/fs/cgroup") / rel.lstrip("/")
+            cap = (d / "memory.max").read_text().strip()
+            if cap != "max":
+                return int(cap) - int((d / "memory.current").read_text())
+        except (OSError, IndexError, ValueError):
+            pass
+        try:
+            return int(next(x for x in Path("/proc/meminfo").read_text().splitlines()
+                            if x.startswith("MemAvailable")).split()[1]) * 1024
+        except (OSError, StopIteration):
+            return None
+
+    def _run(self) -> None:
+        while not self._stop.is_set():
+            free = self.free()
+            if free is not None:
+                self.low_gib = min(self.low_gib if self.low_gib is not None else 1e18, free / 2**30)
+                if free < self.floor and self.hit is None:
+                    self.hit = time.time()
+                    for pid in self.pids:
+                        try:
+                            os.killpg(pid, signal.SIGTERM)
+                        except ProcessLookupError:
+                            pass
+            self._stop.wait(self._every)
+
+    def stop(self) -> None:
+        self._stop.set()
+        self._t.join()
+
+
 def cgroup() -> dict:
     """The job's cgroup v2 memory peak, OOM kills and CPU seconds, where readable."""
     out = {}
@@ -294,6 +340,7 @@ def run(a) -> int:
     readers = [threading.Thread(target=read, args=(i, p), daemon=True) for i, p in enumerate(provers)]
     for r in readers:
         r.start()
+    guard = Guard([p.pid for p in provers] + [p.pid for p in serves.values()], a.mem_floor)
     timed_out = False
     for p in provers:
         try:
@@ -312,6 +359,7 @@ def run(a) -> int:
             p.wait(timeout=60)
     for r in readers:
         r.join(timeout=60)
+    guard.stop()
     for f in logs.values():
         f.close()
     samples = busy.stop() if busy else []
@@ -328,6 +376,8 @@ def run(a) -> int:
     rec = summarize(lives, samples, types, K, warm, a.sessions)
     rec |= {"provers": K, "verify_ahead": ahead, "sessions": a.sessions, "warm": warm, "cpu": a.cpu, "plain": a.plain,
             "timed_out": timed_out, "rc": [p.returncode for p in provers], "wall_s": round(time.time() - t_start, 3),
+            "host_limit": {"stopped_at_s": guard.hit and round(guard.hit - t_start, 1), "floor_gib": a.mem_floor,
+                           "min_free_gib": guard.low_gib and round(guard.low_gib, 1)},
             "types": {t: {k: v[k] for k in ("c", "full", "k_log", "rb")} for t, v in types.items()},
             "host_peak_gib": [round(x / 2**20, 2) for x in host_kb], "verifiers_peak_gib": round(serve_kb / 2**20, 2),
             "gpu_peak_mib": {str(p.pid): gpu_peak.get(p.pid) for p in provers}, "gpu_peak_all_mib": gpu_peak,
@@ -460,6 +510,7 @@ def main() -> int:
     ap.add_argument("--warm", type=int, default=0, help="each prover's warm sessions (at least one a type)")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--deadline", type=float, default=3 * 3600, help="seconds before the provers are stopped")
+    ap.add_argument("--mem-floor", type=float, default=8.0, help="GiB of free host memory under which the run is stopped")
     ap.add_argument("--bin")
     ap.add_argument("--cpu", action="store_true", help="the CPU prover (no --gpu, no device sampling)")
     ap.add_argument("--plain", action="store_true", help="Flock's plain path, a comparison (no --zk, FC_COINS=tree)")
