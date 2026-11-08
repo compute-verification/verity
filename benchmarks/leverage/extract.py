@@ -296,10 +296,13 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
               read column i of E from their half-difference over v. Paired faults ±δ at coordinate i of the residual
               stream after the last layer (δ half the smaller of its box and the boxes' median, well inside the
               norm's linear range) move the final state by 2 δ g_i / σ along e_i, σ the stream's scale, which the
-              same estimate reads: g up to one scale, signs included. Then b, under LayerNorm: each honest final
-              state h read through the estimate has |(h - b) / g|^2 the same, linear in b / g^2 given g; the fit
-              leaves b free along g, which only shifts a state along 1, which LayerNorm's centring removes. The
-              scale makes those states' mean square 1."""
+              same estimate reads: g up to one scale, signs included. Their half-sum at coordinate i is b_i, since
+              the normalized coordinate i sits near 0 there, up to a multiple of g that only shifts a state along
+              1, which LayerNorm's centring removes. The scale makes honest final states read through the estimates
+              have mean square 1, over the coordinates whose g clears 4 times its read noise (the same faults'
+              off-diagonal spread): a g lost in noise (GPT-2 has four under 0.01) would swamp it.
+              `b_offset_mse` is b's error in the state's units, (b_hat - b) / g off that multiple, over those
+              coordinates."""
     E = lm.E.float()
     V, d = E.shape
     L = lm.spec.layers
@@ -350,17 +353,16 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
             A = torch.cat([col, torch.ones(len(T), 1, dtype=torch.float64)], 1)
             dh = torch.linalg.lstsq(A, (obr[prec][0] - obr[prec][1]).T).solution[:d]
             g_hat = dh.diagonal() / (2 * deltas)
+            noise = dh[~torch.eye(d, dtype=torch.bool)].view(d, d - 1).std(1) / (2 * deltas)
+            R = g_hat.abs() > 4 * noise
+            b_hat = torch.zeros(d, dtype=torch.float64)
+            if ln:
+                b_hat = torch.linalg.lstsq(A, ((obr[prec][0] + obr[prec][1]) / 2).T).solution[:d].diagonal().clone()
             Z = H @ E[T].double().T
             if prec == "bf16":
                 Z = Z.float().to(torch.bfloat16).double()
             Hh = torch.linalg.lstsq(A, (Z - Z[:, :1]).T).solution[:d].T
-            b_hat = torch.zeros(d, dtype=torch.float64)
-            if ln:
-                F = torch.cat([2 * Hh, torch.ones(len(Hh), 1, dtype=torch.float64)], 1)
-                ridge = torch.eye(d + 1, dtype=torch.float64)[:d] * math.sqrt(1e-6 * float(F[:, :d].pow(2).sum()) / d)
-                rhs = torch.cat([(Hh / g_hat).pow(2).sum(1, keepdim=True), torch.zeros(d, 1, dtype=torch.float64)])
-                b_hat = torch.linalg.lstsq(torch.cat([F, ridge]), rhs).solution[:d, 0] * g_hat.pow(2)
-            xs = (Hh - b_hat) / g_hat
+            xs = (Hh[:, R] - b_hat[R]) / g_hat[R]
             if ln:
                 xs = xs - xs.mean(1, keepdim=True)
             g_hat = g_hat * xs.pow(2).mean().sqrt()
@@ -368,11 +370,12 @@ def peel(lm: LM, tok, pre: Cache, last: torch.Tensor, t0: int, h0: torch.Tensor,
         diag = {"W_mse_over_var": scaled_mse(W, W_true)}
         if g_hat is not None:
             E_rel = E[T].double() - E[T[0]].double()
-            diag |= {"E_mse_over_var": scaled_mse(col, E_rel), "g_mse_over_var": scaled_mse(g_hat, g.double())}
+            diag |= {"E_mse_over_var": scaled_mse(col, E_rel), "g_mse_over_var": scaled_mse(g_hat, g.double()),
+                     "g_unresolved": int((~R).sum())}
             if ln:
                 e = b_hat - b.double()
-                diag["b_mse_over_var_off_g"] = float((e - (e @ g_hat) / (g_hat @ g_hat) * g_hat).pow(2).mean()
-                                                     / b.double().pow(2).mean())
+                e = (e - (e @ g_hat) / (g_hat @ g_hat) * g_hat) / g.double()
+                diag["b_offset_mse"] = float(e[R].pow(2).mean())
         res[prec] = {"W": W, "beta": beta} | diag
     if max(e["W_mse_over_var"] for e in res.values()) > 0.5:
         raise SystemExit(f"--peel {a.peel}: E diag(g) read no better than its variance, the peel is broken: "
