@@ -457,7 +457,6 @@ def _install_sampler() -> None:
 
 
 def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
-    import torch
     d = S.dir / "rank0" / f"step{step}" / "sampler"
     d.mkdir(parents=True, exist_ok=True)
     if rec.get("topp_out") is not None:
@@ -467,7 +466,7 @@ def _write_sampler(step: int, rec: dict, req_ids: list[str]) -> None:
     for k, t in rec.items():
         if t is None:
             continue
-        raw = t.contiguous().reshape(-1).view(torch.uint8).numpy().tobytes()
+        raw = _flat_bytes(t).numpy().tobytes()
         (d / f"{k}.bin").write_bytes(raw)
         doc["tensors"][k] = {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(raw).hexdigest()}
     (d / "sampler.json").write_text(json.dumps(doc, indent=1, sort_keys=True))
@@ -745,7 +744,6 @@ def _param_digests(names: Any, cache: dict | None) -> dict:
     """Each named parameter's shape, dtype and SHA-512 over its bytes (``params.json``), on ``--hash-threads`` threads. With
     ``cache`` (the engine's, `_State.digests`) each tensor is hashed once for the engine's life, and again only if its
     storage, shape, strides, dtype or version counter changed, which serving never does."""
-    import torch
     from concurrent.futures import ThreadPoolExecutor
 
     def digest(name: str) -> tuple[str, dict]:
@@ -754,7 +752,7 @@ def _param_digests(names: Any, cache: dict | None) -> dict:
         hit = cache.get(name) if cache is not None else None
         if hit is not None and hit[0] == key:
             return name, hit[1]
-        raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+        raw = _flat_bytes(t).cpu().numpy()
         rec = {"shape": list(t.shape), "dtype": str(t.dtype), "sha512": hashlib.sha512(memoryview(raw)).hexdigest()}
         S.add("params_hashed", 0.0, raw.nbytes)
         if cache is not None:
@@ -894,7 +892,6 @@ def _hash_job(raw: Any, ref: dict, write: tuple[Path, str] | None, check: str | 
 
 def _host_copy(v: Any, ref: dict, write: bool, check: str | None = None) -> None:
     """``v``'s bytes on the host, once the hashing pool has room (`_Hasher`), hashed there (`_hash_job`)."""
-    import torch
     if S.hasher is None:
         S.hasher = _Hasher(S.threads, S.host_budget)
     nb = v.numel() * v.element_size()
@@ -903,7 +900,7 @@ def _host_copy(v: Any, ref: dict, write: bool, check: str | None = None) -> None
     S.add("host_wait", time.time() - t)
     try:
         t = time.time()
-        x = v.detach().contiguous().reshape(-1).view(torch.uint8)
+        x = _flat_bytes(v)
         raw = (x.cpu() if x.device.type == "cuda" else x.clone()).numpy()
         S.add("host_copy", time.time() - t, nb)
     except BaseException:
@@ -912,10 +909,19 @@ def _host_copy(v: Any, ref: dict, write: bool, check: str | None = None) -> None
     S.hasher.run(nb, _hash_job, raw, ref, (S.root(), S.step_keep) if write else None, check)
 
 
+def _flat_bytes(t: Any) -> Any:
+    """``t``'s bytes in row-major order, as a flat uint8 view. ``contiguous`` leaves a one-element view its stride (a size-1
+    dimension is contiguous under any stride), which a uint8 ``view`` refuses, so such a tensor is copied."""
+    import torch
+    flat = t.detach().contiguous().reshape(-1)
+    if flat.numel() and flat.stride(0) != 1:
+        flat = flat.clone(memory_format=torch.contiguous_format)
+    return flat.view(torch.uint8)
+
+
 def _cache_ref(v: Any, d: dict) -> dict:
     """A whole cache's reference, named by `chunks_sha512` on its device (or on the host where no kernel builds)."""
-    import torch
-    flat = v.detach().contiguous().reshape(-1).view(torch.uint8)
+    flat = _flat_bytes(v)
     if flat.numel() and flat.data_ptr() % 8:
         flat = flat.clone()
     ref = {**d, "chunk": CHUNK}
@@ -1129,7 +1135,6 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
     """The step's interior root over every rank's, then the coins, flipped by rank 0 only after every rank's root is fixed, and
     the layers they open: ``--open`` (default ``dense:1,moe:1``) layers of each kind, whose parameters each rank
     writes under ``open/`` (the bytes its sampled proof blocks read). Written to ``commit.json``."""
-    import torch
     import torch.distributed as dist
     group = None
     try:
@@ -1191,7 +1196,7 @@ def _commit_and_open(runner: Any, d: Path, rank_root: str) -> dict:
         for name in names:
             t = S.param_of[name]
             tw = time.time()
-            raw = t.detach().contiguous().reshape(-1).view(torch.uint8).cpu().numpy()
+            raw = _flat_bytes(t).cpu().numpy()
             (od / f"{name}.bin").write_bytes(memoryview(raw))
             S.add("write_params", time.time() - tw, raw.nbytes)
             (files if any(m in f".{name}" for m in marks) else small)[name] = {**digests[name], "stride": list(t.stride())}

@@ -102,7 +102,7 @@ theorem Pr_fiber_le {α A B : Type} [Fintype α] [Fintype A] [Fintype B] [Nonemp
     (p : α → Prop) (h : ∀ x y, p x → p y → (e x).2 = (e y).2 → (e x).1 = (e y).1) :
     Claims.Pr p ≤ 1 / Fintype.card A := by
   classical
-  unfold Claims.Pr
+  unfold Claims.Pr Claims.prUniform
   have hc : (Finset.univ.filter p).card ≤ Fintype.card B := by
     rw [← Finset.card_univ (α := B)]
     refine Finset.card_le_card_of_injOn (fun x => (e x).2) (fun _ _ => Finset.mem_coe.2 (Finset.mem_univ _)) ?_

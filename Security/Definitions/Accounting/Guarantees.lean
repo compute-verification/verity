@@ -18,7 +18,7 @@ public import Definitions.Accounting.Guarantees.Confidence
 public import Definitions.Accounting.Guarantees.FillerLuck
 public import Definitions.Accounting.Guarantees.FpG1
 public import Definitions.Accounting.Guarantees.HMu
-public import Definitions.Accounting.Guarantees.DeclaredCircuit
+public import Definitions.Accounting.Guarantees.RegisteredCircuit
 public import Definitions.Accounting.Guarantees.Gates
 public import Definitions.Accounting.Guarantees.Headline
 public import Definitions.Accounting.Guarantees.HeadlineDc

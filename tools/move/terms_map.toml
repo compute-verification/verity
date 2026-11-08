@@ -269,11 +269,12 @@ scope = "prose"
 "WrongUnit" = "IncorrectBlock"
 "incorrect_units" = "incorrect_blocks"
 
-# --- acceptance probability, P_a (was the escape probability); "escape" alone keeps its other senses
-"escape probabilities" = "acceptance probabilities"
-"escape probability" = "acceptance probability"
-"Escape probabilities" = "Acceptance probabilities"
-"Escape probability" = "Acceptance probability"
+# --- miss probability, P_a (was the escape probability, then its acceptance probability); "escape" alone keeps its
+# other senses, and "acceptance probability" its knowledge-soundness one, so neither is a word here
+"escape probabilities" = "miss probabilities"
+"escape probability" = "miss probability"
+"Escape probabilities" = "Miss probabilities"
+"Escape probability" = "Miss probability"
 "effEscape" = "effAcceptProb"
 
 # --- ε_bind, the binding error (was δ_link, the link term)
