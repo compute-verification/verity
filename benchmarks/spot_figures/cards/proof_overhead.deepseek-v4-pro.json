@@ -4,7 +4,7 @@
  "model": "DeepSeek-V4-Pro",
  "status": "measured",
  "provisional": true,
- "source": "C-Flock --zk on an H200 without the ZK server's send check, the witness on the device, warm, statements of 1,024 and 2,048 blocks (benchmarks/flock_s8_block); a stand-in, none of DeepSeek-V4-Pro's own proof blocks, and the vertical line its marginal price until DeepSeek-V4-Pro's blocks are measured",
+ "source": "Flock --zk on an H200 without the ZK server's send check, the witness on the device, warm, statements of 1,024 and 2,048 blocks (benchmarks/flock_s8_block); a stand-in, none of DeepSeek-V4-Pro's own proof blocks, and the vertical line its marginal price until DeepSeek-V4-Pro's blocks are measured",
  "runs": ["r20261105-042916-546a", "r20261105-044913-6ff9", "r20261105-050310-c09e"],
  "owner": "@proofs",
  "value": {
