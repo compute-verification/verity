@@ -8,7 +8,7 @@ pass the honest run through every check and reject the selftest build's forgerie
 output claim, a flipped internal bit). The verifier holds no program for a proof block (`stage.py` says why), so it then
 refuses the honest run for that alone (`ProvedScope.NO_PROGRAM`), which is what `summarize.py` passes it on.
 
-Two kinds of type (`stage.py`'s docstring has both):
+Three kinds of type (`stage.py`'s docstring has each):
 
 - a Definition proved as one proof block (`UNITS`: the FP8 GEMM coordinate with scale groups of 128, the W8A8 GEMM
   coordinate), staged by `class_statement.stage_unit` on PoUW's row convention, each input's output held to the Program's
@@ -16,7 +16,9 @@ Two kinds of type (`stage.py`'s docstring has both):
 - a Q_word class of a word Definition (`PARTS`: router, MoE tiles, SiLU-mul with its scale-group quantization, RMSNorm, RoPE,
   DSA indexer, sparse MLA head, ...), the class of rank `C` by word gates (`TYPE:C=1`), staged by `class_statement.stage` with every input's
   own `sha512/row/v1` rows; the circuit binds the Q_word partition, and Lean gets its own copy of the partition object
-  (`--partition`) and takes the proof blocks as stated.
+  (`--partition`) and takes the proof blocks as stated;
+- a block type of the serving rows by its census name (`CENSUS`: the FP8 group quantization, `gq:K=384` a column block of
+  K = 6144), one whole Definition a proof block, staged like a `UNITS` type on bf16 rows, held to the Program's reference.
 
 Files:
 

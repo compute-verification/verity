@@ -115,14 +115,13 @@ commitments' salts and the ZK server's tape.
 - **Why per test, and the rest.** Any source with fewer outcomes than byte strings refutes the every-event form, as
   Linux's CRNG does past 32 bytes: its zero idealizes the CSPRNG, and `η` is the CSPRNG's advantage against the
   theorem's test. `assumption-notes/a3-uniform-bytes.md` has the argument, why A3 isn't about `IO.getRandomBytes`, its
-  tie to the verifier, its scope (the masks included), what is outside it, why no test runs, and where it is used,
-  salts included.
+  tie to the verifier, its scope (masks included), what is outside it, why no test runs, and where it is used.
 - **Upstream:** watch entry `A3-uniform-bytes`.
 
 **A6. The challenger's round coins are independent uniform** (`uniform/flock-coin-server`), for the session's
 coins.
 
-- **Statement.** Each round's coins are uniform field elements, independent of every earlier round's and sampled after the
+- **Statement.** Each round's coins are uniform field elements, independent of every earlier round's, sampled after the
   prover's message of that round. The model's session flips its coins exactly so (the games' coin nodes), so A6 is what
   makes the model's coins the run's.
 - **Why it is not a `Prop`.** The session game flips its own coins: no theorem reads a byte source for the coins it could be a
@@ -409,7 +408,6 @@ ArkLib (`README.md` §1.6; watch entries `A1-johnson-mca` and `udr-mca`).
 | `Analysis.KnowledgeSound` | `ε_ks` | the session accepts while extraction of a sampled proof block (picked before the session's first coin) fails | `table_knowledge_sound_joint` (`README.md` §1.3), after Jensen over the prover's states |
 | `Analysis.BindSound` | `δ_link` | extraction succeeds but differs from `X` on the unit's committed inputs and outputs | compiled layer: `flock_batched_linkSoundE` (`SHA512CRExpected`, `ValueBinding`) |
 | `Partition.AnchorsSound` | `δ_in` | the session accepts while the committed inputs differ from the anchors' values | `registered_weights` (`README.md` §1.3); at the oracle layer, `InputsSound` (`oracle_anchorsSound`) |
-| `Partition.AnchorsSound₂` | `δ_in` | two-stage audits: for every strategy, the session accepts while the committed coarse trace's inputs differ from the anchors' values | as `AnchorsSound`, for the two-stage game |
 | `Partition.InputsSound` | `δ_in` | oracle layer: the session accepts inputs other than the anchors' with probability at most `δ_in` | **proved for Flock** (`flock_inputs_sound`, `2^-205`), given `InputsLoweringSound` |
 | `Partition.InputsLoweringSound` | — | inputs other than the anchors' leave some session table (the always-proved input statement) unsatisfied | the input unit's lowering (level 3) |
 | `Partition.SessionSound` | `ε` | oracle layer only: a session with a sampled incorrect proof block accepts with probability at most `ε` | **proved for Flock** (`flock_session_sound`, `2^-205`), from `table_value_sound`, `execArith_correct` and the lowering |

@@ -39,6 +39,7 @@ rayon = { workspace = true }
 flock-cuda-ffi = { path = "../flock-cuda-ffi", optional = true }
 getrandom = "0.3"
 rand_chacha = "0.9"
+libc = "0.2"
 
 [lints]
 workspace = true

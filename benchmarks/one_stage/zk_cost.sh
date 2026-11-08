@@ -12,6 +12,7 @@
 #      ZK_SM (the prover's target, from nvidia-smi unless given)  ZK_CARD=rtx-pro-6000-server (the card whose datasheet
 #      peak divides; the overhead step refuses one whose arch isn't the run's GPU's; an H200: ZK_CARD=h200-sxm-141gb)
 #      LEASE_MAX_MIN=30 (one GPU lease a point)
+#      ZK_VERIFY=0 (no Lean verify: the sessions' prices alone, each accepted by its ZK server)
 #      FLOCK_WORK=/workspace/jobs/proof-throughput (the CUDA prover's build and venv, as proof_throughput's job.sh keeps them)
 #      PT_WORK=/workspace/cache/proof-throughput (the Lean verifier's build, as its verify.sh keeps it)
 # Kept in $OUT: the records (stage, prove and verify .jsonl), the fit (fit.json, fit.md, observations.json) and the logs;
@@ -112,9 +113,11 @@ if [ "$rc" = 0 ]; then
       --cold "${ZK_COLD:-2}" --warm "${ZK_WARM:-1}" --runs "${ZK_RUNS:-3}" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
     [ "${PIPESTATUS[0]}" = 0 ] || rc=1
   done
-  log "prove: exit $rc; verify"
-  ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
-  [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+  if [ "${ZK_VERIFY:-1}" = 1 ]; then
+    log "prove: exit $rc; verify"
+    ZK verify --lean "$LEAN" 2>&1 | tee -a "$O/zk.log" | grep ZKCOST
+    [ "${PIPESTATUS[0]}" = 0 ] || rc=1
+  fi
   if [ -n "${ZK_UNITS:-}" ]; then ZK overhead --card "${ZK_CARD:-rtx-pro-6000-server}" 2>&1 | tee -a "$O/zk.log"
   else ZK fit 2>&1 | tee -a "$O/zk.log"; fi
 fi
