@@ -1305,11 +1305,11 @@ mod tests {
             }
             let in_words = ins.len();
             let net = IrUnitNet { name: "t".into(), useful, const_pos: useful - 1, in_groups: ins, out_groups: outs, in_words,
-                                  out_cols: vec![], a, b, unit_log: k.trailing_zeros() as usize, sha256: [0; 32], leaves: None,
-                                  cut: None, order: None, flat: Default::default() };
-            let (x, y) = (schedule(&net), schedule_of(&net, &ra, &rb));
+                                  out_cols: vec![], a: ra, b: rb, unit_log: k.trailing_zeros() as usize, sha256: [0; 32], leaves: None,
+                                  cut: None, order: None, pass: Default::default() };
+            let (x, y) = (schedule(&net), schedule_of(&net, &a, &b));
             assert_eq!((x.levels0, &x.late_rows, &x.cut_rows, &x.level_off, &x.order), (y.levels0, &y.late_rows, &y.cut_rows, &y.level_off, &y.order),
-                       "net {seed}: the schedule from Rows");
+                       "net {seed}: the schedule from vectors");
             assert!(x.level_off.len() > 3, "net {seed}: a schedule of under three levels");
             assert_eq!(x.cut_rows.is_empty(), net.in_groups.len() == 1, "net {seed}: the cut unit's schedule is not two-phase");
         }
