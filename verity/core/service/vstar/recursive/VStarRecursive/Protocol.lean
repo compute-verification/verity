@@ -1,6 +1,6 @@
 /-
 Sampled proofs' recursive audit (`verity/sampled-proofs/recursive/v1`), a `Core.BlobProtocol`: one-stage v1's audit
-(`SampledProofs.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
+(`Spot.OneStage.checkLive`) with its one verdict of record computed by V*'s compiled check, the recursive
 verifier the auditor runs (`flock-verify verify --zk` once per V* part with that part's recursive inputs), on the blobs.
 
 * **params**: v1's, plus `recursive`, exactly `{"circuit", "draw", "parts", "public", "registration"}`: the SHA-512s of
@@ -46,16 +46,16 @@ Without blobs (`toProtocol`) every check rejects: no blob holds the inner circui
 module
 
 public import CoreProtocol.Blobs
-public import SampledProofs.ChallengerInnerTrees
+public import Spot.ChallengerInnerTrees
 public import Flock
 public import Flock.RecLinkPart
-public import SampledProofs.OneStageZk
+public import Spot.OneStageZk
 import all Init.Data.Ord.String
 import all Lean.Data.Json.Basic
 meta import CoreProtocol.Blobs
-meta import SampledProofs.ChallengerInnerTrees
+meta import Spot.ChallengerInnerTrees
 meta import Flock
-meta import SampledProofs.OneStageZk
+meta import Spot.OneStageZk
 
 @[expose] public section
 set_option backward.privateInPublic true
@@ -65,7 +65,7 @@ namespace VStar.Recursive
 
 open Lean (Json)
 open Flock (V)
-open SampledProofs
+open Spot
 
 def PROTOCOL : String := "verity/sampled-proofs/recursive/v1"
 /-- The statement every V* part's session proves. -/
