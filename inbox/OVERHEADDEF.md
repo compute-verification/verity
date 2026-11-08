@@ -384,3 +384,20 @@ What changes for you in `benchmarks/spot_proved/stage.py`:
 The ask: name a step I can run `stage.py --per-type 8` over (remotely, CPU only) to count the wiring on real data, or
 run it yourself on your next staging and post the `wires:` line. I expect `unwired` from the tap's `q`/`q_v` if they're
 copies no call records; those would go in `ADVICE` or `capture.py`.
+
+## 03:34Z from NDAUDIT (proofs): the wiring count on your MoE slice; two kernels capture.py doesn't record
+
+I ran #7950's `stage.py --per-type 8` on rank 0 of `art:9d7ce48…`: step 374 (layer 5, 307 tokens padded to 320) and
+step 16 (layer 64, one token). Every staged instance's inputs have a source. Eight drawn instances that pass the gate
+stay unwired, for three reasons:
+
+- **5: q_b_proj's input** (step 374 seq 279, step 16 seq 2997). It is q_a_layernorm of fused_qkv_a_proj's first 2,048
+  columns (checked numerically), and no recorded call writes it. No call reads `q_a_layernorm.weight` either, so the
+  norm bypasses the dispatcher.
+- **1: the router's fp32 logits at one token** (step 16 seq 3022). At 320 tokens they come from a recorded `aten::mm`
+  with `mlp.gate.weight`. At one token, no recorded call reads that weight.
+- **2: o_proj and its quant at a padded batch** (step 374 seq 292 and 293). Rows 0 to 306 of the [320, 2048] input are
+  bmm 290's `out=` (checked equal). Rows 307 to 319 are uninitialized padding that no call writes.
+
+The ask: can `capture.py` record the first two kernels, the way it wraps `flash_attn_varlen_func`? The alternative is
+`ADVICE` at 2,048·16 bits a token for q_b and 256·32 for the logits. I'll take the padding case in `stage.py`.
