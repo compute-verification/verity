@@ -101,7 +101,8 @@ theorem read_of_check {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht
     (hB : Built (Flock.HmOut.unrolled ct).unit) :
     ∃ (run : (List Lin × Lin) × St)
       (hr : HoldsRead (Rows.ofNet hB) (readIn H (Hash.Tree.depth V)) run.2 (run.1.1 ++ [run.1.2])),
-      ReadSound pinnedKey V H hr ∧ (∀ x < readIn H (Hash.Tree.depth V), (hr.φ x).val = x) ∧
+      ReadSound pinnedKey V H hr ∧ run.1.1.length = 16 * H ∧
+        (∀ x < readIn H (Hash.Tree.depth V), (hr.φ x).val = x) ∧
         ∀ j < 16 * H + 1, (hr.out j).val = Discharge.Layout.outCol (Flock.HmOut.unrolled ct) (j / 16) (j % 16) := by
   have hc := checked_of_check hcheck
   have hzero := lay_zero V H
@@ -126,7 +127,7 @@ theorem read_of_check {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht
   refine ⟨(((List.range (16 * H)).map fun j => Lin.var (readIn H (Hash.Tree.depth V) + j),
       Lin.var (readIn H (Hash.Tree.depth V) + 16 * H)), ⟨readIn H (Hash.Tree.depth V) + 16 * H + 1, []⟩),
     ⟨readPhi (Rows.ofNet hB) (readIn H (Hash.Tree.depth V)) (lay V H).oStart,
-      fun j => readCol (Rows.ofNet hB) ((lay V H).oStart + j), ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_⟩
+      fun j => readCol (Rows.ofNet hB) ((lay V H).oStart + j), ?_, ?_, ?_, ?_⟩, ?_, ?_, ?_, ?_⟩
   · intro v hv
     show (readCol (Rows.ofNet hB) (if v < readIn H (Hash.Tree.depth V) then v else _)).val < _
     rw [if_pos hv, readCol_val (show v < (Rows.ofNet hB).w by omega), hnIn]
@@ -232,6 +233,7 @@ theorem read_of_check {V H : ℕ} {ct : Flock.Circuit} {tu : Flock.TmplUnit} (ht
         simpa using hv
       rw [htok, hopen, hroot, hdom]
       exact hok hv'
+  · simp
   · intro x hx
     show (readCol (Rows.ofNet hB) (if x < readIn H (Hash.Tree.depth V) then x else _)).val = x
     rw [if_pos hx, readCol_val (show x < (Rows.ofNet hB).w by omega)]
