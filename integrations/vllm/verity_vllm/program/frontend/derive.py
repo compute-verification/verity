@@ -817,7 +817,7 @@ def _translate(ctx: Ctx) -> Coll:
         v = ctx.val(a)
         if isinstance(v, (int, float, bool)):
             refuse("side_input", out_node, None, f"returned Python scalar {v!r}; outputs must be values")
-        outs.append(ctx.coll(a, "returned value"))
+        outs.append(v.returned(ctx, a) if hasattr(v, "returned") else ctx.coll(a, "returned value"))
     if not outs:
         refuse("shape", out_node, None, "the source returns nothing")
     # returned inputs / repeated returns are representable (a return is a reference sequence) — record them explicitly

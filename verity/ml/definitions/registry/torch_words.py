@@ -8,6 +8,8 @@ k-th smallest value), each as torch's CUDA kernels compute it, which is torch CP
     I64ToU8_v1      (t: I64) -> U8                the low byte: C++'s conversion to uint8_t, modulo 2^8
     U8ToI64_v1      (t: U8) -> I64                zero-extended
     I64ToF32Rn_v1   (t: I64) -> F32               ``cvt.rn.f32.s64`` (and x86's ``cvtsi2ss``): round to nearest even
+    F32ToI64Rz_v1   (x: F32) -> I64               ``cvt.rzi.s64.f32``: truncated toward zero, from 2^63 up INT64_MAX, below -2^63
+                                                  INT64_MIN, a NaN 0
     F32ToF16Rn_v1   (x: F32) -> F16               ``__float2half``, ``cvt.rn.f16.f32``: ties to even, subnormals kept, overflow to
                                                   infinity, every NaN 0x7FFF
     F16ToF32_v1     (h: F16) -> F32               ``__half2float``: exact, every NaN 0x7FFFFFFF
@@ -19,7 +21,8 @@ k-th smallest value), each as torch's CUDA kernels compute it, which is torch CP
 (I64 is ``Value<64>``, U8 ``Value<8>``, F16 ``Value<16>``, F32 and U32 ``Value<32>``, BIT ``Value<1>``.)
 
 The f16 conversions' NaN words are the GPU's: torch CPU's f32 -> f16 keeps a NaN's payload in its F16C vector body and makes it
-0x7E00 in its scalar tail, and its f16 -> f32 keeps the payload, quieting a signaling NaN in the vector body only.
+0x7E00 in its scalar tail, and its f16 -> f32 keeps the payload, quieting a signaling NaN in the vector body only.  So is the
+truncation's saturation: torch CPU's (x86's ``cvttss2si``) is INT64_MIN for a NaN and from 2^63 up.
 """
 from __future__ import annotations
 
@@ -28,8 +31,8 @@ import numpy as np
 from verity.ml.circuits.defs import primitive
 from verity.ml.circuits.types import Value
 
-__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32", "SelectI64",
-           "U8ToI64", "TORCH_WORDS", "f32_rn_of_int"]
+__all__ = ["F16ToF32", "F32OrderKey", "F32ToF16Rn", "F32ToI64Rz", "I64Add", "I64Le", "I64ToF32Rn", "I64ToU8", "OrderKeyF32",
+           "SelectI64", "U8ToI64", "TORCH_WORDS", "f32_rn_of_int"]
 
 I64, U8, F16, F32, BIT = Value(64), Value(8), Value(16), Value(32), Value(1)
 M64, M32 = (1 << 64) - 1, 0xFFFFFFFF
@@ -38,6 +41,8 @@ _EXACT = ("exact-model-tested: integer arithmetic on the words, torch's on CPU a
           "(verity/ml/definitions/tests/test_torch_words.py)")
 _PTX = ("model-untested on the GPU: as the PTX ISA and torch 2.14's CUDA source define it; torch CPU agrees on every word but a "
         "NaN (verity/ml/definitions/tests/test_torch_words.py)")
+_PTX_SAT = ("model-untested on the GPU: as the PTX ISA and torch 2.14's CUDA source define it; torch CPU agrees on every word but a "
+            "NaN and from 2^63 up (verity/ml/definitions/tests/test_torch_words.py)")
 
 
 def _s64(t: int) -> int:
@@ -99,6 +104,21 @@ def _f32_nan(x: int) -> bool:
     return (x & 0x7F800000) == 0x7F800000 and (x & 0x7FFFFF) != 0
 
 
+@primitive("F32ToI64Rz", 1, [("x", F32)], I64, conformance=_PTX_SAT)
+def F32ToI64Rz(x: int) -> int:
+    """``cvt.rzi.s64.f32`` (torch's CUDA conversion to int64, and to uint8 through it): x truncated toward zero, saturated
+    (from 2^63 up, +inf too, INT64_MAX; below -2^63, -inf too, INT64_MIN); a NaN 0."""
+    x &= M32
+    if _f32_nan(x):
+        return 0
+    v = float(np.array([x], dtype=np.uint32).view(np.float32)[0])
+    if v >= 2.0 ** 63:
+        return (1 << 63) - 1
+    if v < -2.0 ** 63:
+        return 1 << 63
+    return int(v) & M64
+
+
 @primitive("F32ToF16Rn", 1, [("x", F32)], F16, conformance=_PTX)
 def F32ToF16Rn(x: int) -> int:
     """``cvt.rn.f16.f32``: x rounded to f16, ties to even, f16 subnormals kept, past 65504 (by the rounding) infinity; every NaN
@@ -135,4 +155,5 @@ def OrderKeyF32(k: int) -> int:
     return k ^ 0x80000000 if k >> 31 else k ^ M32
 
 
-TORCH_WORDS = [I64Add, I64Le, SelectI64, I64ToU8, U8ToI64, I64ToF32Rn, F32ToF16Rn, F16ToF32, F32OrderKey, OrderKeyF32]
+TORCH_WORDS = [I64Add, I64Le, SelectI64, I64ToU8, U8ToI64, I64ToF32Rn, F32ToI64Rz, F32ToF16Rn, F16ToF32, F32OrderKey,
+               OrderKeyF32]
