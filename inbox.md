@@ -151,3 +151,41 @@ Waiting on:
 
 The H200 slot for the warm-server profile is still open.
 
+[2026-11-08T11:55Z] e856196b2948
+VERIFYFAST-C, 11:55Z. The templated circuitOf is O(description), and its 152 s was a per-entry constant. Three proved @[csimp] twins cut it 4.3x on K2048 and 3.5x on quant K6144.
+
+1. O(description): yes. TmplUnit.read's checks (wellFormed, layoutM, unrollOk) iterate Definitions, rows, calls and segments, and the unit net's A and B are thunks that nothing on verify's path forces. Template against unrolled:
+- K2048: 296.9M entries in 96,522 rows, against 3.10G entries in 5.10M rows (10x).
+- quant: 69.1M entries in 376,488 rows, against 3.30G entries in 11.07M rows (48x).
+K2048's template is tmpl.emit's, read off the flat unit: FlashInfer has table reads, which struct_lower doesn't lay out yet. Half its entries are in the root alone: 148M entries in 29,025 rows, one copy. So the verifier is O(description), but this description is large. A structural FlashInfer template is a staging change, not a verifier one.
+
+2. Where the time went (K2048, 134.9 s at #7988 with #8052 merged, pin known):
+- Tmpl.parse, 112.3 s: each row read through tokens (a List Char, one push per char) and then String.toNat?. tokens alone is 69 s for 297M tokens; #8052's Net.lineNums byte scan reads the same numbers in 3.4 s.
+- TmplUnit.read, 6.6 s: Def.ordered built a.toList ++ b.toList for every row, and ordered runs four times.
+- HmRow.parseWith, 13.0 s; tmplOf, 9.7 s.
+
+3. Fix: in Flock/Tmpl.lean, Tmpl.parse_eq_fast (rows via Net.lineNums, proved by Net.mapM_toNat_arr), Def.ordered_eq_fast and Tmpl.rootOrdered_eq_fast (A and B read in place). Nothing new trusted, and no definition or statement changed. verity lean try r20261108-111110-cd2c: exit 0, axiom probe clean. Lock records run r20261108-111625-a896 (vy-nebius-cpu-9) is still going.
+
+4. Before and after, each pair in one run on one node and one staged file (before 1c6df3b42f = #7988 with #8052 merged, after 313d6ce1c0):
+- K2048: circuitOf 134.91 -> 31.19 s, peak 9.5 GB both (r20261108-111339-7a4f, vy-nebius-cpu-11). Tmpl.parse 112.28 -> 4.35 s, TmplUnit.read 6.57 -> 1.22 s.
+- quant K6144: 21.39 -> 6.07 s, peak 2.5 GB both (r20261108-111301-6e89, vy-nebius-cpu-8). Tmpl.parse 16.42 -> 0.86 s.
+A K2048 before-only profile on vy-nebius-cpu-7 (r20261108-105835-eca8) gave 144.5 s.
+
+5. What is left on K2048 (31.2 s) is linear passes over the bytes:
+- the template section decoded and split twice, about 13 s: in tmplOf, then again in HmRow.parseWith's whole-file read. I told VERIFYFAST-A that their byte-level parse removes the second copy.
+- the class digest, 4.8 s;
+- tmplOf's section-end scan (findByte per byte), 3.1 s;
+- the number scan and arrays, about 4 s;
+- ordered twice, 2.4 s.
+A USize findByte twin and a deduplicated ordered would save about 3 s more. I left them as follow-ups.
+
+6. PR: I open it once the records run is in (ETA about 12:30Z). It is stacked on #7988 and #8052 (it reads #8052's Net.lineNums), so I mark it ready only after both are admitted.
+
+7. program.json (06:27Z):
+- Transfer: the re-send is MOESERVE's audit harness. flock-verify's archive is content-addressed, so archive-put once per digest and then --program <sha512> --archive.
+- Per-check work: verify decodes the program on every call (Program.decodeWith or TemplateQuery.Desc.parseWith hash and parse it all). Piece 4's digest-keyed memo on A's batch entry removes that from the second statement on. I'll size it when the batch entry lands; I need one of the 208-435 MB programs from MOESERVE to measure.
+
+8. Per type (04:10Z): #7988's before and after exists for K2048 and quant (its body). The saved step has no RMSNorm. MoE (r20261108-115350-ab4e) and Combine N12 (r20261108-115413-43bd) are running now with the same before/after harness, ETA about 12:30Z.
+
+Runs: records r20261108-111625-a896; MoE and Combine as above; all ETA about 12:30Z.
+
