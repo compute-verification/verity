@@ -1,10 +1,10 @@
 // cuda/zerocheck_fused.cuh against round 2's fold and the tail's first lookahead (cuda-ghash/zerocheck_round2.cuh and
 // zerocheck_tail.cuh), for test_zerocheck_fused.py. zf_check draws a packed witness of 2^log_rows rows for a and b, a
-// GF(2)-linear fold table, split-eq tables and coins from seed, runs both paths with the fused kernels reading the table by
-// mode `table`, and counts the words that differ: bad[0] of round 2's 8 messages, bad[1] of the first lookahead's 8 and
-// bad[2] of its folded a and b.
+// GF(2)-linear fold table, split-eq tables and coins from seed, runs both paths with the fused kernels reading the table as
+// `table` says (fused_round2), and counts the words that differ: bad[0] of round 2's 8 messages, bad[1] of the first
+// lookahead's 8 and bad[2] of its folded a and b.
 // Built with -DZF_MAIN it is also `zerocheck_fused LOG_ROWS REPS`: one JSON line with the mean time over REPS of round 2 and
-// of the first lookahead, on round 2's tables and on the packed witness under each table mode, and the words that differ.
+// of the first lookahead, on round 2's tables and on the packed witness under each `table`, and the words that differ.
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -95,21 +95,36 @@ static void ref_lookahead(ZfCase& c) {
     launch_zerocheck_tail_lookahead(c.am, c.bm, c.ref_a, c.ref_b, c.eqlo, c.eqhi, 2, c.lobits, c.n_out / 16, c.r1, c.r2, c.s2, c.s3,
                                     c.part, c.out + 8);
 }
+// table: 0 and 1 the modes of those numbers, 4 to 7 mode 2 in chunks of that many bits
+template <int T, int C>
+static void fused(ZfCase& c) {
+    launch_zerocheck_second_round_message<T, C>(c.a, c.b, c.ft, c.eqlo, c.eqhi, c.lobits, c.n_out, c.s1, c.part, c.out);
+}
+template <int T, int C>
+static void fused_tail(ZfCase& c) {
+    launch_zerocheck_tail_lookahead_packed<T, C>(c.a, c.b, c.ft, c.got_a, c.got_b, c.eqlo, c.eqhi, 2, c.lobits, c.n_out / 16, c.r1,
+                                                 c.r2, c.s2, c.s3, c.part, c.out + 8);
+}
 static void fused_round2(ZfCase& c, int table) {
-    if (table == 0) launch_zerocheck_second_round_message<0>(c.a, c.b, c.ft, c.eqlo, c.eqhi, c.lobits, c.n_out, c.s1, c.part, c.out);
-    else if (table == 1) launch_zerocheck_second_round_message<1>(c.a, c.b, c.ft, c.eqlo, c.eqhi, c.lobits, c.n_out, c.s1, c.part, c.out);
-    else launch_zerocheck_second_round_message<2>(c.a, c.b, c.ft, c.eqlo, c.eqhi, c.lobits, c.n_out, c.s1, c.part, c.out);
+    switch (table) {
+        case 0: return fused<0, 4>(c);
+        case 1: return fused<1, 4>(c);
+        case 4: return fused<2, 4>(c);
+        case 5: return fused<2, 5>(c);
+        case 6: return fused<2, 6>(c);
+        default: return fused<2, 7>(c);
+    }
 }
 static void fused_lookahead(ZfCase& c, int table) {
-    const long long q = c.n_out / 16;
-    if (table == 0) launch_zerocheck_tail_lookahead_packed<0>(c.a, c.b, c.ft, c.got_a, c.got_b, c.eqlo, c.eqhi, 2, c.lobits, q, c.r1, c.r2,
-                                                              c.s2, c.s3, c.part, c.out + 8);
-    else if (table == 1) launch_zerocheck_tail_lookahead_packed<1>(c.a, c.b, c.ft, c.got_a, c.got_b, c.eqlo, c.eqhi, 2, c.lobits, q, c.r1,
-                                                                   c.r2, c.s2, c.s3, c.part, c.out + 8);
-    else launch_zerocheck_tail_lookahead_packed<2>(c.a, c.b, c.ft, c.got_a, c.got_b, c.eqlo, c.eqhi, 2, c.lobits, q, c.r1, c.r2, c.s2,
-                                                   c.s3, c.part, c.out + 8);
+    switch (table) {
+        case 0: return fused_tail<0, 4>(c);
+        case 1: return fused_tail<1, 4>(c);
+        case 4: return fused_tail<2, 4>(c);
+        case 5: return fused_tail<2, 5>(c);
+        case 6: return fused_tail<2, 6>(c);
+        default: return fused_tail<2, 7>(c);
+    }
 }
-
 // both paths' messages (16 words: round 2's, then the lookahead's) and the words that differ
 static cudaError_t zf_compare(ZfCase& c, int table, long long* bad) {
     F128 want[16], got[16];
@@ -162,7 +177,7 @@ int main(int argc, char** argv) {
     if (e != cudaSuccess) { fprintf(stderr, "setup: %s\n", cudaGetErrorString(e)); return 1; }
     printf("{\"log_rows\": %d, \"reps\": %d, \"tables\": {\"round2_ms\": %.3f, \"lookahead_ms\": %.3f}", log_rows, reps,
            mean_ms([&] { ref_round2(c); }, reps), mean_ms([&] { ref_lookahead(c); }, reps));
-    for (int t = 0; t < 3; t++) {
+    for (int t : {0, 1, 4, 5, 6, 7}) {
         long long bad[3];
         e = zf_compare(c, t, bad);
         if (e != cudaSuccess) { fprintf(stderr, "compare: %s\n", cudaGetErrorString(e)); return 1; }
