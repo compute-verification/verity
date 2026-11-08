@@ -16,18 +16,20 @@ hidden outputs (`ScopedHidden`), and a Flock witness its relation accepts, row `
 witness holds it, commits to the table row that the registered read of `q`'s port opens. The commit string
 (`Hm96.Default512.commitString`) of the SHA-512 of the bytes the row hash reads (`InnerRows.rowBytes`), under the salt
 the `hm96` slot reads (`InnerRows.salt`), opens the port's root at the position and through the path the session gives
-the unit (`Registered.opens`). It is `InnerRows.rows_commit_check` (the circuit computes the commit string and the public
-file pins it) after `opens_of_stmtOk` (the registered reads open the public file's rows).
+the unit (`Registered.opens`). It is `InnerRows.rows_commit_check` (the circuit computes the commit string and the
+public file pins it) after `opens_of_stmtOk` (the registered reads open the public file's rows).
 
 `decOf_bitAt`: a layout's decoder at table `j`'s column `y` of the unit's block is the witness's bit there, as
 `InnerRows.bitAt` reads it, the bit `rowBytes` and `salt` read.
 
-`reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from two premises on the registration.
-`SessionScoped`: the verifier's check puts each session statement in Flock's scope with hidden outputs, so `rows_open`
-applies; it holds where the check applies Flock's scope check and the hidden-outputs tag (`sessionScoped_of_checks`). `FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's
-block, and the frame's reveal holds an opening of the witness's bit there that passes wherever the registered read of
-the row holding it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds`, `SessionScoped` and
-`FrameRows`.
+`sessionScoped`: the verifier's check puts each session statement in Flock's scope with hidden outputs, since
+`sessionOk` applies Flock's scope check and the hidden-outputs tag (`scoped_of_stmtOk`, `scopedHidden_of_checks`), so
+`rows_open` applies at every session statement the check passes.
+
+`reveals_of_frameRows`: `Reveals` (`SpotFlock.Opens`) at a layout's decoder from one premise on the registration,
+`FrameRows`: for each value a checked unit needs, the layout's wire is a column of a table in the unit's block, and the
+frame's reveal holds an opening of the witness's bit there that passes wherever the registered read of the row holding
+it passes. So `sessionOpensTwo_of_rows`: `SessionOpensTwo` from `Embeds` and `FrameRows`.
 -/
 
 @[expose] public section
@@ -41,12 +43,6 @@ statement check (`Readable.Read.check`, the first half of its scope refusal) and
 def ScopedHidden (xS : Msg) : Prop :=
   ∀ ins spec sts, FlockDeploy.setupOf true xS = some (ins, spec, sts) →
     ins.read.check = .ok () ∧ ins.read.tags.hiddenOutputs = true
-
-/-- **The hidden-outputs tag of a session statement's reading**, `false` where it has none. -/
-def hiddenOf (xS : Msg) : Bool :=
-  match FlockDeploy.readOf true xS with
-  | some r => r.tags.hiddenOutputs
-  | none => false
 
 /-- **A session statement Flock's scope check passes, with hidden outputs, is `ScopedHidden`**: the scope refusal
 (`Parsed.scope`) begins with the statement check, at the reading the setup's tables parse from (`parsed_setupOf`). -/
@@ -162,11 +158,10 @@ theorem rows_open {x m₁ xS : Msg} {c₀ c₁ : FlockDeploy.Coin} {s : AuditSta
 def SessionScoped : Prop :=
   ∀ x m₁ xS c₀ c₁, stmtOk h x m₁ xS c₀ c₁ = true → ScopedHidden xS
 
-/-- **`SessionScoped` from the check's own refusals**: where the check applies Flock's scope check and the
-hidden-outputs tag to each session statement it passes. -/
-theorem sessionScoped_of_checks (hc : ∀ x m₁ xS c₀ c₁, stmtOk h x m₁ xS c₀ c₁ = true →
-    FlockDeploy.scopeCheck true xS = true ∧ hiddenOf xS = true) : SessionScoped h :=
-  fun x m₁ xS c₀ c₁ hok => scopedHidden_of_checks (hc x m₁ xS c₀ c₁ hok).1 (hc x m₁ xS c₀ c₁ hok).2
+/-- **The verifier's check puts each session statement in Flock's scope with hidden outputs**: `sessionOk` applies
+Flock's scope check and the hidden-outputs tag (`scoped_of_stmtOk`). -/
+theorem sessionScoped : SessionScoped h := fun _ _ _ _ _ hok =>
+  scopedHidden_of_checks (scoped_of_stmtOk h hok).1 (scoped_of_stmtOk h hok).2
 
 /-- **The frame reveals each value a checked unit needs at its session row**: at the statements `Reveals` reads and the
 session's setup, with registered ports `own`, for each gate `g` the unit's correctness reads, the layout's wire for `g`
@@ -197,13 +192,13 @@ def FrameRows (L : Layout) : Prop :=
             (paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) = true →
           (SamplingDeploy.commit (code h)).Opens FlockDeploy.sha512 o.1 o.2 = true
 
-/-- **`Reveals` at a layout's decoder** where the verifier's check puts the session statement in Flock's scope with
-hidden outputs (`SessionScoped`) and the frame reveals each needed value at its session row (`FrameRows`): the
-registered read of that row passes (`rows_open`), so the opening does, and its value, the witness's bit at the wire's
-column, is the decoded value (`decOf_bitAt`). -/
-theorem reveals_of_frameRows (L : Layout) (hsc : SessionScoped h) (hf : FrameRows h L) : Reveals h (decOf L) := by
+/-- **`Reveals` at a layout's decoder** where the frame reveals each needed value at its session row (`FrameRows`):
+the check puts the session statement in Flock's scope with hidden outputs (`sessionScoped`), so the registered read of
+that row passes (`rows_open`), so the opening does, and its value, the witness's bit at the wire's column, is the
+decoded value (`decOf_bitAt`). -/
+theorem reveals_of_frameRows (L : Layout) (hf : FrameRows h L) : Reveals h (decOf L) := by
   intro x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb hx hP h2 hin hok hu hck hb hρ hrb g hg
-  have hsx := hsc x m₁ xS c₀ c₁ hok
+  have hsx := sessionScoped h x m₁ xS c₀ c₁ hok
   obtain ⟨_it, ins, spec, sts, own, -, hset, hown, -, hall⟩ := rows_open h hx hok hsx hck
   obtain ⟨β, j, y, n, q, reg, hβ, hj, hy, hw, hn, hreg, hq, o, ho, hpos, hval, hroot, hopen⟩ :=
     hf x s Pt d m₀ m₁ xS c₀ c₁ rest wF u b ρ rb ins spec sts own hx hP h2 hin hok hu hck hb hρ hrb hset hown g hg
@@ -218,11 +213,10 @@ theorem reveals_of_frameRows (L : Layout) (hsc : SessionScoped h) (hf : FrameRow
     rw [hval, decOf_bitAt hset hS (hsx ins spec sts hset).1 hβ wF hj hy hw]
 
 /-- **`SessionOpensTwo` at SPOT[Flock]'s two-stage code from a layout** where the session statement holds each checked
-unit's gates (`Embeds`), the verifier's check puts the session statement in Flock's scope with hidden outputs
-(`SessionScoped`), and the frame reveals each needed value at its session row (`FrameRows`). -/
-theorem sessionOpensTwo_of_rows (L : Layout) (he : Embeds h L) (hsc : SessionScoped h) (hf : FrameRows h L) :
+unit's gates (`Embeds`) and the frame reveals each needed value at its session row (`FrameRows`). -/
+theorem sessionOpensTwo_of_rows (L : Layout) (he : Embeds h L) (hf : FrameRows h L) :
     Claims.SamplingGeneric.SessionOpensTwo FlockDeploy.sha512 (deploy _root_.Flock.Readable.relation (code h))
       (two h) iroots :=
-  sessionOpensTwo_of_embeds h L he (reveals_of_frameRows h L hsc hf)
+  sessionOpensTwo_of_embeds h L he (reveals_of_frameRows h L hf)
 
 end SpotFlock
