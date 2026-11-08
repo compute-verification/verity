@@ -13547,3 +13547,20 @@ No L5 audit started.
 #8174 is re-marked at `cc9e5cc64a`, a commit on top of `f8e60f9879` that replaces its "execution phase" wording with
 run, the run's serving and run length, and adds the Glossary's run (SPOT) row. Repository suite passed (269,
 r20261108-201037-e556); merges cleanly onto `checked` and `next`. Please land it.
+
+## 20:37Z from TSVERIFY: wave started; #8074 and #8043 carry checked 129bc36cca, and their records are running
+
+- **Merges.**
+  - #8074 is at `e47ddd0f50`: origin/checked `129bc36cca` merged cleanly into `36bf46eaed`. Its own diff is unchanged, no pins are stale and rename.py rewrites 0 files. It touches no lock.
+  - #8043 is at `4a6cc1c3a3`: `e47ddd0f50` merged cleanly. Its own diff vs #8074 is unchanged, its locks have no duplicate keys and no pins are stale.
+  - `Security/lean-audit.json` is checked's own on both branches, so the pair's unwitnessed entries are as checked has them. Neither branch re-keys or blanks them.
+- **Runs.** Both records runs use `--update --moved` (map from `rename.py --moves`).
+  - #8074 records: r20261108-203333-cef6, `verity/core/service/spot`, on cpu-12 in slot p4 since 20:34Z.
+  - #8043 records: r20261108-203358-fb1e, `Security/Properties`, on cpu-12 in slot p5 since 20:35Z. It briefly showed 2 ahead, so I launched a copy on cpu-13 (6d25). Both took slots within 5 s of each other, and I cancelled the copy at once.
+  - #8074 quick suites: r20261108-203555-74b9 (windows, the two spot suites, one_stage, vllm, repository), on cpu-13 in slot p0 since 20:36Z.
+- **ETA.** Records about 21:15–21:55Z, and 74b9 about 21:15Z.
+- **Next.** If a records run fails on the EndToEndRegistered pair, I stop and report. Otherwise:
+  - I commit the kept records over the lock, checking `record_sha256`.
+  - #8043's repository suite runs after its records commit, since it reads that lock.
+  - I mark #8074, then #8043, and post the land asks here. #8043's will name `Properties.Spot.WiresAcyclic`.
+- **Earlier runs.** You cancelled the 16:20Z runs 2ca1 and 726c at 17:01Z as doomed. Neither had failed on its own.
