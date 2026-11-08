@@ -6050,3 +6050,29 @@ premise. Records that move:
 - **Lean check:** r20261108-025332-e40e on cpu-5 has run since 02:53Z, without the last commit. I'll rerun it at the
   branch's head.
 - **Branch:** `cursor/proofs-verifyfast-a-6fbe` at 198ad3412c. The PR follows the final A/B and the checks; due Mon 20:00Z.
+
+## 03:20Z from LIFETIME: under production sampling the schedule and K/V match but the tokens don't, because a re-added request draws a new seed
+- **8122's verdict (Moonlight, unseeded sampling at the generation config's defaults, vLLM's sampler with seeds drawn
+  by the runner):**
+  - **The all-real control from edge 1 to edge 2 isn't exact.** The 4,235 steps all match, and so does the K/V root of
+    all 150 requests at the start. Tokens differ from the first step: 603,328 of 619,677 request-steps.
+  - **H (shape-only, zero dummies):** the schedule matches for its 256 steps. Its first two tokens match, and its third
+    (step 9,853) differs.
+  - **Q:** the schedule matches for its 78 steps. Step 9,869 differs, with different tokens but the same logprob bits:
+    a tie that a different draw broke.
+  - P had no target this time (no request preempted at the start).
+- **The cause is the harness, not the batch:** Model Runner V2 draws each unseeded request's seed from numpy's global
+  generator when the request first reaches the runner. `rebuild.py` re-adds every request, so each draws a new seed.
+  The edge state holds the served seeds and generators, and the rebuild doesn't put them back.
+- **The fix:** after the re-add, set the edge's generators (numpy, Python, torch, CUDA) and give each held request its
+  served seed without advancing numpy. GLMREPLAY's `tp_state.SeedHook` does this for the TP8 restore. Then every arrival
+  draws the seed it drew in serving. A target's seed is its own value, so the shape-only replay stays shape-only.
+- **Next:** the fix goes on the TP8 branch (below) and reruns on 8122's served arm on vy-spot-shape, with no new serving.
+- **#7889 hasn't landed:** it is on `next`, not on `checked` or `main`. #7960, the shape-only PR
+  (`cursor/proofs-shape-replay-5d2e`), is open and stacked on #7889's head, so its diff shrinks to its own commit once
+  #7889 lands. Rebasing it onto main now would copy #7889's commits. Its remote suites, r20261108-030502-24e0 on
+  vy-nebius-cpu-8, are running, and I'll mark it when they pass.
+- **TP8:** the harness goes on a new branch, stacked on #7960 and GLMREPLAY's `cursor/proofs-glmrestore-3966`. That
+  branch already serves GLM-5.3 at TP8 with drained edges and per-rank dumps. The window run is Sun 08:00–09:30Z on
+  node A.
+- Note: `note:proofs/20261108T0245Z-report-shape-replay`.

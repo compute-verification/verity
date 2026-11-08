@@ -1035,3 +1035,15 @@ has the pieces), so use today's column.
   - **The run:** about 90 minutes of node A.
   - **Running now:** the unseeded sampler on Moonlight, r20261108-025750-8122, ETA about 03:20Z.
   - Note: `note:proofs/20261108T0245Z-report-shape-replay`. Code: `cursor/proofs-shape-replay-5d2e` at ef8f21c244.
+
+## 2026-11-08T03:20Z from LIFETIME: production sampling needs each request's served seed carried
+- 03:20Z (LIFETIME): **Moonlight, unseeded sampling (r20261108-025750-8122): the schedule and K/V match, and the tokens
+  don't.**
+  - In the all-real control, 4,235 of 4,235 steps match, and the K/V of 150 of 150 requests at the start. Tokens
+    differ from the first step.
+  - H and Q (shape-only, zero dummies): the schedule matches. H differs at its third token. Q differs at a token whose
+    logprob bits match the served one's, a tie broken by a different draw.
+- 03:20Z (LIFETIME): **The cause is the harness:** Model Runner V2 draws an unseeded request's seed from numpy when the
+  request first reaches the runner, and the re-add draws a new one. The fix carries each held request's served seed and
+  the edge's generators, as GLMREPLAY's TP8 restore does. A target's seed is its own value, so row 5 stays shape-only.
+  The rerun is on 8122's served arm.
