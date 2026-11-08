@@ -6,7 +6,8 @@ from typing import Any
 
 
 def _boolean_roots() -> list[Any]:
-    """The combine units on bits at WORLD 8: the fused MNNVL's coordinate, one- and two-shot; row 2 of torch's multimem all-reduce
+    """The combine units on bits at WORLD 8: the fused MNNVL's coordinate, one- and two-shot; its chunks 2 and 3 of 16 of a
+    64-element token, one- and two-shot; row 2 of torch's multimem all-reduce
     of 4 rows of 24 (16 elements per owner) at a chain for owners 0-3 and a balanced tree for 4-7, which meets both; and row 1 of
     vLLM's custom 2-stage all-reduce of 4 rows of 16 (one pack per owner), which meets owners 2 and 3.  The multimem row is over
     `circuit_check.targets.MAX_GATES` at either FTZ, so `select` would keep only the smaller, IEEE one: FTZ changes only the
@@ -18,6 +19,7 @@ def _boolean_roots() -> list[Any]:
     trees = (TA.chain(8),) * 4 + ((((0, 1), (2, 3)), ((4, 5), (6, 7))),) * 4
     return [
         *[bind(BC.AllReduceResidualMnnvlCoordinate, WORLD=8, SHOT=s) for s in (1, 2)],
+        *[bind(BC.AllReduceResidualMnnvlAt, WORLD=8, N=64, C=16, AT=1 + s, SHOT=s) for s in (1, 2)],
         bind(BC.AllReduceMultimemRow, WORLD=8, N=24, ROWS=4, ROW=2, TREES=trees, FTZ=False),
         bind(BC.AllReduceCustomRow, WORLD=8, N=16, ROWS=4, ROW=1, STAGE=2),
     ]
