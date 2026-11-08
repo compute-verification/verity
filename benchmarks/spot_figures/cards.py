@@ -18,7 +18,10 @@ and the figures plot every card's lines, with its `caption` appended to the capt
 line at 0 is drawn along its panel's floor and named in its caption.  A `partition` card is another cut of the model's circuit: its
 strata take the place of the `workload` card's strata of the kinds it `replaces`, each with the k_log it is staged at,
 which prices it until the `proof_overhead` card measures its type; they add up as `references` cards do, each Figure
-1's line of its own.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
+1's line of its own.  A `verifier_cost` card gives the verifier's core-seconds a statement by block prefix, a family's
+other types on the line through its members (or through the fixed seconds at size 0 and its one member), any other type
+at the measured types' median, and the core-seconds that cost one GPU-second, which Figure 1 adds to each statement's
+fixed seconds.  A card reaches the figures by art id, a later one naming the earlier card it replaces:
 
     uv run python benchmarks/spot_figures/cards.py check CARD.json ...       # refuses unknown and missing fields
     research data put --kind spot-card/v1 --file CARD.json --preserve --json
@@ -85,6 +88,8 @@ CURVE = {"label": F(str), "model": _opt(str, nullable=True, choices=MODELS), "po
 TAX_PART = {"part": F(str), "share": F(NUM), "low": F(NUM), "high": F(NUM), "source": F(str)}
 TAX = {"config": F(str, choices=CONFIGURATIONS), "status": F(str, choices=("priced", "measured")), "tax": F(NUM),
        "low": F(NUM), "high": F(NUM), "lower_bound": F(bool), "parts": F(list, each=TAX_PART), "runs": _opt(list)}
+VERIFY_TYPE = {"block": F(str), "core_seconds": F(NUM), "peak_gb": F(NUM, nullable=True), "runs": _opt(list)}
+VERIFY_FAMILY = {"types": F(list), "size": F(str, nullable=True), "members": F(list)}
 SLOTS = {
     "workload": {"ranks": F(int), "device": F(str), "request": F(dict), "tokens": F(int), "weights_bytes": F(NUM),
                  "strata": F(list, each=STRATUM), "served_macs_per_token": _opt(NUM, nullable=True),
@@ -107,6 +112,9 @@ SLOTS = {
                          "series": F(list, each=CURVE)},
     "serve_tax": {"baseline": F(str), "configurations": F(list, each=TAX)},
     "partition": {"name": F(str), "label": F(str), "replaces": F(list), "strata": F(list, each=STRATUM)},
+    "verifier_cost": {"verifier": F(str), "device": F(str), "core_seconds_per_gpu_second": F(NUM),
+                      "ratio_source": F(str), "fixed_seconds": F(NUM), "types": F(list, each=VERIFY_TYPE),
+                      "families": F(list, each=VERIFY_FAMILY)},
 }
 
 
@@ -162,6 +170,13 @@ def check(card: dict) -> dict:
                    if names.count(n) > 1]
         errors += [f"serve_tax.value.configurations[{i}]: low <= tax <= high, but {t['low']}, {t['tax']}, {t['high']}"
                    for i, t in enumerate(value["configurations"]) if not 0 <= t["low"] <= t["tax"] <= t["high"]]
+    if slot == "verifier_cost" and not errors:
+        measured = {t["block"] for t in value["types"]}
+        errors += [f"verifier_cost.value.families[{i}]: member {m!r} is none of the measured types' blocks"
+                   for i, fam in enumerate(value["families"]) for m in fam["members"] if m not in measured]
+        errors += [f"verifier_cost.value.families[{i}]: {len(fam['members'])} members, but a family scales from one "
+                   "(through the fixed seconds at size 0) or two" for i, fam in enumerate(value["families"])
+                   if not 1 <= len(fam["members"]) <= 2]
     if slot == "partition" and not errors:
         errors += [f"partition.value.strata[{i}]: no k_log, so no staged witness bits to price it by until its type is "
                    "measured; give the k_log circuit-check stages it at"

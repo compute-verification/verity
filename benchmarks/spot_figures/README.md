@@ -18,7 +18,7 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
 - **Cards** (`cards.py`, schema `spot-card/v1`): every number the figures read arrives as one JSON card in a slot
   (`workload`, `proof_overhead`, `commitment`, `replay`, `design`, `references`, `infiltration`,
-  `commit_hillclimb`, `serve_tax`, `partition`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
+  `commit_hillclimb`, `serve_tax`, `partition`, `verifier_cost`), for a model or for every model. `cards.py` holds each slot's fields and checks a card against
   them. A card is published to the evidence store and kept in `cards/SLOT.MODEL.json` with its art id; a model's
   `references` cards add up, each kept as `cards/references.MODEL.ART.json`:
 
@@ -47,10 +47,16 @@ research data put --kind spot-figure/v1 --tree DIR --preserve                # f
 
   A `partition` card is another cut of the model's circuit: its strata take the place of the `workload` card's strata
   of the kinds it `replaces`, each with the k_log it is staged at, and its `label` says how far it has got.
+
+  A `verifier_cost` card gives the verifier's core-seconds a statement by proof-block type (and its peak memory where
+  measured), how a family's other types scale, and the core-seconds that cost one GPU-second.
 - **Figure 1** (`total_cost.py`): what an adversary serving the model on all of a scope's compute over a monitoring
   period can exfiltrate or infiltrate while evading detection with probability above δ, against total cost as a share
-  of serving compute, the serve tax plus β (the share spent on replays, interior commitments and proofs of the sampled
-  proof blocks); skipped work is a figure of its own.
+  of serving compute, the serve tax plus β (the share spent on replays, interior commitments, proofs of the sampled
+  proof blocks and their verification); skipped work is a figure of its own.
+  - Each statement's verify (`verified`) is its type's core-seconds on the `verifier_cost` card at its core-seconds a
+    GPU-second, added to the statement's fixed seconds; without the card, β counts proving only and the caption says
+    so.
   - Every line prices a proof block one way (`priced`): at its type's seconds on the `proof_overhead` card, a block's
     and its statement's fixed ones, with its statement's cap, the type being the card's block of the same name, else
     of the same Definition and K; a type the card doesn't measure is computed from its staged witness bits (the

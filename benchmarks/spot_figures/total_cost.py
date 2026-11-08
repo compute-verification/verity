@@ -253,6 +253,51 @@ def cut(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
                                      source=f"{part.source}; cut by the partition card {v['name']}{art}")}
 
 
+def verifier_seconds(v: dict, block: str) -> tuple[float, str]:
+    """The verifier's core-seconds a statement of `block`'s type from a `verifier_cost` card's value, and how they are
+    known: its measured type's, its family's line through its members (or through the fixed seconds at size 0 and its
+    one member; the member's own where the block gives no size), else the measured types' median."""
+    by = {t["block"]: t["core_seconds"] for t in v["types"]}
+    for prefix, seconds in by.items():
+        if block.startswith(prefix):
+            return seconds, "measured"
+    for fam in v["families"]:
+        if block.startswith(tuple(fam["types"])):
+            size = fam["size"] and re.search(rf"[{{,]{fam['size']}=(\d+)", block)
+            if not size:
+                return by[fam["members"][0]], "family"
+            pts = [(int(re.search(rf"[{{,]{fam['size']}=(\d+)", m)[1]), by[m]) for m in fam["members"]]
+            (x0, y0), (x1, y1) = pts if len(pts) == 2 else [(0, v["fixed_seconds"]), *pts]
+            return y0 + (int(size[1]) - x0) * (y1 - y0) / (x1 - x0), "family"
+    return median(by.values()), "assumed"
+
+
+def _verify_sentence(inputs: dict) -> str:
+    """The caption's sentence on the verifier's share of β, empty where the inputs leave it out."""
+    if "verifier_cost" not in inputs:
+        return " β counts proving only: the verifier's CPU is not in it."
+    seconds = [x["verify_core_seconds"] for x in inputs["partition"]["value"]["strata"] if x["per_token"] > 0]
+    return (f" β also pays the verifier: each statement's verify, its type's core-seconds on one core "
+            f"({min(seconds):,.0f} s to {max(seconds):,.0f} s), at {inputs['verifier_cost']['value']:.3g} "
+            "core-seconds a GPU-second, adds to its fixed seconds, so total compute is serve tax, proving and "
+            "verifying.")
+
+
+def verified(c: dict[str, f1.InputCard], card: dict) -> dict[str, f1.InputCard]:
+    """The priced inputs with each statement's verify, its type's core-seconds (`verifier_seconds`) at the card's
+    core-seconds a GPU-second, added to the statement's fixed GPU-seconds."""
+    v, part = card["value"], c["partition"]
+    strata = []
+    for x in part.value["strata"]:
+        seconds, how = verifier_seconds(v, x["block"])
+        strata.append(x | {"fixed_seconds": x["fixed_seconds"] + seconds / v["core_seconds_per_gpu_second"],
+                           "verify_core_seconds": seconds, "verify_priced": how})
+    art = f" ({card['art']})" if card.get("art") else ""
+    return c | {"partition": replace(part, value=part.value | {"strata": strata}),
+                "verifier_cost": f1.InputCard(v["core_seconds_per_gpu_second"], "core-s/GPU-s", card["status"],
+                                              f"the verifier_cost card{art}: {card['source']}", card["provisional"])}
+
+
 def _definition(block: str) -> tuple[str, int | None]:
     k = re.search(r"[{,]K=(\d+)", block)
     return block.split("{")[0], int(k.group(1)) if k else None
@@ -457,7 +502,8 @@ def captions(out: dict, scope: str) -> dict[str, str]:
             "block's and its statement's fixed ones, and a type not yet measured at its staged witness bits (computed): "
             f"the registered circuit's marginal proof overhead comes to {out['overhead']:.3g}×, "
             f"{_share(conf['tokens']['computed_share'])} of it computed, measured on benchmark values, which a "
-            "replayed served step's values cost the same as. Every β has its own plan, the one with the "
+            f"replayed served step's values cost the same as.{_verify_sentence(out['inputs'])} Every β has its own "
+            "plan, the one with the "
             "least bound. Replay is full-batch: the model's tokens come out bit-exact only in their served batch, so a "
             f"sampled request replays its replay block, one machine's {out['inputs']['window']['value']:g} s, whole "
             f"from its edge, {out['registrations']['machine']['requests']:,.0f} requests at {out['inputs']['replay_factor']['value']:g}× "
@@ -565,15 +611,19 @@ def run(model_name: str = "GLM-5.3", scope_names: tuple[str, ...] | None = None,
         return _run(model_name, scope_names, request, pool.map if pool else map)
 
 
-def _lines(model_name: str, request: str) -> tuple:
-    """The model's cards and, for each configuration it has the cut of, its priced inputs, its line (proof blocks a
-    token, fill and marginal overhead) and which of its cells' types are computed."""
+def _lines(model_name: str, request: str, verify: bool = True) -> tuple:
+    """The model's cards and, for each configuration it has the cut of, its priced inputs (with each statement's
+    verify where `verify` and the model has a `verifier_cost` card), its line (proof blocks a token, fill and marginal
+    overhead) and which of its cells' types are computed."""
     sc = f1.slot_cards(model_name)
     c = f1.cards(model_name, request)
     cuts = {card["value"]["name"]: card for card in spot_cards.load_all("partition", model_name)}
     confs = {n: conf for n, conf in CONFIGURATIONS.items() if conf.partition is None or conf.partition in cuts}
     inputs = {n: priced(cut(c, cuts[conf.partition]) if conf.partition else c, sc["proof_overhead"])
               for n, conf in confs.items()}
+    if verify and (vc := spot_cards.load("verifier_cost", model_name, required=False)):
+        sc |= {"verifier_cost": vc}
+        inputs = {n: verified(i, vc) for n, i in inputs.items()}
 
     def line(i: dict[str, f1.InputCard]) -> tuple:
         strata = i["partition"].value["strata"]

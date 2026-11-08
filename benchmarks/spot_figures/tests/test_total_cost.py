@@ -109,6 +109,35 @@ def test_every_line_prices_its_blocks_one_way():
         t.priced(c | {"partition": f1.InputCard(stray, "", "measured", "one unstaged block")}, po)
 
 
+def test_each_statement_pays_its_verify_at_the_cards_ratio():
+    """A statement's verify is its type's measured core-seconds, its family's line (through two members, or through the
+    fixed seconds and one), else the measured median, at the card's core-seconds a GPU-second, added to the
+    statement's fixed seconds and nothing else; a family member that isn't measured is refused."""
+    vc = cards.load("verifier_cost", "GLM-5.3")
+    v = vc["value"]
+    by = {x["block"]: x["core_seconds"] for x in v["types"]}
+    assert t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=2048,N=1}") == (by["FlashInferFp8Linear_v1{K=2048,"],
+                                                                         "measured")
+    k4096, how = t.verifier_seconds(v, "FlashInferFp8Linear_v1{K=4096,N=1}")
+    assert how == "family" and k4096 == pytest.approx(v["fixed_seconds"] + 2 * (by["FlashInferFp8Linear_v1{K=2048,"]
+                                                                                 - v["fixed_seconds"]))
+    lo, hi = by["SparseMlaCombine_v1{NSPLIT=2,"], by["SparseMlaCombine_v1{NSPLIT=12,"]
+    assert t.verifier_seconds(v, "SparseMlaCombine_v1{NSPLIT=5,DV=512}")[0] == pytest.approx(lo + 3 * (hi - lo) / 10)
+    assert t.verifier_seconds(v, "MoeExpertFp8BlockGemm_v4{K=6144}") == (by["MoeExpertFp8GemmW_v1{"], "family")
+    assert t.verifier_seconds(v, "Unseen_v1{K=3}")[1] == "assumed"
+    c, po = f1.cards("GLM-5.3"), cards.load("proof_overhead", "GLM-5.3")
+    p = t.priced(c, po)
+    q = t.verified(p, vc)
+    for x, y in zip(p["partition"].value["strata"], q["partition"].value["strata"]):
+        assert y["fixed_seconds"] == pytest.approx(x["fixed_seconds"] + y["verify_core_seconds"]
+                                                   / v["core_seconds_per_gpu_second"])
+        assert y["seconds_per_block"] == x["seconds_per_block"] and y["price_macs"] == x["price_macs"]
+    assert q["verifier_cost"].value == pytest.approx(5.40 / (2 * 0.015 + 8 * 0.0045))
+    bad = v | {"families": [{"types": ["X"], "size": None, "members": ["Unmeasured_v1{"]}]}
+    with pytest.raises(ValueError, match="none of the measured"):
+        cards.check(vc | {"value": bad})
+
+
 def test_the_kept_priced_taxes_are_the_generators():
     """While a configuration's tax is priced, the kept card's is what `priced_card` prices from the kept cards."""
     kept = t.taxes(cards.load("serve_tax", "GLM-5.3"))

@@ -31,10 +31,10 @@ TARGET, TARGET_LABEL = "FP4", "GLM-5.3's weights at FP4"
 STATUSES = ("measured", "modeled", "assumed")
 #: the default path: each step's label, status, what the status rests on, and its case in each series
 PATH = {"steps": [
-    {"label": "(A′) per-expert cut at 128k, as Figure 1 prices it", "status": "measured",
+    {"label": "(A′) per-expert cut at 128k, as Figure 1 prices its proving", "status": "measured",
      "cases": {"two-stage": "R0"},
      "note": "the cards' measured proving, 600 s replay blocks, at 128k over vLLM's 128k serve plan (the indexer "
-             "modeled)"},
+             "modeled); the verifier's CPU joins at its own step"},
     {"label": "the fused per-expert cut", "status": "measured", "cases": {"two-stage": "R1", "one-stage": "R1-1s"},
      "note": "each expert's table read fused into its GEMM at k_log 25, priced on one H200 with the cache (512 and "
              "1024 blocks); its fixed cost before the cache is modeled"},
