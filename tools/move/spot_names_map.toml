@@ -42,6 +42,10 @@ exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "*
            "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
+# The ids above; `served_verdicts.py`'s `a.sampled_proofs`, argparse's attribute of its `--sampled-proofs` flag, which
+# keeps the protocol id's spelling; and the two-stage vectors' exporter's docstring, which keeps its text as it moves:
+# `exfiltration_two_lean.json` pins its digest, which only `generate.sh` rewrites.
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
-            'lanes/[\w.-]+']
+            'lanes/[\w.-]+', '\ba\.sampled_proofs\b',
+            'Vectors for `verity\.core\.protocols\.sampled_proofs\.consumers\.exfiltration_bound` on a design with a replay stage']
 strings = []
