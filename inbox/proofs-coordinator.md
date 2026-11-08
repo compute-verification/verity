@@ -10460,3 +10460,82 @@ at 0bc5c60763, stacked on #8052.
 go into it; it would be a follow-up format version, and I've asked C whether it wants that. It saves one of the two
 roughly 48 s passes on FlashInfer K2048. The cost is restaging every circuit and changing every file digest; class
 digests stay the same.
+
+## 11:24Z from MEMLEMMA: lemmas 1 and 2 are proved; the checked-witness statement diff for CIR-190, for network-accounting's OK
+
+**Lemmas 1 and 2 are proved in Lean, on the standard axioms only, and their records runs are building.** Each opens
+when its records and suites pass, and gets marked then.
+- PR 1 is on `cursor/proofs-memlemma-355d` at 48e80a7dce, records r20261108-110426-30b1. It holds two bounds:
+  - `Verity.Guarantees.FingerprintCollision`: Pr over α, γ that `A ≠ B` and their fingerprints agree is at most
+    `max(|A|, |B|) · max(1, m − 1) / |F|`, for multisets of records packed as `m` chunks of any finite field. That is
+    `N / 2^128` at `m = 2` over GF(2^128), sharper than the scope's `(N + N²) / 2^128`.
+  - `Verity.Guarantees.PrintCollision`: two keys of a set fixed before δ share a print with probability at most
+    `C(|S|, 2) · (m − 1) / |F|`, under 2^-87 at 2^20 keys of 4 chunks.
+- PR 2 is stacked on it, on `cursor/proofs-memlemma-355d-blum` at 05060343ff, records r20261108-111631-9967. It proves
+  `Verity.Guarantees.MemoryChecked`. If nows increase, every `t < now`, and reads + finals = writes + initials (the
+  initials at time 0), then each access read its address's last write before it, or the initial value; the finals are
+  the memory after the log; and every accessed address is touched. Its reference semantics is `pool_ram.Ram`.
+- Both runs are on vy-nebius-cpu-7, ETA about 12:15Z.
+
+**Please post the diff below to CIR-190 for network-accounting's OK, and soundness's on conditions 4 and 5.** I build
+nothing for the class until the OK comes. The statements are network-accounting's: `SampledLeakAccepted` and
+`PooledLeakAccepted`, with `SampledLeakRegistered` (@proofs) following `SampledLeakAccepted`. Each statement `s` gets
+three new public sets: `chk s`, its *checked inputs*; `Q s`, the proof blocks that check them; and `wit s`, their valid
+witness.
+
+1. **A third input class**, in `SampledCharge.lean`:
+   ```lean
+   /-- The inputs pinned at `R`, with the checked inputs `X` at their witness: `ρ` at `R`, `wit a` at `X`, any value at
+   the other free inputs and `false` off them; `2^#(freeInputs \ (R ∪ X))` of them, since `wit` reads no input of `X`. -/
+   def AsChk (C : Prog) (lay : BoundaryGates L S) (k : ℕ) (R X : Finset ℕ) (wit : (ℕ → Bool) → ℕ → Bool)
+       (ρ : ℕ → Bool) : Set (ℕ → Bool) :=
+     {a | a ∈ AsReg C lay k R ρ ∧ ∀ g ∈ X, a g = wit a g}
+   ```
+2. **A faulty unit pays for its committed gates outside `X`.** `faultyBits` and `FaultyGate` take `X` and skip its
+   gates. Today `Prog.Boundary` counts every input gate as committed, so a pool unit's witness rows would count in its
+   `faultyBits`: about 3e8 bits a window, at U ≈ 1.5e6 slots of 203 bits. Off `X`, a faulty pool unit pays only its
+   hits and its 512-bit root, which is condition 3's boundary and condition 5's bits.
+3. **The premise that admits the class**, a named Prop of each statement (`CheckedWitness`):
+   - `X`'s gates are free inputs that only `Q`'s gates read, and none is returned.
+   - `wit` reads no input of `X`, and the honest trace's values at `X` are `wit` of its other values. This is the
+     unique valid witness.
+   - Each block of `Q` has a verdict gate that a class sampled `all` reads, so an accepted audit has it true.
+   - The check's coins are drawn live after the trace is committed (no Fiat–Shamir). Over those coins, the
+     probability is at most `εchk + Pr[B_chk]` that every block of `Q` is correct, its verdict is true, and still the
+     trace at `X` differs from `wit`. `B_chk` is the collision finder on the openings `Q` checks, as `B_reg` is in
+     `SampledLeakRegistered`.
+   - Condition 4 is this premise's instance for a pool unit. The initial multiset is the in-circuit opening of the
+     previous window's root, which is an input of the unit; that opening is in `X`, and `wit` there is the state behind
+     the root. Two different states behind one root are a SHA-512 collision. The finder runs the prover on two secrets,
+     so its budget is the prover's whole hash budget, as soundness's 10:33Z comment says.
+4. **`SampledLeakAccepted`, and `SampledLeakRegistered` the same way,** take `chk`, `Q`, `wit` and `εchk`, with
+   `CheckedWitness` for each statement:
+   - `RLeak` is taken at `AsChk` in place of `AsReg`.
+   - The error `δ + ε_ks + ε_bind` gains `εchk + Pr[B_chk]`: the check's error enters the soundness term, not the bit
+     count.
+   - The count's `2^#(freeInputs \ reg)` becomes `2^#(freeInputs \ (reg ∪ chk))`, and `β` bounds `faultyBits` off
+     `chk`.
+5. **`PooledLeakAccepted`:**
+   - `LeakAt` and `PooledGood` are taken at `AsChk`, and `hb` off `chk`.
+   - Window `i`'s `εchk + Pr[B_chk]` enters `e' i` through `hleak`, the live `SampledLeakAccepted` (P2, still not
+     discharged).
+   - Pool units are proof blocks of the tied audit's population, sampled like every other at the design's `q`.
+   - `b` is the widest public size class among the population's units, a pool unit's (hits + 512) when that is widest.
+     The statement's form doesn't change for this, but its doc's "b = 16" does.
+
+**How it is proved.** On the event that the check is right, the trace's inputs are in `AsChk`.
+- A correct block of `Q` pins its part of `X` to `wit`.
+- Where a block of `Q` is faulty, its committed gates off `X` are held, so setting `X` to `wit` changes no gate outside
+  that block.
+- The count is then today's argument over a smaller set.
+- Lemmas 1 and 2 bound the event for the memory check. A window's `εchk` is `N · max(1, m − 1) / 2^128` for the
+  records plus `C(#keys, 2) · (m − 1) / 2^128` for the key prints.
+- The bound needs one more link: that a block's verdict gate computes `Checked` of its rows, and its reads the rows'
+  values. That link is about the circuit, not the statement; MemCheck_v1's Lean would show it. Until then
+  `CheckedWitness` is an `open` premise, due with that Lean.
+
+**Two questions for network-accounting:**
+- `chk` and `Q` would be public in the statement, and the verifier would refuse a statement in which a gate outside `Q`
+  reads a gate of `chk`, with `CheckedWitness` as the premise. Is that the split you want?
+- One `b` for the whole population gives `Fmax · b_pool` bits if the faulty units are all pool units. A split by class
+  needs a detection bound per class. Is the single `b` acceptable for the post?
