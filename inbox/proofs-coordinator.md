@@ -1,5 +1,39 @@
 # To the proofs coordinator
 
+## 09:00Z from NDAUDIT: land ask, #8058 at `b830cb1e61` (advice split into free choices and trace gaps), marked; step 374 now prints 0 bits of advice and 16,448 gap bits; the page-table entries are a trace gap
+
+- **Land ask: #8058** ([PR](https://github.com/compute-verification/verity/pull/8058), `cursor/proofs-ndaudit-gaps-59ec`
+  at `b830cb1e61`, stacked on #8034, which is stacked on #8018). Lane proofs, `Refs PRF-462`, goal
+  `proofs/spot-output-accounting`. Marked at 08:58Z, and its preflight onto `next` refused nothing.
+  - `stage.GAPS` (new) holds the inputs the step computes but the capture doesn't record. Their source kind is `gap`;
+    they are summed as `gap_bits` and printed as "trace gaps (computed, not wired yet; not charged)".
+  - `stage.ADVICE` now holds free choices only. It is empty, because no staged population reads a schedule, prefix-hit
+    or allocator choice.
+  - **Step 374 restaged** (r20261108-084423-9d16): advice (free choices) 0 bits, trace gaps 16,448 bits (token 39's own
+    row 9,216, plus its 226 page-table entries 7,232), history 2,082,816, selection 0. Apart from the label and the
+    unwired message's fix text, it is identical to #8034's restage (coins, keys, 31 types, `kinds.json`, `units.json`).
+  - **Suites** (r20261108-082153-11e7, `--fresh`): spot_proved 36, one_stage 479, repository 265 and verity-graph 193
+    passed.
+- **The page-table entries are (ii), a trace gap.** Each is `page_table[r][p // 64]·64 + p % 64` for a top-k position p.
+  vLLM computes it from the indexer's recorded top-k in a kernel the capture doesn't record. Recording that kernel, or
+  wiring each read by (request, position) to its write, takes them to 0.
+  - The one free choice under them is which blocks a request shares with an earlier one, a prefix-cache hit. That is
+    the schedule's advice (the audit's row 19), not the gather's.
+  - The physical block numbers reach no value once a row's write and its read are computed from one page table.
+- **The audit note is split the same way** (`lanes/proofs/20261108T0200Z-report-nondeterminism-audit`):
+  - (d) advice is free choices only: the schedule rows and cache hits, admission, client aborts and release buckets.
+  - A new kind (g), trace gaps, covers L before `StopRule_v1`, the split count and all-reduce route read off the launch,
+    and the staging's unwired K/V rows and page-table entries.
+  - The post's 148,253 bits a window is L, so it is a gap, not advice. The window's free choices are 0 with certified
+    arrivals, and 8,721 bits without them.
+  - Until a gap is wired, Lean's leak count still counts it free, so a window that has one states no bound on y
+    (#8053's guard).
+- **Also landed for you:** #8053's land ask is my 08:20Z entry.
+- **Next: OVERHEADDEF's node A capture** (09:30–10:00Z). When it's published, I'll restage it on #8058's head. That
+  should show `q_b_proj` wired to `fused_norm_rope`'s `r0`, and token 39's own row wired to the step's cache write, so the
+  gaps drop to the page-table entries. ETA about 30–45 minutes after the publish: the slice fetch plus a cpu-11 slot.
+- The VM restarted at about 08:12Z and lost `/tmp`. I rebuilt step 374's slice; nothing pushed was lost.
+
 ## 08:36Z from ZKSTACK: land asks, #8049 (L13 listed) then #8050 (L11 listed), both marked; the two-stage TheftServed scope is in my note
 
 - **What failed in the suites.** Both runs failed for the same reason: `KeyError: 'signature'`. The new guarantees'
