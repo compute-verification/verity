@@ -98,6 +98,19 @@ __device__ __forceinline__ void ring_bmma(uint32_t a0, uint32_t a1, uint32_t a2,
 #endif
 }
 
+// A warp's 32x32 bit transpose: lane l returns bit l of every lane's x, lane r's in bit r
+__device__ __forceinline__ uint32_t ring_transpose32(uint32_t x, int lane) {
+#pragma unroll
+    for (int i = 0; i < 5; i++) {
+        const int s = 16 >> i;
+        const uint32_t m = i == 0 ? 0x0000FFFFu : i == 1 ? 0x00FF00FFu : i == 2 ? 0x0F0F0F0Fu : i == 3 ? 0x33333333u : 0x55555555u;
+        const bool hi = lane & s;
+        const uint32_t got = __shfl_xor_sync(0xffffffffu, hi ? (x & m) << s : (x >> s) & m, s);
+        x = (x & (hi ? ~m : m)) | got;
+    }
+    return x;
+}
+
 // chunk_ring_combine_basis_split's rows, the same field elements, as a GF(2) product on the tensor cores. Row i = (b, a), with
 // a = i mod 2^k, is M_ab(lo_ab[a]·hi_ab[b]) + M_c(lo_c[a]·hi_c[b]) for M_c(v) = Σ_j v_j·w_c[j], and both are linear in the lo
 // entry: Z_b·(lo_ab[a] ‖ lo_c[a]) over GF(2), where Z_b's column j < 128 is M_ab(x^j·hi_ab[b]) and column 128 + j is
@@ -117,15 +130,13 @@ __global__ void __launch_bounds__(256) chunk_ring_combine_basis_bmma(
     const F128 xj = j < 64 ? F128{1ull << j, 0} : F128{0, 1ull << (j - 64)};
     const uint32_t* la = reinterpret_cast<const uint32_t*>(ab_lo);
     const uint32_t* lc = reinterpret_cast<const uint32_t*>(c_lo);
-    const long long rows = 1LL << k;
+    const int rows = 1 << k;
     for (long long b = blockIdx.x; b < nb; b += gridDim.x) {
         const F128 col = ring_weigh(tab, c, ghash_mul_karatsuba(xj, c ? c_hi[b] : ab_hi[b]));
-        uint32_t mine[4] = {0, 0, 0, 0};   // rows 32h + lane's word wid
+        const uint32_t cw[4] = {(uint32_t)col.lo, (uint32_t)(col.lo >> 32), (uint32_t)col.hi, (uint32_t)(col.hi >> 32)};
+        uint32_t mine[4];   // row 32h + lane's word wid
 #pragma unroll
-        for (int n = 0; n < 128; n++) {
-            const uint32_t bits = __ballot_sync(0xffffffffu, (unsigned)(((n < 64 ? col.lo : col.hi) >> (n & 63)) & 1));
-            if (lane == (n & 31)) mine[n >> 5] = bits;
-        }
+        for (int h = 0; h < 4; h++) mine[h] = ring_transpose32(cw[h], lane);
         __syncthreads();   // every warp has read the previous b's rows
 #pragma unroll
         for (int h = 0; h < 4; h++) zt[32 * h + lane][wid] = mine[h];
@@ -138,20 +149,32 @@ __global__ void __launch_bounds__(256) chunk_ring_combine_basis_bmma(
             bf[t][1] = zt[n][4 + q];
         }
         uint32_t* out = reinterpret_cast<uint32_t*>(combined + (b << k));
-        for (long long r = 16LL * wid + g; r < rows; r += 16LL * (blockDim.x >> 5)) {
-            const uint32_t a0 = la[4 * r + q], a1 = la[4 * (r + 8) + q], a2 = lc[4 * r + q], a3 = lc[4 * (r + 8) + q];
+        const int step = 16 * (blockDim.x >> 5);
+        int r = 16 * wid + g;
+        uint32_t a[4] = {};
+        if (r < rows) { a[0] = la[4 * r + q]; a[1] = la[4 * (r + 8) + q]; a[2] = lc[4 * r + q]; a[3] = lc[4 * (r + 8) + q]; }
+        for (; r < rows; r += step) {
+            const int rn = r + step;
+            uint32_t an[4] = {};
+            if (rn < rows) { an[0] = la[4 * rn + q]; an[1] = la[4 * (rn + 8) + q]; an[2] = lc[4 * rn + q]; an[3] = lc[4 * (rn + 8) + q]; }
             uint32_t w0 = 0, w1 = 0;
 #pragma unroll
-            for (int t = 0; t < 16; t++) {
-                uint32_t d[4];
-                ring_bmma(a0, a1, a2, a3, bf[t][0], bf[t][1], d);
-                w0 = __funnelshift_r(w0, d[0], 1);
-                w0 = __funnelshift_r(w0, d[1], 1);
-                w1 = __funnelshift_r(w1, d[2], 1);
-                w1 = __funnelshift_r(w1, d[3], 1);
+            for (int t0 = 0; t0 < 16; t0 += 4) {
+                uint32_t d[4][4];
+#pragma unroll
+                for (int u = 0; u < 4; u++) ring_bmma(a[0], a[1], a[2], a[3], bf[t0 + u][0], bf[t0 + u][1], d[u]);
+#pragma unroll
+                for (int u = 0; u < 4; u++) {
+                    w0 = __funnelshift_r(w0, d[u][0], 1);
+                    w0 = __funnelshift_r(w0, d[u][1], 1);
+                    w1 = __funnelshift_r(w1, d[u][2], 1);
+                    w1 = __funnelshift_r(w1, d[u][3], 1);
+                }
             }
             out[4 * r + q] = w0;
             out[4 * (r + 8) + q] = w1;
+#pragma unroll
+            for (int h = 0; h < 4; h++) a[h] = an[h];
         }
     }
 }
