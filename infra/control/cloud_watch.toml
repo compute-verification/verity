@@ -71,6 +71,13 @@ pattern = '^(\S+Z) (?:tick rc=0 |stopped: )'   # a tick, then 2 min of sleep; st
 period_s = 3600                      # a tick that launches several trains waits on each launch (train.sh: up to 10 min each)
 
 [[loop]]
+name = "Promote loop"
+started_by = "/data/infra/promote-loop.sh"
+file = "/data/drive/promote.log"
+pattern = '^(\S+Z) (?:pass rc=\d+|stopped)$'   # a line each minute, whatever promote did
+period_s = 660                       # a pass may run to its 600 s timeout, then 60 s of sleep
+
+[[loop]]
 name = "Agent watch"
 started_by = "/data/infra/agent_watch.sh"
 file = "/data/agent-watch/status.json"
