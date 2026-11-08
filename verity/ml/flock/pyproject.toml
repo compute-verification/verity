@@ -61,7 +61,7 @@ untraced = [
     "tests/test_lean_zk_mask.py",
     "tests/test_pod_lean_verdicts.py",
     "tests/test_pouw_rows.py",
-    "tests/test_read_tmpl.py",
+    "tests/test_read_tmpl.py", "tests/test_read_tmpl_stager.py",
     "tests/test_rec_algebra.py",
     "tests/test_rec_inner_stage.py",
     "tests/test_sha512_leaves.py",

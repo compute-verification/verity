@@ -478,12 +478,13 @@ def registered(ms: Sequence[CS.Member], rows: Sequence[list[Row]]) -> IF.Registe
 
 def circuit_record(window: CS.Binding, rows: Sequence[list[Row]], arrivals: Mapping[str, int] | None = None) -> dict[str, Any]:
     """The window's ``circuit.json`` (`interface.circuit_record`): each chunked template's statement its `chunk_rows.unit_rows`
-    and `chunk_rows.reads`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the verifier's
-    input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`, `registered`)."""
+    and `chunk_rows.statement`, as ``compose_circuit.py --template`` composes it (a template of word rows has none: the
+    verifier's input set lowers it), its ``rows``' window ingress under ``arrivals`` and registered reads (`ingress_rows`,
+    `registered`)."""
     sts = {}
     for t in dict.fromkeys(m.template for m in window.members if m.schemas):
         in_rows, out_rows = CR.unit_rows(template(t))
-        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, "reads": CR.reads(template(t))}
+        sts[t] = {"in_rows": in_rows, "out_rows": out_rows, **CR.statement(template(t))}
     got, reg = IR.ingress(window, rows, row_units, arrivals), registered(window.members, rows)
     return IF.circuit_record(window, CIRCUIT_NAME, IF.templates_of(window), sts, declared={
         **({IF.WINDOW_INGRESS: [g.doc() for g in got]} if got else {}), **({"registered": reg.doc()} if reg else {})} or None)
