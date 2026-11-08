@@ -55,6 +55,7 @@ def bump {κ : Type} [BEq κ] [Hashable κ] (m : HashMap κ F128) (k : κ) (v : 
 /-- `f y`, read from `a` below its size: `tabled ((Array.range n).map f) f` is `f` with its values on `0 .. n` computed
 once. Its caller builds the table: a definition that built it and returned the lookup would be compiled taking `y` too,
 rebuilding the table on every call. -/
+@[specialize]
 def tabled {α : Type} [Inhabited α] (a : Array α) (f : Nat → α) (y : Nat) : α :=
   if y < a.size then a.getD y default else f y
 
@@ -113,6 +114,7 @@ def Tab.rowLow (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (eL : 
 
 /-- Caller reference `v` with weight `w` for a row of chunk `cx`, low part `k`: an own column at local position `pos v`
 adds at its column chunk (and slot, while explicit), an input opens, the constant adds at the row chunk. -/
+@[specialize]
 def Tab.ref (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (o : Tab) (k cx : Nat) (w : F128) (v : Nat) : Tab :=
   if v < D.cols then
@@ -168,6 +170,7 @@ def Tab.flush (summed : Bool) (o : Tab) (cx cy : Nat) (w : F128) (acc : Array F1
 
 /-- One reference of `Tab.refs` on its table, run chunk and sums: an own column's factor summed at its slot (`0`
 summed), a new run once its column chunk changes, any other reference through `Tab.ref`. -/
+@[specialize]
 def Tab.refStep (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (k cx : Nat) (w : F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
   if v < D.cols then
@@ -183,6 +186,7 @@ def Tab.refStep (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array 
 or more sums an own column's factors along each run of references in one column chunk (`Tab.refStep`) and adds each
 run's sums once (`Tab.flush`): a table read's row of thousands of references costs a sum per reference and at most 64
 table entries. -/
+@[specialize]
 def Tab.refs (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (o : Tab) (k cx : Nat) (w : F128) (vs : Array Nat) : Tab :=
   if vs.size < 64 then vs.foldl (fun o v => Tab.ref D pt summed A B as gL pos o k cx w v) o
@@ -201,6 +205,7 @@ def Tab.flushK (as : Array Nat) (nk : Nat) (o : Tab) (cx cy : Nat) (ws acc : Arr
 /-- One reference of `Tab.refsK`: an own column's factor `fac v`, which is `gL.at (B · (pos v mod A) / 64)`, summed at
 its slot past the copies' low parts, a new run once its column chunk changes, any other reference through `Tab.ref` at
 each copy. -/
+@[specialize]
 def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
     (nk cx : Nat) (ws : Array F128) (st : Tab × Nat × Array F128) (v : Nat) : Tab × Nat × Array F128 :=
   if v < D.cols then
@@ -213,6 +218,7 @@ def Tab.refStepK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half
 /-- An explicit row's references `vs` at every copy `k < nk` at once, weight `ws[k]`, while each copy's low part is
 below `B` and `B` divides 64: an own column's slot is then its copy's low part plus a slot common to the copies, and its
 factor is common, so a run's sums are formed once (`Tab.refStepK`) and added at each copy (`Tab.flushK`). -/
+@[specialize]
 def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat) (fac : Nat → F128)
     (o : Tab) (nk cx : Nat) (ws : Array F128) (vs : Array Nat) : Tab :=
   let st := vs.foldl (Tab.refStepK D pt A B as gL pos fac nk cx ws) (o, 0, Array.replicate 64 0)
@@ -220,7 +226,9 @@ def Tab.refsK (D : Def) (pt : FoldPt) (A B : Nat) (as : Array Nat) (gL : Half) (
 
 /-- Definition `d`'s own rows: copy `k`'s references through `Tab.refs`, an `A` reference weighted `α`; all copies at
 once (`Tab.refsK`, an own column's factor `fac`) while explicit with every copy's low part below `B` and `B` dividing
-64. -/
+64. Specialized at `walk`'s `pos` and `fac`, as are `Tab.ref`, `Tab.refs`, `Tab.refStep`, `Tab.refsK`, `Tab.refStepK`
+and `tabled`, so a reference reads its position and factor from their tables without a closure call. -/
+@[specialize]
 def Tab.rows (D : Def) (pt : FoldPt) (summed : Bool) (A B : Nat) (as : Array Nat) (gL : Half) (pos : Nat → Nat)
     (fac : Nat → F128) (rowLow : Nat → Nat → F128) (alpha : F128) (nk : Nat)
     (rows : Array (Nat × Array Nat × Array Nat)) (o : Tab) : Tab :=
