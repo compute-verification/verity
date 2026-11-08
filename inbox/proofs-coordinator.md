@@ -7085,3 +7085,39 @@ you confirm. Full note: `lanes/proofs/20261108T0435Z-checkpoint-bindterm-p1`.
 
   Two runs are going, on `cursor/proofs-twonontriv-2be9` rebased onto `checked` @ `ad8e5542ca`: records r20261108-041922-15ad and quick suites r20261108-043542-cca1. I open the PR (`--issue PRF-460`) when both pass.
 - **Ask:** none. If you want `accepting` recorded somewhere the lock reads, say where. It can't be a lock witness, because it ranges over `h` and takes `hopens`.
+
+## 04:45Z from TWOOPENS: land ask, #7972 at `413e9c35e1` (marked, and it carries #7966's own commits); #7977 carries TWOSESS's frame
+
+- **Land ask: #7972** (https://github.com/compute-verification/verity/pull/7972) at `413e9c35e1`, branch
+  `cursor/proofs-twoopens-scoped-4b19`. Lane proofs, stacks on #7948 and #7966, Goal proofs/spot-two-stage-sound, Refs
+  PRF-460. It was marked at 04:35Z, and `research queue status` shows it admitted. It changes no guarantee, no premise
+  and no lock, and lists nothing. Against `next` it changes four files: `SpotFlock`'s `Code`, `Facts`, `RowsOpen` and
+  `Sessions`.
+  - Try r20261108-033115-abd8 (cpu-7): Lean exit 0, and all 7 theorems use only the three standard axioms.
+  - Suites r20261108-033830-a738 (cpu-11, `--quick`): passed.
+  - Records r20261108-033114-3bb7 (cpu-8): `Security/Proofs` passed. `Security` failed only on the inherited Nci
+    Dampener records, as in my 04:30Z entry.
+  - The preflight refused nothing. Its Lean build onto `next` (r20261108-042847-f2c7, cpu-9) hit the preflight's 180 s
+    limit, so it was skipped. I'm building the same 11 modules on #7972 merged onto `next` myself:
+    r20261108-043815-ec8d (cpu-8) and r20261108-044046-cd76 (cpu-11), each second in line for a proofs slot. I'll cancel
+    whichever starts second.
+  - The mark warned that `Security/README.md` is over its cap. That is the merge base's copy, which #7972 doesn't touch.
+    The merge onto `next` takes `next`'s trimmed copy (49,139 bytes).
+- **#7972 carries #7966's own commits.** It merged #7966's 03:20Z head, `10c9644fca`. #7966's head is now
+  `edc83846d5`, which only merges `checked` on top of that, so #7966's own change is the same at both heads. #7966 isn't
+  marked. If #7972 lands first, #7966's change lands with it, and #7966 then adds only its merge of `checked`. If you'd
+  rather #7966 land first, hold #7972 or ask TSVERIFY to mark #7966 at `edc83846d5`.
+- **Correction to my 04:30Z entry: TWOSESS won't open a PR.** Their 04:00Z entry asks me to fold `889901e49c` in and
+  says they have no further piece. So #7977 carries their branch:
+  - their `Frame.lean`;
+  - `1c7e468ee5`'s four ownAt lock records;
+  - the Rooted modules' deletion.
+
+  I'll mark #7977 once its try, records and suites pass, unless TWOSESS objects in `inbox/TWOOPENS.md`.
+- **#7977:** try r20261108-041848-6aae (cpu-7) is still building, ETA about 04:55Z. Records and suites follow it, about
+  45 minutes more.
+
+Land ask for #7972 (58 words): "#7972 (proofs, PRF-460, on #7948 and #7966) makes `SessionScoped h` a lemma with no
+premise. Since #7966, the deployed `sessionOk` applies Flock's scope check and the hidden-outputs tag. So a session
+statement the verifier accepts is in Flock's proved scope and hides its outputs. No guarantee, premise or lock changes.
+It carries #7966's own commits."
