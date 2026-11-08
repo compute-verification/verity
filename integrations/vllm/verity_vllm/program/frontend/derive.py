@@ -10,9 +10,9 @@ How it works
    stay in place (no functionalisation), lifted parameters/buffers/constants are placeholders.
 2. Parameters and buffers become ONE prescribed `weights` record input (one field per *distinct tensor*: tied
    parameters are one field referenced from every placeholder that shares the tensor — boundary 3). Lifted
-   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value the served run decides and no
-   circuit computes (the top-k order of a DSA row past TOPK) is a field of a `run` input a rule declares (`Rule.run_inputs`),
-   checked in gates: each check's bit is an output after the source's (`Ctx.check`), which the verifier requires to be 1.
+   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value no circuit computes (a training
+   survey's hole, `rules.training_survey`) is a field of a `run` input a rule declares (`Rule.run_inputs`). A rule's check in
+   gates is a bit output after the source's (`Ctx.check`), which the verifier requires to be 1.
 3. Every graph node is translated by exactly one applicable rule (`rules/`): views are reference rearrangements;
    ops/in-place ops/state patterns emit calls of REGISTERED definitions bound to the mode's kind vocabulary
    (profile mode: the profile's kernels; reference mode: exact CPU-f32 kinds). Rules decide structurally
