@@ -7802,3 +7802,36 @@ settle with BINDSESS which PR deletes `Instance.lean` and `samplingKS*`. Note: l
   a size of 2 proves its probe's staging, `ZK_UNITS` and `ZK_WARM` on CPU, and `ZK_VERIFY=0`. Smoke runs
   r20261108-052057-c2eb and r20261108-052300-06b0 passed. I'll open it as a PR if you want the H200 measurement or the
   tooling on main.
+
+## 06:08Z from TWOOPENS: listing `ksTwo_spot` unwitnessed: the lock's caps refuse it twice; stopped, your call
+
+- **Stopped, as you asked: two capped lists refuse the listing.** Neither refusal is about a witness I could invent.
+  Branch `cursor/proofs-twoopens-listed-3d1a` @ `ac540a7d0d` (on #7977 and #7997) holds `Flock.Guarantees.SpotKSTwo`
+  beside `SampledKSTwo`, proved as `ksTwo_spot h (sessionOpensTwo_of_frameIs h L he hF)`. The lock lists it with
+  `SpotFlock.Embeds` and `SpotFlock.FrameIs` under `open` (PRF-460, due 30 Nov) and its shape frozen. No PR, nothing marked.
+- **Refusal 1, `unwitnessed`.** I observed it by adding one entry and then reverting it.
+  `test_the_unwitnessed_list_only_shrinks` fails the PR's suite (it isn't bookkeeping): "`unwitnessed` grew in
+  {'Security': '306 > 305'}: it only shrinks (LEAN-66); give the guarantee you added its `honest` and `nontrivial`
+  witnesses under `witnesses` (check.py's failure names both) instead". Without the entry, check.py fails
+  `witnesses.missing`.
+- **Refusal 2, `trees.except`.** You didn't ask about this one, but the listing needs it. The statement reads SPOT[Flock]'s
+  code record (`Held`, `code`, `two`, `rs`, `iroots`, `Layout`, `Embeds`, `FrameIs`) in `Proofs.Flock.SpotFlock.*`,
+  which no `trees.except` prefix covers. check.py fails that with `trees.reads`, and adding the prefix fails
+  `test_the_trees_except_list_only_shrinks`: "`trees.except` grew in {'Security': '41 > 40'}: move the definition the
+  statement reads from `Proofs/` into `Definitions/` instead". `SampledKSTwo`'s listing took the 40th slot.
+- **Only one form carries a reason, and the Dampener entries don't carry one.** Their `unwitnessed` entries are bare
+  `{type_hash, unfolded_hash}`, and their reasons are in `shape.frozen`. Adding `why` to that form fails
+  `witnesses.form`. The form with a reason is `{type_hash, missing: "honest", why}`, as four Properties-lock entries
+  use (NciCheck's `ProtocolAccepts` among them). It needs `witnesses` to list the nontrivial half, which would be the
+  existing `Claims.SamplingGeneric.compilerKSTwo_nontrivial`, `SampledKSTwo`'s own. No new lemma.
+- **Options:**
+  1. Raise `UNWITNESSED` and `TREES_EXCEPT` by one each under your ruling, as `59f14996d7` (cap +3, CI-409) and
+     `d5afe6820d` (cap +2, LEAN-163) did. Add `trees.except["Proofs.Flock.SpotFlock"]` and the half-form entry with
+     your reason. I'd also add doc comments to the SpotFlock definitions it reads, so `UNDOCUMENTED` (61, at its count)
+     doesn't refuse too. LEAN-66 is @lean's, if you want their word.
+  2. Don't list it yet: land the proof as an unlisted SpotFlock lemma, and list it once a built two-stage layout
+     witnesses it.
+
+  I'd take 1: it lists the guarantee as you decided, with the reason in the lock.
+- **Runs:** try r20261108-060433-98a8 (cpu-7), ETA about 06:25Z. Records r20261108-060433-a397 (cpu-8) observes check.py's
+  `trees.reads` and `witnesses.missing` and computes the hashes an entry needs, ETA about 06:55Z.
