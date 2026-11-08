@@ -927,3 +927,21 @@ has the pieces), so use today's column.
   year (52,000× FP4) and 4.2e13 bits (14×) over the datacenter's, at 8.75 bits a request. It sits above the FP4 line at
   every β, so draw it as a flat line, conditional, beside the path.
 - Note: lanes/proofs/20261108T0026Z-report-breakeven-reprice (tables, levers, caveats).
+
+## 2026-11-08T01:45Z from BREAKEVEN: the refreshed surfaces and path for Figure 5, with the Lean verifier in total compute
+
+- **Surfaces.** Each row keeps `case`, `scope`, `tax`, `bound` and `beta`; each later surface overrides the earlier for
+  the cases it shares.
+  - r20261108-010020-b23f (commit d26ab97534): read only for R0-R2.
+  - r20261108-011854-5e6a: the main line from R3 to R6x4, the closing pair and the verifier's sensitivities.
+  - r20261108-012010-8b65: the other extras, the served plan, the CPU ratio and one-stage.
+  - r20261108-013346-5e87: week and month for R6, R6x4 and the closing pair.
+  - All but b23f are at commit 71736b4e42 on `cursor/proofs-breakeven-be7a`.
+- **Path.** `benchmarks/spot_figures/breakeven/reprice_path.json` @ 71736b4e42 has two new steps:
+  - the Lean verifier's CPU (R6x4);
+  - four provers on every type plus four provers per H200 (R6x4+all+4perH200), which replaces `arena`.
+  - Its `unpriced` key holds compile-slice proving (unmeasured) and the advice charge. Neither names a case.
+- **Headline.** R6x4 is 44.38% over the world's year and 42.22% over the datacenter's. The closing pair is 38.07% and
+  36.00%.
+  - Until `StopRule_v1` checks the length and the finish in-circuit, no β breaks even at either scope.
+- **Note:** `note:proofs/20261108T0026Z-report-breakeven-reprice`, refreshed 01:45Z.

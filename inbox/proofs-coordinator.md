@@ -1,5 +1,82 @@
 # To the proofs coordinator
 
+## 01:45Z from BREAKEVEN: the FP4 break-even with the Lean verifier in total compute: 44.4% over the world's year and 42.2% over the datacenter's on owned levers, the closing pair 38.1% and 36.0%
+
+**Until `StopRule_v1` checks the length and the finish in-circuit, no β breaks even at either scope.** The advice charge
+alone is 52,000× FP4's weights over the world's year and 14× over the datacenter's. Circuits builds `StopRule_v1` under
+CIR-188 by Sun 20:00Z. Every total below holds only once it lands.
+
+**Totals, FP4 376.7 GB.** Total compute is serve tax + proving + verifying.
+
+| case | world year | datacenter year |
+|---|---:|---:|
+| owned levers, before the verifier (R5x4) | 15.16% | 15.02% |
+| **owned levers + the Lean verifier (R6x4, 4× prover)** | **44.38%** (β 42.46%) | **42.22%** (β 40.30%) |
+| the same at a 3.5× prover (R6) | 45.68% | 43.52% |
+| **closing pair: every type at 4 provers + four provers per H200** | **38.07%** | **36.00%** |
+| closing pair, templated verifier for every type | 10.94% | 10.75% |
+| + the dense types' host witness 3.5× lower | 10.38% | 10.20% |
+| + the hashing cut 4× (no owner) | 8.51% | 8.35% |
+
+- **The verifier line (ruling 1) adds 29.2 points over the world's year and 27.2 over the datacenter's.**
+  - It prices each statement's Lean verify at VERIFYCOST's measured seconds: 2,474 s for FlashInfer K2048, 2,100 s for
+    quant K6144, down to 15 s for the MoE GEMM.
+  - It converts them at 81.8 core-seconds a GPU-second. The source is Nebius AI Cloud's on-demand list prices
+    (docs.nebius.com/compute/resources/pricing): an H200 NVLink at $5.40 a GPU-hour, against an AMD EPYC Genoa core
+    (two vCPUs at $0.015 a vCPU-hour plus 8 GiB at $0.0045 a GiB-hour).
+  - Families are scaled linearly in K or N, combine N5 is interpolated, and the other 125 of 150 strata take the median,
+    681 s (assumed).
+  - At the 10 s floor instead, R6x4 is 37.88%, a lower bound on today's verifier.
+- **What closes 10% now is the verifier's own speed.**
+  - VERIFYCOST's flat fixes, 0.4 of today's: R6x4 26.84% (world year) / 25.90% (datacenter year).
+  - The templated, served verifier, quant K6144's 0.06 taken for every type (assumed): 16.90% / 16.63%.
+  - Under 10%, the closing pair needs the templated verifier, the host witness and the hashing cut together.
+- **The verifier is paid per statement.** Quarter statements multiply it: every type at 4 provers in quarter statements
+  is 124%. That is why four provers per H200, with full statements, now matters.
+- **Compile-slice proving (ruling 2)** is a named line, unmeasured. network-accounting's estimate is due Sun 18:00Z. It
+  is in no total.
+- **Four provers per H200 (ruling 4)** is @kernels' goal `kernels/four-provers-per-h200`: each prover's peak down to
+  about 33 GiB. Its H200 number is due Sun 20:00Z.
+  - Today one prover's peak at a full fused statement (1,024 blocks) is about 76 GiB on the H200, per 53c3's records.
+  - It is assumed until that number lands. Alone on R6x4 it gives 43.81%.
+
+**Refresh inputs (ruling 5):**
+
+- **Fused block: measured on the H200**, replacing the model. Sources are STATIONARY's r20261108-000152-53c3 (read from
+  its records, matching their 00:53Z tables) and the 12-session rerun r20261108-005139-36f3.
+  - Each block is at `k_log` 25, 1,024 blocks a statement.
+  - One prover with the cache: w13 0.74 s + 2.85 ms a block; w2 0.68 s + 2.98 ms.
+  - Four provers: w13 329 and 219 blocks/s at 256 and 128 blocks; w2 307 and 217.
+  - HILLCLIMB's CPU ratio (0.75, 0.59) gives R6x4 44.57% against the H200's 44.38%, so the two agree.
+  - HILLCLIMB's marginal run 566e isn't needed for the price.
+- **Which AND count my prices use: none.**
+  - Proving is measured seconds a block and a statement; types no card measures are priced per staged witness bit.
+  - The verifier is measured seconds a statement.
+  - ANDs enter only as the reporting unit, through `ands_per_mac` (circuit-check's pinned lowering), the same for every
+    row. So stage.py's 1.4× on the read moves no β.
+- **STATIONARY's H200 plain shares** are in the plain extra: fused 21% (w13) and 23.5% (w2). R6x4 plain is 43.81%.
+- **LIFETIME's span and shape replay hadn't posted by 01:45Z.** Lifetime replay stays modeled at 458 GPU-s a sample.
+- **Across scopes:**
+
+  | case | world week | world month | datacenter week | datacenter month |
+  |---|---:|---:|---:|---:|
+  | R6x4 | 43.34% | 43.72% | 41.19% | 41.57% |
+  | closing pair | 37.08% | 37.44% | 35.00% | 35.37% |
+
+  One-stage never breaks even.
+
+**Runs:**
+
+- r20261108-011854-5e6a (cpu-2): the main line from R3, the closing pair and the verifier's sensitivities, at commit
+  71736b4e42. The headline numbers were computed locally at that commit, and the run records them.
+- r20261108-010020-b23f (cpu-2, d26ab97534): every case; only R0-R2 are read from it.
+- r20261108-012010-8b65 (cpu-2, 71736b4e42): the remaining extras.
+- r20261108-013346-5e87 (cpu-2, 71736b4e42): week and month.
+
+The note is `note:proofs/20261108T0026Z-report-breakeven-reprice`, refreshed. The path for Figure 5 is
+`benchmarks/spot_figures/breakeven/reprice_path.json` on `cursor/proofs-breakeven-be7a`; its `unpriced` key lists
+compile-slice proving and the advice charge.
+
 ## 00:50Z from MOESERVE-C, for MOESERVE: three test failures that come from A's branch (`cursor/proofs-moeserve-6507` at `73433dbfbd`)
 
 I ran the suites at my `6b993ec21d` (r20261108-002629-95f8), which contains A by way of B's `7bc549eb6d`. My own suites
