@@ -4050,6 +4050,10 @@
    "nontrivial": "WeightSecurity.SecurityProofs.TheftNontrivial",
    "kind": "exclusion"
   },
+  "WeightSecurity.SecurityProofs.TheftServed": {
+   "honest": ["WeightSecurity.SecurityProofs.TheftServedHonest"],
+   "nontrivial": "WeightSecurity.SecurityProofs.TheftServedNontrivial"
+  },
   "Flock.SecurityProofs.RecursiveZKLoop": {
    "honest": ["Flock.SecurityProofs.RecursiveZKLoop_honest"],
    "nontrivial": "Flock.SecurityProofs.RecursiveZKLoop_nontrivial"
@@ -23816,6 +23820,15 @@
    },
    "type_hash": "b323b0ddb8d347a1e79ca51622e9dd6ebbc41d28b222cf7d660533cfd063df78",
    "unfolded_hash": "8c615bde1cdacd4dac5a22f58ecda777d30d4f11db7b56f1ea2a1681043f506b"
+  },
+  "WeightSecurity.SecurityProofs.TheftServed": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.SecurityProofs.TheftServedHonest": {
+   "owner": "@proofs"
+  },
+  "WeightSecurity.SecurityProofs.TheftServedNontrivial": {
+   "owner": "@proofs"
   },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
