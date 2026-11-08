@@ -5,6 +5,8 @@
     _operand(ctx, node, a, S)           an element-wise operand broadcast to the output shape, as f32 words
     _word_operand(ctx, node, a, S, dt)  an element-wise operand broadcast to the output shape, as words of its own dtype
     _ew(ctx, node, fn, ops, S, w)       `fn` element by element over the output shape
+    _word_ew(ctx, node, fn, args, S, dt) `fn` element by element over the output shape of `_word_operand`'s operands, a static
+                                        one read along the axes it varies first when its runs need it
     _tree(ctx, node, fn, v, n, rows, w) `fn` folded pairwise over n terms of `rows` words
     _TrainRule                          a rule of reference mode
 """
@@ -25,7 +27,8 @@ from verity.ml.definitions.registry import torch_words as W
 from verity_vllm.program.frontend.derive import StaticIndex, refuse
 from verity_vllm.program.frontend.errors import FrontendError
 from verity_vllm.program.frontend.rules.base import OpRule
-from verity_vllm.program.frontend.rules.training_views import StaticFloat, _const, _static_words, _view_expand, _words
+from verity_vllm.program.frontend.rules.training_views import (_PARTS, StaticFloat, _const, _static_words, _view_expand,
+                                                               _view_permute, _words)
 from verity_vllm.program.frontend.strided_views import _tensor_type
 from verity_vllm.program.frontend.value_types import WIDTH_OF_DTYPE, shape_of
 
@@ -37,6 +40,11 @@ _NAMES = {**_DT, torch.bool: "bool", torch.int64: "int64"}
 
 def _bits(x: float) -> int:
     return int(np.float32(x).view(np.uint32))
+
+
+def _alpha(node):
+    """`add` / `sub`'s alpha: keyword-only in `.Tensor`, positional in `.Scalar`."""
+    return node.kwargs.get("alpha", node.args[2] if len(node.args) > 2 else 1)
 
 
 def _note(ctx, node, k0: int) -> None:
@@ -206,6 +214,41 @@ def _ew(ctx, node, fn, ops: list[tuple[Coll, int | None]], S: tuple[int, ...], w
 
 def _flat(c: Coll, S, w: int = 32) -> tuple[Coll, int]:
     return c.reshape(Array(math.prod(S), Value(w))), 0
+
+
+def _static_major(ctx, args, S: tuple[int, ...], dtype) -> tuple[int, ...] | None:
+    """`S`'s axes with those a static operand varies along first, when some static operand's words in `S`'s own order take more
+    runs than a constant tensor may; else None."""
+    w = WIDTH_OF_DTYPE[dtype]
+    ts = [v.tensor for a in args if isinstance(a, torch.fx.Node) and isinstance(v := ctx.val(a), (StaticIndex, StaticFloat))
+          and v.tensor.numel() > 1]
+    if all(np.count_nonzero(np.diff(_words(t.to(dtype).broadcast_to(S), w))) < _PARTS for t in ts):
+        return None
+    lead = sorted({len(S) - t.dim() + i for t in ts for i, n in enumerate(t.shape) if n > 1})
+    dims = tuple(lead) + tuple(d for d in range(len(S)) if d not in lead)
+    return dims if dims != tuple(range(len(S))) else None
+
+
+def _word_ew(ctx, node, fn, args, S: tuple[int, ...], dtype) -> Coll:
+    """`fn` element by element over the output shape `S` of operands `_word_ok` accepts, as `dtype`'s words. A static operand
+    whose words in `S`'s order would take more runs than a constant tensor may (a row of shift amounts across a wide tensor) is
+    read with the axes it varies along outermost, and the result permuted back: the same one batch, its references strided."""
+    w = WIDTH_OF_DTYPE[dtype]
+    dims = _static_major(ctx, args, S, dtype)
+    if dims is None:
+        return _ew(ctx, node, fn, [_word_operand(ctx, node, a, S, dtype) for a in args], S, w)
+    T = tuple(S[d] for d in dims)
+    ops = []
+    for a in args:
+        v = ctx.val(a) if isinstance(a, torch.fx.Node) else None
+        if isinstance(v, (StaticIndex, StaticFloat)) and v.tensor.numel() > 1:
+            ops.append((_static_words(ctx, node, _words(v.tensor.to(dtype).broadcast_to(S).permute(dims), w), w), 0))
+        elif v is not None and not isinstance(v, (StaticIndex, StaticFloat)) and ctx.coll(a).type.leaves > 1:
+            x, _ = _broadcast(ctx.coll(a), S, w, node.name)
+            ops.append(_flat(_view_permute(x.reshape(_tensor_type(list(S), w)), dims, node.name), T, w))
+        else:
+            ops.append(_word_operand(ctx, node, a, T, dtype))
+    return _view_permute(_ew(ctx, node, fn, ops, T, w), tuple(dims.index(d) for d in range(len(S))), node.name)
 
 
 def _tree(ctx, node, fn, v: Coll, n: int, rows: int, w: int) -> Coll:

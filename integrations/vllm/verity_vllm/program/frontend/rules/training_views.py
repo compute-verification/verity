@@ -332,23 +332,28 @@ _MAKERS = {aten.scalar_tensor.default, aten.ones_like.default, aten.zeros_like.d
            aten.ones.default, aten.zeros.default, aten.fill.Scalar, aten.where.self}
 _DIV = {aten.div.Tensor, aten.div.Scalar}
 _ARITH = {aten.add.Tensor, aten.add.Scalar, aten.sub.Tensor, aten.sub.Scalar, aten.mul.Tensor, aten.mul.Scalar} | _DIV
+_ARANGE = {aten.arange.default, aten.arange.start, aten.arange.start_step}
+_SCATTER = {aten.select_scatter.default, aten.slice_scatter.default}
 _FLOATS = (torch.float32, torch.bfloat16, torch.float16)
 
 
 class StaticFloats(ViewRule):
     """A float tensor fixed without reading a value: `scalar_tensor`, `ones_like` / `zeros_like` / `full_like` / `fill.Scalar` (of
-    any tensor: only its shape is read), `full` / `ones` / `zeros`, `where.self` of a static condition and static values, a tensor
-    constant the graph holds (`lift_fresh_copy` of a table; an integral one is a `StaticIndex`), a static tensor converted to a
-    float dtype (`_to_copy`), an f32 `add`, `sub`, `mul` or `div` of static float tensors and numbers, and views of these, computed
-    by torch on the CPU (`StaticFloat`). A conversion and an f32 add, sub, mul or true division are torch CPU's, which are the GPU's
-    on every value but a NaN, so a static NaN converted and a static NaN result are refused; a bf16 or f16 result of arithmetic is
-    refused too (torch CPU rounds a number in a bf16 add to bf16 first, the GPU doesn't). At a compute capability `cc` a division
+    any tensor: only its shape is read), `full` / `ones` / `zeros`, an f32 `arange` of integers within 2^24 (every one an f32, so
+    exact however a kernel accumulates it), `where.self` of a static condition and static values, a tensor constant the graph
+    holds (`lift_fresh_copy` of a table; an integral one is a `StaticIndex`), a static tensor converted to a float dtype
+    (`_to_copy`), an f32 `add`, `sub`, `mul` or `div` of static float tensors and numbers, `select_scatter` / `slice_scatter` of
+    static float tensors, and views of these, computed by torch on the CPU (`StaticFloat`). A conversion and an f32 add, sub, mul
+    or true division are torch CPU's, which are the GPU's on every value but a NaN, so a static NaN converted and a static NaN
+    result are refused; a bf16 or f16 result of arithmetic is refused too (torch CPU rounds a number in a bf16 add to bf16 first,
+    the GPU doesn't). At a compute capability `cc` a division
     by a number is the product by its reciprocal `RN(1 / f32(s))`, as `Binary` lowers a value's, and a division by a 0-d static
     tensor is refused (the GPU multiplies by a CPU scalar's reciprocal and divides by a device tensor)."""
-    info = _info("StaticFloats", "aten float makers, fills, where.self of static operands, tensor constants, conversions, f32 "
-                 "add / sub / mul / div of static operands and views of static float tensors", "the result is float32, bfloat16 or "
-                 "float16", "every operand read for its value is static", "a conversion of no NaN", "arithmetic: an f32 result "
-                 "and no NaN", "div: no rounding mode; at cc no 0-d static divisor", "no gates: constants are made where read",
+    info = _info("StaticFloats", "aten float makers, fills, f32 arange, where.self of static operands, tensor constants, "
+                 "conversions, f32 add / sub / mul / div and select_scatter / slice_scatter of static operands and views of static "
+                 "float tensors", "the result is float32, bfloat16 or float16", "every operand read for its value is static",
+                 "arange: f32, integer bounds and step, every value within 2^24", "a conversion of no NaN", "arithmetic: an f32 "
+                 "result and no NaN", "div: no rounding mode; at cc no 0-d static divisor", "no gates: constants are made where read",
                  kind="view")
     accepts_constants = True
 
@@ -356,7 +361,7 @@ class StaticFloats(ViewRule):
         self.cc = cc
 
     def targets(self):
-        return _MAKERS | _VIEWS | _ARITH | {aten.lift_fresh_copy.default, aten._to_copy.default}
+        return _MAKERS | _VIEWS | _ARITH | _ARANGE | _SCATTER | {aten.lift_fresh_copy.default, aten._to_copy.default}
 
     def _static(self, ctx, a):
         if isinstance(a, torch.fx.Node):
@@ -386,6 +391,13 @@ class StaticFloats(ViewRule):
             return "the result is not float32, bfloat16 or float16"
         if t in _VIEWS:
             return True if isinstance(ctx.val(node.args[0]), StaticFloat) else "the operand is not a static float tensor"
+        if t in _ARANGE:
+            if ctx.dtype_of(node) != torch.float32 or not all(type(a) is int for a in node.args):
+                return "numerics_unregistered: a bf16 or f16 arange, or a fractional bound or step (kernels accumulate it apart)"
+            v = torch.arange(*node.args, dtype=torch.float64)
+            return True if not v.numel() or float(v.abs().max()) <= 2 ** 24 else "numerics_unregistered: an integer past 2^24"
+        if t in _SCATTER and not all(isinstance(ctx.val(a), StaticFloat) for a in node.args[:2]):
+            return "an operand is not a static float tensor"
         if t is aten.where.self:
             if not all(isinstance(self._static(ctx, a), (torch.Tensor, int, float)) for a in node.args[:3]):
                 return "where.self of a value"
@@ -425,6 +437,10 @@ class StaticFloats(ViewRule):
             out = self._static(ctx, node.args[0])
         elif t in _ARITH:
             out = self._arith(ctx, node)
+        elif t in _ARANGE:
+            out = torch.arange(*node.args, dtype=torch.float32)
+        elif t in _SCATTER:
+            out = t(*[self._static(ctx, a) if isinstance(a, torch.fx.Node) else a for a in node.args])
         elif t in _VIEWS:
             args = [self._static(ctx, a) if isinstance(a, torch.fx.Node) else a for a in node.args]
             out = t(*args, **{k: v for k, v in node.kwargs.items() if k != "memory_format"})

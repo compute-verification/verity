@@ -527,13 +527,17 @@ class Cells:
 
 def boolean_prices(prims: dict) -> dict[str, dict]:
     """Each primitive's Boolean price, by id: its Boolean version (`definitions.boolean.boolean_version`) and that circuit's
-    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why."""
+    ANDs, XORs, NOTs and gates (`evaluation.bits.compile`'s counts); a primitive with no Boolean version has none, and why.
+    Inputs (`program.is_input`) are left out: they are bound, not computed, and `priced` counts no input class."""
     from verity.ml.circuits.codec import descriptor_id
     from verity.ml.circuits.evaluation.bits import compile as compile_bits
+    from verity.ml.circuits.program import is_input
     from verity.ml.definitions.boolean import boolean_version
 
     out = {}
     for pid, fn in sorted(prims.items()):
+        if is_input(fn):
+            continue
         try:
             bv = boolean_version(fn)
         except Exception as e:  # noqa: BLE001  (named in the output: a primitive without a Boolean version is unpriced)

@@ -20,9 +20,21 @@
    "and": 63,
    "type": "fab71c4a635241444d5b53ad7c28b962559a8478ecf3418998f45130823d941223591cb8d6e05de61a3acdfbe8e4dd81a971336abe90a46c295c960b776fa776"
   },
+  "I64And_v2": {
+   "and": 64,
+   "type": "5cd0ac254004d9aa43b831dc1e1b55af363d6e0ff5082d5b4fcf14147615aaf06ec4574f228a8afdaab66baa37fba3ec834aeeb7e55ee3d945011a7c1175854c"
+  },
   "I64Le_v2": {
    "and": 64,
    "type": "cacd357a87ad7cfa2210b1fb838355a596a86b4c22f01e5ac3cc6e71f44d17d0d0549709ed19fc2c25a7abcc3f8afd2b01b2ec707f3f938b957ed0f9b41937b6"
+  },
+  "I64Shl_v2": {
+   "and": 475,
+   "type": "c322b3693c43c9d87bdd30fefebf16a54379bd6f78db97136b567b39c5d9d9c8e7fa31def0da625eca2bd34b38728d3f2498faa2d2ec2e0f0cd4e7250166afb9"
+  },
+  "I64Shr_v2": {
+   "and": 472,
+   "type": "538093f18db7004cab28241e8b742012af5b305bf8f4f5d95b365c68d5f2afd7c30e02c5eaa637456a32c1fa381ba238be19f5a9a25ff1d4e7d4b2a5c2f0c358"
   },
   "I64ToF32Rn_v2": {
    "and": 720,

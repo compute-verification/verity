@@ -1,5 +1,5 @@
 """`registry.torch_words` and `registry.boolean_torch_words`: each word primitive against torch CPU (the int64 and uint8 arithmetic
-and casts with wraparound, int64 -> f32 around every rounding position, f32 -> int64 and -> uint8 at every exponent from below 1 to
+and casts with wraparound, the int64 shifts by every amount from below 0 to past 63, int64 -> f32 around every rounding position, f32 -> int64 and -> uint8 at every exponent from below 1 to
 past 2^63, f32 -> f16 at every exponent from below f16's subnormals to past 65504 around each rounding position, and every f16 word
 to f32), the NaN and saturated words against the GPU's as the primitives define them, the order keys sorting values as torch's
 radix select does and inverting; and each Boolean version against its word on special and random words."""
@@ -87,12 +87,33 @@ def test_the_int64_words_are_torchs() -> None:
     ta, tb = torch.from_numpy(_signed(a).copy()), torch.from_numpy(_signed(b).copy())
     _same(E.evaluate_batch(W.I64Add, a, b), (ta + tb).numpy().view(np.uint64), "I64Add")
     _same(E.evaluate_batch(W.I64Le, a, b), (ta <= tb).numpy(), "I64Le")
+    _same(E.evaluate_batch(W.I64And, a, b), (ta & tb).numpy().view(np.uint64), "I64And")
     c = rng.integers(0, 2, a.size, dtype=np.uint8)
     _same(E.evaluate_batch(W.SelectI64, c, a, b), torch.where(torch.from_numpy(c.astype(bool)), ta, tb).numpy().view(np.uint64),
           "SelectI64")
     _same(E.evaluate_batch(W.I64ToU8, a), ta.to(torch.uint8).numpy(), "I64ToU8")
     u = np.arange(256, dtype=np.uint8)
     _same(E.evaluate_batch(W.U8ToI64, u), torch.from_numpy(u).to(torch.int64).numpy().view(np.uint64), "U8ToI64")
+
+
+def _shift_operands(rng, n: int) -> tuple[np.ndarray, np.ndarray]:
+    """`_I64` and n random words, each shifted by every amount from -2 to 66, then n random words by random words."""
+    a = np.concatenate([np.repeat(_i64(_I64), 69), _random_i64(rng, n)])
+    b = np.concatenate([np.tile(_i64(range(-2, 67)), len(_I64)), _i64(rng.integers(-2, 67, n).tolist())])
+    return np.concatenate([a, _random_i64(rng, n)]), np.concatenate([b, _random_i64(rng, n)])
+
+
+def test_the_int64_shifts_are_torchs() -> None:
+    """`<<` and `>>` of tensors and by a Python int, in torch's vector body and its scalar tail (the length is no multiple of 8):
+    `<<` 0 for an amount below 0 or past 63, `>>` every bit the sign for one below 0 or past 62."""
+    torch = pytest.importorskip("torch")
+    a, b = _shift_operands(np.random.default_rng(6), 4001)
+    ta, tb = torch.from_numpy(_signed(a).copy()), torch.from_numpy(_signed(b).copy())
+    _same(E.evaluate_batch(W.I64Shl, a, b), (ta << tb).numpy().view(np.uint64), "I64Shl")
+    _same(E.evaluate_batch(W.I64Shr, a, b), (ta >> tb).numpy().view(np.uint64), "I64Shr")
+    for k in (0, 3, 8, 56, 63):
+        _same(E.evaluate_batch(W.I64Shl, a, np.full(a.size, k, np.uint64)), (ta << k).numpy().view(np.uint64), f"I64Shl by {k}")
+        _same(E.evaluate_batch(W.I64Shr, a, np.full(a.size, k, np.uint64)), (ta >> k).numpy().view(np.uint64), f"I64Shr by {k}")
 
 
 def test_an_int64_rounds_to_f32_as_torch_rounds_it() -> None:
@@ -163,7 +184,9 @@ def test_the_order_keys_sort_values_and_invert() -> None:
 
 def _inputs(d, rng) -> list[np.ndarray]:
     n = 20000
-    if d in (BW.I64Add, BW.I64Le, BW.SelectI64):
+    if d in (BW.I64Shl, BW.I64Shr):
+        return list(_shift_operands(rng, n))
+    if d in (BW.I64Add, BW.I64Le, BW.I64And, BW.SelectI64):
         grid = np.array(list(itertools.product(range(len(_I64)), repeat=2)), np.int64).T
         a, b = (np.concatenate([_i64(_I64)[g], _random_i64(rng, n)]) for g in grid)
         return [rng.integers(0, 2, a.size, dtype=np.uint8), a, b] if d is BW.SelectI64 else [a, b]
@@ -183,8 +206,9 @@ def _inputs(d, rng) -> list[np.ndarray]:
     return [np.concatenate([F32_SPECIALS, rand, extra])]
 
 
-@pytest.mark.parametrize("d", [BW.I64Add, BW.I64Le, BW.SelectI64, BW.I64ToU8, BW.U8ToI64, BW.I64ToF32Rn, BW.F32ToI64Rz,
-                               BW.F32ToF16Rn, BW.F16ToF32, BW.F32OrderKey, BW.OrderKeyF32], ids=lambda d: d.name)
+@pytest.mark.parametrize("d", [BW.I64Add, BW.I64Le, BW.I64Shl, BW.I64Shr, BW.I64And, BW.SelectI64, BW.I64ToU8, BW.U8ToI64,
+                               BW.I64ToF32Rn, BW.F32ToI64Rz, BW.F32ToF16Rn, BW.F16ToF32, BW.F32OrderKey, BW.OrderKeyF32],
+                         ids=lambda d: d.name)
 def test_the_boolean_version_is_its_word(d) -> None:
     target = bind(d)
     word = TR.word_of(target)
