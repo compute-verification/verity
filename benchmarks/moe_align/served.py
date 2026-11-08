@@ -39,6 +39,8 @@ from served_commit.tp_decode import phases, requests_at
 from verity_vllm.engine import moe_align as MA
 
 UNATTRIBUTED = "<outside every MoE layer>"
+#: vLLM's MoE layer classes, by name since they vary across its versions; a decoder layer's outermost one is its MoE layer
+MOE_CLASSES = {"MoERunner", "MoERunnerInterface", "FusedMoE", "SharedFusedMoE"}
 #: vLLM's aligner ops (``vllm._custom_ops``): with the canonical op on, the Marlin experts call none of them
 VLLM_ALIGNERS = ("moe_align_block_size", "batched_moe_align_block_size", "moe_lora_align_block_size")
 #: rank-local state of the phases (`check_on`, `use`, `timer_on`)
@@ -59,6 +61,15 @@ def _ops() -> Any:
     return importlib.import_module("vllm._custom_ops")
 
 
+def moe_layers(model: Any) -> list[str]:
+    """The name of each MoE layer of ``model``: per decoder layer, its outermost module whose class is one of `MOE_CLASSES`."""
+    out: list[str] = []
+    for name, m in model.named_modules():
+        if ".layers." in name and {c.__name__ for c in type(m).__mro__} & MOE_CLASSES and not any(name.startswith(n + ".") for n in out):
+            out.append(name)
+    return out
+
+
 def status(worker: Any) -> dict[str, Any]:
     """On a rank: the function Marlin's experts call, the installed `Align`'s record, and the vLLM plugins this process sees."""
     from importlib.metadata import entry_points
@@ -75,10 +86,9 @@ class Checker:
     made it, and counts the calls of vLLM's own aligners (`VLLM_ALIGNERS`)."""
 
     def __init__(self, model: Any) -> None:
-        from verity_vllm.acquire.sources.moe_source import moe_layers_of
         from verity_vllm.engine import hooks
 
-        self.layers = moe_layers_of(model)
+        self.layers = moe_layers(model)
         self.modules = [(n, m) for n, m in model.named_modules() if n in self.layers]
         self.hooks, self.handles, self.cur, self.rows = hooks.Hooks(), [], None, 0
         self.by_layer: dict[str, dict[str, Any]] = {}
