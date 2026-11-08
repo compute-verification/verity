@@ -583,22 +583,19 @@ theorem programHeld_ok {program : Option ByteArray} (h : programHeld program = .
   · assumption
   · cases h
 
-/-- **The statement versions `verify` takes**: the current statement, a recursive session's inner one, and the templated
-statement (`Tags.tmplName`; building `Tags.circuitTmpl` would hash its identity's key), which `check` passes only in the
-form `scopeOkT` covers and `--zk`'s form check (`KsScope.checkOf`) only on its template, and whose statement circuit, the
-flat circuit it unrolls to, is the one `SampledKSLiveV5` is stated at. Every other version `Tags.all` names is
-superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and the older ones' coins
-derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They stay in `Tags.all` so
-the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then refuses the session
-(`servedForm`). -/
-def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name, Tags.tmplName]
+/-- **The statement versions `verify` takes**: the current statement and a recursive session's inner one. Every other
+version `Tags.all` names is superseded: a `+seed-injection` one is a selftest build's, whose coins the prover injected, and
+the older ones' coins derive through SHA-256 or, under `--zk`, their pads are ChaCha20 streams of the prover's seed. They
+stay in `Tags.all` so the agreement corpus and the recorded fixtures replay: `verify` runs every check on them, then
+refuses the session (`servedForm`). -/
+def served : List String := [Tags.circuit.name, Tags.circuitPlainLeaves.name]
 
 def versionWhy (tags : Tags) : Option String :=
   if served.contains tags.name then none
   else
     let what := if tags.name.endsWith "+seed-injection" then "a selftest build's statement, whose coins the prover injected"
       else "a superseded statement version"
-    some s!"refused: {tags.name}, {what}: verify takes only {", ".intercalate served.dropLast} and {served.getLastD ""}"
+    some s!"refused: {tags.name}, {what}: verify takes only {" and ".intercalate served}"
 
 /-- A session on seed coins (a plain session without `--coins tree`): every coin derives from the prover's seed, so none
 is live and no plain claim's record premise (`RecordCustodyExec`) can hold. The verifier reads coins only from a

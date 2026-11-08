@@ -46,7 +46,7 @@ hypotheses `HmIn.parse` and `HmIn.loadPublic`, and `RootFixesDomainL` at the fil
 * `fixesL_of_collidesT_false`: `collidesT = false` is `RootFixesDomainL` at the tables' leaf map (`LeafMap.ofTables`):
   the roots `collidesT` computes, each port's at its schema over its table's rows, are `rootsOfL`'s.
 * `v5Files_of_sharedOk`: a file `KsScope.SharedOk` admits gives those three file hypotheses, at every `n`.
-* `v5Files_of_check`: `KsScope.checkOf` passing at a shared-row file gives them, at the circuit it checked.
+* `v5Files_of_check`: `KsScope.check` passing at a shared-row file gives them.
 -/
 
 @[expose] public section
@@ -77,16 +77,18 @@ theorem v5Files_of_sharedOk {tags : Flock.Tags} {c : Flock.Circuit} {pf : ByteAr
   obtain ⟨pi, pub, t, hp, hl, ht, hc⟩ := h
   exact ⟨pi, pub, t, hp, hl, ht, fun n => by rw [LeafMap.ofPublic_some n ht]; exact fixesL_of_collidesT_false hc⟩
 
-/-- **`verify --zk`'s form check at a shared-row file gives V5's file hypotheses**: when `KsScope.checkOf` passes at a
-circuit (a templated statement's carrying its template) and the public file as `HmOut.loadPublic` loads it has tables,
-V5's `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` hold at that circuit. -/
-theorem v5Files_of_check {tags : Flock.Tags} {pf : ByteArray} {count : ℕ} {draw : Option Lean.Json}
-    {c : Flock.Circuit} {pub : Flock.Public} {t : Flock.Tables}
-    (h : Flock.KsScope.checkOf (.ok c) tags pf count draw = .ok ()) (hpub : Flock.HmOut.loadPublic tags c pf = .ok pub)
-    (ht : pub.tables = some t) :
-    ∃ pi pub' t', Flock.HmIn.parse c = .ok pi ∧ Flock.HmIn.loadPublic tags c pi pf = .ok pub' ∧
-      pub'.tables = some t' ∧ ∀ n, RootFixesDomainL c (LeafMap.ofPublic c pub' n) := by
-  obtain ⟨-, -, hf, -⟩ := Flock.KsScope.checkOf_ok h rfl hpub
+/-- **`verify --zk`'s form check at a shared-row file gives V5's file hypotheses**: when `KsScope.check` passes and the
+public file as `HmOut.loadPublic` loads it has tables, the circuit is in `scopeOkH`, and V5's `HmIn.parse`,
+`HmIn.loadPublic` and `RootFixesDomainL` hold. -/
+theorem v5Files_of_check {tags : Flock.Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {count : ℕ}
+    {draw : Option Lean.Json} {c : Flock.Circuit} {pub : Flock.Public} {t : Flock.Tables}
+    (h : Flock.KsScope.check tags cf pf tables count draw = .ok ()) (hc : Flock.HmOut.parse tags cf tables = .ok c)
+    (hpub : Flock.HmOut.loadPublic tags c pf = .ok pub) (ht : pub.tables = some t) :
+    Flock.ProvedScope.scopeOkH c = true ∧
+      ∃ pi pub' t', Flock.HmIn.parse c = .ok pi ∧ Flock.HmIn.loadPublic tags c pi pf = .ok pub' ∧
+        pub'.tables = some t' ∧ ∀ n, RootFixesDomainL c (LeafMap.ofPublic c pub' n) := by
+  obtain ⟨_, hs, hf, _⟩ := Flock.KsScope.check_ok h hc hpub
+  refine ⟨hs, ?_⟩
   rcases hf with hn | hok
   · rw [ht] at hn; cases hn
   · exact v5Files_of_sharedOk hok

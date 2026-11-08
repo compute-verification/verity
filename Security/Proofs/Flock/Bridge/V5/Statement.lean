@@ -36,7 +36,7 @@ holds at every `own`:
   parameter;
 * `live-verifier` at `own` and the sampling design (`Assumptions.Zk.RecordCustodyZKJPLaw`);
 * the `--zk` tags hidden-output ones (`ZkHidden.TagsOkZHJ`) as a case, not a hypothesis: at any others `verify --zk`
-  refuses (`Flock.KsScope.checkOf`), so its acceptance (`Bridge.LiveAcceptsKSP`) has probability 0;
+  refuses (`Flock.KsScope.check`), so its acceptance (`Bridge.LiveAcceptsKSP`) has probability 0;
 * the constants `Bridge.constsOfP`: the constant wires `Bridge.constWiresOf`, the constant and the zero, and each proof
   block's public gates at its public input words' bits in the population's public file (`HiddenExec.pubBitOf`). The
   verifier derives the public inputs, so the statement fixes them, and a public gate is read with no opening;
@@ -286,18 +286,14 @@ def _root_.Flock.Bridge.SampledKSLiveV5R : Prop :=
             (Fintype.card (ΩcZ execArith P (planZHJP dj y₀) (tabZHJP dj y₀) vb L p) : ℝ) / Fintype.card L.Ω) *
           (2 * (t' * (1 + k)) / 2 ^ (256 : ℝ) + 1 / (Real.exp 1 * M) + k / (Real.exp 1 * Rw)) / (1 - ρ))
 
-/-- **`verify --zk` accepts at `own`, files and transcript**: the live audit's transcript (`LiveAcceptsZKP`), and the
-last two refusals of `verify --zk`'s verdict, on the circuit it checks, `ProvedScope.circuitOf`'s (a templated
-statement's carries its template): the files' rows, names and roots (`Flock.PortRoots.checkOf`), and their form
-(`Flock.KsScope.checkOf`). At public outputs `verify --zk` checks `HmOut.parse`'s circuit, but `KsScope.checkOf`
-refuses those tags before it reads a circuit. -/
+/-- **`verify --zk` accepts at `own`, files and transcript**: the live audit's transcript (`LiveAcceptsZKP`), the files'
+rows, names and roots (`Flock.PortRoots.check`), and their form (`Flock.KsScope.check`), the last two refusals of
+`verify --zk`'s verdict. -/
 def _root_.Flock.Bridge.LiveAcceptsKSP {n : ℕ} {Reg : Type} (I : Inputs) (own : Option ByteArray)
     (o : Reg × Finset (Fin n) × Discharge.Exec.Transcript) : Prop :=
   LiveAcceptsZKP I own o ∧
-    Flock.PortRoots.checkOf (Flock.ProvedScope.circuitOf (zkTags I) I.circuitFile I.tables) (zkTags I) I.publicFile =
-      .ok () ∧
-    ∃ count draw, Flock.KsScope.checkOf (Flock.ProvedScope.circuitOf (zkTags I) I.circuitFile I.tables) (zkTags I)
-      I.publicFile count draw = .ok ()
+    Flock.PortRoots.check (zkTags I) I.circuitFile I.publicFile I.tables = .ok () ∧
+    ∃ count draw, Flock.KsScope.check (zkTags I) I.circuitFile I.publicFile I.tables count draw = .ok ()
 
 open Classical in
 /-- **`SampledKSLiveV2` at the verifier's public inputs, with or without shared rows, under the sampling design the verifier samples
@@ -320,7 +316,7 @@ bound carries `ecr/sha-512`'s term at that finder (`Bridge.rootsFinderL`, no coi
 at least 1 at a registration whose roots expose one and `rootsCostL / 2^256` at any other. Nor is one taken on the
 proof block's circuit: its unit is built because the circuit file parses (`Discharge.Hidden.built_of_parseStmt`). Nor on
 the `--zk` tags: at tags in `TagsOkZHJ` the bound holds, and at any others `verify --zk` refuses the files
-(`Flock.KsScope.checkOf`'s `tagsWhy`), so the event that it accepts them (`Bridge.LiveAcceptsKSP`) has probability 0. -/
+(`Flock.KsScope.check`'s `tagsWhy`), so the event that it accepts them (`Bridge.LiveAcceptsKSP`) has probability 0. -/
 def SampledKSLiveV5 : Prop :=
   ∀ (n : ℕ) (Reg : Type)
     (I : Inputs) (own : Option ByteArray) (ht : I.tags.typed = false)

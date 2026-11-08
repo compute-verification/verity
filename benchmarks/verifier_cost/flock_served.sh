@@ -2,8 +2,8 @@
 # The Lean verifier on a served statement: flock_served.py stages one kind of a saved served step as one_stage/a11.py
 # stages it (flat), or with --layout MODE as a templated statement of the same unit (with --structural, struct_lower's
 # template, the flat unit never built). With a session sent, this times `flock-verify archive-put` and `flock-verify
-# verify --zk --partition --program` on it as a0.lean_verify runs them (under `perf record` where the node has perf).
-# With --phases or --layout, flock-served (flock_served/Main.lean)
+# verify --zk --partition --program` on it as a0.lean_verify runs them (under `perf record` where the node has perf); a
+# templated statement's verify runs its session and then refuses it (`ProvedScope.servedForm`). With --phases or --layout, flock-served (flock_served/Main.lean)
 # times verify's work on the statement before any session a step at a time, and on a flat one flock-read
 # (flock_read/Main.lean) its parse's phases. With --stmt (a templated statement), flock-tmpl stmt (flock_tmpl/Main.lean)
 # times the statement's parse instead, whole and a stage at a time, and sizes its template against the unrolled unit;

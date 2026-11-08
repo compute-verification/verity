@@ -45216,9 +45216,9 @@
    }
   },
   "Proofs.Flock.Bridge.V5.Statement": {
-   "digest": "dbc15986055e3664e158a2beb7875f376a0367f428c793387e33efaf36617daf",
+   "digest": "69fe2b521a88ced4e22941a4044f343d804e0562616d0865c65c374a8cae1391",
    "definitions": {
-    "Flock.Bridge.LiveAcceptsKSP": "ddcc86cf03014a67623db82ecc9436ea7a8c1794ef1a45f8bfc0f322c6cfaa02",
+    "Flock.Bridge.LiveAcceptsKSP": "37809f2a683eead9277e0b94e6b4e03eeecc54ce87ce47882c4b0139c79b87cd",
     "Flock.Bridge.constsOfP": "67a6f5fe088b95efced36467f34ed9d2726e353df637e8a6c4fc2878dd6a6e83",
     "Flock.Guarantees.SampledKSLiveV5": "04ac6bf852ae019ba1590f80a6e1d8c650e4d12a2126c21aa74a95d7c142aa6c"
    }

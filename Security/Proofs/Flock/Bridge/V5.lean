@@ -16,10 +16,9 @@ the targets its assembly takes (stated). `EndToEndHidden`: `endToEndHiddenV5_of`
 `Flock.Bridge.sampledKSLiveV5R`, V5's bound under the roots guard, and `Flock.SecurityProofs.SampledKSLiveV5 :
 Flock.Guarantees.SampledKSLiveV5` from it, the guard paid for by `ecr/sha-512` at the roots finder (`LeafRoots`). `Honest`:
 `Flock.SecurityProofs.SampledKSLiveV5Honest`, its file hypotheses at the served registered session, from the named
-premise `ServedFilesParseV5`. `Refused`: `verify --zk`'s form check at a shared-row file gives `SampledKSLiveV5R`'s
-file hypotheses `HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` at the circuit it checks
-(`v5Files_of_check`). `Accepted`: `Flock.Bridge.sampledKSLiveV5Accepted`, `SampledKSLiveV5R` on the event that
-`verify --zk` accepts the files, flat or templated, and the run
+premise `ServedFilesParseV5`. `Refused`: `verify --zk`'s form check at a shared-row file gives `SampledKSLiveV5R`'s file hypotheses
+`HmIn.parse`, `HmIn.loadPublic` and `RootFixesDomainL` (`v5Files_of_check`). `Accepted`:
+`Flock.Bridge.sampledKSLiveV5Accepted`, `SampledKSLiveV5R` on the event that `verify --zk` accepts the files and the run
 passes the registration's population, without its hypotheses on the files' rows, names and roots or on the population
 order. -/
 

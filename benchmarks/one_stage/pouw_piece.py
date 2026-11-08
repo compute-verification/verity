@@ -266,7 +266,8 @@ def period_inputs(serve_dir: Path, k: int, pouw: Path, key_sha512: str, main: Pa
                       "period's open committed and credit reads the window's layout from")
     if statements is None:
         raise Missing(f"no statements for window {k}'s drawn units (--statements): the drawn calls are proved as "
-                      "templated --registered statements")
+                      "templated --registered statements, which the verifier of record doesn't accept yet (PRF-133 "
+                      "part 3, PRF-274)")
     if live is None:
         raise Missing(f"no live evidence for window {k}'s rounds (--live-evidence: h1_prove/live.sh on the run's "
                       "--h1-prover dump)")
