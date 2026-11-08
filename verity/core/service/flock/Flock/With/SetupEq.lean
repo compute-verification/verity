@@ -57,7 +57,8 @@ set_option maxRecDepth 20000 in
 -- `rfl` compares the two whole bodies of `parse`, a few hundred binds each
 set_option maxHeartbeats 1000000 in
 theorem parseWith_std (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)) (tmpl : Option Typed.Template)
-    (pre : Array (String × Net)) : HmRow.parseWith std tags bytes tables tmpl pre = HmRow.parse tags bytes tables tmpl pre := by
+    (pre : Array (String × Net)) (from_ : Nat) :
+    HmRow.parseWith std tags bytes tables tmpl pre from_ = HmRow.parse tags bytes tables tmpl pre from_ := by
   unfold HmRow.parseWith HmRow.parse HmRow.parseRest
   simp -zeta only [std_sha512, pure_bind, hmClassOfWith_std, monadLift_self]
   rfl

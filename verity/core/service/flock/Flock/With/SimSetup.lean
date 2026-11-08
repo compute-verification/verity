@@ -122,8 +122,8 @@ theorem hmClassOfWith_sim (S : Sim M N) {hs : Flock.Hashes M} {hs' : Flock.Hashe
 
 theorem parseWith_sim (S : Sim M N) (tM : Throws M) (tN : Throws N) {hs : Flock.Hashes M} {hs' : Flock.Hashes N}
     (hh : S.Hashes hs hs') (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray))
-    (tmpl : Option Typed.Template) (pre : Array (String × Net)) :
-    S.R (HmRow.parseWith hs tags bytes tables tmpl pre) (HmRow.parseWith hs' tags bytes tables tmpl pre) := by
+    (tmpl : Option Typed.Template) (pre : Array (String × Net)) (from_ : Nat) :
+    S.R (HmRow.parseWith hs tags bytes tables tmpl pre from_) (HmRow.parseWith hs' tags bytes tables tmpl pre from_) := by
   unfold HmRow.parseWith
   simp -zeta only [tM.bind, tN.bind]
   sim_walk [hmClassOfWith_sim S hh]

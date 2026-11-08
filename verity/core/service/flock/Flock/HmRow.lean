@@ -610,9 +610,10 @@ def pinnedWhy : String := "pinned outputs (META pinned_outputs): a form no sound
 /-- Parse the circuit file (upstream's `Composite::parse`), check its layout, and refuse `sha512x3` and `hm96` nets other
 than the verifier's (`HmNets.check`), and a `rec-open/…`, `rec-residuals/…`, `rec-sparse/…` or `rec-opening/…` unit
 other than the verifier's (`RecOpen.check`, `RecResiduals.check`, `RecSparse.check`, `RecOpening.check`). A typed
-template's block (`tmpl`, item 1e) brings its root and placed layouts' circuits; its wiring is derived. -/
+template's block (`tmpl`, item 1e) brings its root and placed layouts' circuits; its wiring is derived. The sections start
+at line `from_`: right after META, unless a templated file's template lines come first (`HmOut.parseTmpl`). -/
 def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit := do
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) (from_ : Nat := 2) : V Circuit := do
   let sha := Sha512.hash bytes
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
@@ -641,7 +642,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := from_
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -771,7 +772,7 @@ def parse (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray)
 rows from the tasks `ts` (`SplitNL.splitTasks`). Not inlined: the compiler sinks a `Task.spawn` bound in a body down to
 the branch that reads it, which here is the last. -/
 @[noinline] def parseFastLines (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net))
+    (tables : List (String × ByteArray)) (tmpl : Option Typed.Template) (pre : Array (String × Net)) (from_ : Nat)
     (ts : List (Task (Array String × Array Net.Row))) : V Circuit := do
   let lines0 := SplitNL.linesOf ts
   let rows := SplitNL.rowsOf ts
@@ -798,7 +799,7 @@ the branch that reads it, which here is the last. -/
   let mut nets : Array (String × Net) := match tmpl with
     | some t => #[("root", t.root)] ++ t.layouts.map fun (d, n, _) => (d, n)
     | none => pre
-  let mut at_ := 2
+  let mut at_ := from_
   while at_ < lines.size do
     let h := tokens lines[at_]!
     if h.size != 3 || h[0]! != tags.blockKeyword then throw s!"circuit: expected a {tags.blockKeyword} line"
@@ -926,26 +927,26 @@ the branch that reads it, which here is the last. -/
 
 /-- `parseFastLines` over the file's lines split in tasks between `'\n'` cuts. -/
 @[noinline] def parseFastFrom (sha : Task ByteArray) (tags : Tags) (bytes : ByteArray)
-    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) :
-    V Circuit := do
+    (tables : List (String × ByteArray) := []) (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[])
+    (from_ : Nat := 2) : V Circuit := do
   let text ← match String.fromUTF8? bytes with
     | some s => pure s
     | none => throw "circuit: not UTF-8"
-  parseFastLines sha tags bytes tables tmpl pre (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
+  parseFastLines sha tags bytes tables tmpl pre from_ (SplitNL.splitTasks text (SplitNL.cutsNear text 1024))
 
 /-- `parse` with the file's lines split in tasks (`SplitNL.splitTasks`), each net's rows read in the same tasks
 (`Net.parseWith`) and the file hashed in a task beside them,
 `parse_eq_fast`: the ZK server's setup runs it (`HmOut.parseFast`, `Firewall.Hello.Setup.setup`). Not a `@[csimp]`:
 `flock-verify` compiles `parse` too, and runs no task. -/
 def parseFast (tags : Tags) (bytes : ByteArray) (tables : List (String × ByteArray) := [])
-    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) : V Circuit :=
-  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre
+    (tmpl : Option Typed.Template := none) (pre : Array (String × Net) := #[]) (from_ : Nat := 2) : V Circuit :=
+  parseFastFrom (Task.spawn fun _ => Sha512.hash bytes) tags bytes tables tmpl pre from_
 
 set_option maxRecDepth 20000 in
 -- `rfl` compares the two whole bodies of `parse`, as `With.parseWith_std` does
 set_option maxHeartbeats 1000000 in
 theorem parse_eq_fast : @parse = @parseFast := by
-  funext tags bytes tables tmpl pre
+  funext tags bytes tables tmpl pre from_
   unfold parse parseFast parseFastFrom parseFastLines
   simp -zeta only [Net.parseWith_eq, classOf_eq_task, bind_map_left, SplitNL.linesOf_splitTasks]
   try rfl
