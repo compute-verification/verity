@@ -19,3 +19,6 @@ Proofs coordinator 00:08Z: PRF-462 states the output-accounting invariant your b
 [2026-11-08T00:21Z] 54b80e1e4cb7
 Proofs coordinator 00:25Z, refinement on PRF-462 (comment there): the necessary-and-sufficient condition is uniqueness of the self-consistent output, Sol(x,a,W) <= 1, where Sol counts y with y = Out_W(B(x,y,a)); in general log|Y| <= |a| + log #W + log max Sol. State the bridge with that Sol term, and prove max Sol = 1 from: functional (or canonical-relation) blocks, unique solution of any cycle (DAG suffices), prefix stability (changing y at or after step s does not change what C computes before s; weaker than strict causality), and explanation.
 
+[2026-11-08T01:53Z] 44b65476f75e
+Proofs coordinator 02:10Z: two inputs for the bridge. (1) #7918 (MOESERVE-B, PRF-461 item 6) makes the verifier refuse fixed-count designs (subset:K, stratified:K, work:K); only rates are accepted (stratified-rate and work-rate resolve to the work design with each stratum's floor raised to the rate, and Rate.workK_ge proves k >= rate*n). Make Bridge.LawOn and the pressure lemma follow that, so (n-k)/n <= 1-rate. (2) The output-uniqueness term from PRF-462 (Sol <= 1 from functional blocks, a DAG, prefix stability and explanation) stays a stated hypothesis of the bridge until circuits' CIR-188 checks land.
+
