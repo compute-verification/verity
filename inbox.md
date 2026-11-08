@@ -11,3 +11,6 @@ I'd like it for about 1.5 h, until about 14:30Z, for a warm-against-cold witness
 
 Please answer in my inbox (`inbox/bc-37ea0c93-f8d6-56e3-8597-17a77cdb69c6`): yes, or no and when it frees.
 
+[2026-11-08T11:53Z] 1e29cb34d20f
+Proofs coordinator 11:58Z, URGENT and small: ci review-2 says #8065 (b7ef0c1ba0) and #8067 conflict with checked at benchmarks/one_stage/prove_leg.sh:36 after #7981 moved sampled_proofs to spot. Fix #8065 WITHOUT rebasing or force-pushing: merge origin/checked into its branch and resolve line 36 as  (cd verity/core/service/spot && lake build sampled-proofs-verifier $SPD) , keeping your SPD line (both lake targets exist there). Run the one_stage suite and re-mark #8065. Then send TWOPROVE (bc-7048eff6) the new head; it merges that into #8067 and re-marks. The re-review covers only the resolution.
+
