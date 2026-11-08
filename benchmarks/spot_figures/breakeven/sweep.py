@@ -403,9 +403,11 @@ def served_line() -> dict[str, Case]:
               "provergoal": dict(prover=PROVER_GOAL), "prover2.8": dict(prover=PROVER_OLD_MAIN),
               "tmpl": dict(tmpl="measured"), "tmplgoal": dict(tmpl="goal"), "host": dict(host=3.5),
               "plain": dict(plain=True), "q20": dict(quant6144=0.020),
-              "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True)}
+              "hits": dict(advice_window_bits=HITS_WINDOW_BITS), "prefixoff": dict(prefix_off=True),
+              "ktypes": dict(k_gain="types")}
     for e, kw in extras.items():
         out[f"N5+{e}"] = Case(**(steps["N5"] | kw))
+    out["N5m+ktypes"] = Case(**(steps["N5m"] | dict(k_gain="types")))
     for s in ("N5", "P5"):
         out[f"{s}+zk"] = Case(**(steps[s] | dict(budget_form="zkstack")))
         out[f"{s}+zkmachine"] = Case(**(steps[s] | dict(budget_form="zkstack-machine")))
