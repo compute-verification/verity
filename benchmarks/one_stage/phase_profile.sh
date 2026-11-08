@@ -4,7 +4,8 @@
 # /workspace/jobs/phase) between runs on the pod. STEPS (default setup,build,stage,ident,tl):
 #   setup  CUDA 13.3 (cuda-13.3.sh), Nsight Systems 2026.1.3 and a Python venv, unpacked under KW
 #   build  the source through 70-class-sweep.sh BUILD_ONLY=1, its binaries in KW/AS.env
-#   stage  UNITS (default gq) at full with every unit drawn (zk_cost.py stage), once per KW
+#   stage  UNITS (default moe-w13:N=1,SWAP=False, whose transcripts main pins) at full with every unit drawn
+#          (zk_cost.py stage), once per KW and UNITS
 #   ident  prover_is_deterministic pinned to main's digests under M1 and M0; gpu_paths_agree under M1 and M0
 #   tl     one warm process (warm 1 + RUNS M1 dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
@@ -12,7 +13,7 @@
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
 REPO=$(pwd); W=${KW:-/workspace/jobs/phase}; mkdir -p $W; AS=${AS:-new}; STEPS=${STEPS:-setup,build,stage,ident,tl}
-END=${END:-$(( $(date +%s) + 6 * 3600 ))}; ROUNDS=${ROUNDS:-3}; RUNS=${RUNS:-2}; UNITS=${UNITS:-gq}
+END=${END:-$(( $(date +%s) + 6 * 3600 ))}; ROUNDS=${ROUNDS:-3}; RUNS=${RUNS:-2}; UNITS=${UNITS:-moe-w13:N=1,SWAP=False}
 PHASE=${PHASE:-t.ligerito}; ANCHOR=${ANCHOR:-lf_fold_base_pair}
 MAIN_ZK=493e51d79e3d5c9dc0457e7670245e84218a3cb360b133cd3a35206a7ce7106fce3db0bf2db19d7f158f7994bd16f1b03f3bb056b257c0a2ccd6082aa36eaae6
 MAIN_M0=0f0dfa3c0bb8a743e1b40ded2b8813ca27758061f1fb194e68be62435dd521dec815920b33ad22ec3a4b6a7f68b4c5d3a4fc2cdbc80e3501b4088eaba53f2337
@@ -52,8 +53,9 @@ for i in 1 2 3 4 5 6; do
   log "python: installing $miss"; $HOME/.local/bin/uv pip install -q --python $PY $miss || break
 done
 fail=0
-if has stage && [ ! -s $W/zk-full/plan.json ]; then
-  (nice -n 5 $PY benchmarks/one_stage/zk_cost.py stage --out $W/zk-full --units "$UNITS" --sizes full --draws c:dev \
+Z=$W/zk-$(echo "$UNITS" | tr -c "a-zA-Z0-9\n" -)
+if has stage && [ ! -s $Z/plan.json ]; then
+  (nice -n 5 $PY benchmarks/one_stage/zk_cost.py stage --out $Z --units "$UNITS" --sizes full --draws c:dev \
     > $O/stage.txt 2>&1; echo $? > $S/stage.rc) & STAGE_PID=$!
 fi
 if has build; then
@@ -67,7 +69,7 @@ if [ -n "${STAGE_PID:-}" ]; then
   wait $STAGE_PID; log "stage rc=$(cat $S/stage.rc): $(grep ZKCOST $O/stage.txt | tail -1)"
 fi
 read -r B SB < $W/$AS.env || { log "no $AS build in $W"; exit 1; }
-Z=$W/zk-full; [ -s $Z/plan.json ] || { log "no plan at $Z"; exit 1; }
+[ -s $Z/plan.json ] || { log "no plan at $Z"; exit 1; }
 read -r DEVP INST CIRCUIT < <($PY -c 'import json, sys
 p = json.load(open(sys.argv[1])); d = next(i for i, x in enumerate(p) if x["k"] == x["c"])
 print(d, p[d]["inst"], p[d]["stage_dir"] + "/circuit.txt")' $Z/plan.json)
