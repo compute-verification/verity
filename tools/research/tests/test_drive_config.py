@@ -104,7 +104,7 @@ def test_the_flags_parse_with_their_types_and_absent_keys_take_the_commands_defa
                       ('lowrisk_excludes = ["../x/"]', "lowrisk_excludes = ['../x/']: a non-empty list"),
                       ('lowrisk_excludes = ["verity/*/x.py"]', "lowrisk_excludes = ['verity/*/x.py']: a non-empty list"),
                       ('land = "fast"', "land = 'fast': one of review"),
-                      ('land = "check"', "land = 'check': train landing was deleted with its code (#5070): drive lands on "
+                      ('land = "check"', "land = 'check': train landing was deleted with its code: drive lands on "
                                          "review only"),
                       ('land_into = "next"', "land_into = 'next': \"checked\" (main follows it to fully checked commits) or "
                                              "\"main\""),
@@ -331,7 +331,7 @@ def test_the_deleted_train_flags_parse_and_are_ignored_with_a_note(world, driven
     assert "ignored" not in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10", "--train-size", "4") == 0
     assert driven[-1] == plain
-    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted (#5070); drop them from "
+    assert ("research queue drive: --max-running and --train-size ignored: train landing was deleted; drop them from "
             "drive's args") in capsys.readouterr().out
     assert drive(world, "--on", "m1", "--rules", str(rules), "--max-running", "10") == 0
     assert driven[-1] == plain and "drive: --max-running ignored: " in capsys.readouterr().out

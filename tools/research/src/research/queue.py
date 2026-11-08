@@ -883,7 +883,7 @@ class DriveFlags:
                 got[k] = doc[k]
         if "land" in doc:
             if doc["land"] == "check":
-                raise bad("land", "train landing was deleted with its code (#5070): drive lands on review only; set "
+                raise bad("land", "train landing was deleted with its code: drive lands on review only; set "
                                   "`land = \"review\"` or remove the key")
             if doc["land"] not in LANDINGS:
                 raise bad("land", f"one of {', '.join(LANDINGS)}")
@@ -4115,7 +4115,7 @@ class LeanTimedOut(str):
 
 
 #: the fix a Lean step that couldn't build names, with where it builds
-LEAN_UNBUILT_FIX = "mark again once {on} builds them (`build` Lean slots are @infra's; `research status` there says why not)"
+LEAN_UNBUILT_FIX = "mark again once {on} builds them in its `build` Lean slots (`research status` there says why not)"
 
 
 def run_group(argv: list[str], cwd: Path, left: float) -> tuple[int | None, str]:
@@ -5767,7 +5767,7 @@ def baseline(q: Queue, sha: str, by: str, steps: str | None = None) -> int:
     from .drive import AFTER_LANDING, gating
 
     if _who(by) != "ci":
-        raise QueueError(f"baseline: only ci records a green `main` (--by ci), not {by}")
+        raise QueueError(f"baseline: a green `main` is recorded only with --by ci, not --by {by}")
     green = [x for x in (steps or "").split(",") if x] or list(AFTER_LANDING)
     if unknown := [x for x in green if x not in AFTER_LANDING]:
         raise QueueError(f"baseline: --steps {', '.join(unknown)}: not after-landing steps ({', '.join(AFTER_LANDING)})")
@@ -5805,7 +5805,7 @@ def accept_checked(q: Queue, sha: str, by: str) -> int:
     from .drive import CHECKED_TIPS
 
     if _who(by) != "ci":
-        raise QueueError(f"accept-checked: only ci accepts a `{q.into}` drive didn't write (--by ci), not {by}")
+        raise QueueError(f"accept-checked: a `{q.into}` drive didn't write is accepted only with --by ci, not --by {by}")
     q._clone()
     q.fetch()
     full = _git(q.workdir, "rev-parse", "--verify", "-q", f"{sha}^{{commit}}", check=False).stdout.strip()
@@ -6258,7 +6258,7 @@ def main(argv: list[str]) -> int:
                     help="drive: run the after-landing check reusing no pass but circuit-check's per-target ones "
                          "(check.py --no-cache --circuit-cache)")
     for old in ("--max-running", "--train-size"):
-        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted, #5070)")
+        ap.add_argument(old, type=int, metavar="N", help="drive: accepted and ignored (train landing was deleted)")
     ap.add_argument("--land", action="store_true", help="review N: the verdict that lands it")
     ap.add_argument("--hold", metavar="REASON", help="review N: the verdict that keeps it, and everything above it, on `next`")
     ap.add_argument("--ref", help="review N --land: the note or reason the verdict rests on")
@@ -6450,8 +6450,7 @@ def main(argv: list[str]) -> int:
         own = weakref.WeakMethod(q.own_change)
         labels.change = lambda head: own()(head)
         if ignored := [f"--{k.replace('_', '-')}" for k in ("max_running", "train_size") if getattr(a, k) is not None]:
-            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted (#5070); drop them from "
-                  "drive's args")
+            q.log(f"research queue drive: {' and '.join(ignored)} ignored: train landing was deleted; drop them from drive's args")
         if a.command == "drive":
             q._clone()
             q.fetch()

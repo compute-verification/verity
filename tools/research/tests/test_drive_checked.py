@@ -136,7 +136,7 @@ def test_ci_baseline_moves_main_at_once_beside_a_tick_holding_its_lock_and_write
         monkeypatch.delenv(DRIVE_ENV)
         assert Q.main(argv) == 1 and "this isn't drive" in capsys.readouterr().err
         monkeypatch.setenv(DRIVE_ENV, "1")
-        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only ci" in capsys.readouterr().err
+        assert Q.main(_cli(h, "baseline", tip, "--by", "lane-3")) == 1 and "only with --by ci" in capsys.readouterr().err
         assert Q.main([*argv, "--steps", ",".join(GATED[:-1])]) == 1
         assert f"--steps leaves out {GATED[-1]}, on the merge gate" in capsys.readouterr().err
         assert Q.main(_cli(h, "baseline", f"{tip}^2", "--by", "ci")) == 1      # #1's head, merged into `checked`
@@ -620,7 +620,7 @@ def test_ci_accepting_a_checked_drive_didnt_write_lets_drive_go_on_from_it_and_n
     landed = _checked(world)
     outside = _push_outside(world, {"x.txt": "x\n"}, "mallory")
     assert h.tick().startswith(f"`checked` is at {outside[:12]}")
-    with pytest.raises(QueueError, match="only ci accepts"):
+    with pytest.raises(QueueError, match="accepted only with --by ci"):
         Q.accept_checked(h.q, outside, "lane-1")
     with pytest.raises(QueueError, match=f"is not `checked`'s tip, {outside[:12]}"):
         Q.accept_checked(h.q, landed, "ci")

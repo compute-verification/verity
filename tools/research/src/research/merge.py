@@ -2032,8 +2032,8 @@ def on_drive() -> bool:
 
 def off_drive(ref: str, verb: str) -> str:
     """Why a push of ``ref`` from here is refused: only drive's App may move `main`, `checked` and `next`."""
-    return (f"`{ref}` is moved only by drive's App (GitHub's rulesets, 23 Oct), and this isn't drive (no {DRIVE_ENV}=1): run it "
-            f"on the control pod, `/data/infra/drive.sh {verb}`")
+    return (f"`{ref}` is moved only by drive's App, and this isn't drive (no {DRIVE_ENV}=1): run it on the control pod, "
+            f"`/data/infra/drive.sh {verb}`")
 
 
 def _push_and_sweep(repo: Path, into: str, remote: str, push: bool, tool: str = "check") -> int:

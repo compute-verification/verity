@@ -1377,8 +1377,8 @@ class Driver:
         last = tips[-1]
         text = (f"`{q.into}` is at {tip[:12]} ({subject!r}, by {who}), which drive didn't write: drive lands nothing, syncs no "
                 f"`{q.branch}` and moves no `main` until `{q.into}` is back at {last[:12]}, the last tip drive wrote (as drive's "
-                f"App: `git push --force-with-lease=refs/heads/{q.into}:{tip} origin {last}:refs/heads/{q.into}`), or ci "
-                f"accepts {tip[:12]} (`/data/infra/drive.sh queue accept-checked {tip} --by ci`)")
+                f"App: `git push --force-with-lease=refs/heads/{q.into}:{tip} origin {last}:refs/heads/{q.into}`), or "
+                f"{tip[:12]} is accepted (`/data/infra/drive.sh queue accept-checked {tip} --by ci`)")
         self.refuse(drive, f"unwritten:{tip}", text, TOP.lstrip("@"))
         return text
 
