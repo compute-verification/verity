@@ -22,13 +22,17 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     record names its ports by template, else `p`), each of which it roots or reads;
   - `second-sample`: its sample is not the verifier's own, the second draw's units in its part as a subset of its slots
     (`ownDraw`);
-  - `second-read`: a port's registered read (`readOk`) is none of: its own port of the interior record, each slot `u`
-    reading only its own rows (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t`
-    slots); the boundary port its link names (`Link`, the verifier's own), each slot reading only its cell's replay
-    block's rows (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the boundary population); a value either
-    registration registers. Each is read at its root, domain and leaves.
-* **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-statements` when
-  no statements are given, `second-cover` for each part the second draw samples that no statement is for, and
+  - `second-read`: a port's registered read (`readOk`) is not, for a port a link names, the boundary port it names,
+    each slot reading only its cell's replay block's rows (`[S[i]·r, (S[i] + 1)·r)`, `r` the port's leaves over the
+    boundary population); else its own port of the interior record, each slot `u` reading only its own rows
+    (`[(u - off_t)·r, (u - off_t + 1)·r)`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either
+    registration registers; each at its root, domain and leaves. Or a port a link names is not read.
+* **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
+  supplied (`replayLinks`): a template its body calls once that reads one of its parameters alone reads that boundary
+  port, and one whose output it returns alone writes its output's.
+* **Over the statements**: `second-cells` when the interior program's strata make no parts, `second-links` when the
+  replay block's Definition makes no links (`linksOf`) or one names a template of no part, `second-statements` when no
+  statements are given, `second-cover` for each part the second draw samples that no statement is for, and
   `second-reported` when the `{value: root}` the verifiers of record report the sessions read (`Record.sessionRegistered`)
   is not the statements' (`statementReads`). A passing check (`check_ok`) holds every session's sample to the second
   draw, cell by cell, and every read it reports to a statement's.
@@ -37,7 +41,9 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
 -/
 module
 
+public import Flock.Program
 public import SampledProofs.Record
+meta import Flock.Program
 meta import SampledProofs.Record
 
 @[expose] public section
@@ -66,6 +72,10 @@ def STATEMENTS_WHY : String :=
 
 def REPORTED_WHY : String :=
   "the registered reads the verifiers of record report are not the statements' registered reads, value by value"
+
+def LINKS_WHY : String :=
+  "the replay block's Definition reads a parameter, or returns, other than through templates of the interior's " ++
+  "parts, each called once and reading one parameter alone or returned alone"
 
 /-- A template's part of the interior population: `Q·n` slots from `lo`, `n` in each sampled replay block. -/
 structure Part where
@@ -114,10 +124,11 @@ structure Link where
   value : String
   deriving Repr, Inhabited, DecidableEq
 
-/-- The design's links from their JSON: none (null), or a list of objects of exactly `template`, `port` and `value`,
-each a string. -/
+def Link.toJson (l : Link) : Json :=
+  Json.mkObj [("port", Json.str l.port), ("template", Json.str l.template), ("value", Json.str l.value)]
+
+/-- Links from their JSON: a list of objects of exactly `template`, `port` and `value`, each a string. -/
 def linksOf? : Json → Option (Array Link)
-  | .null => some #[]
   | .arr ls => ls.mapM fun l =>
     if keys? l != some #["port", "template", "value"] then none else
     match getD l "template", getD l "port", getD l "value" with
@@ -126,15 +137,16 @@ def linksOf? : Json → Option (Array Link)
   | _ => none
 
 /-- What the verifier holds of the run: the replay sample `S`, the parts (`parts`), the interior and boundary
-registrations' records, the second draw's units, the design's links, and the `{value: root}` the verifiers of record
-report the sessions read (`Record.sessionRegistered`). -/
+registrations' records, the second draw's units, the design's links (`replayLinks`, none when the replay block's
+Definition makes none), and the `{value: root}` the verifiers of record report the sessions read
+(`Record.sessionRegistered`). -/
 structure Own where
   sample : Array Nat
   parts : Option (Array Part)
   interior : Json
   boundary : Json
   drawn : Array Nat
-  links : Array Link := #[]
+  links : Option (Array Link) := some #[]
   reported : Option (Array (String × Json)) := none
 
 /-- The record names its ports by template, `<template>/<port>`. -/
@@ -146,6 +158,86 @@ def portOf (named : Bool) (t p : String) : String := if named then t ++ "/" ++ p
 /-- The interior record's ports of template `t`: those under `t/` when it names its ports by template, else all. -/
 def templatePorts (named : Bool) (t : String) (rec : Json) : Array String :=
   ((Record.byPort rec).map (·.1)).filter fun q => !named || q.startsWith (t ++ "/")
+
+/-- The output ports `o<j>` of a circuit returning `t`, one per field: a tuple's or a record's fields, else one. -/
+def outputs : Flock.Program.Ty → Nat
+  | .tuple fs => fs.size
+  | .record fs => fs.size
+  | _ => 1
+
+/-- What part `q` of a body's reference reads: parameters (`true`) and nodes (`false`), by index. -/
+def partSources : Flock.Program.Part → List (Bool × Nat)
+  | .affine p i _ _ => [(p, i)]
+  | .strided p i _ _ _ _ _ => [(p, i)]
+  | .explicit items => items.toList.map fun r => (r.p, r.i)
+
+/-- What reference `s` reads: its parts' (`partSources`). -/
+def sources (s : Flock.Program.Seq) : List (Bool × Nat) := s.parts.toList.flatMap partSources
+
+/-- The nodes of all of `defs`' bodies that call definition `c`. -/
+def callers (defs : Array Flock.Program.Defn) (c : Nat) : Nat :=
+  defs.foldl (fun n d => n + (d.body.nodes.filter (·.fn == c)).size) 0
+
+/-- Node `x`'s template: the composite definition it calls or batches, when no other node of `defs` calls it. -/
+def template? (defs : Array Flock.Program.Defn) (x : Flock.Program.Node) : Option Flock.Program.Defn := do
+  let c ← defs[x.fn]?
+  guard ((x.form == .call || x.form == .batch) && !c.prim && callers defs x.fn == 1)
+  pure c
+
+/-- The links node `x` of replay block `D`'s body makes: for each argument that reads one of `D`'s parameters, its
+template's parameter there reads that one; none when the argument reads anything else too, or `x` is no template's
+(`template?`). -/
+def nodeLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) (x : Flock.Program.Node) :
+    Option (List Link) :=
+  (List.range x.args.size).filterMapM fun a => do
+    let arg ← x.args[a]?
+    let src := sources arg.seq
+    match src.find? (·.1) with
+    | none => pure none
+    | some (_, i) =>
+      guard (src.all (· == (true, i)))
+      let c ← template? defs x
+      let (port, _) ← c.params[a]?
+      let (name, _) ← D.params[i]?
+      pure (some ⟨c.key, port, name⟩)
+
+/-- The link replay block `D`'s return makes: when it returns node `x`'s output alone, `x` a template's (`template?`)
+of one output and `D` of one, that template's `o0` is `D`'s; none when it returns anything else. -/
+def returnLinks (defs : Array Flock.Program.Defn) (D : Flock.Program.Defn) : Option (List Link) :=
+  match sources D.body.ret with
+  | [] => some []
+  | (p, k) :: rest => do
+    guard (!p && rest.all (· == (false, k)) && outputs D.ret == 1)
+    let x ← D.body.nodes[k]?
+    let c ← template? defs x
+    guard (outputs c.ret == 1)
+    pure [⟨c.key, "o0", "o0"⟩]
+
+/-- **The design's links**, from replay block `defs[d]`'s registered Definition, its parameters and its body: those its
+nodes make (`nodeLinks`) and its return (`returnLinks`), each value its own port's name. None when its body reads a
+parameter, or returns, any other way. -/
+def linksOf (defs : Array Flock.Program.Defn) (d : Nat) : Option (Array Link) := do
+  let D ← defs[d]?
+  guard (!D.prim)
+  let ins ← D.body.nodes.toList.mapM (nodeLinks defs D)
+  let outs ← returnLinks defs D
+  pure (ins.flatten ++ outs).toArray
+
+/-- The links of the replay block program `P` defines under descriptor id `key` (`linksOf`), each value the boundary
+registration's port for it, as record `rec` names its ports (`portOf` under `key`). -/
+def replayLinks (P : Flock.Program.Prog) (key : String) (rec : Json) : Option (Array Link) := do
+  let d ← P.index[key]?
+  let ls ← linksOf P.defs d
+  pure (ls.map fun l => { l with value := portOf (byTemplate rec) key l.value })
+
+/-- Links `ls` are derived, each for a template one of parts `ps` is of. -/
+def linksOk (ps : Array Part) : Option (Array Link) → Bool
+  | some ls => ls.all fun l => ps.any (·.template == l.template)
+  | none => false
+
+/-- The link that names template `t`'s session port `port`. -/
+def linkOf (own : Own) (t port : String) : Option Link :=
+  (own.links.getD #[]).find? fun l => l.template == t && l.port == port
 
 /-- The header's `units.indices` are part `p`'s slots in order, and its `instances` their count. -/
 def populationOk (q : Nat) (p : Part) (h : Json) : Bool :=
@@ -197,24 +289,29 @@ def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option 
         | _, _ => false
   | _, _, _ => false
 
-/-- Template `p.template`'s session port `port` may read registered-reads entry `e`: its own port of the interior
-record, each slot only its own rows; else the boundary port a link names for it, each slot only its cell's replay
-block's rows; else a value either registration registers. Each at its root, domain and leaves. -/
+/-- Template `p.template`'s session port `port` may read registered-reads entry `e`: a port a link names, only the
+boundary port it names, each slot only its cell's replay block's rows; any other, its own port of the interior record,
+each slot only its own rows, or a value either registration registers, never a boundary port. Each at its root, domain
+and leaves. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
-  match getD e "value" with
-  | .str v =>
+  match getD e "value", linkOf own p.template port with
+  | .str v, some l =>
+    v == l.value && match (Record.byPort own.boundary).find? (·.1 == v), nat? (getD own.boundary "population") with
+      | some (_, b), some m => sameAt e b && rowsOk q p e m fun u => own.sample[p.span u]?
+      | _, _ => false
+  | .str v, none =>
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
     | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
-    | none, some (_, b) =>
-      own.links.any (fun l => l.template == p.template && l.port == port && l.value == v) && sameAt e b &&
-        match nat? (getD own.boundary "population") with
-        | some m => rowsOk q p e m fun u => own.sample[p.span u]?
-        | none => false
+    | none, some _ => false
     | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
       | some x => sameAt e x
       | none => false
-  | _ => false
+  | _, _ => false
+
+/-- Every port a link names for template `t` is one of `reads`. -/
+def linkedRead (own : Own) (t : String) (reads : Array (String × Json)) : Bool :=
+  (own.links.getD #[]).all fun l => l.template != t || reads.any (·.1 == l.port)
 
 /-- Statement `s`'s failing checks against its part `p` (module docstring), in order. -/
 def stmtCodes (own : Own) (named : Bool) (p : Part) (s : Stmt) : List String :=
@@ -223,8 +320,8 @@ def stmtCodes (own : Own) (named : Bool) (p : Part) (s : Stmt) : List String :=
   [("second-population", populationOk q p s.header),
    ("second-roots", rootsOk named own.interior s.template s.header (reads.map (·.1))),
    ("second-sample", jeq s.draw (ownDraw q p own.drawn)),
-   ("second-read", reads.all fun (port, e) => readOk own named p port e)].filterMap fun (code, ok) =>
-    if ok then none else some code
+   ("second-read", reads.all (fun (port, e) => readOk own named p port e) && linkedRead own p.template reads)].filterMap
+    fun (code, ok) => if ok then none else some code
 
 def detailOf (i : Nat) (t : Json) : Json := Json.mkObj [("statement", Lean.toJson i), ("template", t)]
 
@@ -279,8 +376,11 @@ def failures (allow : Bool) (own : Own) (ps : Array Part) (ss : List Json) : Lis
 def check (allow : Bool) (own : Own) (stmts : Option (Array Json)) : Check :=
   let found := match own.parts, stmts with
     | none, _ => [("second-cells", Json.str CELLS_WHY)]
-    | some _, none => [("second-statements", Json.str STATEMENTS_WHY)]
-    | some ps, some ss => failures allow own ps ss.toList
+    | some ps, none =>
+      if linksOk ps own.links then [("second-statements", Json.str STATEMENTS_WHY)]
+      else [("second-links", Json.str LINKS_WHY)]
+    | some ps, some ss =>
+      if linksOk ps own.links then failures allow own ps ss.toList else [("second-links", Json.str LINKS_WHY)]
   found.foldl (fun c x => c.fail x.1 x.2) {}
 
 /-- The interior registration's audit record `rec` with round 2's check `c` as `checks.statements`, failing where `c`
@@ -346,13 +446,17 @@ theorem failures_ne_nil (own : Own) (ps : Array Part) (ss : List Json) : failure
 /-- **Off, round 2 never passes**: with the two-stage form refused, every run's check fails. -/
 theorem check_refused (own : Own) (stmts : Option (Array Json)) : (check false own stmts).codes ≠ #[] := by
   simp only [check, Ne, fold_codes_empty]
-  split <;> simp [failures_ne_nil]
+  split
+  · simp
+  · split <;> simp
+  · split <;> simp [failures_ne_nil]
 
-/-- **What a passing check says**: the form is allowed, the interior program's strata make parts, each statement is one
-for a part's template, no earlier statement's, and passes every check (`stmtCodes_nil`), each part the second draw
-samples has a statement, and the reads the verifiers of record report are the statements'. -/
+/-- **What a passing check says**: the form is allowed, the interior program's strata make parts, the replay block's
+Definition makes links, each for a part's template, each statement is one for a part's template, no earlier
+statement's, and passes every check (`stmtCodes_nil`), each part the second draw samples has a statement, and the reads
+the verifiers of record report are the statements'. -/
 theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
-    allow = true ∧ ∃ ps, own.parts = some ps ∧
+    allow = true ∧ ∃ ps, own.parts = some ps ∧ linksOk ps own.links = true ∧
       (∀ i < ss.size, ∃ s p, Stmt.ofJson? (ss.toList.getD i .null) = some s ∧
         ps.find? (·.template == s.template) = some p ∧ (templates (ss.toList.take i)).contains s.template = false ∧
         stmtCodes own (byTemplate own.interior) p s = []) ∧
@@ -361,9 +465,12 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
   simp only [check, fold_codes_empty] at h
   split at h
   · simp at h
-  · simp at h
+  · split at h <;> simp at h
   · rename_i ps _ hp hs
     cases hs
+    by_cases hl : linksOk ps own.links = true
+    case neg => rw [if_neg hl] at h; simp at h
+    rw [if_pos hl] at h
     simp only [failures] at h
     split at h
     · simp at h
@@ -371,7 +478,7 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
       simp only [h, List.isEmpty_nil, Bool.true_and, Bool.not_eq_true', Bool.not_eq_false] at hne
       simp only [List.append_eq_nil_iff, List.flatMap_eq_nil_iff, List.mem_range, and_assoc] at h
       obtain ⟨hst, hcov, hrep⟩ := h
-      refine ⟨by simpa using hne, ps, hp, ?_, ?_, ?_⟩
+      refine ⟨by simpa using hne, ps, hp, hl, ?_, ?_, ?_⟩
       · intro i hi
         have hi' : i < ss.toList.length := by simpa using hi
         have := hst i hi'
@@ -398,12 +505,14 @@ theorem check_ok {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow 
         · assumption
         · simp at hrep
 
-/-- A passing statement's checks: its population, roots, sample and registered reads. -/
+/-- A passing statement's checks: its population, roots, sample and registered reads, every port a link names among
+them. -/
 theorem stmtCodes_nil {own : Own} {named : Bool} {p : Part} {s : Stmt} (h : stmtCodes own named p s = []) :
     populationOk own.sample.size p s.header = true ∧
       rootsOk named own.interior s.template s.header ((entries (getD s.registered "ports")).map (·.1)) = true ∧
       jeq s.draw (ownDraw own.sample.size p own.drawn) = true ∧
-      (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true := by
+      (entries (getD s.registered "ports")).all (fun (port, e) => readOk own named p port e) = true ∧
+      linkedRead own p.template (entries (getD s.registered "ports")) = true := by
   simpa [stmtCodes, List.filterMap_eq_nil_iff] using h
 
 private def exRoot (i : Nat) : String := String.ofList (List.replicate 128 (Char.ofNat (48 + i)))
@@ -447,7 +556,7 @@ private def exReading (value : String) (root dom leaves : Nat) (reads : List Nat
 private def exReported (value : String) (root : Nat) (own : Own := exOwn) : Own :=
   { own with reported := some #[(value, .str (exRoot root))] }
 
-private def exLinked : Own := { exOwn with links := #[⟨"Pair_v0", "x", "bx"⟩] }
+private def exLinked : Own := { exOwn with links := some #[⟨"Pair_v0", "x", "bx"⟩] }
 
 #guard (check true (exReported "x" 1) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes.isEmpty
 #guard (check true exOwn (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes == #["second-reported"]
@@ -458,5 +567,57 @@ private def exLinked : Own := { exOwn with links := #[⟨"Pair_v0", "x", "bx"⟩
 #guard (check true (exReported "bx" 5) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes == #["second-read"]
 #guard (check false (exReported "bx" 5 exLinked) (some #[exReading "bx" 5 6 4 [1, 1, 1, 3, 3, 3]])).codes ==
   #["two-stage-form"]
+#guard (check true (exReported "x" 1 exLinked) (some #[exReading "x" 1 2 6 [0, 1, 2, 3, 4, 5]])).codes ==
+  #["second-read"]
+#guard (check true exLinked (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-read"]
+#guard (check true { exOwn with links := none } (some #[exStmt [0, 1, 2, 3, 4, 5] [2, 4]])).codes == #["second-links"]
+#guard (check true { exOwn with links := none } none).codes == #["second-links"]
+#guard (check true { exOwn with links := some #[⟨"Other_v0", "x", "bx"⟩] } none).codes == #["second-links"]
+
+private def exArg (p : Bool) (i : Nat) : Flock.Program.Arg :=
+  { ty := .value 8, seq := Flock.Program.Seq.ofParts #[.affine p i 0 1] }
+
+private def exNode (form : Flock.Program.Form) (fn : Nat) (args : Array Flock.Program.Arg) : Flock.Program.Node :=
+  { form, fn, args, out := .value 8 }
+
+private def exDefn (key : String) (prim : Bool) (params : Array String) (nodes : Array Flock.Program.Node)
+    (ret : Array Flock.Program.Part) (rty : Flock.Program.Ty := .value 8) : Flock.Program.Defn :=
+  { key, id := key, prim, params := params.map (·, .value 8), ret := rty, gates := 0, paramLeaves := 0, outLeaves := 0,
+    body := { params := params.map (·, .value 8), retType := rty, nodes, ret := .ofParts ret, offsets := #[] } }
+
+/-- A template of one parameter `x` (0), calling a primitive (2); a replay block of parameters `x` and `w` (1), of body
+`block` returning `ret`. -/
+private def exDefs (block : Array Flock.Program.Node) (ret : Array Flock.Program.Part)
+    (rty : Flock.Program.Ty := .value 8) : Array Flock.Program.Defn :=
+  #[exDefn "Pair_v0" false #["x"] #[exNode .prim 2 #[exArg true 0]] #[.affine false 0 0 1],
+    exDefn "Block_v0" false #["x", "w"] block ret rty, exDefn "Xor_v1" true #["a"] #[] #[]]
+
+#guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1]) 1 ==
+  some #[⟨"Pair_v0", "x", "x"⟩, ⟨"Pair_v0", "o0", "o0"⟩]
+/-- An argument reading `parts`. -/
+private def exParts (parts : Array Flock.Program.Part) : Flock.Program.Arg :=
+  { ty := .value 8, seq := .ofParts parts }
+
+#guard linksOf (exDefs #[exNode .call 0 #[exParts #[.explicit #[⟨true, 1, 0⟩, ⟨true, 1, 3⟩]]]] #[]) 1 ==
+  some #[⟨"Pair_v0", "x", "w"⟩]
+#guard linksOf (exDefs #[exNode .call 0 #[exArg false 0]] #[.affine false 0 0 1]) 1 ==
+  some #[⟨"Pair_v0", "o0", "o0"⟩]
+#guard linksOf (exDefs #[exNode .call 0 #[exArg true 0], exNode .call 0 #[exArg true 1]] #[]) 1 == none
+#guard linksOf (exDefs #[exNode .call 0 #[exParts #[.affine true 0 0 1, .affine false 1 0 1]]] #[]) 1 == none
+#guard linksOf (exDefs #[exNode .prim 2 #[exArg true 0]] #[]) 1 == none
+#guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine true 1 0 1]) 1 == none
+#guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1] (.tuple #[.value 8, .value 8])) 1 ==
+  none
+#guard linksOf (exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1]) 2 == none
+
+private def exProg : Flock.Program.Prog :=
+  { defs := exDefs #[exNode .batch 0 #[exArg true 0]] #[.affine false 0 0 1], root := 1, programFn := "Block_v0",
+    index := Std.HashMap.ofList [("Pair_v0", 0), ("Block_v0", 1), ("Xor_v1", 2)], sha512 := ByteArray.empty }
+
+#guard replayLinks exProg "Block_v0" (exRec 4 [("Block_v0/x", 5, 6)]) ==
+  some #[⟨"Pair_v0", "x", "Block_v0/x"⟩, ⟨"Pair_v0", "o0", "Block_v0/o0"⟩]
+#guard replayLinks exProg "Block_v0" (exRec 4 [("x", 5, 6)]) ==
+  some #[⟨"Pair_v0", "x", "x"⟩, ⟨"Pair_v0", "o0", "o0"⟩]
+#guard replayLinks exProg "Other_v0" (exRec 4 [("x", 5, 6)]) == none
 
 end SampledProofs.SecondStage

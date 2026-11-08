@@ -23,6 +23,7 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the challenger's coins, with the number of bytes it read (`Select.selectSecond`);
 * `second_statements`: round 2's statement check of second-stage sessions' statements against the interior
   registration and the second stage's cells, the two-stage form allowed or not (`SecondStage.check`);
+* `replay_links`: the design's links, from the replay block's Definition in a program (`SecondStage.replayLinks`);
 * `slots`: the claims' partition over the program and query, and the slots of that sample's checked proof blocks
   (`Slots.select`);
 * `file_population`: why the registration's population over a program and query is not a public file's units in order
@@ -557,9 +558,9 @@ hex source, `check_public`'s values and declared items, the challenger's name an
 (strings), `check_verdicts`' sessions, verdicts and outputs, and `record`'s statement, δ, served units and session roots,
 with the proved units and instances null for the sample's own, and the coins' evidence (`coins_reason`'s, which a sample
 that read coins must carry); under a two-stage rule, `interior` (`Run.Interior`): `{"params", "replay", "values",
-"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots"}` in the same forms,
-`replay` one replay block's program object, and null otherwise. The verifier flips no coins of its own: an input whose
-`coin_source` is not the challenger's is refused. -/
+"record", "received", "source", "coins", "proved_units", "instances", "served", "session_roots", "statements"}` in the
+same forms, `replay` one replay block's program object, and no `links`, which the verifier derives; null otherwise. The
+verifier flips no coins of its own: an input whose `coin_source` is not the challenger's is refused. -/
 def run (j : Json) : V Json := do
   let p ← params (getD j "params")
   let rule ← Select.Rule.ofJson (getD j "rule")
@@ -612,11 +613,11 @@ def run (j : Json) : V Json := do
         | .null => pure none
         | .arr ss => pure (some ss)
         | _ => throw "an interior's statements is a list"
-      let some links := SecondStage.linksOf? (getD it "links")
-        | throw "an interior's links is a list of {template, port, value}, strings"
+      if (field? it "links").isSome then
+        throw "an interior names no links: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
-                    statements, links } : Run.Interior))
+                    statements } : Run.Interior))
   Run.run { params := p, record := getD j "record", rule, values, declared, challenger, received,
             source := ← Flock.unhex (← Flock.J.str j "source" "the run"), closure, sessions, verdicts, outputs,
             statement := getD j "statement", delta := getD j "delta", provedUnits, instances,
@@ -624,8 +625,9 @@ def run (j : Json) : V Json := do
 
 /-- `second_stage.check`'s input to its verdict (`SecondStage.check`): the two-stage form allowed or not (`allow`), the
 first stage's replay sample, the interior program and query, whose strata make the parts, the interior and boundary
-registrations' records, the second stage's units (`drawn`), the design's links, the verdicts, whose verifiers of record
-report the sessions' reads (`Record.sessionRegistered`), and the statements, null for none. -/
+registrations' records, the second stage's units (`drawn`), the design's links (`replayLinks`'), null for none, the
+verdicts, whose verifiers of record report the sessions' reads (`Record.sessionRegistered`), and the statements, null
+for none. -/
 def secondStatements (j : Json) : V Json := do
   let .bool allow := getD j "allow" | throw "allow is not a boolean"
   let .arr ss := getD j "sample" | throw "sample is not a list"
@@ -634,7 +636,11 @@ def secondStatements (j : Json) : V Json := do
   let some drawn := ds.mapM nat? | throw "drawn is not a list of slots"
   let .obj _ := getD j "program" | throw "program is not an object"
   let .obj _ := getD j "query" | throw "query is not an object"
-  let some links := SecondStage.linksOf? (getD j "links") | throw "links is not a list of {template, port, value}, strings"
+  let links ← match getD j "links" with
+    | .null => pure none
+    | ls => match SecondStage.linksOf? ls with
+      | some ls => pure (some ls)
+      | none => throw "links is null or a list of {template, port, value}, strings"
   let .obj _ := getD j "verdicts" | throw "verdicts is not an object"
   let verdicts := entries (getD j "verdicts")
   unless verdicts.all fun (_, v) => (v matches .obj _) && (!(truthy (getD v "of_record") &&
@@ -651,13 +657,23 @@ def secondStatements (j : Json) : V Json := do
       boundary := getD j "boundary", drawn, links, reported := Record.sessionRegistered verdicts }
   return (SecondStage.check allow own stmts).toJson
 
+/-- `second_stage.replay_links`' input to the design's links (`SecondStage.replayLinks`): a program object, the replay
+block's descriptor id in it (`replay`) and the boundary registration's record; null for none. -/
+def replayLinks (j : Json) : V Json := do
+  let .obj _ := getD j "program" | throw "program is not an object"
+  let .str key := getD j "replay" | throw "replay is not a string"
+  let p ← Program.parse (← Flock.canon (getD j "program")).toUTF8
+  return match SecondStage.replayLinks p.prog key (getD j "boundary") with
+    | some ls => Json.arr (ls.map SecondStage.Link.toJson)
+    | none => .null
+
 def table : List (String × (Json → V Json)) :=
   [("decode", decode), ("partition", partition), ("committed_bits", committedBits), ("registration", registration),
    ("registered", registered),
    ("domain", domain), ("produced", produced), ("known_port", knownPort), ("check_draw", checkDraw), ("draw", draw), ("select", select), ("slots", slots),
    ("file_population", FilePart.piece),
    ("check_proved", checkProved),
-   ("select_second", selectSecond), ("second_statements", secondStatements),
+   ("select_second", selectSecond), ("second_statements", secondStatements), ("replay_links", replayLinks),
    ("bound", bound), ("harm_bound", harmBound), ("max_harm", maxHarm), ("bernoulli_bound", bernoulliBound),
    ("hidden_offsets", hiddenOffsets), ("hidden_locate", hiddenLocate), ("hidden_witness", hiddenWitness),
    ("stream", stream), ("fleet", fleet), ("verdict", verdict), ("matches_public", matchesPublic),

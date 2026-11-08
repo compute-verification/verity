@@ -20,8 +20,10 @@ import weakref
 from pathlib import Path
 from typing import Any, Mapping
 
-from verity.core.protocols.sampled_proofs import challenger as C, coins as T, remote as R, service as S
+from verity.core.protocols.sampled_proofs import (challenger as C, coins as T, remote as R, second_stage as SS,
+                                                  service as S)
 from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P
+from verity.ml.circuits.codec import descriptor_id
 from verity.ml.commitments.identity import canonical_json_text
 
 from test_challenger import HOST, entropy
@@ -131,17 +133,28 @@ class Stream(S.Stream):
         """The statements of the second-stage sessions an honest prover runs (`second_stage`): one for each template of
         the interior program, its header over the template's slots of the interior registration at its roots (the ports
         `<template>/<port>` there where the record names ports by template), its sample the second stage's units among
-        them, counted from its first, and its registered reads each value the interior registration registers, under a
-        port of its name (None when it registers none)."""
+        them, counted from its first, and its registered reads: each port the replay block's Definition links
+        (`second_stage.replay_links`) of the boundary port its link names, each slot the first row of its cell's replay
+        block, and each value the interior registration registers, under a port of its name (None when it reads
+        none)."""
         e = self._entries[second.registration.order]
-        rec = second.registration.record
+        rec, boundary = second.registration.record, second.replay_sample.registration.record
         named = any("/" in r["port"] for r in rec["roots"])
-        reads = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")} for x in rec.get("registered", [])}
+        values = {x["value"]: {k: x[k] for k in ("value", "root", "domain", "leaves")}
+                  for x in rec.get("registered", [])}
+        at = {r["port"]: r for r in boundary["roots"]}
+        links = SS.replay_links(e.program, descriptor_id(self.replay), boundary) or ()
+        sample = D.proved(second.replay_sample.draw)
         out = []
         for t, ((lo, hi),) in P.strata(e.interior_program, self.spec.check.query):
             prefix = f"{t}/" if named else ""
             roots = {r["port"].removeprefix(prefix): r for r in rec["roots"] if r["port"].startswith(prefix)}
             units = [u - lo for u in D.proved(second.draw) if lo <= u < hi]
+            n = (hi - lo) // len(sample)
+            reads = {**values, **{x.port: {
+                "value": x.value, **{k: at[x.value][k] for k in ("root", "domain", "leaves")}, "reads_from": lo,
+                "reads": [at[x.value]["leaves"] // boundary["population"] * sample[u // n] for u in range(hi - lo)]}
+                for x in links if x.template == t and x.value in at}}
             out.append({"template": t, "registered": {"ports": reads} if reads else None,
                         "header": {"scheme": rec["scheme"], "instances": hi - lo, "units": {"indices": list(range(lo, hi))},
                                    "frame_v3": {"roots": {p: r["root"] for p, r in roots.items()},

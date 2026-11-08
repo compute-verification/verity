@@ -143,7 +143,7 @@ from dataclasses import dataclass
 from fractions import Fraction
 from typing import Any, Callable, Mapping, NoReturn, Sequence, TypeVar
 
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, descriptor_id
 from verity.ml.circuits.defs import SpecializedDefinition
 from verity.ml.circuits.partition import Level
 from verity.ml.circuits.program import Program
@@ -779,12 +779,11 @@ class _Entry:
     sessions: list[str] | None = None
     outcome: Outcome | None = None
     session: Session | None = None
-    #: under a two-stage design: the interior registration, its population program, what `register_interiors`
-    #: handed R1-R7 (as `copies`) and the design's links, then the second stage's sample and the coins it read
+    #: under a two-stage design: the interior registration, its population program and what `register_interiors`
+    #: handed R1-R7 (as `copies`), then the second stage's sample and the coins it read
     interior: WindowCommitmentRecord | None = None
     interior_program: Program | None = None
     interior_copies: tuple[Any, ...] = ()
-    interior_links: tuple[SS.Link, ...] = ()
     second: Draw | None = None
     second_read: bytes | None = None
 
@@ -1742,8 +1741,7 @@ class Stream:
                            registered: Mapping[str, int] | None = None, supplied: Mapping[str, Any] | None = None,
                            pinned: Mapping[str, str] | None = None, schemas: Mapping[str, str] | None = None,
                            window_root: str | None = None, held: Sequence[str] | None = None,
-                           outputs: Mapping[str, Mapping[str, str]] | None = None,
-                           links: Sequence[Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
+                           outputs: Mapping[str, Mapping[str, str]] | None = None) -> WindowCommitmentRecord:
         """Receive a two-stage design's interior registration, once, after the first stage `draw` and before its second
         stage: the interiors of the replay sample's Q replay blocks, over their Q·n_rho proof blocks, replay block
         `draw.units[i]`'s being [i·n_rho, (i+1)·n_rho). The public-items rule on the interior values under the check's
@@ -1751,10 +1749,9 @@ class Stream:
         (`unit`'s Q·n_rho instances, the check's query, `subset:Q·n_rho`, every one committed, `SCHEME`, the log, whose last
         record is the registration it follows, and the copies given here, as `register` takes them), and
         `population-order`. Its receipt follows the log as a registration's does, and it is logged; it reads no clock.
-        `links` are the design's (`second_stage.links_of`): which boundary port each template's session port may read,
-        none by default. Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
-        `interior-registered` (it has one), or either check failing; ValueError for links that aren't."""
-        linked = SS.links_of(None if links is None else [dict(x) if isinstance(x, Mapping) else x for x in links])
+        It names no links: the verifier derives them from the replay block's Definition (`second_stage.replay_links`).
+        Raises `Refused`: `rule` (a one-stage stream), `unknown`, `not-drawn`, `final`, `delivered`,
+        `interior-registered` (it has one), or either check failing."""
         first = draw.replay_sample or draw
         op: dict[str, Any] = {"op": "interiors", **self._drawn_op(first)}
         got: dict[str, Any] = {}
@@ -1786,7 +1783,7 @@ class Stream:
             earlier = self._log[:]
         self._append(reg)
         e = self._entries[first.registration.order]
-        e.interior, e.interior_program, e.interior_links = reg, got["program"], linked
+        e.interior, e.interior_program = reg, got["program"]
         e.interior_copies = (ports, leaf_layer, anchors, earlier, registered, supplied, pinned, schemas, window_root, held,
                              outputs)
         return reg
@@ -2059,7 +2056,8 @@ class Stream:
                    ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
         """`outcome`'s audit records under a two-stage design, once the verdicts hold: the interior registration's over
         the second stage's sample, with round 2's check of `statements` (`second_stage.check`, over the parts the
-        interior program's strata make, the design's links and the reads the verdicts report), and the registration's
+        interior program's strata make, the design's links, which it derives from the replay block's Definition
+        (`second_stage.replay_links`), and the reads the verdicts report), and the registration's
         over the replay sample, each taking the sessions' reads of its own ports at their own roots (`own_reads`), both
         failing `run` where the whole run isn't the verifier's; and the public outputs."""
         assert e.sessions is not None and e.draw is not None and e.interior is not None and e.second is not None
@@ -2078,7 +2076,8 @@ class Stream:
                              len(proved) if instances is None else instances, statement, verdicts, self.delta,
                              e.sessions, served, session_roots, own_reads=True)
         own = SS.Own(tuple(replayed), SS.parts(len(replayed), P.strata(e.interior_program, self.spec.check.query)),
-                     ireg.record, reg.record, tuple(D.proved(second.draw)), e.interior_links,
+                     ireg.record, reg.record, tuple(D.proved(second.draw)),
+                     SS.replay_links(e.program, descriptor_id(self.replay), reg.record),
                      A.session_registered(verdicts))
         rec = SS.attach(rec, SS.check(SS.FORM, own, statements))
         boundary = V.audit_record(reg.record, reg.receipt, first.draw, first.law, replayed, len(replayed), statement,
@@ -2106,9 +2105,7 @@ class Stream:
                                 "values": [(x.name, x.registered) for x in self._values(interior=True)],
                                 "record": ireg.record, "received": ireg.receipt["received"], "read": e.second_read,
                                 "coins": interior_coins, "proved_units": proved_units, "instances": instances,
-                                "served": served, "session_roots": session_roots, "statements": statements,
-                                "links": [{"template": x.template, "port": x.port, "value": x.value}
-                                          for x in e.interior_links]})
+                                "served": served, "session_roots": session_roots, "statements": statements})
             if not v.ok:
                 rec, boundary = _run_failed(rec, v), _run_failed(boundary, v)
         return rec, public, boundary

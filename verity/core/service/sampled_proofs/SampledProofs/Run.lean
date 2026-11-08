@@ -30,7 +30,8 @@ check the stream ran on it, in the stream's order.
 * `outcome`: the verdicts' hold (`Service.checkVerdicts`), the public outputs of the first verifier, and the
   audit record (`Record.record`) over the sample's proved units, and under a two-stage rule the interior registration's
   over the second stage's sample, with round 2's statement check of the second-stage sessions' statements against the
-  interior registration, the second stage's cells and the design's links as its `statements` check
+  interior registration, the second stage's cells and the design's links, which the verifier derives from the replay
+  block's Definition in the challenger's program (`SecondStage.replayLinks`), as its `statements` check
   (`SecondStage.check`, the two-stage form allowed only when `SecondStage.FORM` is); the symbol accepts when every audit
   record does. Under a two-stage rule each audit record takes the sessions' reads of its registration's own ports at
   their own roots (`own_reads`), whose rows round 2 holds.
@@ -64,8 +65,9 @@ def RECEIPT : String := "verity/registration-receipt/v1"
 /-- A two-stage run's interior registration and second stage: the challenger's copies for the interior registration
 (its program, the population of the replay sample's proof blocks, under the check's query), one replay block's Program,
 the interior values, the record and its place in the log, the second stage's coins and their evidence, its audit
-record's proved units, instances, served units and session roots, the second-stage sessions' statements
-(`SecondStage.Stmt`) and the design's links (`SecondStage.Link`). -/
+record's proved units, instances, served units and session roots, and the second-stage sessions' statements
+(`SecondStage.Stmt`). The design's links are the verifier's own, from the replay block's Definition in the boundary
+program (`SecondStage.replayLinks`), and never part of it. -/
 structure Interior where
   params : OneStage.Params
   replay : Program
@@ -79,7 +81,6 @@ structure Interior where
   served : Json
   sessionRoots : Json
   statements : Option (Array Json) := none
-  links : Array SecondStage.Link := #[]
 
 /-- `values` are the Spec's values, a two-stage rule's boundary values. -/
 structure Input where
@@ -187,7 +188,8 @@ private def interiorAudit (i : Input) (sample : Array Nat) :
     let strata ← Partition.strata it.params.verifier.program it.params.verifier.query
     let own : SecondStage.Own :=
       { sample, parts := SecondStage.parts sample.size strata, interior := it.record, boundary := i.record,
-        drawn := (Draw.proved draw).map Int.toNat, links := it.links,
+        drawn := (Draw.proved draw).map Int.toNat,
+        links := SecondStage.replayLinks i.params.verifier.program.prog it.replay.prog.programFn i.record,
         reported := Record.sessionRegistered i.verdicts }
     let rec_ := SecondStage.attach rec_ (SecondStage.check SecondStage.FORM own it.statements)
     return (jeq (getD rec_ "accepted") (.bool true), [("interior", Json.mkObj [("receipt", receipt), ("draw", draw),

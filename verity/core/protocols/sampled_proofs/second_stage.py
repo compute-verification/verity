@@ -8,6 +8,9 @@ A statement is one second-stage session's: ``{"template", "header", "draw", "reg
 an instance of (its stratum's name under the check's query), its public file's header, its session record's
 ``unit_draw``, and the registered reads it was verified against (``--registered``), None for none.
 
+The design's links are the verifier's own, derived from the replay block's Definition (`replay_links`, which the
+difftest's ``replay_links`` holds to `SecondStage.replayLinks`) and never supplied.
+
 `FORM` is `SecondStage.FORM`, which the run of record reads: off, every two-stage run is refused last
 (``two-stage-form``), and the Python flipped alone disagrees with the run of record."""
 
@@ -17,7 +20,10 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from verity.ml.circuits.codec import canonical_json
+from verity.ml.circuits.codec import canonical_json, definitions, descriptor_id
+from verity.ml.circuits.defs import PrimitiveDefinition
+from verity.ml.circuits.refs import Concat, Explicit
+from verity.ml.circuits.types import RecordType, Tuple
 
 from .one_stage.verdict import Verdict, _Collect
 
@@ -29,6 +35,8 @@ STATEMENTS_WHY = ("a two-stage outcome names its second-stage sessions' statemen
                   "registered reads")
 REPORTED_WHY = ("the registered reads the verifiers of record report are not the statements' registered reads, value by "
                 "value")
+LINKS_WHY = ("the replay block's Definition reads a parameter, or returns, other than through templates of the "
+             "interior's parts, each called once and reading one parameter alone or returned alone")
 STMT_KEYS = ["draw", "header", "registered", "template"]
 
 
@@ -66,29 +74,19 @@ class Link:
     value: str
 
 
-def links_of(j: Any) -> tuple[Link, ...]:
-    """`SecondStage.linksOf?`: the design's links from their JSON, none for None, each an object of exactly ``template``,
-    ``port`` and ``value``, strings; ValueError for anything else."""
-    if j is None:
-        return ()
-    if not (isinstance(j, list) and all(isinstance(x, dict) and sorted(x) == ["port", "template", "value"]
-                                        and all(isinstance(s, str) for s in x.values()) for x in j)):
-        raise ValueError("links is a list of {template, port, value}, strings")
-    return tuple(Link(x["template"], x["port"], x["value"]) for x in j)
-
-
 @dataclass(frozen=True)
 class Own:
     """What the verifier holds of the run: the replay sample, the parts (`parts`), the interior and boundary
-    registrations' records, the second draw's units, the design's links, and the ``{value: root}`` the verifiers of
-    record report the sessions read (`audit.session_registered`)."""
+    registrations' records, the second draw's units, the design's links (`replay_links`, None when the replay block's
+    Definition makes none), and the ``{value: root}`` the verifiers of record report the sessions read
+    (`audit.session_registered`)."""
 
     sample: tuple[int, ...]
     parts: tuple[Part, ...] | None
     interior: Any
     boundary: Any
     drawn: tuple[int, ...]
-    links: tuple[Link, ...] = ()
+    links: tuple[Link, ...] | None = ()
     reported: Mapping[str, Any] | None = None
 
 
@@ -150,6 +148,113 @@ def _port_of(named: bool, t: str, p: str) -> str:
     return f"{t}/{p}" if named else p
 
 
+def _by_template(rec: Any) -> bool:
+    """`SecondStage.byTemplate`: the record names its ports ``<template>/<port>``."""
+    return any("/" in x for x in _by_port(rec))
+
+
+def _outputs(t: Any) -> int:
+    """`SecondStage.outputs`: the output ports ``o<j>`` of a circuit returning `t`, one per field: a tuple's or a
+    record's fields, else one."""
+    return len(t.fields) if isinstance(t, (Tuple, RecordType)) else 1
+
+
+def _sources(r: Any) -> list[tuple[bool, int]]:
+    """`SecondStage.sources`: what a body's reference `r` reads, parameters (True) and nodes (False), by index."""
+    out: list[tuple[bool, int]] = []
+    todo = [r]
+    while todo:
+        q = todo.pop()
+        if isinstance(q, Concat):
+            todo.extend(reversed(q.parts))
+        elif isinstance(q, Explicit):
+            out += [(s == "p", i) for s, i, _j in q.items]
+        else:
+            out.append((q.space == "p", q.idx))
+    return out
+
+
+def _callers(defs: Mapping[str, Any]) -> dict[str, int]:
+    """`SecondStage.callers`: how many nodes of the bodies of `defs` call each definition, by descriptor id."""
+    out: dict[str, int] = {}
+    for f in defs.values():
+        for node in () if isinstance(f, PrimitiveDefinition) else f.body.nodes:
+            out[descriptor_id(node.fn)] = out.get(descriptor_id(node.fn), 0) + 1
+    return out
+
+
+def _template(callers: Mapping[str, int], node: Any) -> Any:
+    """`SecondStage.template?`: the composite definition `node` calls or batches, when no other node calls it."""
+    c = node.fn
+    once = callers.get(descriptor_id(c)) == 1
+    return c if node.form in ("call", "batch") and not isinstance(c, PrimitiveDefinition) and once else None
+
+
+def _node_links(callers: Mapping[str, int], fn: Any, node: Any) -> list[Link] | None:
+    """`SecondStage.nodeLinks`: for each argument of `node` that reads one of replay block `fn`'s parameters, its
+    template's parameter there reads that one; None when the argument reads anything else too, or `node` is no
+    template's."""
+    params, out = [name for name, _t in fn.signature()[0]], []
+    for a, arg in enumerate(node.args):
+        src = _sources(arg.refs)
+        first = next((x for x in src if x[0]), None)
+        if first is None:
+            continue
+        c = _template(callers, node) if all(x == first for x in src) else None
+        ports = [] if c is None else [name for name, _t in c.signature()[0]]
+        if c is None or a >= len(ports) or first[1] >= len(params):
+            return None
+        out.append(Link(descriptor_id(c), ports[a], params[first[1]]))
+    return out
+
+
+def _return_links(callers: Mapping[str, int], fn: Any) -> list[Link] | None:
+    """`SecondStage.returnLinks`: when replay block `fn` returns one node's output alone, that node a template's of one
+    output and `fn` of one, that template's ``o0`` is `fn`'s; None when it returns anything else."""
+    src, nodes = _sources(fn.body.ret), fn.body.nodes
+    if not src:
+        return []
+    p, k = src[0]
+    if p or any(x != (False, k) for x in src) or _outputs(fn.signature()[1]) != 1 or k >= len(nodes):
+        return None
+    c = _template(callers, nodes[k])
+    return None if c is None or _outputs(c.signature()[1]) != 1 else [Link(descriptor_id(c), "o0", "o0")]
+
+
+def links_of(defs: Mapping[str, Any], key: str) -> tuple[Link, ...] | None:
+    """`SecondStage.linksOf`: the design's links, from replay block ``defs[key]``'s registered Definition, its
+    parameters and its body: those its nodes make (`_node_links`) and its return (`_return_links`), each value its own
+    port's name. None when its body reads a parameter, or returns, any other way."""
+    fn = defs.get(key)
+    if fn is None or isinstance(fn, PrimitiveDefinition):
+        return None
+    callers, out = _callers(defs), []
+    for node in fn.body.nodes:
+        links = _node_links(callers, fn, node)
+        if links is None:
+            return None
+        out += links
+    ret = _return_links(callers, fn)
+    return None if ret is None else tuple(out + ret)
+
+
+def replay_links(program: Any, key: str, rec: Any) -> tuple[Link, ...] | None:
+    """`SecondStage.replayLinks`: the links of the replay block `program` defines under descriptor id `key` (`links_of`
+    over the definitions its descriptor records, `codec.definitions`), each value the boundary registration's port for
+    it, as record `rec` names its ports."""
+    links, named = links_of(definitions(program), key), _by_template(rec)
+    return None if links is None else tuple(Link(x.template, x.port, _port_of(named, key, x.value)) for x in links)
+
+
+def _links_ok(ps: Sequence[Part], links: Sequence[Link] | None) -> bool:
+    """`SecondStage.linksOk`: links are derived, each for a template one of the parts is of."""
+    return links is not None and all(any(p.template == x.template for p in ps) for x in links)
+
+
+def _link_of(own: Own, t: str, port: str) -> Link | None:
+    return next((x for x in own.links or () if x.template == t and x.port == port), None)
+
+
 def _population_ok(q: int, p: Part, h: Any) -> bool:
     indices, m = _get(_get(h, "units"), "indices"), _get(h, "instances")
     return (isinstance(indices, list) and _nat(m) and m == q * p.n and len(indices) == q * p.n
@@ -207,28 +312,36 @@ def _rows_ok(q: int, p: Part, e: Any, units: int, unit: Callable[[int], int | No
 
 
 def _read_ok(own: Own, named: bool, p: Part, port: str, e: Any) -> bool:
-    """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: its own
-    port of the interior record, each slot only its own rows; else the boundary port a link names for it, each slot only
-    its cell's replay block's rows; else a value either registration registers. Each at its root, domain and leaves."""
+    """`SecondStage.readOk`: template ``p.template``'s session port `port` may read registered-reads entry `e`: a port a
+    link names, only the boundary port it names, each slot only its cell's replay block's rows; any other, its own port
+    of the interior record, each slot only its own rows, or a value either registration registers, never a boundary
+    port. Each at its root, domain and leaves."""
     v, q = _get(e, "value"), len(own.sample)
     if not isinstance(v, str):
         return False
-    x, b = _by_port(own.interior).get(v), _by_port(own.boundary).get(v)
-    if x is not None:
-        return (v == _port_of(named, p.template, port) and _same_at(e, x)
-                and _rows_ok(q, p, e, q * p.n, lambda u: u - p.lo))
-    if b is not None:
-        m = _get(own.boundary, "population")
+    link = _link_of(own, p.template, port)
+    if link is not None:
+        b, m = _by_port(own.boundary).get(v), _get(own.boundary, "population")
 
         def block(u: int) -> int | None:
             i = p.span(u)
             return own.sample[i] if 0 <= i < q else None
-        return (Link(p.template, port, v) in own.links and _same_at(e, b) and _nat(m)
-                and _rows_ok(q, p, e, m, block))
+        return v == link.value and b is not None and _nat(m) and _same_at(e, b) and _rows_ok(q, p, e, m, block)
+    x = _by_port(own.interior).get(v)
+    if x is not None:
+        return (v == _port_of(named, p.template, port) and _same_at(e, x)
+                and _rows_ok(q, p, e, q * p.n, lambda u: u - p.lo))
+    if v in _by_port(own.boundary):
+        return False
     x = _registered_entry(own.boundary, v)
     if x is None:
         x = _registered_entry(own.interior, v)
     return x is not None and _same_at(e, x)
+
+
+def _linked_read(own: Own, t: str, reads: Sequence[tuple[str, Any]]) -> bool:
+    """`SecondStage.linkedRead`: every port a link names for template `t` is one of `reads`."""
+    return all(x.template != t or any(port == x.port for port, _ in reads) for x in own.links or ())
 
 
 def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
@@ -236,7 +349,8 @@ def _stmt_codes(own: Own, named: bool, p: Part, s: Stmt) -> list[str]:
     checks = (("second-population", _population_ok(q, p, s.header)),
               ("second-roots", _roots_ok(named, own.interior, s.template, s.header, [name for name, _ in reads])),
               ("second-sample", _jeq(s.draw, own_draw(q, p, own.drawn))),
-              ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)))
+              ("second-read", all(_read_ok(own, named, p, port, e) for port, e in reads)
+               and _linked_read(own, p.template, reads)))
     return [code for code, ok in checks if not ok]
 
 
@@ -262,7 +376,7 @@ def _same_dict(a: Mapping[str, Any], b: Mapping[str, Any]) -> bool:
 
 
 def _failures(allow: bool, own: Own, ps: Sequence[Part], ss: Sequence[Any]) -> list[tuple[str, Any]]:
-    named, q = any("/" in x for x in _by_port(own.interior)), len(own.sample)
+    named, q = _by_template(own.interior), len(own.sample)
     found: list[tuple[str, Any]] = []
     for i, j in enumerate(ss):
         s = _stmt(j)
@@ -288,6 +402,8 @@ def check(allow: bool, own: Own, statements: Sequence[Any] | None) -> Verdict:
     once, with the detail it first failed with (`SecondStage.check`)."""
     if own.parts is None:
         found = [("second-cells", CELLS_WHY)]
+    elif not _links_ok(own.parts, own.links):
+        found = [("second-links", LINKS_WHY)]
     elif statements is None:
         found = [("second-statements", STATEMENTS_WHY)]
     else:
@@ -305,4 +421,5 @@ def attach(rec: Mapping[str, Any], v: Verdict) -> dict[str, Any]:
     return out if v.ok else {**out, "accepted": False, "profile": None, "integrity_profile": None, "wrong_units": None}
 
 
-__all__ = ["FORM", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "statement_reads"]
+__all__ = ["FORM", "Link", "Own", "Part", "attach", "check", "links_of", "own_draw", "parts", "replay_links",
+           "statement_reads"]
