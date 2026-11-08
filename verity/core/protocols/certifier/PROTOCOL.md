@@ -1541,6 +1541,11 @@ memory operations as records, sorted once, as `advice_check` sorts its events.
   - The counting form and `code_v1`'s model (`ArithCountStep_v1`, `ArithCountFinish_v1` and `BookKT_v1`).
     Lowering an integer (the window's counts, each order entry and each shortfall) to its `Binned` symbols in
     the book's public tables isn't built, so the circuit charges the decisions only.
+  - The length terms. `ChargeCount_v2` doesn't count them. While advice v1 sends each request's output_len and finish
+    (the registration's `send_lengths`, on until a proof holds the length rule), they go as a plain tail after the
+    segment of the window the request's body lands in: output_len in ⌈log2(max_tokens + 1)⌉ bits, then finish in 1.
+    `ChargeCount_v2` and its Lean (`WindowCharge.window`) charge the segment alone, so they undercount each such window
+    by those bits, about 9 a request, until the length rule is proved and the tail goes.
 - `ReplayStep_v1` takes the prefix layer (each hit, its evictable blocks, each slot's returns) as witness it bounds.
   The hits are fixed: `CacheStep_v1` derives them while the no-eviction bound holds, and past it each is the longest
   cached prefix less v1's sent, charged shortfall. The evictable counts and the returns stay bounded witness. A
