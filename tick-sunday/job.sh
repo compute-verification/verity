@@ -38,10 +38,9 @@ TUN=
 cleanup() { [ -n "$TUN" ] && kill "$TUN" 2>/dev/null; rm -rf "$W"; }
 trap cleanup EXIT
 log() { echo "$(date -u +%H:%M:%SZ) tick: $*" | tee -a "$OUT/job.log"; }
-git rev-parse HEAD > "$OUT/tree.txt" 2>/dev/null || true
 
 if [ -z "${FAKE:-}" ]; then
-  PEER=${PEER:?PEER: research@HOST, the serving node}; PORT=${PORT:?PORT: the endpoint's port on the peer's loopback}
+  PEER=${PEER:?PEER: research@HOST, the serving node}; PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the peer}
   KEY=${KEY:-$HOME/.ssh/vy-tick-tunnel}
   LOCAL=${LOCAL:-$(python3 -c 'import socket; s = socket.socket(); s.bind(("127.0.0.1", 0)); print(s.getsockname()[1])')}
   log "reach: $PEER's 127.0.0.1:$PORT from $(hostname) as 127.0.0.1:$LOCAL, key $KEY"

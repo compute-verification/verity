@@ -7,11 +7,11 @@
 # on the serving node's 127.0.0.1; PEER defaults to vy-dc-h200's address in the machine registry; KEY is the tunnel key's
 # path on cpu-11 (the job's default ~/.ssh/vy-tick-tunnel).
 # The run, not in a pool: a pool's slot runs its job at nice 19, behind the node's checks, which a ticking certifier can't
-# be. 8 GB reserved (waiting up to 5 min for it), 90 min at most (about 36 min of serving and checking), its custody key
+# be. 4 GB reserved (waiting up to 5 min for it), 90 min at most (about 36 min of serving and checking), its custody key
 # 6 h. Everything it keeps is in its out/ (job.sh). Cite the run id in the report, which keeps its record in the store.
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
-PORT=${PORT:?PORT: the endpoint's port on the serving node's 127.0.0.1}
+PORT=${PORT:?PORT: the endpoint port on 127.0.0.1 of the serving node}
 REG=${RESEARCH_NOTES:-$HOME/.research/notes}/machines.d/vy-dc-h200.toml
 if [ -z "${PEER:-}" ]; then
   host=$(sed -n 's/^host = "\(.*\)"$/\1/p' "$REG" 2>/dev/null || true)
@@ -26,4 +26,4 @@ echo "launch: $PEER's 127.0.0.1:$PORT from vy-nebius-cpu-11, tree $(git rev-pars
 if [ "${1:-}" = --reach ]; then
   exec "${run[@]}" --env REACH_ONLY=1 --timeout 3m --wait -- bash tick-sunday/job.sh
 fi
-exec "${run[@]}" --mem-gb 8 --mem-wait 300 --timeout 90m --custody-ttl 6h -- bash tick-sunday/job.sh
+exec "${run[@]}" --mem-gb 4 --mem-wait 300 --timeout 90m --custody-ttl 6h -- bash tick-sunday/job.sh
