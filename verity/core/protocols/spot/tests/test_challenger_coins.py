@@ -4,12 +4,15 @@ challenger's commitment before its bytes are used; the verifier replays it from 
 `read_reason`) against the roots the challenger's signed log shows. A bad opening, a commitment sampled twice, coins the
 log doesn't show released after the commitment, coins of another commitment and a coin opened but not read are refused,
 in process, over a served challenger, and through the proof system's `Stream.select`; and the Lean verifier's
-run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`)."""
+run refuses an outcome whose coins' evidence fails (`Stream.outcome(coins=...)`). A window's seed salt
+(`coins.draw_seed_salt`) is its family's first coin after the window's open root, drawn once, which the verifier reads
+back from the challenger's log (`coins.seed_salt_of`), refusing a second coin, a forged one and another window's."""
 
 from __future__ import annotations
 
 import dataclasses
 import itertools
+import re
 
 import pytest
 
@@ -281,3 +284,82 @@ def test_the_lean_run_refuses_a_draw_whose_coins_the_challenger_did_not_release_
     with pytest.raises(S.Refused, match="coins") as refused:
         sampled.outcome(draw, _lean(), {"statement": "stub"}, coins={"segment": segments["honest"]})
     assert "read none" in refused.value.verdict.detail["coins"]
+
+
+def _salt_coins(challenger: C.LiveChallenger | None = None) -> tuple[C.LiveChallenger, T.ChallengerCoins]:
+    ch = challenger or C.LiveChallenger(SCHEME, 0, [(T.SEED_SALT_FAMILY, 2), *FAMILIES], entropy("salt"))
+    return ch, T.ChallengerCoins(C.LiveRecord(ch, T.SEED_SALT_FAMILY, itertools.count().__next__))
+
+
+def test_a_windows_seed_salt_is_its_familys_first_coin_after_the_open_root_drawn_once():
+    """The seed salt is the seed-salt family's first coin, opened after the window's open root and read whole, with no
+    derivation, which the verifier replays from the record. The draw refuses coins of another family, a window root in
+    another form, and a family with a coin open already: nothing redraws a window's salt."""
+    window = "a1" * 64
+    ch, coins = _salt_coins()
+    salt = T.draw_seed_salt(coins, window)
+    (segment,) = coins.segments
+    assert salt == segment.openings[0].coin and len(salt) == C.COIN_BYTES
+    assert (segment.label, segment.start, segment.after.hex(), len(segment.openings)) == (T.SEED_SALT_FAMILY, 0, window, 1)
+    assert coins.record.roots == [bytes.fromhex(window)] and coins.record.reason() is None
+    assert T.challenger_stream(ch.commitment, segment.to_json(), bytes.fromhex(window), coins.record.roots) == salt
+    with pytest.raises(C.CoinError, match="drawn once"):
+        T.draw_seed_salt(coins, window)
+    with pytest.raises(C.CoinError, match="drawn once"):
+        T.draw_seed_salt(T.ChallengerCoins(coins.record), "22" * 64)
+    _, draw = _coins(ch)
+    with pytest.raises(C.CoinError, match="seed-salt family"):
+        T.draw_seed_salt(draw, window)
+    for bad in (window.upper(), window[:-2], window + "00", "", None, bytes.fromhex(window)):
+        with pytest.raises(C.CoinError, match=re.escape(T.SEED_SALT_WINDOW)):
+            T.draw_seed_salt(_salt_coins()[1], bad)
+    assert draw.record.roots == []
+
+
+def test_a_windows_seed_salt_is_read_back_from_its_challengers_log(tmp_path, signer, monkeypatch):  # noqa: F811
+    """Over a challenger served on loopback for the window, withheld: the stream draws the window's seed salt at its
+    open (`Stream.seed_salt`), and the verifier reads the same salt back from the challenger's log under its own key
+    (`coins.seed_salt_of`: the session the auditor's ledger opens for the window, its one seed-salt coin after the
+    window's open root). A session whose challenger released a second coin after the root (a server picking its salt
+    between two) is refused, read alone or both, and so are a forged coin, another family's coins and another window's."""
+    import test_remote
+    from test_challenger import lms_verify
+    from test_service import _stream
+
+    monkeypatch.setattr(test_remote, "FAMILIES", [(T.SEED_SALT_FAMILY, 2), ("positions", 2)])
+    window, other = test_remote.WINDOW["root"], "22" * 64
+    host = Host(tmp_path, signer, withhold=True)
+    alt = Host(tmp_path, signer, session="s-2", seed="alt", ledger=host.ledger, window={"root": other}, withhold=True)
+    stream, salts, segments, second = _stream(), {}, {}, None
+    for h, root in ((host, window), (alt, other)):
+        client = R.RemoteChallenger.connect(h.address)
+        coins = T.ChallengerCoins(C.LiveRecord(client, T.SEED_SALT_FAMILY, itertools.count().__next__))
+        salts[root] = stream.seed_salt(coins, root)
+        if h is alt:
+            coins.record.record(bytes.fromhex(root))
+        client.close()
+        coins.settle()
+        assert h.ended() is None
+        segments[root] = coins.segments[0].to_json()
+        second = client.opened.get((T.SEED_SALT_FAMILY, 1), second)
+    assert [e["window_root"] for e in stream.epoch_log] == [window, other]
+    ledger = R.ledger_lines(host.ledger.path)
+    files = {window: R.session_files(host.directory), other: R.session_files(alt.directory)}
+
+    def read(root: str, segment: dict | None = None, at: str | None = None) -> bytes | str:
+        """The seed salt the verifier reads on window `at` (`root`'s, unless given) from `root`'s session's evidence."""
+        evidence = {"ledger": ledger, "main": test_remote.MAIN, "pins": test_remote.HOST_PINS,
+                    "segment": segments[root] if segment is None else segment, "session": files[root]}
+        try:
+            return T.seed_salt_of(test_remote.pinned_key(), at or root, evidence, lms_verify)
+        except C.CoinError as e:
+            return str(e)
+
+    assert read(window) == salts[window] and len(salts[window]) == C.COIN_BYTES
+    assert "not the ones the challenger's log shows" in read(other)
+    assert second is not None and read(other, {**segments[other], "openings": [*segments[other]["openings"],
+                                                                                second.to_json()]}) == T.SEED_SALT_ONE
+    forged = {**segments[window], "openings": [{**segments[window]["openings"][0], "coin": "5a" * 64}]}
+    assert "does not open" in read(window, forged)
+    assert "family's" in read(window, {**segments[window], "label": "positions"})
+    assert isinstance(read(window, at=other), str) and isinstance(read(window, at="33" * 64), str)
