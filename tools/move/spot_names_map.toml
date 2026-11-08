@@ -33,10 +33,12 @@ files = ["*"]
 [rewrite]
 # Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the Glossary's table
 # of older names, the retired-terms lint's own examples, the frozen backends, files whose bytes a digest pins
-# (`rename.py` repins a `TRUSTED.sha256` line itself), lock files, move_check's own tests, and the Lean tools' fixtures,
-# locks as they were on a past tree, which their tests read as such.
+# (`rename.py` repins a `TRUSTED.sha256` line itself), move_check's own tests, and the Lean tools' fixtures, locks as
+# they were on a past tree, which their tests read as such. The root `uv.lock` is rewritten: its one line naming
+# `verity/core/service/sampled_proofs`, a workspace member's directory, moves with it (`uv lock` refuses a lock whose
+# member moved).
 exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "GLOSSARY.md",
-           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock",
+           "tests/test_retired_terms.py", "fixtures/**", "*.patch", "**/TRUSTED.sha256", "benchmarks/**/uv.lock",
            "tools/verity/check/tests/test_move_check.py", "tools/verity/lean/tests/fixtures/**"]
 
 [keep]
