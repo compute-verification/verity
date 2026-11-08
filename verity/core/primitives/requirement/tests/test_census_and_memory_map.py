@@ -367,7 +367,7 @@ def test_the_memory_map(r1, requests, server):
 def test_a_block_its_last_reader_completes_is_in_no_record(requests, server):
     """A request ending on a page boundary while another runs on: r1 (a prefill of 4 and 4 decode steps) from step 0 completes
     its second page at its last step, 4, which is also its last structural reader. Its rows were live only while the page was incomplete,
-    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling of 18 Oct, 02:29Z):
+    so no step reads the block while it is resident, and it is in no record (memory-map/v1's ruling):
     the link holds at every step, and the map holds no block with every row dead."""
     value, session = map_case({"r0": requests["r0"], "r1": requests["r1_page"]}, {"r0": 0, "r1": 0})
     out = _lean(value, server)
