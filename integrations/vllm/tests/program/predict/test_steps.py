@@ -13,11 +13,13 @@ import sys
 from pathlib import Path
 from types import SimpleNamespace as NS
 
+import numpy as np
 import pytest
 from verity_vllm.config import MANIFESTS, WORKLOADS, RowEngine
 from verity_vllm.engine.profiles.dense_generic import HF_CONFIG_DIR
 from verity_vllm.pipeline import launch_context as LC
 from verity_vllm.pipeline import window_advice as WA
+from verity_vllm.pipeline.build_instances import check_rows
 from verity_vllm.program.predict import batch as B
 from verity_vllm.program.predict import score as S
 from verity_vllm.program.predict.build import Unexpressible, _Specs, build_program, model_shape
@@ -25,6 +27,7 @@ from verity_vllm.program.predict.common import _arr
 from verity_vllm.program.predict.domain import check_phi
 from verity_vllm.program.predict.dsa import Net
 from verity_vllm.program.predict.phi import Phi
+from verity_vllm.program.frontend import stop_rule as SR
 from verity_vllm.program.frontend.targets import parse_launch_context
 from verity_vllm.program.predict.steps import (
     Registered,
@@ -36,6 +39,7 @@ from verity_vllm.program.predict.steps import (
     plan_steps,
     policy_of,
     request_program,
+    stop_of,
     trace_commands,
     trace_dir,
 )
@@ -45,7 +49,9 @@ from verity.ml.definitions.registry.topp_geometry import registered_splits
 
 from verity.core.protocols.certifier import advice as I1
 from verity.ml.circuits.defs import bind
+from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.partition_object import calls
+from verity.ml.circuits.refs import runs
 
 pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 
@@ -53,7 +59,7 @@ FIX = Path(__file__).parent / "fixtures"
 RTXPRO6000 = {"compute_capability": [12, 0], "num_sms": 188}
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
         "num_key_value_heads": 2, "num_hidden_layers": 2, "vocab_size": 256, "rms_norm_eps": 1e-5, "tie_word_embeddings": True,
-        "max_position_embeddings": 64, "hidden_act": "silu"}
+        "max_position_embeddings": 64, "hidden_act": "silu", "eos_token_id": 255}
 GREEDY = {"temperature": 0.0, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 4}
 STOCH = {"temperature": 0.8, "top_p": 1.0, "top_k": 0, "seed": None, "max_tokens": 3, "min_p": 0.0, "repetition_penalty": 1.0}
 STOCH_POLICY = {"kind": "stochastic", "temperature": 0.8, "top_p": 1.0, "top_k": 0, "seeded": True, "splits": registered_splits(188)}
@@ -257,6 +263,100 @@ def test_advice_the_certified_bodies_contradict_is_refused(change, fact):
     change(ingress)
     with pytest.raises(Unexpressible, match=fact):
         compile_steps(reg, advice, ingress)
+
+
+def _stops(body: dict = GREEDY) -> tuple[I1.Advice, dict]:
+    """r0 (LP 8) finished on a stop id at its 3rd output, under max_tokens 4; r1, its shape under `body`, kept its max_tokens 3."""
+    return _session([(8, 3, GREEDY), (8, 3, {**body, "max_tokens": 3})],
+                    [[(0, 0, 8), (1, 0, 8)], [(0, 8, 1), (1, 8, 1)], [(0, 9, 1), (1, 9, 1)]])
+
+
+def _rule(program):
+    return program.fn.body.nodes[-1]
+
+
+def test_each_request_program_returns_its_length_rule_as_its_last_check():
+    """Each request Program's last Call is `StopRule_v1` over exactly the outputs it returns, at the registered model's stop ids,
+    FINISH as the request ended: r0 on a stop id (eos), r1 at its max_tokens (length).  It is the Program's last check, at the
+    last returned leaf, and requests of one shape under different finishes are different Programs with different traces."""
+    reg, (advice, ingress) = _registered(), _stops()
+    c = compile_steps(reg, advice, ingress)
+    u0, u1 = c.requests
+    assert (u0.stop, u1.stop) == ({"ids": [255], "finish": "eos"}, {"ids": [255], "finish": "length"})
+    assert (u0.LP, u0.T, u0.policy) == (u1.LP, u1.T, u1.policy) and u0.digest != u1.digest and u0.key() != u1.key()
+    for u in (u0, u1):
+        body = c.programs[u.digest].fn.body
+        rule = _rule(c.programs[u.digest])
+        assert rule.fn.id == bind(IO.StopRule, L=3, STOP=(255,), FINISH=u.stop["finish"]).id and rule.name == SR.NAME
+        assert runs(rule.args[0].refs) == runs(body.ret.slice(0, 3))
+        assert check_rows(body, 1) == [[len(body.nodes) - 1, 0, 1]]
+        assert request_program(reg, u).checks == {"output": 1, "accept": 1, "of": [SR.what(u.stop)]}
+    s = c.summary()["requests"]
+    assert [r["stop"] for r in s] == [u0.stop, u1.stop] and trace_dir(s[0]) != trace_dir(s[1])
+    cmds = trace_commands(c.summary(), reg, "/out")
+    assert sorted((json.loads(cmd[cmd.index("--stop") + 1]) for cmd in cmds), key=json.dumps) == sorted([u0.stop, u1.stop], key=json.dumps)
+
+
+@pytest.mark.parametrize("finish, ids, ok", [
+    ("eos", [11, 12, 255], 1),        # an honest eos finish
+    ("length", [11, 12, 13], 1),      # an honest length finish
+    ("eos", [11, 12, 13], 0),         # cut short before its first stop
+    ("eos", [11, 255, 255], 0),       # run past a stop to finish on another
+    ("length", [11, 255, 13], 0),     # run past a stop to its cap
+    ("length", [11, 12, 255], 0),     # a stop at its cap read as a length finish
+])
+def test_a_programs_own_length_rule_passes_an_honest_finish_and_refuses_a_stream_cut_short_or_run_past_a_stop(finish, ids, ok):
+    """The rule each Program carries, evaluated on the streams its 3 outputs could hold: 1 only for the stream that ends the way
+    the request did."""
+    reg, (advice, ingress) = _registered(), _stops()
+    c = compile_steps(reg, advice, ingress)
+    u = next(u for u in c.requests if u.stop["finish"] == finish)
+    assert int(evaluate_batch(_rule(c.programs[u.digest]).fn, np.array([ids], dtype=np.uint32), kernel="reference")[0]) == ok
+
+
+@pytest.mark.parametrize("body, why", [
+    ({"stop": ["\n"]}, r"stop strings \['\\n'\]"),
+    ({"stop": "\n"}, r"stop strings '\\n'"),
+    ({"stop_token_ids": [7]}, r"stop_token_ids \[7\]"),
+])
+def test_a_body_with_stops_of_its_own_is_refused_naming_the_fix(body, why):
+    reg, (advice, ingress) = _registered(), _stops()
+    ingress["q1"].update(body)
+    with pytest.raises(Unexpressible, match=f"request 1: {why}.*The fix: "):
+        compile_steps(reg, advice, ingress)
+
+
+def test_ignore_eos_leaves_a_request_no_stop_ids_and_no_rule():
+    """Under ignore_eos vLLM stops a request only on its own stop_token_ids (`SamplingParams.update_from_generation_config`), which
+    are refused, so it has none: no rule, and a finish on a stop id is refused.  Empty stops are none, and compile as without them."""
+    reg, (advice, ingress) = _registered(), _stops()
+    plain = compile_steps(reg, advice, ingress)
+    empty = {**ingress, "q1": {**ingress["q1"], "stop": [], "stop_token_ids": [], "ignore_eos": False}}
+    assert [u.digest for u in compile_steps(reg, advice, empty).requests] == [u.digest for u in plain.requests]
+    ignored = compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": True}})
+    u1 = ignored.requests[1]
+    assert u1.stop is None and _rule(ignored.programs[u1.digest]).fn.id.startswith("TokenSelect")
+    with pytest.raises(Unexpressible, match="request 0: finished on a stop token with ignore_eos set"):
+        compile_steps(reg, advice, {**ingress, "q0": {**ingress["q0"], "ignore_eos": True}})
+    with pytest.raises(Unexpressible, match="request 1: ignore_eos 'yes', not a bool"):
+        compile_steps(reg, advice, {**ingress, "q1": {**ingress["q1"], "ignore_eos": "yes"}})
+
+
+def test_a_model_that_states_no_stop_ids_has_no_rule_and_refuses_a_finish_on_one():
+    bare = _registered({k: v for k, v in TINY.items() if k != "eos_token_id"})
+    advice, ingress = _stops()
+    with pytest.raises(Unexpressible, match="request 0: finished on a stop id, and the registered model states none"):
+        compile_steps(bare, advice, ingress)
+    c = compile_steps(bare, *_session([(8, 3, {**GREEDY, "max_tokens": 3})], [[(0, 0, 8)], [(0, 8, 1)], [(0, 9, 1)]]))
+    (u,) = c.requests
+    assert u.stop is None and not _rule(c.programs[u.digest]).fn.id.startswith("StopRule")
+
+
+@pytest.mark.parametrize("T, finish", [(4, "eos"), (2, "length"), (0, "length")])
+def test_a_request_finishes_on_eos_only_in_the_program_that_holds_its_last_output(T, finish):
+    """A window that carries a request out before its last output ends its Program on no stop id: FINISH length there."""
+    assert stop_of(0, I1.RequestAdvice("q0", 8, 5, "eos"), T, (255,)) == {"ids": [255], "finish": finish}
+    assert stop_of(0, I1.RequestAdvice("q0", 8, 5, "length"), T, (255,)) == {"ids": [255], "finish": "length"}
 
 
 def _hit(shared: int, hit: int = 16, body: dict = GREEDY) -> tuple[I1.Advice, dict]:

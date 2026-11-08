@@ -13,6 +13,7 @@ How it works
    tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value the served run decides and no
    circuit computes (the top-k order of a DSA row past TOPK) is a field of a `run` input a rule declares (`Rule.run_inputs`),
    checked in gates: each check's bit is an output after the source's (`Ctx.check`), which the verifier requires to be 1.
+   A config ``stop`` (a request's length rule, `stop_rule`) adds the last check, over the source's one returned value.
 3. Every graph node is translated by exactly one applicable rule (`rules/`): views are reference rearrangements;
    ops/in-place ops/state patterns emit calls of REGISTERED definitions bound to the mode's kind vocabulary
    (profile mode: the profile's kernels; reference mode: exact CPU-f32 kinds). Rules decide structurally
@@ -51,6 +52,8 @@ from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refu
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
+from verity_vllm.program.frontend.stop_rule import NAME as STOP_NAME
+from verity_vllm.program.frontend.stop_rule import check as stop_check
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
@@ -821,6 +824,17 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
+    if (stop := ctx.config.get("stop")) is not None:
+        # the length rule over a request's outputs (`stop_rule`): a Call no fx node lowers, the body's last and the last check
+        if len(outs) != 1:
+            refuse("shape", out_node, None, f"the length rule (config `stop`) reads a request's outputs, one returned value, and the "
+                                            f"source returns {len(outs)}")
+        try:
+            ok, what = stop_check(ctx.B, outs[0], stop)
+        except (TypeError, ValueError) as e:
+            refuse("shape", out_node, None, f"the length rule (config `stop`): {e}")
+        ctx.node_hints[len(ctx.B.nodes) - 1] = STOP_NAME
+        ctx.check(ok, what)
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))

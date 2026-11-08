@@ -387,6 +387,24 @@ def test_s3_tiny_greedy_serve_matches_serve_v1():
     assert rep.provenance["mutation_effects"] == []
 
 
+def test_s3_a_stop_config_returns_the_length_rule_as_the_programs_last_check():
+    """With a `stop` config (the Build's `--stop`) the derived Program returns `StopRule_v1` over its outputs as its last check, the
+    Call `predict.build` makes for the same config, and claims no family; a config the rule can't take is refused."""
+    from verity.ml.circuits.defs import bind as ir_bind
+    from verity.ml.definitions.registry import io_shell as IO
+    from verity_vllm.program.frontend import stop_rule as SR
+    C, stop = _tiny_config(), {"ids": [7, 9], "finish": "eos"}
+    LP, STEPS = 3, 2
+    with torch.device("meta"):
+        m = ex.GreedyServe(C, STEPS)
+    rep = derive_report(m, (_meta(LP, dtype=torch.int32),), **PROF, config={**C, "stop": stop}, name="Serve")
+    assert rep.ok, rep.unsupported
+    rule = rep.flat_definition.body.nodes[-1]
+    assert rule.fn.id == ir_bind(IO.StopRule, L=STEPS + 1, STOP=(7, 9), FINISH="eos").id
+    assert rep.provenance["checks"]["of"] == [SR.what(stop)] and not rep.family
+    _unsupported(m, (_meta(LP, dtype=torch.int32),), "shape", **PROF, config={**C, "stop": {"ids": [], "finish": "eos"}})
+
+
 def test_s3_final_norm_on_all_rows_is_a_different_program():
     C = _tiny_config()
     with torch.device("meta"):
