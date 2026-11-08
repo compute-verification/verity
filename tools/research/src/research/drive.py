@@ -266,7 +266,7 @@ FIX_WAIT_S = 45 * 60
 #: how long a red's culprit has from when the red was named (its record's `named_at`) for its lane to fix it forward: drive
 #: reverts it only once this passed with no fix marked ready at its head (`Driver._revert_reds`), and never a warn step's
 #: (`Driver._warns`)
-FIX_FORWARD_S = 2 * 3600
+FIX_FORWARD_S = 30 * 60
 #: the declarations a Lean failure names (`Driver._lean_declared`): a dotted or plain Lean name in quotes or backticks
 #: (`unknown identifier 'Foo.bar'`), or the guarantee a Lean check's failure is about (`guarantees: Foo.bar's statement changed`)
 LEAN_NAMED_RE = re.compile(r"[`'‘]([A-Za-z_][\w.]*\w)[`'’]|^\s*guarantees: ([A-Za-z_][\w.]*\w)", re.M)
@@ -2461,12 +2461,18 @@ class Driver:
         none reverted (`_several`).  The ``expired`` allowances that covered it are kept with the record (``expired``: each
         one's text, ``allowed_by``: its owner), so the ring names them and rings their owners too.  A key already named for
         this tip, or whose culprit is still on `main` unreverted, is left as it is; a warn step's red at a newer tip is named
-        afresh, since no revert ends it and the gate judges only the merges above the tip it last judged (`_ratchet_base`)."""
+        afresh, since no revert ends it and the gate judges only the merges above the tip it last judged (`_ratchet_base`).
+        A failure at or below a tip that passed it since (its green, or verified `main` when that run judged its step) is no
+        red: a late rerun of an old shard, already fixed above, would otherwise hold landings and revert a culprit."""
         red, tip, warn = pl.setdefault("red", {}), run["tip"], self._warns(key)
         if (old := red.get(key)) and (old["tip"] == tip or (old.get("culprit") and not old.get("reverted") and not warn
                                                             and not self._undone(old["culprit"][3]))):
             if old["tip"] != tip:
                 old["seen"] = tip                       # red again here (`_behind`)
+            return
+        if not warn and (above := self._passed_above(pl, key, rec.get("step") or key.split(" ", 1)[-1], tip)):
+            self.q.log(f"research queue drive: {key} failed at `{self.q.into}` {tip[:12]} (run {' '.join(run['ids'])}), but it "
+                       f"passed at {above[:12]} above it: no red")
             return
         step = rec.get("step") or ""
         r = {"tip": tip, "ids": run["ids"], "first": first_error(d, rec), "step": step, "culprit": None,
@@ -2512,6 +2518,16 @@ class Driver:
         else:
             self._ring(drive, r, key, f"none of the {since} touches it or its declared inputs, so it was red before them or the "
                                       "machine failed. Reverted nothing")
+
+    def _passed_above(self, pl: dict, key: str, step: str, tip: str) -> str | None:
+        """A tip at or above ``tip`` that passed ``key`` since: its green, else verified `main` when the run that verified it
+        judged ``step`` (`verified_as`); None when neither is."""
+        if (g := (pl.get("green") or {}).get(key)) and g != tip and self._ancestor(tip, g):
+            return g
+        vs, verified = pl.get("verified_as"), pl.get("verified")
+        if verified and (not vs or step in (vs.get("steps") or ())) and self._ancestor(tip, verified):
+            return verified
+        return None
 
     def _several(self, drive: dict, r: dict, key: str, hits: list[Member], how: str) -> None:
         """Red ``key``'s failure names several landings (``hits``, ``how``), its `candidates`: none is its culprit, so none is
@@ -2586,7 +2602,7 @@ class Driver:
                 continue
             head = f"{key} is red on `{self.q.into}` {r['tip'][:12]} (run {' '.join(r['ids'])}): {r['first']}"
             if self._revert_landed(drive, pl, r["tip"], r["base"], one, head, f"revert:{key}:{one.commit}",
-                                   f"#{one.pr} is its culprit ({r['why']}), and {FIX_FORWARD_S // 3600} h after it was named no "
+                                   f"#{one.pr} is its culprit ({r['why']}), and {FIX_FORWARD_S // 60} min after it was named no "
                                    "fix of it is marked", self._red_owners(key, r)):
                 r["reverted"] = now
 
