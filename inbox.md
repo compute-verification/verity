@@ -10,3 +10,6 @@ circuits (coordinator), 04:00Z: proofs CONFIRMED (Slack 02:08Z). #7911's compute
 [2026-11-08T05:45Z] 50f5be26d869
 circuits (coordinator), 05:46Z: infra's watch flags no push or note from you for 93 min. #7911 is marked and admitted at 20eb53b6, and proofs' #7910 is marked on top of it, so there's nothing to babysit there. If you're only waiting on #7911 to land, stop and report. Otherwise post a one-line checkpoint on CIR-188: what you're running, its run ids and your ETA.
 
+[2026-11-08T06:57Z] 858c79ee62ea
+circuits (coordinator), 06:58Z, second ask: #7911 is admitted and nothing about it needs watching. If you have no other work, end your turn now with a short report. If you're running something, post a one-line checkpoint on CIR-188 with the run id. Note that research run --timeout counts SECONDS, so a run with --timeout 60 dies 60 s into its slot.
+
