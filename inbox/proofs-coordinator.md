@@ -13144,3 +13144,42 @@ Python paths are from the root; Lean paths are under `verity/core/service/flock/
 - `pinOk` (`Code.lean:274-279`) also pins `Raw.publicFile`.
 - A session's public file is per run: its header names the run's roots (`a5.py:724-728`), and its body holds the instances' committed leaves, their `b ‖ c` (`HmRow.lean:1330-1374`).
 - So with `xS₀ t` fixed before the run, `pinOk` refuses every honest run too. Once that is fixed, `Embeds` can't rest on the public file being `xS₀ t`'s.
+
+## 18:25Z from ZKTWO (3b): the Properties orphan and two `reads` failures fixed in the locks; the last check passes everything of mine; -25c8 @ `ad36f32256`; waiting on the witnesses PR for records
+
+- **The fixes, each a lock edit, all pushed.** `cursor/proofs-zktwo-members-25c8` and `-wip` are both at `ad36f32256`.
+  1. **The orphan** (`ddc7a62ecd`, `Security/Properties/lean-audit.json`). The fix is in the lock, not a root module's import.
+     - The audit takes its roots from the lock's `roots`, where every other `Properties.Spot.*` module is listed one by one; no root module imports them (`Properties.Spot` imports only `Spot.OneStage`). So `Properties.Spot.Members` joins that list.
+     - Once audited, the module falls under the `layers` rule: the `Properties.Spot` layer admits only `Spot` imports, and Members imports `Properties.Spot.Bits`.
+     - So, like `Bits`, `Second` and `PlanCheck`, Members is an `except` of that layer, with a layer of its own admitting exactly `Properties.Spot.Bits` and `Spot.Slots`.
+     - A root-module import would have needed the same layer entry.
+  2. **`Security`'s `reads:` check** (`40dc9e2a92`). `SpotKSTwo`'s statement reads `bitsProgs`, `membersPart`, `filesReplay` and `filesBlockOf` from "a spec module outside `meaning`, so the record holds nothing of them".
+     - The check names its fix: add the module to `meaning`, which `--update` doesn't do. So `Properties.Spot.Members` is now in `Security/lean-audit.json`'s `meaning`.
+     - The same line was in the 16:22Z run; I missed it there.
+  3. **The next module the same check reached** (`ad36f32256`): Members reads `bitsProg`, so `Properties.Spot.Bits` is in `meaning` too.
+     - Its only imports, `Definitions.Claims.Sampling` and `Spot.Bits`, are already covered: `meaning` matches by prefix.
+- **The checks:** `lean_changed.py --records Security/Properties` without `--update`, all three on cpu-12, slot build/0 (warm, about 12 min each). Nothing is recorded.
+  - A build alone (`--build` or `--try`) never runs the orphan, layers or reads checks, so it would pass with or without the fixes.
+  - r20261108-174649-3a56 at `ddc7a62ecd`: `Properties` and `Proofs` PASS; `Security` shows fix 2's line.
+  - r20261108-180118-e1c3 at `40dc9e2a92`: the same, except `Security` now shows fix 3's line.
+  - **r20261108-181132-b348 at `ad36f32256`:**
+    - `Security/Properties` PASS: 3,036 declarations in 88 modules, 464 guarantees, the three standard axioms;
+    - `Security/Proofs` PASS: 190,464 declarations in 3,742 modules;
+    - `Security` FAIL, and only on what follows.
+- **What's left in `Security`:**
+  - **Not mine:** the `EndToEndRegistered` and `EndToEndRegisteredDrawn` witness rule, plus their changed statements, which `--update` records.
+  - **Mine, all of it record changes that `--update` records:**
+    - `SampledKSTwo` and `SampledKSTwo_honest`: `RegMatchesTwo` changed;
+    - `SpotKSTwo`: `Held` changed, and it now reads `Properties.Spot.Members`, `Properties.Spot.Bits` and `Spot.Bits`;
+    - the `RegMatchesTwo` open entry.
+- **Your questions:**
+  - **Short check r20261108-153442-9c9b passed** at `dfe7e753d2` (rc 0):
+    - Proofs/Flock built with no errors;
+    - `Facts`: lean exit 0, siblings clean, 23 theorems on the three standard axioms;
+    - `Properties/Spot/Members`: clean.
+  - **Members head pushed, and TWOOPENS told.** I pushed `-25c8` @ `dfe7e753d2` at 17:46Z and moved it forward to `ad36f32256` at 18:24Z. Nothing under SpotFlock, the Spot properties or SamplingGeneric changed between the two. TWOOPENS knows both heads and needs the three lock fixes before its own records runs.
+  - **TWOOPENS's questions answered**, with copies:
+    - its 17:00Z (a) to (d), from #8083's code; item 1 went to TWOVERIFY, since reading by position needs #8083 to require one statement per part, in order, and today `second-cover` lets an undrawn part have none;
+    - its 17:55Z point 3: the link templates `b_in` and `b_out` are members with their own sessions, and only their link ports read the boundary record.
+- **Records:** not relaunched. When RELAND8008's witnesses PR is marked, I'll merge its head and `checked` and run records once with `--update` on cpu-12 or cpu-1, about 15 min on a warm slot. No `unwitnessed` entry is touched. Then I commit the records, run the quick suites, open the PR (PRF-460, Lane proofs), mark it and send the land ask.
+- **Running:** nothing of mine.
