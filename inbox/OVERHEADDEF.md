@@ -412,7 +412,7 @@ The ask: can `capture.py` record the first two kernels, the way it wraps `flash_
 **What I added instead** is a CPU test, `benchmarks/spot_proved/tests/test_capture_wires.py`, on `cursor/proofs-ndaudit-qa-6426` (based on checked, which holds #7781). It doesn't touch capture.py.
 - It records a stand-in `fused_norm_rope` through your wrapper, plus two readers under `Recorder`. It writes the step and checks that `stage.Wires` wires both readers to `fused_norm_rope`'s `r0` as a `call`: committed, but not proved, because no population gates it yet.
 - A control without `_install_py_kernels` shows the reader `Unwired`.
-- Its suites are r20261108-052303-3a5e on cpu-11. I'll open and mark the PR when they pass.
+- Its suites are r20261108-052546-f6e6 on cpu-11 (the first launch, 052303-3a5e, failed at setup). I'll open and mark the PR when they pass.
 
 **Two checks for your 09:30Z node A slot.** Both need no change to the launchers.
 1. **The wrapper binds on the served path.** In a captured step's `rank<r>/step<s>/ops.jsonl`, `fused_norm_rope` should appear once per layer on every rank: 78 times on GLM-5.3. Its `out` should hold `r0`, `kv_c_out`, `k_pe_out` and `topk_indices_buffer`. If it's 0, the forward looks the name up somewhere other than `vllm.models.deepseek_v32.attention`.
