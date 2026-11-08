@@ -5,9 +5,10 @@ import SampledProofs
 registration, `Run.run`) on one input, timed after it is parsed, then `Run.run`'s steps one at a time in its order, with
 `Slots.popOk`'s layout split into `Partition.evaluate`, `Partition.unitGates`, `Slots.inputGates` and `Slots.layout`.
 
-`whole-run-time desc FILE [--unit-gates]`: on a `{"program", "query"}` input, `Program.parse`, `Partition.evaluate`, and
-per range one `Desc.gates` of its template and one `TemplateQuery.gates` of its last unit, `inputGates`' count; with
-`--unit-gates`, `Partition.unitGates` too.
+`whole-run-time desc FILE [--unit-gates [--ref]]`: on a `{"program", "query"}` input, `Program.parse`, `Partition.evaluate`,
+and per range one `Desc.gates` of its template and one `TemplateQuery.gates` of its last unit, `inputGates`' count; with
+`--unit-gates`, `Partition.unitGates` and `Slots.popOk` too; with `--ref`, `Partition.unitGatesRef`, the walk unit by
+unit `unitGates` replaced, whose gates must be `unitGates`' (exit 1 if not).
 
 One `PHASE {json}` line per step on stdout. `whole_run.sh` builds it against the checkout's verifier and runs it; it is a
 measurement, not a verifier.
@@ -116,7 +117,7 @@ def inputCount (d : Flock.TemplateQuery.Desc) : Nat := Id.run do
     let tid := d.callees.getD x.fn ""
     if Flock.TemplateQuery.isInput tid then acc + x.members * d.gates tid else acc) 0
 
-def descSteps (j : Json) (unitGates : Bool) : IO Unit := do
+def descSteps (j : Json) (unitGates ref : Bool) : IO UInt32 := do
   let p ← IO.ofExcept (← timed "program.parse" (getD j "program")
     (fun pj => do Program.parse (← Flock.canon pj).toUTF8) isOk)
   let q := getD j "query"
@@ -134,7 +135,18 @@ def descSteps (j : Json) (unitGates : Bool) : IO Unit := do
       (fun _ => tag)
   let _ ← timed "inputGates.count" d inputCount (fun _ => true) (fun c => [("gates", toJson c)])
   if unitGates then
-    let _ ← timed "partition.unitGates" p (fun pr => Partition.unitGates pr q) isOk
+    let gs ← timed "partition.unitGates" p (fun pr => Partition.unitGates pr q) isOk
+    let n := Flock.TemplateQuery.population rs
+    let _ ← timed "slots.popOk" p (fun pr => Slots.popOk pr q n) id (fun b => [("ok", toJson b)])
+    if ref then
+      let walk ← timed "partition.unitGatesRef" p (fun pr => Partition.unitGatesRef pr q) isOk
+      let agree := match gs, walk with
+        | .ok a, .ok b => a == b
+        | .error a, .error b => a == b
+        | _, _ => false
+      IO.println s!"PHASE {(Json.mkObj [("step", Json.str "agree"), ("agree", toJson agree)]).compress}"
+      if !agree then return 1
+  return 0
 
 def main (args : List String) : IO UInt32 := do
   match args with
@@ -144,8 +156,7 @@ def main (args : List String) : IO UInt32 := do
     return 0
   | "desc" :: path :: flags =>
     let j ← IO.ofExcept (Json.parse (← IO.FS.readFile path))
-    descSteps j (flags.contains "--unit-gates")
-    return 0
+    descSteps j (flags.contains "--unit-gates") (flags.contains "--ref")
   | _ => do
-    IO.eprintln "usage: whole-run-time run FILE [--no-whole] [--no-steps] | desc FILE [--unit-gates]"
+    IO.eprintln "usage: whole-run-time run FILE [--no-whole] [--no-steps] | desc FILE [--unit-gates [--ref]]"
     return 2
