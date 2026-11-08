@@ -139,4 +139,32 @@ theorem member_of_replayOf {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sam
   exact ⟨t, ht, p, hp,
     lt_of_lt_of_le (_root_.Flock.Bridge.Members.rank_mul_add_lt (Nat.lt_add_one ρ) hp) (hroom t ht), rfl⟩
 
+/-- **A checked proof block, in Bridge's terms**: at a statement whose partition and two-stage design evaluate, in the
+two-stage scope, where each member's unit net is built with `unitLog ≤ 32`, a checked proof block `b`, replayed in
+request `ρ`, is member `t`'s unit `k`: Bridge's proof block `k` of the member's key program, `Bits.base h.ms t` later,
+whose lowering sits in the statement's program from `Bits.base h.ms t`. -/
+theorem shape_of_checked
+    (hmem : ∀ t (ht : t < h.ms.length), Built h.ms[t].1.unit ∧ h.ms[t].1.unit.unitLog ≤ 32) {x : Msg}
+    {s : Claims.Sampling.AuditStatement} {Pt : Claims.Sampling.Partition} {d : Claims.Sampling.Design.Two}
+    {u ρ : ℕ} {b : List ℕ} (hx : SpotFlock.parse h x = some s) (hP : SpotFlock.partition h s = some Pt)
+    (hd : SpotFlock.two h s = some d) (hin : Claims.Sampling.InScopeTwo Pt d s) (hb : Pt.blocks[u]? = some b)
+    (hρ : Claims.Sampling.replayOf Pt d.part u = some ρ) :
+    ∃ t, ∃ ht : t < h.ms.length, ∃ k : Fin h.ms[t].2.size, u = Properties.Spot.unitBase h.ms t + k ∧
+      _root_.Flock.Bridge.Members.SitsAt s.prog (Spot.Bits.base h.ms t)
+        (_root_.Flock.Bridge.progOf ((Placed.keyProg h.ms[t].1 (hmem t ht).1 h.ms[t].2.size).circuit
+          (Discharge.Layout.outsOf h.ms[t].1 (hmem t ht).1 h.ms[t].2.size))
+          (Bridge.constsOf h.ms[t].1 (hmem t ht).1 h.ms[t].2.size)) ∧
+      b = (_root_.Flock.Bridge.blockOf ((Placed.keyProg h.ms[t].1 (hmem t ht).1 h.ms[t].2.size).partition
+          (Discharge.Layout.outsOf h.ms[t].1 (hmem t ht).1 h.ms[t].2.size))
+          (Bridge.constsOf h.ms[t].1 (hmem t ht).1 h.ms[t].2.size) k).map (Spot.Bits.base h.ms t + ·) := by
+  have htop : ∀ ci ∈ h.ms, (Properties.Spot.memberProg ci.1 ci.2.size).Topological := by
+    intro ci hci
+    obtain ⟨t, ht, rfl⟩ := List.mem_iff_getElem.1 hci
+    exact _root_.Flock.Bridge.Members.topological_memberProg h.ms[t].1 (hU := (hmem t ht).1) (hmem t ht).2 _
+  obtain ⟨t, ht, p, -, hk, rfl⟩ := member_of_replayOf h hP hd hin (List.getElem?_eq_some_iff.1 hb).1 hρ
+  obtain rfl := SpotFlock.partition_eq h hP
+  obtain ⟨hsit, hbeq⟩ := sitsAt_member h.ms htop ht (hmem t ht).1 (hmem t ht).2 ⟨_, hk⟩ hb
+  rw [← SpotFlock.parse_prog h hx] at hsit
+  exact ⟨t, ht, ⟨_, hk⟩, rfl, hsit, hbeq⟩
+
 end SpotFlock
