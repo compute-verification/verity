@@ -382,8 +382,9 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
     `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
-    (`coins`), and its `proved_units`, `instances`, `served` and `session_roots`; `python` then holds its
-    `{"receipt", "draw", "read", "audit"}` under `interior`."""
+    (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, and the second-stage sessions' `statements`
+    (`second_stage`); `python` then holds its `{"receipt", "draw", "read", "audit"}` under `interior`, its audit record
+    with round 2's `statements` check."""
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs),
@@ -409,7 +410,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             "coins": None if it["coins"] is None else dict(it["coins"]),
             "proved_units": None if it["proved_units"] is None else list(it["proved_units"]),
             "instances": it["instances"], "served": None if it["served"] is None else list(it["served"]),
-            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"])}
+            "session_roots": None if it["session_roots"] is None else dict(it["session_roots"]),
+            "statements": None if it.get("statements") is None else list(it["statements"])}
     got = lean("run", args)
     for path in (("audit",), ("interior", "audit")):
         at = got

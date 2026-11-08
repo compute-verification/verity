@@ -1,7 +1,8 @@
 """A two-stage sampling design on the proof system's `Stream`: the boundary registration over replay blocks, the first
 stage, the interior registration over the replay sample's proof blocks, the second stage on its own coins, one outcome
-binding both registrations and both samples, each step by both verifiers; its refusals; and its profile at the
-footprint."""
+binding both registrations and both samples, each step by both verifiers; round 2's statement check of the second-stage
+sessions (`second_stage`), which refuses the two-stage form while `second_stage.FORM` is off; its refusals; and its
+profile at the footprint."""
 
 from __future__ import annotations
 
@@ -16,7 +17,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.program import Program
 from verity.ml.circuits.types import Array, Value as Bits
 from verity.core.protocols.profile import Bernoulli, Subset
-from verity.core.protocols.sampled_proofs import service as S
+from verity.core.protocols.sampled_proofs import second_stage as SS, service as S
 from verity.core.protocols.sampled_proofs.one_stage import (draw as D, partition as P, registration as R,
                                                             verifier as V)
 
@@ -112,11 +113,34 @@ def _stages(stream: S.Stream, row=0) -> tuple[S.Draw, S.Draw]:
     return first, stream.select(stream._entries[reg.order].interior)
 
 
+def _statement(second: S.Draw, **change) -> dict:
+    """The second-stage session's statement (`second_stage`): PAIR's, its public file's header over the interior
+    registration's Q·n_rho slots at its roots, and its sample the second stage's units."""
+    rec, m = second.registration.record, Q * N_RHO
+    (template, _), = P.strata(P.population_program(PAIR, m), QUERY)
+    roots = {r["port"]: r for r in rec["roots"]}
+    header = {"scheme": rec["scheme"], "instances": m, "units": {"indices": list(range(m))},
+              "frame_v3": {"roots": {v: r["root"] for v, r in roots.items()},
+                           "domain_ids": {v: r["domain"] for v, r in roots.items()}}}
+    units = D.proved(second.draw)
+    return {"template": template, "header": header, "registered": None,
+            "draw": {"law": "subset", "population": m, "k": len(units), "units": units}, **change}
+
+
+def _two_stage_outcome(stream: S.Stream, statements) -> S.Outcome:
+    _, second = _stages(stream)
+    stream.deliver(second, [SESSION])
+    return stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
+                          statements=statements(second) if callable(statements) else statements)
+
+
 def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     """The boundary registration's population is the replay blocks; the first stage samples Q of them; the interior
     registration commits their Q·n_rho proof blocks after it, logged after the registration; the second stage samples k in
-    each sampled replay block on the coins after the interior registration; and one accepted outcome holds both audit
-    records, each by both verifiers and the whole run by the Lean's, with the profile at the footprint."""
+    each sampled replay block on the coins after the interior registration; and one outcome holds both audit records, each
+    by both verifiers and the whole run by the Lean's. Round 2 holds the session's statement to the interior registration
+    and the second stage's cells, and passes it; while the two-stage form is refused (`second_stage.FORM`) that refusal is
+    the outcome's one failure, a reject. The profile an accepted one carries is at the footprint."""
     stream = _stream()
     assert stream.n_rho == N_RHO and stream._params["two_stage"] is True
     reg = stream.register(*_boundary())
@@ -129,21 +153,97 @@ def test_a_two_stage_stream_runs_both_stages_and_its_outcome_binds_both():
     assert second.replay_sample == first and second.law == S.second_law(first.units, N_RHO, K)
     assert [u // N_RHO for u in second.units] == list(range(Q))
     assert stream.deliver(second, [SESSION]) is None
-    out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)})
-    assert out.accepted and out.verdict.codes == () and out.terms == S.Terms(DELTA) and stream.symbols == ("accept",)
+    out = stream.outcome(second, _lean(), {"statement": "stub"}, session_roots={**_roots(BOUNDARY), **_roots(INTERIOR)},
+                         statements=[_statement(second)])
+    assert not SS.FORM and not out.accepted and out.profile is None and stream.symbols == ("reject",)
+    assert out.verdict.detail["reject"] == {"checks": ["statements"], "verdicts": {"lean": True}, "replay_sample": []}
 
     body = stream.records[0]
     assert S._sha512(body) == out.record and body["registration"] == reg.digest
-    assert body["draw"] == S._sha512(second.draw) and body["audit"]["accepted"]
+    assert body["draw"] == S._sha512(second.draw) and "run" not in body["audit"]["checks"]
+    assert body["audit"]["checks"]["statements"] == {"ok": False, "codes": ["two-stage-form"],
+                                                     "detail": {"two-stage-form": SS.FORM_WHY}}
     assert body["replay_sample"]["draw"] == S._sha512(first.draw) and body["replay_sample"]["audit"]["accepted"]
     assert body["interior"] == {"registration": ireg.digest, "receipt": S._sha512(ireg.receipt)}
 
-    p = out.profile
+    p = stream._footprint(stream._entries[reg.order])
     assert [lv.name for lv in p.levels] == [S.REPLAY, "unit"] and p.sizes == (N, N_RHO)
     assert p.draws == {S.REPLAY: Bernoulli(Fraction(Q, N)), "unit": Subset(K)} and dict(p.drawn) == {S.REPLAY: Q, "unit": Q * K}
     assert p.programs == (reg.record["program"], ireg.record["program"])
     for m in range(N_RHO + 1):
         assert p.accept(m) == 1 - Fraction(Q, N) + Fraction(Q, N) * Fraction(comb(N_RHO - m, K), comb(N_RHO, K))
+
+
+def test_the_run_of_record_holds_the_form_switch(monkeypatch):
+    """`second_stage.FORM` is the Lean's `SecondStage.FORM`, which the run of record reads: flipped in the Python alone,
+    round 2's check passes and the Python would accept, and the run of record, still refusing the form, disagrees."""
+    monkeypatch.setattr(SS, "FORM", True)
+    stream = _stream()
+    out = _two_stage_outcome(stream, lambda second: [_statement(second)])
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["ok"] and checks["run"]["codes"] == [V.DISAGREE]
+    assert {"interior", "public", "symbol"} <= set(checks["run"]["detail"][V.DISAGREE]["fields"])
+
+
+def _link(second: S.Draw, shift: int = 0) -> dict:
+    """Registered reads under a port of no interior root (`y`) of boundary port `bx`, one row a replay block: each slot's
+    of its cell's replay block, or of the one `shift` on."""
+    first = second.replay_sample
+    bx, = (r for r in first.registration.record["roots"] if r["port"] == "bx")
+    sample = D.proved(first.draw)
+    return {"format": "verity/registered-reads/v1", "ports": {"y": {
+        "value": "bx", "root": bx["root"], "domain": bx["domain"], "leaves": bx["leaves"], "reads_from": 0,
+        "reads": [(sample[u // N_RHO] + shift) % N for u in range(Q * N_RHO)]}}}
+
+
+def _restated(**change):
+    """The session's statement with `change`, each a field or a function of the honest field's value."""
+    def statements(second):
+        s = _statement(second)
+        return [{**s, **{k: f(s[k]) if callable(f) else f for k, f in change.items()}}]
+    return statements
+
+
+def _header(**change):
+    return _restated(header=lambda h: {**h, **change})
+
+
+def _frame(key: str, f):
+    return _restated(header=lambda h: {**h, "frame_v3": {**h["frame_v3"], key: f(h["frame_v3"][key])}})
+
+
+@pytest.mark.parametrize("statements, codes", [
+    (lambda second: [_statement(second, registered=_link(second))], ["two-stage-form"]),
+    (None, ["second-statements"]),
+    ([], ["second-cover"]),
+    (lambda second: [_statement(second)] * 2, ["second-template"]),
+    (_restated(template="TwoStageTestOther_v0"), ["second-template", "second-cover"]),
+    (lambda second: [{k: v for k, v in _statement(second).items() if k != "registered"}],
+     ["second-statement", "second-cover"]),
+    (_restated(header=None), ["second-statement", "second-cover"]),
+    (_header(instances=Q * N_RHO + 1), ["second-population"]),
+    (_header(units={"indices": list(range(1, Q * N_RHO + 1))}), ["second-population"]),
+    (_header(scheme="frame-v3-sha512/other"), ["second-roots"]),
+    (_frame("roots", lambda r: {**r, "x": "00" * 64}), ["second-roots"]),
+    (_frame("roots", lambda r: {k: v for k, v in r.items() if k != "out"}), ["second-roots"]),
+    (_frame("domain_ids", lambda d: {**d, "out": d["x"]}), ["second-roots"]),
+    (_restated(draw=lambda d: {**d, "units": [0, 3] if d["units"] != [0, 3] else [1, 4]}), ["second-sample"]),
+    (_restated(draw=lambda d: {**d, "population": N * N_RHO}), ["second-sample"]),
+    (lambda second: [_statement(second, registered=_link(second, shift=1))], ["second-link"]),
+    (lambda second: [_statement(second, registered={"ports": {"x": _link(second)["ports"]["y"]}})], ["second-roots"]),
+])
+def test_round_two_refuses_a_statement_the_run_did_not_make(statements, codes):
+    """Round 2, by both verifiers, passes the run's own statements, a boundary port read at each slot's cell's replay
+    block included (the form's refusal their one failure), and refuses: none (`second-statements`), none for a template
+    the second stage drew in (`second-cover`), a template twice or one of no part (`second-template`), one that isn't a
+    statement (`second-statement`), and one that isn't the run's: another population of slots (`second-population`), a
+    scheme, root or domain the interior registration's isn't or a port of it it doesn't cover (`second-roots`), another
+    sample (`second-sample`), or a boundary port read at another cell's replay block (`second-link`)."""
+    stream = _stream()
+    out = _two_stage_outcome(stream, statements)
+    checks = stream.records[0]["audit"]["checks"]
+    assert not out.accepted and checks["statements"]["codes"] == codes and "run" not in checks, checks["statements"]
+    assert stream.records[0]["replay_sample"]["audit"]["accepted"]
 
 
 def test_a_rejected_verdict_rejects_and_names_both_records():
@@ -194,6 +294,7 @@ def test_a_one_stage_stream_has_no_interior_registration():
     reg = stream.register(*_boundary())
     first = stream.select(reg)
     assert _refused(lambda: stream.register_interiors(first, *_interior(Q * N_RHO, reg.digest))) == ("rule",)
+    assert _refused(lambda: stream.outcome(first, _lean(), {"statement": "stub"}, statements=[])) == ("statements",)
 
 
 def test_the_stream_holds_the_design_to_its_replay_block():
