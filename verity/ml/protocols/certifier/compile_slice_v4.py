@@ -23,7 +23,7 @@ A registered row is padded to whole words (`compile_slice.WORD`); its padding mu
 class. The checked witness is a computed check: the valid witness is unique, its coins are drawn after it is committed,
 and a wrong one passes only with the fingerprints' collision probability, which enters the soundness error. It still
 counts as free input at its width until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's
-nondeterminism rule; CIR-190's checked-witness class), so `free_width` counts the advice and the checked witness.
+nondeterminism rule; Security's `CheckedWitness` class), so `free_width` counts the advice and the checked witness.
 
 **The output**: ``verdict``, 16 bits: CompileSlice_v3's ``load``, ``steps``, ``cache`` (here the step side's bounds on its
 calls), ``served`` and ``carry``, and bit 5 ``pool``: the stream's verdict, its bus product equal to the steps' and its

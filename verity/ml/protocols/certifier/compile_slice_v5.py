@@ -7,9 +7,9 @@ running slot's request number carried in the slot row rather than looked up amon
 
 **Why.** CompileSlice_v4 keys every arrival slot's CU blocks (K·CU BlockKey_v1 calls), lists RB's and RK's K·CU
 addresses whole in its touched list, and finds each call's request number by comparing its id with all K arrivals'
-((3R + 2)·K comparisons a step): 3.0e11 ANDs a 600 s window at GLM-5.3's class, against 5.5e10 for what its pool does.
-Here the keys are one per block the window keys, RB's touched list is the addresses its calls touch, and a request's
-number is set once, when it is admitted, and carried with its slot.
+((3R + 2)·K comparisons a step), so it pays for every position of its class whatever the window does
+(`benchmarks/mempool/cost.py` prices both). Here the keys are one per block the window keys, RB's touched list is the
+addresses its calls touch, and a request's number is set once, when it is admitted, and carried with its slot.
 
 **The inputs**, each a field list (elements least significant bit first):
 - ``adv`` (*advice*), ``ing`` (*ingress*) and ``srv`` (*registered*): CompileSlice_v4's.

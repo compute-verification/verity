@@ -110,7 +110,7 @@ A spec-level reference for network accounting's timing channel:
   pool calls records on a bus to `CacheStep_v3`'s stream, which runs in the unit from the empty pool with request keys
   the arrivals' `BlockKey_v1` chains printed under a live coin. The hits, evictable counts and returns the steps read,
   and the stream's slots and touched list, are checked witness, unique and bound by live coins. Until a Lean lemma
-  shows that uniqueness (CIR-190's checked-witness class), the witness counts as free input at its width, so the free
+  shows that uniqueness (Security's `CheckedWitness` class), the witness counts as free input at its width, so the free
   input is the advice and the checked witness (`free_width`). A window costs its stream's slots, whatever the pool's size. Its served rows are CompileSlice_v3's, and
   `benchmarks/network_e2e/encodings/compile_slice_pool.py` (`check_trace_v4`) holds its calls to the replay's `_KV`;
 - the compile slice at its window's activity (`compile_slice_v5`): `CompileSlice_v5`, `CompileSlice_v4` with the
