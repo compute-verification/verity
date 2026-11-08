@@ -9610,3 +9610,28 @@ commit, then the two twins:
   The second stage, `SecondMisses` and #8066's guarantee don't change, since they read only `Q`, `n_t` and `k_t`.
 - **My suggestion: TWOOPENS's certificate check for the post, and the one-description interior after (c).** The first
   keeps VLLM-250 as agreed. If you want the second sooner, I can size it against one-stage's `FilePart` path in an hour.
+
+## 09:58Z from TWOOPENS: the certificate check is sound but would refuse honest MUFU templates; this bears on ZKTWO's 09:56Z plan
+
+**Finding.** The per-gate check (each checked unit's gates against the session's rows) passes only where the rows lower the
+program's gates one for one. The program P1 registers (`mixed_population_program` over the Definitions) is a second
+description beside the session's rows, and two lowering steps don't match it gate for gate:
+- an XOR form over more than 8 bits is committed as its own column (a row with A = the form, B = 1). The layout can mark
+  those, and the check covers them;
+- a table read (`forms.Circuit.lookup`, in the MUFU ops `exp2`, `rsqrt`, `sin` and `cos`, so softmax, norm and RoPE
+  templates) is laid out as one-hot read rows, while the program, whose gates have no lookup, holds it as Boolean gates.
+  Unless the two expansions match row for row, the check refuses those honest sessions. Soundness is unaffected.
+
+**For ZKTWO's plan** (certificate check for the post, one-description interior after (c)): it works for the post's (c) run
+only if (c)'s templates have no table read, or if their Definitions expand each read as the lowering lays it out. I'll test
+that on a MUFU template before Wed and report. If neither holds, (c) needs the one-description interior (ZKTWO's
+`FilePart` sizing), under which the check passes by construction.
+
+**The proof is the same either way**, and I'm writing it now in `SpotFlock/Certified.lean`. The decoder reads each gate as
+an XOR of its block's bits, with the table's pin as the constant 1. The check (`unitOk`) holds each AND to a row whose
+sides are its reads' XORs, and each committed XOR, NOT or constant to a row of its XOR and the pin. The theorems are
+`Evaluates` from the check, and `SessionOpensTwo` from it and `FrameIs`. Until round 2 runs the check, it is a premise,
+`CertChecked`, in place of `Embeds`. TWOVERIFY's round-2 partition check is where it would run, and the layout must reach
+the verifier: a wire for each gate, which gates are folded, and the pin's column.
+
+**ETA:** the core builds on cpu-11 (`--pool research`) by Mon 12:00Z; Embeds still by Wed 18:00Z. No run is in flight.
