@@ -36,7 +36,7 @@ from verity.ml.circuits.types import Array, RecordType, Type, Value
 from verity_vllm.program.inputs import check_params
 
 from .build import I32, I64, WRAPPERS, BUILDER_ID, BuildResult, _Model, decoder
-from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows, reads_run, wrapper_keys
+from .common import Unexpressible, _arr_shape, _Peers, _Stochastic, drive, in_launch, launch_batch, launch_rows
 from .phi import Phi
 
 
@@ -187,9 +187,6 @@ def node_parameters(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | N
         raise Unexpressible(f"wrapper {wrapper!r} (have {sorted({w for w, _ in WRAPPERS})})")
     phis = [Phi.from_json({**phi.to_json(), "tp": {**phi.tp, "rank": r}}) for r in range(world)]
     nets = [decoder(p, M, pos0 + M if wrapper == "step" else int(LP) + int(T)) for p in phis]
-    if any(reads_run(net, wrapper_keys(wrapper, M, LP, T)) for net in nets):
-        raise Unexpressible("vocabulary cannot express: a node Program whose rows read more than INDEX_TOPK keys (each rank's top-k "
-                            "order is its own `run` input, which its rank Program reads: `build.build_program`)")
     n = M if wrapper == "step" else int(LP)
     events = 1 if wrapper == "step" else int(T) + 1
     params: list[tuple[str, Type]] = [("prompt", Array(n, I32))]

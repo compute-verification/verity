@@ -11,7 +11,9 @@ a live unit. `without_dead_units` drops the dead units and renumbers the referen
 whose output words are read only in part (`narrowed`, `COLUMNS`) to the columns read: the last layer's fused qkv on the prompt
 rows before the last, whose queries nothing reads, becomes a K/V-only projection over the weight's K and V rows. The Build's
 derive and `predict.build` put the request wrapper alike in that form at one rank (`kept_records`), and at a tensor-parallel rank
-under the Build's `--dead-free` (`build_program(dead_free=True)`): the registered compiler's Programs. Rows of record keep the v1s.
+under the Build's `--dead-free` (`build_program(dead_free=True)`): the registered compiler's Programs. A Program the Build lifts to
+bits (`TargetProfile.ir == "boolean"`) takes the form without the swaps (`BITS`): no Boolean Definition names a dead-free version
+as its word, so it keeps the v1s, whose Boolean versions the lift reads.
 """
 from __future__ import annotations
 
@@ -212,16 +214,26 @@ def narrowed(body: Body) -> tuple[Body, dict[int, tuple[int, int]]]:
     return Body(body.params, body.ret_type, nodes, _shifted(body.ret, by, memo), offsets), cols
 
 
-def _dead_free(body: Body) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:
+#: `kept_records`' form for a Program the Build lifts to bits: the registered compiler's form without the swaps
+BITS = "bits"
+
+
+def registered_form(ir: str | None) -> bool | str:
+    """The form (`kept_records`' `registered`) a request wrapper the Build derives on `ir` (`TargetProfile.ir`) takes: `BITS` on bits,
+    else the registered compiler's."""
+    return BITS if ir == "boolean" else True
+
+
+def _dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int], dict[int, tuple[int, int]]]:
     pruned, kept = without_dead_units(body)
-    form, cols = narrowed(swapped(pruned))
+    form, cols = narrowed(swapped(pruned) if swap else pruned)
     return form, kept, cols
 
 
-def dead_free(body: Body) -> tuple[Body, list[int]]:
-    """`body` in the registered compiler's form: without its dead units, the rest `swapped` and `narrowed`; and the index in `body`
-    of each node kept, in order."""
-    return _dead_free(body)[:2]
+def dead_free(body: Body, *, swap: bool = True) -> tuple[Body, list[int]]:
+    """`body` in the registered compiler's form: without its dead units, the rest `swapped` (unless not `swap`) and `narrowed`; and
+    the index in `body` of each node kept, in order."""
+    return _dead_free(body, swap=swap)[:2]
 
 
 def _cut(slot: dict, lo: int, hi: int) -> dict:
@@ -241,14 +253,14 @@ def _cut(slot: dict, lo: int, hi: int) -> dict:
 
 
 def kept_records(body: Body, calls: list | None, hints: dict[int, Any], *,
-                 registered: bool) -> tuple[Body, list | None, dict[int, Any]]:
+                 registered: bool | str) -> tuple[Body, list | None, dict[int, Any]]:
     """A derivation's flat `body` with its runtime correspondence's `calls` (one per node; None without a correspondence) and
-    its node `hints` (by node index), in the registered compiler's form (`dead_free`) when `registered`. A swapped node keeps
-    its Call record: its arguments and outputs are the v1's. A narrowed node's record keeps the columns it computes: its
-    output's and its column arguments' leaves cut to them."""
+    its node `hints` (by node index), in the registered compiler's form (`dead_free`) when `registered`, without its swaps when
+    `registered` is `BITS`. A swapped node keeps its Call record: its arguments and outputs are the v1's. A narrowed node's record
+    keeps the columns it computes: its output's and its column arguments' leaves cut to them."""
     if not registered:
         return body, calls, dict(hints)
-    form, kept, cols = _dead_free(body)
+    form, kept, cols = _dead_free(body, swap=registered != BITS)
     kept_hints = {i: hints[k] for i, k in enumerate(kept) if k in hints}
     if calls is None:
         return form, None, kept_hints

@@ -8,7 +8,11 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
-  in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``.
+  in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
+- ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
+  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_rows.BoundaryWindows`), each window's finished
+  requests committed by size class as the window closes, under ``boundary/``, each class's public part in
+  ``boundary.PID.jsonl``.
 
 and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
 ``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
@@ -518,8 +522,8 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
-    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit, then the
-    release gate (outside both, so that they see a request when the gate adds it)."""
+    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit and the
+    boundary commitment, then the release gate (outside them, so that they see a request when the gate adds it)."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -557,6 +561,11 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         hooks.wrap(sched, "schedule", schedule)
         atexit.register(tc.stop)
         done.append(tc)
+    if cfg.get("boundary_rows"):
+        from verity_vllm.pipeline import boundary_rows as BR
+
+        sink = _lines(out / f"boundary.{pid}.jsonl")
+        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], out / "boundary", sink).install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests
         gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
