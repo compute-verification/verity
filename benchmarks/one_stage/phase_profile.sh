@@ -24,6 +24,11 @@ S=$(mktemp -d $W/scratch.XXXXXX); trap 'rm -rf "$S"' EXIT
 log "phase_profile: source $(git rev-parse HEAD 2>/dev/null) as $AS, steps $STEPS, units $UNITS, end $(date -u -d @$END +%H:%MZ)"
 nvidia-smi -L | tee -a $O/job.log; lscpu | grep -E 'Model name|^CPU\(s\)' | tee -a $O/job.log; free -g | head -2 | tee -a $O/job.log
 if has setup; then
+  if ! apt-cache show cuda-nvcc-13-3 > /dev/null 2>&1; then
+    . /etc/os-release; K=$S/cuda-keyring.deb
+    curl -fsSL -o $K https://developer.download.nvidia.com/compute/cuda/repos/ubuntu${VERSION_ID/./}/x86_64/cuda-keyring_1.1-1_all.deb \
+      && dpkg -i $K > /dev/null && apt-get update -qq > /dev/null 2>&1
+  fi
   set +u; FLOCK_WORK=$W . verity/ml/flock/pod/cuda-13.3.sh; set -u
   echo "$CUDA_TK" > $W/cuda.env
   NR=$W/nsys-root
