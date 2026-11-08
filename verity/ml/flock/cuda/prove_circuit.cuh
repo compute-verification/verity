@@ -362,6 +362,71 @@ __global__ void fc_sha_rows(const uint64_t* __restrict__ tape, long long n, long
     ao[0] = make_uint4(A[0], A[1], A[2], A[3]); ao[1] = make_uint4(A[4], A[5], A[6], A[7]);
     bo[0] = make_uint4(B[0], B[1], B[2], B[3]); bo[1] = make_uint4(B[4], B[5], B[6], B[7]);
 }
+
+// The plan's rows as runs, per 32-row word and operand: a run is consecutive rows of one word reading consecutive bits of one tape
+// word, or rows of constant 1, as {tape word or ~0u, first row | (rows - 1) << 5 | first bit << 10}; constant-0 rows are in none.
+// Word r's a runs are runs[off[2r], off[2r + 1]), its b runs end at off[2r + 2]; words from `useful` rows on, up to `words`,
+// have none.
+static void fc_sha_runs(const uint32_t* plan, int useful, int words, std::vector<uint32_t>& off, std::vector<uint2>& runs) {
+    off.assign(1, 0);
+    runs.clear();
+    for (int r = 0; r < words; r++)
+        for (int h = 0; h < 2; h++) {
+            uint32_t prev = 0;
+            for (int i = 0; i < 32; i++) {
+                const long long row = 32LL * r + i;
+                const uint32_t src = row < useful ? plan[2 * row + h] : 0;
+                const bool joins = src == 1 ? prev == 1 : src >= 2 && prev >= 2 && src == prev + 1 && ((src - 2) & 63) != 0;
+                if (joins) runs.back().y += 1u << 5;
+                else if (src == 1) runs.push_back(make_uint2(~0u, (uint32_t)i));
+                else if (src >= 2) runs.push_back(make_uint2((src - 2) >> 6, (uint32_t)i | ((src - 2) & 63) << 10));
+                prev = src;
+            }
+            off.push_back((uint32_t)runs.size());
+        }
+}
+
+// fc_sha_rows's words from the plan's runs (fc_sha_runs): a shift and a mask a run instead of a tape read a row
+__global__ void fc_sha_rows_runs(const uint64_t* __restrict__ tape, long long n, long long s0, const uint32_t* __restrict__ off,
+                                 const uint2* __restrict__ runs, int per_block, int pos0, int slot_log, int k_log,
+                                 uint32_t* __restrict__ z_out, uint32_t* __restrict__ a_out, uint32_t* __restrict__ b_out) {
+    const long long s = (long long)blockIdx.y * blockDim.x + threadIdx.x;
+    if (s >= n) return;
+    const int g = blockIdx.x;
+    uint32_t W[2][8];
+#pragma unroll
+    for (int h = 0; h < 2; h++) {
+        uint32_t w0 = ~0u;
+        uint64_t c = 0;
+#pragma unroll
+        for (int j = 0; j < 8; j++) {
+            const int r = 8 * g + j;
+            uint32_t x = 0;
+            for (uint32_t k = off[2 * r + h], e = off[2 * r + h + 1]; k < e; k++) {
+                const uint2 u = runs[k];
+                uint64_t v = ~0ull;
+                if (u.x != ~0u) {
+                    if (u.x != w0) { c = tape[(long long)u.x * n + s]; w0 = u.x; }
+                    v = c;
+                }
+                const uint32_t len = ((u.y >> 5) & 31) + 1;
+                x |= ((uint32_t)(v >> (u.y >> 10)) & (len == 32 ? ~0u : (1u << len) - 1)) << (u.y & 31);
+            }
+            W[h][j] = x;
+        }
+    }
+    const uint32_t* A = W[0];
+    const uint32_t* B = W[1];
+    const long long gs = s0 + s, blk = gs / per_block, kk = gs % per_block;
+    const long long at = (blk << (k_log - 5)) + ((long long)(pos0 + kk) << (slot_log - 5)) + 8 * g;
+    uint4* zo = reinterpret_cast<uint4*>(z_out + at);
+    uint4* ao = reinterpret_cast<uint4*>(a_out + at);
+    uint4* bo = reinterpret_cast<uint4*>(b_out + at);
+    zo[0] = make_uint4(A[0] & B[0], A[1] & B[1], A[2] & B[2], A[3] & B[3]);
+    zo[1] = make_uint4(A[4] & B[4], A[5] & B[5], A[6] & B[6], A[7] & B[7]);
+    ao[0] = make_uint4(A[0], A[1], A[2], A[3]); ao[1] = make_uint4(A[4], A[5], A[6], A[7]);
+    bo[0] = make_uint4(B[0], B[1], B[2], B[3]); bo[1] = make_uint4(B[4], B[5], B[6], B[7]);
+}
 #endif
 
 // Page-locked, mapped host memory (null when the runtime refuses), held for the process: the device reads host slots from it
@@ -624,32 +689,49 @@ static int fc_witness(const FlockCudaProveParams* P, const FlockCircuitParams* N
             };
             if (N->h_plan) {
 #ifdef FLOCK_HB
+                const int nrg = (N->h_useful + 255) / 256;
                 static const uint32_t* plan_of = nullptr;
-                static uint32_t* d_plan = nullptr;
+                static uint32_t *d_plan = nullptr, *d_run_off = nullptr;
+                static uint2* d_runs = nullptr;
                 if (plan_of != N->h_plan) {
-                    if (d_plan) cudaFree(d_plan);
+                    plan_of = nullptr;
+                    for (void* p : {(void*)d_plan, (void*)d_run_off, (void*)d_runs}) if (p) cudaFree(p);
+                    d_plan = d_run_off = nullptr; d_runs = nullptr;
+                    std::vector<uint32_t> off;
+                    std::vector<uint2> runs;
+                    fc_sha_runs(N->h_plan, N->h_useful, 8 * nrg, off, runs);
                     CK(cudaMalloc(&d_plan, (size_t)N->h_useful * 8));
                     CK(cudaMemcpy(d_plan, N->h_plan, (size_t)N->h_useful * 8, cudaMemcpyHostToDevice));
+                    CK(cudaMalloc(&d_run_off, off.size() * sizeof(uint32_t)));
+                    CK(cudaMemcpy(d_run_off, off.data(), off.size() * sizeof(uint32_t), cudaMemcpyHostToDevice));
+                    CK(cudaMalloc(&d_runs, std::max<size_t>(runs.size(), 1) * sizeof(uint2)));
+                    if (!runs.empty()) CK(cudaMemcpy(d_runs, runs.data(), runs.size() * sizeof(uint2), cudaMemcpyHostToDevice));
                     plan_of = N->h_plan;
                 }
                 if (hl < 8) { printf("FFI circuit: the native compression witness needs slots of at least 2^8 rows\n"); return 210; }
                 // a thread per compression where the tape has sha512x3's layout (FC_SHA_TAPE1=1: a thread per slot)
                 static const bool tape1 = [] { const char* e = std::getenv("FC_SHA_TAPE1"); return e && e[0] == '1'; }();
                 const bool tape3 = !tape1 && 2 * N->h_in_words >= 3 * 24 && N->h_tape_words == 2 * N->h_in_words + 3 * FC_SHA_COMP_WORDS + 24;
-                // FC_SHA_ROWS_NOCACHE=1: every row's tape bits read straight from the tape
+                // the rows from the plan's runs; FC_SHA_ROWS_BITS=1: from its rows one bit at a time (FC_SHA_ROWS_NOCACHE=1: every
+                // row's tape bits read straight from the tape)
+                static const bool rows_bits = [] { const char* e = std::getenv("FC_SHA_ROWS_BITS"); return e && e[0] == '1'; }();
                 static const int rows_cache = [] { const char* e = std::getenv("FC_SHA_ROWS_NOCACHE"); return !(e && e[0] == '1'); }();
                 const long long per = (long long)N->h_tape_words * 8;
                 const long long batch = std::max(1LL, std::min(n_h, (2LL << 30) / per));
                 uint64_t* d_tape;
                 CK(cudaMalloc(&d_tape, (size_t)(batch * per)));
-                const int nrg = (N->h_useful + 255) / 256;
                 if (const int e = host_slots()) return e;
                 for (long long s0 = 0; s0 < n_h; s0 += batch) {
                     const long long nb = std::min(batch, n_h - s0);
                     if (tape3) fc_sha_tape3<<<(unsigned)((3 * nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
                     else fc_sha_tape<<<(unsigned)((nb + 127) / 128), 128>>>(d_hin + 2LL * s0 * N->h_in_words, N->h_in_words, nb, d_tape);
-                    fc_sha_rows<<<dim3((unsigned)nrg, (unsigned)((nb + 255) / 256)), 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper,
-                        N->r_pos0[hr], hl, k_log, (uint32_t*)df, (uint32_t*)d_a, (uint32_t*)d_b, rows_cache);
+                    const dim3 grid((unsigned)nrg, (unsigned)((nb + 255) / 256));
+                    if (rows_bits)
+                        fc_sha_rows<<<grid, 256>>>(d_tape, nb, s0, d_plan, N->h_useful, (int)hper, N->r_pos0[hr], hl, k_log, (uint32_t*)df,
+                            (uint32_t*)d_a, (uint32_t*)d_b, rows_cache);
+                    else
+                        fc_sha_rows_runs<<<grid, 256>>>(d_tape, nb, s0, d_run_off, d_runs, (int)hper, N->r_pos0[hr], hl, k_log, (uint32_t*)df,
+                            (uint32_t*)d_a, (uint32_t*)d_b);
                     CK(cudaGetLastError());
                 }
                 CK(cudaStreamSynchronize(0));
