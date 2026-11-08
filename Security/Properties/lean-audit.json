@@ -103,10 +103,20 @@
    "digest": "6f08422ff25bd88205b76fb28cc64d58c5a1d3cfb9be719b2ad8a2e1793896d5",
    "why": "The layer below's guarantee: a subprotocol's bound at its compiled component, which the composition sums and each subprotocol's piece proves."
   },
+  "Verity.Vocab.PeriodsCouple": {
+   "owner": "@soundness",
+   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089",
+   "why": "the coupling of the plays to period runs that TargetOfPeriods carries into the play"
+  },
   "Verity.Vocab.SubprotocolBound": {
    "owner": "@soundness",
    "digest": "1a4d2b3ea246dfa056c0ec2b3edc53f3eadc1d1f43645954fdb4b8a1aaa9b5ba",
    "why": "The layer below's guarantee: a subprotocol's bound in one of its three forms, which the composition sums and each subprotocol's piece proves."
+  },
+  "Verity.Vocab.UpFrontFor": {
+   "owner": "@soundness",
+   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475",
+   "why": "the bound over the coins drawn up front that CoinsCouple carries into the play"
   },
   "Verity.Vocab.WipeCoupling": {
    "owner": "@soundness",
@@ -757,12 +767,6 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
-  "Verity.Vocab.PeriodsCouple": {
-   "owner": "@soundness",
-   "digest": "9b9104bef15bbb693a89d823254efc6ca9911c36423d3d5b98375234d0f2e089",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
   "Verity.Vocab.PousSound": {
    "owner": "@memory-accounting",
    "digest": "2d0ee7043be3fa3a99503039cef1756e3c3558dd814faa5970bcbd738e037e69",
@@ -784,12 +788,6 @@
   "Verity.Vocab.Target": {
    "owner": "@soundness",
    "digest": "548f5118cb15c0be50546298ea855af1004bbfd85138c2afe31efcaeb602b1cd",
-   "issue": "LEAN-186",
-   "due": "2026-11-30"
-  },
-  "Verity.Vocab.UpFrontFor": {
-   "owner": "@soundness",
-   "digest": "28dd9f723c811dcf0725b2d0bcb064f66c0eb969d4544047538b20753c43b475",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -8759,8 +8757,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.UpFrontFor"],
+    "domain": ["Verity.Vocab.UpFrontFor"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",
@@ -9266,8 +9264,8 @@
    "assumptions": [],
    "premises": {
     "assumptions": [],
-    "domain": [],
-    "open": ["Verity.Vocab.PeriodsCouple"],
+    "domain": ["Verity.Vocab.PeriodsCouple"],
+    "open": [],
     "reads": [
      "Hash.Assumptions.LmsForger",
      "Hash.Assumptions.LmsForger.Forges",

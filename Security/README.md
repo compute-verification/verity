@@ -485,7 +485,7 @@ None of these is assumed silently; each would restate the conclusion:
 What may import what (`tests/test_lean_packages.py`): `security` requires only Mathlib; `security_properties` requires
 `security` and the code it states properties of, never `security_proofs`; `security_proofs` requires both, the code and
 ArkLib; and no code package requires anything here. The lock's `layers` say which spec modules each module prefix may
-import (the spec imports only itself and Mathlib), and its `trees` forbid a statement from reading, or a definitions or
+import, and its `trees` forbid a statement from reading, or a definitions or
 properties module from importing, anything in `Proofs/`. Flock is the exception until its spec is extracted: its
 guarantees and assumptions are still in `Proofs/Flock`, which `trees` lists by module.
 
@@ -510,25 +510,10 @@ when:
 - a statement reads a definition outside the spec, or breaks `layers` or `trees`;
 - a claim definition lacks its witnesses: a theorem that it fails at a toy instance, and one per deployed record that its
   checkable antecedents hold there;
-- a record no longer matches the build;
-- a deployed guarantee rests, outside the trust base, on a premise its `trust_gap` entry doesn't list, or the entry
-  lists one it no longer rests on.
+- a record, or a deployed guarantee's `trust_gap` entry, no longer matches the build.
 
-The trust base (`trust`) is what the deployed guarantees may rest on: SHA-512's collision resistance
-(`SHA512CRStrict`, `SHA512CRExpected`, `Claims.StrictBirthday`, `Claims.ExpectedCR`), uniform random bytes
-(`UniformRandomBytes`, `UniformRandomBytesTest`) and an honest verifier's coin log (`ChallengerLogsCoins`,
-`FlipsAfterRecorded`, `VerifierReadsLog`), with Lean's kernel under all of them (`trust.base`, each premise with the
-assumption it states). A deployed guarantee
-may also rest on premises of its own that a ruling's rule names, each with that reason (`trust.extra`): the remote
-audit's verifier never talks to the onsite devices and gets their LMS signatures only as witness inside the proof, so
-`Verity.remote_soundness_of_subprotocols` trusts `LmsUnforgeable`. `deployed` lists the guarantees that
-state the deployed system, and `trust_gap` what each rests on beyond its trust: the named assumptions and open
-premises its record lists, and those of each listed guarantee whose statement it takes as a domain hypothesis. A
-premise enters the gap only by hand, and leaves it when a proof discharges it; the Lean check prints each deployed
-guarantee's gap, and the total is to reach zero.
-
-A changed record means a guarantee now says something else. When one lands, the change is shown, the statement before
-and after and each changed definition with its source; nothing waits on it, and a guarantee that only moved shows none.
+A changed record means a guarantee now says something else. When one lands, the statement before and after is shown
+with each changed definition's source; nothing waits on it, and a guarantee that only moved shows none.
 
 ## The guarantees to read first
 
@@ -538,7 +523,7 @@ remote's three, each subprotocol's target a hypothesis until its own proof disch
 `Properties/Verity/README.md`: the statement, the subprotocols each composes, how to read it and what it rests on.
 
 The table lists the subprotocols' own guarantees, each in its own form; each is proved under `Proofs/`. A status names the statement's named assumptions; the
-conditions it places on its inputs and setup, which the lock also lists, are left out.
+conditions it places on its inputs and setup are left out (the lock lists them).
 
 | Subprotocol | Guarantee | Status |
 |---|---|---|
