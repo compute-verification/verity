@@ -195,7 +195,7 @@ theorem view_eq_resp (C : Θ → Q × Adv → O → V) (E M : ℕ) (Ou : Outside
     · have he : l[V.length].egress o = C θ ((Ou.query r (view Ou L r l V.length)).1, l[V.length].adv) o := by
         simpa [changed, hw] using ho
       rw [hv] at he
-      simp only [overwrite, hnc, ho, and_false, ↓reduceIte, Option.getD_none]
+      simp only [overwrite, hnc, ho, and_false, ↓reduceIte]
       exact he
   · rw [ite_eq_right hnc, dite_eq_right fun h => hnc (lt_of_lt_of_le h.1 (min_le_left _ _))]
 
@@ -268,7 +268,7 @@ theorem value_leak {Ω R Θ X Y M Θ' α : Type} [Fintype Ω] [Fintype R] (C : �
       _ ≤ value (Bad z) (g z) +
             value (fun _ => ∃ s : ch.S, Stolen (gen z.1) ((O.withString ch s).model z.2 (honest C (gen z.1)) q)) (g z) :=
           value_or_le _ _ _
-      _ ≤ _ := add_le_add_left ((value_const_le _ _).trans (ite_exists_le_sum _)) _
+      _ ≤ _ := add_le_add le_rfl ((value_const_le _ _).trans (ite_exists_le_sum _))
   have hs : ∀ s : ch.S, avg (fun z : Ω × R =>
       if Stolen (gen z.1) ((O.withString ch s).model z.2 (honest C (gen z.1)) q) then (1 : ℝ≥0∞) else 0) ≤
         ENNReal.ofReal p := fun s =>
@@ -356,8 +356,8 @@ theorem TheftServed : Guarantees.TheftServed := by
           (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p)
       ≤ avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ) +
           ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) := by
-        gcongr with z
-        exact (value_or_le _ _ _).trans (add_le_add_left (hesc _ _) _)
+        refine add_le_add (avg_mono fun z => ?_) le_rfl
+        exact (value_or_le _ _ _).trans (add_le_add le_rfl (hesc _ _))
     _ ≤ (avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) + δ) +
           ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) := by
         rw [avg_add]
@@ -383,11 +383,11 @@ theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
     refine card_le_one.2 fun a ha b hb => ?_
     obtain ⟨a1, ⟨⟩⟩ := a
     obtain ⟨b1, ⟨⟩⟩ := b
-    have ha' : P.model () (honest C (gen a1)) 2 = gen a1 := (mem_filter.1 ha).2
-    have hb' : P.model () (honest C (gen b1)) 2 = gen b1 := (mem_filter.1 hb).2
-    rw [honest_C] at ha' hb'
-    have hab : gen a1 = gen b1 := ha'.symm.trans hb'
-    rw [show a1 = b1 from hab]
+    replace ha := (mem_filter.1 ha).2
+    replace hb := (mem_filter.1 hb).2
+    simp only [Stolen, gen, id] at ha hb
+    rw [honest_C] at ha hb
+    rw [← ha, ← hb]
   have : ((univ.filter fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)).card : ℝ) ≤ 1 := by
     exact_mod_cast h1
   rw [Nat.cast_ofNat]
