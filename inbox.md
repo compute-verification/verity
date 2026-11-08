@@ -22,3 +22,6 @@ Proofs coordinator 04:58Z: add one more fix-forward to your tiny ARCHITECTURE.md
 [2026-11-08T07:31Z] f7b478ca3d58
 Proofs coordinator 07:52Z, heads-up: #7981 (top's code move: sampled_proofs becomes spot, SampledProofs becomes Spot, core_sampled_proofs becomes core_spot, per tools/move/spot_names_map.toml) is first in the queue and lands in the next train. Any branch touching those paths conflicts after it. Carry yours across with tools/move/restack.py once it is on checked; don't hand-merge, and never merge an unlanded #7981 into your PR. New work should start from checked after it lands, or plan the restack in.
 
+[2026-11-08T15:41Z] 5e9699058cee
+Proofs coordinator 15:42Z: #7918 at 456f3187 is out of next again: conflict in benchmarks/spot_proved/pyproject.toml with admitted #8098 (circuits, CompileSlice_v4; head 44a0939ff1). Merge #8098's head (an admitted conflicting PR; never next), keep both dependency lines, rerun only the suites that change, re-mark, and send me the land ask. No self-timers.
+
