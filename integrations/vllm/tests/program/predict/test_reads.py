@@ -42,13 +42,13 @@ pytestmark = pytest.mark.usefixtures("code_versions_stood_in")
 #: the advice records' fields `READS` declares, the ones the gate passes
 GATED = {(f.record, f.name) for f in R.READS if f.record in R.RECORDS}
 #: a unit's fields the window's end shapes for a request it leaves with outputs to keep: how far it reaches and what its edge returns
-REACH = {"T", "carried_out", "launch", "chunks", "edge"}
+REACH = {"T", "carried_out", "launch", "chunks", "edge", "stop"}
 AHEAD = {n for f in R.READS for n in f.ahead}
 
 
 def test_every_field_the_compiler_reads_is_an_output_certified_or_advice():
     assert R.refusals() == []
-    assert [(f.record, f.name) for f in R.READS if f.ahead] == [("request", "output_len")]
+    assert [(f.record, f.name) for f in R.READS if f.ahead] == [("request", "output_len"), ("request", "finish")]
     assert AHEAD <= {f.name for f in fields(RequestUnit)}
     assert ("advice", "release") not in GATED, "the compiler never reads when an output was released"
 
@@ -182,7 +182,8 @@ def _prefix_stable(reg: Registered, advice, ingress: dict) -> set[str]:
 
 
 def _calls(program) -> list[str]:
-    return [n.fn.id for n in program.fn.body.nodes]
+    """``program``'s calls but its length rule's (`RequestUnit.stop`), the last call, whose config `READS` charges as advice."""
+    return [n.fn.id for n in program.fn.body.nodes if not n.fn.id.startswith("StopCheck_")]
 
 
 def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
@@ -190,7 +191,7 @@ def test_a_batch_invariant_plan_is_prefix_stable_and_a_length_sets_only_its_t():
     and nothing else in the plan moves."""
     reg = _registered()
     for session in (_mixed(), _hit(16), (A_WHOLE, A_BODY)):
-        assert _prefix_stable(reg, *session) == {"T"}
+        assert _prefix_stable(reg, *session) == {"T", "stop"}
 
 
 @pytest.mark.slow
@@ -208,7 +209,7 @@ def test_a_batch_invariant_program_is_prefix_stable_in_its_length():
     for u in whole.requests[:2]:
         m = ingress[u.id]["max_tokens"]
         built = [request_program(reg, replace(u, T=L - 1)).program for L in range(1, m + 1)]
-        assert [p.fn.signature()[1] for p in built] == [Array(L, I32) for L in range(1, m + 1)]
+        assert [field_types(p.fn.signature()[1])[0] for p in built] == [Array(L, I32) for L in range(1, m + 1)]
         assert all(_calls(p) == _calls(built[-1])[:len(_calls(p))] for p in built), u.id
 
 
