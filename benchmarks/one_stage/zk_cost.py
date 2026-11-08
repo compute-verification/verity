@@ -111,25 +111,29 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def proc_cpu(pids) -> tuple[float, float]:
+def proc_cpu(pids) -> tuple[float, float, int]:
     """The user and system seconds of ``pids`` so far, each with its reaped children's (``/proc/PID/stat``'s utime + cutime,
-    stime + cstime)."""
-    u = s = 0
+    stime + cstime), and how many had exited before their stat was read: their seconds reach their parent's once it reaps
+    them."""
+    u = s = gone = 0
     for pid in pids:
         try:
             f = Path(f"/proc/{pid}/stat").read_text().rsplit(")", 1)[1].split()
-        except (OSError, IndexError):
+        except (FileNotFoundError, ProcessLookupError):
+            gone += 1
             continue
         u, s = u + int(f[11]) + int(f[13]), s + int(f[12]) + int(f[14])
     tck = os.sysconf("SC_CLK_TCK")
-    return u / tck, s / tck
+    return u / tck, s / tck, gone
 
 
 def session_cpu(marks: list[dict], names: tuple[str, ...]) -> list[dict]:
     """Each session's share of a prover's marks (`Peak.mark`: one at its start, then one at each LIVE line): each named root's
-    process tree's user and system seconds since the mark before, and the node's 1-minute load at the session's end."""
-    return [{"load1": round(b["load1"], 2), **{f"{n}_{k}_s": round(b["cpu"][i][j] - a["cpu"][i][j], 3)
-                                              for i, n in enumerate(names) for j, k in enumerate(("user", "sys"))}}
+    process tree's user and system seconds since the mark before, the node's 1-minute load at the session's end, and how
+    many of the trees' processes exited between being listed and read at that end."""
+    return [{"load1": round(b["load1"], 2), "gone": sum(x[2] for x in b["cpu"]),
+             **{f"{n}_{k}_s": round(b["cpu"][i][j] - a["cpu"][i][j], 3) for i, n in enumerate(names)
+                for j, k in enumerate(("user", "sys"))}}
             for a, b in zip(marks, marks[1:])]
 
 

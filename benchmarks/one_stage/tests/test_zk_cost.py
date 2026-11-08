@@ -92,18 +92,18 @@ def test_passes_prove_each_types_sizes_in_abba_order():
 
 def test_a_sessions_cpu_seconds_are_its_own_not_its_processes():
     # the ZK server's statement build is in its tree's seconds before the prover starts, the prover's in its first session's
-    marks = [{"t": 0.0, "load1": 1.0, "cpu": [(300.0, 20.0), (0.0, 0.0)]},
-             {"t": 400.0, "load1": 2.0, "cpu": [(310.0, 21.0), (350.0, 30.0)]},
-             {"t": 500.0, "load1": 3.0, "cpu": [(312.0, 23.0), (400.0, 31.5)]}]
+    marks = [{"t": 0.0, "load1": 1.0, "cpu": [(300.0, 20.0, 0), (0.0, 0.0, 0)]},
+             {"t": 400.0, "load1": 2.0, "cpu": [(310.0, 21.0, 0), (350.0, 30.0, 0)]},
+             {"t": 500.0, "load1": 3.0, "cpu": [(312.0, 23.0, 1), (400.0, 31.5, 0)]}]
     assert Z.session_cpu(marks, ("serve", "prover")) == [
-        {"load1": 2.0, "serve_user_s": 10.0, "serve_sys_s": 1.0, "prover_user_s": 350.0, "prover_sys_s": 30.0},
-        {"load1": 3.0, "serve_user_s": 2.0, "serve_sys_s": 2.0, "prover_user_s": 50.0, "prover_sys_s": 1.5}]
+        {"load1": 2.0, "gone": 0, "serve_user_s": 10.0, "serve_sys_s": 1.0, "prover_user_s": 350.0, "prover_sys_s": 30.0},
+        {"load1": 3.0, "gone": 1, "serve_user_s": 2.0, "serve_sys_s": 2.0, "prover_user_s": 50.0, "prover_sys_s": 1.5}]
 
 
-def test_proc_cpu_reads_a_live_process_and_skips_a_gone_one():
-    user, sys_ = Z.proc_cpu([os.getpid()])
-    assert user > 0 and sys_ >= 0
-    assert Z.proc_cpu([(1 << 22) + 12345]) == (0.0, 0.0)   # above Linux's largest pid_max
+def test_proc_cpu_reads_a_live_process_and_counts_a_gone_one():
+    user, sys_, gone = Z.proc_cpu([os.getpid()])
+    assert user > 0 and sys_ >= 0 and gone == 0
+    assert Z.proc_cpu([(1 << 22) + 12345]) == (0.0, 0.0, 1)   # above Linux's largest pid_max
 
 
 def test_overhead_fits_each_part_of_a_cpu_nodes_sessions(tmp_path):
