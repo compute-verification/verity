@@ -320,6 +320,9 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         except waitcap.OverCap as e:
             print(f"research run: {e}", file=sys.stderr)
             return 2
+    if (ns.on or ns.queue) and not ns.claimed and (why := _short_bare_timeout(harness_opts)):
+        print(f"research run: refused: {why}", file=sys.stderr)
+        return 2
     if ns.on == "auto" and (why := _auto_placement(ns, harness_opts)):
         print(f"research run --on auto: {why}", file=sys.stderr)
         return 2
@@ -591,6 +594,25 @@ def _harness_timeout(harness_opts: list[str]) -> float | None:
     """The harness ``--timeout`` (seconds) among the pass-through options, or ``None`` (normalized by :func:`_normalize_timeout`)."""
     v = remote.flag_value(harness_opts, "--timeout")
     return None if v is None else float(v)
+
+
+SHORT_TIMEOUT_S = 300
+
+
+def _short_bare_timeout(harness_opts: list[str]) -> str | None:
+    """Why a run sent to a machine is refused for its ``--timeout``: a bare number under :data:`SHORT_TIMEOUT_S` reads as seconds,
+    and on a shared machine it is nearly always minutes meant (INF-605: `--timeout 60` killed each of #7908's runs 60 s after it
+    took its slot). A value with a unit (`90s`, `60m`) passes as written."""
+    v = remote.flag_value(harness_opts, "--timeout")
+    try:
+        n = float(v) if v is not None else None
+    except ValueError:
+        return None
+    if n is None or n >= SHORT_TIMEOUT_S:
+        return None
+    return (f"--timeout {v} is {n:g} seconds (a bare number reads as seconds). For minutes write --timeout {v}m, or --max-min {v} "
+            f"with --on auto or --queue; a run that should really stop within {SHORT_TIMEOUT_S // 60} minutes says so with a unit, "
+            f"--timeout {v}s")
 
 
 def _normalize_timeout(harness_opts: list[str]) -> list[str]:

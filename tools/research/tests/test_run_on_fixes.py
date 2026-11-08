@@ -25,6 +25,19 @@ def test_a_timeout_with_units_is_shipped_as_seconds_and_seen_by_the_guards(capsy
     assert "--timeout" in capsys.readouterr().err
 
 
+def test_a_bare_timeout_under_five_minutes_is_refused_for_a_machine_with_the_unit_to_write(capsys):
+    """#7908's runs passed `--timeout 60` meaning minutes and were killed 60 s after taking their slots (INF-605)."""
+    for argv in (["--on", "vy-nowhere"], ["--on", "auto"], ["--queue", "--source", ".", "--project", "p"]):
+        assert cli.main(["run", *argv, "--timeout", "60", "--", "true"]) == 2
+        err = capsys.readouterr().err
+        assert "--timeout 60m" in err and "--timeout 60s" in err, err
+    assert cli._short_bare_timeout(["--timeout", "90s"]) is None
+    assert cli._short_bare_timeout(["--timeout=60m"]) is None
+    assert cli._short_bare_timeout(["--timeout", "300"]) is None
+    assert cli._short_bare_timeout(["--stage", "s"]) is None
+    assert "--timeout 1.5m" in cli._short_bare_timeout(["--timeout=1.5"])
+
+
 def test_a_relative_command_with_source_and_no_cwd_is_refused_before_launch(tmp_path, capsys):
     rc = cli.main(["run", "--on", "vy-nowhere", "--project", "p", "--runs-dir", str(tmp_path), "--no-custody-r2",
                    "--source", str(tmp_path), "--", "./scripts/go.sh"])
