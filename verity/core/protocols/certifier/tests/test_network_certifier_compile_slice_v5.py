@@ -19,6 +19,7 @@ from verity.core.protocols.certifier import compile_slice as CS
 from verity.ml.protocols.certifier import compile_slice_v2 as V2, compile_slice_v3 as V3
 from verity.ml.protocols.certifier import compile_slice_v4 as V4, compile_slice_v5 as V5
 from verity.core.protocols.certifier import replay_chain as RC
+from verity.core.protocols.certifier.head_check import ands
 from verity.ml.circuits import boolean as BL
 
 
@@ -294,3 +295,10 @@ def test_size(synth, asynth):
                                    "cout_bits": 160, "coin_bits": 384, "chk_bits": 32764, "free_bits": 32772}
     assert V5.size(**asynth.st) == {"ands": 2975729, "adv_bits": 8, "ing_bits": 27, "req_bits": 160, "srv_bits": 160,
                                     "cout_bits": 176, "coin_bits": 384, "chk_bits": 23164, "free_bits": 23172}
+
+
+def test_the_parts_price_the_unit(synth, asynth):
+    """`compile_slice_v5.parts`, which prices a class too wide to build the body at, is the built unit: its parts' ANDs
+    times their calls sum to `size`'s at both demos' classes."""
+    for x in (synth, asynth):
+        assert sum(n * ands(p) for p, n in V5.parts(**x.st)) == V5.size(**x.st)["ands"]

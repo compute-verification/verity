@@ -900,3 +900,20 @@ def size(**st) -> dict[str, int]:
     """The unit's ANDs (an n-input AND n − 1), its inputs' widths (padded) and its free width at statics `st`."""
     S = SimpleNamespace(**st)
     return {"ands": ands(unit(**st)), **{f"{r}_bits": b for r, b in row_bits(S).items()}, "free_bits": free_width(S)}
+
+
+def parts(**st) -> list[tuple[object, int]]:
+    """The unit's parts at statics `st`, each bound at the statics it reads, with the times the unit calls it: the unit's
+    ANDs are the sum of each part's times its calls (the body's other nodes are constants), so this prices a class whose
+    inputs are too wide to build the body at."""
+    S = SimpleNamespace(**st)
+    S3 = shape(S).S3
+
+    def bound(d, keys):
+        return bind(d, **{k: st[k] for k in keys})
+
+    slot, entry, end = (bind(d, **{k: getattr(S3, k) for k in V3S.SLOT_STATICS}) for d in V3S.PARTS)
+    return [(bound(CompileLoad, LOAD_STATICS), 1), (bound(CompileStep, STEP_STATICS), S.P),
+            (bound(V4.CompileBus, V4.STATICS), nrec(S)), (bound(CompileArrivals, ARRIVAL_STATICS), S.K), (slot, S.NS),
+            (entry, len(dense(S)) + S.NM + S.NRB), (bound(RaggedKey, KEY_STATICS), S.NRK), (end, 1),
+            (bound(CompileVerdict, STATICS), 1)]
