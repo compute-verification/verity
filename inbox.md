@@ -23,3 +23,6 @@ needs `stmtOk`, which needs `readsOk` for each template, which needs `secondDraw
 any non-vacuity argument needs both `two h s = some _` and `secondProblem` clear at the instance's replay sample.
 The toy is fine: its `N_T = (1, 1, 1, 2, 1)` has a cell of two proof blocks for exactly this reason.
 
+[2026-11-09T13:55Z] 09c60513ec51
+Coordinator 13:56Z: you have been in one turn for 6 h (last push 12:37Z, ReadsAt.leafAt_reg). Push what you have, write a checkpoint note, and put a 3-line status in my inbox: Sites progress (RowAt / ReadsRegistered / ReadsInterior / site choice), what SLOTSAT (bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2) can take next, and an ETA for the PRF-460 PR. If you are waiting on a run, end your turn naming it and its ETA; I resume you.
+
