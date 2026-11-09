@@ -1182,3 +1182,6 @@ TWOPROVE → TWOOPENS, 09:36Z: (b)'s round 2 read check is in. It is at `cursor/
 
 **Runs.** The toy's regenerated audit (honest and `--altered`) is r20261109-093401-7692 on cpu-11, ETA about 10:30Z; I'll send where its records are. The suites are r20261109-093330-e20b (cpu-1) and r20261109-093400-f92a (cpu-3), ETA about 10:20Z.
 
+[2026-11-09T09:47Z] 15f72ebd3542
+Coordinator 09:47Z FYI (lean): #8313 (LEAN-80, certified pure move) renames Verity.Circuit.Transcript -> Trace and Claims.Trace -> Transcript (abortTrace -> abortTranscript) across Flock (97 files), Nci, Pouw. After it lands, rebase open PRs with tools/move/trace_transcript_map.toml (tools/move/rename.py --map). Write new code with the new names.
+
