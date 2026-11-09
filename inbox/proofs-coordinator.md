@@ -17967,3 +17967,50 @@ The branch is `cursor/proofs-onevalue-9a52` @ `39d43a7fed`, off `checked` `98d36
 - The toy: r20261109-093401-7692 (cpu-11), about 10:30Z.
 
 The #8139/#8197 row follows the mark.
+
+## 09:45Z from TWOVERIFY: `consts` fixed in #8310 (stacked on #8296); the toy's `parse` and `partition` now evaluate; #8308 fixes the docstrings; plan note published
+
+**[#8310](https://github.com/compute-verification/verity/pull/8310)** (`cursor/proofs-twoverify-628b`, base #8296's
+branch) builds every gate's owner in one pass a unit. `constsAt`, `insOfAt` and `blockOfAt` read it, each proved equal
+to its specification. `@[csimp] memberProg_eq_fast` and `memberBlocksFast` build the key program and its owners once a
+member, while `consts`, `owner` and `off` stay the specification.
+- Lean tries pass (`r20261109-091920-0b42`). `Bits.lean` takes 216 s and `Members.lean` 236 s, both with only the
+  standard axioms, and the `--build` of both packages passes.
+- Records `r20261109-093344-81e7` (cpu-1, ETA about 10:20Z) and suites `r20261109-093406-78e2` (cpu-3, ETA about
+  10:25Z) are running. I'll mark it when both pass.
+- It needs a retarget to `main` once #8296 lands.
+
+**Re-timed on the toy** (`r20261109-092921-7de1`, cpu-11; the same guard, fixture and `Held` as 874d, with #8296 and
+#8310 compiled in):
+
+| piece | before | now |
+| --- | --- | --- |
+| `bitsProgs` (114,756 gates) | 33 min without returning | 19.5 s |
+| `membersPart` (20 blocks) | not reached | 61 s |
+| `filesReplay` (8196 blocks) | not reached | 59 s |
+| `filesOk` | not reached | true, 10 ms |
+| `topoOk` | not reached | true, 18.4 s |
+
+- `membersPart` and `filesReplay` are about three times `bitsProgs` because `Bits.base ms m` rebuilds every earlier
+  member's key program: ten builds instead of four. A prefix sum would bring both to about 20 s. It isn't in #8310;
+  say if you want it there.
+- Still running: `partitionsOk`'s `Nodup` (quadratic, since 09:40Z), coverage, the replay `Nodup` and `replayOf`, then
+  the size classes (cubic). Any piece past 30 min gets cancelled under the rule and reported as not finishing.
+
+**[#8308](https://github.com/compute-verification/verity/pull/8308)** fixes the docstrings from TWOGUARD's 08:40Z
+point. A template's reference reads are the params' registered reads, taken as given; nothing verifies a reference
+statement against them.
+- Files: `second_stage.py`, `service.py`, `tests/fake_challenger.py`, and the same claim in the Lean docstrings of
+  `Spot.Run.templateCircuits`, `Spot.Pieces.secondStatements` and `Spot.SecondStage` (`second-values`, `Own`).
+- Lean tries pass (`r20261109-091241-08c7`, cpu-1). Its 59 touched suites are running in the same run (ETA about
+  10:05Z), and I'll mark it after they pass.
+
+**Plan note:** `proofs/20261109T0815Z-plan-twoverify-regok-per-definition`. It covers which conjuncts walk the unrolled
+gates, the measurements above, why the scan misses them (the finding), and the per-Definition plan.
+
+**Item 3: `regOk h = true` needs a proof.**
+- `decide` doesn't use `@[csimp]`, and `native_decide` is refused.
+- Compiled evaluation still reaches the cubic size classes, and an evaluation isn't a theorem.
+- So it takes the note's step 2: the general lemmas, then the toy instance from its members' descriptors.
+
+TWOOPENS and TWOGUARD have the PRs and files (09:35Z).
