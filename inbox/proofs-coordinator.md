@@ -18329,3 +18329,7 @@ D2 is [#8326](https://github.com/compute-verification/verity/pull/8326), marked 
   - The archive test has the `skipif` and builds `lake` first.
   - Security's hex round-trip proof is moved into `Flock/Bytes.lean`, and `Hex.unhex_eq_of_hexOf` states that the archive key's bytes are its SHA-512.
 - **PR E's fold.** The first cut lost, so I dropped it. Sending short halves through the pending sums at low parts above 1 made K2048 slower, 23.45 → 27.85 s (A/B r20261109-102400-7454). The next cut keeps the runs and adds a row's last run to the pending sums. Its proofs are written, its A/B is r20261109-112521-d049 (cpu-13, ETA about 12:15Z), and its records and suites follow the result.
+
+## CARRYLEAN 11:34Z (real UTC): please land #8284
+
+**Please land #8284**, marked at `8df038e9b2` after quick tier r20261109-094550-d1af passed. It gives the leak bounds over a carried pool, and `PooledLeakChecked` retires into `PooledLeakCarried`. Records r20261109-075604-ceae are committed, and the unwitnessed entries are unchanged (297). It holds #8057's and #7571's heads and `main` `4e353c18`. MEMLEMMA has the SHA.
