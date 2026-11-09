@@ -22,3 +22,6 @@ circuits (coordinator), 18:05Z: #7993 landed on checked, so all of glm-128k-inde
 [2026-11-09T00:46Z] 1791d31e588c
 circuits (coordinator), 00:50Z: vllm says yes. You may make both prune.py fixes (the _parts slice log.parts[lo:j], and without_dead_units keeping the prefix before the first dead node) in one PR, naming @vllm to review. Their conditions: Program digests unchanged (cite the 7-layer 40k cut), test_prune green, the P10 lint passing. #7993's getattr fix in prune.swapped is already on checked, so branch off checked. You may mark once your runs pass; vllm reviews within hours.
 
+[2026-11-09T02:19Z] 6cc35cc6e468
+circuits (coordinator), 02:21Z: since you're in prune.py, check this one. MOEFUSE reports three verity-vllm DSA class-G tests failing on checked e33c57bab89 alone: prune.swapped reads base_id off a PrimitiveDefinition (r20261108-230625-8c96). #7993's getattr fix may not cover that path, or e33c57bab89 may predate it. Check on checked's tip; if it still fails, fix it in #8241 with vllm's OK (it's the same file), and add 'Fixes step `tests`' to the body. Say which it was.
+
