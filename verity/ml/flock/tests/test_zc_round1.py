@@ -1,7 +1,8 @@
 """``cuda/zc_round1.cuh``, the zerocheck's round 1 from the packed witness, word for word against upstream's table kernel
 (``zerocheck_round1_cpustyle.cuh``): the 64 a·b sums and the 64 c sums, at sizes from one outer chunk to grids its warps
-stride several times, with a·b by clmad where the GPU has it and by the log tables (``ZC_R1_TABLES``); and the lincheck's z
-transpose (``cuda/zlin_transpose.cuh``) byte for byte against the byte-at-a-time kernel, with nothing written past its end.
+stride several times, from ``launch_zc_round1`` (``zc_round1_sm90`` on sm_90, ``zc_round1_zlin`` elsewhere) and from each
+kernel it can take on this GPU; and the lincheck's z transpose (``cuda/zlin_transpose.cuh``) byte for byte against the
+byte-at-a-time kernel, with nothing written past its end.
 ``zc_round1.cu`` runs them, built by nvcc against a Flock b684b12 checkout's ``cuda-ghash``
 (``VERITY_ML_FLOCK_CUDA_GHASH``) where a GPU is present."""
 from __future__ import annotations
@@ -41,19 +42,18 @@ needs_gpu = pytest.mark.skipif(
 )
 
 
-@pytest.fixture(scope="module", params=["clmad", "tables"])
-def lib(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
+@pytest.fixture(scope="module")
+def lib(tmp_path_factory: pytest.TempPathFactory) -> ctypes.CDLL:
     arch = gpu_arch()
-    out = tmp_path_factory.mktemp("zc_round1") / f"zc_round1_{request.param}.so"
-    flags = ["-DZC_R1_TABLES"] if request.param == "tables" else []
-    # both builds load into this process: GNU-unique statics (the launchers' one-time setup) would be the first build's
-    r = subprocess.run(["nvcc", "-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC,-fno-gnu-unique", "-shared", f"-I{GHASH}", *flags,
+    out = tmp_path_factory.mktemp("zc_round1") / "zc_round1.so"
+    r = subprocess.run(["nvcc", "-x", "cu", "-O3", "-std=c++17", "-Xcompiler", "-fPIC", "-shared", f"-I{GHASH}",
                         f"-gencode=arch=compute_{arch},code=sm_{arch}", "-o", str(out), str(SOURCE)],
                        capture_output=True, text=True, check=False)
     assert r.returncode == 0, f"nvcc failed:\n{r.stderr[-4000:]}"
     dll = ctypes.CDLL(str(out))
-    dll.zr_check.argtypes = [ctypes.c_longlong, ctypes.c_uint64, ctypes.POINTER(ctypes.c_longlong)]
+    dll.zr_check.argtypes = [ctypes.c_longlong, ctypes.c_uint64, ctypes.c_int, ctypes.POINTER(ctypes.c_longlong)]
     dll.zr_check.restype = ctypes.c_int
+    dll.zr_takes_sm90.restype = ctypes.c_int
     dll.zt_check.argtypes = [ctypes.c_int, ctypes.c_longlong, ctypes.c_int, ctypes.c_uint64, ctypes.POINTER(ctypes.c_longlong)]
     dll.zt_check.restype = ctypes.c_int
     return dll
@@ -62,21 +62,24 @@ def lib(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory
 @pytest.mark.slow
 @needs_gpu
 def test_round_1_from_the_packed_witness_is_the_table_kernels_word_for_word(lib: ctypes.CDLL) -> None:
-    """Slow for its nvcc builds: round 1's kernels, which only a GPU runs."""
+    """Slow for its nvcc build: round 1's kernels, which only a GPU runs."""
+    assert bool(lib.zr_takes_sm90()) == (gpu_arch() == "90")
+    paths = {"launch_zc_round1": 0, "zc_round1_zlin": 1, **({"zc_round1_sm90": 2} if lib.zr_takes_sm90() else {})}
     bad = {}
-    for n_out in N_OUT:
-        for seed in (1, 2):
-            out = (ctypes.c_longlong * 2)()
-            assert lib.zr_check(n_out, seed, out) == 0, (n_out, seed)
-            if any(out):
-                bad[(n_out, seed)] = {"ab": out[0], "c": out[1]}
+    for name, path in paths.items():
+        for n_out in N_OUT:
+            for seed in (1, 2):
+                out = (ctypes.c_longlong * 2)()
+                assert lib.zr_check(n_out, seed, path, out) == 0, (name, n_out, seed)
+                if any(out):
+                    bad[(name, n_out, seed)] = {"ab": out[0], "c": out[1]}
     assert not bad, bad
 
 
 @pytest.mark.slow
 @needs_gpu
 def test_the_z_transpose_is_the_bytewise_kernels_byte_for_byte(lib: ctypes.CDLL) -> None:
-    """Slow for its nvcc builds (shared with round 1's test): the transpose, which only a GPU runs."""
+    """Slow for its nvcc build (shared with round 1's test): the transpose, which only a GPU runs."""
     bad = {}
     for k_log, stripes, blocks in ZT_CASES:
         out = ctypes.c_longlong()
