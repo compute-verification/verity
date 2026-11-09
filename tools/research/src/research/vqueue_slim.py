@@ -22,8 +22,11 @@ A failed step's `Failed.key` is its content key at the candidate (`key`): SHA-51
 reads (`reads`) as git holds them in the candidate's tree; its `base_key` is the same at the base, computed from the base's
 tree, with no run.  An equal key means the base fails the step too, as graph2's keys of its tasks by their inputs do, so
 `vqueue.decide` takes the failure as inherited.  A step whose reads can't be bounded is keyed on the whole tree, so its
-failure is never inherited: preflight-lints (its lints read every file, `check.lints_key`) and ratchet-gate (it judges the
-merges above the base, not a tree)."""
+failure is never inherited by its key: preflight-lints (its lints read every file, `check.lints_key`) and ratchet-gate (it
+judges the merges above the base, not a tree).  Each failed step's one test (`Failed.tests`) is the step's (`step_test`), so
+the run beside the base's own check, which the loop keeps beside `main` (started on `main` against itself, so lean-agreement
+never runs), says what the base fails (`based`): failed there too, a step's failure is inherited by `vqueue.decide`'s rule
+of failing tests."""
 from __future__ import annotations
 
 import ast

@@ -35,7 +35,10 @@ has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue
 graph2 doesn't check starts with its candidate's build, one beside each candidate's check (so up to `--depth` at once, on
 drive's machines), or once in the snapshot for a candidate on `main`'s chain the log holds no start of.  Pending until it
 ends, it is judged each tick, its record logged whenever it changes, and combined with the check's verdict: a candidate passes
-only when both pass.
+only when both pass.  One more runs beside `main`'s own check: the candidate's `main` advanced to, else one the snapshot
+starts at startup and each time `main` moves (and once more after infra).  A step a candidate's run failed is inherited when
+`main`'s failed it too, and its own when `main`'s passed it (`vqueue_slim.based`); while `main`'s runs, at most `pending_s`
+after it started, a fail whose every other failure is inherited is pending.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
 owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
