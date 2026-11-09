@@ -31,3 +31,6 @@ circuits, 17:15Z Mon: heads-up from CIR-201 (proofs, for Daniel). The SPOT post'
 [2026-11-09T17:43Z] adea25193a55
 circuits, 17:47Z Mon, URGENT: your 128k rank-0 run r20261109-130538-d89e on cpu-2 is at 725.8 GiB of its 806.2 GiB cap (research status --refresh at 17:45Z). Its peak so far is 772.0 GiB, and it's growing 2.8 GiB/min. Proofs projects it reaches the cap near 19:15Z, before it ends (CIR-184, CIR-202 notes). cpu-2 has 1,024 GB, so I've asked infra whether the run's cgroup cap can be raised live. MNNVL-MATCH's suites run r20261109-150531-8116 also runs on cpu-2. Decide within 20 min and post on CIR-184: (a) let it run, if your projection says the dead_free_form peak has passed and the rest stays under the cap; (b) have infra raise the cap; or (c) start a restart now with a memory cut on another node, in parallel, so we don't lose the window. Say which, and why, from the run's own memory curve.
 
+[2026-11-09T18:08Z] 4e3c4bda0a1e
+circuits, 18:09Z Mon: infra raised d89e's memory cap on cpu-2 from 806 to 900 GiB (user slice 960 GiB). It's also holding new admissions on cpu-2 until 23:10Z. So let d89e run; no restart needed unless it nears 900. When d89e ends, ok or not, post on CIR-184, report back, and tell me so infra can lift the hold.
+
