@@ -375,12 +375,10 @@ def test_train_launch_gives_train_sh_the_steps_and_flags_it_is_given(tmp_path):
 
     (tmp_path / "tools" / "verity" / "check").mkdir(parents=True)
     (tmp_path / "tools" / "verity" / "check" / "train.sh").write_text('echo "argv: $*"\necho "RUN r20261027-120000-aaaa"\n')
-    extra = {"agreement": False, "no_cache": True, "circuit_cache": True, "no_regenerate": True}
-    ids, tail = train_launch(tmp_path, "c" * 40, "m1", extra.pop("agreement"), deferred="pytest,circuit-check", **extra)
+    ids, tail = train_launch(tmp_path, "c" * 40, "m1", True, deferred="lean-agreement,ratchet-gate", no_regenerate=True,
+                             base="b" * 40)
     assert ids == ["r20261027-120000-aaaa"]
-    assert f"argv: {'c' * 40} m1 --deferred pytest,circuit-check --no-cache --circuit-cache --no-regenerate" in tail, tail
-    ids, tail = train_launch(tmp_path, "c" * 40, "m1", False, deferred="ratchet-gate", base="b" * 40, ratchet_base="a" * 40)
-    assert f"argv: {'c' * 40} m1 --deferred ratchet-gate --base {'b' * 40} --ratchet-base {'a' * 40}" in tail, tail
+    assert f"argv: {'c' * 40} m1 --agreement --deferred lean-agreement,ratchet-gate --no-regenerate --base {'b' * 40}" in tail, tail
 
 
 def test_the_run_beside_a_candidates_check_takes_a_check_slot_ahead_of_unranked_priority_checks(tmp_path, monkeypatch):

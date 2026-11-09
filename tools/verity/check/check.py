@@ -14,9 +14,6 @@ reports each step's real verdict; what gates and what may stay red is the queue'
                                                             last shard's with those no shard holds (ratchet-gate)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
                                                             a regenerated record
-    ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (a lock run):
-                                                            lean-audit repairs a lock's bookkeeping and the caps it breaks and
-                                                            warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
                                                             nightly `audit-main`, which gates nothing); with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
@@ -70,7 +67,7 @@ reports each step's real verdict; what gates and what may stay red is the queue'
                                                             newest recorded checks, and with --on that pack travels with the run
     uv run python tools/verity/check/check.py --record --shard K/N --on M
                                                             shard K of ci.toml's plan with N shards, on machine M (each shard
-                                                            on a pod of the lander's choosing): an Attempt no gate takes alone
+                                                            on a pod of the caller's choosing): an Attempt no gate takes alone
     uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
                                                             shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`);
                                                             with --record --on M, PLAN goes as the run's input
@@ -101,7 +98,7 @@ parts, each once (the preflight's steps once, passed in every shard), when `rese
 shards' Attempts are passing runs of the declared command with `--shard K/N` on that clean commit, their results passed with
 no step failed or stopped, all of one plan (one N, K = 1..N once each) and one config (the commit's), and their parts are
 every part, each once, covering every job the commit's `ci.toml` puts on the gate (a shard skips a job off it, which a plan
-may still name: circuit-check and ratchet-gate run after landing alone). `research merge` takes the combined Attempt only
+may still name: circuit-check and ratchet-gate, which only a `--deferred` run runs). `research merge` takes the combined Attempt only
 after judging its shards again the same way and finding its steps theirs, so a missing, repeated, failed or mismatched shard
 passes nothing. A step skipped in its shard (lean-agreement without the upstream build) is skipped in the combined check too.
 When circuit-check is on the gate and its parts ran in more than one shard, the combine also joins their records
@@ -162,8 +159,8 @@ doesn't name:
                     (`grant_when_alone`): every registered Definition and template
                     (`tools/verity/circuit_check`), or in a shard that holds some of its parts (`circuit-check:K/N`) only
                     those shards of them (`--shard K/N`, records under `CC_SHARDS`),
-                    its report beside the run's result (off the gate: a recorded check skips it, and the after-landing
-                    run, `--deferred` with every job, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
+                    its report beside the run's result (off the gate: a recorded check skips it, and a `--deferred` run
+                    of it, or the nightly's cold check, runs it); then flock-rust-tests, `check_build.sh test` on that checkout:
                     `cargo test --release` of flock-live's unit tests and of the five upstream crates the patches change
     lean            `lake build` of the Lean verifier (`verity/core/service/flock`), then its partition check against
                     `verity.ml.circuits.partition` (`unit_cut_agree.py`), then its agreement with upstream's Rust verifier (`ci.py`) on
@@ -372,7 +369,7 @@ TRAIN_STEPS = ("pytest", "lean-suites", "circuit-check")
 
 def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combining: bool) -> int | None:
     """The slot memory a recorded check must have (`TRAIN_GB`): a train's (`--priority`, outside a pool) that runs pytest,
-    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or after-landing run holding one; else None."""
+    lean-suites or circuit-check, all of a check (``parts`` None) or a shard or `--deferred` run holding one; else None."""
     if not priority or pool is not None or combining:
         return None
     return TRAIN_GB if parts is None or any(p.partition(":")[0] in TRAIN_STEPS for p in parts) else None
@@ -798,13 +795,12 @@ def requires_outside(lean: Path) -> list[str]:
 
 
 def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
-               regenerate: bool = True, bookkeeping: bool = False) -> list[tuple[str, list[str] | str, Path]]:
+               regenerate: bool = True) -> list[tuple[str, list[str] | str, Path]]:
     """The Lean steps: nothing on a tree without the verifier (a skip, named); then `lake build`, the Lean partition check's
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
-    where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, a lock run)
-    repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
+    where a record difference fails), and inside a recorded run it bundles the module versions it
     built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
     directory (`requires_outside`)."""
@@ -833,8 +829,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
                             "--cache", str(cache_dir() / "lean-audit"), "--deps", str(cache_dir() / "lean-deps"),
                             *([] if cache else ["--fresh"]), *(["--urls", str(urls)] if urls else []),
                             *(["--bundle"] if SETTINGS.RESEARCH_RUN_ID else []),
-                            *(["--regenerate"] if regenerate and lean_regenerates() else []),
-                            *(["--bookkeeping", "warn"] if bookkeeping and regenerate and lean_regenerates() else [])], ROOT),
+                            *(["--regenerate"] if regenerate and lean_regenerates() else [])], ROOT),
             ("lean-agreement", agreement, ROOT)]
 
 
@@ -1034,7 +1029,7 @@ def pool_env(pool: str | None, on: str | None, priority: bool) -> list[str]:
         raise ValueError(f"{pool} waits in one machine's pool: `--on auto --pool {LANE_POOL}` or --on MACHINE, not a list, which "
                          f"chooses among merge-check slots")
     if priority:
-        raise ValueError(f"{pool} takes no --priority: that is the lander's train checks' place in the merge-check slots' line")
+        raise ValueError(f"{pool} takes no --priority: that is the queue's train checks' place in the merge-check slots' line")
     return ["--env", f"CHECK_SLOTS={slot_only.pool_slots(pool)}"]
 
 
@@ -1167,7 +1162,7 @@ def record(argv: list[str]) -> int:
     need = [s for s, rule in tool.CHECK.merge_requires.items() if rule_touches(rule, changed)] + ["lean-agreement"] * agreement
     if combining or parts is not None:                 # a shard gets what its own steps read; a combine runs none
         need = [s for s in need if parts is not None and s in parts]
-    # an after-landing run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
+    # a `--deferred` run is no check of the commit: recorded without the tool, so `research merge` never reads it.  On a machine
     # every run of a commit shares the shipped tree <root>/src/<sha>, and two checks' Lake builds there broke each other's .lake,
     # so each runs in its own clone of it
     cmd = [sys.executable, "-m", "research", "run", *(["--tool", "check"] if deferred is None and not records else []), "--project", "verity",
@@ -1340,7 +1335,7 @@ SIBLINGS_GB = 350
 
 def cc_mem_gb(slot_gb: int, beside: bool, lean: bool = True) -> int:
     """circuit-check's --mem-gb in a slot of ``slot_gb``: all of it alone (a shard without pytest or Lean), else what
-    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (an after-landing run of
+    `SIBLINGS_GB` leaves, but never under a quarter of the slot; beside pytest without ``lean`` (a `--deferred` run of
     circuit-check and pytest), what pytest's share of that (`tests_gb`, half, the other half lean-suites') leaves."""
     if not beside:
         return slot_gb
@@ -1522,8 +1517,8 @@ def suite_args(held: list[str], splits: dict[str, dict] | None, out: Path) -> li
 
 def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
            only: list[str] | None = None, regenerate: bool = True,
-           circuit_cache: bool | None = None, splits: dict[str, dict] | None = None,
-           bookkeeping: bool = False) -> list[list[tuple[str, list[str] | str, Path]]]:
+           circuit_cache: bool | None = None,
+           splits: dict[str, dict] | None = None) -> list[list[tuple[str, list[str] | str, Path]]]:
     """The independent groups, each a sequence of (name, argv or the reason it is skipped / cannot run, cwd); with ``only``, a
     shard's parts (`shard`), just the jobs those name, lean-audit on its packages there, and all the cores to pytest or to
     circuit-check when the other isn't among them.  ``circuit_cache`` (default ``cache``) is whether circuit-check reuses its
@@ -1547,7 +1542,7 @@ def groups(out: Path, n: int, cache: bool = True, urls: Path | None = None,
     tests_gb = None if slot_gb is None else (slot_gb - cc_mem_gb(slot_gb, beside) if with_cc else slot_gb) // 2
     tail = ["--timeouts", "--jobs", str(a), *([] if cache else ["--fresh"]), *(["--mem-gb", str(tests_gb)] if tests_gb is not None else []),
             *(["--run", rid] if (rid := SETTINGS.RESEARCH_RUN_ID) else [])]
-    lean = lean_steps(out, cache, urls, regenerate, bookkeeping)
+    lean = lean_steps(out, cache, urls, regenerate)
     # an auto shard's suites (`pytest:SUITE`, `lean-suites:SUITE`): only those
     held = {job: [p.partition(":")[2] for p in only or () if p.partition(":")[0] == job and p.partition(":")[2]]
             for job in SHARDS.SUITE_JOBS}
@@ -1874,7 +1869,7 @@ def shard_plan_main(argv: list[str]) -> int:
 def auto_shard(spec: str, gated: bool = True, plan_file: Path | None = None, jobs: set[str] | None = None) -> dict:
     """`--shard auto:K/N`: {"k", "n", "parts": shard K's parts of the auto plan, "all": the plan's parts, "plan": its summary}.
     The plan is ``plan_file`` (in a recorded run, its `AUTO_PLAN` input); DeclarationError when there is none, or its parts aren't exactly this tree's: every part of the jobs on the gate (not ``gated``: of every job), of
-    ``jobs`` alone when given (an after-landing run's steps and what they need)."""
+    ``jobs`` alone when given (a `--deferred` run's steps and what they need)."""
     m = AUTO_SHARD.fullmatch(spec)
     if not m or not 1 <= int(m.group(1)) <= int(m.group(2)):
         raise DECLARATION.DeclarationError(f"--shard {spec}: an auto shard is auto:K/N, K in 1..N")
@@ -2676,7 +2671,7 @@ def prebuild(out: Path, steps: Steps) -> dict | None:
 def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = False,
         only: list[str] | None = None, packs: Packs | None = None, reused: Reused | None = None,
         regenerate: bool = True, circuit_cache: bool | None = None, live=None,
-        splits: dict[str, dict] | None = None, bookkeeping: bool = False) -> tuple[bool, list[dict]]:
+        splits: dict[str, dict] | None = None) -> tuple[bool, list[dict]]:
     n = n or cores()
     urls = take_lean_deps_urls(out)
     steps = Steps(out, keep_going, packs, reused, live)
@@ -2713,8 +2708,7 @@ def run(out: Path, n: int | None = None, cache: bool = True, keep_going: bool = 
         if not steps.stopping and all(r["status"] == "passed" for r in results):
             if reused is not None:
                 reused.start()
-            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits,
-                        bookkeeping=bookkeeping)
+            gs = groups(out, n, cache, urls, only=only, regenerate=regenerate, circuit_cache=circuit_cache, splits=splits)
             steps.live.plan([name for g in gs for name, _, _ in g])
             steps.live.request()
             ended.update({name: threading.Event() for g in gs for name, _, _ in g})
@@ -2807,8 +2801,8 @@ def reuse_lines(r: dict) -> list[str]:
 def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | None = None, contradicted: list[dict] = (),
                  nondeterministic: list[dict] = (), shard: dict | None = None, stopped_by: str | None = None) -> None:
     """``result.json``: `check/v1`; for a shard (``shard``, from `shard`), `SHARD_KIND`, with the shard's plan, commit and
-    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for an
-    after-landing run (`--deferred`), `DEFERRED_KIND`, the same under `deferred`.  Its `passes` are the lean-audit step's
+    config (the tree of `tools/verity/check/` at HEAD) and each of its steps' parts (the plan's names that step ran); for a
+    `--deferred` run, `DEFERRED_KIND`, the same under `deferred`.  Its `passes` are the lean-audit step's
     (`lean_passes`), which the store indexes as `passes.<key>`.  A run ``stopped_by`` a signal is `not_run`: no verdict and
     no passes, so a job queue runs it again."""
     if shard is not None:
@@ -2842,7 +2836,7 @@ def write_result(run_dir: Path, ok: bool, done: list[dict], verdicts: dict | Non
 
 
 def live_record(out: Path, run_dir: Path | None, sharded: dict | None, picked: list[str]):
-    """The run's `LIVE.Live`: what it checks (a shard, an after-landing run's steps, parts, or the whole check) of which commit, published
+    """The run's `LIVE.Live`: what it checks (a shard, a `--deferred` run's steps, parts, or the whole check) of which commit, published
     with the run's custody key when it has one (`custody_dir`)."""
     what = (f"shard {sharded['k']}/{sharded['n']}" if sharded and "k" in sharded else
             f"deferred {','.join(sharded['deferred'])}" if sharded and sharded.get("deferred") else
@@ -2914,8 +2908,7 @@ def main(argv: list[str], script: bool = False) -> int:
     circuit_cache = cache or "--circuit-cache" in argv
     keep_going = "--keep-going" in argv
     regenerate = "--no-regenerate" not in argv
-    bookkeeping = "--bookkeeping-warn" in argv
-    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate", "--bookkeeping-warn")]
+    rest = [a for a in argv if a not in ("--no-cache", "--circuit-cache", "--keep-going", "--no-regenerate")]
     pack = None
     if "--verdicts-in" in rest and rest.index("--verdicts-in") + 1 < len(rest):
         i = rest.index("--verdicts-in")
@@ -2968,10 +2961,6 @@ def main(argv: list[str], script: bool = False) -> int:
             sharded = {**sharded, "parts": mine}
         sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
-    if bookkeeping and (deferred is None or not regenerate or "--shard" in argv):
-        print("check: --bookkeeping-warn is a lock run: with --deferred, unsharded and without --no-regenerate",
-              file=sys.stderr)
-        return 2
     if picked:
         if sharded or SETTINGS.RESEARCH_RUN_ID:
             print("check: a check of parts runs outside a recorded run and without --shard: no gate takes part of a check",
@@ -3004,7 +2993,7 @@ def main(argv: list[str], script: bool = False) -> int:
         except DECLARATION.DeclarationError as e:
             print(f"check: {e}", file=sys.stderr)
             return 2
-        print(f"check: off the merge gate, left to the after-landing run (`--deferred`): {', '.join(OFF_GATE)}", flush=True)
+        print(f"check: off the merge gate, left to a `--deferred` run: {', '.join(OFF_GATE)}", flush=True)
     out = run_dir or Path(tempfile.mkdtemp(prefix="check-"))
     verdicts = {"in": verdicts_in(pack, run_dir, None if cache else CIRCUIT_ENTRIES)} if pack and circuit_cache else {}
     if records is not None and (only is None or any(p.partition(":")[0] == "circuit-check" for p in only)):
@@ -3023,8 +3012,7 @@ def main(argv: list[str], script: bool = False) -> int:
     live = live_record(out, run_dir, sharded, picked)
     live.start()
     try:
-        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits,
-                       **({"bookkeeping": True} if bookkeeping else {}))
+        ok, done = run(out, n, cache, keep_going, only, packs, reused, regenerate, circuit_cache, live, splits)
     finally:
         if main_thread:
             signal.signal(signal.SIGTERM, prior)

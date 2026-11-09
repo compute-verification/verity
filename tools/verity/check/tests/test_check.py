@@ -142,9 +142,7 @@ def test_the_lean_steps_once_the_verifier_is_on_the_tree(tmp_path, monkeypatch):
     assert lean_audit[4].endswith("tools/verity/lean/lean_audit.py") and {"--cache", "--deps"} <= set(lean_audit) and "--fresh" not in lean_audit
     assert "--fresh" in CHECK.lean_steps(out, cache=False)[2][1]
     assert "--regenerate" in lean_audit and "--regenerate" not in CHECK.lean_steps(out, regenerate=False)[2][1]
-    warn = CHECK.lean_steps(out, bookkeeping=True)[2][1]
-    assert "--bookkeeping" not in lean_audit and warn[warn.index("--bookkeeping") + 1] == "warn"
-    assert "--bookkeeping" not in CHECK.lean_steps(out, regenerate=False, bookkeeping=True)[2][1]
+    assert "--bookkeeping" not in lean_audit
     assert argv[2:4] == ["--lean-agreement", str(out)] and {Path(x).name for x in argv[4:]} == {"a.tar.gz", "b.tar.gz"}
     (sent / "b.tar.gz").unlink()
     assert CHECK.lean_steps(out)[3][1] == "only upstream of the pinned upstream build and inputs was sent"
@@ -379,7 +377,7 @@ def test_record_warns_when_the_commit_cannot_land_as_is_and_checks_it_anyway(mon
 
 
 def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_allowlist(tmp_path, monkeypatch):
-    """With the ratchet gate out of drive's per-merge landing gates, the train's check is where an allowlist that grows is caught:
+    """With the ratchet gate off every per-merge gate, the train's check is where an allowlist that grows is caught:
     the step judges each `Queue: #N` merge above the run's sent base against the one below, with the gate as the base has it, so
     a train holding one merge that grows an allowlist fails naming that PR, even when the PR also rewrites the gate to pass, and a
     clean train passes.  Its verdicts are kept under the check's cache, and none under --no-cache."""
@@ -454,9 +452,9 @@ def test_the_ratchet_gate_step_fails_a_train_naming_the_pr_whose_merge_grows_an_
 
 
 def test_the_ratchet_gate_step_fails_when_its_base_is_head_or_above_it(tmp_path, monkeypatch):
-    """A run of `main`'s tip against origin/main, its own tip, judged no change and passed, so the step could never fail an
-    after-landing run: a base at or above HEAD fails it.  A base below HEAD, or on a branch beside it (a PR behind `main`), is
-    judged; one that names no commit here (the nightly's empty tree) skips it, which no after-landing run passes."""
+    """A run of `main`'s tip against origin/main, its own tip, judged no change and passed, so the step could never fail a
+    run of `main`: a base at or above HEAD fails it.  A base below HEAD, or on a branch beside it (a PR behind `main`), is
+    judged; one that names no commit here (the nightly's empty tree) skips it, which no run beside a candidate passes."""
     import os
     import subprocess
 
@@ -541,7 +539,7 @@ def test_record_sends_the_verdicts_it_gathers_with_a_pack_given_added_unless_no_
     assert CHECK.record(["--base", "HEAD", "--no-cache"]) == 0 and len(given_to) == 2
     assert not any(x.endswith("verdicts-gathered.tar.gz") for x in launched[0])
     launched.clear()
-    # drive's after-landing run: circuit-check's passes come from the gathered pack (main imports only theirs)
+    # a cold check that keeps circuit-check's reuse: its passes come from the gathered pack (main imports only theirs)
     assert CHECK.record(["--base", "HEAD", "--on", "vy-x", "--no-cache", "--circuit-cache"]) == 0 and len(given_to) == 3
     [cmd] = launched
     tail = cmd[cmd.index("--") + 1:]
@@ -674,7 +672,7 @@ def test_a_cached_circuit_check_keeps_the_catalog_bindings_records_and_an_uncach
 
 
 def test_beside_pytest_alone_circuit_check_takes_the_share_lean_suites_would_have(tmp_path, monkeypatch):
-    """An after-landing run (`--deferred circuit-check,pytest`) runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
+    """A `--deferred circuit-check,pytest` run runs no Lean step, so circuit-check getting 210 GiB of a 560 GiB
     slot while pytest kept to its half of the rest, 175, would leave lean-suites' 175 unused and run the 147-167 GiB SHA-512
     targets one at a time.  Pytest's share is unchanged."""
     monkeypatch.setattr(CHECK, "FLOCK_LEAN", tmp_path / "verifier-lean")
@@ -985,7 +983,7 @@ def test_keep_going_runs_every_other_group_to_its_end(tmp_path, monkeypatch):
 
 
 def test_a_step_killed_by_a_sigterm_the_check_did_not_send_is_stopped_not_failed(tmp_path, monkeypatch):
-    """drive's `research cancel` signals the run's whole process group, and a step can die of it before check's own handler
+    """`research cancel` signals the run's whole process group, and a step can die of it before check's own handler
     marks it stopped; it is recorded stopped, not failed with an empty log, a failure the step never found."""
     ok = _py("pass")
     _fake_run(monkeypatch, [[("cancelled", _py("import os, signal\nos.kill(os.getpid(), signal.SIGTERM)"), tmp_path)],
@@ -1153,7 +1151,7 @@ def test_a_cancelled_recorded_check_still_publishes_the_passes_its_steps_stored(
 
 def test_a_runs_pack_is_written_as_each_step_ends_and_on_sigterm_before_any_step_stops(tmp_path, monkeypatch):
     """A cancel SIGKILLs the run 20 s after its SIGTERM, before a stopped step's grace is out and `main` writes its last pack:
-    drive's cancels after landing (rc 137) left packs without the passes the run had stored.  So the pack holds a step's
+    cancelled runs (rc 137) left packs without the passes the run had stored.  So the pack holds a step's
     passes once it ends, and `_terminated` writes what the steps stored since at once, from the pack's own thread."""
     import queue
     import signal
@@ -1339,9 +1337,8 @@ def test_the_early_lean_build_is_a_group_of_its_own_beside_the_lean_steps(tmp_pa
 
 
 def test_circuit_cache_keeps_circuit_checks_reuse_alone_under_no_cache(tmp_path, monkeypatch):
-    """Drive's after-landing run (`--no-cache --circuit-cache`): the suites and the Lean steps run cold, and circuit-check reuses
-    its per-target passes, since a cold `--all` (~4 h) outlasts every after-landing run.  `--no-cache` alone (the
-    nightly `audit-main`) leaves circuit-check cold too."""
+    """`--no-cache --circuit-cache`: the suites and the Lean steps run cold, and circuit-check reuses its per-target passes,
+    since a cold `--all` takes hours.  `--no-cache` alone (the nightly `audit-main`) leaves circuit-check cold too."""
     out, _ = _pinned(tmp_path, monkeypatch)
 
     def steps(**kw) -> dict:
@@ -1658,37 +1655,26 @@ def test_the_circuit_check_step_records_its_cache_as_counts(tmp_path):
     assert CHECK.reuse(tmp_path, [rec])["steps"]["circuit-check"]["not_stored"] == {"untraced": 4000, "errors": 1, "changed": 0}
 
 
-def test_train_sh_refuses_every_flag_but_agreement(tmp_path):
-    """The lander launches checks only through train.sh, which runs the merge queue's command: a flag of its own (`--no-cache`,
-    a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything is read."""
+def test_train_sh_refuses_every_flag_the_queue_doesnt_send(tmp_path):
+    """The verified queue launches checks only through train.sh, which runs the merge queue's command: a flag of its own
+    (`--no-cache`, a shard, a stale `--verdicts-in`) would change what is reused or checked, so it is refused before anything
+    is read."""
     import subprocess
 
     def train(*flags: str) -> subprocess.CompletedProcess:
         return subprocess.run(["bash", str(ROOT / "tools" / "verity" / "check" / "train.sh"), "abc", "vy-x", *flags],
                               capture_output=True, text=True, cwd=tmp_path, env={"PATH": "/usr/bin:/bin"})
 
-    for flag in ("--no-cache", "--no-regenerate", "--verdicts-in", "--cores"):
+    for flag in ("--no-cache", "--circuit-cache", "--no-regenerate", "--verdicts-in", "--cores", "--against", "--shard",
+                 "--ratchet-base", "--cc-records", "--bookkeeping-warn"):
         p = train("--agreement", flag)
-        assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, p.stderr
-    # drive's after-landing run of a review landing: every job, the upstream build, no reuse, no regenerated lock records; past
-    # the flags, the store key
-    p = train("--deferred", "pytest,lean-audit", "--agreement", "--no-cache", "--no-regenerate")
-    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
-    p = train("--deferred", "pytest,circuit-check", "--no-cache", "--circuit-cache", "--no-regenerate")
-    assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
-    p = train("--deferred", "pytest,circuit-check", "--circuit-cache")
-    assert p.returncode == 2 and "train: --circuit-cache refused without --no-cache" in p.stderr, p.stderr
-    p = train("--against", "main")
-    assert p.returncode == 2 and "train: --against refused" in p.stderr, p.stderr
-    for bad in ("3", "0/3", "a/b"):
-        p = train("--shard", bad)
-        assert p.returncode == 2 and "train: --shard needs K/N" in p.stderr, p.stderr
-    p = train("--deferred", "pytest,lean-audit", "--shard", "2/3", "--no-cache", "--no-regenerate")
+        assert p.returncode == 2 and f"train: {flag} refused" in p.stderr, (flag, p.stderr)
+    # the run beside a candidate's check: those steps, the upstream build, no regenerated lock records; past the flags, the
+    # store key
+    p = train("--deferred", "lean-agreement,ratchet-gate", "--agreement", "--no-regenerate")
     assert p.returncode == 1 and "no parent store key" in p.stderr, p.stderr
     p = train("--base", "main")
     assert p.returncode == 2 and "train: --base refused without --deferred" in p.stderr, p.stderr
-    p = train("--ratchet-base", "main")
-    assert p.returncode == 2 and "train: --ratchet-base refused without --deferred" in p.stderr, p.stderr
 
 
 def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
@@ -1707,7 +1693,7 @@ def test_train_sh_copied_out_of_the_tree_finds_the_trees_settings(tmp_path):
 @pytest.mark.parametrize("twins", [False, True])
 def test_train_sh_prints_every_twins_run_id(tmp_path, twins):
     """With `auto` and no free slot, check.py launches one twin per machine and only one of them runs: train.sh prints every
-    twin's run id, so the lander follows the one that runs rather than the first launched, which may exit 75 not started."""
+    twin's run id, so the queue follows the one that runs rather than the first launched, which may exit 75 not started."""
     import os
     import subprocess
 
@@ -1802,81 +1788,6 @@ def test_train_sh_refuses_an_empty_commit_and_one_origin_lacks(tmp_path):
     assert not argv.exists()
 
 
-def test_train_sh_launches_the_records_step_alone_and_hands_a_shard_its_artifact(tmp_path):
-    """Drive's sharded after-landing run: `--cc-records` launches circuit-check's records step alone, in a worktree of its own,
-    and `--cc-records-from ART@SHA256` reaches a shard's check.py; either is refused where it doesn't belong."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "landing")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--cc-records")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--keep-going"):] == ["--keep-going", "--cc-records"], (p.stderr, args)
-    assert f"train-{git('rev-parse', 'HEAD')[:12]}-records.log" in p.stdout, p.stdout
-    art = f"art:{'a' * 64}@{'b' * 64}"
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "1/4", "--cc-records-from", art)
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--cc-records-from"):args.index("--cc-records-from") + 2] == ["--cc-records-from", art]
-    argv.unlink()
-    for flags, why in ((["--cc-records", "--deferred", "pytest"], "--cc-records refused with another flag"),
-                       (["--cc-records", "--agreement"], "--cc-records refused with another flag"),
-                       (["--deferred", "pytest", "--cc-records-from", art], "--cc-records-from refused without --shard"),
-                       (["--deferred", "pytest", "--shard", "1/4", "--cc-records-from", "art:x"], "--cc-records-from needs ART@SHA256")):
-        p = train("HEAD", "vy-x", *flags)
-        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
-
-
-def test_train_sh_hands_an_auto_shard_its_plan_and_refuses_one_without_it(tmp_path):
-    """Drive's `after_landing_shards = "auto"`: each shard is `--shard auto:K/N --shard-plan-file PLAN`, the one plan drive
-    made for all N, which reaches check.py --record as given; an auto shard without a plan, a plan without an auto shard, and
-    a plan by a relative path (train.sh runs check.py from its own worktree) are refused before anything launches."""
-    git, train, argv = _train_repo(tmp_path)
-    (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "landing")
-    git("push", "-q", "origin", "HEAD:main")
-    plan = tmp_path / "check-shard-plan.json"
-    plan.write_text("{}\n")
-    p = train("HEAD", "vy-x", "--deferred", "pytest,circuit-check", "--shard", "auto:2/3", "--shard-plan-file", str(plan))
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[-4:] == ["--shard", "auto:2/3", "--shard-plan-file", str(plan)], (p.stderr, args)
-    assert "shard auto:2/3" in p.stdout and f"train-{git('rev-parse', 'HEAD')[:12]}-auto-2of3.log" in p.stdout, p.stdout
-    argv.unlink()
-    for flags, why in ((["--shard", "auto:2/3"], "--shard auto:K/N takes --shard-plan-file PLAN"),
-                       (["--shard", "2/3", "--shard-plan-file", str(plan)], "--shard auto:K/N takes --shard-plan-file PLAN"),
-                       (["--shard", "auto:2/3", "--shard-plan-file", plan.name], "--shard-plan-file needs a plan's absolute"),
-                       (["--shard", "auto:0/3", "--shard-plan-file", str(plan)], "--shard needs K/N or auto:K/N")):
-        p = train("HEAD", "vy-x", "--deferred", "pytest", *flags)
-        assert p.returncode == 2 and f"train: {why}" in p.stderr and not argv.exists(), (flags, p.stderr)
-
-
-def test_train_sh_hands_the_lock_runs_bookkeeping_flag_to_a_check_that_takes_it(tmp_path):
-    """Drive's lock run (`--deferred lean-audit --bookkeeping-warn`): the flag reaches check.py --record when the commit's
-    check.py takes it, and on a commit whose check.py predates it the run launches without it, saying so; with --no-regenerate,
-    --shard or without --deferred it is refused before anything launches."""
-    git, train, argv = _train_repo(tmp_path)
-    check = tmp_path / "repo" / "tools" / "verity" / "check" / "check.py"
-    check.parent.mkdir(parents=True)
-    check.write_text('BOOKKEEPING = "--bookkeeping-warn"\n')
-    git("add", "tools")
-    git("commit", "-q", "-m", "landing")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--deferred"):] == ["--deferred", "lean-audit", "--bookkeeping-warn"], (
-        p.stderr, args)
-    check.write_text("\n")
-    git("commit", "-q", "-am", "older")
-    git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--deferred", "lean-audit", "--bookkeeping-warn")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and "--bookkeeping-warn" not in args and "predates --bookkeeping-warn" in p.stdout, (p.stdout, args)
-    argv.unlink()
-    for flags in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
-                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
-        p = train("HEAD", "vy-x", *flags)
-        assert p.returncode == 2 and "train: --bookkeeping-warn refused" in p.stderr and not argv.exists(), (flags, p.stderr)
-
-
 def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     """On the control pod's NFS TMPDIR a train's tree can be left half removed and no longer a worktree, which `worktree remove`
     skips and `worktree add` refuses: every relaunch of that commit registered no run."""
@@ -1892,33 +1803,27 @@ def test_train_sh_replaces_a_tree_git_no_longer_lists_as_a_worktree(tmp_path):
     assert (stale / "a").read_text() == "b\n" and not (stale / "README.md").exists()
 
 
-def test_train_sh_hands_check_the_base_below_the_tip_that_drive_sends(tmp_path):
-    """Drive's after-landing run of `main`'s tip names the last verified `main` (`--base`), so ratchet-gate judges the landings
-    above it, not the tip against itself: train.sh resolves it after its fetch and hands check.py that commit, and registers
-    no run for a base that is no commit."""
+def test_train_sh_hands_check_the_base_below_the_candidate(tmp_path):
+    """The run beside a candidate's check names the commit of `main` below it (`--base`), so ratchet-gate judges the merges
+    above it, not the candidate against itself: train.sh resolves it after its fetch and hands check.py that commit, and
+    registers no run for a base that is no commit."""
     git, train, argv = _train_repo(tmp_path)
-    verified = git("rev-parse", "HEAD")
+    below = git("rev-parse", "HEAD")
     (tmp_path / "repo" / "a").write_text("b\n")
-    git("commit", "-q", "-am", "landing")
+    git("commit", "-q", "-am", "candidate")
     git("push", "-q", "origin", "HEAD:main")
-    p = train("HEAD", "vy-x", "--deferred", "pytest,ratchet-gate", "--no-cache", "--base", "HEAD~1")
+    p = train("HEAD", "vy-x", "--deferred", "lean-agreement,ratchet-gate", "--no-regenerate", "--base", "HEAD~1")
     args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified], (p.stderr, args)
-    assert args[args.index("--deferred"):args.index("--base")] == ["--deferred", "pytest,ratchet-gate", "--no-cache"], args
+    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", below], (p.stderr, args)
+    assert args[args.index("--deferred"):args.index("--base")] == ["--deferred", "lean-agreement,ratchet-gate",
+                                                                   "--no-regenerate"], args
     argv.unlink()
     p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "nope")
     assert p.returncode == 1 and "--base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
-    # ratchet-gate's own base (`--ratchet-base`: the tip of drive's last run whose gate gave a verdict), beside `--base`
-    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--base", "HEAD~1", "--ratchet-base", "HEAD~1")
-    args = argv.read_text().split()
-    assert p.returncode == 0 and args[args.index("--base"):] == ["--base", verified, "--ratchet-base", verified], (p.stderr, args)
-    argv.unlink()
-    p = train("HEAD", "vy-x", "--deferred", "ratchet-gate", "--ratchet-base", "nope")
-    assert p.returncode == 1 and "--ratchet-base nope: no such commit" in p.stderr and not argv.exists(), p.stderr
 
 
 def test_train_sh_retries_a_failed_first_fetch_twice_with_a_backoff(tmp_path):
-    """Drive launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
+    """The verified queue launches train.sh detached, so its fetch in the queue's clone can meet a tick's, which
     fails one of them with `cannot lock ref`.  It tries twice more, 5 s and then 15 s later, and only then registers no run."""
     git, train, argv = _train_repo(tmp_path)
     (tmp_path / "repo" / "a").write_text("b\n")
@@ -1969,8 +1874,8 @@ def test_train_sh_takes_a_restack_by_merge_head_and_refuses_one_with_mains_tree(
 
 
 def test_train_sh_stops_a_launcher_that_launched_nothing_in_the_wait(tmp_path):
-    """A check.py still gathering verdicts after train.sh's wait would launch its runs later, with no ids for drive, so nothing
-    would cancel them, and one could hold a check slot for hours on a tree no longer on `next`."""
+    """A check.py still gathering verdicts after train.sh's wait would launch its runs later, with no ids for the queue, so
+    nothing would cancel them, and one could hold a check slot for hours on a candidate the queue dropped."""
     import os
 
     git, train, _ = _train_repo(tmp_path)
@@ -2023,8 +1928,8 @@ def test_train_sh_returns_the_exit_of_a_check_that_died_before_launching(tmp_pat
 
 
 def test_the_lean_audit_step_regenerates_records_only_where_the_lean_job_takes_it(tmp_path, monkeypatch):
-    """A train's Lean check passes a package whose only failures are record differences, and drive commits the
-    regenerated locks as it lands. A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
+    """The Lean check passes a package whose only failures are record differences where the tree's lean_audit.py takes
+    `--regenerate` (`lean_regenerates`). A tree whose lean_audit.py predates `--regenerate` runs as it always did."""
     monkeypatch.setattr(CHECK, "LEAN_JOBS", tmp_path)
     (tmp_path / "lean_audit.py").write_text("ap.add_argument('--fresh')\n")
     assert not CHECK.lean_regenerates()

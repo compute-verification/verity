@@ -155,19 +155,17 @@ def authed(auth: tuple[str, ...]):
 
 
 def train_launch(repo: Path, commit: str, machine: str, agreement: bool = False, auth: tuple[str, ...] = (),
-                 deferred: str | None = None, no_cache: bool = False, no_regenerate: bool = False,
-                 detached: bool = False, circuit_cache: bool = False, base: str | None = None,
-                 ratchet_base: str | None = None, rank: int | None = None) -> tuple[list[str], str] | dict:
-    """`train.sh COMMIT MACHINE [--agreement] [--deferred STEPS] [--base BASE] [--ratchet-base RBASE]` from the queue's clone:
+                 deferred: str | None = None, no_regenerate: bool = False, detached: bool = False,
+                 base: str | None = None, rank: int | None = None) -> tuple[list[str], str] | dict:
+    """`train.sh COMMIT MACHINE [--agreement] [--deferred STEPS] [--no-regenerate] [--base BASE]` from the queue's clone:
     (the run ids it printed, its output's tail); ``detached``, started in the background (`detach`) from a copy of train.sh,
     which reads nothing by its own path (``$0`` only for its usage) and finds the tree from its working directory, and returned
     at once as the record `launched` reads.  Git never prompts (the queue's clone has no credential helper, so train.sh's fetch
     would wait on a password at the tty).  ``rank`` is its check's `slot.py --rank` (CHECK_SLOT_RANK), none for an unranked
     one."""
     argv = ["bash", "tools/verity/check/train.sh", commit, machine, *(["--agreement"] if agreement else []),
-            *(["--deferred", deferred] if deferred else []), *(["--no-cache"] if no_cache else []),
-            *(["--circuit-cache"] if circuit_cache else []), *(["--no-regenerate"] if no_regenerate else []),
-            *(["--base", base] if base else []), *(["--ratchet-base", ratchet_base] if ratchet_base else [])]
+            *(["--deferred", deferred] if deferred else []), *(["--no-regenerate"] if no_regenerate else []),
+            *(["--base", base] if base else [])]
     env = {**os.environ, **auth_env(auth), "GIT_TERMINAL_PROMPT": "0", "TRAIN_AS": "ci",
            "CHECK_SLOT_RANK": "" if rank is None else str(rank)}
     if detached:
@@ -881,8 +879,7 @@ class Landing:
         regenerates no lock record, and reuses the passes a check may."""
         from .merge import required_steps
 
-        kw = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_cache": False,
-              "circuit_cache": False, "no_regenerate": True}
+        kw = {"agreement": "lean-agreement" in required_steps(self.repo, base, tip, "check"), "no_regenerate": True}
         below = (base if base != tip else
                  _git(self.repo, "rev-parse", "--verify", "-q", f"{tip}^1", check=False).stdout.strip()) or None
         flags = (f" --base {below[:12]}" if below else "") + "".join(f" --{k.replace('_', '-')}" for k, on in kw.items() if on)

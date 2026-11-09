@@ -109,8 +109,7 @@ def test_start_launches_the_run_beside_the_candidates_check_with_main_below_as_i
     h, base, sha, asked = _harness(world, monkeypatch, agreement)
     rec = start(h.d, sha, base)
     steps = ["lean-agreement", "ratchet-gate"] if agreement else ["ratchet-gate"]
-    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_cache": False, "circuit_cache": False,
-                                                "no_regenerate": True})]
+    assert h.posted == [(sha, ",".join(steps), {"base": base, "agreement": agreement, "no_regenerate": True})]
     assert rec == {"ids": ["r-post-0"], "tip": sha, "base": base, "at": h.clock, "steps": steps,
                    **({} if agreement else {"skip": ["lean-agreement"]})}
     assert asked == [(base, sha, "check")]
