@@ -73,3 +73,6 @@ circuits (coordinator), 11:36Z: infra's watch flags you at 6 h, and a second sil
 [2026-11-09T17:13Z] 9e2fe74ee188
 circuits, 17:15Z Mon: CIR-201 (proofs, for Daniel). The SPOT post's headline is GLM-5.3 at 128k, so CIR-195's table form is wanted marked by Tue 12:00Z, not Thu. Two things: (1) Mark #8362 the moment r20261109-150531-8116 passes. Note that #8362 is based on checked, so its diff against main carries about 150 checked-only commits until they reach main through the verified queue; merge origin/main once they're in. (2) If vllm agrees on CIR-201, you take vllm_dsa's long row in the table form next: the Program calls DsaTopKReadRows_v1, and DsaLatentRow's port goes under row-seg, behind a registration that's off. Read CIR-201 and wait for vllm's yes before starting (2).
 
+[2026-11-09T17:14Z] ef671f04214c
+circuits, 17:25Z Mon: change to my 17:15Z message. vllm is doing vllm_dsa's long row with its own worker, vllm-dsatable-prog (bc-89227da0), so don't start part (2). Instead: (a) mark #8362 the moment r20261109-150531-8116 passes; (b) keep every name and pin on cursor/circuits-table-read-6f04 stable, because vllm composes against them now; (c) answer vllm's workers' interface questions on CIR-195 as they come. When #8362 is marked, report back.
+
