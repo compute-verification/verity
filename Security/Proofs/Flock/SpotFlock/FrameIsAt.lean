@@ -31,14 +31,12 @@ open Properties.NetworkCertifier.Bytes (bs)
 open Lean (Json)
 
 /-- **Whether round 2 reads a registered read's value `v` at template `t`'s port `port` off the interior record**
-(`SecondStage.readOk`): at a port no link names, where the interior record has a port named `v`, or where neither
-record has and the boundary record registers no value `v`. -/
+(`SecondStage.readOk`): at a port no link names, where the interior record has a port named `v`. A registered value it
+reads off the boundary registration alone. -/
 def readsInterior (own : Spot.SecondStage.Own) (t port v : String) : Bool :=
   match Spot.SecondStage.linkOf own t port with
   | some _ => false
-  | none => ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome ||
-      (((Spot.Record.byPort own.boundary).find? (·.1 == v)).isNone &&
-        (Spot.SecondStage.registeredEntry own.boundary v).isNone)
+  | none => ((Spot.Record.byPort own.interior).find? (·.1 == v)).isSome
 
 /-- **The entry round 2 reads a registered read's value `v` at template `t`'s port `port` off**
 (`SecondStage.readOk`): the boundary port a link names; else the interior record's port named `v`, where it has one

@@ -4258,13 +4258,22 @@ def _read_registered(c: dict, x: int) -> dict:
         **lean, "registered": {**reported, f"{s['template']}/z": {"value": value, "root": e["root"]}}}}}
 
 
+def _interior_registers(c: dict) -> dict:
+    """`c` with the boundary's registered values registered by the interior registration alone, at their roots: round 2
+    reads a registered value off the boundary registration only, so a read of one is refused (`second-read`)."""
+    b, i = c.get("boundary"), c.get("interior")
+    if not (isinstance(b, dict) and isinstance(i, dict)):
+        return c
+    return {**c, "boundary": {**b, "registered": []}, "interior": {**i, "registered": b.get("registered", [])}}
+
+
 #: A change to a second_statements input, its `x` drawn: a statement changed (`_restated`), reversed, one dropped, none,
 #: a slot drawn more, the sample reversed, one replay block more or one fewer, a registered value's read by a port of
 #: no interior root, every read moved on (checked as moved, or not), the design's links or wires, the reads the verifier
 #: of record reports, what a verdict of record names of a session it checked (`_unverified`), the reference headers
 #: (`_referenced`), the reference statements' registered reads (`_valued`), a registered value read where the reference
-#: reads it or another (`_read_registered`), the interior record's replay sample or run (`_reordered`), or the rows a
-#: header shares (`_shared_rows`).
+#: reads it or another (`_read_registered`), registered by the interior registration alone (`_interior_registers`), the
+#: interior record's replay sample or run (`_reordered`), or the rows a header shares (`_shared_rows`).
 SECOND_CHANGES = [
     lambda c, x: {**c, "statements": _shifted(c["statements"], 1 + x % 3)},
     lambda c, x: _as_stated({**c, "statements": _shifted(c["statements"], 1 + x % 3)}),
@@ -4275,6 +4284,7 @@ SECOND_CHANGES = [
     _referenced,
     _valued,
     _read_registered,
+    lambda c, x: _interior_registers(_read_registered(c, x)),
     _reordered,
     _shared_rows,
     lambda c, x: {**c, "statements": _restated(c["statements"], x)},
@@ -5909,10 +5919,11 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
     (`second_stage.blank_reads`). So TRIPLE reading its linked `x` passes against a reference reading the boundary's `x`
     with other roots, leaves and rows or none, and is refused against no reference reads, one for no template, null, of
     another format, reading another value, a port more or none; PAIR reading its own `x` is refused against a reference
-    reading the boundary's. At a port no link names, which `second-read` lets read any value either registration
+    reading the boundary's. At a port no link names, which `second-read` lets read any value the boundary registration
     registers at any rows, PAIR reading `w2` passes where its reference reads `w2` at its rows and is refused where it
     reads `w`, and the reverse, and reading either is refused where its reference reads it at other rows
-    (`_read_registered`): the run never chooses the value, nor the rows."""
+    (`_read_registered`): the run never chooses the value, nor the rows. Nor the registration: reading one the interior
+    registration alone registers is refused (`_interior_registers`)."""
     pair, triple = SECOND_MIXED.templates
     sample, drawn = [0, 2], [1, 4, 6, 9]
     honest = _second_case(SECOND_MIXED, True, sample, drawn, allow=True)
@@ -5946,6 +5957,8 @@ def test_round_two_holds_each_port_to_the_value_its_reference_reads(pieces):
         (_read_registered(honest, 4), ["second-values"]),
         (_read_registered(honest, 7), ["second-values"]),
         (_read_registered(honest, 8), ["second-values"]),
+        (_interior_registers(_read_registered(honest, 0)), ["second-read"]),
+        (_interior_registers(_read_registered(honest, 3)), ["second-read"]),
     ]
     for case, codes in cases:
         got = second_statements(copy.deepcopy(case))

@@ -45,9 +45,10 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     population); for a port a wire names, its writer's output port of the interior record, each slot of replay block
     `S[i]` reading only its writer's first instance's first row there (`i·n_w·r`, `r` the port's leaves over the
     writer's `Q·n_w` slots); else its own port of the interior record, each slot `u` reading only its own first row
-    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value either registration registers;
-    each at its root, domain and leaves, at most `2^64` of them (`MAX_LEAVES`). Or a port a link or a wire names is
-    not read.
+    (`(u - off_t)·r`, `r` the port's leaves over the part's `Q·n_t` slots), or a value the boundary registration
+    registers, never the interior registration's copy (a registered value is an input, committed at every proof
+    block's boundary under the run's roots); each at its root, domain and leaves, at most `2^64` of them
+    (`MAX_LEAVES`). Or a port a link or a wire names is not read.
   - `second-refs`: its header shares rows (`shared_rows`: tables whose rows its instances read by the refs in its public
     file's body) at a port it doesn't read registered (`refsOk`). At a port it reads registered, the session's verifier
     holds each instance's ref to the row at the position the read gives its unit (`Flock.Registered.check`), and
@@ -61,7 +62,7 @@ registration and to the second draw's cells (`check`). `Run.run` adds it to the 
     own, or at a port a wire names its writer's), whose rows the run places (`runPlacesRows`). So the ports it reads
     registered, the value each reads, and the rows at
     which it reads a value a registration registers are fixed before the run: `second-read` alone lets a port no link
-    names read any value either registration registers, at any rows.
+    names read any value the boundary registration registers, at any rows.
 * **The links** (`Link`) are the verifier's own, derived from the replay block's registered Definition and never
   supplied (`replayLinks`): a template its body calls once that reads one of its parameters alone reads that boundary
   port, and one whose output it returns alone writes its output's, or, where it returns several fields, each one
@@ -588,8 +589,10 @@ def rowsOk (q : Nat) (p : Part) (e : Json) (units : Nat) (unit : Nat → Option 
 boundary port it names, each slot only its cell's replay block's first row; a port a wire names, only its writer's
 output port of the interior record, each slot only its writer's first instance's first row in its cell's replay block
 (the writer's slot `p.span u · n_w` of its `Q·n_w`); any other, its own port of the interior record, each slot only its
-own first row, or a value either registration registers, never a boundary port. Each at its root, domain and leaves, at
-most `MAX_LEAVES` of them. -/
+own first row, or a value the boundary registration registers, never a boundary port. Each at its root, domain and
+leaves, at most `MAX_LEAVES` of them. A registered value is an input of the program, which every proof block commits
+at its boundary, under the run's roots: it is read off the boundary registration alone, the one made before any coin,
+and never off the interior registration's copy, so the run doesn't choose which roots a value is read under. -/
 def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bool :=
   let q := own.sample.size
   match getD e "value", linkOf own p.template port, wireOf own p.template port with
@@ -605,7 +608,7 @@ def readOk (own : Own) (named : Bool) (p : Part) (port : String) (e : Json) : Bo
     match (Record.byPort own.interior).find? (·.1 == v), (Record.byPort own.boundary).find? (·.1 == v) with
     | some (_, x), _ => v == portOf named p.template port && sameAt e x && rowsOk q p e (q * p.n) fun u => some (u - p.lo)
     | none, some _ => false
-    | none, none => match registeredEntry own.boundary v <|> registeredEntry own.interior v with
+    | none, none => match registeredEntry own.boundary v with
       | some x => sameAt e x
       | none => false
   | _, _, _ => false
@@ -1044,7 +1047,7 @@ theorem refsOk_read {s : Stmt} (h : refsOk s = true) {port : String} {c : Json}
 /-- **Every port a header shares rows at is a read round 2 holds**: in a passing check, every port the `i`-th
 statement's header shares rows at (`shared_rows`) is one of its registered reads, each `readOk` at its part: for a port
 a link names, the boundary port it names, each slot reading only its cell's replay block's rows; else its own port of
-the interior record, each slot reading only its own rows, or a value either registration registers. The session's
+the interior record, each slot reading only its own rows, or a value the boundary registration registers. The session's
 verifier holds each instance's ref at such a port to the row at the position the read gives its unit
 (`Flock.Registered.check`), so no ref there points a drawn unit at another unit's rows. -/
 theorem check_ok_refs {allow : Bool} {own : Own} {ss : Array Json} (h : (check allow own (some ss)).codes = #[]) :
@@ -1415,11 +1418,22 @@ private def exReadW (leaves : Nat) : Json :=
 #guard !readOk (exRegisteringW (2 ^ 64 + 1)) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW (2 ^ 64 + 1))
 #guard !readOk (exRegisteringW 6) false ⟨"Pair_v0", 0, 3⟩ "y" (exReadW 7)
 
-/-- `exOwn`, the interior registration registering values `w1` and `w2`, six leaves each at its own root and domain. -/
+/-- Registered values `w1` and `w2`, six leaves each at its own root and domain. -/
+private def exRegistered : Json := Json.arr #[
+  Json.mkObj [("value", "w1"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))],
+  Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]
+
+/-- `exOwn`, the boundary registration registering `exRegistered`. -/
 private def exRegistering : Own :=
-  { exOwn with interior := exInterior.setObjVal! "registered" (Json.arr #[
-      Json.mkObj [("value", "w1"), ("root", exRoot 7), ("domain", exRoot 8), ("leaves", Lean.toJson (6 : Nat))],
-      Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]]) }
+  { exOwn with boundary := (exRec 4 [("bx", 5, 6)]).setObjVal! "registered" exRegistered }
+
+/-- `exOwn`, the interior registration alone registering `exRegistered`. -/
+private def exRegisteringInterior : Own :=
+  { exOwn with interior := exInterior.setObjVal! "registered" exRegistered }
+
+/-- A read of registered value `w2` at its root and domain, six leaves. -/
+private def exReadW2 : Json :=
+  Json.mkObj [("value", "w2"), ("root", exRoot 9), ("domain", exRoot 5), ("leaves", Lean.toJson (6 : Nat))]
 
 /-- Round 2's codes for statement `j` alone, its session checked by a verifier of record, the params giving its
 template's reference statement the registered reads of statement `r`. -/
@@ -1442,9 +1456,14 @@ private def exReadField (k : String) (v : Json) (j : Json) : Json :=
   [("ports", Json.mkObj [("x", Json.mkObj [("value", "bx"), ("root", .null), ("domain", .null), ("leaves", .null),
     ("reads_from", .null), ("reads", .null)])])])
 #guard jeq (blankReads exOwn "Pair_v0" .null) .null
--- a port no link names reads a value either registration registers (`second-read`): the one its reference reads, at
--- the run's root, domain and leaves and the reference's rows
+-- a port no link names reads a value the boundary registration registers (`second-read`): the one its reference
+-- reads, at the run's root, domain and leaves and the reference's rows
 #guard (exCheck true (exReported "w2" 9 exRegistering) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes.isEmpty
+-- never one the interior registration alone registers, whatever its root
+#guard (exCheck true (exReported "w2" 9 exRegisteringInterior) #[exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5]]).codes ==
+  #["second-read"]
+#guard !readOk exRegisteringInterior false ⟨"Pair_v0", 0, 3⟩ "y" exReadW2
+#guard readOk exRegistering false ⟨"Pair_v0", 0, 3⟩ "y" exReadW2
 #guard (exValues (exReported "w2" 9 exRegistering) (exReading "w2" 1 2 3 [0, 1, 2, 3, 4, 5])
   (exReading "w2" 9 5 6 [0, 1, 2, 3, 4, 5])).isEmpty
 -- the rows at which it reads a registered value, which `second-read` leaves to the run: refused at any but the

@@ -235,22 +235,12 @@ theorem readOk_entry {own : Spot.SecondStage.Own} {p : Spot.SecondStage.Part} {p
         | some x =>
           simp only [hfi, hfb, hrb] at hok
           have hsx : Spot.SecondStage.sameAt e x = true := hok
-          have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hfi, hfb, hrb]
+          have hRI : readsInterior own p.template port v = false := by simp [readsInterior, hlk, hfi]
           rw [hRI, hRK]
           refine ⟨entryOf (1, v, x), ?_, hs hsx⟩
           show recKeyAt own.boundary (.reg v) = _
           rw [recKeyAt_reg, hrb]; rfl
-        | none =>
-          cases hri : Spot.SecondStage.registeredEntry own.interior v with
-          | none => simp only [hfi, hfb, hrb, hri] at hok; cases hok
-          | some x =>
-            simp only [hfi, hfb, hrb, hri] at hok
-            have hsx : Spot.SecondStage.sameAt e x = true := hok
-            have hRI : readsInterior own p.template port v = true := by simp [readsInterior, hlk, hfi, hfb, hrb]
-            rw [hRI, hRK]
-            refine ⟨entryOf (1, v, x), ?_, hs hsx⟩
-            show recKeyAt own.interior (.reg v) = _
-            rw [recKeyAt_reg, hri]; rfl
+        | none => simp only [hfi, hfb, hrb] at hok; cases hok
 
 /-! ## The verifier's registered reads, as its file states them -/
 
