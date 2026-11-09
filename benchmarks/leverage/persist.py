@@ -19,7 +19,9 @@ Read modes (--mode):
                    drawn like any column of the matrix (pair_scores);
             top    the distinct served tokens of the direct reads, scored as the vocabulary's top set along u: if all
                    of them rank within u's top K, they carry log2 C(V, n) - log2 C(K, n) bits about u's order. The
-                   honest tokens of the same requests, ranked the same way, are the baseline.
+                   honest tokens of the same requests, ranked the same way, are the baseline. Along a value fault's
+                   own column, also as a hypergeometric tail over top sets of every power-of-two size (tail), which
+                   one far token can't undo, each score less the same score along random columns of the matrix.
 
 Faults (--values): unclamped, multiples of the site's RMS at the fault position, `zero`, and `neg` (the honest value's
 negation); under --boxes, `box` (plus and minus the coordinate's box at the position's class, the most a correct
@@ -253,6 +255,35 @@ def top_bits(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
     return log2_comb(vocab, len(ranks)) - log2_comb(k, len(ranks)), k
 
 
+_LOG_FACT: dict[int, np.ndarray] = {}
+
+
+def tail_bits_set(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
+    """top_bits that one far token can't undo: over K = 1, 2, 4, ..., V, the most -log2 P(at least as many of the set
+    in the top K) under a random order of the vocabulary (a hypergeometric tail), less log2 of how many K it tried."""
+    ranks = np.unique(ranks)
+    n = len(ranks)
+    ks = [2 ** j for j in range(int(math.log2(vocab)) + 1)] + [vocab]
+    if n == 0:
+        return 0.0, 0
+    if vocab not in _LOG_FACT:
+        _LOG_FACT[vocab] = np.concatenate([[0.0], np.cumsum(np.log(np.arange(1, vocab + 1)))])
+    lf = _LOG_FACT[vocab]
+    lc = lambda a, b: lf[a] - lf[b] - lf[a - b]  # noqa: E731
+    best, best_k = 0.0, vocab
+    for K in ks:
+        hit = int((ranks < K).sum())
+        j = np.arange(hit, min(n, K) + 1)
+        j = j[n - j <= vocab - K]
+        if hit == 0 or len(j) == 0:
+            continue
+        t = lc(K, j) + lc(vocab - K, n - j) - lc(vocab, n)
+        b = -(t.max() + math.log(np.exp(t - t.max()).sum())) / math.log(2)
+        if b > best:
+            best, best_k = float(b), K
+    return best - math.log2(len(ks)), best_k
+
+
 def honest_first(lm: LM, pre_h: Cache, sfx: torch.Tensor, precision: str) -> tuple[torch.Tensor, torch.Tensor]:
     """A request's honest first position after the honest prefix: served logprobs (1, V), final norm output (1, d)."""
     L = lm.spec.layers
@@ -453,8 +484,26 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
             cb = [top_bits(cr[dec].numpy(), vocab)[0] for cr in ctrl_ranks]
             row |= {"ctrl_bits_w": float(np.mean(cb)), "ctrl_max_w": float(np.max(cb)),
                     "net_bits_w": row.get("top_bits_w", 0.0) - float(np.mean(cb))}
+            row |= tail_scores(targets["w"][dec].numpy(), [cr[dec].numpy() for cr in ctrl_ranks], vocab)
         out[f"q{qc}"] = row
+    if target is not None:
+        # Each decoded token's first request and its ranks, so a score can be read again at any Q without a rerun.
+        dec = decoded(s0, direct)
+        firsts = {}
+        for q in np.nonzero(direct)[0]:
+            firsts.setdefault(int(s0[q]), int(q))
+        out["decoded_detail"] = {"token": dec, "first": [firsts[y] for y in dec],
+                                 "rank_w": targets["w"][dec].tolist(),
+                                 "rank_ctrl": [cr[dec].tolist() for cr in ctrl_ranks]}
     return out
+
+
+def tail_scores(rank_w: np.ndarray, rank_ctrl: list[np.ndarray], vocab: int) -> dict:
+    """tail_bits_set along the target and its controls, and the net."""
+    tb, tk = tail_bits_set(rank_w, vocab)
+    tc = [tail_bits_set(r, vocab)[0] for r in rank_ctrl] or [0.0]
+    return {"tail_bits_w": tb, "tail_k_w": tk, "tail_ctrl_w": float(np.mean(tc)), "tail_ctrl_max_w": float(max(tc)),
+            "tail_net_w": tb - float(np.mean(tc))}
 
 
 def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, controls: list[torch.Tensor],
@@ -466,12 +515,13 @@ def score_flips(flips: list[tuple[int, int]], target: torch.Tensor | None, contr
     dec = decoded(np.array([y for _, y in flips]), np.ones(len(flips), bool))
     rank = ranks_along(E, target)
     rb, rk = top_bits(rank[dec].numpy(), vocab)
-    cb = [top_bits(ranks_along(E, c)[dec].numpy(), vocab)[0] for c in controls] or [0.0]
+    cr = [ranks_along(E, c)[dec].numpy() for c in controls]
+    cb = [top_bits(r, vocab)[0] for r in cr] or [0.0]
     pairs = list(dict.fromkeys(flips))
     return {"decoded": len(dec), "top_bits_w": rb, "top_k_w": rk, "ctrl_bits_w": float(np.mean(cb)),
             "net_bits_w": rb - float(np.mean(cb)), "p1_w": int(int(rank[dec[0]]) == 0),
-            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10]))} | pair_scores(
-                pairs, target, controls, E, [len(pairs)], null)[0]
+            "in_top10_w": int(sum(int(rank[y]) < 10 for y in dec[:10]))} | tail_scores(
+                rank[dec].numpy(), cr, vocab) | pair_scores(pairs, target, controls, E, [len(pairs)], null)[0]
 
 
 def main() -> int:
@@ -576,7 +626,8 @@ def main() -> int:
                 r["code_bits"] = code_bits(direct.reshape(-1), S[j].reshape(-1), V)
                 r["direct_reads"] = int(direct.sum())
                 last = r[f"q{checkpoints[-1]}"]
-                for key in ("top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w", "ctrl_bits_w", "net_bits_w"):
+                for key in ("top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w", "ctrl_bits_w", "net_bits_w",
+                            "tail_bits_w", "tail_ctrl_w", "tail_net_w"):
                     if key in last:
                         r[key] = last[key]
                 if KL is not None:
@@ -616,13 +667,13 @@ def main() -> int:
                "code_max": float(max(r["code_bits"] for r in rs))}
         for key in ("pair_bits", "pair_bits_u_ctrl", "pair_bits_w", "pair_bits_ctrl", "top_bits_u", "base_bits_u",
                     "split_bits_u", "split_ctrl_u", "split_net_u", "top_bits_w", "base_bits_w", "ctrl_bits_w",
-                    "net_bits_w", "pairz_bits_w", "pairz_bits_ctrl", "kl_bits"):
+                    "net_bits_w", "tail_net_w", "pairz_bits_w", "pairz_bits_ctrl", "kl_bits"):
             if any(r.get(key) is not None for r in rs):
                 vals = [r.get(key) or 0.0 for r in rs]
                 row[key + "_mean"], row[key + "_max"] = float(np.mean(vals)), float(max(vals))
         rows.append(row)
     keys = ("code_bits", "pair_bits", "pair_bits_w", "pairz_bits_w", "top_bits_u", "split_net_u", "top_bits_w",
-            "net_bits_w")
+            "net_bits_w", "tail_net_w")
     best = {key: max(recs, key=lambda r: r.get(key) or 0.0) for key in keys if any(key in r for r in recs)}
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "mode": a.mode, "where": a.where, "fault_position": pf, "fault_class": pc, "prefix_tokens": ids.shape[1],
