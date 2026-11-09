@@ -509,11 +509,14 @@ def test_a_listed_records_registered_reads_fill_its_members_rows_and_count_regis
 def test_a_wire_reads_whole_rows_among_its_templates_units_each_reader_port_once():
     """A wire's checks are per wire: its ends are its templates' ports, its reader and writer units are among theirs, it reads
     a row of its writer's words (a gathered row is refused), and no reader unit's port is wired twice. A step of 0 is a
-    fan-out."""
+    fan-out. A template's wire to its own later instances passes with no order too, and one reading the same instances
+    or later ones is refused (``order``)."""
     w = {"reader": GID, "port": "x", "writer": GID, "out": "o0", "at": 4, "radix": (2, 2), "base": 0, "step": (2, 1)}
     I.Circuit("ok", ((GEMM, 8),), wires=(I.Wire(**w),), order=((GID, 0, 4), (GID, 4, 4)))
-    with pytest.raises(ValueError, match="cycle: wire 0"):
-        I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    I.Circuit("unordered", ((GEMM, 8),), wires=(I.Wire(**w),))
+    for edit in ({"base": 4}, {"at": 0, "base": 4}, {"base": 5, "step": (0, 0)}):
+        with pytest.raises(ValueError, match="order: wire 0 "):
+            I.Circuit("self", ((GEMM, 8),), wires=(I.Wire(**{**w, **edit}),))
     for edit, why in [({"writer": TID}, "templates of the circuit"), ({"port": "o0"}, "parameters"), ({"out": "x"}, "outputs"),
                       ({"port": "w"}, "gathered from several writers"), ({"at": 5}, "reader units"),
                       ({"base": 5}, "writer units"), ({"step": (-2, 1)}, "writer units"), ({"radix": ()}, "at least one digit"),
@@ -547,13 +550,14 @@ def test_a_wires_box_bounds_the_writers_of_the_reader_indices_between_two():
 
 
 def test_the_wires_dataflow_is_acyclic_under_the_circuits_order():
-    """`chain`'s template reads itself, so with no order its wires are a cycle of templates; its order, a range each layer
-    and step (`ordered`), puts every range a wire reads in a range below that range. An order where a range reads a later
-    one is refused naming the first such wire, an order that doesn't tile each template's units by name, and a cut into
-    ranges no order can rank (layer 0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
+    """`chain`'s template reads itself, and with no order its units in unit order don't fit its wires (layer 1's step 0,
+    units 2 and 3, reads layer 0's step 1, units 4 and 5); its order, a range each layer and step (`ordered`), puts every
+    range a wire reads in a range below that range. An order where a range reads a later one is refused naming the first
+    such wire, an order that doesn't tile each template's units by name, and a cut into ranges no order can rank (layer
+    0's steps one range, read by layer 1's step 0 and reading it) as a cycle."""
     c = chain()
     assert c.order == ((GID, 0, 2), (GID, 4, 2), (GID, 2, 2), (GID, 6, 2))
-    with pytest.raises(ValueError, match="cycle: wire 0 .* is on a cycle of templates"):
+    with pytest.raises(ValueError, match="order: wire 1 "):
         I.check_order(c.units, c.wires)
     for order, why in [(((GID, 0, 4), (GID, 4, 4)), "order: wire 1 "), (((GID, 0, 2), (GID, 2, 2), (GID, 4, 2), (GID, 6, 2)),
                                                                         "order: wire 1 "),
