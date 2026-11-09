@@ -3,8 +3,8 @@ built for it, as a template partition counts them (`TemplatePartition` over ever
 members), at GLM-5.3's class-G registration cut to its first layers: a request beside other sequences, in prefill chunks, after a
 history, resumed, leaving at a window's edge, stochastic, under its length rule and in a launch past FlashInfer's fused all-reduce;
 at INDEX_TOPK 16 under a decode threshold of 2, its dense-MHA prefills; at INDEX_TOPK 4, its rows past it, on a last layer that
-shares the top-k and on one that computes it, and in several blocks a call, by the rows network and by table reads; and the B8
-window's planned units."""
+shares the top-k and on one that computes it, and in several blocks a call, by the rows network and by table reads, whose long
+rows' units (`TemplateCounts.units`) are their cut; GLM-5.3's at 131,072 keys; and the B8 window's planned units."""
 
 from __future__ import annotations
 
@@ -13,13 +13,16 @@ from collections import Counter
 import pytest
 
 from verity.ml.circuits.codec import descriptor_id
+from verity.ml.circuits.defs import bind
 from verity.ml.circuits.partition_object import TemplatePartition, calls, template_instances_query
+from verity.ml.commitments.gates.embedding import read
+from verity.ml.definitions.registry import dsa_topk_reads as R
 from verity_vllm.engine.profiles.engine_classes import DSA_TOPK_ENV
 from verity_vllm.program.frontend.rules import vllm_dsa
 from verity_vllm.program.predict.build import build_program
 from verity_vllm.program.predict.phi import Phi
 from verity_vllm.program.predict.steps import Registered, plan_steps, policy_of, request_program
-from verity_vllm.program.predict.template_counts import TemplateCounts
+from verity_vllm.program.predict.template_counts import TABLE_ROWS, TemplateCounts
 from tests.program.predict.test_node import _first_layers
 from tests.program.predict.test_steps import _b8_window, _class_g, _spec
 
@@ -50,11 +53,33 @@ def _instances(program) -> Counter:
     return out
 
 
+def _cut(program, H: int) -> Counter:
+    """`_instances` of `program` with its long rows in units, read off its Calls: each `DsaTopKIndex_v1{N,TOPK}` member the cut of
+    its long row `DsaTopKReadRows_v1{N,TOPK}` (`dsa_topk_reads.CUTS`) but the reads, its counted mask's units with it; each
+    `DsaHistoryReads_v1{V,TOPK,H}` member TOPK reads of the history table; and no counted mask of its own."""
+    nodes, rd, out = program.root.body.nodes, read(TABLE_ROWS, H), Counter()
+    for k, fn in calls(program):
+        n, base = nodes[k].n if nodes[k].form == "batch" else 1, getattr(fn, "base_id", None)
+        if base == "DsaTopKIndex_v1":
+            row = bind(R.DsaTopKReadRows, N=fn.bindings["N"], TOPK=fn.bindings["TOPK"], BLOCK=R.BLOCK, READ=rd)
+            out.update({descriptor_id(u): n * c for u, c in R.CUTS[row.base_id](row) if descriptor_id(u) != descriptor_id(rd)})
+        elif base == "DsaHistoryReads_v1":
+            out[descriptor_id(rd)] += n * fn.bindings["TOPK"]
+        elif base != "DsaTopKMaskCounted_v1":
+            out[descriptor_id(fn)] += n
+    return out
+
+
 def _check(phi: Phi, LP: int, T: int, policy: dict = GREEDY, table_reads: bool = False, **kw) -> None:
+    """n_t of (LP, T) is the built Program's; under `table_reads` its units too (`_cut`)."""
     r = build_program(Phi.from_json({**phi.to_json(), "sampling": policy}), "request", LP=LP, T=T, dead_free=True, batched=True,
                       with_desc=False, table_reads=table_reads, **kw)
-    want, got = _instances(r.program), TemplateCounts(phi, table_reads=table_reads).request(LP, T, policy, **kw)
+    tc = TemplateCounts(phi, table_reads=table_reads)
+    want, got = _instances(r.program), tc.request(LP, T, policy, **kw)
     assert got == want, {t: (got[t], want[t]) for t in sorted(got.keys() | want.keys()) if got[t] != want[t]}
+    if table_reads:
+        want, got = _cut(r.program, int(tc.C["KV_LORA"]) + int(tc.C["QK_ROPE"])), tc.units(got)
+        assert got == want, {t: (got[t], want[t]) for t in sorted(got.keys() | want.keys()) if got[t] != want[t]}
 
 
 def _decodes(LP: int, T: int, first: list) -> list:
@@ -129,9 +154,30 @@ def test_rows_past_index_topk_in_several_blocks_count_each_blocks_selection(tmp_
 def test_rows_past_index_topk_by_table_reads_count_their_index_and_reads(tmp_path, monkeypatch, case, layers, block):
     """Under the registration's table reads (`Registered.dsa_table_reads`) a row past INDEX_TOPK counts its index in place of the
     settings and its history reads at its block's keys in place of the rows network, with no zero pad, in one block a call or
-    in several."""
+    in several; in units, each its long row's cut."""
     monkeypatch.setattr(vllm_dsa, "BLOCK_KEYS", block)
     _check(_phi(tmp_path, layers=layers, topk=4), table_reads=True, **LONG[case])
+
+
+def test_glm53s_decode_at_131072_keys_reads_its_history_table_2048_times_a_layer(tmp_path):
+    """GLM-5.3 whole (78 layers, 21 of them indexer layers) under table reads, one decode token after 131,071 positions: each
+    layer's long row is 2,048 reads of its history table, 159,744 a token, and each indexer layer's its long row's cut besides
+    (the counted mask's 5M + 4 units at M = 8 blocks of 16,384 keys, a `DsaMaskPositions_v1` a block and the merge).  Every
+    other template is as n_t counts it, and units are the table form's alone."""
+    phi, C = _phi(tmp_path, layers=78, topk=2048), 131071
+    tc = TemplateCounts(phi, table_reads=True)
+    n_t = tc.request(6, C - 6 + 1, C=C, batch=[[[1, C]]])
+    units = tc.units(n_t)
+    indexers, rd = len(tc.net.indexers), read(TABLE_ROWS, 576)
+    row = bind(R.DsaTopKReadRows, N=131072, TOPK=2048, BLOCK=R.BLOCK, READ=rd)
+    cut = Counter({descriptor_id(u): n * indexers for u, n in R.CUTS[row.base_id](row)})
+    cut[descriptor_id(rd)] = 78 * 2048
+    assert (indexers, units[descriptor_id(rd)]) == (21, 159744)
+    assert units - n_t == cut and sum(cut.values()) - cut[descriptor_id(rd)] == 21 * (5 * 8 + 4 + 8 + 1)
+    assert n_t - units == Counter({"DsaTopKMaskCounted_v1{N=131072,TOPK=2048}": 21, "DsaTopKIndex_v1{N=131072,TOPK=2048}": 21,
+                                   "DsaHistoryReads_v1{V=131072,TOPK=2048,H=576}": 78})
+    with pytest.raises(ValueError, match="table-read form's"):
+        TemplateCounts(phi).units(n_t)
 
 
 @pytest.mark.slow

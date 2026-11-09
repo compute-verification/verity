@@ -21,6 +21,9 @@ the registered compiler's form keeps (`prune.dead_free`):
   mask, settings and rows at the block's class; under table reads (`table_reads`), its index in place of the settings and its
   history reads at the block's keys in place of the rows, without their pad.
 
+Under table reads, `units` counts the long rows by the units serving proves them in: the cut of the long row
+`DsaTopKReadRows_v1` (`dsa_topk_reads.CUTS`), whose reads open the request's history table for the layer at its `TABLE_ROWS`.
+
 Consts count, a pad block as its words. A const called alone (the select's settings under a seeded policy, a dense prefill's empty
 context) is a root primitive, one instance here, which `TemplatePartition` refuses. `tests/program/predict/test_template_counts.py`
 holds n_t to the built Programs' root nodes, and to their template partitions where the partition applies.
@@ -41,7 +44,12 @@ from verity_vllm.program.prune import COLUMNS, dead_free_versions
 from .common import Unexpressible, _Launch, in_launch, kind, launch_batch, request_passes
 from .step_needs import Need, StepNeeds
 
-__all__ = ["TemplateCounts"]
+__all__ = ["TABLE_ROWS", "TemplateCounts"]
+
+#: a (request, layer) history table's rows whatever the request's length, the V of every read of it (`EmbeddingRead_v1{V,H}`)
+TABLE_ROWS = 1 << 17
+#: the table form's long-row Definitions (`program.dsa_table`), by family, and which stage of the long row's cut each is
+_STAGES = {"DsaTopKMaskCounted_v1": "mask", "DsaTopKIndex_v1": "index", "DsaHistoryReads_v1": "reads"}
 
 
 @dataclass(frozen=True)
@@ -64,13 +72,14 @@ class _Pass:
 
 
 class TemplateCounts(StepNeeds):
-    """    `StepNeeds`' decoder for φ (one tensor-parallel rank), each kind named by its dead-free version's descriptor id (`kind`),
+    """`StepNeeds`' decoder for φ (one tensor-parallel rank), each kind named by its dead-free version's descriptor id (`kind`),
     and n_t of a request unit's Program (`unit`, `request`); `table_reads`: the registration's DSA long rows by table reads
-    (`steps.Registered.dsa_table_reads`)."""
+    (`steps.Registered.dsa_table_reads`), which `units` counts as the units serving proves."""
 
     def __init__(self, phi, table_reads: bool = False) -> None:
         super().__init__(phi)
         self._fns: dict[str, Any] = {}
+        self._cuts: dict[str, list[tuple[str, int]]] = {}
         self.table_reads = bool(table_reads)
 
     def kind(self, role: str, **statics: object) -> Need:
@@ -96,6 +105,42 @@ class TemplateCounts(StepNeeds):
     def unit(self, u) -> Counter[str]:
         """n_t of a `steps.RequestUnit`'s Program (`steps.request_program`), from its key's fields."""
         return self.request(u.LP, u.T, u.policy, C=u.C, chunks=u.chunks, batch=u.batch(), edge=u.edge, stop=u.stop)
+
+    def units(self, counts: Mapping[str, int]) -> Counter[str]:
+        """n_t `counts` (`unit`'s or `request`'s) with each long row in the units of its cut, `DsaTopKReadRows_v1{N,TOPK,BLOCK,READ}`'s
+        (`dsa_topk_reads.CUTS`, READ the read of the history table `EmbeddingRead_v1{V=TABLE_ROWS,H}`), on bits: an indexer
+        layer's counted mask `DsaTopKMaskCounted_v1{N,TOPK}` the mask's units (its own cut past `dsa_topk_mask_cut.WHOLE_MAX`
+        keys, else the mask whole), its `DsaTopKIndex_v1{N,TOPK}` a `DsaMaskPositions_v1` a block and the merge, and each layer's
+        `DsaHistoryReads_v1{V,TOPK,H}` TOPK reads.  Every other template as `counts` has it.  Only under `table_reads`: the rows
+        network's long rows have no cut."""
+        if not self.table_reads:
+            raise ValueError("units are the table-read form's long rows' (table_reads): the rows network's have no cut")
+        out: Counter[str] = Counter()
+        for tid, n in counts.items():
+            for u, k in self._cut(tid):
+                out[u] += n * k
+        return out
+
+    def _cut(self, tid: str) -> list[tuple[str, int]]:
+        """The units of template `tid` (`units`): its long-row stage of the cut, or itself."""
+        f = self._fns.get(tid)
+        stage = _STAGES.get(getattr(f, "base_id", None))
+        if stage is None:
+            return [(tid, 1)]
+        if tid not in self._cuts:
+            from verity.ml.commitments.gates.embedding import read
+            from verity.ml.definitions.registry import dsa_topk_reads as R
+            from verity_vllm.program.frontend.rules.vllm_dsa import long_row_keys
+            b, TOPK = f.bindings, int(f.bindings["TOPK"])
+            READ = read(TABLE_ROWS, int(b["H"]) if stage == "reads" else int(self.C["KV_LORA"]) + int(self.C["QK_ROPE"]))
+            N = long_row_keys(int(b["V"]), TOPK) if stage == "reads" else int(b["N"])
+            row = bind(R.DsaTopKReadRows, N=N, TOPK=TOPK, BLOCK=R.BLOCK, READ=READ)
+            index = {R.DsaMaskPositions.id, R.DsaPositionsMerge.id}
+
+            def of(u) -> str:
+                return "reads" if descriptor_id(u) == descriptor_id(READ) else "index" if getattr(u, "base_id", None) in index else "mask"
+            self._cuts[tid] = [(descriptor_id(u), k) for u, k in R.CUTS[row.base_id](row) if of(u) == stage]
+        return self._cuts[tid]
 
     def request(self, LP: int, T: int, policy: Mapping[str, Any] | None = None, *, C: int = 0, chunks: Sequence[int] = (),
                 batch: list | None = None, edge: Sequence[str] = (), stop: Mapping[str, Any] | None = None) -> Counter[str]:
