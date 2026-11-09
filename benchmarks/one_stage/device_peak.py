@@ -16,10 +16,10 @@ MIB = 1 << 20
 
 
 def enum(con: sqlite3.Connection, table: str) -> dict[int, str]:
-    try:
-        return {i: n for i, n in con.execute(f"SELECT id, name FROM {table}")}
-    except sqlite3.OperationalError:
+    """``table``'s ids and names, or nothing when this nsys version's export has no such table."""
+    if con.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (table,)).fetchone() is None:
         return {}
+    return {i: n for i, n in con.execute(f"SELECT id, name FROM {table}")}
 
 
 def peak(path: str, top: int = 8) -> dict:
