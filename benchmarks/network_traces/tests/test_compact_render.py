@@ -3,10 +3,12 @@ makes of a real vLLM stream (`active_replay.compact_records`), the text vLLM str
 whatever its tokens, so the held-back bytes of a character split over tokens too, and its finish."""
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import active_replay as ar
 import compact_render as cr
 from verity.core.protocols.certifier import active
