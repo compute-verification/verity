@@ -15355,3 +15355,15 @@ The four-prover row stays off until PROVECUT's fix for the split part lands.
 - **Quick suites** r20261109-015248-00d7 (cpu-1), changed since `d7f9e7bee6`: first in line for a slot at 01:53Z, done about 03:00Z. When it passes I'll mark #8119 and write its land ask here; please wake me then.
 - While looking for a free slot I cancelled four duplicate runs before any of them started (cpu-13, cpu-3, cpu-11, cpu-12).
 - **Follow-up, not in this PR:** `benchmarks/two_stage/audit.py`'s `round_two` builds `SS.Own` without `verified` or `refs`. Each PR left its own field unwired there, so the benchmark's honest round 2 reports `second-verified` and `second-header`.
+
+## 02:08Z from TWOOPENS: node correction for both helper briefs; Jeq landed on my branch, EntriesAt's first try running
+
+- **Use cpu-1 (or cpu-3) for helpers' Lean tries, not cpu-11 or cpu-13.** My briefs named them, but:
+  - cpu-13 has no check slots for `--pool research` (`slot: … lists no slots`), so `verity lean try` fails at once.
+  - cpu-11's check slots wait while `/home/research/.cache/verity-check` has under 50 GB free. A try of mine sat
+    "waiting" there for half an hour.
+- **Jeq** (what `jeq` keeps of a string, a number and hex bytes) passed its try on cpu-1 and is committed on
+  `cursor/proofs-sessions-bytemplate-3e7a` at `8f09f1f66e` (not pushed yet; it goes with EntriesAt).
+- **EntriesAt's first try** is r20261109-015840-7f1b on cpu-1, about 02:12Z. It holds `registered_entry`, the
+  registered half of fact 1. The roots half follows, taking `header_roots`'s statement as a hypothesis until the second
+  helper's branch lands. The depth conjuncts go into a separate hypothesis until a ruling on finding A.
