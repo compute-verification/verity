@@ -132,6 +132,7 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert (tmp_path / "tie.args").read_text().split() == [str(sd), "7", w, str(q / "passes")]
     verify = argv["served_passes.py verify"]
     assert verify[verify.index("--tie") + 1] == w and verify[verify.index("--passes") + 1] == str(q / "passes")
+    assert "--class" not in verify
     pearlplus = argv["served_verdicts.py pearlplus"]
     assert pearlplus[pearlplus.index("--served") + 1] == str(q / "passes" / "served.json")
     assert pearlplus[pearlplus.index("--tie") + 1] == w
@@ -142,6 +143,18 @@ def test_under_pearlplus_tie_the_piece_ties_the_windows_own_epoch_to_its_w(tmp_p
     assert any(x.startswith("POUW tie: served_verdicts.sh pearl-tie exit 0 after ") and x.endswith(": PEARL-TIE: tied")
                for x in lines), lines
     assert (sd / "pearl" / "w7" / "coin.json").exists()
+
+
+def test_under_pearlplus_tie_verify_holds_the_passes_to_the_windows_class(tmp_path):
+    """With PEARLPLUS_CLASS (served_verdicts.sh's, the class the window is committed at) `verify` gets ``--class`` beside
+    ``--tie W``, so it refuses passes that aren't the class's fixed load."""
+    run, sd, _tree = _piece(tmp_path, _epoch(), PEARLPLUS_CLASS="4,32,3")
+    assert run.returncode == 0, (run.stdout, run.stderr)
+    verify = next(a for a in _steps(tmp_path) if Path(a[0]).name == "served_passes.py" and a[1] == "verify")
+    w = str(sd / "private" / "pearlplus" / "window-record.json")
+    assert verify[verify.index("--tie"):verify.index("--tie") + 4] == ["--tie", w, "--class", "4,32,3"]
+    script = (HERE.parent / "served_verdicts.sh").read_text()
+    assert "export PEARLPLUS_TIE PEARLPLUS_CLASS=${V3C_CLASS-4,32,4} " in script
 
 
 def test_under_pearlplus_tie_a_window_whose_epoch_failed_or_is_missing_gets_no_retain_tie_or_verdict(tmp_path):
