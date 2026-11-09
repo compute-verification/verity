@@ -413,8 +413,8 @@ def main() -> int:
     ap.add_argument("--reads", choices=("inline", "slots"), default="inline",
                     help="a flat unit's MUFU table reads: inline rows of the unit, or Flock lookup slots (read_slots)")
     ap.add_argument("--stage-ands", type=lambda v: v if v in ("auto", "none") else int(v), default="auto", metavar="N|auto|none",
-                    help="with --reads slots: at most N ANDs a net, the caps whose nets take the fewest cells (auto), or no cap "
-                         "(read_slots.split's stage_ands)")
+                    help="with --reads slots: at most N ANDs a net, the caps whose statement takes the smallest block, then "
+                         "whose nets take the fewest cells (auto), or no cap (read_slots.split's stage_ands)")
     ap.add_argument("--bin", default=None, help="M0's flock-circuit: prove one round")
     ap.add_argument("--lean", default=None, help="the Lean verifier of record (flock-verify)")
     ap.add_argument("--tmpl-unit-bin", default=None, help="with --structural and --bin: flock-tmpl-unit, which places the unit's rows")
