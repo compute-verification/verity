@@ -5,7 +5,10 @@
   device at its first session, the caller's ``route`` or else the device with the fewest types so far, and each of its
   sessions to that device's prover with the fewest unfinished sessions, so each of a device's provers loads each of its
   types. A prover loads each circuit and builds each population's statement once, and its witness pipeline, statement
-  cache and ``FC_VERIFY_AHEAD`` (``verify_ahead``, default 2) span every statement it proves.
+  cache and ``FC_VERIFY_AHEAD`` (``verify_ahead``, default 2) span every statement it proves. Provers that share the node
+  (more than one in all, ``devices`` × ``provers``) split its threads evenly: each one's ``RAYON_NUM_THREADS`` is its share
+  of the server's (the server's own ``RAYON_NUM_THREADS``, else the CPUs it may run on), so each sizes its work, its host
+  witness's lane groups a pass among it, for the cores it has rather than for every core.
 * **Verifiers.** One a type and prover: `serve --zk --queue -`, its circuit loaded once, each session's public file and
   sample taken from the line `submit` writes for it, its record filed under the session's ``out`` (else the verifier's own
   directory). A verifier serves its queue in the order its connections arrive, so it takes one prover's sessions, and
@@ -112,6 +115,13 @@ class Session:
             self._judged.set()
 
 
+def _threads(env: Mapping[str, str]) -> int:
+    """The threads a server's provers share: ``RAYON_NUM_THREADS`` in its environment, which rayon takes when it is a
+    positive count, else the CPUs this process may run on, rayon's own default."""
+    v = env.get("RAYON_NUM_THREADS", "")
+    return int(v) if v.isdigit() and int(v) > 0 else len(os.sched_getaffinity(0))
+
+
 class _Process:
     """One long-lived `flock-circuit`, a prover (``key``: its device and index there) or a verifier (``key``: its type's
     pin and its prover's key): lines
@@ -187,6 +197,8 @@ class ProofServer:
         self.provers, self.verify_ahead, self.zk, self.challenger = provers, verify_ahead, zk, challenger
         self.challengers: dict[str, dict] = {}
         self._env = {k: v for k, v in {**os.environ, **(env or {})}.items() if v is not None}
+        n = len(self.devices) * provers
+        self._share = {} if n == 1 else {"RAYON_NUM_THREADS": str(max(1, _threads(self._env) // n))}
         self._routes: dict[str, int | None] = dict(route or {})
         self._lock, self._send, self._typing = threading.Lock(), threading.Lock(), threading.Lock()
         self._provers: dict[tuple[int | None, int], _Process] = {}
@@ -345,7 +357,7 @@ class ProofServer:
         p = self._provers.get(key)
         if p is None:
             dev = key[0]
-            env = {**self._env, "FC_VERIFY_AHEAD": str(self.verify_ahead)}
+            env = {**self._env, "FC_VERIFY_AHEAD": str(self.verify_ahead), **self._share}
             if dev is not None:
                 env["CUDA_VISIBLE_DEVICES"] = str(dev)
             cmd = [self.binary, "prove", *(["--zk"] if self.zk else []), *([] if dev is None else ["--gpu"]), "--stream", "-"]
