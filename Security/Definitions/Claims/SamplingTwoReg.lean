@@ -202,10 +202,10 @@ def CompilerKSRegTwo : Prop :=
     (H : Msg → Msg), A.KS H → L.commit.Binds H → L.Sessions H → L.KSRegTwo H
 
 /-- **The two-stage miss bound**: every compiled two-stage verifier that meets the contract meets
-`CompiledTwo.MissTwo` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂`, from its draw laws (`replayDraws`, `secondDraws`). -/
+`CompiledTwo.MissTwo` at all rates `0 ≤ r₁ ≤ 1` and `0 ≤ r₂ ≤ 1`, from its draw laws (`replayDraws`, `secondDraws`). -/
 def CompilerMissTwo : Prop :=
   ∀ (Coin : Type) [Fintype Coin] [Nonempty Coin] [Inhabited Coin] (A : Arg Coin) (L : CompiledTwo Coin A)
-    (H : Msg → Msg), L.Sessions H → ∀ r₁ r₂ : ℝ, 0 ≤ r₁ → r₁ ≤ 1 → 0 ≤ r₂ → L.MissTwo H r₁ r₂
+    (H : Msg → Msg), L.Sessions H → ∀ r₁ r₂ : ℝ, 0 ≤ r₁ → r₁ ≤ 1 → 0 ≤ r₂ → r₂ ≤ 1 → L.MissTwo H r₁ r₂
 
 /-- **The two-stage headline from the committed form**: every compiled two-stage verifier that meets the contract and
 `CompiledTwo.KSRegTwo` meets `CompiledTwo.HeadlineTwo`, by its draw laws and the best interiors. -/
