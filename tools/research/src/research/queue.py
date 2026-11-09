@@ -2802,8 +2802,9 @@ class Queue:
         PR based on another branch among them, and ``close_days`` (drive's `stale_close_days`) when drive closes it.
         ``fetched``, called once the clone is fetched and before anything reads it, returns those two instead: the command reads
         its cutoff and drive.toml at `main` there, so it fetches once.  With ``loop``, as the verified queue admits each onto
-        `main` (`vqueue_loop.World.ready`, which reads no `next`), a head on `main` landed; else as drive does, with each
-        member's place on `next`, a head on `checked` landed there, and the refusals of drive's last sync."""
+        `main` (`vqueue_loop.World.ready`, which reads no `next`): a head on `main` landed, and a move PR that conflicts with
+        `main` refused as any PR is; else as drive does, with each member's place on `next`, a head on `checked` landed there,
+        and the refusals of drive's last sync."""
         self._clone()
         state = self.load_state()
         open_prs = self.listed = self.github.open_prs()
@@ -2851,7 +2852,8 @@ class Queue:
                     if e.state == "ready" and (e.pr.head in landed or not reach[e.pr.head][0]):
                         e.state, e.why = "queued", (f"landed on `{self.into}`: it reaches `main` when drive's full check of a "
                                                     f"`{self.into}` commit at or above it passes every step on the merge gate")
-        files_of = self.conflicts_with(main, [e.pr.head for n, e in entries.items() if e.state == "ready" and not e.pr.move
+        files_of = self.conflicts_with(main, [e.pr.head for n, e in entries.items() if e.state == "ready"
+                                              and (loop or not e.pr.move)
                                               and conflicts.get(str(n), {}).get("head") != e.pr.head
                                               and waits.get(str(n), {}).get("head") != e.pr.head])
         for n in contained_first(entries):
@@ -2862,12 +2864,13 @@ class Queue:
                 e.state, e.why = "refused", f"{c['why']} (at the last sync)"
             elif e.state == "ready" and (w := waits.get(str(n))) and w["head"] == e.pr.head:
                 e.state, e.why = "waiting", f"{w['why']} (at the last sync)"
-            elif e.state == "ready" and not e.pr.move and (files := files_of[e.pr.head]):
+            elif e.state == "ready" and (loop or not e.pr.move) and (files := files_of[e.pr.head]):
                 e.state, e.why = "refused", (f"conflicts with `main` in {', '.join(files)}: merge `main` into the branch and "
                                              f"re-mark it")
             elif e.state == "ready":
-                e.why = ("admitted: the verified queue builds it into a batch onto `main` once it has a land verdict, or on its "
-                         "mark alone when it is low-risk")
+                e.why = ("admitted: the verified queue builds it into a batch onto `main` once it has a land verdict"
+                         + (": a move lands only with one, never on its mark alone" if e.pr.move else
+                            ", or on its mark alone when it is low-risk"))
         return entries
 
     def conflicts_with(self, main: str, heads: Iterable[str]) -> dict[str, list[str]]:
