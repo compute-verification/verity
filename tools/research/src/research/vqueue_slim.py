@@ -5,12 +5,13 @@ whose check runs the preflights before any step.  It is judged as `Driver._follo
 the preflights and lean-agreement count, policy.toml's `off_gate` (ratchet-gate) doesn't.  A candidate passes only once its
 graph2 check's gating tasks and this run both passed (`combine`).
 
-What the loop does.  It starts the run only for the lowest candidate, and only once graph2's gating verdict for it has
-passed, so the runs beside the shadow's candidates, which take drive's after-landing slot and machines, are one per candidate
-about to advance; until then the candidate's run verdict is pending (`Verdict(PENDING)`, not `judge` of None, which is
-infra).  It calls `start` once for that candidate, `judge` each tick, and saves the record after every `judge`: `judge` fills
-it in (the run ids once a detached launch printed them, the verdict once the run ended or was given up, which it returns from
-then on without reading the run again), and a launch read once is gone (`Driver._resolve` removes its directory).  On
+What the loop does.  It starts the run with each candidate's build, beside each candidate's check, so up to its `--depth`
+of them at once take drive's machines, or once for a candidate on `main`'s chain whose start its log doesn't hold; until
+then the candidate's run verdict is pending (`Verdict(PENDING)`, not `judge` of None, which is infra), and a candidate dropped
+while its run runs cancels it (one still launching has no run ids to cancel yet).  It calls `start` once a candidate, `judge` each tick, and saves the record after
+every `judge`: `judge` fills it in (the run ids once a detached launch printed them, the verdict once the run ended or was
+given up, which it returns from then on without reading the run again), and a launch read once is gone (`Driver._resolve`
+removes its directory).  On
 `vqueue.Retry` with this run's verdict infra, it calls `start` again and keeps the new record in place of the old.  It gives
 the Driver the `on` of drive.toml at its `main` (`MAIN`): `start` refuses a Driver without machines.  Under `--dry-run` it
 calls neither `start` nor `judge`.  The candidate's verdict for `vqueue.decide` is `combine` of graph2's and this one's.  The
