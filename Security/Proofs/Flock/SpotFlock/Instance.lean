@@ -3,6 +3,7 @@ module
 public import Proofs.Flock.SpotFlock.FrameIsBuilt
 public import Proofs.Flock.SpotFlock.Cap
 public import Proofs.Flock.SpotFlock.DrawnAt
+public import Proofs.Flock.SpotFlock.OneTable
 import all Init.Data.Array.Basic
 
 /-!
@@ -26,8 +27,8 @@ Each bundle holds the facts the two-stage design reads of it, each a decision on
 At them the design evaluates (`two_held`) and the second stage takes the counts at every replay sample of one replay
 block or more, ascending (`secondProblem_held`), so neither refutes a checked run before any session; the frame is
 SPOT's own (`built_held`); SPOT's layout embeds the statement (`embeds_held`); round 2's parts are the one template's
-(`partsAt_held`); and the first stage samples unit slots (`firstSlots_held`), so a checked unit of a one-table session
-is counted (`counted_held`).
+(`partsAt_held`); and the first stage samples unit slots (`firstSlots_held`), so a checked unit is counted
+(`counted_held`).
 
 ## What this does not show
 
@@ -35,10 +36,10 @@ is counted (`counted_held`).
 registration (`embeds_layoutFor`). At `held R bnd0 …` (`bnd0`, `SpotFlock.InstanceBoundary`'s concrete boundary)
 `Built` holds for every `R : Ref`. That does not reduce the two-stage guarantee's non-vacuity to one existence fact.
 Non-vacuity at the instance needs three things, none proved here:
-* `Sites` at the instance: of a site's three conjuncts only `Counted` is proved, and only at a one-table session
-  (`counted_held`);
-* an accepted run: that some run passes `CheckedRun.Ok` at the instance, given `R`; without one, `Sites` holds
-  vacuously and the guarantee says nothing there;
+* `Sites` at the instance: of a site's three conjuncts only `Counted` is proved (`counted_held`);
+* an accepted run: without one, `Sites` holds vacuously and the guarantee says nothing there.
+  `SpotFlock.InstanceRun` gives one from an honest session of `R` (`ok_held`), but that such a session exists is not
+  shown;
 * a concrete `Ref`: a reference statement with hidden outputs and `sha512/row/v2` ports, in the two-stage scope at two
   units a request, whose registered reads carry roots and whose masked setup (`Stmt.setupHidden`, through
   `FlockDeploy.setupOf true`) holds at the open guarantee that the verifier's fixed nets build
@@ -192,10 +193,9 @@ theorem secondProblem_held {s : Array ℕ} (hne : s.isEmpty = false)
 order (`firstSlots_of`). -/
 theorem firstSlots_held : FirstSlots (held R B desc q c₀) := firstSlots_of _ B.firstK B.pop
 
-/-- **A checked unit is counted**, `SiteHolds`'s first conjunct, where its session has one table: no slot is always
-checked and the first stage samples unit slots (`CheckedRun.counted`). -/
-theorem counted_held {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) (hc1 : r.ins.read.I.count ≤ 1) :
-    r.Counted (held R B desc q c₀) :=
-  CheckedRun.counted _ hr hc1 rfl (firstSlots_held R B desc q c₀)
+/-- **A checked unit is counted**, `SiteHolds`'s first conjunct: its session has one table (`CheckedRun.count_le_one`),
+no slot is always checked and the first stage samples unit slots (`CheckedRun.counted`). -/
+theorem counted_held {r : CheckedRun} (hr : r.Ok (held R B desc q c₀)) : r.Counted (held R B desc q c₀) :=
+  CheckedRun.counted _ hr (CheckedRun.count_le_one hr) rfl (firstSlots_held R B desc q c₀)
 
 end SpotFlock.Instance
