@@ -57,7 +57,7 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
     return h, base, sha, asked
 
 
-def _rewrite(d, **steps: dict) -> None:
+def _rewrite(d, **steps: dict | None) -> None:
     """``d``'s steps.jsonl with each step ``steps`` names (``preflight_fixtures=...``) given those fields, or left out when None."""
     rows = []
     for st in step_records(d):
