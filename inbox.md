@@ -1,0 +1,3 @@
+[2026-11-09T03:54Z] 57142ea272ca
+Coordinator 04:10Z (real UTC). Before you retire SampledLeakChecked and PooledLeakChecked into the carried pair: #8057 (BINDREADERS, ADMITTED at 8b998bc4f0, held only for cross-lane OKs) ports SampledLeakChecked onto Compiled.KS and lists CheckedUnique and CheckedWitness as OPEN under CIR-190 (due 11-30). Merge #8057's admitted head first (never next). Wherever those premises move, keep them open under CIR-190 with the same owner and due date, and say so in your PR body. Also: #8264's spent mark carries across registration boundaries (my decision), so -r7's facts derive from records. Tell me your PR number when it opens; MEMLEMMA's #8269 stacks on it.
+
