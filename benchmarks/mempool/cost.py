@@ -270,8 +270,8 @@ def compile_statics(load: dict[str, Any], engine: dict[str, Any], lookups: str) 
 
 #: `compile_slice_v6.parts`' order for each unit, each part's term
 UNIT_TERMS = {
-    "compile": ("load", "steps (CompileStep)", "arrivals' ids (CompileIds)", "calls row (CallsEq)",
-                "verdict (CallsVerdict)"),
+    "compile": ("cut (CompileCut)", "load", "steps (CompileStep)", "edge (CompileEdge)", "arrivals' ids (CompileIds)",
+                "calls row (CallsEq)", "verdict (CallsVerdict)"),
     "pool": ("bus records (CompileBus)", "arrivals' counts (PoolCounts)", "pool row digests in and out",
              "key prints in and out", "stream slots (PoolSlot)", "open steps (PoolOpen)", "touched list (PoolEntry)",
              "ragged keys (RaggedKey)", "pool end", "close steps (PoolClose)", "M run copies (PoolCopies)",
