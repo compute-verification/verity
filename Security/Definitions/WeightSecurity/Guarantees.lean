@@ -30,9 +30,9 @@ network certifier and the dataflow discharge. Its witnesses
 `TheftServedReq` is `TheftServed` per charge unit, in bits: the released outputs grouped into units (a request, or a
 request with the requests that read its state), each changed unit charged its whole output and its name, and the leakage
 term the probability that an incorrect proof block changes more than `F` units, in its window or later ones, before the
-first rejection (`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use leaves the weights
-`K` bits of min-entropy: `2^(B - K)`. `TheftServedHonest` is the first's honest witness, `TheftServedMinEntropyHonest`
-the second's, and each has a nontrivial witness at the leaking toy deployment.
+first rejection (`Served.Isolated`). `TheftServedMinEntropy` is `TheftServedReq` against every party, where honest use
+leaves the weights `K` bits of min-entropy: `2^(B - K)`. `TheftServedHonest` is the first's honest witness,
+`TheftServedMinEntropyHonest` the second's, and each has a nontrivial witness at the leaking toy deployment.
 -/
 
 @[expose] public section
