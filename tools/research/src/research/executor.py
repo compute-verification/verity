@@ -370,10 +370,16 @@ class QueueTransport:
     artifact a label on `commit:<sha>` names (`LISTED`: `tasks_graph` a `tasks-graph/v1`, `verity_graph` a `verity-graph/v2`),
     verdicts as `verdict` labels on `task:<key>` and results as `result` labels there.  A key's verdicts are pulled from the
     store's remote while it isn't passed here (a fail here may since have been relabelled error there, and an error rerun), its
-    results while it has none here yet."""
+    results while it has none here yet.  With ``by``, only labels written by it count (`research data label --by`)."""
+
+    #: the writer whose labels count, anyone's when None
+    by: str | None = None
 
     def __init__(self, store, command: tuple[str, ...] = (), cwd: Path | None = None):
         self.store, self.command, self.cwd = store, tuple(command), cwd
+
+    def _labels(self, target: str, key: str) -> list:
+        return [lab for lab in self.store.labels(target, key=key) if self.by is None or lab.by == self.by]
 
     def enqueue(self, graph_file: Path | None, priority: int, check: str, schema: str | None = None) -> None:
         if not self.command:
@@ -391,9 +397,9 @@ class QueueTransport:
 
         label, want = LISTED[schema]
         target = f"commit:{check.partition(':')[2]}"
-        if not (labs := self.store.labels(target, key=label)) and getattr(self.store, "remote", None) is not None:
+        if not (labs := self._labels(target, label)) and getattr(self.store, "remote", None) is not None:
             labels_sync.pull_targets(self.store, [target])
-            labs = self.store.labels(target, key=label)
+            labs = self._labels(target, label)
         if not labs:
             return None
         art = labs[-1].value
@@ -405,11 +411,11 @@ class QueueTransport:
         from .queue import PREFETCH_JOBS
         from .store import labels_sync
 
-        have = {k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in keys}
+        have = {k: [lab.value for lab in self._labels(task_target(k), label)] for k in keys}
         stale = (lambda v: fold(v) != PASS) if label == vocab.TASK_VERDICT else (lambda v: not v)
         if (todo := [k for k, v in have.items() if stale(v)]) and getattr(self.store, "remote", None) is not None:
             labels_sync.pull_targets(self.store, [task_target(k) for k in todo], jobs=PREFETCH_JOBS)
-            have.update({k: [lab.value for lab in self.store.labels(task_target(k), key=label)] for k in todo})
+            have.update({k: [lab.value for lab in self._labels(task_target(k), label)] for k in todo})
         return have
 
     def labels(self, keys: list[str]) -> dict[str, list[str]]:

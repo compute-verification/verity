@@ -18,8 +18,9 @@ Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` me
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
 the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
-each key's from the first its retry or any candidate's rerun didn't set aside (a task graph2's `verdict` says failed by its
-own fault, which it labels no result for, failed), on the merge gate's tasks, those drive's `executor = "on"` path gates on
+the labels graph2 wrote alone (`GRAPH2_BY`), each key's from the first its retry or any candidate's rerun didn't set aside (a
+task graph2's `verdict` says failed or infra reads so whatever its labels say, one failed by its own fault, which it labels
+no result for, included), on the merge gate's tasks, those drive's `executor = "on"` path gates on
 (none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed task an unexpired
 allowance of that policy covers passed, as drive reads it (`Driver._task_allowed`); else a failed or blocked task is fail,
 each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
@@ -28,10 +29,11 @@ listed it, where there are
 (`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error, and pending while those
 are to come: the base's check isn't listed (the loop enqueues it, once a base) or a task's key there waits on what it reads;
 else a task whose newest result is graph2's infra error (`detail.infra`; graph2's `tree` where `Failed` has one) is infra,
-else every gating task passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its
-`ready_verdict` label), a graph that can't be read, a graph lacking a job `main` waits for (`drive.gating`) and failing
-nothing, or no graph of a candidate the log never enqueued is list-failed.  graph2's own verdict, where it
-has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
+else every gating task passed is pass once graph2's own verdict, where it has one, can be read and counts none pending
+(`World._held`, which an inherited fail's end waits on too), else pending.  No graph while graph2 says its listing failed
+(`verdict`, else its `ready_verdict` label), a graph that can't be read, a graph lacking a job `main` waits for
+(`drive.gating`) and failing nothing, or no graph of a candidate the log never enqueued is list-failed.  graph2's own
+verdict, where it has one, is compared and a disagreement logged.  With ``slim`` (`research.vqueue_slim`), the run beside the check of what
 graph2 doesn't check starts with its candidate's build, one beside each candidate's check (so up to `--depth` at once, on
 drive's machines), or once in the snapshot for a candidate on `main`'s chain the log holds no start of.  Pending until it
 ends, it is judged each tick, its record logged whenever it changes, and combined with the check's verdict: a candidate passes
@@ -120,6 +122,8 @@ QUIET = ("-c", "gc.auto=0", "-c", "maintenance.auto=false")
 TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 #: the store label graph2 puts on `commit:<sha>` with its terminal verdict on `ready:<sha>`
 READY_VERDICT = "ready_verdict"
+#: who graph2 writes its labels as (its `research data label ... --by executor`): a label by anyone else counts for nothing
+GRAPH2_BY = "executor"
 #: why a candidate's failures wait on its base (`World._base`) while graph2 hasn't listed the base's check
 UNLISTED = "its check isn't listed yet"
 #: who ejects, as drive's ejections are by
@@ -314,11 +318,12 @@ class Judged:
 
 class _Seen:
     """A transport that keeps each key's results as `Executor.settle` reads them (an infra error folds to pending there), each
-    key's from its ``since``-th on: a retry or a rerun set the earlier ones aside.  A key of ``faulted`` ({key: its fail}) with
-    neither a pass nor a fail among them reads as that fail."""
+    key's from its ``since``-th on: a retry or a rerun set the earlier ones aside.  A key of ``said`` ({key: the fail or the
+    infra error graph2's verdict says it ended in}, `_said`) reads so whatever its labels say: a fail with no fail among them
+    gets that fail, and an infra error loses its passes and gets that error unless it ends in one."""
 
-    def __init__(self, transport, since: dict[str, int] | None = None, faulted: dict[str, dict] | None = None):
-        self.transport, self.since, self.faulted, self.got = transport, since or {}, faulted or {}, {}
+    def __init__(self, transport, since: dict[str, int] | None = None, said: dict[str, dict] | None = None):
+        self.transport, self.since, self.said, self.got = transport, since or {}, said or {}, {}
 
     def results(self, keys: list[str]) -> dict[str, list[object]]:
         if isinstance(self.transport, Transport):
@@ -326,8 +331,14 @@ class _Seen:
         else:
             got = {k: v[self.since.get(k, 0):] for k, v in self.transport.results(keys).items()}
         for k in keys:
-            if (doc := self.faulted.get(k)) is not None and fold_results(got.get(k) or (), k)[0] == PENDING:
-                got[k] = [*(got.get(k) or ()), doc]
+            if (doc := self.said.get(k)) is None:
+                continue
+            have = list(got.get(k) or ())
+            if doc["status"] == FAIL and fold_results(have, k)[0] != FAIL:
+                got[k] = [*have, doc]
+            elif doc["status"] != FAIL:
+                have = [d for d in have if not (isinstance(d, dict) and d.get("status") == PASS)]
+                got[k] = have if _infra(have, k) else [*have, doc]
         self.got.update(got)
         return got
 
@@ -335,7 +346,10 @@ class _Seen:
 class Transport(QueueTransport):
     """`QueueTransport`, pulling a key's results from the store's remote again while none of them passed or failed: graph2 labels
     an infra error as a result, and a retry's or a rerun's result comes after it.  With ``since``, each key's from its
-    ``since``-th on, so one set aside reads as no result and is pulled again."""
+    ``since``-th on, so one set aside reads as no result and is pulled again.  Only graph2's labels count (`GRAPH2_BY`): its
+    results, and the graph it listed."""
+
+    by = GRAPH2_BY
 
     def results(self, keys: list[str], since: dict[str, int] | None = None) -> dict[str, list[object]]:
         from .queue import PREFETCH_JOBS
@@ -344,7 +358,7 @@ class Transport(QueueTransport):
         since = since or {}
 
         def have(k: str) -> list[object]:
-            return [lab.value for lab in self.store.labels(task_target(k), key=vocab.TASK_RESULT)][since.get(k, 0):]
+            return [lab.value for lab in self._labels(task_target(k), vocab.TASK_RESULT)][since.get(k, 0):]
 
         got = {k: have(k) for k in keys}
         if (todo := [k for k, v in got.items() if fold_results(v, k)[0] == PENDING]) \
@@ -573,7 +587,7 @@ class World:
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said, theirs=theirs)
-        states, keys, seen = self._settled(graph, since, _faulted(theirs))
+        states, keys, seen = self._settled(graph, since, _said(theirs))
         closure = _Closure(tasks, envs)
         needed = _walk(tasks, gates)
         allowed = self._allowed(sha, tasks, states, needed)
@@ -586,7 +600,10 @@ class World:
                 bad += closure.fails(i, failed) or [i]
         infra = [i for i in needed if states[i][0] == PENDING and _infra(seen.got.get(keys[i]) or (), keys[i])]
         erred = frozenset(infra)
-        ended = all(states[i][0] != PENDING or closure.meets(i, erred) for i in gates)
+        held = self._held(theirs)
+        ran = all(states[i][0] != PENDING or closure.meets(i, erred) for i in gates)
+        passed = all(states[i][0] == PASS or i in allowed for i in gates)
+        ended = ran and held is None
         jobs = {JOB_OF_KIND.get(t["kind"], t["kind"]) for t in tasks.values()}
         lacks = tuple(s for s in gating(self.repo, sha) if s not in jobs and s not in SLIM_STEPS)
         based = self._base(base, set(bad), base_since) if bad else {}
@@ -607,7 +624,7 @@ class World:
             mine = Verdict(PENDING)
         elif down:
             mine = Verdict(INFRA, (), down)
-        elif all(states[i][0] == PASS or i in allowed for i in gates):
+        elif passed and held is None:
             mine = Verdict(PASS)
         else:
             mine = Verdict(PENDING)
@@ -617,9 +634,27 @@ class World:
         note = "; ".join([*([f"graph2 says {said}"] if said in vqueue.STATES and said != mine.state else []),
                           *([f"no task of {', '.join(lacks)}, which `main` waits for"] if lacks else []),
                           *([f"waiting for the base's listing: {waits}"] if waits is not None else []),
+                          *([f"held: {held}"] if held is not None and (mine.state == PENDING and passed
+                                                                       or mine.state == FAIL and ran) else []),
                           *([f"allowed: {', '.join(sorted(allowed))}"] if allowed else [])])
         return Judged(mine, mark=mark, note=note, graph2=said, lacks=lacks, theirs=theirs,
                       unlisted=base if waits == UNLISTED else None)
+
+    def _held(self, theirs: dict | None) -> str | None:
+        """Why graph2's own verdict, from its database, keeps a candidate from passing (or from ending with only inherited
+        failures), which the loop's is never more passing than: it can't be read, says pending, cancelled or list-failed, or
+        counts a task pending, which no label passes.  Its pending count names no task, so one off the gate holds a candidate
+        too; each failed or infra task it names reads so on its own (`_said`).  None with no graph2 `verdict` to ask (its
+        `ready_verdict` label, the fallback, is written only once nothing is pending)."""
+        if not self.graph2 or "verdict" in self.absent:
+            return None
+        if not isinstance(theirs, dict):
+            return "graph2's verdict can't be read"
+        if (state := theirs.get("state")) not in (PASS, FAIL, INFRA):
+            return f"graph2 says {state}"
+        if isinstance(n := theirs.get("pending"), int) and n > 0:
+            return f"graph2 counts {n} task(s) pending"
+        return None
 
     def _allowed(self, sha: str, tasks: dict[str, dict], states: dict[str, tuple], ids: Iterable[str]) -> set[str]:
         """The failed tasks of ``ids`` an allowance of ``sha``'s policy covers, each red record they name, as drive's
@@ -632,12 +667,12 @@ class World:
                     out.add(i)
         return out
 
-    def _settled(self, graph: dict, since: dict[str, int] | None = None, faulted: dict[str, dict] | None = None
+    def _settled(self, graph: dict, since: dict[str, int] | None = None, said: dict[str, dict] | None = None
                  ) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
         """``graph``'s tasks settled on graph2's results (`Executor.settle`), each key's from its ``since``-th on, a key of
-        ``faulted`` with none read as its fail (`_Seen`), each one's key, the graph's or one made from its reads ("" while they
-        haven't all passed), and the results read."""
-        seen = _Seen(self.tasks.transport, since, faulted)
+        ``said`` read as graph2's verdict says it ended (`_Seen`), each one's key, the graph's or one made from its reads (""
+        while they haven't all passed), and the results read."""
+        seen = _Seen(self.tasks.transport, since, said)
         keyed: dict[str, str] = {}
         states = Executor(seen).settle(graph, keyed)
         return states, {t["id"]: keyed.get(t["id"], "") for t in graph["tasks"]}, seen
@@ -664,7 +699,7 @@ class World:
                          "so no failure on it is inherited: each is its candidate's own")
                 return {}
             return UNLISTED
-        states, keys, seen = self._settled(got[1], since)
+        states, keys, seen = self._settled(got[1], since, _said(theirs))
         stuck = any(_infra(seen.got.get(k) or (), k) for k in keys.values() if k)      # what they read may never pass
         if not stuck and (waiting := sorted(i for i in ids if i in keys and not keys[i] and states[i][0] == PENDING)):
             return f"{', '.join(waiting)} there still wait on what they read"
@@ -715,12 +750,16 @@ class World:
         store = getattr(self.tasks.transport, "store", None)
         if store is None:
             return None
-        labs = store.labels(f"commit:{sha}", key=READY_VERDICT)
+
+        def ours() -> list:
+            return [lab for lab in store.labels(f"commit:{sha}", key=READY_VERDICT) if lab.by == GRAPH2_BY]
+
+        labs = ours()
         if not labs and getattr(store, "remote", None) is not None:
             from .store import labels_sync
 
             labels_sync.pull_targets(store, [f"commit:{sha}"])
-            labs = store.labels(f"commit:{sha}", key=READY_VERDICT)
+            labs = ours()
         if not labs:
             return None
         v = labs[-1].value
@@ -862,14 +901,21 @@ def _tests(doc: object) -> frozenset[str]:
     return frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
 
 
-def _faulted(theirs: dict | None) -> dict[str, dict]:
-    """The tasks graph2's `verdict` says failed by their own fault (an undeclared read, a race: a failed entry with a `why`),
-    for which it labels no result: {key: the fail each reads as}.  Not from a `ready_verdict` label, which a rerun leaves
-    standing until the check ends again."""
+def _said(theirs: dict | None) -> dict[str, dict]:
+    """How graph2's `verdict` says each task it lists as failed or infra ended, from its database, which no label overrides:
+    {key: the fail or the infra error it reads as}.  A task failed by its own fault (an undeclared read, a race: a failed entry
+    with a `why`) has no result labelled at all.  Not from a `ready_verdict` label, which a rerun leaves standing until the
+    check ends again."""
     if not isinstance(theirs, dict) or "labelled" in theirs:
         return {}
-    return {k: {"key": k, "task": e.get("task"), "status": FAIL, "detail": {"fault": e["why"]}}
-            for e in theirs.get("failed") or () if isinstance(e, dict) and e.get("why") and isinstance(k := e.get("key"), str)}
+    out = {k: {"key": k, "task": e.get("task"), "status": "error", "detail": {"infra": True, "why": e.get("why")}}
+           for e in theirs.get("infra") or () if isinstance(e, dict) and isinstance(k := e.get("key"), str)}
+    for e in theirs.get("failed") or ():
+        if isinstance(e, dict) and isinstance(k := e.get("key"), str):
+            out[k] = {"key": k, "task": e.get("task"), "status": FAIL,
+                      "detail": {"fault": e["why"]} if e.get("why") else {"failed_tests": [
+                          t for t in e.get("tests") or () if isinstance(t, str)]}}
+    return out
 
 
 def _named(theirs: dict | None) -> dict[tuple[str, str], frozenset[str]]:
