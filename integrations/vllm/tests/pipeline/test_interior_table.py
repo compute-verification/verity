@@ -87,8 +87,9 @@ def _with(span: IR.Span, kind: str, port: str, unit: int, value) -> IR.Span:
 
 def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roots_as_supplied_values():
     """The record registers the two sampled spans' tables, each at 8 leaves under `one_stage.history`'s domain, and two
-    supplied values. `history.check`, the verifier's mirror, reopens each table's root from its rows' b || c, and the
-    supplied values made from the registered table entries alone are the record's. The reads' ``root`` and ``domain``
+    supplied values. `history.check`, the verifier's mirror, reopens each table's root from the rows' b || c the interior
+    publishes, read through the table's held run, and the supplied values made from the registered table entries alone
+    are the record's, each row's source naming its table. The reads' ``root`` and ``domain``
     rows are given by reference, rows (0, 0, 1, 1) of those values, and the commitment is the one the same rows given in
     full under the values' salts makes. It registers on the stream after its first stage."""
     stream, reg, first = _first()
@@ -105,8 +106,14 @@ def test_a_table_read_interior_registers_each_spans_table_once_and_its_reads_roo
         assert e["domain"] == HT.domain(prog, IR.table_name(run, s), 2, 8).domain_id.hex()
         HT.check(prog, e["value"], 2, it.tables[s].bcs, bytes.fromhex(e["root"]), 8)
         assert it.tables[s].bcs == IR.commit_table(t, prog, e["value"]).bcs
+    for tc in it.tables:
+        held = tc.published()
+        at = HT.order(tc.runs(), len(tc.bcs), "", "", 0, {v: len(x) for v, x in held.items()})
+        HT.check(prog, tc.value, 2, [bytes.fromhex(held[v][r]) for _k, v, r in at], tc.root, 8)
     sup = IR.supplied(prog, run, got[:Q])
     assert [v.entry() for v in sup] == [{k: e[k] for k in v.entry()} for v, e in zip(sup, got[Q:], strict=True)]
+    assert IR.sources(run, it.tables) == {IR.supplied_name(run, of): [[{"history": f"{IR.table_name(run, s)}/{of}"}]
+                                                                      for s in range(Q)] for of in ("root", "domain")}
     m = w.members[0]
     by_ref = {p: c.given[m.port(p)] for p in ("root", "domain")}
     assert all(v.positions == (0, 0, 1, 1) for v in by_ref.values())

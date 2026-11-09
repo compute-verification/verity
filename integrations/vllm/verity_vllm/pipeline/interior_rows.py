@@ -538,10 +538,29 @@ class TableCommit:
         return {"value": self.value, "root": self.root.hex(), "leaves": self.leaves, "words": self.words,
                 "domain": self.domain.domain_id.hex()}
 
+    @property
+    def held(self) -> str:
+        """The value its rows' b || c are published as."""
+        return f"{self.value}/rows"
+
+    def runs(self) -> list[dict[str, Any]]:
+        """Its positions' sources (`one_stage.history.order`'s runs): one held run, position r row r of `held`."""
+        return [{"start": 0, "count": len(self.bcs), "held": self.held, "row": 0}]
+
+    def published(self) -> dict[str, list[str]]:
+        """What the interior publishes of it, ``{held: [b || c hex, ...]}``: the strings `runs` reads, from which the
+        verifier recomputes its root (`one_stage.history.check`), so the registered root is never the prover's word."""
+        return {self.held: [bc.hex() for bc in self.bcs]}
+
 
 def table_name(run: str, s: int) -> str:
     """Sampled span ``s``'s table in the interior of run ``run``: its registered value and its domain's table."""
     return f"interior/{run}/history/{int(s)}"
+
+
+def supplied_name(run: str, of: str) -> str:
+    """The supplied value whose row s is sampled span s's table's ``of`` (``root`` or ``domain``), in run ``run``."""
+    return f"interior/{run}/history/{of}"
 
 
 def commit_table(t: Table, program: str, name: str) -> TableCommit:
@@ -584,11 +603,17 @@ def supplied(program: str, run: str, entries: Sequence[Mapping[str, Any]]) -> tu
     `interface.supplied` fills a served window's table reads."""
     out = []
     for of in ("root", "domain"):
-        name = f"interior/{run}/history/{of}"
+        name = supplied_name(run, of)
         rows = [digest_words(bytes.fromhex(e[of])) for e in entries]
         out.append(RG.Registered.commit(program, name, rows, RG.supplied_salts(program, name, len(rows)),
                                         schema=RG.SCHEMA_V2))
     return out[0], out[1]
+
+
+def sources(run: str, tables: Sequence[TableCommit]) -> dict[str, list[list[dict[str, str]]]]:
+    """The challenger's copy of `supplied`'s values: row s of each one source, ``{"history": "<table s>/root"}`` or
+    ``/domain``, which the verifier resolves to the root or domain id it recomputed for table s from its published rows."""
+    return {supplied_name(run, of): [[{"history": f"{tc.value}/{of}"}] for tc in tables] for of in ("root", "domain")}
 
 
 def _reader(m: CS.Member) -> tuple[int, int] | None:
@@ -782,4 +807,4 @@ def register(stream: Any, first: Any, it: Interior, **copies: Any) -> Any:
 
 __all__ = ["MOVED", "READ", "DeviceCommit", "Interior", "Replay", "Span", "Table", "TableCommit", "captured", "commit_table",
            "committed", "gather", "interior", "interior_ports", "interior_run", "interior_tables", "interior_window", "named",
-           "pieces", "port_map", "register", "span", "supplied", "table_name", "table_reads"]
+           "pieces", "port_map", "register", "sources", "span", "supplied", "supplied_name", "table_name", "table_reads"]
