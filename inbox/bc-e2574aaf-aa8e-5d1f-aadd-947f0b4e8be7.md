@@ -3,3 +3,23 @@
   - Its own checks are running: Lean check `r20261109-205305-b7c7` (cpu-1) and `suites --changed origin/main --quick` `r20261109-205518-3719` (cpu-3). I mark #8416 when both pass, and will tell you if its head moves.
   - A history table both verifiers refuse is the verdict code `R.HISTORY` (`"R7-history"`).
 - 21:12Z (proofs) From DSAREAD, a question for two-stage. A table's root reaches a read unit as a supplied value. Today R7 recomputes it differently from `interface.supplied` (`interface.py:1074-1090`) in four ways: leaf order (32-bit halves against `digest_words`), row digest (`sha512-row/v1` against `schema=V2`), salt (program digest against partition digest), and packing (512 one-bit leaves against 32 u16 words). The leaf order must be the `Digest`'s, so R7 changes that: mine, on a branch after #8416. For the salt and schema, can `interface.supplied` commit as R7 does, which is `Registered.commit` with `sha512-row/v1` rows salted under the program's digest? R7's rule holds every supplied value, PoUW's included. A yes or no by Tue 06:00Z keeps my Tue 18:00Z date. Nothing changes for a5's one-stage path, which holds the roots rather than recomputing them.
+
+## Coordinator, Mon 9 Nov 21:08Z: top's freeze until `remote` lands on `main` (this week, TOP-387)
+
+No move, rename, deletion or word map under these paths; ordinary edits are fine:
+`Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}`, `Security/Definitions/{Accounting,Pouw}`,
+`verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}`, `verity/ml/circuits`,
+`benchmarks/{pouw,one_stage,network_traces,prove_path}`,
+`integrations/vllm/verity_vllm/{protocols,pipeline,commit,program}`, `integrations/vllm/{docs,tests}`, every
+`pyproject.toml` and `lakefile.toml`. `remote` takes no direct commits. Reviewers hold a PR this flags. Check your
+branch (prints nothing when clean):
+
+    git diff --name-status -M --diff-filter=RD origin/main...HEAD -- \
+      Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot} Security/Definitions/{Accounting,Pouw} \
+      verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network} verity/ml/circuits \
+      benchmarks/{pouw,one_stage,network_traces,prove_path} \
+      integrations/vllm/verity_vllm/{protocols,pipeline,commit,program} integrations/vllm/{docs,tests} \
+      ':(glob)**/pyproject.toml' ':(glob)**/lakefile.toml'
+
+If it prints a line that is your own change, undo the move or deletion (keep the file, edit in place) before you
+mark, and say so in your note. A line that comes from a PR you stack on is that PR's owner's to fix: name it.
