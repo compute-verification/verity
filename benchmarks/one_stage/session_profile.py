@@ -2,13 +2,15 @@
 `phase_profile.py` (`phase_profile.sh`'s `tl` step, then its `session` step).
 
     python benchmarks/one_stage/session_profile.py --sqlite P.sqlite --prove-out prove.out [--skip 1] [--json out.json]
+        [--timeline PHASE]   # also PHASE's GPU ops in start order, in the first timed session's first rep that has it
 
 A session's `prove_total_s` is its two reps' prove seconds. Each rep's device phases (the record's buckets ``t.witness``
 through ``t.ligerito``) run back to back, so each window is placed backward from Ligerito's phase mark (`phase_profile.py`'s,
 at ``lf_fold_base_pair``) by the record's seconds, and split into GPU time by kernel and the host's idle time. The
 rest of a rep's prove seconds has no device window and is ranked from the records alone: the host around the device
 prover (``t.upstream`` less ``t.total``), M1's finish (``t.prove`` less ``t.upstream``), and what the session adds to the
-rep (rep 0: level 0's hiding and the ZK server's level-0 recheck; rep 1: its pads' commitment). ``--skip`` drops the first
+rep (rep 0: M1's preparation past the witness build, where it runs beside it, else level 0's hiding and the ZK server's
+level-0 recheck; rep 1: the rep's time outside its device call, its wait on rep 0's finish included). ``--skip`` drops the first
 sessions (the warm one)."""
 from __future__ import annotations
 
@@ -35,8 +37,33 @@ def host_parts(r: dict) -> dict[str, list[float]]:
     for rep, (b, s) in enumerate(zip(r["buckets"], r["prove_s"])):
         out["host around the device prover"].append(b["t.upstream"] - b["t.total"])
         out["M1 finish (replay, inner proof)"].append(b["t.prove"] - b["t.upstream"])
-        out["rep 0: level 0's hiding and recheck" if rep == 0 else "rep 1: its pads' commitment"].append(s - b["t.prove"])
+        out["rep 0: M1's preparation past the witness" if rep == 0 else "rep 1: outside its device call"].append(s - b["t.prove"])
     return out
+
+
+def timeline(gpu, api, span, phase: str) -> None:
+    """The phase window's GPU ops in start order, a run of one name as one line: its offset from the window's start, count,
+    summed and spanned time, bytes, and the runtime call that issued it."""
+    if span is None:
+        print(f"timeline: no timed {phase} window")
+        return
+    a, b = span
+    call = {c: n for _, _, n, c, _ in api}
+    rows = []
+    for s, e, n, c, kind, by in gpu:
+        if s < b and e > a:
+            name = n.removeprefix("void ").split("<")[0].split("(")[0]
+            via = call.get(c, "?").split("_v")[0]
+            if rows and rows[-1][2] == name and rows[-1][6] == via:
+                r = rows[-1]
+                rows[-1] = (r[0], max(r[1], e), name, r[3] + 1, r[4] + (e - s), r[5] + by, via)
+            else:
+                rows.append((s, e, name, 1, e - s, by, via))
+    print(f"timeline of {phase}: {(b - a) / 1e6:.2f} ms window, {len(rows)} runs of ops")
+    print(f"  {'at ms':>8s} {'span':>7s} {'busy':>7s} {'n':>4s} {'MB':>8s}  op (via)")
+    for s, e, name, n, busy, by, via in rows:
+        mb = f"{by / 1e6:8.1f}" if by else f"{'':8s}"
+        print(f"  {(s - a) / 1e6:8.2f} {(e - s) / 1e6:7.2f} {busy / 1e6:7.2f} {n:4d} {mb}  {name} ({via})")
 
 
 def main() -> int:
@@ -46,6 +73,7 @@ def main() -> int:
     ap.add_argument("--anchor", default="lf_fold_base_pair")
     ap.add_argument("--skip", type=int, default=1)
     ap.add_argument("--json")
+    ap.add_argument("--timeline", help="a device phase (encoding_commitment, zerocheck, ...)")
     a = ap.parse_args()
     gpu, api, osrt = load(a.sqlite)
     recs = sessions(a.prove_out)
@@ -55,11 +83,13 @@ def main() -> int:
     if len(ms) != len(reps):
         print("marks and reps differ in number: paired in order, the shorter list's length")
     per = defaultdict(lambda: defaultdict(lambda: defaultdict(float)))  # session -> phase -> key -> value
+    spans = []  # (session, phase, start, end)
     for (si, b), (s_lig, tid, _) in zip(reps, ms):
         end = s_lig + int(b["t.ligerito"] * 1e9)
         for k in reversed(DEVICE):
             start = end - int(b.get(k, 0.0) * 1e9)
             if end > start:
+                spans.append((si, k[2:], start, end))
                 w = window(gpu, api, osrt, tid, start, end)
                 d = per[si][k[2:]]
                 for key in ("wall_ms", "gpu_ms", "idle_os_ms", "idle_api_ms", "idle_sync_ms", "idle_host_ms"):
@@ -92,6 +122,8 @@ def main() -> int:
         print(f"  {p:38s} {m['wall_ms']:7.1f} " + (f"{m['gpu_ms']:7.1f} | {m['idle_os_ms']:12.1f} {m['idle_api_ms']:6.1f} "
               f"{m['idle_sync_ms']:6.1f} {m['idle_host_ms']:6.1f} | " + ", ".join(f"{f} {v:.1f}" for f, v in fams)
               if dev else f"{'-':>7s} | (host; no device window)"))
+    if a.timeline:
+        timeline(gpu, api, next(((s, e) for si, p, s, e in spans if p == a.timeline and si >= a.skip), None), a.timeline)
     if a.json:
         json.dump({"median": med, "rank": rank, "sessions": [{p: dict(d) for p, d in s.items()} for s in timed]}, open(a.json, "w"),
                   indent=1)
