@@ -126,8 +126,7 @@ LOCK, LOG, STATE = Path("/data/vqueue/vqueue.lock"), Path("/data/vqueue/decision
 PRIORITY = Path("/data/drive/priority")
 #: a freeze's paths, one git pathspec a line (`#` lines skipped): while the file exists, a PR whose change renames or deletes a
 #: file under one waits, as does one that moves a word map there; ordinary edits don't, nor does a head the freeze's owner
-#: cleared against the branch it protects (a `cleared-by HANDLE KEY` line: a `KEY = true` label by HANDLE at the head), nor a
-#: PR an `except N ...` line names
+#: cleared against the branch it protects (a `cleared-by HANDLE KEY` line: a `KEY = true` label by HANDLE at the head)
 FROZEN = Path("/data/vqueue/live/frozen")
 #: how far back the decision log is read
 WINDOW_S = 48 * 3600
@@ -568,10 +567,10 @@ class World:
                 held = (unreviewed(reviews, ()) or "").startswith("held")
                 if landing or not held and lowrisk(files[n], excludes):
                     took.append(n)
-            specs, spared, clears = self._frozen()
+            specs, clears = self._frozen()
             if specs:                                       # a PR's own change: above `checked` while `main` doesn't hold it
                 below = old if old and not self._ancestor(old, main) else main
-                took = [n for n in took if n in spared or self._cleared(n, entries[n].pr.head, clears)
+                took = [n for n in took if self._cleared(n, entries[n].pr.head, clears)
                         or not self._frozen_out(below, entries[n].pr, specs)]
             new = any((entries[n].pr.head, main) not in self._judged for n in took)
             with base_drivers(self.repo, main) if new else contextlib.nullcontext(None) as cfg:   # once a tick, not a PR
@@ -604,15 +603,13 @@ class World:
         self.prs = {n: entries[n].pr for n in chosen}
         return [Ready(n, entries[n].pr.head, *chosen[n][:2], rank=i, conflict=chosen[n][2]) for i, n in enumerate(placed)]
 
-    def _frozen(self) -> tuple[list[str], set[int], list[tuple[str, str]]]:
-        """The freeze's pathspecs, the PRs its `except` lines spare and its `cleared-by` (handle, label key) pairs (`FROZEN`):
-        none while its file is absent."""
+    def _frozen(self) -> tuple[list[str], list[tuple[str, str]]]:
+        """The freeze's pathspecs and its `cleared-by` (handle, label key) pairs (`FROZEN`): none while its file is absent."""
         if self.frozen_file is None or not self.frozen_file.is_file():
-            return [], set(), []
+            return [], []
         lines = [s for line in self.frozen_file.read_text().splitlines() if (s := line.strip()) and not s.startswith("#")]
-        spared = {int(n.lstrip("#")) for s in lines if s.startswith("except ") for n in s.split()[1:]}
         clears = [(w[1], w[2]) for s in lines if s.startswith("cleared-by ") and len(w := s.split()) == 3]
-        return [s for s in lines if not s.startswith(("except ", "cleared-by "))], spared, clears
+        return [s for s in lines if not s.startswith("cleared-by ")], clears
 
     def _cleared(self, n: int, head: str, clears: list[tuple[str, str]]) -> bool:
         """Whether the freeze's owner cleared ``n`` at ``head``: a `KEY = true` label there by the handle of a `cleared-by`."""

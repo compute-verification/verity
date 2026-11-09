@@ -915,8 +915,6 @@ def test_a_pr_renaming_or_deleting_under_a_frozen_path_waits_while_the_freeze_la
     cleared[(1, head, "remote-cleared")] = [Lab("vllm", "true", "2026-01-01T00:00:00Z")]
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]             # the owner cleared that head
     cleared.clear()
-    frozen.write_text(frozen.read_text() + "except #1 9\n")                # a PR the freeze's owner checked, by number
-    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
     frozen.unlink()
     assert [r.number for r in w.ready(env.main())] == [1, 2, 3]
 
