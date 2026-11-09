@@ -87,7 +87,7 @@ against, is SHA-512 too (`weights_sha512`: rows-sha512's registration, `step_row
   table, `Flock.ProvedScope`). They run on SPOT's proof server (`proof_server`, `verity_flock.proof_server`): one
   streaming `flock-circuit prove --zk` and one queued verifier a template for the whole audit, with no ZK server (`a0.DIRECT`:
   `zk_cost.py`'s `dev` arm, which Figure 1 prices), Lean's verify each session's verdict of record. A templated
-  statement's (`--tmpl-unit`) runs as a process pair of its own (`a0.session`). Under ``--firewall`` (Lean's `flock-firewall`), the
+  statement's unit (`--tmpl-unit`) goes to both its sides there. Under ``--firewall`` (Lean's `flock-firewall`), the
   core protocols' path, each runs behind the ZK server's send check instead (`FC_FIREWALL=1`, live PROTOCOL.md §10.4), its `Hello`
   set up on the statement's partition and program. Lean `verify --zk` holds each session with `--partition` and `--program`
   (units derived).
@@ -831,7 +831,7 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
     for mm in members:
         mm["st"]["archived"] = archived
 
-    server = proof_server(a, out, [mm for mm, _ in drawn])
+    server = proof_server(a, out)
 
     def staged(mm: dict, local: list[int]) -> dict:
         """Member ``mm``'s statement on its proved units ``local`` (sampled, and a work sample's closure): its session's draw
@@ -857,7 +857,8 @@ def audit(a: argparse.Namespace, sets: dict, out: Path, mine: CS.Binding, served
         if server is not None:
             st = mm["st"]
             h = server.submit(Statement(pin=st["pin"], circuit=st["dir"] / "circuit.txt", tables=st["dir"] / "tables",
-                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin"),
+                                        instances=st["dir"] / f"inst-{m.n}.bin", public=st["dir"] / f"pub-{m.n}.bin",
+                                        tmpl_unit=st.get("tmpl_unit")),
                               session_draw, str(sdir.resolve()), out=sdir / "sessions",
                               verdict=lambda _: a0.lean_verify(a.lean, st, m.n, sdir, zk=True))
             return {**s, "handle": h}
@@ -1194,12 +1195,12 @@ def plain(a: argparse.Namespace) -> bool:
     return bool(getattr(a, "plain", False))
 
 
-def proof_server(a: argparse.Namespace, out: Path, members: Sequence[dict]) -> ProofServer | None:
+def proof_server(a: argparse.Namespace, out: Path) -> ProofServer | None:
     """SPOT's proof server for an audit's sessions (`verity_flock.proof_server`, its processes' logs under
     ``out/proof-server``): one CPU prover and one verifier a template, each verifier on a challenger of its own under
-    FLOCK_CHALLENGER=1. None where a session is one it doesn't prove (plain, behind the ZK server under ``--firewall``, or a
-    templated statement's, `--tmpl-unit`): each session is then a process pair of its own (`a0.session`)."""
-    if plain(a) or a.firewall or any(mm["st"].get("tmpl_unit") for mm in members):
+    FLOCK_CHALLENGER=1, a templated statement's unit (`--tmpl-unit`) handed to both. None where a session is one it doesn't
+    prove (plain, or behind the ZK server under ``--firewall``): each session is then a process pair of its own (`a0.session`)."""
+    if plain(a) or a.firewall:
         return None
     return ProofServer(a.bin, out / "proof-server", env=a0.DIRECT, challenger=a0.own_challenger(zk=True))
 

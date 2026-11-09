@@ -218,6 +218,22 @@ def test_one_cpu_prover_without_devices(binary, tmp_path):
     assert s.device is None and "--gpu" not in record(s)["proved"]["argv"] and set(ps.exits) >= {"prover-cpu"}
 
 
+def test_a_templated_statements_unit_reaches_its_verifier_and_its_provers_line(binary, tmp_path):
+    """A templated statement's verifier loads its circuit with the unit (`--tmpl-unit`) and the prover's line names it
+    (``tmpl_unit``); a flat statement on the same server names none."""
+    tmpl, flat = "66" * 64, "77" * 64
+    st = statement(tmp_path, tmpl)
+    st = Statement(st.pin, st.circuit, st.tables, st.instances, st.public, tmpl_unit=st.circuit.parent / "unit.placed")
+    with ProofServer(binary, tmp_path / "ps") as ps:
+        got = [ps.submit(x, draw([i]), f"s{i}").result() for i, x in enumerate((st, statement(tmp_path, flat), st))]
+    for s in got:
+        r = record(s)
+        if s.pin == tmpl:
+            assert r["argv"][r["argv"].index("--tmpl-unit") + 1] == str(st.tmpl_unit) == r["proved"]["line"]["tmpl_unit"]
+        else:
+            assert "--tmpl-unit" not in r["argv"] and "tmpl_unit" not in r["proved"]["line"]
+
+
 def test_a_dead_prover_fails_its_session_and_the_next_starts_afresh(binary, tmp_path, monkeypatch):
     """The prover exits on reading its second line: that session fails, its verifier (whose queue holds it) is retired,
     and the next session meets a new prover and verifier on their first lines."""
