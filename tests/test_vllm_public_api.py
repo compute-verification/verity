@@ -48,6 +48,8 @@ PUBLIC = {
                                     "order: its reference, kernels and install, which benchmarks/moe_align checks and times",
     "verity_vllm.engine.plugins": "I1: the distribution's vLLM general plugins (PLUGINS), which pyproject.toml declares, and "
                                   "the environment that loads exactly the ones a run names (env)",
+    "verity_vllm.engine.pin_op": "I1: one name a vLLM module or op namespace is called through, replaced once before anything "
+                                 "calls it and put back (pin_op, Pin)",
     "verity_vllm.engine.step_trace": "I2: the scheduler's step trace of an in-process engine core (StepTrace) and its "
                                      "reader, which serve-openai records and benchmarks/serve_tax times and replays",
     "verity_vllm.engine.core_gate": "I2: the engine core's one seam between steps (EngineCoreGate): gates that hold its "
