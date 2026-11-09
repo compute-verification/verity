@@ -17,10 +17,10 @@ frame's slot for the row, all fixed before the run. Nothing here reads `h.frame`
   `layoutFor h` is `layoutAt` at that rank and `pickAny`.
 * **The opening** (`openingOf`, `openAt`): at gate `g` of unit `u`, the session witness's bit at the unit's block and
   the layout's column (`bitAt`), under the replay block's roots where `g` is a gate of the replay block it doesn't
-  commit and the run's roots otherwise (`rootsAt`). Its data are row `q` of the unit's instance in the session's first table
-  (`rowBitsAt`), that row's salt and its path (`pathAt`): the session header's path for the registered read named like
-  the port where there is one, else the path in the port's published tree (`pubPath`). The reveal (`revealAt`) opens
-  every gate the unit's proof block could need (`needsOf`) that has a site.
+  commit and the run's roots otherwise (`rootsAt`). Its data are row `q` of the unit's instance in the session's
+  first table (`rowBitsAt`), that row's salt and its path (`pathAt`): the session header's path for the registered
+  read named like the port where there is one, else the path in the port's published tree (`pubPath`). The reveal
+  (`revealAt`) opens every gate the unit's proof block could need (`needsOf`) that has a site.
 * **The opening facts**, at a checked unit of an accepted run (`CheckedRun`, `CheckedRun.Ok`): the reveal holds gate
   `g`'s opening (`open_mem`), under `FrameIs`'s roots (`roots_opening`); its row is the one the row hash reads
   (`row_opening`) where the site's port is an unsegmented bit row of its place's width whose bit at the place is the
