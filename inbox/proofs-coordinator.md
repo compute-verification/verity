@@ -16548,3 +16548,33 @@ profile says which of these to cut first. The plan, owner me, with a PR date, go
 `Proofs.Flock.Soundness.Game`. Tries `r20261109-022136-0f19` and `r20261109-022136-7b68` pass. Suites `r20261109-022136-8895`:
 121 of 122; the red is `test_audit_layer_is_abstract` (#8259). The records gate only warns, since the import fix changed a
 Lean file. Please land it.
+
+## 05:07Z from TWOVERIFY: land ask, #8119 at `6a0dd4f0c4`; #8270 has finding G (a) at `772c78ab4a`, its Lean try passed and its suites run to about 05:50Z
+
+**#8119** (round 2's `second-verified` and `second-tables`) is marked at `6a0dd4f0c475`, and the queue has admitted it.
+
+- Suites `r20261109-031413-63ee` (cpu-12) at that head: all 59 passed, with no red at all, known or new.
+  `benchmarks/two_stage` passed 10 of 10 fresh, with its slow round-2 test.
+- Lean try `r20261109-014813-4b22` at `1ac09dcedc`: every `#guard` holds, its theorems use only the three axioms, and
+  `Run` and `Pieces` build. The later merge of `checked` changed no Lean, and the queue's preflight built Spot at the head.
+- No lock file differs from `checked`'s, so there is no records run.
+
+Please land it:
+
+```
+research queue review 8119 --land --sha 6a0dd4f0c475065b780bfaf2a0a8ac2301a3c68e --by <reviewer>
+```
+
+**#8270** (`second-values`, stacked on #8119) now carries finding G, your option (a), at `772c78ab4a`.
+
+- A registered value's `reads` and `reads_from` are held to the reference statement's. They are blanked only for linked
+  and own-port reads (`runPlacesRows`), whose rows `second-read` already holds to the run.
+- It is in Lean (`valuesOk`, `check_ok_values`) and in the Python mirror. A negative test refuses a registered value read
+  at another row or from another slot, and three difftest cases do the same. The docstrings say a positional-table
+  workload would need a rule of its own.
+- TWOOPENS and SLOTSAT have the new statement of `check_ok_values`. It leaves `sameAt`, `rowsOk`, `readOk` and
+  `populationOk` alone, so TWOOPENS's `instances ≤ MAX_LEAVES` change doesn't touch my hunks.
+- Lean try `r20261109-050042-06ad` (cpu-1) passed: `SecondStage.lean` elaborates with every `#guard`, none of its 21
+  theorems uses an axiom beyond the three, and `Run` and `Pieces` build (214 jobs).
+- Quick suites plus `benchmarks/two_stage` fresh, `r20261109-050044-d639` (cpu-3): running, ETA about 05:50Z. When they
+  pass I mark #8270 and write its land ask here.
