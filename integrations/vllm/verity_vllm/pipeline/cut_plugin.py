@@ -1,10 +1,11 @@
 """The carried pool's cut at each window edge, under vLLM's engine core: `register`, a vLLM general plugin, adds the edge
-``"cut"`` to the engine core's seam (`verity_vllm.engine.core_gate.SEAM`). Once an edge is due, the seam drains every
-step in flight and schedules nothing; then `Cut.take`
+``"cut"`` to the engine core's seam (`verity_vllm.engine.core_gate.SEAM`), a `HeldEdge`. Once an edge is due, the seam
+drains every step in flight and schedules nothing; then
 
-1. **holds** until every open request's outputs are released (`Cut.released`, its ``e``), for at most ``hold_s``: the
-   engine core schedules nothing meanwhile, while its output thread and the API server deliver what it emitted;
-2. **cuts**: it preempts every running request in vLLM's own victim order (``running.pop()``, then
+1. it **holds** until every open request's outputs are released (`Cut.released`, its ``e``), for at most ``hold_s``:
+   the seam's input loop asks `Cut.ready` every ``poll_s`` and handles client requests meanwhile, while the engine core's
+   output thread and the API server deliver what it emitted;
+2. `Cut.take` **cuts**: it preempts every running request in vLLM's own victim order (``running.pop()``, then
    ``Scheduler._preempt_request`` with ``drop_stale_output``, as ``reset_prefix_cache(reset_running_requests=True)`` does
    without resetting the cache), so no block is held and each request continues in the next window as an arrival of its
    prompt and its ``e`` outputs, hitting its own cached blocks;
@@ -158,21 +159,23 @@ def _blocks(sched: Any, request_id: str) -> int:
 
 
 class Cut:
-    """One engine core's edges, an `engine.core_gate.Edge`: `due` before each step, `take` once the seam has drained.
-    ``released(request)`` is the request's released output count ``e`` (by default, what the engine emitted), and
-    ``poll()``, called by `due` and on each wait, brings it up to date (`Sent`); ``export(scheduler, k)`` exports the
-    pool's row at edge k after the cut (by default, none). ``clock`` and ``sleep`` are the engine core's (injected in
-    tests), ``poll_s`` the wait between two polls while it holds, ``log`` a JSON-lines file."""
+    """One engine core's edges, an `engine.core_gate.HeldEdge`: `due` before each step; once the seam has drained, `ready`
+    on each pass of its input loop, true once every running request's outputs are released or ``hold_s`` after the first
+    ask, and true from then until `take`. ``released(request)`` is the request's released output count ``e`` (by default,
+    what the engine emitted), and ``poll()``, called by `due` and `ready`, brings it up to date (`Sent`);
+    ``export(scheduler, k)`` exports the pool's row at edge k after the cut (by default, none). ``clock`` is the engine
+    core's (injected in tests), ``poll_s`` the longest the seam's input loop waits on its queue between two asks, ``log``
+    a JSON-lines file."""
 
     def __init__(self, *, every_s: float | None = None, every_steps: int | None = None, hold_s: float = 30.0,
                  released: Callable[[Any], int] | None = None, poll: Callable[[], None] | None = None,
                  export: Callable[[Any, int], Any] | None = None, clock: Callable[[], float] = time.monotonic,
-                 sleep: Callable[[float], None] = time.sleep, poll_s: float = 0.002, log: Path | None = None) -> None:
+                 poll_s: float = 0.002, log: Path | None = None) -> None:
         if (every_s is None) == (every_steps is None):
             raise ValueError("an edge every so many seconds or every so many steps, one of the two")
         self.every_s, self.every_steps, self.hold_s = every_s, every_steps, float(hold_s)
         self.released = released or (lambda r: r.num_output_tokens)
-        self.poll, self.export, self.clock, self.sleep, self.poll_s = poll, export, clock, sleep, poll_s
+        self.poll, self.export, self.clock, self.poll_s = poll, export, clock, poll_s
         self.file = None if log is None else open(log, "a", encoding="utf-8")
         self.numbers = itertools.count()
         self.seq: dict[str, int] = {}
@@ -181,6 +184,9 @@ class Cut:
         self.start: float | None = None
         self.next_due: float = float(every_steps if every_steps is not None else every_s)
         self.due_at: float | None = None
+        self.held_at: float | None = None
+        self.ready_at: float | None = None
+        self.waits = 0
 
     def _at(self, sched: Any, now: float) -> float:
         return sched.current_step if self.every_steps is not None else now - self.start
@@ -195,21 +201,33 @@ class Cut:
             self.due_at = now
         return self.due_at is not None
 
+    def ready(self, core: Any) -> bool:
+        if self.ready_at is not None:
+            return True
+        if self.poll is not None:
+            self.poll()
+        now = self.clock()
+        if self.held_at is None:
+            self.held_at = now
+        if now - self.held_at >= self.hold_s or all(r.num_output_tokens <= self.released(r) for r in core.scheduler.running):
+            self.ready_at = now
+            return True
+        self.waits += 1
+        return False
+
     def take(self, core: Any, drained: Any) -> None:
         sched = core.scheduler
         if busy := [r.request_id for r in sched.running
                     if getattr(r, "num_in_flight_tokens", 0) or getattr(r, "num_output_placeholders", 0)]:
             raise RuntimeError(f"the cut found {len(busy)} requests in flight ({busy[0]} first) after the seam's drain")
-        t0, waits = self.clock(), 0
-        while any(r.num_output_tokens > self.released(r) for r in sched.running) and \
-                self.clock() - self.due_at < self.hold_s:
-            self.sleep(self.poll_s)
-            waits += 1
-            if self.poll is not None:
-                self.poll()
-        self._cut(sched, drained, t0, waits)
+        if self.ready_at is None:
+            raise RuntimeError("the cut was taken before it was ready: the seam asks a held edge's ready() first")
+        wait_s, waits = self.ready_at - self.held_at, self.waits
+        self.held_at = self.ready_at = None
+        self.waits = 0
+        self._cut(sched, drained, wait_s, waits)
 
-    def _cut(self, sched: Any, drained: Any, t0: float, waits: int) -> None:
+    def _cut(self, sched: Any, drained: Any, wait_s: float, waits: int) -> None:
         k = len(self.edges)
         for rid in sched.requests:
             self.seq.setdefault(rid, next(self.numbers))
@@ -238,7 +256,7 @@ class Cut:
         t3 = self.clock()
         rec = {"edge": k, "step": sched.current_step, "due": self.next_due, "at": self._at(sched, self.due_at),
                "drain_s": drained.drained_t - drained.due_t, "drain_calls": drained.drain_calls,
-               "wait_s": t1 - t0, "waits": waits, "cut_s": t2 - t1, "export_s": t3 - t2, "cut": cut,
+               "wait_s": wait_s, "waits": waits, "cut_s": t2 - t1, "export_s": t3 - t2, "cut": cut,
                "requeued": [r.request_id for r in sched.waiting],
                "skipped": [r.request_id for r in getattr(sched, "skipped_waiting", ())], "over": over,
                "reads_outputs": reads, "pool_row": row}

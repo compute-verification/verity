@@ -1,11 +1,14 @@
 """The cut at each window edge (`cut_plugin`) through the engine core's seam (`engine.core_gate`), on stand-ins for vLLM
 d9105ea80's Scheduler, which admits, decodes and preempts as it does (a step's tokens are in flight until its output is
-processed), and its EngineCore, stepping one step at a time or two deep through its batch queue."""
+processed), and its EngineCore, stepping one step at a time or two deep through its batch queue, its input loop before
+each step as vLLM's busy loop runs it."""
 from __future__ import annotations
 
 import asyncio
 import json
 import os
+import queue
+import threading
 from collections import deque
 from types import SimpleNamespace as NS
 
@@ -105,18 +108,42 @@ class Sched:
                 r.status = "FINISHED"
 
 
-class Core:
-    """vLLM's EngineCore as the seam drives it: `step` schedules, runs and processes one step, and
-    `step_with_batch_queue` keeps two in flight, as with async scheduling (its batch queue two deep)."""
+class Inputs:
+    """The engine core's input queue, which no client request reaches: each wait on it is its timeout on the test's clock
+    (``wait``), after which it is empty."""
 
-    def __init__(self, sched: Sched, async_scheduling: bool = False) -> None:
+    def __init__(self, wait) -> None:
+        self.wait = wait
+
+    def empty(self) -> bool:
+        return True
+
+    def get(self, timeout=None):
+        assert timeout is not None, "the input loop waited for a client request that never comes"
+        self.wait(timeout)
+        raise queue.Empty
+
+
+class Core:
+    """vLLM's EngineCore as the seam drives it: `_process_input_queue` returns once it has work, `step` schedules, runs
+    and processes one step, and `step_with_batch_queue` keeps two in flight, as with async scheduling (its batch queue two
+    deep). ``wait`` is the test's clock passing while the input loop waits on its queue."""
+
+    def __init__(self, sched: Sched, async_scheduling: bool = False, wait=lambda dt: None) -> None:
         self.scheduler, self.batch_queue = sched, deque() if async_scheduling else None
+        self.input_queue, self.aborts_queue = Inputs(wait), NS(mutex=threading.Lock(), queue=deque())
 
     def _process_input_queue(self) -> None:
         pass
 
+    def is_running(self) -> bool:
+        return True
+
+    def _notify_idle_state_callbacks(self) -> None:
+        pass
+
     def has_work(self) -> bool:
-        return self.scheduler.has_requests()
+        return self.scheduler.has_requests() or bool(self.batch_queue)
 
     def step(self):
         if not self.scheduler.has_requests():
@@ -153,17 +180,18 @@ def engine():
         seam.uninstall()
 
 
-def serve(cls, sched, reqs, *, arrive=None, async_scheduling=False, limit=200):
-    """Step an engine core of class ``cls`` over ``sched`` until every request finishes; ``arrive`` maps a step call to
-    the requests added before it (by default all before the first)."""
-    core = cls(sched, async_scheduling)
+def serve(cls, sched, reqs, *, arrive=None, async_scheduling=False, wait=lambda dt: None, limit=200):
+    """Run an engine core of class ``cls`` over ``sched`` until every request finishes, its input loop then one step at
+    a time; ``arrive`` maps a step call to the requests added before it (by default all before the first)."""
+    core = cls(sched, async_scheduling, wait)
     step = core.step_with_batch_queue if async_scheduling else core.step
     arrive = arrive or {0: reqs}
     for k in range(limit):
         for r in arrive.get(k, ()):
             sched.add_request(r)
-        if not (sched.has_requests() or core.batch_queue) and k > max(arrive):
+        if not core.has_work() and k > max(arrive):
             break
+        core._process_input_queue()
         step()
     return sched.steps
 
@@ -214,25 +242,26 @@ def test_an_async_edge_is_cut_once_the_seam_has_drained_the_step_in_flight(engin
 
 
 def test_the_edge_holds_each_open_request_at_its_released_count(engine) -> None:
-    """A request whose emitted outputs the network certifier hasn't released holds the cut, polling until they are,
-    and nothing is scheduled meanwhile. Past hold_s the cut goes ahead and lists the request in ``over``."""
+    """A request whose emitted outputs the network certifier hasn't released holds the cut: the seam's input loop asks
+    `Cut.ready` once each poll_s it waits on its queue until they are, and nothing is scheduled meanwhile. Past hold_s
+    the cut goes ahead and lists the request in ``over``."""
     t = [0.0]
     behind = {"req-1": 2}
 
-    def sleep(dt):
-        t[0] += 1.0
+    def wait(dt):
+        t[0] += dt
         if t[0] >= 3:
             behind.pop("req-1", None)
     released = lambda r: r.num_output_tokens - behind.get(r.request_id, 0)  # noqa: E731
-    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0], sleep=sleep)
-    steps = serve(engine(lambda core: cut), sched, [Req(0), Req(1)])
+    sched, cut = Sched(), CP.Cut(every_steps=4, hold_s=5, released=released, clock=lambda: t[0], poll_s=1.0)
+    steps = serve(engine(lambda core: cut), sched, [Req(0), Req(1)], wait=wait)
     e0 = cut.edges[0]
     assert e0["waits"] == 3 and e0["wait_s"] == 3.0 and not e0["over"] and e0["step"] == 4
     assert [c["e"] for c in e0["cut"]] == [4, 4] and len(steps) == 9
 
     behind["req-0"] = 1
-    sched2, cut2 = Sched(), CP.Cut(every_steps=1, hold_s=5, released=released, clock=lambda: t[0], sleep=sleep)
-    serve(engine(lambda core: cut2), sched2, [Req(0, max_tokens=2)])
+    sched2, cut2 = Sched(), CP.Cut(every_steps=1, hold_s=5, released=released, clock=lambda: t[0], poll_s=1.0)
+    serve(engine(lambda core: cut2), sched2, [Req(0, max_tokens=2)], wait=wait)
     e0 = cut2.edges[0]
     assert e0["waits"] == 5 and e0["over"] == ["req-0"] and e0["cut"][0]["e"] == 0
 
@@ -374,17 +403,18 @@ def test_the_sent_feed_counts_each_streamed_response_s_output_ids_as_they_leave(
 
 def test_the_cut_polls_the_sent_counts_and_holds_at_them(engine) -> None:
     """The engine runs ahead of what the server has sent: the cut waits until each open request's sent count, read by
-    ``poll`` on each wait, reaches its emitted one."""
+    ``poll`` on each ask of the seam's input loop, reaches its emitted one."""
     recs: list[dict] = []
     feed = deque([[{"key": "req-00000", "sent": 2}], [{"key": "req-00000", "sent": 4}]])
     sent = CP.Sent(lambda: recs.pop() if recs else [])
     sched = Sched()
-    cut = CP.Cut(every_steps=4, hold_s=60, released=sent, poll=sent.poll, sleep=lambda dt: recs.append(feed.popleft()))
+    cut = CP.Cut(every_steps=4, hold_s=60, released=sent, poll=sent.poll)
     r = Req(0)
     r.request_id = "cmpl-req-00000-0-0123abcd"
-    core = engine(lambda core: cut)(sched)
+    core = engine(lambda core: cut)(sched, False, lambda dt: recs.append(feed.popleft()))
     sched.add_request(r)
     for _ in range(5):
+        core._process_input_queue()
         core.step()
     e0 = cut.edges[0]
     assert e0["cut"][0]["n"] == e0["cut"][0]["e"] == 4 and e0["waits"] == 2 and sent.sent == {"req-00000": 4}
