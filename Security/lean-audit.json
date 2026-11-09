@@ -5274,9 +5274,9 @@
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25",
    "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)"
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots at each pattern serving picks where every audit accepts (CarriedRoots, from each run's root check and the record rule's chain), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins), and its period's inputs (CIR-190)",
+   "unfolded_hash": "90c8790b267d736e22e531948ab05a382781671a2ba4d1d9adcb8a2d52a64c25"
   },
   "Pous.SecurityProofs.BandPubMeets14": {
    "type_hash": "cc0a571f0b841ecb8d43acbf6b871e6cc71d9c7f83d30199fc0e717b117175f9",
@@ -18749,7 +18749,28 @@
    "type_hash": "65febd6c51800e154ad016b8bd55af25b9d235e2236e77ee60d9fecc7c08272a"
   },
   "NetTiming.Witness.SampledLeakCarried_honest": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "NetTiming.Witness.SampledLeakCarried_honest :",
+    "  And",
+    "    (Claims.SamplingGeneric.Compiled.KS FlockDeploy.sha512",
+    "      (SamplingDeploy.compiled (FlockDeploy.deployZk Flock.Readable.relation) SamplingDeploy.toyCode fun x x_1 x_2 =>",
+    "        List.nil))",
+    "    (NetTiming.OpensAtInputs fun s =>",
+    "      List.filter",
+    "        (fun g =>",
+    "          Decidable.decide",
+    "            (Eq (List.instGetElem?NatLtLength.getElem? s.prog.gates g) (Option.some Claims.Sampling.BGate.input)))",
+    "        (List.range s.prog.gates.length))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.Scope"],
+    "reads": []
+   },
+   "type_hash": "38e3d42546976890ba34bcf13bc01890c56bd05f513638b5afe02928264320c3"
   },
   "NetTiming.Witness.SampledLeakCarried_nontrivial": {
    "owner": "@proofs",
