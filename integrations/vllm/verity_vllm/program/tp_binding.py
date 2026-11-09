@@ -11,8 +11,8 @@ name: a collective live at some ranks only, ranks that combine a site with diffe
 one slice of the Input its rank sends, a collective read inside a batch or a scan.
 
 Each site also records, per rank, who reads its combine's output (``Site.readers``): every call reading leaves of it, which
-the window wires from the combine units that compute those leaves (NDAUDIT row 11 at the collective sites). A combine's output
-read inside a batch or a scan is refused by name.
+the window wires from the combine units that compute those leaves: at a collective site too, every value a unit reads is the
+output of the unit that computed it, never a free witness. A combine's output read inside a batch or a scan is refused by name.
 
 The prover and the verifier derive the binding from the rank Programs of record alone, so it is part of the registered circuit
 and never supplied; `pipeline.tp.wires` lowers it to a window's wires."""
