@@ -647,6 +647,8 @@ def run (j : Json) : V Json := do
         throw "an interior names no links: the verifier derives them from the replay block's Definition"
       if (field? it "wires").isSome then
         throw "an interior names no wires: the verifier derives them from the replay block's Definition"
+      if (field? it "rows").isSome then
+        throw "an interior names no rows: the verifier derives them from the replay block's Definition"
       pure (some ({ params := ip, replay, values, record := getD it "record", received, source, coins := getD it "coins",
                     provedUnits, instances, served := getD it "served", sessionRoots := getD it "session_roots",
                     statements, circuits } : Run.Interior))

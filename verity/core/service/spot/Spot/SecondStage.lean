@@ -1935,7 +1935,8 @@ private def exWiredInterior : Json :=
 /-- `exTwoParts` over `exWiredInterior`, `Triple_v0`'s `x` wired from `Pair_v0`'s `out`, its unit reading its writer's
 first unit of three a block. -/
 private def exWired : Own :=
-  { exOwn with parts := some exTwoParts, interior := exWiredInterior, wires := some #[exWire],
+  { exOwn with
+    parts := some exTwoParts, interior := exWiredInterior, wires := some #[exWire]
     rows := #[⟨"Triple_v0", "x", 3, #[⟨0, 1, 0, 0⟩]⟩] }
 
 /-- `exWired`, `Triple_v0`'s unit reading its writer's unit `j`, of `per` a block. -/
