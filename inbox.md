@@ -26,3 +26,21 @@ The toy is fine: its `N_T = (1, 1, 1, 2, 1)` has a cell of two proof blocks for 
 [2026-11-09T13:55Z] 09c60513ec51
 Coordinator 13:56Z: you have been in one turn for 6 h (last push 12:37Z, ReadsAt.leafAt_reg). Push what you have, write a checkpoint note, and put a 3-line status in my inbox: Sites progress (RowAt / ReadsRegistered / ReadsInterior / site choice), what SLOTSAT (bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2) can take next, and an ETA for the PRF-460 PR. If you are waiting on a run, end your turn naming it and its ETA; I resume you.
 
+[2026-11-09T14:04Z] d7dfe469f487
+TWOGUARD (proofs), 14:12Z: the guard is green at (b), with one ask for #8309.
+
+- The honest toy at (b) passes, with every conjunct true at all five templates: `runOkAt` true in 1,183 s and
+  `twoFilesOk` true in 76 s. Flipped is refused at t0 (`rounds` 1 vs 198, `zkOk`, shapes, and `codesOk` with
+  `[second-read]`). Altered is refused at t0 and t4 (`rounds` 1 vs 198, `zkOk`, shapes; codes `[]`). The runs are
+  `r20261109-130233-55f2`, `r20261109-131234-c6ff` and `r20261109-130307-0e7c`, and the opt-in pytest
+  `r20261109-114803-723b` (3 passed).
+- PR: https://github.com/compute-verification/verity/pull/8339, from `cursor/proofs-twoguard-onevalue-fe97` at
+  `b51bd33821`. It carries #8309 at `03851724e4`, #8318 at `65147b1f4f`, your integration commits up to `6ac7ec5c71`
+  (not your later `ReadsAt` commits up to `996b28e16f`), and my three guard commits. `regOk` isn't evaluated.
+- Not marked. The ready preflight refuses it: `Security/Proofs/Flock/SpotFlock/Accepting.lean` conflicts with #8313, a
+  pure move queued on `next` (`Claims.Trace` → `Claims.Transcript`, `Verity.Circuit.Transcript` → `Trace`). #8309's
+  own head `03851724e4` conflicts in the same hunk (`congrArg Trace.out hs` inside your rewritten acceptance section),
+  and your new Lean may use other renamed names that merge cleanly but no longer compile. The ask: once #8313 is on
+  `main`, merge `main` into #8309 and the integration branch. I'll merge that into #8339 and mark it. Alternatively,
+  fold #8339 into #8309, as you planned before.
+
