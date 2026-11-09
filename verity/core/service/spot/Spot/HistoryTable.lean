@@ -23,7 +23,14 @@ can't register rows of its choosing.
   its value; a run of another template or output is refused, so a position's writer is the table's own;
 * `checkAt cap program table words bcs registered`: the refusals, in order: a capacity that is not a power of two of at
   least 2, a row of no words or of `2^64` bits or more, more rows than the capacity, a `b ‖ c` that is not 128 bytes, a
-  registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`.
+  registered root that is not 64 bytes, then a registered root other than `rootAt`'s. `check` is it at `CAPACITY`;
+* `memberStrings`, `tableStrings`: the `bcs` `checkAt` reads, from the writer's members' public bodies (each unit's
+  `b ‖ c` of its rows, or a shared-row body's tables and refs) at the positions `order` gives, and from the strings the
+  verifier holds of the table's earlier windows for its held runs;
+* `tableRoots`, `rootsOf`: each table's registered root held to `checkAt` over those strings, from members whose public
+  bodies hash to the digests the window's leaf layer binds; `resolve` puts the root and domain id it computed for table
+  `H` in place of a supplied value's sources `{"history": "H/root"}` and `{"history": "H/domain"}`, so a reader's
+  `TableRead` takes the root the verifier computed, never one the prover or the verifier's Python supplies.
 
 What a read that opens against this root returns is stated by `Hash.Guarantees.HistoryReadBinding`: the row behind
 the `b ‖ c` at its index, or SHA-512 collides. That guarantee is stated over `Hash.HistoryTable.root`, and
@@ -183,6 +190,108 @@ def checkAt (cap : Nat) (program table : String) (words : Nat) (bcs : Array Byte
 def check (program table : String) (words : Nat) (bcs : Array ByteArray) (registered : ByteArray) : V Unit :=
   checkAt CAPACITY program table words bcs registered
 
+/-! ## The rows' strings, from the writers' public bodies -/
+
+/-- One member of the table's writer template: its first unit `base` and its `n` units, its rows' names in order
+(`ports`, inputs then outputs), each shared-row table's rows (`tables`, none for a body of one row a unit a port) and its
+public body, the bytes the leaf layer binds. -/
+structure Member where
+  base : Nat
+  n : Nat
+  ports : Array String
+  tables : Option (Array (String × Nat)) := none
+  body : ByteArray
+
+/-- **Each of a member's units' `b ‖ c` of its row `port`**, from its public body as the circuit prover writes it: every
+unit's `b ‖ c`, ports in order, unit-major; or, with shared-row tables, each port's table rows (`n` for a port no table
+names), port-major, then each unit's ref into each port's table (u32 little-endian, unit-major), a unit's string the
+row its ref names. Refused where the member has no row `port`, the body is not that length, or a ref is past its
+table. -/
+def memberStrings (m : Member) (port : String) : V (Array ByteArray) := do
+  let some j := m.ports.findIdx? (· == port) | throw s!"the member at unit {m.base} has no row {port}"
+  let np := m.ports.size
+  match m.tables with
+  | none =>
+    if m.body.size != m.n * np * BC_BYTES then
+      throw s!"the member at unit {m.base}: its public body is not {m.n} units' {np} strings"
+    return (Array.range m.n).map fun i => m.body.extract ((i * np + j) * BC_BYTES) ((i * np + j + 1) * BC_BYTES)
+  | some ts =>
+    let counts := m.ports.map fun q => ((ts.find? (·.1 == q)).map (·.2)).getD m.n
+    let refsAt := BC_BYTES * counts.foldl (· + ·) 0
+    if m.body.size != refsAt + 4 * m.n * np then
+      throw s!"the member at unit {m.base}: its public body is not its tables' strings and {m.n} units' refs"
+    let off := BC_BYTES * (counts.extract 0 j).foldl (· + ·) 0
+    let rows := counts[j]!
+    (Array.range m.n).mapM fun i => do
+      let r := (Flock.u32OfLE m.body (refsAt + 4 * (i * np + j))).toNat
+      if rows ≤ r then throw s!"the member at unit {m.base}: unit {m.base + i}'s ref is past its {port} table"
+      return m.body.extract (off + r * BC_BYTES) (off + (r + 1) * BC_BYTES)
+
+/-- **A table's rows' strings in position order** (`order`'s sources): a unit run's from the writer's members, which
+must hold its units `[first, first + units)` in order, each its units' `out` strings (`memberStrings`); a held run's
+from the strings the verifier holds of the table's earlier windows (`held`, by value). -/
+def tableStrings (runs : Array Run) (len : Nat) (writer out : String) (first units : Nat) (members : Array Member)
+    (held : Array (String × Array ByteArray)) : V (Array ByteArray) := do
+  let heldOf := fun v => (held.find? (·.1 == v)).map (·.2)
+  let srcs ← order runs len writer out units fun v => (heldOf v).map (·.size)
+  let mut mine : Array ByteArray := #[]
+  if srcs.any (· matches .unit _) then
+    let mut at_ := first
+    for m in members.qsort (·.base < ·.base) do
+      if m.base != at_ then throw s!"{writer}'s members leave unit {at_} without a public body"
+      mine := mine ++ (← memberStrings m out)
+      at_ := at_ + m.n
+    if at_ != first + units then throw s!"{writer}'s members hold {at_ - first} of its {units} units"
+  srcs.mapM fun
+    | .unit u => match mine[u]? with
+      | some s => pure s
+      | none => throw s!"{writer}'s unit {u} has no string"
+    | .held v r => match (heldOf v).bind (·[r]?) with
+      | some s => pure s
+      | none => throw s!"{v} holds no row {r}"
+
+/-- A history table the verifier's program declares (`interface.History`): the program its domain names, its writer
+template and output, its rows' words, its runs and its capacity. -/
+structure Spec where
+  program : String
+  writer : String
+  out : String
+  words : Nat
+  runs : Array Run
+  capacity : Nat := CAPACITY
+
+/-- A table's length: its runs' rows. -/
+def Spec.length (h : Spec) : Nat := h.runs.foldl (· + ·.count) 0
+
+/-- **The leaf layer** (`rows.leaf_layer`): SHA-512 (hex) of the canonical JSON object of each member's public body's
+SHA-512 (hex) by its key. -/
+def leafLayer (digests : Array (String × String)) : V String :=
+  canonSha512 (Json.mkObj (digests.toList.map fun (k, d) => (k, Json.str d)))
+
+/-- **Each table's root, recomputed from the writers' public bodies the leaf layer binds**: every member's body digest
+(`digests`, by key) must make the leaf layer `leaf`, and each table's writer members' bodies must have the digests it
+names; then table `name`'s strings (`tableStrings`: its writer's units `[first, first + units)`, and `held name`, the
+strings the verifier holds of its earlier windows) and `checkAt` against the root the window registers for it
+(`registered`). Each table's `(name, root, domain)`, the root and domain its reads open against. -/
+def tableRoots (leaf : String) (digests : Array (String × String))
+    (tables : Array (String × Spec × Nat × Nat × Array (String × Member)))
+    (held : String → Array (String × Array ByteArray)) (registered : String → Option ByteArray) :
+    V (Array (String × ByteArray × ByteArray)) := do
+  if (digests.map (·.1)).toList.eraseDups.length != digests.size then throw "a member's key twice among the digests"
+  if (← leafLayer digests) != leaf then throw "the members' public bodies' digests are not the leaf layer"
+  if (tables.map (·.1)).toList.eraseDups.length != tables.size then throw "a history table named twice"
+  tables.mapM fun (name, h, first, units, ms) => do
+    for (k, m) in ms do
+      match digests.find? (·.1 == k) with
+      | some (_, d) =>
+        if Flock.hexOf (Flock.Sha512.hash m.body) != d then
+          throw s!"history {name}: {k}'s public body is not the one the leaf layer binds"
+      | none => throw s!"history {name}: {k} is no member the leaf layer binds"
+    let bcs ← tableStrings h.runs h.length h.writer h.out first units (ms.map (·.2)) (held name)
+    let some root := registered name | throw s!"history {name}: the window registers no root for it"
+    checkAt h.capacity h.program name h.words bcs root
+    return (name, root, ← domainAt h.capacity h.program name h.words)
+
 /-! ## The difftest's pieces -/
 
 /-- A JSON list of lowercase hex strings, as bytes. -/
@@ -267,5 +376,96 @@ def orderPiece (j : Json) : V Json := do
   return Json.mkObj [("sources", Json.arr (srcs.map fun
     | .unit u => Json.mkObj [("unit", Lean.toJson u)]
     | .held v r => Json.mkObj [("held", Json.str v), ("row", Lean.toJson r)]))]
+
+/-- A member: `{"base", "n", "ports", "body"}` (hex), with `"tables": {port: rows}` for a shared-row body. -/
+def memberOf (j : Json) : V Member := do
+  let .arr ps := getD j "ports" | throw "a member's ports are not a list"
+  let ports ← ps.mapM fun | .str s => pure s | _ => throw "a member's port is not a string"
+  let tables ← match field? j "tables" with
+    | none => pure none
+    | some t@(.obj _) => some <$> (entries t).mapM fun (p, n) => match nat? n with
+      | some k => pure (p, k)
+      | none => throw s!"tables: {p}'s rows are not a natural number"
+    | some _ => throw "a member's tables are not an object"
+  let .str b := getD j "body" | throw "a member's body is not a hex string"
+  return { base := ← natField j "base", n := ← natField j "n", ports, tables, body := ← Flock.unhex b }
+
+/-- `{"runs", "length", "writer", "out", "first", "units", "members", "held": {value: [hex]}}` to `{"bcs": [hex]}`:
+`tableStrings`' strings, or its refusal. -/
+def stringsPiece (j : Json) : V Json := do
+  let .arr rs := getD j "runs" | throw "runs is not a list"
+  let .arr ms := getD j "members" | throw "members is not a list"
+  let held ← match getD j "held" with
+    | h@(.obj _) => (entries h).mapM fun (v, ss) => return (v, ← hexes ss s!"held {v}")
+    | _ => throw "held is not an object"
+  let bcs ← tableStrings (← rs.mapM runOf) (← natField j "length") (← strField j "writer") (← strField j "out")
+    (← natField j "first") (← natField j "units") (← ms.mapM memberOf) held
+  return Json.mkObj [("bcs", Json.arr (bcs.map (Json.str ∘ Flock.hexOf)))]
+
+/-- An object of hex strings, as `(key, bytes)`. -/
+def hexObj (j : Json) (what : String) : V (Array (String × ByteArray)) := do
+  let .obj _ := j | throw s!"{what} is not an object"
+  (entries j).mapM fun (k, v) => match v with
+    | .str s => return (k, ← Flock.unhex s)
+    | _ => throw s!"{what}: {k} is not a hex string"
+
+/-- `tableRoots` over its JSON form under the leaf layer `leaf`: `{"digests": {key: hex}, "tables": [{"name", "program",
+"writer", "out", "words", "runs", "capacity", "first", "units", "members": [member with "key"]}], "held": {name: {value:
+[hex]}}, "registered": {name: hex}}`. -/
+def rootsOf (leaf : String) (j : Json) : V (Array (String × ByteArray × ByteArray)) := do
+  let .obj _ := getD j "digests" | throw "digests is not an object"
+  let digests ← (entries (getD j "digests")).mapM fun (k, d) => match d with
+    | .str s => pure (k, s)
+    | _ => throw s!"digests: {k} is not a string"
+  let .arr ts := getD j "tables" | throw "tables is not a list"
+  let tables ← ts.mapM fun t => do
+    let .arr rs := getD t "runs" | throw "a table's runs are not a list"
+    let .arr ms := getD t "members" | throw "a table's members are not a list"
+    let spec : Spec := { program := ← strField t "program", writer := ← strField t "writer", out := ← strField t "out",
+                         words := ← natField t "words", runs := ← rs.mapM runOf, capacity := ← natField t "capacity" }
+    let members ← ms.mapM fun m => return (← strField m "key", ← memberOf m)
+    return (← strField t "name", spec, ← natField t "first", ← natField t "units", members)
+  let held ← match getD j "held" with
+    | h@(.obj _) => (entries h).mapM fun (n, vs) => do
+      let .obj _ := vs | throw s!"held: {n} is not an object"
+      return (n, ← (entries vs).mapM fun (v, ss) => return (v, ← hexes ss s!"held {n} {v}"))
+    | _ => throw "held is not an object"
+  let registered ← hexObj (getD j "registered") "registered"
+  tableRoots leaf digests tables (fun n => ((held.find? (·.1 == n)).map (·.2)).getD #[])
+    fun n => (registered.find? (·.1 == n)).map (·.2)
+
+/-- The supplied values `supplied` (`Supplied.sources`' form) with each source `{"history": "H/root"}` or
+`{"history": "H/domain"}` the bytes `{"bytes": hex}` of the root or domain id `roots` holds for table `H`; an error on
+a table `roots` holds none of, or another field. Every other source is left as it is, for `Supplied.sources` to read or
+refuse. -/
+def resolve (roots : Array (String × ByteArray × ByteArray)) (supplied : Json) : V Json := do
+  let .obj _ := supplied | return supplied
+  let source : Json → V Json := fun s => match s with
+    | .obj o => match o.toArray with
+      | #[("history", .str n)] =>
+        match roots.find? (n == ·.1 ++ "/root"), roots.find? (n == ·.1 ++ "/domain") with
+        | some (_, r, _), _ => pure (Json.mkObj [("bytes", Json.str (Flock.hexOf r))])
+        | none, some (_, _, d) => pure (Json.mkObj [("bytes", Json.str (Flock.hexOf d))])
+        | none, none => throw s!"history {n}: the verifier computed no table's root or domain of that name"
+      | _ => pure s
+    | _ => pure s
+  let row : Json → V Json := fun r => do
+    match r with
+    | .arr ss => return Json.arr (← ss.mapM source)
+    | r => pure r
+  let values ← (entries supplied).mapM fun (v, rows) => do
+    match rows with
+    | .arr rs => return (v, Json.arr (← rs.mapM row))
+    | rows => pure (v, rows)
+  return Json.mkObj values.toList
+
+/-- `{"leaf_layer", "digests": {key: hex}, "tables": [{"name", "program", "writer", "out", "words", "runs", "capacity",
+"first", "units", "members": [member with "key"]}], "held": {name: {value: [hex]}}, "registered": {name: hex}}` to
+`{"roots": {name: {"root", "domain"}}}`: `tableRoots`', or its refusal. -/
+def rootsPiece (j : Json) : V Json := do
+  let .str leaf := getD j "leaf_layer" | throw "leaf_layer is not a string"
+  let got ← rootsOf leaf j
+  return Json.mkObj [("roots", Json.mkObj (got.toList.map fun (n, r, d) =>
+    (n, Json.mkObj [("domain", Json.str (Flock.hexOf d)), ("root", Json.str (Flock.hexOf r))])))]
 
 end Spot.HistoryTable
