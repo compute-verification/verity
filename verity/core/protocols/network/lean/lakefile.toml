@@ -1,9 +1,16 @@
 name = "network_check"
-defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period"]
+defaultTargets = ["NetworkCheck", "network-check-difftest", "network-check", "network-records", "network-period",
+  "network-rows"]
 
 [leanOptions]
 autoImplicit = false
 relaxedAutoImplicit = false
+
+# The period's check reads a tied audit's wires as the sampled audit does (`SampledProofs.Wires`, `Summary.drawnOk`),
+# and the rows form reads its draw at its own δ by one-stage's bound (`SampledProofs.Bound.boundOf`).
+[[require]]
+name = "core_sampled_proofs"
+path = "../../../service/sampled_proofs"
 
 [[require]]
 name = "flock_verifier"
@@ -51,3 +58,7 @@ root = "NetworkCheck.RecordsMain"
 [[lean_exe]]
 name = "network-period"
 root = "NetworkCheck.PeriodMain"
+
+[[lean_exe]]
+name = "network-rows"
+root = "NetworkCheck.RowsMain"
