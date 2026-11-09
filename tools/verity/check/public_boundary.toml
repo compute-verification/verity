@@ -191,6 +191,18 @@ records = [
     "integrations/vllm/tests/properties/test_golden_of_record.py",
     "integrations/vllm/tests/observe/test_{m1_log,resolve_m1}.py",
 ]
+# vLLM's tests that read what a GPU pod or host recorded and no tracked file or registry fixture holds (`out/gen`, `fixtures/`,
+# `vllm-poc/bundles`, a host's archive), so the public tree could only skip them: each `*_of_record.py` beside the public test it
+# shares helpers with, or the whole file where none of it runs without them
+pod_records = [
+    "integrations/vllm/tests/acquire/test_compiled_manifest.py",
+    "integrations/vllm/tests/pipeline/test_compiled_merge_identity.py",
+    "integrations/vllm/tests/check/test_stoch_draw_ledger_of_record.py",
+    "integrations/vllm/tests/engine/test_gen_{dense2,ov_moe,ov_sampling}_of_record.py",
+    "integrations/vllm/tests/pipeline/test_{admission_telemetry,coverage_workloads,run_config_dry_run}_of_record.py",
+    "integrations/vllm/tests/program/test_{artifact_applicability_independent,composition,fa3_launch_context}_of_record.py",
+    "integrations/vllm/tests/program/test_{harden_guards,rmsnorm_fused}_of_record.py",
+]
 team = [
     "infra",
     "tools/{research,agent-guard}",
