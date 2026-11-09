@@ -7,7 +7,9 @@ the whole model's compiled Program against the compiled Programs of windows of i
 `pieces(program, world)` puts each node of the program function's body in a part, 0 the prologue, L + 1 layer L, NL + 1 the
 epilogue:
 
-- a node that reads a weight or a peer Input is in the latest part among them: a weight `model.layers.{L}.*` is layer L's, the
+- a node that reads a weight or a peer Input is in the latest part among them: a weight `model.layers.{L}.*` is layer L's (unless
+  a node that reads a later layer's node reads it, as every layer reads vLLM's one rotary cache under layer 0's name: that weight
+  is in no part, named in full), the
   embedding the prologue's and the final norm and `lm_head` the epilogue's; a collective's peer Inputs are in its part (the
   embedding's all-reduce the prologue, layer L's attention and MLP all-reduces layer L, the logits gather the epilogue); a part
   earlier than the node before it starts the next launch;
@@ -185,22 +187,49 @@ def pieces(program, world: int) -> Pieces:
                 hi = mid
         return lo
 
+    def wfields(p) -> range | set:
+        """The weight fields a reference part `p` reads."""
+        if p.space != "p" or p.idx != wi or not p.count:
+            return range(0)
+        if isinstance(p, Explicit):
+            return {field_of(leaf) for _s, _i, leaf in p.items}
+        ends = (p.base, p.base + p.count - 1) if isinstance(p, Affine) else (p[0][2], p[p.count - 1][2])
+        return range(field_of(min(ends)), field_of(max(ends)) + 1)
+
     def contributes(p) -> list[int]:
         """The parts a parameter part `p` reads put its reader in."""
-        if p.space != "p":
-            return []
-        if p.idx == wi:
-            if isinstance(p, Explicit):
-                leaves = [leaf for _s, _i, leaf in p.items]
-            elif isinstance(p, Affine):
-                leaves = [p.base, p.base + p.count - 1] if p.count else []
-            else:
-                leaves = [p[0][2], p[p.count - 1][2]] if p.count else []
-            return [x for x in {fpart[f] for leaf in leaves for f in range(field_of(min(leaves)), field_of(max(leaves)) + 1)}
-                    if x is not None] if leaves else []
-        if p.idx in peers:
+        if p.space == "p" and p.idx in peers:
             return [peers[p.idx][2]]
-        return []
+        return [x for f in wfields(p) if (x := fpart[f]) is not None]
+
+    def operands(parts) -> list[int]:
+        return [lab[p.idx] for p in parts if p.space == "n" and not isinstance(p, Explicit) and lab[p.idx] is not None] + [
+            lab[i] for p in parts if isinstance(p, Explicit) for s, i, _l in p.items if s == "n" and lab[i] is not None]
+
+    # A layer's weight that a node reading a later layer's node reads is shared (vLLM's one rotary cache, which every layer reads
+    # under layer 0's name): such fields are found by labelling alone, and then belong to no part.
+    shared_fields: set[int] = set()
+    while True:
+        cur, late = 0, set()
+        for k, n in enumerate(nodes):
+            parts = [p for a in n.args for p in _flat(a.refs)]
+            mine, ops = [x for p in parts for x in contributes(p)], operands(parts)
+            if mine:
+                top = max((x for x in ops if 1 <= x <= NL), default=0)
+                late |= {f for p in parts for f in wfields(p) if fields[f][0] is not None and fpart[f] is not None and fpart[f] < top}
+                cur = max(mine)
+            elif ops:
+                pass
+            else:
+                lab[k] = None
+                continue
+            lab[k] = cur
+        if not late:
+            break
+        shared_fields |= late
+        for f in late:
+            fpart[f] = None
+    lab = [None] * len(nodes)
 
     def port(space: str, idx: int, leaf: int, reader: int | None):
         """A reference to leaf `leaf` of node or parameter `idx`, as `reader`'s part writes it."""
@@ -218,8 +247,8 @@ def pieces(program, world: int) -> Pieces:
         if idx == wi:
             f = field_of(leaf)
             L, role = fields[f]
-            if L is None:
-                return ("W@", role, leaf - starts[f])
+            if L is None or f in shared_fields:
+                return ("W@", names[f], leaf - starts[f])
             if reader is None or reader in (0, E):
                 return ("W@L", L, role, leaf - starts[f])
             return ("W", reader - (L + 1), role, leaf - starts[f])
@@ -258,11 +287,10 @@ def pieces(program, world: int) -> Pieces:
             if p < cur:
                 launch += 1
                 if len(splits) < 4:
-                    reads = sorted({(names[field_of(q.base)] if q.idx == wi and not isinstance(q, Explicit) else params[q.idx][0])
-                                    for q in parts if q.space == "p" and contributes(q)})
+                    reads = sorted({names[f] for q in parts for f in wfields(q) if fpart[f] is not None} |
+                                   {params[q.idx][0] for q in parts if q.space == "p" and q.idx in peers})
                     splits.append(f"node {k} ({fkey(n.fn)[:60]}) in part {p} after part {cur}, reading {reads[:4]}")
-        elif any(lab[p.idx] is not None for p in parts if p.space == "n" and not isinstance(p, Explicit)) or any(
-                s == "n" and lab[i] is not None for p in parts if isinstance(p, Explicit) for s, i, _l in p.items):
+        elif operands(parts):
             p = cur
         else:
             base = hashlib.sha512(repr(entry(n, None)).encode()).hexdigest()[:32]
