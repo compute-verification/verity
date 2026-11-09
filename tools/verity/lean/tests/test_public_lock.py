@@ -234,7 +234,7 @@ def test_a_kept_entry_that_cites_what_the_copied_files_lack_refuses_the_lock(whe
 def test_a_lock_as_it_stands_names_each_thing_the_copied_files_lack():
     left = PL.missing(lock(), has)
     for name in ("roots: Gone", "proved_in: ../Gone", "guarantees: Lib.Gone.G", "reads: Gone.Defs",
-                 "layers[Lib.Defs].imports: Gone.Defs", "witnesses[Lib.Gone.G].honest: Lib.Gone.G_honest",
+                 "layers[Mod.Defs].imports: Gone.Defs", "witnesses[Lib.Gone.G].honest: Lib.Gone.G_honest",
                  "guarantees[Lib.Gone.G].premises.reads: Lib.Gone.Shape.mk", "guarantees.Lib.G.owner: a lane field",
                  "open.Lib.O.issue: a lane field", "open.Lib.O.due: a lane field", "open_seed: a lane field"):
         assert name in left
