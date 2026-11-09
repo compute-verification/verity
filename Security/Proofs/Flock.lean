@@ -60,6 +60,7 @@ public import Proofs.Flock.SpotFlock.Numbers
 public import Proofs.Flock.SpotFlock.Opens
 public import Proofs.Flock.SpotFlock.Frame
 public import Proofs.Flock.SpotFlock.FrameAt
+public import Proofs.Flock.SpotFlock.FrameIsAt
 public import Proofs.Flock.SpotFlock.Format
 public import Proofs.Flock.SpotFlock.Reads
 public import Proofs.Flock.SpotFlock.Rows
