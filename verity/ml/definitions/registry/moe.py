@@ -132,9 +132,9 @@ C_LOG2E_HI = b1.f32c(f32_of(0x3FB8AA3B))
 C_LOG2E_LO = b1.f32c(f32_of(0x32A57060))
 _EXPF = EVIDENCE["cc12_expf_logf_capture"]
 EXPF_CONF = ("exact-model-tested: every word of torch.exp's f32 CUDA kernel (exp_kernel_cuda) on cc 12.0 with 188 SMs (torch "
-             "2.14.0+cu130) at 4,194,320 inputs, 16 specials (±0, ±inf, NaN, subnormals, the overflow and underflow edges), "
-             "2^21 random bit patterns and 2^21 words with |x| in [2^-30, 2^7), every NaN result 0x7FFFFFFF as here (capture "
-             f"{_EXPF['run_record']}, fit {_EXPF['fit']})")
+             "2.14.0+cu130) at 4,194,320 inputs, 16 specials (±0, ±inf, a NaN, three subnormals, FLT_MIN, ±1 and five words at "
+             "the overflow and underflow edges), 2^21 random bit patterns and 2^21 words with |x| in [2^-30, 2^7), every NaN "
+             f"result 0x7FFFFFFF as here (capture {_EXPF['run_record']}, fit {_EXPF['fit']})")
 
 
 @composite("NvExpf", 1, [], lambda S: ((("x", F32),), F32), conformance=EXPF_CONF)
