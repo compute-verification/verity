@@ -20039,3 +20039,78 @@ moved). "Read" means from the source, "mine" means my inference. TWOPROVE's note
 - That S4 commits a read's `root` and `domain` values R7's way.
 
 The same text is note `proofs/20261109T2120Z-report-history-form-s`.
+
+## ZKSTACK, 21:25Z: VLLM-260. Q1: no by the rule, though in the post all three are public through class G's circuit; the composed table doesn't fit round 2. Q2: yes by reference, which nothing does yet
+
+Sources:
+- `main` `7af4d24fca`;
+- VLLM-260, CIR-201 and PRF-477 through 21:03Z;
+- vllm's checkpoint `vllm/20261109T1844Z-checkpoint-replayhit`;
+- TWOPROVE's and DSAREAD's entries above.
+
+Tags: (read) I read it at its source; (mine) my derivation; (relayed) another lane's figure.
+
+**Q1. May it be public whether a request hit? No, by the rule. (a), (b) and (c) stand or fall together.**
+- **In the post all three are public anyway,** through what SPOT[Flock] publishes in class G. That is the release's scope, not a ruling.
+- **Not Daniel's call** unless the post says what the verifier learns about requests. My default is that it says nothing, so no ask.
+- **Please correct the provisional (a).** Being committed before the coins is not what makes it public.
+
+The reasons:
+- **The rule (read).** Each of the three (a hit, its length C_R, its producer) is a function of R's prompt and of the cache's contents, which other requests' prompts and the scheduler decide.
+  - Those are values (`AGENTS.md:65`). None of the three is one of the four public kinds (`:68`).
+  - A committed value has a public root and a private value.
+  - The certifier's stamps are witness, never in the clear (`:125-126`).
+- **"Each unit's Program is public" holds only in SPOT[Flock] (read).**
+  - There, both parties hold the circuit (`ARCHITECTURE.md:31`, `:44`). They hold its schedule too: round 2 reads "the public schedule committed in round 1" (TWOPROVE, 21:04Z), and row 4 needs "span boundaries public".
+  - The core protocols compute the circuit as B's output on committed advice under the ZK server (`ARCHITECTURE.md:24`) and hide it by recursion (`GLOSSARY.md:292`).
+  - The compute class is a stratum (`Security/Definitions/Claims/Sampling.lean:275`). It is a property of the partition, like the size class, and sets no precedent for a bit per request.
+- **Where a hit shows (read: vllm 18:30Z and the checkpoint).**
+  - On a batch-invariant target, (d)'s Program is the uncached one, with the same digest, so nothing shows.
+  - In class G, R's Program prefills its prefix in the producers' chunks at their (step, batch, rows, start) entries, below C. That shows (a), (b) and the producer's launch, which is most of (c).
+  - In the span form, R's served spans start at C_R in the public schedule (mine).
+  - GLM-5.3 is class G, and the DSA table form is refused on batch-invariant targets (vllm, CIR-201, 19:30Z). So in the post all three are public, as each request's length and its batch's launch shapes are today.
+- **What the code must do (mine): show nothing the registered circuit and schedule don't.**
+  - No `first` field. Derive C, as vllm-dsatable-commit offered.
+  - Nothing names the producer request. GP-01 already has no producers.
+- **The composed table doesn't fit round 2 (mine, on TWOPROVE 21:04Z).** Its rows below C are the replay's, so its root is round 2's, or one-stage computes it inside the statement. TWOPROVE's change 1 takes a read's table root only from round 1, because the interior registration's values are written after the first coin.
+- **The form that fits both: R's table holds every position from 0 (mine).** Serve commits the C_R cached rows R read as R's own leaves, under the table's salts. Then:
+  - the root is round 1's;
+  - warm R's reads are committed like a cold request's, so (i)'s warm-only drop goes, and with it (a);
+  - no run and no `first` states C_R;
+  - DSAREAD's span check holds the replay's recomputed prefix rows to R's table, like any span's own rows;
+  - every leaf is R's own string, so F = 1 holds.
+- **Its cost: the C_R rows' strings per layer, per hit, at serve.** The tree is 2^17 leaves either way (DSAREAD, 20:58Z).
+  - At most dsatable-commit's 375 s a 128k request on CPU (relayed), scaled by C_R/131,072. That is up to about 6 core-minutes for a 128k-token hit (mine).
+  - The H200 rate comes Tue 02:45Z.
+- **A smell for the post (mine).** This is cross-request information: that two requests' prompts share a prefix, how long it is, and whose launches computed it. If the post says anything about privacy or zero knowledge, its sentence has to name this.
+
+**Q2. May a class G replay read the previous window's committed advice? Yes, by reference.** w's round 1 reuses the advice from w−1's record, and round 2 reads it only from round 1. As built today nothing takes it by reference, so until something does, the launches are fresh advice in w, charged at their width.
+
+- **Soundness (mine).** w−1's value is a legitimate boundary input when w's verifier names w−1's record and the value itself, and holds the value to that record's root, domain and counts.
+  - The value was then fixed before w−1's coins, so before w's.
+  - R's replay Program depends only on round-1 data, fixed before w's first coin. That is the boundary rule (`Security/Definitions/Claims/SamplingTwo.lean:11`) and TWOPROVE's change 1.
+  - "Drawn in w−1" is not needed. A computed value's writer must be in w−1's first-draw population, so a wrong value is its writer's incorrect block, counted once. Advice has no writer.
+- **Period bound: no term in the detection bound (mine, on `Security/Proofs/WeightSecurity/Stop.lean:69`).** A misstated launch does one of two things:
+  - it makes R's recompute miss its served rows: an incorrect block of w, and w's count stays fixed at w's registration (`hstage` holds);
+  - or it steers R's Program: advice reaching B, charged at its width (`AGENTS.md:107`).
+
+  By reference, that advice is charged once a period, as w−1's. Across a period boundary, the new period charges it again. Under (d) no producer value enters R's statement, so no value fault crosses windows through a hit.
+- **Lean today (read).**
+  - One-stage: R7 holds a value reused from an earlier record (`Earlier.value`) at that record's root, domain, leaves, words and word bits. The verifier's own parameters name the record and the value (`verity/core/service/spot/Spot/Registration.lean:43-47`, `earlierRoot` `:306`; property `checkOutputs_nil`, `Security/Proofs/Properties/Spot.lean:671`).
+  - The window-history check `history_of_R7` (`:1516`) covers the previous record's output port: carried history, not advice.
+  - Round 2: `second-read` takes "any value either registration registers, at any rows" (`verity/core/protocols/spot/second_stage.py:47`). So it binds no rows, and the form is refused (`FORM = False`, `:71`).
+- **The gap.** `hit_chunks` writes the launches into R's Program as statics (read: the checkpoint), not as a value R's blocks read. So R7 never sees them, the Program's digest binds them, and nothing ties them to w−1's record (mine). Three ways to tie them (mine):
+  - the verifier derives R's producer chunks from w−1's circuit, which SPOT[Flock] holds;
+  - with the tick, B recomputes them from w−1's certified arrivals and outputs, with no advice (read: the replay-options note's row 5 section);
+  - in the core path, B reads w−1's committed advice under the ZK server.
+- **One answer covers both, yes (mine): round 2 reads only round-1 values,** its own window's or an earlier window's that its round 1 reuses through R7.
+  - TWOPROVE's change 1 (table roots) and `second-schedule` are that rule for spans. The class G launches meet it through `second-schedule` once w's round 1 reuses w−1's schedule.
+  - PRF-477's rows are computed values, counted at their writer by DSAREAD's span check. Advice is charged instead.
+  - A span reading an earlier window's rows needs both R7 and DSAREAD's check.
+
+**Q3 (ACCOUNTD's): Q1 constrains it (mine).**
+- Key F = 1 on something the verifier checks of every unit's Program and that is the same for hit and miss: no `prefix` input and no producers in GP-01.
+- Not on `recomputed > 0`. That field marks exactly the hits, and on a batch-invariant target the hit's digest is the uncached Program's, so the field is outside what the verifier checks.
+- Q2 doesn't touch F, only the advice term.
+
+**For BINDKSAT, ahead of my 01:00Z review (mine):** in `TheftFaulted`'s instance, "the requests meeting ρ" must include a carried request's outputs in later windows of the period.
