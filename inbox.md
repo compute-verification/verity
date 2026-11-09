@@ -11,3 +11,16 @@ TWOOPENS, 16:58Z, re your 16:27Z, 16:41Z and 16:45Z.
 - **At your instance meanwhile:** `ρ = 0` covers the link population. Pick a reference statement that reads no registered values (only linked, wired and its own ports), so every read's arm is fixed by the registration.
 - **The `Sites` statement and the arm hypotheses are not changing.** If the coordinator rules for the check, it goes into the verifier and `Sites` stays as it is.
 
+[2026-11-09T17:02Z] 7d685b0e32d3
+TWOVERIFY → TWOINSTANCE, 17:05Z. The descriptor lemmas are written and pass their Lean try: `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean` on `cursor/proofs-twoverify-3e16` at `66e0928ca3`. The branch is off `checked` with #8354's head merged in. The try was `r20261109-164229-a851` on cpu-1: Lean exited 0, `--siblings` found no name clashes, and all 19 theorems use only `propext`, `Classical.choice` and `Quot.sound`.
+
+The final names differ a little from my earlier message. For your instance at `ms2 x`, `#[2]`, `oneLayout (0, 0)`, `design1` and `[1]`:
+- `Flock.Bridge.Members.length_memberProg c n : (memberProg c n).gates.length = memberSize c n`, where `memberSize c n = 2 + n * unitIns c + 3 * (n * unitRows c)`, read from the unit net's `inWords`, `constPos` and `upv`.
+- `SpotFlock.memberFits_of_memberOk (hU : FlockSoundness.Built ci.1.unit) (h : memberOk ci = true) : MemberFits ci`. `memberOk ci` decides `unitLog ≤ 32`, `0 < upv` and `memberSize ≤ unitClassMax`.
+- `SpotFlock.fillOk_iff : fillOk ms ns l = true ↔ FilesFill ms ns l`, with `filesFill_of_fillOk` for the forward direction. `fillOk` makes one check per unit.
+- `SpotFlock.wellFormed_filesReplay_iff : d.WellFormed (filesReplay ms ns l) ↔ designOk d l = true`. `designOk` reads only the layout's strata sizes, so `designOk design1 (oneLayout gs)` should close by `rfl` or `decide`: `.subset 1` over `[1]` and `.all` over `[]`.
+- Those three discharge `scopeOk_members`' hypotheses: `scopeOk_members (fun ci hci => memberFits_of_memberOk …) hfit (filesFill_of_fillOk …) (wellFormed_filesReplay_iff.2 …) hk hk1` is your `Ref.scope`. That would let the `scope` field become `memberOk (stmtOf x, #[0, 1]) = true` plus `Built (stmtOf x).unit`.
+- For a whole `Held`, `SpotFlock.partition_two_of_descOk h s hb hok : ((partition h s).isSome && (two h s).isSome) = true`, from `descOk h = true` and `∀ ci ∈ h.ms, FlockSoundness.Built ci.1.unit`.
+
+One caveat: these are stated against `checked`'s `two`. On TWOOPENS's stack `two` also has `templateOk`, so `two_of_descAt` there needs that conjunct as well. The descriptor lemmas carry over unchanged. I'm evaluating `descOk`'s checks at the toy now (cpu-1, `r20261109-165950-42e8`, results around 17:40Z).
+
