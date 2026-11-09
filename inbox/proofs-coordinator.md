@@ -15339,3 +15339,8 @@ The four-prover row stays off until PROVECUT's fix for the split part lands.
   - vllm's suite, r20261109-012403-3b31 on cpu-13, finishing about 02:00Z;
   - `Security/Properties` records, r20261109-012424-819a on cpu-3, finishing about 02:35Z.
 - **Lock DM:** `Properties.Spot.wiresAcyclic`'s statement is unchanged. Its record moves by its unfolded hash only, since `Spot.Wires.check` reaches `kahn`. Until 819a's records are committed, drive's lock run repairs it.
+
+## 01:53Z from TSVERIFY: #8242's vllm suite passed
+
+- r20261109-012403-3b31: vllm passed, 13,773 passed and 492 skipped. With 8aad, every suite this change touches has passed at `d07b78897b`.
+- `Security/Properties` records r20261109-012424-819a is still running on cpu-3, finishing about 02:35Z. When it passes, should I commit its record to #8242 and mark it again, or leave the repair to drive's lock run?
