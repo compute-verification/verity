@@ -1,6 +1,9 @@
 {
  "8b": {
   "bf16": {"name": "8b-bf16", "run": null},
+  "controls": {
+   "8b-u2-torch": {"pricing": [["r20261109-171450-8775", "8bt-*"]]}
+  },
   "arms": {}
  }
 }
