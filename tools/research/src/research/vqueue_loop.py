@@ -59,7 +59,8 @@ as it is), reruns those keys itself while graph2's verdict is another (a
 task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun
 runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
 graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.INFRA` (or its `pr`'s owner), once a candidate and
-why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it
+why; a ring to an owner is held, only logged, while another candidate's check or the run beside `main`'s reads infra in the
+same tick, as in an outage (`Loop._outage`).  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it
 is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its
 file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's
 message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one whose
@@ -1132,6 +1133,8 @@ class Tick:
     foreign: dict[str, str] = field(default_factory=dict)
     #: what the snapshot logged: the runs beside the checks it started or judged
     wrote: list[dict] = field(default_factory=list)
+    #: the record of the run beside `main`'s own check (`Loop._below`), None while none is kept
+    below: dict | None = None
 
 
 class Loop:
@@ -1201,7 +1204,7 @@ class Loop:
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
                         lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
-        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote)
+        return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote, below[0])
 
     def _shadow_main(self, past: Past, origin: str) -> str:
         """The shadow's `main`: the newest candidate it advanced (`SHADOW`, else its log's newest advance) while origin's `main`
@@ -1652,6 +1655,8 @@ class Loop:
         text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) is {c.verdict.state} "
                 f"after {c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
         line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
+        if a.pr is not None and (held := self._outage(c, t)) is not None:
+            return [self.record(t, "ring", **line, done=True, posted=False, held=held)]
         if self.shadow:
             return [self.record(t, "ring", **line, done=False)]
         to = (INFRA_HANDLE,) if a.pr is None else self.owner(a.pr)
@@ -1659,6 +1664,16 @@ class Loop:
             return [self.record(t, "ring", **line, done=False, posted=False,
                                 error=f"ringing {', '.join(to)} about {c.sha[:12]} failed: the next tick rings again")]
         return [self.record(t, "ring", **line, done=True, posted=True)]
+
+    def _outage(self, c: Candidate, t: Tick) -> str | None:
+        """Why a ring to the owner of ``c``'s lone member about its check erring is held, logged and not posted: in the same
+        tick another candidate's check, or the run beside `main`'s own, reads infra too, as an outage reads, which graph2 can't
+        tell from one change's erring.  Infra is rung all the same."""
+        if others := [o.sha[:12] for o in t.snap.candidates if o.sha != c.sha and (o.verdict.state == INFRA or o.verdict.infra)]:
+            return f"{', '.join(others)} read infra too"
+        if ((t.below or {}).get("verdict") or {}).get("state") == INFRA:
+            return f"the run beside {t.main[:12]}'s check ended in infra"
+        return None
 
     def _red(self, a: Red, c: Candidate, t: Tick) -> dict:
         """Tell `CI` and the owners of what failed that ``a.base`` is red on it, once a base and task: a post that fails is told

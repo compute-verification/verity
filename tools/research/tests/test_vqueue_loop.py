@@ -7,7 +7,7 @@ import json
 import os
 import subprocess
 import sys
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, replace
 from pathlib import Path
 
 import pytest
@@ -1477,6 +1477,46 @@ def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_r
     assert loop.tick() == [] and len(slim.started) == 1
     c = seen[-1].candidates[0]
     assert (c.verdict.state, c.tries, c.enqueued) == (PENDING, 2, T0)
+
+
+def _rings_owner_of_one(s: vqueue.Snapshot) -> list:
+    """Build #1 and #2 alone on `main`, then ring #1's owner while its check reads infra."""
+    if not s.candidates:
+        return [Build((1,), s.main, 5), Build((2,), s.main, 5)]
+    return [Ring(c.sha, "its check keeps erring", 1) for c in s.candidates if c.members == (1,) and c.verdict.state == INFRA]
+
+
+def _two_erring(env, second: str) -> tuple[Loop, dict, dict]:
+    env.put(1, {"a.txt": "1\n"})
+    env.put(2, {"b.txt": "2\n"})
+    loop = env.loop(_rings_owner_of_one)
+    one, two = loop.tick()
+    k1 = env.listed(one["sha"], {"pytest:a": ["a.txt"]})
+    k2 = env.listed(two["sha"], {"pytest:b": ["b.txt"]})
+    env.result(k1["pytest:a"], "pytest:a", "error", infra=True)
+    if second == INFRA:
+        env.result(k2["pytest:b"], "pytest:b", "error", infra=True)
+    else:
+        env.result(k2["pytest:b"], "pytest:b", second)
+    return loop, one, two
+
+
+def test_in_an_outage_a_ring_to_a_pr_s_owner_is_held_and_logged_while_another_check_reads_infra_too(env):
+    loop, one, two = _two_erring(env, INFRA)
+    (held,) = loop.tick()
+    assert (held["action"], held["sha"], held["posted"]) == ("ring", one["sha"], False) and two["sha"][:12] in held["held"]
+    assert env.posts == [] and loop.tick() == []                    # once: the outage told nobody
+
+
+def test_a_lone_pr_whose_check_keeps_erring_rings_its_owner_unless_main_s_run_beside_reads_infra_too(env):
+    loop, one, _ = _two_erring(env, PASS)
+    t = loop.snapshot(L.Past.read(loop.log_path, 0), 9)
+    c = next(c for c in t.snap.candidates if c.members == (1,))
+    assert loop._outage(c, t) is None
+    assert "ended in infra" in loop._outage(c, replace(t, below={"verdict": {"state": INFRA}}))
+    (rung,) = loop.tick()
+    assert (rung["action"], rung["sha"], rung["posted"]) == ("ring", one["sha"], True) and len(env.posts) == 1
+    assert "keeps erring" in env.posts[0]
 
 
 def test_a_check_rung_for_staying_pending_is_rung_once_still_when_its_ring_is_older_than_the_log_s_window(env):
