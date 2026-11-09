@@ -15,7 +15,7 @@ from research import merge
 from research.drive import ACTIVE, LAUNCH_LOST_S, LOST_AFTER_S, NOT_STARTED, SIGTERM_RC, step_paths, step_records, touches
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Advance, Candidate, Drop, Eject, Failed, Ready,
                              Red, Snapshot, Verdict, decide, meets)
-from research.vqueue_slim import BUILD, WHOLE, combine, judge, key, reads, start
+from research.vqueue_slim import BUILD, WHOLE, based, combine, judge, key, reads, start, step_test
 from test_drive_executor import PREFLIGHTS, _slim
 from test_drive_policy import _policy
 from test_drive_review import GATED_TREE, _main, _move_main
@@ -81,8 +81,9 @@ def _harness(world: World, monkeypatch, agreement: bool = False, off_gate: tuple
 
 
 def _failed(h: Drive, base: str, sha: str, step: str, inputs: frozenset[str] = frozenset()) -> Failed:
-    """The `Failed` of ``step`` failed at candidate ``sha`` on ``base``: keyed by the content it reads at each."""
-    return Failed(f"step {step}", key(h.q.workdir, sha, step), inputs, key(h.q.workdir, base, step))
+    """The `Failed` of ``step`` failed at candidate ``sha`` on ``base``: keyed by the content it reads at each, its one test
+    the step's."""
+    return Failed(f"step {step}", key(h.q.workdir, sha, step), inputs, key(h.q.workdir, base, step), frozenset({step_test(step)}))
 
 
 def _rewrite(d, **steps: dict | None) -> None:
@@ -210,7 +211,7 @@ def test_a_run_that_passed_every_step_it_judges_passes(world, monkeypatch, tmp_p
     rec = start(h.d, sha, base)
     d = _slim(h, tmp_path)
     assert [st["step"] for st in step_records(d)] == [*PREFLIGHTS, "ratchet-gate"]
-    assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS}
+    assert judge(h.d, rec) == Verdict(PASS) and rec["verdict"] == {"state": PASS, "passed": list(PREFLIGHTS)}
 
 
 def test_a_failed_preflight_fails_the_candidate_with_the_paths_drive_names_its_culprit_by(world, monkeypatch, tmp_path):
@@ -316,7 +317,8 @@ def test_judge_keeps_its_verdict_in_the_record_and_reads_the_run_no_more(world, 
     got = judge(h.d, rec)
     f = _failed(h, base, sha, "preflight-lints", LINT_PATHS)
     assert rec["verdict"] == {"state": FAIL, "failed": [{"task": "step preflight-lints", "key": f.key, "inputs": sorted(LINT_PATHS),
-                                                         "base_key": f.base_key}]}
+                                                         "base_key": f.base_key, "tests": ["step:preflight-lints"]}],
+                              "passed": [s for s in PREFLIGHTS if s != "preflight-lints"]}
     saved = json.loads(json.dumps(rec))
     h.d.states = h.d.evidence = None
     assert judge(h.d, saved) == got == judge(h.d, rec)
@@ -383,7 +385,7 @@ def test_a_member_touching_what_the_failed_step_reads_owns_the_failure(world, mo
 
 
 @pytest.mark.parametrize("step", ["preflight-lints", "ratchet-gate"])
-def test_a_step_read_whole_is_keyed_on_the_tree_so_its_failure_is_never_inherited(world, monkeypatch, tmp_path, step):
+def test_a_step_read_whole_is_keyed_on_the_tree_so_its_failure_is_never_inherited_by_its_key(world, monkeypatch, tmp_path, step):
     """preflight-lints' lints read every file, and ratchet-gate judges the merges above the base: a change to a file no
     bounded step reads still changes their key, and the member is suspected."""
     h, base, sha, _ = _harness(world, monkeypatch, off_gate=("circuit-check",), tree=KEYED, change={"docs/notes.md": "more\n"})
@@ -395,6 +397,26 @@ def test_a_step_read_whole_is_keyed_on_the_tree_so_its_failure_is_never_inherite
     (drop,) = [a for a in _decided(sha, base, {"docs/notes.md"}, v) if isinstance(a, Drop) and a.sha == sha]
     assert drop.outcome.inherited == () and drop.outcome.suspects == (1,)
 
+
+@pytest.mark.parametrize("below", ["failed", "passed", "running"])
+def test_a_step_read_whole_is_inherited_only_when_the_run_beside_the_base_s_check_failed_it_too(world, monkeypatch, tmp_path,
+                                                                                                below):
+    """Never at its base's key, a failure of a step read whole is compared by its test (`step_test`) with the run beside the
+    base's own check (`based`): failed there too, it is inherited, and `decide` blames no member; passed there, it is the
+    member's; while that run runs, it is unknown, so the member is suspected as before."""
+    h, base, sha, _ = _harness(world, monkeypatch, tree=KEYED, change={"docs/notes.md": "more\n"})
+    rec_base = start(h.d, base, base)
+    if below != "running":
+        _slim(h, tmp_path, **({"preflight_lints": LINT_LOG} if below == "failed" else {}))
+    assert judge(h.d, rec_base).state == {"failed": FAIL, "passed": PASS, "running": PENDING}[below]
+    rec = start(h.d, sha, base)
+    _slim(h, tmp_path, preflight_lints=LINT_LOG)
+    assert based(judge(h.d, rec), None) == judge(h.d, rec)
+    (f,) = (v := based(judge(h.d, rec), rec_base)).failed
+    assert f.tests == {"step:preflight-lints"} and f.key != f.base_key is not None
+    assert f.base_tests == {"failed": {"step:preflight-lints"}, "passed": frozenset(), "running": None}[below]
+    (drop,) = [a for a in _decided(sha, base, {"docs/notes.md"}, v) if isinstance(a, Drop) and a.sha == sha]
+    assert (drop.outcome.inherited, drop.outcome.suspects) == (((f,), ()) if below == "failed" else ((), (1,)))
 
 @pytest.mark.parametrize("build", [None, BUILD_SRC.replace("CHECK_READS = (", "CHECK_READS = tuple(sorted(") + "))\n",
                                    BUILD_SRC.replace('"settings.py"', "SETTINGS"), "VERIFIER = (\n"])

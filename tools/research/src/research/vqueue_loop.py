@@ -234,6 +234,11 @@ class Past:
         recs = self.of("slim", sha)
         return bool(recs), recs[-1].get("record") if recs else None
 
+    def slim_started(self, sha: str) -> tuple[int, float | None]:
+        """How many times a run beside ``sha``'s check was started, and when the newest was."""
+        starts = [r for r in self.of("slim", sha) if str(r.get("why") or "").startswith("started")]
+        return len(starts), unstamp(starts[-1].get("at")) if starts else None
+
     def launching(self) -> dict[str, dict]:
         """The drops whose candidate's run beside its check was still launching (`beside_launching`), by sha, but those a
         slim line has settled since (`dropped`)."""
@@ -1027,6 +1032,7 @@ class Loop:
         def chained(sha: str, seen: tuple[str, ...] = ()) -> bool:
             return bases[sha] == main or bases[sha] in bases and sha not in seen and chained(bases[sha], (*seen, sha))
 
+        below = self._below(past, whole, n, main, origin, wrote)
         w._theirs = {}
         try:
             for sha in sorted(mine):
@@ -1037,7 +1043,8 @@ class Loop:
                     j = Judged(Verdict(LIST_FAILED), mark="not enqueued", note="the log holds no enqueue of it",
                                graph2=j.graph2, listed=False, theirs=j.theirs)
                 if self.slim is not None and not w._ancestor(sha, main):
-                    j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha))
+                    j = self._beside(p, n, main, origin, sha, base, prs, heads, j, wrote, chained(sha),
+                                     below if base == main else (p.slim(base)[1], p.slim_started(base)[1]))
                 judged[sha] = j
                 cands.append(Candidate(sha, base, prs, heads, j.verdict, p.tries(sha), reruns=p.reruns(sha),
                                        enqueued=p.enqueued(sha)))
@@ -1064,14 +1071,45 @@ class Loop:
                 return sha
         return origin
 
+    def _below(self, past: Past, whole: Past, n: int, main: str, origin: str,
+               wrote: list[dict]) -> tuple[dict | None, float | None]:
+        """The record of the run beside ``main``'s own check, which says what the steps a candidate on ``main`` fails are
+        (`vqueue_slim.based`), and when it started: the run beside the candidate ``main`` advanced to (the same tree), else
+        one started here on ``main`` against itself, so lean-agreement never runs (at startup, each time ``main`` moves, and
+        once more when it ended in infra).  Judged each tick, its record logged per ``main`` (to ``wrote`` too) whenever it
+        changed, and never cancelled; past the window, read from the whole log (``whole``, where the snapshot read it).
+        None with --dry-run, which starts nothing."""
+        if self.slim is None or self.dry_run:
+            return None, None
+        if not past.slim(main)[0]:
+            past = whole if whole is not past else Past.read(self.log_path, 0)
+        (started, rec), (starts, since) = past.slim(main), past.slim_started(main)
+        line = dict(sha=main, base=main, members=(), heads=())
+        if started:
+            was = json.dumps(rec, sort_keys=True)
+            v = self.slim.judge(self.world.slim_driver(), rec)
+            if json.dumps(rec, sort_keys=True) != was:
+                self.write(got := self._line(n, main, origin, "slim", **line, why=f"judged {v.state} beside `main`", record=rec,
+                                             done=True))
+                wrote.append(got)
+            if v.state != INFRA or starts > 1:
+                return rec, since
+        self.write(got := self._started(n, main, origin, line, "started again beside `main`" if starts else
+                                        "started beside `main`"))
+        wrote.append(got)
+        return got["record"], self.now()
+
     def _beside(self, past: Past, n: int, main: str, origin: str, sha: str, base: str, prs: tuple[int, ...],
-                heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool) -> Judged:
+                heads: tuple[str, ...], j: Judged, wrote: list[dict], chained: bool,
+                below: tuple[dict | None, float | None] = (None, None)) -> Judged:
         """``j`` combined with the verdict of the run beside candidate ``sha``'s check (`vqueue_slim`), which its build starts
         beside each candidate's check, and here, once, one on ``main``'s chain (``chained``) the log holds no start of (its
         build's tick stopped first); again by a retry of its infra or a rerun of its failure.  Judged each tick, its record
         logged (to ``wrote`` too) whenever it changed; with --dry-run neither started nor judged, so pending.  A check that
         failed to list stays list-failed beside a run that hasn't ended, which `combine` reads as pending: one that never
-        starts would hold it so."""
+        starts would hold it so.  Each step it failed is compared with the run beside its base's check (``below``: its record
+        and start, `_below` for ``main``), which `vqueue.decide` takes as inherited when that run failed it too; a fail whose
+        every other failure is inherited waits (pending) while that run, started at most `pending_s` ago, hasn't said."""
         started, rec = past.slim(sha)
         line = dict(sha=sha, base=base, members=prs, heads=heads)
         if self.dry_run or not started and not chained:
@@ -1088,11 +1126,26 @@ class Loop:
                 wrote.append(got)
         if j.verdict.state == LIST_FAILED and v.state == PENDING:
             return replace(j, slim=v, record=rec)
+        v = self.slim.based(v, below[0])
         both = self.slim.combine(j.verdict, v)
         if both.state == FAIL:              # `combine` keeps no `ended`: a fail has ended once both checks stopped running
             g = j.verdict
             both = replace(both, ended=(g.state != PENDING and (g.state != FAIL or g.ended)) and v.state != PENDING)
+            if waits := self._waits(both, v, *below):
+                return replace(j, verdict=Verdict(PENDING), slim=v, record=rec, note="; ".join(
+                    [*filter(None, [j.note]), f"waiting for the run beside {base[:12]}'s check: {', '.join(waits)}"]))
         return replace(j, verdict=both, slim=v, record=rec)
+
+    def _waits(self, both: Verdict, v: Verdict, rec: dict | None, since: float | None) -> list[str]:
+        """The failed steps of ``v`` (the run beside a check) whose fail ``both`` waits on: those the run beside its base's
+        check (``rec``, started at ``since``) hasn't said of while it runs, up to `pending_s`, when every other failure is
+        inherited; none else."""
+        unknown = [f for f in v.failed if f.base_tests is None]
+        if not unknown or rec is None or "verdict" in rec or since is None or self.now() - since > self.pending_s:
+            return []
+        if not all(f in unknown or vqueue._inherited(f) for f in both.failed):
+            return []
+        return [f.task for f in unknown]
 
     # -- a tick
 

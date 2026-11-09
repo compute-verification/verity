@@ -30,6 +30,7 @@ import ast
 import functools
 import hashlib
 import json
+from dataclasses import replace
 from pathlib import Path
 
 from .drive import (ACTIVE, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, Driver, implicated, killed, not_run, step_paths,
@@ -89,9 +90,9 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     or runs.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids), never ran or was
     stopped, or was lost or killed before it passed each of those steps; infra's one `Failed` says which.  Once it ended,
     pass when it passed each of them, fail with each of them it failed (a `Failed`: ``step NAME``, the step's content key at
-    the candidate, the paths drive names that failure's culprit by, `step_paths`, and its content key at ``base``: `key`),
-    and infra when it failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict but pending is
-    kept in ``rec`` (``verdict``) and read from there."""
+    the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at ``base``, `key`, and
+    the step's one test, `step_test`), and infra when it failed none but passed fewer (one skipped, or absent from its
+    steps.jsonl).  Each verdict but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
@@ -112,13 +113,13 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     if not lost and driver._never_ran(rec, states):
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
     off = driver._policy(tip).off_gate
-    if not (missed := driver._unrun(ids, [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS)
-                                          and s not in off], tip)):
-        return _keep(rec, Verdict(PASS))
+    judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
+    if not (missed := driver._unrun(ids, judged, tip)):
+        return _keep(rec, Verdict(PASS), judged)
     dirs = [d for ds in driver._shards(rec) for d in ds]
-    passed = driver._every_shard(rec, states, lambda rc: rc == 0) or (
+    ok = driver._every_shard(rec, states, lambda rc: rc == 0) or (
         driver._every_shard(rec, states, lambda rc: rc in (0, 1)) and driver._only_allowed(rec))
-    if not passed and (lost or any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
+    if not ok and (lost or any(isinstance(rc, int) and (rc < 0 or (rc > 128 and rc != SIGTERM_RC))
                                    for _, rc, *_ in states.values())
                        or any(implicated(d) is None and killed(d, why) for d in dirs)):
         return _keep(rec, _down(rec, "was lost" if lost else f"was killed ({why})"))
@@ -127,13 +128,14 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
         for st in step_records(d):
             if (s := st.get("step")) in missed and st.get("status") == "failed" and not not_run(st):
                 paths.setdefault(s, set()).update(step_paths(d, st) or ())
+    passed = [s for s in judged if s not in missed]
     if paths:
         base = rec.get("base")
         return _keep(rec, Verdict(FAIL, tuple(Failed(f"step {s}", key(driver.repo, tip, s) or f"{tip}:{s}", _inputs(paths[s]),
-                                                     key(driver.repo, base, s) if base else None)
-                                              for s in missed if s in paths), ended=True))
+                                                     key(driver.repo, base, s) if base else None, frozenset({step_test(s)}))
+                                              for s in missed if s in paths), ended=True), passed)
     return _keep(rec, _down(rec, f"ended ({why}) without passing {', '.join(missed)}: each skipped, or absent from its "
-                                 "steps.jsonl"))
+                                 "steps.jsonl"), passed)
 
 
 def combine(graph: Verdict, slim: Verdict) -> Verdict:
@@ -288,13 +290,41 @@ def _down(rec: dict | None, why: str) -> Verdict:
                                       f"{rec['tip'] if rec else ''}:{ids or 'no run'}", frozenset()),))
 
 
-def _keep(rec: dict, v: Verdict) -> Verdict:
+def _keep(rec: dict, v: Verdict, passed: list[str] | None = None) -> Verdict:
     rec["verdict"] = {"state": v.state, **{k: [{"task": f.task, "key": f.key, "inputs": sorted(f.inputs),
-                                                **({"base_key": f.base_key} if f.base_key is not None else {})} for f in fs]
-                                           for k, fs in (("failed", v.failed), ("infra", v.infra)) if fs}}
+                                                **({"base_key": f.base_key} if f.base_key is not None else {}),
+                                                **({"tests": sorted(f.tests)} if f.tests else {})} for f in fs]
+                                           for k, fs in (("failed", v.failed), ("infra", v.infra)) if fs},
+                      **({"passed": passed} if passed is not None else {})}
     return v
 
 
 def _kept(got: dict) -> Verdict:
-    return Verdict(got["state"], *(tuple(Failed(f["task"], f["key"], frozenset(f["inputs"]), f.get("base_key"))
+    return Verdict(got["state"], *(tuple(Failed(f["task"], f["key"], frozenset(f["inputs"]), f.get("base_key"),
+                                                frozenset(f.get("tests") or ()))
                                          for f in got.get(k) or ()) for k in ("failed", "infra")), ended=got["state"] == FAIL)
+
+
+def step_test(step: str) -> str:
+    """The one test id of ``step`` of the run beside a check: its failures are compared by it (`vqueue.Failed.tests`), as a
+    step read whole (`WHOLE`) is never at its base's key."""
+    return f"step:{step}"
+
+
+def based(v: Verdict, base: dict | None) -> Verdict:
+    """``v`` with each failed step's `base_tests` read from the run beside the base's check (``base``, that run's record, as
+    `judge` keeps it): the step's test (`step_test`) when that run failed it, none when it passed it, and None while it runs, or
+    when it ended without judging it, so `vqueue.decide` takes a failure the base has too as inherited."""
+    got = (base or {}).get("verdict")
+    if not isinstance(got, dict) or not v.failed:
+        return v
+    failed = {f.get("task") for f in got.get("failed") or () if isinstance(f, dict)}
+    passed = set(got.get("passed") or ())
+
+    def of(f: Failed) -> Failed:
+        s = f.task.removeprefix("step ")
+        if s == f.task:
+            return f
+        return replace(f, base_tests=frozenset({step_test(s)}) if f.task in failed else frozenset() if s in passed else None)
+
+    return replace(v, failed=tuple(of(f) for f in v.failed))
