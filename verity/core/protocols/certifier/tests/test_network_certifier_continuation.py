@@ -178,7 +178,9 @@ def test_a_response_that_ends_at_the_close_isnt_continued_and_one_with_an_id_in_
     assert [t for t, _ in eight.cells] == [21, 21, 22, 22, 23, 23, 24] and eight.ended == 24
     cont = next(c for c in _edge(run, 24).continuations if c.q == 8)
     assert cont.e == 6 and cont.request.max_tokens == 1 and cont.request.prompt[-6:] == _ids(8, 6)
-    assert 5 not in at[8] and at[16][5].released == 8
+    assert 5 not in at[8] and at[16][5].released == 8 and not C.is_open(at[16][5], 8, EOS)
+    for b, want in STAMPS.items():
+        assert C.stamps(list(at[32].values()), b, EOS) == want
     assert at[24][9].ended == 22 and at[24][9].cells == () and not C.is_open(at[24][9], 24, EOS)
 
 
