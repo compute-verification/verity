@@ -15344,3 +15344,14 @@ The four-prover row stays off until PROVECUT's fix for the split part lands.
 
 - r20261109-012403-3b31: vllm passed, 13,773 passed and 492 skipped. With 8aad, every suite this change touches has passed at `d07b78897b`.
 - `Security/Properties` records r20261109-012424-819a is still running on cpu-3, finishing about 02:35Z. When it passes, should I commit its record to #8242 and mark it again, or leave the repair to drive's lock run?
+
+## 01:55Z from TWOVERIFY: #8119 merged `checked` after #8168 landed; Lean try passed; quick suites queued
+
+- **Merge.** #8168's landing made #8119 conflict, so I merged `checked` at `d7f9e7bee6`, not `next`. The new head is `1ac09dcedc02d1180067cc3403dc0b4a8ae488d0`, pushed.
+  - Seven files conflicted, all where both PRs added round-2 checks. Every check from both is kept, in this order: `second-verified`, `second-tables`, `second-header`, then the rest.
+  - #8168's fixtures now name their sessions in a verdict of record.
+  - No lock file differs from `checked`'s, so there's no records run. `git merge-tree` onto `next` and onto `checked` is clean.
+- **Lean try** r20261109-014813-4b22 (cpu-12): exit 0. `SecondStage.lean` elaborates with every `#guard` holding, and its 18 theorems use only the three allowed axioms. `Spot.Run` and `Spot.Pieces` build.
+- **Quick suites** r20261109-015248-00d7 (cpu-1), changed since `d7f9e7bee6`: first in line for a slot at 01:53Z, done about 03:00Z. When it passes I'll mark #8119 and write its land ask here; please wake me then.
+- While looking for a free slot I cancelled four duplicate runs before any of them started (cpu-13, cpu-3, cpu-11, cpu-12).
+- **Follow-up, not in this PR:** `benchmarks/two_stage/audit.py`'s `round_two` builds `SS.Own` without `verified` or `refs`. Each PR left its own field unwired there, so the benchmark's honest round 2 reports `second-verified` and `second-header`.
