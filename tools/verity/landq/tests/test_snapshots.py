@@ -177,6 +177,23 @@ def test_the_snapshot_carries_the_clock_reruns_and_fields_set_by_keyword() -> No
         snapshots.Driver(vq, lean=3)
 
 
+def test_a_queue_that_reruns_a_lone_fail_stays_sound_in_the_harness() -> None:
+    def decide(s):
+        c = s.candidates[0] if s.candidates else None
+        if c is not None and c.verdict.state == vq.FAIL and len(c.members) == 1 and not c.reruns:
+            return [Rerun(c.sha, tuple(f.key for f in c.verdict.failed))]
+        return vq.decide(s)
+
+    q = types.SimpleNamespace(**vars(FULL))
+    q.decide = decide
+    d, reruns = snapshots.Driver(q), 0
+    for seed in range(60):
+        r = harness.run(harness.random_scenario(random.Random(seed), flaky=3), step=d.step, state=d.start(harness.MAIN0))
+        assert not r.unsound, (seed, r.unsound)
+        reruns += sum(isinstance(x, lq.Rerun) for x in r.decisions)
+    assert reruns > 10
+
+
 def test_a_rerun_clears_the_failed_keys_and_asks_the_world_to_run_them_afresh() -> None:
     s = snapshots.QState("m")
     s.stack.append(lone({"unit:a": lq.Result("T1", "unit:a", lq.FAIL, frozenset({"a/"}), "1"),

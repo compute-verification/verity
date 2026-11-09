@@ -9,6 +9,8 @@ from dataclasses import dataclass, field
 from verity_landq import model as lq
 
 MAIN0 = "main0"
+#: the log's mark of a `Rerun` decision, as (RERUN, tree, task): the results there before it are set aside
+RERUN = "rerun"
 
 
 @dataclass(frozen=True)
@@ -116,6 +118,9 @@ def run(s: Scenario, step=lq.step, limit: int = 20_000, state=None) -> Run:
             after[tree] = [lq.Listed(tree, frozenset(s.tasks))] + [result(tree, t) for t in sorted(s.tasks)]
         elif isinstance(d, lq.Retry):
             pending.append(result(d.tree, d.task))
+        elif isinstance(d, lq.Rerun):
+            r.log.append((RERUN, d.tree, d.task))
+            pending.append(result(d.tree, d.task))
         elif isinstance(d, lq.Advance):
             check_advance(r, d)
             r.mains.append(d.tree)
@@ -142,7 +147,8 @@ def run(s: Scenario, step=lq.step, limit: int = 20_000, state=None) -> Run:
 
 def check_advance(r: Run, d: lq.Advance) -> None:
     """Soundness at one `Advance`, from the log alone: the tree is built on `main` as the world last moved it, it was listed,
-    every listed task has a delivered pass on that tree and no delivered fail there, and no PR it holds breaks anything."""
+    every listed task has a delivered pass on that tree and no delivered fail there since its last `Rerun` there (which
+    sets the earlier results aside, a stale delivery of one included), and no PR it holds breaks anything."""
     s, tree, main = r.scenario, d.tree, r.mains[-1]
     why = []
     up, seen = tree, set()
@@ -155,7 +161,10 @@ def check_advance(r: Run, d: lq.Advance) -> None:
     if not listed:
         why.append(f"{tree} was never listed")
     for task in sorted(listed[0] if listed else ()):
-        got = [e.status for e in r.log if isinstance(e, lq.Result) and e.tree == tree and e.task == task]
+        since = max((i for i, e in enumerate(r.log) if e == (RERUN, tree, task)), default=-1) + 1
+        aside = {id(e) for e in r.log[:since]}  # a stale delivery repeats an earlier result's object
+        got = [e.status for e in r.log[since:]
+               if isinstance(e, lq.Result) and e.tree == tree and e.task == task and id(e) not in aside]
         if lq.PASS not in got or lq.FAIL in got:
             why.append(f"{task} on {tree}: {got}")
     holds = {pr for pr, _ in r.trees.get(tree, ())}
