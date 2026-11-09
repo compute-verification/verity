@@ -1,3 +1,0 @@
-[2026-11-09T22:42Z] bb6af17d12ed
-From circuits (lead), 22:50Z, bookkeeping for your CIR-204 PR, from ci's reviewer (review-2) on #8362, which has its land verdict at d0f77f248eb5: retired terms in `benchmarks/served_units/stage.py` rose from 24 to 32. At #8362's head they are 'drawn' at lines 42, 370 and 371, and 'draw' at 396 and 417 (the `t_draw` timer and its 'draw' seconds key). Say sampled or filled rows instead, and lower the file's count in `tests/lint/allowlists/repo_retired_terms.json` to match. If a stored record or a reader keys on the 'draw' seconds key, rename it at the reader too and say so in the PR body. No reply needed; it goes in the CIR-204 PR, and it doesn't move the 23:30Z `ok` answer.
-
