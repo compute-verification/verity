@@ -18,7 +18,9 @@ sessions' runs on their fixed rounds, and the sample's slots, at most `n_PU` hol
 Read at the per-window cap (`Design.Two.card_wrongBlocks_lt`), `KSAt` bounds what one accepted run hides
 (`CompiledTwo.KSAt.wrongBlocks_le`): at a first stage that catches each replay block at rate `r₁` and a second stage
 that samples each cell at rate `r₂`, a run is accepted while the extracted boundary trace marks at least `K` replay
-blocks incorrect at every interior with probability at most `KSAt`'s bound at every `δ ≥ (1 − r₁·r₂)^K`.
+blocks incorrect at every interior with probability at most `KSAt`'s bound at every `δ ≥ (1 − r₁·r₂)^K`. The same
+bound holds at the replay blocks wrong at their boundary, a count of the boundary trace alone
+(`CompiledTwo.KSAt.wrongAtBoundary_le`).
 -/
 
 @[expose] public section
@@ -73,6 +75,23 @@ theorem KSAt.wrongBlocks_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hks : L.
     show d'.replay.Pa d'.part S ≤ ∏ _ρ ∈ S, (1 - r₁)
     rw [Finset.prod_const]
     exact h₁ S hS
+
+/-- **What one accepted run hides, counted at the boundary**: `KSAt.wrongBlocks_le` at the replay blocks the extracted
+boundary trace marks wrong at their boundary (`Sampling.wrongAtBoundary`), which every interior marks incorrect
+(`Sampling.wrongAtBoundary_subset`). -/
+theorem KSAt.wrongAtBoundary_le {H : Msg → Msg} {L : CompiledTwo Coin A} (hks : L.KSAt H) {x : Msg} (hx : L.Scope x)
+    {s : Sampling.AuditStatement} {Pt : Sampling.Partition} {d : Sampling.Design.Two} (hs : L.parse x = some s)
+    (hPt : L.partition s = some Pt) (hd : L.two s = some d) {r₁ r₂ δ : ℝ} {K : ℕ} (h₁ : d.FirstRate r₁)
+    (h₂ : d.SecondRate Pt r₂) (hr₁ : 0 ≤ r₁) (hr₁' : r₁ ≤ 1) (hr₂ : 0 ≤ r₂) (hr₂' : r₂ ≤ 1) (hδ : 0 ≤ δ)
+    (hK : (1 - r₁ * r₂) ^ K ≤ δ) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ) :
+    ENNReal.ofReal (Pr fun z : Ω × (Fin (L.V.k x) → Coin) × L.E.C x =>
+        (run H P L.V x z.1 z.2.1).out = .acc ∧ ∀ w, (L.E.eval H P x z.1 z.2.1 z.2.2).1 = some w →
+          K ≤ (Sampling.wrongAtBoundary H L.commit s Pt d.part w).card) ≤
+      ENNReal.ofReal (L.κ δ x) + ENNReal.ofReal (Real.sqrt (L.γ x)) * sbB H L.V P x (2 * T) +
+        ecrBound H (Sampling.BextAt H L.V L.E T Ω P x) (2 * T * L.work x) :=
+  le_trans (ENNReal.ofReal_le_ofReal (Pr_mono fun _ hz => ⟨hz.1, fun w hw ι =>
+      (hz.2 w hw).trans (Finset.card_le_card (Sampling.wrongAtBoundary_subset H L.commit s Pt d w ι))⟩))
+    (hks.wrongBlocks_le hx hs hPt hd h₁ h₂ hr₁ hr₁' hr₂ hr₂' hδ hK Ω P T)
 
 end CompiledTwo
 
