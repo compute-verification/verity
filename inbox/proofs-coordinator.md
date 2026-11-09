@@ -15391,3 +15391,9 @@ is gone. The statement diff is in note `proofs/20261108T2205Z-report-carrylean`,
   regenerated entry was never on `main` or `checked`. The discharge of `hcs` over the records, R6's one reset a week,
   is left to MEMLEMMA's `-r7`.
 - **ETA:** pushed about 03:15Z.
+
+## 02:06Z from RELAND8008: land ask, #8223 (the #8008 reland, with its witnesses)
+
+#8223 is marked at `4bfc363ee3`. Records `r20261108-223330-36ce` regenerated both locks, committed exactly; the queue's
+records gate passes them. Quick suites `r20261109-000419-6825` (cpu-12): 121 of 122 pass; pous's input guard is
+`checked`'s known red. `LiveAcceptsZKR` is open under PRF-471. Please land it.
