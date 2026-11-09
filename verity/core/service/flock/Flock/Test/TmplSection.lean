@@ -4,12 +4,15 @@ template's `n` lines off the file's head alone, so bytes past the section that a
 file without the section, with a malformed header or with fewer lines than its header names gives none.
 `HmRow.tmplLines`, what `HmRow.parse` passes over before the sections, is the header and those lines under the templated
 tags, and nothing under any other's or in a file without the section. `HmOut.parseTmpl` refuses a META `definition`, a
-unit class's, before it reads the template.
+unit class's, before it reads the template. `HmOut.tmplOfView` reads the same template, and the same errors, off an
+ASCII file's line view.
 -/
 module
 
 public import Flock.HmRow
+public import Flock.TmplLines
 meta import Flock.HmRow
+meta import Flock.TmplLines
 
 @[expose] public section
 
@@ -31,6 +34,17 @@ def two : ByteArray := file "TEMPLATE 2\na b\nc d\n"
 #guard (HmOut.tmplOf (file "TEMPLATE two\na\n")).toOption == none
 #guard (HmOut.tmplOf (file "TEMPLATE 1 2\na\n")).toOption == none
 #guard (HmOut.tmplOf (file "")).toOption == none
+
+def viewOf (b : ByteArray) : Option (Except String (Array String)) := (ByteLines.View.of? b).map HmOut.tmplOfView
+
+#guard (viewOf two).map Except.toOption == some (some #["a b", "c d"])
+#guard (viewOf (file "TEMPLATE 0\n")).map Except.toOption == some (some #[])
+#guard (viewOf (file "TEMPLATE 1\na b\n" ⟨#[0xff, 0xfe]⟩)).isNone
+#guard viewOf (file "TEMPLATE 3\na\nb\n" .empty) matches some (.error "circuit: the template section is truncated")
+#guard HmOut.tmplOf (file "TEMPLATE 3\na\nb\n" .empty) matches .error "circuit: the template section is truncated"
+#guard (viewOf (file "TEMPLATE two\na\n")).map Except.toOption == some none
+#guard (viewOf (file "TEMPLATE 1 2\na\n")).map Except.toOption == some none
+#guard (viewOf (file "")).map Except.toOption == some none
 
 #guard HmRow.tmplLines Tags.circuitTmpl (linesOf two) == 3
 #guard (linesOf two)[2 + HmRow.tmplLines Tags.circuitTmpl (linesOf two)]! == "CIRCUIT x 0"
