@@ -47,7 +47,7 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, Fault, served_logprobs, sink_span, ue8m0_scale
 from prompts import PROMPTS
-from traffic import HELDOUT_TEXTS
+from traffic import CALIBRATION_TEXTS, HELDOUT_TEXTS
 
 PREFIX = "You are a helpful assistant. Answer every question briefly and accurately.\n\n"
 SITES = ("resid", "mlph", "v", "k", "attn", "mlp")
@@ -114,15 +114,29 @@ def faults_at(lm: LM, taps: dict, pf: int, pc: int, sites: list[str], layers: li
     return out
 
 
-def suffixes(tok, n: int, gen: torch.Generator, lo: int = 6, hi: int = 40) -> list[torch.Tensor]:
-    """n receiver-chosen requests: PROMPTS and held-out texts, each cut after a random number of tokens."""
-    texts = list(PROMPTS) + list(HELDOUT_TEXTS)
-    out = []
-    for i in range(n):
-        ids = tok.encode(texts[i % len(texts)]).ids
-        k = int(torch.randint(min(lo, len(ids)), min(hi, len(ids)) + 1, (1,), generator=gen))
-        out.append(torch.tensor([ids[:k]]))
-    return out
+def suffixes(lm: LM, tok, pre_h: Cache, n: int, gen: torch.Generator, cut: str, precision: str, lo: int = 6,
+             hi: int = 48) -> list[torch.Tensor]:
+    """n receiver-chosen requests after the prefix: PROMPTS and the texts of traffic.py, each cut after some tokens
+    (`random`, or `margin`: where the honest top two are closest, which a receiver finds by honest sampling under
+    seeds it controls), a text's k-th use at its k-th cut, interleaved so that every prefix of the list spans texts."""
+    texts = list(PROMPTS) + list(HELDOUT_TEXTS) + list(CALIBRATION_TEXTS)
+    per = -(-n // len(texts))
+    cuts = []
+    for t in texts:
+        ids = tok.encode(t).ids[:hi]
+        if len(ids) <= lo:
+            continue
+        if cut == "random":
+            ks = (torch.randperm(len(ids) - lo + 1, generator=gen)[:per] + lo).tolist()
+        else:
+            lp = served_logprobs(lm.forward(torch.tensor([ids]), copy_cache(pre_h))[0], precision)
+            top = lp.topk(2, -1).values
+            margin = top[:, 0] - top[:, 1]
+            margin[:lo - 1] = math.inf
+            ks = (margin.argsort()[:per] + 1).tolist()
+        cuts.append([torch.tensor([ids[:k]]) for k in ks])
+    out = [c[r] for r in range(per) for c in cuts if r < len(c)]
+    return out[:n]
 
 
 class Noise:
@@ -243,42 +257,83 @@ def decode(lm: LM, pre_f: Cache, pre_h: Cache, prompt: torch.Tensor, b: int, n: 
     return torch.stack(ys, 1), torch.stack(yh, 1), torch.stack(kl, 1)
 
 
-def score_oracle(served: np.ndarray, honest: np.ndarray, deltas: np.ndarray, E: torch.Tensor, vocab: int) -> dict:
+def weight_target(lm: LM, site: str, layer: int, coord: int) -> torch.Tensor | None:
+    """For a value-vector fault: the direction it adds to every later position's final norm output, read from the
+    weights alone (the output projection's column for that coordinate, summed over the query heads sharing it,
+    through the final norm's gain; GPT-2's LayerNorm also centres it). Exact up to the norm's scale at the last layer;
+    at earlier layers the direct path only. None for other sites."""
+    s, W = lm.spec, lm.W
+    if site != "v":
+        return None
+    if s.arch == "gpt2":
+        w = W[f"h.{layer}.attn.c_proj.weight"][coord].float()
+        return (w - w.mean()) * W["ln_f.weight"].float()
+    kh, e = divmod(coord, s.head_dim)
+    r = s.heads // s.kv_heads
+    wo = W[f"layers.{layer}.self_attn.o_proj.weight"].float()
+    return sum(wo[:, (kh * r + i) * s.head_dim + e] for i in range(r)) * W["norm.weight"].float()
+
+
+def ranks_along(E: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    """Each token's 0-based rank by its logit change along t (E t), largest first."""
+    order = torch.argsort(E @ t, descending=True)
+    rank = torch.empty_like(order)
+    rank[order] = torch.arange(len(order))
+    return rank
+
+
+def decoded(served: np.ndarray, direct: np.ndarray) -> list[int]:
+    """The decoder's output: the distinct tokens the fault served in place of the honest one, most frequent first."""
+    ys, counts = np.unique(served[direct], return_counts=True)
+    return [int(y) for y in ys[np.argsort(-counts, kind="stable")]]
+
+
+def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, deltas: np.ndarray,
+                 target: torch.Tensor | None, E: torch.Tensor, vocab: int, checkpoints: list[int]) -> dict:
     """The decoders' bits for one fault over Q requests (first served token). deltas (Q, d): the fault's effect on the
-    final norm's output at each request's first served position."""
-    direct = served[:, 0] != honest[:, 0]
+    final norm's output at each request's first served position; runner (Q,): each request's honest runner-up, the
+    token a small push serves without any information about the fault's direction (the baseline)."""
+    s0, h0 = served[:, 0], honest[:, 0]
+    direct = s0 != h0
     Q = len(direct)
-    out = {"direct": int(direct.sum()), "reads": Q}
-    if not direct.any():
-        return out | {"pairs": 0, "pairs_ok": 0, "pair_bits": 0.0, "top_bits": 0.0, "top_k": 0, "base_bits": 0.0,
-                      "base_k": 0, "cos_mean": None}
     D = torch.from_numpy(deltas).float()
     tot = D.sum(0)
+    u_all = tot / Q
+    out = {"direct": int(direct.sum()), "reads": Q, "delta_norm": float(D.norm(dim=1).mean())}
+    targets = {"u": ranks_along(E, u_all)} if float(u_all.norm()) > 0 else {}
+    if target is not None:
+        targets["w"] = ranks_along(E, target)
+        out["cos_u_w"] = float(torch.nn.functional.cosine_similarity(u_all, target, 0))
     cos, ok, seen = [], 0, set()
-    n_pairs = 0
     for q in np.nonzero(direct)[0]:
         u = (tot - D[q]) / max(Q - 1, 1)
         if float(u.norm()) == 0:
             continue
         cos.append(float(torch.nn.functional.cosine_similarity(D[q], u, 0)))
-        y0, y1 = int(honest[q, 0]), int(served[q, 0])
-        if (y0, y1) in seen:
-            continue
-        seen.add((y0, y1))
-        n_pairs += 1
-        ok += int(float((E[y1] - E[y0]).float() @ u) > 0)
+        y0, y1 = int(h0[q]), int(s0[q])
+        if (y0, y1) not in seen:
+            seen.add((y0, y1))
+            ok += int(float((E[y1] - E[y0]) @ u) > 0)
+    n_pairs = len(seen)
     acc = ok / n_pairs if n_pairs else 0.0
     h = 0.0 if acc in (0.0, 1.0) else -(acc * math.log2(acc) + (1 - acc) * math.log2(1 - acc))
-    u_all = tot / Q
-    score = (E.float() @ u_all)
-    order = torch.argsort(score, descending=True)
-    rank = torch.empty_like(order)
-    rank[order] = torch.arange(len(order))
-    tb, tk = top_bits(rank[torch.from_numpy(served[direct, 0])].numpy(), vocab)
-    bb, bk = top_bits(rank[torch.from_numpy(honest[direct, 0])].numpy(), vocab)
-    return out | {"pairs": n_pairs, "pairs_ok": ok, "pair_bits": n_pairs * max(0.0, 1 - h) if acc > 0.5 else 0.0,
-                  "top_bits": tb, "top_k": tk, "top_n": int(len(np.unique(served[direct, 0]))), "base_bits": bb,
-                  "base_k": bk, "cos_mean": float(np.mean(cos)) if cos else None}
+    out |= {"pairs": n_pairs, "pairs_ok": ok, "pair_bits": n_pairs * (1 - h) if acc > 0.5 else 0.0,
+            "cos_mean": float(np.mean(cos)) if cos else None}
+    for qc in checkpoints:
+        if qc > Q:
+            continue
+        dq = direct[:qc]
+        dec = decoded(s0[:qc], dq)
+        base = sorted({int(r) for r in runner[:qc][dq]})
+        row = {"direct": int(dq.sum()), "code_bits": code_bits(dq, s0[:qc], vocab), "decoded": len(dec)}
+        for name, rank in targets.items():
+            rb, rk = top_bits(rank[dec].numpy() if dec else np.array([], dtype=np.int64), vocab)
+            bb, bk = top_bits(rank[base].numpy() if base else np.array([], dtype=np.int64), vocab)
+            row |= {f"top_bits_{name}": rb, f"top_k_{name}": rk, f"base_bits_{name}": bb, f"base_k_{name}": bk,
+                    f"p1_{name}": int(bool(dec) and int(rank[dec[0]]) == 0),
+                    f"in_top10_{name}": int(sum(int(rank[y]) < 10 for y in dec[:10]))}
+        out[f"q{qc}"] = row
+    return out
 
 
 def main() -> int:
@@ -296,6 +351,8 @@ def main() -> int:
     ap.add_argument("--coords", type=int, default=4, help="per site and layer: the widest half, then random")
     ap.add_argument("--queries", type=int, default=128, help="oracle: receiver-chosen requests sharing the prefix")
     ap.add_argument("--obs", type=int, default=1, help="oracle: served tokens a request returns")
+    ap.add_argument("--cut", default="margin", choices=("margin", "random"),
+                    help="oracle: where each request's text ends (margin: at the honest near-tie)")
     ap.add_argument("--prompts", type=int, default=4, help="decode: prompts after the prefix")
     ap.add_argument("--new", type=int, default=128, help="decode: served tokens")
     ap.add_argument("--temperature", type=float, default=0.0)
@@ -335,9 +392,11 @@ def main() -> int:
         faults = faults[:a.max_faults]
     E = lm.E.float()
     t_start = time.time()
+    checkpoints = sorted({q for q in (8, 32, 128, a.queries) if q <= a.queries})
     if a.mode == "oracle":
-        reqs = suffixes(tok, a.queries, gen)
+        reqs = suffixes(lm, tok, pre_h, a.queries, gen, a.cut, a.precision)
         hons = [honest_first(lm, pre_h, sfx, a.precision) for sfx in reqs]
+        runner = np.array([int(h[0][0].topk(2).indices[1]) for h in hons])
     else:
         reqs = [torch.tensor([tok.encode(t).ids]) for t in PROMPTS[:a.prompts]]
     recs = []
@@ -360,9 +419,14 @@ def main() -> int:
             KL = torch.stack(KL, 1).numpy() if KL else None
             for j, f in enumerate(chunk):
                 direct = S[j] != H[j]
-                r = dict(f) | score_oracle(S[j], H[j], Dl[j], E, V)
+                target = weight_target(lm, f["site"], f["layer"], f["coord"])
+                r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, E, V, checkpoints)
                 r["code_bits"] = code_bits(direct.reshape(-1), S[j].reshape(-1), V)
                 r["direct_reads"] = int(direct.sum())
+                last = r[f"q{checkpoints[-1]}"]
+                for key in ("top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w"):
+                    if key in last:
+                        r[key] = last[key]
                 if KL is not None:
                     r["kl_bits"] = float(KL[j].sum())
                 recs.append(r)
@@ -392,13 +456,13 @@ def main() -> int:
                "direct_max": int(max(r["direct"] for r in rs)),
                "code_mean": float(np.mean([r["code_bits"] for r in rs])),
                "code_max": float(max(r["code_bits"] for r in rs))}
-        for key in ("pair_bits", "top_bits", "base_bits", "kl_bits"):
-            if key in rs[0]:
-                vals = [r[key] for r in rs]
+        for key in ("pair_bits", "top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w", "kl_bits"):
+            if any(key in r for r in rs):
+                vals = [r.get(key, 0.0) for r in rs]
                 row[key + "_mean"], row[key + "_max"] = float(np.mean(vals)), float(max(vals))
         rows.append(row)
-    best = {key: max(recs, key=lambda r: r.get(key, 0.0)) for key in ("code_bits", "pair_bits", "top_bits")
-            if key in recs[0]}
+    keys = ("code_bits", "pair_bits", "top_bits_u", "top_bits_w")
+    best = {key: max(recs, key=lambda r: r.get(key, 0.0)) for key in keys if any(key in r for r in recs)}
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "mode": a.mode, "where": a.where, "fault_position": pf, "fault_class": pc, "prefix_tokens": ids.shape[1],
                "boxes": str(a.boxes) if a.boxes else None, "temperature": a.temperature, "seeds": a.seeds,
