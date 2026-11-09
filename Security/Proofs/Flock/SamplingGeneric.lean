@@ -24,6 +24,7 @@ public import Proofs.Flock.SamplingGeneric.TwoBernoulli
 public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
 public import Proofs.Flock.SamplingGeneric.TwoRankin
+public import Proofs.Flock.SamplingGeneric.TwoRegSets
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -84,7 +85,9 @@ rates `q_ρ`, the admissible sets' count and their patterns' count are at most `
 blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
 At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,
 `P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
-every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved).
+every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved). At two stages, the
+committed form's incorrect set is the grid's incorrect proof blocks at the committed traces, and reads no second-stage
+coin (`SamplingGeneric/TwoRegSets.lean`: `CompiledTwo.FregTwo_eq`, `CompiledTwo.FregTwo_forkOn`).
 -/
 
 @[expose] public section
