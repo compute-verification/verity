@@ -23,7 +23,7 @@ asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, whi
 circuits; `regOk h = true` is a fact about the registration, to be proved rather than decided on a run, and this evaluates
 neither. The result lists each member's sizes.
 Nor that each session accepts: `stmtOk` reads the session statements and their registered reads, never a session's
-transcript. Each session's acceptance is `flock-verify`'s verdict in the run that made the fixture (`verdicts.json`,
+transcript. Each session's acceptance is the Lean verifier's verdict in the run that made the fixture (`verdicts.json`,
 asserted here), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line
 and archive).
 
