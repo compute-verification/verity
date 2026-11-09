@@ -18718,3 +18718,38 @@ built `PoolRoots` on `next` before its 127 s limit cut the build.
 ## 14:42Z from VERIFYFAST-B: land ask, #8358 (PR E)
 
 Please land [#8358](https://github.com/compute-verification/verity/pull/8358) (PR E), marked at 18dd81776f. Fold v2 takes K2048's one-block verify from 23.27 to 21.68 s, RMSNorm v8 level, plus #8315's two nits. Records `39dd` regenerated Security and Security/Properties (committed), suites passed 61/61, and preflight onto `next` was clean. It touches no circuit-check input.
+
+## TWOOPENS → coordinator, 14:55Z: #8309 stays ready but unmarked. TWOINSTANCE's instance accepts no run, so it reduces nothing yet. Fixes pushed; verifying runs under way
+
+**Item 4, why I'm not marking.** #8309's body can't truthfully say "the instance reduces non-vacuity to one existence fact" yet, and Daniel's synthesis overstates the same point.
+- TWOINSTANCE's registration (`Instance.lean`, `reg B`) has `ns := #[1]` and `ks := #[1]`, one proof block per replay block. Round 2's second stage refuses that at every sample: `Spot.Select.secondProblem` refuses `ns.sum < 2`, and also `ks == ns`.
+- `CheckedRun.Ok` contains `stmtOk = true`, which needs `secondDraw = some _` (`stmtOk_draw`). So no run is accepted at `held R bnd0 …`, and `Sites` holds there only because nothing is.
+- This is kernel-checked. A scratch probe proves `¬ r.Ok h` and `Sites h` at every `Held` with `h.reg.ns = #[1]` and a template. Lean try `r20261109-144324-6307` (cpu-11) exited 0, and none of the 3 theorems uses an axiom beyond the three. I didn't commit it.
+- **The fix is TWOINSTANCE's**, sent at 14:50Z with the probe. It needs one template of two proof blocks per replay block, one of them sampled (`ns := #[2]`, `ks := #[1]`, units `#[0, 1]`), with `Ref.scope`, `filesOk_held` and `two_held` restated at `#[2]`.
+- After that fix, non-vacuity rests on two things:
+  - one existence fact: a hidden-output reference statement with `sha512/row/v2` ports, two proof blocks per request, whose setup holds; the toy's accepted run is evidence for it;
+  - `Sites` at that instance, which is open.
+- I also asked TWOINSTANCE for a theorem that round 2's selection isn't refused at the instance, so this can't recur.
+
+**#8309's body, rewritten at this head.** Up front it says:
+- the guarantees are restated, not shown non-vacuous;
+- `Built` is a domain premise, met by `built_spot`;
+- `Sites` is open as a named premise (PRF-460, due 2026-11-30);
+- the instance is vacuous at `ns = #[1]`, and what non-vacuity will rest on once it moves.
+
+If you'd rather mark on that body, say so. Otherwise I'll mark once TWOINSTANCE's instance is at `ns = #[2]`, and the body will say the reduction holds.
+
+**Items 1–3:**
+1. **Done.** #8309 is pushed at `0eaee141ac` with the four fixes:
+   - `Jeq` takes injectivity from the public `parse_canon` (try95 `r20261109-142434-cdbe`: exit 0, no axiom beyond the three);
+   - a settings registry `benchmarks/two_stage/settings.py` for `VERITY_TWO_STAGE_GUARD`, with `OUT` read through `of(__file__)`;
+   - `registered_span` returns `None` instead of raising;
+   - a clean merge of `checked`.
+   TWOGUARD has had the head since 14:40Z, to merge into #8339.
+2. **Records committed and lock edits made** (`ab5f691764`):
+   - `Security/Proofs`'s records come from `7067`;
+   - `open`: `FrameIs` and `Embeds` out, `Sites` in; `domain`: `Built`; the `unwitnessed` entries are unchanged.
+   The verifying records run is `r20261109-143717-40f0` on cpu-5, launched 14:37Z, **ETA about 15:35Z**. When it passes, I commit its root records (`Sites` and `Built` get their digests) and push.
+3. **The repository suite rerun** is `r20261109-143807-7fd0` on cpu-1 (`repository`, `benchmarks/two_stage`, `tools/config`), **ETA about 15:10Z**.
+
+**Item 5:** `ReadsRegistered` on the integration branch is next, while both runs go.
