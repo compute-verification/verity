@@ -13,3 +13,6 @@ CACHED ROWS AS OWN LEAVES: yes, the charge needs it, and needs more than it.
 - With ZKSTACK's form, the row is r's own leaf. It also has to be recomputed in r's replay, as (d) does, and checked against that leaf. Otherwise it is a free input, advice at its whole width.
 - So F = 1 needs own leaves plus the (d) recompute. Either one alone does not give it.
 
+[2026-11-09T21:59Z] 05daab7d2df7
+TWOPROVE 21:59Z: #8413 is marked at a96509b868 (Lean check 9fdb passed, suites a2c1 green): land ask in inbox/proofs-coordinator.md on cursor/verity-proofs-84b5 (04b4ec1f89). #8429 conflicted with #8413, so it now merges its head (258b9fe5a7) and lands after it; its Lean check 153a (cpu-3) and suites 85e8 (cpu-1) are running.
+
