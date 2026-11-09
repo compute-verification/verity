@@ -3990,10 +3990,11 @@ def test_a_grandfathered_inline_hypothesis_passes_and_the_list_only_shrinks():
 WHY = "inline when the rule came"
 
 
-def renamed_inline(was, now, consts, constants, moves=None):
-    """(policy, facts): `P.t`'s `shape.inline` lists ``was``, and its build takes ``now`` instead, naming ``consts``; the
-    build holds ``constants`` ({name: its kind, or (its kind, the text its SHA-256 is of)}) and was read with ``moves``."""
-    pol, f = inlined(premise(now, "Eq") | {"consts": consts})
+def renamed_inline(was, now, consts, constants, moves=None, fields=None):
+    """(policy, facts): `P.t`'s `shape.inline` lists ``was``, and its build takes ``now`` instead, naming ``consts`` and
+    showing ``fields`` ([object, field, constant] each); the build holds ``constants`` ({name: its kind, or (its kind, the
+    text its SHA-256 is of)}) and was read with ``moves``."""
+    pol, f = inlined(premise(now, "Eq") | {"consts": consts, "fields": fields or []})
     table = {n: {"kind": k} if isinstance(k, str) else {"kind": k[0], "sha256": sha(k[1])} for n, k in constants.items()}
     return pol | {"shape": {"inline": {"P.t": {was: WHY}}}}, f | {"constants": table, "moves": moves or {}}
 
@@ -4069,6 +4070,56 @@ def test_a_grandfathered_inline_premise_follows_its_declarations_renames_and_upd
     assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], "without the move, both declared and different"
 
 
+#: the move of `Verity.Circuit.Transcript` to `Verity.Circuit.Trace`, as `rename.py --moves` printed it
+TRACE_MOVES = {"Claims.Recursion.abortTrace": "Claims.Recursion.abortTranscript", "Claims.Trace": "Claims.Transcript",
+               "Verity.Circuit.Transcript": "Verity.Circuit.Trace"}
+NCI_CONSTS = ["Eq", "Exists", "Membership.mem", "Nci.admissible", "Nci.values", "SetLike", "SetLike.instMembership"]
+NCI_CONSTANTS = {"Nci.admissible": ("def", "admissible"), "Nci.values": ("def", "values"), "Eq": "inductive"}
+
+
+def test_a_moved_field_on_a_variable_follows_the_move_through_what_the_build_says_it_names():
+    """A dotted name that ends in a field on a variable (`D.D.Trace`, `Verity.Circuit.Trace D.D` by field notation) is
+    renamed where `--moved` moved the constant the build says that field stands for (`fields`): Nci's two premises over a
+    trace, as the lock keyed them before `Verity.Circuit.Transcript` moved, take their entries' places with no hand edit,
+    and `--update` keys them as printed. Without the move, or with no constant the build reports for the field, each
+    fails and `--update` drops it."""
+    for d in "Dd":
+        was = f"∀ (a : {d}.D.Transcript), SetLike.instMembership.mem (Nci.admissible {d} θv) a → Exists fun s => Eq " \
+            "(Nci.values Sst a) (f s)"
+        now = was.replace(f"{d}.D.Transcript", f"{d}.D.Trace")
+        fields = [[d, "D", "Verity.RegisteredCircuit.D"], [f"{d}.D", "Trace", "Verity.Circuit.Trace"]]
+        pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, TRACE_MOVES, fields)
+        assert inline_codes(pol, f) == [], was
+        assert A.inline_failures(pol, f)[1:] == ({"P.t": {now: WHY}}, {"P.t": [now]})
+        assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
+        for moves, shown in [(None, fields), (TRACE_MOVES, fields[:1]), (TRACE_MOVES, [])]:
+            pol, f = renamed_inline(was, now, NCI_CONSTS, NCI_CONSTANTS, moves, shown)
+            assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, moves, shown)
+            assert A.inline_failures(pol, f)[1] == {}, (was, moves, shown)
+
+
+def test_a_field_of_another_structure_that_shares_the_moved_word_keeps_its_text():
+    """A field that shares the moved field's word but stands for another structure's field (`s.Transcript`,
+    `P.Log.Transcript`) stays as printed beside the moved one, and a premise where it changed doesn't take the entry's
+    place, since nothing moved its own constant: `P.Log.Trace` for `P.Log.Transcript`, a field that stands for two
+    constants, or the moved field's new name already in the old text on another object."""
+    fields = [["D", "D", "Verity.RegisteredCircuit.D"], ["D.D", "Trace", "Verity.Circuit.Trace"],
+              ["s", "Transcript", "P.Log.Transcript"]]
+    was, now = "∀ (a : D.D.Transcript), Eq (P.view a) s.Transcript", "∀ (a : D.D.Trace), Eq (P.view a) s.Transcript"
+    pol, f = renamed_inline(was, now, ["Eq", "P.view"], {"P.view": ("def", "view")}, TRACE_MOVES, fields)
+    assert inline_codes(pol, f) == []
+    assert A.judge(pol, f, FILES, update=True)[1]["shape"] == {"inline": {"P.t": {now: WHY}}}
+    traced = [["s", "Trace", "P.Log.Trace"]]
+    cases = [("Eq (P.view a) s.Transcript", "Eq (P.view a) s.Trace", traced),
+             ("Eq (P.view a) s.Transcript", "Eq (P.view a) s.Trace", traced + [["s", "Trace", "Verity.Circuit.Trace"]]),
+             ("∀ (a : D.D.Transcript), Eq a E.D.Trace", "∀ (a : D.D.Trace), Eq a E.D.Trace",
+              fields + [["E.D", "Trace", "Verity.Circuit.Trace"]])]
+    for was, now, shown in cases:
+        pol, f = renamed_inline(was, now, ["Eq", "P.view"], {"P.view": ("def", "view")}, TRACE_MOVES, shown)
+        assert inline_codes(pol, f) == ["guarantees.inline-hypothesis"], (was, now, shown)
+        assert A.inline_failures(pol, f)[1] == {}, (was, now, shown)
+
+
 INLINE_G = "import Control.Defs\n\ndef Control.Guarantees.G : Prop := ∀ n : Nat, 0 < n → Control.double n = 5 → True\n"
 INLINE = """import Control.Assumptions
 import Control.Guarantees
@@ -4085,6 +4136,19 @@ theorem SecurityProofs.G : Guarantees.G := fun _ _ _ => trivial
 
 theorem uses_g : True ∧ (Guarantees.G → True) := ⟨trivial, fun _ => trivial⟩
 
+structure Circ where
+  N : Nat
+
+abbrev Circ.Trace (C : Circ) := Fin C.N → Nat
+
+structure Reg where
+  D : Circ
+
+structure Run where
+  n : Nat
+
+theorem fielded (D : Reg) (s : Run) (h : ∀ a : D.D.Trace, a = a → s.n = 0) : True := trivial
+
 end Control
 """
 
@@ -4098,7 +4162,8 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
     definition taken inside a conjunct is another listed guarantee's statement. Each premise names the constants its text
     shows, and the build reports those and the names of the lock's `shape.inline` texts it declares, with a definition's
     SHA-256 blind to its name: an entry under a name the build lacks, or under a definition the same as the printed one,
-    takes its premise's place; one under another declared definition doesn't."""
+    takes its premise's place; one under another declared definition doesn't. Each premise also names the fields it shows
+    by field notation, with their objects and constants, so that an entry under a moved field's old name takes its place."""
     pkg = tmp_path / "control"
     shutil.copytree(HERE / "fixtures" / "control", pkg, ignore=shutil.ignore_patterns(".lake"))
     src = pkg / "Control" / "Assumptions.lean"
@@ -4140,6 +4205,16 @@ def test_inline_hypotheses_are_read_past_lifts_foralls_and_conjunctions_on_a_rea
         "n): an inline hypothesis")
     assert A.judge(held, f, A.lean_modules(pkg), update=True)[1]["shape"]["inline"] == {
         "Control.SecurityProofs.G": {"Eq (Control.double n) 5": WHY}, "Control.offends": {"Eq (Control.double n) 4": WHY}}
+
+    traced = policy | {"guarantees": policy["guarantees"] | {"Control.fielded": {"owner": "@lean"}},
+                       "shape": {"inline": {"Control.fielded": {"∀ (a : D.D.Transcript), Eq a a → Eq s.n 0": WHY}}}}
+    f = A.facts_of(pkg, traced, tmp_path, moved={"Control.Circ.Transcript": "Control.Circ.Trace"})
+    part = f["pins"]["Control.fielded"]["inline"][0]
+    assert part["type"] == "∀ (a : D.D.Trace), Eq a a → Eq s.n 0"
+    assert part["fields"] == [["D", "D", "Control.Reg.D"], ["D.D", "Trace", "Control.Circ.Trace"],
+                              ["s", "n", "Control.Run.n"]]
+    assert A.judge(traced, f, A.lean_modules(pkg), update=True)[1]["shape"]["inline"] == {
+        "Control.fielded": {part["type"]: WHY}}
 
 
 def test_a_reflexive_statement_needs_no_witnesses_and_its_unwitnessed_entry_drops():
@@ -5105,6 +5180,45 @@ def test_another_package_reads_a_sampled_dependency_s_build_unchanged_while_the_
     assert fails == [] and rep["modules"] == ["D", "P"], (fails, rep)
     assert window == [([], olean), ([], olean)], "a reader in the window finds the dependency's build as it was"
     assert [files_of(b) for b in builds] == before, "nothing wrote either build"
+
+
+def test_without_the_sandbox_a_module_no_build_of_the_run_compiled_fails_the_audit(tmp_path, monkeypatch):
+    """Where check.py's own sandbox probe fails, nothing is recompiled, so a module its build didn't compile passes only if
+    a build of this run compiled it, as a dependent's path dependency's audit compiled it. One restored or kept fails,
+    naming the cause and the fix: `lean_audit.py`'s probe can pass where check.py's fails, and then it restores the kept
+    build. An empty population passes, and a sandboxed audit recompiles its sample as before."""
+    d, p = tmp_path / "ws" / "d", tmp_path / "ws" / "p"
+    for at, name, text, req in ((d, "D", "def D.v : Nat := 1\n", ""),
+                                (p, "P", "import D\n\ndef P.v : Nat := D.v + 1\n", '\n[[require]]\nname = "d"\npath = "../d"\n')):
+        (at / ".lake" / "build" / "lib" / "lean").mkdir(parents=True)
+        (at / "lakefile.toml").write_text(f'name = "{name.lower()}"\ndefaultTargets = ["{name}"]\n{req}\n'
+                                          f'[[lean_lib]]\nname = "{name}"\n')
+        (at / "lean-toolchain").write_text("leanprover/lean4:v4.34.0\n")
+        (at / f"{name}.lean").write_text(text)
+        (at / ".lake" / "build" / "lib" / "lean" / f"{name}.trace").write_text("{}")
+    (d / "lake-manifest.json").write_text(json.dumps({"packages": []}))
+    (p / "lake-manifest.json").write_text(json.dumps({"packages": [{"type": "path", "name": "d", "dir": "../d"}]}))
+    monkeypatch.setattr(A, "sandboxed", lambda: False)
+    monkeypatch.setattr(A, "RUN_COMPILED", set())
+    monkeypatch.setattr(A, "run", lambda argv, cwd, log=None, **kw: (1, "recompiled"))
+
+    fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w1", set(), [], log=lambda s: None)
+    assert [(f.code, f.entry) for f in fails] == [("sampled", None)] and rep["population"] == 2 and rep["modules"] == []
+    assert "the sandbox probe failed here" in fails[0] and "2 of the 2 modules" in fails[0] and "(D, P)" in fails[0]
+    assert fails[0].endswith("rerun on a node whose builds are sandboxed, or after fixing the probe")
+    assert not (tmp_path / "w1").exists(), "nothing is recompiled"
+
+    assert A.sampled_recompile(d, ["D"], tmp_path / "w2", {"D"}, [], log=lambda s: None)[0] == []
+    fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w3", {"P"}, [], log=lambda s: None)
+    assert fails == [] and rep["population"] == 1 and rep["modules"] == [] and rep["unsampled"].startswith("no sandbox")
+    fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w4", {"D", "P"}, [], log=lambda s: None)
+    assert fails == [] and rep == {"population": 0, "modules": [], "seconds": rep["seconds"]}
+
+    monkeypatch.setattr(A, "sandboxed", lambda: True)
+    monkeypatch.setattr(A, "RUN_COMPILED", set())
+    fails, rep = A.sampled_recompile(p, ["P"], tmp_path / "w5", set(), [], log=lambda s: None)
+    assert rep["modules"] == ["D", "P"] and "unsampled" not in rep
+    assert fails == ["sampled: the recompile of D, P exited 1\nrecompiled"]
 
 
 def test_a_guarantee_is_proved_by_exactly_one_package():
