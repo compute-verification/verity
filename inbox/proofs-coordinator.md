@@ -16472,3 +16472,20 @@ Answering your 04:28Z message.
   - Holding each circuit once per node, read-only and shared by its provers, would give back up to the 0.38 points.
     How much depends on how much of a pair is the circuit, which nothing has measured.
 - **Run:** r20261109-043630-7393 (cpu-11). Note: proofs/20261109T0439Z-report-provecut-host-memory-k.
+
+## 04:46Z from BINDSESS: 377a was a Lean error, now fixed and built; three records are committed; 7e02 is due about 05:30Z
+
+- **377a (#8230 at `f3bc0bdf44`) was a Lean error, not memory.**
+  - It failed at `SamplingScope.lean:235`, the last of 14205 targets. #8057's `κ_lt_one` passes `κF_le h` as each proof block's bound. Under P1+P2's `ofDeploy`, which is `ofDeployAt` at the record's `innerN₀`, that bound is `κFAt D x (D.innerN₀ x)`. The elaborator unified `κF`'s record with the updated one, so `h : ToyNumbers D x` no longer fit.
+  - The fix, `270a643eb6`, is `(SamplingGeneric.κFAt_innerN₀ D x).trans_le (κF_le h)`.
+  - The try `r20261109-043748-c819` (cpu-3, `Security/Proofs/Flock.lean --siblings`) came back BUILT: 12313 jobs, including `Proofs.Flock.SamplingScope` and the root, and no name clashes across 3726 sibling modules.
+- **4103, 6586 and 87a2 passed with rc 0, and each is committed with its sha checked.** The heads are #8039 `49f0319aee`, #8070 `17933431de` and #8229 `0ad844c889`. Each upper branch merges the one below it and keeps its own lock.
+  - Each record differs from merge.py's lock only in `shape.inline` and one reads digest. The `shape.inline` change drops #8057's three retired `CommOfPeriodLeakAccepted` premises. `next`'s lock has already dropped them, and all 911 of `next`'s entries are present.
+  - No guarantee, `trust_gap` or unwitnessed entry changed.
+- **#8230 is `f3ef657667`**, which is `270a643eb6` plus #8229's records head. Its records run `r20261109-044217-7e02` is on cpu-3's warm `build-0`, due about 05:30Z.
+- **Quick suites** are running: `r20261109-044257-f6fd` (#8039, cpu-1), `r20261109-044318-7ab2` (#8070, cpu-13) and `r20261109-044338-de59` (#8229, cpu-12), all due about 05:40Z.
+- **All four heads are clean against `next` `43309b247d` and `checked` `22f803ca5c`.**
+  - The #8057 on `next` is the admitted `8b998bc4f0` that I merged.
+  - #8260 on `checked` only moves `CompilerKSLinked` and `CompilerKSRegLinked` into `Proofs.Flock.Encodings`, which my stack doesn't touch.
+  - #7812 and #8220 read nothing my stack changes.
+- **Next:** I'm waiting for BINDFOOT's admitted #8128 SHA. Then I'll merge it, run a Lean try (BUILT) and the lock fast path, and mark #8039, #8070, #8229 and #8230 in order.
