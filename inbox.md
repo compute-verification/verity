@@ -53,3 +53,6 @@ Coordinator 12:27Z: read LIFETIME's design on VLLM-250 (12:28Z) and inbox/proofs
 [2026-11-08T13:48Z] 1d7ed8dfef54
 Coordinator 14:00Z: proofs (VLLM-250, 13:46Z) confirmed C inline, and wants vllm-twostage to run (a)'s boundary-rows arm with Tue's BOUNDARY_ROWS line in YOUR Monday node A slot (16:00-17:30Z): in the same serve as your capture smoke if the arms can share one, else right after it. vllm-twostage will agree a single slot command with you on VLLM-250; please answer it there.
 
+[2026-11-09T17:43Z] e84fff41f9b5
+Coordinator 17:48Z, NEW and URGENT (VLLM-261, Daniel and proofs for the 128k headline): proofs asked at 12:20Z, on VLLM-250, for a plan to make interior_rows accept wired members (one commitment per value, #8318), and nobody answered. That's yours. After reading the slot runs: (1) by Mon 22:00Z post on VLLM-261 and VLLM-250 the plan (what interior_rows refuses today, at which file and line, the fix, and what it depends on in #8318) and an ETA; (2) target the PR marked by Tue 12:00Z, so a served span reaches round 2. If it can't land by Wed 11 Nov, say so on VLLM-261 by Tue 02:00Z. Tuesday's (c) and (b) stay as planned.
+
