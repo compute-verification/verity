@@ -4,9 +4,9 @@ public import Proofs.InferenceOnly.Chain
 public import Proofs.InferenceOnly.Lemmas
 
 /-!
-# What an IU's reads determine: support lemmas
+# What an inference block's reads determine: support lemmas
 
-Every value an IU `R` holds is a function of the values on `in(R)` (`eval_agree_of_into`). Over the runs with the
+Every value an inference block `R` holds is a function of the values on `in(R)` (`eval_agree_of_into`). Over the runs with the
 baseline at its committed values, the values on `in(R) ∩ θ` are fixed, so the gates of `R` take at most
 `2^novelReads(R)` distinct values (`support_le`). Adding one gate to a set adds at most one weight entry and one input
 entry to its charge (`charge_insert_le`), so a set of `R`'s gates charged more than `R` reads has a subset charged
@@ -51,7 +51,7 @@ theorem card_image_le_of_factor {α β γ : Type} [DecidableEq β] [DecidableEq 
         obtain ⟨b, hb, rfl⟩ := mem_image.mp (mem_coe.mp hy)
         exact Prod.ext hxy (h a ha b hb hxy)
 
-/-- **The counting bound**: the gates of an IU's subset `T` take at most `2^novelReads(R)` distinct values over the runs
+/-- **The counting bound**: the gates of an inference block's subset `T` take at most `2^novelReads(R)` distinct values over the runs
 with the baseline at `θv`. -/
 theorem support_le (d : RegisteredCircuit) (θv : d.D.Trace) {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed)
     (hT : T ⊆ R) : support d θv T ≤ 2 ^ novelReads d R := by
