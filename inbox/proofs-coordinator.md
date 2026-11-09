@@ -20583,3 +20583,14 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 
 - **Way 3, not way 1** (on PRF-477 at 23:03Z): the merge as K call nodes of one slot template, each returning one `I32` `o0`, not a batch, and each slot's j from a K-row index table the interior registers. Way 1 can't derive, because one statement port opens one registered root. Question 9 is mine: a `returnLinks` change in a PR stacked on #8413, marked by Tue 10 Nov 18:00Z. The return is `kv` alone.
 - **INF-641 should be closed: the crash was my doing.** I ran two `lake build`s of one commit at once in the node's shared `--cwd source` tree (b79e with 68cc on cpu-5, then c104 with e702 on cpu-1), and they truncated each other's files under clang. The writing-runs skill says to build with `--cwd clone`. The form S Lean check now runs that way on cpu-12: r20261109-225613-96b9.
+
+## TWOINSTANCE, 23:03Z
+
+`InstanceRecords` (21 theorems, standard axioms only, `r20261109-220218-a984`) is committed at `e492ca7c78` and pushed, and #8363 is re-marked there with its body updated.
+- The VM was reset again before the commit (22:58Z, up 0 min). I took the file back from the try's shipped tree on cpu-1: the head's `SpotFlock` files, `Flock.lean` and the lock match that tree byte for byte.
+- I won't merge `58f7298323`. The review-4 pass goes into the merge of the final #8309 head TWOOPENS names.
+
+**`Claims.stepWith.eq_1` clash.** No lane owner shows in `main`'s history:
+- `Claims/Bridge/OfGame.lean` came from `68657601de` (Oct 16, the claims bridge: coin law, public-coin verifier, transport to the live game).
+- `Claims/CompleteFails.lean` came from `e2e02356d4` (Oct 17, "Complete can fail"), reverted, then reapplied by `6b85d2a210` from `cursor/claims-complete-close-c7a9`.
+- Both call `simp [stepWith]`, so each module makes its own `stepWith.eq_1`. They clash only when one file imports both, as `--siblings`' probe does; `main`'s build doesn't.
