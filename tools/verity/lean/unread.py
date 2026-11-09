@@ -64,7 +64,7 @@ exits 1 when an area's count rose above its cap (an area the file doesn't list h
 ``--update-caps`` lowers each cap to its count, never raising one. The Lean check runs it (`check`, from
 `lean_audit.py`) on the facts its audits wrote, with no build; there the report is the short one (`analyse` without
 ``full``: no chains or `kept_only_by`). Neither this file nor the caps is in an audit's key (`lean_audit.NOT_READ`), so
-changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): drive's landing gate
+changing them reruns no audit, and nor are the seeds outside Lean (`cited_kind`, `lock_docs`): the ready preflight's landing gate
 (`unread_gate.py`) runs the ratchet on a change to them before it lands, from the facts a check of its Lean left
 (`lean_audit.facts_file`). Those facts come from the builds of `Security` and `Security/Proofs` alone: a module of
 `Security/Properties` that `Security/Proofs` doesn't import has no `.olean` there and is reported `unbuilt`, so a spec

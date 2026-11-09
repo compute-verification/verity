@@ -1,4 +1,4 @@
-"""`unread_gate`: drive's landing gate on the seeds of the Lean nothing reads (`unread.py`'s ratchet). A change that takes the
+"""`unread_gate`: a landing gate (drive.toml's `landing_gates`, run by the ready preflight) on the seeds of the Lean nothing reads (`unread.py`'s ratchet). A change that takes the
 last mention outside Lean of a module of the security analysis, or of a declaration of it, out of the files that keep it
 fails here, before it lands, when that takes the module's area above its cap in `unread-caps.json`.
 
@@ -6,10 +6,10 @@ fails here, before it lands, when that takes the module's area above its cap in 
 
 Those seeds (code that names a declaration or a module, `unread.cited_kind`, and the documents a lock's text names,
 `unread.lock_docs`) are in no audit's key, so a change to them alone reruns no Lean check and lands green, and the next check's
-ratchet fails on it. The change judged is ``HEAD``'s against the commit below it (``LO``): the first parent of drive's merge of
+ratchet fails on it. The change judged is ``HEAD``'s against the commit below it (``LO``): the first parent of the queue's merge of
 a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_caps.py` judges it.
 
-- A change to what a Lean check reads (drive's `lean_reads`: Lean sources, Lake files, the toolchain, a lock,
+- A change to what a Lean check reads (`LEAN_READS`: Lean sources, Lake files, the toolchain, a lock,
   `tools/verity/lean/`) passes with a note: the Lean check runs the ratchet on it (`lean_audit.unread_ratchet`).
 - Otherwise, from git alone: what each changed seed file names at ``LO`` and no longer at ``HEAD`` (`seeds`), less what any
   seed file still names at ``HEAD``. It passes when nothing went that could name the analysis's Lean: a declaration whose last
@@ -17,17 +17,17 @@ a PR (a ``Queue: #N`` merge), else its merge base with ``MAIN``, as `markdown_ca
   a path no file there has.
 - Otherwise it runs the ratchet on both trees, ``LO``'s and ``HEAD``'s, from the facts the audits of `Security` and
   `Security/Proofs` wrote (`lean_audit.facts_file`, by each package's key): ``LO``'s, else ``MAIN``'s, as this machine keeps them
-  (a node's passes, or this gate's cache) or as a recorded check published them in the evidence store: one of that commit
-  (drive runs a commit's Lean check before it lands it), else one of the `SCAN` newest. When neither's are (a Lean landing's are
-  published once its lock run lands, about an hour after it), it reads stale ones: those of the newest commit below ``LO``
+  (a node's passes, or this gate's cache) or as a recorded check published them in the evidence store: one of that commit,
+  else one of the `SCAN` newest. When neither's are (a Lean landing's are
+  published by a recorded check of it), it reads stale ones: those of the newest commit below ``LO``
   along first parents, within `ANCESTORS`, that a recorded check ran at and whose facts are kept or published
-  (`ancestor_facts`). The verdict says so (``--json``: `facts_from`, `stale`) and isn't kept, and the Lean check's ratchet
-  after landing judges what such facts miss. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
+  (`ancestor_facts`). The verdict says so (``--json``: `facts_from`, `stale`) and isn't kept, and the next Lean check's ratchet
+  judges what such facts miss. Each area whose wholly unread modules, or their declarations, ``HEAD`` takes above both its cap and ``LO``'s count
   fails, naming each module that went, the mentions that kept it (each at its file and line at ``LO``) and the fix.
 
 It runs ``MAIN``'s `unread.py`, `lean_audit.py` and their helpers (`git archive`, `CODE`), so the change it judges can't change
-how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. Drive judges every PR
-of `next` again whenever `main` moves, so the gate keeps each verdict by the trees it judged and the code that judged it
+how it is judged, and it builds nothing; it runs git under `LOCALE`, so the host's locale can't either. The preflight judges a PR
+again at each ready mark, so the gate keeps each verdict by the trees it judged and the code that judged it
 (`gate`), and what the Lean declares by the Lean's tree (`declared`). Before marking a branch, run ``python3 tools/verity/lean/unread_gate.py origin/main
 HEAD``. Exit 0 when it passes, 1 when it fails (``--json``: `{"failures": [{"why", "fix"}]}`, `KIND`), 2 when it can't judge: a
 git error, `MAIN`'s code doesn't load, or neither tree's facts nor an ancestor's are kept here or stored.
@@ -49,10 +49,10 @@ from collections import defaultdict
 from pathlib import Path
 
 KIND = "lean-unread-gate/v1"
-#: the subject of the queue's merge of one PR onto `next`
+#: the subject of the queue's merge of one PR onto the commit below it
 QUEUE_SUBJECT = "Queue: #"
 LEAN_TOOL = "tools/verity/lean/"
-#: what a Lean check reads (drive's `lean_reads`): a change to any of it is the Lean check's to judge
+#: what a Lean check reads: a change to any of it is the Lean check's to judge
 LEAN_READS = (".lean", "lakefile.toml", "lakefile.lean", "lean-toolchain", "lake-manifest.json", "lean-audit.json")
 #: ``MAIN``'s code the gate runs: the Lean tools (not their tests) and what `lean_audit.py` loads
 COMMON = "tools/verity/check/common.py"
@@ -65,13 +65,13 @@ CAPS = f"{LEAN_TOOL}unread-caps.json"
 #: how many of the newest recorded checks the store lookup lists the files of
 SCAN = 64
 #: how far below ``LO`` along first parents the gate looks for a commit whose Lean's facts it holds when it holds neither
-#: ``LO``'s nor ``MAIN``'s (a Lean landing's are published once its lock run lands, about an hour after it), and how many of
+#: ``LO``'s nor ``MAIN``'s (a Lean landing's are published by a recorded check of it), and how many of
 #: the commits there a recorded check ran at it tries, the newest first: each costs an archive of the tree (about a second)
 ANCESTORS, ANCESTOR_CHECKS = 300, 8
 #: a recorded check that ended
 ENDED = "state IN ('done', 'failed', 'cancelled')"
-#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (drive
-#: judges each PR of `next` again on every landing)
+#: how many facts files this gate keeps in its cache, the last used first; how many `declared` sets; how many verdicts (a PR is
+#: judged again at each ready mark)
 KEPT, DECLARED_KEPT, VERDICTS_KEPT = 16, 16, 1024
 #: a recorded check's facts of the package with key K: `unread/K.jsonl.gz` under its lean-audit output
 STORED = re.compile(r"(?:.*/)?lean-audit/unread/([0-9a-f]{64})\.jsonl\.gz")
@@ -290,7 +290,7 @@ def declared(lo: str, cache: Path | None = None) -> tuple[set[str], set[str]]:
     """What the names the Lean under `ANALYSIS_DIR` declares at ``lo`` can start and end with (each a `WORD`): the first
     component of a `namespace` or of a name a keyword of `DECLARED` declares, and a private name's `_private`; the last
     component of such a name, or of a helper first on a line of a definition's `WHERE` block.  Kept in ``cache`` by the tree
-    of `ANALYSIS_DIR` (`declared/K.json`): every PR of `next` above the same Lean reads the same."""
+    of `ANALYSIS_DIR` (`declared/K.json`): every PR above the same Lean reads the same."""
     f = cache / "declared" / f"{digest(own(), lean_tree(lo))}.json" if cache is not None else None
     if f is not None and (got := kept(f)) is not None:
         return set(got["heads"]), set(got["lasts"])
@@ -476,8 +476,8 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
                                 f"below {lo[:12]} along first parents" + (f": {'; '.join(why[:3])}" if why else ""))
             keys, facts, source = keys_at, facts_at, at
             notes.append(f"judged on the stale facts of {at[:12]}'s Lean, below {lo[:12]} along first parents: neither "
-                         f"{lo[:12]}'s nor `main` {base[:12]}'s are kept or published yet (a Lean landing's are once its "
-                         "lock run lands), and the ratchet of the Lean check after landing judges what they miss")
+                         f"{lo[:12]}'s nor `main` {base[:12]}'s are kept or published yet (a Lean landing's are by a "
+                         "recorded check of it), and the next Lean check's ratchet judges what they miss")
     F = U.Facts(*(facts[p] for p in LA.UNREAD_FACTS))
     t_lo = U.Tree(tree, files_lo)
     rep_lo = U.analyse(t_lo, F, full=False)
@@ -527,7 +527,7 @@ def judge(U, LA, base: str, lo: str, top: str, gone: dict[tuple[str, str], list[
 def gate(base: str, top: str) -> dict:
     """The verdict on ``top``'s change: one kept for the same trees (``LO``'s and ``top``'s) by the same code (this script,
     ``base``'s `CODE_TREES`), and for one on `main`'s facts the same `main` Lean, else `judged` and kept (`verdicts/K.json`).
-    Drive judges every PR of `next` again when `main` moves, and a PR whose members below are the same has the same trees.
+    A PR judged again over the same trees, at a later ready mark, gets the verdict kept for them.
     A verdict on stale facts isn't kept, so a later run reads the facts of the Lean it judges once they are published; a gate
     that can't judge raises, and keeps nothing."""
     base, top = (git_text("rev-parse", "--verify", f"{r}^{{commit}}").strip() for r in (base, top))

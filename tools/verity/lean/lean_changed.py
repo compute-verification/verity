@@ -61,7 +61,7 @@ Then it audits, the same way, every package whose guarantees' records read PKG's
 reports under `requirer-<path>/` beside PKG's. Of the facts documents, only PKG's own stays beside its reports
 (`check_argv`: `check.py --facts named`, which `trusted_size.py --run` reads); its provers' and the requirers' are not
 kept. A change to what another package's pinned guarantees read
-(`Security/Properties`' when `Security` changes) fails here, not at the Lean check of `next`. With `--update`, a requirer whose every
+(`Security/Properties`' when `Security` changes) fails here, not at its candidate's check. With `--update`, a requirer whose every
 failure is a record difference (`settles`) is audited again with `--update`, so one run regenerates every lock the change
 moved; one failing for any other reason fails. With `--moved` too, each requirer's first audit takes `--update --moved`
 (`first_update`; check.py reads `--moved` only with `--update`), so a rename its records read resolves before its
@@ -86,7 +86,7 @@ result the store holds (`stored`, by `research data select`: the store's index w
 otherwise) lists its key under `passes` (`kept`; the record names that run and commit, `reused_from`), or
 when HEAD merges a commit of `main` into one whose records passed, possibly through further such merges, and each merge took
 every Lean input of the package whole from main's side, its locks aside, which must be `merge.py`'s merge of the two sides
-(`merged`). That lock is a candidate, never a verdict: the Lean check of `next` rebuilds every record and regenerates one
+(`merged`). That lock is a candidate, never a verdict: the check of a candidate holding it rebuilds every record and fails on one
 that differs. `--rebuild`, and `--moved`, run every package.
 
 `--inputs-key` prints the key of each package at a commit from git's objects alone (`keys_at`), so a caller with only a
@@ -828,7 +828,7 @@ def merged(pkg: str, files: list[str]) -> str | None:
     """Why this checkout's records of ``pkg`` need no run although its inputs are new, or None: HEAD merges a commit of `main`
     into a commit whose records passed (`kept`), possibly through further such merges, and each merge takes every Lean input
     of ``pkg`` from one side whole, its locks aside, which are `merge.py`'s merge of the two sides. The lock is then a candidate,
-    never a verdict: the Lean check of `next` rebuilds every record and regenerates one that differs."""
+    never a verdict: the check of a candidate holding it rebuilds every record and fails on one that differs."""
     prefixes = sorted({*closure(pkg), LA.LEAN_TOOL.rstrip("/"), *tool_inputs(files)})
     if git("status", "--porcelain", "--untracked-files=no", "--", *prefixes) != "":
         return None
@@ -867,8 +867,8 @@ def merged(pkg: str, files: list[str]) -> str | None:
         found = kept(pkg, fb, blob_reader({f: hb[f] for f in closure_inputs(pkg, fb) if f in hb}))
         if hit := found and found[0]:
             return (f"HEAD merges main's {', '.join(took)} into {b[:12]}, where {hit}; every Lean input it changed is main's "
-                    f"and its lock merge.py's merge: a candidate, which the Lean check of `next` rebuilds and compares (a record "
-                    f"that differs is regenerated there)")
+                    f"and its lock merge.py's merge: a candidate, which the check of a candidate holding it rebuilds and compares (a "
+                    f"record that differs fails there)")
         c = b
     return None
 

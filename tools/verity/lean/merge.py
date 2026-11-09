@@ -22,7 +22,7 @@ is recomputed from the merged definitions (`audit.module_digest`). A side writte
 
 The merge refuses only where it can't vouch for itself (the guards below): otherwise lock files never conflict on merge.
 What the build determines is the records
-`check.py --update` writes from it, which the lock run after landing rewrites on the merged tree whenever they differ
+`check.py --update` writes from it, which a check of the merged tree fails on whenever they differ
 (`audit.RECORD_DIFFERENCE`, `audit.regenerated`): a guarantee's record (signature, named assumptions, type hash: restated
 on both sides, the merged tree's statement decides it), each `reads` group (which definitions the guarantees read, and
 each one's hash) and an assumption's or open premise's `digest`.
@@ -50,8 +50,8 @@ Every entry taken from one side where the sides disagree is named on stderr, one
 record (not JSON, not an object, or holding both `pins` and `guarantees`) is the other side's record, named; only when
 neither side is one, or a guard below refuses, does the merge leave git's text merge of the file, as a conflict. Exit 0: merged, the record written
 to OURS. Exit 1: neither side a record, or a guard refused. A merged record is a candidate, never a verdict: `check`'s Lean
-audit rebuilds every record of the merged tree and fails on any difference, as for any record; the lock run after landing
-regenerates the records, and the landing DM shows each one that changed against `main`.
+audit rebuilds every record of the merged tree and fails on any difference, as for any record; the PR it fails regenerates
+the records (`check.py --update`), and the landing DM shows each one that changed against `main`.
 
 Git runs a driver from the worktree of the side merged into, so a branch whose checkout took older merge rules would merge
 `main` by those: an older copy that merged `main` into an old branch collapsed `Security`'s 1,316 `reads` groups to one. The
@@ -245,7 +245,7 @@ def derived(path: str, o, a, b, candidate: list[str]):
     """The three-way merge of a value the build determines (a definition's hash, an assumption's digest, a guarantee's
     signature, named assumptions and type hash): as `one`, named in ``candidate`` rather than ``why``.  A value both sides
     changed differently is theirs' (named ``path (theirs)``), and one removed on one side and changed on the other is kept
-    (the union, named ``path``): the lock run after landing regenerates it from the merged tree."""
+    (the union, named ``path``): `check.py --update` on the merged tree regenerates it."""
     if a == b or a == o:
         return b
     if b == o:
@@ -264,7 +264,7 @@ def owned(rec, k: str = "owner"):
 def guarantees(o: dict, a: dict, b: dict, why: list[str], candidate: list[str]) -> dict:
     """The guarantees entry by entry, each one's `owner` apart from the rest of its record: a branch that restates a guarantee
     and one that gives it an owner merge.  The rest of a record (signature, named assumptions, type hash) is the build's, so
-    two sides that restated it differently merge as theirs' record (`derived`), which the lock run after landing rebuilds
+    two sides that restated it differently merge as theirs' record (`derived`), which `check.py --update` rebuilds
     from the merged statement.  Whether a guarantee is listed is not the build's: one side's removal applies over the
     other's change to its record, and only a change to its owner, which a person writes, keeps it (`one`)."""
     out = {}
@@ -325,7 +325,7 @@ def group(m: str, x: dict, y: dict, z: dict, why: list[str], candidate: list[str
     """One module's `reads` entry, both sides having changed it: definitions entry by entry.  A definition one side no
     longer reads while the other still reads it stays, with the other side's hash, unless the dropping side's `gone`
     (``dropped``, by "ours" and "theirs") says the merged tree reads it nowhere: the union is the candidate
-    (``candidate``), and the lock run after landing regenerates the group.  A hash both sides changed differently is
+    (``candidate``), and `check.py --update` on the merged tree regenerates the group.  A hash both sides changed differently is
     theirs' (`derived`)."""
     xd, yd, zd = A.definitions(x), A.definitions(y), A.definitions(z)
     defs = {}
@@ -498,7 +498,7 @@ def merge(base: dict, ours: dict, theirs: dict, candidate: list[str] | None = No
     """(the merged record, the entries a person writes that the sides disagreed on, each with the side taken: empty when
     none).  A pure function of the three records, which never refuses.  ``candidate`` collects the records the build
     determines (`RECORD_DIFFERENCE`'s kinds: guarantees' records, `reads`, assumptions' digests, `JUDGED` entries) merged
-    although the sides disagree on them: the union or theirs' value, which the lock run after landing regenerates, or the
+    although the sides disagree on them: the union or theirs' value, which `check.py --update` on the merged tree regenerates, or the
     side `judged` keeps; and the `shape.inline` premises `held` keeps."""
     why: list[str] = []
     candidate = [] if candidate is None else candidate
@@ -952,7 +952,7 @@ def _cap_lines(lines: list[str]) -> dict[str, dict[str, int]] | None:
 def _maxed(base: dict[str, int], ours: dict[str, int], theirs: dict[str, int]) -> dict[str, int]:
     """One cap's counts merged as the larger of the two sides' (a key a side lacks counts as the base's there; one both sides
     lack is gone), in ours' order with theirs' new keys after the key theirs has before them.  Each side's check held its
-    count under its cap, and a cap left above its count only warns (`_held`) until drive's lock run lowers it to the count
+    count under its cap, and a cap left above its count only warns (`_held`) until a change lowers it to the count
     and its room.  Counters (theirs plus ours' change) can take a cap below its count, where both sides lowered it for
     entries that overlap or from different bases, and then fail a PR that did nothing wrong."""
     return {k: max(n for n in (ours.get(k, base.get(k)), theirs.get(k, base.get(k))) if n is not None)
@@ -1248,7 +1248,7 @@ def main(argv: list[str]) -> int:
             "`check.py --update` drops it where the merged tree's premise no longer offends" if c.endswith(" (kept)") else
             "kept as named; the Lean check of the merged tree judges it, and a stale entry fails there as a witness failure"
             if c.split("[", 1)[0] in JUDGED else
-            "taken without regenerating it; the lock run after landing regenerates it"), file=sys.stderr)
+            "taken without regenerating it; regenerate it (`check.py --update`) if a check fails on it"), file=sys.stderr)
     ours.write_text(A.text(merged))
     return 0
 

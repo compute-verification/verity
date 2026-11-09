@@ -639,7 +639,7 @@ def cited(policy: dict | None = None) -> tuple[dict, dict]:
 
 def test_every_record_difference_code_is_one_update_settles():
     """Each code of `RECORD_DIFFERENCE` comes from a record that differs from the build, and `regenerated` writes the record
-    that then passes: what drive commits is the code set, so a code in it that no case provokes fails here."""
+    that then passes: what is committed is the code set, so a code in it that no case provokes fails here."""
     pol = recorded()
     group = pol["reads"]["P.Defs"]
     entry = pol["guarantees"]["P.t"]
@@ -718,7 +718,7 @@ def test_every_record_difference_code_is_one_update_settles():
 
 def test_what_settles_is_keyed_on_codes_not_text():
     """A record difference reworded still settles, and a string that reads like one but has no record-difference code (a
-    bare string, or another check's failure) settles nothing: rewording a message changes nothing drive commits."""
+    bare string, or another check's failure) settles nothing: rewording a message changes nothing that is committed."""
     now = facts()
     (unrecorded, *_) = A.judge(POLICY, now, FILES)[0]
     assert unrecorded.code == "guarantees.unrecorded" and unrecorded.entry == "P.t"
@@ -789,7 +789,7 @@ def bookkeeping_cases() -> dict[str, tuple[dict, dict]]:
 
 
 def test_every_bookkeeping_code_is_repaired_with_a_warning_and_fails_without_the_flag():
-    """Each code of `BOOKKEEPING` (drive's lock run after a landing repairs the bookkeeping and warns) comes
+    """Each code of `BOOKKEEPING` (a lock run repairs the bookkeeping and warns) comes
     from a lock `repaired` mends, so the policy's checks pass on the lock it writes, and each repair is one warning line naming
     the entry and its owner. Without `--bookkeeping warn` the same lock fails: no bookkeeping code is a record difference, so
     `regenerated` settles none of it. A code in the set that no case provokes fails here."""
@@ -977,7 +977,7 @@ def bookkeeping_audit(tmp_path, monkeypatch, lock: dict, now: dict, replayed=())
 
 def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_still_fails(tmp_path, monkeypatch):
     """`audit(bookkeeping=DUE)`: a package that fails only on bookkeeping passes with the repaired lock beside its report
-    (`regenerated`, which drive commits) and its warnings (`bookkeeping`), and its own lock untouched; the same package fails
+    (`regenerated`, to commit) and its warnings (`bookkeeping`), and its own lock untouched; the same package fails
     without the flag. What the flag never repairs still fails under it: an axiom beyond the standard three (`sorryAx`), a
     `native_decide` (`Lean.ofReduceBool`), a replay the kernel rejects, and a malformed lock. A lock that gives no
     `open_default_issue` passes too, the premise listed without one and a warning saying so."""
@@ -1014,7 +1014,7 @@ def test_an_audit_under_the_flag_writes_the_repaired_lock_and_what_else_fails_st
 
 def test_the_lock_runs_flag_settles_a_repaired_package_and_lists_its_warnings(tmp_path, monkeypatch):
     """`--regenerate --bookkeeping warn`: a package whose audit repaired its bookkeeping (`regenerated` beside `bookkeeping`)
-    passes, and audit.json lists each warning under its package's path for drive to ring; the flag goes only with
+    passes, and audit.json lists each warning under its package's path for its owner; the flag goes only with
     `--regenerate`, and the audit is given the due date seven days from the run's."""
     a = tmp_path / "a"
     a.mkdir()
@@ -4856,8 +4856,8 @@ def test_a_job_pinned_to_one_cpu_runs_lean_on_one_thread(monkeypatch):
 
 
 def test_the_lean_checks_audit_passes_record_differences_and_names_the_records_to_commit(tmp_path, monkeypatch):
-    """`--regenerate` (the lean-audit step of the Lean check of `next`): a package whose every failure is a record difference,
-    so the audit wrote the record `--update` would, passes, and `audit.json` names that record for drive to commit; one with any other
+    """`--regenerate` (the lean-audit step of a check that regenerates): a package whose every failure is a record difference,
+    so the audit wrote the record `--update` would, passes, and `audit.json` names that record to commit; one with any other
     failure fails as before, and the packages' own locks are never written."""
     a, b = tmp_path / "a", tmp_path / "b"
     for p in (a, b):

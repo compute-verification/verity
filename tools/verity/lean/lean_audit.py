@@ -3,10 +3,10 @@ packages whose passes can't be reused, with dependencies kept warm.
 
     python tools/verity/lean/lean_audit.py --out DIR [--cache DIR] [--deps DIR] [--fresh] [--urls FILE] [--export DIR] [--package PKG]...
                                                       (only those packages: a shard's share, `check.py --shard`)
-                                                      [--regenerate] (the Lean check of `next`: record differences pass,
-                                                      and audit.json's `regenerated` names the records drive commits)
-                                                      [--bookkeeping warn] (with --regenerate, drive's lock run: the
-                                                      bookkeeping repaired and warned, `repaired` the caps drive commits)
+                                                      [--regenerate] (record differences pass, and audit.json's
+                                                      `regenerated` names the records for the caller to commit)
+                                                      [--bookkeeping warn] (with --regenerate, a lock run: the
+                                                      bookkeeping repaired and warned, `repaired` the caps to commit)
                                                       [--bundle] (a recorded check: the module versions it built, for other nodes)
     python tools/verity/lean/lean_audit.py --pin RUN        pin the bundles run RUN exported (`lean-deps.json`)
     python tools/verity/lean/lean_audit.py --restore PKG    PKG's pinned bundle as its `.lake/packages`, when it has none (`setup.sh`)
@@ -74,8 +74,8 @@ wholly unread modules, or their declarations, rose above its cap in `unread-caps
 and takes seconds. `unread.py` and the caps are out of every key (`NOT_READ`), so a change to either reruns no audit. The
 seeds it reads outside Lean (code that names a declaration or a module, the documents a lock names) are in no key either,
 so each run leaves the facts it read under ``--out`` as `unread/K.jsonl.gz`, by the package's key (`facts_file`), which a
-recorded check publishes: drive's landing gate (`unread_gate.py`) runs the ratchet from them on a change to those seeds
-before it lands.
+recorded check publishes: the ready preflight's landing gate (`unread_gate.py`) runs the ratchet from them on a change to
+those seeds before it lands.
 
 A machine without a package's dependencies restores them from the evidence store instead of cloning them from GitHub, which
 throttles anonymous clones from shared addresses. `lean-deps.json` pins one bundle per `lake-manifest.json`'s fetched entries + `lean-toolchain`
@@ -192,7 +192,7 @@ NOT_READ = {
     "Upstream.lean": "`upstream.py --lean`, the exact pass; the audit runs the no-build one",
     "unread.py": "the ratchet on wholly unread modules, which `run` runs after the audits on the facts they wrote",
     "unread-caps.json": "the ratchet's caps, which `unread.py` reads",
-    "unread_gate.py": "drive's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
+    "unread_gate.py": "the ready preflight's landing gate on the seeds the ratchet reads, which runs `main`'s copy of this tool",
     "pyproject.toml": "the tools/verity/lean suite's settings",
 }
 
@@ -204,8 +204,8 @@ UNREAD_SCHEMA = "lean-unread-facts/v1"
 #: the facts entries a node keeps beside the passes (`unread/` in the cache), last stored or reused first: Security/Proofs'
 #: are some 6 MB each, and a pass whose facts went is audited again
 UNREAD_KEPT = 64
-#: the caps `--bookkeeping warn` (drive's lock run after a landing) holds to what the run measures, each
-#: repaired in a copy under the run's `repaired/` for drive to commit beside the regenerated locks: the ratchet's, and the
+#: the caps `--bookkeeping warn` (a lock run) holds to what the run measures, each
+#: repaired in a copy under the run's `repaired/`, to commit beside the regenerated locks: the ratchet's, and the
 #: repository suite's caps on what the locks list (`tests/test_lean_packages.py`'s `_held`), each {cap: a lock's count}
 UNREAD_CAPS = "tools/verity/lean/unread-caps.json"
 CAPS_TEST = "tests/test_lean_packages.py"
@@ -310,7 +310,7 @@ def kept_facts(cache: Path, pkg: str, k: str, out: Path, log=print) -> Path | No
 
 def facts_file(out: Path, k: str) -> Path:
     """Where a run leaves the facts the ratchet read of the package whose key is ``k``: `unread/K.jsonl.gz` under ``out``,
-    which a recorded check publishes, so that drive's landing gate (`unread_gate.py`) finds them by the key alone."""
+    which a recorded check publishes, so that the ready preflight's landing gate (`unread_gate.py`) finds them by the key alone."""
     return out / "unread" / f"{k}.jsonl.gz"
 
 
@@ -1336,8 +1336,8 @@ def _audit(missed: list[str], files: list[str], keys: dict, reports: dict, out: 
            log, urls: dict[str, str] | None = None, comps: dict | None = None,
            regenerate: bool = False, bundle: bool = False, bookkeeping: bool = False) -> tuple[list[str], list[str]]:
     """Audit ``missed`` on a scratch tree of their inputs (the packages they require by path included), and store each pass.
-    ``regenerate`` (`check.py --regenerate`, the Lean check of `next`) passes a package whose every failure is a record
-    difference; such a pass is never stored, since its lock changes when drive commits the record.  Each passing package's build in
+    ``regenerate`` (`check.py --regenerate`) passes a package whose every failure is a record
+    difference; such a pass is never stored, since its lock changes once the record is committed.  Each passing package's build in
     the sandbox goes into the artifact cache (`LakeArtifacts.put`), and ``bundle`` (a recorded check) writes the module versions it
     indexed to ``out`` for other nodes (`LakeArtifacts.bundle`).  Where builds aren't sandboxed (`sandboxed`) none of that
     happens and no kept build or artifact cache is read: every package builds cold.  Returns (the failed, the audited)."""
@@ -1447,7 +1447,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
         return 1
     if bookkeeping and (left := sorted(set(packages(files)) - set(pkgs))):
         log(f"lean-audit: FAIL: --bookkeeping warn holds the caps to every package's lock, and --package leaves out "
-            f"{', '.join(left)}: drive's lock run audits every package")
+            f"{', '.join(left)}: a lock run audits every package")
         return 1
     comps = {p: components(p, files, FLAGS) for p in pkgs}
     keys = {p: key_of(c) for p, c in comps.items()}
@@ -1480,7 +1480,7 @@ def run(out: Path, cache: Path, deps: Path, fresh: bool = False, log=print, urls
     failed += [p for p in pkgs if p not in reports and p not in failed]
     regenerated = {p: reports[p]["regenerated"] for p in pkgs if reports.get(p, {}).get("settled")}
     for p, f in regenerated.items():
-        log(f"lean-audit: {p}: passed on its regenerated record ({f}), which drive commits over {p}/lean-audit.json")
+        log(f"lean-audit: {p}: passed on its regenerated record ({f}), to commit over {p}/lean-audit.json")
     for rep in reports.values():                        # a pass cached before check.py reported codes has none to list
         rep.setdefault("failure_codes", [None] * len(rep.get("failures", [])))
     for p in UNREAD_FACTS:
@@ -1681,21 +1681,21 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--urls", type=Path, help=f"{URLS}: presigned URLs for the pinned bundles ({PIN})")
     ap.add_argument("--export", type=Path, help="bundle the dependencies of every package that passed into this directory")
     ap.add_argument("--package", action="append", metavar="PKG", help="audit only this package (repeatable): a shard's share")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of `next`: `check.py --regenerate`, so a package whose "
+    ap.add_argument("--regenerate", action="store_true", help="`check.py --regenerate`, so a package whose "
                     "every failure is a record difference passes and audit.json's `regenerated` names its record; not in the "
                     "cache key, and such a pass is never stored")
     ap.add_argument("--bundle", action="store_true", help="a recorded check's audit: write the module versions it added to the "
                     "artifact cache as lean-artifacts.tar.gz in --out, for other nodes to take (`shared_bundles`)")
-    ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: "
+    ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, a lock run: "
                     "`check.py --bookkeeping warn`, so a package that fails only on its lock's bookkeeping passes on the lock "
                     "with it repaired; an unread area above its cap, and a cap of `tests/test_lean_packages.py` the locks "
                     "left break (UNWITNESSED, INLINE), is raised to the count, or lowered to the count and its room, in a copy under --out's "
-                    "`repaired/`, which audit.json's `repaired` names for drive to commit; each repair is a warning in "
+                    "`repaired/`, which audit.json's `repaired` names to commit; each repair is a warning in "
                     "audit.json's `bookkeeping`. Every package is audited (`--package` may name them all, as check.py's parts do): the "
                     "caps count every package")
     a = ap.parse_args(argv)
     if a.bookkeeping and not a.regenerate:
-        ap.error("--bookkeeping warn goes with --regenerate: drive's lock run, which commits the locks it regenerates")
+        ap.error("--bookkeeping warn goes with --regenerate: a lock run, which regenerates the locks it repairs")
     urls = json.loads(a.urls.read_text()) if a.urls and a.urls.is_file() else None
     return run(a.out, a.cache, a.deps, a.fresh, log=lambda s: print(s, flush=True), urls=urls, export=a.export, only=a.package,
                regenerate=a.regenerate, bundle=a.bundle, bookkeeping=bool(a.bookkeeping))

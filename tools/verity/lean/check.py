@@ -1,8 +1,8 @@
 """`check.py`: the Lean audit, one run over every Lake package that carries a `lean-audit.json`.
 
     python tools/verity/lean/check.py [--build] [--update [--owner @LANE] [--moved FILE]] [--out DIR] [--facts all|named|none] PACKAGE_DIR...
-    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   the Lean check of `next`;
-                                                    with --bookkeeping warn, drive's lock run (bookkeeping repaired, warned)
+    python tools/verity/lean/check.py --regenerate [--bookkeeping warn] [--out DIR] PACKAGE_DIR...   record differences pass;
+                                                    with --bookkeeping warn, a lock run (bookkeeping repaired, warned)
     python tools/verity/lean/check.py --all [--root DIR] [--build] [--out DIR]   the controls, then every package under DIR (default .)
     python tools/verity/lean/check.py --name-instances [--build] PACKAGE_DIR...  write each anonymous instance's name into its source
     python tools/verity/lean/check.py --lift FILE [--build] PACKAGE_DIR   lift guarantees into `SecurityProofs.G : G` (`lift`)
@@ -3026,7 +3026,7 @@ RECORD_DIFFERENCE = Codes({
 })
 
 
-#: the bookkeeping `--bookkeeping warn` (drive's lock run after a landing) repairs in the lock it regenerates
+#: the bookkeeping `--bookkeeping warn` (a lock run) repairs in the lock it regenerates
 #: instead of failing, each with one warning naming the entry and its owner, so the next PR does the work: a premise's
 #: kind and its ticket, an entry no guarantee has, an owner, a guarantee the witnesses rule holds to witnesses it lacks,
 #: and a `trust_gap` entry that lists more than its deployed guarantee rests on outside its trust
@@ -5270,7 +5270,7 @@ def audit(pkg: Path, out: Path, build: bool = False, update: bool = False, repla
     one (a control, a lean-changed scan or a stubbed test, none of which runs a dependent's build beside the audit) the
     readers read the live `.lake`. `main` always provides one, so the run's gate is always sealed.
     ``bookkeeping`` (a due date:
-    `--bookkeeping warn`, drive's lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
+    `--bookkeeping warn`, a lock run) regenerates a failing package's lock with its bookkeeping repaired (`repaired`,
     on `bookkeeping_ticket`) and judges the policy's checks again on that lock: the package fails on what fails there and
     on every failure those checks don't make (the build, the replay, the scans, the tests), else its report names the lock
     (`regenerated`) and its repairs (`bookkeeping`, `bookkeeping_warnings`).  ``facts_out`` writes the stage-A facts
@@ -5572,8 +5572,8 @@ def _finish(pkg: Path, work: Path, policy: dict, new: dict, facts: dict, files: 
             (work / "review.txt").write_text("\n".join(notes) + "\n")
             rep |= {"review": notes, "statement_changes": bool(statement_changes(notes)), "regenerated": str(work / POLICY),
                     "bookkeeping": bookkeeping_warnings(fails, fixed, ticket, policy)}
-            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, which drive "
-                f"commits: {len(rep['bookkeeping'])} repairs, each a warning")
+            log(f"audit: {pkg}/{POLICY}: passes on its lock with the bookkeeping repaired, {work / POLICY}, for its "
+                f"caller to commit: {len(rep['bookkeeping'])} repairs, each a warning")
     elif update:
         dump(work, new)
     elif (regen := regenerated(policy, facts, files, fails)) is not None:
@@ -5823,11 +5823,11 @@ def main(argv: list[str]) -> int:
                     "\"into\": spec module[, \"beside\": module]}}; write each as `def G : Prop` in the spec module and "
                     "`theorem X.SecurityProofs.G : X.Guarantees.G` beside its proof, or in `beside` (`lift`), instead of "
                     "auditing, and FILE.moved.json for `--update --moved`")
-    ap.add_argument("--regenerate", action="store_true", help="the Lean check of a commit of `next`: a package whose every "
+    ap.add_argument("--regenerate", action="store_true", help="a Lean check that passes record differences: a package whose every "
                     "failure is a record difference (a code in `RECORD_DIFFERENCE`) passes, and audit.json's `regenerated` names "
-                    "the record `--update` writes for it under --out, which drive commits when it lands that commit; the "
+                    "the record `--update` writes for it under --out, for its caller to commit; the "
                     "package's own lock is never written")
-    ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, drive's lock run after a landing: a package "
+    ap.add_argument("--bookkeeping", choices=["warn"], help="with --regenerate, a lock run: a package "
                     "whose lock's bookkeeping fails (`BOOKKEEPING`: an unlisted or misfiled premise, a guarantee the "
                     "witnesses rule holds to witnesses it lacks, a stale entry, an owner) passes once the lock with it "
                     "repaired (`repaired`, on the lock's `open_default_issue`, else without an issue, due in "
@@ -5863,7 +5863,7 @@ def main(argv: list[str]) -> int:
                     "checks and the stored source and dependency findings, no build, no kernel replay, no tests "
                     "(`audit_from_facts`).  Its verdict and, with --update, its record are a full audit's")
     ap.add_argument("--facts-only", type=Path, metavar="DIR", help="stage A: read each named package's facts (build it with "
-                    "--build, as drive does, for a fresh sealed build) and write its facts document, keyed by that build "
+                    "--build for a fresh sealed build) and write its facts document, keyed by that build "
                     "(`facts_key`), into DIR, so `--facts-from DIR` judges from it with no build.  It does not record, "
                     "replay or run tests; it passes once it has written each document (a lock failure is `--facts-from`'s "
                     "to report)")
@@ -5878,7 +5878,7 @@ def main(argv: list[str]) -> int:
     if a.regenerate and (a.update or a.name_instances or a.lift):
         ap.error("--regenerate writes no lock: not with --update, --name-instances or --lift")
     if a.bookkeeping and not a.regenerate:
-        ap.error("--bookkeeping warn goes with --regenerate: drive's lock run, whose regenerated locks drive commits")
+        ap.error("--bookkeeping warn goes with --regenerate: a lock run, which regenerates the locks it repairs")
     if a.facts_from is not None and (a.all or a.build or a.lift or a.name_instances or a.fresh or a.closure
                                      or a.replay_cache or a.artifacts or a.dev_cache):
         ap.error("--facts-from judges from a stored facts document: name packages, and not with --all, --build, --lift, "
@@ -6089,7 +6089,7 @@ def main(argv: list[str]) -> int:
     regen = {os.path.relpath(r["package"], a.repo.resolve()): r["regenerated"] for r in reports if r.get("settled")}
     for p, f in regen.items():
         print(f"audit: {p}: every failure is a record difference{' or bookkeeping' if a.bookkeeping else ''}, settled by "
-              f"{f}, which drive commits over {p}/{POLICY} when it lands", flush=True)
+              f"{f}, for its caller to commit over {p}/{POLICY}", flush=True)
     warned = [f"{os.path.relpath(r['package'], a.repo.resolve())}: {w}" for r in reports for w in r.get("bookkeeping", [])]
     doc = {"passed": not failed, "failed": failed, "packages": reports, "regenerated": regen} | (
         {"bookkeeping": warned} if a.bookkeeping else {})

@@ -312,9 +312,9 @@ def test_the_inline_list_only_shrinks():
 ROOM = {"INLINE Security": 3, "INLINE Security/Properties": 20, "UNWITNESSED Security": 2, "RETIRED_NAMES draw": 59, "RETIRED_NAMES wrong": 10, "OVERLONG Security/Proofs": 275, "RETIRED_NAMES escape": 9, "RETIRED_NAMES law": 9, "TREES_EXCEPT Security": 1, "UNWITNESSED Security/Properties": 3, "OVERLONG verity/core/protocols/pouw/lean/check": 3, "OVERLONG verity/core/service/flock": 4, "IMPORT_ALL_USES Security/Proofs": 1}
 
 
-def test_the_caps_the_lock_run_repairs_are_the_files_drive_commits():
-    """Drive's lock run (`lean_audit.py --bookkeeping warn`) repairs the unread caps and this file's caps on what the locks
-    list, and drive commits them beside the locks (`research.merge.REPAIRED`, which the merge gate holds to the run's copies):
+def test_the_caps_the_lock_run_repairs_are_the_files_merge_holds():
+    """A lock run (`lean_audit.py --bookkeeping warn`) repairs the unread caps and this file's caps on what the locks list,
+    which are committed beside the locks (`research.merge.REPAIRED`, which the merge gate holds to the run's copies):
     the two name the same files, and each cap here is the one-line dict `lean_audit.held_caps` rewrites."""
     import ast
 
@@ -341,7 +341,7 @@ def _lock(pkg: Path) -> dict:
 def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: str) -> None:
     """``got``, a count by key, held to the cap ``caps`` (this file's ``name``), which equals it: a count above its cap
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
-    change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
+    change that lowers a count never fails the check of a commit it lands on; the next change lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
     (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}

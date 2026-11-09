@@ -1,4 +1,4 @@
-"""`tools/verity/lean/unread_gate.py`, drive's landing gate on the seeds of the Lean nothing reads, on a repository of
+"""`tools/verity/lean/unread_gate.py`, the ready preflight's landing gate on the seeds of the Lean nothing reads, on a repository of
 `unread.py`'s fixture with the Lean tools beside it and the fixture's kept facts where the gate keeps facts by key: a change
 to a Python file that takes away a declaration's last mention fails, naming the module, the file and line and the fix, with
 no Lean built; a change that leaves every name somewhere, or that changes what a Lean check reads, passes; with none of the
@@ -136,7 +136,7 @@ def test_taking_away_a_declaration_s_last_mention_fails_naming_its_module_the_li
     same = git(repo, "commit-tree", f"{top}^{{tree}}", "-p", base, "-m", "the same change, merged again")
     doc = G.gate(base, same)
     assert (doc["top"], [f["why"] for f in doc["failures"]]) == (same, [dead["why"], gone["why"]]), \
-        "drive's next merge of the same trees after `main` moves reads the verdict back"
+        "a later merge of the same trees reads the verdict back"
     assert doc["notes"][-1] == f"kept: the verdict of {base[:12]}..{top[:12]}, the same trees, by the same code"
 
 
@@ -209,7 +209,7 @@ class Store:
 
 def test_with_neither_tree_s_facts_it_judges_on_the_newest_ancestor_s_a_check_published_says_they_are_stale_and_keeps_nothing(
         repo, tmp_path, monkeypatch, capsys):
-    """No facts of a Lean are published until its lock run lands, about an hour after it, and the gate couldn't judge a PR
+    """No facts of a Lean are published until a recorded check of it publishes them, and the gate couldn't judge a PR
     above it meanwhile.  With neither ``LO``'s nor `main`'s, it reads those of the newest commit below ``LO`` along first
     parents, within `ANCESTORS`, that a recorded check published all of at; past the bound it can't judge."""
     old = git(repo, "rev-parse", "HEAD")

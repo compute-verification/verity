@@ -336,7 +336,7 @@ the replay pass it: only the records see it, and only a person can judge it. `--
 it: each changed guarantee's signature before and after, and each changed definition a guarantee
 reads, with the guarantees that read it and its source now (also in `review.txt` among the reports). Say so in the PR.
 An audit without `--update` whose only failures are record differences (a guarantee's signature, named assumptions,
-premises or type hash, a `reads` group, a premise's digest: what merging two PRs on `next`, each recorded on its own side, can
+premises or type hash, a `reads` group, a premise's digest: what merging two PRs, each recorded on its own side, can
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
 `regenerated` names that file; a missing record or name, an owner or any other failure writes none. Code decides which
 failures those are, not text: each failure's code (`check.py`'s `Failure`) is in `report.json`'s `failure_codes`
@@ -344,8 +344,8 @@ failures those are, not text: each failure's code (`check.py`'s `Failure`) is in
 regenerate (`tasks.py`'s `REGENERATE`), so a record difference fails its candidate, and the queue ejects the PR, telling its
 owner to record its locks at its head: a lock record change rides with its PR.
 
-**Bookkeeping warns after a landing.** A lock run (the lean-audit step of a check with `--bookkeeping-warn`, reaching
-`check.py` as `--bookkeeping warn`; the verified queue runs none) passes a package that fails only on bookkeeping
+**A lock run repairs bookkeeping.** A lock run (`lean_audit.py --regenerate --bookkeeping warn`, reaching `check.py` as
+`--bookkeeping warn`; no check runs one) passes a package that fails only on bookkeeping
 (`BOOKKEEPING`) on the lock `repaired` writes:
 - an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else

@@ -237,7 +237,7 @@ def test_a_definition_one_side_stops_reading_leaves_the_merge_unless_the_other_s
     """A reads-only clash (one side moves definitions out of a module that the other side's new guarantees read).  No
     guarantee of the side that stopped reading the definition reads it, so in the merged tree only the other side's new
     ones may: the removal applies, named as a candidate, unless that side also changed the definition's hash, where the
-    union stays with its hash and the Lean check of `next` regenerates."""
+    union stays with its hash and `check.py --update` regenerates it."""
     base = record(t=thm([F, G]))
     ours = record(t=thm([F], "P.f n + 0 = n", "00000000000000dd"))
     theirs = record(t=thm([F, G]), v=thm([H], "P.h n = n", "00000000000000cc"))
@@ -419,7 +419,7 @@ def test_a_definition_taken_out_of_a_module_next_adds_readers_to_merges_as_the_s
 
 
 def test_a_branch_onto_next_leaves_no_read_of_the_name_it_renamed(tmp_path, capsys):
-    """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as drive merged it: `next` added readers of
+    """A branch that renames `J10R.Layout` to `NoiseLayout`, merged onto `next` as the queue merged it: `next` added readers of
     `Definitions.Accounting.TS.J10R`, and the union kept `Layout` and its four fields beside the new names, which the
     after-landing Lean check, with no regenerate, fails on.  The fixture is that group on each side with the records of its
     readers, as locks once listed them.  Read without them, `next`'s group is the base's, so the merge is the renaming
@@ -611,8 +611,8 @@ def test_git_merges_two_branches_that_add_guarantees_and_takes_theirs_where_both
     merged = git(repo, "merge", "--no-edit", "d")
     assert [s for s in merged.stderr.splitlines() if s.startswith("merge.py:")] == [
         "merge.py: pkg/lean-audit.json: dependencies[mathlib]: changed on both sides, differently: took theirs",
-        "merge.py: pkg/lean-audit.json: guarantees[P.t] (theirs): taken without regenerating it; the lock run after "
-        "landing regenerates it"]
+        "merge.py: pkg/lean-audit.json: guarantees[P.t] (theirs): taken without regenerating it; regenerate it "
+        "(`check.py --update`) if a check fails on it"]
     assert git(repo, "diff", "--name-only", "--diff-filter=U").stdout.split() == []
     assert rec.read_text() == A.text(branches["d"])
 
@@ -1340,7 +1340,7 @@ V5 = "Flock.SecurityProofs.SampledKSLiveV5"
 
 
 def test_an_unwitnessed_entry_both_sides_changed_is_the_side_at_its_merged_record(tmp_path, capsys):
-    """Drive's merge of a lock change onto `next`: each side re-keyed SampledKSLiveV5's `unwitnessed` entry with its
+    """The queue's merge of a lock change onto `next`: each side re-keyed SampledKSLiveV5's `unwitnessed` entry with its
     restated record, and the merged record, theirs', holds theirs' entry's hashes, so the entry is theirs'.  Where
     theirs left the record as the base had it, the merged record is ours', and theirs' entry is a stale value that
     would re-key ours': it is ours'."""
@@ -1394,7 +1394,7 @@ def _caps(tmp: Path, base: str, ours: str, theirs: str) -> tuple[str, int]:
 
 
 def test_two_branches_that_each_move_the_ratchet_caps_merge_them_as_the_larger(tmp_path, capsys):
-    """Every PR that witnesses a guarantee, and drive's lock run, edit a lock's count on one line, so any two conflict as
+    """Every PR that witnesses a guarantee, and a lock run, edit a lock's count on one line, so any two conflict as
     text. Each key merges as the larger of the two sides' caps, on each cap line, with theirs' other edits kept."""
     base = packages({SEC: 354, PROPS: 184, FLOCK: 8}, {SEC: 1422, PROPS: 129, FLOCK: 6})
     ours = packages({SEC: 355, PROPS: 183, FLOCK: 7}, {SEC: 1423, PROPS: 129, FLOCK: 6})
@@ -1466,7 +1466,7 @@ def test_caps_both_sides_brought_over_a_base_without_them_merge_as_the_larger_co
 
 
 def test_a_cap_two_sides_each_lowered_from_one_base_merges_as_the_larger_not_below_its_count(tmp_path, capsys):
-    """`checked` fa8d2365: drive's lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and a PR,
+    """`checked` fa8d2365: a lock run lowered `UNWITNESSED["Security"]` from 331 to 311, its count then, and a PR,
     from an older base at 331, lowered it by its own 24 to 307. As counters (311 - 24) the merged cap was 287 against a
     merged count of 305, since what the two lowerings dropped overlapped, and every PR on it failed `grew`. As the larger,
     311 holds the count, and the lock run lowers it to the count and its room."""

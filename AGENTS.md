@@ -237,12 +237,11 @@ are bisected. A Lean lock record change rides with its PR. How a PR lands: the t
   to; the check prints each one's gap, the number Daniel drives to zero.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
-  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
-  after a landing, and the next PR fixes it; a PR's own check still fails on it. Bookkeeping is an unlisted or misfiled premise, a guarantee
-  the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
-  no longer rests on, a missing owner, or a cap of `unread-caps.json` or
-  `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a
-  malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
+  A guarantee that only moved keeps its record (`--update --moved MOVES.json`). A check fails on a lock's bookkeeping:
+  an unlisted or misfiled premise, a guarantee the witnesses rule holds to missing witnesses, a stale entry, a premise a
+  `trust_gap` entry lists that its guarantee no longer rests on, a missing owner, or a cap of `unread-caps.json` or
+  `tests/test_lean_packages.py`; a cap more than its room above its count only warns. The build, the replay, the axioms,
+  `sorry`, `native_decide`, a kernel bypass and a malformed lock always fail. Lock files conflict on merge only where `tools/verity/lean/merge.py` can't vouch for the
   merge: a lock in a `format` newer than it knows, the worktree's copy merging in newer merge rules, or a merge that would
   drop most of a section. The registered driver runs `origin/main`'s copy wherever the repository has that ref.
 - How to work on Lean (the edit loop, why two agents never share a writable `.lake`, `upstream` watch entries): the
