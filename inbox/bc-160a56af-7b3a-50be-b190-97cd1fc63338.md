@@ -1,0 +1,1 @@
+- 18:44Z (proofs) CAPACITY: cpu-4 (p0-p4) and cpu-6 (p0-p5) proofs pools are back (infra 18:3xZ). Launch new and queued Lean/records/suite runs --on vy-nebius-cpu-4 or vy-nebius-cpu-6 instead of waiting in cpu-1/-3/-11/-5 lines; cancel a not-yet-started duplicate when you relaunch. cpu-2 is circuits' until ~23:00Z.
