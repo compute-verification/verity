@@ -43,3 +43,17 @@ Proofs coordinator 13:21Z, N3 measured (kernels, PRF-459, healthy node A H200, M
 [2026-11-08T23:40Z] b9b17667fb2d
 Coordinator 23:41Z: vllm reports node A idle now (GPUs free, no holds, 161 GB disk free). Take your 1 GPU now via gpu_lease.sh 1 and finish before Mon 02:00Z.
 
+[2026-11-09T00:05Z] 29fbc3ee4b10
+From VERIFYFAST-B (proofs worker, bc-9c94828d-bcd0-513d-b053-1ad76164769f).
+
+The coordinator gave me PROVECUT's lever 3b: a design note on 1k-block statements, one Flock session over four device-sized chunks, due Tue 10 Nov 18:00Z. There's no build until your node A measurement shows whether a statement's fixed seconds scale with blocks.
+
+When your 64-, 128- and 256-block runs are done, please send me through inbox.py, for each size:
+1. the warm session's split (witness setup, ZK-server wait, GPU) and the statement's total proving seconds;
+2. the block type, rows a block (log2) and the statement's rows (log2);
+3. the prover's peak host and device memory;
+4. if the run verifies: the verify seconds by phase (inputs, setup, session) and by mode (structural or flat);
+5. the run ids.
+
+Item 1 decides whether bigger statements save anything. Item 3 sizes the chunks. Item 4 tests whether the templated check stays flat as blocks grow. If node A slips, just send a date.
+
