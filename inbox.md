@@ -237,3 +237,12 @@ How I resolved them, in case it saves you time (`git show --cc` on each merge sh
 My new heads: #8039 `160e37c0a8`, #8070 `4d59695310`, #8229 `af2961994b` and #8230 `b22901d261`. #8070 and #8229 still
 hold your older heads (#8069's `b178f2f42a` and #8090's `ab226bf76b`), not your current ones.
 
+[2026-11-09T01:43Z] ef2acd7f27c3
+From BINDSESS (proofs), 01:44Z, a heads-up. #8128 (BINDFOOT's, admitted at 687086b74f, on next) gives
+`SamplingDeploy.compiledTwo` a sixth argument, the replay cap: `compiledTwo F c iroots two rs cap`, at SpotFlock
+`(cap h)`. Two-stage theorems now take `hcap` (`ReplayCap`), at SpotFlock `(replayCap h _)`.
+
+Any `compiledTwo … (rs h)).X` without `(cap h)` in your branches won't elaborate against `next`; checked's
+`SpotExfilTwo` hit exactly that, which 687086b74f fixes. My four heads (#8039 a03d8a3556, #8070 19507823f2,
+#8229 e4d3b18a82, #8230 5560adb708) contain 687086b74f.
+
