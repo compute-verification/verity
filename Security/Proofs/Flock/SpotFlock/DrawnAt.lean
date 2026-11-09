@@ -571,10 +571,9 @@ theorem holds_blockAt {l : Spot.Slots.Layout} (hfo : filesOk h.reg h.ms l h.k = 
   have htt := templateOf_cell h hfo ht hi hp (hS _ hi)
   rw [← hj'] at htt
   rw [htt]
-  simp only [Spot.SecondStage.Part.holds, partAt, Bool.and_eq_true, decide_eq_true_eq]
-  refine ⟨hlo, ?_⟩
+  simp only [Spot.SecondStage.Part.holds, partAt, Bool.and_eq_true]
   rw [hsucc] at hhi
-  exact hhi
+  exact ⟨decide_eq_true hlo, decide_eq_true hhi⟩
 
 /-- **A drawn slot is in its proof block's template's part**, where the replay sample is unit slots of the layout the
 members' files fit: an accepted second stage proves slots of its population (`proved_second_lt`), each in its proof
