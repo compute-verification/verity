@@ -37,6 +37,7 @@ LIGERITO = {
     37: (6, (1, 2, 3, 4, 5, 6, 7, 8), (4, 4, 4, 4, 4, 4, 4), (241, 148, 121, 110, 105, 103, 102, 101)),
 }
 F128, F256, HB = 16, 32, 64
+SALT = 192  # an hm96-sha512 leaf's salt
 BLOCKS = 2048  # ZT_MAX_BLOCKS, LC_MAX_BLOCKS, SMC_MAX_BLOCKS, LF_MAX_BLOCKS
 
 
@@ -56,6 +57,8 @@ class Shape:
     zc_packed: bool | None = None
     #: before the lane groups, level 0's M1 commit held every witness lane's codeword at once
     lane_groups: bool = True
+    #: level 0's M1 commit transforms the witness lanes in place in its leaves (launch_ntt_rows; not under FC_NTT_REGS=0)
+    l0_rows: bool = True
     #: before keep-L0, a keeping rep 0 held a and b through Ligerito and a copy of z from its witness on
     keep_ab: bool = False
     ligerito: tuple = field(default=None, compare=False)
@@ -109,11 +112,15 @@ def rep_events(s: Shape, mode: str) -> Iterator[tuple]:
         yield a("d_zk_extra", 4 * l * F128)
         yield a("d_cw0", n * (w + 4) * F128)
         yield a("d_tree0", (2 * n - 1) * HB)
-        wg = w >> min(ik, 2) if s.lane_groups else w
-        yield a("cw_w", n * wg * F128)
-        yield a("cw_x", n * 4 * F128)
-        yield r("cw_w")
-        yield r("cw_x")
+        if s.l0_rows:
+            yield a("cw_x", n * 4 * F128)
+            yield r("cw_x")
+        else:
+            wg = w >> min(ik, 2) if s.lane_groups else w
+            yield a("cw_w", n * wg * F128)
+            yield a("cw_x", n * 4 * F128)
+            yield r("cw_w")
+            yield r("cw_x")
     else:
         yield a("d_cw0", n * w * F128)
         yield a("d_tree0", (2 * n - 1) * HB)
@@ -210,15 +217,8 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
     eq_k = log_n // 2
     yield a("d_eq_lo", (1 << eq_k) * F128)
     yield a("d_eq_hi", (1 << (log_n - eq_k)) * F128)
-    yield r("d_eq_hi")
-    yield r("d_eq_lo")
     yield a("region2", ln * F128)
     yield a("region3", ln * F128)
-    if s.zk:
-        yield a("d_r", max(ik, 1) * F256)
-        yield a("d_ybar", max(s.t_pad, 1) * F256)
-        yield r("d_r")
-        yield r("d_ybar")
     n1 = log_n - ik
     levels, d = [], n1 + 1
     for lvl in range(1, steps + 1):
@@ -226,6 +226,17 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
         bl = 1 << (log_cols + rates[lvl])
         levels.append((bl, 1 << ks[lvl - 1]))
         d = log_cols + 1
+    # the first fold's copies of the levels' hm96 salts (cuda_sha512_patch.py's copy_salts_ahead)
+    for lvl, (bl, _) in enumerate(levels, 1):
+        yield a(f"salts{lvl}", bl * SALT)
+    # the first fold adds level 0's last OOD glue over the eq tables (ligerito_folds.cuh), then releases them
+    yield r("d_eq_hi")
+    yield r("d_eq_lo")
+    if s.zk:
+        yield a("d_r", max(ik, 1) * F256)
+        yield a("d_ybar", max(s.t_pad, 1) * F256)
+        yield r("d_r")
+        yield r("d_ybar")
     max_block = max([l0_bl] + [bl for bl, _ in levels])
     max_q = max(queries)
     max_al = max(1 << (q - 1).bit_length() for q in queries)
@@ -238,6 +249,7 @@ def ligerito_events(s: Shape, l0_bl: int, l0_lanes: int) -> Iterator[tuple]:
         bl, lanes = levels[lvl - 1]
         yield a(f"cw{lvl}", bl * lanes * F128)
         yield a(f"tree{lvl}", (2 * bl - 1) * HB)
+        yield r(f"salts{lvl}")
 
     def query(lvl: int) -> Iterator[tuple]:
         lanes = l0_lanes if lvl == 0 else levels[lvl - 1][1]

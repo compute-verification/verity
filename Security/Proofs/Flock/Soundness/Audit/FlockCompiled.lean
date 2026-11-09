@@ -3,12 +3,10 @@ module
 public import Proofs.Flock.Soundness.Audit.Extraction
 public import Proofs.Flock.Soundness.Knowledge
 public import Definitions.Flock.Lowering
-public import Proofs.Flock.Soundness.Game.Basic
+public import Proofs.Flock.Soundness.Game
 public import Proofs.Flock.Soundness.Instance
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
 import Proofs.Flock.Soundness.Lowering
 
 /-!

@@ -64,6 +64,12 @@ or `genesis`. The opening gates then read one row, so the runs' inputs agree off
 pattern serving picked for them are in the union of those sets over the registered patterns. The escape bound is
 `pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which together give rows
 that chain at the pattern picked (`Hash.BindingProofs.rowSeg_bind`).
+
+**The empty pool** (`pooledLeakChecked_of_carried`). With no opening or closing gate, one pattern that restarts no run,
+and every row empty, a run is accepted from its row exactly when it is accepted with a valid run, every run opens the
+empty row's root, and no opening collides (`poolColl_empty`). So the period's bound there is the bound with checked
+inputs over windows that each hold a pool of their own: the escape bound loses its collision term, and the count over
+every secret meeting the good event is `encard_pooledCarried_le` at the one pattern.
 -/
 
 @[expose] public section
@@ -229,8 +235,8 @@ theorem carried_step {L K S : ℕ} (C : Prog) (P : Partition) (d : Design) (lay 
 /-- **A valid trace run gives the leak relation from the trace's rows**: `rLeakChecked_of`'s run (the trace's inputs, and
 its values held at the incorrect set's committed gates) reads the trace's values at opening gates that are inputs, and
 leaves the trace run's values at the closing gates. -/
-theorem rLeakCarried_of {Coin Col T : Type} (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ}
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
+theorem rLeakCarried_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg)
+    (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
     (Dj : ℕ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit} {s : AuditStatement} {P : Partition}
     (hs : D.parse x = some s) (hP : D.partition s = some P) (hRel : RelS H D.commit δ s P w)
@@ -289,16 +295,16 @@ theorem rLeak_of_rLeakCarried {H : Msg → Msg} {Cm : CommitmentScheme Bool} {pa
 /-- **`KSLinOn` moves from `RAcc δ` to the leak relation from the trace's rows**, on the statements where the check holds
 on the trace's run except with probability `εchk` (`CheckedWitness`), at `κ + εchk`: `ksLinOn_rLeakChecked`'s argument
 at `rLeakCarried_of`. -/
-theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col]
-    [Zero Col] (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) {δ : ℝ} (decode : List (ℕ × Col) → List T) (reg : AuditStatement → Finset ℕ)
+theorem ksLinOn_rLeakCarried {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]
+    {A : Claims.SamplingGeneric.Arg Coin} (H : Msg → Msg) (D : Claims.SamplingGeneric.Compiled Coin A) {L K S : ℕ}
+    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) {δ : ℝ} (reg : AuditStatement → Finset ℕ)
     (valid : AuditStatement → (ℕ → Bool) → Prop) (prow nrow : AuditStatement → List ℕ) (hopen : OpensAtInputs prow)
     (εchk : Msg → ℝ) (Dj : ℕ)
-    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) (E D decode) (κ D δ)
-      (γ D) (fun _ => 1) (Bext H D.V (E D decode))) :
-    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D decode valid εchk x)
+    (h : KSLinOn H D.V (ScopeAcc D lay k) (RAcc H D.commit D.parse D.partition L K S lay k δ) D.E (D.κ δ) D.γ
+      (fun _ => 1) (Bext H D.V D.E)) :
+    KSLinOn H D.V (fun x => ScopeAcc D lay k x ∧ CheckedWitness H D valid εchk x)
       (RLeakCarried H D.commit D.parse D.partition L K S lay k δ reg valid prow nrow Dj)
-      (E D decode) (fun x => κ D δ x + εchk x) (γ D) (fun _ => 1) (Bext H D.V (E D decode)) := by
+      D.E (fun x => D.κ δ x + εchk x) D.γ (fun _ => 1) (Bext H D.V D.E) := by
   intro x hx Ω _ _ P
   have h1 := h x hx.1 Ω P
   have h2 := hx.2 Ω P
@@ -307,7 +313,7 @@ theorem ksLinOn_rLeakCarried {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] 
   refine (Claims.Sampling.Pr_or_le (fun r hr => ?_) h1 h2).trans (le_of_eq ?_)
   · beta_reduce at hr ⊢
     obtain ⟨hacc, hng⟩ := hr
-    generalize ((E D decode).eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
+    generalize (D.E.eval H P x r.1 r.2.1 r.2.2).1 = ow at hng ⊢
     rcases ow with _ | w
     · exact Or.inl ⟨hacc, fun hR => by simp only [Rel.ext] at hR⟩
     · by_cases hR : RAcc H D.commit D.parse D.partition L K S lay k δ x w
@@ -350,12 +356,12 @@ theorem encard_accSeqsCarried_le {L K S : ℕ} (C : Prog) (P : Partition) (d : D
     _ ≤ _ := encard_accSeqsChecked_le C P d lay n hfits chk valid hchk (reg ∪ prow.toFinset) ρ' δ op D
     _ = _ := by rw [Finset.union_right_comm]
 
-/-- **One carried run's leak bound, given `SampledAuditAccepted`**: `Guarantees.SampledLeakCarried`, from
-`ksLinOn_rLeakCarried` at `KSAccepted`'s bound and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
+/-- **One carried run's leak bound**: `Guarantees.SampledLeakCarried`, from `ksLinOn_rLeakCarried` at `KSAccepted`'s
+bound (`SecurityProofs.SampledAuditAccepted`) and `encard_accSeqsCarried_le` on the statements whose layout fits. -/
 theorem sampledLeakCarried : Guarantees.SampledLeakCarried := by
-  intro hSA Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg chk valid prow nrow hopen εchk Dj
-  refine ⟨ksLinOn_rLeakCarried H D lay k decode reg valid prow nrow hopen εchk Dj
-      (hSA H D L K S lay k hks δ decode hδ hdec), fun x hx s P hs hP hchk op ρ rin => ?_⟩
+  intro Coin _ _ _ A H D hks L K S lay k δ hδ reg chk valid prow nrow hopen εchk Dj
+  refine ⟨ksLinOn_rLeakCarried H D lay k reg valid prow nrow hopen εchk Dj
+      (SecurityProofs.SampledAuditAccepted H D L K S lay k hks δ hδ), fun x hx s P hs hP hchk op ρ rin => ?_⟩
   obtain ⟨s', hs', hfits⟩ := hx.2
   rw [Option.some_injective _ (hs'.symm.trans hs)] at hfits
   exact encard_accSeqsCarried_le s.prog P s.design (lay s) (k s) hfits (chk s) (valid s) hchk (reg s) ρ (prow s)
@@ -603,5 +609,123 @@ theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
       (nsmul_eq_mul _ _).le)
     exact encard_pooledCarried_le lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls c.1 c.2 arr f tap run htrust
       cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω
+
+/-! ### The empty pool -/
+
+/-- **No collision at an opening of the empty pool**: the digests of the empty row hash one message, twice. -/
+theorem poolColl_empty (G : Hash.Msg → Hash.Digest) {m : ℕ} (chains : Fin m → Bool) (i : Fin m) :
+    ¬PoolColl G chains (fun _ => []) (fun _ => []) (fun _ => []) i := by
+  rintro ⟨x, hx, y, hy, hne, -⟩
+  have hseg : Hash.RowSeg.segmentMsgs [] = [] := by
+    simp [Hash.RowSeg.segmentMsgs, Hash.RowSeg.segCount, Hash.RowSeg.SEG_BITS]
+  have hopen : poolOpen chains (fun _ => ([] : Hash.Row)) (fun _ => []) i = [] := by
+    unfold poolOpen
+    split_ifs <;> rfl
+  simp [Hash.RowSeg.hashed, hseg, hopen] at hx hy
+  exact hne (hx.trans hy.symm)
+
+/-- **A run accepted from a row is accepted with a valid run**, whatever its rows. -/
+theorem leakAtChecked_of_leakAtCarried {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop}
+    {prow nrow : AuditStatement → List ℕ} {Dj : ℕ} {s : AuditStatement} {P : Partition} {ρ : ℕ → Bool}
+    {op : ℕ → List (Obs L K S) → List Bool} {rin rout : Hash.Row} {F : Finset ℕ} {o : List (Obs L K S)}
+    (h : LeakAtCarried lay k reg valid prow nrow Dj s P ρ op rin rout F o) :
+    LeakAtChecked lay k reg valid Dj s P ρ op F o := by
+  obtain ⟨hfit, hdisj, hl, hD, a, ha, free, hfree, hv, -, -, hacc⟩ := h
+  exact ⟨hfit, hdisj, hl, hD, a, ha, free, hfree, hv, hacc⟩
+
+/-- **A run accepted with a valid run is accepted from the empty row**, with no opening or closing gate. -/
+theorem leakAtCarried_of_leakAtChecked {L K S : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ}
+    {s : AuditStatement} {P : Partition} {ρ : ℕ → Bool} {op : ℕ → List (Obs L K S) → List Bool} {F : Finset ℕ}
+    {o : List (Obs L K S)} (h : LeakAtChecked lay k reg valid Dj s P ρ op F o) :
+    LeakAtCarried lay k reg valid (fun _ => []) (fun _ => []) Dj s P ρ op [] [] F o := by
+  obtain ⟨hfit, hdisj, hl, hD, a, ha, free, hfree, hv, hacc⟩ := h
+  exact ⟨hfit, hdisj, hl, hD, a, ha, free, hfree, hv, rfl, rfl, hacc⟩
+
+/-- **A period's good event over a pool gives its good event with valid runs**, whatever its rows and restarts, at an
+operator that doesn't read the runs before it. -/
+theorem pooledGoodChecked_of_carried {L K S m : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop}
+    {prow nrow : AuditStatement → List ℕ} {Dj : ℕ} {sw : Fin m → AuditStatement} {Pw : Fin m → Partition}
+    {ρ : Fin m → ℕ → Bool} {op : Fin m → ℕ → List (Obs L K S) → List Bool} {chains : Fin m → Bool}
+    {genesis : Fin m → Hash.Row} {Fmax : ℕ} {W : Fin m → Finset ℕ} {o : Fin m → List (Obs L K S)}
+    (h : PooledGoodCarried lay k reg valid prow nrow Dj sw Pw ρ (fun i _ => op i) chains genesis Fmax W o) :
+    PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax W o := by
+  obtain ⟨hlt, _, _, -, hl⟩ := h
+  exact ⟨hlt, fun i => leakAtChecked_of_leakAtCarried (hl i)⟩
+
+/-- **A period's good event with valid runs is its good event over the empty pool**, at the pattern that restarts no
+run. -/
+theorem pooledGoodCarried_of_checked {L K S m : ℕ} {lay : AuditStatement → BoundaryGates L S}
+    {k : AuditStatement → ℕ} {reg : AuditStatement → Finset ℕ} {valid : AuditStatement → (ℕ → Bool) → Prop} {Dj : ℕ}
+    {sw : Fin m → AuditStatement} {Pw : Fin m → Partition} {ρ : Fin m → ℕ → Bool}
+    {op : Fin m → ℕ → List (Obs L K S) → List Bool} {Fmax : ℕ} {W : Fin m → Finset ℕ} {o : Fin m → List (Obs L K S)}
+    (h : PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax W o) :
+    PooledGoodCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) (fun _ => false)
+      (fun _ => []) Fmax W o :=
+  ⟨h.1, fun _ => [], fun _ => [], fun _ => by simp [poolOpen], fun i => leakAtCarried_of_leakAtChecked (h.2 i)⟩
+
+/-- **The leak through the network certifier over a monitoring period, with the checked inputs left out, over windows
+that each hold a pool of their own**: `pooledLeakCarried` at the empty pool, where no run opens or closes a row and the
+one pattern restarts none. There a period's good event with valid runs is its good event over the pool, every run opens
+the empty row's root, and no opening collides (`poolColl_empty`), so the escape bound is `PooledLeakAccepted`'s with
+`(1 - q)^Fmax`; the count over every secret meeting the good event is `encard_pooledCarried_le` at the one pattern. -/
+theorem pooledLeakChecked_of_carried {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
+    (reg chk : AuditStatement → Finset ℕ) (valid : AuditStatement → (ℕ → Bool) → Prop) (Dj : ℕ) {m : ℕ}
+    (sw : Fin m → AuditStatement) (Pw : Fin m → Partition) (ρ : Fin m → ℕ → Bool)
+    (op : Fin m → ℕ → List (Obs L K S) → List Bool) (n : Fin m → ℕ)
+    (hchk : ∀ i, CheckedUnique (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i)) (valid (sw i)))
+    {Ω : Type} [Fintype Ω] [Nonempty Ω] {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
+    (f : RecordFormat Conn Cell (Fin m → List (Obs L K S))) (tap : Dev)
+    (run : Dev → CertifierSchedule Conn × Srv → (Conn → List (ℕ × CellView Cell)) × (Fin m → List (Obs L K S)))
+    (htrust : Verity.Assumptions.TrustedHost tap run fun p => recordingCode f p.1 (arr p.2))
+    (cap : Conn → ℕ) (Ss : Set (CertifierSchedule Conn)) (Zs : Set Z)
+    (schedOf : Z → (Fin m → Ω) → CertifierSchedule Conn) (srvOf : Z → (Fin m → Ω) → Srv)
+    (dec : (Fin m → Ω) → (Conn → List (ℕ × CellView Cell)) → Z)
+    (hch : PeriodChannel f cap Ss Zs schedOf srvOf dec fun p => (run tap p).1)
+    (acc : Z → Fin m → (Fin m → Ω) → Ω → Prop) (W : Z → (Fin m → Ω) → Fin m → Finset ℕ)
+    (had : PeriodAdaptive n acc W) (e e' : Fin m → ℝ) (he : ∀ i, 0 ≤ e i) (q : ℝ) (hq0 : 0 ≤ q) (hq1 : q ≤ 1)
+    (hesc : PeriodEscapes Zs acc W q e)
+    (hleak : PeriodLeaksChecked lay k reg valid Dj sw Pw ρ op Zs acc W
+      (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e')
+    (Fmax : ℕ) :
+    (∀ z ∈ Zs, Pr (fun ω => (∀ i, acc z i ω (ω i)) ∧
+        ¬PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2) ≤
+        (1 - q) ^ Fmax + ∑ i, e i + ∑ i, e' i) ∧
+      ∀ ω, {z | z ∈ Zs ∧
+          PooledGoodChecked lay k reg valid Dj sw Pw ρ op Fmax (W z ω) (run tap (schedOf z ω, srvOf z ω)).2}.encard ≤
+        Ss.encard * (((∏ c, (cap c + 1)) * ((∑ i, n i) + 1) ^ Fmax *
+          2 ^ ((univ.sup fun i => (range (n i)).sup fun v => faultyBits (sw i).prog (Pw i) {v}) * Fmax) *
+          ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ (reg (sw i) ∪ chk (sw i))).card *
+            Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
+  have hcls : ∀ i, CheckedClosing (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i)) (chk (sw i))
+      (valid (sw i)) [] := fun _ => by unfold CheckedClosing; intros; rfl
+  refine ⟨fun z hz => ?_, fun ω => ?_⟩
+  · have hroot : ∀ z ∈ Zs, ∀ ω, (∀ i, acc z i ω (ω i)) →
+        CarriedRoots (fun _ _ => 0) lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i)
+          (fun _ => false) (fun _ => []) := by
+      intro _ _ _ _ _ _ _ _ h i
+      obtain ⟨-, -, -, -, _, -, _, -, -, hp, -, -⟩ := h i
+      simp only [List.map_nil] at hp
+      simp [poolOpen, ← hp]
+    have hleak' : PeriodLeaksCarried lay k reg valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) Zs acc W
+        (fun _ _ _ => []) (fun _ _ _ => []) (fun z ω => (run tap (schedOf z ω, srvOf z ω)).2) e' := by
+      intro z hz i
+      refine le_trans (Pr_mono fun ω hω => ?_) (hleak z hz i)
+      exact ⟨hω.1, fun h' => hω.2 (leakAtCarried_of_leakAtChecked h')⟩
+    have h := (pooledLeakCarried (fun _ _ => 0) lay k reg chk valid (fun _ => []) (fun _ => []) Dj sw Pw ρ
+      (fun i _ => op i) n hchk hcls arr f tap run htrust cap Ss Zs schedOf srvOf dec hch
+      {(fun _ => false, fun _ => [])} (fun _ _ _ => false) (fun _ _ _ => []) acc
+      (fun _ _ _ _ => Finset.mem_singleton_self _) hroot W had (fun _ _ _ => []) (fun _ _ _ => []) e e' he q hq0 hq1
+      hesc hleak' Fmax).1 z hz
+    simp only [poolColl_empty, Pr_false, Finset.sum_const_zero, add_zero] at h
+    refine le_trans (Pr_mono fun ω hω => ?_) h
+    exact ⟨hω.1, fun hg => hω.2 (pooledGoodChecked_of_carried hg)⟩
+  · have h := encard_pooledCarried_le lay k reg chk valid (fun _ => []) (fun _ => []) Dj sw Pw ρ (fun i _ => op i) n
+      hchk hcls (fun _ => false) (fun _ => []) arr f tap run htrust cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω
+    simp only [List.toFinset_nil, Finset.union_empty] at h
+    refine le_trans (Set.encard_le_encard fun z hz => ?_) h
+    exact ⟨hz.1, pooledGoodCarried_of_checked hz.2⟩
 
 end NetTiming

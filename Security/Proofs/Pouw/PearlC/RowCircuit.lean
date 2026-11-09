@@ -99,7 +99,7 @@ theorem Prim.eval_mod (q : Prim) (l : List ℕ) : q.eval ops l % 2 ^ q.w = q.eva
   unfold Prim.eval; exact Nat.mod_mod _ _
 
 /-- **A table's honest values meet its gates**: the circuit's evaluation on any inputs. -/
-theorem Rows.holds (T : Rows) (X : (T.spec ops).toCircuit.Transcript) :
+theorem Rows.holds (T : Rows) (X : (T.spec ops).toCircuit.Trace) :
     RunsHold ops (val ((T.spec ops).toCircuit.eval X)) T.runs T.nIn := by
   apply runsHold_of
   intro g G hg hG
@@ -117,7 +117,7 @@ theorem Rows.holds (T : Rows) (X : (T.spec ops).toCircuit.Transcript) :
   rw [fill_reads, Prim.eval_mod]
 
 /-- A table's honest values on its inputs are the transcript's. -/
-theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Transcript) {l : ℕ} (hl : l < T.nIn) :
+theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Trace) {l : ℕ} (hl : l < T.nIn) :
     val ((T.spec ops).toCircuit.eval X) l = val X l := by
   have hlt : l < (T.spec ops).N := by
     show l < T.nIn + runsLen T.runs
@@ -127,7 +127,7 @@ theorem Rows.val_input (T : Rows) (X : (T.spec ops).toCircuit.Transcript) {l : �
 
 /-- A transcript whose one unit is correct holds the circuit's values on every output (core's
 `Verity.Partition.compose`). -/
-theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Transcript) (hX : S.part.Correct X 0) {g : ℕ} (hg : g ∈ S.outs)
+theorem Spec.out_eq (S : Spec) (X : S.toCircuit.Trace) (hX : S.part.Correct X 0) {g : ℕ} (hg : g ∈ S.outs)
     (hlt : g < S.N) : val X g = val (S.toCircuit.eval X) g := by
   have hw : S.part.wrong X = ∅ := by
     ext u
@@ -436,7 +436,7 @@ theorem code8W_congr {p : Pipeline} {α x : ℕ} {et et' f f' : ℕ → ℕ} (he
 unit is correct, holds on position `t`'s code output `code8W` at `alpha8`'s and `beta8`'s words of the row's inputs `x`,
 `x_t`, `e`'s codes and the form basis' row `t`. -/
 theorem rows8_code (T : Rows) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (hb : 65 * K + 32 ≤ T.nIn) {rest : List Run}
-    (hr : T.runs = pre8Runs p K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Transcript)
+    (hr : T.runs = pre8Runs p K T.nIn ++ rest) (X : (T.spec ops).toCircuit.Trace)
     (hX : (T.spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) (hout : code8 K T.nIn t ∈ T.outs) :
     val X (code8 K T.nIn t) = code8W ops p (alpha8 ops (val X) K) (val X t)
       (fun l => eTilde8 ops (beta8 ops (val X) K) (val X (K + l))) (fun l => val X (K + 32 + 32 * t + l)) := by
@@ -457,7 +457,7 @@ theorem rows8_code (T : Rows) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (hb : 65 *
   exact code8W_congr (fun l hl => by rw [hin _ (by omega)]) fun l hl => hin _ (by omega)
 
 /-- **RowA computes `A′`'s codes** (`rows8_code` at `Pc8RowA_v1{K}`). -/
-theorem row8A_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+theorem row8A_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) :
     val X (code8 K (rowIn K false) t) = code8W ops p (alpha8 ops (val X) K) (val X t)
       (fun l => eTilde8 ops (beta8 ops (val X) K) (val X (K + l))) (fun l => val X (K + 32 + 32 * t + l)) :=
@@ -466,7 +466,7 @@ theorem row8A_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spe
       rfl⟩))))
 
 /-- **RowB computes `B̃`'s codes** (`rows8_code` at `Pc8RowB_v1{K}`). -/
-theorem row8B_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+theorem row8B_code (p : Pipeline) {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ} (ht : t < K) :
     val X (code8 K (rowIn K true) t) = code8W ops p (alpha8 ops (val X) K) (val X t)
       (fun l => eTilde8 ops (beta8 ops (val X) K) (val X (K + l))) (fun l => val X (K + 32 + 32 * t + l)) :=
@@ -615,7 +615,7 @@ theorem chain8_word (hn : 0 < n) (h : Chain8Holds (ops := ops) p V cd cl o n) (A
 /-- **RowA computes `P_A`'s words**: at depth `K = 128·nw`, a transcript correct on RowA whose code outputs hold `A′`'s
 codes `A` and whose chain basis' column `q` holds `B` has on `P_A`'s word `q` the BF16 cast of the chain's word over `A`
 and `B` (`chainWordP? p 4`, the pinned order). -/
-theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+theorem row8A_pa {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
     (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K false) t) = (A t).val) {q : ℕ} (hq : q < 32)
     (hB : ∀ t : Fin (128 * nw), val X (33 * K + 32 + 32 * t + q) = (B t).val) {c : ℕ}
@@ -719,7 +719,7 @@ theorem pbAcc_congr {ew ew' g g' : ℕ → ℕ} : ∀ n, (∀ s ≤ n, ew s = ew
 codes `A` and whose chain basis' column `q` holds `B` has on `P_B`'s word `q` the BF16 cast of `Σ_s ẽ_s·g_{s,q}` (the
 FMAs from `+0` of the rescaled noise' FP32 words against `G`'s column `q`) plus the negated word of the chain over `A`
 and `B` (`chainWordP? p 4`, the pinned order). -/
-theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) (A B : Fin (128 * nw) → Code)
     (hA : ∀ t : Fin (128 * nw), val X (code8 K (rowIn K true) t) = (A t).val) {q : ℕ} (hq : q < 32)
     (hB : ∀ t : Fin (128 * nw), val X (33 * K + 32 + 32 * t + q) = (B t).val) {c : ℕ}
@@ -847,7 +847,7 @@ theorem row8B_pb {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p 
 
 /-- **RowA writes the rescaled noise' BF16 words** (`be_A`, `P_A`'s head in `paRow?`): word `l` is the BF16 cast of
 `ẽ_l`'s FP32 word. -/
-theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post8At K (rowIn K false) + 32 * (5 * nw + 1) + l) =
       Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + l))]] := by
@@ -880,7 +880,7 @@ theorem row8A_be {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8A p 
 
 /-- **RowB writes the rescaled noise' BF16 words negated** (`P_B`'s tail in `pbRow?`): word `l` is the BF16 cast of
 `ẽ_l`'s FP32 word, its sign flipped. -/
-theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+theorem row8B_nbe {K nw : ℕ} (hnw : 0 < nw) (hK : K = 128 * nw) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post8At K (rowIn K true) + 32 * (5 * nw + 35) + 2 * l + 1) = Prim.eval ops .bf16Neg
       [Prim.eval ops .f2fpBf16 [Prim.eval ops .e4m3ToF32 [eTilde8 ops (beta8 ops (val X) K) (val X (K + l))]]] := by
@@ -1059,7 +1059,7 @@ section Flags8
 variable {ops} (p : Pipeline)
 
 /-- **RowA writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
-theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Transcript)
+theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircuit.Trace)
     (hX : ((row8A p K).spec ops).part.Correct X 0) :
     val X (post8At K (rowIn K false) + 32 * (5 * (K / 128) + 1) + 32) =
       Prim.eval ops .selBf16 [flag8 ops (val X) K, 1, 0] := by
@@ -1088,7 +1088,7 @@ theorem row8A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8A p K).spec ops).toCircui
   rw [g, pre8_flag hK hpre, flag8_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
 /-- **RowB writes its flag**: the BF16 select of `flag8` to `1` or `0`. -/
-theorem row8B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Transcript)
+theorem row8B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row8B p K).spec ops).toCircuit.Trace)
     (hX : ((row8B p K).spec ops).part.Correct X 0) :
     val X (post8At K (rowIn K true) + 32 * (5 * (K / 128) + 35) + 64) =
       Prim.eval ops .selBf16 [flag8 ops (val X) K, 1, 0] := by
@@ -1186,7 +1186,7 @@ theorem pre4_flag {V : ℕ → ℕ} {K b : ℕ} (hK : 8 ≤ K) (h : RunsHold ops
   rfl
 
 /-- **RowA writes the noise' `Ẽ`**: word `l` is `PouwETilde_v1` of `e`'s code `l` at `a_E`, `β`'s E4M3 cast. -/
-theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + l) =
       Prim.eval ops .eTilde [val X (K + l), Prim.eval ops .toE4m3 [beta4 ops (val X) K]] := by
@@ -1216,7 +1216,7 @@ theorem row4A_et {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Tr
     beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
 /-- **RowA writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
-theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Transcript)
+theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.Trace)
     (hX : ((row4A K).spec ops).part.Correct X 0) :
     val X (post4At K (rowIn K false) + 32 * (K / 64 + 1) + 32) =
       Prim.eval ops .selBf16 [flag4 ops (val X) K, 1, 0] := by
@@ -1245,7 +1245,7 @@ theorem row4A_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4A K).spec ops).toCircuit.
   rw [g, pre4_flag hK hpre, flag4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
 /-- **RowB writes the noise' `−Ẽ`**: word `l` is `PouwBf16Neg_v1` of `PouwETilde_v1` of `e`'s code `l` at `a_E`. -/
-theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) {l : ℕ} (hl : l < 32) :
     val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + l) = Prim.eval ops .bf16Neg
       [Prim.eval ops .eTilde [val X (K + l), Prim.eval ops .toE4m3 [beta4 ops (val X) K]]] := by
@@ -1276,7 +1276,7 @@ theorem row4B_net {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.T
     beta4_congr hK fun l hl => hin l (by simp only [rowIn]; omega)]
 
 /-- **RowB writes its flag**: the BF16 select of `flag4` to `1` or `0`. -/
-theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Transcript)
+theorem row4B_flag {K : ℕ} (hK : 8 ≤ K) (X : ((row4B K).spec ops).toCircuit.Trace)
     (hX : ((row4B K).spec ops).part.Correct X 0) :
     val X (post4At K (rowIn K true) + 32 + 32 * (K / 64 + 35) + 32) =
       Prim.eval ops .selBf16 [flag4 ops (val X) K, 1, 0] := by
@@ -1423,7 +1423,7 @@ theorem codes8_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : P
 /-- **RowA's codes are `pc8Sem`'s**: `e4m3` of `pc8Form` at `α`, `x_t` and `β` read as values and the noise line's and
 `F_t`'s codes, under `codes8_sem`'s conditions. -/
 theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
-    (X : ((row8A p K).spec ops).toCircuit.Transcript) (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ}
+    (X : ((row8A p K).spec ops).toCircuit.Trace) (hX : ((row8A p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
     (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, val X (K + l) < 256)
     (hf : ∀ l < Params.pi.r, val X (K + 32 + 32 * t + l) < 256)
@@ -1437,7 +1437,7 @@ theorem row8A_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p
 
 /-- **RowB's codes are `pc8Sem`'s**, as `row8A_code_sem`. -/
 theorem row8B_code_sem (hcast : ∀ u, ops.f32ToE4m3Sat u = (e4m3Word u).val) (p : Pipeline) {K : ℕ} (hK : 8 ≤ K)
-    (X : ((row8B p K).spec ops).toCircuit.Transcript) (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ}
+    (X : ((row8B p K).spec ops).toCircuit.Trace) (hX : ((row8B p K).spec ops).part.Correct X 0) {t : ℕ}
     (ht : t < K) (ha : AccumProofs.StepWord (alpha8 ops (val X) K)) (hx : AccumProofs.StepWord (val X t))
     (hb : AccumProofs.StepWord (beta8 ops (val X) K)) (he : ∀ l < Params.pi.r, val X (K + l) < 256)
     (hf : ∀ l < Params.pi.r, val X (K + 32 + 32 * t + l) < 256)

@@ -41,8 +41,8 @@ section OpenT
 variable {Coin Col T : Type}
 
 /-- A view opened where it accepts, as a trace, and aborted elsewhere: what `E^rep` at `DE` sees of it. -/
-def Bound.openT (Bd : Bound Coin Col T) (v : Seen) : Trace :=
-  if v.out = .acc then ⟨(Bd.openView v).msgs, [], [], .acc⟩ else abortTrace
+def Bound.openT (Bd : Bound Coin Col T) (v : Seen) : Transcript :=
+  if v.out = .acc then ⟨(Bd.openView v).msgs, [], [], .acc⟩ else abortTranscript
 
 /-- **A view and its opening accept alike**, and an accepted view's opening is the view opened. -/
 theorem Bound.openT_rel (Bd : Bound Coin Col T) (v : Seen) :
@@ -51,9 +51,9 @@ theorem Bound.openT_rel (Bd : Bound Coin Col T) (v : Seen) :
   · have e : Bd.openT v = ⟨(Bd.openView v).msgs, [], [], .acc⟩ := ite_eq_left h
     rw [e]
     exact ⟨⟨fun _ => rfl, fun _ => h⟩, fun _ => Bd.openView_eq_of_acc h⟩
-  · have e : Bd.openT v = abortTrace := ite_eq_right h
+  · have e : Bd.openT v = abortTranscript := ite_eq_right h
     rw [e]
-    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTrace, Trace.seen] at h'⟩, fun h' => absurd h' h⟩
+    exact ⟨⟨fun h' => absurd h' h, fun h' => by simp [abortTranscript, Transcript.seen] at h'⟩, fun h' => absurd h' h⟩
 
 end OpenT
 
@@ -100,11 +100,11 @@ noncomputable def Bound.keepDO (ω : Ω)
 
 /-- **`P_O`'s run at a sample, as it aborts**: at the sample's inner coins, unless `keepDO` refuses it. -/
 noncomputable def Bound.innerFO (decC : Msg → Msg → Coin) (ω : Ω)
-    (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Trace :=
+    (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Transcript :=
   if Bd.keepDO decI H D DO decO P x ω d then
     run H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) ω
       (innerCoins D (Inner.ofFlock Bd.deploy decI) x d.1)
-  else abortTrace
+  else abortTranscript
 
 /-- **`P_O`'s aborts**: a run at the inner coins `ρ` and the abort coins `a` is kept as `keepDO` keeps the sample they
 extend to. -/
@@ -115,7 +115,7 @@ noncomputable def Bound.keepAO (ω : Ω) (ρ : Fin (Bd.DE.V.k (xI D x)) → Coin
 /-- The served run at a sample, opened (`openT`): what `E^rep` at `DE` sees where `E*`'s inner stage sees the served
 run. -/
 noncomputable def Bound.servedO (ω : Ω)
-    (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Trace :=
+    (d : (Fin (D.V.k x) → Coin) × (EO D (Inner.ofFlock Bd.deploy decI) DO decO).C x) : Transcript :=
   Bd.openT (servedRun H (Claims.outerStage (EO D (Inner.ofFlock Bd.deploy decI) DO decO) (dec H D) x)
     (run H P D.V x ω) d).seen
 
@@ -227,7 +227,7 @@ theorem Bound.runO (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x (Bd.ans
     (by simp only [Bound.ansAt, show ¬ (Bd.DE.V.k (xI D x) - 1 + 1 < Bd.DE.V.k (xI D x)) by omega, ↓reduceIte])
   rw [hcongr, hov']
   refine ⟨?_, h2, fun e he => ?_⟩
-  · simp only [Trace.seen, h1, h2]
+  · simp only [Transcript.seen, h1, h2]
   · obtain ⟨j, hj, hej⟩ := h3 e he
     exact (hag j hj).2 e hej
 
@@ -245,8 +245,8 @@ theorem Bound.servedO_seen (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x
   · have hk : Bd.keepDO decI H D DO decO P x ω d = false := by
       unfold Bound.keepDO
       simp [ho]
-    have e1 : Bd.openT (dec H D x d.1 none) = abortTrace := ite_eq_right (by simp [dec])
-    have e2 : Bd.innerFO decI H D DO decO P x decC ω d = abortTrace := by
+    have e1 : Bd.openT (dec H D x d.1 none) = abortTranscript := ite_eq_right (by simp [dec])
+    have e2 : Bd.innerFO decI H D DO decO P x decC ω d = abortTranscript := by
       unfold Bound.innerFO
       rw [hk]
       rfl
@@ -265,8 +265,8 @@ theorem Bound.servedO_seen (decC : Msg → Msg → Coin) (hdec : ∀ x c, decC x
     · have hk : Bd.keepDO decI H D DO decO P x ω d = false := by
         unfold Bound.keepDO
         simp [ho, dec, hacc]
-      have e1 : Bd.openT (dec H D x d.1 (some ws)) = abortTrace := ite_eq_right hacc
-      have e2 : Bd.innerFO decI H D DO decO P x decC ω d = abortTrace := by
+      have e1 : Bd.openT (dec H D x d.1 (some ws)) = abortTranscript := ite_eq_right hacc
+      have e2 : Bd.innerFO decI H D DO decO P x decC ω d = abortTranscript := by
         unfold Bound.innerFO
         rw [hk]
         rfl
@@ -282,7 +282,7 @@ theorem Bound.abortRun_eqO (decC : Msg → Msg → Coin) (hn : Bd.DE.V.k (xI D x
     innerCoins_extend D (Inner.ofFlock Bd.deploy decI) x hn t.1 t.2.1
   unfold abortRun Bound.keepAO
   show (if Bd.keepDO decI H D DO decO P x ω (extendDraw t) = true then
-      run H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) ω t.1 else abortTrace) =
+      run H (Bd.innerPO decI H D DO decO P x decC) Bd.DE.V (xI D x) ω t.1 else abortTranscript) =
     Bd.innerFO decI H D DO decO P x decC ω (extendDraw t)
   unfold Bound.innerFO
   rw [hc]
@@ -499,7 +499,7 @@ theorem Bound.innerFO_vLog_subBy (decC : Msg → Msg → Coin) (hdec : ∀ x c, 
     rcases hL decO x Ω P ω d.1 d.2 ws (eoGives_of_some hws) with h | h
     · exact Or.inl fun e he => h e (hrun.2.2 e he)
     · exact Or.inr h
-  · exact Or.inl fun e he => by simp [Bound.innerFO, hk, abortTrace] at he
+  · exact Or.inl fun e he => by simp [Bound.innerFO, hk, abortTranscript] at he
 
 /-- **`B` at `P_O`'s aborting runs finds only collisions among the calls `cl` searches at `B_I`'s fork**: each kept
 run's calls are among those at the sample it extends to, or those collide (`CallsLogCollBy`), and an aborted run makes

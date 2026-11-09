@@ -4,7 +4,9 @@ reader row, as `verity.ml.windows.interface.members` does: reader index i of a w
 ``at + i // C``, row ``c0 + i % C``, and its writer ``base + sum(d[k] * step[k])`` over i's mixed-radix digits, the
 first digit the slowest (`Wire.writers`, copied below rather than imported: a verifier imports no `verity.ml` code).
 Both pieces agreeing with it on the same inputs is the difftest of the closed form (spans, lookups, wired rows and bits,
-and the overlap check pair by pair) against the expansion.
+the overlap check pair by pair, and the order wire by wire) against the expansion: the reference ranks every unit by the
+range of the order that holds it and, for each range a wire reads in, holds every unit within the wire's box there (`box`,
+`Wire.box`'s digit by digit bounds, copied) below the range, and with no order places the templates as `Wires.kahn` does.
 """
 
 from __future__ import annotations
@@ -112,9 +114,13 @@ def refusal(code: str, wire: int | None = None) -> dict:
     return {"ok": False, "code": code, "wire": wire}
 
 
+def _keys(j, keys: set[str]) -> None:
+    if set(_obj(j, "an instance")) not in (keys, keys | {"order"}):
+        raise D.Reject(f"an instance is {sorted(keys)} and optionally its order")
+
+
 def reference(j):
-    if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "queries"}:
-        raise D.Reject("an instance is {templates, cuts, wires, queries}")
+    _keys(j, {"templates", "cuts", "wires", "queries"})
     queries = []
     for q in _list(j["queries"], "queries"):
         if len(_list(q, "a query")) != 4:
@@ -136,6 +142,13 @@ def expand(j):
     cuts = {tid: {p: _nat(k, "a cut") for p, k in _obj(kv, "a template's cuts").items()}
             for tid, kv in _obj(j["cuts"], "cuts").items()}
     wires = [_wire(w) for w in _list(j["wires"], "wires")]
+    order = None
+    if "order" in j:
+        order = []
+        for b in _list(j["order"], "order"):
+            if len(_list(b, "a range")) != 3:
+                raise D.Reject("a range is [template, at, units]")
+            order.append((_str(b[0], "a range's template"), _nat(b[1], "a range's first unit"), _nat(b[2], "a range's units")))
 
     for tid, kv in cuts.items():
         if tid not in templates:
@@ -165,13 +178,90 @@ def expand(j):
             if row in entries:
                 return refusal("overlap")
             entries[row] = ([w["writer"], writers(w, x), w["out"]], 16 * (templates[w["reader"]][1][w["port"]][0] // k))
+    if order is None:
+        if (got := kahn(templates, wires)) is not None:
+            return got
+    elif (got := ordered(templates, wires, order)) is not None:
+        return got
     return {"entries": entries, "wires": wires}
+
+
+def kahn(templates, wires):
+    """With no order: the templates placed one by one, the first by id that reads none not yet placed by a wire from
+    another; where every one left reads one, the cycle's refusal, naming the first wire from one left of the template
+    that walking back from the first one left, as many steps as there are left, ends on. Else the order of the
+    placements, each template's units cut at the first and the end reader unit of each wire it reads itself by, held to
+    as a stated order is (`ordered`)."""
+    rest, placed = sorted(templates), []
+
+    def into(t):
+        return [i for i, w in enumerate(wires) if w["reader"] == t and w["writer"] in rest and w["writer"] != t]
+
+    while rest:
+        free = [t for t in rest if not into(t)]
+        if free:
+            rest.remove(free[0])
+            placed.append(free[0])
+            continue
+        t = rest[0]
+        for _ in range(len(rest)):
+            t = wires[into(t)[0]]["writer"]
+        return refusal("cycle", into(t)[0])
+    order = []
+    for t in placed:
+        n = templates[t][0]
+        cs = sorted({0, n, *(min(x, n) for w in wires if w["reader"] == t == w["writer"]
+                             for x in (w["at"], w["at"] + units(w) // w["c"]))})
+        order += [(t, a, b - a) for a, b in zip(cs, cs[1:])] or [(t, 0, n)]
+    return ordered(templates, wires, order)
+
+
+def box(w, lo, hi):
+    """`Wire.box`: bounds on the writers of reader indices ``lo`` to ``hi``, digit by digit, the fastest first."""
+    pairs = list(zip(reversed(w["radix"]), reversed(w["step"])))
+    low = high = w["base"]
+    for k, (r, s) in enumerate(pairs):
+        if lo // r == hi // r:
+            q, rest = lo // r, 0
+            for r2, s2 in pairs[k + 1:]:
+                rest += q % r2 * s2
+                q //= r2
+            return low + min(lo % r * s, hi % r * s) + rest, high + max(lo % r * s, hi % r * s) + rest
+        low, high, lo, hi = low + min(0, s * (r - 1)), high + max(0, s * (r - 1)), lo // r, hi // r
+    return low, high
+
+
+def read_in(w, at, n):
+    """The bounds on the writers of the wire's reader units in units ``[at, at + n)`` of its reader, None where it has
+    none there."""
+    a, b = max(at, w["at"]), min(at + n, w["at"] + units(w) // w["c"])
+    return box(w, (a - w["at"]) * w["c"], (b - w["at"]) * w["c"] - 1) if a < b else None
+
+
+def ordered(templates, wires, order):
+    """The order's refusal, unrolled: every unit ranked by the range that holds it, each template's ranges its units each
+    once, and for each range a wire reads in, every unit within its box there ranked below the range."""
+    rank = {}
+    for b, (t, a, n) in enumerate(order):
+        if t not in templates or n < 1:
+            return refusal("order")
+        for u in range(a, a + n):
+            if (t, u) in rank:
+                return refusal("order")
+            rank[(t, u)] = b
+    if set(rank) != {(t, u) for t, tt in templates.items() for u in range(tt[0])}:
+        return refusal("order")
+    for i, w in enumerate(wires):
+        for b, (t, a, n) in enumerate(order):
+            got = read_in(w, a, n) if t == w["reader"] else None
+            if got and any(rank.get((w["writer"], v), -1) >= b for v in range(max(got[0], 0), max(got[1], 0) + 1)):
+                return refusal("order", i)
+    return None
 
 
 def reference_drawn(j):
     """The sampled proof blocks' wired rows (`wires_drawn`): each is its writer's when both public strings are given and equal."""
-    if set(_obj(j, "an instance")) != {"templates", "cuts", "wires", "drawn", "reads", "writes"}:
-        raise D.Reject("an instance is {templates, cuts, wires, drawn, reads, writes}")
+    _keys(j, {"templates", "cuts", "wires", "drawn", "reads", "writes"})
     drawn, reads, writes = set(), {}, {}
     for d in _list(j["drawn"], "drawn"):
         if len(_list(d, "a drawn unit")) != 2:
@@ -250,8 +340,10 @@ def instances(draw, broken: bool = False):
     queries = [[draw(st.sampled_from(names)), draw(st.integers(0, 9)), draw(st.sampled_from(["x", "y"])), draw(st.integers(0, 3))]
                for _ in range(draw(st.integers(0, 4)))]
     j = {"templates": templates, "cuts": cuts, "wires": wires, "queries": queries}
+    if draw(st.booleans()):
+        j["order"] = draw(_orders(templates, wires))
     if broken:
-        part = draw(st.sampled_from(["templates", "cuts", "wires", "queries", "wire", "template"]))
+        part = draw(st.sampled_from(["templates", "cuts", "wires", "queries", "wire", "template", "order"]))
         if part == "wire" and wires:
             wires[0][draw(st.sampled_from(sorted(WIRE_KEYS | {"cut", "extra"})))] = draw(JSON)
         elif part == "template":
@@ -259,6 +351,45 @@ def instances(draw, broken: bool = False):
         else:
             j[part] = draw(JSON)
     return j
+
+
+@st.composite
+def _orders(draw, templates: dict, wires: list):
+    """An order of the instance's units: each template's units cut into up to three ranges, placed in a topological order
+    of what their wires' boxes need where there is one, else in any order; sometimes one range's units 0, its first unit
+    moved, one range of no template, or the last range dropped."""
+    ranges = []
+    for t, tt in templates.items():
+        n = tt["units"]
+        bounds = sorted({0, n, *(c for c in draw(st.lists(st.integers(1, max(n - 1, 1)), max_size=2)) if c < n)})
+        ranges += [(t, a, b) for a, b in zip(bounds, bounds[1:])]
+
+    def meet(t, lo, hi):
+        return {i for i, (s, a, b) in enumerate(ranges) if s == t and max(a, lo) < min(b, hi)}
+
+    need = {i: set() for i in range(len(ranges))}
+    for w in map(_wire, wires):
+        for r, (t, a, b) in enumerate(ranges):
+            if t == w["reader"] and (got := read_in(w, a, b - a)) is not None:
+                need[r] |= meet(w["writer"], max(got[0], 0), max(got[1], 0) + 1)
+    left, order = list(range(len(ranges))), []
+    while left:
+        ready = [i for i in left if not need[i] & set(left)]
+        i = draw(st.sampled_from(ready or left))
+        left.remove(i)
+        t, a, b = ranges[i]
+        order.append([t, a, b - a])
+    how = draw(st.integers(0, 11))
+    if how == 0:
+        order[draw(st.integers(0, len(order) - 1))][2] = 0
+    elif how == 1:
+        o = order[draw(st.integers(0, len(order) - 1))]
+        o[1] += 1 if o[1] == 0 else draw(st.sampled_from([-1, 1]))
+    elif how == 2:
+        order.insert(draw(st.integers(0, len(order))), ["Z", 0, 1])
+    elif how == 3:
+        order.pop()
+    return order
 
 
 @st.composite
@@ -354,6 +485,61 @@ def test_an_overlap_is_refused(pieces):
     assert reference(j) == refusal("overlap")
     for fn in ("wires", "wires_unrolled"):
         assert pieces.call(fn, j) == ("output", D.canonical(refusal("overlap")))
+
+
+def _back(order=None, split: bool = False) -> dict:
+    """The gather with `G`'s units 4 and 5 reading `A`'s unit 0 back (its `o4`, as `G`'s `x`): the templates read each
+    other, though no unit reads itself (`G`'s units 0 to 3 feed `A`'s 0, which feeds `G`'s 4 and 5, which with `G`'s 3
+    feed `A`'s 1); ``split``, the gather as a wire a reader unit."""
+    j = _gather()
+    del j["queries"][2]
+    j["templates"]["A"]["outs"]["o4"] = 4
+    if split:
+        j["wires"] = [dict(j["wires"][0], at=u, radix=[1, 3], base=3 * u) for u in (0, 1)]
+    j["wires"].append({"reader": "G", "port": "x", "writer": "A", "out": "o4", "at": 4, "radix": [2], "base": 0,
+                       "step": [0]})
+    return j | ({"order": order} if order is not None else {})
+
+
+def _self(order=None, base: int = 0) -> dict:
+    """The gather with `G`'s unit 1 reading `G`'s unit ``base`` (its `o4`): a template that reads itself, an earlier
+    instance at ``base`` 0, the same at 1 and a later one at 2."""
+    j = _gather()
+    j["templates"]["G"]["outs"]["o4"] = 4
+    j["wires"].append({"reader": "G", "port": "x", "writer": "G", "out": "o4", "at": 1, "radix": [1], "base": base,
+                       "step": [0]})
+    return j | ({"order": order} if order is not None else {})
+
+
+@pytest.mark.parametrize("name, j, want", [
+    ("templates that read each other", _back(), refusal("cycle", 0)),
+    ("a template that reads an earlier instance of itself", _self(), True),
+    ("a template that reads the same instance of itself", _self(base=1), refusal("order", 1)),
+    ("a template that reads a later instance of itself", _self(base=2), refusal("order", 1)),
+    ("an order a wire a reader unit follows", _back([["G", 0, 4], ["A", 0, 1], ["G", 4, 2], ["A", 1, 1]], split=True), True),
+    ("an order a template that reads itself follows", _self([["G", 0, 1], ["G", 1, 5], ["A", 0, 2]]), True),
+    ("an order ranking a template's later units first", _gather(order=[["G", 3, 3], ["G", 0, 3], ["A", 0, 2]]), True),
+    ("an order a wire's reader units cross, each range after what it reads",
+     _back([["G", 0, 4], ["A", 0, 1], ["G", 4, 2], ["A", 1, 1]]), True),
+    ("an order a wire's reader units cross, a range before what it reads",
+     _back([["G", 0, 3], ["A", 0, 1], ["G", 4, 2], ["A", 1, 1], ["G", 3, 1]]), refusal("order", 0)),
+    ("an order with a writer after its reader", _back([["A", 0, 1], ["G", 0, 4], ["G", 4, 2], ["A", 1, 1]], split=True),
+     refusal("order", 0)),
+    ("an order of the gather with its reader first", _gather(order=[["A", 0, 2], ["G", 0, 6]]), refusal("order", 0)),
+    ("an order of the gather", _gather(order=[["G", 0, 6], ["A", 0, 2]]), True),
+    ("an order with a range of no units", _gather(order=[["G", 0, 6], ["A", 0, 0], ["A", 0, 2]]), refusal("order")),
+    ("an order of no template", _gather(order=[["G", 0, 6], ["A", 0, 2], ["Z", 0, 1]]), refusal("order")),
+    ("an order short of a template's units", _gather(order=[["G", 0, 5], ["A", 0, 2]]), refusal("order")),
+    ("an order whose ranges overlap", _gather(order=[["G", 0, 4], ["G", 2, 4], ["A", 0, 2]]), refusal("order")),
+    ("an order with a gap", _gather(order=[["G", 0, 4], ["G", 5, 1], ["A", 0, 2]]), refusal("order")),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_the_order(pieces, name, j, want):
+    """A dataflow between units with no cycle passes, ordered by the circuit's ranges where its templates read each other,
+    and a cycle, an order its wires don't follow or a malformed order is refused."""
+    got = reference(j)
+    assert got["ok"] is True if want is True else got == want
+    for fn in ("wires", "wires_unrolled"):
+        assert pieces.call(fn, j) == ("output", D.canonical(got)), fn
 
 
 def test_the_drawn_check_reads_only_drawn_units(pieces):

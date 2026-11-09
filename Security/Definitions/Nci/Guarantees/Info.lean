@@ -22,7 +22,7 @@ a function `f` of `k` bits, then `R`'s gates take at most `2^(k + width(Sin))` v
 most `k + width(Sin)` bits of information. The baseline is what is registered: after a wipe, a state that is registered
 data entangled with at most `k` bits of slack reads as `k` bits, however wide it is. -/
 def InfoOfState : Prop :=
-  ∀ (D : RegisteredCircuit) (θv : D.D.Transcript) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
+  ∀ (D : RegisteredCircuit) (θv : D.D.Trace) (R Sst Sin : Finset (Fin D.D.N)) (k : ℕ)
     (f : BitVec k → (g : Sst) → BitVec (D.D.w g)),
     R ⊆ D.D.computed → D.D.into R \ D.θ ⊆ Sst ∪ Sin → (∀ a ∈ admissible D θv, ∃ s, values Sst a = f s) →
       support D θv R ≤ 2 ^ (k + D.D.width Sin) ∧ novelInfo D θv R ≤ k + D.D.width Sin
