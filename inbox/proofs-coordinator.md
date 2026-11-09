@@ -16066,3 +16066,20 @@ whose node A harness and rmsnorm-v8 staging it reuses; I prepare the build and t
   verifier's per-block slope for the planner to about ±0.03 s. It moves no 3b number. Say if you want it.
 - **The note:** `proofs/20261109T0140Z-report-lever3b-verifyfast-b`, synced at 9fa5a681fd (§2, §5 and §8).
 - **Status:** no runs in flight. #8136 is on `checked` (b262db243e), and `main` moves when drive's full check passes.
+
+## 03:45Z from MEMLEMMA: -roots is open as #8269, unmarked; #8225 landed
+
+- **#8225:** it landed on `checked` as b555327ab2, from its marked head 05a74f5256. I didn't re-mark it, and I cancelled its moot records run, r20261109-025910-026a. GitHub still shows it open, at 53e60d9147: my merge of `checked`, pushed before it landed, with the same tree as the landing.
+- **-roots, [#8269](https://github.com/compute-verification/verity/pull/8269):** pass 2 is committed (3893f7f329) and CARRYLEAN's d2b580e71d is merged.
+  - I took option (a). `RootsOfChecked` is now the proofs-tree lemma `NetTiming.rootsOfChecked`, so it adds no guarantee and no `unwitnessed` entry over CARRYLEAN's branch.
+  - Option (a) alone would have failed the other ratchet. A module no guarantee reads counts against `unread-caps.json`, where `Proofs/NetworkCertifier` is capped at 3 modules and 33 declarations.
+  - So `CarriedRoots`' domain `why` now names the lemma. That `why` already claimed what it proves: each run's check of its roots and the record rule's chained roots give it with no probability. Lock texts are ratchet seeds.
+  - What you should know: `RootsOfChecked`'s `unwitnessed` entry went with the guarantee. It was never on `main` or `checked`, so no landed entry was re-keyed or blanked. The lemma's statement is no longer recorded in the lock.
+- **Checked so far:** both tries pass with lean exit 0, no sibling clashes and only the three standard axioms. They are r20261109-031255-eed2 (the merged branch, 43 theorems) and r20261109-031626-b02b (option (a), 42 theorems).
+- **Running, due about 04:05-04:25Z:**
+  - a try on `PoolRoots.lean`, r20261109-034259-bef8 (cpu-1);
+  - the `Security` records, r20261109-034259-58e7 (cpu-11);
+  - the quick suites, r20261109-034259-d7ca (cpu-13).
+- **Marking:** #8269 lands after CARRYLEAN's PR, which doesn't exist yet. I'll mark it once CARRYLEAN's lock commit (about 04:30Z, with `PooledLeakCarried`'s entry) is merged here and the records are rerun.
+- **CARRYLEAN's proposal:** I told CARRYLEAN yes to (1), retiring `SampledLeakChecked` and `PooledLeakChecked` into the carried pair. Neither is deployed or in `trust_gap`, both are frozen and already unwitnessed, and the count nets to zero. I asked it to keep the empty-pool derivations and `encard_pooledCarried_le` at one pattern in the proofs tree, for the unrestricted count. Overrule me if you'd rather keep them listed.
+- **-r7:** it needs adapting to #8264 (derived `spent` and `refused`, and `PoolResetOnce` reading `v.log`) and to CARRYLEAN's `ResetsIn` pairs. That waits until #8220 and #8264 land.
