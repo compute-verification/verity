@@ -9,10 +9,10 @@ import Proofs.NetworkCertifier.TapRows
 
 A window that meets `WindowGood`, whose observations the network certifier registers at the transfer gates
 (`TapOpens`), has them among the sequences `AccSeqsSampled` counts at its registration, with the registration's values
-at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the cells
+at `reg` (`mem_accSeqsSampled_of_windowGood`). The observations are the trusted network certifier's record of the frames
 it sends, so the client's view reads back from them under its schedule, one its record format holds
 (`tap_cells_read`): the views, and the secrets
-they decode to, number at most `#Ss` times the size of the product of those sets (`encard_periodGood_le`). The record
+they decode to, number at most `#Ss` times the size of the product of those sets (`encard_period_le`). The record
 holds the fail cells and the padding too, so the count needs no separate charge for them: the bound's
 `∏_c (cap_c + 1)`, one fail choice per connection, is room here. `periodLeak` adds the per-window bound at
 the network certifier's rows (`sampledLeak_tap`).
@@ -54,12 +54,14 @@ theorem mem_accSeqsSampled_of_windowGood {H : Msg → Msg} {D : Deploy Coin Col 
   rw [hprog, hlay, hk] at hfits
   exact ⟨hfits, hmem⟩
 
-omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [DecidableEq Col] [Zero Col] in
-theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S)
-    (k : AuditStatement → ℕ) (δ : ℝ) (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
-    (hPw : ∀ i, D.partition (sw i) = some (Pw i)) (ρ : Fin n → ℕ → Bool)
-    (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
+/-- **The count over any good event that puts each window's observations among `AccSeqsSampled`'s sequences**, with
+the registered inputs pinned at `ρ i`: the secrets whose observations the network certifier's one run gives number at
+most `#Ss` times the size of the product of those sets. `periodLeak` counts over `WindowGood`;
+`periodLeak_registered` counts over `WindowGoodReg` from the rows format's read-back instead
+(`RowsFormat.encard_periodRead_le`). -/
+theorem encard_period_le (L K S : ℕ) (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ)
+    (reg : AuditStatement → Finset ℕ) (Dj : ℕ) {n : ℕ} (sw : Fin n → AuditStatement) (Pw : Fin n → Partition)
+    (ρ : Fin n → ℕ → Bool) (op : Fin n → ℕ → List (Obs L K S) → List Bool) (β : Fin n → ℕ)
     (hβ : ∀ i, ∀ F ∈ faultySets (sw i).design (Pw i) δ, faultyBits (sw i).prog (Pw i) F ≤ β i)
     {Conn Cell Srv Dev Z : Type} [Fintype Conn] (arr : Srv → Conn → Arrivals Cell)
     (f : TapRecord Conn Cell (Fin n → List (Obs L K S))) (tap : Dev)
@@ -68,15 +70,14 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
     (cap : Conn → ℕ) (Ss : Set (WardenSchedule Conn)) (hfit : ∀ s ∈ Ss, f.fits s)
     (Zs : Set Z) (schedOf : Z → WardenSchedule Conn) (srvOf : Z → Srv) (hs : ∀ z ∈ Zs, schedOf z ∈ Ss)
     (dec : (Conn → List (ℕ × CellView Cell)) → Z) (hdz : ∀ z ∈ Zs, dec (run tap (schedOf z, srvOf z)).1 = z)
-    (x : Z → Fin n → Msg) (wit : Z → Fin n → Wit) (tops : AuditStatement → List (Opening Bool))
-    (htap : ∀ z ∈ Zs, ∀ i s, D.parse (x z i) = some s → TapOpens H D.commit (lay s) (k s) (op i) s (tops s)
-      ((run tap (schedOf z, srvOf z)).2 i)) :
-    {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-        ((run tap (schedOf z, srvOf z)).2 i)}.encard ≤
+    (Good : Z → Prop)
+    (hwin : ∀ z ∈ Zs, Good z → ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) ∧
+      (run tap (schedOf z, srvOf z)).2 i ∈ AccSeqsSampled (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
+        (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) δ (op i) Dj) :
+    {z | z ∈ Zs ∧ Good z}.encard ≤
       Ss.encard * (((∏ c, (cap c + 1)) * ∏ i, (2 ^ (freeInputs (sw i).prog (lay (sw i)) (k (sw i)) \ reg (sw i)).card *
         (faultySets (sw i).design (Pw i) δ).card * 2 ^ β i * Dj ^ k (sw i)) : ℕ) : ℕ∞) := by
-  set G := {z | z ∈ Zs ∧ ∀ i, WindowGood H D L K S lay k δ reg Dj (sw i) (ρ i) tops (x z i) (wit z i)
-    ((run tap (schedOf z, srvOf z)).2 i)} with hG
+  set G := {z | z ∈ Zs ∧ Good z} with hG
   rcases G.eq_empty_or_nonempty with he | ⟨z₀, hz₀⟩
   · rw [he, Set.encard_empty]
     exact zero_le
@@ -84,9 +85,9 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
     AccSeqsSampled (sw i).prog (Pw i) (sw i).design (lay (sw i)) (k (sw i))
       (AsReg (sw i).prog (lay (sw i)) (k (sw i)) (reg (sw i)) (ρ i)) δ (op i) Dj
   have hgood : ∀ z ∈ G, ∀ i, (run tap (schedOf z, srvOf z)).2 i ∈ A i := fun z hz i =>
-    (mem_accSeqsSampled_of_windowGood (hPw i) (htap z hz.1 i) (hz.2 i)).2
+    (hwin z hz.1 hz.2 i).2
   have hfits : ∀ i, (lay (sw i)).Fits (sw i).prog (k (sw i)) := fun i =>
-    (mem_accSeqsSampled_of_windowGood (hPw i) (htap z₀ hz₀.1 i) (hz₀.2 i)).1
+    (hwin z₀ hz₀.1 hz₀.2 i).1
   let V : Set (Conn → List (ℕ × CellView Cell)) :=
     (fun p : WardenSchedule Conn × (Fin n → List (Obs L K S)) => f.read p.1 p.2) '' (Ss ×ˢ Set.pi Set.univ A)
   have hsub : G ⊆ dec '' V := fun z hz =>
@@ -112,14 +113,14 @@ theorem encard_periodGood_le (H : Msg → Msg) (D : Deploy Coin Col T) (L K S : 
         exact_mod_cast Nat.le_mul_of_pos_left _ hcap1
 
 /-- **The leak through the network certifier over a monitoring period**: `Guarantees.PeriodLeakAccepted`, from
-`sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and `encard_periodGood_le`. -/
+`sampledLeak_tap` with the registered inputs pinned (`adviceIn_asReg`), and `encard_period_le` over `WindowGood`. -/
 theorem periodLeak : Guarantees.PeriodLeakAccepted := by
-  intro Coin Col T _ _ _ _ _ H D hks L K S lay k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
+  intro Coin Col T _ _ _ _ _ H D L K S lay hks k δ decode hδ hdec reg Dj n sw Pw hPw ρ op β hβ Conn Cell Srv Dev Z _
     arr f tap run htrust cap Ss hcap hfit Zs schedOf srvOf hs dec hdz x wit tops hb
-  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_tap H D hks hb L K S lay k δ decode hδ hdec _ Dj
+  exact ⟨fun m hm Ω _ _ P => TapProof.sampledLeak_tap H D hb L K S lay hks k δ decode hδ hdec _ Dj
     (fun _ _ _ _ => adviceIn_asReg K _ _ _ _ _ _ _ _) tops m hm Ω P,
-    encard_periodGood_le H D L K S lay k δ reg Dj sw Pw hPw ρ op β hβ arr f tap run htrust cap Ss hfit Zs
-      schedOf srvOf hs dec hdz x wit tops⟩
+    fun htap => encard_period_le L K S lay k δ reg Dj sw Pw ρ op β hβ arr f tap run htrust cap Ss hfit Zs schedOf
+      srvOf hs dec hdz _ fun z hz hg i => mem_accSeqsSampled_of_windowGood (hPw i) (htap z hz i) (hg i)⟩
 
 end Deploy
 

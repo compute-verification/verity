@@ -17,7 +17,7 @@ leak relations' errors `e' i`.
 The count half: a family of faulty sets with fewer than `Fmax` proof blocks in total is the proof blocks listed by some
 `Fin Fmax → Option (Σ i, Fin (n i))` (`exists_famOf_eq`), so there are at most `(N + 1)^Fmax` of them. At one family,
 each window's observations number at most `2^#(freeInputs \ reg) · 2^(faultyBits) · Dj^k` (`encard_leakAt_le`, from
-`encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the cells
+`encard_acceptedFaulty_le` at `AsReg`), and the faulty bits sum to at most `b · Fmax`. Under `trusted-host` the frames
 the client receives read back from the network certifier's record under the schedule, one its record format holds
 (`tap_cells_read`), so they
 number at most `#Ss` times those records, which bounds the secrets they decode to (`encard_pooledGood_le`);

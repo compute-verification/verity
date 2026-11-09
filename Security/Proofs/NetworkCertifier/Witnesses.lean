@@ -12,20 +12,25 @@ Each guarantee that says what an accepted run establishes has two lemmas (the tw
 `G_honest`, its hypotheses at the honest deployed instance, and `G_nontrivial`, its conclusion false at an instance
 whose verifier accepts everything.
 
-* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `Claims.Sampling.KS` holds at
-  SHA-512 at a sampling record over the masked Flock record at the deployed relation, under the assembled record's
-  hypotheses (`ks_deployed`: `KS_of` at `sampling_assembled_of`'s, Flock's KS `FlockDeploy.KS.zk_KS_untrim`). So do
-  the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible faulty set's
-  committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at
-  the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no
-  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
-  with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
-  trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no witness is in `RLeak`.
-* `PooledIncorrectBlocksLe`. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its
-  soundness hypothesis at `ε = 0` when no block is incorrect. At one window of one block, that block incorrect, an audit
-  that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
+* `SampledAuditAccepted`, `SampledLeakAccepted`, `SampledLeakRegistered`. Their premise `KSBy` at the wired check, at layouts with no
+  wiring, holds at SHA-512 at a sampling record over the masked Flock record at the deployed relation, under the
+  assembled record's hypotheses (`ksWired_none` at `ks_deployed`: `KS_of` at `sampling_assembled_of`'s, Flock's KS
+  `FlockDeploy.KS.zk_KS_untrim`). So do the rest: the record's decoder meets the list-decoding spec, a charge `β`
+  bounds every possible faulty set's committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds.
+  Those hypotheses are no named assumptions, so the lock lists none of these `_honest` lemmas. Their acceptance
+  conclusion fails at SHA-512 at the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so
+  the one unit is faulty and no witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program
+  negates its input. There, with nothing opened, the trace holds `false` at the negation, which the circuit computes
+  `true` from the ingress the trace carries; the one unit is drawn `all`, so no possible faulty set holds it, and no
+  witness is in `RLeak`.
 
 The count conjuncts of the leak bounds read no verifier: they hold at every deployment, the accepting one included.
+
+`PooledIncorrectBlocksLe` reads no claim and no verifier, so the two-lemma rule doesn't hold it, and the lock lists
+neither of its lemmas here. Its draw hypotheses hold at the uniform `k`-subset draw (`uniform_draw`), and its soundness
+hypothesis at `ε = 0` when no block is incorrect (`PooledIncorrectBlocksLe_honest`). At one window of one block, that
+block incorrect, an audit that always accepts, `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`
+(`PooledIncorrectBlocksLe_nontrivial`).
 -/
 
 namespace NetTiming.Witness
@@ -74,7 +79,8 @@ theorem charge_bounds {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T
   exact Finset.sum_le_sum_of_subset hF.1
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**: `KS` (`ks_deployed`). -/
+/-- **`SampledAuditAccepted`'s hypothesis at the deployed record**, at layouts with no wiring: `KSBy` at the wired check there, from
+`KS` (`ks_deployed`, `ksWired_none`). -/
 theorem SampledAuditAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
@@ -84,14 +90,14 @@ theorem SampledAuditAccepted_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    Claims.Sampling.KS shaD D :=
-  ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
-    hchecks
+    KSBy shaD D (wiredOk fun _ _ => none) :=
+  ksWired_none (fun _ => rfl) (ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum
+    hslots iroots hopens hfix hprog hchecks)
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledLeakAccepted`'s hypotheses at the deployed record**: `SampledAuditAccepted`, `KS`, the record's decoder
-within Flock's radius (`Sampling.decoder_meets_zk`), and at every `δ` a charge bounding every possible faulty set
-(`charge_bounds`). -/
+/-- **`SampledLeakAccepted`'s hypotheses at the deployed record**, at layouts with no wiring: `SampledAuditAccepted`,
+`KSBy` at the wired check (`ksWired_none` at `ks_deployed`), the record's decoder within Flock's radius (`Sampling.decoder_meets_zk`),
+and at every `δ` a charge bounding every possible faulty set (`charge_bounds`). -/
 theorem SampledLeakAccepted_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
@@ -101,18 +107,18 @@ theorem SampledLeakAccepted_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ KSBy shaD D (wiredOk fun _ _ => none) ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
-    ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
-      hchecks,
+    ksWired_none (fun _ => rfl) (ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum
+      hslots iroots hopens hfix hprog hchecks),
     Claims.Sampling.decoder_meets_zk relD D hflock, charge_bounds D⟩
 
 set_option synthInstance.maxSize 1024 in
-/-- **`SampledLeakRegistered`'s hypotheses at the deployed record**: `SampledLeakAccepted`'s, and the hm96 commitment
-binds (`Binding_of_hm96`). -/
+/-- **`SampledLeakRegistered`'s hypotheses at the deployed record**, at layouts with no wiring: `SampledLeakAccepted`'s,
+and the hm96 commitment binds (`Binding_of_hm96`). -/
 theorem SampledLeakRegistered_honest
     (D : Claims.Sampling.Deploy FlockDeploy.Coin (List FlockLevel3.GF128) Claims.Flock.ZkTrace)
     (hflock : D.flock = FlockDeploy.deployZk relD) (hε : ∀ x, 0 ≤ D.εtable x)
@@ -122,13 +128,13 @@ theorem SampledLeakRegistered_honest
     (hfixed : DrawFixed D) (hsessions : SessionRuns shaD D) (hnum : InnerNumbers D) (hslots : DrawSlots D)
     (iroots : Msg → Seen → ℕ → List Msg) (hopens : SessionOpens shaD D iroots) (hfix : InteriorFixed shaD D iroots)
     (hprog : ProgramScope D) (hchecks : ChecksScope shaD D) :
-    NetTiming.Guarantees.SampledAuditAccepted ∧ Claims.Sampling.KS shaD D ∧ D.commit.Binds shaD ∧
+    NetTiming.Guarantees.SampledAuditAccepted ∧ KSBy shaD D (wiredOk fun _ _ => none) ∧ D.commit.Binds shaD ∧
       Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ D.flock.decode ∧
       ∀ δ : ℝ, ∃ β : Claims.Sampling.AuditStatement → ℕ, ∀ s P, D.partition s = some P →
         ∀ F ∈ faultySets s.design P δ, faultyBits s.prog P F ≤ β s :=
   ⟨NetTiming.SecurityProofs.SampledAuditAccepted,
-    ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum hslots iroots hopens hfix hprog
-      hchecks,
+    ksWired_none (fun _ => rfl) (ks_deployed D hflock hε own at_ row salt π layer hcommit hrow hfixed hsessions hnum
+      hslots iroots hopens hfix hprog hchecks),
     Binding_of_hm96 D own at_ row salt π layer hcommit hrow shaD,
     Claims.Sampling.decoder_meets_zk relD D hflock, charge_bounds D⟩
 
@@ -137,7 +143,7 @@ end Honest
 /-! ## At the accepting verifier -/
 
 /-- A layout of one link of one slot, with no gate. -/
-def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
+def trivLay : BoundaryGates 1 1 := { egress := fun _ _ _ => (0, []), ingress := fun _ => [] }
 
 /-- One input gate and its negation, the negation returned. -/
 def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
@@ -149,7 +155,7 @@ def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩,
 def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
 
 /-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
+def notLay : BoundaryGates 1 1 := { egress := fun _ _ _ => (1, []), ingress := fun _ => [0] }
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
@@ -169,7 +175,8 @@ theorem inScope_not : Claims.Sampling.InScope notPart notStmt := by
   · simp [notStmt, notPart, Claims.Sampling.OneStage.WellFormed]
 
 theorem notLay_fits : notLay.Fits notProg 1 := by
-  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega)⟩
+  refine ⟨fun t _ ℓ σ g hg => ?_, fun t _ g hg => ?_, fun t _ t' _ htt' => absurd htt' (by omega),
+    wiresFit_none rfl _ _⟩
   · simp [notLay, slotGates] at hg
     subst hg
     decide
@@ -268,8 +275,10 @@ theorem leakD_noRLeak (H : Msg → Msg) (As : Claims.Sampling.AuditStatement →
   obtain ⟨_, hrows, -⟩ := hacc 0 Nat.one_pos
   have hin : notLay.inputOf 1 [[false]] a 0 = false := rfl
   have h1 : (none : Option (List Bool)) =
-      rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 :=
+      rowOf (valOver notProg (resolveWires notProg notLay.wires (notLay.inputOf 1 [[false]] a) (fun _ => none)
+        notProg.gates.length) (fun _ => none)) (notLay.egress 0 0) 0 :=
     congrFun (congrFun hrows 0) 0
+  rw [resolveWires_nil (wires := notLay.wires) rfl] at h1
   have hrow : rowOf (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)) (notLay.egress 0 0) 0 =
       if valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none) 1 then
         some (([] : List ℕ).map (valOver notProg (notLay.inputOf 1 [[false]] a) (fun _ => none)))
@@ -306,52 +315,54 @@ theorem leakD_reg_bound_fails (H : Msg → Msg) (decode : List (ℕ × Unit) →
   simp only [hp, hb, mul_zero, Real.sqrt_zero, add_zero, leakD_bext, leakD_breg] at h
   linarith
 
-/-- **`SampledAuditAccepted`'s conclusion fails at the accepting verifier** `sksD`, at a horizon of no step: no opening
-passes, so no witness is in `RelS`, and `RAcc` reads `RelS`. -/
-theorem SampledAuditAccepted_nontrivial (H : Msg → Msg) :
-    ¬ KSAccepted H (sksD Coin) 1 1 1 (fun _ => trivLay) (fun _ => 0) := by
-  intro h
-  have h1 := h 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _)
-  have hscope : ScopeAcc (sksD Coin) (fun _ => trivLay) (fun _ => 0) [] :=
-    ⟨sksD_scope [], toyStmt, rfl, fun t ht => absurd ht (Nat.not_lt_zero t), fun t ht => absurd ht (Nat.not_lt_zero t),
-      fun t ht => absurd ht (Nat.not_lt_zero t)⟩
-  exact sksD_bound_fails (Coin := Coin) H (fun _ => [()]) _ _ []
-    (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Coin) H 0 le_rfl [] w ⟨s, P, hs, hP, hrel⟩)
-    (by linarith [sksD_κ (Coin := Coin) []]) (h1 [] hscope Unit silentP)
-
-/-- **`SampledLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at `δ = 0`,
-with no input registered (`leakD_noRLeak`). -/
-theorem SampledLeakAccepted_nontrivial (H : Msg → Msg) :
-    ¬ KSLinOn H (leakD Coin).V (ScopeAcc (leakD Coin) (fun _ => notLay) (fun _ => 1))
-      (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0
-        (fun s => AsReg s.prog notLay 1 ∅) 1)
-      (Claims.Sampling.E (leakD Coin) fun _ => [()]) (Claims.Sampling.κ (leakD Coin) 0) (Claims.Sampling.γ (leakD Coin))
-      (fun _ => 1) (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()])) := fun h =>
-  leakD_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
-    (h [] (leakD_scopeAcc []) Unit silentP)
-
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 /-- With no input registered, the registration opens at every statement `leakD` parses. -/
 theorem leakD_regOpens (H : Msg → Msg) (x : Msg) :
     ∀ s, (leakD Coin).parse x = some s → RegOpens H (leakD Coin).commit s ∅ [] :=
   fun _ _ => ⟨by simp, by simp⟩
 
-/-- **`SampledLeakRegistered`'s acceptance conclusion fails at the accepting verifier** `leakD`, at one step at
-`δ = 0`, with no input registered: at the statement `[]`, in scope (`leakD_scopeAcc`) with its registration opening
-(`leakD_regOpens`), its silent prover's bound fails. -/
-theorem SampledLeakRegistered_nontrivial (H : Msg → Msg) :
-    ¬ PrBad H (leakD Coin).V
-        (RLeak H (leakD Coin).commit (leakD Coin).parse (leakD Coin).partition 1 1 1 (fun _ => notLay)
-          (fun _ => 1) 0 (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1)
-        (Claims.Sampling.E (leakD Coin) fun _ => [()]) [] silentP ≤
-      Claims.Sampling.κ (leakD Coin) 0 [] +
-          Real.sqrt (Claims.Sampling.γ (leakD Coin) [] * PrB H (leakD Coin).V silentP []) +
-        (Bext H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) Unit silentP []).Pr H +
-        (Breg H (leakD Coin).V (Claims.Sampling.E (leakD Coin) fun _ => [()]) (leakD Coin).commit
-          (leakD Coin).parse (fun _ => []) Unit silentP []).Pr H :=
-  leakD_reg_bound_fails H _ _ _ [] (leakD_noRLeak H _ []) (by linarith [leakD_κ (Coin := Coin) []])
-
 end Toy
+
+/-- **`SampledAuditAccepted`'s conclusion fails at the accepting verifier** `sksD`, at SHA-512, at a horizon of no
+step: no opening passes, so no witness is in `RelS`, and `RAcc` reads `RelS`. -/
+theorem SampledAuditAccepted_nontrivial :
+    ¬ KSAccepted shaD (sksD Unit) 1 1 1 (fun _ => trivLay) (fun _ => 0) := by
+  intro h
+  have h1 := h 0 (fun _ => [()]) le_rfl (Claims.Witness.Flock.listWithin_unit _ _ _)
+  have hscope : ScopeAcc (sksD Unit) (fun _ => trivLay) (fun _ => 0) [] :=
+    ⟨sksD_scope [], toyStmt, rfl, fun t ht => absurd ht (Nat.not_lt_zero t), fun t ht => absurd ht (Nat.not_lt_zero t),
+      fun t ht => absurd ht (Nat.not_lt_zero t), wiresFit_none rfl _ _⟩
+  exact sksD_bound_fails (Coin := Unit) shaD (fun _ => [()]) _ _ []
+    (fun w ⟨s, P, hs, hP, hrel, _⟩ => sksD_noR (Coin := Unit) shaD 0 le_rfl [] w
+      ⟨s, P, hs, hP, by unfold RelS; rw [← incorrect_none]; exact hrel⟩)
+    (by linarith [sksD_κ (Coin := Unit) []]) (h1 [] hscope Unit silentP)
+
+/-- **`SampledLeakAccepted`'s acceptance conclusion fails at the accepting verifier** `leakD`, at SHA-512, at one step
+at `δ = 0`, with no input registered (`leakD_noRLeak`). -/
+theorem SampledLeakAccepted_nontrivial :
+    ¬ KSLinOn shaD (leakD Unit).V (ScopeAcc (leakD Unit) (fun _ => notLay) (fun _ => 1))
+      (RLeak shaD (leakD Unit).commit (leakD Unit).parse (leakD Unit).partition 1 1 1 (fun _ => notLay) (fun _ => 1) 0
+        (fun s => AsReg s.prog notLay 1 ∅) 1)
+      (Claims.Sampling.E (leakD Unit) fun _ => [()]) (Claims.Sampling.κ (leakD Unit) 0) (Claims.Sampling.γ (leakD Unit))
+      (fun _ => 1) (Bext shaD (leakD Unit).V (Claims.Sampling.E (leakD Unit) fun _ => [()])) := fun h =>
+  leakD_bound_fails (Coin := Unit) shaD _ _ _ [] (leakD_noRLeak shaD _ []) (by linarith [leakD_κ (Coin := Unit) []])
+    (h [] (leakD_scopeAcc []) Unit silentP)
+
+/-- **`SampledLeakRegistered`'s acceptance conclusion fails at the accepting verifier** `leakD`, at SHA-512, at one
+step at `δ = 0`, with no input registered: at the statement `[]`, in scope (`leakD_scopeAcc`) with its registration
+opening (`leakD_regOpens`), its silent prover's bound fails. -/
+theorem SampledLeakRegistered_nontrivial :
+    ¬ PrBad shaD (leakD Unit).V
+        (RLeak shaD (leakD Unit).commit (leakD Unit).parse (leakD Unit).partition 1 1 1 (fun _ => notLay)
+          (fun _ => 1) 0 (fun s _ => AsReg s.prog notLay 1 ∅ (regVal [])) 1)
+        (Claims.Sampling.E (leakD Unit) fun _ => [()]) [] silentP ≤
+      Claims.Sampling.κ (leakD Unit) 0 [] +
+          Real.sqrt (Claims.Sampling.γ (leakD Unit) [] * PrB shaD (leakD Unit).V silentP []) +
+        (Bext shaD (leakD Unit).V (Claims.Sampling.E (leakD Unit) fun _ => [()]) Unit silentP []).Pr shaD +
+        (Breg shaD (leakD Unit).V (Claims.Sampling.E (leakD Unit) fun _ => [()]) (leakD Unit).commit
+          (leakD Unit).parse (fun _ => []) Unit silentP []).Pr shaD :=
+  leakD_reg_bound_fails (Coin := Unit) shaD _ _ _ [] (leakD_noRLeak shaD _ [])
+    (by linarith [leakD_κ (Coin := Unit) []])
 
 /-! ## The monitoring period -/
 

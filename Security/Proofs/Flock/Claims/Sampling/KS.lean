@@ -21,12 +21,17 @@ the deployed sampled verifier, each a hypothesis to discharge there.
 * `interiorFixed_of_prefix`: **`InteriorFixed` from the interiors' place in the run**: a run's first `m` messages read
   only its first `m` rounds' coins (`run_msgs_take`), so interior roots read off the messages before the second stage
   are kept by fresh second-stage coins.
-* `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails` holds or
-  the extractor's own calls collide (`CommitmentScheme.Binds`).
+* `SessionOpensBy`, `incorrectBy_wrong`: **a check on each proof block**. The argument reads of the faulty set and of
+  `SessionOpens` only a check on a proof block's committed and interior values (`BlockCheck`, with `incorrectBy` and
+  `RBy` in `Definitions.Claims.Sampling`). At `correctOk` they are `faulty`, `R` and `SessionOpens`; a protocol that
+  checks more of a sampled proof block states KS at its own check (`KSBy`).
+* `splitBy`, `split`: **the deterministic half**. At an accepted run whose extraction fails, the failure event `Fails`
+  holds or the extractor's own calls collide (`CommitmentScheme.Binds`); `split` is `splitBy` at `correctOk`.
 * `inner_bad_le`, `outer_bad_le`, `Pr_fails_le`: **the probabilistic half**. Each wait's truncation and union bound
   (`wait_bad_le`), its union's size against the slack `c` (`k = 2^40·(2·n_PU + 1)`), the draw law and Flock's
   error at the inner wait, averaged over the first stage and the tapes: `Pr[Fails] ≤ κ(δ) + √(γ·Pr[B])`.
-* `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: `KS` through `KSLin_of_ownColl`; `Bits` with the extractor's
+* `KSBy_of`, `KS_of`, `Bits_of`, `KSCount_of_KS`: **the claims**: KS at a check through `KSLin_of_ownColl`, and `KS`
+  at `correctOk`; `Bits` with the extractor's
   costs; and the count form, at the miss clamped at `0`.
 -/
 
@@ -321,19 +326,35 @@ theorem mem_found (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ 
 
 end Extractor
 
-/-! ## The faulty set's proof units -/
+/-! ## The incorrect set at a check on each proof block
 
-/-- **A faulty unit is wrong at any interior values**: at slot `v` of the faulty set, whatever interior values `ι`, its
-proof block `b` is not correct on `ref_ι`. -/
-theorem faulty_wrong {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
-    (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
-    ∃ b, P.blocks[v]? = some b ∧ ¬ s.prog.Correct (s.prog.refIn b (w.val H Cm s) ι) b := by
+`splitBy` reads two things: that a slot of the incorrect set at a check `Ok` (`incorrectBy`, a `BlockCheck` on a proof
+block's committed and interior values) is wrong at any interior values, and that a checked unit's session reveals
+openings making it pass. `SessionOpensBy Ok` says the latter. At `correctOk` (the proof block is correct) `incorrectBy`,
+`RBy` and `SessionOpensBy` are `faulty`, `R` and `SessionOpens`, and `KSBy` is `KS`. -/
+
+theorem RBy_correctOk (H : Msg → Msg) (Cm : CommitmentScheme Bool) (parse : Msg → Option AuditStatement)
+    (partition : AuditStatement → Option Partition) (δ : ℝ) :
+    RBy correctOk H Cm parse partition δ = R H Cm parse partition δ := rfl
+
+/-- **A slot of the incorrect set at `Ok` fails `Ok` at any interior values.** -/
+theorem incorrectBy_wrong {Ok : BlockCheck} {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement}
+    {P : Partition} {w : Wit} {v : ℕ} (hv : v ∈ incorrectBy Ok H Cm s P w) (ι : ℕ → Bool) :
+    ∃ b, P.blocks[v]? = some b ∧ ¬ Ok s b (w.val H Cm s) ι := by
   classical
-  unfold faulty at hv
+  unfold incorrectBy at hv
   obtain ⟨hlt, hf⟩ := mem_filter.1 hv
+  unfold IncorrectBy at hf
   have hlt' : v < P.blocks.length := mem_range.1 hlt
   have hget : P.blocks[v]? = some P.blocks[v] := List.getElem?_eq_getElem hlt'
   exact ⟨P.blocks[v], hget, fun hc => hf ⟨_, hget, ι, hc⟩⟩
+
+/-- **A faulty unit is wrong at any interior values**: at slot `v` of the faulty set, whatever interior values `ι`, its
+proof block `b` is not correct on `ref_ι` (`incorrectBy_wrong` at `correctOk`). -/
+theorem faulty_wrong {H : Msg → Msg} {Cm : CommitmentScheme Bool} {s : AuditStatement} {P : Partition} {w : Wit} {v : ℕ}
+    (hv : v ∈ faulty H Cm s P w) (ι : ℕ → Bool) :
+    ∃ b, P.blocks[v]? = some b ∧ ¬ s.prog.Correct (s.prog.refIn b (w.val H Cm s) ι) b :=
+  incorrectBy_wrong (Ok := correctOk) hv ι
 
 /-! ## What the deployed sampled verifier is taken to do -/
 
@@ -400,6 +421,25 @@ def SessionOpens (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → See
           (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
           (q.1 = iroots x (run H P D.V x ω r).seen u → ι q.2.pos = q.2.val)) →
         s.prog.Correct (s.prog.refIn b val ι) b
+
+/-- **A checked unit's Flock witness makes it pass `Ok`**: `SessionOpens` with `Ok` for correct. At `correctOk` it is
+`SessionOpens`. -/
+def SessionOpensBy (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) (Ok : BlockCheck) :
+    Prop :=
+  ∀ x s Pt (Ω : Type) (P : Prover Ω) ω r u xS vS wF,
+    D.parse x = some s → D.partition s = some Pt → InScope Pt s →
+    (run H P D.V x ω r).out = .acc → (∃ p : Fin (nPU D x), (D.checked x r)[p.val]? = some u) →
+    D.session x u (run H P D.V x ω r).seen = some (xS, vS) → Flock.check D.flock.parse xS wF = true →
+    ∃ b, Pt.blocks[u]? = some b ∧
+      ∀ (val : ℕ → Option Bool) (ι : ℕ → Bool),
+        (∀ q ∈ D.reveal s u (run H P D.V x ω r).seen wF, D.commit.Opens H q.1 q.2 = true →
+          (q.1 = s.roots → val q.2.pos = some q.2.val) ∧
+          (q.1 = iroots x (run H P D.V x ω r).seen u → ι q.2.pos = q.2.val)) →
+        Ok s b val ι
+
+omit [Fintype Coin] [Nonempty Coin] [DecidableEq Col] [Zero Col] in
+theorem sessionOpensBy_correctOk (H : Msg → Msg) (D : Deploy Coin Col T) (iroots : Msg → Seen → ℕ → List Msg) :
+    SessionOpensBy H D iroots correctOk ↔ SessionOpens H D iroots := Iff.rfl
 
 /-! ### Sessions that cover several checked units -/
 
@@ -612,16 +652,17 @@ def Fails (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (ℕ × Col) 
         (fun r e => BadOuter H D decode x run' B (forkOn (D.stage2 x) r) e) ((List.finRange (D.cap x)).map c.1)
         (toE1 D x c))
 
-/-- **The split**: at an accepted run whose extraction fails, the failure event holds or the extractor's own calls
-collide. Otherwise take `B` the assembled witness's faulty set, refused at `δ`, and a kept outer run `r`; at the
-interior values the kept openings under `r`'s interior roots give, the proof block at each `v ∈ B` is wrong
-(`faulty_wrong`); a kept inner run that checks `v` and finds its witness would make it correct (`SessionOpens`, the
-kept openings agreeing), so `r` is bad for `B`. -/
-theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero Col] (decode : List (ℕ × Col) → List T)
-    (δ : ℝ) (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H) (hopens : SessionOpens H D iroots)
-    (hfix : InteriorFixed H D iroots) (hrefuse : Refuses H D) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
-    (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) (hacc : (run H P D.V x ω r₀).out = .acc)
-    (hfail : ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x ω r₀ c).1) :
+/-- **The split, at the check `Ok`**: at an accepted run whose extraction fails at `RBy Ok`, the failure event holds or
+the extractor's own calls collide. Otherwise take `B` the assembled witness's incorrect set at `Ok`, refused at `δ`, and a
+kept outer run `r`; at the interior values the kept openings under `r`'s interior roots give, the proof block at each
+`v ∈ B` fails `Ok` (`incorrectBy_wrong`); a kept inner run that checks `v` and finds its witness would make it pass
+(`SessionOpensBy`, the kept openings agreeing), so `r` is bad for `B`. -/
+theorem splitBy (Ok : BlockCheck) {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero Col]
+    (decode : List (ℕ × Col) → List T) (δ : ℝ) (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H)
+    (hopens : SessionOpensBy H D iroots Ok) (hfix : InteriorFixed H D iroots) (hrefuse : Refuses H D) (x : Msg)
+    {Ω : Type} (P : Prover Ω) (ω : Ω) (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x)
+    (hacc : (run H P D.V x ω r₀).out = .acc)
+    (hfail : ¬ (RBy Ok H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x ω r₀ c).1) :
     Fails H D decode δ x (run H P D.V x ω) c ∨ OwnColl H (E D decode) P x ω r₀ c := by
   classical
   obtain ⟨s, Pt, hs, hPt, hin⟩ := hrefuse x Ω P ω r₀ hacc
@@ -640,7 +681,7 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     fun q hq q' hq' h1 h2 => agree_of_passes hbind hpass hcoll hq hq' h1 h2
   rw [E_eval H D decode P x ω r₀ c hs hacc] at hfail
   set w := assemble s fd with hw
-  have hB : faulty H D.commit s Pt w ∈ S₁ s.design Pt δ := by
+  have hB : incorrectBy Ok H D.commit s Pt w ∈ S₁ s.design Pt δ := by
     unfold S₁
     refine mem_filter.2 ⟨mem_powerset.2 (filter_subset _ _), ?_⟩
     by_contra hlt
@@ -654,7 +695,7 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     ((List.finRange (D.cap x)).map (c.2.1 j))).length < D.k x
   · exact Or.inl hshort2
   refine Or.inr ⟨accList_length_eq hshort2, fun l d hl v hv hgood => ?_⟩
-  obtain ⟨b, hb, hnc⟩ := faulty_wrong hv (ιOf fd (iroots x (run' r).seen v))
+  obtain ⟨b, hb, hnc⟩ := incorrectBy_wrong hv (ιOf fd (iroots x (run' r).seen v))
   obtain ⟨p, hp, hsome⟩ := hgood
   obtain ⟨wF, hwF⟩ := Option.isSome_iff_exists.1 hsome
   have hacc' : (run' (forkOn (D.stage2 x) r d)).out = .acc := by
@@ -684,6 +725,15 @@ theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero 
     rw [hb, Option.some.injEq] at hb'
     subst hb'
     exact hnc hcorr
+
+/-- **The split**: `splitBy` at `correctOk`, where the faulty set at the check is `faulty` and the relation `R`. -/
+theorem split {H : Msg → Msg} {D : Deploy Coin Col T} [DecidableEq Col] [Zero Col] (decode : List (ℕ × Col) → List T)
+    (δ : ℝ) (iroots : Msg → Seen → ℕ → List Msg) (hbind : D.commit.Binds H) (hopens : SessionOpens H D iroots)
+    (hfix : InteriorFixed H D iroots) (hrefuse : Refuses H D) (x : Msg) {Ω : Type} (P : Prover Ω) (ω : Ω)
+    (r₀ : Fin (D.V.k x) → Coin) (c : ECoins D x) (hacc : (run H P D.V x ω r₀).out = .acc)
+    (hfail : ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x ω r₀ c).1) :
+    Fails H D decode δ x (run H P D.V x ω) c ∨ OwnColl H (E D decode) P x ω r₀ c :=
+  splitBy correctOk decode δ iroots hbind hopens hfix hrefuse x P ω r₀ c hacc hfail
 
 end Split
 
@@ -941,21 +991,36 @@ theorem Pr_fails_le (H : Msg → Msg) (D : Deploy Coin Col T) (decode : List (�
           Real.sqrt_sq (pow_nonneg hc.le 2)]
 
 set_option synthInstance.maxSize 1024 in
-/-- **Sampling: KS from Flock's KS.** Flock's KS at the checked units' sessions (`SessionKS`), the trace commitment's
-binding at `H`, and the deployed sampled verifier's named facts (the draw law, what a unit's Flock witness reveals,
-the interior commitments fixed by the first stage, the scope refusal) give the block's `KS`: the split
-(`split`) puts a failed extraction at an accepted run in the failure event or an own-call collision, and the failure
-event has probability at most `κ(δ) + √(γ·Pr[B])` (`Pr_fails_le`). -/
+/-- **Sampling: KS at a check on each proof block, from Flock's KS.** Flock's KS at the checked units' sessions
+(`SessionKS`), the trace commitment's binding at `H`, and the deployed sampled verifier's named facts (the draw law, that
+a unit's Flock witness reveals openings making it pass `Ok`, the interior commitments fixed by the first stage, the
+scope refusal) give KS at the incorrect set at `Ok` (`KSBy`): the split (`splitBy`) puts a failed extraction at an
+accepted run in the failure event or an own-call collision, and the failure event has probability at most
+`κ(δ) + √(γ·Pr[B])` (`Pr_fails_le`). -/
+theorem KSBy_of (Ok : BlockCheck) {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
+    (hbind : D.commit.Binds H) (hsess : SessionKS H D) (hopens : SessionOpensBy H D iroots Ok)
+    (hfix : InteriorFixed H D iroots) (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) :
+    KSBy H D Ok := by
+  intro δ decode hδ hdec x _
+  exact KSLin_of_ownColl H D.V (RBy Ok H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D)
+    (fun x Ω P s => (run H P D.V x s.1 s.2.1).out = .acc ∧ Fails H D decode δ x (run H P D.V x s.1) s.2.2)
+    (fun x Ω P s hacc hfail =>
+      (splitBy Ok decode δ iroots hbind hopens hfix hrefuse x P s.1 s.2.1 s.2.2 hacc hfail).imp_left
+        fun h => ⟨hacc, h⟩)
+    (fun x Ω _ _ P => Pr_fails_le H D decode hdec hδ hsess hdraw x (hε x) Ω P) x
+
+set_option synthInstance.maxSize 1024 in
+/-- **`KSBy` at `correctOk` is `KS`.** -/
+theorem KSBy_correctOk (H : Msg → Msg) (D : Deploy Coin Col T) : KSBy H D correctOk ↔ KS H D := Iff.rfl
+
+set_option synthInstance.maxSize 1024 in
+/-- **Sampling: KS from Flock's KS**: `KSBy_of` at `correctOk`, where the incorrect set is `faulty` and the relation
+`R`. -/
 theorem KS_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)
     (hbind : D.commit.Binds H) (hsess : SessionKS H D) (hopens : SessionOpens H D iroots)
     (hfix : InteriorFixed H D iroots) (hdraw : DrawLaw D) (hrefuse : Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x) :
-    KS H D := by
-  intro δ decode hδ hdec x _
-  exact KSLin_of_ownColl H D.V (R H D.commit D.parse D.partition δ) (E D decode) (κ D δ) (γ D)
-    (fun x Ω P s => (run H P D.V x s.1 s.2.1).out = .acc ∧ Fails H D decode δ x (run H P D.V x s.1) s.2.2)
-    (fun x Ω P s hacc hfail =>
-      (split decode δ iroots hbind hopens hfix hrefuse x P s.1 s.2.1 s.2.2 hacc hfail).imp_left fun h => ⟨hacc, h⟩)
-    (fun x Ω _ _ P => Pr_fails_le H D decode hdec hδ hsess hdraw x (hε x) Ω P) x
+    KS H D :=
+  KSBy_of correctOk iroots hbind hsess hopens hfix hdraw hrefuse hε
 
 /-- **Sampling: bits from Flock's KS**: `KS_of`, with the extractor's expected reruns and own SHA-512 calls. -/
 theorem Bits_of {H : Msg → Msg} {D : Deploy Coin Col T} (iroots : Msg → Seen → ℕ → List Msg)

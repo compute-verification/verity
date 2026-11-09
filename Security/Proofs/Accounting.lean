@@ -18,6 +18,7 @@ import Proofs.Accounting.JointBridge.CommOfPeriodLeakAccepted
 import Proofs.Accounting.JointLive
 import Proofs.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
 import Proofs.Accounting.JointBridge.HonestH200
+import Proofs.Accounting.JointBridge.CommWitnesses
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityPeriod
 import Proofs.Accounting.JointBridge.IntegrityOfIntegrityBlock
 import Proofs.Accounting.Pouw
@@ -95,8 +96,8 @@ import Proofs.Accounting.Compose
 import Proofs.Accounting.ComposePeriod
 import Proofs.Accounting.ComposePeriod.Honest
 import Proofs.Accounting.Served
-import Proofs.Pous.Obligation
 import Proofs.Accounting.Additive
+import Proofs.Pous.Obligation
 import Proofs.Accounting.Coverage
 import Proofs.Accounting.ServingBlocks
 import Proofs.Accounting.ServingBlocks.Witnesses

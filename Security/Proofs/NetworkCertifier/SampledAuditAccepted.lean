@@ -1,23 +1,31 @@
 import Definitions.NetworkCertifier.Guarantees.SampledAudit
 import Proofs.Flock.Claims.Prob
+import Proofs.NetworkCertifier.Wires
+import Proofs.NetworkCertifier.KSWired
 
 /-!
 # The sampled audit implies `Accepted`
 
-`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is `KS`'s
-bound with a stronger relation on a smaller scope, so it is `KS` once `R δ x w` gives `RAcc δ x w` at every statement in
-the audit's scope (`rAcc_of_r`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On that scope:
+`NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted`. `KSAccepted` is the bound
+of `KSBy` at the wired check (at `RWired`, `ksBy_wiredOk`) with a stronger relation on a smaller scope, so it is that
+bound once `RWired δ x w` gives `RAcc δ x w`
+at every statement in the audit's scope (`rAcc_of_rWired`), `PrBad` monotone in the relation (`Claims.Pr_mono`). On
+that scope:
 
-* **No faulty proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
+* **No incorrect proof block is sampled `all`** (`disjoint_allSlots`): a set that meets a class sampled `all` has that
   class's `P_a` factor `0` (`classesPa_eq_zero`), so it is in no `M_δ` at `δ ≥ 0`.
-* **The advice** (`heldAdv`): every faulty proof block's committed gate (`FaultyGate`) held at the trace's value there,
-  and the other inputs the trace's values.
+* **The advice** (`heldAdv`): every incorrect proof block's committed gate (`FaultyGate`) held at the trace's value
+  there, and the other inputs the trace's values.
 * **`Accepted`** (`accepted_of`): at each step before the horizon, `C` run on the ingress up to the step and the advice
-  holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't faulty computes what its
-  proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every unit
-  correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: a held gate's
-  or another correct unit's boundary value, each the trace's. An input reads the ingress the trace carries (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a
-  later step's ingress (`Good`).
+  holds the trace's value at every egress gate (`valOver_out`). A gate of a proof block that isn't incorrect computes what
+  its proof unit computes on its committed values and interior (`valOver_unit`, by strong induction on the gate, every
+  unit correct there, `runIn_ne_none`), and a value it reads from outside its proof unit is a committed one: a held
+  gate's or another correct unit's boundary value, each the trace's. An unwired input reads the ingress the trace carries
+  (`inputOf_eq`): the layout fits the program, so no egress gate of a step depends on a later step's ingress through
+  reads or wires (`Good`). A wired input outside the incorrect proof blocks has its wire right
+  (`wireRight_of_not_faultyGate`), so the trace holds its writer's value there, and once the wires are resolved it reads
+  that value (`resolveWires_eq`, by induction on the rounds, a wired gate's writer depending only on wired gates the
+  wires' rank puts lower, `wiredBelow`, and on gates `Good` as the wired gate is).
 -/
 
 namespace NetTiming.SampledAuditProof
@@ -193,7 +201,7 @@ variable {C : Prog} {P : Partition} {ref : ℕ → Option Bool} {F : Finset ℕ}
   (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
   (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
   (Good : ℕ → Prop) (hgood : ∀ g x, C.gates[g]? = some x → Good g → ∀ i ∈ x.reads, Good i)
-  (hinp : ∀ g, C.gates[g]? = some .input → Good g → inp g = traceVal C ref g)
+  (hinp : ∀ g, C.gates[g]? = some .input → Good g → ¬ FaultyGate C P F g → inp g = traceVal C ref g)
 include hT hP hι hgood hinp
 
 /-- **A unit that isn't faulty computes what its proof unit does**: at a gate whose inputs read the trace, `C` run with
@@ -216,7 +224,7 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
   by_cases hxi : x = .input
   · subst hxi
     simp only [BGate.val, Option.getD_some]
-    rw [hinp g hx hgd, ref_of_boundary (boundary_of_input hx), traceVal,
+    rw [hinp g hx hgd hnf, ref_of_boundary (boundary_of_input hx), traceVal,
       read_of_not_const fun b h => by rw [hx] at h; cases h]
   congr 1
   refine val_congr hxi fun i hi => ?_
@@ -265,25 +273,70 @@ theorem valOver_unit : ∀ g, Good g → ∀ v u, P.blocks[v]? = some u → v �
   rw [hb] at hc
   exact Option.some.inj hc
 
-/-- **At a returned gate, `C` run with the faulty proof blocks' gates held has the trace's value.** -/
-theorem valOver_out {g : ℕ} (hout : g ∈ C.outs) (hgd : Good g) :
+/-- **At a returned gate or an input, `C` run with the faulty proof blocks' gates held has the trace's value**: either
+is committed at its proof block's boundary. -/
+theorem valOver_out {g : ℕ} (hout : g ∈ C.outs ∨ C.gates[g]? = some .input) (hgd : Good g) :
     valOver C inp (heldAdv C P F ref) g = traceVal C ref g := by
+  have hbd : ∀ u, C.Boundary u g = true := fun u =>
+    hout.elim (boundary_of_out (u := u)) (boundary_of_input (u := u))
   by_cases hfg : FaultyGate C P F g
   · exact valOver_held (heldAdv_of hfg)
   have hfree := heldAdv_of_not (ref := ref) hfg
-  have hglt : g < C.gates.length := hT.2 g hout
+  have hglt : g < C.gates.length := hout.elim (hT.2 g) fun h => (List.getElem?_eq_some_iff.1 h).1
   by_cases hconst : ∃ b, C.gates[g]? = some (.const b)
   · obtain ⟨b, hb⟩ := hconst
     rw [valOver_const hfree hb, traceVal, read_const hb]
     rfl
   push Not at hconst
   obtain ⟨v, u, hu, hg⟩ := exists_of_mem_gates (hP.2.2.1 g hglt hconst)
-  have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, boundary_of_out hout⟩
-  obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (boundary_of_out hout)
+  have hv : v ∉ F := fun hv => hfg ⟨v, hv, u, hu, hg, hbd u⟩
+  obtain ⟨b, hb, hrun⟩ := (hι v u hu hv g hg).2 (hbd u)
   rw [valOver_unit hT hP ι hι Good hgood hinp g hgd v u hu hv hg, hrun, traceVal, read_of_not_const hconst,
-    ← ref_of_boundary (u := u) (ref := ref) (ι := ι v) (boundary_of_out hout), hb]
+    ← ref_of_boundary (u := u) (ref := ref) (ι := ι v) (hbd u), hb]
 
 end Run
+
+/-! ## The wires -/
+
+/-- **A wired gate outside the incorrect proof blocks reads the trace's value** once the wires are resolved in more
+rounds than the wired gates ranked below it, at inputs that read the trace at every unwired input that is `Good`, where
+a wired gate's writer depends only on gates `Good` as the wired gate is: its wire is right, so the trace holds there its
+writer's committed value, and the writer, a returned gate that is no constant or an input, has the trace's value
+(`valOver_out`) on inputs that do, the wired ones among them ranked lower. -/
+theorem resolveWires_eq {L S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ}
+    {ref : ℕ → Option Bool} {F : Finset ℕ} (hT : C.Topological) (hP : P.Partitions C) (ι : ℕ → ℕ → Bool)
+    (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u) (hwf : lay.WiresFit C k)
+    (r : ℕ → ℕ) (hr : ∀ g w g', lay.wires g = some w → lay.wires g' ≠ none → Depends C g' w → r g' < r g)
+    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight C lay.wires ref g) {inp : ℕ → Bool}
+    (Good : ℕ → Prop) (hgood : ∀ g w g', lay.wires g = some w → Good g → Depends C g' w → Good g')
+    (hinp : ∀ g', Good g' → C.gates[g']? = some .input → lay.wires g' = none → ¬ FaultyGate C P F g' →
+      inp g' = traceVal C ref g') :
+    ∀ n g w, lay.wires g = some w → Good g → (wiredBelow C lay.wires r g).card < n → ¬ FaultyGate C P F g →
+      resolveWires C lay.wires inp (heldAdv C P F ref) n g = traceVal C ref g := by
+  intro n
+  induction n with
+  | zero => intro g w _ _ hc; exact absurd hc (Nat.not_lt_zero _)
+  | succ n ih =>
+  intro g w hw hg hc hnf
+  rw [resolveWires_succ hw]
+  obtain ⟨hgi, -, hwo⟩ := hwf.1 g w hw
+  obtain ⟨hwc, b, hgb, hwb⟩ := hright g hgi hnf w hw
+  have htg : traceVal C ref g = b := by
+    rw [traceVal, read_of_not_const (fun b' h => by rw [hgi] at h; cases h), hgb, Option.getD_some]
+  have htw : traceVal C ref w = b := by
+    rw [traceVal, read_of_not_const hwc, hwb, Option.getD_some]
+  refine (valOver_out hT hP ι hι (fun g' => Depends C g' w) ?_ ?_ hwo Relation.ReflTransGen.refl).trans
+    (htw.trans htg.symm)
+  · intro g' x hx hg' i hi
+    exact Relation.ReflTransGen.head (by simp [hx, hi]) hg'
+  · intro g' hg'i hdep hnf'
+    cases hw' : lay.wires g' with
+    | none =>
+      rw [resolveWires_of_none hw']
+      exact hinp g' (hgood g w g' hw hg hdep) hg'i hw' hnf'
+    | some w' =>
+      have hlt := card_wiredBelow_lt_of_depends hwf hr hw hw' hdep
+      exact ih g' w' hw' (hgood g w g' hw hg hdep) (by omega) hnf'
 
 /-! ## The ingress -/
 
@@ -387,12 +440,14 @@ theorem correct_of_not_faulty (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s 
   exact ⟨ι, hι⟩
 
 /-- **The trace's transfer gates carry what the Program accepts**: at a topological program that the partition
-partitions and the layout fits, with every proof block outside `F` correct at some interior, the advice holding `F`'s
-committed gates at the trace's values and the other inputs at the trace's makes `Accepted` every observation sequence
-and operator the trace carries with every status complete. -/
+partitions and the layout fits, with every proof block outside `F` correct at some interior and the wire into every
+input gate outside `F`'s proof blocks right, the advice holding `F`'s committed gates at the trace's values and the
+other inputs at the trace's makes `Accepted` every observation sequence and operator the trace carries with every
+status complete. -/
 theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGates L S} {k : ℕ} (hT : C.Topological)
     (hP : P.Partitions C) (hfit : lay.Fits C k) {ref : ℕ → Option Bool} {F : Finset ℕ} (ι : ℕ → ℕ → Bool)
     (hι : ∀ v u, P.blocks[v]? = some u → v ∉ F → C.Correct (C.refIn u ref (ι v)) u)
+    (hright : ∀ g, C.gates[g]? = some .input → ¬ FaultyGate C P F g → WireRight C lay.wires ref g)
     {op : ℕ → List (Obs L K S) → List Bool} {o : List (Obs L K S)} (hcar : Carries lay C ref op k o)
     (hcov : Covered k o) : Accepted (circuitProgram C lay k) op k o (traceVal C ref, heldAdv C P F ref) := by
   intro t ht
@@ -400,32 +455,64 @@ theorem accepted_of {L K S : ℕ} {C : Prog} {P : Partition} {lay : BoundaryGate
   refine ⟨ho, ?_, hcov t ht ho⟩
   funext ℓ
   rw [hrows ℓ]
-  let Good : ℕ → Prop := fun g => ∀ t', t < t' → t' < k → ∀ i ∈ lay.ingress t', ¬ Depends C i g
+  obtain ⟨hout, -, hcaus, hwf⟩ := hfit
+  obtain ⟨r, hr⟩ := hwf.2
+  let Good : ℕ → Prop := fun g => ∀ t', t < t' → t' < k → ∀ i ∈ lay.ingress t', ¬ DependsWired C lay.wires i g
   have hgood : ∀ g x, C.gates[g]? = some x → Good g → ∀ i ∈ x.reads, Good i := by
     intro g x hx hg i hi t' h1 h2 j hj hdep
-    exact hg t' h1 h2 j hj (hdep.tail (by simp [hx, hi]))
-  have hinp : ∀ g, C.gates[g]? = some .input → Good g →
-      lay.inputOf k (ingressUpTo op o t) (traceVal C ref) g = traceVal C ref g := fun g _ hg =>
-    inputOf_eq hcar ht fun t' h1 h2 hgi => hg t' h1 h2 g hgi Relation.ReflTransGen.refl
+    exact hg t' h1 h2 j hj (hdep.tail (Or.inl (by simp [hx, hi])))
+  have hgoodw : ∀ g w g', lay.wires g = some w → Good g → Depends C g' w → Good g' := by
+    intro g w g' hw hg hdep t' h1 h2 j hj hd
+    exact hg t' h1 h2 j hj ((hd.trans (dependsWired_of_depends hdep)).tail (Or.inr hw))
+  have hinp : ∀ g, C.gates[g]? = some .input → Good g → ¬ FaultyGate C P F g →
+      resolveWires C lay.wires (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)
+        C.gates.length g = traceVal C ref g := by
+    intro g hgi hg hnf
+    cases hw : lay.wires g with
+    | none =>
+      rw [resolveWires_of_none hw]
+      exact inputOf_eq hcar ht fun t' h1 h2 hgi => hg t' h1 h2 g hgi Relation.ReflTransGen.refl
+    | some w =>
+      exact resolveWires_eq hT hP ι hι hwf r hr hright Good hgoodw
+        (fun g' hg' _ _ _ => inputOf_eq hcar ht fun t' h1 h2 hgi => hg' t' h1 h2 g' hgi Relation.ReflTransGen.refl)
+        _ g w hw hg (card_wiredBelow_lt (List.getElem?_eq_some_iff.1 hgi).1) hnf
   have heq : ∀ σ, ∀ g ∈ slotGates (lay.egress t ℓ σ),
-      valOver C (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref) g = traceVal C ref g :=
-    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (hfit.1 t ht ℓ σ g hg).1
-      fun t' h1 h2 i hi => hfit.2.2 t ht t' h2 h1 ℓ σ g hg i hi
+      valOver C (resolveWires C lay.wires (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)
+        C.gates.length) (heldAdv C P F ref) g = traceVal C ref g :=
+    fun σ g hg => valOver_out hT hP ι hι Good hgood hinp (Or.inl (hout t ht ℓ σ g hg).1)
+      fun t' h1 h2 i hi => hcaus t ht t' h2 h1 ℓ σ g hg i hi
   funext σ
   show rowOf (traceVal C ref) (lay.egress t ℓ) σ =
-    rowOf (valOver C (lay.inputOf k (ingressUpTo op o t) (traceVal C ref)) (heldAdv C P F ref)) (lay.egress t ℓ) σ
+    rowOf (valOver C (resolveWires C lay.wires (lay.inputOf k (ingressUpTo op o t) (traceVal C ref))
+      (heldAdv C P F ref) C.gates.length) (heldAdv C P F ref)) (lay.egress t ℓ) σ
   symm
   simp only [rowOf]
   rw [heq σ _ (by simp [slotGates]),
     List.map_congr_left fun g hg => heq σ g (by simp [slotGates, hg])]
 
+/-- **An input gate outside the incorrect proof blocks has its wire right**: its proof block is not wire-wrong. -/
+theorem wireRight_of_not_faultyGate (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) {P : Partition}
+    (hP : P.Partitions s.prog) (wires : ℕ → Option ℕ) (w : Wit) {g : ℕ} (hg : s.prog.gates[g]? = some .input)
+    (hnf : ¬ FaultyGate s.prog P (incorrect H Cm s P wires w) g) : WireRight s.prog wires (w.val H Cm s) g := by
+  classical
+  by_contra hn
+  have hglt : g < s.prog.gates.length := (List.getElem?_eq_some_iff.1 hg).1
+  obtain ⟨v, u, hu, hgu⟩ := exists_of_mem_gates (hP.2.2.1 g hglt fun b h => by rw [hg] at h; cases h)
+  have hv : v < P.blocks.length := (List.getElem?_eq_some_iff.1 hu).1
+  have hW : v ∈ wireWrong H Cm s P wires w :=
+    Finset.mem_filter.2 ⟨Finset.mem_range.2 hv, u, hu, g, Or.inl hgu, hn⟩
+  exact hnf ⟨v, Finset.mem_union_right _ hW, u, hu, hgu, boundary_of_input hg⟩
+
 variable {Coin Col T : Type}
 
-/-- **On the audit's scope the sampling relation gives the audit's**: at `δ ≥ 0`, `R δ x w` gives `RAcc δ x w`. -/
-theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
-    {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
-    (hR : R H D.commit D.parse D.partition δ x w) : RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
+/-- **On the audit's scope the sampling relation at the incorrect set gives the audit's**: at `δ ≥ 0`, `RWired δ x w`
+at the layout's wiring gives `RAcc δ x w`. -/
+theorem rAcc_of_rWired (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S)
+    (k : AuditStatement → ℕ) {δ : ℝ} (hδ : 0 ≤ δ) {x : Msg} (hx : ScopeAcc D lay k x) {w : Wit}
+    (hR : RWired H D.commit D.parse D.partition (fun s => (lay s).wires) δ x w) :
+    RAcc H D.commit D.parse D.partition L K S lay k δ x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR
+  beta_reduce at hM
   obtain ⟨⟨s₁, P₁, hs₁, hP₁, hin⟩, s₂, hs₂, hfit⟩ := hx
   rw [hs] at hs₁ hs₂
   obtain rfl := Option.some.inj hs₁
@@ -434,23 +521,24 @@ theorem rAcc_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay :
   obtain rfl := Option.some.inj hP₁
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, hM, disjoint_allSlots hδ hM,
-    heldAdv s.prog P (faulty H D.commit s P w) (w.val H D.commit s),
+    heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (w.val H D.commit s),
     fun g b h => faultyGate_of_heldAdv h, fun g h => by
       rw [heldAdv_of (ref := w.val H D.commit s) h]; exact Option.some_ne_none _, fun op o hcar hcov => ?_⟩
-  exact accepted_of hin.1 hin.2.1 hfit ι hι hcar hcov
+  exact accepted_of hin.1 hin.2.1 hfit ι (fun v u hu hv => hι v u hu fun h => hv (Finset.mem_union_left _ h))
+    (fun g hg hnf => wireRight_of_not_faultyGate H D.commit s hin.2.1 _ w hg hnf) hcar hcov
 
 end NetTiming.SampledAuditProof
 
 open NetTiming.SampledAuditProof in
 /-- **The sampled audit implies `Accepted`, at `ε` at `δ` over the selection**
-(`NetTiming.Guarantees.SampledAuditAccepted`): `KS`'s bound at the stronger relation on the smaller scope, `R δ` giving
-`RAcc δ` there (`rAcc_of_r`). -/
+(`NetTiming.Guarantees.SampledAuditAccepted`): `KSBy`'s bound at the wired check, at `RWired` (`ksBy_wiredOk`), at the
+stronger relation on the smaller scope, `RWired δ` giving `RAcc δ` there (`rAcc_of_rWired`). -/
 theorem NetTiming.SecurityProofs.SampledAuditAccepted : NetTiming.Guarantees.SampledAuditAccepted := by
   intro Coin Col T _ _ _ _ _ H D L K S lay k hKS δ decode hδ hdec x hx Ω _ _ P
-  have h := hKS δ decode hδ hdec x hx.1 Ω P
+  have h := NetTiming.ksBy_wiredOk.1 hKS δ decode hδ hdec x hx.1 Ω P
   unfold Claims.PrBad at h ⊢
   refine le_trans (Claims.Pr_mono fun s hs => ⟨hs.1, fun hR => hs.2 ?_⟩) h
   revert hR
   cases ((Claims.Sampling.E D decode).eval H P x s.1 s.2.1 s.2.2).1 with
   | none => exact id
-  | some w => exact rAcc_of_r H D lay k hδ hx
+  | some w => exact rAcc_of_rWired H D lay k hδ hx

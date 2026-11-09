@@ -7,14 +7,15 @@ import Proofs.Flock.Claims.Finder
 /-!
 # The leak bound at the network certifier's rows
 
-The network certifier registers its records at the transfer gates (`TapOpens`). On the sampling relation (`R δ`), every
-proof block outside the faulty set is correct on the trace's committed values, so the trace opens every transfer gate
-there (each is committed: an output or an input). Where the trace opens a transfer gate it agrees with the network
+The network certifier registers its records at the transfer gates (`TapOpens`). On the sampling relation at the
+incorrect set (`RWired δ`, at the layout's wiring), every proof block outside the incorrect set is correct on the trace's
+committed values and has its wired rows right, so the trace opens every transfer gate there (each is committed: an
+output or an input). Where the trace opens a transfer gate it agrees with the network
 certifier, unless the two openings collide (below). Fill in the network certifier's value at every gate the trace leaves
 unopened (`fill`): a correct proof block stays correct (`correct_mono`, it reads only opened values), and the filled
-trace carries the network certifier's records at every transfer gate (`carries_fill`), the faulty proof blocks'
+trace carries the network certifier's records at every transfer gate (`carries_fill`), the incorrect proof blocks'
 included, since the trace's own value there, where it has one, is the network certifier's. So `accepted_of` gives
-`Accepted` with the faulty proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
+`Accepted` with the incorrect proof blocks' committed gates held at the filled values, the advice the count charges (`2^β`
 over `faultySets`), and since a held gate's input value is never read, the inputs move back to the trace's own values
 (`valOver_congr_held`): the network certifier's records are among the sequences `AccSeqsSampled` counts at the trace's
 values (`rLeakTap_of_r`).
@@ -198,73 +199,65 @@ theorem inputOf_congr_at {L S : ℕ} (lay : BoundaryGates L S) (k : ℕ) (ins : 
   · rfl
   · rw [h]
 
-theorem valOver_congr_held (C : Prog) {inp inp' : ℕ → Bool} (free : ℕ → Option Bool)
-    (h : ∀ i, C.gates[i]? = some .input → free i = none → inp i = inp' i) (g : ℕ) :
-    valOver C inp free g = valOver C inp' free g := by
-  induction g using Nat.strong_induction_on with
-  | _ g ih =>
-    rcases hf : free g with _ | b
-    · rcases hx : C.gates[g]? with _ | x
-      · rw [valOver_of_none_none C inp hf hx, valOver_of_none_none C inp' hf hx]
-      · rw [valOver_of_none_some C inp hf hx, valOver_of_none_some C inp' hf hx]
-        have hrd : ∀ i ∈ x.reads, (if _h : i < g then some (valOver C inp free i) else some false) =
-            if _h : i < g then some (valOver C inp' free i) else some false := by
-          intro i _
-          split_ifs with hig
-          · rw [ih i hig]
-          · rfl
-        rw [bgate_val_congr x _ hrd]
-        cases x <;> first | rfl | rw [h g hx hf]
-    · rw [valOver_of_some C inp hf, valOver_of_some C inp' hf]
-
 /-! ### The sampling relation gives the leak relation at the network certifier's rows -/
 
 section Deploy
 
 variable {Coin Col T : Type}
 
-/-- **At the network certifier's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at a trace that agrees
-with the network certifier wherever both open a gate gives the leak relation at the network certifier's rows, at any
-inputs `As` that suffice (`AdviceIn`). -/
+/-- **At the network certifier's rows**: on the audit's scope at `δ ≥ 0`, the sampling relation at the incorrect set
+(`RWired`, at the layout's wiring) at a trace that agrees with the network certifier wherever both open a gate gives the
+leak relation at the network certifier's rows, at any inputs `As` that suffice (`AdviceIn`). -/
 theorem rLeakTap_of_r (H : Msg → Msg) (D : Deploy Coin Col T) {L K S : ℕ} (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ)
     {δ : ℝ} (hδ : 0 ≤ δ) {As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)} {Dj : ℕ} (tops : AuditStatement → List (Opening Bool))
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ) {x : Msg}
-    (hx : ScopeAcc D lay k x) {w : Wit} (hR : R H D.commit D.parse D.partition δ x w)
+    (hx : ScopeAcc D lay k x) {w : Wit} (hR : RWired H D.commit D.parse D.partition (fun s => (lay s).wires) δ x w)
     (hagree : ∀ s, D.parse x = some s → (∀ q ∈ tops s, D.commit.Opens H s.roots q = true) →
       ∀ g, (∃ q ∈ tops s, q.pos = g) → ∀ b, w.val H D.commit s g = some b → b = tapVal (tops s) g) :
     RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops x w := by
   obtain ⟨s, P, hs, hP, hM⟩ := hR
+  beta_reduce at hM
   obtain ⟨⟨s₁, P₁, hs₁, hP₁, hsc⟩, s₂, hs₂, hfit⟩ := hx
   rw [hs] at hs₁ hs₂
   obtain rfl := Option.some.inj hs₁
   obtain rfl := Option.some.inj hs₂
   rw [hP] at hP₁
   obtain rfl := Option.some.inj hP₁
-  have hF := faulty_mem_faultySets hM (disjoint_allSlots hδ hM)
+  have hF := incorrect_mem_faultySets hM (disjoint_allSlots hδ hM)
   obtain ⟨ι, hι⟩ := correct_of_not_faulty H D.commit s P w
   refine ⟨s, P, hs, hP, fun op o htap hcov hl hD => ?_⟩
   have hext : ∀ g b, w.val H D.commit s g = some b → fill (w.val H D.commit s) (tapVal (tops s)) g = some b :=
     fill_ext
   have hcar := carries_fill hfit htap (hagree s hs htap.1)
-  have hacc := accepted_of hsc.1 hsc.2.1 hfit ι
-    (fun v u hu hv => correct_mono (refIn_mono hext) (hι v u hu hv)) hcar hcov
+  have hacc := accepted_of (F := incorrect H D.commit s P (lay s).wires w) hsc.1 hsc.2.1 hfit ι
+    (fun v u hu hv => correct_mono (refIn_mono hext) (hι v u hu fun h => hv (Finset.mem_union_left _ h)))
+    (fun g hg hnf w' hw' => by
+      obtain ⟨hc, b, h1, h2⟩ := wireRight_of_not_faultyGate H D.commit s hsc.2.1 (lay s).wires w hg hnf w' hw'
+      exact ⟨hc, b, hext g b h1, hext w' b h2⟩) hcar hcov
   have hacc' : Accepted (circuitProgram s.prog (lay s) (k s)) op (k s) o
       (traceVal s.prog (w.val H D.commit s),
-        heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (tapVal (tops s)))) := by
+        heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s)))) := by
     intro t ht
     obtain ⟨h, hr, hst⟩ := hacc t ht
     refine ⟨h, ?_, hst⟩
-    have hv : valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t)
+    have hv : valOver s.prog (resolveWires s.prog (lay s).wires ((lay s).inputOf (k s) (ingressUpTo op o t)
           (traceVal s.prog (fill (w.val H D.commit s) (tapVal (tops s)))))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (tapVal (tops s)))) =
-        valOver s.prog ((lay s).inputOf (k s) (ingressUpTo op o t) (traceVal s.prog (w.val H D.commit s)))
-          (heldAdv s.prog P (faulty H D.commit s P w) (fill (w.val H D.commit s) (tapVal (tops s)))) :=
-      funext (valOver_congr_held s.prog _ fun i hi hfi => inputOf_congr_at (lay s) (k s) _ (by
-        have hnf : ¬ FaultyGate s.prog P (faulty H D.commit s P w) i := fun hfg => by
-          rw [heldAdv_of hfg] at hfi
-          cases hfi
-        obtain ⟨b, hb⟩ := val_some_of_input hsc.2.1 hi hnf
-        rw [traceVal_of_val hi hb, traceVal_of_val hi (hext i b hb)]))
+          (heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s))))
+          s.prog.gates.length)
+          (heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s)))) =
+        valOver s.prog (resolveWires s.prog (lay s).wires ((lay s).inputOf (k s) (ingressUpTo op o t)
+          (traceVal s.prog (w.val H D.commit s)))
+          (heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s))))
+          s.prog.gates.length)
+          (heldAdv s.prog P (incorrect H D.commit s P (lay s).wires w) (fill (w.val H D.commit s) (tapVal (tops s)))) :=
+      funext (valOver_congr_held s.prog _ (resolveWires_congr_held s.prog (lay s).wires _ (fun i hi hfi _ =>
+        inputOf_congr_at (lay s) (k s) _ (by
+          have hnf : ¬ FaultyGate s.prog P (faulty H D.commit s P w) i := fun ⟨v, hv, hr⟩ => by
+            rw [heldAdv_of (F := incorrect H D.commit s P (lay s).wires w)
+              ⟨v, Finset.mem_union_left _ hv, hr⟩] at hfi
+            cases hfi
+          obtain ⟨b, hb⟩ := val_some_of_input hsc.2.1 hi hnf
+          rw [traceVal_of_val hi hb, traceVal_of_val hi (hext i b hb)])) _))
     rw [hr]
     simp only [circuitProgram, hv]
   exact ⟨hl, hD, _, hF, hin s P hP _ _ hF op o
@@ -369,12 +362,13 @@ theorem Pr_tapColl_le_Btap (H : Msg → Msg) (D : Deploy Coin Col T) (decode : L
     | none => rw [hx] at hp; exact absurd hp (by simp)
     | some st => rw [hx] at hp; exact tapLog_valid H D.commit st.roots (tops st) p hp
 
-/-- **The leak bound at the network certifier's rows**, at any deployment `D` of the sampled verifier where `KS` holds
-and the trace's commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
+/-- **The leak bound at the network certifier's rows**, at any deployment `D` of the sampled verifier where sampling at
+the incorrect set holds at the layout's wiring (`KSBy` at the wired check, which is `KS` with no wires) and the trace's
+commitment binds. Take a public layout `lay` and horizon `k`, `δ ≥ 0`, a decoder that lists every trace
 within Flock's radius, inputs `As` that suffice (`AdviceIn`), and the network certifier's openings `tops s` at each
 statement. On the statements in the audit's scope: `Pr[acc ∧ ¬RLeakTap] ≤ δ + ε_ks + ε_bind + Pr[B_tap]`. -/
-theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D) (hb : D.commit.Binds H) (L K S : ℕ)
-    (lay : AuditStatement → BoundaryGates L S) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
+theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hb : D.commit.Binds H) (L K S : ℕ)
+    (lay : AuditStatement → BoundaryGates L S) (hks : KSBy H D (wiredOk fun s => (lay s).wires)) (k : AuditStatement → ℕ) (δ : ℝ) (decode : List (ℕ × Col) → List T)
     (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (As : AuditStatement → (ℕ → Bool) → Set (ℕ → Bool)) (Dj : ℕ)
     (hin : ∀ s P, D.partition s = some P → ∀ ρ, AdviceIn K s.prog P s.design (lay s) (k s) ρ (As s ρ) δ)
@@ -383,7 +377,7 @@ theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D)
     PrBad H D.V (RLeakTap H D.commit D.parse D.partition L K S lay k δ As Dj tops) (E D decode) x P ≤
       κ D δ x + Real.sqrt (γ D x * PrB H D.V P x) + (Bext H D.V (E D decode) Ω P x).Pr H +
         (Btap H D.V (E D decode) D.commit D.parse tops Ω P x).Pr H := by
-  have hks' := hks δ decode hδ hdec x hx.1 Ω P
+  have hks' := ksBy_wiredOk.1 hks δ decode hδ hdec x hx.1 Ω P
   rw [one_mul] at hks'
   unfold PrBad at hks' ⊢
   calc Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
@@ -392,13 +386,14 @@ theorem sampledLeak_tap (H : Msg → Msg) (D : Deploy Coin Col T) (hks : KS H D)
             ((E D decode).eval H P x s.1 s.2.1 s.2.2).1)
       ≤ Pr (fun s : Ω × (Fin (D.V.k x) → Coin) × (E D decode).C x =>
           ((run H P D.V x s.1 s.2.1).out = .acc ∧
-            ¬ (R H D.commit D.parse D.partition δ).ext x ((E D decode).eval H P x s.1 s.2.1 s.2.2).1) ∨
+            ¬ (RWired H D.commit D.parse D.partition (fun s => (lay s).wires) δ).ext x
+              ((E D decode).eval H P x s.1 s.2.1 s.2.2).1) ∨
             TapColl H D decode tops P x s) := by
         refine Pr_mono fun s ⟨hac, hR⟩ => ?_
         rcases hw : ((E D decode).eval H P x s.1 s.2.1 s.2.2).1 with _ | w
         · exact Or.inl ⟨hac, by simp [Rel.ext]⟩
         · rw [hw] at hR
-          by_cases hA : R H D.commit D.parse D.partition δ x w
+          by_cases hA : RWired H D.commit D.parse D.partition (fun s => (lay s).wires) δ x w
           · refine Or.inr ?_
             by_contra hnc
             refine hR (rLeakTap_of_r H D lay k hδ tops hin hx hA fun st hst hpass g hq b hwb => ?_)

@@ -422,8 +422,8 @@ def _root_.Accounting.JointBridge.RealizesCommOfPeriodLeakAccepted.atCode {r : P
 /-- **The network certifier at the code**: `CommOfPeriodLeakAccepted` at `atCode r A`, from a realization at `r`
 (its own `window_le` not read) and `NetworkWindowLe`. -/
 theorem network_atCode {r : PeriodRun d α C Ω} (c : Certificates) (p : Price)
-    (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n) (hks : KS H D)
-    (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
+    (R : RealizesCommOfPeriodLeakAccepted r c.K H D L Kₒ S lay k δ decode reg Dj n)
+    (hks : Claims.Sampling.KSBy H D (NetTiming.wiredOk fun s => (lay s).wires)) (hb : D.commit.Binds H) (hδ : 0 ≤ δ) (hdec : Claims.Flock.ListWithin D.flock.len D.flock.enc D.flock.θ decode)
     (εks εbind εtap : ℝ)
     (herr : ∀ ξ i, Claims.Sampling.κ D δ (R.stmt ξ i) - δ +
       Real.sqrt (Claims.Sampling.γ D (R.stmt ξ i) * PrB H D.V (R.prover ξ i) (R.stmt ξ i)) ≤ εks)

@@ -11,7 +11,7 @@ The recursive audit (`Proofs.Flock.Recursive.Defs`: `recGame`): the developer re
 commitment among it); the auditor draws `ω`, the hidden circuit's units to prove; in each of the inner protocol's `I.r`
 rounds the developer's firewall sends the auditor a salted SHA-512 commitment to the round's inner message (C-Flock run
 with `--zk` off on the workers), and the auditor answers with a live coin; then the developer registers `R₂`, the
-values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and with `link_rows` its opened rows),
+values V*'s sessions read that the rounds do not fix (V*'s running sums `rec-acc`, and its opened rows and their siblings),
 and C-Flock `--zk --registered` sessions of the public verifier circuits V* (`zs R ω t R₂ j`, `ZkOuter`, one per circuit
 `(Vs j).c`, in a row: `outerV`) prove that openings of those commitments exist on which the inner verifier accepts. Each guarantee is a `def G : Prop` in the
 form of `Pouw.Guarantees`; its proof is `Flock.SecurityProofs.G : Flock.Guarantees.G`

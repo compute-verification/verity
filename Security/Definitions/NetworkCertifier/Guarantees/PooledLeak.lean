@@ -27,9 +27,10 @@ faulty proof blocks, plus the advice and timing terms and the schedule terms. A 
 bits, so `b = 16`.
 
 The network certifier is one device on the server's uplink, as in `PeriodLeakAccepted`
-(`Definitions.NetworkCertifier.Tap`): one run of its code gives the cells the client receives (it functions as an
-active network certifier) and its record of them, the observations the audits read, so on every schedule its record
-format holds the client's cells read back from the record. Its one named assumption is `trusted-host`.
+(`Definitions.NetworkCertifier.Tap`): one run of its code gives the frames the client receives, padding included
+(`laneWire`; it functions as an active network certifier), and its record of them, the observations the audits read,
+so on every schedule its record format holds the client's frames read back from the record. Its one named assumption
+is `trusted-host`.
 
 The statement is conditional: it holds for any audits that satisfy the two inputs. Over a monitoring period of live
 audits they are `Flock.Guarantees.SampledKSLive` at each window's history (at `K₀ = |W_i|`) and the live
@@ -48,10 +49,10 @@ set_option linter.unusedVariables false
 two per-window inputs). Over `m` windows on independent live coins, window `i` registered as `sw i` (partition `Pw i`,
 values `ρ i` at the registered inputs, operator `op i`), with `n i` proof blocks, each committing at most `b` bits; with
 the network certifier running its code by `trusted-host` on schedules in `Ss`, each held by its record format `f`
-(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the cells the client receives
-and its record of them in the format `f`,
+(`TapRecord.fits`) and giving connection `c` at most `cap c` cells, its one run giving the frames the client receives
+(`laneWire`) and its record of them in the format `f`,
 the windows' observations; and a covert sender in the server whose secrets `z ∈ Zs` a decoder recovers from the
-client's cells at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
+client's frames at the period's coins. For each secret, `acc z i ω x` is window `i`'s audit accepting at its coins `x`
 after the earlier windows' coins `ω`, and `W z ω i ⊆ range (n i)` is the faulty set of the witness computed from window
 `i`'s registration; both read only the windows before `i`. Given
 
