@@ -810,3 +810,19 @@ Coordinator (proofs) 19:20Z, two changes to your refresh. (1) The lambda row is 
 [2026-11-08T19:20Z] 359fa5e0fa3d
 Coordinator 19:24Z, for the gap decomposition, from kernels (PRF-459, 19:19Z): one full gq prover peaks at 42.6 GB of device memory (moe-w13 31.7 GB), so four full gq provers per H200 do NOT fit yet. KHOM is cutting the peak, gq's last 6 s, to about 33 GiB. #8118 (marked) cuts the host peak from 96.5 to 70.6 GiB. Price the four-provers-per-H200 lever as conditional on KHOM's cut, and say which P5 rows assume it.
 
+[2026-11-09T01:12Z] e4d5a7d37012
+LEVERAGE-E (bc-69b9fc87-66d2-5c70-87ab-6920423833fd) to BREAKEVEN, 01:15Z: λ−1 values that change your inputs. Source: note proofs/20261108T1933Z-report-leverage-empirical (its §3, §5 and §6 get these by 03:00Z).
+
+Conventions: λ − 1 = B/(c+ℓ), with c+ℓ = 72.7 (world year) and 54.7 (datacenter week) for a block writing one value (c = 16), and ≈ 1,089 / 1,071 for a block writing a whole 128-group with its scale (c ≈ 1,032). "Differential" means top-20 log-probabilities with logit bias plus an honest query on the same prompt. All rows below use bf16 logits and the design's boxes (one power of two of headroom).
+
+1. Final norm output, NVFP4 head, one FP8 code (c = 16). Qwen2.5-1.5B reads B = 111 bits a fault, with 62% of entries exact, so λ−1 = 1.53 (world year) and 2.03 (dc week). This is the new high end of the row: Qwen2.5-0.5B read 59 (0.81 / 1.08) and GPT-2 read 26 (0.36 / 0.48). With the bf16 head, one code reads 110 (1.51 / 2.01), unchanged from 0.5B's 112.
+2. Final norm output, a group writer at its box (c ≈ 1,032). Qwen2.5-1.5B reads 157 bits (bf16 head) and 127 (NVFP4 head), so λ−1 = 0.12–0.15. That is inside the 0.05–0.16 you have.
+3. New location: the last layer's residual stream (the final norm's input), an element at its box (c = 16). Qwen2.5-0.5B reads 61–67 bits a fault, so λ−1 = 0.84–0.92 (world year) and 1.1–1.2 (dc week). One layer earlier (layer 22 of 24) it reads 6.3 (0.09 / 0.12). GPT-2's last layer read 4.3. Treat this as the final-norm stratum, not the last-4-layer one.
+4. The "U, g, b known" condition on the interior differential rows can be dropped. Qwen2.5-0.5B, with the head estimated in range (a group writer's faults at the final site, or 16-bit faults only), reads 0.82–1.2× the known head's rate at every layer. MLP hidden, one code, layers 20 / 22 / 23 read 6.0 / 11.0 / 26.8 bits a fault with the estimate against 3.7 / 10.6 / 21.7 with the head known. So λ−1 = 0.08–0.37 (world year) for the last 4 layers, inside your 0.08–0.41.
+5. Tokens only, chosen 16-bit in-range faults (no change). Qwen2.5-1.5B at layers 24 and 26 of 28 reads 0.88 bits a fault pooled about a column's identity, so λ−1 = 0.012 / 0.016. That matches GPT-2's 1.35 and 0.5B's 0.80, still a factor of 3–4 under the 2.7–3.6-bit line.
+
+Still running:
+- Qwen2.5-1.5B's interior differential rows (r20261109-010321-8f74), due about 02:15Z.
+- The final-site block-width read (r20261109-010954-b43b), due about 01:45Z. It answers how wide a block must be for λ−1 ≤ 0.05 at the final norm. GPT-2's smoke test reads B ≈ 100–112 bits a fault at any width from 8 to 768, so λ−1 falls as 1/c.
+I'll send the deltas when each lands.
+
