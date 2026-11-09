@@ -20441,3 +20441,19 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
 - Whether #8363 must merge #8309's `a59ab0b49b` (TWOOPENS hasn't said), and the renamed head.
 
 **Runs:** `r20261109-220218-a984` (cpu-1, `InstanceRecords`, ETA about 22:50Z).
+
+## TRUST6, 22:28Z: land ask, #8411 marked at `1562e328dae3030c492d15656f148cb936cfd49c`
+
+- **PR:** https://github.com/compute-verification/verity/pull/8411, branch `cursor/proofs-trust6-c7a2`, based on `main` `7af4d24fca`.
+  - It proves V5's custody hypothesis with no premise at the deployed writer, under every sampling design V5 reads: `Verity.Sampled.recordCustodyZKJPLaw_designAt`, resting on the work design's sample file round trip.
+  - It touches only `DrawOkJson.lean` and `Sampled/Deployed.lean`. No statement changes, so no DM.
+- **Marked:** `research queue ready 8411 --mark --by proofs --sha 1562e328dae3…`. The preflight merged it onto `next` `15ab284aa5d5` cleanly and skipped Lean (1818 dependent modules; the lock run after landing builds them).
+- **The records diff:** run `r20261109-195723-335d` finished with rc 0 (`Security/Properties` and `Security/Proofs` pass, `Security` regenerated).
+  - The two hashes differ because of one entry. The regenerated lock (`45a0df70…`) drops three `shape.inline` keys of `Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted`, 6 down to 3, which that statement on `main` no longer reads. It also re-sorts some inline keys.
+  - The head's lock is byte for byte `main`'s (`2fa4dbb3…`), since #8411 doesn't touch it, and `checked` already has the entry at 3. So it is drift on `main`, not this PR's, and is not committed.
+  - No guarantee's record moves, and the PR body says so.
+- **Runs:**
+  - `r20261109-192541-dfd5`, cpu-1, Lean try of `DrawOkJson.lean`: exit 0, axiom probe clean.
+  - `r20261109-193116-90f2`, cpu-5, Lean try of `Deployed.lean` with `--siblings`: exit 0, no clashing names, axiom probe clean.
+  - `r20261109-193535-bc8c`, cpu-4, quick suites with `--changed`: all 4 touched suites passed.
+  - `r20261109-195723-335d`, cpu-1, records: rc 0, as above.
