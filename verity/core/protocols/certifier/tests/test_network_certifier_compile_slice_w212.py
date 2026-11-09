@@ -4,7 +4,7 @@ requests' 14 decisions and 20 steps, at the served engine with the slice's sync 
 window is the served one (the encodings' `test_served_window.py`). `fixtures/compile_slice_w212.json` is the window at
 its own statics; `fixtures/compile_slice_w212_class.json` is the same window padded into the engine's public sizes
 (R, W, A) = (8, 1, 9), Q 4, D 32, P 54, K 4 under a sync scheduler, the sync class. The engine's own class is its
-AsyncScheduler's (AS = 1), where `benchmarks/network_traces/compile_slice_zk.py` proves w212 as `CompileSlice_v4`. The
+AsyncScheduler's (AS = 1), where `benchmarks/network_traces/compile_slice_zk.py` proves w212 as `CompileSlice_v6`. The
 charge is from the session's carry into w212 (`CARRY`: the chain over windows 0 … 211, each window's decisions as its
 own replay asks them, under the async-light book; `compile_slice_zk.py` derives `window_charge`'s, the length terms
 included, from the run's records)."""

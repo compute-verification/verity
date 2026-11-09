@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The compile slice (CompileSlice_v4) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
+# The compile slice (CompileSlice_v6) in zero knowledge, or plain (compile_slice_zk.py) on a CPU machine, on hidden_zk's
 # builds (its job.sh, sourced: Flock's flock-circuit and the Lean flock-verify) with the ZK server's Lean frame and the
 # sampled-proofs verifier built in the tree. From a clone, in one of the network pool's pinned slots, as a job of at
 # most 180 minutes:
@@ -28,7 +28,7 @@ setup
 PYTHONPATH=$SRC/tools/research/src "$PY" -m research data fetch-fixtures --repo "$SRC" \
   benchmarks/network_e2e/encodings/tests/fixtures verity/core/protocols/certifier/tests/fixtures > "$OUT/fetch-fixtures.log" 2>&1 \
   || { tail -20 "$OUT/fetch-fixtures.log"; exit 7; }
-(cd verity/core/service/sampled_proofs && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
+(cd verity/core/service/spot && lake build sampled-proofs-verifier) > "$OUT/build-sampled-proofs.log" 2>&1 \
   || { tail -40 "$OUT/build-sampled-proofs.log"; exit 7; }
 if [ -n "${CS_PLAIN:-}" ]; then
   mode=cszk-plain points=${CS_POINTS:-}

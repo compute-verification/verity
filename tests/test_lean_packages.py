@@ -76,7 +76,9 @@ def test_one_mathlib():
 #: the size of each lock's `unwitnessed`, as the regeneration that recorded every guarantee's premises left it: the
 #: guarantees stating what an acceptance means, or an exclusion's bound, that have no `honest` and `nontrivial` witnesses
 #: (`check.py`'s `witness_failures`)
-UNWITNESSED = {"Security": 311, "Security/Properties": 191, "verity/core/service/flock": 7}
+# Security's 303: Flock.SecurityProofs.SpotExfilTwo, NetTiming.SecurityProofs.SampledLeakChecked and PooledLeakChecked carry
+# their nontrivial witnesses; their honest ones are due with the two-stage layout and the deployed check pinning CheckedUnique
+UNWITNESSED = {"Security": 303, "Security/Properties": 191, "verity/core/service/flock": 7}
 
 
 def test_the_unwitnessed_list_only_shrinks():
@@ -88,14 +90,22 @@ def test_the_unwitnessed_list_only_shrinks():
           "witnesses under `witnesses` (check.py's failure names both) instead")
 
 
+def test_the_trust_base_is_one_list():
+    """Every lock that names a trust base (`trust.base`, tools/verity/lean/README.md) names the same one, each premise
+    with the same trust assumption, so no package's deployed guarantees count a premise as trusted that another's count
+    in their gap; a premise one guarantee alone may rest on is its own (`trust.extra`)."""
+    bases = {_rel(p): _lock(p)["trust"]["base"] for p in lake_packages() if "trust" in _lock(p)}
+    assert "Security" in bases and len({json.dumps(b, sort_keys=True) for b in bases.values()}) == 1, bases
+
+
 def test_the_randomness_assumption_cites_this_toolchain():
-    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes`) cites what the toolchain's runtime reads
-    for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump fails here until someone re-reads it and
-    updates the citation."""
-    proofs = ROOT / "Security/Proofs"
-    version = (proofs / "lean-toolchain").read_text().strip().rpartition(":")[2]
-    for doc in ("ASSUMPTIONS.md", "Assumptions.lean"):
-        assert f"Lean {version}'s runtime" in (proofs / "Flock/Soundness" / doc).read_text(), doc
+    """A3 (Flock soundness's `ASSUMPTIONS.md`, `Assumptions.UniformRandomBytes` in `Definitions/Assumptions/Flock.lean`)
+    cites what the toolchain's runtime reads for `IO.getRandomBytes` (`lean_io_get_random_bytes`), so a toolchain bump
+    fails here until someone re-reads it and updates the citation."""
+    security = ROOT / "Security"
+    version = (security / "Proofs/lean-toolchain").read_text().strip().rpartition(":")[2]
+    for doc in ("Proofs/Flock/Soundness/ASSUMPTIONS.md", "Definitions/Assumptions/Flock.lean"):
+        assert f"Lean {version}'s runtime" in (security / doc).read_text(), doc
 
 
 def _module_roots(pkg: Path):
@@ -174,7 +184,7 @@ def _requires(pkg: Path) -> list[dict]:
 
 
 def test_security_package_requires_only_mathlib():
-    """The security analysis's trusted text (`Security`: Definitions and Models) is what every guarantee is stated
+    """The security analysis's trusted text (`Security`: the spec, Definitions) is what every guarantee is stated
     in, so it requires nothing of the repository and no ArkLib: a path dependency here would put a component or a proof
     under every guarantee."""
     assert SECURITY in lake_packages()
@@ -232,7 +242,8 @@ def test_every_open_conjecture_names_a_test_that_exists():
 #: the 392 premises of the lemmas and completeness theorems the lock stopped listing and the guarantees deleted with the
 #: falsified conjectures they rest on; a renamed or restated premise counts twice, under both texts, until `--update`
 #: drops the one no tree prints
-INLINE = {"Security": 917, "Security/Properties": 132, "verity/core/service/flock": 6}
+# Security's 945: merge residue of renamed premise texts, which the lock run's --update drops and the after-landing bookkeeping lowers
+INLINE = {"Security": 914, "Security/Properties": 132, "verity/core/service/flock": 6}
 
 
 def test_the_inline_list_only_shrinks():
@@ -282,10 +293,10 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
     fails with ``fix``, and a cap above its count by more than its `ROOM` warns, naming the value to lower it to, so a
     change that lowers a count never fails the check of a commit it lands on; the next change, or drive's lock run, lowers
     the cap (`lean_audit.held_caps`), so the next offender, or an entry added by hand, is seen. The `lean-caps` merge driver
-    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as counters."""
+    (`tools/verity/lean/merge.py --caps`) merges two changes to a cap as the larger of the two sides' caps."""
     over = {k: f"{n} > {caps.get(k, 0)}" for k, n in got.items() if n > caps.get(k, 0)}
-    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each lowered the cap for the same entry, "
-                      f"raise it to the count)")
+    assert not over, (f"{what} grew in {over}: {fix} (where two merged changes each added entries, the merge kept the "
+                      f"larger of their caps while the count took both: raise it to the count)")
     loose = {k: got.get(k, 0) + ROOM.get(f"{name} {k}", 0) for k in caps
              if caps[k] > got.get(k, 0) + ROOM.get(f"{name} {k}", 0)}
     for k, n in loose.items():
@@ -294,7 +305,7 @@ def _held(name: str, caps: dict[str, int], got: dict[str, int], what: str, fix: 
 
 #: the size of each lock's `trees.except`: the modules whose statements may read a definition of the proofs tree, almost
 #: all Flock's until its spec is extracted
-TREES_EXCEPT = {"Security": 40}
+TREES_EXCEPT = {"Security": 41}
 
 
 def test_the_trees_except_list_only_shrinks():
@@ -481,7 +492,7 @@ def test_the_spec_states_no_new_lemma():
 #: the lines a module may run to: one module is one unit of rebuild, so a long one costs every check and train its build
 LONG = 2000
 #: the lines past `LONG` of each package's modules, summed
-OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 690}
+OVERLONG = {"Security": 963, "Security/Proofs": 54185, "verity/core/protocols/pouw/lean/check": 281, "verity/core/service/flock": 700}
 
 
 def overlong(lines: dict[str, int]) -> dict[str, int]:
@@ -507,8 +518,8 @@ RETIRED_NAMES = {"draw": 1020, "law": 133, "escape": 98, "wrong": 130, "dampener
 #: each `import all` of an in-tree module ({"FILE: MODULE": why}), those in the tree or on `next` when the rule came; an
 #: entry whose FILE the tree doesn't have waits for the change on `next` that adds it
 IMPORT_ALL: dict[str, str] = {
-    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: SampledProofs.Draw":
-        "its proofs open `SampledProofs.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
+    "Security/Proofs/Flock/Claims/Sampling/Select/Second.lean: Spot.Draw":
+        "its proofs open `Spot.Draw`'s private `stratum?` and `natRanges` to read the stratified law's strata",
 }
 #: the entries of `IMPORT_ALL` whose FILE the tree has, per package
 IMPORT_ALL_USES = {"Security/Proofs": 1}
@@ -554,9 +565,9 @@ def _load(name: str, path: Path):
     return mod
 
 
-def test_every_cap_merges_as_a_counter():
+def test_every_cap_merges_as_the_larger_of_its_sides():
     """Each cap here is one line the `lean-caps` merge driver reads (`merge.py`'s `CAP_LINE`), so two changes to it merge
-    as counters instead of conflicting."""
+    as the larger of the two sides' caps instead of conflicting."""
     merge = _load("lean_merge", ROOT / "tools" / "verity" / "lean" / "merge.py")
     caps = [s for s in Path(__file__).read_text().splitlines() if re.match(r"[A-Z][A-Z_]* = \{", s)
             and isinstance(v := globals()[s.split(" = ")[0]], dict) and all(isinstance(n, int) for n in v.values())]

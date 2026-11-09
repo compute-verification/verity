@@ -186,14 +186,25 @@ def test_refusals_name_every_reason_before_anything_is_installed(monkeypatch):
     assert any("TP 2" in r for r in got) and any("['zk']" in r for r in got)
     assert "pouw:ncp-v1: compiled execution" in got
     assert any("verity_vllm.protocols.not_landed_here is not on this tree" in r for r in got)
-    assert any(r.startswith("sampled-proofs:rows-sha512: sampled proofs runs in the Commit stage") for r in got)
+    assert any(r.startswith("sampled-proofs:rows-sha512: SPOT runs in the Commit stage") for r in got)
     with pytest.raises(PO.Refused) as e:
         PO.install(Model(), ctx)
     assert e.value.reasons == got
     assert PO.refusals(_serve("pouw:ncp-v2")) == ("pouw:ncp-v2: pouw registers no scheme 'ncp-v2' (registered: ncp-v1)",)
 
 
-def test_sampled_proofs_alone_at_the_commit_adds_no_hooks():
+def test_a_driver_its_tree_does_not_hold_is_refused_by_name(monkeypatch):
+    """A protocol serving drives by flag (`driver`, PoUB's ``--remote-verifier`` and ``--memory-map``) is imported by name,
+    so a tree without its package refuses the flag by name rather than failing to import."""
+    monkeypatch.setitem(PO.DRIVERS, "remote-bandwidth", "not_landed_here")
+    with pytest.raises(PO.Refused, match=r"remote-bandwidth: its driver verity_vllm\.protocols\.not_landed_here\.commit_map is "
+                                         "not on this tree"):
+        PO.driver("remote-bandwidth", "commit_map")
+    with pytest.raises(PO.Refused, match="no driver of protocol 'pous'"):
+        PO.driver("pous", "remote")
+
+
+def test_spot_alone_at_the_commit_adds_no_hooks():
     ctx = PO.Context(stage="commit", enabled=ALL[2:])
     assert PO.refusals(ctx) == () and PO.adapter("sampled-proofs").schemes() == ("rows-sha512", "vllm-v1")
     before = hooks.live()
@@ -202,7 +213,7 @@ def test_sampled_proofs_alone_at_the_commit_adds_no_hooks():
     assert comp.verdict() == {"protocols": list(ALL[2:]), "record": comp.record()["digest"]}
 
 
-def test_a_commit_refuses_sampled_proofs_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
+def test_a_commit_refuses_spot_under_vllm_v1_by_name_and_a_recorded_target_still_parses(capsys):
     """vllm-v1 (SHA-256, 32-byte roots) is registered so a recorded run's target parses and digests as it did; a Commit
     refuses it by name, and refuses a committer whose scheme isn't the one sampled proofs is declared with."""
     assert config.DEFAULT_ROW_PROTOCOLS == ("sampled-proofs:rows-sha512",)
@@ -443,9 +454,9 @@ def test_a_site_has_one_executor(monkeypatch):
 POUW_SCHEMES = ("ncp-v1", "ncp-v1-shift24", "ncp-v2", "pearl-fp8-v4")
 
 
-def _refused_beside_sampled_proofs(scheme):
+def _refused_beside_spot(scheme):
     """The refusal of an executor whose scheme has no circuit, word for word."""
-    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so sampled proofs "
+    return (f"pouw:{scheme}: executes {APPLY}, and the Program has no Definition for what it computes there, so SPOT "
             f"would trace it as the stock computation (refused until the option names one: traced_as)")
 
 
@@ -453,7 +464,7 @@ def _commit(*enabled):
     return PO.Context(stage="commit", enabled=config.parse_protocols(enabled))
 
 
-def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
+def test_beside_spot_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     """`verity.ml.protocols.pouw.circuit` has circuits for `ncp-v2` and `ncp-v2-shift24`, and the adapter executes `ncp-v2` alone:
     that scheme is admitted beside sampled proofs, and every other one keeps its refusal, word for word.  Without sampled
     proofs nothing changes."""
@@ -463,7 +474,7 @@ def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     pouw.EXECUTES = (APPLY,)
     assert PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512")) == ()
     for scheme in ("ncp-v1", "ncp-v1-shift24", "pearl-fp8-v4"):
-        assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:rows-sha512")) == (_refused_beside_sampled_proofs(scheme),)
+        assert PO.refusals(_commit(f"pouw:{scheme}", "sampled-proofs:rows-sha512")) == (_refused_beside_spot(scheme),)
     for scheme in POUW_SCHEMES:
         assert PO.refusals(_serve(f"pouw:{scheme}")) == ()
     p = TargetProfile(protocols=("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
@@ -473,7 +484,7 @@ def test_beside_sampled_proofs_pouw_is_admitted_for_ncp_v2_only(monkeypatch):
     assert e.value.code == 3
     with pytest.raises(PO.Refused) as r:
         PO.at_row("pouw:ncp-v1,sampled-proofs:rows-sha512", {})
-    assert r.value.reasons == (_refused_beside_sampled_proofs("ncp-v1"),)
+    assert r.value.reasons == (_refused_beside_spot("ncp-v1"),)
 
 
 def test_traced_as_is_the_circuit_of_one_executed_call():
@@ -486,12 +497,12 @@ def test_traced_as_is_the_circuit_of_one_executed_call():
         PO.traced_as("pouw:ncp-v2", 16, 65, 16)
 
 
-def test_without_its_circuit_registry_pouw_stays_refused_beside_sampled_proofs(monkeypatch):
+def test_without_its_circuit_registry_pouw_stays_refused_beside_spot(monkeypatch):
     pouw = _fake_adapter(monkeypatch, "pouw", _pouw([]), schemes=POUW_SCHEMES)
     pouw.EXECUTES = (APPLY,)
     monkeypatch.setitem(PO.CIRCUITS, "pouw", "verity.core.protocols.pouw.not_a_circuit_registry")
     got = PO.refusals(_commit("pouw:ncp-v2", "sampled-proofs:rows-sha512"))
-    assert got[-1] == _refused_beside_sampled_proofs("ncp-v2")
+    assert got[-1] == _refused_beside_spot("ncp-v2")
     assert got[0].startswith("pouw: its circuit registry verity.core.protocols.pouw.not_a_circuit_registry is not installed")
     with pytest.raises(PO.Refused, match="is not installed"):
         PO.traced_as("pouw:ncp-v2", 16, 64, 16)

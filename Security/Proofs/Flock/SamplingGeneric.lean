@@ -8,6 +8,7 @@ public import Proofs.Flock.SamplingGeneric.Coins
 public import Proofs.Flock.SamplingGeneric.Session
 public import Proofs.Flock.SamplingGeneric.Count
 public import Proofs.Flock.SamplingGeneric.Bits
+public import Proofs.Flock.SamplingGeneric.KSAt
 public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
@@ -20,7 +21,9 @@ public import Proofs.Flock.SamplingGeneric.TwoCount
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
+public import Proofs.Flock.SamplingGeneric.TwoCap
 public import Proofs.Flock.SamplingGeneric.Complete
+public import Proofs.Flock.SamplingGeneric.TwoRankin
 
 /-!
 # The sampled compiler in the claims core, at Flock
@@ -46,6 +49,10 @@ opening checks' count, `Compiled.OpenCallsLe`, without which they fail (`Counter
 (`SamplingGeneric/Coins.lean`). The committed form, against the incorrect set of the plurality trace the prover's tape
 fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneric/Reg.lean`: `compilerKSReg_of`), so
 **`CompilerKSReg` is proved** (`compilerKSReg`), and with it Flock's (`flockKSReg`).
+
+`CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
+oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`).
 
 A frozen sampled record is a compiled verifier over Flock (`ofDeploy`, `SamplingGeneric/Deployed.lean`): its opening
 count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), its errors are within `Claims.Sampling`'s, and it
@@ -75,7 +82,12 @@ bound over the first `K` slots gives the compiled error.
 
 At a two-stage design whose first stage samples a uniform `Q`-subset of the population's `N` replay blocks, its `P̄_a` is
 at most the product a Bernoulli(Q/N) replay level gives, `∏_{ρ<N} (1 − Q/N + (Q/N)·e_ρ)` (`SamplingGeneric/TwoBernoulli.lean`:
-`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance.
+`Design.Two.Pa_le_bernoulli_pop`), the integrity profile's acceptance. At a first stage below independent catches at
+rates `q_ρ`, the admissible sets' count and their patterns' count are at most `δ^{−θ}` times a product over the replay
+blocks (`SamplingGeneric/TwoRankin.lean`: **`AdmissibleTwoRankin`** and **`AdmissibleTwoRankinPatterns`** are proved).
+At a first stage that catches each replay block at rate `r₁` and a second stage that samples each cell at rate `r₂`,
+`P̄_a ≤ (1 − r₁·r₂)^m`, `m` the replay blocks the footprint marks incorrect, so a footprint in `M̄_δ` marks fewer than
+every `K` with `(1 − r₁·r₂)^K ≤ δ` (`SamplingGeneric/TwoCap.lean`: **`CapTwo`** is proved).
 -/
 
 @[expose] public section
@@ -113,6 +125,9 @@ theorem flockKSReg : FlockKSReg (Coin := Coin) (Col := Col) (T := T) := flockKSR
 
 /-- **Bits**: `CompilerKS` and `CompilerEfficient` (`compilerBits_of`). -/
 theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEfficient
+
+/-- **KS read at a time budget**: `CompilerKS` and `CompilerEfficient` (`compilerKSAt_of`). -/
+theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEfficient
 
 /-- **`Sampling.KS` from the compiler**: `flockKS` at `ofDeploy` (`samplingKS_of_flockKS`). -/
 theorem samplingKS [Zero Col] {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T}

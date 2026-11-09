@@ -212,7 +212,7 @@ it every 5 minutes, `--public` once `store-export.env` exists (`infra/control/st
 (Neon's `store_private` with `$STORE_PRIVATE_READER_URL`, else `index.sqlite`, else the catalog), with its listing time and the
 records only here. `select` names its source and that time on stderr in every output form (`--json` stays a list), and exits 1
 when there is no index that ever listed the bucket and the catalog holds no artifact: a `research run` job's store, where an empty
-answer had read as "none" (19 Oct).
+answer would read as "none".
 
 ## 6. Tools, derivations, conditions, closures, scratch
 

@@ -1,8 +1,9 @@
 """a0's session on the challenger (`a0.session` under FLOCK_CHALLENGER=1): a session on the keyed coin tree (`--zk`, or a
 plain one under FC_COINS=tree) starts a challenger of its own, its server takes the tree from it (`--tree-from`), and the
 challenger's end and audit of the server's records come back as ``live["challenger"]``; a failed one refuses the session.
-Any other session starts none. The server and prover are a stand-in for `flock-circuit`, the challenger
-`verity_flock.challengers`' calls."""
+Any other session starts none. A session's prover (`a0.prover_env`) runs `prove --zk` itself unless it is given Lean's
+`flock-firewall`, which puts it behind the ZK server's send check. The server and prover are a stand-in for
+`flock-circuit`, the challenger `verity_flock.challengers`' calls."""
 from __future__ import annotations
 
 import sys
@@ -15,26 +16,29 @@ from verity_flock import challengers as CH
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import a0
 
-#: a stand-in for flock-circuit: ``serve`` records one session holding its argv and its environment's FC_COINS, and
-#: ``prove`` prints its LIVE line
+ENV = ("FC_FIREWALL", "FC_FIREWALL_LEAN", "FC_FIREWALL_STATEMENT", "FC_HOST_WITNESS")
+
+#: a stand-in for flock-circuit: ``serve`` records one session holding its argv and its environment's FC_COINS and ENV,
+#: and ``prove`` prints its LIVE line with its own ENV
 FAKE = '''#!{python}
 import json, os, pathlib, sys
 args = sys.argv[1:]
+env = {{k: os.environ.get(k) for k in {env}}}
 if args[0] == "serve":
     s = pathlib.Path(args[args.index("--out") + 1]) / "s0"
     s.mkdir(parents=True, exist_ok=True)
-    (s / "session.json").write_text(json.dumps({{"argv": args, "coins": os.environ.get("FC_COINS"),
+    (s / "session.json").write_text(json.dumps({{"argv": args, "coins": os.environ.get("FC_COINS"), "env": env,
                                                 "verdict": {{"accepted": True}}}}))
     print("SERVING", flush=True)
 elif args[0] == "prove":
-    print("LIVE\\t" + json.dumps({{"accepted": True, "roots": {{}}}}))
+    print("LIVE\\t" + json.dumps({{"accepted": True, "roots": {{}}, "env": env}}))
 '''
 
 
 @pytest.fixture
 def run(tmp_path, monkeypatch):
     bin_ = tmp_path / "flock-circuit"
-    bin_.write_text(FAKE.format(python=sys.executable))
+    bin_.write_text(FAKE.format(python=sys.executable, env=ENV))
     bin_.chmod(0o755)
     st = {"dir": tmp_path / "stage", "pin": "00"}
     st["dir"].mkdir()
@@ -51,7 +55,8 @@ def run(tmp_path, monkeypatch):
 
     monkeypatch.setattr(CH, "start", start)
     monkeypatch.setattr(CH, "end", end)
-    monkeypatch.delenv("FC_COINS", raising=False)
+    for k in ("FC_COINS", *ENV):
+        monkeypatch.delenv(k, raising=False)
 
     def go(name, zk=False, env=None):
         out = tmp_path / name
@@ -93,3 +98,19 @@ def test_any_other_session_starts_no_challenger(run, monkeypatch, flag, zk, env)
     _, record, live = go("s", zk=zk, env=env)
     assert calls == {"start": [], "end": []}
     assert "--tree-from" not in record["argv"] and "challenger" not in live
+
+
+def test_a_session_proves_itself_unless_given_the_zk_server(run, monkeypatch):
+    """Without a firewall both sides run with the ZK server off and the witness where the prover builds it, a
+    FC_HOST_WITNESS the caller set removed (`a0.DIRECT`, zk_cost's `dev` arm); with one, the ZK server's send check is on
+    and the caller's environment stands."""
+    go, _, _ = run
+    monkeypatch.delenv("FLOCK_CHALLENGER", raising=False)
+    monkeypatch.setenv("FC_HOST_WITNESS", "1")
+    _, record, live = go("direct", zk=True, env=a0.prover_env(None, {"partition_file": "p.json"}))
+    assert record["env"] == live["env"] == {"FC_FIREWALL": "0", "FC_FIREWALL_LEAN": None, "FC_FIREWALL_STATEMENT": None,
+                                            "FC_HOST_WITNESS": None}
+    _, record, live = go("fw", zk=True, env=a0.prover_env("flock-firewall", {"partition_file": "p.json"}))
+    assert record["env"] == live["env"] == {"FC_FIREWALL": "1", "FC_FIREWALL_LEAN": "flock-firewall",
+                                            "FC_FIREWALL_STATEMENT": a0.STATEMENT_ID, "FC_HOST_WITNESS": "1"}
+    assert a0.firewall_env({"partition_file": "p.json"})["FC_FIREWALL_HELLO_ARGS"] == "--partition p.json"

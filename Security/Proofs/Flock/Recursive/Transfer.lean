@@ -17,9 +17,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Discharge.ZkReg.Checked
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Recursion: a stage's committed values against a candidate, for the compiled `--zk` session
@@ -56,7 +54,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
@@ -273,7 +271,7 @@ theorem zk_linkSoundCandC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisCandZC (L := L) A Hs P planZ tab vb Sk wv (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (fun R τ => linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ +
         candTermZC A Hs P planZ tab vb Sk wv R τ k Rw ρ) := by
   intro R τ tgt

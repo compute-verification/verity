@@ -18,6 +18,20 @@
     "type_hash": "676cea5384e44d46e9ff924d15b724db8f6d985734ba845fa44bf013ae0ec7d4"
    }
   },
+  "reads": {
+   "Definitions.Accounting.Guarantees.Pouw": {
+    "digest": "60db4b0366633bf9a7085c4649612f3bb3ba763a182bb92eace3a237353e01a0",
+    "definitions": {
+     "Accounting.Guarantees.ComputeOfPouw": "5fc05a0bf3cecc92f48c9ad1985ea4e909913f1c540c7fb9568999ce197a23fc"
+    }
+   },
+   "Definitions.Accounting.Guarantees.RemoteDraw": {
+    "digest": "3750881ce56287e04fc6af3d9cf28ea7e949afd27dee4d941102245ac6f60d0f",
+    "definitions": {
+     "Accounting.Guarantees.Remote.LiveCoinsDrawn": "37fc0bde3801b80a420d5f06e13c2455f585130eb46ef88376288048dce7b543"
+    }
+   }
+  },
   "shape": {
    "inline": {
     "Accounting.SecurityProofs.ComputeOfPouw": {
@@ -54,6 +68,20 @@
     "type_hash": "676cea5384e44d46e9ff924d15b724db8f6d985734ba845fa44bf013ae0ec7d4"
    }
   },
+  "reads": {
+   "Definitions.Accounting.Guarantees.Pouw": {
+    "digest": "86d00bba1e7e691a7bf4896f659bf7b8fabdfe7505fb786f91dd2f3432d966e0",
+    "definitions": {
+     "Accounting.Guarantees.ComputeOfPouw": "ffc981efb1c7f802071e8752f627dd9c86a806fb873079caabb272b7f3aa05d1"
+    }
+   },
+   "Definitions.Accounting.Guarantees.RemoteDraw": {
+    "digest": "dac47e8f64f6553895f49a78d1408c9653ce463209f2eaf1657f064deef0a3c8",
+    "definitions": {
+     "Accounting.Guarantees.Remote.LiveCoinsDrawn": "16a0103450fbd8cb8bfd7b7e22df67df48a080042d429395e9c0d90b7e50474f"
+    }
+   }
+  },
   "shape": {
    "inline": {
     "Accounting.SecurityProofs.ComputeOfPouw": {
@@ -88,6 +116,20 @@
     ],
     "assumptions": [],
     "type_hash": "676cea5384e44d46e9ff924d15b724db8f6d985734ba845fa44bf013ae0ec7d4"
+   }
+  },
+  "reads": {
+   "Definitions.Accounting.Guarantees.Pouw": {
+    "digest": "60db4b0366633bf9a7085c4649612f3bb3ba763a182bb92eace3a237353e01a0",
+    "definitions": {
+     "Accounting.Guarantees.ComputeOfPouw": "5fc05a0bf3cecc92f48c9ad1985ea4e909913f1c540c7fb9568999ce197a23fc"
+    }
+   },
+   "Definitions.Accounting.Guarantees.RemoteDraw": {
+    "digest": "3750881ce56287e04fc6af3d9cf28ea7e949afd27dee4d941102245ac6f60d0f",
+    "definitions": {
+     "Accounting.Guarantees.Remote.LiveCoinsDrawn": "37fc0bde3801b80a420d5f06e13c2455f585130eb46ef88376288048dce7b543"
+    }
    }
   },
   "shape": {

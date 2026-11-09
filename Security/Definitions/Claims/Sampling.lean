@@ -5,7 +5,7 @@ public import Definitions.Claims
 /-!
 # Claims: the sampling compiler (frozen before any proof work)
 
-The claims block of sampled proofs (`verity/core/protocols/sampled_proofs/`), one-stage sampling, on the
+The claims block of sampled proofs (`verity/core/protocols/spot/`), one-stage sampling, on the
 shared definitions of `Definitions.Core.Interaction`, in the template's eight items and the README glossary's terms. Parametric in
 the deployed sampled verifier (`Deploy`), as Flock's block is in `Flock.Deploy`: binding it to the compiled verifier is
 the code side's.
@@ -21,10 +21,11 @@ the code side's.
 3. **Relation** (`R δ`): the set of incorrect proof blocks of the committed trace is in the confidence set
    `M_δ = {B : P_a(B) > δ}`. A unit is faulty when its committed outputs differ from its gates applied to its committed
    inputs, or a value it reads or writes is unopened: one is faulty unless some interior makes it correct, which on a
-   topologically ordered program is the glossary's form on the boundary trace (`FaultyBoundary`).
+   topologically ordered program is the glossary's form on the boundary trace (`BoundaryFaulty`;
+   `Proofs.Flock.SamplingBoundary` proves `Faulty` is it on every such program).
 4. **Scope** (`Scope`, `InScope`, `ScopeMatches`): a statement that parses, whose query evaluates; a topologically
    ordered program; a partition of all its gates but constants and unread inputs into proof blocks, each a set of gates
-   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`unitClasses`: powers of two from 16 to
+   whose committed values fit its public size class, `|out(u)| ≤ w_{c(u)}` (`sizeClasses`: powers of two from 16 to
    262,144); and a well-formed design, one rule per class. `KS`, `KSCount`, `Bits` and
    `Complete` hold on it, and it excludes every design whose `P_a` is not its sample's miss probability: `subset K` with
    `K > N`, whose `P_a` is `0` at every set, so that `KS` there is vacuous, and a Bernoulli rule with `den = 0` or
@@ -37,12 +38,12 @@ the code side's.
    parameters (`Deploy`, with the Flock verifier its sessions run as a `Flock.Deploy`, and the masked deployment
    `ZkDeploy`: the reference prover's tape as a finite nonce and rest, and the simulator).
 6. **Claims**, on the statements in scope: `KS` at every `δ ≥ 0`, with error `δ + ε_ks + ε_bind`, `ε_ks` Flock's at
-   the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`; `FaultyBoundary`;
+   the units' sessions and `ε_bind = Pr[B_ext]`; its count form `KSCount`; `Binding`; `Universal`;
    `Complete`; `ScopeMatches`; `ZK`, of the masked deployment's reference prover and simulator, relative to the trace's
    published leaf layer; `Bits`; `Efficient`; and `Nontrivial`.
 7. **Assumptions used**: `StrictBirthday` (for `B`), `ExpectedCR` (for `Bext`), and `trustedBase`. `ZK` gives the
    simulator the leaf layer the protocol publishes, so it reads no hiding assumption of the leaves.
-8. **Status**: stated; `FaultyBoundary` is proved (`Proofs.Flock.SamplingBoundary`), no other claim is.
+8. **Status**: stated; no claim is proved.
    `Proofs.Flock.SamplingScope` shows the scope is the one `KS` needs: an out-of-scope `subset K` with `K > N` has
    `P_a = 0` at every set, and an in-scope design has a deployment at which `KS`'s bound is below `1`.
 
@@ -197,16 +198,16 @@ def Partition.blocks (P : Partition) : List (List ℕ) := P.classes.flatten.flat
 def Partition.gates (P : Partition) : List ℕ := P.blocks.flatten
 
 /-- **The widest public size class** of a proof block's outputs, in bits: 262,144, provisional. Setting it to `16` makes
-`unitClasses` `[16]`, the former literal limit. -/
+`sizeClasses` `[16]`, the former literal limit. -/
 def unitClassMax : ℕ := 262144
 
 /-- **The public size classes** `w_c` of a proof block's outputs, in bits: the powers of two from `16` up to
 `unitClassMax`, ascending (`[16, 32, …, 262144]`). -/
-def unitClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
+def sizeClasses : List ℕ := (List.range (Nat.log2 (unitClassMax / 16) + 1)).map (16 * 2 ^ ·)
 
 /-- **A proof block's size class** `w_{c(u)}`: the least public class that holds the values it commits (`committed`), a
 function of the program and the unit, both public; `none` when no class does. -/
-def unitClass (C : Prog) (u : List ℕ) : Option ℕ := unitClasses.find? fun w => decide (committed C u ≤ w)
+def unitClass (C : Prog) (u : List ℕ) : Option ℕ := sizeClasses.find? fun w => decide (committed C u ≤ w)
 
 /-- **`P` partitions `C`**: no gate is in two proof blocks, and every gate of `C` but a constant and an unread input is
 in one, the other input gates included. A constant, public, may be in one or in none, and so may an unread input
@@ -403,7 +404,7 @@ proof blocks (sets of gates, constants and unread inputs in one or in none) whos
 classes, and a well-formed design.
 
 The query: whatever its own width parameter, every unit, input units included, commits at most its class's width
-`w_{c(u)}` (`unitClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
+`w_{c(u)}` (`sizeClasses`, up to `unitClassMax`). A unit that commits more than the widest class is out of scope. -/
 def InScope (P : Partition) (s : AuditStatement) : Prop :=
   s.prog.Topological ∧ P.Partitions s.prog ∧ s.design.WellFormed P
 
@@ -503,11 +504,15 @@ def nPU (D : Deploy Coin Col T) (x : Msg) : ℕ :=
   | some s => (D.part s).blocks.length
   | none => 0
 
-/-- **The extractor's waits** stop at `k = 2^40·(2·n_PU + 1)` accepted runs. A union over the minimal sets of the
-complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`; this `k`
-makes it at most `2^{2^{−40}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only through
-`log₂ k`. -/
-def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 40 * (2 * nPU D x + 1)
+/-- **The waits' slack exponent** `j = 10`: a wait keeps `2^j` accepted runs for each bit of the union its bound is paid
+over, so the union costs at most the slack `c = 2^{2^{−j}}` (`slack`). -/
+def slackExp : ℕ := 10
+
+/-- **The extractor's waits** stop at `k = 2^j·(2·n_PU + 1)` accepted runs (`slackExp`). A union over the minimal sets
+of the complement of `M_δ`, at most `2^n` for `n` units, spread over `k` accepted runs, costs the factor `2^{n/k}`;
+this `k` makes it at most `2^{2^{−j}}`, while `k` enters the extractor's cost, and so the hash side of `Bits`, only
+through `log₂ k`. -/
+def Deploy.k (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ slackExp * (2 * nPU D x + 1)
 
 /-- The waits give up after `K = 2^128·k` reruns. -/
 def Deploy.cap (D : Deploy Coin Col T) (x : Msg) : ℕ := 2 ^ 128 * D.k x
@@ -602,6 +607,26 @@ noncomputable def Bext (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin
             (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.1 }
     else { S := Unit, out := fun _ => none, cost := fun _ => 0 }
 
+/-- **`B_ext` declared at `T` a rerun**: `Bext`'s coins and outcome, its cost both extractions' own SHA-512 calls plus
+`T` for each rerun of the prover, `T` the budget for one run's whole SHA-512 work, the prover's own included, which the
+reader computes from the prover's time. `ExpectedCR` at it so counts the hashing a prover does outside the oracle, which
+`Bext`'s logged cost doesn't (`KSAt`). -/
+noncomputable def BextAt (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (T : ℕ) : FinderFamily :=
+  fun Ω _ _ P x =>
+    if hk : 0 < V.k x then
+      { S := BCoins Ω Coin (V.k x) × E.C x × E.C x
+        ne := ⟨(⟨⟨0, hk⟩, Classical.arbitrary _, fun _ => default, fun _ => default⟩, Classical.arbitrary _,
+          Classical.arbitrary _)⟩
+        out := fun s =>
+          findColl (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1) ++
+            ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2))
+        cost := fun s =>
+          (ownLog H (run H P V x s.1.2.1) (E.ext x s.1.2.2.1 s.2.1)).length +
+            (ownLog H (run H P V x s.1.2.1) (E.ext x (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2)).length +
+            T * ((E.eval H P x s.1.2.1 s.1.2.2.1 s.2.1).2.2 +
+              (E.eval H P x s.1.2.1 (forkCoins s.1.1 s.1.2.2.1 s.1.2.2.2) s.2.2).2.2) }
+    else { S := Unit, out := fun _ => none, cost := fun _ => 0 }
+
 /-- `λ` with `β > 0`: `min(log₂(1/κ), 255.5 − ½ log₂ γ, 256 − log₂(2βc)) − log₂ 3`, where `c` is the extractor's expected
 work in runs. -/
 noncomputable def lamLin (κ γ β c : ℝ) : ℝ :=
@@ -628,6 +653,27 @@ on every prover, tape and coin. -/
 def ExtractOwnLe (H : Msg → Msg) {V : Verifier Coin} (E : Extractor Coin W V) (calls : Msg → ℕ) : Prop :=
   ∀ (x : Msg) (Ω : Type) (P : Prover Ω) (ω : Ω) (r₀ : Fin (V.k x) → Coin) (c : E.C x),
     (ownLog H (run H P V x ω) (E.ext x r₀ c)).length ≤ calls x
+
+/-- **KS read at a time budget**, at every statement in `Scope`: `KSLinOn`'s bound with each hash term read at the
+budget `T`, the SHA-512 compressions one run of the prover makes, its own and the oracle's, plus the size of any state
+it carries, which the reader computes from the prover's time (`c · time + d` at a stated rate), as PoUW's bounds per
+prover read `ecrBound`. The birthday term is `√γ · sbB` at `B` declared at `2T`, the binding term `ecrBound` at `B_ext`
+declared at `T` a rerun, at `2·T·work`. Either is `⊤` at a prover whose finder fails its assumption, so the statement
+takes no hypothesis on `H`; where both hold it is `κ + 2T·√γ/2^256.5 + 2T·work/2^256`, linear in `T`, so the terms of
+the runs of a monitoring period sum at the adversary's SHA-512 work over the period. -/
+def KSAt (H : Msg → Msg) (V : Verifier Coin) (Scope : Msg → Prop) (R : Rel W) (E : Extractor Coin W V)
+    (κ γ work : Msg → ℝ) : Prop :=
+  ∀ x, Scope x → ∀ (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ),
+    ENNReal.ofReal (PrBad H V R E x P) ≤
+      ENNReal.ofReal (κ x) + ENNReal.ofReal (Real.sqrt (γ x)) * sbB H V P x (2 * T) +
+        ecrBound H (BextAt H V E T Ω P x) (2 * T * work x)
+
+/-- **Cost, `B_ext` at a time budget**: at every budget `T ≥ 1`, both extractions' own calls and `T` a rerun come to at
+most `2·T·work(x)` in expectation, so `KSAt`'s binding term is `2T·work/2^256` wherever `ExpectedCR` holds at its
+finder. -/
+def BextAtCostLe (H : Msg → Msg) (V : Verifier Coin) (E : Extractor Coin W V) (work : Msg → ℝ) : Prop :=
+  ∀ (x : Msg) (Ω : Type) [Fintype Ω] [Nonempty Ω] (P : Prover Ω) (T : ℕ), 1 ≤ T →
+    Ex (fun s => ((BextAt H V E T Ω P x).cost s : ℝ)) ≤ 2 * T * work x
 
 end Finder
 
@@ -686,8 +732,8 @@ variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] [De
 noncomputable def κF (D : Deploy Coin Col T) (x : Msg) : ℝ :=
   4 * D.εtable x + 2 ^ (-(D.innerWaits x : ℝ)) + 2 * D.innerK x / D.innerCap x + Real.exp (-(D.innerK x : ℝ) / 8)
 
-/-- The waits' slack factor, `c = 2^{2^{−40}} < 1 + 2^{−40}`: each wait's (`Deploy.k`). -/
-noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-40 : ℝ))
+/-- The waits' slack factor, `c = 2^{2^{−j}} < 1 + 2^{−j}` at `j = slackExp`: each wait's (`Deploy.k`). -/
+noncomputable def slack : ℝ := 2 ^ ((2 : ℝ) ^ (-(slackExp : ℝ)))
 
 /-- **The knowledge error at `δ`**: `δ + ε_ks`, with
 `ε_ks = (c² − 1)·δ + c²·κ_F + (1 + c)·(2k/K + e^{−k/8})`: the outer wait's factor `c` times the inner wait's bound
@@ -746,14 +792,6 @@ as a program built of universal units, its description committed values like any
 def Universal (D : Deploy Coin Col T) : Prop :=
   ∀ (c : SizeClass) (n : PrivateCircuit) (x : List Bool), n.Fits c → x.length = c.nIn →
     (D.universal c).eval (n.args c ++ x) = n.eval x
-
-/-- **Sampling: the incorrect set is the boundary form's**: on a topologically ordered program, a proof block of distinct
-gates is faulty exactly when its committed boundary outputs differ from its gates applied to its committed boundary
-inputs. -/
-def FaultyBoundary : Prop :=
-  ∀ (H : Msg → Msg) (Cm : CommitmentScheme Bool) (s : AuditStatement) (P : Partition) (w : Wit) (v : ℕ) (u : List ℕ),
-    s.prog.Topological → P.blocks[v]? = some u → u.Nodup → (∀ g ∈ u, g < s.prog.gates.length) →
-    (Faulty H Cm s P w v ↔ BoundaryFaulty H Cm s P w v)
 
 /-- **Sampling: Complete**, on the statements in scope, when no unit is faulty. It needs the verifier to check before
 the sample that every unit's session has a form Flock proves (`Flock.InScope`); that check waits for the reference

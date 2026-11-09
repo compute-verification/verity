@@ -8,15 +8,21 @@ directory its files go to, ``window_s``, and a true value for each change), ever
   (`serve_admit.ReleaseOrder`), their release numbers read from their X-Request-Id (``{run}-{n}``, as `serve_tax`'s client
   numbers them, standing in for the certifier's headers);
 - ``tokens``: `TokenCommit`, each window's tokens (every prompt id at its request's arrival and every sampled id) committed
-  in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``.
+  in ``rows-sha512`` rows on a thread of its own when the window closes, its roots in ``tokens.PID.jsonl``;
+- ``boundary_rows`` (an object: ``check``, ``per_prompt``, ``per_output``, ``window_s``, ``drained``, ``inline``): the
+  two-stage audit's boundary commitment (`verity_vllm.pipeline.boundary_rows.BoundaryWindows`), each window's finished
+  requests committed by size class as the window closes, under ``boundary/``, each class's public part in
+  ``boundary.PID.jsonl``.
 
-and with ``edges`` (seconds after the first request whose id holds ``edge_tag``) every engine core takes a replay block's
-boundary state at each edge (`edges_of`, `boundary.Edges`): it drains, takes the state between two steps, and goes on.
-Each edge's record (`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy``
-is false the GPU's busy time each step since the last edge), its `boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl)
-are written off the engine loop, and the KV pool's bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv. From the
-first edge ``save_kv`` names to the last edge, each step's sampled tokens and their logprobs' bits go to
-``edges/outputs.PID.jsonl``.
+and with ``edges_s`` (seconds after the first request whose id holds ``edge_tag``) or ``every_s`` (an edge each
+``every_s`` seconds of a load's serving) every engine core takes a replay block's boundary state at each edge
+(`edges_of`, `boundary.Edges`): it drains, takes the state between two steps, and goes on. Each edge's record
+(`edges.PID.jsonl`: the drain, the pause and its parts, the KV pool's root, sizes, and unless ``busy`` is false the GPU's
+busy time each step since the last edge) is written off the engine loop. With the uniprocess executor, so are its
+`boundary.dump_core` and block fingerprints (``edges/``) and its state (``kv_dir``/edge-K.state.pkl), and the KV pool's
+bytes at the edges ``save_kv`` names to ``kv_dir``/edge-K.kv; from the first edge ``save_kv`` names to the last edge, each
+step's sampled tokens and their logprobs' bits go to ``edges/outputs.PID.jsonl``. With a tensor-parallel executor each
+rank keeps its part in its own process (`ranks_take`), copied to host memory on the ranks ``kv_copy`` names.
 
 The tick's plugin (`verity_vllm.pipeline.tick_plugin`) is a separate entry point, loaded after this one, so its gate wraps
 the scheduler outside these.
@@ -330,32 +336,60 @@ def step_outputs_hook(trace: Any, sink: Callable[[dict], None], active: Callable
 
 
 def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = time.monotonic) -> Any:
-    """The engine core's `boundary.Edges` under ``cfg``: due ``edges_s`` after the first request whose id holds ``edge_tag``,
-    each taking the boundary state as module `boundary` reads it (the KV pool copied to a pinned host buffer allocated
-    here, once, and hashed), its record and files written as the module's docstring says. The pool is hashed once here,
-    at the engine's first step, so the hash kernels are built before the first edge and its pause is only the edge's."""
+    """The engine core's `boundary.Edges` under ``cfg``: due every ``every_s`` seconds of a load's serving
+    (`boundary.every`), or ``edges_s`` after the first request whose id holds ``edge_tag`` (`boundary.at_times`), each
+    taking the boundary state as module `boundary` reads it, its record and files written as the module's docstring says.
+    With the uniprocess executor the engine core takes every part itself (`local_take`); with a tensor-parallel one, each
+    rank takes its own where it lies (`ranks_take`). Either hashes the KV pool once here, at the engine's first step, so
+    that the hash kernels are built before the first edge and its pause is only the edge's."""
+    import boundary as B
+    from verity_vllm.engine.hooks import Hooks
+    from verity_vllm.engine.step_trace import StepTrace
+
+    sched = core.scheduler
+    trace = next((x for x in getattr(sched, "_verity_servetax", ()) if isinstance(x, StepTrace)), None)
+    if trace is None:
+        raise RuntimeError("the edges need the step trace (record) on the scheduler")
+    at = None if cfg.get("every_s") else [float(x) for x in cfg["edges_s"]]
+    due, start = B.every(float(cfg["every_s"]), clock) if at is None else B.at_times(at, clock)
+    tag = cfg.get("edge_tag")
+    load: list[str | None] = [None]
+    hooks = Hooks(tag="serve-tax-edges")
+
+    def add_request(orig):
+        def wrapped(request, *a, **kw):
+            if tag is None or tag in request.request_id:
+                key = release_key(request.request_id)
+                load[0] = key[0] if key else None
+                start(load[0])
+            return orig(request, *a, **kw)
+        return wrapped
+
+    hooks.wrap(sched, "add_request", add_request)
+    local = hasattr(core.model_executor, "driver_worker")
+    take = (local_take if local else ranks_take)(core, cfg, trace, hooks, at, load, clock)
+    return B.Edges(core, due, take, clock)
+
+
+def local_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: list[float] | None, load: list,
+               clock: Callable[[], float]) -> Callable[[Any, dict], None]:
+    """`edges_of`'s take for the uniprocess executor: the KV pool copied to a pinned host buffer allocated here, once, and
+    hashed, and the engine core's state with the runner's rows, written off the loop; at the edges ``save_kv`` names,
+    the pool's bytes too, and from the first of them to the last edge each step's outputs (fixed times only)."""
     import pickle
 
     import numpy as np
     import torch
 
     import boundary as B
-    from verity_vllm.engine.hooks import Hooks
-    from verity_vllm.engine.step_trace import StepTrace
 
     out = Path(cfg["out"])
     d = out / "edges"
     d.mkdir(parents=True, exist_ok=True)
     pid = os.getpid()
     sched, _kvm, pool, runner = B.parts(core)
-    trace = next((x for x in getattr(sched, "_verity_servetax", ()) if isinstance(x, StepTrace)), None)
-    if trace is None:
-        raise RuntimeError("the edges need the step trace (record) on the scheduler")
     kv = B.KvPool(runner.kv_caches, len(pool.blocks))
-    host = kv.host() if cfg.get("kv_copy", True) else None
-    at = [float(x) for x in cfg["edges_s"]]
-    due, start = B.at_times(at, clock)
-    tag = cfg.get("edge_tag")
+    host = kv.host() if cfg.get("kv_copy", "all") not in (False, "none") else None
     save_kv = set(int(k) for k in cfg.get("save_kv", (0,)))
     kv_dir = Path(cfg.get("kv_dir") or d)
     kv_dir.mkdir(parents=True, exist_ok=True)
@@ -368,16 +402,6 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
     active = [False]
     last = {"step": trace.scheduled, "resumed_t": None}
     writer: list[threading.Thread | None] = [None]
-    hooks = Hooks(tag="serve-tax-edges")
-
-    def add_request(orig):
-        def wrapped(request, *a, **kw):
-            if tag is None or tag in request.request_id:
-                start()
-            return orig(request, *a, **kw)
-        return wrapped
-
-    hooks.wrap(sched, "add_request", add_request)
     hooks.wrap(sched, "update_from_output", step_outputs_hook(trace, _lines_behind(d / f"outputs.{pid}.jsonl"),
                                                               lambda: active[0]))
 
@@ -397,13 +421,15 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
         kvr = kv.take(host)
         t5 = clock()
         fp = kvr.pop("fingerprint")
+        kvr["copied_bytes"] = kvr["bytes"] if host is not None else 0
         st["kv"] = kvr
         busy_s = busy_steps = busy_steps_s = None
         if busy is not None:
             busy.reap(wait=True)
             busy_s, busy_steps = busy.total(last["step"], trace.scheduled)
             busy_steps_s = [round(x, 7) for x in busy.steps(last["step"], trace.scheduled)]
-        rec = {"edge": k, "next_step": trace.scheduled, "at_s": at[k], "drained_unix": time.time() - (clock() - info["drained_t"]),
+        rec = {"edge": k, "load": load[0], "next_step": trace.scheduled, "at_s": at[k] if at else None,
+               "drained_unix": time.time() - (clock() - info["drained_t"]),
                "drain_s": info["drained_t"] - info["due_t"], "drain_calls": info["drain_calls"], "sync_s": t1 - t0,
                "state_s": t2 - t1, "dump_s": t3 - t2, "write_wait_s": t4 - t3, "kv_s": t5 - t4,
                "pause_s": t5 - info["drained_t"], "pause_production_s": (t5 - info["drained_t"]) - (t3 - t2) - (t4 - t3),
@@ -415,7 +441,7 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
                "skipped": st["skipped"], "runner_skipped": st["runner"]["skipped"]}
         record(rec)
         last["step"], last["resumed_t"] = trace.scheduled, clock()
-        active[0] = min(save_kv) <= k < len(at) - 1
+        active[0] = bool(at and save_kv) and min(save_kv) <= k < len(at) - 1
 
         def write() -> None:
             t = time.monotonic()
@@ -433,8 +459,55 @@ def edges_of(core: Any, cfg: Mapping[str, Any], clock: Callable[[], float] = tim
             record(got)
         writer[0] = threading.Thread(target=write, name=f"edge-{k}-write")
         writer[0].start()
+    return take
 
-    return B.Edges(core, due, take, clock)
+
+def ranks_take(core: Any, cfg: Mapping[str, Any], trace: Any, hooks: Any, at: list[float] | None, load: list,
+               clock: Callable[[], float], key: Callable[[], bytes] = lambda: os.urandom(32),
+               record: Callable[[dict], None] | None = None) -> Callable[[Any, dict], None]:
+    """`edges_of`'s take for a tensor-parallel executor, whose ranks the engine core reaches only through
+    ``collective_rpc``: the engine core's state taken here, and on every rank its KV pool hashed under a fresh key, the
+    same on every rank, so that ranks holding the same bytes give the same root (`boundary.rank_take`), copied to host
+    memory on the ranks ``kv_copy`` names (`boundary.KV_COPY`), and its runner rows and generators taken. Each part is
+    kept where it was taken until the next edge replaces it; nothing is written but the edge's record, and the record's
+    pause runs to the engine core's next step."""
+    import boundary as B
+
+    if cfg.get("save_kv"):
+        raise RuntimeError("the edges of a tensor-parallel engine keep their KV bytes in host memory: no save_kv")
+    sched = core.scheduler
+    pool = sched.kv_cache_manager.block_pool
+    rpc = core.model_executor.collective_rpc
+    record = record or _lines_behind(Path(cfg["out"]) / f"edges.{os.getpid()}.jsonl")
+    t = clock()
+    init = rpc(B.rank_pool, args=(len(pool.blocks), cfg.get("kv_copy", "all")))
+    record({"hash_build_s": clock() - t, "ranks": init})
+    pool_bytes = sum(r["bytes"] for r in init)
+    kept: dict[str, Any] = {}
+
+    def take(e: B.Edges, info: dict) -> None:
+        k = info["edge"]
+        t0 = clock()
+        kept["state"] = B.capture(core, runner=False)
+        kept["state"]["next_step"] = trace.scheduled
+        t1 = clock()
+        ranks = sorted(rpc(B.rank_take, args=(key(),)), key=lambda r: r["rank"])
+        t2 = clock()
+        roots = {r["root"] for r in ranks}
+        copied = [r["copy_ms"] for r in ranks if r["copy_ms"] is not None]
+        rec = {"edge": k, "load": load[0], "next_step": trace.scheduled, "at_s": at[k] if at else None,
+               "drained_unix": time.time() - (clock() - info["drained_t"]),
+               "drain_s": info["drained_t"] - info["due_t"], "drain_calls": info["drain_calls"],
+               "state_s": t1 - t0, "kv_s": t2 - t1,
+               "requests": len(sched.requests), "running": len(sched.running), "waiting": len(sched.waiting),
+               "kv": {"root": min(roots), "roots_equal": len(roots) == 1, "bytes": pool_bytes,
+                      "copied_bytes": sum(r["copied_bytes"] for r in ranks),
+                      "hash_kernel_ms": max(r["hash_kernel_ms"] for r in ranks), "copy_ms": max(copied, default=None),
+                      "rank_kv_s": max(r["kv_s"] for r in ranks), "runner_s": max(r["runner_s"] for r in ranks)},
+               "state_requests_bytes": len(kept["state"]["requests"]), "ranks": ranks}
+        rec["pause_s"] = clock() - info["drained_t"]
+        record(rec)
+    return take
 
 
 def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[Any], Any]:
@@ -449,8 +522,8 @@ def _edge_step(orig: Callable[[Any], Any], cfg: Mapping[str, Any]) -> Callable[[
 
 
 def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
-    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit, then the
-    release gate (outside both, so that they see a request when the gate adds it)."""
+    """The changes ``cfg`` names on one scheduler, innermost first: the step trace, then the tokens' commit and the
+    boundary commitment, then the release gate (outside them, so that they see a request when the gate adds it)."""
     from verity_vllm.engine.hooks import Hooks
     from verity_vllm.engine.step_trace import StepTrace
 
@@ -488,6 +561,11 @@ def install(sched: Any, cfg: Mapping[str, Any]) -> list[Any]:
         hooks.wrap(sched, "schedule", schedule)
         atexit.register(tc.stop)
         done.append(tc)
+    if cfg.get("boundary_rows"):
+        from verity_vllm.pipeline import boundary_rows as BR
+
+        sink = _lines(out / f"boundary.{pid}.jsonl")
+        done.append(BR.BoundaryWindows.of(cfg["boundary_rows"], out / "boundary", sink).install(sched, hooks))
     if cfg.get("release_order"):
         add, finish = sched.add_request, sched.finish_requests
         gate = ReleaseGate(add, lambda ids: finish(ids, _aborted()), key=release_key, hold_s=float(cfg.get("hold_s", 5.0)))
@@ -569,11 +647,12 @@ def register() -> None:
             runner = getattr(importlib.import_module(name), "GPUModelRunner", None)
             if runner is not None:
                 hooks.wrap(runner, "execute_model", lambda execute: _kv_runner(execute, cfg))
-    if cfg.get("edges_s"):
+    if cfg.get("edges_s") or cfg.get("every_s"):
         import boundary as B
         from vllm.v1.engine.core import EngineCore
         from vllm.v1.worker.gpu.model_runner import GPUModelRunner
 
         hooks.wrap(EngineCore, "step_with_batch_queue", lambda orig: _edge_step(orig, cfg))
-        B.busy_runner(GPUModelRunner, lambda r: getattr(r, "_verity_busy", None))
+        if cfg.get("busy", True):
+            B.busy_runner(GPUModelRunner, lambda r: getattr(r, "_verity_busy", None))
     _PLUGIN.append(hooks)

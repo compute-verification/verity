@@ -6,7 +6,7 @@ is the outline and the entry points.
 
 ## What runs today
 
-A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the prover
+A session runs end to end on live coins: the verifier and its challenger as a party of their own, on a host the developer
 doesn't control (`verifier_party.py`), or every party in one process (`period.py`), against the prover's passes over
 its registered store. A period's case replays through the Lean (`RemoteAudit.Protocol`), and the session harness runs
 the Lean verifier beside the books (below). Not all of it is zero knowledge yet:
@@ -45,7 +45,7 @@ each session's index `k`, the outcomes `close` counts, and `registry/v0`), and t
 seed, codec, plans, receipts, openings, samples). Where the two differ, the Python is what is wrong. The properties of
 the Lean's verdicts are `Security/Properties/Accounting/Remote.lean`.
 
-`benchmarks/remote_session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
+`verity/core/protocols/remote_bandwidth/session/verifier.py` runs both. The Lean's process `remote-audit-verifier` (`RemoteAudit.Verifier`)
 decides each registration, event and window, an accepted session's record is the one it returns, and the ledger reads
 that record. `audit.AuditRun` keeps the books beside it as the reference, and a registration, event, window verdict or
 record field on which they differ refuses the session at that window as `disagreement`. The books check no openings: a
@@ -80,7 +80,7 @@ digests (`expectedRoot`, also against `audit.payload_tree`), the hello's decisio
 safetensors headers and config.json, the arena's layout from them (`tensors`, `arena`) and the weights blocks' digests
 (`weight_digests`); the Lean takes those digests as given. It lives in this tree because a period's circuit is this
 tree's git hash (`verity/remote-bandwidth/v0 verifier tree
-<tree>`, `sampled_proofs.challenger.credited_session`), so the circuit a period signs commits to the code that decided
+<tree>`, `spot.challenger.credited_session`), so the circuit a period signs commits to the code that decided
 `bound`. A change to it, like any change here, gives later periods a new circuit.
 
 A session over PoUS's P2 store (`p2_party.py`) is decided by the Lean too, since the trusted base is the compiled Lean
@@ -130,8 +130,8 @@ A transcript that doesn't name its session's pace replays only with the pace its
 - `ledger.py`: the declared outputs from an accepted session's record (`declared`): γ at both R, per window and over
   the session, and the memory line's three forms (snapshot, time-held and link-charged) on the verifier's node
   (`Node`), the paced ones `line.py`'s stretch held over time with the whole session one stretch, in floats.
-- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`sampled_proofs.challenger`, in
-  process or through `sampled_proofs.remote`), each opened after the root it follows, and what the auditor's ledger
+- `coins.py`: a session's live coins, an epoch of the proof system's one challenger (`spot.challenger`, in
+  process or through `spot.remote`), each opened after the root it follows, and what the auditor's ledger
   opens for the session's window inside the audit's period, read through `challenger.pinned_session`: the host's pins
   log records the session's pin, on the verifier's own first-parent list of main (`trusted`). The prover gets the
   coins in this order: each window's challenge as it is released, its value and the root it follows (`Released`); the
@@ -145,10 +145,10 @@ A transcript that doesn't name its session's pace replays only with the pace its
   receipts of units of four 2,056-byte blocks that the decode kernel sketches as it decodes (`Sketcher`, its CPU
   reference), and openings checked on PoUS's `vk`. Its Lean is `lean/RemoteAudit/P2.lean`, held to it by
   `lean/tests/test_p2.py`, and its session's is `lean/RemoteAudit/P2Session.lean`, of record.
-- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the prover doesn't
+- `p2_party.py`: a P2 session's verifier and its challenger as a party of their own, on a host the developer doesn't
   control: started over ssh with the channel on its stdin and stdout (`--stdio`, as an auditor gate's verb starts it)
   or on a TCP port, it holds the auditor's registration and its plan (the units holding a tensor's block, not the
-  store's padding past them, which is PoUS's: MEM-72), holds each session to the auditor's parameters (`SESSION`,
+  store's padding past them, which is PoUS's), holds each session to the auditor's parameters (`SESSION`,
   the served bandwidth piece's: a request carrying other values is refused by name before any coin), drives the
   session on its own clock and coins, and answers
   the verdict with the credited reads (`q_bytes`), the Lean's (`Twin`), with `p2.Session`'s books (`Books`) as its
@@ -179,7 +179,7 @@ A transcript that doesn't name its session's pace replays only with the pace its
   sessions, at δ = 1% and 10⁻⁶: pooled by the count bound (all but M − 1 sessions certify), with each session at
   δ/T beside it. The deployment's machines and window are parameters.
 - `period.py`: one session a period on one node (`run`, `session`), its core case and its answer.
-- `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the prover doesn't control,
+- `verifier_party.py`: the verifier and its challenger as a party of their own, on a host the developer doesn't control,
   one line of JSON a message and each window's openings in the openings frame (`main`, `period_with`).
 - `opening.py`: check 3 through the opening unit (`verity.ml.commitments.gates.block_check`) on the honest witness,
   the stand-in for the unit's proofs.

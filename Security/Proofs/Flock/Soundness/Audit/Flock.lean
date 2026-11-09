@@ -1,16 +1,15 @@
 module
 
-public import Proofs.Flock.Soundness.Audit.TwoStage
+public import Proofs.Flock.Soundness.Audit.OneStage
 public import Proofs.Flock.Soundness.Instance
-public import Definitions.Flock.Game.Batch
+public import Definitions.Flock.Game
 public import Mathlib.Order.CompletePartialOrder
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.Combinatorics.Matroid.Init
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Soundness
 import VCVio.Prelude.Core
 
@@ -33,8 +32,6 @@ schedule, so every other table's coins are part of its strategy.
 * `flock_oracle_count`, `flock_oracle_count_subset`: the audit's count curve,
   `δ(K) = miss K + 2^-205`, and for the uniform `k`-subset `C(n − K, k)/C(n, k) + 2^-205`;
 * `flock_oracle_drawn`, `flock_oracle_cone`: sampled proof blocks, and a consumer's value through its cone;
-* `flock_two_stage_sound`, `flock_two_stage_full_profile`: two-stage (b1) on Flock, one-stage over
-  the coarse partition plus `2^-205`.
 
 Mutual correlated agreement is proved (`mcaError_le_bchks25`), so there is no other hypothesis.
 Of `Audit/`, only this file and the compiled instances (`FlockCompiled.lean`, `FlockBatched.lean`)
@@ -110,7 +107,7 @@ end FlockTable
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **The verifier's session on a sample**: the tables its plan derives from the sample and the
 transcript, run concurrently; it accepts when every table accepts. -/
@@ -204,37 +201,6 @@ theorem flock_oracle_cone
       (⨆ u ∈ P.cone T, (1 - L.incl u)) + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) +
         ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
   P.oracle_cone (P.flock_session_sound plan hlow) (flock_inputs_sound plan hin) T σ
-
-/-! ### Two stages -/
-
-variable {nf nc : ℕ} {Pf : Partition C nf} {Pc : Partition C nc}
-
-/-- **Flock's batched session at the fine level is `SessionSound₂` at `2^-205`**, given the fine
-partition's lowering: the tables are planned from the fine transcript, the coarse registration
-with the interior filled in. -/
-theorem flock_two_stage_sound
-    (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockTable) (hlow : Pf.LoweringSound plan)
-    {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool)) :
-    SessionSound₂ Pf Pc ext (fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I)))
-      (ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ)))) := by
-  intro S R S₁ I v hv hw τ
-  obtain ⟨T, hT, hno⟩ := hlow S _ v hv hw
-  exact flockSession_le plan S _ hT hno τ
-
-/-- **Two-stage (b1) on Flock is one-stage over the coarse partition**: when the second stage
-proves every fine unit of each sampled coarse unit,
-`Pr[accept ∧ wrong_c(R) ∈ 𝓑] ≤ sup_{B ∈ 𝓑} e_{L₁}(B) + 2^-205`. -/
-theorem flock_two_stage_full_profile (r : Refines Pf Pc)
-    (plan : Finset (Fin nf) → (Fin C.N → Bool) → List FlockTable) (hlow : Pf.LoweringSound plan)
-    {L₁ : Law nc} {L₂ : Fin nc → Law nf} (hfull : ∀ u ω v, r.parent v = u → v ∈ (L₂ u).draw ω)
-    {Int : Finset (Fin nc) → Type} (ext : ∀ S₁, Int S₁ → (Fin C.N → Bool))
-    (𝓑 : Finset (Fin nc) → Prop)
-    (σ : Strategy (twoStage L₁ L₂ (Fin C.N → Bool) Int
-      (fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I))))) :
-    prob (fun o => o.1 = true ∧ 𝓑 (Pc.wrong (reg₂ σ)))
-        (twoStage L₁ L₂ _ Int fun S R S₁ I => flockSession plan S (extend (Pc := Pc) R (ext S₁ I))) σ ≤
-      (⨆ (B : Finset (Fin nc)) (_ : 𝓑 B), L₁.escape B) + ENNReal.ofReal ((2 : ℝ) ^ (-(205 : ℝ))) :=
-  r.oracle₂_full_profile (flock_two_stage_sound plan hlow ext) hfull 𝓑 σ
 
 end Partition
 

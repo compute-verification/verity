@@ -3,8 +3,7 @@ module
 public import Proofs.Flock.Soundness.Audit.Work
 import Mathlib.Algebra.Order.Algebra
 import Mathlib.Analysis.SpecialFunctions.Pow.NNReal
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Closure samples
@@ -143,7 +142,7 @@ variable {n m : ℕ} {σ : Fin n → Fin m} {w : Fin m → ℕ} {f : Fin m → �
 /-- **The work audit with closure samples** (oracle layer): the audit accepts while its incorrect proof blocks and the units they make
 unsound do at least `T` of the work with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
 theorem audit_work_closure (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
         (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
@@ -156,7 +155,7 @@ theorem audit_work_closure (A : Analysis ((Law.work σ w f K).closure cl) Reg se
 `((W − T)/W)^K + ε_ks(σ) + δ_link(σ)`. -/
 theorem extraction_audit_work_closure (A : ExtractionAnalysis ((Law.work σ w f K).closure cl) Reg session)
     {εks δlink : (R : Reg) → Cont ((Law.work σ w f K).closure cl) Reg session R → ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ T ≤ Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
         (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
@@ -171,7 +170,7 @@ theorem extraction_audit_work_closure (A : ExtractionAnalysis ((Law.work σ w f 
 /-- **Each incorrect proof block is charged its harm** (oracle layer): the audit accepts while some incorrect proof block, sampled or not, has
 harm at least `T` with probability at most `((W − T)/W)^K + ε_ks + δ_link`. -/
 theorem audit_work_closure_harm (A : Analysis ((Law.work σ w f K).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w) (T : ℕ)
     (σ' : Strategy (audit ((Law.work σ w f K).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ ∃ u ∈ A.wrong (A.committedOf σ'), T ≤ Law.harm σ w cl u)
         (audit ((Law.work σ w f K).closure cl) Reg session) σ' ≤
@@ -183,7 +182,7 @@ theorem audit_work_closure_harm (A : Analysis ((Law.work σ w f K).closure cl) R
 /-- **The closure audit at the sizing of record**: with `K = 27,713`, the audit accepts while its incorrect proof blocks and the units
 they make unsound do at least 0.1% of the work with probability at most `2^-40 + ε_ks + δ_link`. -/
 theorem audit_work_closure_of_record (A : Analysis ((Law.work σ w f 27713).closure cl) Reg session) {εks δlink : ℝ≥0∞}
-    (hks : A.KnowledgeSound εks) (hlink : A.LinkSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
+    (hks : A.KnowledgeSound εks) (hlink : A.BindSound δlink) (hf : ∀ s, 1 ≤ f s) (hW : 0 < Law.totalWork σ w)
     (σ' : Strategy (audit ((Law.work σ w f 27713).closure cl) Reg session)) :
     prob (fun o => o.1 = true ∧ Law.totalWork σ w ≤ 1000 * Law.unsoundWork σ w cl (A.wrong (A.committedOf σ')))
         (audit ((Law.work σ w f 27713).closure cl) Reg session) σ' ≤ ((2 : ℝ≥0∞) ^ 40)⁻¹ + εks + δlink := by

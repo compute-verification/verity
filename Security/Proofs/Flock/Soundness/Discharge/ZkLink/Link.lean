@@ -2,17 +2,12 @@ module
 
 public import Proofs.Flock.Soundness.Discharge.ZkSession.Numbers
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Batch
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Interleave
-import Proofs.Flock.Soundness.Game.Prob
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `δ_link` for `--zk` sessions under expected-time collision resistance (interactive-oracle layer)
 
-`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `LinkSound δ_link`. It is discharged here in the
+`zk_flock_count_execOS_m1` leaves the binding error as the named hypothesis `BindSound δ_link`. It is discharged here in the
 shape of `Audit.Partition.flock_batched_linkSoundE`, for the protocol as Lean defines it at the interactive-oracle layer
 (`sessionZK`), under expected-time collision resistance of SHA-512 for an explicit finder
 (`Assumptions.SHA512CRExpected`):
@@ -92,7 +87,7 @@ theorem prob_out_le (A : Arith F K) (ts : List (TabZK F mPts)) (j : Fin ts.lengt
 
 section Link
 
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
@@ -286,7 +281,8 @@ theorem trialZ_mass_le (M : ℕ) (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') (c : 
     split_ifs with h1 h2 h2 <;> first | rfl | exact absurd h1 h2 | exact absurd h2 h1
   have heq : (∑ w : ΩcZ A P planZ tab vb L c, psiZ A P planZ tab vb R τ c w.1) /
       Fintype.card (ΩcZ A P planZ tab vb L c) = sRd T sT rd + ((∑ v, pRd T sT rd v) - pRd T sT rd Xv) := by
-    rw [← expect_draw (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi, expect_sub]
+    rw [← Verity.Game.expect_draw (ΩcZ A P planZ tab vb L c) (fun w => psiZ A P planZ tab vb R τ c w.1), hpsi,
+      expect_sub]
     have := rRd_eq T sT rd
     unfold rRd at this
     rw [this]
@@ -379,7 +375,7 @@ $$\delta_{\rm link}\le Q_s\Big(\frac{2t'}{2^{256}}+\frac{1}{eM}\Big),$$
 with `Q_s = Σ_c π_c` the expected number of commit strings the sampled proof blocks read and `M` the finder's further trials. At
 any other prover the bound is `⊤` (`linkBoundZ`). -/
 theorem zk_linkSoundE (hlow : LoweringSoundZK A P planZ tab decode) {M : ℕ} (hM : 1 ≤ M) {t' : ℝ} (ht : 0 ≤ t') :
-    (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).LinkSound
+    (analysisZK (L := L) A P planZ tab decode (fun R τ => XplurZ A P planZ tab vb R τ) hlow).BindSound
       (linkBoundZ A P planZ tab L vb M t') := by
   intro R τ tgt
   unfold linkBoundZ
@@ -426,7 +422,7 @@ end Link
 
 section Count
 
-variable (A : Arith F K) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 

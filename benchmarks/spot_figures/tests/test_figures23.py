@@ -82,7 +82,7 @@ def test_the_hash_loop_card_keeps_its_sha512_arms_with_their_runs():
 
 def test_figure3_prices_the_cuts_as_figure1_does():
     out = figure3.run("GLM-5.3")
-    f1 = figure1.run("GLM-5.3", 3, ("world year",))
+    f1 = figure1.run("GLM-5.3", 3, ("world year",), lean=False)
     share = {m["cut"]: m["share"] for m in out["modeled"]}
     assert share["every_block"] == pytest.approx(f1["scopes"]["world year"]["serve_hash_share"])
     assert share["tokens"] < 1e-6
@@ -100,14 +100,14 @@ def test_macs_in_no_proof_block_are_served_and_shown(card_dir):
     work = cards.load("workload", "GLM-5.3")
     work["value"]["served_macs_per_token"] = None
     cards.write(work, force=True)
-    base, base3 = figure1.run("GLM-5.3", 2, ("world year",)), figure3.run("GLM-5.3")
+    base, base3 = figure1.run("GLM-5.3", 2, ("world year",), lean=False), figure3.run("GLM-5.3")
     strata = work["value"]["strata"]
     macs = sum(s["per_token"] * s["macs"] for s in strata)
     first = next(s for s in strata if s["macs"])
     first["modeled"] = True
     work["value"]["served_macs_per_token"] = 2 * macs
     cards.write(work, force=True)
-    out = figure1.run("GLM-5.3", 2, ("world year",))
+    out = figure1.run("GLM-5.3", 2, ("world year",), lean=False)
     modeled = first["per_token"] * first["macs"] / (2 * macs)
     assert out["partition"]["uncovered_mac_share"] == pytest.approx(.5)
     assert out["partition"]["modeled_mac_share"] == pytest.approx(modeled)
@@ -138,8 +138,10 @@ def test_figures_writes_every_figure(tmp_path, monkeypatch):
     be = {"beta": 1e-2, "targets": {"FP8": 1e3}, "rel": 1e-2, "spans": total_cost.SPANS,
           "rows": [{"config": "tokens", "registration": "machine", "scope": "world week", "overhead": 2.0,
                     "floor": 8e6, "h": {"FP8": None}, "beta": {"FP8": 3.0}}]}
-    monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: be)
-    figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2"])
+    seen = []
+    monkeypatch.setattr(total_cost, "breakeven", lambda *a, **k: seen.append(k) or be)
+    figures.main(["--model", "GLM-5.3", "--out", str(tmp_path), "--points", "2", "--no-lean"])
+    assert seen[0]["lean"] is False
     assert json.loads((tmp_path / "figure1.json").read_text())["breakeven"] == json.loads(json.dumps(be))
     assert (tmp_path / "breakeven.txt").read_text() == total_cost.breakeven_table(be)
     for name, schema in (("figure1", total_cost.SCHEMA), ("figure1_overhead", figure1.SCHEMA),

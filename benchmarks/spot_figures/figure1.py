@@ -8,7 +8,7 @@ census and rho's reference.  The output carries them all beside every plotted se
 the console reads.
 
 **Workload.**  A scope's compute is its GPUs (the world: rho's `world-h200` fleet, the census's `world-inference-2027`;
-a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`wipe_monitoring.PERIODS`), serving at
+a datacenter: the census's `dc-12500-machines-600s`) over a monitoring period (`reporting.PERIODS`), serving at
 the fleet's MFU on the H200's dense FP8 peak.  It serves the model's requests of the census's tokens each, at the
 circuit's MACs a token (the `workload` card's `served_macs_per_token` where its proof blocks leave some out), cut into
 proof blocks as the card has them; the captions give the share of MACs in no proof block and in `modeled` strata.
@@ -46,6 +46,10 @@ block's outputs under one-stage, outside the budget, and the token ids under two
   widest block's output bits, and a sampled one costs the count-weighted mean MACs to prove.
 * `request`: request-level sampling, each sampled request replayed and proved whole, its output the session's cap.
 
+Lean checks every one-stage and request-level point's design (`lean_check`, unless `run`'s `lean` is off): a series'
+`lean` says which points it checked, an exfiltration point is the bits Lean certifies (`plancheck`), and a design Lean
+refuses is an error.  A two-stage point is the planner's alone.
+
 Exfiltration is in bits: the main figure plots the width-stratified two-stage design, uncapped and in the capped
 sets' form, and request-level sampling (`MAIN`), and an appendix figure every design with the reference lines the
 `design` card's `main_lines` leaves out.  A request is the census's mean, or with `request="workload"` the `workload`
@@ -70,8 +74,9 @@ from math import inf, log, sqrt
 from pathlib import Path
 
 import cards as spot_cards
-from verity.core.protocols.pous.wipe_monitoring import PERIODS
-from verity.core.protocols.sampled_proofs.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
+from verity.core.protocols.reporting import PERIODS
+from verity.core.protocols.spot import plancheck
+from verity.core.protocols.spot.optimize import (Cell, Grain, ReplayGrain, grain_costs, leak_count, loc_bits,
                                                            two_stage_design)
 
 HERE = Path(__file__).resolve().parent
@@ -109,6 +114,16 @@ DEPLOYMENT = {"exfiltration": "Tokens only: serving commits each request's token
               "layer_of_token": "Deferred interiors at a layer of a token: serving commits each layer's residual "
                                 "stream and the K and V a later token reads, and a replay block is one layer of one "
                                 "token."}
+#: the deployment every panel prices: SPOT[Flock]'s three roles, and the network certifier a layer of its own
+ROLES = ("The deployment is SPOT[Flock]'s three roles: an inference server serves and commits its values; a proof "
+         "server replays each sampled replay block and proves it with flock-circuit prove --zk, with no ZK server and "
+         "no recursion (the proof_overhead card's dev arm); and a verifier draws the sample on the challenger's live "
+         "coins and decides with the Lean verifier. The network certifier, which stamps each request's release order "
+         "and bucket at ingress, is a layer of its own.")
+#: what every bound rests on
+TRUST = ("Every bound is soundness alone, resting on SHA-512's collision resistance, uniform verifier randomness and an "
+         "honest verifier; a bound that reads the certifier's stamp rests on the certifier's own assumptions too, "
+         "stated in its layer.")
 #: the share of compute the infiltration caption compares the two panels' bounds at
 RATIO_BUDGET = 0.01
 SCHEMA = "spot-figure1/v1"
@@ -319,6 +334,10 @@ class Scope:
         return f"{self.who} {self.period}"
 
 
+#: the post's headline scope, whose figures carry the bare file names, and its secondary scope, plotted beside it
+PRIMARY, SECONDARY = "world year", "datacenter year"
+
+
 def scopes(c: dict[str, InputCard], part: TokenBlocks) -> list[Scope]:
     flop_request = c["tokens_per_request"].value * 2 * part.served_macs
     out = []
@@ -455,6 +474,35 @@ def point(m: Model, design: str, target: str, budget: float, rel: float = 1e-4, 
     return {"bound": bound, "capped": bound >= top, "row": best}
 
 
+def lean_design(m: Model, design: str, target: str, p: dict) -> dict | None:
+    """The one-stage or request-level design behind `point`'s `p`, as Lean's checker reads it (`plancheck`), or None
+    where there is none to check: at the trivial bound, or at a leak count of every unit, which samples none."""
+    if p["capped"]:
+        return None
+    if target == "leak":
+        g = m.request if design == "request" else m.dot
+        return None if leak_count(g, p["bound"]) >= g.units else plancheck.leak_design(g, p["bound"], m.delta)
+    return plancheck.work_design(m.request if design == "request" else m.dot_work, p["bound"], m.delta)
+
+
+def lean_check(points: list[tuple[Model, str, str, dict]]) -> list[tuple[bool | None, float]]:
+    """Lean's check of each (model, design, target, point)'s design (`lean_design`), in one run of the checker: whether
+    it checked one (None where there is none), and the point's bound, a leak point's the bits Lean certifies rounded up
+    to a float where it checked one.  A design Lean refuses is an error."""
+    designs = [lean_design(*q) for q in points]
+    got = iter(plancheck.check([d for d in designs if d is not None]))
+    out = []
+    for (m, design, target, p), d in zip(points, designs):
+        if d is None:
+            out.append((None, p["bound"]))
+            continue
+        a = next(got)
+        if a is None or a is False:
+            raise plancheck.LeanError(f"Lean refuses the planner's {design} design at {m.scope.name}: {d}")
+        out.append((True, plancheck.upper(a) if target == "leak" else p["bound"]))
+    return out
+
+
 PLAN = ("merged", "kappa", "q", "k", "draws", "replay_sample", "prove", "replay", "boundary", "interior", "commit",
         "total", "fill")
 
@@ -553,7 +601,8 @@ def infiltration_ratio(infiltration: dict, exfiltration: list[dict], scope: str,
 
 
 def zero_lines(refs: dict[str, list[dict]], scope: str) -> dict[str, list[str]]:
-    """Each panel's lines at 0 in `scope`, which a log axis can't plot and its caption names."""
+    """Each panel's lines at 0 in `scope`, which a log axis has no place for: drawn along its floor and named in its
+    caption."""
     return {panel: [r["label"] for r in rows if (r["value"] if "value" in r else r["by_scope"].get(scope, 1)) <= 0]
             for panel, rows in refs.items()}
 
@@ -594,18 +643,18 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
                     f"escape among them; never above the scope's served bits either ({OUTS_STATUS}).")
     inf = infiltration["value"] if infiltration else None
     out = {
-        "exfiltration": (f"{DEPLOYMENT['exfiltration']} Two-stage, width-stratified (solid): {two}; the second stage "
+        "exfiltration": (f"{DEPLOYMENT['exfiltration']} {ROLES} {TRUST} Two-stage, width-stratified (solid): {two}; the second stage "
                          "samples a request's proof blocks of the public size classes up to a threshold together and "
                          "each wider class apart, at the threshold and rates with the least bound. "
                          f"{request} {exact}{capped}{fill}{gaps}"),
-        "exfiltration_appendix": (f"{DEPLOYMENT['exfiltration']} Every design, with the reference lines the main "
+        "exfiltration_appendix": (f"{DEPLOYMENT['exfiltration']} {ROLES} {TRUST} Every design, with the reference lines the main "
                                   f"figure leaves out. Two-stage, width-stratified (solid) and uniform (thin, one "
                                   f"sample over a request's proof blocks): {two}. "
                                   f"One-stage (dashed) {serve}; its bound counts the incorrect proof blocks' output "
                                   f"bits, each the widest block's, and which ones they are. {request} {exact}{capped}"
                                   f"{patterns}{fill}"),
         "infiltration": inf["caption"] if inf else "Pending: the design that certifies infiltration, and its consumer.",
-        "skipped_work": (f"{DEPLOYMENT['skipped_work']} One-stage (solid) {serve}. Request-level (dotted) proves each "
+        "skipped_work": (f"{DEPLOYMENT['skipped_work']} {ROLES} {TRUST} One-stage (solid) {serve}. Request-level (dotted) proves each "
                          f"sampled request whole; serving commits only {tokens}, inside the budget. Two-stage is left "
                          f"out: its interiors are committed after the first stage, so they don't show the work was done "
                          f"at serve time.{fill}{gaps}"),
@@ -614,7 +663,7 @@ def captions(serve_hash_share: float, infiltration: dict | None = None, coverage
         out[panel] += "".join(f" {s}" for s in sentences)
     for panel, labels in (zeros or {}).items():
         if labels:
-            out[panel] += f" At 0, so not plotted: {'; '.join(labels)}."
+            out[panel] += f" At 0, drawn along the axis's floor: {'; '.join(labels)}."
     return out
 
 
@@ -630,15 +679,16 @@ def infiltration_panel(card: dict | None, scope_names: list[str]) -> dict:
 
 
 def run(model_name: str = "GLM-5.3", points: int = 57, scope_names: tuple[str, ...] | None = None,
-        request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None) -> dict:
+        request: str = "census", workers: int = 1, designs: tuple[str, ...] | None = None, lean: bool = True) -> dict:
     """Figure 1's JSON at `points` proof overheads besides the vertical line's, over the scopes and designs named
-    (default all), each curve's points planned on `workers` processes."""
+    (default all), each curve's points planned on `workers` processes, with Lean checking the one-stage and
+    request-level designs unless `lean` is off."""
     with ProcessPoolExecutor(workers) if workers > 1 else nullcontext() as pool:
-        return _run(model_name, points, scope_names, request, designs, pool.map if pool else map)
+        return _run(model_name, points, scope_names, request, designs, pool.map if pool else map, lean)
 
 
 def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, request: str,
-         designs: tuple[str, ...] | None, each) -> dict:
+         designs: tuple[str, ...] | None, each, lean: bool) -> dict:
     planned = {panel: [d for d in ds if designs is None or d in designs] for panel, ds in DESIGNS.items()}
     sc = slot_cards(model_name)
     c = cards(model_name, request)
@@ -668,11 +718,15 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
             for design in planned[panel]:
                 for beta in budgets:
                     pts = list(each(point, models, repeat(design), repeat(target), repeat(beta * s.gpu_seconds)))
+                    checked = (lean_check([(m, design, target, p) for m, p in zip(models, pts)])
+                               if lean and design not in TWO_STAGE else None)
+                    ys = [b for _, b in checked] if checked else [p["bound"] for p in pts]
                     series[panel].append({
                         "scope": s.name, "design": design, "budget": beta, "headline": design == HEADLINE[panel],
-                        "main": design in MAIN[panel], "x": xs, "y": [p["bound"] for p in pts],
+                        "main": design in MAIN[panel], "x": xs, "y": ys,
                         "capped": [p["capped"] for p in pts],
-                        "share": [p["bound"] / cap(models[0], target) for p in pts],
+                        "share": [y / cap(models[0], target) for y in ys],
+                        **({"lean": [c for c, _ in checked]} if checked else {}),
                         "plan": [None if p["row"] is None else _plan(p["row"]) for p in pts]})
         ratio = infiltration_ratio(infiltration, series["exfiltration"], s.name, c["proof_overhead"].value)
         out_scopes[s.name] = {"who": s.who, "period": s.period, "gpus": c[f"{s.who}_gpus"].value,
@@ -690,6 +744,7 @@ def _run(model_name: str, points: int, scope_names: tuple[str, ...] | None, requ
                                                     base.blocks_per_request, served_total(base)) if capped else None)}
     return {
         "schema": SCHEMA, "model": model_name, "request": request,
+        "lean": {"exe": plancheck.EXE, "slack": str(plancheck.SLACK)} if lean else None,
         "inputs": {k: v.__dict__ for k, v in c.items()},
         "cards": sc,
         "partition": part.__dict__ | part.coverage(),

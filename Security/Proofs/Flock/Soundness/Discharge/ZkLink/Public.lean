@@ -4,7 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.CompiledLink
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Count
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The compiled `--zk` count curve, "wrong" measured against the registration
@@ -35,7 +35,7 @@ essentially every value exists, so there it adds nothing to correctness in `X`.
 
 namespace FlockSoundness.Audit.Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **Unit `u` reads only its own gates and input gates.** -/
 def ReadsOwn (u : Fin n) : Prop :=
@@ -56,7 +56,7 @@ theorem localEval_eq_eval {u : Fin n} (hr : P.ReadsOwn u) (Xv : Fin C.N → Bool
     · rfl
     · exact absurd ((P.input_iff g).2 h) (by simp [hu])
   rw [P.localEval_of_mem Xv hu, C.eval_op Xv hni]
-  refine Op.apply_congr _ fun x hx => ?_
+  refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
   rcases hr g x hu hx with hxu | hxn
   · exact ih x.val (hgm ▸ C.topo g x hx) x rfl hxu
   · rw [P.localEval_of_not_mem Xv (by rw [hxn]; simp), C.eval_input Xv ((P.input_iff x).1 hxn)]
@@ -83,7 +83,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
   {decode : DecoderZK (C := C) planZ tab} {Dh : Type} {Hc : List UInt8 → Dh}
@@ -198,7 +198,7 @@ theorem zk_linkSoundC_reg
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).BindSound
       (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))
@@ -214,7 +214,7 @@ theorem zk_linkSoundC_reg_at
     (hj : JointZC A Hs planZ k a)
     (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
     (analysisZCReg (L := L) A Hs P planZ tab vb (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow hown a hj).BindSound
       (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
   intro R τ tgt
   refine le_of_eq_of_le (congrArg avg (funext fun ω => ?_))

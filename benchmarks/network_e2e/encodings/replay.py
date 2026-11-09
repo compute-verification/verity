@@ -225,8 +225,8 @@ def read_corpus_trace(d: str | Path, *, num_gpu_blocks: int | None = None, block
     their ingress). `ingress="warden"` is the floor a server admitting in release order at the next bucket would give.
 
     A trace served under ``--admit tick`` (meta.json's ``tick``: τ and the certifier run's origin) has each request's
-    release number and bucket from the corpus's stand-in network certifier (`requests.jsonl`'s ``release`` and
-    ``bucket``), as `Trace.releases`."""
+    release number and bucket from its network certifier, a warden trace's warden or the corpus's stand-in for it
+    (`requests.jsonl`'s ``release`` and ``bucket``), as `Trace.releases`."""
     d = Path(d)
     meta = json.loads((d / "meta.json").read_text())
     argv = meta["server_argv"]

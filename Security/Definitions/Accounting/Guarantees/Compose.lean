@@ -31,12 +31,12 @@ The credit splits in two, and `CircuitCredit` is their composition:
   (`OperandHMu`) and B′ (`ReceiptLuckAt`) per tile folded, the whole-unit guess bound (`GuessLuckAt`) per tile whole,
   at B′'s `½` (`2^-64` isn't granted), and the fixed-words claim, `UnitFixed` with
   its fold clause at the run's modes (`tileMode`), with the templates' proved luck (`Scheme.LuckProved`), the service's commit order (`LayerCommitted`, in `Scope`), the
-  service's sample and sampled (I8)'s pieces on the window's proofs (`DrawnLayer.Of`, binding at
+  service's sample and sampled (I8)'s pieces on the window's proofs (`SampledLayer.Of`, binding at
   `δ_bind`, joint proof soundness, `Pins`). The proofs' layer is the IR's (`Declared.layer`): its slots, writers, cuts, coins and sample are
   defined from the circuit, so under `LayerCommitted` it is bound at the IR's cuts (a value only its own unit reads,
   committed later, at its commit coin, which adds no late edge out of its unit), reads each round's coin and has
   every late edge the IR has (`StageCuts`, `StageCoins`, `StageSlots`, `StageComplete`, proved of it), and only its
-  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is `DrawnRightOff`, one
+  run-dependent half (`ProofRun`) is a parameter. No machine model. Its crypto half is `SampledRightOff`, one
   event of probability `δ_bind + δ_ks` off which every sampled tile is right.
 * (P) `CreditOfWork`, the physical layer's step: on the tensor–scalar model of a data sheet, a run with that work takes
   at least `(1 − ε)·T_cred`. Its premises are exactly the machine model's: the model the circuit's on the sheet
@@ -46,7 +46,7 @@ The credit splits in two, and `CircuitCredit` is their composition:
 The seeded pair is (L) and its composition with (P) under seeded coins, stated as Fiat–Shamir in the random-oracle model
 (`fiat-shamir`): the window's seeds are uniform answers to the prover's queries naming its operands' roots, and
 `SeedExtractedAt` (`random-oracle`) is where that model is named, at `ε_id` once a window. Its run is a `JointRun` on
-every round's answers at once, with no stage order. Its binding is checked at the sample (`Declared.atDraw`: `Of`,
+every round's answers at once, with no stage order. Its binding is checked at the sample (`Declared.atSample`: `Of`,
 `MovedIn`, `JointSound`), after every seed, since a seeded round's coin is a hash the cheater can evaluate before it
 commits; its cones are counted at the IR's cuts (`Declared.atIR`: `UnitFixed`, `ServiceCovers`), which read no committed
 value, and its scope needs each seeded round's seed to name what the round reads (`SeedNamed`). GRIND's premise
@@ -93,8 +93,8 @@ a uniform `K_d`-subset), with the proofs' coins `Ξ`, each sampled tile proved w
 * the play's ideal game the service's at share `1` per unit of each skipped tile's late cone (`tileCone`, tiles of no
   words included), and sampled (I8)'s pieces on the window's proofs, the IR's layer (`Declared.layer` at the run's `pr`:
   positions the IR's gates, its slots, writers, cuts, coins and sample defined from the circuit): `Of`, binding at
-  `δ_bind` in the round (`MovedIn`; WindowEps: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
-  jointly over the samples at `δ_ks` (`JointSound`; WindowEps: `max_c κ_c + coll`) and `Pins`;
+  `δ_bind` in the round (`MovedIn`; WindowDelta: `Σ_c δlink_c`, which needs `LayerCommitted`'s order), proof soundness
+  jointly over the samples at `δ_ks` (`JointSound`; WindowDelta: `max_c κ_c + coll`) and `Pins`;
 * the four claims: (H-μ) (`OperandHMu` at its kind's `μ`) and B′ (`ReceiptLuckAt` at its kind's `r_B`) for every
   credited tile folded at its stage, the guess bound (`GuessLuckAt` at its kind's guess) for every one whole, and the
   fixed-words claim, `UnitFixed` with its fold clause, on the IR's layer at the run's modes (`tileMode`) and
@@ -155,7 +155,7 @@ round `r`'s operands, values and skips after querying the oracle for any round's
   meet) and `δ_g > 0`;
 * every tile at least `ρ` times its detected weight's share, costs `a > 0`, `b ≥ 0` and `κ₀ ≥ 0`;
 * the play's ideal game the service's on `R` (`jointGame`) at share `1` per unit of each skipped tile's late cone;
-* sampled (I8)'s binding pieces on the proofs' layer cut at the sample (`Declared.atDraw`'s `Declared.layer` at the run's
+* sampled (I8)'s binding pieces on the proofs' layer cut at the sample (`Declared.atSample`'s `Declared.layer` at the run's
   `pr`): `Of`, `MovedIn` at `δ_bind`, `JointSound` at `δ_ks` and `Pins`. A seeded round's coin is a hash the cheater
   can evaluate before it commits, so nothing it writes, operands or a round's receipts, is bound before the live sample,
   and the sample is where the `δ_bind` card holds: Fiat–Shamir has fixed every root the seeds' preimages name;
@@ -214,8 +214,8 @@ def CircuitWorkSeeded : Prop :=
     ScopeSeeded Sc Cd δs → 0 < δg → 0 < Kd →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) → 0 < a → 0 ≤ b → 0 ≤ κ0 →
     Pl.game = jointGame (Ξ := Ξ) R (tileCone Sc Cd Np) 1 1 Kd →
-    (Cd.atDraw.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) ≤ δbind) →
-    (Cd.atDraw.layer hr hK pr).JointSound δks → (Cd.atDraw.layer hr hK pr).Pins →
+    (Cd.atSample.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) ≤ δbind) →
+    (Cd.atSample.layer hr hK pr).JointSound δks → (Cd.atSample.layer hr hK pr).Pins →
     SeedExtractedAt sq εid T J →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) sq δb →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .whole κ0 (wholeTheta Sc Cd) sq δb →
@@ -297,7 +297,7 @@ run, the window's certificate in device window `win` holds at `.seeded` (`certOf
 `(1 − ε)·T_cred` with probability at most `δ_s + δ_bind + δ_ks + ε_id(T, |J|) + 2·rounds·(δ_g + δ_b)`, where
 `ε = ε_♭ + ε_μ + max(5a, (1 + κ₀)·b)·ln(1/δ_s)/(ρ·K_d) + a·Π_F + b·Π_0 + min(a, b)·D₀` (`rOfSeeded`, `Π_F` and `Π_0` the
 seed groups' premiums from the IR at the folded and the whole rates). It is stated as Fiat–Shamir in the random-oracle
-model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the sample (`Declared.atDraw`) and its cones at
+model (`fiat-shamir`; `SeedExtractedAt` names it), its binding checked at the sample (`Declared.atSample`) and its cones at
 the IR (`Declared.atIR`), as `CircuitWorkSeeded`'s, and its luck line is that statement's, conditional as its numbers
 are on the whole-tile luck a query its `wholeTheta` reads. With `ε_♭ = 0.571%` (NOTATION's sm_120 sheet, H1 + fx1)
 and `ε_μ = 0` under FOLD-OPT, its `ε` at `r = 1` and `T_q = 2^128` is:
@@ -327,8 +327,8 @@ def CircuitCreditSeeded : Prop :=
     ScopeSeeded Sc Cd δs → 0 < δg → 0 < Kd →
     0 < ρ → (∀ t : Fin Np, ρ * Np * shareCone Sc Cd Np t ≤ 1) → 0 < aOf Sc Cd Z lam → 0 ≤ κ0 →
     Pl.game = jointGame (Ξ := Ξ) R (tileCone Sc Cd Np) 1 1 Kd →
-    (Cd.atDraw.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.atDraw.layer hr hK pr).MovedIn x w) ≤ δbind) →
-    (Cd.atDraw.layer hr hK pr).JointSound δks → (Cd.atDraw.layer hr hK pr).Pins →
+    (Cd.atSample.layer hr hK pr).Of Pl → (∀ w, prob (fun x => (Cd.atSample.layer hr hK pr).MovedIn x w) ≤ δbind) →
+    (Cd.atSample.layer hr hK pr).JointSound δks → (Cd.atSample.layer hr hK pr).Pins →
     SeedExtractedAt sq εid T J →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .folded 4 (seedTheta Sc Cd) sq δb →
     SeedLuckAt (tileRound Cd Np) R (shareCone Sc Cd Np) .whole κ0 (wholeTheta Sc Cd) sq δb →

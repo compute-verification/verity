@@ -65,7 +65,7 @@ def test_the_remote_uncertified_share_is_tiers_residual_term():
     assert remote.uncertified(ctx) == pytest.approx(T.evaluate(p, T.TIERS["T1"])["residual"], rel=1e-9)
 
 
-def test_with_sampled_proofs_it_adds_tiers_escape_and_cheating_shares():
+def test_with_spot_it_adds_tiers_escape_and_cheating_shares():
     ctx = tiers_context()
     p = tiers_params(ctx)
     sampled = envelopes.regime(REG, "remote-sampled")
@@ -102,7 +102,7 @@ def test_with_nothing_else_bounding_the_padded_size_ratio_is_lean_dampener_remot
 #: `Nci.Dampener.remoteDampener` as Security/Definitions/Nci/Remote.lean defines it, and the conclusion of
 #: `Nci.Guarantees.DampenerRemote` (Security/Definitions/Nci/Guarantees/Remote.lean) that names it `ρ`
 REMOTE_DAMPENER = "noncomputable def remoteDampener (mfu s x : ℝ) : ℝ := max 1 (1 / (s + x / mfu))"
-REMOTE_CONCLUSION = "remoteDampener mfu (unmonitoredShare C U)"
+REMOTE_CONCLUSION = "remoteDampener mfu (unregisteredShare C U)"
 
 
 def test_the_remote_overhead_is_lean_remote_dampener_at_the_references_mfu():
@@ -183,7 +183,7 @@ def test_a_regime_table_with_a_stray_key_or_a_base_loop_is_refused():
         envelopes.regime(REG.override({"regime.onsite-links.form": "widths"}), "onsite-links")
     with pytest.raises(ValueError, match="wipe per"):
         envelopes.regime(REG.override({"regime.onsite.per": "rack"}), "onsite")
-    with pytest.raises(ValueError, match="sampled proofs need"):
+    with pytest.raises(ValueError, match="SPOT needs"):
         Detection(1, 3600, sampled=True)
 
 

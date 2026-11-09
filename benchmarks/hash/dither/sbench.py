@@ -112,7 +112,7 @@ Arms:
                  recomputed from them at an opening
     ARM-xl       any dither arm with `verity_int8::row_quant`'s CUDA body exactlin's quantizer (`exactlin.install`, which
                  serves `scaled_mm` from exactlin's GEMM too; the dither arms call row_quant only): the same xq and s_a, so
-                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh and hb_served.sh run exactlin's
+                 ARM's gate and reference arm, and its tokens gated as ARM's are; sbench.sh runs exactlin's
                  kgate.py in the lease before an -xl or exact-fused arm is timed
     ARM-a2       any dither arm with each call's A table from `h1c_a_call2_k` (DITHER_A_FORM=2: the same table, its
                  compressions paired); ARM-a3 from `h1c_a_call3_k` (DITHER_A_FORM=3: paired, its messages in registers);
@@ -124,7 +124,7 @@ Arms:
                  own worker's environment, so one run times the units' forms and shares side by side (ARM-j10r-smq9o16)
     ARM-zy1      a dither-a-hbc arm with DITHER_ZY1_KC=1 (its z and y tables in one h1c_build), whatever the run's
                  environment sets
-    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, e.g. hb_served.sh's HB_KC_FLAGS_B), timed beside
+    ARM-kcb      a dither-a-hbc arm on a second h1u_kc build ($HB_H1U_KC_B, sbench.sh's from HB_KC_FLAGS_B), timed beside
                  ARM on $HB_H1U_KC's
     ARM-cgp      a dither-a-so arm serving at priority (DITHER_SO_PRIO=1) with vLLM's graphs captured at it too
                  (DITHER_SO_CAPTURE_PRIO=1, `dither_so.capture_at`).  Under SMQ units it keeps every step in the fast
@@ -218,8 +218,16 @@ import statistics
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from verity_config.settings import of
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+    from multiprocessing.connection import Connection
+
+    from transformers import PreTrainedTokenizerBase
+    from vllm import LLM
 
 settings = of(__file__)
 HERE = Path(__file__).resolve().parent
@@ -259,7 +267,7 @@ def prefill() -> bool:
     return settings.get(PREFILL_ENV)
 
 
-def prefill_prompts(tok, n: int, t: int) -> list[dict]:
+def prefill_prompts(tok: PreTrainedTokenizerBase, n: int, t: int) -> list[dict]:
     """n prompts of t token ids each, request i's from offset 61 i of the prompts' ids cycled (no two alike)."""
     ids = tok.encode(" ".join(prompts(64)))
     need = t + 61 * n
@@ -312,7 +320,7 @@ def stock_args(gpu_mem: float) -> dict:
     return engine_args(gpu_mem, own_batch=settings.get(OWN_BATCH_ENV))
 
 
-def scheduler_of(llm) -> dict | None:
+def scheduler_of(llm: LLM) -> dict | None:
     """The engine's resolved batch and its KV cache's tokens: what a stock arm under --stock-own-batch really ran at,
     and whether its memory share, not its scheduler, bounded its concurrency at saturation."""
     try:
@@ -334,7 +342,7 @@ DISABLED = {"stock": "CutlassInt8ScaledMMLinearKernel", "stock-percall": "Cutlas
             "stock-humming": "CutlassInt8ScaledMMLinearKernel,TritonInt8ScaledMMLinearKernel"}
 
 
-def kernels_of(llm) -> dict:
+def kernels_of(llm: LLM) -> dict:
     """The linear kernels the engine's layers really run: class name -> layers."""
     from verity_vllm.engine import handle
     seen: dict = {}
@@ -355,13 +363,13 @@ def install_exactlin() -> None:
         exactlin._sbench_installed = True
 
 
-def a_form(f: int):
+def a_form(f: int) -> Callable[[], None]:
     def set_form() -> None:
         os.environ["DITHER_A_FORM"] = str(f)
     return set_form
 
 
-def env_of(name: str, value: str | None):
+def env_of(name: str, value: str | None) -> Callable[[], None]:
     def set_env() -> None:
         if value is None:
             os.environ.pop(name, None)
@@ -430,7 +438,7 @@ def suffix_of(arm: str) -> str | None:
     return None
 
 
-def suffix_env(s: str):
+def suffix_env(s: str) -> Callable[[], None]:
     if s in SUFFIXES:
         return SUFFIXES[s]
     m = SMQ_SUFFIX.fullmatch(s)
@@ -443,7 +451,7 @@ def base_arm(arm: str) -> str:
     return base_arm(arm[:-len(s)]) if s else arm
 
 
-def build(arm: str, scratch: Path, gpu_mem: float):
+def build(arm: str, scratch: Path, gpu_mem: float) -> LLM:
     from vllm import LLM
     arm = arm.split("@")[0]
     s = suffix_of(arm)
@@ -468,8 +476,8 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         vllm_dir = ROOT / "integrations" / "vllm"
         sys.path.insert(0, str(vllm_dir))
         from tests.engine import int8_exact_gpu as G
-        from verity_vllm.engine.build import build_engine
         from verity_vllm import TargetProfile
+        from verity_vllm.engine.build import build_engine
         target = TargetProfile.from_device().with_overrides(int8_exact="all")
         ns = argparse.Namespace(checkpoints=str(vllm_dir / "manifests" / "checkpoints.json"), role="LLAMA31_8B_INT8",
                                 base_role="LLAMA31_8B", repo="verity-int8/Llama-3.1-8B-INT8",
@@ -481,8 +489,9 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         return eng.llm
     if arm in ("exact", "exact-fused", "dither", "dither-side"):
         sys.path.insert(0, str(HERE))
-        import dither_fused as DF
         from verity_vllm.engine import int8_vllm
+
+        import dither_fused as DF
         int8_vllm.register()
         if arm == "exact-fused":
             install_exactlin()
@@ -527,10 +536,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         return llm
     if arm in DITHER_A:
         sys.path.insert(0, str(HERE))
+        from verity_vllm.engine import int8_vllm
+
         import dither_a as DA
         import dither_fused as DF
         import dither_one as DO
-        from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         h1u = settings.HB_H1U
         unit, z, ao, pt, ls = DITHER_A[arm]
@@ -554,10 +564,11 @@ def build(arm: str, scratch: Path, gpu_mem: float):
         return llm
     if arm in DITHER_SO:
         sys.path.insert(0, str(HERE))
+        from verity_vllm.engine import int8_vllm
+
         import dither_fused as DF
         import dither_one as DO
         import dither_so as SO
-        from verity_vllm.engine import int8_vllm
         int8_vllm.register()
         unit, ao, pt, depth, ov, serve_prio, we, spill = DITHER_SO[arm]
         a = engine_args(gpu_mem)
@@ -671,7 +682,7 @@ def close_coins() -> None:
             (getattr(win, "pipe", None) or win.coins).close()
 
 
-def fill_end(llm, gen) -> dict:
+def fill_end(llm: LLM, gen: Callable[[list, int], tuple[float, list]]) -> dict:
     """A -we arm's off-node execution phase served to its layout's last step at the stop (one request a generate, its prompt one
     step's prefill, so a generate of n tokens is n steps), where it ends on its own; then its `check_end`."""
     win, mod = getattr(llm, "dither_win", None), getattr(llm, "dither_mod", None)
@@ -685,7 +696,7 @@ def fill_end(llm, gen) -> dict:
             "end": mod.end_checks(win, settings.need(mod.LIB_ENV)), "stats": llm.dither_stats()}
 
 
-def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
+def worker(arm: str, conn: Connection, scratch: str, gpu_mem: float) -> None:
     settings.setdefault("VLLM_ENABLE_V1_MULTIPROCESSING", "0")
     at = (settings.get(CHALLENGERS_ENV) or {}).get(arm)
     if at:
@@ -725,7 +736,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
         settings.setdefault(DA.CHECK_WORKERS_ENV, str(PF_CHECK_WORKERS))
     last: dict = {}
 
-    def gen(reqs: list, n: int):
+    def gen(reqs: list, n: int) -> tuple[float, list]:
         # a -we arm's in-process execution phase ends with each generate, inside its time; the next one's challenger is made after
         sp = SamplingParams(temperature=0.0, max_tokens=n, ignore_eos=True, seed=0)
         win = getattr(llm, "dither_win", None)
@@ -781,7 +792,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             mod = getattr(llm, "dither_mod", None) or (DF if win is not None else None)
             we = win is not None and getattr(win, "end_each", False)
             if pf and win is not None and mod is DF:
-                raise ValueError(f"{arm}: --prefill gates dither_one's windows (dither-a, dither-1s), not dither_fused's")
+                raise ValueError(f"{arm}: --prefill gates dither_one's execution phases (dither-a, dither-1s), not dither_fused's")
             if win is not None:
                 if mod is DF:
                     win.arm(B)
@@ -912,7 +923,7 @@ def worker(arm: str, conn, scratch: str, gpu_mem: float) -> None:
             return
 
 
-def recv(arm: str, conn, op: str, keep: bool = False) -> dict:
+def recv(arm: str, conn: Connection, op: str, keep: bool = False) -> dict:
     """ARM's next message.  A worker that reports an error or exits ends the run (exit 5, its result kept: the gates so
     far in gate.json, the reps in reps.jsonl); sys.exit terminates the daemon workers, so no engine outlives it.  With
     KEEP the error is returned instead, the worker gone and the run going on without it."""
@@ -944,7 +955,7 @@ def main() -> int:
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--scratch", default=None)
     ap.add_argument("--gpu-mem", type=float, default=0.40)
-    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither window's T")
+    ap.add_argument("--t", type=int, default=MAX_TOKENS_STEP, help="max_num_batched_tokens: the Dither execution phase's T")
     ap.add_argument("--ops", default="decode,sat")
     ap.add_argument("--gate", action="store_true")
     ap.add_argument("--stock-own-batch", action="store_true",
@@ -958,19 +969,19 @@ def main() -> int:
     ap.add_argument("--serial", action="store_true",
                     help="one engine on the GPU at a time: each arm built, warmed, gated, timed and stopped before the next "
                          "comes up, in --arms order (its reference arm first); for an arm that needs most of the GPU, as "
-                         "Dither's window does at --prefill's T = 2048")
+                         "Dither's execution phase does at --prefill's T = 2048")
     ap.add_argument("--bw-passes", type=float, default=0.0, metavar="GIB",
                     help="PoUB's passes beside the arms on their GPU, over a store of GIB GiB "
-                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle session, each rep "
-                         "an off block and an on block, a tampered session)")
+                         "(`dbw.py`: the prover calibrated beside the dither arms' decode ops, an idle run, each rep "
+                         "an off block and an on block, a tampered run)")
     ap.add_argument("--bw-prover-args", action="append", metavar="ARGS",
                     help="a side of its own a time, its prover's options (leading NAME=VALUE words its environment)")
     ap.add_argument("--bw-cover", type=float, default=4.0,
-                    help="the first on block's session lasts this many times the off block before it (each later one "
+                    help="the first on block's run lasts this many times the off block before it (each later one "
                          "1.5 times the longest on block before it, the tampered one twice its dither op), in "
-                         "stretches of the idle session's length (`dbw.window_s`), then of the last on session's "
+                         "stretches of the idle run's length (`dbw.window_s`), then of the last on run's "
                          "beside its block (`dbw.beside_s`)")
-    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle session's passes, in seconds")
+    ap.add_argument("--bw-idle-s", type=float, default=3.0, help="the idle run's passes, in seconds")
     a = ap.parse_args()
     if a.bw_passes and not (settings.BW_LIB and settings.BW_KV):
         ap.error("--bw-passes needs BW_LIB and BW_KV: session.so and kv.so (sbench.sh builds both)")

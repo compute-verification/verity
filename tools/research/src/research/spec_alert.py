@@ -1,5 +1,5 @@
-"""The DM a spec change sends Daniel when it lands on main, by `research merge --push` or drive's landing: a change to what a
-guarantee says waits on nobody, and he is shown it.
+"""The DM a spec change sends the person who reads the spec (the Slack registry's `daniel` entry) when it lands on main, by
+`research merge --push` or drive's landing: a change to what a guarantee says waits on nobody, and he is shown it.
 
 The spec is what each package's `lean-audit.json` records: every guarantee's statement (its printed signature and type
 hash; for one stated as a definition, that statement unfolded once, `unfolded_hash`, so a restated definition shows its
@@ -10,8 +10,11 @@ or `open`, of it and the definitions it reads: one that gains a digest is shown 
 one listed, with its `why`, one no longer listed, and a new `why` are shown) and the open premises (`open`: one listed,
 one discharged, and a new issue or due date are shown; an assumption that becomes open is tallied), what
 the shape rule exempts (`shape.frozen`:
-an entry added there is shown with its reason), and the compiled code allowed on a verifier's path (`verifier.allow`: an
-entry added there is shown). Between the main the push replaced and the one it
+an entry added there is shown with its reason), the compiled code allowed on a verifier's path (`verifier.allow`: an
+entry added there is shown), and the trust (`deployed`, the guarantees that state the deployed system; `trust`, the
+premises they may rest on; `trust_gap`, those outside it each still rests on, which an update only shrinks: a gap grown,
+which only a hand edit does, is shown first, ahead of everything else, and a guarantee deployed or no longer, a premise
+trusted or no longer, and a gap shrunk are shown too). Between the main the push replaced and the one it
 pushed, the guarantees added, removed or restated, and the definitions whose hash changed under the same name, are found
 across every record that changed, not record by record: a guarantee or a definition that moved from one package's record
 to another's under its name is no change, nor is a guarantee renamed with the same type hash, one that only prints
@@ -102,7 +105,7 @@ def _premises(rec: dict) -> list[str] | None:
 
 
 def _ticket(r: dict) -> str:
-    return f"{r.get('issue')}, due {r.get('due')}"
+    return f"{r.get('issue') or 'no issue'}, due {r.get('due')}"
 
 
 def _scope(r: dict) -> str:
@@ -131,6 +134,112 @@ def _allowed(doc: dict) -> list[str]:
     """The record's `verifier.allow`: the compiled code no proof sees that its verifier's path may reach."""
     a = (doc.get("verifier") or {}).get("allow") or []
     return [x for x in a if isinstance(x, str)] if isinstance(a, list) else []
+
+
+def _trust(doc: dict) -> tuple[list[str], dict[str, str], dict[str, dict[str, str]], dict[str, list[str]]] | None:
+    """The record's trust: (`deployed`, the guarantees that state the deployed system; `trust.base`, {premise: the trust
+    assumption it states}; `trust.extra`, {deployed guarantee: {premise it also trusts: the ruling's reason}}; `trust_gap`,
+    {deployed guarantee: the premises outside its trust it rests on}), or None for a record written before it held them."""
+    if not any(k in doc for k in ("deployed", "trust", "trust_gap")):
+        return None
+    t = doc.get("trust") if isinstance(doc.get("trust"), dict) else {}
+    base = t.get("base") if isinstance(t.get("base"), dict) else {}
+    extra = t.get("extra") if isinstance(t.get("extra"), dict) else {}
+    gap = doc.get("trust_gap") if isinstance(doc.get("trust_gap"), dict) else {}
+    return ([x for x in doc.get("deployed") or [] if isinstance(x, str)], {p: str(w) for p, w in base.items()},
+            {g: {p: str(w) for p, w in ps.items()} for g, ps in extra.items() if isinstance(ps, dict)},
+            {g: sorted(x for x in ps if isinstance(x, str)) for g, ps in gap.items() if isinstance(ps, list)})
+
+
+def _renames(olds: dict[str, dict], news: dict[str, dict], guarantees: dict[str, str]) -> dict[str, str]:
+    """{old name: new name} of a rename: ``guarantees``' (those gone and come with one type hash), and each premise or
+    definition gone under one name and come under another with the one digest or hash only it has."""
+    def hashes(docs: dict[str, dict]) -> dict[str, str]:
+        out: dict[str, str] = {}
+        for d in docs.values():
+            out |= {n: h for n, (h, _) in _definitions(d).items() if h} | {n: h for n, h in _assumptions(d).items() if h}
+        return out
+
+    pa, pb = hashes(olds), hashes(news)
+    gone = {n: h for n, h in pa.items() if n not in pb}
+    came = {n: h for n, h in pb.items() if n not in pa}
+    one = {h for h in gone.values() if list(gone.values()).count(h) == 1 and list(came.values()).count(h) == 1}
+    by_hash = {h: n for n, h in came.items() if h in one}
+    return {n: by_hash[h] for n, h in gone.items() if h in one} | guarantees
+
+
+def _trusted(docs: dict[str, dict], ren: dict[str, str]) -> tuple[dict, dict, dict, dict] | None:
+    """Every record's trust (`_trust`) across ``docs``, each name through ``ren`` (an old name's new one), each entry with
+    its package: ({deployed guarantee: package}, {base premise: (package, what it states)}, {(guarantee, premise): (package,
+    reason)}, {guarantee: (package, gap premises)}); None when no record holds a trust."""
+    got = [(_package(p), t) for p, d in docs.items() if (t := _trust(d)) is not None]
+    if not got:
+        return None
+    dep, base, extra, gap = {}, {}, {}, {}
+    for pkg, (ds, bs, xs, gs) in got:
+        dep |= {ren.get(g, g): pkg for g in ds}
+        base |= {ren.get(p, p): (pkg, w) for p, w in bs.items()}
+        extra |= {(ren.get(g, g), ren.get(p, p)): (pkg, w) for g, ps in xs.items() for p, w in ps.items()}
+        gap |= {ren.get(g, g): (pkg, sorted(ren.get(p, p) for p in ps)) for g, ps in gs.items()}
+    return dep, base, extra, gap
+
+
+def _known(docs: dict[str, dict], ren: dict[str, str]) -> set[str]:
+    """Every name ``docs`` hold, through ``ren``: their guarantees, listed premises and the definitions they read."""
+    return {ren.get(n, n) for d in docs.values() for n in (*_guarantees(d), *_listed(d), *_definitions(d))}
+
+
+def _unpaired(added: list[str], dropped: list[str], fresh: set[str], gone: set[str]) -> tuple[list[str], list[str]]:
+    """``added`` and ``dropped`` less the renames among them: as many added names the old records never held (``fresh``)
+    as dropped ones the new records no longer hold (``gone``), a name changed under a rename whose text changed with it
+    (one whose hash or digest stayed is matched by `_renames` already)."""
+    k = min(len(new := [p for p in added if p in fresh]), len(old := [p for p in dropped if p in gone]))
+    return [p for p in added if p not in new[:k]], [p for p in dropped if p not in old[:k]]
+
+
+def _trust_changes(olds: dict[str, dict], news: dict[str, dict], ren: dict[str, str]) -> list[tuple[str, str, str]]:
+    """(package, kind, text) of what changed in the records' trust (`_trust`), a rename none (``ren``, else a premise
+    replaced by one no old record held, or listed in the trust under another name with the same text): `grown` (a
+    deployed guarantee rests outside its trust on a premise its `trust_gap` didn't list: an update only shrinks the gap,
+    so it was grown by hand), `deployed` and `undeployed` (a guarantee listed in `deployed`, or no longer), `trusted` and
+    `untrusted` (a premise listed in the trust base or a deployed guarantee's extra trust, or with what it states or its
+    reason changed; or no longer listed) and `shrunk` (a premise the gap no longer lists), in that order; `trust` (text "")
+    for a package whose record holds a trust for the first time."""
+    a, b = _trusted(olds, ren), _trusted(news, {})
+    if b is None:
+        return []
+    if a is None:
+        return [(pkg, "trust", "") for pkg in dict.fromkeys(_package(p) for p, d in news.items() if _trust(d) is not None)]
+    (da, ba, xa, ga), (db, bb, xb, gb) = a, b
+    known_old, known_new = _known(olds, ren), _known(news, {})
+    fresh, gone = known_new - known_old, known_old - known_new
+    more, less = {}, {}
+    for g in sorted(set(ga) | set(gb)):
+        was, now = (ga.get(g) or ("", []))[1], (gb.get(g) or ("", []))[1]
+        more[g], less[g] = _unpaired([p for p in now if p not in was], [p for p in was if p not in now], fresh, gone)
+    pkg_of = {g: (gb.get(g) or ga.get(g))[0] for g in set(ga) | set(gb)}
+    out = [(pkg_of[g], "grown", f"• trust gap grown, by hand: deployed guarantee `{g}` now also rests outside its trust on "
+                                f"{', '.join(f'`{p}`' for p in ps)}") for g, ps in more.items() if ps]
+    out += [(pkg, "deployed", f"• deployed guarantee `{g}` listed: it states the deployed system")
+            for g, pkg in sorted(db.items()) if g not in da]
+    out += [(pkg, "undeployed", f"• `{g}` no longer listed as deployed") for g, pkg in sorted(da.items()) if g not in db]
+    same_base = {(p, q) for p, (_, w) in ba.items() if p not in bb for q, (_, v) in bb.items() if q not in ba and v == w}
+    same_extra = {(k, j) for k, (_, w) in xa.items() if k not in xb for j, (_, v) in xb.items()
+                  if j not in xa and j[0] == k[0] and v == w}
+    for p, (pkg, w) in sorted(bb.items()):
+        if (p not in ba or ba[p][1] != w) and not any(q == p for _, q in same_base):
+            out.append((pkg, "trusted", f"• trust base `{p}`: {w}" + (f" (was: {ba[p][1]})" if p in ba else ", listed")))
+    for (g, p), (pkg, w) in sorted(xb.items()):
+        if ((g, p) not in xa or xa[g, p][1] != w) and not any(j == (g, p) for _, j in same_extra):
+            out.append((pkg, "trusted", f"• deployed guarantee `{g}` also trusts `{p}`: {w}"
+                        + (f" (was: {xa[g, p][1]})" if (g, p) in xa else "")))
+    out += [(pkg, "untrusted", f"• trust base `{p}` no longer listed (it stated: {w})")
+            for p, (pkg, w) in sorted(ba.items()) if p not in bb and not any(o == p for o, _ in same_base)]
+    out += [(pkg, "untrusted", f"• deployed guarantee `{g}` no longer trusts `{p}`")
+            for (g, p), (pkg, _) in sorted(xa.items()) if (g, p) not in xb and not any(k == (g, p) for k, _ in same_extra)]
+    out += [(pkg_of[g], "shrunk", f"• trust gap shrunk: `{g}` no longer rests outside its trust on "
+                                  f"{', '.join(f'`{p}`' for p in ps)}") for g, ps in less.items() if ps]
+    return out
 
 
 def _signature(rec: dict) -> str:
@@ -166,7 +275,10 @@ def _package(path: str) -> str:
 def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) -> list[tuple[str, str, str]]:
     """(package, kind, text) of every change from the records ``olds`` to ``news`` ({record path: record}), matched by name
     and type hash across all of them, so a guarantee or definition that moved from one record to another is no change.
-    The kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
+    A trust gap grown by hand (`_trust_changes`' `grown`) comes first, before anything else, and the rest of what changed
+    in the records' trust (`deployed`, `undeployed`, `trusted`, `untrusted`, `shrunk`, and `trust` for one held for the
+    first time) right after `changed` and `removed`, through any rename (`_renames`).
+    The other kinds are `changed`, `removed`, `premises` (the premises a guarantee's record says it rests on changed;
     `premised`, text "", for a record that lists them for the first time), `assumed` (a named assumption
     added, or another premise now one), `unassumed` (a named assumption no longer listed, saying so when statements still read
     it), `domain` (a domain hypothesis
@@ -191,6 +303,12 @@ def _across(olds: dict[str, dict], news: dict[str, dict], sources: bool = True) 
     out = [(b[n][0], "changed", _changed(n, a[n][1], b[n][1]))
            for n in sorted(set(a) & set(b)) if _restated(a[n][1], b[n][1], sources)]
     out += [(a[n][0], "removed", f"• removed guarantee `{n}`") for n, r in sorted(gone.items()) if r.get("type_hash") not in renamed]
+    hg, hc = [r.get("type_hash") for r in gone.values()], [r.get("type_hash") for r in came.values()]
+    moved_to = {n: m for n, r in gone.items() for m, s in came.items()
+                if r.get("type_hash") and r.get("type_hash") == s.get("type_hash") and hg.count(r["type_hash"]) == 1
+                and hc.count(r["type_hash"]) == 1}
+    trust = _trust_changes(olds, news, _renames(olds, news, moved_to))
+    out = [e for e in trust if e[1] == "grown"] + out + [e for e in trust if e[1] != "grown"]
     for n in sorted(set(a) & set(b)):
         was, now = _premises(a[n][1]), _premises(b[n][1])
         if now is None or was == now:
@@ -304,7 +422,12 @@ def _tally(kinds: list[str]) -> str:
                   if k in kinds)
     f = f"shape: {f}" if f else ""
     v = f"verifier: {kinds.count('compiled')} allowed" if "compiled" in kinds else ""
-    return "; ".join(([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else [])
+    t = ", ".join(f"{kinds.count(k)} {w}" for k, w in (("grown", "gap grown by hand"), ("deployed", "deployed"),
+                                                       ("undeployed", "no longer deployed"), ("trusted", "trusted"),
+                                                       ("untrusted", "no longer trusted"), ("shrunk", "gap shrunk"),
+                                                       ("trust", "recorded"))
+                  if k in kinds)
+    return "; ".join(([f"trust: {t}"] if t else []) + ([f"guarantees: {g}"] if g else []) + ([f"definitions: {d}"] if d else [])
                      + ([f"premises: {a}"] if a else []) + ([f] if f else []) + ([v] if v else []))
 
 
@@ -370,8 +493,8 @@ def message(repo: Path, old: str, new: str, url: str | None = None, prs: list[in
 
 def alert(repo: Path, old: str, new: str, *, remote: str = "origin", prs: list[int] | None = None, api=None,
           reg: dict | None = None, log=print) -> bool:
-    """DM Daniel what the push from ``old`` to ``new`` changed in the spec; True when it was sent or there was nothing to
-    send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
+    """DM the spec's reader (`human_entry(reg, "daniel")`) what the push from ``old`` to ``new`` changed in the spec; True when
+    it was sent or there was nothing to send. A failure is printed and posted to #agent-alerts, and returns False; nothing raises, since the push has happened
     and the caller still has its own steps after a landing to run."""
     from .slack import Slack, SlackError, human_entry, load_registry, registry_path
 

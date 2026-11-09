@@ -1,4 +1,4 @@
-"""The compile slice (`compile_slice_v4.CompileSlice_v4`: CompileSlice_v1 that also charges each certified arrival's
+"""The compile slice (`compile_slice_v6.CompileSlice_v6`: CompileSlice_v1 that also charges each certified arrival's
 length term) proved in zero knowledge: one window of a few steps as one unit, proved by Flock `prove --zk` behind the
 Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--plain``), through the one-stage audit path
 (`warden_zk._one_stage`: its stager, ZK server and received-pieces scan).
@@ -7,7 +7,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
       [--slice demo|corpus|w212] [--g G] [--points 1] [--kinds K,...] [--plain] [--dry]
     python benchmarks/network_traces/compile_slice_zk.py rescan --from PROVE_OUT --out DIR
 
-* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v4.demo`, 59,613 ANDs a
+* **The slice** (``--slice``): ``demo`` (the default), the demonstration class (`compile_slice_v6.demo`, 59,613 ANDs a
   unit, max_tokens 8, 16 and 255), whose candidates take real prefix hits; ``corpus``, corpus-smallkv's first seven
   steps (`verity/core/protocols/certifier/tests/fixtures/compile_slice_smallkv.json`, about 7.6M ANDs a unit, each
   arrival's max_tokens its request's), which `prove` first checks is the corpus's (`replay_vectors.vectors` on
@@ -62,7 +62,7 @@ Lean ZK server and held by Lean `verify --zk`, or on Flock's plain path (``--pla
   check alone refuses), and its ``cin`` and ``cout`` rows are the window's carry rows in the session's chain
   (`window_charge.check_chain` on the earlier windows' openings and the unit's two).
 * **The verifier** opens each unit's ``pub`` row to its own copy (the declared charge and the registered book,
-  `compile_slice_v4.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
+  `compile_slice_v6.pub`) and its verdict ``o0``, under the salts the prover sends for those two rows; never ``adv``,
   ``cert``, ``srv``, ``cin``, ``cout`` or ``wit``. A unit passes when its verdict is `compile_slice.ACCEPT` and its
   bindings hold. What the verifier received is scanned (`received`) for every piece of each unit's witness row, its
   ``srv`` rows and every row's salt (`scan_pieces`: each row cut whole, `leak_scan.public_pieces`, less the pieces the
@@ -104,7 +104,7 @@ from verity.core.protocols.certifier import served_rows as SR  # noqa: E402
 from verity.ml.commitments import advice as ADV  # noqa: E402
 from verity.ml.commitments.frame_v3 import BitRowLeaf  # noqa: E402
 from verity.ml.commitments.rowleaf import bit_row, row_leaf  # noqa: E402
-from verity.ml.protocols.certifier import compile_slice_v4 as V4  # noqa: E402
+from verity.ml.protocols.certifier import compile_slice_v6 as V6  # noqa: E402
 from verity.ml.protocols.certifier import window_charge as WC  # noqa: E402
 
 FIXTURES = REPO / "verity/core/protocols/certifier/tests/fixtures"
@@ -152,18 +152,18 @@ def load(name: str, G: int | None = None) -> SimpleNamespace:
     ``restart`` charges from. Its arrivals' max_tokens are the demo's, the corpus's requests' or the run's (`requests`).
     Its honest carry-in is set by `chain`."""
     if name == "demo":
-        st, sl = V4.demo()
+        st, sl = V6.demo()
         st = CS.with_block(st, G)
         S = SimpleNamespace(**st)
-        return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=list(V4.case(S, sl, BOOK).steps),
+        return SimpleNamespace(name=name, st=st, S=S, sl=sl, rows=list(V6.case(S, sl, BOOK).steps),
                                forged=WC.first_carry(BOOK), restart=ZERO)
     fx = json.loads((W212 if name == "w212" else FIXTURE).read_text())
     cached = {k: fx[k] for k in ("CN", "CTW", "CU") if k in fx}
-    st = V4.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
+    st = V6.statics(fx["R"], fx["W"], fx["A"], fx["engine"], fx["IW"], Q=fx["Q"], D=fx["D"], P=fx["P"], K=fx["K"],
                     G=G, **cached)
     S = SimpleNamespace(**st)
     arrivals = tuple(map(tuple, fx["arrivals"]))
-    sl = V4.Slice(arrivals, tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx.get("tokens", ()))),
+    sl = V6.Slice(arrivals, tuple(fx["decisions"]), fx["steps"], tuple(map(tuple, fx.get("tokens", ()))),
                   max_tokens(name, arrivals))
     if name == "w212":
         if fx["engine"] != engine_class():
@@ -345,9 +345,9 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
             flip[FLIP[x.name]] ^= 1
             kw["window"] = flip
         elif kind == "charge":
-            kw["charge"] = V4.case(x.S, x.sl, BOOK, carry=x.carry).length - 1
+            kw["charge"] = V6.case(x.S, x.sl, BOOK, carry=x.carry).length - 1
         elif kind == "tails":
-            kw["charge"] = V4.case(x.S, x.sl, BOOK, carry=x.carry).length - tails(x.sl)
+            kw["charge"] = V6.case(x.S, x.sl, BOOK, carry=x.carry).length - tails(x.sl)
         elif kind == "max-tokens":
             sl = lowered(x.sl)
         elif kind == "cleared":
@@ -374,19 +374,19 @@ def cases(x: SimpleNamespace, n: int, kinds: tuple[str, ...]) -> list[SimpleName
             kw["hits"] = {0: (0, 0, 0)}
         elif kind == "sixpass-own":
             kw["served"] = None
-        c = V4.case(x.S, sl, BOOK, **kw)
+        c = V6.case(x.S, sl, BOOK, **kw)
         out.append(SimpleNamespace(kind=kind, case=c, charge=kw.get("charge", c.length),
                                    registered=list(c.steps) if kind == "table" else x.rows,
                                    words={r: CS.words(c.rows[r]) for r in CS.row_names(x.S)}, chained=kind != "restart"))
     return out
 
 
-def tails(sl: V4.Slice) -> int:
+def tails(sl: V6.Slice) -> int:
     """The bits of the slice's length terms, bitlen(max_tokens) + 1 each (`window_charge.length_bits`)."""
     return sum(WC.length_bits(m) for m in sl.max_tokens)
 
 
-def lowered(sl: V4.Slice) -> V4.Slice:
+def lowered(sl: V6.Slice) -> V6.Slice:
     """`sl` with one arrival's max_tokens lowered to its output length, the arrival whose length term that shortens
     most (the first of those); a request that stopped there could have had it, so the unit charges less and passes
     every check. Refuses a slice whose arrivals all stop at their cap."""
@@ -399,8 +399,8 @@ def lowered(sl: V4.Slice) -> V4.Slice:
 
 def stager(M, x: SimpleNamespace, n: int, out: Path) -> SimpleNamespace:
     """The statement's program and partition (one template, n units) and its stager, the unit lowered by its builder."""
-    defn = V4.unit(**x.st)
-    bits = CS.row_bits(x.S, V4.CODE)
+    defn = V6.unit(**x.st)
+    bits = CS.row_bits(x.S, V6.CODE)
     rows = [(r, M.V2, bits[r], [r]) for r in CS.row_names(x.S)]
     program = M.P.mixed_population_program([(defn, n)])
     query = M.P.template_instances_query([defn])
@@ -484,7 +484,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
         want[f"{name}/{p_}"] = w
         roots.append({"port": f"{name}/{p_}", "root": fv["roots"][p_], "leaves": w["leaves"], "domain": fv["domain_ids"][p_]})
     leaf_layer = hashlib.sha512(M.canonical_json({name: a0.sha512_file(m["dir"] / f"pub-{n}.bin")})).hexdigest()
-    law = M.D.parse_law(f"stratified:{n}")
+    law = M.D.parse_design(f"stratified:{n}")
     win = {"kind": "stand-in", "of": f"the compile slice's {sg.slice} window (compile_slice_zk.py)",
            "members": {name: {"template": P.template_id(m["defn"]), "units": [m["base"], m["base"] + n]}},
            "link": "compile_slice: each unit's adv row is the advice registration's row, its cert row the certified "
@@ -541,7 +541,7 @@ def audit(M, a, sg, m: dict, units: list[SimpleNamespace], binds: dict, out: Pat
     for i, u in enumerate(units):
         word = m["oks"][i]
         opened = ((m["base"] + i) in held
-                  and a7.opens(port_["pub"], V4.pub(sg.S, u.charge, BOOK), m["salts"]["pub"][i], bcs[i]["pub"])
+                  and a7.opens(port_["pub"], V6.pub(sg.S, u.charge, BOOK), m["salts"]["pub"][i], bcs[i]["pub"])
                   and a7.opens(port_["o0"], [word], m["salts"]["o0"][i], bcs[i]["o0"]))
         adv_ok = advice_leaf_ok(binds["advice"], binds["binding"], n, i, bcs[i]["adv"], binds["n_bits"])
         srv_ok = all(SR.leaf_ok(record, binds["run_root"], k, bcs[i][r], served.registration.open(k).path)
@@ -696,7 +696,7 @@ def charged(x: SimpleNamespace, ch: SimpleNamespace, units: list[SimpleNamespace
 
 def prove(a) -> int:
     x = load(a.slice, a.g)
-    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S, V4.CODE), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
+    summary: dict = {"statics": x.st, "row_bits": CS.row_bits(x.S, V6.CODE), "slice": {"name": x.name, **dataclasses.asdict(x.sl)},
                      "kinds": a.kinds, "book": BOOK, "plain": a.plain}
     secret = os.urandom(32)
     if a.dry:

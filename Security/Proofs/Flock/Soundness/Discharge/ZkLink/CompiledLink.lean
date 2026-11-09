@@ -4,9 +4,7 @@ public import Proofs.Flock.Soundness.Discharge.ZkLink.Analysis
 public import Proofs.Flock.Soundness.Discharge.ZkLink.Link
 public import Proofs.Flock.Soundness.LinkCarry
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 
 /-!
 # `δ_link` for the compiled `--zk` session, under expected-time collision resistance
@@ -48,7 +46,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 
@@ -207,7 +205,7 @@ theorem expect_trialZC (c : vb.Pos) [Nonempty (ΩcZ A P planZ tab vb L c)] (k Rw
           (gameωZC A Hs planZ R τ w.1) (stratωZC A Hs planZ R τ w.1).2) /
         Fintype.card (ΩcZ A P planZ tab vb L c) := by
   unfold trialGZC trialStratZC
-  rw [expect_bind, expect_draw]
+  rw [expect_bind, Verity.Game.expect_draw]
   congr 1
   refine Finset.sum_congr rfl fun w _ => ?_
   rw [expect_bind]
@@ -653,7 +651,7 @@ theorem zk_linkSoundC_at
     (hj : JointZC A Hs planZ k a)
     (Xv : (R : Reg) → Cont L Reg (batchedSessionZC A Hs planZ) R → vb.Pos → vb.Val) :
     (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XlayerZC A P planZ tab vb (Xv R τ)) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (errBoundZC A Hs P planZ tab vb Xv k Rw ρ) := by
   intro R τ tgt
   unfold errBoundZC
@@ -739,7 +737,7 @@ theorem zk_linkSoundC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') :
     (analysisZC (L := L) A Hs P planZ tab decode (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (linkBoundZC A Hs P planZ tab vb k Rw M ρ t') := by
   intro R τ tgt
   unfold linkBoundZC

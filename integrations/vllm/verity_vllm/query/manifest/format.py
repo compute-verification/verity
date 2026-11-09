@@ -43,7 +43,8 @@ FAMILIES = ("input_token_ids", "instance_outputs", "sampled_token_ids", "weights
             "router_softmax",                   # opt-in (query.router_softmax): the ordered router's softmax per token row, `moe/L<k>/router_softmax`
             "vocab_range",                      # opt-in (query.vocab_range): a TP rank's range values per token row, `<embedding module>/vocab_range`
             "scale_products",                   # additive (query.scale_products): a shared-scale FP8 GEMM's products per row, `<linear module>/scale_products`
-            "call_boundaries")                  # Q_word: a Value two Calls of one module body exchange, `<module>/<fx node>[/<port>]`
+            "call_boundaries",                  # Q_word: a Value two Calls of one module body exchange, `<module>/<fx node>[/<port>]`
+            "run_values")                       # additive: only a Program whose `run` Input has `<op_path>/<member>` fields (`RUN_PARAM`)
 
 TP_PARTIAL_MEMBER = "part_rank{rank}"
 
@@ -511,8 +512,8 @@ STOCHASTIC_SELECT_PREFIXES = ("Gumbel",)
 #: parameter (static-form `{V,S}` Programs and greedy Programs have none: byte-for-byte unchanged).
 SPLITS_PARAM = "splits"
 
-#: [DSV4] a TP rank Program's WITNESS input (`vllm_meta.ScheduledWithPeers`): `schedule`, each Marlin align call's key per pair, read
-#: by `MoeAlignRanks_v1` only.  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
+#: [DSV4] a TP rank Program's WITNESS input `schedule`, each Marlin align call's key per pair, read by `MoeAlignRanks_v1` only; no
+#: builder emits it any more (every Program keys the align by the pair indices, the served deterministic align's order).  It is neither the prompt nor a committed word of its own: any key gives ranks the kernel can produce, so
 #: the Commit's replay binds a reader's slice to that Call's own committed rank (port 0; key := rank gives rank back exactly when the
 #: committed ranks rank each expert's pairs), and the manifest names no identity for it.
 SCHEDULE_PARAM = "schedule"
@@ -521,6 +522,17 @@ SCHEDULE_READERS = frozenset({"MoeAlignRanks_v1"})
 
 def has_splits_param(params) -> bool:
     return any(str(n) == SPLITS_PARAM for n, _t in (params or []))
+
+
+#: a Program's `run` Input (`registration.RunInputs`): values the served run decides and the Program checks in gates, one field each.
+#: A field named `<op_path>/<member>` is one request-owned value of the engine step whose forward reads it, committed then (identity
+#: `<op_path>/<member>`, element range [0, its leaves), family `run_values`; the row also names its leaves in `run`, the module its
+#: first reader is lowered from, `attention_module`, and that reader's `statics`): a DSA row's top-k order past INDEX_TOPK is
+#: `model.layers.<L>.self_attn.attn/topk_switches[t=<P>]`, read by `DsaWaksmanOrder_v1{N=P+1,TOPK}`, its Waksman settings, one byte
+#: (0 or 1) a leaf (`commit.committer.run_values`).  A field of any other name (a fold's sampling values) is registration's, never
+#: committed.  Emitted iff the Program HAS such a field: every other manifest is byte-for-byte unchanged.
+RUN_PARAM = "run"
+RUN_FAMILY = "run_values"
 
 
 def is_token_select(family: str) -> bool:
@@ -534,15 +546,21 @@ def is_stochastic_select(family: str) -> bool:
     return is_token_select(family) and family.startswith(STOCHASTIC_SELECT_PREFIXES)
 
 
-def segment_steps(rows: list[dict]) -> list[tuple[int, int]]:
-    """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`)."""
+def segment_steps(rows: list[dict], checks: dict | None = None) -> list[tuple[int, int]]:
+    """Engine steps as [lo, hi] inclusive index ranges at `TokenSelect` boundaries (one sampling event per step; `cb_a.compare._segment`).
+    The Program's checks after its last sampling event (`checks`: its instances header's, `at` their rows), which the runtime never
+    runs, close its last step."""
+    at = {int(a[0]) for a in (checks or {}).get("at") or ()}
     segs, lo = [], 0
     for r in rows:
         if is_token_select(spec_family(r["spec"])):
             segs.append((lo, r["i"]))
             lo = r["i"] + 1
     if lo < len(rows):
-        segs.append((lo, len(rows) - 1))                                          # trailing instances without a sampling event (padded wrapper)
+        if segs and all(int(r["i"]) in at for r in rows[lo:]):
+            segs[-1] = (segs[-1][0], len(rows) - 1)
+        else:
+            segs.append((lo, len(rows) - 1))                                      # trailing instances without a sampling event (padded wrapper)
     return segs
 
 

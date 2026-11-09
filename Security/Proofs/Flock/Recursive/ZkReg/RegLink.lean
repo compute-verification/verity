@@ -3,9 +3,7 @@ module
 public import Proofs.Flock.Soundness.Discharge.ZkLink.StrictZ
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Circuit
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The committed values against registered values, for the compiled `--zk` session
@@ -40,7 +38,7 @@ open scoped ENNReal
 
 variable {F K : Type} [Field F] [Fintype F] [DecidableEq F] [Field K] [Fintype K] [DecidableEq K] {mPts : ℕ}
 variable {D Sl : Type} [Inhabited D] [Inhabited Sl]
-variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
+variable (A : Arith F K) (Hs : Hashes F D Sl) {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n) {Reg : Type}
   (planZ : Finset (Fin n) → Reg → List (TabZK F mPts))
   (tab : (S : Finset (Fin n)) → (R : Reg) → Fin n → Fin (planZ S R).length)
 variable {decode : DecoderZK (C := C) planZ tab} {Dh : Type}
@@ -369,7 +367,7 @@ theorem zk_linkSoundRegC
     {a : (S : Finset (Fin n)) → (R : Reg) → Strategy (sessionZC A Hs (planZ S R)) → Fin (planZ S R).length → ℝ}
     (hj : JointZC A Hs planZ k a) {t' : ℝ} (ht : 0 ≤ t') (qW : ℝ) :
     (analysisRegZC (L := L) A Hs P planZ tab vb wo (fun R τ => XplurZC A Hs P planZ tab vb R τ k Rw) k
-        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).LinkSound
+        (fun S R j => (hr S R j).trans_lt hρ) hlow a hj).BindSound
       (fun R τ => linkBoundZC A Hs P planZ tab vb k Rw M ρ t' R τ +
         regBoundZC A Hs P planZ tab vb wo k Rw ρ qW R τ) := by
   intro R τ tgt

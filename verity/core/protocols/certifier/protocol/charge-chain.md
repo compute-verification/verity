@@ -210,13 +210,13 @@ them a window whose length terms charge 2^20 − 1 bits and one charging 2^20, w
 
 **The slice.** The compile slice's class runs inside the pool bound with the network certifier's ingress, so its windows send no
 hits and no order entries. `CompileSlice_v1` keeps `ChargeLink_v1{D}` over `replay-charge` as above, which counts no
-length terms. `CompileSlice_v4` (`compile_slice_v4`, the served windows' slice) charges them with
+length terms. `CompileSlice_v6` (`compile_slice_v6`, the served windows' slice) charges them with
 `ChargeLink_v2{D, 0, 0, K}`: a length slot for each of ``cert``'s K arrival slots, qen its ``a_valid``, mt its certified
-max_tokens ``a_mt`` and olen its certified output length, so every slot is the certified record's and none is witness.
-A lower ``a_mt`` that still fits the output length charges less and passes the circuit, so ``cert``'s b‖c alone holds
-it; `compile_slice_zk` checks that b‖c against a stand-in for the certified record (the honest ``cert`` row under one
-certifier salt), as it does the arrivals the replay loads. A class whose windows send hits, order entries or length
-terms does the following:
+max_tokens ``a_mt`` and olen its certified output length, so no slot is free witness. What holds ``cert`` to the
+certified record is a stand-in, the honest cert row under the certifier's salt, until max_tokens is read from the
+certified body; the circuit bounds max_tokens only from above, so a lower one the output still fits passes at a lower
+charge until then. `compile_slice_zk` checks ``cert``'s b‖c against that stand-in, as it does the arrivals the replay
+loads. A class whose windows send hits, order entries or length terms does the following:
 - It calls `window_charge.build_link(C, N, H, O, L, book, row_in, row_out, en, bits, hen, short, oen, p, r, qen, mt,
   olen)` over `window-charge`'s rows (`window_charge.reads()`), in place of `charge_chain.build_link` over
   `replay-charge`'s.
@@ -233,7 +233,7 @@ terms does the following:
   can't be charged, so that window's proof block fails.
 
 **Cost** (`size`, ANDs). `window_charge.circuit-check.json` pins Flock's lowering, which adds one row for each commit
-copy of the carry, at `{1, 1, 1, 1}` and `{2, 2, 0, 2}`.
+copy of the carry: 40,508 at `{2, 2, 0, 2}`, and 54,015 for the link at `{1, 1, 1, 1}`.
 
 | proof block | ANDs |
 |---|---|
