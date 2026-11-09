@@ -178,7 +178,7 @@ def test_every_fetching_package_has_a_pinned_bundle():
 #: a fresh pin of PKG's bundle: an audit of this tree bundles the dependencies its build left, then `--pin` pins that run's
 REPIN = ("research run --on auto --mem-gb 32 --project verity --source . --cwd clone -- bash -c 'python3 "
          "tools/verity/lean/lean_audit.py --out \"$OUT/audit\" --export \"$OUT/lean-deps\" --package PKG', then "
-         "`python3 tools/verity/lean/lean_audit.py --pin RUN`")
+         "`python3 tools/verity/lean/lean_audit.py --pin RUN` where the store's remote is configured")
 
 
 def unbundled(imports: dict[str, list[str]], listed: dict[str, dict[str, list[str]]], local: set[str]) -> list[str]:
