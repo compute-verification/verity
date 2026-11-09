@@ -921,13 +921,39 @@ def _said(theirs: dict | None) -> dict[str, dict]:
 
 def _named(theirs: dict | None) -> dict[tuple[str, str], frozenset[str]]:
     """The failing tests graph2's `verdict` names of each failed task, by (task, key): its result's own `failed_tests` may
-    name none (a `lean-suites` result's detail has none).  Test ids are relative to the task's suite, so they are compared
-    only within a task.  Not from a `ready_verdict` label, which a rerun leaves standing until the check ends again."""
+    name none (a `lean-suites` result's detail has none), and a task failed by its own fault has its fault's (`_fault_tests`).
+    Test ids are relative to the task's suite, so they are compared only within a task.  Not from a `ready_verdict` label,
+    which a rerun leaves standing until the check ends again."""
     if not isinstance(theirs, dict) or "labelled" in theirs:
         return {}
-    return {(i, k): frozenset(x for x in e["tests"] if isinstance(x, str))
-            for e in theirs.get("failed") or () if isinstance(e, dict) and isinstance(i := e.get("task"), str)
-            and isinstance(k := e.get("key"), str) and isinstance(e.get("tests"), list)}
+    out: dict[tuple[str, str], frozenset[str]] = {}
+    for e in theirs.get("failed") or ():
+        if isinstance(e, dict) and isinstance(i := e.get("task"), str) and isinstance(k := e.get("key"), str):
+            tests = frozenset(x for x in e.get("tests") or () if isinstance(x, str))
+            out[i, k] = tests or (_fault_tests(e["why"]) if isinstance(e.get("why"), str) and e["why"] else frozenset())
+    return out
+
+
+#: graph2's fault of a task that read files outside its declared inputs (its `task_fault`): how many, and the first paths
+UNDECLARED_RE = re.compile(r"read (\d+) file\(s\) outside its declared inputs: (.*)$")
+#: the start of graph2's fault of a task whose runner caught a race (its `task_fault`)
+RACE = "its runner caught a race"
+#: a run and the node it ran on in graph2's words ("run <id> on <node>"), and a run id alone
+RUN_ON_RE, RUN_ID_RE = re.compile(r"\brun \S+ on [^\s:;,]+"), re.compile(r"\br\d{8}-\d{6}-[0-9a-z]+\b")
+
+
+def _fault_tests(why: str) -> frozenset[str]:
+    """The tests a task failed by its own fault fails, from graph2's `why` of it, so the same fault at its base is the same
+    tests (`vqueue.Failed.base_tests`): each file it read outside its declared inputs (`undeclared:<path>`), else one test of
+    the fault (`fault:<it>`), from its runner's race on, else the whole `why` without the runs and nodes it names.  graph2's
+    verdict keeps a `why`'s last 300 characters, where its fault ends it."""
+    if m := UNDECLARED_RE.search(why):
+        # graph2 names only the first three files of its sorted reads: one the change adds past them goes unseen, and one it
+        # removes from them brings the next into view, as if added
+        return frozenset(f"undeclared:{p}" for p in m.group(2).split(", ") if p)
+    if (i := why.find(RACE)) >= 0:
+        return frozenset({f"fault:{why[i:]}"})
+    return frozenset({"fault:" + " ".join(RUN_ID_RE.sub("", RUN_ON_RE.sub("run", why)).split())})
 
 
 def _failure(task: str, key: str, inputs: frozenset[str], **kw) -> Failed:

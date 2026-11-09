@@ -536,8 +536,8 @@ def test_a_task_graph2_says_faulted_which_it_labels_no_result_for_fails_the_cand
     assert [f.task for f in loop.world.verdict(sha).verdict.failed] == ["pytest:a"]
     assert _said({**said, "labelled": "2026-01-01T00:00:00Z"}) == {}       # a label outlives the rerun of what it says
     eject, drop = loop.tick()
-    assert (eject["action"], eject["number"], env.withdrawn, drop["failed"]) == ("eject", 1, [(1, one)],
-                                                                                 [{"task": "pytest:a", "key": a}])
+    assert (eject["action"], eject["number"], env.withdrawn, drop["failed"]) == (
+        "eject", 1, [(1, one)], [{"task": "pytest:a", "key": a, "tests": ["undeclared:x.txt"]}])
 
 
 def test_only_graph2_s_labels_count_its_results_and_the_graph_it_listed(tmp_path):
@@ -618,6 +618,40 @@ def test_a_fail_whose_every_failure_is_inherited_hasn_t_ended_while_graph2_count
     Path(f"{script}.verdict").write_text(json.dumps({"state": FAIL, "pending": 0}))
     v = loop.world.verdict(sha, base).verdict
     assert (v.ended, vqueue._reading(v)) == (True, PASS)
+
+
+def test_a_fault_main_has_too_is_inherited_by_what_it_names_so_no_pr_touching_its_inputs_is_ejected(env):
+    """graph2 names no failing test of a task's own fault: its tests are the files it read outside its declared inputs
+    (`undeclared:<path>`), else its fault (`fault:...`, without the run and node it names), from graph2's verdicts on the
+    candidate and on its base, so a fault `main` has too is inherited where the change moved the task's key."""
+    env.put(1, {"t.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop)
+    (built,) = loop.tick()
+    sha, main = built["sha"], built["base"]
+    env.listed(main, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t0"})
+    env.listed(sha, {"pytest:t": ["t.txt"]}, keys={"pytest:t": "sha512:t1"})
+
+    def faulted(at: str, key: str, run: str, fault: str) -> None:
+        Path(f"{script}.verdict.ready:{at}").write_text(json.dumps({"state": FAIL, "pending": 0, "failed": [
+            {"task": "pytest:t", "key": key, "tests": [], "why": f"run {run} exit 1; error: {{}}; {fault}"}]}))
+
+    undeclared = "read 2 file(s) outside its declared inputs: x.txt, y.txt"
+    faulted(main, "sha512:t0", "r20261109-101432-ea83 on n1", undeclared)
+    faulted(sha, "sha512:t1", "r20261109-111111-ffff on node-12", undeclared)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert f.tests == f.base_tests == {"undeclared:x.txt", "undeclared:y.txt"} and vqueue._inherited(f)
+    faulted(sha, "sha512:t1", "r20261109-111111-ffff on n2", "read 3 file(s) outside its declared inputs: x.txt, y.txt, z.txt")
+    assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])            # one the change adds
+    race = 'its runner caught a race: {"error": "race (t.txt)"}'
+    faulted(main, "sha512:t0", "r20261109-101432-ea83 on n1", race)
+    faulted(sha, "sha512:t1", "r20261109-111111-ffff on node-12", race)
+    (f,) = loop.world.verdict(sha, main).verdict.failed
+    assert f.tests == f.base_tests == {f"fault:{race}"}
+    assert L._fault_tests("run r20261109-101432-ea83 on n1: storing its artifacts: gone") == {
+        "fault:run: storing its artifacts: gone"}
+    acts = loop.tick()
+    assert "eject" not in _acts(acts) and "advance" in _acts(acts) and env.main() == sha
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
