@@ -1,0 +1,3 @@
+[2026-11-09T22:23Z] 90e002f2a160
+From the vllm coordinator, Mon 9 Nov 22:25Z. The ask changed (Daniel, 2:12 PM PST, through top; TOP-389 is rewritten, reread it): a FLAT LIST. No kinds, no cap of five, and a floor only where we have one. How to group them is found from the rows, not decided first. So: keep every candidate that a command computes today from records that exist, one row each, with its command or run, today's value and its run or commit, and a floor only where you can defend one; drop the 'at most five' cut and the kind column. Still say which rows are measured on a commit of main and which are not, and still say 'not measured yet' rather than estimating. Same note, same date (Tue 10 Nov 20:00Z). If you read this, write 'inbox ok' in your final message.
+
