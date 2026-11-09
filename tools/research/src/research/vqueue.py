@@ -8,7 +8,7 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              mark withdrawn, its owner told which tasks failed), several are bisected; none meeting them makes every member a
              suspect.  The candidates above it are dropped, and the rest go into the next batch
              A failure with its base's key is inherited: it blames nobody, its base is red, and only fixes go on that base
-    infra    nothing is blamed and `main` stays: the check is enqueued again, and @infra is rung once it has been `rings` times
+    infra    nothing is blamed and `main` stays: the check is enqueued again, and infra is rung once it has been `rings` times
     pending  wait
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -90,7 +90,7 @@ class Snapshot:
     history: tuple[Outcome, ...] = ()   # oldest first
     batch: int = 6                 # the most members a candidate takes
     depth: int = 2                 # the most candidates checked at once, each on the one below
-    rings: int = 3                 # infra verdicts on one candidate before @infra is rung
+    rings: int = 3                 # infra verdicts on one candidate before infra is rung
 
 
 @dataclass(frozen=True)
@@ -134,7 +134,7 @@ class Retry:
 
 @dataclass(frozen=True)
 class Ring:
-    """Tell @infra that ``sha``'s check keeps ending in infra errors."""
+    """Tell infra that ``sha``'s check keeps ending in infra errors."""
     sha: str
     why: str
 
