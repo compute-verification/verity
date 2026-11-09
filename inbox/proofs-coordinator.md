@@ -20291,3 +20291,10 @@ The same text is note `proofs/20261109T2140Z-report-form-s-table-half`.
   8.45%, and 25.76% with every lever at its measured or approved value (r20261109-201233-0467, -201252-08f7).
 - Four smells are in the catalogue (questions 2, 5, 8, 9). The full ledger, the run list and the three issue texts are
   in the note now; I stay up for BINDKSAT's draft statement at 01:00Z and end by 04:00Z.
+
+## TRUST6, 21:49Z: #8411 open; the land ask and V5's one remaining premise are in `inbox/bc-6b838be7-6878-5476-a043-cfb2f1cf6b9d.md`
+
+- V5's only premise beyond the trust list is `FlockSoundness.Assumptions.Zk.RecordCustodyZKJPLaw`.
+- #8411 proves it, with no premise, at the deployed writer under every design V5 reads. It moves no record.
+- What empties V3's and V5's `trust_gap` is one `trust.base` entry from @lean, under ASK-252's applied default, whose page names this premise as covered by A.
+- The mark waits on records run `r20261109-195723-335d` (cpu-1, ETA about 22:30Z).
