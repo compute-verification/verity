@@ -14,7 +14,7 @@
 //! `ORDER` line is the template's position map, one column per root column.
 
 use crate::circuit::{port_cols, seg_shape, Composite, Instances, Port, STATEMENT, TMPL_STATEMENT};
-use crate::ir_block::IrUnitNet;
+use crate::ir_block::{IrUnitNet, RowRead};
 
 const WORD: usize = 128;
 
@@ -39,11 +39,7 @@ pub fn port_reads(net: &IrUnitNet) -> bool {
             mask[x] = true;
         }
     }
-    (n..net.const_pos).all(|r| row(&net.a, r).iter().chain(row(&net.b, r)).all(|&x| x >= n || mask[x]))
-}
-
-fn row(m: &[Vec<usize>], r: usize) -> &[usize] {
-    m.get(r).map_or(&[], Vec::as_slice)
+    (n..net.const_pos).all(|r| net.a.cols_or_empty(r).chain(net.b.cols_or_empty(r)).all(|x| x >= n || mask[x]))
 }
 
 /// `ProvedScope.outReads`: for each output port of `net`, the input ports whose bits it reads, ascending; and whether its
@@ -84,7 +80,7 @@ pub fn out_reads(net: &IrUnitNet, lookup: bool) -> (Vec<Vec<usize>>, bool) {
     let mut m = vec![0u64; words];
     for i in 0..n_rows {
         m.fill(0);
-        for &x in row(&net.a, n + i).iter().chain(row(&net.b, n + i)) {
+        for x in net.a.cols_or_empty(n + i).chain(net.b.cols_or_empty(n + i)) {
             col(&rows, i, x, &mut m);
         }
         rows[i * words..(i + 1) * words].copy_from_slice(&m);
@@ -328,7 +324,7 @@ pub fn check(c: &Composite, inst: &Instances, zk: bool, tables: usize) -> Result
 mod tests {
     use super::*;
     use crate::circuit::Wire;
-    use crate::ir_block::{FlatCache, Group};
+    use crate::ir_block::{Group, PassCache, Rows};
     use crate::lookup::LookupNet;
 
     fn net(groups: Vec<Group>, in_words: usize, rows: Vec<(Vec<usize>, Vec<usize>)>) -> IrUnitNet {
@@ -341,7 +337,8 @@ mod tests {
         a.push(vec![const_pos]);
         b.push(vec![const_pos]);
         IrUnitNet { name: "unit".into(), useful: const_pos + 1, const_pos, in_groups: groups, out_groups: vec![], in_words, out_cols: vec![],
-                    a, b, unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None, flat: FlatCache::default() }
+                    a: Rows::from_vecs(&a), b: Rows::from_vecs(&b), unit_log: 9, sha256: [0; 32], leaves: None, cut: None, order: None,
+                    pass: PassCache::default() }
     }
 
     #[test]

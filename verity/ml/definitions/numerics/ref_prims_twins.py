@@ -7,7 +7,7 @@ from __future__ import annotations
 import numpy as np
 
 from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry.ref_prims import f32_erf_rn_bits, f32_exp_rn_bits, f32_tanh_rn_bits
+from verity.ml.definitions.registry.ref_prims import f32_erf_rn_bits, f32_exp_rn_bits, f32_log_rn_bits, f32_tanh_rn_bits
 
 
 def _np_u32(x: np.ndarray) -> np.ndarray:
@@ -129,6 +129,17 @@ def np_softmax_ref(x_words, DT: str) -> np.ndarray:
     s = _np_seq_sum(e)
     r = (np.float32(1.0) / s).astype(np.float32)
     return np_narrow((e * r[..., None]).astype(np.float32), DT)
+
+
+def np_log_softmax_ref(x_words, DT: str) -> np.ndarray:
+    """`LogSoftmaxRef{N,DT}` over rows (NaN-free rows)."""
+    xf = np_widen(x_words, DT)
+    m = xf[..., 0]
+    for i in range(1, xf.shape[-1]):
+        m = np.where(xf[..., i] > m, xf[..., i], m)
+    d = (xf - m[..., None]).astype(np.float32)
+    s = _np_seq_sum(_np_scalar_fn(f32_exp_rn_bits, d))
+    return np_narrow((d - _np_scalar_fn(f32_log_rn_bits, s)[..., None]).astype(np.float32), DT)
 
 
 def np_rope_ref(x_words, cos_words, sin_words, DT: str) -> np.ndarray:

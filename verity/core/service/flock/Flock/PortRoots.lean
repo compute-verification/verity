@@ -15,10 +15,12 @@ one root under different domains (`collidesPub`).
   (`collidesBy`). Each root is SHA-512 of a frame whose first part is its domain, so such a pair is a SHA-512
   collision, which a file exhibits only by holding one. With no two published domains one (`dupId`) and no
   `collidesPub`, no two ports' published roots are one (`pubRoot_ne`).
-* `checkOf parsed tags publicFile`: on the circuit as `HmOut.parse` reads it, `rowsOk` and no port name twice
-  (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it the refusals of `loadedWhy`: `collides`
-  at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId` and `collidesPub`. `verify --zk` refuses every session
-  whose files fail it, after every other check (`Main.verifyCmd`).
+* `checkOf parsed tags publicFile`: on the circuit `parsed` it is handed, `rowsOk` and no port name twice
+  (`Registered.dupName`), then on the public file as `HmOut.loadPublic` reads it over that circuit the refusals of
+  `loadedWhy`: `collides` at its population (`pub.n`), `wordsOk`, `idsSized`, `dupId` and `collidesPub`. At hidden
+  outputs `verify --zk` hands it the circuit `ProvedScope.circuitOf` reads (`HmOut.parseCommit`), which for a templated
+  statement is the template's parse (`HmOut.parseTmpl`) and for a flat one the circuit `HmOut.parse` reads, as `check`
+  does. It refuses every session whose files fail it, after every other check (`Main.verifyCmd`).
 -/
 module
 
@@ -158,7 +160,8 @@ def checkWith (H : ByteArray → ByteArray) (parsed : V Circuit) (tags : Tags) (
         | none => .ok ()
 
 /-- **The files' rows, names, widths, domains and roots are the form the sampled audit's knowledge soundness covers**:
-the circuit `parsed` (`HmOut.parse`'s) parses, every port is a `rowsOk` row and no two ports share a name
+the circuit `parsed` (`ProvedScope.circuitOf`'s under `verify --zk`, `HmOut.parse`'s under `check`) parses, every port
+is a `rowsOk` row and no two ports share a name
 (`Registered.dupName`), the public file loads (`HmOut.loadPublic`), and `loadedWhy` refuses nothing: no two ports'
 roots over its population `collides`, every row is under `2^64` bits, and the published domains are 64 bytes, pairwise
 distinct, and fixed by their roots. -/
@@ -186,14 +189,24 @@ theorem loadedWhy_none {H : ByteArray → ByteArray} {c : Circuit} {pub : Public
         · simp [h1, h2, h3, h4] at h
   · simp [h1] at h
 
-/-- **`check` passing, at the files it read**: every port is a `rowsOk` row, no two ports share a name, and
-`loadedWhy` refuses nothing at the public file `HmOut.loadPublic` loads. -/
-theorem check_loaded {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit} {pub : Public}
-    (h : check tags cf pf tables = .ok ()) (hc : HmOut.parse tags cf tables = .ok c)
+/-- **`checkOf` passing at a circuit loads the public file** (`HmOut.loadPublic`). -/
+theorem checkOf_load {tags : Tags} {c : Circuit} {pf : ByteArray} (h : checkOf (.ok c) tags pf = .ok ()) :
+    ∃ pub, HmOut.loadPublic tags c pf = .ok pub := by
+  unfold checkOf checkWith at h
+  cases hl : HmOut.loadPublic tags c pf with
+  | ok pub => exact ⟨pub, rfl⟩
+  | error e =>
+    simp only [hl] at h
+    split at h
+    · cases h
+    · split at h <;> cases h
+
+/-- **`checkOf` passing at a circuit, at the public file it loaded**: every port is a `rowsOk` row, no two ports share a
+name, and `loadedWhy` refuses nothing at the public file `HmOut.loadPublic` loads. -/
+theorem checkOf_loaded {tags : Tags} {c : Circuit} {pf : ByteArray} {pub : Public} (h : checkOf (.ok c) tags pf = .ok ())
     (hpub : HmOut.loadPublic tags c pf = .ok pub) :
     rowsOk c = true ∧ Registered.dupName c = none ∧ loadedWhy Sha512.hash c pub = none := by
-  unfold check checkOf checkWith at h
-  rw [hc] at h
+  unfold checkOf checkWith at h
   cases hr : rowsOk c with
   | false => simp [hr] at h
   | true =>
@@ -203,6 +216,24 @@ theorem check_loaded {tags : Tags} {cf pf : ByteArray} {tables : List (String ×
       cases hw : loadedWhy Sha512.hash c pub with
       | none => exact ⟨rfl, rfl, rfl⟩
       | some _ => simp [hr, hd, hpub, hw] at h
+
+/-- **What `checkOf` passing at a circuit says of the files**: at the public file `HmOut.loadPublic` loads, every port is
+a `rowsOk` row, no two ports share a name, and no two ports' roots over the population `collides`. -/
+theorem checkOf_ok {tags : Tags} {c : Circuit} {pf : ByteArray} {pub : Public} (h : checkOf (.ok c) tags pf = .ok ())
+    (hpub : HmOut.loadPublic tags c pf = .ok pub) :
+    rowsOk c = true ∧ Registered.dupName c = none ∧ collides c pub pub.n = false :=
+  have hl := checkOf_loaded h hpub
+  ⟨hl.1, hl.2.1, (loadedWhy_none hl.2.2).1⟩
+
+/-- **`check` passing, at the files it read**: every port is a `rowsOk` row, no two ports share a name, and
+`loadedWhy` refuses nothing at the public file `HmOut.loadPublic` loads. -/
+theorem check_loaded {tags : Tags} {cf pf : ByteArray} {tables : List (String × ByteArray)} {c : Circuit} {pub : Public}
+    (h : check tags cf pf tables = .ok ()) (hc : HmOut.parse tags cf tables = .ok c)
+    (hpub : HmOut.loadPublic tags c pf = .ok pub) :
+    rowsOk c = true ∧ Registered.dupName c = none ∧ loadedWhy Sha512.hash c pub = none := by
+  unfold check at h
+  rw [hc] at h
+  exact checkOf_loaded h hpub
 
 /-- **What `check` passing says of the files**: at the circuit `HmOut.parse` reads and the public file
 `HmOut.loadPublic` loads, every port is a `rowsOk` row, no two ports share a name, and no two ports' roots over the

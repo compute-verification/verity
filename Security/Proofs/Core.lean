@@ -10,6 +10,8 @@ public import Proofs.Core.Game.Basic
 public import Proofs.Core.Game.Interleave
 public import Proofs.Core.Game.Union
 public import Proofs.Core.Game.Prob
+public import Proofs.Core.Prob
+public import Proofs.Core.Coins
 public import Proofs.Core.Game.Poly
 public import Proofs.Core.Game.Expect
 public import Proofs.Core.Game.Runs
@@ -24,6 +26,7 @@ public import Proofs.Core.Game.Tape
 public import Proofs.Core.Game.InterleaveBridge
 public import Proofs.Core.Challenger
 public import Proofs.Core.ValueSalts
+public import Proofs.Core.MemCheck
 public import Proofs.Core.UnionBound
 public import Proofs.Core.Scalar.Vectors
 public import Proofs.Core.Prims.Vectors

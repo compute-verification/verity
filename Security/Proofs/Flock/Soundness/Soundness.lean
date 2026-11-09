@@ -2,13 +2,12 @@ module
 
 public import Definitions.Flock.Accounting.Fast100
 public import Mathlib.CategoryTheory.Category.Basic
-public import Proofs.Flock.Soundness.LinkSound
+public import Proofs.Flock.Soundness.BindSound
 public import Proofs.Flock.Soundness.RepSound
 import Proofs.Flock.Soundness.Accounting.Fast100
 import Proofs.Flock.Soundness.Accounting.Numbers
 import Proofs.Flock.Soundness.Defs
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Interleave
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.ListSize
 import VCVio.Prelude.Core
 

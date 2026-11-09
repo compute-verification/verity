@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import bisect
 import json
+import re
+from dataclasses import replace
 
 import numpy as np
 import pytest
@@ -372,3 +374,48 @@ def sent_at_own_slices(b: TB.RequestBinding) -> bool:
                 or any([s.own[p][0][0] for s in ss] != sorted({s.own[p][0][0] for s in ss}) for p in range(b.world))):
             return False
     return True
+
+
+def _closing(sites: TW.Sites) -> tuple[tuple[I.Wire, ...], str, str]:
+    """``sites``' wires and one more closing a cycle: the first site whose rank 0 producer reads a row as wide as its combine's
+    output reads its ``x`` from that output, which sums the producer's own partial. -> the wires, the producer's template and
+    the combine's."""
+    fns = _fns(sites)
+    for (i, j, stage, r), rs in sites.units.items():
+        for (ptid, pu, _n) in (rs if stage == TW.PRODUCER and r == 0 else ()):
+            for ctid, cu, _m in sites.units.get((i, j, TW.COMBINE, TW.ALL), ()):
+                if dict(I.layout(fns[ptid]).rows).get("x") == dict(I.layout(fns[ctid]).outs)["o0"]:
+                    forged = I.Wire(ptid, "x", ctid, "o0", at=pu, radix=(1,), base=cu, step=(0,))
+                    return (*sites.circuit.wires, forged), ptid, ctid
+    raise AssertionError("no producer reads a row as wide as its combine's output")
+
+
+@pytest.mark.parametrize("world", [W, 8])
+def test_a_wire_closing_a_cycle_is_refused_and_the_tp_windows_wires_have_none(toy, world):
+    """Units that read one another through wires pass every unit's check on a fixed point the prover chose (a combine
+    summing a partial its producer computed from that combine's output), so `interface.check_wires` refuses wires whose
+    dataflow between units has a cycle, naming a wire on it (`Spot.Wires.check_acyclic`). The TP window's wires,
+    at TP2 (the toy) and TP8 (a Gemm partial a row, `rank_body`), have none and need no order but the window's own. One
+    wire more, rank 0's producer reading its ``x`` from its combine's output, is refused: under the window's order as out
+    of it, with no order as a cycle of the two templates, under the honest wires' order as the first wire out of it, the
+    forged one, and no order of single units holds it."""
+    sites = TW.sites_circuit(toy, "tp") if world == W else \
+        TW.sites_circuit([TB.derive([rank_body(world, r) for r in range(world)])], f"w{world}")
+    c = sites.circuit
+    lays = {descriptor_id(fn): (I.layout(fn), n) for fn, n in c.templates}
+    assert c.order == sites.order and len({r for _i, _j, _s, r in sites.units if r != TW.ALL}) == world
+    replace(c, order=None)
+    wires, ptid, ctid = _closing(sites)
+    with pytest.raises(ValueError, match=f"order: wire {len(wires) - 1} "):
+        replace(c, wires=wires)
+    with pytest.raises(ValueError, match=r"cycle: wire \d+ .* is on a cycle of templates") as e:
+        replace(c, wires=wires, order=None)
+    named = wires[int(re.match(r"cycle: wire (\d+)", str(e.value))[1])]
+    assert {named.reader, named.writer, ptid, ctid} <= set(str(e.value).split("each reading the next: ")[1].split(";")[0]
+                                                         .split(" <- "))
+    honest = I.ordered(c.units, c.wires, {})
+    I.check_wires(lays, c.wires, c.cuts, honest)
+    with pytest.raises(ValueError, match=f"order: wire {len(wires) - 1} "):
+        I.check_wires(lays, wires, c.cuts, honest)
+    with pytest.raises(ValueError, match="cycle: no order of the ranges"):
+        I.ordered(c.units, wires, {t: range(n) for t, n in c.units.items()})

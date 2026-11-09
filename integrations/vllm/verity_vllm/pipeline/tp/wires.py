@@ -21,7 +21,8 @@ units a sample draws), never a free input: `interface.input_count` counts every 
 
 Each template's units are allocated in the public order: request; then the site's place in its request Program's call
 order, its step then its layer; then stage (`PRODUCER`, `GATHER`, `COMBINE`, `OUTPUT`, `NORM`, `CONSUMER`); then rank (none
-for the stages every rank reads, `ALL`); then position. `Sites.order` lists those ranges in it.
+for the stages every rank reads, `ALL`); then position. `Sites.order` lists those ranges in it, and is the circuit's
+`Circuit.order`, since a template's units sit at several steps (the Gemm coordinates of one layer and the next).
 
 **Wires**, every one running forward in that order:
 * each gather's K one-word rows, from its rank's producer units in position order;
@@ -347,6 +348,6 @@ def sites_circuit(bindings: Sequence[TB.RequestBinding | None], name: str, ranks
                         target = ("spread", [unit], port, win.words(unit[0], port))
                     win.read(what, target, off, lo, hi, segs[j])
     templates = tuple((fn, win.count[tid]) for tid, fn in win.fns.items())
-    circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts)
+    circuit = I.Circuit(name, templates, wires=tuple(I.coalesce(win.wires)), cuts=win.cuts, order=tuple(win.order))
     return Sites(circuit, {k: tuple(v) for k, v in win.units.items()}, dict(win.consumers), tuple(win.order),
                  tuple(win.unwired))
