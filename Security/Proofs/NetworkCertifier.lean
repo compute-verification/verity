@@ -92,7 +92,7 @@ network certifier's; `Period` counts with it. `Checked` proves the leak bounds w
 `Carried` proves the leak bounds over a carried pool (`SampledLeakCarried`, `PooledLeakCarried`, `PooledLeakReset`): one
 run's relation at the rows its extracted trace holds, and the period's bound, where an opened row costs no advice bits,
 since the chain fixes it unless two rows have one root, and the restarts serving picks cost `log₂` of the patterns it may
-pick. `WitnessesCarried` gives their nontrivial lemmas.
+pick where every audit accepts. `WitnessesCarried` gives their nontrivial lemmas.
 -/
 
 @[expose] public section
