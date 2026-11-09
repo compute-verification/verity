@@ -36,10 +36,12 @@ def CALL_RANGE : Nat := 2 ^ 32
 def hex (b : ByteArray) : String :=
   String.ofList (b.toList.flatMap fun x => [Nat.digitChar (x.toNat / 16), Nat.digitChar (x.toNat % 16)])
 
-/-- `verify_run.tie`'s answer: the window record's digest (hex) and the number of tables it ties (`Tie.tieOf`). -/
+/-- `verify_run.tie`'s answer: the window record's digest (hex), the number of tables it ties (`Tie.tieOf`) and, for a
+version-1 W, `Tie.WEIGHTS_UNTIED`. -/
 structure Tied where
   record : String
   tables : Nat
+  weights : Option String := none
   deriving Repr
 
 /-- A refusal: Python's (code, why) where it has one (`passes_distinct`'s and `AFTER_COIN`), the reason it rejects with,

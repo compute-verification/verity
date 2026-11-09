@@ -82,7 +82,9 @@ round, less the rounds ``DIR/retention.json`` drops, with the verifier's coin re
 the device numbers calls across the epoch, and a run whose passes share an index is refused before any replay), then
 reads every pass, holds the window record ``--tie W`` (``retain --window-record W`` writes it) to them where one is named
 (`verify_run.tie`: each call's ``pearl-a/<s>/<c>`` and ``pearl-y/<s>/<c>`` entry its root and its domain recomputed from
-the salt and the call's index), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
+the salt and the call's index, and each weight's ``pearl-b/<w>`` its epoch's weight root and `audit.weight_binding`'s
+domain; a W that states no version, written before W registered the weights, ties the calls alone, its weights named
+untied, `verify_run.WEIGHTS_UNTIED`), takes the verifier's coin (with ``PEARLC_CHALLENGER_GATE`` and ``PEARLC_CHALLENGER_PEER``
 set, a draw session's on the auditor host opened on the run's commitment, `bench_arm.LiveDraw`, reserved under
 ``PEARLC_CHALLENGER_LANE`` once that lane has no period open; else the node's, `verify_run.node_draw`; the format is
 `verify_run`'s "The coin record"), and replays ``--draws`` work-weighted tiles over all of them and
@@ -656,7 +658,8 @@ def lean(args: argparse.Namespace) -> int:
     if got.get("drawn") not in (None, doc["draws"]):
         differ.append("drawn")
     tie = answer["tie"]
-    if (tie is not None and not isinstance(tie, dict)) or (tie or {}).get("record") != (doc.get("tie") or {}).get("record"):
+    if (tie is not None and not isinstance(tie, dict)) or any((tie or {}).get(k) != (doc.get("tie") or {}).get(k)
+                                                              for k in ("record", "weights")):
         differ.append("tie")
     rec["differ"] = differ
     if differ:

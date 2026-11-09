@@ -1,7 +1,9 @@
 """The interface `test_pearlplus_lean`'s cases drive, read from the Lean's source without building it: `pouw-pearlplus`'s
 options (`PouwPearlPlus/Main.lean`'s `parse`) are the ones the cases' argv passes, each taking a value or not as it does
 there; its `over_cap` rules and their default are `verify_run`'s; and the window record's value names it ties a run to
-(`PouwPearlPlus/Tie.lean`) are `verify_run`'s."""
+(`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no weight, a version-1 W that registers one and
+a W of another version, W's version, and the name it gives a version-1 W's untied weights, are `verify_run`'s and
+`pearl_c.window`'s."""
 
 from __future__ import annotations
 
@@ -56,3 +58,11 @@ def test_the_tie_names_are_verify_runs():
     prefixes = re.search(r"def TIE_PREFIXES : List String := \[(.*)\]", tie).group(1)
     assert tuple(re.findall(r'"([^"]+)"', prefixes)) == VR.TIE_PREFIXES
     assert sorted(set(re.findall(r's!"(pearl-[ay]/\{s\}/\{c\})"', tie))) == [VR.TIE_A, VR.TIE_Y]
+    assert set(re.findall(r's!"(pearl-b/\{w\})"', tie)) == {VR.TIE_B}
+    def lit(name: str) -> str:
+        return re.search(rf'def {name} : String :=\s*"([^"]*)"', tie).group(1)
+    assert (lit("UNTIED_WEIGHTS"), lit("WEIGHTS_UNTIED"), lit("V1_WEIGHTS")) == (VR.UNTIED_WEIGHTS, VR.WEIGHTS_UNTIED,
+                                                                                 VR.V1_WEIGHTS)
+    assert int(re.search(r"def W_VERSION : Nat := (\d+)", tie).group(1)) == VR.PWR.VERSION
+    unknown = re.search(r'def UNKNOWN_VERSION : String :=\s*s!"([^"]*)" \+\+\s*"([^"]*)"', tie).groups()
+    assert "".join(unknown).replace("{W_VERSION}", str(VR.PWR.VERSION)) == VR.PWR.UNKNOWN_VERSION

@@ -113,7 +113,8 @@ def _rows(x, y):
 class Run(PP.EpochCalls, PassEnds):
     """Pearl-C's device run with no device: the real pass numbering (`passes.call_index`, `passes.pass_dir`) and ends
     (`PassEnds.end_pass`, `finish`); a call's y the BF16 product and its A rows and y committed as test_pearltie's toy
-    commits them, in a retained pass's manifest."""
+    commits them, in a retained pass's manifest beside each weight's n, k and root (as `host.write_manifest` writes
+    them)."""
 
     lag_ends = False
 
@@ -121,6 +122,7 @@ class Run(PP.EpochCalls, PassEnds):
         workload = Workload(tuple(Matmul(w, Shape(16, t.shape[1], t.shape[0]), w) for w, t in weights.items()))
         self.epoch = PPD.epoch_of(workload, roots, coins, opening, pass_index)
         self.scheme, self.entry, self.salt, self.salt_key, self.coins = s, entry, self.epoch.salt, salt_key, coins
+        self.weights = {str(w): {"n": t.shape[0], "k": t.shape[1], "root": roots[w].hex()} for w, t in weights.items()}
         self.commits = {"scheme": s.name, "salt": self.salt.hex(), "weights_root": self.epoch.weights_root.hex(),
                         "coins": coins.to_json(), "salt_opening": opening.to_json()}
         self.details, self.retain_dir, self.retained, self.cur, self.finished = {"passes": []}, None, 0, None, False
@@ -154,7 +156,7 @@ class Run(PP.EpochCalls, PassEnds):
             cur.retain.mkdir(mode=0o700)
             (path := cur.retain / "manifest.json").write_text(json.dumps(
                 {"entry": self.entry, "scheme": self.scheme.name, "salt": self.salt.hex(),
-                 "hm96_salt_key": self.salt_key.hex(), "matmuls": cur.records}))
+                 "hm96_salt_key": self.salt_key.hex(), "weights": self.weights, "matmuls": cur.records}))
             out["manifest"] = str(path)
         self.details["passes"].append(out)
         return out
@@ -198,7 +200,8 @@ def _serve(s, prompts):
 def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_registers_what_it_served(tmp_path):
     """Two requests of the toy's class, one a window: each window's epoch has its own salt and hm96 key, its passes are
     its steps, each with every linear's call at the toy's index, m₁₆ and real rows, and its W's entries are the roots of the
-    x each linear was handed and the y it served; its line's ``pouw_pearl`` is its outcome, and every hook is off after."""
+    x each linear was handed and the y it served, then each linear's weight's B root, once; its line's ``pouw_pearl`` is
+    its outcome, and every hook is off after."""
     original = vars(Forward)["execute_model"]
     runner = Forward(Model())
     with _serving(tmp_path, runner) as srv:
@@ -231,6 +234,8 @@ def test_each_window_is_one_epoch_a_pass_a_step_numbered_as_the_toys_and_its_w_r
                 assert ea["root"] == commit_rows(activation_binding(RUNS[k].salt, i), i, [r.tobytes() for r in a], HM96,
                                                  key, i).commitment.root.hex()
                 assert ey["root"] == SY.commit_y(y16.tobytes(), u["n"], RUNS[k].salt, i, key)[0].hex()
+        assert [(e["value"], e["root"], (e["leaves"], e["words"])) for e in entries] == [
+            (PEARL.b(c), (bytes([c + 1]) * 32 + key).hex(), SHAPES[c]) for c in range(CALLS)]
         salts.append((RUNS[k].salt, key))
         roots = {w: bytes([w + 1]) * 32 + key for w in range(CALLS)}
         assert RUNS[k].epoch.weights_root == weights_root(roots)

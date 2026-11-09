@@ -27,6 +27,7 @@ from verity.core.protocols.pouw.schemes import pearl_c_u as PCU
 from verity.core.protocols.sampled_proofs.one_stage import registration as REG
 from verity_vllm.protocols.pouw.pearl_c import host as PH
 from verity_vllm.protocols.pouw.pearl_c import served_y as SY
+from verity_vllm.protocols.pouw.pearl_c import window as PWR
 
 torch = pytest.importorskip("torch")
 
@@ -1630,11 +1631,13 @@ def test_the_run_verdict_credits_no_given_up_row_and_refuses_a_give_up_past_v_ex
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, r["line"]
 
 
-def window_record(*paths: Path) -> dict:
-    """Pearl+'s window record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record whose registered
-    values are each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows of N, y's domain), beside a
-    value of another kind the verdict doesn't read."""
-    reg = []
+def window_record(*paths: Path, version: int = 2) -> dict:
+    """Pearl+'s window record W over passes `paths`, pass s its round s, as the tie writes it: a v2 record at W's
+    ``version`` whose registered values are each call's A rows (m16 rows of K FP32 words, A's domain) and y (its real rows
+    of N, y's domain), then at version 2 each weight's B rows once (its n rows of K FP32 words at PoUW's root, its
+    weights-tree domain), beside a value of another kind the verdict doesn't read. At version 1 its header states no
+    version and it registers no weight, as a W written before W registered them (the run of record's) does."""
+    reg, weights = [], {}
     for s, path in enumerate(paths):
         man = json.loads(path.read_text())
         salt = bytes.fromhex(man["salt"])
@@ -1644,22 +1647,37 @@ def window_record(*paths: Path) -> dict:
                      "domain": a.domain_id.hex()},
                     {"value": f"pearl-y/{s}/{c}", "root": u["y"]["root"], "leaves": u["real_rows"], "words": u["n"],
                      "word_bits": 32, "domain": SY.y_domain(salt, u["index"], u["real_rows"]).domain_id.hex()}]
-    return {"format": REG.FORMAT_V2, "registered": [*reg, {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1,
-                                                           "domain": "00"}]}
+            weights.setdefault(u["weight"], {
+                "value": f"pearl-b/{u['weight']}", "root": man["weights"][str(u["weight"])]["root"], "leaves": u["n"],
+                "words": u["k"], "word_bits": 32,
+                "domain": rows_domain(weight_binding(u["weight"]), -2, u["n"], HM96).domain_id.hex()})
+    return {"format": REG.FORMAT_V2, "window": {"kind": "served", **({"version": 2} if version == 2 else {})},
+            "registered": [*reg, *(weights[w] for w in sorted(weights) if version == 2),
+                           {"value": "input-ids/0", "root": "00", "leaves": 1, "words": 1, "domain": "00"}]}
 
 
-def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_domain(tmp_path):
+def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_and_each_weights_b_root_and_domain(tmp_path):
     """``served_passes.py verify --tie W`` accepts a run whose window record registers each call's A rows and y at the roots
-    the verdict credits, under the domains it recomputes from the salt and the call's index, and names W's digest in its
-    answer.  A W whose root, domain (another salt's or call's), rows, words or word bits differ for any call, which misses
-    a call or names one the run doesn't hold, or which is not a v2 record, rejects the run before the coin."""
+    the verdict credits, under the domains it recomputes from the salt and the call's index, and each weight's B rows at
+    the root the epoch commits it under (PoUW's weights tree), and names W's digest in its answer.  A W whose root, domain
+    (another salt's, call's or weight's), rows, words or word bits differ for any call or weight, which misses one, names
+    one twice or one the run doesn't hold, or which is not a v2 record, rejects the run before the coin.  So does a
+    version-2 W that registers every call right and no weight: it reads as untied, by `UNTIED_WEIGHTS`, through
+    ``served_passes.py verify`` too; and a W stating another version, or a version-1 one registering a weight.  A W that
+    states no version (version 1, the run of record's: written before W registered the weights) and registers every call
+    right is held to the calls alone and accepts, its tie on the calls' tables naming its weights untied
+    (`WEIGHTS_UNTIED`), in the answer and the verdict's line."""
     path = proved_pass(tmp_path, PROMOTED[0])[0]
     coins, w, man = published(path), window_record(path), json.loads(path.read_text())
     (wfile := tmp_path / "w.json").write_text(json.dumps(w))
     rc, doc, answer = served_verify(path.parent, tmp_path / "verify.json", "--manifest", str(path), "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 4}, doc["line"]
-    assert f"tied to W {REG.digest(w)[:16]} on its 4 tables" in doc["line"] and doc["tie_record"] == str(wfile)
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 6}, doc["line"]
+    assert f"tied to W {REG.digest(w)[:16]} on its 6 tables" in doc["line"] and doc["tie_record"] == str(wfile)
     salt, (u0, u1) = bytes.fromhex(man["salt"]), man["matmuls"]
+    b0, b1 = (next(e for e in w["registered"] if e["value"] == f"pearl-b/{x}") for x in (0, 1))
+    n1 = b1["leaves"]
+    legacy = {**w, "registered": [e for e in w["registered"] if not e["value"].startswith("pearl-b/")]}
+    old = window_record(path, version=1)
 
     def at(v: str, **kw) -> dict:
         return {**w, "registered": [{k: x for k, x in {**e, **kw}.items() if x is not None} if e["value"] == v else e
@@ -1676,10 +1694,33 @@ def test_the_run_verdict_holds_its_window_record_to_each_calls_a_and_y_root_and_
              ({**w, "registered": [*w["registered"], {**w["registered"][0], "value": "pearl-a/1/0"}]},
               "W registers pearl-a/1/0, no call of the run's"),
              ({**w, "registered": [*w["registered"], w["registered"][0]]}, "W registers pearl-a/0/0 twice"),
+             (at("pearl-b/0", root=man["weights"]["1"]["root"]), "W's pearl-b/0: its root not the weight's"),
+             (at("pearl-b/1", domain=rows_domain(weight_binding(0), -2, n1, HM96).domain_id.hex()),
+              "W's pearl-b/1: its domain"),
+             (at("pearl-b/0", leaves=n1), "W's pearl-b/0: its leaves"),
+             ({**w, "registered": [e for e in w["registered"] if e["value"] != "pearl-b/1"]}, "W registers no pearl-b/1"),
+             ({**w, "registered": [*w["registered"], b0]}, "W registers pearl-b/0 twice"),
+             ({**w, "registered": [*w["registered"], {**b0, "value": "pearl-b/2"}]},
+              "W registers pearl-b/2, no weight of the run's"),
+             (legacy, f"{VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)"),
+             ({**old, "registered": [*old["registered"], b0]},
+              f"{VR.V1_WEIGHTS} pearl-b/0: a W that registers the weights states version 2"),
+             ({**w, "window": {"kind": "served", "version": 1}}, PWR.UNKNOWN_VERSION),
+             ({**w, "window": {"kind": "served", "version": 3}}, PWR.UNKNOWN_VERSION),
              ({**w, "format": REG.FORMAT}, f"W is no {REG.FORMAT_V2} record")]
     for bad, why in cases:
         r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=bad, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+    (lfile := tmp_path / "legacy.json").write_text(json.dumps(legacy))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "legacy-verify.json", "--manifest", str(path), "--tie", str(lfile))
+    assert rc != 0 and answer["verdict"] == "reject" and VR.UNTIED_WEIGHTS in answer["reason"], doc["line"]
+    untied = {"record": REG.digest(old), "tables": 4, "weights": VR.WEIGHTS_UNTIED}
+    r = VR.verify_passes([path], 3, 1, "test", coins, b"verifier" * 4, window=old, test_instance=True)
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"] == untied, r["line"]
+    (ofile := tmp_path / "v1.json").write_text(json.dumps(old))
+    rc, doc, answer = served_verify(path.parent, tmp_path / "v1-verify.json", "--manifest", str(path), "--tie", str(ofile))
+    assert rc == 0 and answer["public"]["tie"] == untied, doc["line"]
+    assert f"on its 4 tables, {VR.WEIGHTS_UNTIED}" in doc["line"]
 
 
 def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_credits_them(tmp_path):
@@ -1702,11 +1743,13 @@ def test_retain_writes_w_over_the_retained_timed_rounds_and_the_tied_verdict_cre
     got = json.loads((d / SP.RETENTION).read_text())
     assert got["rounds"] == [1, 2] and [(x["round"], x["why"]) for x in got["dropped"]] == [(0, SP.WARM_UP)]
     w = json.loads(wfile.read_text())
-    assert sorted({e["value"].split("/")[1] for e in w["registered"]}) == ["1", "2"] and len(w["registered"]) == 8
+    calls = [e["value"] for e in w["registered"] if e["value"].startswith(("pearl-a/", "pearl-y/"))]
+    assert sorted({v.split("/")[1] for v in calls}) == ["1", "2"] and len(calls) == 8
+    assert [e["value"] for e in w["registered"]][8:] == ["pearl-b/0", "pearl-b/1"]
     r = VR.verify_passes([warm, a, b], 3, 1, "test", coins, b"verifier" * 4, window=w, test_instance=True)
     assert r["answer"]["verdict"] == "reject" and "W registers no pearl-a/0/0" in r["answer"]["reason"], r["line"]
     rc, doc, answer = served_verify(d, tmp_path / "verify.json", "--tie", str(wfile))
-    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 8}, doc["line"]
+    assert rc == 0 and answer["public"]["tie"] == {"record": REG.digest(w), "tables": 10}, doc["line"]
     assert (answer["public"]["rounds"], answer["public"]["dropped"], doc["timed"]["passes"]) == ([1, 2], [0], 2)
     before = wfile.read_text()
     assert SP.main(["retain", "--passes", str(d), "--window-record", str(wfile)]) == 1 and wfile.read_text() == before
@@ -1946,11 +1989,22 @@ def test_a_tie_over_a_retention_holds_each_retained_pass_at_its_round_and_passes
     a, b = (proved_pass(tmp_path / name, PROMOTED[0], ix)[0] for name, ix in (("a", (0, 1)), ("b", (2, 3))))
     coins, w = published(b), window_record(a, b)
     r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=[1], dropped=(0,), test_instance=True)
-    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 4, r["line"]
+    assert r["answer"]["verdict"] == "accept" and r["answer"]["public"]["tie"]["tables"] == 6, r["line"]
     for rounds, dropped, why in (([1], (), "W registers pearl-a/0/0, no call of the run's"),
                                  ([0], (1,), "W's pearl-a/0/0: its root")):
         r = VR.verify_passes([b], 3, 1, "test", coins, b"verifier" * 4, window=w, rounds=rounds, dropped=dropped, test_instance=True)
         assert r["answer"]["verdict"] == "reject" and why in r["answer"]["reason"] and "source" not in r, (why, r["line"])
+
+
+def test_a_tie_refuses_two_passes_that_commit_one_weight_under_two_roots(tmp_path):
+    """W registers each weight's B rows once, so a tie over passes whose epochs commit weight 0 under two roots (other
+    weights, seed 12) has no one entry to hold them to.  `verify_passes` never gets here (one salt is one weights root,
+    checked before the tie), so the tie is called directly."""
+    a, b = proved_pass(tmp_path / "a", PROMOTED[0])[0], proved_pass(tmp_path / "b", PROMOTED[0], (2, 3), seed=12)[0]
+    passes = [VR.load(x, published(x)) for x in (a, b)]
+    assert passes[0].epoch.weight_roots[0] != passes[1].epoch.weight_roots[0]
+    with pytest.raises(ValueError, match="pass 1 commits weight 0's B rows under another root or shape than an earlier"):
+        VR.tie(window_record(a, b), passes)
 
 
 def test_volunteer_words_gives_up_one_a_row_a_band_and_a_b_row_once_the_a_count_is_spent():

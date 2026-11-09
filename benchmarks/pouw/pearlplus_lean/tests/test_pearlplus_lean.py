@@ -6,7 +6,8 @@ holds the Lean's verdict to the Python's on the same files and coin: the verdict
 commitment and source, every opened tile's verdict in order, and an accepted run's work (its credit at Pearl's assumption,
 `credit_at_assumption`: the credited MACs, tiles and MACs, ρ, ε and the draws over the inert-work bound) under each
 `over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
-and the window record W it held the passes to (`verify_run.tie`, ``--tie W``).
+and the window record W it held the passes to (`verify_run.tie`, ``--tie W``: each call's A rows and y, and each
+weight's B rows at the root PoUW's weights tree commits them under).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
@@ -449,26 +450,38 @@ def test_a_challenger_draw_that_is_not_the_runs_coin(exe, tmp_path):
 
 
 def test_a_run_tied_to_its_window_record(exe, tmp_path):
-    """A window record W registering each call's A rows and y: the Lean holds the passes to W as the Python does and
+    """A window record W registering each call's A rows and y and each weight's B rows once: the Lean holds the passes to W as the Python does and
     prints the same tie, W's digest and its table count, also when W lists a round dropped before the coin (the coin
-    record's rounds and dropped, which the Python wrote)."""
+    record's rounds and dropped, which the Python wrote). A W that states no version (version 1, the run of record's,
+    registering the calls alone) accepts in both on the calls' tables, the tie naming its weights untied."""
     warm, a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("w", (0, 1)), ("a", (2, 3)), ("b", (4, 5))))
     (w := tmp_path / "w.json").write_text(json.dumps(T.window_record(a, b)))
     got = same(exe, [a, b], 8, tie=w, record=tmp_path / "coin.json")
-    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w.read_text())), "tables": 8}
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w.read_text())), "tables": 10}
     (w3 := tmp_path / "w3.json").write_text(json.dumps(T.window_record(warm, a, b)))
     got = same(exe, [a, b], 8, tie=w3, rounds=[1, 2], dropped=(0,), record=tmp_path / "coin3.json")
-    assert got["verdict"] == "accept" and got["tie"]["tables"] == 8
+    assert got["verdict"] == "accept" and got["tie"]["tables"] == 10
     rec = json.loads((tmp_path / "coin3.json").read_text())
     assert (rec["rounds"], rec["dropped"]) == ([1, 2], [0])
+    (w1 := tmp_path / "w1.json").write_text(json.dumps(T.window_record(a, b, version=1)))
+    got = same(exe, [a, b], 8, tie=w1, record=tmp_path / "coin1.json")
+    assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(w1.read_text())), "tables": 8,
+                                                         "weights": VR.WEIGHTS_UNTIED}
 
 
 def test_a_pass_that_is_not_ws(exe, tmp_path):
-    """W whose entry for a call has another root, or lacks one, or registers a call the run doesn't have, or one twice,
-    or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the Python does."""
+    """W whose entry for a call or a weight has another root (B another weight's: a foreign rootB) or domain, or lacks
+    one, or registers a call or weight the run doesn't have, or one twice, or registers no weight at all at version 2
+    (every call's entry right: untied, not a tie), or states no version (version 1) and registers a weight, or states a
+    version other than 2, or isn't a v2 record: refused before the coin (Python's `ValueError`, in its words), as the
+    Python does."""
     a, b = (T.proved_pass(tmp_path / n, H100, ix)[0] for n, ix in (("a", (0, 1)), ("b", (2, 3))))
     good = T.window_record(a, b)
     reg = good["registered"]
+    b0, b1 = (next(e for e in reg if e["value"] == f"pearl-b/{x}") for x in (0, 1))
+
+    def at(v: str, **kw) -> dict:
+        return {**good, "registered": [{**e, **kw} if e["value"] == v else e for e in reg]}
     cases = [({**good, "registered": [{**e, "root": "00" * 64} if e["value"] == "pearl-a/0/0" else e for e in reg]},
               "ValueError: W's pearl-a/0/0: its root not the call's"),
              ({**good, "registered": [{**e, "word_bits": 16, "leaves": 1} if e["value"] == "pearl-y/1/1" else e
@@ -477,6 +490,18 @@ def test_a_pass_that_is_not_ws(exe, tmp_path):
              ({**good, "registered": [*reg, {**reg[0], "value": "pearl-a/2/0"}]},
               "ValueError: W registers pearl-a/2/0, no call of the run's"),
              ({**good, "registered": [*reg, reg[1]]}, "ValueError: W registers pearl-y/0/0 twice"),
+             (at("pearl-b/0", root=b1["root"]), "ValueError: W's pearl-b/0: its root not the weight's"),
+             (at("pearl-b/1", domain=b0["domain"]), "ValueError: W's pearl-b/1: its domain not the weight's"),
+             ({**good, "registered": [e for e in reg if e["value"] != "pearl-b/1"]}, "ValueError: W registers no pearl-b/1"),
+             ({**good, "registered": [*reg, b0]}, "ValueError: W registers pearl-b/0 twice"),
+             ({**good, "registered": [*reg, {**b0, "value": "pearl-b/2"}]},
+              "ValueError: W registers pearl-b/2, no weight of the run's"),
+             ({**good, "registered": [e for e in reg if not e["value"].startswith("pearl-b/")]},
+              f"ValueError: {VR.UNTIED_WEIGHTS}, so the run's rootB is no W's (pearl-b/0 first)"),
+             ({**(old := T.window_record(a, b, version=1)), "registered": [*old["registered"], b1]},
+              f"ValueError: {VR.V1_WEIGHTS} pearl-b/1: a W that registers the weights states version 2"),
+             ({**good, "window": {"kind": "served", "version": 1}}, f"ValueError: {T.PWR.UNKNOWN_VERSION}"),
+             ({**good, "window": {"kind": "served", "version": "2"}}, f"ValueError: {T.PWR.UNKNOWN_VERSION}"),
              ({**good, "format": "verity/registration/v1"},
               "ValueError: W is no verity/registration/v2 record with registered values")]
     for doc, why in cases:

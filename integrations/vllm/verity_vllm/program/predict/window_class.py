@@ -25,8 +25,10 @@ Each cut linear is a unit `LinearARow_v1{K, R, ROUND, CALL}` (`registry.linear_c
 held to row i of its call's A rows, i its position's row (`FixedLoad.at`), and a unit `LinearOut_v1{N, W, ROUND, CALL}`
 that reads row i of its call's y and hands its BF16 words on to its readers in rows of W (`PearlTables.words`, doubled
 where a unit of N / W rows would be no proof block). The circuit's program takes them as its values, round by round and
-call by call the A rows then the y. Its census (`window_cut.census`) counts each cut linear by shape, and none is tied
-to PoUW's credited product yet.
+call by call the A rows then the y. Pearl+'s window record, at its version 2, registers each weight w's B rows too,
+``pearl-b/<w>`` (`PearlTables.b`), at the root of the tree PoUW reads B from; the circuit, cut at its linears, reads none
+of them. Its
+census (`window_cut.census`) counts each cut linear by shape, and none is tied to PoUW's credited product yet.
 """
 from __future__ import annotations
 
@@ -178,6 +180,11 @@ class PearlTables(FixedLoad):
     def y(s: int, c: int) -> str:
         """Round ``s``'s call ``c``'s y, by the name Pearl+'s window record registers it under."""
         return PWR.y_value(s, c)
+
+    @staticmethod
+    def b(w: int) -> str:
+        """Weight ``w``'s B rows, by the name Pearl+'s window record registers them under."""
+        return PWR.b_value(w)
 
     @staticmethod
     def rows(cls: WindowClass, s: int) -> int:

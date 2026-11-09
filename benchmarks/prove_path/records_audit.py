@@ -545,8 +545,9 @@ def tie_of(circuit: Mapping[str, Any], w: Mapping[str, Any] | None,
     value's readers read. W names a value under ``prefix``, its descriptor's ``PREFIX``, as its table
     `credit.window_table` (PoUW H1's registration of the window, each value a Commit table in ``row/v2`` rows), or, with
     no prefix, by the value's own name (Pearl+'s window record, `pearl_c.window`: each call's A rows and y, FP32 words in
-    ``row-seg/v1`` rows). ``({}, {})`` for a circuit that takes no values with no W. Refused (ValueError) for values
-    without W, W without values, and W registering a value other than once."""
+    ``row-seg/v1`` rows, beside each weight's B rows, which the circuit doesn't take). ``({}, {})`` for a circuit that
+    takes no values with no W. Refused (ValueError) for values without W, W without values, and W registering a value
+    other than once."""
     reg = IF.declarations(circuit)[2]
     values = tuple(reg.values) if reg is not None else ()
     if not values and w is None:
