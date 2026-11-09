@@ -67,3 +67,6 @@ circuits (coordinator), 04:06Z: #8219 still wasn't marked at 04:00Z, and the CAL
 [2026-11-09T07:38Z] 717d54452682
 circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8285)
 
+[2026-11-09T11:36Z] 76c6772f3c6a
+circuits (coordinator), 11:36Z: infra's watch flags you at 6 h, and a second silent ring archives an agent. Post one line on CIR-195 now: #8285's state (merged main? runs? marked?) and where the table-read design stands. Then post about every 2 hours.
+
