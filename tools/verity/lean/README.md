@@ -340,12 +340,12 @@ premises or type hash, a `reads` group, a premise's digest: what merging two PRs
 leave) writes the `lean-audit.json` and `review.txt` that `--update` would among its reports, and its `report.json`'s
 `regenerated` names that file; a missing record or name, an owner or any other failure writes none. Code decides which
 failures those are, not text: each failure's code (`check.py`'s `Failure`) is in `report.json`'s `failure_codes`
-(`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The Lean check of a commit of `next` runs with
-`--regenerate`, and drive commits the records it regenerated when it lands that commit (drive.toml's `regenerate_locks`);
-drive's after-landing run passes `--no-regenerate`, so a record difference that reaches `checked` fails there.
+(`settled_codes`: what `--regenerate` settled), and the record differences are `RECORD_DIFFERENCE`'s. The verified queue's graph2 tasks never
+regenerate (`tasks.py`'s `REGENERATE`), so a record difference fails its candidate, and the queue ejects the PR, telling its
+owner to record its locks at its head: a lock record change rides with its PR.
 
-**Bookkeeping warns after a landing.** Drive's lock run (the lean-audit step of the merge queue's check with
-`--bookkeeping-warn`, reaching `check.py` as `--bookkeeping warn`) passes a package that fails only on bookkeeping
+**Bookkeeping warns after a landing.** A lock run (the lean-audit step of a check with `--bookkeeping-warn`, reaching
+`check.py` as `--bookkeeping warn`; the verified queue runs none) passes a package that fails only on bookkeeping
 (`BOOKKEEPING`) on the lock `repaired` writes:
 - an unlisted premise, an `assumptions` entry declared outside the assumptions module, or an uncovered `domain` entry is
   listed under `open`, owned by its guarantees' owner (the first, of several), on the lock's `open_default_issue` (else
@@ -358,9 +358,8 @@ an axiom beyond the standard three, `sorry`, `native_decide`, a kernel bypass an
 repairs the caps, in copies that audit.json's `repaired` names (`raised_unread`, `held_caps`): an unread area over its cap,
 and a lock count over its cap in `tests/test_lean_packages.py` (UNWITNESSED, INLINE), are raised to the count, and such a
 cap more than its `ROOM` above its count is lowered to the count and its room. Elsewhere a loose cap only warns (`_held`), so lowering a count never fails a check. Each repair is one
-warning naming the entry and its owner, in audit.json's `bookkeeping`. Drive commits the repaired files with the locks
-(`research.merge.REPAIRED`, held byte for byte to the run's copies), lists the warnings in the lock commit, and tells the
-Lean lane and each owner they name; the next PR fixes them. No other check takes the flag.
+warning naming the entry and its owner, in audit.json's `bookkeeping`, and the repaired files are the run's (a lock commit
+holds them byte for byte: `research.merge.REPAIRED`); the next PR fixes them. No other check takes the flag.
 
 When the change lands on `main`, the landing DM (`research.spec_alert`) lists each new, removed or changed guarantee and
 each changed definition; nobody approves it first. A statement that only prints differently (the same type hash and named
@@ -450,7 +449,7 @@ readers and `pins` are read as today's. A guarantee's `owner` merges apart from 
 owner and the other side's restatement both apply.
 
 Apart from the guards below, the merge never conflicts. What the build determines (a guarantee's record, `reads`,
-assumption digests) merges as the union or theirs' value, and the lock run regenerates it. What a person
+assumption digests) merges as the union or theirs' value, and a record that doesn't match the merged tree fails the queue's check of it. What a person
 writes (an owner, an `issue` or `due`, a `why`, a reason, the roots, an exemption, a dependency) merges as the union of
 both sides' entries: one both sides changed differently is theirs', and one a side removed while the other changed it is
 the changed one. An entry the sides moved to different sections of an exclusive group (`witnesses`, `not`, `generic`;

@@ -77,10 +77,10 @@ change that adds or modifies a circuit passes `uv run circuit-check <definition|
 - `check` runs it as its `circuit-check` step (`tools/verity/check/check.py`): `circuit-check --all`, every registered
   Definition and template, each target's pass kept in check's cache (`--cache`, `--catalog-units`) and reused while
   everything it read is unchanged. A shard of the check runs only its shards of the targets (`--shard K/N`), and
-  `circuit-check --combine` joins them. Drive's sharded after-landing run first builds every catalog binding's record once,
+  `circuit-check --combine` joins them. A sharded `--deferred` run first builds every catalog binding's record once,
   in check's records step (`--cc-records`: `circuit-check --all --records-only`), and gives each shard those records
-  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`), so it runs after
-  landing.
+  (`--cc-records-from`). The step is off the merge gate (`off_gate` in `tools/verity/check/policy.toml`), so it gates
+  nothing.
 - The fine-grained check ([`verity graph`](../../../tools/verity/graph/README.md)) has circuit-check as one
   `circuit-catalog` task, which builds those records, one `circuit-binding` task per catalog binding, which checks only that
   binding's targets from them (`circuit-check --all --catalog-units --binding NAME`), and a `circuit-coverage` task, which

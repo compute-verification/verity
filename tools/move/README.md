@@ -69,10 +69,8 @@ run names one and bundles the branch into its outputs, and the lead pushes it fr
     research fetch RUN --all && git fetch ~/.research/runs/RUN/out/move.bundle BRANCH:BRANCH && git push -u origin BRANCH
 
 If `main` moves before the move lands, the lead stages it again on the new `main`: the map reruns over whatever landed
-since. A word map can also go through the queue, as a PR whose body says `Move: tools/move/NAME.toml`: drive regenerates
-its move on the tip below it with `checked`'s scripts, as `stage.py` does with its base's, lands it only if certified
-(the team skill's "Landing"), and restacks `next`'s members across it. Drive knows only the moves it regenerated: a move
-landed outside the queue leaves each open branch, `next`'s members among them, to cross it with `restack.py`.
+since. The verified queue takes no PR whose body says `Move: tools/move/NAME.toml`, so a landed move leaves each open
+branch to cross it with `restack.py`.
 
 `stage.py` refuses (exit 1) a map outside this directory or missing at the commit it would run on, a map with both
 `[words]` and `[paths]` or neither (a move that needs both stages two maps), a script that fails, a map that changes

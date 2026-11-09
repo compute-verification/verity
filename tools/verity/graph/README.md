@@ -1,7 +1,7 @@
 # `verity graph`
 
 The fine-grained check: Verity's checks as a graph of tasks that depends only on the commit. An executor runs any part of it
-with one result cache, one artifact store and one event stream; drive only reads results. This package is Verity's side:
+with one result cache, one artifact store and one event stream; the verified queue only reads results. This package is Verity's side:
 the listing (graph/v2), one task's run (result/v1) and a serial reference executor. `verity tasks` (`tools/verity/check/
 tasks.py`, tasks/v1) is the coarse graph `check` runs today.
 
@@ -20,9 +20,9 @@ verity graph check --local [--family F ...] [--work DIR] [--retries N] [--events
 
 1. Keys come from declared inputs, not traced reads. A sandbox enforces the declaration: an undeclared read is an error.
 2. Keys include repository paths. A pure move reruns what it moved, once.
-3. Runners report facts. What gates, what may stay red and what a red triggers is drive's configuration, never a runner's.
+3. Runners report facts. What gates, what may stay red and what a red triggers is the verified queue's configuration, never a runner's.
 4. `tasks.toml` holds families (tens of entries), not one row per task.
-5. No `owner` field anywhere in the graph, results or events: who is paged is drive's policy, from paths. The listing
+5. No `owner` field anywhere in the graph, results or events: who is paged is the queue's policy, from paths. The listing
    refuses one in a table or a task, and `contract.result_errors` in a result.
 
 ## Layout
@@ -175,7 +175,7 @@ runs them, one task a step:
 `lean-suites` reads every one and puts it at that path in the tree before suites.py runs (its var `bin`). A part's task
 (its var `files`) hands suites.py a timing record with none of the suite's files (`--timings`), so part K is every M-th test
 file by path from the K-th, the same wherever it runs, and the M parts hold each file once. A lean-suites fail names each
-failed suite with its failed tests (`detail.failed`), which drive names, allows and blames as that suite's red. A
+failed suite with its failed tests (`detail.failed`), which the queue names, allows and blames as that suite's red. A
 run that ran nothing is no pass: ci.py skipping every set of the agreement, a partition check that compared no cut, a suite
 suites.py didn't run. Each is an error, so no result. The agreement fetches the upstream
 build and inputs `upstream.json` pins (`research data fetch`, as ci.py fetches what it pins) and holds them to the pin's

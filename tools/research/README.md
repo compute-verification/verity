@@ -100,9 +100,8 @@ research merge --train --prepare BRANCH [--onto BASE] [--allow-removal PATH] N@S
 research merge --sweep [--into main] [--remote origin] [--dry-run]       # close the PRs that landed, retarget their children
 research merge --mirror [SHA]                                           # main or SHA to node 1's bare repo
 research merge --canary [--tool check] [--json]                    # the gates' daily self-test, in scratch stores
-research queue status|sync|land|eject|drive|ready|open [--dry-run]  # the merge queue on `next` (queue.py)
+research queue vqueue|status|eject|ready|review|open [--dry-run]  # the verified queue (queue.py, vqueue_loop.py)
 research queue judge RUN [--by LANE]      # the mark `queue ready --on` writes, from its quick-tier run that ended after its caller died
-research queue stats --log FILE [--hours 24] [--until T] [--json]  # where landed PRs' time went (queue_stats.py)
 research lean-times ...  # Lean tasks' p95
 research git old2new|remap|check|build ...                              # after a history rewrite (commitmap.py, below)
 research msg send|close|read|list|names|traffic|owners|handles|subscriptions|ask-daniel|groups sync [--dry-run]   # Slack (slack.py, below)
@@ -126,7 +125,7 @@ stores, that every gate refuses each bad attempt in `CANARY` and admits a good o
 passes fast-forwards the target to that exact tree. On a failure it bisects to the first ref whose merge breaks it
 and fast-forwards to the longest prefix that passed.
 
-`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is the lander's train build: the same chain, in a scratch
+`research merge --train --prepare BRANCH [--onto BASE] N@SHA ...` is a train build: the same chain, in a scratch
 worktree, onto the remote's `--into` or a train ahead's prep branch (`--onto`). An `N@SHA` or `BRANCH@SHA` whose head moved is
 refused, and the build stops at the first ref that doesn't merge. check's preflight (`check.py --preflight`, the markdown caps
 among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothing is recorded or landed:
@@ -136,7 +135,7 @@ among its tests) runs on the tip, which is pushed as BRANCH, never forced. Nothi
 After a merge or a train lands, `research merge` sweeps the pull requests (`gh`; `--sweep` does only that, `--dry-run` prints
 it). From the remote's copy of the target, not the checkout, it closes each open PR whose head is on
 it, naming the commit, retargets each whose base branch's tip is on it (stacks GitHub never closes), and deletes a closed one's
-head branch unless an open one uses it. With `--push` (the lander's), a merge that lands is
+head branch unless an open one uses it. With `--push` (on `main`, only the verified queue's loop on the control pod), a merge that lands is
 pushed, never forced, before the sweep, and a refused push sweeps nothing and exits 1; without it, run `research merge --sweep`
 after `git push`. No remote skips the sweep, and its failure leaves the exit code alone. Then `main` goes over ssh to node 1's
 bare repo (120 s; `RESEARCH_MERGE_MIRROR`: host, empty skips); a failure logs the `--mirror` rerun.
@@ -145,22 +144,19 @@ A tool's declaration may name result steps a merge needs by path (`Tool.merge_re
 the target's checkout): when the merge's diff touches a prefix, only an attempt whose `result.json` `steps` show that step
 `passed` admits it; `!` patterns leave paths out (`!README.md`: every file of that name under the prefixes). `check` requires
 `lean-agreement` for `verity/{ml,core/service}/flock/`, less README.md and PROTOCOL.md; `--train --send FILE` ships what such a
-step needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `--push` has pushed, it starts detached
+step needs. It may also name what runs after a landing (`Tool.after_land`, an argv): once `main` moves (`merge.caught_up`), it starts detached
 in the checkout with the landed commit appended, and can't change the exit code; `check`'s is its `post_train.py`, the vLLM
 regression's manifest rebuilds, which label the landing's check attempt.
 
-`research queue` is the merge queue: `next` is the landed branch (drive.toml's `land_into`: `checked`) plus every admitted PR,
-one `--no-ff` merge commit each, and drive fast-forwards `checked` to the reviewed prefix and `main` only to a commit of
-`checked` whose after-landing run passed every step on the merge gate (`research.drive`); its alarms ring the owner of a slow step, a
-stuck ready PR or a red, and the lander handles only what drive refuses. A PR is admitted when it's open (drafts too),
+`research queue` is the merge queue, and its verified queue (`research queue vqueue`, `vqueue_loop.py`) lands: it builds
+candidates from `main` and a batch of the ready PRs with land verdicts, one `--no-ff` merge commit each, checks each with
+graph2 and the run beside it, fast-forwards `main` only to a candidate with no new failure, and ejects a failure's culprits;
+`next` and `checked` are frozen. A PR is admitted when it's open (drafts too),
 names its owner (a `Lane {name}` line, else its Cursor agent id), has no hold label, and is marked ready at its head by that
 owner (`research queue ready PR --mark --by LANE`, or `--on auto` to run the quick tier first, or a `ready` label on
 `pr:{n}@{head}`); `ready` and `open` only warn of a body with neither a `Goal <id>` line naming a live goal, which `open --issue KEY` writes
-from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. The branch holds the queue's state (each
-merge commit's `PR:`, `Head:` and `Owner:` trailers); a sync keeps the prefix that still matches and merges the rest again, and one post per
-root cause names each PR it leaves out. `--shadow` builds `queue-shadow`, never moves `main` and tells no one.
-
-The mark and sync refuse a lock merge dropping an entry `next` needs (`lock_drops`).
+from KEY's goal label, nor `Issue: none: REASON`. No PR waits on a person's approval or on a per-head grant. Each merge commit's `PR:`, `Head:` and `Owner:` trailers name what it
+merged. `--shadow` decides without acting: it never moves `main` and tells no one.
 
 The workload receives `RESEARCH_RUN_ID`, `RESEARCH_RUN_DIR` and `OUT` (its `out/`, uploaded in full) and may write
 `$RESEARCH_RUN_DIR/result.json` (see `result.py` for the envelope). A local

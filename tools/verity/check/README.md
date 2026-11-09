@@ -13,20 +13,15 @@ commit you ask it to. The jobs it runs are data in `ci.toml`: each has an owner,
 `--deferred STEP,...`, `--plan` and `--slots`.
 
 The runners (`suites.py`, `circuit-check`, `check.py`'s steps) report real verdicts and nothing else: a test, target or step
-that failed is failed, whoever is fixing it. What gates and what may stay red is drive's config, `policy.toml`
-(`research.policy`), which drive reads at the commit it judges. An allowance there (`[[allow]]`: an id, its owner, when it
-expires in UTC, and why) covers one suite, one test or one circuit-check failure: drive takes such a failure as not red (no
-culprit, no revert, no hold on `main`) until it expires, and then rings its owner and names the allowance. The quick tier
-applies `main`'s allowances the same way.
+that failed is failed, whoever is fixing it. What gates and what may stay red is `policy.toml`
+(`research.policy`), which the verified queue reads at the candidate it judges. An allowance there (`[[allow]]`: an id, its
+owner, when it expires in UTC, and why) covers one suite, one test or one circuit-check failure: the queue takes such a
+failure as not red (no culprit, no hold on `main`) until it expires. The quick tier applies `main`'s allowances the same way.
 
 A job in `policy.toml`'s `off_gate` is off the merge gate: a recorded check and its shards leave it out, and `research
-merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`. Each runs after landing, in the run that
-checks `checked`'s tip, and doesn't hold `main`; under drive.toml's `executor = "on"`, `ratchet-gate` runs with
-`lean-agreement` in a run of their own beside the executor's check of the tip, and `main` waits for that run's preflights and
-`lean-agreement`, not its `ratchet-gate`. A red `circuit-check` names its culprit, fixed forward or else reverted, as every
-after-landing red does, and while it is red no PR touching its inputs lands. A red `ratchet-gate` names as culprits the
-merges its log fails and never reverts one (drive.toml's `warn_steps`): drive rings each one's lane, which fixes it forward in
-its next PR, and the next run's `ratchet-gate` judges only the merges above the tip it judged.
+merge` requires it of no check. Today those are `circuit-check` and `ratchet-gate`, and neither holds `main`: the verified
+queue's graph2 check runs circuit-check's tasks, and `ratchet-gate` runs with `lean-agreement` in a run of their own beside
+the graph2 check of each candidate, which waits for that run's preflights and `lean-agreement`, not its `ratchet-gate`.
 `circuit-check` goes back on the gate once `circuit-check --all` fits inside the rest of the check; `ratchet-gate` is in no
 shard plan, and reports without blocking a merge.
 
@@ -76,9 +71,9 @@ follows.
 | `tool.py`, `preflight.py` | the check's store declaration, and whether a machine is prepared for it |
 | `pod_setup.sh` | prepares a check pod once, so every pod of the pool computes the same verdict keys |
 | `slot.py`, `lean_slot.py` | a command in one of a node's merge-check or Lean check slots |
-| `train.sh` | the lander's recorded check of a train |
+| `train.sh` | a recorded check of a commit, and the run beside each of the verified queue's candidates |
 | `post_train.py` | the vLLM reference regression's manifest rebuilds and the fast rows of record's neutrality after a landing |
-| `drive.toml`, `queue.toml` | the merge queue's flags and its admission rules |
+| `drive.toml`, `queue.toml` | the verified queue's flags and its admission rules |
 | `gates/markdown_caps.py` | the warn gate naming a change that puts a Markdown file over its cap |
 | `move_check.py`, `anchors.py` | the certificate of a pure move, and that every path a file reaches from its own place survives it |
 | `merge_map.py` | git's merge driver for `fixtures/artifacts.json` |
@@ -114,7 +109,7 @@ verity tasks costs --graph art:ID|FILE [--graph ...] [--seconds FILE] [--out FIL
 ~~~
 
 `list` prints the graph of the checked-out tree, uncommitted files included. `--kind after-landing` (the default) is every job
-in `ci.toml`, as drive's after-landing run checks it; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
+in `ci.toml`, those off the gate too; `--kind preflight` is the jobs on the merge gate, a PR's preflight.
 `--changed BASE` keeps the tasks whose inputs the change from BASE's merge-base with HEAD touches, by `suites.py --changed`'s
 rule for a suite and by input paths for the rest, and the tasks they depend on. `--circuit-shards M` splits circuit-check into M
 tasks (default: its ci.toml `shards`, or ceil(seconds / S) when `--costs` gives `circuit-check` more seconds than those cover).
@@ -192,17 +187,15 @@ over recent recorded checks, and its reds so far. What isn't recorded shows as u
 
 ## Landing
 
-PRs land through the merge queue (`research queue drive`): its flags are `drive.toml` and its admission rules are
+PRs land through the verified queue (`research queue vqueue`): its flags are `drive.toml` and its admission rules are
 `queue.toml`. Before a PR lands, the landing gates `drive.toml` names judge its merge, and its warn gates
-(`gates/markdown_caps.py`) too, whose failure keeps no PR out: drive lands it and tells its owner, who fixes it in their next
-PR. Reviewed PRs land on `checked` (`land_into`); after each landing, one run of the full check checks `checked`'s tip
-with every job, those off the gate too (`train.sh --deferred`), and `main` moves only to a commit whose run passed every step
-on the gate, where `post_train.py` runs the vLLM regression's rebuilds and fast neutrality tier. A red names its culprit by what its failure names,
-never by bisecting: its lane marks a fix within 30 min, or drive reverts it on `checked` (`research.drive`), but a warn step's
-(drive.toml's `warn_steps`) is never reverted, and its lane fixes it forward in its next PR; a red job off the gate doesn't
-hold `main`. The team skill's "Landing" is the procedure. A layout move's PR (`Move: tools/move/MAP.toml` in its
-body) lands from `next` too: drive regenerates it on the tip below it and lands it only if `move_check.py` certifies it there
-(`verity check move BASE HEAD`), running both scripts as `checked` has them.
+(`gates/markdown_caps.py`) too, whose failure keeps no PR out: the PR lands, and its owner fixes it in their next PR. The
+queue checks each candidate (`main` and a batch of reviewed PRs, one merge each) with graph2 and the run beside it
+(`train.sh --deferred`), and fast-forwards `main` only to a candidate with no new failure; after each advance,
+`post_train.py` runs the vLLM regression's rebuilds and fast neutrality tier on it. A new failure's suspects are the PRs whose
+changed files meet its inputs: a lone one is ejected, several bisected. The team skill's "Landing" is the procedure. The
+queue takes no layout move's PR (`Move: tools/move/MAP.toml` in its body); `move_check.py` (`verity check move BASE HEAD`)
+certifies a move.
 
 ## The public boundary
 
