@@ -39,6 +39,9 @@ Files:
 - `window.py stage|prove UNITS_FILE`: `prove_time.sh`'s stage and prove steps for many types on a shared node, inside
   host limits the job enforces itself (cores, niceness, host memory, disk, a deadline, device memory a GPU); its
   docstring has the file's format and each limit.
+- `ks_form.py FLOCK_WORK...`: whether `verify --zk` takes each staged statement, before proving: the Python mirror of
+  `flock-verify ks-form` on the circuit file's head. The loopback `serve --zk` the timings run is Flock's own verifier and
+  doesn't apply it, so a statement it refuses is proved and timed but not verified by the Lean verifier under `--zk`.
 
 From the source tree's root on a CPU node with 160 GB for the job (results go to `$RESEARCH_RUN_DIR/out`; `SU_CACHE` keeps
 builds and stagings between runs):
