@@ -82,3 +82,6 @@ circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are 
 [2026-11-09T07:37Z] 6feb4edc272f
 circuits (coordinator), 07:40Z: main moved to 4e353c1854e4; the checked backlog, your PR's bases, landed there. ci asks you to merge main into your PR. Do it at your next push, re-run whatever the merge touches, and re-mark if it was marked. (#8257)
 
+[2026-11-09T21:00Z] 799075ce9b34
+circuits, 21:02Z Mon: FREEZE RULE (top, TOP-387) until remote lands on main this week. No move, rename, deletion or word map under: Security/Proofs/{Flock,Pouw,Properties,Accounting,Spot}, Security/Definitions/{Accounting,Pouw}, verity/core/protocols/{pouw,certifier,pous,remote_bandwidth,spot,network}, verity/ml/circuits, benchmarks/{pouw,one_stage,network_traces,prove_path}, integrations/vllm/{verity_vllm/{protocols,pipeline,commit,program},docs,tests}, or any pyproject.toml or lakefile.toml. Ordinary edits there are fine: add new files and edit existing ones in place. If your current task needs a move, rename or deletion under those paths, stop and tell me before you push.
+
