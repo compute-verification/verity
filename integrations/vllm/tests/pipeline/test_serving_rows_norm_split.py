@@ -17,12 +17,12 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.evaluation import evaluate_batch
 from verity.ml.circuits.ops.boolean import mufu as BM
 from verity.ml.definitions.registry import boolean_dsa_norm as BD
-from verity.ml.definitions.registry import boolean_norms as BN
+from verity.ml.definitions.registry import boolean_norms as BN, boolean_norms_split as BS
 from verity.ml.definitions.registry import boolean_sigma as SG
 from verity.ml.definitions.registry import cuda_rmsnorm as C
 from verity.ml.definitions.registry import cuda_rmsnorm_split as NS
 from verity.ml.definitions.registry import dsa_norm as DN
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
 from verity_vllm.pipeline import part_rows as PR
 from verity_vllm.pipeline import serving_rows as SRW
 from verity_vllm.pipeline import serving_templates as ST
@@ -41,14 +41,14 @@ def _rsqrt():
 FAMILIES = {
     "RMSNormCudaVector8_v1": (
         lambda: bind(C.RMSNormCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK), (("x", N), ("w", N)), ("out",),
-        lambda b: bind(BN.RMSNormSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK, RSQRT=_rsqrt()) if b
+        lambda b: bind(BS.RMSNormSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK, RSQRT=_rsqrt()) if b
         else bind(NS.RMSNormSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
-        lambda b: bind(BN.RMSNormApplyCudaVector8 if b else NS.RMSNormApplyCudaVector8, G=G), LAYER),
+        lambda b: bind(BS.RMSNormApplyCudaVector8 if b else NS.RMSNormApplyCudaVector8, G=G), LAYER),
     "RMSNormFusedCudaVector8_v3": (
         lambda: bind(C.RMSNormFusedCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK), (("x", N), ("res", N), ("w", N)), ("out", "residual"),
-        lambda b: bind(BN.RMSNormFusedSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK, RSQRT=_rsqrt()) if b
+        lambda b: bind(BS.RMSNormFusedSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK, RSQRT=_rsqrt()) if b
         else bind(NS.RMSNormFusedSumSqCudaVector8, N=N, EPS=EPS, BLOCK=BLOCK),
-        lambda b: bind(BN.RMSNormFusedApplyCudaVector8 if b else NS.RMSNormFusedApplyCudaVector8, G=G),
+        lambda b: bind(BS.RMSNormFusedApplyCudaVector8 if b else NS.RMSNormFusedApplyCudaVector8, G=G),
         "model.layers.{L}.post_attention_layernorm"),
     "DsaRMSNorm_v1": (
         lambda: bind(DN.DsaRMSNorm, N=N, EPS=EPS), (("x", N), ("w", N)), ("out",),
@@ -57,8 +57,8 @@ FAMILIES = {
     "AllReduceRmsNormMnnvl_v1": (
         lambda: bind(TA.AllReduceRmsNormMnnvl, WORLD=WORLD, N=N, SHOT=1, CLUSTER=1, EPS=EPS, FMA=False),
         (("parts", WORLD * N), ("res", N), ("w", N)), ("normed", "residual"),
-        lambda b: bind(SG.RmsNormMnnvlSumSq if b else TA.RmsNormMnnvlSumSq, N=N, SHOT=1, CLUSTER=1, EPS=EPS, FMA=False),
-        lambda b: bind(SG.RmsNormMnnvlApply if b else TA.RmsNormMnnvlApply, G=G, SHOT=1),
+        lambda b: bind(SG.RmsNormMnnvlSumSq if b else TS.RmsNormMnnvlSumSq, N=N, SHOT=1, CLUSTER=1, EPS=EPS, FMA=False),
+        lambda b: bind(SG.RmsNormMnnvlApply if b else TS.RmsNormMnnvlApply, G=G, SHOT=1),
         "model.layers.{L}.fused_allreduce_rms_norm_all_reduce"),
 }
 

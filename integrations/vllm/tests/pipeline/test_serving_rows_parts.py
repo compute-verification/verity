@@ -24,7 +24,7 @@ from verity.ml.definitions.registry import boolean_sigma as SG
 from verity.ml.definitions.registry import cuda_rmsnorm as C
 from verity.ml.definitions.registry import deepgemm as DG
 from verity.ml.definitions.registry import dsa_norm as DN
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
 
 WORLD, N = 4, 256
 STATICS = {"WORLD": WORLD, "N": N, "SHOT": 1, "CLUSTER": 1, "EPS": 1e-5, "FMA": False}
@@ -45,11 +45,11 @@ def norm(boolean: bool = False):
 
 
 def sumsq():
-    return bind(TA.RmsNormMnnvlSumSq, N=N, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False)
+    return bind(TS.RmsNormMnnvlSumSq, N=N, SHOT=1, CLUSTER=1, EPS=1e-5, FMA=False)
 
 
 def apply(g: int):
-    return bind(TA.RmsNormMnnvlApply, G=g, SHOT=1)
+    return bind(TS.RmsNormMnnvlApply, G=g, SHOT=1)
 
 
 def ev(fn, *args: np.ndarray) -> list[np.ndarray]:

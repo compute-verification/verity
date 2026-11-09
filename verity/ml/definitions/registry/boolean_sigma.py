@@ -29,6 +29,7 @@ from __future__ import annotations
 
 from verity.ml.definitions.boolean import sigma_lift
 from verity.ml.definitions.registry import b1, b1_tp2, cuda_rmsnorm as CR, inductor as I, marlin_moe as MM, mhc, moe, ref_prims as R, tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce_split as TS
 
 __all__ = ["AllGather", "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "ArgmaxStepF32", "DotBf16", "EmbeddingShard",
            "Fa3AttentionHeadSplit", "Fa3AttentionSplit", "Gemm", "GemmCoordinate", "InductorAdd2RMSNorm", "InductorAdd2RMSNormFinal",
@@ -48,8 +49,8 @@ EmbeddingShard = sigma_lift(b1_tp2.EmbeddingShard, 2)
 AllReduceRmsNormMnnvl = sigma_lift(TA.AllReduceRmsNormMnnvl, 2)
 AllReduceResidualMnnvl = sigma_lift(TA.AllReduceResidualMnnvl, 2)
 RmsNormMnnvl = sigma_lift(TA.RmsNormMnnvl, 2)
-RmsNormMnnvlSumSq = sigma_lift(TA.RmsNormMnnvlSumSq, 2)
-RmsNormMnnvlApply = sigma_lift(TA.RmsNormMnnvlApply, 2)
+RmsNormMnnvlSumSq = sigma_lift(TS.RmsNormMnnvlSumSq, 2)
+RmsNormMnnvlApply = sigma_lift(TS.RmsNormMnnvlApply, 2)
 MhcFusedPostPre = sigma_lift(mhc.MhcFusedPostPre, 2)
 
 InductorRMSNorm = sigma_lift(I.InductorRMSNorm, 2)

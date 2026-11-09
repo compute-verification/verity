@@ -7,10 +7,7 @@ all-reduce vLLM's batch-invariant mode pins pynccl to, on 4x RTX PRO 6000 with P
                                               (parts, res: Array<N, bf16>, w: Array<N, bf16>) -> (normed, residual')
     AllReduceResidualMnnvl_v1{WORLD,N,SHOT}   (parts, res) -> residual'   (the fused one's all-reduce and residual add)
     RmsNormMnnvl_v1{N,SHOT,CLUSTER,EPS,FMA}   (r: Array<N, bf16>, w) -> normed   (the fused one's norm of residual' r)
-    RmsNormMnnvlSumSq_v1{N,SHOT,CLUSTER,EPS,FMA}
-                                              (r) -> f32   (the norm's scale rs, every normed element's one broadcast word)
-    RmsNormMnnvlApply_v1{G,SHOT}              (r: Array<G, bf16>, w: Array<G, bf16>, rs: f32) -> Array<G, bf16>
-                                              (the norm's G normed elements from rs: any G columns of the row)
+                                              (cut at its scale: `tp_allreduce_split`)
     AllReduceCustomCoordinate_v1{WORLD,START} (col: Array<WORLD, bf16>) -> bf16
     AllReduceCustom_v1{WORLD,SIZE,STAGE}      (parts: Array<WORLD, Array<SIZE, bf16>>) -> Array<SIZE, bf16>
     AllReduceMultimemCoordinate_v1{WORLD,TREE,FTZ}
@@ -114,7 +111,7 @@ from verity.ml.circuits.refs import array_of, coll_concat, tuple_of
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.evidence import EVIDENCE
 from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry.prims import BF16, F32
+from verity.ml.definitions.registry.prims import BF16
 from verity.ml.definitions.registry.tp_allreduce_nodes import (NODE_FILE, NODE_RECORDS, multimem_tree, multimem_trees, node_key,
                                                                nvls_tree, stated_node)
 
@@ -122,8 +119,8 @@ __all__ = ["AllReduceCustom", "AllReduceCustomCoordinate", "AllReduceMnnvl", "Al
            "AllReduceMultimemCoordinate", "AllReduceMultimemVector", "AllReduceNcclTree", "AllReduceNcclTreeCoordinate",
            "AllReduceResidualMnnvl", "AllReduceRmsNormMnnvl", "BATCH_INVARIANT", "CAPTURED", "CAPTURE_RUNS", "CUSTOM_MAX_BYTES",
            "CUSTOM_SYMM_MAX_BYTES", "Captured", "FI_MAX_BYTES", "MNNVL_ONE_SHOT_BYTES", "MULTIMEM_REPLAY_RUN", "MULTIMEM_VECTOR",
-           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "RmsNormMnnvlApply", "RmsNormMnnvlSumSq", "SETTINGS", "SYMM_MEM_MAX_BYTES",
-           "TREE_UNRECORDED", "TREE_UNSTATED", "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
+           "NCCL_TREE_RUNS", "RTX_PRO_6000", "RmsNormMnnvl", "SETTINGS", "SYMM_MEM_MAX_BYTES", "TREE_UNRECORDED", "TREE_UNSTATED",
+           "UNSTATED_NODE", "WARP", "chain", "covered", "custom_order", "custom_owners", "custom_stage", "device_of", "eps_bits",
            "fused_max_tokens", "mnnvl_grid", "mnnvl_shot", "multimem_owners", "multimem_runs", "nccl_chain", "node_refusal",
            "offset_free", "ranks", "route_binding", "served_route", "settings_of", "strategy", "tree_clusters", "tree_from_clusters"]
 
@@ -540,29 +537,6 @@ def RmsNormMnnvl(B, S, r, w):
     res))`` is that Definition."""
     _fused_geometry(int(S.N), int(S.CLUSTER))
     return _mnnvl_norm(B, S, B.call(ZERO32), r, w)
-
-
-_MNNVL_SPLIT = ("not-yet-established: `RmsNormMnnvl_v1` cut at its scale, the norm of AllReduceRmsNormMnnvl_v1 whose captures are "
-                "exact-model-tested; the scale and N / G apply units return RmsNormMnnvl_v1's words "
-                "(`verity/ml/definitions/tests/test_mnnvl_and_dsa_norm_splits.py`)")
-
-
-@composite("RmsNormMnnvlSumSq", 1, ["N", "SHOT", "CLUSTER", "EPS", "FMA"], lambda S: ((("r", Array(S.N, BF16)),), F32),
-           conformance=_MNNVL_SPLIT)
-def RmsNormMnnvlSumSq(B, S, r):
-    """`RmsNormMnnvl_v1`'s scale on its own: ``rs = rsqrt(sum * rcp(N) + EPS)`` of r in the fused kernel's geometry, the one f32
-    word each normed element reads."""
-    _fused_geometry(int(S.N), int(S.CLUSTER))
-    return _mnnvl_scale(B, S, B.call(ZERO32), r)
-
-
-@composite("RmsNormMnnvlApply", 1, ["G", "SHOT"],
-           lambda S: ((("r", Array(S.G, BF16)), ("w", Array(S.G, BF16)), ("rs", F32)), Array(S.G, BF16)),
-           conformance=_MNNVL_SPLIT)
-def RmsNormMnnvlApply(B, S, r, w, rs):
-    """`RmsNormMnnvl_v1`'s normed elements from its scale rs, element by element: G columns of the row are this Definition at
-    width G on those columns of r and w."""
-    return _mnnvl_apply(B, strategy(S.SHOT), B.call(ZERO32), B.batch(P.Bf16ToF32, r, axes=(0,)), w, rs)
 
 
 def _mnnvl_norm(B, S, zero, r, w):

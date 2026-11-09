@@ -3,7 +3,7 @@ row's elements [j·G, (j+1)·G), their weights and the sum of squares' scale), r
 `RMSNormFusedCudaVector8_v1`'s outputs word for word on `test_rmsnorm_fused_add`'s rows: Gaussian rows at three scales,
 uniformly random words (NaN, ±inf, ±0 and subnormals among them), and rows whose residual add, squares or variance
 overflow, underflow or cancel. Their gates are the kernels' plus the N residual adds the fused apply units redo, their
-Boolean versions (`boolean_norms`' `_v2`) return their words, and at GLM-5.3's hidden width each unit fits a Flock proof
+Boolean versions (`boolean_norms_split`'s `_v2`) return their words, and at GLM-5.3's hidden width each unit fits a Flock proof
 block and returns at most G words of a row."""
 from __future__ import annotations
 
@@ -76,7 +76,7 @@ def test_their_gates_are_the_kernels_and_the_fused_apply_units_redo_the_residual
 
 @pytest.mark.parametrize("fused", [False, True])
 def test_on_bits_each_unit_is_the_switchs_boolean_version_and_returns_its_words(fused):
-    """The switch takes each word unit to `boolean_norms`' `_v2`, RSQRT bound to mufu's Boolean version; on every row kind
+    """The switch takes each word unit to `boolean_norms_split`'s `_v2`, RSQRT bound to mufu's Boolean version; on every row kind
     that returns the word unit's words, the apply unit on the row's first G elements."""
     N, EPS, BLOCK, G = 64, 1e-6, 8, 16
     rows = _rows(np.random.default_rng(7), N)

@@ -6,8 +6,8 @@ squares is the kernel's own reduction (`cuda_rmsnorm._pure_scale`, and for the f
 v3's batches, v1's words) and an apply unit is the kernel's own
 epilogue (`cuda_rmsnorm._out`) on its elements, so N / G apply units return the kernel's outputs word for word. The fused
 apply redoes the residual add on its G elements, so the cut adds N residual adds to the fused kernel's gates and none to
-the pure kernel's (`verity/ml/definitions/tests/test_cuda_rmsnorm_split.py`). Their Boolean versions are `boolean_norms`'
-units of the same names, `_v2`.
+the pure kernel's (`verity/ml/definitions/tests/test_cuda_rmsnorm_split.py`). Their Boolean versions are
+`boolean_norms_split`'s units of the same names, `_v2`.
 """
 from __future__ import annotations
 

@@ -22,7 +22,7 @@ from verity.ml.circuits.ops.prims import ZERO32
 from verity.ml.definitions.boolean import boolean_version
 from verity.ml.definitions.registry import dsa_norm as DN
 from verity.ml.definitions.registry import prims as P
-from verity.ml.definitions.registry import tp_allreduce as TA
+from verity.ml.definitions.registry import tp_allreduce as TA, tp_allreduce_split as TS
 from verity.ml.windows import interface as IF
 
 _spec = importlib.util.spec_from_file_location("rows_of_test_rmsnorm_fused_add", Path(__file__).with_name("test_rmsnorm_fused_add.py"))
@@ -33,7 +33,7 @@ _rows, _flat, _gates = _rows_test._rows, _rows_test._flat, _rows_test._gates
 
 def _mnnvl(N: int, SHOT: int, CLUSTER: int, FMA: bool, G: int) -> tuple[object, object, object]:
     statics = {"N": N, "SHOT": SHOT, "CLUSTER": CLUSTER, "EPS": 1e-5, "FMA": FMA}
-    return bind(TA.RmsNormMnnvl, **statics), bind(TA.RmsNormMnnvlSumSq, **statics), bind(TA.RmsNormMnnvlApply, G=G, SHOT=SHOT)
+    return bind(TA.RmsNormMnnvl, **statics), bind(TS.RmsNormMnnvlSumSq, **statics), bind(TS.RmsNormMnnvlApply, G=G, SHOT=SHOT)
 
 
 def _dsa(N: int, G: int) -> tuple[object, object, object]:
