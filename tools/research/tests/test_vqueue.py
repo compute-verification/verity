@@ -273,6 +273,19 @@ def test_a_cap_comes_from_the_newest_outcome_holding_the_pr_at_its_head():
     assert decide(snap(ready=prs(1, 2, 3), history=[pair, later])) == [Build((1, 2), MAIN, 2)]
 
 
+def test_decide_depends_on_what_the_snapshot_holds_not_its_order():
+    t = task("t", "pkg9/")
+    cands = [cand("c1", MAIN, 1, 2, state=FAIL, failed=(t,)), cand("c2", "c1", 3), cand("a", "gone", 4), cand("b", "a", 5),
+             cand("d", "a", 6), cand("e", "gone2", 7), cand("f", MAIN, 8)]
+    ready = [*prs(1, 2, 3, 4, 5, 6, 7), pr(8, rank=0), pr(9, lean=True), pr(10, lean=True)]
+    want = decide(snap(*cands, ready=ready))
+    rng = random.Random(0)
+    for _ in range(50):
+        rng.shuffle(cands)
+        rng.shuffle(ready)
+        assert decide(snap(*cands, ready=ready)) == want
+
+
 def test_decide_reads_no_clock_files_or_randomness(monkeypatch):
     t = task("t", "pkg2/", "**/x.py")
     snaps = [snap(cand("c1", MAIN, 1, 2, state=state, failed=(t,)), cand("c2", "c1", 3), cand("z", "gone", 4),

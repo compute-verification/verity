@@ -214,7 +214,7 @@ def _chain(s: Snapshot, ready: dict[int, Ready], acts: list[Action]) -> tuple[li
     """Main's chain, lowest first, and the members of the candidates already on `main`; the drops of the other candidates go
     to ``acts``, each with every candidate above it."""
     by_sha: dict[str, Candidate] = {}
-    for c in s.candidates:
+    for c in sorted(s.candidates, key=lambda c: c.sha):
         by_sha.setdefault(c.sha, c)
     above: dict[str, list[Candidate]] = {}
     for c in by_sha.values():
