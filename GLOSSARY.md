@@ -310,7 +310,7 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
 - A **sliding window** is a model's term: the span of positions a layer's attention reads (a model config's
   `sliding_window`).
 - In `integrations/vllm`, "family" and "kind" name circuit Definitions and query families, many of them serialized fields (its README's vocabulary).
-- Seven words still carry two senses in the code:
+- Eight words still carry two senses in the code:
   - **Footprint**: a replay block's is where sampled proofs read harm (Two-stage design, below). An HBM footprint
     (`Accounting.BoundReceipt.footprint`) and a theorem's (its hypotheses, in Flock's `ASSUMPTIONS.md`) keep the word.
   - **Row**: a commitment row, the bits one leaf hashes (`hm96` rows, the `*/row/*` leaf schemes, the row-form
@@ -331,6 +331,10 @@ pins, fixtures and runs bake in; a new family takes a fresh id (`test_targets_fr
   - **Acceptance probability**: a prover's success probability, the δ of knowledge soundness's κ(δ). An incorrect proof
     block's chance to pass the sample is its miss probability (Older names), which the Lean's `effAcceptProb` and
     `acceptProb` lemmas and the docstrings of SPOT's Python verifier still call its acceptance probability.
+  - **Cap**: SPOT's served cap S, the most served output bits a request counts in the capped two-stage form, and the
+    network certifier's registered response cap (`WardenParams.max_tokens_cap`, the most tokens a response carries)
+    keep the word. Pearl's cap is its inert-work bound (Older names), and "cap check" and an "over-cap" tile stay
+    retired.
 
 ## Terms of one area
 
