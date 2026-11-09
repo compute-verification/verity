@@ -1937,7 +1937,8 @@ class Queue:
         return when is not None and when > at
 
     def entries(self, prs: list[PR], state: dict, base: str | None = None, landed: str | None = None,
-                queued: str | None = None, open_numbers: Collection[int] | None = None) -> dict[int, Entry]:
+                queued: str | None = None, open_numbers: Collection[int] | None = None,
+                old_landed: str | None = None) -> dict[int, Entry]:
         """Each open PR's standing.  With ``open_numbers`` (every open PR's number), one whose head carries merges of an old
         `next` (`old_next`: of PRs neither among them nor landed) is refused, with the fix (`old_next_refusal`), as the
         preflight refuses its mark (`Preflight._old_next`).  A PR P goes after, and waits while it isn't admitted, each other open PR Q whose current
@@ -1961,7 +1962,10 @@ class Queue:
         Commits two PRs merely share wait for nothing: a third branch both merged (on neither first-parent line), or a fork
         point the queue never saw either PR at (on both), and neither does a head of Q's that P holds (`Entry.held`) on
         ``landed``, the landing branch's tip (`base` as fetched unless given: the preflight judges on `main`).  One walk of
-        every head (`above`) and one `rev-list --parents` of `next`, not a merge base for each pair."""
+        every head (`above`) and one `rev-list --parents` of `next`, not a merge base for each pair.
+
+        ``old_landed``, the old path's `checked` while ``landed`` doesn't hold it: a head of Q's that P holds there landed under
+        drive's rules, so P still goes after Q but doesn't wait for it, though Q moved on unmarked since."""
         rules, base = self.rules(), base or self.base
         landed = landed or self.base
         heads = {p.head: p.number for p in prs}
@@ -2006,6 +2010,8 @@ class Queue:
         # a held commit is above ``base``, so on ``landed`` only when that isn't ``base``
         on = functools.cache(lambda c: landed != base and not _git(self.workdir, "merge-base", "--is-ancestor", c, landed,
                                                                    check=False).returncode)
+        on_old = functools.cache(lambda c: bool(old_landed) and not _git(self.workdir, "merge-base", "--is-ancestor", c,
+                                                                          old_landed, check=False).returncode)
         seen = state.get("seen") or {}
         carriers = set(pos)
         while True:                                         # until every member counted as carrying commits is admitted
@@ -2037,7 +2043,8 @@ class Queue:
             while changed:                                  # a PR waits while a PR whose commits it contains isn't admitted
                 changed = False
                 for e in out.values():
-                    if e.state == "ready" and (blocking := [a for a in e.after if out[a].state != "ready"]):
+                    if e.state == "ready" and (blocking := [a for a in e.after
+                                                            if out[a].state != "ready" and not on_old(e.held[a])]):
                         e.state, e.why, changed = "waiting", f"contains {e.contains(blocking[0])}, which isn't admitted", True
             if not (fell := {n for n in carriers if out[n].state != "ready"}):
                 return out
@@ -2811,7 +2818,7 @@ class Queue:
             self.prefetch = None
         try:
             old = _git(self.workdir, "rev-parse", "-q", "--verify", "refs/remotes/origin/checked^{commit}", check=False).stdout.strip()
-            onto = {"base": main, "landed": landed_with(self.workdir, main, old or None), "queued": main} if loop else {}
+            onto = {"base": main, "landed": main, "queued": main, "old_landed": old or None} if loop else {}
             entries = self.entries(prs, state, open_numbers={p.number for p in open_prs}, **onto)
             entries.update(waiting)
             entries.update(self.off_main(open_prs))
@@ -3260,18 +3267,6 @@ def rules_at(repo: Path, ref: str) -> Rules | None:
         if r.returncode == 0:
             return Rules.parse(r.stdout, path)
     return None
-
-
-def landed_with(repo: Path, main: str, old: str | None) -> str:
-    """What `entries` takes as landed onto ``main`` (its ``landed``): ``main``, and while ``main`` doesn't hold ``old``, the old
-    path's frozen `checked`, ``old`` too, as one commit with both as parents.  A head landed on `checked` passed drive's rules
-    and reaches `main` in an aggregate of `checked`, so a PR holding it doesn't wait for its PR, which may have moved on
-    unmarked since, as under drive."""
-    if not old or not _git(repo, "merge-base", "--is-ancestor", old, main, check=False).returncode:
-        return main
-    pinned = {**IDENTITY, "GIT_AUTHOR_DATE": "@0 +0000", "GIT_COMMITTER_DATE": "@0 +0000"}      # the same pair, the same commit
-    return _git(repo, "commit-tree", f"{main}^{{tree}}", "-p", main, "-p", old, "-m", "main and the old path's checked",
-                env=pinned).stdout.strip()
 
 
 def chain_of(repo: Path, base: str, ref: str) -> list[Member]:

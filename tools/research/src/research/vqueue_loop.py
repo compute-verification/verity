@@ -115,8 +115,7 @@ from .drive import CI, JOB_OF_KIND, RATCHET_STEP, SLIM_STEPS, SUITES_KIND, Drive
 from .drive import INFRA as INFRA_HANDLE
 from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
-                    landed_with, lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at,
-                    unreviewed)
+                    lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
                      Ready, Red, Rerun, Retry, Ring, Snapshot, Verdict, _inherited)
 
@@ -546,8 +545,8 @@ class World:
         prs = [p for p in prs if p.head not in gone and not self._ancestor(p.head, main)]
         labels.prefetch([(p.number, p.head) for p in prs])
         old = _git(self.repo, "rev-parse", "-q", "--verify", f"{CHECKED}^{{commit}}", check=False).stdout.strip()
-        entries = q.entries(prs, q.load_state(), base=main, landed=landed_with(self.repo, main, old or None), queued=main,
-                            open_numbers=set(self.open()))
+        entries = q.entries(prs, q.load_state(), base=main, landed=main, queued=main, open_numbers=set(self.open()),
+                            old_landed=old or None)
         flags = flags_at(self.repo, main)
         excludes = tuple(flags.lowrisk_excludes) if flags.lowrisk_lane else ()
         self._files = {k: v for k, v in self._files.items() if k[1] == main}
