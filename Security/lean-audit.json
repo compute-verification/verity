@@ -1576,7 +1576,7 @@
   },
   "Claims.SamplingGeneric.CompiledTwo.Sessions": {
    "owner": "@proofs",
-   "digest": "d71156b47b842cc84a70b97910460cc907087931554107614833714d0087fb5e",
+   "digest": "149be8259cd9dff09fbd172876b9d017e0e712985ee92d138c4d2aaff8ebfd43",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -3841,6 +3841,15 @@
      "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
      "Claims.Witness.SamplingGeneric.twoSessions_meets"
     ]
+   },
+   "Claims.SamplingGeneric.CompiledTwo.KSAt": {
+    "fails": "Claims.SamplingGeneric.CompiledTwo.KSAt_fails",
+    "meets": [
+     "Claims.Flock.decoder_meets_plain",
+     "Claims.Flock.decoder_meets_zk",
+     "Claims.Witness.SamplingGeneric.twoOpenCalls_meets",
+     "Claims.Witness.SamplingGeneric.twoSessionsTwo_meets"
+    ]
    }
   },
   "not": {
@@ -3956,7 +3965,9 @@
    "Claims.Encodings.LinkBinds": "Claims.Encodings.linkBinds",
    "Claims.Encodings.RelinkR": "Claims.Encodings.relinkR",
    "Claims.SamplingGeneric.CompilerKSAt": "Claims.SamplingGeneric.compilerKSAt",
-   "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo"
+   "Claims.Guarantees.CapTwo": "Claims.SecurityProofs.CapTwo",
+   "Claims.SamplingGeneric.CompilerKSAtTwo": "Claims.SamplingGeneric.compilerKSAtTwo",
+   "Claims.SamplingGeneric.CompilerEfficientTwo": "Claims.SamplingGeneric.compilerEfficientTwo"
   }
  },
  "witnesses": {
@@ -4427,6 +4438,14 @@
   "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
    "honest": ["Flock.SecurityProofs.EndToEndRegisteredDrawn_honest"],
    "nontrivial": "Flock.SecurityProofs.EndToEndRegisteredDrawn_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial"
+  },
+  "Claims.SamplingGeneric.compilerEfficientTwo": {
+   "honest": ["Claims.SamplingGeneric.compilerKSTwo_honest", "Claims.SamplingGeneric.compilerBits_honest"],
+   "nontrivial": "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial"
   }
  },
  "unwitnessed": {
@@ -11986,6 +12005,21 @@
    },
    "type_hash": "e4243fbaf1ee1c234ce100d08e628977ca71758e0c37225e2636dd725e44e044"
   },
+  "Claims.SamplingGeneric.CompiledTwo.KSAt_fails": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.CompiledTwo.KSAt_fails {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin]",
+    "  (H : Claims.Msg → Claims.Msg) : Exists fun A => Exists fun L => Not (Claims.SamplingGeneric.CompiledTwo.KSAt H L)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "3ce579edc550a7489aba9d13e5f6c39c62013d660319cdef679ea5ff381bdfa2"
+  },
   "Claims.SamplingGeneric.CompiledTwo.KS_fails": {
    "owner": "@proofs",
    "signature": [
@@ -12154,6 +12188,36 @@
    "type_hash": "21af2809d9cbe6c94684ce640570d0fead7fd6a11c3b403ce9731d9124100b69",
    "unfolded_hash": "ac880e87937f1c75d7c0cc49e9af5fb3f2ea7ce4655d9d88a6aaf3ff97f5b66d"
   },
+  "Claims.SamplingGeneric.compilerEfficientTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerEfficientTwo : Claims.SamplingGeneric.CompilerEfficientTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.Compiled.OpenCallsLe", "Claims.SamplingGeneric.CompiledTwo.Sessions"],
+    "reads": []
+   },
+   "type_hash": "74de6b1ee4a5a56cea0dc15483e561a72a93e7b2b7a74a8fc65a3f18e3374175",
+   "unfolded_hash": "ce8f50cfd43bfa3c1687523f76e39de90bac517504d2f9a05f500fb51d26407b"
+  },
+  "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerEfficientTwo_nontrivial :",
+    "  Not",
+    "    (Claims.SamplingGeneric.Compiled.Efficient FlockDeploy.sha512",
+    "      (Claims.Witness.SamplingGeneric.effLTwo Bool).toCompiled)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "c1a22100e8ae32936fde2a26b42cd4128aa0a32f4ce2e2c83cc44121e5ca7d76"
+  },
   "Claims.SamplingGeneric.compilerEfficient_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -12236,6 +12300,39 @@
    },
    "type_hash": "86c0c76d767eeed9c3d6f0ba50bdc9f5a460be2ae5a716bef9ad44ffef243867",
    "unfolded_hash": "92e403cec8f991118e93542458f9b0b9fe731ba1be4047fe6db27b0a54892a52"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo": {
+   "owner": "@proofs",
+   "signature": ["Claims.SamplingGeneric.compilerKSAtTwo : Claims.SamplingGeneric.CompilerKSAtTwo"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["Claims.Sampling.CommitmentScheme.Binds"],
+    "open": [
+     "Claims.SamplingGeneric.Arg.KS",
+     "Claims.SamplingGeneric.Compiled.OpenCallsLe",
+     "Claims.SamplingGeneric.CompiledTwo.Scope",
+     "Claims.SamplingGeneric.CompiledTwo.Sessions"
+    ],
+    "reads": []
+   },
+   "type_hash": "c6ac7c1b35f8440b35281103a59b4794d7d6407da8de443a9bc489a4839d405f",
+   "unfolded_hash": "9aecf6855d726770a3c07a074d98db78539f7117af4344f3523b6c8dbbd3b846"
+  },
+  "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "Claims.SamplingGeneric.compilerKSAtTwo_nontrivial :",
+    "  Not (Claims.SamplingGeneric.CompiledTwo.KSAt FlockDeploy.sha512 (Claims.Witness.SamplingGeneric.sksLTwo Bool))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Claims.SamplingGeneric.CompiledTwo.Scope"],
+    "reads": []
+   },
+   "type_hash": "d65b4b98c028c06f1dff459b2860b4cac79a96f263355f3d8b31960b29334ec3"
   },
   "Claims.SamplingGeneric.compilerKSAt_nontrivial": {
    "owner": "@proofs",
@@ -32423,7 +32520,7 @@
    }
   },
   "Definitions.Claims.SamplingTwo": {
-   "digest": "79975b7d9dd9b05de613c8b8f7d63a2f336d11785b783275435dbca59f8f3f8a",
+   "digest": "4175254b4c46d0c2d6965486491b8c674c3bcc3dc0ff0fbd4b3d401430a71048",
    "definitions": {
     "Claims.Sampling.Design.Two": "d1c7605e035e8d2d77209adadc6b25301fae1804f7e8ea858fa1aa597e7d4a00",
     "Claims.Sampling.Design.Two.FirstRate": "c47f092ab4e567a228b5a0bc990750a48733a96b590649f5e7bb87609a4024fc",
@@ -32458,12 +32555,15 @@
     "Claims.SamplingGeneric.CompiledTwo": "1e25965b53856ad51df8689214d9d45be650b291cbdc5e15e73975a9b6b4d5ec",
     "Claims.SamplingGeneric.CompiledTwo.Exfil": "802ad425758d4f9a5142febbe8c6b7218dca8b1ee9f99f5fced4de5012b1a4e5",
     "Claims.SamplingGeneric.CompiledTwo.KS": "a1248a70c0faedf4a598de524bcb491f3f08cd20d7dff39d0502a1dc8c78f936",
+    "Claims.SamplingGeneric.CompiledTwo.KSAt": "4d4dc8186592320621f4c1b6660a4ccd78b9cc82fb8429661a796e09467b583c",
     "Claims.SamplingGeneric.CompiledTwo.Scope": "c5b24307da73e3fd56aa75fc4617e03dfd0f41984fb40bccb792e97a43515735",
-    "Claims.SamplingGeneric.CompiledTwo.Sessions": "d71156b47b842cc84a70b97910460cc907087931554107614833714d0087fb5e",
+    "Claims.SamplingGeneric.CompiledTwo.Sessions": "149be8259cd9dff09fbd172876b9d017e0e712985ee92d138c4d2aaff8ebfd43",
     "Claims.SamplingGeneric.CompiledTwo.replaySample": "bc99ecaee387a6c05784d9894a69e22031f3ec413d1cbc3efa4f596a3f029841",
     "Claims.SamplingGeneric.CompiledTwo.toCompiled": "0c63c2616b1bb25764ab651b8c1f7e5428848cea5d0fa4e874c241d8ccec06a2",
     "Claims.SamplingGeneric.CompiledTwo.two": "bb5d61d75e180d0e5265c7ed2a38bbd6e337091d093c853487fe82047d09b02e",
+    "Claims.SamplingGeneric.CompilerEfficientTwo": "0d2219d8ee13871177742f732c246708cd8d15d90067a4546cbe9472b89af9e4",
     "Claims.SamplingGeneric.CompilerExfilTwo": "20db2a73640612ec3c9de0b6ea3d3ed5f3a2049f7744d0579ce182e7cc196176",
+    "Claims.SamplingGeneric.CompilerKSAtTwo": "6f20572b8ce003f43a3365f49d95bbba3b95ef450d9f76fec170979244035fa3",
     "Claims.SamplingGeneric.CompilerKSTwo": "2f34960aa5248cf8bb1d7da7cd439645e6b8cc5e051e7b29e12ed2a0991345bf"
    }
   },
@@ -47935,6 +48035,12 @@
     "Claims.Witness.SamplingGeneric.twoLTwo": "50fbf176a9705e89026cf3974b238432828c9aea0b5ad4270d5e8f179c456dbb",
     "Claims.Witness.SamplingGeneric.twoTwo": "ddd8445d33c7ed6a26bd6dd7b5738019b1f45791da9b72a37c51c544df738d4c",
     "Claims.Witness.SamplingGeneric.zeroTwo": "b16b4bbdbeae49840beb320496d10aa16188622a0741322d78d74cdeca75c725"
+   }
+  },
+  "Proofs.Flock.Claims.Witnesses.SamplingTwoKSAt": {
+   "digest": "ed206c1c4aba20511a1827bb55d61287e1035d829d652e5ff880c4d8412abfa5",
+   "definitions": {
+    "Claims.Witness.SamplingGeneric.effLTwo": "4e792a5a53e27de4e291776970b3857264d096a778e7269d282f72f37a7c0f72"
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingTwoRankin": {
