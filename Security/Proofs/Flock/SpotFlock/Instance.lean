@@ -9,9 +9,9 @@ public import Proofs.Flock.SpotFlock.Cap
 `SpotFlock.Instance.held R B desc q c₀`: the auditor's copies (`Held`) of a registration of one template whose one
 request is one unit, over the template's reference statement `R` (`Ref`) and a boundary registration `B` (`Bnd`) of one
 unit sampled `subset:1`, at the descriptor `desc` and the statement's query `q`, with SPOT's own frame (`frameAt` at the
-slot map, `revealCode` at the site map, from the code `c₀`). Its round 2 reads no links, wires or reference registered
-reads: each is present and empty (`some #[]`, `.null`), since an absent one refuses every run. No slot is always
-checked.
+slot map, `revealCode` at the site map, from the code `c₀`). Its round 2 reads `R`'s links and reference registered
+reads, each present (`some`), since an absent one refuses every run, and no wires (`some #[]`), since there is one
+template. No slot is always checked.
 
 Each bundle holds the facts the two-stage design reads of it, each a decision on its own data:
 * `Ref`: the statement is in Flock's masked scope (`zkOk`), reads as a member (`templateOk`), and with its one unit is
@@ -57,11 +57,15 @@ structure Bnd where
   firstK : firstK g = some 1
   pop : ∀ n, Spot.Partition.units g.program g.query = .ok n → Spot.Slots.popOk g.program g.query n = true
 
-/-- **A template's reference statement**, named `name`, with the facts the two-stage design reads of it: it sets up in
-Flock's masked scope, reads as a member, and with its one unit is in the two-stage scope. -/
+/-- **A template's reference statement**, named `name`, with its replay block's links (`links`: its input and output
+ports at the boundary record) and its reference registered reads (`reads`: each port's registered read, `.null` for
+none), and the facts the two-stage design reads of it: it sets up in Flock's masked scope, reads as a member, and with
+its one unit is in the two-stage scope. -/
 structure Ref where
   x : Msg
   name : String
+  links : Array Spot.SecondStage.Link
+  reads : Json
   zk : zkOk x = true
   tmpl : ∀ h : Held, h.xS₀ 0 = x → templateOk h 0 = true
   scope : scopeOk (bitsProgs (ms1 x)) (membersPart (ms1 x)) ⟨part1 x, design1, [1]⟩ = true
@@ -71,8 +75,8 @@ structure Ref where
 def reg (B : Bnd) : RegTwo :=
   { first := B.g, ns := #[1], ks := #[1], blockOf := fun ρ _ p => ρ + p, always := fun _ => false }
 
-/-- **The auditor's copies at the frame `c₀`**: one template, `R`'s, with one VU and the second stage's count `1`, no
-links, wires or reference registered reads, at the descriptor `desc` and the query `q`. -/
+/-- **The auditor's copies at the frame `c₀`**: one template, `R`'s, with one VU, the second stage's count `1`, `R`'s
+links and reference registered reads and no wires, at the descriptor `desc` and the query `q`. -/
 def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held where
   desc := desc
   vus := [#[0]]
@@ -80,11 +84,11 @@ def held₀ (R : Ref) (B : Bnd) (desc : Msg) (q : Query) (c₀ : Code) : Held wh
   reg := reg B
   k := [1]
   names := [R.name]
-  links := some #[]
+  links := some R.links
   wires := some #[]
   xS₀ := fun _ => R.x
   xS₀_ok := fun _ => R.zk
-  refReads := fun _ => .null
+  refReads := fun _ => R.reads
   frame := c₀
 
 /-- **The auditor's copies**: `held₀`'s, with SPOT's own frame from `c₀`. -/
