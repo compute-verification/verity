@@ -28,7 +28,9 @@ are the proof blocks, with `k = 1` and no interior registration.
    `P̄_a(w) = E_S ∏_{ρ∈S} e_ρ(w)`, `e_ρ(w) = ∏_t C(n_{ρ,t} − w(ρ, t), k_t)/C(n_{ρ,t}, k_t)` (`Design.Two.esc`, the
    hypergeometric miss, `escCell`), written through the first stage's `P_a`; the confidence set
    `M̄_δ = {w : P̄_a(w) > δ}` (`Design.Two.M`); and the relation `RTwo`: at some interiors, the extracted boundary
-   trace's footprint is in `M̄_δ`.
+   trace's footprint is in `M̄_δ`. The cap reads two rates, a first stage that catches each replay block at rate `r₁`
+   (`Design.Two.FirstRate`) and a second stage that samples each cell at rate `r₂` (`Design.Two.SecondRate`), and the
+   replay blocks a footprint marks incorrect (`Design.Two.wrongBlocks`).
 4. **The compiled verifier** (`CompiledTwo`): a `Compiled` with the statement's two-stage design (`two`) and the
    replay sample (`replaySample`). Its second stage is `Compiled.stage2`, and `iroots x v ρ` is the roots a run shows for
    replay block `ρ`'s interior. Its extractor, errors and numbers are `Compiled`'s.
@@ -148,6 +150,22 @@ noncomputable def Design.Two.Pa (d : Design.Two) (Pt : Partition) (fp : ℕ → 
 
 /-- **The confidence set** `M̄_δ`: every footprint `fp` with `P̄_a(fp) > δ`. -/
 def Design.Two.M (d : Design.Two) (Pt : Partition) (δ : ℝ) : Set (ℕ → ℕ → ℕ) := {fp | δ < d.Pa Pt fp}
+
+/-- **The first stage catches each replay block at rate `r`**: it misses every set `T` of replay blocks with
+probability at most `(1 − r)^{|T|}`, as independent catches at rate `r` would. -/
+def Design.Two.FirstRate (d : Design.Two) (r : ℝ) : Prop :=
+  ∀ T ⊆ Finset.range d.part.blocks.length, d.replay.Pa d.part T ≤ (1 - r) ^ T.card
+
+/-- **The second stage samples each cell at rate `r`**: in every nonempty cell `(ρ, t)` it samples
+`min(k_t, n_{ρ,t}) ≥ r·n_{ρ,t}` proof blocks. -/
+def Design.Two.SecondRate (d : Design.Two) (Pt : Partition) (r : ℝ) : Prop :=
+  ∀ ρ < d.part.blocks.length, ∀ t < Pt.strata.length, 0 < (cell Pt d.part ρ t).card →
+    r * (cell Pt d.part ρ t).card ≤ ((min (d.k.getD t 0) (cell Pt d.part ρ t).card : ℕ) : ℝ)
+
+/-- **The replay blocks a footprint marks incorrect**: those with an incorrect proof block in the cell of some
+stratum. -/
+def Design.Two.wrongBlocks (d : Design.Two) (Pt : Partition) (fp : ℕ → ℕ → ℕ) : Finset ℕ :=
+  (Finset.range d.part.blocks.length).filter fun ρ => ∃ t < Pt.strata.length, 0 < fp ρ t
 
 /-- **The two-stage relation** at `δ`, on the statement's bytes: it parses, its proof-block partition and two-stage
 design evaluate (`partition`, `two`, the verifier's own), and at some interior values, one interior per replay block,

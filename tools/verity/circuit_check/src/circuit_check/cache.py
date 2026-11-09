@@ -2665,17 +2665,36 @@ def task_list_reads(roots: Iterable[Any]) -> dict[str, list[str]]:
     got = attributed(fr, (), roots, sidecars=False)
     _INTERNAL.append(True)
     try:
-        root = _ROOT[0]
-        by_file: dict[str, str] = {}
-        for name, m in list(sys.modules.items()):
-            if (f := _module_file(m)) is not None:
-                by_file.setdefault(os.path.abspath(f), name)
-        mods = {name for f, name in by_file.items() if _rel(f) is not None and not f.startswith(os.path.join(str(_HERE), ""))
-                and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}
+        mods, by_file = _tree_modules()
         units = {f"{n}#*" for f in _unit_files() if (n := _named_file(f, ".py", by_file)) is not None}
     finally:
         _INTERNAL.pop()
     return {**got, "modules": sorted(set(got["modules"]) | mods), "units": sorted(set(got["units"]) | units)}
+
+
+def modules_since(loaded: set[str]) -> dict[str, list[str]]:
+    """What a process forked from one that had loaded the modules ``loaded`` names adds to that one's `task_list_reads` beyond
+    the reads of the Definitions it built (`unit_reads`, `circuit_check.units`' builds apart): each in-tree module it imported
+    under a name ``loaded`` lacks.  The rest of its `task_list_reads` walks what every binding made, which the one it was
+    forked from walks too."""
+    _INTERNAL.append(True)
+    try:
+        return {"modules": sorted(_tree_modules(loaded)[0])}
+    finally:
+        _INTERNAL.pop()
+
+
+def _tree_modules(loaded: set[str] = frozenset()) -> tuple[set[str], dict[str, str]]:
+    """Each in-tree module this process imported, by the first name it was loaded under, as the tree resolves that name, but
+    the checker's own (its key's `version`) and those ``loaded`` names; and that first name by each loaded module's file."""
+    root = _ROOT[0]
+    by_file: dict[str, str] = {}
+    for name, m in list(sys.modules.items()):
+        if (f := _module_file(m)) is not None:
+            by_file.setdefault(os.path.abspath(f), name)
+    own = os.path.join(str(_HERE), "")
+    return {name for f, name in by_file.items() if name not in loaded and _rel(f) is not None and not f.startswith(own)
+            and (p := _resolve(root, name)) is not None and os.path.realpath(p) == os.path.realpath(f)}, by_file
 
 
 def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: dict,
@@ -2697,6 +2716,6 @@ def store(cache: Path, k: dict, root: Path, got: dict[str, list[str]], report: d
     return eid
 
 
-__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup", "pin_files",
-           "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store", "task_list_reads", "trace", "tracing",
-           "unit_files", "unit_reads", "untraced", "version", "warm"]
+__all__ = ["PINS", "SCHEMA", "SUFFIX", "TARGETS", "UNTRACEABLE", "Frame", "attributed", "internal", "key", "lookup",
+           "modules_since", "pin_files", "produced", "recorded_pins", "recording", "registries", "seen", "seen_all", "store",
+           "task_list_reads", "trace", "tracing", "unit_files", "unit_reads", "untraced", "version", "warm"]

@@ -529,6 +529,16 @@ def _cover(t: Type, lo: int, hi: int) -> tuple[Type, int]:
             return t, off
 
 
+def _cyclic_widths(E: Type, r: int, n: int) -> frozenset:
+    """The widths of `n` consecutive leaves of an array of `E`s, from leaf `r` of an element on."""
+    L = E.leaves
+    if n >= L:
+        return E.width_set()
+    if r + n <= L:
+        return range_widths(E, r, r + n)
+    return range_widths(E, r, L) | range_widths(E, 0, r + n - L)
+
+
 def _residues(stride: int, count: int, L: int, cap: int = 4096) -> set[int] | None:
     """{k * stride mod L : k < count}, or None when it has more than `cap` members."""
     g = math.gcd(stride, L)
@@ -601,10 +611,14 @@ class _Widths:
             return False
         L = node.elem.leaves
         A = _residues(p.outer_stride, -(-p.count // p.inner), L)
+        r0 = (p.base - off) % L
+        if A is not None and p.inner_stride == 1 and len(A) <= 4096:
+            # each outer step reads `inner` consecutive leaves (fewer at a short last step), so a superset of the leaves `p`
+            # names is the window of `inner` leaves from each step's first, cyclically within an element
+            return all(_cyclic_widths(node.elem, (r0 + a) % L, min(p.inner, p.count)) == {w} for a in A)
         B = _residues(p.inner_stride, p.inner, L)
         if A is None or B is None or len(A) * len(B) > 4096:
             return False
-        r0 = (p.base - off) % L
         return all(range_widths(node.elem, r, r + 1) == {w} for r in {(r0 + a + b) % L for a in A for b in B})
 
     def misread(self, t: Type, pos: int, p: Refs) -> int | None:

@@ -24,6 +24,8 @@ GLM-5.3's served SiLU·mul (vLLM ``_C.silu_and_mul``) is ``silu-mul-v2``, ``Silu
 Its served RMSNorms (vLLM's width-8 CUDA kernels, ``registry.cuda_rmsnorm``) are ``rmsnorm-fused-cuda-vec8``,
 ``RMSNormFusedCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-fused-cuda``'s ports, and ``rmsnorm-cuda-vec8``,
 ``RMSNormCudaVector8_v1{N, EPS, BLOCK}`` on ``rmsnorm-triton``'s; BLOCK is the launch's block, which the token count picks.
+The served fused norm binds ``RMSNormFusedCudaVector8_v3``, v1's words with its sum of squares stated as batches (its unit
+netlist orders the same gates differently, so it has no pins here); ``rmsnorm-fused-cuda-vec8`` keeps v1.
 
 The registered compiler's dead-free Definitions (``registry.dead_free``) have templates of their own: ``rmsnorm-triton-v5``,
 ``RMSNormTriton_v5{N, EPS}`` on ``rmsnorm-triton``'s ports, and ``attention-head-v18``, ``AttentionHead_v18{T, D, BN, DOT, INV,
@@ -833,7 +835,7 @@ ROWS: dict[str, _Row] = {r.template: r for r in (
          lambda s: _u16(2 * s["I"], "in0"), lambda s: _u16(s["I"], "out.out"), _silu_sample,
          lambda s: f"i{s['I']}/bf16", lambda s: f"SiluMul_v2<{s['I']}> · BF16", {"in0 (gate | up)": SILU.describe()},
          pattern=r"i(?P<I>\d+)", example={"I": 256}),
-    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8",
+    _Row("rmsnorm-fused-cuda-vec8", "RMSNormFusedCudaVector8_v1", "verity.ml.definitions.registry.cuda_rmsnorm:RMSNormFusedCudaVector8V1",
          ("N", "EPS", "BLOCK"), lambda s: _u16(s["N"], "in0", "in1", "in2"), lambda s: _u16(s["N"], "out.0", "out.1"), _rms_fused_sample,
          lambda s: f"n{s['N']}-b{s['BLOCK']}-eps{_slug_float(s['EPS'])}/bf16",
          lambda s: f"RMSNormFusedCudaVector8_v1<{s['N']}> · BLOCK {s['BLOCK']} · eps {s['EPS']:g} · BF16",
