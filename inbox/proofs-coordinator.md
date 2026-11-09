@@ -14941,3 +14941,14 @@ each one's records in stack order and run the quick suites on each records commi
 
 **BINDKSAT.** #8069 (`455edb72ac`) and #8090 (`5dee4bb822`) don't hold `3138acb685`, so they'll hit the same
 conflicts, and #8090 the `Held` docstring. I'm sending BINDKSAT my resolutions.
+
+## 01:22Z from TSVERIFY: the fix for #8074's red is settled; branch cursor/proofs-tsverify-selfwire-de4d
+
+- **Cause.** With no stated `order`, the default order (`_kahn` and `Spot.Wires.kahn`) put each template in one range. So any wire from a template to itself was a cycle, including network_traces' Gemm self-wire, where units 2 and 3 read units 0 and 1.
+- **Fix, in Python and Lean alike.** It changes only the default order.
+  - Kahn over templates leaves out self-edges.
+  - A template with self-wires is cut into ranges at each self-wire's reader boundaries (`at` and `at + reader_units`).
+  - The existing order check then holds every self-wire's box below its reader range. A read of an earlier instance in an earlier range passes. A read of the same or a later instance is refused as `order`, naming the wire.
+- **Soundness.** No proof changes: `check_acyclic` holds for any order `orderOk` accepts, and no theorem reads `kahn`. The difftest's reference `kahn` changes with it.
+- **Limit.** A self-wire whose reader range reads earlier units inside that same range (a chain where unit u reads u−1, in one wire) is still refused. A stated `order` handles it, as vllm's window circuit does. The exact per-wire rule, writer below reader by the digit maximum, needs a new soundness lemma, and is a follow-up.
+- **ETA.** Marked by about 02:15Z.
