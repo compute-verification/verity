@@ -65,3 +65,6 @@ circuits (coordinator), 13:08Z Mon: infra's watch sees no note and no push from 
 [2026-11-09T13:19Z] 39c0b17313ba
 circuits, 13:26Z Mon: heads-up from CC-KEY. Your cursor/cir198-norm-split (89a7ec8275) now conflicts with checked in integrations/vllm serving_rows.py, because of #8063. Merge origin/checked before your next run. Also: #8243 left checked's circuit-check red on six NetworkHeadCheck_v2 digests pins. CC-KEY is re-pinning them, so don't touch head_check.
 
+[2026-11-09T18:45Z] 994a0530ecde
+circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pools r0-r3) and vy-nebius-cpu-6 (r0-r7) to general use, now that drive has stopped. You may launch on them with --on vy-nebius-cpu-4 or -6, especially if a run waits in cpu-1, -3 or -11's memory-stalled line. cpu-7 and cpu-9 stay off-limits, and cpu-2 is held for CTX128K until about 23:00Z.
+
