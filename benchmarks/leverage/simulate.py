@@ -7,9 +7,12 @@ in-range faults under clamp.py's boxes, with three simulators:
 
   silent  the fault changes no served token: x' = x and no advice
   forced  the honest model reading the faulted tokens as forced input (reach.py's direct tokens); the advice is the
-          direct tokens' code (reach.fault_code_bits)
+          direct tokens' code (`advice_bits`)
   edit    one token of the prompt's last --window positions replaced, x' = x[tau <- u]; the advice is log2(W V) for the
           edit plus the code of the direct tokens of the honest model on x' reading the faulted tokens
+
+A fault is covered by its charge when its advice is at most c + --slot-bits: c its block's output bits, and the
+location the charge pays beyond a served slot's (log2 of proof blocks a served token, GLM-5.3's by default).
 
 Faults sit at a prompt's last position t0 (the forward serving the first new token) or --offsets positions before it,
 every forward clamped to the boxes. Kinds:
@@ -18,6 +21,8 @@ every forward clamped to the boxes. Kinds:
   own      a linear's input (lm.GROUP_SITES): one FP8 code at plus or minus 448 times its token's own group scale
   adv      of --adv-pool random coordinates at plus or minus their box, the --adv with the largest KL(faulted || honest)
            of the first served token's distribution
+  far      of the same pool, the --adv farthest from every input of the window (the identity included) in centered
+           logits at the first served token: the faults least like any honest query there
 
 Every edit is evaluated at the first served token, exhaustively over its W V candidates: its served top-1 and top-5,
 and its distance to the faulted distribution in centered logits, d = ||z_f - z_e - mean||_2, which bounds the
@@ -43,9 +48,8 @@ import torch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from lm import E4M3_MAX, GROUP, GROUP_SITES, LM, MODELS, Boxes, Cache, Fault, served_logprobs, ue8m0_scale
 from prompts import PROMPTS
-from reach import fault_code_bits
 
-KINDS = ("uniform", "edge", "own", "adv")
+KINDS = ("uniform", "edge", "own", "adv", "far")
 LN2 = math.log(2)
 
 
@@ -104,6 +108,7 @@ class Edits:
         self.N = torch.cat(ns)
         self.top = torch.cat(tops)
         self.M = self.N @ P
+        self.M2 = self.M.pow(2).sum(1)
         self.tau = torch.tensor(self.taus).repeat_interleave(V)
         self.u = torch.arange(V).repeat(W)
         self.identity = self.u == ids[0, self.tau]
@@ -139,24 +144,51 @@ def site_list(lm: LM, names: list[str], layers: list[int], offset: int) -> list[
 
 
 def step1(lm: LM, ids: torch.Tensor, tf: int, pre: Cache, site: tuple[str, int], cands: list[tuple[int, float]],
-          taps: dict, precision: str, batch: int) -> torch.Tensor:
-    """The first served token's log-probabilities with each candidate (coord, value) at site, position tf; the layers
-    below the site's are read from the honest residual stream."""
-    out = []
+          taps: dict, precision: str, batch: int) -> tuple[torch.Tensor, torch.Tensor]:
+    """The first served token's log-probabilities, and the final norm's output there, with each candidate
+    (coord, value) at site, position tf; the layers below the site's are read from the honest residual stream."""
+    out, ns = [], []
     s, l = site
+    L = lm.spec.layers
     tail = ids[:, tf:]
     for i in range(0, len(cands), batch):
         ch = cands[i:i + batch]
         b = len(ch)
         f = Fault.of(tf, [(s, l, c, v) for c, v in ch])
+        tp = {("final", L): None}
         if s == "emb":
-            lg = lm.forward(tail.expand(b, -1), pre.expand(b), fault=f, last_only=True)
+            lg = lm.forward(tail.expand(b, -1), pre.expand(b), fault=f, taps=tp, last_only=True)
         else:
-            first = min(max(l, 0), lm.spec.layers)
+            first = min(max(l, 0), L)
             xin = (taps[("emb", -1)] if first == 0 else taps[("resid", first - 1)])[:, tf:]
-            lg = lm.forward(tail.expand(b, -1), pre.expand(b), fault=f, last_only=True, x_in=xin.expand(b, -1, -1),
-                            first_layer=first, pos0=tf)
+            lg = lm.forward(tail.expand(b, -1), pre.expand(b), fault=f, taps=tp, last_only=True,
+                            x_in=xin.expand(b, -1, -1), first_layer=first, pos0=tf)
         out.append(served_logprobs(lg[:, -1], precision))
+        ns.append(tp[("final", L)][:, -1].float())
+    return torch.cat(out), torch.cat(ns)
+
+
+def advice_bits(D: np.ndarray, rank: np.ndarray, vocab: int) -> np.ndarray:
+    """Per row, a prefix code for the direct tokens a simulator must be told: Elias gamma of D + 1, log2 C(N, D) for
+    their positions, and per direct token a flag and either Elias gamma of its rank - 1 or log2 V for the token."""
+    n = D.shape[1]
+    d = D.sum(1)
+    lgam = np.vectorize(math.lgamma)
+    positions = (lgam(n + 1) - lgam(d + 1) - lgam(n - d + 1)) / math.log(2)
+    gamma = lambda x: 2 * np.floor(np.log2(np.maximum(x, 1))) + 1  # noqa: E731
+    tokens = np.where(D, 1 + np.minimum(gamma(rank - 1), math.log2(vocab)), 0).sum(1)
+    return gamma(d + 1) + positions + tokens
+
+
+def nearest_edit(E: "Edits", n: torch.Tensor, P: torch.Tensor, chunk: int = 32) -> torch.Tensor:
+    """Per row of n (B, d), the least centered-logit distance to any edit, the identity included: how far the first
+    served token's distribution is from every input of the window."""
+    m = n @ P
+    out = []
+    for i in range(0, len(m), chunk):
+        mi = m[i:i + chunk]
+        d2 = E.M2[None] - 2 * mi @ E.M.T + mi.pow(2).sum(1, keepdim=True)
+        out.append(d2.min(1).values.clamp_min(0).sqrt())
     return torch.cat(out)
 
 
@@ -207,17 +239,25 @@ def decode_forced(lm: LM, ids: torch.Tensor, rows: list[tuple[int, int]], ys: to
 
 
 def faults_for(lm: LM, ids: torch.Tensor, tf: int, site: tuple[str, int], taps: dict, pre: Cache, lp_h: torch.Tensor,
-               kinds: list[str], a, gen: torch.Generator) -> list[dict]:
-    """The site's faults at position tf, each {site, layer, coord, value, kind, hi, honest}."""
+               kinds: list[str], a, gen: torch.Generator, E: "Edits", P: torch.Tensor) -> list[dict]:
+    """The site's faults at position tf, each {site, layer, coord, value, kind, hi, honest, c}: c is the faulting
+    block's output bits, 16 for one value, and 1,032 for a value beyond one FP8 code at its token's own group scale
+    at a linear's input (it rewrites the group's scale, so its block writes the whole group)."""
     pc = lm.boxes.class_at(tf, ids[:, tf:tf + 1], pre.sink)
     x = taps[site][0, tf].float()
     hi = lm.boxes.hi[site][pc].float()
     w = x.numel()
     out = []
 
-    def add(c: int, v: float, kind: str, score: float | None = None):
+    def own_of(c: int) -> float:
+        g = x[c // GROUP * GROUP:(c // GROUP + 1) * GROUP]
+        return min(E4M3_MAX * float(ue8m0_scale(g.abs().max())), float(hi[c]))
+
+    def add(c: int, v: float, kind: str, score: float | None = None, far: float | None = None):
+        wide = site[0] in GROUP_SITES and abs(v) > own_of(c) * (1 + 1e-6)
         out.append({"site": site[0], "layer": site[1], "coord": int(c), "value": float(v), "kind": kind,
-                    "hi": float(hi[c]), "honest": float(x[c]), "class": pc, "screen_kl": score})
+                    "hi": float(hi[c]), "honest": float(x[c]), "class": pc, "screen_kl": score, "screen_far": far,
+                    "c": 8 * GROUP + 8 if wide else 16})
 
     for kind in kinds:
         if kind == "uniform":
@@ -228,20 +268,23 @@ def faults_for(lm: LM, ids: torch.Tensor, tf: int, site: tuple[str, int], taps: 
                 add(c, float(hi[c]) * (1.0 if torch.rand(1, generator=gen) < 0.5 else -1.0), kind)
         elif kind == "own" and site[0] in GROUP_SITES:
             for c in torch.randperm(w, generator=gen)[:a.random].tolist():
-                g = x[c // GROUP * GROUP:(c // GROUP + 1) * GROUP]
-                own = min(E4M3_MAX * float(ue8m0_scale(g.abs().max())), float(hi[c]))
-                add(c, own * (1.0 if torch.rand(1, generator=gen) < 0.5 else -1.0), kind)
-        elif kind == "adv":
-            pool = torch.randperm(w, generator=gen)[:a.adv_pool].tolist()
-            cands = [(c, sg * float(hi[c])) for c in pool for sg in (1.0, -1.0)]
-            lp = step1(lm, ids, tf, pre, site, cands, taps, a.precision, a.batch)
-            kl = kl_bits(lp, lp_h)
+                add(c, own_of(c) * (1.0 if torch.rand(1, generator=gen) < 0.5 else -1.0), kind)
+    if {"adv", "far"} & set(kinds):
+        pool = torch.randperm(w, generator=gen)[:a.adv_pool].tolist()
+        cands = [(c, sg * float(hi[c])) for c in pool for sg in (1.0, -1.0)]
+        lp, n = step1(lm, ids, tf, pre, site, cands, taps, a.precision, a.batch)
+        kl = kl_bits(lp, lp_h)
+        far = nearest_edit(E, n, P)
+        if "adv" in kinds:
             for j in kl.topk(min(a.adv, len(cands))).indices.tolist():
-                add(cands[j][0], cands[j][1], kind, float(kl[j]))
+                add(cands[j][0], cands[j][1], "adv", float(kl[j]), float(far[j]))
+        if "far" in kinds:
+            for j in far.topk(min(a.adv, len(cands))).indices.tolist():
+                add(cands[j][0], cands[j][1], "far", float(kl[j]), float(far[j]))
     return out
 
 
-def summarize(recs: list[dict], budget: float) -> list[dict]:
+def summarize(recs: list[dict]) -> list[dict]:
     keys = sorted({(r["site"], r["layer"], r["offset"], r["kind"]) for r in recs},
                   key=lambda k: (k[2], k[1], k[0], k[3]))
     rows = []
@@ -262,8 +305,10 @@ def summarize(recs: list[dict], budget: float) -> list[dict]:
             "moved_dinf_beats_honest": fr(moved, lambda r: r["best_dinf"] < r["dinf_honest"]),
             "eff_cont": fr(eff, lambda r: r["cont_exact"]),
             "eff_edit_cheaper": fr(eff, lambda r: r["edit_bits"] < r["forced_bits"]),
-            "eff_budget": fr(eff, lambda r: r["best_bits"] <= budget),
-            "eff_forced_budget": fr(eff, lambda r: r["forced_bits"] <= budget),
+            "eff_budget": fr(eff, lambda r: r["best_bits"] <= r["budget"]),
+            "eff_forced_budget": fr(eff, lambda r: r["forced_bits"] <= r["budget"]),
+            "eff_budget16": fr(eff, lambda r: r["best_bits"] <= r["budget"] - r["c"] + 16),
+            "c_wide": fr(g, lambda r: r["c"] > 16),
             "best_bits_mean": float(np.mean([r["best_bits"] for r in g])),
             "best_bits_max": float(np.max([r["best_bits"] for r in g])),
             "forced_bits_mean": float(np.mean([r["forced_bits"] for r in g])),
@@ -292,8 +337,9 @@ def main() -> int:
     ap.add_argument("--near", type=int, default=64, help="nearest edits evaluated exactly a fault")
     ap.add_argument("--cont", type=int, default=8, help="nearest first-token-matching edits decoded a fault")
     ap.add_argument("--eps", type=float, default=1e-3, help="the slack of the eps-max-divergence")
-    ap.add_argument("--budget", type=float, default=40.2,
-                    help="advice bits a fault the charge covers: c + log2(proof blocks a served slot), GLM-5.3's")
+    ap.add_argument("--slot-bits", type=float, default=24.2,
+                    help="log2 of proof blocks a served token: the location the charge pays beyond a served slot's "
+                         "(GLM-5.3's, 1.9e7)")
     ap.add_argument("--precision", default="bf16", choices=("bf16", "fp32"))
     ap.add_argument("--batch", type=int, default=512)
     ap.add_argument("--threads", type=int, default=0)
@@ -335,13 +381,13 @@ def main() -> int:
             pre = prefix(lm, ids, tf)
             faults = []
             for site in site_list(lm, (a.sites if off == 0 else a.far_sites).split(","), layers, off):
-                faults += faults_for(lm, ids, tf, site, taps, pre, lp_h, kinds, a, gen)
+                faults += faults_for(lm, ids, tf, site, taps, pre, lp_h, kinds, a, gen, E, P)
             for i in range(0, len(faults), a.batch):
                 ch = faults[i:i + a.batch]
                 ys, lp1, n1 = decode(lm, ids, tf, [(f["site"], f["layer"], f["coord"], f["value"]) for f in ch],
                                      a.new, a.precision)
                 D0, rank0 = decode_forced(lm, ids, [(-1, -1)] * len(ch), ys, a.precision, a.batch)
-                forced = fault_code_bits(D0.numpy(), rank0.numpy())
+                forced = advice_bits(D0.numpy(), rank0.numpy(), V)
                 cont_rows, cont_of = [], []
                 per = []
                 for j, f in enumerate(ch):
@@ -368,7 +414,7 @@ def main() -> int:
                                 "kl_honest": float(kl_bits(lp, lp_h)), "dinf_honest": float(dh)})
                 yc = ys[torch.tensor(cont_of, dtype=torch.long)] if cont_rows else torch.zeros(0, a.new, dtype=torch.long)
                 De, ranke = decode_forced(lm, ids, cont_rows, yc, a.precision, a.batch) if cont_rows else (None, None)
-                code_e = fault_code_bits(De.numpy(), ranke.numpy()) + edit_bits if cont_rows else np.zeros(0)
+                code_e = advice_bits(De.numpy(), ranke.numpy(), V) + edit_bits if cont_rows else np.zeros(0)
                 for j, f in enumerate(ch):
                     mine = [r for r, o in enumerate(cont_of) if o == j]
                     best = min(mine, key=lambda r: code_e[r]) if mine else None
@@ -384,6 +430,7 @@ def main() -> int:
                            "cont_exact": bool(mine) and any(not bool(De[r].any()) for r in mine),
                            "served": tok.decode(ys[j].tolist()), "honest_served": tok.decode(yh.tolist())}
                     rec["best_bits"] = 0.0 if rec["silent"] else min(rec["forced_bits"], rec["edit_bits"])
+                    rec["budget"] = rec["c"] + a.slot_bits
                     recs.append(rec)
                     rec_file.write(json.dumps(rec) + "\n")
                 rec_file.flush()
@@ -391,9 +438,9 @@ def main() -> int:
     rec_file.close()
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "boxes": str(a.boxes),
                "prompts": a.prompts, "window": a.window, "edit_bits": edit_bits, "new": a.new, "near": a.near,
-               "cont": a.cont, "eps": a.eps, "budget": a.budget, "precision": a.precision, "kinds": kinds,
+               "cont": a.cont, "eps": a.eps, "slot_bits": a.slot_bits, "precision": a.precision, "kinds": kinds,
                "layers": layers, "offsets": offsets, "faults": len(recs), "seconds": time.time() - t_start,
-               "groups": summarize(recs, a.budget)}
+               "groups": summarize(recs)}
     (a.out / "summary.json").write_text(json.dumps(summary, indent=1))
     print(json.dumps({k: v for k, v in summary.items() if k != "groups"}, indent=1))
     return 0
