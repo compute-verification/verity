@@ -982,21 +982,33 @@ def test_no_slim_runs_only_with_shadow_or_dry_run(capsys):
 class Slim:
     """`research.vqueue_slim`'s three functions, faked: each start registers a run, judged as ``verdicts`` says (pending
     unless it names it), and a verdict other than pending is kept in its record, as `judge` keeps it.  Each record judged is
-    kept in ``judged``."""
+    kept in ``judged``.  With ``launching``, a start is a detached launch, pending until ``registered`` names the run ids it
+    printed for its sha (none: it registered no run)."""
 
     def __init__(self):
         self.started: list[tuple] = []
         self.verdicts: dict[str, str] = {}
         self.judged: list = []
+        self.launching, self.registered = False, {}
 
     def start(self, driver, sha: str, base: str) -> dict:
         self.started.append((driver, sha, base))
+        if self.launching:
+            return {"ids": [], "launch": {"dir": f"train-{len(self.started)}", "pid": 1}, "tip": sha, "base": base}
         return {"ids": [f"run-{len(self.started)}"], "tip": sha, "base": base}
 
     def judge(self, driver, rec: dict | None) -> Verdict:
         self.judged.append(rec)
         if rec is None:
             return Verdict(INFRA, (), (vqueue.Failed("the run beside its check registered no run", ":no run", frozenset()),))
+        if "launch" in rec:
+            if rec["tip"] not in self.registered:
+                return Verdict(PENDING)
+            del rec["launch"]
+            if not (ids := self.registered[rec["tip"]]):
+                rec["verdict"] = INFRA
+                return Verdict(INFRA, (), (vqueue.Failed("registered no run", f"{rec['tip']}:no run", frozenset()),))
+            rec["ids"] = ids
         state = rec.get("verdict") or self.verdicts.get(rec["ids"][0], PENDING)
         if state != PENDING:
             rec["verdict"] = state
@@ -1102,6 +1114,31 @@ def test_a_failed_candidate_s_run_beside_and_those_of_the_candidates_above_it_ar
                                                                                         ("drop", two["sha"], ["run-2"])]
     assert [ids for ids, _ in env.cancelled] == [["run-1"], ["run-2"]]
     assert _acts(rebuilt) == ["build", "slim"] and rebuilt[0]["members"] == [2] and rebuilt[1]["record"]["ids"] == ["run-3"]
+
+
+@pytest.mark.parametrize("registered", [["run-9"], []])
+def test_a_run_beside_still_launching_when_its_candidate_is_dropped_is_cancelled_once_it_printed_its_run_ids(env, registered):
+    """train.sh takes many minutes to register a run, so a candidate dropped soon after its build has a run beside it with no
+    ids to cancel: the drop logs it, and each tick judges it until its launch ends; one that registered no run is settled."""
+    env.put(1, {"a.txt": "1\n"})
+    slim = Slim()
+    slim.launching = True
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda: "drive"
+    built, started = loop.tick()
+    sha = built["sha"]
+    env.o.gh.ready.discard((1, built["heads"][0]))                  # its ready mark withdrawn: dropped
+    (drop,) = loop.tick()
+    assert (drop["action"], drop["beside_launching"], env.cancelled) == ("drop", started["record"], [])
+    assert "beside_cancelled" not in drop and loop.tick() == []     # still launching
+    slim.registered[sha] = registered
+    (settled,) = loop.tick()
+    assert (settled["action"], settled["sha"], settled["dropped"], settled["record"]["ids"]) == ("slim", sha, True, registered)
+    assert "launch" not in settled["record"]
+    assert env.cancelled == ([(registered, f"vqueue: candidate {sha[:12]} was dropped: #1's ready mark was withdrawn")]
+                             if registered else [])
+    assert settled.get("beside_cancelled") == (registered or None) and loop.tick() == []
+    assert env.loop(vqueue.decide, clone="again", slim=slim).tick() == [] and len(slim.started) == 1   # settled, once
 
 
 def test_a_dropped_candidate_s_run_beside_its_check_is_cancelled_while_it_runs_and_one_that_ended_is_left(env):

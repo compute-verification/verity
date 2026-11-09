@@ -43,11 +43,12 @@ before, as a tick cut off after its push leaves: `adopted`), logs it, enqueues `
 starts the run beside its check.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
 (`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
-Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs, deletes the branch and logs
-its outcome, with its base and its inherited failures, their inputs whole, which `history` reads back.  Eject withdraws the
-PR's ready mark at its head (`Queue.eject`, under the clone's queue lock) and tells its owner the failed tasks, their keys and
-where their logs are.  Retry enqueues again (graph2 lists a check whose listing failed, reruns what ended in infra errors once
-its own verdict is infra, and leaves a pending one as it is), reruns those keys itself while graph2's verdict is another (a
+Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs (one still launching once
+it printed its run ids, a later tick), deletes the branch and logs its outcome, with its base and its inherited failures,
+their inputs whole, which `history` reads back.  Eject withdraws the PR's ready mark at its head (`Queue.eject`, under the
+clone's queue lock) and tells its owner the failed tasks, their keys and where their logs are.  Retry enqueues again (graph2
+lists a check whose listing failed, reruns what ended in infra errors once its own verdict is infra, and leaves a pending one
+as it is), reruns those keys itself while graph2's verdict is another (a
 task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun
 runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
 graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a candidate and
@@ -232,6 +233,12 @@ class Past:
         """Whether the run beside ``sha``'s check was started, and the newest record of it (`vqueue_slim.start`)."""
         recs = self.of("slim", sha)
         return bool(recs), recs[-1].get("record") if recs else None
+
+    def launching(self) -> dict[str, dict]:
+        """The drops whose candidate's run beside its check was still launching (`beside_launching`), by sha, but those a
+        slim line has settled since (`dropped`)."""
+        settled = {r.get("sha") for r in self.of("slim") if r.get("dropped")}
+        return {r["sha"]: r for r in self.of("drop") if isinstance(r.get("beside_launching"), dict) and r["sha"] not in settled}
 
     def ignored(self) -> set[tuple[str, str]]:
         return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
@@ -1102,6 +1109,7 @@ class Loop:
             return []
         new = [self.record(t, "ignore", sha=sha, ref=name, why=f"origin's queue/{name} is no build of the loop's: no candidate")
                for name, sha in t.foreign.items() if (name, sha) not in past.ignored()] + self._flaky(t) + self._bases(t)
+        new += self._launched(t)
         new += [self._on_main(t, adv, told) for adv, told in t.past.moved()]
         for rec in new:
             self.write(rec)
@@ -1300,15 +1308,41 @@ class Loop:
 
     def _drop(self, a: Drop, c: Candidate, t: Tick) -> dict:
         """Cancel ``c``'s check and the run beside it while that runs (it would hold drive's machines for nothing), delete its
-        branch and log its outcome."""
+        branch and log its outcome.  A run still launching has no run ids yet: its record is logged (`beside_launching`), and
+        `_launched` cancels it once it has them."""
         w, j = self.world, t.judged.get(c.sha)
         cancel = w.cancel(c.sha)
-        ids = list((j.record or {}).get("ids") or ()) if j is not None and j.slim is not None and j.slim.state == PENDING else []
+        rec = (j.record or {}) if j is not None and j.slim is not None and j.slim.state == PENDING else {}
+        ids = list(rec.get("ids") or ())
         failed = w.cancel_runs(ids, f"vqueue: candidate {c.sha[:12]} was dropped: {a.why}") if ids else {}
         w.push("", branch(c.sha), c.sha)
         return self.record(t, "drop", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, outcome=a.outcome,
                            failed=c.verdict.failed, cancel=cancel, done=True,
-                           **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}))
+                           **({"beside_cancelled": ids} if ids else {}), **({"beside_cancel_failed": failed} if failed else {}),
+                           **({"beside_launching": rec} if "launch" in rec else {}))
+
+    def _launched(self, t: Tick) -> list[dict]:
+        """The run beside each dropped candidate's check that was still launching at its drop (`Past.launching`), judged each
+        tick until its launch ends: cancelled once it printed its run ids while it runs, and settled (`dropped`) either way;
+        one that registered no run or already ended has nothing to cancel."""
+        if self.slim is None:
+            return []
+        out = []
+        for sha, drop in t.past.launching().items():
+            rec = dict(drop["beside_launching"])
+            v = self.slim.judge(self.world.slim_driver(), rec)
+            ids = list(rec.get("ids") or ())
+            if v.state == PENDING and not ids:
+                continue
+            running = ids if v.state == PENDING else []
+            reason = f"vqueue: candidate {sha[:12]} was dropped: {drop.get('why')}"
+            failed = self.world.cancel_runs(running, reason) if running else {}
+            out.append(self.record(t, "slim", sha=sha, base=drop.get("base"), members=drop.get("members") or (),
+                                   heads=drop.get("heads") or (), record=rec, dropped=True, done=True,
+                                   why=f"its candidate was dropped while it launched: {'cancelled' if running else v.state}",
+                                   **({"beside_cancelled": running} if running else {}),
+                                   **({"beside_cancel_failed": failed} if failed else {})))
+        return out
 
     def _eject(self, a: Eject, t: Tick) -> dict:
         w = self.world
