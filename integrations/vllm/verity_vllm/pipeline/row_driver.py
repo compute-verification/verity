@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import glob
 import hashlib
+import importlib
 import json
 import os
 import re
@@ -25,14 +26,16 @@ import threading
 import time
 from collections.abc import Callable
 from pathlib import Path
+from types import ModuleType
 from typing import Any
 
-from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, row_execution, row_path, row_target
+from verity_vllm.config import ROOT, TARGETS, RowConfig, RunEnv, UsageError, row_execution, row_path, row_target
 from verity_vllm.engine import served
 from verity_vllm.pipeline import gpu_lease as GL
 from verity_vllm.program import prefix_plan as PP
 
 CLI = ("-m", "verity_vllm.pipeline.cli")
+RESEARCH = "verity_vllm.pipeline.research"
 SIGNUM = {"TERM": 15, "INT": 2, "HUP": 1}
 SHARED_JIT = ("TRITON_CACHE_DIR", "VLLM_CACHE_ROOT")
 _NUM = re.compile(r"^-?[0-9]+(\.[0-9]+)?$")
@@ -50,6 +53,17 @@ class Stop(Exception):
 
 def utc() -> str:
     return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def research() -> ModuleType:
+    """`pipeline.research`, a row's stages as research Attempts, loaded by name: it runs the team's run and store tool, which
+    the public release leaves out with it, and there it is a `UsageError`."""
+    try:
+        return importlib.import_module(RESEARCH)
+    except ModuleNotFoundError as e:
+        if e.name != RESEARCH:
+            raise
+        raise UsageError(f"{RESEARCH} is not on this tree: a row's stages run as research Attempts only where it is") from e
 
 
 def _stamp() -> str:

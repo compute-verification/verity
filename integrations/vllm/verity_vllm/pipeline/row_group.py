@@ -30,9 +30,8 @@ from verity_vllm import protocols as PO
 from verity_vllm.config import row_world
 from verity_vllm.pipeline import commit_group as CG
 from verity_vllm.pipeline import gpu_lease as GL
-from verity_vllm.pipeline import research
 from verity_vllm.pipeline import row_config as RC
-from verity_vllm.pipeline.row_driver import Stop, utc
+from verity_vllm.pipeline.row_driver import Stop, research as research_attempts, utc
 
 MEMBERS_SCHEMA = "verity-vllm/commit-group-members/v1"
 ROW_SCHEMA = "verity-vllm/commit-group-row/v1"
@@ -100,6 +99,7 @@ def build_input(r: Any) -> str | None:
             run_id = f.read().strip()
     except OSError:
         return None
+    research = research_attempts()
     child = research.abs_store_env(dict(r.env.environ))
     cli = research.research_argv(r.env.environ.get("RESEARCH_BIN"), r.env.environ.get("RESEARCH_PY") or "python3", child)
     build_in = research.attempt_output(cli, run_id, "build") if run_id else ""
