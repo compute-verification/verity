@@ -181,6 +181,14 @@ def log2_comb(n: int, k: int) -> float:
     return (math.lgamma(n + 1) - math.lgamma(k + 1) - math.lgamma(n - k + 1)) / math.log(2)
 
 
+def pair_bits(n: int, acc: float) -> float:
+    """n binary order claims right at rate acc, as independent bits: n (1 - h(acc)), none at or below chance."""
+    if acc <= 0.5:
+        return 0.0
+    h = 0.0 if acc == 1.0 else -(acc * math.log2(acc) + (1 - acc) * math.log2(1 - acc))
+    return n * (1 - h)
+
+
 def top_bits(ranks: np.ndarray, vocab: int) -> tuple[float, int]:
     """Bits the set of tokens at these 0-based ranks along u says about u's order: log2 C(V, n) - log2 C(K, n), K the
     smallest top set holding them all."""
@@ -274,6 +282,22 @@ def weight_target(lm: LM, site: str, layer: int, coord: int) -> torch.Tensor | N
     return sum(wo[:, (kh * r + i) * s.head_dim + e] for i in range(r)) * W["norm.weight"].float()
 
 
+def signed_targets(lm: LM, f: dict, n: int, seed: int) -> tuple[torch.Tensor | None, list[torch.Tensor]]:
+    """A fault's weight target signed by its push (value - honest), and n other columns of the same matrix signed alike."""
+    t = weight_target(lm, f["site"], f["layer"], f["coord"])
+    if t is None:
+        return None, []
+    sgn = 1.0 if f["value"] >= f["honest"] else -1.0
+    rng = np.random.default_rng([seed, f["layer"], f["coord"]])
+    others = [c for c in rng.permutation(v_width(lm)).tolist() if c != f["coord"]][:n]
+    return sgn * t, [sgn * weight_target(lm, f["site"], f["layer"], c) for c in others]
+
+
+def v_width(lm: LM) -> int:
+    s = lm.spec
+    return s.heads * s.head_dim if s.arch == "gpt2" else s.kv_heads * s.head_dim
+
+
 def ranks_along(E: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
     """Each token's 0-based rank by its logit change along t (E t), largest first."""
     order = torch.argsort(E @ t, descending=True)
@@ -289,10 +313,13 @@ def decoded(served: np.ndarray, direct: np.ndarray) -> list[int]:
 
 
 def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, deltas: np.ndarray,
-                 target: torch.Tensor | None, E: torch.Tensor, vocab: int, checkpoints: list[int]) -> dict:
+                 target: torch.Tensor | None, controls: list[torch.Tensor], E: torch.Tensor, vocab: int,
+                 checkpoints: list[int]) -> dict:
     """The decoders' bits for one fault over Q requests (first served token). deltas (Q, d): the fault's effect on the
     final norm's output at each request's first served position; runner (Q,): each request's honest runner-up, the
-    token a small push serves without any information about the fault's direction (the baseline)."""
+    token a small push serves without any information about the fault's direction (the baseline). target: the
+    weights' own direction for the fault, signed by its push; controls: other columns of the same matrix, signed
+    alike, which score the same decoded tokens for what common tokens give along any column."""
     s0, h0 = served[:, 0], honest[:, 0]
     direct = s0 != h0
     Q = len(direct)
@@ -316,9 +343,17 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
             ok += int(float((E[y1] - E[y0]) @ u) > 0)
     n_pairs = len(seen)
     acc = ok / n_pairs if n_pairs else 0.0
-    h = 0.0 if acc in (0.0, 1.0) else -(acc * math.log2(acc) + (1 - acc) * math.log2(1 - acc))
-    out |= {"pairs": n_pairs, "pairs_ok": ok, "pair_bits": n_pairs * (1 - h) if acc > 0.5 else 0.0,
+    out |= {"pairs": n_pairs, "pairs_ok": ok, "pair_bits": pair_bits(n_pairs, acc),
             "cos_mean": float(np.mean(cos)) if cos else None}
+    ctrl_ranks = [ranks_along(E, c) for c in controls]
+    if target is not None and seen:
+        pr = torch.tensor(sorted(seen))
+        gap = E[pr[:, 1]] - E[pr[:, 0]]
+        acc_w = float(((gap @ target) > 0).float().mean())
+        acc_c = [float(((gap @ c) > 0).float().mean()) for c in controls]
+        out |= {"pair_acc_w": acc_w, "pair_bits_w": pair_bits(n_pairs, acc_w),
+                "pair_acc_ctrl": float(np.mean(acc_c)) if acc_c else None,
+                "pair_bits_ctrl": float(np.mean([pair_bits(n_pairs, x) for x in acc_c])) if acc_c else None}
     for qc in checkpoints:
         if qc > Q:
             continue
@@ -332,6 +367,10 @@ def score_oracle(served: np.ndarray, honest: np.ndarray, runner: np.ndarray, del
             row |= {f"top_bits_{name}": rb, f"top_k_{name}": rk, f"base_bits_{name}": bb, f"base_k_{name}": bk,
                     f"p1_{name}": int(bool(dec) and int(rank[dec[0]]) == 0),
                     f"in_top10_{name}": int(sum(int(rank[y]) < 10 for y in dec[:10]))}
+        if ctrl_ranks and dec:
+            cb = [top_bits(cr[dec].numpy(), vocab)[0] for cr in ctrl_ranks]
+            row |= {"ctrl_bits_w": float(np.mean(cb)), "ctrl_max_w": float(np.max(cb)),
+                    "net_bits_w": row.get("top_bits_w", 0.0) - float(np.mean(cb))}
         out[f"q{qc}"] = row
     return out
 
@@ -362,6 +401,7 @@ def main() -> int:
     ap.add_argument("--batch", type=int, default=64)
     ap.add_argument("--max-faults", type=int, default=0, help="keep at most this many faults (0: all)")
     ap.add_argument("--threads", type=int, default=0)
+    ap.add_argument("--controls", type=int, default=8, help="oracle: random columns that score a value fault's control")
     ap.add_argument("--seed", type=int, default=0)
     a = ap.parse_args()
     if a.threads:
@@ -392,7 +432,7 @@ def main() -> int:
         faults = faults[:a.max_faults]
     E = lm.E.float()
     t_start = time.time()
-    checkpoints = sorted({q for q in (8, 32, 128, a.queries) if q <= a.queries})
+    checkpoints = sorted({q for q in (8, 16, 32, 64, 128, 256, 512, a.queries) if q <= a.queries})
     if a.mode == "oracle":
         reqs = suffixes(lm, tok, pre_h, a.queries, gen, a.cut, a.precision)
         hons = [honest_first(lm, pre_h, sfx, a.precision) for sfx in reqs]
@@ -419,12 +459,12 @@ def main() -> int:
             KL = torch.stack(KL, 1).numpy() if KL else None
             for j, f in enumerate(chunk):
                 direct = S[j] != H[j]
-                target = weight_target(lm, f["site"], f["layer"], f["coord"])
-                r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, E, V, checkpoints)
+                target, controls = signed_targets(lm, f, a.controls, a.seed)
+                r = dict(f) | score_oracle(S[j], H[j], runner, Dl[j], target, controls, E, V, checkpoints)
                 r["code_bits"] = code_bits(direct.reshape(-1), S[j].reshape(-1), V)
                 r["direct_reads"] = int(direct.sum())
                 last = r[f"q{checkpoints[-1]}"]
-                for key in ("top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w"):
+                for key in ("top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w", "ctrl_bits_w", "net_bits_w"):
                     if key in last:
                         r[key] = last[key]
                 if KL is not None:
@@ -456,13 +496,14 @@ def main() -> int:
                "direct_max": int(max(r["direct"] for r in rs)),
                "code_mean": float(np.mean([r["code_bits"] for r in rs])),
                "code_max": float(max(r["code_bits"] for r in rs))}
-        for key in ("pair_bits", "top_bits_u", "base_bits_u", "top_bits_w", "base_bits_w", "kl_bits"):
-            if any(key in r for r in rs):
-                vals = [r.get(key, 0.0) for r in rs]
+        for key in ("pair_bits", "pair_bits_w", "pair_bits_ctrl", "top_bits_u", "base_bits_u", "top_bits_w",
+                    "base_bits_w", "ctrl_bits_w", "net_bits_w", "kl_bits"):
+            if any(r.get(key) is not None for r in rs):
+                vals = [r.get(key) or 0.0 for r in rs]
                 row[key + "_mean"], row[key + "_max"] = float(np.mean(vals)), float(max(vals))
         rows.append(row)
-    keys = ("code_bits", "pair_bits", "top_bits_u", "top_bits_w")
-    best = {key: max(recs, key=lambda r: r.get(key, 0.0)) for key in keys if any(key in r for r in recs)}
+    keys = ("code_bits", "pair_bits", "pair_bits_w", "top_bits_u", "top_bits_w", "net_bits_w")
+    best = {key: max(recs, key=lambda r: r.get(key) or 0.0) for key in keys if any(key in r for r in recs)}
     summary = {"model": a.model, "revision": MODELS[a.model]["revision"], "vocab": V, "bits_per_token": math.log2(V),
                "mode": a.mode, "where": a.where, "fault_position": pf, "fault_class": pc, "prefix_tokens": ids.shape[1],
                "boxes": str(a.boxes) if a.boxes else None, "temperature": a.temperature, "seeds": a.seeds,
