@@ -495,7 +495,7 @@ def _window_roots(window: tuple, root: str, held: dict | None = None) -> dict:
     (`ml.windows.history.params`), under the window's leaf layer, the window registering ``root``."""
     from verity.ml.windows import history as HW, rows as CS
     doc, mine, publics = window
-    return {"leaf_layer": CS.leaf_layer(publics), **HW.params(doc, mine, publics, {"latent": root}, held)}
+    return {"leaf_layer": CS.leaf_layer(publics), **HW.params(doc, mine, publics, HW.pins(doc, {"latent": root}), held)}
 
 
 def test_roots_of_a_windows_history_table(pieces):
