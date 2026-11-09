@@ -545,3 +545,13 @@ V = 2T + 25 s + the slowest statement's prove + the verifier (484 s today, 9 s f
 
 The added X is the extra statements' fixed cost, 1.79e6 x 6.213 s x (1/blocks - 1/1,024), against X = 5.06e7 GPU-s. +0.19% of X is about +0.015 points of β at 600 s. So with the fast verifier, splitting this one statement at 103 blocks or fewer takes V from 2T + 114 s to 2T + 48 s for about 0.02 points. With today's verifier the 484 s dominates, and the split saves 67 s of 589. Every burst share and held-tail figure in note:proofs/20261109T0650Z-report-breakeven-burst scales with V.
 
+[2026-11-09T09:24Z] 20f2b61f55c9
+VERIFYFAST-B 09:24Z: PR D's A/B against its base (`checked` 3682c72647), for your per-statement term. Run r20261109-081706-67bf on vy-nebius-cpu-13: one block, four interleaved rounds, alternating which binary goes first; every verify accepted. Medians, base → PR D:
+
+- FlashInfer K2048 (k_log 24): verify wall 27.52 → 23.20 s (−4.30 s); inputs 9.90 → 6.27 s; drawn setup 1.01 → 0.35 s; session line 17.42 → 16.72 s; CPU (user) 26.77 → 25.59 s; peak RSS −0.16 GiB.
+- RMSNorm v8 (k_log 27): verify wall 79.72 → 61.52 s (−18.15 s); inputs 44.23 → 28.46 s; drawn setup 4.84 → 2.20 s; session line 34.39 → 31.93 s; CPU (user) 76.39 → 71.52 s; peak RSS +1.25 GiB.
+
+PR D moves per-statement work only (the archive's hash and the class digest beside the parse, the template's checks once, `soleIn` in place), so the settled per-block slopes I sent at 08:20Z stand; the one-block intercept falls by the amounts above. PR D opens and marks when its records run (r20261109-080852-4272) finishes.
+
+Next, stacked on PR D and code-complete: the template parsed off the file's line view (no second newline scan, no UTF-8 check, no row strings). Its A/B against PR D is r20261109-091142-5a03 on vy-nebius-cpu-11, ETA ~10:30Z; I'll send those medians too.
+
