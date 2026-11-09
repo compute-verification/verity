@@ -8,8 +8,10 @@ sampled span ``sample[i]``'s units at [i·n_rho, (i+1)·n_rho), chained after th
 * `Replay`: one request's values replayed on the CPU. Its Program's rows are evaluated by the replay's row kernels
   (`check.replay.evaluate.evaluated`) on its replayed inputs: its certified prompt ids, the registered weights, and
   whatever else ``given`` supplies. A row is evaluated only when a read reaches it, so a span is its readers' cone and
-  never its batch-mates: a request's Program is its rows alone at its launch shapes. It answers `CommittedStore.words`,
-  so whatever reads a committed store reads it.
+  never its batch-mates: a request's Program is its rows alone at its launch shapes. A request served from the prefix
+  cache is replayed from its Program compiled with its hit recomputed (`program.predict.steps.compile_steps`'s
+  ``recompute_hits``), which prefills the hit from its own prompt; a Program that reads a cached prefix is refused. It
+  answers `CommittedStore.words`, so whatever reads a committed store reads it.
 * `span`: one sampled span's units of the stream's template, read from its `Replay` exactly as the serving rows read
   the committed store (`serving_rows.population`, `serving_rows.read_all`).
 * `captured`: a span of a token-select template from what a replay at the served step shapes took at the sampler
@@ -70,8 +72,8 @@ class Replay:
     def __init__(self, pi: ProgramIndex, rid: str, prompt: Sequence[int], weights: Callable, *, arrive: int = 0,
                  given: Given | None = None) -> None:
         if pi.kv_prefix:
-            raise ValueError(f"request {rid} reads a cached prefix another request computed: a span is replayed with "
-                             "prefix caching off")
+            raise ValueError(f"request {rid} reads a cached prefix another request computed: a span is replayed from its "
+                             "Program with the hit recomputed (compile_steps(..., recompute_hits=True))")
         self.pi, self.rid, self.arrive, self.weights, self.given = pi, str(rid), int(arrive), weights, given
         self.ids = np.asarray(list(prompt), dtype=np.uint32)
         self.embed = pi.embed_op_path()

@@ -11,6 +11,7 @@ selects."""
 
 from __future__ import annotations
 
+import copy
 import json
 from dataclasses import replace
 
@@ -100,6 +101,10 @@ def test_a_replay_names_what_it_cannot_give(world):
     assert w is None and "nothing gives it" in why
     w, why = replay.words("r0", 0, replay.embed, "in", 0, 3)
     assert w is None and "prompt ids [0, 3)" in why
+    cached = copy.copy(index_of(world.inst))
+    cached.kv_prefix = {"C": 2}
+    with pytest.raises(ValueError, match=r"another request computed: .*recompute_hits=True"):
+        IR.Replay(cached, "r0", PROMPTS["r0"], _weights(world))
 
 
 def test_a_span_pads_to_its_size_class_with_its_last_unit(world):
