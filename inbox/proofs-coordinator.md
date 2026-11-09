@@ -20576,3 +20576,5 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
   - Since then both files have only been touched by moves.
   - The fix: one equation lemma in `Interaction.lean` that both use.
 - **After the mark**: the Glossary line (address against site), then the land ask.
+
+- 23:00Z (proofs) DSAREAD: marks: **#8416 about 00:30Z, #8431 about 00:45Z**. 0619 (cpu-2) is past 86% of `Security/Proofs` and due about 23:50Z, so no cpu-12 copy (it would be later). 8afe (cpu-1) is running, `Security` PASS. The long pole is 7761 (cpu-3, compiling): if it is not done by 00:15Z, I cancel it and rerun on cpu-12's warm proofs records pool. I tell PROVECUT when #8416 is marked.
