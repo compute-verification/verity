@@ -18,12 +18,12 @@ from verity.ml.circuits import evaluation as E
 from verity.ml.circuits.evaluation import bits as BS
 from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.defs import CompositeDefinition, SpecializedDefinition, bind
-from verity.ml.circuits.types import Array
+from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.ops import fp32 as W
 from verity.ml.kernels import tc as K
 from verity.ml.circuits.ops.boolean import elementwise as EW
 from verity.ml.circuits.boolean import trace as TR
-from verity.ml.circuits.boolean.forms import const_bits
+from verity.ml.circuits.boolean.forms import const_bits, or_reduce
 
 from _boolean_checks import assert_live_ands, assert_pinned
 
@@ -265,6 +265,44 @@ def test_a_specialized_constant_is_folded() -> None:
         assert T.counts["and"] < PINS["Bf16MulF32_v2"][0]
         got = np.asarray(BS.evaluate_words(target, every)).reshape(-1)
         assert np.array_equal(got, np.asarray(E.evaluate_batch(W.Bf16MulF32, every, np.full(every.shape, word, np.uint32))).reshape(-1))
+
+
+def _group(n: int):
+    """A group of n 2-bit words with a shared s (the OR of each word's AND): word 0 its own, words 1 and 2 one circuit, the rest
+    another, each reading s, and s the group's last output."""
+    def sig(S):
+        return (("x", Array(n, Array(2, BL.BIT))),), Tuple(Array(n, Array(2, BL.BIT)), Array(1, BL.BIT))
+
+    def build(S):
+        def run(C, *x):
+            d = [C.AND(a[0], a[1]) for a in x]
+            s = or_reduce(C, d)
+            q = [[C.AND(x[0][0], s), s]]
+            q += [[C.AND(d[j], s) ^ x[j][0], C.AND(x[j][1], s)] for j in (1, 2)]
+            q += [[C.AND(C.AND(x[j][0], s), x[j][1] ^ s), d[j]] for j in range(3, n)]
+            return q + [[s]]
+        return run
+    return build, sig
+
+
+@pytest.mark.parametrize("n", [6, 12])
+def test_a_rolled_group_is_the_specialized_operation(n) -> None:
+    """`rolled` cuts the group into its classes of words, the larger first, and its core, with exactly the `specialized`
+    circuit's gates; its body is the classes' In batches, the core's Call and their Out batches whatever n is; and it is the
+    `specialized` Definition on random groups."""
+    build, sig = _group(n)
+    whole = EW.specialized("RolledWholeCheck", 1, [], build, sig, register=False)
+    d = EW.rolled("RolledCheck", 1, [], build, sig, register=False)
+    S = SimpleNamespace()
+    R = d.cut(S)
+    assert [c["elements"] for c in R["classes"]] == [list(range(3, n)), [1, 2]] and R["rest"] == [0, 1, 2 * n]
+    parts = [(len(c["elements"]), c["in"].counts, c["out"].counts) for c in R["classes"]]
+    counts = whole.traced(S).counts
+    assert {g: R["core"].counts[g] + sum(m * (i[g] + o[g]) for m, i, o in parts) for g in counts} == counts
+    assert [nd.fn.id.split("{")[0] for nd in bind(d).body.nodes] == ["RolledCheckIn_v1", "RolledCheckIn_v1", "RolledCheckCore_v1",
+                                                                     "RolledCheckOut_v1", "RolledCheckOut_v1"]
+    x = np.random.default_rng(28).integers(0, 4, (2000, n)).astype(np.uint8)
+    assert np.array_equal(np.asarray(BS.evaluate_words(bind(d), x)), np.asarray(BS.evaluate_words(bind(whole), x)))
 
 
 def test_a_composite_on_bits_has_the_word_composite_as_its_word_view() -> None:
