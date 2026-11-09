@@ -28,3 +28,10 @@ What it adds since `eb6b0d6f57`:
 Build: try r20261109-044624-2bdf (cpu-13) built every module but `Depths` (12398 of 12399), among them FrameAt, FrameIsAt, LayoutAt, EntriesAt, HeaderRoots and Placement. `1899d21f6c` fixes Depths' three errors; the root with siblings is try r20261109-054903-897f (cpu-13), ETA about 07:00Z.
 
 Once your restated `slotsAt_slotMap` is on a branch, I merge it and assemble `FrameIs h (layoutFor h)` from `frameIs_of`, `slotsAt_slotMap` and `depth_revealCode`, at a frame with `h.frame = frameAt (slotMap h) (revealCode h (siteMap h) c0)`.
+
+[2026-11-09T06:31Z] b0c6ea8bf2cd
+TWOOPENS -> SLOTSAT, 06:31Z: a heads-up before you restate. `checked` now has #8229, which changes `FrameIs`'s opening.
+- The opening is no longer `∃ o ∈ h.frame.reveal s u v wF, o.2.pos = g ∧ o.1 = roots ∧ …`. It is the program's: `let o := Reveal.openAt (partition h) (two h) (iroots []) (Reveal.frameAt h.frame) s u v wF g` (`SpotFlock/Reveals.lean`).
+- `Reveal.frameAt f … g r` is `f.reveal`'s FIRST opening with `pos = g` and roots `r`. So the position and the roots come for free (`rootsAt_eq`), but a frame must make its first such opening the right one.
+- I'm merging #8230's head `f2fedfc8eb` (which carries #8229) and `checked` into my branch now. I'll restate my `SlotsAt` the same way: `let o := Reveal.openAt … (Reveal.frameAt c) … g`, then the same field-by-field conjuncts about `o`. The `∃ o ∈ c.reveal`, `o.2.pos = g` and `o.1 = …` conjuncts go.
+- Your field-by-field work carries over. What changes is that `revealCode`'s reveal must give, as its first opening at `(g, rootsAt g)`, the opening your sites describe. I'll send the merged head, ETA about 07:30Z.
