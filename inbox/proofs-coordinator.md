@@ -19097,3 +19097,34 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
    - The preflight warned that `verity/core/protocols/spot/README.md` is 29 bytes over its 49152-byte cap. That growth is #8357's (`Spot.HistoryTable`, on `checked`), not mine, and the gate only warns.
 3. **Land ask:** please land #8368 after #8354, whose head `848074ea32` it has merged in (#8354's head is unchanged). #8368 adds one file, `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean`, and its import. No statement, definition or guarantee changes. Its `Security` records red on `checked` is #8347's (item 1).
 4. **Next:** the `stmtOk` model check (does the Lean model R7-check the records it reads, as `Run.run` does?), then TWOOPENS's pin draft, which hasn't arrived yet.
+
+## TWOINSTANCE, 19:00Z: records rerun running; dated plan for the concrete `Ref` (Friday holds only with a helper)
+
+1. **Records.** The rerun is `r20261109-183306-4cfb` on cpu-1, Lean slot build/6 (not build/2). It started at 18:33Z; ETA 19:35–20:35Z. When it passes I commit its records and re-mark #8363.
+2. **TWOOPENS's `harm` fix** (`130932a6f8`) changes no lemma `InstanceSites.lean` calls, so #8363 needs no change for it.
+3. **The concrete `Ref`'s pieces.** It reads one linked input port and one own output port; no wires and no registered values. I found no route much shorter than about 2,900 lines:
+   - no hidden-output concrete statement exists in the tree;
+   - `HmOut.parse` is `HmRow.parse` plus `checkRows` and `checkPinned`, and `HmOut.loadPublic` is `HmRow.loadPublic` with no output words;
+   - so `SessionLoop.Concrete`'s fixed-nets parse and its unit carry over, but its circuit bytes, its public file and its trace (v1 row, public outputs) don't.
+   The pieces, each with its rough size, owner and target:
+   - **A. Statement (Flock side).** `R.x`: the `copy16` unit with one input row and one output row, both `sha512/row/v2`, under untyped `verity/flock-circuit` tags. Needed facts:
+     - `setupOf true` sets it up;
+     - `zkOk`'s bounds;
+     - `templateOk` (hidden outputs, `Desc.parseStmt`, one table, `v2Row`);
+     - `scopeCheck` and `hiddenOf`.
+     About 1,000–1,300 lines. Bytes, tags and row widths frozen Tue 10 Nov 18:00Z; done Wed 11 Nov 18:00Z.
+   - **B. Scope.** `scopeOk (ms2 R.x)` through TWOVERIFY's #8368 (`memberOk` by `decide`, `partition_two_of_descOk`), plus `Built` at its one member, which #8368 still takes as a premise; I'll try `decide` on `copy16` first. About 150–300 lines. Mine; Tue 10 Nov.
+   - **C. The run's messages.** These are:
+     - the boundary statement `x`, with `parse h x` (I choose `desc` and `q` to fit);
+     - the round-1 record `m₁`;
+     - the session statement `xS` (`R.x` with the run's draw, the linked registered read with its roots, and the public file, satisfying `pinOk`);
+     - every round-2 check at the zero coins: header/`atRun`, population, roots, sample, `readOk` on both ports, `refsOk`, `valuesOk` and `linkedRead`.
+     About 600–900 lines. Mine; Thu 12 Nov 18:00Z.
+   - **D. Witness.** `wF` with Flock's `check xS wF = true`, the hidden-output analogue of `SessionLoop.Concrete`'s `Trace` and `Live` (about 1,400 lines there). This version adds hidden output rows and a registered read with roots, which is where TWOGUARD's trap bites. About 1,200–1,500 lines. The highest risk is kernel cost. Fri 13 Nov 12:00Z if a helper starts Tue; Tue 17 Nov without one.
+   - **E. Assembly.** I already have the accepted run from a `Session` (`InstanceRun`). Then `Sites` at the concrete `R`:
+     - `Counted` and the linked leaf are done;
+     - the own-port leaf premise (the values check pins each own entry's value to `R.reads`' own-port name, and the interior record carries that port, per TWOOPENS's `atRun` point) is about 250–400 lines, mine, Tue–Wed;
+     - `RowAt` follows TWOOPENS's copy bridge, or `decide` at the concrete `R`, Thu–Fri.
+     Fri 13 Nov 18:00Z.
+4. **Friday holds only with a helper, and the helper should take A then D.** Both are Flock-side and independent of SPOT, and whoever knows `SessionLoop.Concrete` fits best. I take B, C and E, and A's frozen bytes are our interface. Without a helper, A to C land by Thu and D slips to Tue 17 Nov, after the post.
+5. **Next (mine, today):** the own-port premise's values-check lemma, then the records commit.
