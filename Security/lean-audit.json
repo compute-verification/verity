@@ -281,22 +281,15 @@
    "digest": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
    "why": "A scope: rows that every run accepts from a valid run have, at each run, the opened row's root the record rule names, the previous run's closing root or the empty pool's; each run's check of its roots and the record rule's chained roots give it with no probability."
   },
-  "NetTiming.CheckedRoots": {
-   "owner": "@proofs",
-   "why": "A scope: each run's in-circuit check holds the row it opens and the row it leaves to its registered roots on every valid run whose faults avoid the classes sampled all; the deployed check's honest witness concludes it."
-  },
-  "NetTiming.PoolChained": {
-   "owner": "@proofs",
-   "why": "A scope: the runs' registered roots chain under the record rule, each run's opening root the previous run's closing root where it carries the pool and the empty pool's root otherwise; the executable record rule (R7-pool-chain) gives it on accepted records."
-  },
-  "NetTiming.LeakAtCarried": {
-   "owner": "@proofs",
-   "why": "A scope: the conclusion (CarriedRoots) speaks of rows at which every run's leak relation holds, so the relation is its own antecedent, which no hypothesis of the guarantee supplies."
-  },
   "NetTiming.CheckedClosing": {
    "owner": "@proofs",
    "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
+  },
+  "NetTiming.CheckedRoots": {
+   "owner": "@proofs",
+   "digest": "132d4869d582635bd642797d37d0b07103eab6fb15772c97f64a7fc93f121498",
+   "why": "A scope: each run's in-circuit check holds the row it opens and the row it leaves to its registered roots on every valid run whose faults avoid the classes sampled all; the deployed check's honest witness concludes it."
   },
   "NetTiming.CheckedUnique": {
    "owner": "@proofs",
@@ -313,6 +306,11 @@
    "digest": "559db99f683821879b48c8850d8fd77e243272bdbda83d3aaa8a7cdc7a38f2af",
    "why": "NetTiming.SecurityProofs.SampledAuditAccepted's statement, another listed guarantee",
    "cites": "NetTiming.SecurityProofs.SampledAuditAccepted"
+  },
+  "NetTiming.LeakAtCarried": {
+   "owner": "@proofs",
+   "digest": "c185ff749d54d82c552c9ace294749da80b4006dfddbe3e1633c6c82765becb2",
+   "why": "A scope: the conclusion (CarriedRoots) speaks of rows at which every run's leak relation holds, so the relation is its own antecedent, which no hypothesis of the guarantee supplies."
   },
   "NetTiming.PeriodAdaptive": {
    "owner": "@proofs",
@@ -338,6 +336,11 @@
    "owner": "@proofs",
    "digest": "727b29fa325435eeddaf8266d17571053bd61f3138f42a01a5d24a37aaef1837",
    "why": "The layer below's guarantee at each window: the leak relation with checked inputs at the window's faulty set, which the live SampledLeakChecked gives."
+  },
+  "NetTiming.PoolChained": {
+   "owner": "@proofs",
+   "digest": "db1790a4b6e9d192443e9132982666d817be1aa8cd673d04334ecf17d0ec8c24",
+   "why": "A scope: the runs' registered roots chain under the record rule, each run's opening root the previous run's closing root where it carries the pool and the empty pool's root otherwise; the executable record rule (R7-pool-chain) gives it on accepted records."
   },
   "Pouw.NCP.Params.InstanceU": {
    "owner": "@compute-research",
@@ -5263,23 +5266,23 @@
    "type_hash": "6042883e0de54d343be42f372fe18390a11842febc9feda80046b6e3f70bb455",
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots (CarriedRoots, from each run's root check and R7), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins) (CIR-190)",
+   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514"
+  },
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
    "missing": "honest",
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
-  "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
-   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514",
-   "missing": "honest",
-   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots (CarriedRoots, from each run's root check and R7), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins) (CIR-190)"
-  },
   "NetTiming.SecurityProofs.RootsOfChecked": {
    "type_hash": "f34c02ed2812248675cc945e994fdd80a66e537d5662a9293be0fe6bb2055329",
-   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e",
    "missing": "honest",
-   "why": "honest instance needs a deployed check that holds each run's opened and left rows to its registered roots in the circuit (CheckedRoots), beside the records' chained roots (PoolChained, from R7 on each record) (CIR-190)"
+   "why": "honest instance needs a deployed check that holds each run's opened and left rows to its registered roots in the circuit (CheckedRoots), beside the records' chained roots (PoolChained, from R7 on each record) (CIR-190)",
+   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
@@ -18517,9 +18520,6 @@
    "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
    "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514"
   },
-  "NetTiming.SecurityProofs.RootsOfChecked": {
-   "owner": "@proofs"
-  },
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "owner": "@proofs",
    "signature": ["NetTiming.SecurityProofs.PooledLeakChecked : NetTiming.Guarantees.PooledLeakChecked"],
@@ -18538,6 +18538,19 @@
    },
    "type_hash": "50edf1fb52d78599b26fb54aca2b376fa475a86024556bb53ee80f3d695f1ce9",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
+  },
+  "NetTiming.SecurityProofs.RootsOfChecked": {
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.RootsOfChecked : NetTiming.Guarantees.RootsOfChecked"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.CheckedRoots", "NetTiming.LeakAtCarried", "NetTiming.PoolChained"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "f34c02ed2812248675cc945e994fdd80a66e537d5662a9293be0fe6bb2055329",
+   "unfolded_hash": "9ba281b49a5729c4a69f656f3b727b6adb327858b49afa3739806ff66ef6783e"
   },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "owner": "@proofs",
@@ -18622,9 +18635,6 @@
    },
    "type_hash": "8552f1fdf8e329fcaf2e915e99fd5039e0ac8d07fdbc1e4e29a453cf68d92c1c"
   },
-  "NetTiming.Witness.RootsOfChecked_nontrivial": {
-   "owner": "@proofs"
-  },
   "NetTiming.Witness.PooledLeakChecked_nontrivial": {
    "owner": "@proofs",
    "signature": [
@@ -18650,6 +18660,26 @@
     "reads": []
    },
    "type_hash": "b94dd1db998466e8b11a6be75417a1a1788a293be91adcf5f8790d5a5eba5e40"
+  },
+  "NetTiming.Witness.RootsOfChecked_nontrivial": {
+   "owner": "@proofs",
+   "signature": [
+    "NetTiming.Witness.RootsOfChecked_nontrivial :",
+    "  Not",
+    "    (NetTiming.CarriedRoots (fun m => ite (Eq m (Hash.RowSeg.outerPrefix 0)) (fun x => 0) fun x => 1)",
+    "      (fun x => NetTiming.Witness.notLay) (fun x => 0) (fun x => Finset.instEmptyCollection.emptyCollection)",
+    "      (fun x x_1 => True) (fun x => List.nil) (fun x => List.nil) 1 (fun x => NetTiming.Witness.notStmt)",
+    "      (fun x => NetTiming.Witness.notPart) (fun x x_1 => Bool.false) (fun x x_1 x_2 x_3 => List.nil)",
+    "      (fun x => Bool.false) fun x => List.cons Bool.true List.nil)"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": ["NetTiming.LeakAtCarried"],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "d3108dab138c02cc6bccba5a8dff020933124ec698f2aafc350ed93fec07609e"
   },
   "NetTiming.Witness.SampledLeakChecked_nontrivial": {
    "owner": "@proofs",
@@ -35398,6 +35428,12 @@
     "NetTiming.Guarantees.PeriodLeakAccepted": "9098e215204054fc1e0af27b52666c5660c2d72c7f5bf06af9aa474c1fedb476"
    }
   },
+  "Definitions.NetworkCertifier.Guarantees.PoolRoots": {
+   "digest": "84245a9b202546e371ad5145832161a51ce7e7fb44eaa461aabb883799ce695b",
+   "definitions": {
+    "NetTiming.Guarantees.RootsOfChecked": "45036de08a8c7c9a02005ec749f9aa29a264d4a50963c1917ebfaf5d878c7235"
+   }
+  },
   "Definitions.NetworkCertifier.Guarantees.Pooled": {
    "digest": "54fea0a567a4758143eeefd5ddfa44f6ff75b5659e11d867439071d9d3d95129",
    "definitions": {
@@ -35437,6 +35473,12 @@
    "definitions": {
     "NetTiming.SameRegistration": "7604bb256ec6683474664e855d7454fcef82e5bd22247f0e1b78612d6147c6d6",
     "NetTiming.WindowGood": "2d4c48a8e4d3aea767c94d5792b530db829601def700ed470ff08988857ae2ed"
+   }
+  },
+  "Definitions.NetworkCertifier.PoolRoots": {
+   "digest": "036070fe7218b8b5ea635d51ddf3cbed954925d68181fd12b455d7e7971f831b",
+   "definitions": {
+    "NetTiming.CheckedRoots": "132d4869d582635bd642797d37d0b07103eab6fb15772c97f64a7fc93f121498"
    }
   },
   "Definitions.NetworkCertifier.PooledLeak": {
