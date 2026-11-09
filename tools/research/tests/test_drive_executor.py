@@ -522,9 +522,9 @@ def test_settle_keys_a_reader_once_what_it_reads_passed_and_blocks_it_behind_a_f
         ex.graph_v2(f"after-landing:{tip}")
 
 
-def _settle_by_rounds(transport, graph: dict) -> dict:
-    """`Executor.settle` as each round looked at every task the graph has yet to settle: the reference its incremental form is
-    held to, which costs a Lean graph's millions of reads times its hundreds of rounds."""
+def _settle_by_rounds(transport, graph: dict, keyed: dict[str, str]) -> dict:
+    """`Executor.settle` as each round looked at every task the graph has yet to settle, each task's key into ``keyed``: the
+    reference its incremental form is held to, which costs a Lean graph's millions of reads times its hundreds of rounds."""
     tasks = {t["id"]: t for t in graph["tasks"]}
     files, envs = graph.get("files") or {}, graph.get("envs") or {}
     out, keys = {}, {i: t["key"] for i, t in tasks.items() if t.get("key")}
@@ -551,6 +551,7 @@ def _settle_by_rounds(transport, graph: dict) -> dict:
             moved = True
         if not moved and not fetch:
             break
+    keyed.update(keys)
     return {i: out.get(i, ("pending", None)) for i in tasks}
 
 
@@ -577,9 +578,10 @@ class _Dealt:
 
 @pytest.mark.parametrize("seed", range(300))
 def test_settle_settles_each_task_as_rounds_over_the_whole_graph_do(seed):
-    """Incremental settling is the same function as the rounds over the whole graph, the same results read in the same batches:
-    on random graphs whose tasks read those before and after them, a task the graph lacks, one twice, an output no task makes,
-    and a task keyed in the graph that reads others."""
+    """Incremental settling is the same function as the rounds over the whole graph, the same results read in the same batches
+    and the same keys made, each the one a task whose reads all passed takes from their outputs: on random graphs whose tasks
+    read those before and after them, a task the graph lacks, one twice, an output no task makes, and a task keyed in the graph
+    that reads others."""
     import random
 
     rng = random.Random(seed)
@@ -601,8 +603,17 @@ def test_settle_settles_each_task_as_rounds_over_the_whole_graph_do(seed):
         if t["reads"] and rng.random() < 0.1:
             t["key"] = _digest(f"{seed}/{t['id']}")
     new, old = _Dealt(seed), _Dealt(seed)
-    assert Executor(new).settle(g) == _settle_by_rounds(old, g)
-    assert new.asked == old.asked
+    made, ref = {}, {}
+    states = Executor(new).settle(g, made)
+    assert states == _settle_by_rounds(old, g, ref)
+    assert new.asked == old.asked and made == ref
+    for t in g["tasks"]:
+        reads = [states[r["task"]] for r in t["reads"] if r["task"] in states]
+        rule = t["key"] or (task_key(t, g["files"], ENVS[t["env"]]["digest"], {r["task"]: s[1]["outputs"] for r, s in
+                                                                               zip(t["reads"], reads)})
+                            if len(reads) == len(t["reads"]) and states[t["id"]][0] != BLOCKED
+                            and all(s[0] == "pass" for s in reads) else "")
+        assert made.get(t["id"], "") == rule, t["id"]
 
 
 def test_on_enqueues_graph_v2_and_verifies_the_tip_once_every_task_passed_by_key(world, monkeypatch, tmp_path):

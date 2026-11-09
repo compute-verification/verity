@@ -90,7 +90,7 @@ from typing import Callable, Iterable
 from . import policy, vqueue
 from .drive import CI, JOB_OF_KIND, SLIM_STEPS, Driver, cancel_runs, gating, merge_thread_post
 from .drive import INFRA as INFRA_HANDLE
-from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_key, task_target
+from .executor import BLOCKED, Executor, QueueTransport, fold_results, task_target
 from .queue import (PR, WORKDIR, Member, Queue, QueueError, StoreLabels, _git, _out, base_drivers, flags_at, label_verifier,
                     lean_change, lowrisk, merged_tree, priority_list, queue_commit, review_owners, rules_at, unreviewed)
 from .vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Action, Advance, Build, Candidate, Drop, Eject, Failed, Outcome,
@@ -622,15 +622,9 @@ class World:
         ``faulted`` with none read as its fail (`_Seen`), each one's key, the graph's or one made from its reads ("" while they
         haven't all passed), and the results read."""
         seen = _Seen(self.tasks.transport, since, faulted)
-        states = Executor(seen).settle(graph)
-        files, envs = graph.get("files") or {}, graph.get("envs") or {}
-        keys: dict[str, str] = {}
-        for t in graph["tasks"]:
-            reads = [states[r["task"]] for r in t["reads"]]
-            keys[t["id"]] = t.get("key") or (task_key(t, files, envs[t["env"]]["digest"],
-                                                     {r["task"]: s[1]["outputs"] for r, s in zip(t["reads"], reads)})
-                                             if states[t["id"]][0] != BLOCKED and all(s[0] == PASS for s in reads) else "")
-        return states, keys, seen
+        keyed: dict[str, str] = {}
+        states = Executor(seen).settle(graph, keyed)
+        return states, {t["id"]: keyed.get(t["id"], "") for t in graph["tasks"]}, seen
 
     def _base(self, base: str, ids: set[str], since: dict[str, int] | None = None
               ) -> dict[str, tuple[str | None, frozenset[str] | None]] | str:

@@ -230,8 +230,9 @@ class Executor:
                                  f"{t.get('id') if isinstance(t, dict) else repr(t)}")
         return gid, g
 
-    def settle(self, graph: dict) -> dict[str, tuple[str, dict | None]]:
-        """{task id: (its state, its result)} of graph/v2 ``graph``.  A task with a key in the graph is pass, fail or pending by
+    def settle(self, graph: dict, keyed: dict[str, str] | None = None) -> dict[str, tuple[str, dict | None]]:
+        """{task id: (its state, its result)} of graph/v2 ``graph``, and into ``keyed`` when given, each task's key, the graph's
+        or the one made from what it reads.  A task with a key in the graph is pass, fail or pending by
         its `result` labels (`fold_results`).  A task that reads others is blocked once one of them failed, is blocked, or
         passed without the output it reads; pending while one is; and once each passed, keyed by `task_key` from their
         results' `outputs` and read as the others are.  Read in rounds, each of the keys the last one made known, a round
@@ -299,6 +300,8 @@ class Executor:
                     keys[i] = fetch[i] = task_key(t, files, envs[t["env"]]["digest"],
                                                   {r["task"]: out[r["task"]][1]["outputs"] for r in t["reads"]})
             at = -1
+        if keyed is not None:
+            keyed.update(keys)
         return {i: out.get(i, (PENDING, None)) for i in tasks}
 
 
