@@ -36,10 +36,16 @@ def _phi(tmp_path, layers: int = 4, topk: int | None = None) -> Phi:
 
 
 def _instances(program) -> Counter:
-    part = TemplatePartition(program, template_instances_query(sorted({descriptor_id(fn) for _, fn in calls(program)})))
-    out: Counter = Counter()
-    for _k, tid, _at, n in part.ranges:
-        out[tid] += n
+    """Each template's instances in `program` as `TemplatePartition` numbers them, a root Call one and a batch its members, which
+    the partition itself gives where it applies: a const called alone is a primitive node, which its query refuses."""
+    nodes, out = program.root.body.nodes, Counter()
+    for k, fn in calls(program):
+        out[descriptor_id(fn)] += nodes[k].n if nodes[k].form == "batch" else 1
+    if all(nodes[k].form in ("call", "batch") for k, _ in calls(program)):
+        part, by = TemplatePartition(program, template_instances_query(sorted(out))), Counter()
+        for _k, tid, _at, n in part.ranges:
+            by[tid] += n
+        assert by == out
     return out
 
 
@@ -68,6 +74,7 @@ DENSE = {
     "chunk-with-context": dict(LP=6, T=0, chunks=(3, 3), batch=[[[3, 0]], [[3, 3]]]),
     "beside-a-decode": dict(LP=3, T=1, batch=_decodes(3, 1, [[3, 0], [1, 5]])),
     "beside-an-extend": dict(LP=3, T=1, batch=_decodes(3, 1, [[3, 0], [4, 3]])),
+    "after-a-history": dict(LP=6, T=1, C=3, batch=_decodes(6, 1, [[3, 3]])),
     "then-past-topk": dict(LP=12, T=6, batch=_decodes(12, 6, [[12, 0]])),
 }
 LONG = {
@@ -75,6 +82,8 @@ LONG = {
     "chunks-to-an-edge": dict(LP=9, T=-1, chunks=(5, 3), edge=EDGE, batch=[[[5, 0]], [[3, 5]]]),
     "unfused": dict(LP=6, T=1, batch=[[[6, 0], [40, 0]], [[1, 6], [1, 40]]]),
     "short-prompt": dict(LP=3, T=3, batch=_decodes(3, 3, [[3, 0]])),
+    "after-a-history": dict(LP=8, T=1, C=4, batch=_decodes(8, 1, [[4, 4]])),
+    "resumed-to-an-edge": dict(LP=4, T=4, C=6, edge=EDGE, batch=[[[1, 6]], [[1, 7]]]),
 }
 
 
@@ -83,7 +92,11 @@ def test_a_units_counts_are_its_programs_at_the_served_index_topk(tmp_path, case
     _check(_phi(tmp_path), **SERVED[case])
 
 
+@pytest.mark.slow
 def test_a_stochastic_units_counts_hold_its_selects_consts(tmp_path):
+    """The seeded top-p select at its registered split count, swapped to its dead-free version, and its per-row consts (top_p,
+    the position, the temperature and S), which no greedy unit calls; the Program's select at GLM-5.3's vocabulary is most of
+    its 2 minutes."""
     phi = _phi(tmp_path)
     policy, _ = policy_of(0, {"temperature": 0.8, "top_p": 0.95, "seed": 11}, phi.target_profile().num_sms)
     _check(phi, 3, 2, policy, batch=_decodes(3, 2, [[3, 0]]))
