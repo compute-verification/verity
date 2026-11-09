@@ -81,9 +81,10 @@ difftest against `one_stage`'s Python, beside the whole protocol (`sampled-proof
   the unrolled reference (`Wires.checkRef`), each with its summary: wired rows and bits, spans, and sampled rows' writers.
 * `wires_drawn`, `wires_drawn_unrolled`: the wire check on the sampled proof blocks alone (`Wires.Summary.drawnOk`, each sampled
   wired row's public string its writer's) and on the reference's entries whose unit is sampled.
-* `history_root`, `history_check`, `history_order`, `history_strings`: a history table (`HistoryTable`): its domain,
-  placeholder and root over its writers' `b ‖ c` at a capacity, the registered root held to that root, each position's
-  source from the program's runs, and the strings at those sources from the writer's members' public bodies.
+* `history_root`, `history_check`, `history_order`, `history_strings`, `history_roots`: a history table
+  (`HistoryTable`): its domain, placeholder and root over its writers' `b ‖ c` at a capacity, the registered root held
+  to that root, each position's source from the program's runs, the strings at those sources from the writer's members'
+  public bodies, and each table's root from bodies the leaf layer binds, held to the root the window registers.
 
 `sampled-proofs-verifier` serves those the verifier runs (`verifier`): `registration`, `matches_public`,
 `select` (the sample of record: `Stream.select` hands it the bytes of the challenger's coins), `select_second` (a
@@ -791,7 +792,8 @@ def table : List (String × (Json → V Json)) :=
    ("wires", Wires.piece), ("wires_unrolled", Wires.pieceRef),
    ("wires_drawn", Wires.pieceDrawn), ("wires_drawn_unrolled", Wires.pieceDrawnRef),
    ("history_root", HistoryTable.rootPiece), ("history_check", HistoryTable.checkPiece),
-   ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece)]
+   ("history_order", HistoryTable.orderPiece), ("history_strings", HistoryTable.stringsPiece),
+   ("history_roots", HistoryTable.rootsPiece)]
 
 /-- The verifier's pieces: `table`'s, by name. -/
 def verifier : List (String × (Json → V Json)) :=

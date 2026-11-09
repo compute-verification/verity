@@ -2,7 +2,9 @@
 (`history_root`), the registered root held to it (`history_check`), and each position's source from the program's runs
 (`history_order`), on valid and broken inputs at capacities up to 64, and once at the pinned capacity, `2^17`. The named
 cases hold what the guarantee reads off the check: a rank past the table's length opens as the public placeholder, and
-the root binds the rows' order and the capacity."""
+the root binds the rows' order and the capacity. The strings come from the writer's members' public bodies as the
+circuit prover lays them out (`history_strings`), and each table's root from bodies the leaf layer binds
+(`history_roots`)."""
 
 from __future__ import annotations
 
@@ -384,3 +386,48 @@ def test_strings_from_a_shared_row_body(pieces):
 ], ids=lambda x: x if isinstance(x, str) else "")
 def test_refused_strings(pieces, name, j):
     assert pieces.call("history_strings", j)[0] == "reject"
+
+
+def _roots(unbound: str | None = None, **change) -> dict:
+    """`_strings`' table `k_hist` at capacity 16, its writer's two members and a reader's body under the leaf layer
+    `rows.leaf_layer` makes of all three (of all but `unbound`), the window registering the root over its rows."""
+    from verity.ml.windows import rows as CS
+    s = _strings()
+    members = [dict(m, key=f"W/{i}") for i, m in enumerate(s["members"])]
+    publics = {m["key"]: bytes.fromhex(m["body"]) for m in members if m["key"] != unbound} | {"R/0": b"the reader's body"}
+    dom, ph = H.domain("p", "k_hist", 64, 16), H.placeholder(64)
+    bcs = [_bc(4, 1), _bc(4, 2), _bc(3, 4), _bc(3, 3), _bc(3, 2)]
+    j = {"leaf_layer": CS.leaf_layer(publics),
+         "digests": {k: hashlib.sha512(b).hexdigest() for k, b in publics.items()},
+         "tables": [{"name": "k_hist", "program": "p", "writer": "W", "out": "o", "words": 64, "runs": s["runs"],
+                     "capacity": 16, "first": s["first"], "units": s["units"], "members": members}],
+         "held": {"k_hist": s["held"]}, "registered": {"k_hist": H.root(dom, bcs, ph).hex()}}
+    return {**j, **change}
+
+
+def test_roots_from_the_bodies_the_leaf_layer_binds(pieces):
+    """Each table's root is recomputed from its writer's bodies, which the leaf layer over every member's body binds, and
+    the root and domain its reads open against are the registered root, held to it, and the table's domain."""
+    j = _roots()
+    dom = H.domain("p", "k_hist", 64, 16).domain_id.hex()
+    assert _call(pieces, "history_roots", j) == {"roots": {"k_hist": {"domain": dom, "root": j["registered"]["k_hist"]}}}
+
+
+def _tampered_body() -> dict:
+    j = _roots()
+    m = j["tables"][0]["members"][0]
+    body = bytearray.fromhex(m["body"])
+    body[-1] ^= 1
+    j["tables"][0]["members"][0] = dict(m, body=body.hex())
+    return j
+
+
+@pytest.mark.parametrize("name, j", [
+    ("a body that is not the one the leaf layer binds", _tampered_body()),
+    ("a writer member the leaf layer doesn't name", _roots(unbound="W/1")),
+    ("another leaf layer", _roots(leaf_layer="00" * 64)),
+    ("a registered root over other rows", _roots(registered={"k_hist": _roots()["registered"]["k_hist"][::-1]})),
+    ("no registered root", _roots(registered={})),
+], ids=lambda x: x if isinstance(x, str) else "")
+def test_refused_roots(pieces, name, j):
+    assert pieces.call("history_roots", j)[0] == "reject"
