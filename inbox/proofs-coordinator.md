@@ -17390,3 +17390,47 @@ the capacity lost.
   - `open`: drop `SpotFlock.FrameIs`, add `SpotFlock.Sites` under PRF-460, due 2026-11-30;
   - `domain`: add `SpotFlock.Built`. Why: the guarantee is about SPOT's own frame, and an honest registration takes it as its frame (`slotMap_frame`, `revealCode_frame`).
 - **No runs in flight.**
+
+## 07:43Z from STRUCT-LIT: proofs/20261109T0632Z-report-struct-lit is final; the literature ranked, recommend R1 (prove the cut theorem) now and R2's premise for interior blocks
+
+**Answer.** Quantitative information flow, in its computational form, is the formal home, and main already has its
+core.
+- `Theft` is the min-entropy chain rule: a union bound over the server's choices.
+- Leverage is the length of the hint a simulator needs, beside honest use, to reproduce a fixed fault pattern.
+- A cut between the faulted blocks and the served tokens bounds that hint (McCamant–Ernst's max-flow bound, applied
+  to faults). That gives all of LEVERAGE-T's bounds that need no extra premise.
+
+No published theorem bounds a persistent interior fault below its reach, and none can:
+- Every tamper-resilience result rests on something our server knows or controls (fresh randomness, tampers that
+  fail, a per-cycle budget, tamper-proof gadgets), or on the circuit proving its own run (Dachman-Soled–Kalai).
+- A separation shows the gap is real. There are weights under which honest serving is bit-identical to a base model's,
+  while one 16-bit fault dumps the fault's whole reach.
+  - I ran it on a toy transformer.
+  - Honest runs were bit-identical: 400 of 400 in float32, 200 of 200 in BF16.
+  - Every faulted run dumped 417 bits of θ exactly: 100 of 100 in each format.
+
+**Ranked by promise:**
+1. QIF with computational entropy: the framework and the cut theorem.
+2. Robust declassification: the same property as a type check on the graph; it rejects every interior block.
+3. Self-checking circuits: the only premise-free route for interior blocks. My estimate is 3.5–11× serving at the best
+   K, leaving λ ≈ 9–22, plus exact served arithmetic.
+4. Subversion: framing only.
+5. Fault attacks on ML: evidence only.
+
+Each of the rest gives nothing toward leverage, for a stated reason: tamper-resilient compilers and non-malleable codes
+(6), masking and noisy leakage (7), certified robustness (8), and differential privacy (9).
+
+**Recommendation.**
+- **R1, now.** Prove the cut theorem in Lean over the faulted function `Cf` of
+  [PR #8224](https://github.com/compute-verification/verity/pull/8224).
+  - It is one lemma, `faultedUseHard_of_cut`, sketched in the note against #8224's definitions, and three instances.
+  - It proves `FaultedUseHard`'s conversion with no premise for the token gate (λ ≤ 0.68, the 2.6% of MACs behind it)
+    and one-token requests (λ ≤ 0.52). Everywhere else it caps a block at its reach, λ ≤ 1,070–1,420.
+  - It needs no circuit or serving change.
+- **R2.** Keep `FaultedUseHard` at λ = 1.05 as the one premise on `gen`, now needed only for interior blocks.
+  - §2's separation is the argument that some premise is necessary.
+  - This bears on #8224's pending decision.
+- **R3** is the priced alternative if Daniel rejects any premise on the weights.
+
+Nothing is needed from you. Two smells from my own drafts are in the catalogue, under questions 8 and 10. The toy and
+its runs are at art:6551aa38647195c5a97e55de8a2d80351ab0e3ece80549bd44ddedc5c794eb92.
