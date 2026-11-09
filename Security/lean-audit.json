@@ -25579,29 +25579,40 @@
     "domain": ["WeightSecurity.Served.UndetectedLe"],
     "open": ["WeightSecurity.Assumptions.HonestUseHard"],
     "reads": []
-   }
+   },
+   "type_hash": "8b2f9f145e791c67699d3e5f661505469364bc71b0a9cc5d04383fc1768c2d05",
+   "unfolded_hash": "5574032c9232a01bc741d5beddbda0c9797be72f1135c7955ae7dd74b7c9d4ac"
   },
   "WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest": {
    "owner": "@proofs",
-   "signature": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest : WeightSecurity.Guarantees.TheftServedMinEntropyHonest"],
+   "signature": [
+    "WeightSecurity.SecurityProofs.TheftServedMinEntropyHonest : WeightSecurity.Guarantees.TheftServedMinEntropyHonest"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [],
     "reads": ["WeightSecurity.Assumptions.HonestUseHard"]
-   }
+   },
+   "type_hash": "5eeab4bd35b2e7d86500d53dc125998aaf55bb32cc490866b78fef46aed20e9b",
+   "unfolded_hash": "ff7e5349615a993533797477f23c4b5e7d2d844e1e19d16674d9689f32ba4ad7"
   },
   "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial": {
    "owner": "@proofs",
-   "signature": ["WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial : WeightSecurity.Guarantees.TheftServedMinEntropyNontrivial"],
+   "signature": [
+    "WeightSecurity.SecurityProofs.TheftServedMinEntropyNontrivial :",
+    "  WeightSecurity.Guarantees.TheftServedMinEntropyNontrivial"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [],
     "reads": []
-   }
+   },
+   "type_hash": "2f1fcc0ded9f506cda285d4ad4ecd2df2543d5a5db6b332c85ad4667c3a73667",
+   "unfolded_hash": "501e94cf7649751ccfaf9cce5af9875cb78ec63f81ecddad4a2ac637dd76b919"
   },
   "WeightSecurity.SecurityProofs.TheftServedNontrivial": {
    "owner": "@proofs",
@@ -25625,18 +25636,24 @@
     "domain": ["WeightSecurity.Served.UndetectedLe"],
     "open": ["WeightSecurity.Assumptions.HonestUseHard", "WeightSecurity.Assumptions.Simulable"],
     "reads": []
-   }
+   },
+   "type_hash": "9aa3f44f0c9c3699c124835ba59dd0ab41dc4ab634a16922f2c4f8fbffbb9567",
+   "unfolded_hash": "3072471d3bf7ca78ac527b8b225421bdfb737d91f223d43752d30692bef538c2"
   },
   "WeightSecurity.SecurityProofs.TheftServedReqNontrivial": {
    "owner": "@proofs",
-   "signature": ["WeightSecurity.SecurityProofs.TheftServedReqNontrivial : WeightSecurity.Guarantees.TheftServedReqNontrivial"],
+   "signature": [
+    "WeightSecurity.SecurityProofs.TheftServedReqNontrivial : WeightSecurity.Guarantees.TheftServedReqNontrivial"
+   ],
    "assumptions": [],
    "premises": {
     "assumptions": [],
     "domain": [],
     "open": [],
     "reads": []
-   }
+   },
+   "type_hash": "9a48f16b018644444d3db9883786dc1057159224dc6782a22f52ed83694cdfd8",
+   "unfolded_hash": "39671a9337e4d354aa510ba495f0668e96894f29bbbc1a80001591af57df4ccd"
   },
   "WeightSecurity.SecurityProofs.TheftTight": {
    "owner": "@proofs",
@@ -27588,21 +27605,19 @@
    },
    "Flock.SecurityProofs.EndToEndRegistered": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegistered reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawn": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parse (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
+    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (Flock.HmOut.loadPublic (FlockSoundness.Discharge.ZkExec.zkTags I) D.unroll I.publicFile) (Except.ok pub)": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (FlockSoundness.Discharge.Layout.scopeOkH D.unroll) Bool.true": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
     "Eq (instHMod.hMod kd (FlockSoundness.Discharge.Composed.nTab I)) 0": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "Eq (Flock.Desc.parseStmt (FlockSoundness.Discharge.ZkExec.zkTags I) I.circuitFile I.tables) (Except.ok D)": "an equation, the grandfathered premise `Flock.Desc.parse (zkTags I) I.circuitFile I.tables = .ok D` restated as `Flock.Desc.parseStmt … = .ok D` so EndToEndRegisteredDrawn reads templated statements, inline when the rule came: name it or state it as a guarantee's conclusion"
+    "∀ (S : Finset (Fin n)) (R : Reg) (j : Fin (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R).length), Real.instLE.le (FlockSoundness.Discharge.ZkLink.rateZ (FlockSoundness.Discharge.ZkHidden.planZHJ dj y₀ S R) j k) ρ": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Flock.SecurityProofs.EndToEndRegisteredDrawnFlat": {
     "Eq I.tags.typed Bool.false": "an equation, inline when the rule came: name it or state it as a guarantee's conclusion",
@@ -39368,35 +39383,44 @@
    }
   },
   "Definitions.WeightSecurity.Guarantees": {
-   "digest": "92e19d8655de5ab23dc5326eb9c9125398c93e747a0f10b859fa29026237ffd6",
+   "digest": "35a55349788d8a15806d074cd78cfe79b5795d085e503014f8c9775b5cb5b6ff",
    "definitions": {
     "WeightSecurity.Guarantees.Theft": "243a4531b248cccfef6facd28bc3405391f5da31d56ab1cb55fcb1c107ca67af",
     "WeightSecurity.Guarantees.TheftHonest": "edcebe0ece71b890e6f3ba54fd3daf68deef830b9bcf824f8453dd5b347b07c3",
     "WeightSecurity.Guarantees.TheftNontrivial": "01c971f2461b56cc999f6f851dd87a4be69c2c8c9d0692e56f2f452ce42fff75",
     "WeightSecurity.Guarantees.TheftServed": "3001e1613e4c171768f8231c43f04b9da48f65e1c192a23c70253af21ae82447",
     "WeightSecurity.Guarantees.TheftServedHonest": "17ba31b29ff8739852838079165e4ead570e5cd1a6a04ff05c73f02008c9ebf7",
+    "WeightSecurity.Guarantees.TheftServedMinEntropy": "8ee9360961ec963f89c5efc41bda0127682348dd7d633ae87ca4f0fe46f05deb",
+    "WeightSecurity.Guarantees.TheftServedMinEntropyHonest": "8337ac23db46a602ab313b0ec2ab27a4f91ba9c443b943fcc863d0651bf6108a",
+    "WeightSecurity.Guarantees.TheftServedMinEntropyNontrivial": "40e31b32626c9988213b195575581144019e24be4059eb8dc2b03999fbf56ea9",
     "WeightSecurity.Guarantees.TheftServedNontrivial": "0712e05191e0bfc872041259073ddc2fd6e4adb433e46e953ac9849a58c6650a",
+    "WeightSecurity.Guarantees.TheftServedReq": "78982874ecfc6e82aaa67f02c8dd5d06f07d1bcfb304b2f578a77ad0e87ea81c",
+    "WeightSecurity.Guarantees.TheftServedReqNontrivial": "d11428d102f9f539f37664c507024b5710a6bdf6259a371ac558a8fc8ae788b3",
     "WeightSecurity.Guarantees.TheftTight": "2296f0698d7e1ec1bf28bbbaccc1aa43192b428a061a9655fc914627c43af5ac"
    }
   },
   "Definitions.WeightSecurity.Served": {
-   "digest": "9c3c654bdc94ac481a8791018cba08abfd02e291601f73edfa2d904b61630dad",
+   "digest": "18f0490aaae4db504e8276348db1976d4c71c1260f538e15ffab12d3dd3012e9",
    "definitions": {
     "WeightSecurity.Served": "f2e335906c7443ef8a8ba3e8852804b26236819caac95e6f636260dbe13e1e95",
+    "WeightSecurity.Served.Isolated": "a3277c3725c5787d30b7d734723fc4e5e31bb9e8bc0d8c3efdf1eae90b97f36d",
     "WeightSecurity.Served.Local": "31551f1b7e8ce007c714a1512ee4575217a40c7635f0dc6d2d1a4cb136c43bd9",
     "WeightSecurity.Served.Undetected": "9ed8853e48e07f7a988fa3ac523c9ecca7435f218c7a784b28d4906b7d899d1f",
     "WeightSecurity.Served.UndetectedLe": "2c7e1138e7bbc4840bff376fd43d2c0fc3d466c38d3ff020a6a41feaddcaf198",
+    "WeightSecurity.Served.accLen": "c612e76b44e5079b4e634b43f15320ac65ae7b555869f69863a87395efb60cfc",
     "WeightSecurity.Served.accepted": "6ba621195397ffc7bf6a08140b8201ccf68a75da7d9bf330e8fa7d2ff8dc3f71",
     "WeightSecurity.Served.adv": "0bed20d375b2c98533a99c0f975c567c99fa9e1f3e958f66f481ec2264a34f15",
     "WeightSecurity.Served.changed": "033219056c1b8d36bcbe0bce0c4490a75c1bc9f803f101d55ab54e9b963278dd",
     "WeightSecurity.Served.count": "d8adf81d59bccd9c9d5fc2812fe62c0c9c188ec229f2d83b0b0faccffe1f3e55",
     "WeightSecurity.Served.egress": "ae399124ad38ad8a594769be4f80cf708e3e083d82c1d0b14d13a2a55d20727c",
     "WeightSecurity.Served.incorrect": "f4f10bf3213d963d38b752c20239a7785c014681732357021dd92c7533d6ff6f",
+    "WeightSecurity.Served.incorrectAt": "c618f014196819301c26485ce8294014948ee404dc457115b4ac7054e2caaa4e",
     "WeightSecurity.Served.lead": "3b6979a5d94387f047757e4b1fba48c2341c3d41a375370f07a199108270c5f5",
     "WeightSecurity.Served.reply": "7a6155704038ef48f1d396fec306b801b3bad22ad8e3b98bd46f536644ed8d0a",
     "WeightSecurity.Served.sampledIncorrect": "1887dc4fa4406626a64ddf89d77758fb83c426c5054e1804b86067740c857fc4",
     "WeightSecurity.Served.tick": "84f0fd09edc8555fef5dcc42df74bf2925e6ee1406976d579cefaa06ae6a497c",
     "WeightSecurity.Served.view": "9502eba9ec773763689c4be6a67556c1820e3866bf985a7d7a6605c990d66561",
+    "WeightSecurity.servedBits": "1d3f71668a7025922b3e7718c30c61897683f09d8c8b4120c6d80dafe2cc0e40",
     "WeightSecurity.servedChannel": "9d82402645753e6c721739e0d2ec3d795a9b45ca2e73b7763cb4814dbcbc7e0a"
    }
   },
