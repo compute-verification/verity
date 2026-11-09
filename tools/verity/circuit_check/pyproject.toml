@@ -35,6 +35,7 @@ untraced = [
     "tests/test_cache_redteam.py",
     "tests/test_circuit_check.py",
     "tests/test_metadata_listings.py",
+    "tests/test_named_targets.py",
     "tests/test_shard.py",
     "tests/test_units.py",
 ]
