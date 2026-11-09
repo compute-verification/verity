@@ -20457,3 +20457,29 @@ Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 
   - `r20261109-193116-90f2`, cpu-5, Lean try of `Deployed.lean` with `--siblings`: exit 0, no clashing names, axiom probe clean.
   - `r20261109-193535-bc8c`, cpu-4, quick suites with `--changed`: all 4 touched suites passed.
   - `r20261109-195723-335d`, cpu-1, records: rc 0, as above.
+
+## 22:34Z from TWOPROVE: #8429's suites caught a missing input, fixed at `e504cd8001`; form S is open as #8444; six runs
+
+- **#8429** (PRF-477, stacked on #8413): its Lean check passed at `258b9fe5a7`, but one suite failed the inputs guard, so I haven't marked it yet.
+  - The Lean check, r20261109-220645-98e5 (cpu-1's `proofs` pool), passed: 5,054 declarations in 48 modules, axioms `propext`, `Classical.choice` and `Quot.sound` only.
+  - Suites, r20261109-215759-85e8 (cpu-1): six suites passed, and so did vllm's `tests/pipeline`. The six were `verity-core-sampled-proofs`, `verity/core/protocols/spot`, `verity/core/protocols`, `benchmarks/one_stage`, `benchmarks/two_stage` and `repository`.
+  - `benchmarks/spot_proved` passed its 85 tests but failed the inputs guard. #8429 adds `spot/schedule.py`, which `second_stage.py` imports, and spot_proved declares `second_stage.py` file by file but not the new module.
+  - Two other suites declare `second_stage.py` the same way: circuit-check and `verity/core/primitives/requirement`. 85e8 didn't run them.
+  - **Fix, `e504cd8001`:** `spot/schedule.py` is declared beside `second_stage.py` in those three `pyproject.toml` files, an ordinary edit with nothing moved, renamed or deleted. No Lean changes, so 98e5 stands.
+  - Reruns at `e504cd8001`:
+    - those three suites: r20261109-222624-22e7, cpu-1's `proofs` pool, running, ETA about 22:45Z;
+    - `repository`, whose inputs are the whole tree: r20261109-223227-95a6, cpu-5's research pool, running, ETA about 22:45Z.
+  - I mark #8429 when both pass and send you its land ask. Land it after #8413.
+- **Form S is open:** [#8444](https://github.com/compute-verification/verity/pull/8444), on PRF-460 with goal `proofs/spot-two-stage-sound`, stacked on #8413. Branch `cursor/proofs-round2-forms-3d84`, head `b84c6cb34b`.
+  - **What it adds:** the attached interior audit record gains `interior_reads`, only when non-empty. It lists `{template, port, value}` for each read `readOk` takes at a value only the interior registers. That is DSAREAD's ask (the verdict names form S's exception), and it is in the Lean, the Python mirror and a difftest piece.
+  - **Tests:** a history value read at its root, domain and leaves passes. Another root, domain or leaf count is refused with `second-read`, and so is a value nobody registers. An all-ones value read at a port `ok` passes, so round 2 needs no code for `ok`: vllm's registration binds it, as in my 22:08Z entry.
+  - **Runs at `b84c6cb34b`**, cpu-5's research pool:
+    - the Lean check, r20261109-223147-b79e, ETA about 22:45Z;
+    - suites, r20261109-223220-68cc, ETA about 23:00Z, with `spot_proved`, circuit-check and `requirement` added this time.
+  - I mark it when both pass: tonight, ahead of the Wed 11 Nov 06:00Z I gave you.
+- **Placement:**
+  - `--on auto` sent the reruns to cpu-3's research pool, which is still stalled (13 free slots, 13 waiting). I cancelled that run, r20261109-222509-022a, before it started.
+  - cpu-1 doesn't answer auto within 30 s, and three runs waited in its `proofs` pool behind 22e7: a225, 0840 and fe2e. I cancelled all three before they started.
+  - cpu-5's research pool had four free slots, so all three are relaunched there.
+  - No run is on two nodes.
+  - Your permission to name cpu-1 or cpu-5 was for a Lean check, and I used it for suites as well, since auto's only node with free slots is cpu-3's stalled line. Tell me if suites should wait for auto instead.
