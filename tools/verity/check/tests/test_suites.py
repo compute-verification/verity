@@ -160,6 +160,51 @@ def test_suites_refuse_a_python_that_imports_the_trees_packages_from_elsewhere(t
     assert S.main(["--list"]) == 0 and len(probed) == 1
 
 
+def test_a_fresh_trees_own_environment_installs_the_workspace_once_and_runs_again(tmp_path, monkeypatch, capsys):
+    """`uv run tools/verity/check/suites.py` on a freshly shipped tree installs only the runner's dependencies; the runner syncs the
+    workspace and runs again in place of refusing, once, and an environment it can't fill is still refused."""
+    (tmp_path / "pyproject.toml").write_text('[tool.uv.workspace]\nmembers = ["pkg"]\n')
+    (tmp_path / "pkg" / "tests").mkdir(parents=True)
+    (tmp_path / "pkg" / "pyproject.toml").write_text('[project]\nname = "pkg"\n\n[tool.pytest.ini_options]\ntestpaths = ["tests"]\n')
+    _git(tmp_path, "init", "-q")
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S, "foreign", lambda pkgs, env: "verity from nowhere (not importable)")
+    monkeypatch.setattr(S, "fresh", lambda: True)
+    resynced = []
+    monkeypatch.setattr(S, "resync", resynced.append)
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert S.main() == 2 and resynced == [["tools/verity/check/suites.py", "--fresh", "pkg"]]
+    monkeypatch.setattr(sys, "argv", ["tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])
+    assert S.main() == 2 and len(resynced) == 1
+    assert f"`{' '.join(S.SYNC)} && uv run tools/verity/check/suites.py` there" in capsys.readouterr().err
+    assert S.main(["--fresh", "pkg"]) == 2 and len(resynced) == 1
+
+
+def test_resync_installs_the_workspace_and_runs_the_command_again_marked_synced(tmp_path, monkeypatch):
+    S = _suites(monkeypatch, tmp_path)
+    synced, ran = [], []
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: synced.append((cmd, cwd)) or subprocess.CompletedProcess(cmd, 0))
+    monkeypatch.setattr(S.os, "execv", lambda exe, args: ran.append((exe, args)))
+    S.resync(["tools/verity/check/suites.py", "--fresh", "pkg"])
+    assert synced == [(S.SYNC, tmp_path)]
+    assert ran == [(sys.executable, [sys.executable, "tools/verity/check/suites.py", "--synced", "--fresh", "pkg"])]
+    monkeypatch.setattr(S.subprocess, "run", lambda cmd, cwd: subprocess.CompletedProcess(cmd, 1))
+    S.resync(["tools/verity/check/suites.py"])
+    assert len(ran) == 1
+
+
+def test_only_the_trees_own_environment_without_the_workspace_or_torch_is_fresh(tmp_path, monkeypatch):
+    (tmp_path / "pyproject.toml").write_text('[tool.hatch.build.targets.wheel]\npackages = ["no_such_root_pkg"]\n')
+    S = _suites(monkeypatch, tmp_path)
+    monkeypatch.setattr(S.shutil, "which", lambda name: "/usr/bin/uv")
+    monkeypatch.setattr(S.importlib.util, "find_spec", lambda name: None)
+    assert not S.fresh()
+    monkeypatch.setattr(sys, "prefix", str(tmp_path / ".venv"))
+    assert S.fresh()
+    monkeypatch.setattr(S.importlib.util, "find_spec", lambda name: object() if name == "torch" else None)
+    assert not S.fresh()
+
+
 def test_a_declared_build_output_keys_the_suite(tmp_path, monkeypatch):
     """Git ignores build outputs, so a suite whose tests run or skip on one declares it (`[tool.verity.tests] artifacts`), and
     its pass is reused only for the same build."""
