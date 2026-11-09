@@ -13,9 +13,9 @@ as `next` is), pushed to `queue/<sha12>` and checked by graph2 as `ready:<sha>`.
              A fail that names no failed task is rung, and nothing else happens
     infra    nothing is blamed and `main` stays: the check is enqueued again at every reading, and infra is rung from `rings`
              enqueues on (2 at most), in words that change only with the erring tasks, so the loop tells infra once for each
-             set; a listing failure is handled alike.  Only infra errors graph2 saw on two or more nodes (`tree`) follow the
-             tree: they are bisected like a fail, on the members whose files meet their inputs, else on every member, and
-             eject a lone member
+             set; a listing failure is handled alike.  With `tree_ejects`, infra errors graph2 saw on two or more nodes
+             (`tree`) follow the tree: they are bisected like a fail, on the members whose files meet their inputs, else on
+             every member, and eject a lone member.  Without it, the default, they are retried and rung like any other
     pending  wait; a check still pending `pending_s` after its first enqueue is enqueued again, and rung at twice that
 
 `decide` is the whole policy: a pure function from a `Snapshot` (what the refs, the labels and graph2's results say now) to
@@ -108,6 +108,8 @@ class Snapshot:
     lean: int = 1                  # the most members of a batch that change Lean, a lock or a spec
     now: float | None = None       # when the snapshot was taken, in seconds since the epoch; None: nothing times out
     pending_s: float = 4 * 3600    # how long the lowest candidate is pending after its first enqueue before it is retried
+    tree_ejects: bool = False      # infra errors marked `tree` are bisected and eject; off while graph2 marks `tree` on any
+                                   # error that ran out of attempts on two or more nodes, as an outage's do
 
 
 @dataclass(frozen=True)
@@ -208,7 +210,7 @@ def decide(s: Snapshot) -> list[Action]:
             main, landed, chain = c1.sha, landed | set(c1.members), chain[1:]
         elif reading == FAIL and (rerun := _rerun(c1, ready)) is not None:
             acts.append(rerun)
-        elif reading == FAIL or (reading == INFRA and _tree(c1.verdict)):
+        elif reading == FAIL or (reading == INFRA and s.tree_ejects and _tree(c1.verdict)):
             ejected = _failed(c1, ready, _outcomes(s, acts), acts)
             acts += [Drop(c.sha, BASE_FAILED) for c in chain[1:]]
             chain = []
@@ -410,13 +412,13 @@ def _failed(c1: Candidate, ready: dict[int, Ready], outcomes: list[Outcome], act
                                    "not rerun)", own)
     elif len(c1.members) == 1:
         n = c1.members[0]
-        eject = Eject(n, heads[n], f"{_ring_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
+        eject = Eject(n, heads[n], f"{_tree_why(c1)}, with only it merged on {c1.base[:12]}: a check that keeps erring on a "
                                    "change (an undeclared read, a hang, an untraced program) is the change's to fix", _tree(v))
     suspects = (eject.number,) if eject is not None else tuple(by_inputs) if by_inputs else c1.members
     acts += _red(c1, outcomes)
     if eject is not None:
         acts.append(eject)
-    why = f"failed: {', '.join(f.task for f in v.failed)}" if own else _ring_why(c1)
+    why = f"failed: {', '.join(f.task for f in v.failed)}" if own else _tree_why(c1)
     acts.append(Drop(c1.sha, why, Outcome(c1.members, c1.heads, FAIL, suspects, c1.base,
                                           tuple(f for f in v.failed if _inherited(f)))))
     return set() if eject is None else {eject.number}
@@ -426,11 +428,13 @@ def _ring_why(c: Candidate) -> str:
     """Words that change with the tasks ``c``'s check erred on, not with its enqueues: the loop rings each why once."""
     if c.verdict.state == LIST_FAILED:
         return f"{c.sha[:12]}'s check failed to list"
-    if tree := _tree(c.verdict):
-        return f"{c.sha[:12]}'s check ended in infra errors on two or more nodes, which follow its tree: " + ", ".join(
-            f.task for f in tree)
     tasks = ", ".join(sorted({f.task for f in c.verdict.infra}))
     return f"{c.sha[:12]}'s check ended in infra errors" + (f": {tasks}" if tasks else "")
+
+
+def _tree_why(c: Candidate) -> str:
+    return f"{c.sha[:12]}'s check ended in infra errors on two or more nodes, which follow its tree: " + ", ".join(
+        f.task for f in _tree(c.verdict))
 
 
 def _batch(pool: list[Ready], outcomes: list[Outcome], size: int, lean: int) -> tuple[int, ...]:

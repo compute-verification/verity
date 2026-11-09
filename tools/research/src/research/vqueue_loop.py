@@ -994,10 +994,10 @@ class Loop:
     def __init__(self, world: World, log: Path, *, decide: Callable[[Snapshot], list[Action]] = vqueue.decide,
                  shadow: bool = False, dry_run: bool = False, batch: int = BATCH, depth: int = DEPTH, lean: int = LEAN,
                  pending_s: float = 4 * 3600, slim=None, now: Callable[[], float] = time.time,
-                 out: Callable[[str], None] = print, state: Path | None = None):
+                 out: Callable[[str], None] = print, state: Path | None = None, tree_ejects: bool = False):
         self.world, self.log_path, self.decide, self.shadow, self.dry_run = world, Path(log), decide, shadow, dry_run
         self.batch, self.depth, self.lean, self.pending_s, self.slim = batch, depth, lean, pending_s, slim
-        self.now, self.out, self.state = now, out, state
+        self.now, self.out, self.state, self.tree_ejects = now, out, state, tree_ejects
         #: the last tick this loop ran: a tick that logs nothing still counts
         self.last = 0
 
@@ -1051,7 +1051,7 @@ class Loop:
         cands.sort(key=lambda c: (height(c.sha), c.sha))       # each after the candidate it is built on
         history = past.history((lambda sha: bool(sha) and w._ancestor(sha, main)) if self.shadow else None)
         snap = Snapshot(main, tuple(sorted(ready, key=lambda x: x.rank)), tuple(cands), history, self.batch, self.depth,
-                        lean=self.lean, now=self.now(), pending_s=self.pending_s)
+                        lean=self.lean, now=self.now(), pending_s=self.pending_s, tree_ejects=self.tree_ejects)
         return Tick(n, main, origin, snap, judged, whole, past.told(), foreign, wrote)
 
     def _shadow_main(self, past: Past, origin: str) -> str:
@@ -1524,6 +1524,10 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--pending-hours", type=float, default=4.0,
                     help="hours the lowest candidate's check may stay pending after its first enqueue before it is enqueued "
                          "again; rung at twice that (default 4)")
+    ap.add_argument("--tree-ejects", action="store_true",
+                    help="bisect on infra errors graph2 marks `tree`, and eject a lone member for them, as for a fail; off "
+                         "(the default), they are retried and rung like any infra error, while graph2 marks `tree` on any "
+                         "error that ran out of attempts on two or more nodes, as an outage's do")
     ap.add_argument("--no-slim", action="store_true",
                     help="judge each candidate on its graph2 check alone, with no run beside it of lean-agreement and the "
                          "preflights (research.vqueue_slim), which it otherwise launches on drive's machines beside each "
@@ -1563,7 +1567,7 @@ def main(argv: list[str]) -> int:
         world = World(q, labels, Executor(Transport(store, (*graph2, "enqueue"), a.repo)), graph2=graph2,
                       priority_file=a.priority_file, labels_at=labels_at, cache=a.log.parent)
         loop = Loop(world, a.log, shadow=a.shadow, dry_run=a.dry_run, batch=a.batch, depth=a.depth, lean=a.lean,
-                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state)
+                    pending_s=a.pending_hours * 3600, slim=slim, state=a.state, tree_ejects=a.tree_ejects)
         if a.once or a.dry_run:
             loop.tick()
             return 0
