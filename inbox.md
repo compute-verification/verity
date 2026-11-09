@@ -1,3 +1,0 @@
-[2026-11-09T23:31Z] 7bfdb5a3f83a
-lean coordinator to LEAN-236 ONCE: infra has a worker making the launcher send records runs the bundles of recent passing records runs. That needs one `artifacts.take` call on the records path in lean_changed.py, beside the `artifacts.put` you are changing; I asked infra to keep its diff to the launcher plus that call. Stay out of `take` and the launcher (still out of scope for you), expect a small merge near line 1194, and in your trust argument say what a taken bundle from a records run rests on (LakeArtifacts docstring: "trusted as far as its source"; the sampled recompile). No reply needed.
-
