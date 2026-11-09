@@ -16,7 +16,7 @@ from research import vqueue
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Retry, Ring,
                              Snapshot, Verdict)
-from research.vqueue_loop import Loop, World, _Clone, branch
+from research.vqueue_loop import Loop, World, _Clone, _faulted, branch
 from test_queue import World as Origin, _git
 
 T0 = 1_900_000_000.0
@@ -490,6 +490,26 @@ def test_graph2_s_own_verdict_is_kept_beside_the_loop_s_and_its_cancel_runs_on_a
     assert any("graph2 says fail" in x for x in env.out)
     (drop,) = loop.tick()
     assert drop["cancel"] == "cancelled" and Path(f"{script}.cancel").read_text() == f"ready:{sha}\n"
+
+
+def test_a_task_graph2_says_faulted_which_it_labels_no_result_for_fails_the_candidate_and_blocks_its_readers(env):
+    """graph2 labels no result for a task's own fault (an undeclared read, a race): its verdict's failed entry with a `why`
+    is read as the fail it is, not as pending."""
+    one = env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(vqueue.decide)
+    script = env.graph2_script(loop, {"state": PENDING})
+    (built,) = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:b": ["b.txt"]}, reads={"pytest:b": "pytest:a"})
+    assert loop.tick() == []
+    a, why = keys["pytest:a"], "read 1 file(s) outside its declared inputs: x.txt"
+    said = {"state": FAIL, "failed": [{"task": "pytest:a", "key": a, "why": why}]}
+    Path(f"{script}.verdict").write_text(json.dumps(said))
+    assert [f.task for f in loop.world.verdict(sha).verdict.failed] == ["pytest:a"]
+    assert _faulted({**said, "labelled": "2026-01-01T00:00:00Z"}) == {}       # a label outlives the rerun of what it says
+    eject, drop = loop.tick()
+    assert (eject["action"], eject["number"], env.withdrawn, drop["failed"]) == ("eject", 1, [(1, one)],
+                                                                                 [{"task": "pytest:a", "key": a}])
 
 
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):

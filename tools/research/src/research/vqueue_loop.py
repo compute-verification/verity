@@ -17,11 +17,12 @@ Lean-change test (`queue.lean_change`), and `conflict` whether `Queue._merge` me
 `candidates` are the loop's own builds: each of origin's `queue/<sha12>` branches at the sha a build line of the log names
 (the window's, else the whole log's, which its other lines are then read from too), with that line's base and members, lowest
 first; any other `queue/*` branch is no candidate, and is logged once (`ignore`).  `now` is the clock, `lean` and `pending_s`
-the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>` (`Executor.settle`),
-each key's from the first a retry or a rerun didn't set aside, on the merge gate's tasks, those drive's `executor = "on"` path
-gates on (none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked
-task is fail, each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing
-tests (result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
+the command's (`--lean`, `--pending-hours`).  A candidate's verdict is graph2's results for `ready:<sha>`
+(`Executor.settle`), each key's from the first a retry or a rerun didn't set aside (a task graph2's `verdict` says failed by
+its own fault, which it labels no result for, failed), on the merge gate's tasks, those drive's `executor = "on"` path gates
+on (none `"gate": false`, of `drive.SLIM_STEPS` or off the gate in policy.toml at the candidate): a failed or blocked task is
+fail, each failed task with its inputs (its own, its env's spec files and those of each task it reads), its failing tests
+(result/v1's `failed_tests`) and its key and failing tests in its base's graph as graph2 listed it, where there are
 (`Failed.base_key`, `Failed.base_tests`), ended once no gating task runs but behind an infra error; else a task whose newest
 result is graph2's infra error (`detail.infra`; graph2's `tree` where `Failed` has one) is infra, else every gating task
 passed is pass, else pending.  No graph while graph2 says its listing failed (`verdict`, else its `ready_verdict` label), a
@@ -249,16 +250,20 @@ class Judged:
 
 class _Seen:
     """A transport that keeps each key's results as `Executor.settle` reads them (an infra error folds to pending there), each
-    key's from its ``since``-th on: a retry or a rerun set the earlier ones aside."""
+    key's from its ``since``-th on: a retry or a rerun set the earlier ones aside.  A key of ``faulted`` ({key: its fail}) with
+    neither a pass nor a fail among them reads as that fail."""
 
-    def __init__(self, transport, since: dict[str, int] | None = None):
-        self.transport, self.since, self.got = transport, since or {}, {}
+    def __init__(self, transport, since: dict[str, int] | None = None, faulted: dict[str, dict] | None = None):
+        self.transport, self.since, self.faulted, self.got = transport, since or {}, faulted or {}, {}
 
     def results(self, keys: list[str]) -> dict[str, list[object]]:
         if isinstance(self.transport, Transport):
             got = self.transport.results(keys, self.since)
         else:
             got = {k: v[self.since.get(k, 0):] for k, v in self.transport.results(keys).items()}
+        for k in keys:
+            if (doc := self.faulted.get(k)) is not None and fold_results(got.get(k) or (), k)[0] == PENDING:
+                got[k] = [*(got.get(k) or ()), doc]
         self.got.update(got)
         return got
 
@@ -483,7 +488,7 @@ class World:
         if not gates:
             return Judged(Verdict(LIST_FAILED), mark=f"empty {_digest(sorted(tasks))}", note="no task on the merge gate",
                           graph2=said, theirs=theirs)
-        states, keys, seen = self._settled(graph, since)
+        states, keys, seen = self._settled(graph, since, _faulted(theirs))
         inputs: dict[str, frozenset[str]] = {}
 
         def reach(i: str) -> frozenset[str]:
@@ -531,10 +536,12 @@ class World:
                           *([f"no task of {', '.join(lacks)}"] if lacks else [])])
         return Judged(mine, mark=mark if mine.state == INFRA else None, note=note, graph2=said, lacks=lacks, theirs=theirs)
 
-    def _settled(self, graph: dict, since: dict[str, int] | None = None) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
-        """``graph``'s tasks settled on graph2's results (`Executor.settle`), each key's from its ``since``-th on, each one's key,
-        the graph's or one made from its reads ("" while they haven't all passed), and the results read."""
-        seen = _Seen(self.tasks.transport, since)
+    def _settled(self, graph: dict, since: dict[str, int] | None = None, faulted: dict[str, dict] | None = None
+                 ) -> tuple[dict[str, tuple], dict[str, str], _Seen]:
+        """``graph``'s tasks settled on graph2's results (`Executor.settle`), each key's from its ``since``-th on, a key of
+        ``faulted`` with none read as its fail (`_Seen`), each one's key, the graph's or one made from its reads ("" while they
+        haven't all passed), and the results read."""
+        seen = _Seen(self.tasks.transport, since, faulted)
         states = Executor(seen).settle(graph)
         files, envs = graph.get("files") or {}, graph.get("envs") or {}
         keys: dict[str, str] = {}
@@ -735,6 +742,16 @@ def _tests(doc: object) -> frozenset[str]:
     """The failing tests a result names (result/v1's `failed_tests`)."""
     got = (doc.get("detail") or {}).get("failed_tests") if isinstance(doc, dict) else None
     return frozenset(x for x in got if isinstance(x, str)) if isinstance(got, list) else frozenset()
+
+
+def _faulted(theirs: dict | None) -> dict[str, dict]:
+    """The tasks graph2's `verdict` says failed by their own fault (an undeclared read, a race: a failed entry with a `why`),
+    for which it labels no result: {key: the fail each reads as}.  Not from a `ready_verdict` label, which a rerun leaves
+    standing until the check ends again."""
+    if not isinstance(theirs, dict) or "labelled" in theirs:
+        return {}
+    return {k: {"key": k, "task": e.get("task"), "status": FAIL, "detail": {"fault": e["why"]}}
+            for e in theirs.get("failed") or () if isinstance(e, dict) and e.get("why") and isinstance(k := e.get("key"), str)}
 
 
 def _failure(task: str, key: str, inputs: frozenset[str], **kw) -> Failed:
