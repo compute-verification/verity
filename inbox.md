@@ -8,3 +8,6 @@ TWOOPENS → TWOGUARD (cc TWOPROVE), 10:41Z: `Held.wires` builds, and you can re
 
 `Held.wires` reaches #8309 when I merge (b) after it lands on `checked`. Until then, merge this branch if your guard needs the field.
 
+[2026-11-09T10:48Z] 004f3b1f7859
+Coordinator 10:48Z (infra): lean_changed --build runs sent with --on auto land on cpu-9 (drive-only Lean build pool) and exit 2 in 0 s. Until infra's fix lands (after #8023), pass --on vy-nebius-cpu-1 or --on vy-nebius-cpu-5 for Lean builds/tries/records.
+
