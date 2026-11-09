@@ -20,7 +20,8 @@ Each bundle holds the facts the two-stage design reads of it, each a decision on
   `firstK`), and its population is in slot order (`popOk`).
 
 At them the design evaluates (`two_held`), so the registration doesn't refute a checked run before any session; the
-frame is SPOT's own (`built_held`); and SPOT's layout embeds the statement (`embeds_held`).
+frame is SPOT's own (`built_held`); SPOT's layout embeds the statement (`embeds_held`); and round 2's parts are the
+one template's (`partsAt_held`).
 -/
 
 @[expose] public section
@@ -149,5 +150,11 @@ theorem built_held : Built (held R B desc q c₀) := built_spot (held₀ R B des
 
 /-- **SPOT's layout embeds the statement.** -/
 theorem embeds_held : Embeds (held R B desc q c₀) (layoutFor (held R B desc q c₀)) := embeds_layoutFor _
+
+/-- **Round 2's parts**: the one template's, named `R.name`, from slot `0`, of one unit. -/
+theorem partsAt_held (n : ℕ) : partsAt (held R B desc q c₀) n = #[⟨R.name, 0, 1⟩] := by
+  first
+  | rfl
+  | simp [partsAt, partAt, Held.ms, held, held₀, reg]
 
 end SpotFlock.Instance
