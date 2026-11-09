@@ -128,7 +128,7 @@ def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, st
 
 
 def quantile(xs: list[float], f: float) -> float:
-    """The `f`-quantile of `xs` as CI-485's scorer takes it: the sorted value at index ⌊f·n⌋."""
+    """The `f`-quantile of `xs`: the sorted value at index ⌊f·n⌋, or the last one when that index is past the end."""
     xs = sorted(xs)
     return xs[min(len(xs) - 1, int(f * len(xs)))] if xs else float("nan")
 
