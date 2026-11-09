@@ -4499,6 +4499,14 @@
    "type_hash": "adf77051204e654f79116b466bf8b2901ce4f9c35a882047988058a6bbdbb00a",
    "unfolded_hash": "7be6fec7e43d2b4bcb904cee6032058522ad1fba91c837fd4cd448417c732e62"
   },
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
+   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
+   "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
+  },
+  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
+   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
+   "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
+  },
   "Accounting.SecurityProofs.ComputeOfPearlCPerRunPriced": {
    "type_hash": "2eed0526fa5f4476b6ce1975b042190a9566a0568b57aee689ee3a023705ede8",
    "unfolded_hash": "3d54089a8b29cf26b32a65da0287ef7e5f5ef8a59ff05a06f0ce314f0eda0dad"
@@ -4959,9 +4967,21 @@
    "type_hash": "20a8497e59180c39414fe50e1e41293894b8d2c6b974786bb7b8d58803dd58cc",
    "unfolded_hash": "aee6f9b300ae55f3eb5d6d0b9c97c4382d21120d25d0d34419a09b0a7e0bc9c3"
   },
+  "Flock.SecurityProofs.JointHorizonV5": {
+   "type_hash": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72",
+   "unfolded_hash": "0c8033f676893e998217880b3ff947c0a5e794719b540d6327a1863fc987482e"
+  },
+  "Flock.SecurityProofs.JointSampledV5": {
+   "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
+   "unfolded_hash": "374675d926dbb927bea421f4416e9783db957514ac3b51384bf81542b63b59af"
+  },
   "Flock.SecurityProofs.JointServed": "7336cb84d9ce7d76a08b717e7b412bbe3b5fbbf7f79068bb0af0d60ef45c9a79",
   "Flock.SecurityProofs.JointServed_honest": "b322a5ee756839ec18d249d2c4868b17f088400afc0a3556da10d5f9ff4073b7",
   "Flock.SecurityProofs.JointServed_nontrivial": "3dfd9d37c2f1a836bc2f967261d6545049dcbfde0a0c1fff234dd9fe63a0a947",
+  "Flock.SecurityProofs.JointShareV5": {
+   "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
+   "unfolded_hash": "120b414dc3c252643fe80a0b8b6071595faa9abeb3d683374f95263100e2297e"
+  },
   "Flock.SecurityProofs.JointStratified": {
    "type_hash": "8a0d33c3f05e59012d7c2818198770e9a9b1ab6c83d82a51a9acd510ca33da6b",
    "unfolded_hash": "e44d70b4e2a1584de312f46c75bac008bdddb9887d6d9644be0370b3315be165"
@@ -5403,58 +5423,6 @@
   "Verity.SecurityProofs.ServingBlockSum": {
    "type_hash": "08c59698b215f650f00508d3cac6aabef1196ad39401fb6c87d6f9e097cbcec8",
    "unfolded_hash": "76801bacbea7a7241bc4900b35606f76be5cb7c45089092a126af20fd85dd6e5"
-  },
-  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitCreditPeriod": {
-   "type_hash": "514a7aec3cc4e33e81ae87c8efd760c86424bcfa18b1e75b246b6d64e11bbdd2",
-   "unfolded_hash": "7d61453c79f2ab6a4c03f89facbceb697990a7198d63abac3a05b5edb43e3ab8"
-  },
-  "Accounting.SecurityProofs.ComposeMonitoringPeriod.CircuitWorkMonitoringPeriod": {
-   "type_hash": "b36ccf1574d4991f403428d8b3cbb20397872b9f6341f217dfd141a2fdc5efe2",
-   "unfolded_hash": "e178dc2b082c97762056fd509aba946c9323a0cda3356b2ac4864a5c6c642513"
-  },
-  "Flock.SecurityProofs.JointHorizonV5": {
-   "type_hash": "6bf001db90d1e2f2293065e87750097905100b4b3bfaefd4f26474959f331d72",
-   "unfolded_hash": "0c8033f676893e998217880b3ff947c0a5e794719b540d6327a1863fc987482e"
-  },
-  "Flock.SecurityProofs.JointSampledV5": {
-   "type_hash": "2ab8f9edfaf8c3dbbcf8b9fa37933dd79f84b94347d45e1a3fe266d199210b76",
-   "unfolded_hash": "374675d926dbb927bea421f4416e9783db957514ac3b51384bf81542b63b59af"
-  },
-  "Flock.SecurityProofs.JointShareV5": {
-   "type_hash": "021a8367cbb384241ac411da6a2b8a523ce3aba4efe29fc8d6ba1e1a0add071f",
-   "unfolded_hash": "120b414dc3c252643fe80a0b8b6071595faa9abeb3d683374f95263100e2297e"
-  },
-  "Nci.SecurityProofs.IncompressibleThreadedThrottled": {
-   "type_hash": "3f0744ed7643bc3edea9b8bcf41a99c0a872164d55e92857ae748cac9d1ba7f6",
-   "unfolded_hash": "8c6f9da424a228bd46e1ad63c4bfea690e6f9ffa632a5b412968062cebda528b"
-  },
-  "Nci.SecurityProofs.IncompressibleThreadedThrottledOn": {
-   "type_hash": "796765adf9071efb9307c0bc132a001510b1a96beab7fb237fdd64013c33899f",
-   "unfolded_hash": "6cb6ca836825e498ba381568fb4abcd6051ee4a56c21b9de16c3ed665788d2a3"
-  },
-  "Nci.SecurityProofs.ThreadedThrottled": {
-   "type_hash": "6007575d1460a22e63346ad2afc4a83bc5c4c7fff749b280a150dba09d596041",
-   "unfolded_hash": "80df4629cbbb2662cb37463e1a0017c2007c5951cf00ae1483ef0478c1000bcb"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledDark": {
-   "type_hash": "a3965e5caa03cf2e61926408d5047b84693ac61a62baafca0cca6e13d857dd2e",
-   "unfolded_hash": "5d769971219774dbc4187d28906e6dddbd0a37dd7bd292f93accaed35e197552"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledDarkSlots": {
-   "type_hash": "f0fd651df80a204957a512ee9a4b43bbd40861f8aef36fd77bb331b62fa14301",
-   "unfolded_hash": "26d0cf7adaffc00d64d4d3f0087bb2c1d6d073275f1267394b20b07f38434255"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledOn": {
-   "type_hash": "a7984c474df2870454bd2dfca9bd5e9b030354d05ffbceea7b2f791e14530d65",
-   "unfolded_hash": "bad0930d4b2264b7252f8e356f65407946b5a274915dba69d11ce4757b602406"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledOnSlots": {
-   "type_hash": "1593e5bf02baa087182289a9fedaf463f3d5fdf1bcbc4c08691ceaae7500be91",
-   "unfolded_hash": "e3134193ae8ec8847acaa1ac4a67d8c6c1ac0ba53fdcf527e562182480243bd3"
-  },
-  "Nci.SecurityProofs.ThreadedThrottledSlots": {
-   "type_hash": "6f1cd5018a0f1fbc06386cb1e9c7c06c3b2ec5b19ac3fa470a40e8f77f26e350",
-   "unfolded_hash": "264ef2d2d26499ffc41b4db6746b1f3ba46f2d31be940b4ae7750f23ef2244af"
   }
  },
  "witnesses_assumed": {
@@ -17393,7 +17361,14 @@
     "  Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial"
    ],
    "assumptions": [],
-   "type_hash": "27ce01386af305774c5973ffa9159901e34fd7b1661c5f648afdd5955ef9b1a7"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "27ce01386af305774c5973ffa9159901e34fd7b1661c5f648afdd5955ef9b1a7",
+   "unfolded_hash": "48732b566218ca9800ede25dedb807802569aed988bfabbc8896a4b44e2e6201"
   },
   "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest": {
    "owner": "@lean",
@@ -17401,7 +17376,14 @@
     "Nci.SecurityProofs.IncompressibleThreadedThrottled_honest : Nci.Guarantees.IncompressibleThreadedThrottled_honest"
    ],
    "assumptions": [],
-   "type_hash": "cd385dc2fd4cd1e7663e2eecac02a7f776cb5385f3e737857197b94530071bd3"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "cd385dc2fd4cd1e7663e2eecac02a7f776cb5385f3e737857197b94530071bd3",
+   "unfolded_hash": "397399d1ad7d821861925885248a107d51be96e80e0f9c6044fe37936c68673e"
   },
   "Nci.SecurityProofs.IncompressibleThreadedThrottled_nontrivial": {
    "owner": "@lean",
@@ -17410,7 +17392,14 @@
     "  Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial"
    ],
    "assumptions": [],
-   "type_hash": "930bd09b69860cdcf218c8fd8b714ca02cc49642a2b3a119b736c353704c26b9"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.TrainingIncompressible"]
+   },
+   "type_hash": "930bd09b69860cdcf218c8fd8b714ca02cc49642a2b3a119b736c353704c26b9",
+   "unfolded_hash": "228ceb3dc52f49daede759d399013b02bd044a21eec5643d6bffc88a6a39d50f"
   },
   "Nci.SecurityProofs.InfoOfState": {
    "owner": "@lean",
@@ -17945,13 +17934,27 @@
     "Nci.SecurityProofs.ThreadedThrottledDarkSlots_nontrivial : Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial"
    ],
    "assumptions": [],
-   "type_hash": "fc553856fa6b34e8dd54f18b468f1e0c72ba800e46e875ff9f55fbdc4d6c7d3f"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "fc553856fa6b34e8dd54f18b468f1e0c72ba800e46e875ff9f55fbdc4d6c7d3f",
+   "unfolded_hash": "4e720ff7c1675b0c273cf6986b13bdddf9c09f3b6a6169b898d1faf18b43fc4d"
   },
   "Nci.SecurityProofs.ThreadedThrottledDark_nontrivial": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledDark_nontrivial : Nci.Guarantees.ThreadedThrottledDark_nontrivial"],
    "assumptions": [],
-   "type_hash": "1d141bc2d22d3204a323854b62174bf68117ef718254b80fa4c74a6468fadc40"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "1d141bc2d22d3204a323854b62174bf68117ef718254b80fa4c74a6468fadc40",
+   "unfolded_hash": "d1aa89672835255930606464a211549232295617941f9fb07869f5c7ada0c22f"
   },
   "Nci.SecurityProofs.ThreadedThrottledOn": {
    "owner": "@lean",
@@ -17995,13 +17998,27 @@
     "Nci.SecurityProofs.ThreadedThrottledOnSlots_nontrivial : Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial"
    ],
    "assumptions": [],
-   "type_hash": "024d1d64683144e5d5f30ff4fc65301993d50e158bf3eeaeb46551118df3aa4b"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "024d1d64683144e5d5f30ff4fc65301993d50e158bf3eeaeb46551118df3aa4b",
+   "unfolded_hash": "8830b5ccaf91c4ef0f32eefbecb44363f04daed226e51683a6a32d55ce693be4"
   },
   "Nci.SecurityProofs.ThreadedThrottledOn_nontrivial": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledOn_nontrivial : Nci.Guarantees.ThreadedThrottledOn_nontrivial"],
    "assumptions": [],
-   "type_hash": "a5ac9f9965815c2884b3a76f84ec9af95c30d3d58a70af433d5488ef7e621143"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "a5ac9f9965815c2884b3a76f84ec9af95c30d3d58a70af433d5488ef7e621143",
+   "unfolded_hash": "54a22b7c11d5e99e28d752e25ff63952c6454a3ad741339e7c353e8df7ec277c"
   },
   "Nci.SecurityProofs.ThreadedThrottledSlots": {
    "owner": "@lean",
@@ -18025,7 +18042,14 @@
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottledSlots_honest : Nci.Guarantees.ThreadedThrottledSlots_honest"],
    "assumptions": [],
-   "type_hash": "14ad04ce35ea78050085728bc7626dd1e2216bb592414624abc01426ad9ede42"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "14ad04ce35ea78050085728bc7626dd1e2216bb592414624abc01426ad9ede42",
+   "unfolded_hash": "1be338bb1deedcd687e801b46892465b340f270bae4cc70b170909ea01d4eb61"
   },
   "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial": {
    "owner": "@lean",
@@ -18033,19 +18057,40 @@
     "Nci.SecurityProofs.ThreadedThrottledSlots_nontrivial : Nci.Guarantees.ThreadedThrottledSlots_nontrivial"
    ],
    "assumptions": [],
-   "type_hash": "196a83579731989fed764e15a4238a34f2aac5099f89616926e0ed7319f21260"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressibleSlots"]
+   },
+   "type_hash": "196a83579731989fed764e15a4238a34f2aac5099f89616926e0ed7319f21260",
+   "unfolded_hash": "4b6bd0cb0fe194ccf9fefbb35bbcf8856a84609b25789b7efd2def2ae304d7b7"
   },
   "Nci.SecurityProofs.ThreadedThrottled_honest": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottled_honest : Nci.Guarantees.ThreadedThrottled_honest"],
    "assumptions": [],
-   "type_hash": "4455706a3f2ebea600941fb41fbc2711e78816377fde87dfaef72ae589f6b076"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "4455706a3f2ebea600941fb41fbc2711e78816377fde87dfaef72ae589f6b076",
+   "unfolded_hash": "1ecf77b54c6c095bd8d2986a4aebe7fbb56cf9171fec40b8647a25ca6ece96ea"
   },
   "Nci.SecurityProofs.ThreadedThrottled_nontrivial": {
    "owner": "@lean",
    "signature": ["Nci.SecurityProofs.ThreadedThrottled_nontrivial : Nci.Guarantees.ThreadedThrottled_nontrivial"],
    "assumptions": [],
-   "type_hash": "3c476dab760e37309f7853bedaa0deda6c10d31891f6dfbfe2b0b379eeeb2811"
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": ["Nci.Small"],
+    "reads": ["Nci.Assumptions.ThetaRegistered", "Nci.Assumptions.WeightsIncompressible"]
+   },
+   "type_hash": "3c476dab760e37309f7853bedaa0deda6c10d31891f6dfbfe2b0b379eeeb2811",
+   "unfolded_hash": "faad399ea9d59870160584b852a6682b95db5678b099dd60725af08f0116604e"
   },
   "Nci.SecurityProofs.ThreadedTraining": {
    "owner": "@lean",
@@ -34644,7 +34689,7 @@
    }
   },
   "Definitions.Nci.Guarantees.Witnesses": {
-   "digest": "9e33767a3b79dfd2df68320c511d121c5ad80a58a9d23b710907fdfcd8fc3c72",
+   "digest": "a6ed75873b6bccf9903e78f9327e003a3aa72a1631d645c9f5b82e57e5eaac47",
    "definitions": {
     "Nci.Cover.Guarantees.CoverTraining_honest": "c9a43a55ce63a654a6dcb28e8e48317d4ff824f9c2820aabf171d806476cf95e",
     "Nci.Cover.Guarantees.CoverTraining_nontrivial": "09d1c7e6bb0ca1f34ff0dcf754bda1e8331e0931631a96ed9086f03345266359",
@@ -34664,23 +34709,23 @@
     "Nci.Guarantees.IncompressibleContainedTrainingOn_nontrivial": "cf1ecb5c97e26edeab227747807d703a71b93af6fba147a13bbbb06f772d8e79",
     "Nci.Guarantees.IncompressibleContainedTraining_honest": "ed10f30023ea1c63932cfafdf1a689be4c88e4e3fd8ac31ca89352d06078d8e1",
     "Nci.Guarantees.IncompressibleContainedTraining_nontrivial": "aeda39b8ec57ff8627554d2f0a90b5fb0a05edc79fc8920c9f075d7405c414c6",
-    "Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial": "ca04245a6fb3407d2480ad00d17f12988852a12fe02ed439248fd2d1174035bd",
-    "Nci.Guarantees.IncompressibleThreadedThrottled_honest": "86c2a2a91e05a79f613f9aa416c9b3a2995ede36a52de3eed8db31cfbc032afb",
-    "Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial": "77c4b78c96dee3aee55c798bfe4330515885cedcaf5ed92ceea67ef6442c82f4",
+    "Nci.Guarantees.IncompressibleThreadedThrottledOn_nontrivial": "c5646e3e2bf75aa1087f290184b45568baff28c4348417d2738e4cea7a7c6439",
+    "Nci.Guarantees.IncompressibleThreadedThrottled_honest": "a1fd4a293c09c0d22f50c3baef0cd5d6df000497062fbce9e628b6cd7ca81de2",
+    "Nci.Guarantees.IncompressibleThreadedThrottled_nontrivial": "a7bef3367d4b0b28698ee599df78460371af540424da96149b6989ccefacfcb2",
     "Nci.Guarantees.LayeredTraining_honest": "bfcc1dd5ea8a0cbc4e6386ac42c6d33e56c5f671d11262e87aeeb31c705bde02",
     "Nci.Guarantees.LayeredTraining_nontrivial": "e4639c110234ef852b9e9a3a22ab254ca15ac46da82b561ca2d19894f61e2ebd",
     "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_honest": "d021a740c9462838cb00de63b85fe77c081c1425cbce7f255c6d3a060d4462d6",
     "Nci.Guarantees.PackedIncompressibleContainedMatMulOn_nontrivial": "4a7581c16ddee67a8134601b0036444d715d2db32d596d415a924fce93d09602",
     "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_honest": "bec11b8f87395fdbbb8378570e2e87bf6525ff4926b0766dd4879d611f92c0df",
     "Nci.Guarantees.PackedIncompressibleContainedTrainingOn_nontrivial": "b4d1f34ba8f3d3173ff8cff9e8f13798b7a72efe7b225fb8917bd77f79dfd111",
-    "Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "5f3f4b02fae4a0f8fcf455ded59b2cbdb533b960c18d7be6da20e7bcb7774baa",
-    "Nci.Guarantees.ThreadedThrottledDark_nontrivial": "7bc90410bf5612811c67702fdf653c822a3069fb87c1a8b90f1c10202ecbbc1f",
-    "Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial": "bfbaf25ec30fda0e83799b30884828000bfb19c117adbe5742b7cadaa5b71a7f",
-    "Nci.Guarantees.ThreadedThrottledOn_nontrivial": "7f341b29484327c6a129721c3e2b9e1ba1c123301c5047478510b5d7a8a8af74",
-    "Nci.Guarantees.ThreadedThrottledSlots_honest": "2fee92e1c919864a8aa180a8debafe5655babea95f5505439ac6331b2c4cae8e",
-    "Nci.Guarantees.ThreadedThrottledSlots_nontrivial": "cffdaa5ccacdfad4f47f263e2279614f2e671e684c7a7e7cef49e3f4ece2741c",
-    "Nci.Guarantees.ThreadedThrottled_honest": "4b618392ad693145d4c4d97a49442d4c103b35fc4f6e2b3d9cb3c2b4171127ca",
-    "Nci.Guarantees.ThreadedThrottled_nontrivial": "d12f7427d945de3d141fbc38699d239bb343ecc10c841cc422e012b3a90debfc",
+    "Nci.Guarantees.ThreadedThrottledDarkSlots_nontrivial": "9905501ecf998130aae17807343cb98b2d3cb75e082ee672c808540dea0f139f",
+    "Nci.Guarantees.ThreadedThrottledDark_nontrivial": "ef4823d6f2d158c187d6ca9a8672890c3abf9fcc25feced2971e306efbeac87b",
+    "Nci.Guarantees.ThreadedThrottledOnSlots_nontrivial": "d5e0569bb81d7e901dced4eb8ccca64419ff3cee61277dc7e47fc5a1a411d990",
+    "Nci.Guarantees.ThreadedThrottledOn_nontrivial": "15314f8a8cc7295d4d7df3d6e8b56da8fe136dee860209567897e0612e4b5889",
+    "Nci.Guarantees.ThreadedThrottledSlots_honest": "a9897d1fd0e6e005fe16eb73216d1747e2c4c03b5482dcac6b3509a21dd66c3d",
+    "Nci.Guarantees.ThreadedThrottledSlots_nontrivial": "d3aee0a1f002d0e9613ddc132780c26356ae6b0932db04b116a5be2215dd6bff",
+    "Nci.Guarantees.ThreadedThrottled_honest": "36127039422d915e0ed568bdfb4613460515fb5a10738ae82369ef869c43ef0d",
+    "Nci.Guarantees.ThreadedThrottled_nontrivial": "977907e91f3dbb856624a350bdfe74dcb8f8e22c736a29d8f6e5f16ae9d2984a",
     "Nci.Guarantees.ThreadedTrainingOn_nontrivial": "9c7307e675d363394a57bf8c89316f87dfc15c069b9337857cc09b5da5d75abd",
     "Nci.Guarantees.ThreadedTraining_honest": "bf43b1af65eb09ea653561fb1ad6c939ff57921867dc4fda95a0a5c1e00d1b3a",
     "Nci.Guarantees.ThreadedTraining_nontrivial": "ae4e40c68ddfd12b55ce6470722b64d71736d7b0b5c7c4e7a3c07057ede58020"
