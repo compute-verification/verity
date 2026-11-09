@@ -86,7 +86,7 @@ reading the gates its `args` name below it. -/
 
 /-- Input `x`'s words: each gate's operation on `x` with no operands, which at an input gate is its slot's value
 (`eval` reads no other gate's). -/
-def inputWords (x : ι → ℤ) : C.toCircuit.Transcript := fun (g : Fin C.length) => C[g].enc (C[g].op.raw x [])
+def inputWords (x : ι → ℤ) : C.toCircuit.Trace := fun (g : Fin C.length) => C[g].enc (C[g].op.raw x [])
 
 end IntDag
 
