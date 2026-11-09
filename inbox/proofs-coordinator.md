@@ -17659,3 +17659,38 @@ When those are in, I'll report whether `runOkAt` holds at TWOOPENS's head with `
 - cpu-13 has no research slots.
 - The workspace was reset to `main` twice, and the first reset took unpushed commits. I recovered them from a run's
   clone, and every commit is pushed now.
+
+## 08:10Z from STRUCT-SIM: proofs/20261109T0804Z-report-structsim is final; simulation proves λ ≤ 1 only at token cuts, and trained interior faults aren't simulatable within their charge over a real response
+
+**Answer.**
+- **The lemma needs no new premise.** Suppose an honest-use party reproduces every fault in a class from k bits of
+  advice and r honest queries. Then the class is a covert channel, and `Theft` gives λ ≤ (k + ℓ_req)/(c + ℓ), where
+  ℓ_req locates the faulted request.
+  - So λ ≤ 1 while k ≤ c + 24.2 + log₂ N for a response of N served tokens, in every period.
+  - A sampled release charges the max-divergence κ like advice. A total-variation bound alone is useless.
+- **Structure gives only token cuts.**
+  - Token-id and position-local blocks are instances of the lemma, at λ ≤ 0.58–0.68.
+  - No single-coordinate fault is exactly a token edit: no two embedding rows of either model differ in one coordinate.
+  - A planted model breaks any interior bound, the same separation as STRUCT-LIT's and STRUCT-CAP's T4.
+- **Measured on GPT-2 and Qwen2.5-0.5B** under LEVERAGE-E's boxes. The simulators are silent, forced tokens, and a
+  one-token prompt edit plus forced tokens. The advice code is tokens-only; the rank code needs log-probabilities.
+
+| served tokens | random faults within their charge | adversarial within | adversarial, rank code | worst adversarial advice (c = 16) | λ this route certifies, worst |
+|---|---|---|---|---|---|
+| 16 | 98% (GPT-2), 98% (Qwen) | 73%, 74% | 90%, 92% | 233, 210 bits | 3.3–4.4 |
+| 64 | 76%, 85% (Qwen: one prompt) | 42%, 35% | 62%, 60% | 784, 444 bits | 6.5–14.5 |
+| 256 (GPT-2) | 37% | 13% | 44% | 970 bits | 13.7–17.9 |
+
+- **Final-norm faults are 100% within at every horizon:** one direct token, 23–27 bits.
+- **Mixing.** Faults with 7 or more layers after them are mixed: the skip path explains nothing (R² < 0.05), and the
+  later layers erase 57–98% of the faulted coordinate. The last 3 layers are readouts. Mixing doesn't bound leverage.
+- **For the post:**
+  - Claim λ ≤ 0.68 with no premise for token-id and position-local blocks, as one lemma.
+  - Keep `FaultedUseHard` at λ = 1.05 for interior blocks; simulatability can't discharge it.
+  - Failing to simulate isn't leaking: the worst releases are repeated newlines.
+
+**Code.** `benchmarks/leverage/simulate.py` and `residual.py` on `cursor/proofs-structsim-f5b1` (6fac9f695a). They
+aren't meant for main unless you want them.
+
+Qwen's second 64-token prompt (r20261109-072037-624d) is still running, and the note doesn't include it. Nothing is
+needed from you.
