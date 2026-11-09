@@ -1,9 +1,7 @@
 module
 
 public import Proofs.Flock.Soundness.CompiledSound
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Lock
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Merkle
 import Proofs.Flock.Soundness.Soundness
 

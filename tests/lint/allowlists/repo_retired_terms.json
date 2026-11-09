@@ -2072,7 +2072,6 @@
     {"file": "Security/Proofs/Flock/Soundness/ExtractWait.lean", "count": 4},
     {"file": "Security/Proofs/Flock/Soundness/Game/LockLin.lean", "count": 5},
     {"file": "Security/Proofs/Flock/Soundness/Game/LockOff.lean", "count": 1},
-    {"file": "Security/Proofs/Flock/Soundness/Game/Seq.lean", "count": 1},
     {"file": "Security/Proofs/Flock/Soundness/Headline.lean", "count": 25},
     {"file": "Security/Proofs/Flock/Soundness/KeyedDraw.lean", "count": 216},
     {"file": "Security/Proofs/Flock/Soundness/Knowledge.lean", "count": 15},
