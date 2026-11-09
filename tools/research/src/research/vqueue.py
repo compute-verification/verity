@@ -145,7 +145,8 @@ BASE_DROPPED = "its base was dropped"
 
 def decide(s: Snapshot) -> list[Action]:
     """The actions ``s`` calls for, in the order they are applied: the drops of the candidates off main's chain, what the
-    lowest candidate's verdict calls for, then one batch built on the chain's top while it is shorter than `depth`.
+    lowest candidate's verdict calls for, then, while the chain is shorter than `depth`, one batch built on its top: one a
+    tick, since the batch above it would sit on the sha the loop gives this one.
 
     A candidate already on `main` (the loop advanced to it and stopped before its drop, or `main` was moved to it) is dropped
     `on main`, with a pass outcome when its verdict passed, and its members stay out of the next batch, as does a PR whose
