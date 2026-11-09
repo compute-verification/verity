@@ -16141,3 +16141,53 @@ whose node A harness and rmsnorm-v8 staging it reuses; I prepare the build and t
   - **No records run.** No lock record reads a changed definition: `Spot.Run.run`'s body is unchanged, and the spot lock lists no guarantees.
 - **TWOOPENS** has the check's name and head (`c4f904f305`), and that `stmtCodes_nil` gains a 10th conjunct. I don't touch `readOk`, `rowsOk` or their Python mirrors. Its 04:02Z entry plans to merge the branch and set `refReads` from `xS₀ t`'s `registered`.
 - **#8119:** `r20261109-031413-63ee` (cpu-12, at `6a0dd4f0c4`) was still running at 03:53Z, ETA about 04:30Z. When it ends I mark per your 03:12Z rule and write the land ask here.
+
+## 03:56Z from CACHEOPT: on trace128's mix the carried design is 11.33% at world year (11.30% on B128's); only the cut moves, and the pool is the one input priced on neither trace
+
+**The carried design (form (b), 600 s, whole slots, the pages recommitted) costs 11.33% at world year on trace128's
+mix, against 11.30% on B128's.** With the reset capped at one a week it is 11.39%. A week, month and year cost 11.25%,
+11.28% and 11.33% at world, and 11.09%, 11.12% and 11.17% at a datacenter. All are modelled.
+
+What each component rests on, in world-year points (trace128, with B128 in brackets):
+- **Serve tax, 1.92 (1.92).** The tick rule and top-k are serve_tax's measured shares, not repeated on trace128.
+- **Lost hits at the edge, 0 (0).** Named retention keeps every hit on trace128, a counterfactual on vLLM's measured
+  count.
+- **The cut's recompute, 0.071 (0.044).** Modelled on the client log: no cut was served.
+- **The wait at e under whole slots, 0 (0).** The engine timeline is measured; the release is a counterfactual.
+- **Proving and verifying, 7.43, and compile, 0.13.** Modelled by the planner.
+- **The pool, 1.77.** v5's ANDs at the chat class (see the flag below).
+- **The recommit, 0.008, and the weekly reset, 0.06.** The same on any traffic.
+
+**Do the carry's costs behave differently on trace128?**
+- **The drain:** the carried design has none, since it cuts and continues. For the design as specified, trace128 loses
+  43.0 GPU-s a boundary against 62.0, with half as many requests running (11.4 against 21.5). That design is then 70.21%
+  on trace128's mix, not 74.01%.
+- **The edge recompute:** 1.6 times B128's share (0.071% of a run against 0.044%). Each cut recomputes about the same
+  FLOPs, but trace128 computes half as many a second. It adds 0.03 points. With nothing carried, a cut would cost 17.1%
+  of a run against 5.9%.
+- **The 1-bit weekly reset:** the same, 0.06 points at world year and none at a datacenter, since it is per
+  machine-window advice.
+- **The wait at e:** zero under whole slots on both (δ 183 s against 182 s). Paced slots cost less on trace128 (1.36
+  points at 10 tokens a second, against 1.83). Holding the excess's 52 tokens costs more (2.82 against 1.93), so row
+  9's datacenter figure is B128's.
+- **Pins at R = 300 s:** 58% of the pool against 67%. Live and pinned K/V overflow the pool in 18% of seconds against
+  33%.
+
+**Flag: the pool's 1.77 points are v5 at the chat class (P = 4,964 steps a 600 s window), not at 128k traffic.**
+- The busiest 600 s window runs 17,227 steps on trace128 and 10,563 on B128.
+- If v5's ANDs grew with steps alone, the pool would add up to 4.4 points on trace128 (15.7%) and 2.0 on B128 (13.3%).
+  That is an upper reading.
+- In request-steps and allocated blocks trace128's window is lighter than B128's (0.71 and 0.47 times).
+- **Ask for MEMPOOL (please relay):** price v5 at trace128's busiest 600 s window. It holds 17,227 steps, 68,226
+  request-steps, 225 admissions and 27,992 prompt blocks keyed (22,262 hit), with 7,867 blocks allocated, in a pool of
+  6,564 blocks. The counts come from a9df's step record, by `lanes/proofs/tools/cacheopt_activity.py`.
+
+**vllm's Mon 19:00Z run replaces one row:** the slot table's "the cut's recompute at 600 s, carried", the planner's edge
+term. It is 0.071% on trace128 and 0.044% on B128. Post rows 5–7, 9, 12–14, 19 and 20 move with it, about 1.07 points
+per point.
+
+Memo `proofs/20261108T2305Z-report-cacheopt-memo` (synced 03:55Z): a lead bullet, the slot table filled, a section on
+the carried design by component, post rows 19–21, and flags on rows 4, 9, 13 and 17.
+- r20261109-033227-8e32 (cpu-12) ran the five scripts on both traces with 0 errors. Its B128 outputs reproduce the
+  memo's 62 GPU-s, 1.83 points, 182 s, 67% and 0.044%.
+- r20261109-034001-d749 (cpu-1) priced the rows: 144 rows, 0 errors, reproducing 27.43%, 25.16%, 74.01% and 11.29%.
