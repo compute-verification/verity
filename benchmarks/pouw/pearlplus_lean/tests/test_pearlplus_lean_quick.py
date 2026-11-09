@@ -3,7 +3,8 @@ options (`PouwPearlPlus/Main.lean`'s `parse`) are the ones the cases' argv passe
 there; its `over_cap` rules and their default are `verify_run`'s; and the window record's value names it ties a run to
 (`PouwPearlPlus/Tie.lean`), why it refuses a version-2 W that registers no weight, a version-1 W that registers one and
 a W of another version, W's version, and the name it gives a version-1 W's untied weights, are `verify_run`'s and
-`pearl_c.window`'s; and the rows of a class's fixed load and why passes of another load are refused are `verify_run`'s."""
+`pearl_c.window`'s; the rows of a class's fixed load and why passes of another load are refused are `verify_run`'s;
+and the grid a class-held run's give-up is padded to (`PouwPearlPlus/Grid.lean`) is H1's window grid, as `verify_run`'s."""
 
 from __future__ import annotations
 
@@ -83,3 +84,21 @@ def test_the_fixed_loads_rows_and_refusal_are_verify_runs():
                             ("c.outputs", outputs), ("ROW_ALIGN", align)):
             text = text.replace("{" + name + "}", str(value))
         assert text == VR.off_load(cls) and "{" not in text
+
+
+def test_the_grid_is_h1s_window_grid():
+    """`Grid.lean`'s `GRID_BITS` and `gridPad` are `window.GRID_BITS` and `window.pad` (0 at 0, where `verify_run.grid_work`
+    pads nothing), at each value its guards name, the run of record's give-up among them."""
+    from verity.core.protocols.pouw import window as Wd
+
+    grid = (LEAN / "Grid.lean").read_text()
+    assert int(re.search(r"def GRID_BITS : Nat := (\d+)", grid).group(1)) == Wd.GRID_BITS and VR.grid_pad is Wd.pad
+    assert "(n + 2 ^ s - 1) / 2 ^ s * 2 ^ s" in _block(grid, "def gridPad ") and "if n == 0 then 0" in _block(grid, "def gridPad ")
+    assert "#guard (List.range 17).map (gridPad ·) == List.range 17" in grid
+    assert [Wd.pad(n) for n in range(1, 17)] == list(range(1, 17))
+    ins, outs = re.search(r"#guard \[([\d, ]+)\]\.map \(gridPad ·\) == \[([\d, ]+)\]", grid).groups()
+    assert [Wd.pad(int(n)) for n in ins.split(",")] == [int(g) for g in outs.split(",")] and len(ins.split(",")) == 10
+    pairs = re.findall(r"gridPad (\d+) == (\d+)", grid)
+    assert len(pairs) == 3 and ("331347979", "335544320") in pairs and all(Wd.pad(int(n)) == int(g) for n, g in pairs)
+    assert VR.grid_work({"credited": 400_000_000}, {"credited": 400_000_000 - 331_347_979}) == {
+        "credited": 400_000_000 - 335_544_320, "give_up": 335_544_320}

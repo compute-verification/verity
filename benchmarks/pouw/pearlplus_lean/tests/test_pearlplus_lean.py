@@ -8,7 +8,9 @@ commitment and source, every opened tile's verdict in order, and an accepted run
 `over_cap` rule, `uncredited` (the default: a tile over its bound is credited nothing and the run goes on) and `reject`,
 and the window record W it held the passes to (`verify_run.tie`, ``--tie W``: each call's A rows and y, and each
 weight's B rows at the root PoUW's weights tree commits them under), with the class whose fixed load it held them at
-(`verify_run.held_to_load`, ``--class``).
+(`verify_run.held_to_load`, ``--class``). Held to a class, the work is in the grid form on both sides (`verify_run.grid_work`,
+`PouwPearlPlus/Grid.lean`: the structural credit, MACs and tiles, and the give-up padded up to H1's window grid), with the
+exact credit it replaces beside it (``exact_work``).
 The passes are a test instance's, read as one (``test_instance``, ``--test-instance``), so the work credits nothing;
 read as a served run's they are refused (their tile is not 64 x 64), as passes of two salts are. A layer past `K_MAX` is
 refused at load on both sides. Passes salted by a live session's coins load under that session's commitment, and a coin
@@ -95,7 +97,8 @@ def answer(out: dict) -> dict:
     return {"verdict": out["answer"]["verdict"], "reason": out["answer"]["reason"], "refused": out.get("refused"),
             "commitment": out.get("commitment"), "source": out.get("source"),
             "over_cap": out.get("over_cap", VR.REJECT), "verdicts": out.get("verdicts", []),
-            "work": None if work is None else {"over_cap_draws": 0, **work}, "tie": out.get("tie")}
+            "work": None if work is None else {"over_cap_draws": 0, **work},
+            "exact_work": (out["answer"]["profile"] or {}).get("exact_work"), "tie": out.get("tie")}
 
 
 def same(exe: Path, paths: list[Path], draws: int = 3, source: bytes | None = SOURCE, record: Path | None = None,
@@ -491,7 +494,9 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
     """With the window's class (``--class``, `verify_passes`' ``window_class``) the Lean holds the tied passes to the class's
     fixed load as the Python does. Passes that are the class's (2 slots of 8 prompt ids and 2 outputs: round 0's calls of
     16 rows, round 1's of 2 in 16) accept in both, the tie naming the class, also with a round dropped before the coin
-    (the coin record's rounds, which the Python wrote). Passes of another load (a round short or over, the rounds in
+    (the coin record's rounds, which the Python wrote), and their work is in the grid form in both: the passes' whole
+    records' MACs and tiles, the give-up the excluded rows' credit padded up to the grid, and the exact credit beside it
+    (``exact_work``); without the class the work is the exact credit and there is no ``exact_work``. Passes of another load (a round short or over, the rounds in
     another order, a call of other rows or of other committed rows) are refused before the coin in both, in the same
     words, the class's alone, also over a retention whose rounds a coin record names. The Lean takes ``--class`` only
     beside ``--tie``, and only as three positive integers."""
@@ -507,10 +512,19 @@ def test_a_tied_run_held_to_its_classs_fixed_load(exe, tmp_path):
     got = same(exe, [a, b], 8, tie=wab, load=cls, record=tmp_path / "coin.json")
     assert got["verdict"] == "accept" and got["tie"] == {"record": T.REG.digest(json.loads(wab.read_text())), "tables": 10,
                                                          "load": [2, 8, 2]}
+    passes = [VR.load(x, VR.epoch_coins(x.parent / "coins.json")) for x in (a, b)]
+    work, kept = got["work"], got["exact_work"]
+    exact = VR.credit_at_assumption(passes, 8, VR.DELTA, work["over_cap_draws"])
+    whole = VR.structural_credit(passes, 8, VR.DELTA, work["over_cap_draws"])
+    assert kept == {"credited": 0, "credited_tiles": exact["credited_tiles"], "macs": exact["macs"]}
+    assert work == {**whole, "credited": 0, "give_up": Wd.pad(whole["credited"] - exact["credited"])}
+    assert work["macs"] > kept["macs"] and work["credited_tiles"] >= kept["credited_tiles"] and work["give_up"] > 0
     got = same(exe, [a, b], 8, tie=wab, record=tmp_path / "coin.json")
     assert got["verdict"] == "accept" and "load" not in got["tie"]
+    assert got["exact_work"] is None and got["work"] == {**exact, "credited": 0}
     got = same(exe, [b], 8, tie=wab, load=cls, rounds=[1], dropped=(0,), record=tmp_path / "coin1.json")
     assert got["verdict"] == "accept" and got["tie"]["load"] == [2, 8, 2]
+    assert got["work"]["macs"] == VR.pass_macs(VR.whole_pass(passes[1])) > got["exact_work"]["macs"] == VR.pass_macs(passes[1])
     cases = [([a, b], wab, (2, 8, 3), {}), ([a, b], wab, (2, 8, 1), {}), ([a, b], wab, (4, 4, 2), {}),
              ([a, b], wab, (2, 4, 2), {}), ([a, b], wab, (1, 16, 2), {}), ([b, a], w(b, a), cls, {}),
              ([a, wide], w(a, wide), cls, {}),
