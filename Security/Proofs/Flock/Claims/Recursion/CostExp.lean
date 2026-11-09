@@ -65,7 +65,7 @@ open Claims
 /-! ## A run's first messages read only its first coins -/
 
 theorem stepWith_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn : List Msg → OC Out) :
-    ∀ (N : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace),
+    ∀ (N : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript),
       t.msgs <+: (stepWith H P x ω vn N hist as t).msgs
   | 0, _, _, _ => List.prefix_refl _
   | N + 1, hist, as, t => by
@@ -77,7 +77,7 @@ theorem stepWith_prefix {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) 
     · exact List.prefix_append _ _
 
 theorem stepWith_take {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω) (vn vn' : List Msg → OC Out) :
-    ∀ (N n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Trace) (L : ℕ), L = t.msgs.length + n →
+    ∀ (N n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t : Transcript) (L : ℕ), L = t.msgs.length + n →
       (∀ bs : List Msg, bs.length ≤ as.length + n → vn bs = vn' bs) →
       (stepWith H P x ω vn N hist as t).msgs.take L = (stepWith H P x ω vn' N hist as t).msgs.take L
   | 0, _, _, _, _, _, _, _ => rfl
@@ -165,7 +165,7 @@ stopping at `kk` accepted runs, and started only when the judged sample accepted
 expectation. At each prefix one wait makes `N` reruns with `ε·N ≤ kk` (`waitRuns_exp`), `ε` the prefix's acceptance
 probability, which is the judged sample's weight there (`Ex_acc_fork`). -/
 theorem forkWaits_exp {Coin : Type} [Fintype Coin] [Nonempty Coin] {k : ℕ} {off : (Fin k → Coin) → ℕ}
-    (hoff : PrefixDet off) (run' : (Fin k → Coin) → Trace) (kk m K : ℕ) :
+    (hoff : PrefixDet off) (run' : (Fin k → Coin) → Transcript) (kk m K : ℕ) :
     Ex (fun s : (Fin k → Coin) × (Fin m → Fin K → Fin k → Coin) =>
       (if (run' s.1).out = .acc then (1 : ℝ) else 0) *
         ∑ i, (waitRuns (fun d => run' (fork (off s.1) s.1 d)) kk ((List.finRange K).map (s.2 i)) 0 : ℝ)) ≤
@@ -209,7 +209,7 @@ def SessionAccepts {Coin : Type} (D : Deploy Coin) : Prop :=
 
 /-- Session `s`'s view of the prover's run at coins `r`, as `E_O`'s waits see a rerun. -/
 def sessRun {Coin : Type} [Inhabited Coin] (H : Msg → Msg) (D : Deploy Coin) {Ω : Type} (P : Prover Ω) (x : Msg)
-    (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Trace :=
+    (ω : Ω) (s : ℕ) (r : Fin (D.V.k x) → Coin) : Transcript :=
   servedRun H (viewing (D.session x s)) (run H P D.V x ω) r
 
 /-- Session `s`'s first round in the run at coins `r`: the inner rounds, then the earlier sessions' rounds at the V*
@@ -230,19 +230,19 @@ theorem offO_prefixDet {Coin W Col T : Type} [Inhabited Coin] (H : Msg → Msg) 
     h i (by unfold offO; omega)
   simp only [offO, hm]
 
-theorem serve_viewing_runs {R α : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (p : RP R α) :
+theorem serve_viewing_runs {R α : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (p : RP R α) :
     ((serve (viewing f) p).eval H run).2.2 = (p.eval H (servedRun H (viewing f) run)).2.2 := by
   rw [serve_eq, (RP.serve_eval H _ run p).2.2, RP.eval_runs_eq]
   simp only [viewing_runs, List.map_const', List.sum_replicate, smul_eq_mul, mul_one]
 
-theorem waitRuns_map {R R' : Type} (run : R' → Trace) (g : R → R') (k : ℕ) :
+theorem waitRuns_map {R R' : Type} (run : R' → Transcript) (g : R → R') (k : ℕ) :
     ∀ (rs : List R) (a : ℕ), waitRuns run k (rs.map g) a = waitRuns (fun r => run (g r)) k rs a
   | [], _ => rfl
   | r :: rs, a => by simp only [List.map_cons, waitRuns, waitRuns_map run g k rs]
 
 /-- **Served waits rerun the prover once per wait rerun**: each wait at samples `ρ i`, rerunning at `g (ρ i j)` seen
 through `f`, reruns as one wait over the served runs. -/
-theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → Trace) (f : Seen → Seen) (k : ℕ)
+theorem servedWaits_runs_le {R W' Op Dr : Type} (H : Msg → Msg) (run : R → Transcript) (f : Seen → Seen) (k : ℕ)
     (opens : Seen → List Op) (assemble : List Op → Option W') (check : W' → Bool) {m K : ℕ} (g : Dr → R)
     (ρ : Fin m → Fin K → Dr) :
     ((serve (viewing f) (firstWait k opens assemble check

@@ -757,16 +757,17 @@ def touched_counts(S, stream: V3S.Stream) -> list[int]:
     return out
 
 
-def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | None = None) -> SimpleNamespace | None:
+def reference(S, sl: CS.Slice, delta: int = COINS[2], counts: Sequence[int] | None = None,
+              stream: V3S.Stream | None = None) -> SimpleNamespace | None:
     """The registered rows, the counts and the checked witness the unit accepts `sl`'s advice with under the print coin δ,
-    by `compile_slice_v4.scan`'s run (``srv``, ``cout`` and ``chk``'s bits, unpadded, and ``counts``: `touched_counts`
-    unless given), or None where CompileSlice_v4's reference refuses the slice or the class doesn't hold it (the
-    stream past NS slots, NM M or NRB RB entries, its RK reads past a slot's count, the counts past NRK blocks or a
-    slot's past CU), or the arrivals repeat an id."""
+    by `compile_slice_v4.scan`'s run on `stream` (default the empty pool's) (``srv``, ``cout`` and ``chk``'s bits,
+    unpadded, and ``counts``: `touched_counts` unless given), or None where CompileSlice_v4's reference refuses the slice
+    or the class doesn't hold it (the stream past NS slots, NM M or NRB RB entries, its RK reads past a slot's count, the
+    counts past NRK blocks or a slot's past CU), or the arrivals repeat an id."""
     shape(S)
     if not _distinct(sl):
         return None
-    sc = V4.scan(S, sl, delta)
+    sc = V4.scan(S, sl, delta, stream)
     if sc.refused is not None:
         return None
     for u, (cur, nxt) in enumerate(zip(sc.states, sc.states[1:])):

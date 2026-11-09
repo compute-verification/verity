@@ -13,11 +13,11 @@ public import Proofs.Flock.SamplingGeneric.Reg
 public import Proofs.Flock.SamplingGeneric.Efficient
 public import Proofs.Flock.SamplingGeneric.Counter
 public import Proofs.Flock.SamplingGeneric.Deployed
-public import Proofs.Flock.SamplingGeneric.Instance
 public import Proofs.Flock.SamplingGeneric.ZK
 public import Proofs.Flock.SamplingGeneric.FlockZk
 public import Proofs.Flock.SamplingGeneric.Two
 public import Proofs.Flock.SamplingGeneric.TwoCount
+public import Proofs.Flock.SamplingGeneric.TwoKSAt
 public import Proofs.Flock.SamplingGeneric.TwoServed
 public import Proofs.Flock.SamplingGeneric.TwoTable
 public import Proofs.Flock.SamplingGeneric.TwoBernoulli
@@ -52,24 +52,21 @@ fixes, follows from the sessions' bound and the rewinding lemma (`SamplingGeneri
 
 `CompilerKSAt` reads `KS`'s two hash terms at a budget on the prover's whole SHA-512 work rather than at the calls the
 oracle logs: `KS` gives it at every budget, and `CompilerEfficient`'s expected reruns and own calls bound its binding
-finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`).
+finder's cost (`SamplingGeneric/KSAt.lean`), so **`CompilerKSAt` is proved** (`compilerKSAt`). At two stages the
+extractor is `Compiled.E` at the two-stage verifier's own waits' counts, and the two-stage contract gives the facts
+its cost reads, so **`CompilerEfficientTwo` and `CompilerKSAtTwo` are proved** (`compilerEfficientTwo`,
+`compilerKSAtTwo`, `SamplingGeneric/TwoKSAt.lean`).
 
 A frozen sampled record is a compiled verifier over Flock (`ofDeploy`, `SamplingGeneric/Deployed.lean`): its opening
-count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), its errors are within `Claims.Sampling`'s, and it
-meets the contract where the record meets the frozen hypotheses `KS_of` reads (`sessions_ofDeploy`). At the deployed
+count is the frozen `Sampling.OpenCallsLe` (`openCallsLe_of_deploy`), and it meets the contract where the record meets
+the frozen hypotheses (`sessions_ofDeploy`). Its knowledge soundness is the one guarantees read at the deployed sampled
+verifier; `Claims.Sampling` holds no extractor or knowledge-soundness claim of its own. At the deployed
 record `deployOf F c` (`SamplingDeploy.compiled`), four of those are facts about the sampled verifier's code
 (`Code.DrawLaw`, `Code.Refuses`, `Code.InteriorFixed`, `Code.DrawFixed`), and the compiler's KS and committed form
 there take exactly them, Flock's KS at `F`, the commitment's binding and the sessions' runs, numbers and openings
 (`SamplingDeploy.ks_compiled`, `SamplingDeploy.ksReg_compiled`). At Flock's masked record and SHA-512, Flock's KS,
 the decoder's list bound and the commitment's binding are proved (`SamplingGeneric/Masked.lean`: `ks_masked`,
 `ksReg_masked`, and `SamplingDeploy.ks_masked` at the deployed record).
-
-`Claims.Sampling` is the compiler's instance there: at coupled coins `Sampling.E` and the compiled extractor at
-`ofDeploy` fail alike, with the same failure probability and `B_ext`, and each decoder within Flock's radius is the
-deployed decoder of a record the frozen statement and hypotheses read as they read `D` (`SamplingGeneric/Instance.lean`:
-`samplingKS_of_flockKS`), so `Sampling.KS` follows from `Flock.KS`, the commitment's binding and the frozen hypotheses
-`sessions_ofDeploy` reads, with `ε_table ≥ 0` (`samplingKS`), and at the deployed record from the code's four facts
-with the sessions' runs, numbers and openings (`SamplingDeploy.samplingKS_deployOf`).
 
 **`CompilerZK` is proved** (`compilerZK`, `SamplingGeneric/ZK.lean`): a hybrid over the sessions, each step `A`'s zero
 knowledge at the session's statement against `V*` after the run's messages before it (`residual`). Flock's ZK server is
@@ -129,15 +126,6 @@ theorem compilerBits : CompilerBits := compilerBits_of compilerKS compilerEffici
 /-- **KS read at a time budget**: `CompilerKS` and `CompilerEfficient` (`compilerKSAt_of`). -/
 theorem compilerKSAt : CompilerKSAt := compilerKSAt_of compilerKS compilerEfficient
 
-/-- **`Sampling.KS` from the compiler**: `flockKS` at `ofDeploy` (`samplingKS_of_flockKS`). -/
-theorem samplingKS [Zero Col] {H : Msg → Msg} {D : Claims.Sampling.Deploy Coin Col T}
-    (iroots : Msg → Seen → ℕ → List Msg) (hKS : Claims.Flock.KS H D.flock) (hbind : D.commit.Binds H)
-    (hopens : Claims.Sampling.SessionOpens H D iroots) (hfix : Claims.Sampling.InteriorFixed H D iroots)
-    (hdraw : Claims.Sampling.DrawLaw D) (hrefuse : Claims.Sampling.Refuses H D) (hε : ∀ x, 0 ≤ D.εtable x)
-    (hdfix : Claims.Sampling.DrawFixed D) (hruns : Claims.Sampling.SessionRuns H D)
-    (hnum : Claims.Sampling.InnerNumbers D) : Claims.Sampling.KS H D :=
-  samplingKS_of_flockKS flockKS iroots hKS hbind hopens hfix hdraw hrefuse hε hdfix hruns hnum
-
 end Claims.SamplingGeneric
 
 namespace SamplingDeploy
@@ -162,13 +150,5 @@ theorem ksReg_compiled (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H 
     (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
     (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : (compiled F c iroots).KSReg H :=
   Claims.SamplingGeneric.flockKSReg H F _ hKS hlist hB (sessions_compiled F c iroots H hd hr hi hf hruns hnum hopens)
-
-/-- **`Sampling.KS` at the deployed record**: from Flock's KS at `F`, the commitment's binding, the code's four facts
-and the sessions' runs, numbers and openings (`samplingKS`). -/
-theorem samplingKS_deployOf (H : Claims.Msg → Claims.Msg) (hKS : Claims.Flock.KS H F) (hB : (commit c).Binds H)
-    (hd : c.DrawLaw) (hr : c.Refuses H) (hi : c.InteriorFixed H iroots) (hf : c.DrawFixed)
-    (hruns : Claims.Sampling.SessionRuns H (deployOf F c)) (hnum : Claims.Sampling.InnerNumbers (deployOf F c))
-    (hopens : Claims.Sampling.SessionOpens H (deployOf F c) iroots) : Claims.Sampling.KS H (deployOf F c) :=
-  Claims.SamplingGeneric.samplingKS iroots hKS hB hopens hi hd hr (deployOf_εtable_nonneg F c) hf hruns hnum
 
 end SamplingDeploy

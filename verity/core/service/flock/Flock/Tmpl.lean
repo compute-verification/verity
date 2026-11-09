@@ -350,6 +350,49 @@ it, so it stays directly below `parse`. -/
   simp only [rowNums_eq, Array.any_append]
   all_goals rfl
 
+/-- A template `parse` returns passed its last two checks (`TmplUnit.readParsed` reads them). -/
+theorem parse_checked {lines : Array String} {t : Tmpl} (h : parse lines = .ok t) :
+    t.ordered = true ∧ t.wellFormed = true := by
+  have bind_eq_ok {α β : Type} {x : V α} {f : α → V β} {b : β} :
+      (x >>= f) = .ok b ↔ ∃ a, x = .ok a ∧ f a = .ok b := by
+    cases x <;> simp [bind, Except.bind]
+  -- the body from the outside in, each join point unfolded once its branch is taken (inlining them all copies the rest
+  -- of the body into every check), each check's other branch a `throw`
+  unfold parse at h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
+  obtain ⟨⟨_, _⟩, -, h⟩ := bind_eq_ok.1 h
+  obtain ⟨⟨_, _⟩, -, h⟩ := bind_eq_ok.1 h
+  try simp -zeta only [] at h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  obtain ⟨_, -, h⟩ := bind_eq_ok.1 h
+  extract_lets at h
+  split at h
+  · cases h
+  simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  try simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  rename_i hord
+  try simp -zeta +zetaDelta only [] at h
+  try extract_lets at h
+  split at h
+  · cases h
+  rename_i hwf
+  try simp -zeta +zetaDelta only [] at h
+  cases h
+  exact ⟨by simpa using hord, by simpa using hwf⟩
+
 /-- A sorted list with each run of equal columns cut to its length mod 2. -/
 def dropPairs : List Nat → List Nat
   | [] => []
