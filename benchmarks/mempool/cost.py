@@ -300,7 +300,8 @@ def unit_cost(st: dict[str, Any], memo: dict, rss: dict[str, float] | None = Non
             _drop_traces()
             if rss is not None:
                 rss[f"{unit}: {term}"] = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 2**20
-    out["pool"]["checked witness hash"] = SHA_BIT * V6.data_bits(SimpleNamespace(**st))["chk"]
+    bits = V6.data_bits(SimpleNamespace(**st))
+    out["pool"]["checked witness hash"] = SHA_BIT * (bits["chk"] + bits["src"])
     for unit in ("compile", "pool"):
         out[unit]["total"] = sum(out[unit].values())
     return out
