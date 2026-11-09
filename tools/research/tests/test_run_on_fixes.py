@@ -88,6 +88,28 @@ def test_fetch_reports_a_running_run_whose_machine_rebooted_or_whose_runner_is_g
     assert "runner_gone" not in at(os.getpid()) and R.summarize(local)["state"] == "running"
 
 
+def test_a_run_that_ends_between_the_status_copy_and_the_runner_probe_is_its_end_not_runner_gone(tmp_path, monkeypatch):
+    """INF-619: `--wait` copied status.json while the run was running, then probed the runner after it had ended and exited, and
+    called a passing run runner-gone (r20261109-062759-36d6). A failed probe rereads the status first."""
+    import socket
+    local = _machine_run(tmp_path, monkeypatch, launcher_log="")
+    d = tmp_path / "machine" / "r-x"
+    dead = json.loads((d / "launch.json").read_text())["runner_pid"]
+    (d / "status.json").write_text(json.dumps({"state": "running", "pid": dead}))
+    (d / "job.json").write_text(json.dumps({"environment": {"hostname": socket.gethostname(),
+                                                            "boot_id": Path("/proc/sys/kernel/random/boot_id").read_text().strip()}}))
+    probe = remote._runner_gone
+
+    def ended_meanwhile(*a, **k):
+        (d / "status.json").write_text(json.dumps({"state": "done", "rc": 0, "pid": dead}))
+        return probe(*a, **k)
+
+    monkeypatch.setattr(remote, "_runner_gone", ended_meanwhile)
+    rec = remote.fetch(local)
+    assert "runner_gone" not in rec and rec["last_observed"] == {**rec["last_observed"], "state": "done", "rc": 0}
+    assert R.summarize(local)["state"] == "done"
+
+
 def test_push_refusal_names_the_bind_for_a_worktree_on_another_branch(tmp_path, monkeypatch):
     repo = tmp_path / "wt"
     subprocess.run(["git", "init", "-q", "-b", "feature", str(repo)], check=True)
