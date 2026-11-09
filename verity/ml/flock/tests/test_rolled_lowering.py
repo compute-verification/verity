@@ -14,7 +14,7 @@ from verity.ml.circuits import boolean as BL
 from verity.ml.circuits.boolean.forms import or_reduce
 from verity.ml.circuits.boolean.trace import emit
 from verity.ml.circuits.defs import CompositeDefinition, bind
-from verity.ml.circuits.ops.boolean import elementwise as EW
+from verity.ml.circuits.ops.boolean import rolled as RO
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.definitions.registry import boolean_deepgemm as BDG
 from verity_flock import struct_lower as SL
@@ -73,7 +73,7 @@ def test_a_rolled_group_lowers_to_its_flat_circuit() -> None:
             return q + [[C.AND(C.AND(x[j][0], s), x[j][1] ^ s), d[j]] for j in range(3, 6)] + [[s]]
         return run
 
-    d = EW.rolled("RolledLoweringCheck", 1, [], build, sig, register=False)
+    d = RO.rolled("RolledLoweringCheck", 1, [], build, sig, register=False)
     assert len(d.cut(SimpleNamespace())["classes"]) == 2
     assert _netlist(bind(d)) == _netlist(bind(_flat(d)))
     assert SL.check(bind(d))["mismatched_bits"] == 0

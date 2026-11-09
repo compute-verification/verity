@@ -134,14 +134,13 @@ def replayed(inner: CompositeDefinition, statics: Sequence[str], signature: Call
 
 
 def flat(name: str, version: int, statics: Sequence[str], signature: Callable, body: Callable, word,
-         lifted: Sequence[str] = (), rolled: bool = False) -> CompositeDefinition:
+         lifted: Sequence[str] = ()) -> CompositeDefinition:
     """The Boolean Definition ``name_v{version}{statics}`` whose circuit is ``body`` (over Boolean Definitions, as `EW.on_bits`
     takes it, its ``lifted`` statics Boolean Definitions read as their word views) compiled and traced as one circuit per binding
-    (`EW.specialized`; with ``rolled``, written as one Call per element of an Array parameter, `EW.rolled`), its word view
-    ``word`` at the same statics."""
+    (`EW.specialized`), its word view ``word`` at the same statics."""
     inner = EW.on_bits(name, version, statics, signature, body, word, register=False, lifted=lifted)
-    make = EW.rolled if rolled else EW.specialized
-    return make(name, version, statics, replayed(inner, statics, signature), signature, doc=body.__doc__ or "", word=inner.word)
+    return EW.specialized(name, version, statics, replayed(inner, statics, signature), signature, doc=body.__doc__ or "",
+                          word=inner.word)
 
 
 def _scale(B, S, amax):
