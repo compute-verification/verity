@@ -11,8 +11,8 @@ is ``pipeline``, ``check|properties``, ``acquire``, ``observe|commit``, ``engine
 ``core``, ``target_family`` (bound for ``config.py``) sits in ``config``, and ``predict``, which imports ``pipeline``,
 sits in ``pipeline``, as does PoUB's ``commit_map``, which reads the replay's store.  ``OPTIONAL`` names the packages a
 tree may hold or not (a private protocol's driver).  ``engine.hooks``, the one owner of
-runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``engine.makers``, a seam's parts, and ``settings``,
-the environment's registry, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
+runtime patches, ``engine.env``, the one writer of vLLM's env pins, ``engine.makers``, a seam's parts, ``settings``,
+the environment's registry, and ``log``, the logger, import nothing from the package and sit in ``core`` so every layer may call them.  Peers in one layer
 (``check|properties``, ``observe|commit``, ``query|correspondence``) may import each other; P5 is the only rule that
 restricts a peer edge.
 """
@@ -55,6 +55,7 @@ LAYER = {
     "verity_vllm.commit.challenge": "core",                    # -> verity.ml.randomness; imports nothing from verity_vllm
     "verity_vllm.records": "core",                             # the typed stage records; imports nothing else from verity_vllm
     "verity_vllm.errors": "core",                              # the one Refused; imports nothing from verity_vllm
+    "verity_vllm.log": "core",                                 # the logger; imports nothing from verity_vllm
 }
 
 #: the packages a tree may not hold, a private protocol's driver (`verity_vllm.protocols.DRIVERS`): placed where present
