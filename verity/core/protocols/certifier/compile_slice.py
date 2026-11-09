@@ -324,11 +324,11 @@ def _sig(S):
     return tuple((r, Array(bits[r], BIT)) for r in row_names(S)), Array(16, BIT)
 
 
-_DOC = ("a slice of the compile unit, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance on the "
-        "same arrival and decision wires, CacheStep_v1's calls on the same wires and the certified tokens checking the "
-        "hits ReplayStep_v1 reads, the committed decisions charged by ChargeLink_v1 from the window's carry-in to its "
-        "carry-out and held to the declared charge, and the step rows held to the committed served rows (verdict bits "
-        "load, steps, code, charge, rows, cache)")
+_DOC = ("the compile slice's proof block, one window whole: ReplayLoad, then per step ReplayStep_v1 and ReplayAdvance "
+        "on the same arrival and decision wires, CacheStep_v1's calls on the same wires and the certified tokens "
+        "checking the hits ReplayStep_v1 reads, the committed decisions charged by ChargeLink_v1 from the window's "
+        "carry-in to its carry-out and held to the declared charge, and the step rows held to the committed served "
+        "rows (verdict bits load, steps, code, charge, rows, cache)")
 CompileSlice = _part("CompileSlice", STATICS, _sig, _build, _DOC)
 CompileSlice.build = _build  # type: ignore[attr-defined]
 CompileSliceRowGroups = _part("CompileSliceRowGroups", BLOCK_STATICS, _sig, _build,

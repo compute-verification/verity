@@ -728,10 +728,10 @@ def _sig(S):
     return tuple((r, Array(bits[r], BIT)) for r in row_names(S)), Array(16, BIT)
 
 
-_DOC = ("a slice of the compile unit, one window whole, with vLLM's block pool: CompileSlice_v1's load, steps, charge "
-        "and served rows, and per step CacheStep_v2's calls on the pool rows in vLLM's order, each call's new, held, "
-        "nins and slot ReplayStep_v1's own and its hits, evictable counts and returns the ones ReplayStep_v1 reads, "
-        "each state row's free count the pool's (verdict bits load, steps, code, charge, rows, cache)")
+_DOC = ("the compile slice's proof block, one window whole, with vLLM's block pool: CompileSlice_v1's load, steps, "
+        "charge and served rows, and per step CacheStep_v2's calls on the pool rows in vLLM's order, each call's new, "
+        "held, nins and slot ReplayStep_v1's own and its hits, evictable counts and returns the ones ReplayStep_v1 "
+        "reads, each state row's free count the pool's (verdict bits load, steps, code, charge, rows, cache)")
 CompileSlice = _part("CompileSlice", STATICS, _sig, _build, _DOC, version=2)
 
 

@@ -1,5 +1,5 @@
 """The compile slice with the block pool carried between windows: `CompileSlice_v5` (`compile_slice_v5`) cut in two
-units, both proved every window, the pool passed from window to window as a committed root.
+proof blocks, both proved every window, the pool passed from window to window as a committed root.
 
     CompileSlice_v6{R, W, A, M, T, L, B, H, CH, WM, FULL, PC, NB, IW, AS, EW, Q, D, P, K, CTW, CU, DA, NS, NM, NRB, NRK}
         (adv, ing, req, srv, cout, res, calls) -> verdict[16]
@@ -9,19 +9,20 @@ units, both proved every window, the pool passed from window to window as a comm
 
 **Why.** CompileSlice_v5 runs each window from the empty pool, so a window never hits what an earlier one cached. Here
 the pool between windows is one row (`row_fields`), committed as its unsalted `Sha512RowSeg_v1` digest, the root: a
-window's pool unit opens the previous root, runs CacheStep_v3's stream from the pool it opens, and commits the pool it
-leaves as the next root. Both units are proved every window, none sampled: window w + 1's ``pin`` is window w's
-``pout``, one registered row both windows read, registered before window w + 1's coins are drawn (`PoolChain` is two
+window's pool window opens the previous root, runs CacheStep_v3's stream from the pool it opens, and commits the pool it
+leaves as the next root. Both proof blocks are proved every window, none sampled: window w + 1's ``pin`` is window w's
+``pout``, one registered row both windows read, registered before window w + 1's coins are flipped (`PoolChain` is two
 windows so wired). The first window's ``pin`` is the empty pool's root, `genesis`. A window whose proof fails ends its
 chain, and the next starts again from `genesis`, as the first does. The window pays for its activity as CompileSlice_v5
 does: its keys are the ragged row's blocks, its RB run the addresses its calls touch.
 
 **The edge.** A window ends at its edge, and a request still open there (running, waiting, or certified and not yet
 taken) is cut: its registered ``a_cut`` bit is 1 and its ``a_O`` the outputs it emitted by the edge, so the load reads
-its O as L − P and its cap as 0 (`CompileCut`) and it doesn't leave at ``a_O``. After the last step `CompileEdge`
-preempts every running slot in vLLM's preemption order, the last slot first, each a free on the bus whose returns are the
-registered ``erets``, and holds the open requests to the cut ones: each running or waiting request cut, having emitted
-its ``a_O``, each certified arrival not taken cut with ``a_O`` 0, and as many open as cut, so every other request left.
+its O as L − P and its max_tokens bit as 0 (`CompileCut`) and it doesn't leave at ``a_O``. After the last step
+`CompileEdge` preempts every running slot in vLLM's preemption order, the last slot first, each a free on the bus whose
+returns are the registered ``erets``, and holds the open requests to the cut ones: each running or waiting request cut,
+having emitted its ``a_O``, each certified arrival not taken cut with ``a_O`` 0, and as many open as cut, so every other
+request left.
 The next window takes each cut request's continuation as an ordinary arrival, (id, P + e) with its tokens its prompt
 then its e released outputs, in the order the edge leaves them (`opened_at_edge`: the running in slot order, the
 waiting, the arrivals not taken), and its prefix hits find the blocks the window cached, carried in the pool. At AS = 1
@@ -46,9 +47,9 @@ and stamps are one window's.
   the edge's R returns ``erets``.
 - ``calls`` (*registered*): the steps' and the edge's `nrec` bus records, field-major as `CompileWindow` makes them.
 - ``pin`` and ``pout`` (*registered*): the roots the window opens and leaves, 512 bits each.
-- ``coin`` (the verifier's coins): α, γ and δ, drawn live: δ once every registered row is, α and γ once ``prow``,
+- ``coin`` (the verifier's coins): α, γ and δ, flipped live: δ once every registered row is, α and γ once ``prow``,
   ``nrow`` and ``chk`` are committed.
-- ``prow`` (*opened*): the pool row under ``pin``. The unit opens it against its root, so it is ``pin``'s up to a
+- ``prow`` (*opened*): the pool row under ``pin``. The pool window opens it against its root, so it is ``pin``'s up to a
   SHA-512 collision, and no input is free of it.
 - ``nrow`` (*checked*): the pool row the window leaves, under ``pout``; its every field is held to the stream's finals.
 - ``src`` (*checked*): per block b = 1 … NB − 1 ``keyed`` (its final key nonzero), then per block ``fresh`` (keyed, and
@@ -58,8 +59,8 @@ and stamps are one window's.
   opened pool caches.
 A registered row is padded to whole words (`compile_slice.WORD`); its padding must be zero. `CLASSES` names each input's
 class. The checked rows are computed checks, as CompileSlice_v5's witness is, and count as free input at their widths
-until a Lean lemma shows the witnesses the unit accepts are unique (AGENTS.md's nondeterminism rule): `free_width`
-counts the advice and the checked rows of the units' inputs.
+until a Lean lemma shows the witnesses the proof block accepts are unique (AGENTS.md's nondeterminism rule):
+`free_width` counts the advice and the checked rows of the proof blocks' inputs.
 
 **The compile slice**: `CompileWindow` (`CompileCut`, CompileSlice_v5's load, the arrivals' ids distinct, its steps from
 ``res``, each running slot's request number carried in its slot row, and `CompileEdge`), `CallsEq` scanned over its
@@ -98,8 +99,8 @@ the pool window is CompileSlice_v5's stream, bus (over the edge's R records too)
 **The reference** is `reference`: CompileSlice_v5's run of the window, its cut arrivals' O their length past their prompt
 (`effective`), on the stream `opened` makes from the row, the edge's frees on that stream (`edge`), the blocks' sources
 (`sources`) and the row it leaves (`closed`), None for ``next`` where the edge doesn't hold or a block is still held
-after it. `cut_open` cuts a window at its edge. `arguments` gives both units' rows, `run_compile` and `run_pool` their
-verdicts, `run_copy` `PageCopy`'s.
+after it. `cut_open` cuts a window at its edge. `arguments` gives both proof blocks' rows, `run_compile` and `run_pool`
+their verdicts, `run_copy` `PageCopy`'s.
 """
 from __future__ import annotations
 
@@ -186,8 +187,8 @@ def row_bits(S) -> dict[str, int]:
 
 
 def free_width(S, widths: dict[str, int]) -> int:
-    """The free input bits among `widths` (a unit's rows and their bits): the advice and the checked rows (`CLASSES`; the
-    module's docstring)."""
+    """The free input bits among `widths` (a proof block's rows and their bits): the advice and the checked rows
+    (`CLASSES`; the module's docstring)."""
     if not set(widths) <= set(CLASSES):
         raise ValueError(f"inputs {sorted(set(widths) - set(CLASSES))} aren't classified rows")
     return sum(b for r, b in widths.items() if CLASSES[r] in ("advice", "checked"))
@@ -234,23 +235,23 @@ def _sig_counts(S):
     return (("carry", carry), ("n_i", Array(_bitlen(S.CU), BIT)), ("alpha", F)), Tuple(carry, BIT)
 
 
-def _cut_head(C, S, a_P, a_O, a_cut, *a_cap):
-    """The O and cap of each arrival the load reads: a cut arrival's L − P and 0, so it doesn't leave at its a_O, and
-    another's a_O and a_cap."""
+def _cut_head(C, S, a_P, a_O, a_cut, *a_max):
+    """The O and max_tokens bit (O is its max_tokens) of each arrival the load reads: a cut arrival's L − P and 0, so it
+    doesn't leave at its a_O, and another's a_O and max_tokens bit."""
     LW = _bitlen(S.L)
     out = []
     for k in range(S.K):
         P, O = list(a_P[LW * k:LW * (k + 1)]), list(a_O[LW * k:LW * (k + 1)])
         out += mux(C, a_cut[k], RS._sub(C, const_bits(S.L, LW), P, LW), O)
     if S.AS:
-        out += [C.AND(c, x.inv()) for c, x in zip(a_cap[0], a_cut)]
+        out += [C.AND(c, x.inv()) for c, x in zip(a_max[0], a_cut)]
     return out
 
 
 def _sig_cut(S):
     LW, K = _bitlen(S.L), S.K
-    caps = (("a_cap", Array(K, BIT)),) if S.AS else ()
-    return ((("a_P", Array(K * LW, BIT)), ("a_O", Array(K * LW, BIT)), ("a_cut", Array(K, BIT))) + caps,
+    at_max = (("a_max", Array(K, BIT)),) if S.AS else ()
+    return ((("a_P", Array(K * LW, BIT)), ("a_O", Array(K * LW, BIT)), ("a_cut", Array(K, BIT))) + at_max,
             Array(K * LW + K * S.AS, BIT))
 
 
@@ -461,8 +462,8 @@ PoolClose = _part(
     "allocated in the window); a first copy's (print, block, mlast) folded into R5")
 CompileCut = _part(
     "CompileCut", CUT_STATICS, _sig_cut, _cut_head,
-    "the arrivals' O and cap the compile slice's load reads: a cut arrival's L − P and 0, so it doesn't leave at its "
-    "a_O, another's a_O and a_cap")
+    "the arrivals' O and max_tokens bit the compile slice's load reads: a cut arrival's L − P and 0, so it doesn't "
+    "leave at its a_O, another's a_O and max_tokens bit")
 CompileEdge = _part(
     "CompileEdge", EDGE_STATICS, _sig_edge, _edge,
     "the compile slice's edge after its last step: every running slot's free in vLLM's preemption order (the last slot "
@@ -715,24 +716,24 @@ def _chain_body(B, S, *rows):
 
 PoolChain = CompositeDefinition(
     "PoolChain", 1, STATICS, _chain_sig, _chain_body, conformance="exact-model-tested",
-    doc="two consecutive windows of the carried pool, both units of each: window 1 opens root0 and leaves root1, which "
-        "window 2 opens and leaves root2, one input both windows read (verdicts: window 1's compile slice and pool "
-        "window, then window 2's)")
+    doc="two consecutive windows of the carried pool, both proof blocks of each: window 1 opens root0 and leaves "
+        "root1, which window 2 opens and leaves root2, one input both windows read (verdicts: window 1's compile slice "
+        "and pool window, then window 2's)")
 
 
-def compile_unit(**st):
+def compile_block(**st):
     return bind(CompileSlice, **st)
 
 
-def pool_unit(**st):
+def pool_block(**st):
     return bind(PoolWindow, **st)
 
 
-def chain_unit(**st):
+def chain_block(**st):
     return bind(PoolChain, **st)
 
 
-def copy_unit(CB: int):
+def copy_block(CB: int):
     return bind(PageCopy, CB=CB)
 
 
@@ -893,7 +894,7 @@ def cuts(S, sl: CS.Slice, cut: Sequence[int] | None = None) -> tuple[int, ...]:
 
 def effective(S, sl: CS.Slice, cut: Sequence[int] | None = None) -> CS.Slice:
     """The slice the steps replay (`CompileCut`): `sl`, each arrival's O its served a_O, with each cut arrival's O its
-    length past its prompt, L − P, and its cap 0."""
+    length past its prompt, L − P, and its max_tokens bit 0."""
     cut = cuts(S, sl, cut)
     arr = tuple(((a[0], a[1], S.L - a[1]) + ((0,) if S.AS else ())) if c else tuple(a)
                 for a, c in zip(sl.arrivals, cut))
@@ -961,8 +962,8 @@ def sources(S, stream: V3S.Stream) -> tuple[tuple[int, int], ...]:
 
 def reference(S, sl: CS.Slice, row: PoolRow | None = None, delta: int = COINS[2],
               counts: Sequence[int] | None = None, cut: Sequence[int] | None = None) -> SimpleNamespace | None:
-    """Both units' registered rows and the pool window's checked witness for `sl` (each arrival's O its served a_O) with
-    the arrivals `cut` cut (default none) from the pool `row` (default the empty pool) under the print coin δ
+    """Both proof blocks' registered rows and the pool window's checked witness for `sl` (each arrival's O its served
+    a_O) with the arrivals `cut` cut (default none) from the pool `row` (default the empty pool) under the print coin δ
     (unpadded): ``srv``, ``cout``, ``res`` (the steps' results and the edge's returns), ``chk`` and ``counts``
     (CompileSlice_v5's on `effective`'s slice, the edge's frees on its stream), the blocks' sources ``src``, ``edge``
     (whether the edge holds), the row ``left`` the stream leaves and ``next``, it where the edge holds and no block is
@@ -1015,8 +1016,8 @@ def records(st: dict, args: Sequence[dict[str, list[int]]]) -> list[list[int]]:
 
 
 def _req(S, v5: Sequence[int], sl: CS.Slice, cut: Sequence[int]) -> list[int]:
-    """``req``'s bits: CompileSlice_v5's (of `effective`'s slice) with each arrival's served a_O and a_cap, and its cut
-    bit."""
+    """``req``'s bits: CompileSlice_v5's (of `effective`'s slice) with each arrival's served a_O and max_tokens bit, and
+    its cut bit."""
     got = RC._split(list(v5[:V5.data_bits(S)["req"]]), V5.fields(S)["req"])
     Sc = CS.chain(S)
     arr = [dict(zip(RC.arrival_names(Sc), a)) for a in sl.arrivals] + [None] * (S.K - len(sl.arrivals))
@@ -1029,8 +1030,8 @@ def _req(S, v5: Sequence[int], sl: CS.Slice, cut: Sequence[int]) -> list[int]:
 
 def arguments(S, sl: CS.Slice, row: PoolRow | None = None, coins: Sequence[int] = COINS, cut: Sequence[int] | None = None,
               **given) -> dict[str, list[int]]:
-    """Both units' inputs for window `sl` (each arrival's O its served a_O) with the arrivals `cut` cut (default none)
-    from the pool `row` (default the empty pool) under the coins (α, γ, δ): every row of `COMPILE_ROWS` and
+    """Both proof blocks' inputs for window `sl` (each arrival's O its served a_O) with the arrivals `cut` cut (default
+    none) from the pool `row` (default the empty pool) under the coins (α, γ, δ): every row of `COMPILE_ROWS` and
     `POOL_ROWS` (the registered ones zero-padded), each of `given` as given and the rest `reference`'s (``counts`` given
     lays out the ragged row), ``calls`` the records the reference's rows make (zero where it refuses the window, the
     pool rows ``row`` and its root both in and out)."""
@@ -1052,25 +1053,25 @@ def arguments(S, sl: CS.Slice, row: PoolRow | None = None, coins: Sequence[int] 
     return out
 
 
-def _run(unit, rows, args) -> list[int]:
-    out = evaluate_bits(unit, *[[a[r] for a in args] for r in rows]).reshape(len(args), -1).tolist()
+def _run(block, rows, args) -> list[int]:
+    out = evaluate_bits(block, *[[a[r] for a in args] for r in rows]).reshape(len(args), -1).tolist()
     return [sum(int(b) << j for j, b in enumerate(o)) for o in out]
 
 
 def run_compile(st: dict, args: Sequence[dict[str, list[int]]]) -> list[int]:
     """The compile slice's verdict word on each of `args` (`arguments`' form), in one evaluation."""
-    return _run(compile_unit(**st), COMPILE_ROWS, args)
+    return _run(compile_block(**st), COMPILE_ROWS, args)
 
 
 def run_pool(st: dict, args: Sequence[dict[str, list[int]]]) -> list[int]:
     """The pool window's verdict word on each of `args` (`arguments`' form), in one evaluation."""
-    return _run(pool_unit(**st), POOL_ROWS, args)
+    return _run(pool_block(**st), POOL_ROWS, args)
 
 
 def run_copy(CB: int, args: Sequence[dict[str, list[int]]]) -> list[int]:
     """`PageCopy`'s verdict word on each of `args` (``keyed``, ``fresh``: one bit each; ``wrote``, ``carried``, ``out``: CB
     bits each), in one evaluation."""
-    return _run(copy_unit(CB), ("keyed", "fresh", "wrote", "carried", "out"), args)
+    return _run(copy_block(CB), ("keyed", "fresh", "wrote", "carried", "out"), args)
 
 
 def chain_arguments(first: dict[str, list[int]], second: dict[str, list[int]]) -> dict[str, list[int]]:
@@ -1084,28 +1085,28 @@ def chain_arguments(first: dict[str, list[int]], second: dict[str, list[int]]) -
 
 def run_chain(st: dict, args: Sequence[dict[str, list[int]]]) -> list[tuple[int, int, int, int]]:
     """`PoolChain`'s four verdict words on each of `args` (`chain_arguments`' form), in one evaluation."""
-    params, _ret = chain_unit(**st).signature()
-    out = evaluate_bits(chain_unit(**st), *[[a[name] for a in args] for name, _t in params])
+    params, _ret = chain_block(**st).signature()
+    out = evaluate_bits(chain_block(**st), *[[a[name] for a in args] for name, _t in params])
     words = [[sum(int(b) << j for j, b in enumerate(o[16 * i:16 * (i + 1)])) for i in range(4)]
              for o in out.reshape(len(args), -1).tolist()]
     return [tuple(w) for w in words]
 
 
 def size(**st) -> dict[str, int]:
-    """Each unit's ANDs (an n-input AND n − 1), every input row's width (padded) and each unit's free width at statics
-    `st`."""
+    """Each proof block's ANDs (an n-input AND n − 1), every input row's width (padded) and each proof block's free
+    width at statics `st`."""
     S, memo = SimpleNamespace(**st), {}
     bits = row_bits(S)
-    return {"compile_ands": ands(compile_unit(**st), memo), "pool_ands": ands(pool_unit(**st), memo),
+    return {"compile_ands": ands(compile_block(**st), memo), "pool_ands": ands(pool_block(**st), memo),
             **{f"{r}_bits": b for r, b in bits.items()},
             "compile_free_bits": free_width(S, {r: bits[r] for r in COMPILE_ROWS}),
             "pool_free_bits": free_width(S, {r: bits[r] for r in POOL_ROWS})}
 
 
 def parts(**st) -> dict[str, list[tuple[object, int]]]:
-    """Each unit's parts at statics `st`, each bound at the statics it reads, with the times the unit calls it: a unit's
-    ANDs are the sum of each part's times its calls (the bodies' other nodes are constants), so this prices a class
-    whose inputs are too wide to build the bodies at."""
+    """Each proof block's parts at statics `st`, each bound at the statics it reads, with the times the proof block
+    calls it: a proof block's ANDs are the sum of each part's times its calls (the bodies' other nodes are constants),
+    so this prices a class whose inputs are too wide to build the bodies at."""
     S = SimpleNamespace(**st)
     S3, n = V5.shape(S).S3, S.NB - 1
 

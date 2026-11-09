@@ -1,4 +1,4 @@
-"""The compile slice with the pool carried between windows (`compile_slice_v6`), both units proved every window:
+"""The compile slice with the pool carried between windows (`compile_slice_v6`), both proof blocks proved every window:
 `CompileSlice_v6`, CompileSlice_v5's load and steps with their calls held to the registered calls row, and `PoolWindow_v1`,
 which opens the pool row under the input root as the memory check's initial values, runs CacheStep_v3's stream over the
 calls with CompileSlice_v5's ragged keys and commits the row it leaves as the output root. A window from the empty pool
@@ -121,10 +121,10 @@ def test_the_free_inputs(request, which):
     blocks' sources and the stream's witness: its coins are the verifier's 384 bits, the roots and the calls are
     registered and the row under the input root is opened against it. The results and the stream's witness are
     CompileSlice_v5's witness at the class and the edge's R returns, and the calls its records and the edge's R. Each
-    unit's output is 16 bits."""
+    proof block's output is 16 bits."""
     x = request.getfixturevalue(which)
-    for unit, rows in ((V6.compile_unit, V6.COMPILE_ROWS), (V6.pool_unit, V6.POOL_ROWS)):
-        params, ret = unit(**x.st).signature()
+    for block, rows in ((V6.compile_block, V6.COMPILE_ROWS), (V6.pool_block, V6.POOL_ROWS)):
+        params, ret = block(**x.st).signature()
         widths = {name: sum(BL.elements(t)) for name, t in params}
         assert tuple(widths) == rows and sum(BL.elements(ret)) == 16
         assert widths == {r: V6.row_bits(x.S)[r] for r in rows}
@@ -144,10 +144,11 @@ def test_the_free_inputs(request, which):
 
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_a_window_from_the_empty_pool_is_compile_slice_v5s(request, which):
-    """From the empty pool (its root `genesis`) the reference is CompileSlice_v5's, rows and witness (the results and the
-    rest of the witness), and the window wrote every page it keys: each keyed block is fresh. The demo's synchronous
-    window leaves every request done and no block held, and both units accept it. The asynchronous one ends with a
-    request running, which the compile slice's edge refuses (0x3F) and, its blocks held, the pool window's close (0xB)."""
+    """From the empty pool (its root `genesis`) the reference is CompileSlice_v5's, rows and witness (the results and
+    the rest of the witness), and the window wrote every page it keys: each keyed block is fresh. The demo's synchronous
+    window leaves every request done and no block held, and both proof blocks accept it. The asynchronous one ends with
+    a request running, which the compile slice's edge refuses (0x3F) and, its blocks held, the pool window's close
+    (0xB)."""
     x = request.getfixturevalue(which)
     ref, r5 = V6.reference(x.S, x.sl), V5.reference(x.S, x.sl)
     n5 = V6.data_bits(x.S)["res"] - x.S.R * V5.shape(x.S).CW
@@ -164,10 +165,10 @@ def test_a_window_from_the_empty_pool_is_compile_slice_v5s(request, which):
 def test_a_chained_window_hits_the_carried_pool(synth):
     """The demo again from the pool its first window leaves: the second window's input root is the first one's output
     root, its hits find the four blocks the first cached (5 hit blocks where the first had 3), its served rows differ,
-    and both units accept both windows. Its sources keep two blocks keyed from the carried pool (keyed, not fresh: their
-    pages are the first window's) beside the two it wrote. The row carries the keys, not their prints, so each window
-    draws its own coins: under other coins the left row is the same, and the witness made under the first coins is
-    refused."""
+    and both proof blocks accept both windows. Its sources keep two blocks keyed from the carried pool (keyed, not
+    fresh: their pages are the first window's) beside the two it wrote. The row carries the keys, not their prints, so
+    each window flips its own coins: under other coins the left row is the same, and the witness made under the first
+    coins is refused."""
     x = synth
     assert x.a2["pin"] == x.a1["pout"] != x.a1["pin"]
     assert (_hits(x.S, x.w1), _hits(x.S, x.w2)) == (3, 5) and x.w2.srv != x.w1.srv
@@ -201,14 +202,14 @@ def test_a_forged_root_or_a_wrong_opening_is_refused(synth):
     row under it is refused by the open bit alone (0xD), and the row one bit off at each field's first, middle and last
     bit under the true root by the open bit.
 
-    Under its own root a row is another pool, which the unit runs the window from: the true pool's witness is refused
-    wherever the window's run from that pool differs from it (by the stream's check or the close), and accepted exactly
-    where it doesn't, which is where the window reads no bit that differs. Here that is 4 of the 24 bits: the queue's
-    tail's 3, which the window's allocations drain before any block returns to it, and one of the mlast of a block that
-    is no key's first copy, which a valid close leaves 0. The 18 of those pools the reference compiles the window from
-    each have their own run accepted. So a window's pool is the root's opening and nothing else; binding the root to the
-    previous window's is the chain's. The window's witness from the empty pool under the carried root, and the carried
-    window's witness under the empty pool's root and row, are refused by the stream's check."""
+    Under its own root a row is another pool, which the pool window runs the window from: the true pool's witness is
+    refused wherever the window's run from that pool differs from it (by the stream's check or the close), and accepted
+    exactly where it doesn't, which is where the window reads no bit that differs. Here that is 4 of the 24 bits: the
+    queue's tail's 3, which the window's allocations drain before any block returns to it, and one of the mlast of a
+    block that is no key's first copy, which a valid close leaves 0. The 18 of those pools the reference compiles the
+    window from each have their own run accepted. So a window's pool is the root's opening and nothing else; binding the
+    root to the previous window's is the chain's. The window's witness from the empty pool under the carried root, and
+    the carried window's witness under the empty pool's root and row, are refused by the stream's check."""
     x = synth
     S, honest = x.S, x.a2
     forged = [RG.digest_bits(V6.genesis(S)), honest["pout"], [0] * 512]
@@ -269,7 +270,7 @@ def test_the_left_row_is_held_to_the_stream(synth):
     last copy at a first copy and 0 elsewhere. The output root one bit off is too, and so is each bit of the blocks'
     sources. A window that ends with a request open and not cut (the demo at 1 to 3 steps) is refused by the compile
     slice's edge bit alone (0x3F); its pool window, whose calls hold the edge's frees, accepts it, no block held after
-    them. Cut at its edge (`cut_open`), both units accept it."""
+    them. Cut at its edge (`cut_open`), both proof blocks accept it."""
     x = synth
     S, honest = x.S, x.a2
     flips = sorted({j for at, n, w in _offsets(V6.row_fields(S)).values() for j in (at, at + n * w // 2, at + n * w - 1)})
@@ -286,11 +287,12 @@ def test_the_left_row_is_held_to_the_stream(synth):
     assert got == [V6.POOL_ACCEPT & ~CLOSE] * len(cases) + [V6.POOL_ACCEPT] * 6, [hex(g) for g in got]
 
 
-def test_the_calls_row_ties_the_units(synth):
-    """The registered calls row is the compile slice's records and the pool window's bus: a bit of it off (every record's
-    on bit, the edge's included, and each other field's bits of the first record on) is refused by the compile slice's
-    calls bit (0x5F) and the pool window's pool bit (0xE); so is a padding bit set in the calls or results row by the
-    calls bit. Results one bit off, with the records the steps make from them, are refused by one unit or the other."""
+def test_the_calls_row_ties_the_proof_blocks(synth):
+    """The registered calls row is the compile slice's records and the pool window's bus: a bit of it off (every
+    record's on bit, the edge's included, and each other field's bits of the first record on) is refused by the compile
+    slice's calls bit (0x5F) and the pool window's pool bit (0xE); so is a padding bit set in the calls or results row
+    by the calls bit. Results one bit off, with the records the steps make from them, are refused by one proof block or
+    the other."""
     x = synth
     S, honest = x.S, x.a2
     n, ofs = V6.nrec(S), _offsets(V6.fields(S)["calls"])
@@ -316,10 +318,10 @@ def test_random_chains(request, which):
     """Ten chains of up to four random windows sharing a first block, each from the pool the last left and cut at its
     edge (`cut_open`), a chain ending at a window that leaves a block held: 40 windows (15 asynchronous) with 35 (21)
     requests cut, every one of which the reference compiles. Synchronously the edge frees every running slot, so no
-    window leaves a block held and both units accept each. Asynchronously a window with a request running at its edge
-    is refused by the compile slice's edge bit (0x3F) and, its blocks held, the pool window's close (0xB), and the rest
-    are accepted. Each of the 30 (5) chained windows' input root is the last output root, and 17 (3) of them hit blocks
-    an earlier one cached (more hit blocks than from the empty pool)."""
+    window leaves a block held and both proof blocks accept each. Asynchronously a window with a request running at its
+    edge is refused by the compile slice's edge bit (0x3F) and, its blocks held, the pool window's close (0xB), and the
+    rest are accepted. Each of the 30 (5) chained windows' input root is the last output root, and 17 (3) of them hit
+    blocks an earlier one cached (more hit blocks than from the empty pool)."""
     x = request.getfixturevalue(which)
     S, rng = x.S, random.Random(31 + x.S.AS)
     args, quiet, links, carried, cut = [], [], [], 0, 0
@@ -353,7 +355,7 @@ def test_cut_and_continue(edge):
     A decoding (5 outputs), Z preempted and waiting (3 outputs) and D never admitted, each with a_O its outputs. The edge
     frees A's 2 blocks, then X's 3, and leaves no block held. Window w + 1 opens w's output root and takes their
     continuations first, in that order: X', A' and Z' each take the blocks it cached in w (2, 1 and 1), which from the
-    empty pool none does, and D' has none. w + 1 cuts D' at its own edge. Both units accept both windows."""
+    empty pool none does, and D' has none. w + 1 cuts D' at its own edge. Both proof blocks accept both windows."""
     x = edge
     last = x.r1.scan.states[-1]
     assert [r[:5] for r in last.running] == [(0, 11, 13, 0, 10), (1, 2, 22, 5, 6)]
@@ -426,13 +428,13 @@ def test_the_carried_pages(edge):
 
 
 def test_size(synth, asynth):
-    """What each unit costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileCut (24 and 27
-    ANDs), CompileWindow with its edge (CompileEdge, 162 and 98) and the calls row's check (a CallsEq a record, the
-    edge's R = 2 among them), 13,466 and 14,497 ANDs, 224 and 163 more than without the edge. The pool window, 4,543,787
-    and 3,661,471, is CompileSlice_v5's stream, bus (the edge's two records at 2,322 each among them) and ragged keys
-    with 8 more M entries, the arrivals' counts, the two rows' digests (four compressions each at 2,641 bits), their ten
-    keys' prints, five open and five close steps (the close's source check 4 ANDs a block) and 16 copy steps. Its free
-    input is the left row, the blocks' sources (2 bits a block) and the stream's witness."""
+    """What each proof block costs at the demos' classes (`compile_slice_v6.size`). The compile slice is CompileCut (24
+    and 27 ANDs), CompileWindow with its edge (CompileEdge, 162 and 98) and the calls row's check (a CallsEq a record,
+    the edge's R = 2 among them), 13,466 and 14,497 ANDs, 224 and 163 more than without the edge. The pool window,
+    4,543,787 and 3,661,471, is CompileSlice_v5's stream, bus (the edge's two records at 2,322 each among them) and
+    ragged keys with 8 more M entries, the arrivals' counts, the two rows' digests (four compressions each at 2,641
+    bits), their ten keys' prints, five open and five close steps (the close's source check 4 ANDs a block) and 16 copy
+    steps. Its free input is the left row, the blocks' sources (2 bits a block) and the stream's witness."""
     common = {"adv_bits": 8, "ing_bits": 27, "req_bits": 160, "srv_bits": 160, "res_bits": 208, "pin_bits": 512,
               "pout_bits": 512, "coin_bits": 384, "prow_bits": 2641, "nrow_bits": 2641, "src_bits": 10,
               "compile_free_bits": 8}
@@ -440,13 +442,13 @@ def test_size(synth, asynth):
                                    "calls_bits": 2032, "chk_bits": 34684, "pool_free_bits": 37335}
     assert V6.size(**asynth.st) == {**common, "compile_ands": 14497, "pool_ands": 3661471, "cout_bits": 176,
                                     "calls_bits": 2256, "chk_bits": 25084, "pool_free_bits": 27735}
-    assert ands(V6.chain_unit(**synth.st)) == 2 * (13466 + 4543787)
+    assert ands(V6.chain_block(**synth.st)) == 2 * (13466 + 4543787)
 
 
-def test_the_parts_price_the_units(synth, asynth):
-    """`compile_slice_v6.parts`, which prices a class too wide to build the bodies at, is the built units: each unit's
-    parts' ANDs times their calls sum to `size`'s at both demos' classes."""
+def test_the_parts_price_the_proof_blocks(synth, asynth):
+    """`compile_slice_v6.parts`, which prices a class too wide to build the bodies at, is the built proof blocks: each
+    proof block's parts' ANDs times their calls sum to `size`'s at both demos' classes."""
     for x in (synth, asynth):
         sz = V6.size(**x.st)
-        for unit, ps in V6.parts(**x.st).items():
-            assert sum(n * ands(p) for p, n in ps) == sz[f"{unit}_ands"], unit
+        for block, ps in V6.parts(**x.st).items():
+            assert sum(n * ands(p) for p, n in ps) == sz[f"{block}_ands"], block

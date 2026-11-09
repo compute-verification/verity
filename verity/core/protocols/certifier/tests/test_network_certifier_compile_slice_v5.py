@@ -146,7 +146,7 @@ def test_a_wrong_carried_request_number_is_refused(asynth):
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_the_checked_witness_is_unique(request, which):
     """The checked witness one bit off the reference's is refused, by the cache, pool or keys bit: each field's first,
-    middle and last bit, and 96 bits drawn at random. A hit, evictable count or return the steps read is held by the
+    middle and last bit, and 96 bits sampled at random. A hit, evictable count or return the steps read is held by the
     record that carries it, or is zero; a slot, a list entry or a time stamp off is the stream's check or the bus
     products' disagreement; a ragged block's number off breaks its runs or its RK entry."""
     x = request.getfixturevalue(which)
