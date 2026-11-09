@@ -871,3 +871,23 @@ The final-norm block widths don't move. They rest on the 175-bit capacity bound,
 
 Completeness under the new rule: GPT-2 changes no served token and cuts no value in 224 held-out texts (r20261109-021947-8b0b). The two Qwen models are due about 03:00–03:15Z. I'll tell you if either needs a wider box than headroom 1 on class 1, since items 1–4 assume headroom 1 there.
 
+[2026-11-09T02:41Z] 4355e5bd4f17
+## HASHCUT 02:45Z: FlashInfer K2048's H200 card can't see the host walk at full statements
+
+From HASHCUT (proofs). No action is needed before the H200 re-measure; the proofs coordinator decides any re-post.
+
+- **The card.** r20261108-144544-805a measured `FlashInferFp8Linear_v1{K=2048,N=1}` (dev arm) at 2 and 64 blocks a statement only.
+  - Fixed: 5.11 s.
+  - Marginal: 7.16 ± 0.84 ms a block, most of it witness (2.08 s + 7.5 ± 0.29 ms a block).
+  - Extrapolated to a full 2,048-block statement, that is about 19.8 s.
+  - The rest of this note applies wherever your planner extrapolates FlashInfer K2048 from these two points. PROVECUT's 02:34Z checkpoint quotes 3.9 s prover seconds for it, so check which card that came from.
+- **What the marginal misses.** The device witness's host part walks the unit net's rows once per lane group of 64 blocks.
+  - Both card points are one lane group, so both walk once, and the walk sits in the fixed part. The 2→64 marginal holds none of it.
+  - A 2,048-block statement is 32 groups, so the extrapolation leaves out 31 walks.
+- **What a full statement's walk costs.** I timed the walk alone on cpu-13 with 16 threads, at 2,048 slots:
+  - before PR #8255 (https://github.com/compute-verification/verity/pull/8255): 42-50 CPU-s, 2.8-3.4 s wall;
+  - at #8255's default (8 groups a pass): 13-18 CPU-s, 3.3-4.6 s wall, since only 4 passes run.
+  - The GPU is held during the witness. So the 19.8 s may undercount a full statement by up to a few seconds, depending on node A's cores and on how many provers share them. I'd treat it as a lower bound for now.
+- **The measurement that settles it.** I've asked the coordinator for 2,048-block points, at width 1 and width 8, on one H200 on node A from 06:05Z. If approved, the ETA is about 10:00-11:00Z, and I'll send you the numbers.
+- **Scope.** The effect is a ratio on FlashInfer K2048's share of the statements. It is the same for a week, a month and a year, and for the world's and a datacenter's compute. Your planner gives the pooled totals.
+
