@@ -26736,9 +26736,6 @@
     "Real.instLE.le c.Q (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHSub.hSub (instHMul.hMul k b).cast d.chip.cast) (Finset.univ.sum fun i => instHMul.hMul (d.cap i) r.win.len).cast) (instHMul.hMul G b).cast) lam.cast)": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
    },
    "Accounting.SecurityProofs.Bridge.CommOfPeriodLeakAccepted": {
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (Claims.Sampling.κ D δ (R.stmt ξ i)) δ) (instHMul.hMul (Claims.Sampling.γ D (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V (Claims.Sampling.E D decode) (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
-    "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V (Claims.Sampling.E D decode) D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (instHAdd.hAdd (instHSub.hSub (D.κ δ (R.stmt ξ i)) δ) (instHMul.hMul (D.γ (R.stmt ξ i)) (Claims.PrB H D.V (R.prover ξ i) (R.stmt ξ i))).sqrt) εks": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (Claims.Sampling.Bext H D.V D.E (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εbind": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion",
     "∀ (ξ : (i : I) → Ω i) (i : Fin n), Real.instLE.le (Claims.Finder.Pr H (NetTiming.Btap H D.V D.E D.commit D.parse R.tops (R.Tape ξ i) (R.prover ξ i) (R.stmt ξ i))) εtap": "a bound that is no plain range, inline when the rule came: name it or state it as a guarantee's conclusion"
@@ -47826,10 +47823,10 @@
    }
   },
   "Proofs.Flock.Claims.Witnesses.SamplingGeneric": {
-   "digest": "3445853340ca58af4fb230cf7efcada79db39a4d0c2dc819f74bc8f7aab72e60",
+   "digest": "043de3180aaff961610561ca0d48e286b98fd5cd5293b5b74a2e7f191720f581",
    "definitions": {
-    "Claims.Witness.SamplingGeneric.certL": "81030f02dfbea658782d5ee67a95596c9b83ce74461ae79c64b18c127b121293",
-    "Claims.Witness.SamplingGeneric.leakL": "ba685e1c5077b42959a2a72926e5d59e24d4f4dea5974e2ac3867a2f780a36dd",
+    "Claims.Witness.SamplingGeneric.certL": "8cc7f59bc49788c58a42da00e793e80fd1d5f94acacadf1a84da551891d9751c",
+    "Claims.Witness.SamplingGeneric.leakL": "c9fc9d3968d4253407de8f2a49c8a7d7ce47ddd8646cf96d357b968b16651886",
     "Claims.Witness.SamplingGeneric.notPart": "e6bc0d55b7ff7cf837836690a9cd1126dc06545220a2680712baa834d27fdb9b",
     "Claims.Witness.SamplingGeneric.notProg": "14d3fd2a76b241df84de6409b2b4c001523be346aff77025bc4ea34a6add4a4b",
     "Claims.Witness.SamplingGeneric.notStmt": "f61097b5a73f7022d31f9ea21b3ce8af337da173def168215aee677eb9ffb7ae",
