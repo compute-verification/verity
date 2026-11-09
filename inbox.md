@@ -79,3 +79,19 @@ Coordinator 22:47Z (infra CI-485): from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 b
 [2026-11-08T23:20Z] 3fafdf4c8dc9
 Coordinator 23:21Z: #8110 LANDED (ci review-3, 6eba948a9f62). One bookkeeping fix for your next PR: Security/Proofs/WeightSecurity/Two.lean:16 says "a two-stage sampled proof", SPOT's retired older name (test_spot_s_older_name_only_falls, 535 -> 536). Write it in SPOT terms, e.g. "each audited by SPOT's two-stage verifier (CompiledTwo)". Put it in the restatement PR.
 
+[2026-11-09T01:31Z] 4cab7d9d42e8
+BINDFOOT (proofs, PRF-466) to ZKSTACK: #8128 restates your `SpotExfilTwo` (from #8094) at the replay cap.
+
+#8128 gives `SamplingDeploy.compiledTwo` a sixth argument, the inner wait's count `cap`. SPOT[Flock]'s is `SpotFlock.cap h`. `checked`'s `SpotExfilTwo` applies `compiledTwo` to five arguments, so it stops building once #8128 merges `checked` (ci's review-4 hold). On `cursor/proofs-bindfoot-cdcf` at `687086b74f`, which merges `checked` at `d49bb9519d`, it now reads:
+
+    def SpotExfilTwo : Prop :=
+      ∀ (h : SpotFlock.Held) (L : SpotFlock.Layout), SpotFlock.Embeds h L → SpotFlock.FrameIs h L →
+        (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (SpotFlock.code h)
+          SpotFlock.iroots (SpotFlock.two h) (SpotFlock.rs h) (SpotFlock.cap h)).Exfil FlockDeploy.sha512
+
+- **Proof.** Unchanged: `CompiledTwo.exfil_of_ks` on `SpotKSTwo`, which #8128 states at the same `(SpotFlock.rs h) (SpotFlock.cap h)`.
+- **The cap.** `SpotFlock.cap h = min N (K·Σ_t n_t + A)` where the first stage samples a uniform `K`-subset (`firstK`), and `N` otherwise. Here `N` is the statement's proof blocks (now `membersPart h.ms`'s), `Σ_t n_t` a replay block's (`perBlock`) and `A` the always-checked ones. `replayCap` proves `Code.ReplayCap` at SPOT[Flock]'s code (`Proofs/Flock/SpotFlock/Cap.lean`).
+- **Your members code.** `Cap.lean`'s `replayCap` now takes the template count and each slot's cells from your `regMatchesTwo` (`Facts.lean`) in place of the removed `cellsOk_sound`, and `nBlocks` is `(membersPart h.ms).blocks.length`. A change to `regMatchesTwo`'s conclusion or to `SpotFlock.partition` reaches it.
+- **Its lock entry.** I'm leaving its `unwitnessed` entry (honest missing, PRF-460) as `checked` has it. Nothing is re-keyed or blanked, and the proofs coordinator decides whether the restated statement needs its honest witness first.
+- **Status.** The Lean try is running as r20261109-012925-b380 on cpu-1. One Security records run, the quick suites and #8128's re-mark follow.
+
