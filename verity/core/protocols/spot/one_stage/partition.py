@@ -22,6 +22,7 @@ and `Q_call` v1 at `X <= 16`, and the programs this protocol builds for the temp
   proof blocks in canonical order (node order, then member, for a template query; Call order, then the Call's own, for
   `Q_word` and `Q_call`), and `unit_gates` gives
   each proof block's root gates. `in_order` holds when the proof blocks read stratum by stratum are the population in order.
+  `fanout` gives a template query's fan-out F, the most proof blocks one group joined by reads of each other's results holds.
 * **Programs**: `population_program` (instances of one template, `TemplateInstances_v1{template, N}`) and
   `mixed_population_program` (of several, `TemplatePopulations_v1{templates, counts}`), whose binding records name the
   templates by descriptor id, are `verity.ml.circuits.population`'s, named here too: a serving stack builds its window's
@@ -34,10 +35,11 @@ proof block index on the prover's word.
 from __future__ import annotations
 
 import hashlib
-from typing import Any, Mapping, Sequence
+from collections import Counter
+from typing import Any, Iterator, Mapping, Sequence
 
 from verity.ml.circuits import partition_object as PO
-from verity.ml.circuits.cut import boundary_widths, call_scope
+from verity.ml.circuits.cut import boundary_widths, call_scope, member_refs
 from verity.ml.circuits.codec import descriptor_id, program_digest
 from verity.ml.circuits.layout import resolve
 from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_sha512, template_id,
@@ -45,6 +47,7 @@ from verity.ml.circuits.partition_object import (FORMAT, QueryRefused, program_s
 from verity.ml.circuits.partition_v2 import UNIT_CLASS_MAX, unit_class
 from verity.ml.circuits.population import POPULATION_VERSIONS, mixed_population_program, population_program
 from verity.ml.circuits.program import Program, is_input
+from verity.ml.circuits.refs import Affine, Concat, Strided
 from verity.ml.circuits.types import Value
 
 _PRE_CANONICAL = {"program", "query"}
@@ -236,6 +239,60 @@ def in_order(program: Program, query: Mapping[str, Any], n: int) -> bool:
     return us == list(range(n)) and all(u < len(gates) for u in us)
 
 
-__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "in_order", "mixed_population_program", "partition",
+def _reads(refs: Any) -> Iterator[tuple[int, int, int]]:
+    """`(node, lo, hi)` per run of root references in `refs`: each leaf of the run is one of leaves `[lo, hi)` of root node
+    `node`'s result. A strided run is taken at its span."""
+    if not refs.count:
+        return
+    if isinstance(refs, Concat):
+        for p in refs.parts:
+            yield from _reads(p)
+    elif isinstance(refs, Affine):
+        if refs.space == "n":
+            yield refs.idx, refs.base, refs.base + refs.count
+    elif isinstance(refs, Strided):
+        if refs.space == "n":
+            q, r = divmod(refs.count - 1, refs.inner)
+            corners = [(0, 0), (0, min(refs.inner, refs.count) - 1), (q, 0), (q, r), *([(q - 1, refs.inner - 1)] if q else [])]
+            at = [refs.base + a * refs.outer_stride + b * refs.inner_stride for a, b in corners]
+            yield refs.idx, min(at), max(at) + 1
+    else:
+        yield from ((i, j, j + 1) for s, i, j in refs if s == "n")
+
+
+def fanout(program: Program, query: Mapping[str, Any]) -> int:
+    """F, the fan-out of a template query's partition of `program`: the most proof blocks one group holds, two proof blocks
+    joined when one reads part of the other's result and the groups closed under joining. F is 1 when every proof block is
+    closed, reading only Input nodes; the requests a group's proof blocks serve then read in no other group's, so a served
+    cap of S bits per proof block bounds each group's served bits by F S (the capped form at N = F, `plancheck.two`'s
+    `fanout`). A batch member reads its own share of each argument (`cut.member_refs`), a strided read is taken at its span,
+    and the walk reads the root's references, never its gates. `QueryRefused` for a query other than a template query."""
+    part = evaluate(program, query)
+    if not isinstance(part, PO.TemplatePartition):
+        raise QueryRefused(f"fan-out is a template query's, not {query.get('name')}'s", {"query": dict(query)})
+    nodes = program.root.body.nodes
+    first = {k: lo for k, _t, lo, _n in part.ranges}
+    parent = list(range(part.population))
+
+    def group(u: int) -> int:
+        while parent[u] != u:
+            parent[u] = parent[parent[u]]
+            u = parent[u]
+        return u
+
+    for k, _t, lo, n in part.ranges:
+        node = nodes[k]
+        axes = node.axes if node.form == "batch" else (None,) * len(node.args)
+        for m in range(n):
+            for a, ax in zip(node.args, axes):
+                for i, a_lo, a_hi in _reads(member_refs(a, ax, m) if node.form == "batch" else a.refs):
+                    if i in first:
+                        w = nodes[i].fn.out_leaves
+                        for v in range(first[i] + a_lo // w, first[i] + (a_hi - 1) // w + 1):
+                            parent[group(v)] = group(lo + m)
+    return max(Counter(group(u) for u in range(part.population)).values())
+
+
+__all__ = ["template_id", "FORMAT", "QueryRefused", "digest", "evaluate", "fanout", "in_order", "mixed_population_program", "partition",
            "POPULATION_VERSIONS", "population_program", "program_digest", "program_sha512", "ranges", "strata", "template_instance_query",
            "template_instances_query", "unit_gates", "units", "QUERY_X"]
