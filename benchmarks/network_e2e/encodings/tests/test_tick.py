@@ -350,7 +350,7 @@ def test_the_table_reads_a_tick_trace_on_its_own_buckets(tmp_path):
     tr, rec, _ = V._trace(str(d), (EOS,))
     assert tr.releases.tick.bucket_us == 250_000
     assert [q.end for q in rec.requests] == [b - a[0] for b in a]
-    with pytest.raises(V.V1Error, match="250000 µs"):
+    with pytest.raises(V.AdviceCodeError, match="250000 µs"):
         V.record_of(tr, (EOS,))
 
 
