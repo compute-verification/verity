@@ -25,13 +25,13 @@ KNOWN = {
     ("tools/verity/check/suites.py", "worktree", "git add -A"): "ci: names the step that failed, advises nothing",
     ("tools/verity/check/suites.py", "changed_base", "research run"): "ci: names where the tree came from, advises nothing",
     ("tools/verity/check/suites.py", "main", "research run --on"): "ci: a tree outside git; untested",
-    ("tools/verity/check/suites.py", "main", "uv run tools/verity/check/suites.py"):
-        "ci: in a fresh tree, whose .venv holds only research, this is the refused command itself",
+    ("tools/verity/check/suites.py", "main", "X && uv run tools/verity/check/suites.py"):
+        "ci: syncs the tree's own environment before running there; no test runs it from the refused state",
     ("tools/verity/check/check.py", "fixtures_only", "research data export"): "ci: needs the store's write key; untested",
     ("tools/verity/check/check.py", "main", "research run"): "ci: names the launcher, advises nothing",
     ("tools/verity/check/check.py", "main", "check.py --record --cc-records --on M"): "ci: untested",
-    ("tools/verity/check/check.py", "main", "uv run --extra torch-cpu python tools/verity/check/check.py"):
-        "ci: installs the dev group, not every member, so a fresh tree refuses it again",
+    ("tools/verity/check/check.py", "main", "X && uv run --extra torch-cpu python tools/verity/check/check.py"):
+        "ci: syncs the tree's own environment before running there; no test runs it from the refused state",
     ("tools/verity/check/slot.py", "main", "research run --pool NAME"): "ci: untested",
     ("tools/verity/check/slot.py", "main", "check.py --slots"): "ci: lists the slots; untested",
 }
