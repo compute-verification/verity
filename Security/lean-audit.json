@@ -278,10 +278,12 @@
   },
   "NetTiming.CarriedRoots": {
    "owner": "@proofs",
+   "digest": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
    "why": "A scope: rows that every run accepts from a valid run have, at each run, the opened row's root the record rule names, the previous run's closing root or the empty pool's; each run's check of its roots and the record rule's chained roots give it with no probability."
   },
   "NetTiming.CheckedClosing": {
    "owner": "@proofs",
+   "digest": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
    "why": "A scope: an opened row costs no advice bits only where the previous run's check pins its closing row, a valid run's closing row a function of its inputs, as CheckedUnique pins its checked inputs; the deployed check's honest witness concludes it."
   },
   "NetTiming.CheckedUnique": {
@@ -317,6 +319,7 @@
   },
   "NetTiming.PeriodLeaksCarried": {
    "owner": "@proofs",
+   "digest": "c12a6f62df4f753d7747e2fda7590a7841d3b587e77be0e6d707d48a4596339e",
    "why": "The layer below's guarantee at each run: the leak relation with checked inputs and the carried rows (LeakAtCarried) at the run's faulty set, which a live SampledLeakChecked over the carried pool would give."
   },
   "NetTiming.PeriodLeaksChecked": {
@@ -5251,6 +5254,12 @@
    "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique) and a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check) (CIR-190, open to 30 Nov)",
    "unfolded_hash": "b47d65cccae8757ba6d024a7f98e4df2611ef0c9227e527821200452ff1733fa"
   },
+  "NetTiming.SecurityProofs.PooledLeakCarried": {
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514",
+   "missing": "honest",
+   "why": "honest instance needs a deployed check that pins its checked inputs (CheckedUnique), its closing row (CheckedClosing) and its rows' roots (CarriedRoots, from each run's root check and R7), with a proved bound on its miss (CheckedWitness, MemCheck_v1's offline check run every run on its own live coins) (CIR-190)"
+  },
   "NetTiming.SecurityProofs.SampledAuditAccepted": {
    "type_hash": "debf2afa03a59d1d37dd902e4a99f3a2a5f9eb834c327dad8c7a697a6b101048",
    "unfolded_hash": "4c87d753bb6cc7f2adc8f9b7e770f4c9f5fa03c0ad4c56679f1269df582c2bb3"
@@ -5658,9 +5667,9 @@
    "why": "P2's pins and its cost model read only the game, the models and the parameters"
   },
   "Definitions.NetworkCertifier": {
-   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims"],
+   "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.Claims", "Definitions.Hash"],
    "except": [],
-   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another and the claims' definitions (the sampled audit reads sampling's vocabulary)"
+   "why": "the protocol's definitions, and the statements under its Guarantees/, are trusted text: they import no assumption or proof, only Mathlib, one another, the claims' definitions (the sampled audit reads sampling's vocabulary) and the hash area's (a carried pool's rows and their sha512/row-seg/v1 roots)"
   },
   "Definitions.NetworkCertifier.Assumptions": {
    "imports": ["Mathlib", "Definitions.NetworkCertifier", "Definitions.NetworkCertifier.Assumptions"],
@@ -18467,7 +18476,25 @@
    "unfolded_hash": "2eec6c9336acfa7539b2c9eecfa82c9810701d4024426048b0116374af511561"
   },
   "NetTiming.SecurityProofs.PooledLeakCarried": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": ["NetTiming.SecurityProofs.PooledLeakCarried : NetTiming.Guarantees.PooledLeakCarried"],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [
+     "NetTiming.CarriedRoots",
+     "NetTiming.CheckedClosing",
+     "NetTiming.CheckedUnique",
+     "NetTiming.PeriodAdaptive",
+     "NetTiming.PeriodChannel",
+     "NetTiming.PeriodEscapes",
+     "NetTiming.PeriodLeaksCarried"
+    ],
+    "open": ["Verity.Assumptions.TrustedHost"],
+    "reads": []
+   },
+   "type_hash": "a9ff871790645fc89b956cc559d9b28f1f9de6812547963a09e367a883f7c74f",
+   "unfolded_hash": "51456ceabbd0e67ea3f09d43eda0cb107cfae69d09534b46e9cb3c3d59040514"
   },
   "NetTiming.SecurityProofs.PooledLeakChecked": {
    "owner": "@proofs",
@@ -18541,7 +18568,35 @@
    "unfolded_hash": "2c384cc47aaf9e3d3fa03bd997741ac26fe8b0cbb64db6031fe1ad62563fe22d"
   },
   "NetTiming.Witness.PooledLeakCarried_nontrivial": {
-   "owner": "@proofs"
+   "owner": "@proofs",
+   "signature": [
+    "NetTiming.Witness.PooledLeakCarried_nontrivial :",
+    "  Not",
+    "    (Real.instLE.le",
+    "      (Claims.Pr fun x =>",
+    "        And (∀ (x : Fin 1), True)",
+    "          (Not",
+    "            (NetTiming.PooledGoodCarried (fun x => NetTiming.Witness.notLay) (fun x => 1)",
+    "              (fun x => Finset.instEmptyCollection.emptyCollection) (fun x x_1 => True) (fun x => List.nil)",
+    "              (fun x => List.nil) 1 (fun x => NetTiming.Witness.notStmt) (fun x => NetTiming.Witness.notPart)",
+    "              (fun x x_1 => Bool.false) (fun x x_1 x_2 x_3 => List.cons Bool.false List.nil) (fun x => Bool.false)",
+    "              (fun x => List.nil) 1 (fun x => Finset.instEmptyCollection.emptyCollection) fun x => List.nil)))",
+    "      (instHAdd.hAdd",
+    "        (instHAdd.hAdd (instHAdd.hAdd (instHPow.hPow (instHSub.hSub 1 1) 1) (Finset.univ.sum fun x => 0))",
+    "          (Finset.univ.sum fun x => 0))",
+    "        (Finset.univ.sum fun i =>",
+    "          Claims.Pr fun x =>",
+    "            NetTiming.PoolColl (fun x x_1 => 0) (fun x => Bool.false) (fun x => List.nil) (fun x => List.nil)",
+    "              (fun x => List.nil) i)))"
+   ],
+   "assumptions": [],
+   "premises": {
+    "assumptions": [],
+    "domain": [],
+    "open": [],
+    "reads": []
+   },
+   "type_hash": "8552f1fdf8e329fcaf2e915e99fd5039e0ac8d07fdbc1e4e29a453cf68d92c1c"
   },
   "NetTiming.Witness.PooledLeakChecked_nontrivial": {
    "owner": "@proofs",
@@ -35222,6 +35277,21 @@
     "NetTiming.Regenerates": "0d433e5271a1ae85c0d7fde2eacabd9de68f97a6760809219bdf1ab0ba5234ec"
    }
   },
+  "Definitions.NetworkCertifier.Carried": {
+   "digest": "c87acfac8685c190cffe62d90f9532006f6795a73a272ea7b141539def1bf3d1",
+   "definitions": {
+    "NetTiming.AcceptedCarried": "df9c8b60a2e4ef1965f06a821aa3066df1da64625065a2a4c403af2d096368c4",
+    "NetTiming.CarriedRoots": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
+    "NetTiming.CheckedClosing": "6d7f4517a46cba2423aba508a5782dbe2b791d9e36dc027f209eed6ccbf10c0b",
+    "NetTiming.LeakAtCarried": "c185ff749d54d82c552c9ace294749da80b4006dfddbe3e1633c6c82765becb2",
+    "NetTiming.PeriodLeaksCarried": "c12a6f62df4f753d7747e2fda7590a7841d3b587e77be0e6d707d48a4596339e",
+    "NetTiming.PoolChained": "db1790a4b6e9d192443e9132982666d817be1aa8cd673d04334ecf17d0ec8c24",
+    "NetTiming.PoolColl": "0e207c80813d8807fbd1c34ea4f9063b1d51e6f1e821dee51af8e5f73b9fa18d",
+    "NetTiming.PooledGoodCarried": "db76677f651d89b88b044045daa6f2a54a0217e6f7cda5fbc9195eb6153ec2c3",
+    "NetTiming.poolOpen": "4874fc3cdb655140ed8eba5e750cc319bc10f261a59ae320f0f577174edd7b21",
+    "NetTiming.runsBefore": "1eb148a4221b22658388804a4f46ba808757e4ba57dfa482fc80fd56ddae1ba4"
+   }
+  },
   "Definitions.NetworkCertifier.Checked": {
    "digest": "8792acd167858d8795313d78036c226d662f2253b5238916bf147b289ed256e7",
    "definitions": {
@@ -35279,6 +35349,12 @@
     "NetTiming.Guarantees.EncardIngressObsDecodableLeContentsPerWindow": "460710ffcbbc13b8b6879879325220fafab040ee4505a620af6d8bf2e8c41664",
     "NetTiming.Guarantees.EncardIngressObsDecodableLePerWindow": "5b1bd0d5f8bb2e14913a96a64d8191d46d6a171723f46c3acb5c806c54e8cfe7",
     "NetTiming.Guarantees.ExpectedRowCausal": "85dd5fa499a040c042f939c9e4fd249e9375914a67193e9ea5cde5b7560689f3"
+   }
+  },
+  "Definitions.NetworkCertifier.Guarantees.Carried": {
+   "digest": "64a021032aefc91106b22931e9e4a10386d1338cb2a2a376fbdbe920fb69fe70",
+   "definitions": {
+    "NetTiming.Guarantees.PooledLeakCarried": "9cca7fdbcf4b4354aa9a40c8716024e85b0f674851beabf264c17c3d0129b037"
    }
   },
   "Definitions.NetworkCertifier.Guarantees.Checked": {
