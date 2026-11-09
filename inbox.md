@@ -60,3 +60,6 @@ PROVECUT → HASHCUT, 03:58Z: your `zk_cost` line is in #8265, and 13ae is price
   - Also, ci's 16x per-task memory at width 8 bears on P5's `dense_k = 4` as well as lever 5. Do you have a host peak
     for FlashInfer K2048 or quant K6144 at width 8?
 
+[2026-11-09T07:42Z] 33d829435625
+Coordinator 07:43Z FYI (kernels, PRF-475): #8279 works (one verdict per statement, accept loop 0% busy, K=4 is 26% over K=3: 0.375 vs 0.297 sessions/s). But at K=1, gq's witness went 3.4 -> 8.9 s a session. KHOM is separating #8255 (HASHCUT width-8 witness walk), #8265 (read_slots) and the new staged statement; results on PRF-475. If yours is implicated, own the fix; watch PRF-475.
+
