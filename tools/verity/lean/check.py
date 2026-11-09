@@ -4224,6 +4224,10 @@ SAMPLED_OUTPUTS = ("olean", "ilean", "olean.server", "olean.private", "ir", "ir.
 SAMPLED_BESIDE = ("trace", "setup.json", *(f"{o}.hash" for o in SAMPLED_OUTPUTS))
 #: the outputs that keep the path of the module's source (a message's), compared as object graphs when their bytes differ
 PATH_PARTS = ("olean.server", "olean.private")
+#: (its package's build, module) of each module a build of this process compiled (`sampled_recompile`): a dependent's
+#: build reuses what its path dependencies' audits compiled, which without the sandbox is as cold as its own
+RUN_COMPILED: set[tuple[Path, str]] = set()
+_RUN_COMPILED_LOCK = threading.Lock()
 
 
 def sampled_file(mk, build: Path, mod: str, ext: str) -> Path:
@@ -4254,12 +4258,17 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     one object graph but for strings that are absolute paths ending in the module's source path (`olean_graph.differs`):
     Lean keeps a message's file in `olean.server`, so a build at another path differs there. A failure names the module
     and its file, and keeps the recompile's outputs in the upper layers; a pass removes them. Without the sandbox there is
-    no overlay, so nothing is recompiled and the report's `unsampled` says so. The audit prints the sample under its line
-    (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories (`writing`), so no
-    build changes an overlay's lower layer while it is mounted."""
+    no overlay, so nothing is recompiled and the report's `unsampled` says so; a module of the population that no build of
+    this process compiled (`RUN_COMPILED`) was restored or kept, which nothing would check, so it fails the audit, and only
+    a cold run passes there (`lean_audit.sandboxed`'s probe can pass where this one fails). The audit prints the sample
+    under its line (`sampled:`), so a run records what it checked. The caller holds the build's `.lake` directories
+    (`writing`), so no build changes an overlay's lower layer while it is mounted."""
     mk, og = sibling("module_keys"), sibling("olean_graph")
     s = time.monotonic()
     keyed = mk.keys(pkg, roots)
+    with _RUN_COMPILED_LOCK:
+        RUN_COMPILED.update((k.package.build().resolve(), m) for m, k in keyed.items() if m in built)
+        cold = set(RUN_COMPILED)
     pop = sorted(m for m, k in keyed.items()
                  if m not in built and sampled_file(mk, k.package.build(), m, "trace").is_file())
     sample = sorted(SAMPLE_RNG.sample(pop, min(len(pop), max(SAMPLE_MIN, math.ceil(SAMPLE_SHARE * len(pop))))))
@@ -4269,6 +4278,13 @@ def sampled_recompile(pkg: Path, roots: list[str], work: Path, built: set[str], 
     if sample and not sandboxed():
         rep["modules"], rep["unsampled"] = [], ("no sandbox here, and the recompile runs only in an overlay in the "
                                                 "sandbox's mount namespace, never in the build other packages read")
+        if warm := [m for m in pop if (keyed[m].package.build().resolve(), m) not in cold]:
+            rep["seconds"] = round(time.monotonic() - s, 1)
+            return [Failure("sampled", None, (
+                f"sampled: the sandbox probe failed here (`sandboxed`), yet {len(warm)} of the {len(pop)} modules "
+                f"this build didn't compile were restored or kept, not compiled by a build of this run "
+                f"({', '.join(warm[:5])}{', ...' if len(warm) > 5 else ''}), and without the sandbox nothing checks "
+                f"them against their source: rerun on a node whose builds are sandboxed, or after fixing the probe"))], rep
     if not rep["modules"]:
         rep["seconds"] = round(time.monotonic() - s, 1)
         return [], rep
