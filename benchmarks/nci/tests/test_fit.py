@@ -28,7 +28,7 @@ def test_n_star_depends_on_the_target_not_on_the_loss_floor():
 
 
 def test_reach_at_sequence_threads_kimi_k2():
-    """The falsification test of the conjectures `Nci.Assumptions.Reach` and `ReachSlots` over all recipes: one sequence
+    """The falsification test of the conjectures `InferenceOnly.Assumptions.Reach` and `ReachSlots` over all recipes: one sequence
     of Kimi K2's pretraining, at its shortest length, uses at least N* weights in its counted multiplications (87.6B,
     the Besiroglu refit at a 405B-class target) when its tokens' routed slots spread over the experts as kappa.py routes
     them, 8 of 384 a token, load-balanced; one token uses fewer, so Reach is false at token threads, the threading the
@@ -49,7 +49,7 @@ def test_reach_at_sequence_threads_kimi_k2():
     assert (S, fewest) == (4096, 30) and fewest <= reached
     entry = json.loads((ROOT / "Security" / "lean-audit.json").read_text())["shape"]["conjectures"]
     test = f"benchmarks/nci/tests/{Path(__file__).name}::test_reach_at_sequence_threads_kimi_k2"
-    for name in ("Nci.Assumptions.Reach", "Nci.Assumptions.ReachSlots"):
+    for name in ("InferenceOnly.Assumptions.Reach", "InferenceOnly.Assumptions.ReachSlots"):
         assert entry[name] | {"why": ""} == {"status": "open", "test": test, "why": ""}
 
 

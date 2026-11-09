@@ -10,10 +10,10 @@ backward.proofsInPublic = true
 name = "flock_verifier"
 path = "../../../service/flock"
 
-# The period's check reads a scan's layout off its description as NCI's check does (`NciCheck.Desc`'s layout checks).
+# The period's check reads a scan's layout off its description as NCI's check does (`InferenceOnlyCheck.Desc`'s layout checks).
 [[require]]
-name = "nci_check"
-path = "../nci/lean"
+name = "inference_only_check"
+path = "../inference_only/lean"
 
 # The check is a core protocol, reads the Program's grid from the certifier program (`expectedRow`, Σ_sync) and verifies
 # certificates with the LMS port.

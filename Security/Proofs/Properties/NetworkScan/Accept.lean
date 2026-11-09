@@ -38,7 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
-import Proofs.Properties.Nci.BodiesOk.Basic
+import Proofs.Properties.InferenceOnly.BodiesOk.Basic
 import Std.Tactic.BVDecide.Normalize.Prop
 
 /-!
@@ -56,7 +56,7 @@ its first argument one input node's leaves), and the Program topological (`Prog.
 namespace Properties.NetworkScan.Fits
 
 open Flock.Program (Prog Node Part Ty Defn)
-open NciCheck.Properties.SecurityProofs
+open InferenceOnlyCheck.Properties.SecurityProofs
 open NetworkCheck.Period
 
 /-- Root node `k`. -/
@@ -84,7 +84,7 @@ def Ingress (P : Prog) (s : Schedule) (km : ℕ × ℕ) : Prop :=
 
 /-- **What an accepted scan's Program is**, as `NetTiming.BoundaryGates.Fits`'s first two parts read it. -/
 structure Accepted (P : Prog) (s : Schedule) : Prop where
-  laid : NciCheck.Desc.rootLaidOut P = true ∧ NciCheck.Desc.inputsAtRoot P = true ∧ NciCheck.Desc.walkable P = true
+  laid : InferenceOnlyCheck.Desc.rootLaidOut P = true ∧ InferenceOnlyCheck.Desc.inputsAtRoot P = true ∧ InferenceOnlyCheck.Desc.walkable P = true
   egress_mem : egressNode P ∈ templateNodes P
   egress_batch : (node P (egressNode P)).form = .batch ∧ (node P (egressNode P)).n = s.window
   egress_ret : (callee P (egressNode P)).ret = .tuple #[.array outBits (.value 1), rowTy s]
