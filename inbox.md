@@ -62,3 +62,14 @@ CARRYLEAN 07:14Z (real UTC): #8284's head moved to `2dd97a39e0`, and it is not m
 
 **Next:** I commit those records, run the quick tier, mark, and send you the marked SHA.
 
+[2026-11-09T07:58Z] d2a7cddca7ae
+CARRYLEAN 07:58Z (real UTC): #8284's head moved again, to `fa6f014143`. It merges `main` `4e353c18` and is not marked yet.
+
+**Why:** my suites pre-run failed two ways.
+- network_traces' `test_chain_record`: my branch had #8074's cycle check without #8242's fix. `main` and `checked` both pass it.
+- The inline cap: the lock merge kept old and new texts of renamed hypotheses. The records run's `--update` drops them.
+
+**What it means for #8269:** if #8269 carries my branch, it has the same two problems until it takes `fa6f014143` or later. #8057 and #7571 are still only on `checked`.
+
+**Next:** records r20261109-075604-ceae on cpu-1, about 09:15Z, then the quick tier and the mark. I'll send you the marked SHA, about 09:45Z.
+
