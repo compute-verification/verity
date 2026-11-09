@@ -19029,3 +19029,25 @@ They can't come from `Ref`'s current fields (`zk`, `tmpl`, `scope`), and `readsO
 - **TWOVERIFY's `ScopeDesc`** doesn't overlap anything I'm proving.
 
 When `93b1` passes, I commit the records with the re-dates, mark #8309, and put the land ask here. I'm ending this turn to wait on `93b1`, ETA about 17:55Z.
+
+## TWOINSTANCE, 17:12Z: one table at every registration; the instance's runs pinned down; link and own leaves at the instance; #8363 re-marked at 947b79309a
+
+- **`CheckedRun.count_le_one`** (new `OneTable.lean`, general): `r.Ok h → r.ins.read.I.count ≤ 1` at every registration.
+  - `sessionOk` holds the session's table shape to the template's reference statement's, `templateOk` holds that to one table, and `setupTables` gives `max 1 count`.
+  - It discharges every `hc1` hypothesis, TWOOPENS's included. At the instance, `counted_held` now holds at every accepted run.
+- **Where every accepted run of the instance stands** (new `InstanceSites.lean`, 10 theorems, try `r20261109-170423-d61c` passed):
+  - replay sample `#[0]` (`sample_ok`);
+  - `ρ = 0` and `u < 2`;
+  - the unit's part is `⟨R.name, 0, 2⟩`;
+  - no wires.
+- **`ReadsRegistered`'s last conjunct (the slot's leaf is the read's position) at the instance:**
+  - `leafAt_link`: at a linked read, at a slot with units 0, stride 0 and position 0. Round 2's row is `ρ·(leaves/M)` and `ρ = 0`, so it holds whatever population `M` the boundary record states. This avoids the unpinned-population gap at the instance; in general that gap is still open.
+  - `leafAt_own`: at an own-port read, at a slot with units 0, stride 2 and position = the unit, given that round 2 accepts only the own arm at that port. That premise should follow from `refReads`, not yet proved.
+- **Finding for TWOOPENS, sent:** the `harm` premise of `harm_own`, `harm_wire`, `harm_link` and `leafAt_reg` quantifies over every entry with `ReadFields`, which doesn't state the entry's value. So no registration meets it: an entry with value `null` gets `armOf = none`. The fix is to add that entry's `readOk`, which `regEntry` already supplies. My two leaf lemmas go through `regEntry` directly for that reason.
+- **Verified:**
+  - after merging the integration branch (`cd0a610760`), `InstanceRun`'s try passed, 22 theorems (`r20261109-163513-5295`);
+  - the whole-Flock-area try after that merge is still running on cpu-1 (`r20261109-163513-647c`).
+- **Records:** `r20261109-171019-9496` (cpu-5) is running at the head, with TWOOPENS's `compile_time` fix merged in.
+- **Land ask:** #8363 is ready at `947b79309a`, still stacked on `cursor/proofs-sessions-onevalue-3e7a`. Drive can't take it until it is retargeted to main after the integration lands, or until TWOOPENS takes the five files.
+- **Side note:** I mistakenly pushed one message to `inbox/bc-3772f5d9-0000-0000-0000-000000000000`, a guessed id. It is a stray branch; I resent the message to TWOVERIFY's real id. Delete the stray branch if you like; I left it rather than push to a branch that isn't mine.
+- **Next:** the rest of `Sites` (`RowAt`, and the reads conjunct's name, port, roots and key facts) once TWOOPENS's site theorem lands; the own arm's premise from `refReads`; then the concrete `Ref` (target Fri 13 Nov).
