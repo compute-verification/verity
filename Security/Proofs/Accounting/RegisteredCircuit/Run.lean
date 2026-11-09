@@ -14,7 +14,7 @@ tile it never queried with probability at most `G·N/2^h` (`pr_guess_family_le`)
 made `k + 1` correct digest queries behind unobtained positions with probability at most
 `2^a·(q_tot/2^96)^(k+1) + δ`: key binding at the steered layout, with the union over the `2^a` summaries inside the
 uniform blocks (`pr_badK_pass_le`). With the rank tail once a window, a session in which some window has rank-poor signs
-or some pass one of the two events costs `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)` (`pr_session_le`).
+or some pass one of the two events costs `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)` (`pr_run_le`).
 -/
 
 @[expose] public section
@@ -128,11 +128,11 @@ every prefix is bounded. -/
 theorem pr_at_pass_le {n P N m ρ h ks G d : ℕ} (w : Fin n) (j : Fin P)
     (F : SketchPrefix n P N m ρ h ks G d → Y → SketchPassCoins N ρ h ks G → Prop) (p : ℝ≥0∞)
     (hF : ∀ c, pr (fun a : Y × SketchPassCoins N ρ h ks G => F c a.1 a.2) ≤ p) :
-    pr (fun x : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) =>
+    pr (fun x : Y × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) =>
       F (SketchPrefix.of x.2 w j) x.1 ((x.2 w).2.1 j)) ≤ p := by
   classical
-  let e : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) ≃
-      (Y × SketchPassCoins N ρ h ks G) × (({v : Fin n // v ≠ w} → SketchWindowCoins P N m ρ h ks G d) ×
+  let e : Y × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) ≃
+      (Y × SketchPassCoins N ρ h ks G) × (({v : Fin n // v ≠ w} → SketchExecutionPhaseCoins P N m ρ h ks G d) ×
         (SketchSigns ks m × ({i : Fin P // i ≠ j} → SketchPassCoins N ρ h ks G) × (Fin d → Fin P × Fin N))) :=
     { toFun := fun x => ((x.1, (Equiv.funSplitAt j _ (Equiv.funSplitAt w _ x.2).1.2.1).1),
         ((Equiv.funSplitAt w _ x.2).2, (Equiv.funSplitAt w _ x.2).1.1,
@@ -145,33 +145,33 @@ theorem pr_at_pass_le {n P N m ρ h ks G d : ℕ} (w : Fin n) (j : Fin P)
   refine Rate.pr_le_of_fiber _ _ fun rest => ?_
   obtain ⟨ws, σ, rj, pd⟩ := rest
   refine (pr_mono fun a ha => ?_).trans (hF ⟨w, fun v => ws ⟨v.1, v.2.ne⟩, σ, j, fun i => rj ⟨i.1, i.2.ne⟩⟩)
-  have hself : (Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+  have hself : (Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws) w =
         (σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd) := by
     simp
-  have hwin : (fun v : {v : Fin n // v < w} => (Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+  have hwin : (fun v : {v : Fin n // v < w} => (Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws) v.1) =
         fun v => ws ⟨v.1, v.2.ne⟩ := by
     funext v
     simp [v.2.ne]
   have hpass : (fun i : {i : Fin P // i < j} =>
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd) :
-        SketchWindowCoins P N m ρ h ks G d).2.1 i.1) = fun i => rj ⟨i.1, i.2.ne⟩ := by
+        SketchExecutionPhaseCoins P N m ρ h ks G d).2.1 i.1) = fun i => rj ⟨i.1, i.2.ne⟩ := by
     funext i
     simp [i.2.ne]
   have hj : (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj) j = a.2 := by simp
-  have h1 : SketchPrefix.of ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+  have h1 : SketchPrefix.of ((Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws)) w j =
         ⟨w, fun v => ws ⟨v.1, v.2.ne⟩, σ, j, fun i => rj ⟨i.1, i.2.ne⟩⟩ := by
     unfold SketchPrefix.of
     rw [hwin, hself, hpass]
-  have h2 : ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+  have h2 : ((Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws) w).2.1 j = a.2 := by
     rw [hself]
     exact hj
-  change F (SketchPrefix.of ((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+  change F (SketchPrefix.of ((Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws)) w j) a.1
-    (((Equiv.funSplitAt w (SketchWindowCoins P N m ρ h ks G d)).symm
+    (((Equiv.funSplitAt w (SketchExecutionPhaseCoins P N m ρ h ks G d)).symm
       ((σ, (Equiv.funSplitAt j (SketchPassCoins N ρ h ks G)).symm (a.2, rj), pd), ws) w).2.1 j) at ha
   rw [h1, h2] at ha
   exact ha
@@ -184,7 +184,7 @@ variable {n P N ρ S L q G T M a : ℕ} {Ω Ca Ch : Type}
 
 /-- Candidate `g` of pass `c.j` of window `c.w`, at the prefix `c` before the pass and the codec and the append coins
 `y`: the device of the session of the summary `steer c y` the pass is told. -/
-abbrev passDev (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
+abbrev passDev (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (c : SketchPrefix n P N 128 ρ 512 16 G 2773) (y : Ω × (Fin T → Ca)) (g : Fin G) :
     Prover N 128 ρ 512 S L q 256 Sector (SketchSigns 16 128) (Fin 16 → ZMod (2 ^ 32)) :=
@@ -192,7 +192,7 @@ abbrev passDev (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
 
 /-- **A guessed tag** at pass `c.j` of window `c.w`, on its store and its coins `pc`: some candidate holds a correct
 tag of a tile it never queried. -/
-abbrev PassGuess (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
+abbrev PassGuess (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector))
     (choose : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (b : Fin T) → ({b' : Fin T // b' < b} → Ca) → Ch)
@@ -205,7 +205,7 @@ abbrev PassGuess (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
 
 /-- **`k + 1` correct digests behind unobtained positions** at pass `c.j` of window `c.w`, on its store and its coins
 `pc`, at signs of rank 12. -/
-abbrev PassBadK (k : ℕ) (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
+abbrev PassBadK (k : ℕ) (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector))
     (choose : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (b : Fin T) → ({b' : Fin T // b' < b} → Ca) → Ch)
@@ -228,7 +228,7 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
     (layout : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (hslot : Assumptions.SteeredLayout layout steer)
-    (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
+    (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (hq : ∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) qtot)
     (c : SketchPrefix n P N 128 ρ 512 16 G 2773) :
     pr (fun z : (Ω × (Fin T → Ca)) × SketchPassCoins N ρ 512 16 G =>
@@ -269,14 +269,14 @@ theorem pr_badK_pass_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {δ : ℝ≥0�
 correct digests behind unobtained positions, with probability at most
 `n·ε + n·P·G·N/2^512 + n·P·(2^a·(q_tot/2^96)^(k+1) + δ)`: the rank tail once a window, and at each pass the guess at
 every store and the slack's price on the steered layout, each at the prefix before the pass. -/
-theorem pr_session_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {ε δ : ℝ≥0∞}
+theorem pr_run_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {ε δ : ℝ≥0∞}
     {enc : Ω → Fin T → Ch → (Fin T → Ca) → Fin M → (Fin 128 → Sector)}
     (hRank : Assumptions.SketchRank 16 128 12 ε) (hKB : Assumptions.KeyBinding T M δ enc)
     (choose : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω → (b : Fin T) → ({b' : Fin T // b' < b} → Ca) → Ch)
     (layout : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (steer : SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (hslot : Assumptions.SteeredLayout layout steer)
-    (A : SketchSummarySession a n P N 128 ρ 512 S L q 16 G 2773)
+    (A : SketchSummaryRun a n P N 128 ρ 512 S L q 16 G 2773)
     (hq : ∀ s w η j pre, Assumptions.SketchHashBudget (((A.session s).window w η).device j pre) qtot) :
     pr (fun x : StackedCoins Ω Ca T n P N ρ G => ∃ w, ¬ RankGood 12 (x.2 w).1 ∨
       ∃ j, PassGuess A steer enc choose layout (SketchPrefix.of x.2 w j) x.1 ((x.2 w).2.1 j) ∨
@@ -289,7 +289,7 @@ theorem pr_session_le [Fintype Ω] [Fintype Ca] {k qtot : ℕ} {ε δ : ℝ≥0�
         PassBadK k A steer enc choose layout (SketchPrefix.of x.2 w j) x.1 ((x.2 w).2.1 j)) ≤
       ε + ∑ _j : Fin P, ((G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (2 ^ a * ((qtot : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ)) :=
-    fun w => (pr_or_le _ _).trans (add_le_add (SketchDeployedSession.pr_rank_le 12 ε hRank w)
+    fun w => (pr_or_le _ _).trans (add_le_add (SketchDeployedRun.pr_rank_le 12 ε hRank w)
       ((pr_exists_le _).trans (Finset.sum_le_sum fun j _ => (pr_or_le _ _).trans (add_le_add
         (pr_at_pass_le w j (PassGuess A steer enc choose layout) _ fun c =>
           pr_guess_family_le (fun y g => passDev A steer c y g) c.signs

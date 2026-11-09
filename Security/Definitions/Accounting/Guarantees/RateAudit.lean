@@ -18,7 +18,7 @@ registry names, for a deployed device, the measurement or conjecture that carrie
 * `RateAudit`: in one window, an accepted device's footprint (residency) and ingress (bandwidth) reach the floor except
   with probability `((k − 1)/N)^s + s/2^h + C(q, k)/2^λ`; its honest device is a lemma, `RateHonest`
   (`Security/Proofs/Accounting/Lemmas/RateAudit.lean`).
-* `RateAuditWindows`: over `n` windows on one store, the time-averaged footprint.
+* `RateAuditExecutionPhases`: over `n` windows on one store, the time-averaged footprint.
 * `RateOfAudit`: in a joint run, the bandwidth account's reads, with the rebuilds charged as compute, so a compute
   account that did `W` of work leaves `F·T − W` for them.
 * `RateAuditInteractiveRO`: `RateAudit`'s bound for a chip that sends to side sources answering any function of the
@@ -103,11 +103,11 @@ number of accepted windows below it is at most `n·ε`.
 **The reading.** At `m = 1`: the average footprint over the windows is at least `RateAudit`'s `(1 − μ)·|E|` except with
 probability `n·ε`. At `m = δ·n`: it is at least `(1 − δ)·(1 − μ)·|E|` except with probability `ε/δ`, whatever `n` is,
 so a time average at a slack of `δ` costs no union over the windows. Proof:
-`Accounting.SecurityProofs.RateAuditWindows`, from `RateAudit` at each window, at each value of the other windows'
+`Accounting.SecurityProofs.RateAuditExecutionPhases`, from `RateAudit` at each window, at each value of the other windows'
 coins.
 
 Frozen (no-function, hash): like `RateAudit`, a bound in the random-oracle model over abstract chip programs. -/
-def RateAuditWindows : Prop :=
+def RateAuditExecutionPhases : Prop :=
   ∀ (n N b h ρ S L q s k F cTag cEnc lam m : ℕ) (A : Devices n N b h ρ S L q s),
     (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>
         (∀ i, (A.dev i x.2).Accepts x.1 (x.2 i).1 (x.2 i).2.1 (x.2 i).2.2 ∧

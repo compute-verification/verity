@@ -32,7 +32,7 @@ completing.
 * `SketchBound δ`: except with probability `δ`, a correct receipt of a registered block was computed while the block
   was in node memory or on a chip during its pass: the receipt's sketch binds the whole block. It is derived from a
   model of the receipts' sketch (`Accounting.Remote.Sketch`) at every parameter
-  (`Accounting.Guarantees.Remote.SketchBoundSession`) and at the deployed receipts, at `timing.sketch_failure`'s `δ`
+  (`Accounting.Guarantees.Remote.SketchBoundRun`) and at the deployed receipts, at `timing.sketch_failure`'s `δ`
   (`Accounting.Guarantees.Remote.SketchBoundDeployed`), under the model's own premises
   (`Accounting.Remote.Sketch.Assumptions`) and the named random-oracle premise on SHA-512's keys
   (`Accounting.Assumptions.SketchHashRandom`).

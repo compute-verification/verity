@@ -49,7 +49,7 @@ import Proofs.Pous.Prob
 * `Sampled d̄`: an accepting run whose correct receipts cover less than `(1 − d̄)·n·P·N·b` bits holds at most
   `⌊(1 − d̄)·n·P·N⌋` correct receipts, the monitoring period's sample (`DeployedSession.pr_samples_pooled_le`).
 * `Paid`: a run whose correct receipts' words exceed its payments and slacks has a window whose do
-  (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedWindow.pr_unpaid_sample_le`) covers.
+  (`DeployedSession.pr_unpaid_le`), which each window's bound (`DeployedExecutionPhase.pr_unpaid_sample_le`) covers.
 
 `Accounting.SecurityProofs.Remote.Conservation` composes them; the run's payments other than its tier reads are the
 `n·P` passes' `S + (L − ρ) + X` bits, so its `(1 − d̄ − λ)·C` of payments are `(1 − (d̄ + γ))·C` of tier reads, with
@@ -80,15 +80,15 @@ theorem pouw_pr_le {α : Type} [Fintype α] {Q : α → Prop} {B : ℝ≥0∞} (
 
 /-- The run's tier reads are the session's windows' reads. -/
 theorem ofDeployed_reads (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
-    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).reads x = ∑ w, (A.win w x.2).reads tier x.1 (x.2 w).1 := by
-  simp only [Run.reads, Run.ofDeployed, DeployedWindow.reads]
+  simp only [Run.reads, Run.ofDeployed, DeployedExecutionPhase.reads]
   rw [Finset.sum_comm]
   exact Finset.sum_congr rfl fun w _ => Finset.sum_comm
 
 /-- The run's payments at every location: its tier reads and the `n·P` passes' `L − ρ`, `S` and `X` bits. -/
 theorem ofDeployed_paid (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X : ℕ)
-    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
+    (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d)) :
     (Run.ofDeployed A tier X Nd a).paid x =
       (Run.ofDeployed A tier X Nd a).reads x + n * P * (L - ρ) + n * P * S + n * P * X := by
   simp only [Run.paid]
@@ -170,32 +170,32 @@ theorem ofDeployed_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (
   have e : n * (P * (S + (L - ρ) + X + lam)) = n * P * (L - ρ) + n * P * S + n * P * X + n * P * lam := by ring
   omega
 
-theorem roErr_toReal_window (P G N h q lam : ℕ) :
+theorem roErr_toReal_executionPhase (P G N h q lam : ℕ) :
     ((P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam))).toReal =
       (P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam) := by
   have := roErr_toReal 1 P G N h q lam
   simpa using this
 
 /-- Window `w`'s run's tier reads are the window's reads. -/
-theorem ofDeployedWindow_reads (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
-    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
-    (Run.ofDeployedWindow A w tier X Nd a).reads x = (A.win w x.2).reads tier x.1 (x.2 w).1 := by
-  simp only [Run.reads, Run.ofDeployedWindow, DeployedWindow.reads]
+theorem ofDeployedExecutionPhase_reads (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d)) :
+    (Run.ofDeployedExecutionPhase A w tier X Nd a).reads x = (A.win w x.2).reads tier x.1 (x.2 w).1 := by
+  simp only [Run.reads, Run.ofDeployedExecutionPhase, DeployedExecutionPhase.reads]
   exact Finset.sum_comm
 
 /-- Window `w`'s run's payments at every location: its tier reads and the `P` passes' `L − ρ`, `S` and `X` bits. -/
-theorem ofDeployedWindow_paid (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
-    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → WindowCoins P N b h ρ r s d)) :
-    (Run.ofDeployedWindow A w tier X Nd a).paid x =
-      (Run.ofDeployedWindow A w tier X Nd a).reads x + P * (L - ρ) + P * S + P * X := by
+theorem ofDeployedExecutionPhase_paid (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+    (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d)) :
+    (Run.ofDeployedExecutionPhase A w tier X Nd a).paid x =
+      (Run.ofDeployedExecutionPhase A w tier X Nd a).reads x + P * (L - ρ) + P * S + P * X := by
   simp only [Run.paid]
-  simp [Run.ofDeployedWindow]
+  simp [Run.ofDeployedExecutionPhase]
 
 /-- **Sampled** for window `w`'s run, at the window's sample. -/
-theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedExecutionPhase_sampled (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (X : ℕ) (Nd : Node (Fin τ)) (a : Audit) (dw : ℝ) (hP : 0 < P) (hN : 0 < N) (hb : 0 < b)
     (hdw : dw ≤ 1) (hab : a.b = b) (hC : Nd.declared a.T = P * N * b) :
-    (Run.ofDeployedWindow A w tier X Nd a).Sampled dw ((1 - dw / n) ^ (d * n)) := by
+    (Run.ofDeployedExecutionPhase A w tier X Nd a).Sampled dw ((1 - dw / n) ^ (d * n)) := by
   classical
   have hn : 0 < n := w.pos
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
@@ -213,19 +213,19 @@ theorem ofDeployedWindow_sampled (A : DeployedSession n P N b h ρ S L q r s d G
   refine pouw_pr_le ((Bandwidth.pr_mono fun x hx => ?_).trans hB) hT
   obtain ⟨hacc, hlt⟩ := hx
   refine ⟨hacc, w, Nat.le_floor ?_⟩
-  simp only [Run.ofDeployedWindow, hab, hC, not_le] at hlt
+  simp only [Run.ofDeployedExecutionPhase, hab, hC, not_le] at hlt
   push_cast at hlt ⊢
   have : (((A.win w x.2).correctAll x.1 (x.2 w).1).card : ℝ) * b < (1 - dw) * (P * N) * b := by linarith
   exact (lt_of_mul_lt_mul_right this hb'.le).le
 
 /-- **Paid** for window `w`'s run: `RatePaidNamedRO` at each of its passes and candidates. -/
-theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
+theorem ofDeployedExecutionPhase_paid_route (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (tier : ℕ → Fin τ)
     (Nd : Node (Fin τ)) (a : Audit) {lam rounds cRoot F : ℕ} {cost : ℕ → ℕ} (hrc : 0 < rounds * cRoot)
     (ha : a.P = P) (hab : a.b = b) (hal : a.lam = lam)
     (hW : Accounting.Assumptions.WorkHardness b rounds cRoot cost)
     (hF : ∀ w η j ι c, Accounting.Assumptions.SquaringCeiling cost F ((A.window w η).device j ι c))
     (hA : ∀ w η j ι c E R O O', ((A.window w η).device j ι c).side E R O = ((A.window w η).device j ι c).side E R O') :
-    (Run.ofDeployedWindow A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
+    (Run.ofDeployedExecutionPhase A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a).Paid
       ((P * G : ℝ) * ((N : ℝ) / 2 ^ h + (q.choose 2 : ℝ) / 2 ^ h + (2 ^ N : ℝ) / 2 ^ lam)) := by
   classical
   set X := Deployed.rebuildBits b rounds cRoot F
@@ -239,11 +239,11 @@ theorem ofDeployedWindow_paid_route (A : DeployedSession n P N b h ρ S L q r s 
     ENNReal.mul_ne_top (ENNReal.natCast_ne_top P)
       (ENNReal.mul_ne_top (ENNReal.natCast_ne_top G) (roErr_ne_top N h q lam))
   unfold Run.Paid Run.Holds
-  rw [← roErr_toReal_window]
+  rw [← roErr_toReal_executionPhase]
   refine pouw_pr_le ((Bandwidth.pr_mono fun x hx => ?_).trans h₂) hT
   obtain ⟨-, hlt⟩ := hx
-  have hc : (Run.ofDeployedWindow A w tier X Nd a).correct x = ((A.win w x.2).correctAll x.1 (x.2 w).1).card := rfl
-  rw [not_le, ofDeployedWindow_paid, ofDeployedWindow_reads, hc, ha, hab, hal] at hlt
+  have hc : (Run.ofDeployedExecutionPhase A w tier X Nd a).correct x = ((A.win w x.2).correctAll x.1 (x.2 w).1).card := rfl
+  rw [not_le, ofDeployedExecutionPhase_paid, ofDeployedExecutionPhase_reads, hc, ha, hab, hal] at hlt
   show (A.win w x.2).reads tier x.1 (x.2 w).1 + P * (S + (L - ρ) + X + lam) <
     ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b
   have e : P * (S + (L - ρ) + X + lam) = P * (L - ρ) + P * S + P * X + P * lam := by ring
@@ -255,17 +255,17 @@ namespace Accounting.SecurityProofs
 
 open Accounting.Rate Accounting.Remote
 
-/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteSessionRoutes`). -/
-theorem RemoteSessionRoutes : Accounting.Guarantees.RemoteSessionRoutes := by
+/-- **The deployed session meets the remote audit's routes** (`Accounting.Guarantees.RemoteRunRoutes`). -/
+theorem RemoteRunRoutes : Accounting.Guarantees.RemoteRunRoutes := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
   exact ⟨ofDeployed_sampled A tier _ Nd a dbar hn hP hN hb hdbar hab hC,
     ofDeployed_paid_route A tier Nd a hrc ha hab hal hW hF hA⟩
 
 /-- **The deployed session conserves its words as a run of the remote audit, at the same `γ`**
-(`Accounting.Guarantees.RemoteSessionRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunConservation := by
+(`Accounting.Guarantees.RemoteMonitoringPeriodConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteMonitoringPeriodConservation : Accounting.Guarantees.RemoteMonitoringPeriodConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN hb hrc hdbar ha hab hal hC hW hF hA
-  obtain ⟨hs, hp⟩ := RemoteSessionRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
+  obtain ⟨hs, hp⟩ := RemoteRunRoutes n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A Nd a dbar hn hP hN
     hb hrc hdbar ha hab hal hC hW hF hA
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
   refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dbar _ _ hC0 hs hp)
@@ -286,16 +286,16 @@ theorem RemoteSessionRunConservation : Accounting.Guarantees.RemoteSessionRunCon
   nlinarith [h2, eΛ, k]
 
 /-- **Each window conserves its words as a run of the remote audit, at the same `γ_w`**
-(`Accounting.Guarantees.RemoteWindowRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
-theorem RemoteWindowRunConservation : Accounting.Guarantees.RemoteWindowRunConservation := by
+(`Accounting.Guarantees.RemoteExecutionPhaseRunConservation`), from `Accounting.SecurityProofs.Remote.Conservation`. -/
+theorem RemoteExecutionPhaseRunConservation : Accounting.Guarantees.RemoteExecutionPhaseRunConservation := by
   intro n P N b h ρ S L q r s d G lam τ rounds cRoot F cost tier A w Nd a dw hP hN hb hrc hdw ha hab hal hC hW hF hA
-  have hs := ofDeployedWindow_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
-  have hp := ofDeployedWindow_paid_route A w tier Nd a hrc ha hab hal hW hF hA
+  have hs := ofDeployedExecutionPhase_sampled A w tier (Deployed.rebuildBits b rounds cRoot F) Nd a dw hP hN hb hdw hab hC
+  have hp := ofDeployedExecutionPhase_paid_route A w tier Nd a hrc ha hab hal hW hF hA
   have hC0 : 0 < Nd.declared a.T := by rw [hC]; positivity
   refine Remote.holds_mono ?_ (Remote.Conservation (Fin τ) _ Nd a _ dw _ _ hC0 hs hp)
   rintro x - ⟨h1, h2⟩
   refine ⟨h1, ?_⟩
-  rw [ofDeployedWindow_paid] at h2
+  rw [ofDeployedExecutionPhase_paid] at h2
   have hCr : (Nd.declared a.T : ℝ) = P * N * b := by rw [hC]; push_cast; ring
   have eΛ : muLambda Nd a * Nd.declared a.T = a.P * a.lam := by
     have : (0 : ℝ) < Nd.declared a.T := by exact_mod_cast hC0

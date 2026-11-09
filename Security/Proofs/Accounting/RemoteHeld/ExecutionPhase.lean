@@ -10,7 +10,7 @@ import Mathlib.Tactic.Positivity.Finset
 
 `heldOverLinks_of` (`Proofs.Accounting.RemoteHeld.OverTime`) bounds what a paced session held over its credited span
 `[e_0, s_C)`. Its argument bounds the absent ticks over `[s_0, s_C)`, so it bounds what was held over `[u, s_C)` for any
-`u` in `[s_0, e_0]`: `heldOverWindow_of`, the same argument with `u` for `e_0`, at one outcome and with the paced
+`u` in `[s_0, e_0]`: `heldOverExecutionPhase_of`, the same argument with `u` for `e_0`, at one outcome and with the paced
 session's facts given there rather than through `Paced` and `Covers`. The memory line's stretches after the first start
 at their first group's coin `s_lo`, before their paced session's `e_lo` (`Properties.RemoteAudit.Line.LineHeld`).
 -/
@@ -25,7 +25,7 @@ variable {Ω : Type} {T : Trace Ω}
 
 /-- **Held over time from `u ∈ [s_0, e_0]`**: `heldOverLinks_of`'s bound over `[u, s_C)` at one outcome, from the
 paced session's facts there (`Paced`'s, but the ticks' order, and `Covers`'). -/
-theorem heldOverWindow_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β βl Br Bd Bl W : ℝ} (hE : 0 < E)
+theorem heldOverExecutionPhase_of [Fintype Ω] (K : Pace Ω) (ω : Ω) {S : ℕ} {s E β βl Br Bd Bl W : ℝ} (hE : 0 < E)
     (hs : 0 ≤ s) (hβ : 0 ≤ β) (hβl : 0 ≤ βl) (hl : Links T βl Bl) (hsq : SquaringCeiling T s E Br)
     (hd : Disks T β Bd) (hS : ChipCeiling T S) (hr : Routed T)
     (hfP : K.first ω (K.credited + 1) ≤ T.passes) (hfg : ∀ g ≤ K.credited, K.first ω g < K.first ω (g + 1))

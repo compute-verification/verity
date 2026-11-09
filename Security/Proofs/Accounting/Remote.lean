@@ -65,7 +65,7 @@ arithmetic. The correct receipts' `(1 − ε) · C` bits were paid by the node's
 μ_link counts only the whole's boundary.
 
 These are lemmas, not guarantees. The deployed session's and window's guarantees
-(`Accounting.Guarantees.RemoteSessionRunConservation`, `RemoteWindowRunConservation` and their `Relay` forms) prove
+(`Accounting.Guarantees.RemoteMonitoringPeriodConservation`, `RemoteExecutionPhaseRunConservation` and their `Relay` forms) prove
 `Conservation`'s routes for the runs the rate audit realizes and apply it; their tier-read bound, at no location, is
 the node-level reading that is listed. The memory a session shows held is the memory line's
 (`Accounting.Guarantees.Remote.Held` and its time-held forms), and Mbw is the bandwidth game's

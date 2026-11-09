@@ -1,9 +1,9 @@
 module
 
-public import Proofs.Properties.Accounting.Remote.Window
+public import Proofs.Properties.Accounting.Remote.ExecutionPhase
 public import Proofs.Properties.Accounting.Remote.Draw
 public import Proofs.Properties.Accounting.Remote.Plan
-public import Proofs.Properties.Accounting.Remote.Session
+public import Proofs.Properties.Accounting.Remote.Run
 public import Proofs.Properties.Accounting.Remote.Released
 public import Proofs.Properties.Accounting.Remote.Lifetime
 public import Proofs.Properties.Accounting.Remote.Pooled
@@ -19,7 +19,7 @@ are the sampler's subset mapped to distinct receipts (`sampleIsSubset`), on `Bis
 (`acceptedMinPasses`, `passesStepped`, `passesReadDistinct`, `appendsInOrder`, `passesChained`). `Released`: a
 second invariant, from an accepted release on, and from it `releasedStayOut`. `Lifetime`: a third, on the windows
 appends joined, and from it `lifetimeCapped`. `Pooled`: the pooled bound the code computes, and the W the memory line
-reads, cover the draw's (`pooledCovers`, `pooledCoversSession`, `lineCoversSession`, stated in
+reads, cover the draw's (`pooledCovers`, `pooledCoversRun`, `lineCoversRun`, stated in
 `Properties.RemoteAudit.Pooled`).
 -/
 

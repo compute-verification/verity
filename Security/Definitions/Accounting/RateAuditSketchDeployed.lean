@@ -14,7 +14,7 @@ windows on one store.
 The model keeps the restriction proved by `RateAuditTensorSketchRank`: device memory, on-chip state, the side link and
 rebuilding deliver sectors whole and verbatim. A precomputed sketch table is not a device of this type.
 
-A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummarySession`): one
+A session's devices may also be told an `a`-bit summary of what the prover chose (`SketchSummaryRun`): one
 session for each value of the summary, a pass told `s` running the devices and the pick of session `s`. A prover that
 steers its passes' layout knows the summary it steered by, and its devices may follow it.
 -/
@@ -46,44 +46,44 @@ instance instFintypeSketchPassCoins (N ρ h ks G : ℕ) : Fintype (SketchPassCoi
   exact inferInstance
 
 /-- One window's coins: one signs matrix, `P` passes, then `d` pooled openings among the `P·N` receipts. -/
-abbrev SketchWindowCoins (P N m ρ h ks G d : ℕ) : Type :=
+abbrev SketchExecutionPhaseCoins (P N m ρ h ks G d : ℕ) : Type :=
   SketchSigns ks m × (Fin P → SketchPassCoins N ρ h ks G) × (Fin d → Fin P × Fin N)
 
-instance instFintypeSketchWindowCoins (P N m ρ h ks G d : ℕ) :
-    Fintype (SketchWindowCoins P N m ρ h ks G d) := by
+instance instFintypeSketchExecutionPhaseCoins (P N m ρ h ks G d : ℕ) :
+    Fintype (SketchExecutionPhaseCoins P N m ρ h ks G d) := by
   letI : Fintype (SketchPassCoins N ρ h ks G) := instFintypeSketchPassCoins N ρ h ks G
   exact inferInstance
 
 /-- A window of `P` causal verbatim-sector passes with `G` oracle candidates per pass. -/
-structure SketchDeployedWindow (P N m ρ h S L q ks G : ℕ) where
+structure SketchDeployedExecutionPhase (P N m ρ h S L q ks G : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → SketchPassCoins N ρ h ks G) → Fin G →
     Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32))
   pick : (j : Fin P) → ({i : Fin P // i < j} → SketchPassCoins N ρ h ks G) → SketchStore N m →
     SketchSigns ks m → (Fin G → Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32))) → Fin G
 
-namespace SketchDeployedWindow
+namespace SketchDeployedExecutionPhase
 
 variable {P N m ρ h S L q ks G : ℕ}
 
 /-- The candidate pass `j` keeps. -/
-def kept (A : SketchDeployedWindow P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
+def kept (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : Fin G :=
   A.pick j (fun i => ω i.1) E σ (ω j).2
 
 /-- Pass `j`'s device at the candidate it kept. -/
-def dev (A : SketchDeployedWindow P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
+def dev (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) :
     Prover N m ρ h S L q 256 Sector (SketchSigns ks m) (Fin ks → ZMod (2 ^ 32)) :=
   A.device j (fun i => ω i.1) (A.kept j E σ ω)
 
 /-- Pass `j`'s random oracle at the candidate it kept. -/
-def oracle (A : SketchDeployedWindow P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
+def oracle (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (j : Fin P) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) :
     Oracle N ρ h Sector (Fin ks → ZMod (2 ^ 32)) :=
   (ω j).2 (A.kept j E σ ω)
 
 /-- The pooled receipts whose sketch tags are correct. -/
-def correctAll (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore N m)
+def correctAll (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : Finset (Fin P × Fin N) :=
   Finset.univ.filter fun p =>
     let D := Data.ofParts E (ω p.1).1
@@ -92,47 +92,47 @@ def correctAll (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore
     p.2 ∈ B.correct sketch σ O D
 
 /-- Device-memory sectors read in the window, in bits, summed over its passes. -/
-def reads (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : SketchStore N m)
+def reads (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (E : SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : ℕ :=
   ∑ j,
     let D := Data.ofParts E (ω j).1
     (A.dev j E σ ω).footprint σ (A.oracle j E σ ω) D
 
-end SketchDeployedWindow
+end SketchDeployedExecutionPhase
 
 /-- A causal session of `n` deployed sketch windows on one shared store. -/
-structure SketchDeployedSession (n P N m ρ h S L q ks G d : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → SketchWindowCoins P N m ρ h ks G d) →
-    SketchDeployedWindow P N m ρ h S L q ks G
+structure SketchDeployedRun (n P N m ρ h S L q ks G d : ℕ) where
+  window : (w : Fin n) → ({v : Fin n // v < w} → SketchExecutionPhaseCoins P N m ρ h ks G d) →
+    SketchDeployedExecutionPhase P N m ρ h S L q ks G
 
-namespace SketchDeployedSession
+namespace SketchDeployedRun
 
 variable {n P N m ρ h S L q ks G d : ℕ}
 
 /-- Window `w` at the session's coins. -/
-def win (A : SketchDeployedSession n P N m ρ h S L q ks G d) (w : Fin n)
-    (ω : Fin n → SketchWindowCoins P N m ρ h ks G d) : SketchDeployedWindow P N m ρ h S L q ks G :=
+def win (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
+    (ω : Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) : SketchDeployedExecutionPhase P N m ρ h S L q ks G :=
   A.window w (fun v => ω v.1)
 
-end SketchDeployedSession
+end SketchDeployedRun
 
 /-- **A session whose devices are told an `a`-bit summary**: a deployed session for each value `s` of the summary
 (`session s`). A pass told `s` runs the devices and the pick of `session s`, so its device may follow everything the
-summary carries. With `a = 0` it is one `SketchDeployedSession`. -/
-structure SketchSummarySession (a n P N m ρ h S L q ks G d : ℕ) where
-  session : Bits a → SketchDeployedSession n P N m ρ h S L q ks G d
+summary carries. With `a = 0` it is one `SketchDeployedRun`. -/
+structure SketchSummaryRun (a n P N m ρ h S L q ks G d : ℕ) where
+  session : Bits a → SketchDeployedRun n P N m ρ h S L q ks G d
 
-namespace SketchSummarySession
+namespace SketchSummaryRun
 
 variable {a n P N m ρ h S L q ks G d : ℕ}
 
 /-- Window `w` at the session's coins `ω`, with pass `j` told `s j`: each pass runs the device and the pick of its
 summary's session. -/
-def win (A : SketchSummarySession a n P N m ρ h S L q ks G d) (w : Fin n)
-    (ω : Fin n → SketchWindowCoins P N m ρ h ks G d) (s : Fin P → Bits a) : SketchDeployedWindow P N m ρ h S L q ks G :=
+def win (A : SketchSummaryRun a n P N m ρ h S L q ks G d) (w : Fin n)
+    (ω : Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) (s : Fin P → Bits a) : SketchDeployedExecutionPhase P N m ρ h S L q ks G :=
   ⟨fun j => ((A.session (s j)).win w ω).device j, fun j => ((A.session (s j)).win w ω).pick j⟩
 
-end SketchSummarySession
+end SketchSummaryRun
 
 /-- The non-sampling shortfall of one pass, as a share of its `N·m·256` stored bits. -/
 noncomputable def gammaSketch (N m ρ S L X : ℕ) : ℝ :=

@@ -3,7 +3,7 @@ module
 public import Properties.Accounting.Remote.Live
 public import Proofs.Properties.Accounting.Remote.SharedLink
 import Batteries.Tactic.OpenPrivate
-import Proofs.Properties.Accounting.Remote.Window
+import Proofs.Properties.Accounting.Remote.ExecutionPhase
 
 /-!
 # The verifier's process accepts what `Shared.run g` accepts (`liveIsRun`)
@@ -19,7 +19,7 @@ The recorded run is taken at `W c a s`, the process's session `s` with the coins
   recorded run where the window awaits openings (`ChecksOK`). At its `settle`, later, the window still awaits them, and
   `checkWindow` gives the same verdict there (`verdict_kept`): its draws, record, registration and digest are kept
   (`Shared.recordKeptAfterSample`, `srun_kept`), and the appends only grow past the blocks its draws read, which are
-  receipts of its plans (`Shared.SamplesIn`, `Shared.checkWindow_grow`). So the process's `verifyBy` on that verdict is
+  receipts of its plans (`Shared.SamplesIn`, `Shared.checkExecutionPhase_grow`). So the process's `verifyBy` on that verdict is
   the recorded `verify` (`verifyBy_congr`).
 
 `run_sim` puts them together by induction on the requests, from the end (`snoc_induction`), over `Shared.srunL g`.
@@ -485,7 +485,7 @@ theorem verdict_kept {g : Nat} (hg : 1 ≤ g) {params : Params} {reg : Registrat
     exact Option.some.inj this
   subst e
   obtain ⟨more, happ⟩ := hf.2.2
-  rw [hrec, hr, hf.2.1, Shared.checkWindow_grow hIV hI hinV more happ hr ht hd o]
+  rw [hrec, hr, hf.2.1, Shared.checkExecutionPhase_grow hIV hI hinV more happ hr ht hd o]
 
 /-! ## The process's requests on the recorded run -/
 

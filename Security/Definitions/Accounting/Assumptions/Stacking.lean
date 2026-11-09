@@ -108,10 +108,10 @@ them: their keys never change, so a carrier of one built at any time still helps
 its own block and free copies, and the stock of such carriers grows without decay. -/
 def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
     (A : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y →
-      RateSketch.SketchDeployedSession n P N 128 ρ 512 S Lk q 16 G 2773)
+      RateSketch.SketchDeployedRun n P N 128 ρ 512 S Lk q 16 G 2773)
     (store : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → RateSketch.SketchStore N 128)
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Y → Fin N ↪ Fin T × Fin M)
-    (joined : Y × (Fin n → RateSketch.SketchWindowCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
+    (joined : Y × (Fin n → RateSketch.SketchExecutionPhaseCoins P N 128 ρ 512 16 G 2773) → Fin T → ℕ)
     (X L B εnum εden : ℕ) (W : Gates.IntDag ι) (Aud : Gates.Audit) : Prop :=
   RateSketch.LifetimeCapped layout joined L →
   ∀ (c : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773) (g : Fin G) (y : Y),
@@ -126,7 +126,7 @@ def CircuitCarriers {n P N ρ S Lk q G T M : ℕ} {ι Y : Type}
 /-- **A pass's layout reads the codec and the append coins only through the `a`-bit summary its devices are told.**
 At every prefix `c` of the session's coins, the layout `layout c y` is `slot c` of the summary `steer c y`: it takes at
 most `2^a` values as the codec and the append coins `y` vary, and the pass's devices, told `steer c y`
-(`RateSketch.SketchSummarySession`), know the layout they run on.
+(`RateSketch.SketchSummaryRun`), know the layout they run on.
 
 **Why it should hold.** The layout is the memory map's schedule: which blocks are resident and planned when the pass's
 step begins. The memory map makes it a function of the served steps (frees at the values' last structural reader,

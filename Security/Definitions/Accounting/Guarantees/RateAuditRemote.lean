@@ -215,7 +215,7 @@ with its compute within `F` while the footprints, summed over the passes, fall s
 
 is at most `P` times `RateAudit`'s error.
 
-**The reading.** As `RateAuditWindows`', with one challenge for the whole window: at `c = δ·P` the passes' footprints
+**The reading.** As `RateAuditExecutionPhases`', with one challenge for the whole window: at `c = δ·P` the passes' footprints
 average at least `(1 − δ)·(1 − μ)·|E|` except with probability `ε/δ`. A footprint is at most the reads summed over the
 tiers, so the window's reads of all tiers, at most `∑ᵢ R_i·T`, certify the sum: `P` passes in a window cost `P` passes'
 reads, less the slack. Proof: `Accounting.SecurityProofs.RateChainRO`, from `RateChainPassRO` at each pass.

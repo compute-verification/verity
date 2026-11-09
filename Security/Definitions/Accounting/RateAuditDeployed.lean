@@ -18,12 +18,12 @@ pooled sample of `d` openings. It puts together what the pieces state separately
   read of device memory, counted per tier by `PIChip.tierBits`. Its on-chip state is at most `S` bits, its side link
   carries at most `L` bits a pass (the certified stream's `ρ` among them), and it makes at most `q` oracle queries a
   pass, in every world;
-* **the window** (`DeployedWindow`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
+* **the window** (`DeployedExecutionPhase`) is `RateAuditRemote.lean`'s `GrindChain` of such devices: pass `j`'s root is one
   of `G` candidates the earlier passes' coins and the store fix, picked as any function of pass `j`'s whole oracle
   family, and pass `j`'s device may depend on the pick;
 * **the session** (`DeployedSession`) is `RateAuditHorizon.lean`'s `Session` of such windows: window `w`'s prover is
   any function of the earlier windows' coins, their samples among them, and each window samples `d` of its `P·N`
-  receipts after its last root (`WindowCoins`).
+  receipts after its last root (`ExecutionPhaseCoins`).
 
 A receipt is the oracle's tag `H(σ, R, j, E_j)` of the whole word; the deployed receipt hashes a 16-row sketch of it,
 which this game does not model (the PR's gap list). What the guarantee charges for each route to a word without
@@ -176,56 +176,56 @@ end PIDevice
 (`fiat-shamir`), as `GrindChain`, each pass's device a `PIDevice`. Pass `j`'s device and its `G` candidate roots are
 any function of the earlier passes' coins (the candidates also of the store), and the kept candidate any function of
 pass `j`'s whole oracle family. -/
-structure DeployedWindow (P N b h ρ S L q r s G : ℕ) where
+structure DeployedExecutionPhase (P N b h ρ S L q r s G : ℕ) where
   device : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Fin G → PIDevice N b h ρ S L q
   cand : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → Fin G → Bits r
   pick : (j : Fin P) → ({i : Fin P // i < j} → PassCoins N b h ρ r s) → Store N b → (Bits r → Oracle N b h ρ) →
     Fin G
 
-namespace DeployedWindow
+namespace DeployedExecutionPhase
 
 variable {P N b h ρ S L q r s G : ℕ}
 
 /-- The candidate pass `j` keeps at the window's coins `ω`. -/
-def kept (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def kept (A : DeployedExecutionPhase P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Fin G :=
   A.pick j (fun i => ω i.1) E (ω j).2.1
 
 /-- Pass `j`'s device at the window's coins `ω`, at the candidate it kept. -/
-def dev (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def dev (A : DeployedExecutionPhase P N b h ρ S L q r s G) (j : Fin P) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
     PIDevice N b h ρ S L q :=
   A.device j (fun i => ω i.1) (A.kept j E ω)
 
 /-- Pass `j`'s oracle: its family at the kept candidate root, `H(σ_t, j, root_{j−1}, ·)`. -/
-def oracle (A : DeployedWindow P N b h ρ S L q r s G) (j : Fin P) (E : Store N b)
+def oracle (A : DeployedExecutionPhase P N b h ρ S L q r s G) (j : Fin P) (E : Store N b)
     (ω : Fin P → PassCoins N b h ρ r s) : Oracle N b h ρ :=
   (ω j).2.1 (A.cand j (fun i => ω i.1) E (A.kept j E ω))
 
 /-- The window's correct receipts, as the (pass, word) pairs whose opening its pooled sample passes. -/
-def correctAll (A : DeployedWindow P N b h ρ S L q r s G) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
+def correctAll (A : DeployedExecutionPhase P N b h ρ S L q r s G) (E : Store N b) (ω : Fin P → PassCoins N b h ρ r s) :
     Finset (Fin P × Fin N) :=
   Finset.univ.filter (fun p => p.2 ∈ (A.dev p.1 E ω).correct E (ω p.1).1 (A.oracle p.1 E ω))
 
 /-- The window's reads of every tier, in bits, summed over its passes. Completions are not reads: what they cost is
 the compute `PIChip.work`, which the guarantee's assumptions turn into the term `muRebuild`. -/
-def reads {τ : ℕ} (A : DeployedWindow P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (E : Store N b)
+def reads {τ : ℕ} (A : DeployedExecutionPhase P N b h ρ S L q r s G) (tier : ℕ → Fin τ) (E : Store N b)
     (ω : Fin P → PassCoins N b h ρ r s) : ℕ :=
   ∑ j, ∑ t, (A.dev j E ω).tierReads tier t E (ω j).1 (A.oracle j E ω)
 
-end DeployedWindow
+end DeployedExecutionPhase
 
 /-- A deployed session of `n` windows on one store, each closed by its pooled sample of `d` openings: window `w`'s prover
 is any function of the earlier windows' coins, their samples among them. -/
 structure DeployedSession (n P N b h ρ S L q r s d G : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → DeployedWindow P N b h ρ S L q r s G
+  window : (w : Fin n) → ({v : Fin n // v < w} → ExecutionPhaseCoins P N b h ρ r s d) → DeployedExecutionPhase P N b h ρ S L q r s G
 
 namespace DeployedSession
 
 variable {n P N b h ρ S L q r s d G : ℕ}
 
 /-- Window `w`'s prover at the session's coins `ω`: it reads the earlier windows' coins. -/
-def win (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (ω : Fin n → WindowCoins P N b h ρ r s d) :
-    DeployedWindow P N b h ρ S L q r s G :=
+def win (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n) (ω : Fin n → ExecutionPhaseCoins P N b h ρ r s d) :
+    DeployedExecutionPhase P N b h ρ S L q r s G :=
   A.window w (fun v => ω v.1)
 
 end DeployedSession

@@ -64,7 +64,7 @@ to `joined t + L − 1`. The game flips every append's coin with the codec, so `
 **A pass on the devices' clocks.** A pass is bound to an engine step, and a placed execution
 (`Requirement.Placement`) says at which tick each device begins each step. Pass `j` of window `w` on device `d` is
 the `τ` ticks from the one at which `d` begins the pass's step (`Placement.passTicks`), and window `w` on `d` is its
-passes' ticks (`Placement.windowTicks`). On one clock with a placed execution's other windows (compute accounting's
+passes' ticks (`Placement.executionPhaseTicks`). On one clock with a placed execution's other windows (compute accounting's
 `region` over ticks), they say which of a device's ticks a pass and a window take. `Placement.Deadlines` asks that no
 device tick be in two windows or in two passes of one window.
 
@@ -173,13 +173,13 @@ structure Carrier (N m : ℕ) where
 passes before `j`. -/
 structure SketchPrefix (n P N m ρ h ks G d : ℕ) where
   w : Fin n
-  windows : {v : Fin n // v < w} → SketchWindowCoins P N m ρ h ks G d
+  windows : {v : Fin n // v < w} → SketchExecutionPhaseCoins P N m ρ h ks G d
   signs : SketchSigns ks m
   j : Fin P
   passes : {i : Fin P // i < j} → SketchPassCoins N ρ h ks G
 
 /-- The prefix before pass `j` of window `w`, at the session's coins `x`. -/
-def SketchPrefix.of {n P N m ρ h ks G d : ℕ} (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n)
+def SketchPrefix.of {n P N m ρ h ks G d : ℕ} (x : Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) (w : Fin n)
     (j : Fin P) : SketchPrefix n P N m ρ h ks G d :=
   ⟨w, fun v => x v.1, (x w).1, j, fun i => (x w).2.1 i.1⟩
 
@@ -219,8 +219,8 @@ whose layout puts a block of an append `t` after the registration in its store i
 after it. -/
 def LifetimeCapped {n P N m ρ h ks G d T M : ℕ} {Y : Type}
     (layout : SketchPrefix n P N m ρ h ks G d → Y → Fin N ↪ Fin T × Fin M)
-    (joined : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d) → Fin T → ℕ) (L : ℕ) : Prop :=
-  ∀ (x : Y × (Fin n → SketchWindowCoins P N m ρ h ks G d)) (w : Fin n) (j : Fin P),
+    (joined : Y × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) → Fin T → ℕ) (L : ℕ) : Prop :=
+  ∀ (x : Y × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d)) (w : Fin n) (j : Fin P),
     ∀ i ∈ appendedTiles layout (SketchPrefix.of x.2 w j) x.1,
       joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 ≤ (w : ℕ) ∧
         (w : ℕ) < joined x (layout (SketchPrefix.of x.2 w j) x.1 i).1 + L
@@ -243,20 +243,20 @@ end Chip
 /-- A stacked session's coins at the deployed parameters (16 sketch rows of 128-sector tiles, 512-bit tags, 2,773
 openings a window): the codec and every append's coin, then its `n` windows'. -/
 abbrev StackedCoins (Ω Ca : Type) (T n P N ρ G : ℕ) : Type :=
-  (Ω × (Fin T → Ca)) × (Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773)
+  (Ω × (Fin T → Ca)) × (Fin n → SketchExecutionPhaseCoins P N 128 ρ 512 16 G 2773)
 
 /-- **The stores window `w`'s passes certify**: pass `j`'s is `view c ω` at the prefix `c` before it, `ω` sampled
 independently of the session's coins (in the stacked guarantees, `coinStore` at the codec and the append coins). -/
 def programmed {n P N m ρ h ks G d : ℕ} {Ω : Type} (view : SketchPrefix n P N m ρ h ks G d → Ω → SketchStore N m)
-    (ω : Ω) (x : Fin n → SketchWindowCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
+    (ω : Ω) (x : Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) (w : Fin n) : Fin P → SketchStore N m :=
   fun j => view (.of x w j) ω
 
-namespace SketchDeployedWindow
+namespace SketchDeployedExecutionPhase
 
 variable {P N m ρ h S L q ks G : ℕ}
 
 /-- The pooled receipts whose sketch tags are correct, each pass on its own store `E j`. -/
-def correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+def correctOn (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : Finset (Fin P × Fin N) :=
   Finset.univ.filter fun p =>
     let D := Data.ofParts (E p.1) (ω p.1).1
@@ -265,7 +265,7 @@ def correctOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → Sk
     p.2 ∈ B.correct sketch σ O D
 
 /-- Device-memory sectors read in the window, in bits, summed over its passes, each on its own store `E j`. -/
-def readsOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+def readsOn (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) : ℕ :=
   ∑ j,
     let D := Data.ofParts (E j) (ω j).1
@@ -273,13 +273,13 @@ def readsOn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → Sket
 
 /-- Device-memory sectors read in the window from the tiles `I j` of each pass `j`, in bits, each pass on its own
 store `E j`: `readsOn` restricted to those tiles. -/
-def readsIn (A : SketchDeployedWindow P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
+def readsIn (A : SketchDeployedExecutionPhase P N m ρ h S L q ks G) (E : Fin P → SketchStore N m)
     (σ : SketchSigns ks m) (ω : Fin P → SketchPassCoins N ρ h ks G) (I : Fin P → Finset (Fin N)) : ℕ :=
   ∑ j,
     let D := Data.ofParts (E j) (ω j).1
     ((((A.dev j (E j) σ ω).prog σ D).mems (A.oracle j (E j) σ ω) D).filter fun p => p.1 ∈ I j).card * 256
 
-end SketchDeployedWindow
+end SketchDeployedExecutionPhase
 
 end Accounting.RateSketch
 
@@ -371,13 +371,13 @@ def Placement.passTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ
   Finset.Ico (p.ticks d (bind w j)) (p.ticks d (bind w j) + τ)
 
 /-- **Window `w` on device `d`'s clock**: the ticks of its passes. -/
-def Placement.windowTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (d : L) : Finset ℕ :=
+def Placement.executionPhaseTicks (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) (w : Fin n) (d : L) : Finset ℕ :=
   Finset.univ.biUnion fun j => p.passTicks bind τ w j d
 
 /-- **The passes keep their deadlines on every device's clock**: on each device, no tick is in two windows or in two
 passes of one window, so each of a device's ticks is taken by at most one pass. -/
 def Placement.Deadlines (p : Placement L G) (bind : Fin n → Fin P → ℕ) (τ : ℕ) : Prop :=
-  ∀ d, (Pairwise fun w w' => Disjoint (p.windowTicks bind τ w d) (p.windowTicks bind τ w' d)) ∧
+  ∀ d, (Pairwise fun w w' => Disjoint (p.executionPhaseTicks bind τ w d) (p.executionPhaseTicks bind τ w' d)) ∧
     ∀ w, Pairwise fun j j' => Disjoint (p.passTicks bind τ w j d) (p.passTicks bind τ w j' d)
 
 end Accounting.Requirement

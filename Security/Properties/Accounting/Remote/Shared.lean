@@ -8,7 +8,7 @@ public import RemoteAudit.Shared
 
 `Properties.RemoteAudit.Coins` and the draw's statement in `Properties.Accounting.Remote`, for a session that draws its
 openings `g` windows at a time (`audit.Params.groups_per_coin`, `RemoteAudit.Shared.run g`): draw `c` is windows
-`c·g … min(c·g + g, W) − 1` (`sampleWindows`), sampled together at the close of the last of them by one coin,
+`c·g … min(c·g + g, W) − 1` (`sampleExecutionPhases`), sampled together at the close of the last of them by one coin,
 `coins[W + c]`, on the openings key of `c`, over the draw's receipts in order, numbered across its windows
 (`sampleLengths`). Each window gets the draws in its passes, renumbered to its own (`shareOf`, `passesBefore`), and
 `verify` checks them against its own record. Where `Coins` indexes by window `t`'s coin `W + t`, these index by
@@ -20,7 +20,7 @@ draw `c`'s, `W + c`.
   share accepts, each value is an openable receipt of the window it falls in (`receiptCount`). Like today's, which is
   on `verifyWindow` (`draws`, then `checkWindow`), it is on `draws` and `checkWindow` alone, over the records `ws` of
   the draw's windows, whose passes number its receipts (`lengthsOf`, `passCount`).
-* `SessionSamplesRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sampled draw is `draws` over
+* `RunSamplesRecords` (`Shared.run`, the session link), for every `g ≥ 1`: in a run, a sampled draw is `draws` over
   its windows' records (`sampleRecords`, `State.record`), each window holding its share, and a window of it is accepted
   only with an empty share (which the close accepts at `g ≥ 2`) or with `checkWindow` of its share passing on the
   session's appends: the hypotheses `AcceptSamplesOpenable` reads, each window's on the one array of appends. It needs
@@ -36,7 +36,7 @@ draw `c`'s, `W + c`.
   openable receipts.
 
 At `g = 1`, `Shared.run 1` is `Session.run` (`RemoteAudit.Shared.run_one`), `c` is the window, and draw `c` is window
-`c` alone (`sampleWindows_one`, `sampleLengths_one`): `OpeningsUnreadUntilSampled` and `RecordKeptAfterSample` give today's,
+`c` alone (`sampleExecutionPhases_one`, `sampleLengths_one`): `OpeningsUnreadUntilSampled` and `RecordKeptAfterSample` give today's,
 `ReleaseOrder 1` and `LiveUnder 1` are today's, and `AcceptSamplesOpenable` on a draw of one window gives today's
 (`Proofs.Properties.Accounting.Remote.Shared`'s `*_one`). Today's `SampleIsSubset` is on `draws` alone, which knows no `g`;
 this one states it for `Shared.close`'s draw.
@@ -50,12 +50,12 @@ namespace Properties.RemoteAudit.Shared
 
 /-- Draw `c`'s windows, at `g` windows a draw and `W` in all: `c·g … min(c·g + g, W) − 1`, the windows
 `Shared.close` draws together. -/
-def sampleWindows (g W c : Nat) : List Nat := (List.range (min (c * g + g) W - c * g)).map (c * g + ·)
+def sampleExecutionPhases (g W c : Nat) : List Nat := (List.range (min (c * g + g) W - c * g)).map (c * g + ·)
 
 /-- The lengths of draw `c`'s passes, window by window in order: `Shared.close`'s `lengths`, whose positions number
 the draw's receipts. -/
 def sampleLengths (g : Nat) (s : Session.State) (c : Nat) : Array Nat :=
-  (sampleWindows g s.params.windows c).foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
+  (sampleExecutionPhases g s.params.windows c).foldl (fun acc u => acc ++ s.windows[u]!.plans.map (·.length)) #[]
 
 /-- The passes of the windows from `first` up to window `u`, not counting `u`'s: where `u`'s passes start among its
 draw's. -/
@@ -92,7 +92,7 @@ def SampleIsSubset : Prop :=
           drawn[k].2 < (sampleLengths g s (t.toNat / g))[drawn[k].1]! ∧
           receiptIndex (sampleLengths g s (t.toNat / g)) drawn[k].1 drawn[k].2 = us[k]!) ∧
         (∀ k₁ k₂ (h₁ : k₁ < drawn.size) (h₂ : k₂ < drawn.size), drawn[k₁] = drawn[k₂] → k₁ = k₂) ∧
-        ∀ u ∈ sampleWindows g s.params.windows (t.toNat / g),
+        ∀ u ∈ sampleExecutionPhases g s.params.windows (t.toNat / g),
           sampledOf s' u = some (shareOf drawn (passesBefore s (t.toNat / g * g) u) s.windows[u]!.plans.size)
 
 /-- Draw `c` over the records `ws` of its windows, in order, on the coin `coin`: its values `us` are the sampler's on
@@ -114,14 +114,14 @@ def AcceptSamplesOpenable : Prop :=
 
 /-- The records of draw `c`'s windows at `s`, in order. -/
 def sampleRecords (g : Nat) (s : Session.State) (c : Nat) : List WindowRecord :=
-  (sampleWindows g s.params.windows c).map s.record
+  (sampleExecutionPhases g s.params.windows c).map s.record
 
 /-- **The session link**, per draw, at any `g ≥ 1` windows a draw: in a run from `State.init` that has sampled the first
 window of draw `c` (one of the session's, `c·g < W`), the draw is `draws` on the openings key of `c` and the coin
 `coins[W + c]` over the records `ws` of `c`'s windows (`sampleRecords`), `U` their receipts (`lengthsOf`); window `k` of
 it holds its share (`shareOf`, from its passes' start, `passCount`); and once window `k` is accepted, its share is
 empty (the close accepts it) or `checkWindow` of its share passes on some openings and the session's appends. -/
-def SessionSamplesRecords : Prop :=
+def RunSamplesRecords : Prop :=
   ∀ (g : Nat) (params : Session.Params) (reg : Registration) (coins appendCoins : Array ByteArray) (notBeforeNs : Nat)
     (events : Array Session.Event) (rs : Array Session.Result) (s : Session.State),
     Shared.run g (Session.State.init params reg coins appendCoins notBeforeNs) events = .ok (rs, s) →
@@ -137,7 +137,7 @@ def SessionSamplesRecords : Prop :=
               (shareOf drawn (passCount ((sampleRecords g s c).take k)) (sampleRecords g s c)[k].passes.size)
               openings = .accept)
 
-/-- **A draw's accepted windows open its values** (`SessionSamplesRecords` and `AcceptSamplesOpenable` joined): in a run
+/-- **A draw's accepted windows open its values** (`RunSamplesRecords` and `AcceptSamplesOpenable` joined): in a run
 from `State.init` that has accepted every window of draw `c` (`c·g < W`), the draw's values `us` are the sampler's on
 the openings key of `c` and the coin `coins[W + c]`, `U` its windows' receipts, and each value `v` is an openable
 receipt, on the session's appends, of the window `k` it falls in, its number there `v − receiptCount (ws.take k)`. -/

@@ -17,8 +17,8 @@ coins (or, under Fiat–Shamir, the random oracle's, as in `Rate.Chain`).
 * `RatePooled`: the bound for a chain's passes, with their correct receipts as the good sets.
 * `RateChainSampledRO`, `RateChainSampled`: the route `Sampled`: with `RateChainPaidRO`'s conservation, a window whose
   passes are all accepted read the words of more than `K` correct receipts, except with the two bounds' sum.
-* `RateWindowSample`: the deployed window's sample, `d` openings pooled over its passes' `P·N` receipts after the last root.
-* `RateSessionSample`: a session of such windows, each adapting to the earlier windows' samples: the horizon's shortfall and
+* `RateExecutionPhaseSample`: the deployed window's sample, `d` openings pooled over its passes' `P·N` receipts after the last root.
+* `RateRunSample`: a session of such windows, each adapting to the earlier windows' samples: the horizon's shortfall and
   every window's, at once.
 
 The prover is one undifferentiated resource (`Definitions/Accounting/RateAuditHorizon.lean`): these bound the correct
@@ -127,26 +127,26 @@ def RateChainSampled : Prop :=
 
 /-- **A window's pooled sample.** For every chained prover over `P` passes (`Rate.Chain`), over a uniform store, each
 pass's uniform coins and one sample of `d` openings, each a pass and a word, uniform over the window's `P·N` receipts
-(`Rate.WindowCoins`): the probability that every opening lands on a correct receipt (`Chain.correctAll`) while the
+(`Rate.ExecutionPhaseCoins`): the probability that every opening lands on a correct receipt (`Chain.correctAll`) while the
 window holds at most `K` correct receipts is at most `(K / (P·N))^d`.
 
 **The reading.** The deployed window: its passes sample nothing of their own, and one sample from the openings coin, after
 the last root, opens `d` of all its passes' receipts. At `K = (1 − d̄)·P·N`, a window short of its receipts by `d̄`
 passes with probability at most `(1 − d̄)^d`, however its shortfall is spread over its passes.
 
-Proof: `Accounting.SecurityProofs.RateWindowSample`: `PooledSampling`'s one round at `M = P·N`: the sample is uniform and
+Proof: `Accounting.SecurityProofs.RateExecutionPhaseSample`: `PooledSampling`'s one round at `M = P·N`: the sample is uniform and
 independent of the window's other coins, so at each value of them it lands in the correct receipts with probability
 `(#correct/(P·N))^d`.
 
 Frozen (no-function, hash): as `RateAudit`. -/
-def RateWindowSample : Prop :=
+def RateExecutionPhaseSample : Prop :=
   ∀ (P N b h ρ S L q r s d K : ℕ) (A : Rate.Chain P N b h ρ S L q r s),
-    pr (fun x : Store N b × WindowCoins P N b h ρ r s d =>
+    pr (fun x : Store N b × ExecutionPhaseCoins P N b h ρ r s d =>
         (∀ t, x.2.2 t ∈ A.correctAll x.1 x.2.1) ∧ (A.correctAll x.1 x.2.1).card ≤ K)
       ≤ ((K : ℝ≥0∞) / (P * N)) ^ d
 
 /-- **A session's pooled samples: the horizon and every window.** For every session of `n` chained windows on one store
-(`Rate.Session`: window `w`'s chained prover any function of the earlier windows' coins, their samples among them), each
+(`Rate.Run`: window `w`'s chained prover any function of the earlier windows' coins, their samples among them), each
 closed by its pooled sample of `d` openings: the probability that every window's openings land on correct receipts while
 either the session holds at most `K` correct receipts in all or some window holds at most `K_w` is at most
 
@@ -158,14 +158,14 @@ was short by less than `d̄` over its horizon and by less than `d_w` in every wi
 can't make a short window pass more often by shorting several. At `2^-40` for each, `d̄ = 0.15%` needs `d·n ≥ 18,470`
 openings over the horizon and `d_w = 1%` needs `d ≥ 2,773` a window.
 
-Proof: `Accounting.SecurityProofs.RateSessionSample`, `PooledSampling` with the windows as rounds and `M = P·N` at each
+Proof: `Accounting.SecurityProofs.RateRunSample`, `PooledSampling` with the windows as rounds and `M = P·N` at each
 store, twice: with each window's correct receipts as its good set, and with every window's receipts good but the first
 window holding at most `K_w`, whose correct receipts are its good set.
 
 Frozen (no-function, hash): as `RateAudit`. -/
-def RateSessionSample : Prop :=
-  ∀ (n P N b h ρ S L q r s d K Kw : ℕ) (A : Rate.Session n P N b h ρ S L q r s d),
-    pr (fun x : Store N b × (Fin n → WindowCoins P N b h ρ r s d) =>
+def RateRunSample : Prop :=
+  ∀ (n P N b h ρ S L q r s d K Kw : ℕ) (A : Rate.Run n P N b h ρ S L q r s d),
+    pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.chain w x.2).correctAll x.1 (x.2 w).1) ∧
           (∑ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ K ∨
             ∃ w, ((A.chain w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw))

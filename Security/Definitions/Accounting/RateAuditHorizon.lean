@@ -15,7 +15,7 @@ pass `j` read the store, the earlier passes' coins, and pass `j`'s stream and or
 windows whose devices see only the earlier windows' coins.
 
 **The deployed sample.** A chained window samples no sample per pass: after its last root, one sample from the openings coin
-picks `d` of the window's `P·N` receipts, each a pass and a word (`WindowCoins`). A `Session` is `n` such windows on
+picks `d` of the window's `P·N` receipts, each a pass and a word (`ExecutionPhaseCoins`). A `Run` is `n` such windows on
 one store, window `w`'s prover any function of the earlier windows' coins, their samples among them.
 
 **The prover is one resource.** Nothing here names which device, machine or party holds, reads or rebuilds a word: a
@@ -36,10 +36,10 @@ def Causal {M n : ℕ} {X : Fin n → Type} {s : Fin n → ℕ}
 
 /-- A chained window's coins: each pass's coins, then the window's pooled sample of `d` openings, each a pass and a word,
 uniform over the window's `P·N` receipts. -/
-abbrev WindowCoins (P N b h ρ r s d : ℕ) : Type := (Fin P → PassCoins N b h ρ r s) × (Fin d → Fin P × Fin N)
+abbrev ExecutionPhaseCoins (P N b h ρ r s d : ℕ) : Type := (Fin P → PassCoins N b h ρ r s) × (Fin d → Fin P × Fin N)
 
 /-- The window coins are finite, as a product: an instance of its own, as for `PassCoins`. -/
-instance instFintypeWindowCoins (P N b h ρ r s d : ℕ) : Fintype (WindowCoins P N b h ρ r s d) :=
+instance instFintypeExecutionPhaseCoins (P N b h ρ r s d : ℕ) : Fintype (ExecutionPhaseCoins P N b h ρ r s d) :=
   inferInstanceAs (Fintype (_ × _))
 
 namespace Chain
@@ -61,18 +61,18 @@ end Chain
 
 /-- A session of `n` chained windows on one store, each closed by its pooled sample of `d` openings: window `w`'s chained
 prover is any function of the earlier windows' coins, their samples among them. -/
-structure Session (n P N b h ρ S L q r s d : ℕ) where
-  window : (w : Fin n) → ({v : Fin n // v < w} → WindowCoins P N b h ρ r s d) → Chain P N b h ρ S L q r s
+structure Run (n P N b h ρ S L q r s d : ℕ) where
+  window : (w : Fin n) → ({v : Fin n // v < w} → ExecutionPhaseCoins P N b h ρ r s d) → Chain P N b h ρ S L q r s
 
-namespace Session
+namespace Run
 
 variable {n P N b h ρ S L q r s d : ℕ}
 
 /-- Window `w`'s chained prover at the session's coins `ω`: it reads the earlier windows' coins. -/
-def chain (A : Session n P N b h ρ S L q r s d) (w : Fin n) (ω : Fin n → WindowCoins P N b h ρ r s d) :
+def chain (A : Run n P N b h ρ S L q r s d) (w : Fin n) (ω : Fin n → ExecutionPhaseCoins P N b h ρ r s d) :
     Chain P N b h ρ S L q r s :=
   A.window w (fun v => ω v.1)
 
-end Session
+end Run
 
 end Accounting.Rate

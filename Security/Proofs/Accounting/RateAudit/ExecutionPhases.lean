@@ -173,8 +173,8 @@ open Accounting.Rate
 open Pous (pr)
 open scoped ENNReal
 
-/-- **The rate audit over `n` windows** (`Accounting.Guarantees.RateAuditWindows`). -/
-theorem RateAuditWindows : Accounting.Guarantees.RateAuditWindows := by
+/-- **The rate audit over `n` windows** (`Accounting.Guarantees.RateAuditExecutionPhases`). -/
+theorem RateAuditExecutionPhases : Accounting.Guarantees.RateAuditExecutionPhases := by
   classical
   intro n N b h ρ S L q s k F cTag cEnc lam m A
   calc (m : ℝ≥0∞) * pr (fun x : Store N b × (Fin n → Coins N b h ρ s) =>

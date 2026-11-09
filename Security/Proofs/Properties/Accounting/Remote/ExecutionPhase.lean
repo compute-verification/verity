@@ -15,8 +15,8 @@ it returned a bad value. The receipters' map only ever holds a pass's own receip
 opening under the receipter of its pass's seed. `checkOpening_none` reads checks 1–5 off `checkOpening`'s early returns.
 
 `forIn_findSome` reads such a loop exactly: its result is the first value over the list. So `checkWindow` is its first
-rejection in draw order (`checkWindow_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among the
-window's draws there (`checkWindow_extract`), and `checkWindowChunked`'s chunks, in order, cover the draws
+rejection in draw order (`checkExecutionPhase_eq`, `rejectAt`), a chunk `[a, b)` checked alone is the first rejection among the
+window's draws there (`checkExecutionPhase_extract`), and `checkWindowChunked`'s chunks, in order, cover the draws
 (`chunks_cover`): its first chunk that rejects holds the window's first rejection (`chunkedIsWhole`). A spawned task's
 value is its function's (`Task.spawn`'s definition), so the threads change nothing.
 -/
@@ -64,7 +64,7 @@ theorem forIn_good {α β σ : Type} (Inv : σ → Prop) (Good : α → Prop) (B
 def Cached (reg : Registration) (w : WindowRecord) (m : Std.HashMap Nat Receipter) : Prop :=
   ∀ i r, m.get? i = some r → r = receipterOf reg w i
 
-theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
+theorem checkExecutionPhase_accept {reg : Registration} {digest : ByteArray} {appends : Array Append} {w : WindowRecord}
     {drawn : Array (Nat × Nat)} {openings : Array Opening}
     (h : checkWindow reg digest appends w drawn openings = .accept) :
     openings.size = drawn.size ∧ ∀ k (hk : k < drawn.size),
@@ -112,7 +112,7 @@ theorem checkWindow_accept {reg : Registration} {digest : ByteArray} {appends : 
       rw [h1] at h
       exact h2 h
 
-theorem verifyWindow_accept {reg : Registration} {appends : Array Append} {w : WindowRecord} {coin : ByteArray}
+theorem verifyExecutionPhase_accept {reg : Registration} {appends : Array Append} {w : WindowRecord} {coin : ByteArray}
     {samples : Nat} {openings : Array Opening} (h : verifyWindow reg appends w coin samples openings = some .accept) :
     ∃ drawn, receiptSample reg.digest w.index coin samples (w.passes.map (·.plan.length)) = some drawn ∧
       checkWindow reg reg.digest appends w drawn openings = .accept := by
@@ -123,8 +123,8 @@ theorem verifyWindow_accept {reg : Registration} {appends : Array Append} {w : W
 
 theorem acceptChecksOpenings : AcceptChecksOpenings := by
   intro reg appends w coin samples openings h
-  obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept h
-  exact ⟨drawn, hd, checkWindow_accept hc⟩
+  obtain ⟨drawn, hd, hc⟩ := verifyExecutionPhase_accept h
+  exact ⟨drawn, hd, checkExecutionPhase_accept hc⟩
 
 theorem checkOpening_none {reg : Registration} {appends : Array Append} {w : WindowRecord} {i p : Nat} {o : Opening}
     (h : checkOpening reg reg.digest appends w (receipterOf reg w i) i p o = none) :
@@ -251,7 +251,7 @@ theorem rejectAt_reject {reg : Registration} {digest : ByteArray} {appends : Arr
   exact ⟨_, _, h.symm⟩
 
 /-- `checkWindow` is its first rejection in draw order (`rejectAt`), or accept. -/
-theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
+theorem checkExecutionPhase_eq (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) :
     checkWindow reg digest appends w drawn openings =
       if openings.size ≠ drawn.size then .reject .malformed none
@@ -295,12 +295,12 @@ theorem checkWindow_eq (reg : Registration) (digest : ByteArray) (appends : Arra
 
 /-- A window's draws `[a, b)` and their openings, checked alone, give the first rejection among those draws in the
 whole window's order. -/
-theorem checkWindow_extract (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
+theorem checkExecutionPhase_extract (reg : Registration) (digest : ByteArray) (appends : Array Append) (w : WindowRecord)
     (drawn : Array (Nat × Nat)) (openings : Array Opening) (hsize : openings.size = drawn.size) (a b : Nat) :
     checkWindow reg digest appends w (drawn.extract a b) (openings.extract a b) =
       ((List.range' a (min b drawn.size - a)).findSome? (rejectAt reg digest appends w drawn openings)).getD
         .accept := by
-  rw [checkWindow_eq]
+  rw [checkExecutionPhase_eq]
   simp only [Array.size_extract, hsize, ne_eq, not_true_eq_false, ↓reduceIte]
   rw [List.range'_eq_map_range, List.findSome?_map]
   refine congrArg (Option.getD · Verdict.accept) (findSome?_congr fun k hk => ?_)
@@ -339,7 +339,7 @@ theorem le_ceil_mul (n s : Nat) (hs : 0 < s) : n ≤ (n + s - 1) / s * s := by
 
 theorem chunkedIsWhole : ChunkedIsWhole := by
   intro size reg digest appends w drawn openings
-  rw [checkWindow_eq]
+  rw [checkExecutionPhase_eq]
   unfold checkWindowChunked
   simp only [Id.run]
   split
@@ -365,7 +365,7 @@ theorem chunkedIsWhole : ChunkedIsWhole := by
           (rejectAt reg digest appends w drawn openings) := by
       intro c
       simp only [Function.comp, Task.spawn]
-      rw [checkWindow_extract reg digest appends w drawn openings hsize]
+      rw [checkExecutionPhase_extract reg digest appends w drawn openings hsize]
       cases h : (List.range' (c * s) (min ((c + 1) * s) drawn.size - c * s)).findSome?
           (rejectAt reg digest appends w drawn openings) with
       | none => rfl

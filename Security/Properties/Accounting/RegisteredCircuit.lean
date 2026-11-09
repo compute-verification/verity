@@ -57,7 +57,7 @@ def ScheduledRequirement : Prop :=
     (layout : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Fin N ↪ Fin T × Fin M)
     (steer : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Pous.Bits a)
     (joined : RateSketch.StackedCoins Ω Ca T n P N ρ G → Fin T → ℕ)
-    (A : RateSketch.SketchSummarySession a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
+    (A : RateSketch.SketchSummaryRun a n P N 128 ρ 512 S (Lr * τ) q 16 G 2773)
     (blocks cap : ℕ) (idx : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → ℕ)
     (pos : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Array (ℕ × ℕ) → Array (ℕ × ℕ) → Fin N ↪ Fin T × Fin M)
     (appended sent : RateSketch.SketchPrefix n P N 128 ρ 512 16 G 2773 → Ω × (Fin T → Ca) → Array (ℕ × ℕ))

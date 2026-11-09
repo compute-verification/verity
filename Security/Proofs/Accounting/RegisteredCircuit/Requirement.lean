@@ -2,7 +2,7 @@ module
 
 public import Mathlib
 public import Proofs.Accounting.RegisteredCircuit.Credit
-public import Proofs.Accounting.RegisteredCircuit.Session
+public import Proofs.Accounting.RegisteredCircuit.Run
 
 /-!
 # A declared circuit's space and bandwidth from an accepted audit
@@ -12,10 +12,10 @@ public import Proofs.Accounting.RegisteredCircuit.Session
 windows carries at most `C` bits (`Carrier.card_le_census`), so every pass rebuilds at most `X_r·τ + C` bits of its
 appended tiles, and its tiles of `W` are appended tiles. Each window's reads in its passes' tiles of `W`, with each
 pass's tiles short of the store counted as read, against the window's correct receipts: a window short by more than a
-pass's slack, `k` tiles more, has a pass unpaid on its tiles of `W` (`SketchDeployedWindow.exists_unpaid_tiles`), which
+pass's slack, `k` tiles more, has a pass unpaid on its tiles of `W` (`SketchDeployedExecutionPhase.exists_unpaid_tiles`), which
 at signs of rank 12 holds a guessed tag or `k + 1` correct digests behind unobtained positions
-(`Prover.unpaid_tiles_split`), priced at each pass's prefix (`pr_session_le`). The samples then bound the windows' and the
-session's reads so counted (`SketchDeployedSession.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a
+(`Prover.unpaid_tiles_split`), priced at each pass's prefix (`pr_run_le`). The samples then bound the windows' and the
+session's reads so counted (`SketchDeployedRun.pr_deployed_of_unpaid_causal`), and a pass's credit is at most a
 tile's bits for each of its tiles of `W` (`Requirement.credit_le_tiles`), so the shortfall against the credit is the
 shortfall against the store (`Requirement.sum_lt_of_credit`, `Requirement.lt_of_credit`).
 -/
@@ -83,7 +83,7 @@ theorem card_le_census {N m P L B εnum εden E : ℕ} {ι : Type} {Wc : Gates.I
 
 end Accounting.RateSketch.Carrier
 
-namespace Accounting.RateSketch.SketchDeployedWindow
+namespace Accounting.RateSketch.SketchDeployedExecutionPhase
 
 /-- Passes whose reads `r` and one slack each fall short of their correct receipts `c`, less what their tiles `u` and
 credits `cr` leave of the store, have one that falls short of its correct receipts in its tiles `ci`. -/
@@ -114,7 +114,7 @@ theorem exists_lt_of_shares {P : ℕ} (r c ci u cr : Fin P → ℕ) (N slack : �
 each pass `j`, with each pass's store outside its credit `cr j ≤ |U j|` tiles counted as read, and one slack a pass,
 fall short of its correct receipts, some pass's reads in its tiles and the slack fall short of its correct receipts
 there. -/
-theorem exists_unpaid_tiles {P N ρ h S L q ks G : ℕ} (A : SketchDeployedWindow P N 128 ρ h S L q ks G)
+theorem exists_unpaid_tiles {P N ρ h S L q ks G : ℕ} (A : SketchDeployedExecutionPhase P N 128 ρ h S L q ks G)
     (E : Fin P → SketchStore N 128) (σ : SketchSigns ks 128) (ω : Fin P → SketchPassCoins N ρ h ks G)
     (U : Fin P → Finset (Fin N)) (cr : Fin P → ℕ) (slack : ℕ) (hcr : ∀ j, cr j ≤ (U j).card * 32768)
     (hx : A.readsIn E σ ω U + (P * (N * 32768) - ∑ j, cr j) + P * slack < (A.correctOn E σ ω).card * 32768) :
@@ -143,7 +143,7 @@ theorem exists_unpaid_tiles {P N ρ h S L q ks G : ℕ} (A : SketchDeployedWindo
     (fun j => (U j).card) cr N slack (fun j => key _ (U j))
     (fun j => (Finset.card_le_univ _).trans_eq (Fintype.card_fin N)) hcr hx
 
-end Accounting.RateSketch.SketchDeployedWindow
+end Accounting.RateSketch.SketchDeployedExecutionPhase
 
 namespace Accounting.Requirement
 
@@ -218,7 +218,7 @@ theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRe
     calc ∑ j, credit x (bind x w j) ≤ ∑ _j : Fin P, N * 32768 := Finset.sum_le_sum fun j _ =>
           (hcredit x w j).trans (Nat.mul_le_mul_right _ ((Finset.card_le_univ _).trans_eq (Fintype.card_fin N)))
       _ = P * (N * 32768) := by simp
-  have hcor : ∀ (o : Ω × (Fin T → Ca)) (ws ws' : Fin n → SketchWindowCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
+  have hcor : ∀ (o : Ω × (Fin T → Ca)) (ws ws' : Fin n → SketchExecutionPhaseCoins P N 128 ρ 512 16 G 2773) (w : Fin n),
       (∀ v, v < w → ws v = ws' v) → (ws w).1 = (ws' w).1 → (ws w).2.1 = (ws' w).2.1 →
       (win (o, ws) w).correctOn (store o ws w) (ws w).1 (ws w).2.1 =
         (win (o, ws') w).correctOn (store o ws' w) (ws' w).1 (ws' w).2.1 := by
@@ -230,7 +230,7 @@ theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRe
     have hwin : win (o, ws) w = win (o, ws') w := by
       show A.win w ws (fun j => steer (SketchPrefix.of ws w j) o) =
         A.win w ws' (fun j => steer (SketchPrefix.of ws' w j) o)
-      simp only [hpre, SketchSummarySession.win, SketchDeployedSession.win]
+      simp only [hpre, SketchSummaryRun.win, SketchDeployedRun.win]
       rw [hη]
     have hstore : store o ws w = store o ws' w := funext fun j => by
       show steeredStore enc choose layout (SketchPrefix.of ws w j) o =
@@ -244,12 +244,12 @@ theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRe
       ((win z w).correctOn (store z.1 z.2 w) (z.2 w).1 (z.2 w).2.1).card * (128 * 256)) ≤
       (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * ((N : ℝ≥0∞) / 2 ^ 512) +
         (n * P : ℝ≥0∞) * (2 ^ a * (((qr * τ : ℕ) : ℝ≥0∞) / 2 ^ 96) ^ (k + 1) + δ) := by
-    refine le_trans (pr_mono fun x hx' => ?_) (pr_session_le (k := k) hrank hKB choose layout steer hslot A hB)
+    refine le_trans (pr_mono fun x hx' => ?_) (pr_run_le (k := k) hrank hKB choose layout steer hslot A hB)
     obtain ⟨w, hw⟩ := hx'
     by_cases hr : RankGood 12 (x.2 w).1
     swap
     · exact ⟨w, Or.inl hr⟩
-    obtain ⟨j, hj⟩ := SketchDeployedWindow.exists_unpaid_tiles (win x w) (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1
+    obtain ⟨j, hj⟩ := SketchDeployedExecutionPhase.exists_unpaid_tiles (win x w) (store x.1 x.2 w) (x.2 w).1 (x.2 w).2.1
       (tiles x w) (fun j => credit x (bind x w j)) (S + (Lr * τ - ρ * 256) + (Xr * τ + C + k * 32768))
       (hcredit x w) hw
     have hXp : (((win x w).dev j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1).prog (x.2 w).1
@@ -265,7 +265,7 @@ theorem RegisteredCircuitRequirement : Accounting.Guarantees.RegisteredCircuitRe
       with ⟨t, ht⟩ | ⟨ι, hb⟩
     · exact ⟨w, Or.inr ⟨j, Or.inl ⟨(win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1, t, ht⟩⟩⟩
     · exact ⟨w, Or.inr ⟨j, Or.inr ⟨hr, (win x w).kept j (store x.1 x.2 w j) (x.2 w).1 (x.2 w).2.1, ι, hb⟩⟩⟩
-  refine le_trans (pr_mono fun x hx' => ?_) ((SketchDeployedSession.pr_deployed_of_unpaid_causal
+  refine le_trans (pr_mono fun x hx' => ?_) ((SketchDeployedRun.pr_deployed_of_unpaid_causal
     (fun o ws w => (win (o, ws) w).correctOn (store o ws w) (ws w).1 (ws w).2.1)
     (fun o ws w => (win (o, ws) w).readsIn (store o ws w) (ws w).1 (ws w).2.1 (tiles (o, ws) w) +
       (P * (N * 32768) - ∑ j, credit (o, ws) (bind (o, ws) w j)))

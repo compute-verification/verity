@@ -211,7 +211,7 @@ def checkWindow (reg : Registration) (digest : ByteArray) (appends : Array Appen
 in draw order, or accept. A chunk's verdict is `checkWindow`'s on its draws and their openings, so a rejection names
 the draw and failure `checkWindow` on the whole window would (its earlier chunks accept, and its first failing opening
 is the window's first), and an acceptance is every chunk's, each chunk's openings passing `checkOpening` under the
-receipter of their pass's seed (`checkWindow_accept`). -/
+receipter of their pass's seed (`checkExecutionPhase_accept`). -/
 def checkWindowChunked (size : Nat) (reg : Registration) (digest : ByteArray) (appends : Array Append)
     (w : WindowRecord) (drawn : Array (Nat × Nat)) (openings : Array Opening) : Verdict := Id.run do
   if openings.size ≠ drawn.size then return .reject .malformed none

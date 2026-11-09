@@ -38,7 +38,7 @@ import Mathlib.Tactic.NormNum.Prime
 import Mathlib.Tactic.NormNum.RealSqrt
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.Chip
-import Proofs.Accounting.RateAudit.Windows
+import Proofs.Accounting.RateAudit.ExecutionPhases
 
 /-! The first pieces of the proof of `Accounting.Guarantees.RegisteredCircuitRequirement`, whose theorem is in
 `RegisteredCircuit/Requirement.lean`: a carrier of a declared circuit's is within its census over its life, its inputs

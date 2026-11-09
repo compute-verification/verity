@@ -1,6 +1,6 @@
 module
 
-public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod
+public import Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod
 import Mathlib.Algebra.Order.Floor.Extended
 import Mathlib.Algebra.Order.Interval.Basic
 import Mathlib.Analysis.Complex.UpperHalfPlane.Basic
@@ -68,10 +68,10 @@ theorem pr_le_prob_of_equiv {A X : Type} [Fintype A] [Fintype X] (e : A ≃ X) {
   rw [Finset.card_map] at this
   convert (Nat.cast_le (α := ℝ)).2 this using 3
 
-/-- `WorkOfH1CheckedCreditPeriodAt p macs u b_unit` from `H1CheckedCreditPeriod`, at the source's instance at each
+/-- `WorkOfH1CheckedCreditMonitoringPeriodAt p macs u b_unit` from `H1CheckedCreditPeriod`, at the source's instance at each
 value of the coins. -/
-theorem workOfH1CheckedCreditPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Price) (macs : Compose.Kind → ℕ)
-    (u bUnit : ℕ) : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodAt p macs u bUnit := by
+theorem workOfH1CheckedCreditMonitoringPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Price) (macs : Compose.Kind → ℕ)
+    (u bUnit : ℕ) : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodAt p macs u bUnit := by
   intro ι α I _ _ Ω _ d C r c ι' K T L U Cn Ξ V _ _ _ _ _ _ _ Sc Cd n hn hN hr hM hK prm enc staged flat δs δbind
     δks ws opened salt Wp Pl folded help real hcost hhelp hScope hρ hw hluck hgame hdead hpre hbind hreg hdraw hsvc
     hsalt hpins hmu hrb hguess hfix
@@ -84,14 +84,14 @@ theorem workOfH1CheckedCreditPeriodAt_of (hsrc : H1CheckedCreditPeriod) (p : Pri
   exact pr_le_prob_of_equiv (Equiv.refl _) fun _ h => h
 
 /-- **The joint period's PoUW guarantee from H1's checked credit**, at every price, per-kind multiply-add count, unit
-count and unit width (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod`). -/
-theorem WorkOfH1CheckedCreditPeriod : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriod :=
-  workOfH1CheckedCreditPeriodAt_of Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod
+count and unit width (`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod`). -/
+theorem WorkOfH1CheckedCreditMonitoringPeriod : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriod :=
+  workOfH1CheckedCreditMonitoringPeriodAt_of Properties.Pouw.Period.SecurityProofs.h1CheckedCreditPeriod
 
 /-- **The joint period's PoUW guarantee from H1's checked credit on the H200, at INT8**
-(`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200`). -/
-theorem WorkOfH1CheckedCreditPeriodH200 : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditPeriodH200 :=
+(`Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodH200`). -/
+theorem WorkOfH1CheckedCreditMonitoringPeriodH200 : Properties.Accounting.JointBridge.WorkOfH1CheckedCreditMonitoringPeriodH200 :=
   fun sha fetch K R C bUnit =>
-    WorkOfH1CheckedCreditPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit
+    WorkOfH1CheckedCreditMonitoringPeriod (h200S8Price sha fetch) (fun _ => receiptWordMacs R C) (receiptUnitMacs K R C) bUnit
 
 end Accounting.SecurityProofs.Bridge

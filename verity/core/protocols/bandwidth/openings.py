@@ -19,7 +19,7 @@ pass's receipts again, correct and read once.
 satisfy `Pr[all accepted ∧ mean d ≥ d̄] ≤ (1 − d̄)^(s·n)` however the prover adapts (`horizon_error_log2`): by
 induction on `n`, `sup over d₁ of (1 − d₁)^s·(1 − (n·d̄ − d₁)/(n − 1))^(s·(n − 1))` is attained at `d₁ = d̄`.  So a
 time-averaged claim over a monitoring period needs `ln(1/δ)/d̄` openings in total, spread over its windows (in proportion to
-their receipts when the windows differ).  The proved `RateAuditWindows` is a Markov bound (error `n·ε/m`), which gives
+their receipts when the windows differ).  The proved `RateAuditExecutionPhases` is a Markov bound (error `n·ε/m`), which gives
 no such saving at small `δ`: it reads every window's error at the per-window `s`.
 
 **λ, the compression slack.**  `RateAudit`'s error term is `C(q, k)/2^λ`: its code names which `k` of the `q` oracle

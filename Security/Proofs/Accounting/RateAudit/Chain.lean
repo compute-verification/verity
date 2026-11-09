@@ -4,7 +4,7 @@ public import Mathlib
 public import Definitions.Accounting.Guarantees.RateAuditRemote
 public import Proofs.Accounting.RateAudit.Conservation
 public import Proofs.Accounting.RateAudit.Interactive
-public import Proofs.Accounting.RateAudit.Windows
+public import Proofs.Accounting.RateAudit.ExecutionPhases
 
 /-!
 # Chained passes: the proof
@@ -17,7 +17,7 @@ independent of the store, and the event depends on nothing else (`pr_root_le`). 
 for one fixed interactive device, and `RateAuditInteractiveRO` or `RateAuditInteractive` bounds it at each value of
 the other passes' coins (`Chain.pr_short_le`).
 
-**The window.** As `RateAuditWindows`': footprints summed short of `P + 1 − c` floors in passes all accepted within the
+**The window.** As `RateAuditExecutionPhases`': footprints summed short of `P + 1 − c` floors in passes all accepted within the
 budget leave at least `c` passes short (`Chain.le_card_short`), and Markov's inequality over the count of short passes
 (`mul_pr_le_sum`) gives `P` times the per-pass error.
 

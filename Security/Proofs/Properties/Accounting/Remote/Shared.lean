@@ -24,7 +24,7 @@ agree below `W` leave every window's openings coin free.
 
 `acceptSamplesOpenable` is `Properties.RemoteAudit.acceptSamplesOpenable`'s argument across a draw's windows: each sampled
 `(i, p)` falls in the passes of one window `k` (`locatePass`), its share holds `(i − passCount, p)` (`shareOf_mem`),
-whose opening `checkWindow` passed (`checkWindow_accept`), and its number in the draw is the receipts before window `k`
+whose opening `checkWindow` passed (`checkExecutionPhase_accept`), and its number in the draw is the receipts before window `k`
 plus its number there (`flatMap_split`, `sum_take_mid`).
 
 `*_one`: at `g = 1` the session statements are today's (`Shared.run 1` is `Session.run`, `RemoteAudit.Shared.run_one`),
@@ -120,8 +120,8 @@ theorem finalize_roots (first m : Nat) (ws : Array Win) (v : Nat) :
     (finalize ((List.range m).map (first + ·)) ws)[v]!.roots = ws[v]!.roots := by
   rw [finalize_range]; split <;> rfl
 
-theorem grp_eq {g t W : Nat} (h : t + 1 = min (t / g * g + g) W) : grp g t = sampleWindows g W (t / g) := by
-  unfold grp sampleWindows
+theorem grp_eq {g t W : Nat} (h : t + 1 = min (t / g * g + g) W) : grp g t = sampleExecutionPhases g W (t / g) := by
+  unfold grp sampleExecutionPhases
   rw [← h]
 
 theorem find_none {p : Nat → Bool} {l : List Nat} (h : ∀ u, l.find? p = some u → False) : ∀ u ∈ l, p u = false := by
@@ -300,7 +300,7 @@ theorem acceptSamplesOpenable : AcceptSamplesOpenable := by
   have hmem := shareOf_mem drawn (passCount (ws.take k)) ws[k].passes.size j hjd hk1 hk2
   rcases hacc k hk with he | hc
   · rw [he] at hmem; simp at hmem
-  obtain ⟨-, hchk⟩ := checkWindow_accept hc
+  obtain ⟨-, hchk⟩ := checkExecutionPhase_accept hc
   obtain ⟨m, hm, hme⟩ := Array.mem_iff_getElem.1 hmem
   have hck := hchk m hm
   simp only [hme] at hck
@@ -878,8 +878,8 @@ theorem recordKeptAfterSample : RecordKeptAfterSample := by
 
 /-! ## At `g = 1`: today's statements -/
 
-theorem sampleWindows_one {W c : Nat} (h : c < W) : sampleWindows 1 W c = [c] := by
-  unfold sampleWindows
+theorem sampleExecutionPhases_one {W c : Nat} (h : c < W) : sampleExecutionPhases 1 W c = [c] := by
+  unfold sampleExecutionPhases
   rw [show min (c * 1 + 1) W - c * 1 = 1 by omega]
   simp
 
@@ -887,7 +887,7 @@ theorem sampleWindows_one {W c : Nat} (h : c < W) : sampleWindows 1 W c = [c] :=
 theorem sampleLengths_one {s : State} {c : Nat} (h : c < s.params.windows) :
     sampleLengths 1 s c = s.windows[c]!.plans.map (·.length) := by
   unfold sampleLengths
-  rw [sampleWindows_one h]
+  rw [sampleExecutionPhases_one h]
   simp
 
 theorem releaseOrder_one (params : Params) (reg : Registration) (appendCoins : Array ByteArray) (notBeforeNs : Nat)
@@ -916,7 +916,7 @@ theorem liveUnder_one (params : Params) (reg : Registration) (appendCoins : Arra
 /-- A draw of one window is `verifyWindow`'s: its share is the whole draw, and its receipts are numbered from 0. -/
 theorem acceptSamplesOpenable_one (h : AcceptSamplesOpenable) : Properties.RemoteAudit.AcceptSamplesOpenable := by
   intro reg appends w coin samples openings hv
-  obtain ⟨drawn, hd, hc⟩ := verifyWindow_accept hv
+  obtain ⟨drawn, hd, hc⟩ := verifyExecutionPhase_accept hv
   have hl : lengthsOf [w] = w.passes.map (·.plan.length) := by apply Array.ext'; simp [lengthsOf]
   obtain ⟨_, _, _, _, _, hrange, _⟩ := Properties.RemoteAudit.sampleIsSubset _ _ _ _ _ _ hd
   have hsh : shareOf drawn 0 w.passes.size = drawn :=

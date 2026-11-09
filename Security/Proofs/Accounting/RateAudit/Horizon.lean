@@ -38,7 +38,7 @@ import Mathlib.Tactic.Polynomial.Basic
 import Mathlib.Tactic.ReduceModChar
 import Mathlib.Topology.Sheaves.Init
 import Proofs.Accounting.Bandwidth.AuditRO
-import Proofs.Accounting.RateAudit.Windows
+import Proofs.Accounting.RateAudit.ExecutionPhases
 import Std.Tactic.BVDecide.Normalize.Prop
 import Proofs.Pous.Prob
 

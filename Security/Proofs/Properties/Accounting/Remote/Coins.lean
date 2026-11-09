@@ -2,8 +2,8 @@ module
 
 public import Batteries.Tactic.OpenPrivate
 public import Proofs.Properties.Accounting.Remote.Draw
-public import Proofs.Properties.Accounting.Remote.Session
-public import Proofs.Properties.Accounting.Remote.Window
+public import Proofs.Properties.Accounting.Remote.Run
+public import Proofs.Properties.Accounting.Remote.ExecutionPhase
 public import Properties.Accounting.Remote.Coins
 
 /-!
