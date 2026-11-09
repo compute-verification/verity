@@ -539,6 +539,11 @@ class World:
                 chosen = {n: (files[n], *j)
                           for n, j in zip(took, pool.map(lambda n: self._judge(main, entries[n].pr.head, cfg), took))}
         first = {n: i for i, n in enumerate(priority_list(self.priority_file) if self.priority_file else ())}
+        # a PR the priority file names ahead of PRs whose heads its own holds (an aggregate, such as a commit of `checked`'s
+        # chain) lands them with it, so they don't build first; a stack the file doesn't rank still lands its bases first
+        held = {a for n in chosen if n in first for a in entries[n].after
+                if a in chosen and first.get(a, len(first)) > first[n]}
+        chosen = {n: v for n, v in chosen.items() if n not in held}
         order = sorted(chosen, key=lambda n: (first.get(n, len(first)), labels.marked_at(n, entries[n].pr.head) or "", n))
         placed: list[int] = []
 

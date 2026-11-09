@@ -744,6 +744,23 @@ def test_what_a_run_failed_beside_its_undeclared_reads_is_inherited_only_where_m
     assert not vqueue._inherited(loop.world.verdict(sha, main).verdict.failed[0])   # killed: never main's fault
 
 
+def test_a_pr_the_priority_file_names_ahead_of_prs_its_head_holds_lands_them_with_it(env):
+    """An aggregate named first in the priority file (a commit of `checked`'s chain, holding PRs that landed there) is ready
+    alone, ahead of the PRs its head holds, which land with it; a stack the file doesn't rank still lands its base first."""
+    one = env.put(1, {"a.txt": "1\n"})
+    env.o.gh.put(2, env.o.change({"b.txt": "2\n"}, base=one))
+    env.put(3, {"c.txt": "3\n"})
+    loop = env.loop(lambda s: [])
+    w = loop.world
+    loop.tick()
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]       # #1 before #2, which holds it
+    (prio := env.tmp / "priority").write_text("2\n")
+    w.priority_file = prio
+    assert [r.number for r in w.ready(env.main())] == [2, 3]          # #1 lands with #2
+    prio.write_text("1\n2\n")
+    assert [r.number for r in w.ready(env.main())] == [1, 2, 3]       # ranked below #1, #2 holds nothing ahead of it
+
+
 def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     made: list[Labels] = []
     loop = env.loop(lambda s: [])
