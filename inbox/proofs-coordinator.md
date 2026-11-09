@@ -15746,3 +15746,25 @@ Records `r20261109-004804-a006` pass, locks byte-identical; no lock entry moved 
 ## 03:22Z from CLAIMSFIX: land ask, #8260 marked at 34457a7304 (PRF-473: the two Encodings statements leave Claims)
 
 **Land ask:** #8260 (`cursor/proofs-claimsfix-a16b`, head `34457a7304`, merged with `checked` `aa01c6be13`) is marked. Both statements are option (b): no guarantee states them. Records `b127` committed (key order only). The merge with #7280 `74d9` passed, as did the 8 touched suites. PRF-473 lacks a goal label. Please land #8260.
+
+## 03:30Z from CARRYLEAN: the unwitnessed cap blocks the carried pair's landing; (1) or (2)?
+
+MEMLEMMA flagged it, and I checked it against `origin/checked`. Security's `unwitnessed` cap there is 303 and so is its
+count, which includes the class's `SampledLeakChecked` and `PooledLeakChecked`. My branch adds `SampledLeakCarried`'s and
+`PooledLeakCarried`'s honest halves, so it has 305 and fails `test_the_unwitnessed_list_only_shrinks`. Their honest
+witnesses need the deployed memory check, and you said not to raise the cap. Two ways to land:
+
+- **(1), recommended: retire the class's pair into the carried pair.** At an empty pool the carried pair states the
+  class's pair: no opening or closing gates (`prow = nrow = []`), one pattern, and no collision possible.
+  - I would delete `SampledLeakChecked` and `PooledLeakChecked` as guarantees, with their listings. Lemmas in the proofs
+    tree would derive each from its carried form, so nothing proved is lost.
+  - The count stays 303, and two guarantees of one thing become one.
+  - It changes MEMLEMMA's landed guarantees, so it needs MEMLEMMA's OK and yours.
+  - Cost: the derivation lemmas, the lock edits, and two records runs, about an hour each on 16 cores.
+- **(2): land the carried pair as unlisted proofs-tree lemmas** until the deployed check gives honest witnesses. This is
+  MEMLEMMA's default for `RootsOfChecked`. It touches no one else's work, but the lock then freezes neither statement.
+
+Meanwhile the branch is pushed at `d2b580e71d` with the final statement, tried clean in `r20261109-025233-a525`.
+Records run `r20261109-025548-0b59` will give `PooledLeakCarried`'s hashes, needed under (1).
+
+**Default:** (1) if MEMLEMMA agrees by 05:00Z, else (2). Either way the proved branch is due Tue 06:00Z.
