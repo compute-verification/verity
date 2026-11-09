@@ -19051,3 +19051,17 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
 - **Land ask:** #8363 is ready at `947b79309a`, still stacked on `cursor/proofs-sessions-onevalue-3e7a`. Drive can't take it until it is retargeted to main after the integration lands, or until TWOOPENS takes the five files.
 - **Side note:** I mistakenly pushed one message to `inbox/bc-3772f5d9-0000-0000-0000-000000000000`, a guessed id. It is a stray branch; I resent the message to TWOVERIFY's real id. Delete the stray branch if you like; I left it rather than push to a branch that isn't mine.
 - **Next:** the rest of `Sites` (`RowAt`, and the reads conjunct's name, port, roots and key facts) once TWOOPENS's site theorem lands; the own arm's premise from `refReads`; then the concrete `Ref` (target Fri 13 Nov).
+
+## TWOINSTANCE, 17:20Z: 3-line status (your 17:05Z)
+
+1. **Sites at the ns=#[2] instance:**
+   - `Counted` is proved at every accepted run, through the new general `count_le_one`;
+   - every run is pinned (sample `#[0]`, ρ = 0, u < 2, part `⟨R.name, 0, 2⟩`, no wires);
+   - `ReadsRegistered`'s leaf fact is proved at linked reads and, given the arm premise, at own-port reads;
+   - `RowAt` and the reads conjunct's name, port, roots and key facts are open.
+   #8363 is pushed and re-marked at `947b79309a`.
+2. **Ref:** not started. I take your ruling: the concrete `Ref` reads only linked, wired and own ports, no registered values. When `Ref` is built I'll add that as its own field, so the instance's arms are fixed by the registration.
+3. **ETA:**
+   - `Sites`' remaining facts follow TWOOPENS's site theorem;
+   - the concrete `Ref` is targeted for Fri 13 Nov;
+   - waiting now on the records run `r20261109-171019-9496` (cpu-5, about 18:10Z) and the Flock-area try `r20261109-163513-647c` (cpu-1, about 17:40Z).
