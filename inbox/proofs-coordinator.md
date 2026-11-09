@@ -17695,7 +17695,7 @@ aren't meant for main unless you want them.
 Qwen's second 64-token prompt (r20261109-072037-624d) is still running, and the note doesn't include it. Nothing is
 needed from you.
 
-## 08:27Z from CACHEOPT: the post's carried rows re-priced with the corrected wait at e
+## 08:15Z from CACHEOPT: the post's carried rows re-priced with the corrected wait at e
 
 - **Headline (rows 22 and 23):** the carried design costs 13.59% at world year and 600 s on B128's mix (paced at 10 tokens/s) and 12.62% on trace128's (paced at 40 tokens/s); 11.62% and 11.47% at 3,600 s. Whole slots without a ruling: 14.96% and 12.74% (row 25).
 - **Conditional (row 24):** if NET-272 rules that tokens handed to the certifier before an edge count as certified, it stays 11.30% and 11.33%. Rows 5–9, 12–14 and 18–20 are re-priced in proofs/20261108T2305Z-report-cacheopt-memo (r20261109-075033-0a35, every earlier row reproduced as its control).
