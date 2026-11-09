@@ -13,7 +13,8 @@ reproduces. `long-w0` is two prompts of 2,220 and 2,304 tokens, 15 decodes each.
 writes OUT/compile_cost.json: the window, its digests, each Program's root nodes (by form and Definition, `root_kinds`), wall
 seconds and peak RSS (`ru_maxrss`), and each phase's wall seconds and peak RSS while it ran (an RSS sampler thread), and prints
 `COMPILE-COST window=.. wall_min=.. peak_gib=.. digests=..`.
-`--requests A:LP:MAX,...` gives the window directly, `--layers N` truncates the model to its first N layers (a scaling
+`--requests A:LP:MAX,...` gives the window directly, `--execution compiled` registers class G's compiled execution (the record's
+`graphs`: its compilation, CUDA-graph mode and capture sizes), `--layers N` truncates the model to its first N layers (a scaling
 measurement: its digests are another model's), `--profile` writes cProfile's stats (`profile.pstats`, and the top functions in
 `profile.txt`). `--guard` exits 1 unless each digest is the one `PINS` holds for the window.
 
@@ -90,17 +91,19 @@ def session(reqs: list[tuple[int, int, int]]):
     return advice, ingress
 
 
-def registered(rank: int, layers: int | None):
-    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on H200 at TP8 `rank`, class G's engine, the public seed."""
+def registered(rank: int, layers: int | None, execution: str = "eager"):
+    """φ of GLM-5.3's checkpoint of record (its pinned config.json, FP8) on H200 at TP8 `rank`, class G's engine at `execution` (compiled:
+    the target compilation class G serves it at, `engine_classes.compilation`), the public seed."""
     from verity_vllm.engine.profiles.dense_generic import pinned_hf_config
+    from verity_vllm.engine.profiles.engine_classes import compilation
     from verity_vllm.engine.served_seed import DEFAULT_SEED
     from verity_vllm.program.predict.phi import Phi
     from verity_vllm.program.predict.steps import Registered
     hf = json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text())
     if layers is not None:
         hf = {**hf, "num_hidden_layers": layers, **{k: hf[k][:layers] for k in ("indexer_types", "mlp_layer_types")}}
-    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target=dict(TARGET), execution="eager",
-              tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
+    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, "compilation": compilation("G", execution)},
+              execution=execution, tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     return Registered.of(phi, default_seed=DEFAULT_SEED)
 
 
@@ -201,6 +204,8 @@ def main() -> int:
     ap.add_argument("--window", choices=sorted(WINDOWS), default=None)
     ap.add_argument("--requests", default=None, help="ARRIVE:LP:MAX_TOKENS,... in place of --window")
     ap.add_argument("--rank", type=int, default=0)
+    ap.add_argument("--execution", choices=("eager", "compiled"), default="eager",
+                    help="class G's execution: compiled is vLLM's breakable CUDA graphs at their capture sizes")
     ap.add_argument("--layers", type=int, default=None, help="the model's first N layers only (a scaling measurement)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--profile", action="store_true", help="cProfile the compile (profile.pstats, profile.txt)")
@@ -221,7 +226,10 @@ def main() -> int:
         instrument(m)
     from verity_vllm.program.predict.steps import compile_steps
     advice, ingress = session(reqs)
-    reg = registered(a.rank, a.layers)
+    reg = registered(a.rank, a.layers, a.execution)
+    tp = reg.phi.target_profile()
+    graphs = {"compilation": tp.compilation, **({k: tp.COMPILATIONS[tp.compilation][k] for k in ("mode", "cudagraph_mode", "capture_sizes")}
+                                                if tp.compilation else {"cudagraph_mode": None})}
     prof = None
     if a.profile:
         import cProfile
@@ -243,6 +251,7 @@ def main() -> int:
     kinds = {d: dict(Counter(f"{n.form} {getattr(n.fn, 'name', None) or n.fn.id.split('{')[0]}" for n in p.fn.body.nodes).most_common())
              for d, p in compiled.programs.items()}
     rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
+           "execution": a.execution, "graphs": graphs,
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "root_kinds": kinds,
            "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
@@ -259,7 +268,7 @@ def main() -> int:
         (out / "profile.txt").write_text(s.getvalue())
     for p in rec["phases"]:
         print(f"  {'  ' * p['depth']}{p['phase']:<40} calls={p['calls']:<6} wall_s={p['wall_s']:<10} peak_gib={p['peak_gib']}")
-    print(f"COMPILE-COST window={rec['window']} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
+    print(f"COMPILE-COST window={rec['window']} execution={a.execution} layers={a.layers} wall_min={rec['wall_min']} peak_gib={rec['peak_gib']} "
           f"nodes={sorted(nodes.values())} digests={','.join(d[:16] for d in digests)} workload={compiled.workload.digest[:16]}", flush=True)
     if a.guard:
         want = PINS.get(a.window or "")
