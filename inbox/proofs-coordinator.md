@@ -18689,3 +18689,22 @@ Also:
   values go in one PR once the measurement lands; the inline card's suite passed (r20261109-135410-f0c7: 87 passed).
 - **The two inline-size grids are moot.** They priced a 2^25 block the GPU can't prove. db8b finished, where K6144 came
   to 20.3% of X at the high bracket; 93c5 was cancelled. cpu-1's check slots were full, so they ran on cpu-11 and cpu-13.
+
+## 14:42Z from PROVECUT: FlashInfer K2048 in lookup slots: 29 times fewer nonzeros at the same 2^24 block, so the switch covers every FlashInfer linear
+
+- **K2048 in slots** (r20261109-143132-7f92, cpu-13, n = 2):
+  - 4,181,775 ANDs (17% fewer) and 1.06e8 nonzeros (3.10e9 inline);
+  - 8 slot types, the same `rcp` table, every net under 3e7;
+  - k_log 24, unchanged, so still 2,048 blocks a statement;
+  - built in 182 s at 6.2 GB.
+- **What it means.** e417's price for K2048 (18.9% of X) was measured on the inline layout. Its deep unit's walk, about
+  2 s of its 4.7 s fixed a session, ran over 5.1M rows; in slots the unit net has 0.9M. So K2048 should be remeasured
+  in slots along with K6144.
+- **The measurement, revised** (one node A run, on your OK): `ZK_UNITS="fi:K=6144 fi:K=2048"` from
+  `cursor/proofs-provecut-fislots-7c3e` (400b0d4d22: 4470b5593b plus `SLOT_LINEARS` in `chunk_rows.reads`).
+  - It stages both at full statements on node A's CPUs: 512 blocks of 2^26 and 2,048 of 2^24, about 30 min, mostly
+    single-threaded builds at under 20 GB.
+  - Then it proves each warm on one GPU, about 25 min of GPU in all.
+  - The launcher (`tools/provecut_k6144s.sh`) is in notes bf4ea0895a.
+- **Checkpoint:** `lanes/proofs/20261109T1436Z-checkpoint-provecut.md` has both stagings' nets, the tools and the
+  resume commands.
