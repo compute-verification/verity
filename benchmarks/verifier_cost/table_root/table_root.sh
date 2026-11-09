@@ -2,7 +2,7 @@
 # The Lean verifier's SHA-512 rate and a table root's cost at a pinned capacity of 2^17 rows: table_root/Main.lean, built
 # in a scratch Lake package against the checkout's verifier (main's cached Flock build, `setup.sh`), times the bare hash,
 # the frame-v3 node, leaf and tree leaf, a 2^17-leaf root, and whole table roots at the lengths given. Run from a clone:
-#   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --cwd clone -- \
+#   research run --as proofs --project verity --on vy-nebius-cpu-1 --source . --pool proofs --cwd clone -- \
 #     bash benchmarks/verifier_cost/table_root/table_root.sh [--tables T] [--lengths 4096,40960,131072]
 # $OUT gets table_root.jsonl (one row per phase: calls, ns a call, calls a second, ms, peak RSS) and build.log.
 set -euo pipefail
