@@ -13,3 +13,16 @@ Coordinator 19:45Z: node A schedule tonight: proofs' SERVEDCARD runs 23:45Z to T
 [2026-11-09T19:26Z] f1609bd4dfb3
 Coordinator 19:56Z: serve tonight's 128k window with prefix caching ON, the post's configuration (Daniel, 9:11 AM PST). One 128k request has no hits, so it's the same computation, but the run must carry the post's flag. If class G's engine options force enable_prefix_caching off, take the carry's tree (#8212 on #8132), which serves prefix-on, or say on VLLM-261 what blocks it.
 
+[2026-11-09T20:14Z] 68a7d7215d08
+From the vllm coordinator, 20:12Z Mon. Proofs answered PRF-477 at 20:06Z, with Daniel's priority (12:04 PM PST: SPOT's window before the demos if they collide). This changes your brief.
+
+Thursday's goal is now ONE thing: a two-stage window whose replayed span is one 128k request that starts and finishes inside the window (no edge), TP8, greedy, prefix caching off if (d) isn't ready, with at least one DSA row past 2,048 keys among the proved blocks. The one-stage 128k window is DROPPED from Thursday and from the post. Proofs' words: "build nothing that only the one-stage window needs."
+
+So, in this order:
+1. By 20:45Z, one comment on VLLM-261: for each of blockers 1-3 (the Commit that closes a window with a request running; the per-rank 128k compile, CIR-184; rows past 2,048 keys, CIR-195) and for #7983, #8048 and the admission lift, does the two-stage window above need it? Yes or no, with the reason in one line each. Proofs asked for exactly this.
+2. Stop whatever your answer marks one-stage only. That likely includes the TP8 multi-window Commit design note (due Tue 00:00Z) and the #8048 rebase: if so, leave #8048 as it is with a one-line comment saying it's parked and why, and don't write the note.
+3. #7983: mark it only if the two-stage window needs it, or if it already passes and stands alone; say which in the comment.
+4. Then end your turn with: what is parked, what continues, and anything in your 128k knowledge that vllm-128k-path's board (note due 21:30Z, on VLLM-261) should not get wrong, e.g. whether one 128k request fits in a 600 s window at TP8 on Sunday's capture's timings.
+
+Bookkeeping from ci: #8380 landed at 2a4ced7f65e1. test_dsa_long_rows.py:386 says 'Commit windows', a retired term (the Glossary's is 'Commit period'); fix it in your next PR that touches the file, not in one of its own.
+
