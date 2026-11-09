@@ -883,7 +883,7 @@ def main() -> int:
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
     k = a.k or len(defs)
-    law = D.parse_law(f"stratified:{k}")
+    law = D.parse_design(f"stratified:{k}")
     bound = {"partition": pd, "program": part["program"]}
 
     members, tags = [], {}
@@ -1023,8 +1023,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_law(f"stratified:{k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_law(f"subset:{k}"))):
+    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     v = V.check(rec, program, query, law, a0.SCHEME, want,
@@ -1073,7 +1073,7 @@ def main() -> int:
         tst_d = {"dir": d, "meta": tst.meta, "pin": tst.pin, "partition_file": tdir / "partition.json", "program_file": tdir / "program.json",
                  **templated(tst, tdir, a.tmpl_unit_bin)}
         theader = a0.public_header(d, tn)
-        tlaw = D.parse_law("subset:2")
+        tlaw = D.parse_design("subset:2")
         twant = a6.frame_ports(set_name, tst.meta, tn)
         trec = R.record(tprog, tq, tlaw, a0.SCHEME, a0.registered_roots(theader, twant),
                         {"kind": "stand-in", "of": f"tampered copy of {tm['kind']}'s first {tn} units: bit 0 of every instance's "

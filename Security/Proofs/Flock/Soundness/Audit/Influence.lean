@@ -10,8 +10,7 @@ import Mathlib.Basic.ENNReal.Inv
 import Mathlib.Data.Fintype.BigOperators
 import Proofs.Flock.Soundness.Audit.Circuit
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # Influence through a separator
@@ -42,12 +41,7 @@ circuit's outputs, since commitments and leaves are outputs that the verifier se
 
 @[expose] public section
 
-namespace FlockSoundness.Audit
-
-open Game Finset
-open scoped ENNReal
-
-namespace Circuit
+namespace Verity.Boolean.Circuit
 
 variable (C : Circuit)
 
@@ -56,13 +50,18 @@ inductive FeedsAvoiding (K : Finset (Fin C.N)) : Fin C.N → Fin C.N → Prop
   | refl {t : Fin C.N} : t ∉ K → FeedsAvoiding K t t
   | step {g h t : Fin C.N} : g ∉ K → g ∈ (C.op h).args → FeedsAvoiding K h t → FeedsAvoiding K g t
 
-end Circuit
-
-theorem Circuit.FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
+theorem FeedsAvoiding.not_mem {C : Circuit} {K : Finset (Fin C.N)} {g t : Fin C.N}
     (h : C.FeedsAvoiding K g t) : g ∉ K := by
   cases h with
   | refl hK => exact hK
   | step hg _ _ => exact hg
+
+end Verity.Boolean.Circuit
+
+namespace FlockSoundness.Audit
+
+open Game Finset
+open scoped ENNReal
 
 /-- **Guessing through a small set of outputs**: a receiver `g` that sees only the delivered output `y m` recovers the
 message `m`, with `y m ∈ Y`, for at most `|Y|` messages. -/
@@ -75,7 +74,7 @@ theorem card_guess_le {M O : Type} [Fintype M] [DecidableEq M] [DecidableEq O] (
 
 namespace Partition
 
-variable {C : Circuit} {n : ℕ} (P : Partition C n)
+variable {C : Verity.Boolean.Circuit} {n : ℕ} (P : Partition C n)
 
 /-- **A separator of the units `B` from the delivered wires `D`** (a downstream cut): every path from a gate of a unit
 of `B` to a wire of `D` meets `K`. -/
@@ -142,7 +141,7 @@ theorem separator_induction {K : Finset (Fin C.N)} {B : Finset (Fin n)} {D : Fin
   have hB : ∀ u, P.unit g = some u → P.localEval X u g = P.localEval Y u g := by
     intro u hu
     rw [P.localEval_of_mem X hu, P.localEval_of_mem Y hu]
-    refine Op.apply_congr _ fun x hx => ?_
+    refine Verity.Boolean.Op.apply_congr _ fun x hx => ?_
     have hxg : x.val < m := hgm ▸ C.topo g x hx
     by_cases hxK : x ∈ K
     · by_cases hxu : P.unit x = some u

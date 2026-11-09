@@ -19,6 +19,7 @@ public import Flock.Tags
 public import Flock.Scan
 public import Flock.Net
 public import Flock.SplitNL
+public import Flock.ByteLines
 public import Flock.Lookup
 public import Flock.Circuit
 public import Flock.Public
@@ -50,6 +51,7 @@ public import Flock.RecSparseCmd
 public import Flock.RecAlgebra
 public import Flock.RecResiduals
 public import Flock.RecOpening
+public import Flock.HmOutCols
 public import Flock.HmRow
 public import Flock.ReadNet.Sha
 public import Flock.ReadNet.RowSeg

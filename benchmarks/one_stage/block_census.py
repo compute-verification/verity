@@ -3,12 +3,14 @@ of each rank, sized with ``--estimate``) cut into proof blocks, and the proof bl
 step (step 0) and the decode steps, per token and per request.
 
 A row's cut is its own Definition, or else a unit template for each slot of its split (`serving_rows.unit_templates`):
-a ``CUT`` row's batched members, a ``PARTS`` row's parts and a ``SPLITS`` row's split parts and combine are a slot each; a
+a ``CUT`` row's batched members, a ``PARTS`` row's parts, a ``SPLITS`` row's split parts and combine, a ``CHAINS`` row's key
+blocks and end and a ``STAGES`` row's stages are a slot each; a
 ``COORDS``, ``COLS`` or ``SLICES`` row has one slot, its units listed coarse to fine, and a ``KCHUNKS`` row's slot is its
 coordinate or its K-chunks of one width. A unit template fits when it binds, Flock has a piece for every leaf, its block
 (`m1_families.block`) is at most `m1_families.K_MAX` and its outputs fit a public size class (`partition.unit_class`). The
-row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` row, and a split's ``COLS`` slot,
-instead take the fitting width of least leakage-weighted proving cost (`cols_pick`, the row's own width among them). A row
+row itself is taken when it fits, else each slot's coarsest fitting option. A ``COLS`` or ``WIDE_COORDS`` row, and a
+split's ``COLS`` or ``WIDE_COORDS`` slot (the block-scaled FP8 GEMM's coordinates of c outputs), instead take the fitting
+width of least leakage-weighted proving cost (`width_pick`, the row's own width among them). A row
 with a slot that has none is a gap, with its finest option's reason. A row whose Definition has no gate (a gather) or no
 input (a constant) is no proof block.
 
@@ -36,10 +38,10 @@ PHASES = ("prefill", "decode")
 #: the bits a sampled block's position adds to what its outputs reveal: the planner's location bits, log2(e R n) for R replay
 #: blocks of n units of a type (`optimize.two_stage_design`), at the scale of the world's compute
 LOCATION_BITS = 80
-#: a ``COLS`` row's column blocks are no smaller than 2^COLS_FLOOR rows while a wider width fits: below it a block is mostly its
-#: rows' hashing slots (Flock's 2^18-row slots), so a narrower one proves about as much and adds a hiding leaf a row to every
-#: token's commitments
-COLS_FLOOR = 22
+#: a ``COLS`` row's column blocks and a ``WIDE_COORDS`` row's coordinates are no smaller than 2^WIDTH_FLOOR rows while a wider
+#: width fits: below it a block is mostly its rows' hashing slots (Flock's 2^18-row slots), so a narrower one proves about as
+#: much and adds a hiding leaf a row to every token's commitments
+WIDTH_FLOOR = 22
 
 
 def misfit(e: dict) -> str | None:
@@ -64,7 +66,7 @@ def slots(spec: str, units: list[dict]) -> list[list[list[dict]]]:
     base = spec_base(spec)
     if base in ST.PARTS:
         return [[[u] for u in units if spec_base(u["spec"]) == p[0]] for p in ST.PARTS[base]]
-    if base in ST.CUT or base in ST.SPLITS:
+    if base in ST.CUT or base in ST.SPLITS or base in ST.CHAINS or base in ST.STAGES:
         return [[[u]] for u in units]
     if base in ST.KCHUNKS:
         whole, chunks = [], defaultdict(list)
@@ -83,11 +85,18 @@ def leak_cost(units: list[dict]) -> float:
     return sum(u["n"] * (unit_class(sum(u["block"]["out_bits"])) + LOCATION_BITS) * 2 ** u["block"]["est_log"] for u in units)
 
 
-def cols_pick(opts: list[list[dict]]) -> list[dict] | None:
-    """A ``COLS`` slot's option (its widths coarse to fine): of the fitting ones no smaller than 2^`COLS_FLOOR` rows, the one of
-    least `leak_cost`, the coarser on a tie; the coarsest fitting one when none is that large; None when none fits."""
+def widths(spec: str) -> bool:
+    """Whether a row or unit of ``spec`` comes in widths `width_pick` chooses between: a ``COLS`` family's column blocks or a
+    ``WIDE_COORDS`` family's coordinates."""
+    return spec_base(spec) in ST.COLS or spec_base(spec) in ST.WIDE_COORDS
+
+
+def width_pick(opts: list[list[dict]]) -> list[dict] | None:
+    """A ``COLS`` or ``WIDE_COORDS`` slot's option (its widths coarse to fine): of the fitting ones no smaller than
+    2^`WIDTH_FLOOR` rows, the one of least `leak_cost`, the coarser on a tie; the coarsest fitting one when none is that large;
+    None when none fits."""
     fit = [o for o in opts if all(misfit(u) is None for u in o)]
-    big = [o for o in fit if all(u["block"]["est_log"] >= COLS_FLOOR for u in o)]
+    big = [o for o in fit if all(u["block"]["est_log"] >= WIDTH_FLOOR for u in o)]
     return min(big, key=leak_cost) if big else next(iter(fit), None)
 
 
@@ -102,14 +111,14 @@ def cut(spec: str, f: dict) -> tuple[str, list[dict], str | None]:
     why = misfit(e)
     whole = [{**e, "spec": spec, "n": 1}]
     ss = slots(spec, e.get("units", []))
-    if spec_base(spec) in ST.COLS and (pick := cols_pick([whole, *(ss[0] if ss else [])])) is not None:
+    if widths(spec) and (pick := width_pick([whole, *(ss[0] if ss else [])])) is not None:
         return ("row" if pick == whole else "split"), pick, None
     if why is None:
         return "row", whole, None
     got = []
     for opts in ss:
-        cols = all(spec_base(u["spec"]) in ST.COLS for o in opts for u in o)
-        pick = cols_pick(opts) if cols else next((o for o in opts if all(misfit(u) is None for u in o)), None)
+        wide = all(widths(u["spec"]) for o in opts for u in o)
+        pick = width_pick(opts) if wide else next((o for o in opts if all(misfit(u) is None for u in o)), None)
         if pick is None:
             worst = next((u for u in (opts[-1] if opts else []) if misfit(u) is not None), None)
             return "gap", [], f"{why}; finest split {worst['spec']}: {misfit(worst)}" if worst else why
