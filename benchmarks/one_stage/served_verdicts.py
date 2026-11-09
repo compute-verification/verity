@@ -1173,12 +1173,13 @@ def pouw(serve_dir: Path, window: int, out: Path, *, gate: str | None, key: str 
 
 
 def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key: str | None,
-                    main: Path | None) -> dict[str, Any]:
+                    main: Path | None, fetch: Callable[..., bytes] | None = None) -> dict[str, Any]:
     """Whether every pass with calls of Pearl+'s served run (``served``, `served_passes.py serve`'s document) has its
     epoch's salt from the live session its ``coins`` names (`served_step.coins_of`'s): the session's tree as the gate
     `gate`'s ``fetch`` gives it, and the auditor's ledger and the host's pins log as the gate answers now, written to
     `out`, with main's first-parent line `main` (`remote.main_lines`), each pass's manifest held by
     `core_check.live_salt` under the challenger key whose public key's SHA-512 is `key` (`challenger.pinned_key`).
+    `fetch` gives the gate's answers in `gate`'s place (`served_sources.GateReads`, which reads each once; tests).
     ``{session, closed, passes, reason}``: the passes checked, and None or the first refusal."""
     from verity.core.protocols.pouw import core_check as CC
     from verity.core.protocols.sampled_proofs import remote
@@ -1188,17 +1189,18 @@ def pearlplus_coins(served: Mapping[str, Any], out: Path, gate: str | None, key:
     sid = (coins.get("session") or {}).get("session")
     got: dict[str, Any] = {"session": sid, "closed": coins.get("closed"), "passes": 0, "reason": None}
     try:
-        if not (gate and key and main):
+        if not ((gate or fetch is not None) and key and main):
             raise ValueError("no gate, key pin or main's first-parent line to check the session by (--gate, --key-sha512, "
                              "--main)")
         if not sid:
             raise ValueError("the served run names no live session")
+        ask = fetch or (lambda *words: _gate_out(gate, *words))
         tgz, tree = out / "session.tgz", out / "session"
-        tgz.write_bytes(_gate_out(gate, "fetch", sid))
+        tgz.write_bytes(ask("fetch", sid))
         with tarfile.open(tgz) as t:
             t.extractall(tree, filter="data")
         for name in ("ledger", "pins"):
-            (out / f"{name}.jsonl").write_bytes(_gate_out(gate, name))
+            (out / f"{name}.jsonl").write_bytes(ask(name))
         d = tree / sid / "out"
         live = {"key": PHC.pinned_key(d / remote.KEY, key).to_json(), "ledger": remote.ledger_lines(out / "ledger.jsonl"),
                 "pins": remote.ledger_lines(out / "pins.jsonl"), "main": remote.main_lines(main),
@@ -1914,7 +1916,8 @@ def terms(r: Mapping[str, Any], leg: Mapping[str, Any] | None) -> list[str]:
 def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | None, str]], node: str,
          legs: Mapping[str, Mapping[str, Any]] | None = None) -> str:
     """The composed verdict's reason: one clause a subprotocol, its verdict and, unless it accepted about ``node``, why; an
-    accept about ``node`` with its `terms` (``legs``: each accepted one's block record leg, by runner name)."""
+    accept about ``node`` with its `terms` (``legs``: each accepted one's block record leg, by runner name) and, where
+    its row carries one, its own clause (``said``: `served_sources`' rows, each saying where it was verified)."""
     out = []
     for k, r in rows.items():
         v, server = r.get("verdict"), at[k][0]
@@ -1929,6 +1932,8 @@ def said(rows: Mapping[str, Mapping[str, Any]], at: Mapping[str, tuple[str | Non
             s = ("accept" if server is not None else "accept, naming no server: not carried") + (f" ({'; '.join(t)})" if t else "")
             if r.get("answer_from") == PEARLPLUS_FROM:
                 s += f", {PEARLPLUS_SAID}"
+            elif r.get("said"):
+                s += f", {r['said']}"
         else:
             s = f"{v}: {r.get('reason')}"
         out.append(f"{NAMES[k]}: {s}")
@@ -2024,7 +2029,8 @@ def served_compare_line(path: Path) -> str:
 def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[int, int], node: str,
            run: str | None, servers: Mapping[str, tuple[str | None, str]] | None = None, product: str = "onsite",
            deferred: str | None = None, off_node: bool = False, tree: Mapping[str, str] | None = None,
-           served_compare: str | None = None) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
+           served_compare: str | None = None, sources: Mapping[str, Any] | None = None
+           ) -> tuple[dict[str, Any], dict[str, Any] | None, dict[str, Any]]:
     """The window report over ``rows`` (by runner name), its block record (None when a subprotocol about this node
     rejected, erred or was undecided), and the ``RECORD`` line's summary, composed for ``product``: each subprotocol it
     drops is its `dropped_row`, about no server. ``servers``: each piece's `piece_server`, by runner name; sampled proofs'
@@ -2032,11 +2038,13 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
     follow-on and why, and ``served_compare``: the served compare's verdict line (`served_compare_line`), each of which
     the report and the line carry. ``off_node``: composed from the served node's compose
     hand-off (`HANDED_FROM`); ValueError on ``node`` itself. ``tree``: the composing tree's ``tree`` (its commit) and
-    ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries."""
+    ``tree_on`` (the branch its host pinned it from), which ``composed_on`` carries. ``sources``: what ``composed_on``
+    says where each row is from its own source (`served_sources.compose`: where, who controls the host, and from what),
+    off ``node`` too."""
     from verity_e2e_demo import block_record as BR
 
     host = socket.gethostname()
-    if off_node and host == node:
+    if (off_node or sources) and host == node:
         raise ValueError(f"a record composed off the served node is not composed on it: this host is {node}")
 
     legs = {v: k for k, v in BR.RUNNER_KEYS.items()} | {"wipe": "wipe"}
@@ -2056,7 +2064,8 @@ def record(rows: Mapping[str, Mapping[str, Any]], *, window: int, steps: tuple[i
                 rows[k] = {**r, "verdict": "error", "quantity": None, "epsilon": None,
                            "reason": f"its answer is not the block record's {legs[k]} leg: {type(e).__name__}: {e}"[:2000]}
     where = {"host": host, "served_node": host == node,
-             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(tree or {})}
+             "from": HANDED_FROM if off_node else COMPOSED_FROM if host == node else COPIED_FROM, **(sources or {}),
+             **(tree or {})}
     left = {k: v for k, v in (("deferred", deferred), ("served_compare", served_compare)) if v}
     report = {"format": REPORT_FORMAT, "window": window, "node": node, "run": run, "protocols": rows,
               "servers": {k: at[k][0] for k in rows}, "composed_on": where, **left}
