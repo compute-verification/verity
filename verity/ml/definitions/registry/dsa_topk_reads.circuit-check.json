@@ -35,7 +35,7 @@
  },
  "digests": {
   "DsaPositionsMerge_v1{M=8,K=2048}": {
-   "sha512": "0"
+   "sha512": "722b747a383a52da6f25117cd46875e7f7a29a24f9d47b5a81ce7526c5d353568a212c38f14646becdc783c1f58a7e225436fbdaf68984fbf82157cbb11a42ed"
   }
  }
 }
