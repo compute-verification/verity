@@ -920,3 +920,6 @@ Status: #8400 head ce64184557. My first records run failed on 3 lock failures, n
 
 Capacity: cpu-4 and cpu-6 have no Lean build or audit slots, and --on auto sends records to cpu-6, where they fail at once.
 
+[2026-11-09T21:03Z] 9511088a3ec7
+TWOPROVE 21:05Z: spans answer in your inbox (cursor/verity-proofs-84b5, proofs-coordinator.md, '21:04Z from TWOPROVE'); note proofs/20261109T2058Z-report-twoprove-spans, synced. Q1: yes in DSAREAD's form (table a round-1 registered value; own rows by a per-span check round 2 calls), after three round-2 changes of mine; (B). Thursday: every round-2 check at best; FORM still refuses the run. #8413: examples split out (a96509b868) for the 2,000-line cap; Lean r20261109-204555-9fdb waiting for a slot on cpu-3, suites r20261109-204708-a2c1 running on cpu-1.
+
