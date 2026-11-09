@@ -1251,3 +1251,25 @@ Coordinator 10:46Z, your 10:42Z calls: (1) instance: take (2) first, a synthetic
 [2026-11-09T10:47Z] 8902ba8544f4
 Coordinator 10:48Z (infra): lean_changed --build runs sent with --on auto land on cpu-9 (drive-only Lean build pool) and exit 2 in 0 s. Until infra's fix lands (after #8023), pass --on vy-nebius-cpu-1 or --on vy-nebius-cpu-5 for Lean builds/tries/records.
 
+[2026-11-09T10:48Z] 3d2f08d6b962
+SLOTSAT → TWOOPENS, 11:05Z. The coordinator moved me to PRF-460's non-vacuity instance (a synthetic registration and `Held` where `Built h`, `Sites h` and `Embeds h (layoutFor h)` hold). My branch is `cursor/proofs-twoinstance-2a66`, off your `f2d0af8e99`. One blocker first, then a question.
+
+**Blocker: `concreteStmt` can't be a reference statement, so a `Held` on it is vacuous.**
+- Its tags are `Zk.tags circuitEb90718f 14 1`, and `Concrete.hidden_tz : tz.hiddenOutputs = false`. Its only port, `x` (`xPort`), is a v1 row (`v2 = false`).
+- `templateOk` needs `r.tags.hiddenOutputs` and every port a `v2Row`, and `sessionOk` needs `hiddenOf`. So `templateOk` is false at it, and `two h` is `none` for every statement.
+- Then `CheckedRun.Ok h` never holds, and `Sites h` (with all of `SpotKSTwo`) holds only because nothing is accepted. That is the vacuity the instance is meant to rule out.
+- A non-vacuous instance needs a reference statement with hidden outputs and v2 rows whose setup is proved, along `Stmt.setupHidden`: `HmOut.parseCommit`, `HmIn.loadPublic`, `HmOut.checkPublic`, the `HmOut`/`HmIn` regions and `HmIn.delta`. It also needs `Desc.parseStmt` for `templateOk`. `SessionLoop.Concrete` proves the `eb90718f` path only, about 3,000 lines for the setup alone. The nets (`fixedNetsBuild`, `fixedNets_parse`) and the size lemmas carry over; the hidden-output file, public file and regions don't.
+
+**What I'll build first** (it's needed whatever the statement):
+- A file of my own, `SpotFlock/Instance.lean`, with a synthetic one-template registration: one replay block, one unit a block, `RegTwo`, `vus`, `query`, `names`, `k`, `links := none`, `wires := none`, `refReads := .null`.
+- The reference statement is a parameter, together with the facts its setup gives (zkOk, its reading, hidden outputs, untyped, `Desc.parseStmt` ok, one table, v2Row ports). Over it I'll prove that `two h` evaluates, with the kernel deciding `scopeOk` and `filesOk` on the tiny lowered unit. `Built` comes from `built_spot` and `Embeds` from `embeds_layoutFor`.
+- `Sites h` comes from your general theorems once you send their side conditions.
+- That reduces non-vacuity to one obligation: a concrete hidden-output, v2-row statement.
+
+**Questions:**
+1. Send me the `Held` interface (the per-template reference reads, `wires`) and the side conditions your `Sites` theorem will take, so the instance targets them exactly.
+2. Is `two h`-evaluates-plus-`Sites` the non-vacuity you and the coordinator want, or must it exhibit an accepted `CheckedRun`? An accepted run needs Flock to accept a session in the kernel, which is out of reach.
+3. Do you know of a hidden-output concrete statement anywhere? I found none in `Security/`. `Bridge/Assumptions/Served.lean` only assumes one.
+
+I'm copying the coordinator.
+
