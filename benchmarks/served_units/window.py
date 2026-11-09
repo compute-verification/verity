@@ -16,12 +16,15 @@ stage  each UNIT@N its own `prove_time.sh STEPS=stage PT_DEVICE=cpu` into $FLOCK
        hard-linked to that one. The build step (flock-circuit with its CUDA prover) runs first, beside the stagings, unless
        FLOCK_WORK already holds a built prover. FLOCK_WORK stays for `prove`. Where /dev/shm is mounted noexec, a FLOCK_WORK
        there holds `py` and `flock-gpu-link` as symlinks to a built FLOCK_WORK on disk, and only the statements in RAM.
-prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements on one GPU, in WIN_GPUS groups balanced
-       by estimated time, each group one `prove_time.sh STEPS=prove PT_DEVICE=gpu` on its own slice of the job's cores
-       under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: a group whose GPU holds more than
-       WIN_DEV_GIB has its prover killed (every prover, once nvidia-smi goes unread for 30 s), and our processes' RSS over
-       WIN_MEM_GB x 0.97 kills the largest. Then, or as soon as the job stops (SIGTERM included), its groups are killed
-       and FLOCK_WORK is removed, unless WIN_KEEP=1. A stopped `stage` kills its stagings and keeps FLOCK_WORK.
+prove  the statements of UNITS_FILE staged under FLOCK_WORK, and under each WIN_ALSO directory (colon-separated
+       FLOCK_WORKs, each statement linked file by file into FLOCK_WORK/data so its sessions are written there), a unit's
+       statements on one GPU, in WIN_GPUS groups balanced by estimated time, each group one `prove_time.sh STEPS=prove
+       PT_DEVICE=gpu` on its own slice of the job's cores under `gpu-lease 1` (the tree's gpu_lease.sh where none is
+       installed). Every 2 s: a group whose GPU holds more than WIN_DEV_GIB has its prover killed (every prover, once
+       nvidia-smi goes unread for 30 s), and our processes' RSS, plus a FLOCK_WORK in RAM with its sessions, over
+       WIN_MEM_GB x 0.97 kills the largest process. Then, or as soon as the job stops (SIGTERM included), its groups are
+       killed and FLOCK_WORK is removed (its links, not what they point to), unless WIN_KEEP=1. A stopped `stage` kills its
+       stagings and keeps FLOCK_WORK.
 
 Limits (env): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
 WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp, or under /dev/shm, where what it
@@ -338,6 +341,8 @@ def prove(units: list[Unit]) -> int:
     on_gpu = env("WIN_DEVICE", "gpu") == "gpu"
     if on_gpu and not shutil.which("nvidia-smi"):
         raise SystemExit("window.py: no nvidia-smi on PATH, so no device-memory limit: prove on a GPU node, or WIN_DEVICE=cpu")
+    for also in filter(None, env("WIN_ALSO", "").split(":")):
+        link_also(fw, Path(also))
     binary = fw / "flock-gpu-link/flock/target/release/flock-circuit"
     if not binary.exists():
         log(f"no prover at {binary}: building it inside the window")
@@ -356,12 +361,12 @@ def prove(units: list[Unit]) -> int:
     other = sorted({d.name.rsplit("-", 1)[1] for d in (fw / "data").glob("*-*") if (d / ".done").exists()} - {k})
     if other:
         log(f"statements staged under key(s) {', '.join(other)}, not this tree's {k}: prove from the staging's commit")
-    if str(fw).startswith(RAM):
+    ram = fw if str(fw).startswith(RAM) else None
+    if ram:
         held = du(fw)
         if held >= 0.9 * mem:
             raise SystemExit(f"window.py: FLOCK_WORK holds {held / GB:.0f} GB of host memory, too much of WIN_MEM_GB={mem / GB:.0f}")
-        log(f"FLOCK_WORK holds {held / GB:.0f} GB of host memory: {(mem - held) / GB:.0f} GB left for the provers")
-        mem -= held
+        log(f"FLOCK_WORK holds {held / GB:.0f} GB of host memory: {(mem - held) / GB:.0f} GB left for the provers and sessions")
     groups: list[list] = [[] for _ in range(ngpu)]
     for item in sorted(staged, key=lambda x: -x[2]):
         min(groups, key=lambda g: sum(x[2] for x in g)).append(item)
@@ -386,7 +391,7 @@ def prove(units: list[Unit]) -> int:
                   prefix=["taskset", "-c", cores])
         jobs.append(Job(f"gpu{g}", p, time.time()))
     try:
-        watch(jobs, mem, dev_mib, on_gpu)
+        watch(jobs, mem, dev_mib, on_gpu, ram)
     finally:
         stop(jobs)
         shutil.rmtree(scratch, ignore_errors=True)
@@ -407,11 +412,31 @@ def prove(units: list[Unit]) -> int:
     return 0
 
 
-def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool) -> None:
+def link_also(fw: Path, also: Path) -> None:
+    """Each statement staged under `also` (another FLOCK_WORK) and not under `fw`, as a directory of `fw`'s data whose
+    files link to its own, so its sessions are written under `fw`; and `also`'s venv and prover where `fw` has none."""
+    n = 0
+    for d in sorted(also.glob("data/*-*")):
+        t = fw / "data" / d.name
+        if (d / ".done").exists() and not t.exists():
+            t.mkdir(parents=True)
+            for f in d.iterdir():
+                (t / f.name).symlink_to(f)
+            n += 1
+    for x in ("py", "flock-gpu-link"):
+        if not (fw / x).exists() and (also / x).exists():
+            (fw / x).symlink_to(also / x)
+    log(f"linked {n} statements staged under {also}")
+
+
+def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool, ram: Path | None = None) -> None:
     """Until every group exits: kill a group's prover past dev_mib on its GPU, and the largest of our processes past
-    0.97 x mem. Device memory unread for 30 s in a row kills every prover, since the limit can't be held."""
-    blind = 0
+    0.97 x mem, counting a FLOCK_WORK in RAM (`ram`, its statements and the sessions written beside them) with them.
+    Device memory unread for 30 s in a row kills every prover, since the limit can't be held."""
+    blind, held, last = 0, du(ram) if ram else 0, time.time()
     while any(j.proc.poll() is None for j in jobs):
+        if ram and time.time() - last > 10:
+            held, last = du(ram), time.time()
         t = procs()
         ours = {p for j in jobs for p in tree(j.proc.pid, t)}
         used: dict[str, str] = {}
@@ -445,12 +470,13 @@ def watch(jobs: list[Job], mem: float, dev_mib: float, on_gpu: bool) -> None:
                             log(f"killed {j.label}'s prover pid {p}: {mib:.0f} MiB on {j.gpu}, over {dev_mib:.0f}")
                     except OSError:
                         pass
-        total = sum(t[p][1] for p in ours)
+        total = sum(t[p][1] for p in ours) + held
         if total > 0.97 * mem:
             big = max((p for p in ours if t[p][1] > GB), key=lambda p: t[p][1], default=None)
             if big:
                 os.kill(big, signal.SIGKILL)
-                log(f"killed pid {big} ({t[big][1] / GB:.0f} GB): our RSS {total / GB:.0f} GB over {0.97 * mem / GB:.0f}")
+                log(f"killed pid {big} ({t[big][1] / GB:.0f} GB): our RSS and FLOCK_WORK in RAM {total / GB:.0f} GB over "
+                    f"{0.97 * mem / GB:.0f}")
         time.sleep(2)
 
 
