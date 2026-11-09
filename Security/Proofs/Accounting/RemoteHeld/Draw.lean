@@ -65,7 +65,7 @@ no commitment while the session runs, as the committed session whose view reads 
   `U_t − i` offsets at most a `1/(U_t − i)` share (`Draw.pr_hit_le`, the wipe's `card_fiber_le`). Once the earlier
   steps took receipts of `C_t`, `g_t − i` of the positions left hold receipts of `C_t` (`Draw.card_arrange_mem`), so
   step `i` takes one with probability at most `(g_t − i)/(U_t − i) ≤ g_t/U_t`, and the draw lands in `C_t` with
-  probability at most `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t` (`Draw.pr_window_le`, the steps as rounds of
+  probability at most `(g_t/U_t)^(s'_t)`, `0` when `g_t < s'_t` (`Draw.pr_executionPhase_le`, the steps as rounds of
   `Draw.pr_rounds_le`, the adaptive product bound `Draw.pr_live_le`): `bound t` (`Run.bound`).
 * **The pooled bound** (`Draw.prod_le_of_pooled_lt`). When the wrong receipts pass the pooled bound, the wrong shares
   `f_t = 1 − g_t/U_t` are no point of its knapsack, so a window has fewer correct receipts than draws, or
@@ -454,7 +454,7 @@ open Classical in
 /-- **One window's draw lands in `C`** with probability at most `(g/U)^k`, `g = |C ∩ [0, U)|`, and never when
 `g < k`: step `i` takes one of the `U − i` positions left, `g − i` of which hold receipts of `C` once the earlier steps
 took receipts of `C`, each with at most a `1/(U − i)` share. -/
-theorem pr_window_le {m U k : ℕ} (hm : m < 2 ^ 448) (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ) (r : ℕ → ℕ) :
+theorem pr_executionPhase_le {m U k : ℕ} (hm : m < 2 ^ 448) (hU : U ≤ m) (hk : k ≤ U) (C : Finset ℕ) (r : ℕ → ℕ) :
     pr (fun b : Blocks m => accepted U k b ∧ openings U k b r ⊆ C) ≤
       ENNReal.ofReal (if k ≤ ((range U).filter (· ∈ C)).card
         then ((((range U).filter (· ∈ C)).card : ℝ) / U) ^ k else 0) := by
@@ -606,7 +606,7 @@ theorem pr_test_le {m U k : ℕ} (hm : m < 2 ^ 448) (hU : U ≤ m) (hk : k ≤ U
         then ((((range U).filter (· ∈ C)).card : ℝ) / U) ^ k else 0) := by
   refine (Bandwidth.pr_mono (fun b hb => (?_ : ¬ accepted U k b ∨
       (accepted U k b ∧ openings U k b (fun _ => 0) ⊆ C)))).trans
-    ((Bandwidth.pr_or_le _ _).trans (add_le_add (pr_not_accepted_le hm hU hk) (pr_window_le hm hU hk C _)))
+    ((Bandwidth.pr_or_le _ _).trans (add_le_add (pr_not_accepted_le hm hU hk) (pr_executionPhase_le hm hU hk C _)))
   by_cases ha : accepted U k b
   · exact Or.inr ⟨ha, hb ha⟩
   · exact Or.inl ha

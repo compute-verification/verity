@@ -657,7 +657,7 @@ theorem pr_conservation_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Sketc
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      exact Rate.Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- `pr_conservation_of_unpaid` at the deployed receipt parameters (`RemoteRunConservationSketchDeployed`'s): the
 samples' terms are at most `2·2^-40`. -/

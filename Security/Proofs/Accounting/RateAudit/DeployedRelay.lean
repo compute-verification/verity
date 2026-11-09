@@ -17,7 +17,7 @@ and the tier reads are the device's plus its completed bits.
 
 **A pass, a window, a session.** `RatePaid` bounds each simulated pass at `m` relayed words; a window's unpaid words
 are its passes' at each candidate (`GrindChain.pr_unpaid_le`), with the completed bits, at most `X`, paid from the
-slack; the session is `DeployedSession.pr_paid_of_window` and the samples, as in `Deployed.lean`.
+slack; the session is `DeployedSession.pr_paid_of_executionPhase` and the samples, as in `Deployed.lean`.
 -/
 
 @[expose] public section
@@ -412,7 +412,7 @@ theorem ofDeployedExecutionPhase_paid_relay (A : DeployedSession n P N b h ρ S 
       ((P * G : ℝ) * ((N.choose m : ℝ) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ) / 2 ^ lam)) := by
   classical
   set X := Deployed.rebuildBits b rounds cRoot F
-  have h₂ := DeployedSession.pr_window_le A w
+  have h₂ := DeployedSession.pr_executionPhase_le A w
     (fun C y => C.reads tier y.1 y.2.1 + P * (S + (L - ρ) + X + (lam + m * b)) < (C.correctAll y.1 y.2.1).card * b) _
     (executionPhase_relay_le A tier hrc hW hF w)
   have hT : (P : ℝ≥0∞) * (G * ((N.choose m : ℝ≥0∞) * 2 ^ L / 2 ^ (h * m) + (2 ^ q : ℝ≥0∞) / 2 ^ lam)) ≠ ⊤ :=
@@ -467,7 +467,7 @@ theorem run_relay_of_unpaid {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      exact Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 end Accounting.Remote
 

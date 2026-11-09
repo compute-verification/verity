@@ -52,7 +52,7 @@ earlier windows' openings coins kept, window `t`'s and the later ones fresh), wh
 * **Per receipt** (`Plurality.moved_le_forked`, at `cont t`). A move shows the presented row against the plurality
   (`Plurality.Mov`), and the moves squared are at most the pairs of continuations showing two different rows
   (`Plurality.Frk`): `Pr[p moved]² ≤ Pr[p forked]`.
-* **Over the window's receipts** (`Binding.window_le`). The union bound and Cauchy–Schwarz over `L_t` give
+* **Over the window's receipts** (`Binding.executionPhase_le`). The union bound and Cauchy–Schwarz over `L_t` give
   `(Σ_p Pr[p moved])² ≤ |L_t|·Σ_p Pr[p forked]`. A run opens at most `s_t` receipts (`Binding.card_opened_le`), so
   `Σ_p Pr[p forked] ≤ s_t·Pr[some p forked]` (`Binding.sum_prob_le`). A forked receipt is accepted in both runs
   with two different rows: at one verifier, root and rank that is a SHA-512 collision among what the two checks hashed
@@ -143,7 +143,7 @@ theorem card_opened_le (D : Remote.Draw.Run n m s κ X) (prf : Fin n → Pous.Bi
   exact Finset.card_image_le.trans ((Finset.card_range _).le.trans (by unfold Run.samples; exact min_le_left _ _))
 
 /-- **Window `t`'s share of the binding term** is at most `√(|L_t|·s_t·(fork_t + split_t))`. -/
-theorem window_le [Fintype X] (D : Remote.Draw.Run n m s κ X) (R : Receipts n κ X)
+theorem executionPhase_le [Fintype X] (D : Remote.Draw.Run n m s κ X) (R : Receipts n κ X)
     (prf : Fin n → Pous.Bits κ → Blocks m) (rest : Coins n κ X → Fin n → ℕ → ℕ) (L : Fin n → Finset ℕ)
     (hL : ∀ t ω, D.opened prf rest t ω ⊆ L t) (t : Fin n) :
     prob (fun ω => ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p) ≤
@@ -214,7 +214,7 @@ theorem ReceiptsBindingOfFork : Accounting.Guarantees.Remote.ReceiptsBindingOfFo
   rw [Receipts.binding, Binding.toReal_pr]
   refine (prob_mono fun ω hω => ?_).trans ((prob_exists_le Finset.univ fun t ω =>
     ∃ p ∈ D.opened prf rest t ω, R.Moved D prf rest t ω p).trans
-      (Finset.sum_le_sum fun t _ => Binding.window_le D R prf rest L hL t))
+      (Finset.sum_le_sum fun t _ => Binding.executionPhase_le D R prf rest L hL t))
   obtain ⟨t, h⟩ := hω
   exact ⟨t, Finset.mem_univ _, h⟩
 

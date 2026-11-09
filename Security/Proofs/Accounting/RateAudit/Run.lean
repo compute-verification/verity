@@ -60,7 +60,7 @@ with no union over the windows (`Horizon.pr_floor_le`).
 
 **Paid.** A session with more than `K` correct receipts in all, or more than `K_w` in every window, whose reads fall
 short of those receipts' words leaves some window short (`Run.pr_unpaid_le`), and that window some pass, which
-`RatePaidNamedRO` bounds at the devices the earlier coins pick (`Run.pr_window_le`, then `Chain.pr_unpaid_le`).
+`RatePaidNamedRO` bounds at the devices the earlier coins pick (`Run.pr_executionPhase_le`, then `Chain.pr_unpaid_le`).
 -/
 
 @[expose] public section
@@ -203,7 +203,7 @@ variable {n P N b h ρ S L q r s d : ℕ}
 
 /-- **Sequencing over windows**: an event of window `w`'s chained prover and its coins has at most its bound for the
 chained provers the earlier windows' coins pick. -/
-theorem pr_window_le (A : Run n P N b h ρ S L q r s d) (w : Fin n)
+theorem pr_executionPhase_le (A : Run n P N b h ρ S L q r s d) (w : Fin n)
     (Q : Chain P N b h ρ S L q r s → Store N b × ExecutionPhaseCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
     pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) => Q (A.chain w x.2) (x.1, x.2 w)) ≤ ε := by
@@ -293,7 +293,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : Run n P N b h ρ S L q r s d) (tier : ℕ �
   calc _ ≤ ∑ w, pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
           (A.chain w x.2).spent tier x.1 (x.2 w).1 + P * slack <
             ((A.chain w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
-    _ ≤ ∑ _w : Fin n, (P : ℝ≥0∞) * ε := Finset.sum_le_sum (fun w _ => pr_window_le A w
+    _ ≤ ∑ _w : Fin n, (P : ℝ≥0∞) * ε := Finset.sum_le_sum (fun w _ => pr_executionPhase_le A w
           (fun C y => C.spent tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _
           (fun η => (A.window w η).pr_unpaid_sample_le tier slack d ε (hε w η)))
     _ = (n : ℝ≥0∞) * (P * ε) := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]

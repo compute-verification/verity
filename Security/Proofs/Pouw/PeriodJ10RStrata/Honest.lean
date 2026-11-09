@@ -155,7 +155,7 @@ theorem strata_meets_stratum (s : Fin mB) (hKd : 1 ≤ k s) (n : ℕ) (hn : 0 < 
       monitoringPeriodGame (tileStage (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s))
         (liveCone Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s)) 1 1 (k s)
         (HonestJ10R.period (View σ s) (tileCount σ s) n) ∧
-    (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryWindow
+    (HonestJ10R.period (View σ s) (tileCount σ s) n).EveryExecutionPhase
       (fun live _ => DeadConeDead Honest.scheme (HonestJ10R.circuit (tileCount σ s)) (tileCount σ s) live) ∧
     PrefixOf (layerAt (HonestJ10R.circuit (tileCount σ s)) (HonestJ10R.hr1 _) (rounds1 _) σ k hk s unitOf
       (windows σ regOf evOf n) HonestJ10R.opened enc HonestJ10R.place HonestJ10R.tile)

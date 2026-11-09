@@ -434,7 +434,7 @@ variable {n P N b h ρ S L q r s d G : ℕ}
 
 /-- **Sequencing over windows**: an event of window `w`'s prover and its coins has at most its bound for the provers the
 earlier windows' coins pick. -/
-theorem pr_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n)
+theorem pr_executionPhase_le (A : DeployedSession n P N b h ρ S L q r s d G) (w : Fin n)
     (Q : DeployedExecutionPhase P N b h ρ S L q r s G → Store N b × ExecutionPhaseCoins P N b h ρ r s d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
     pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) => Q (A.win w x.2) (x.1, x.2 w)) ≤ ε := by
@@ -548,7 +548,7 @@ theorem pr_samples_pooled_le (A : DeployedSession n P N b h ρ S L q r s d G) (K
 
 /-- **A session's pooled samples in every window**: every window's openings land on correct receipts while some window
 holds at most `K_w`. -/
-theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
+theorem pr_samples_executionPhase_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
     (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1) ∧
@@ -561,13 +561,13 @@ theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store 
     exact ⟨fun w t => hmem ω w t (hall w t), w, (hcard ω w).trans_le hw⟩
   · simp only [Nat.cast_mul, mul_assoc]
 
-/-- `pr_samples_window_le_map` on a uniform store. -/
-theorem pr_samples_window_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
+/-- `pr_samples_executionPhase_le_map` on a uniform store. -/
+theorem pr_samples_executionPhase_le (A : DeployedSession n P N b h ρ S L q r s d G) (Kw : ℕ) :
     pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
         (∀ w t, (x.2 w).2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1) ∧
           ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_samples_window_le_map id A Kw
+  pr_samples_executionPhase_le_map id A Kw
 
 /-- **A session's pooled samples**, on any store `store ω` sampled before the session's coins: every window's openings
 land on correct receipts while the session holds at most `K` in all or some window at most `K_w`. -/
@@ -580,7 +580,7 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → Store N b)
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono (fun _ ⟨hall, h⟩ => h.imp (fun hK => ⟨hall, hK⟩) (fun hw => ⟨hall, hw⟩))).trans
-    ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K) (pr_samples_window_le_map store A Kw)))
+    ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K) (pr_samples_executionPhase_le_map store A Kw)))
 
 /-- **A session's pooled samples**: every window's openings land on correct receipts while the session holds at most
 `K` in all or some window at most `K_w`. -/
@@ -606,7 +606,7 @@ theorem pr_unpaid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G)
   calc _ ≤ ∑ w, pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
           (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack <
             ((A.win w x.2).correctAll x.1 (x.2 w).1).card * b) := pr_exists_le _
-    _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum (fun w _ => pr_window_le A w
+    _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum (fun w _ => pr_executionPhase_le A w
           (fun C y => C.reads tier y.1 y.2.1 + P * slack < (C.correctAll y.1 y.2.1).card * b) _ (hε w))
     _ = (n : ℝ≥0∞) * ε := by rw [Finset.sum_const, Finset.card_univ, Fintype.card_fin, nsmul_eq_mul]
 
@@ -648,7 +648,7 @@ theorem pr_paid_of_unpaid_map {τ : ℕ} {Ω : Type} [Fintype Ω] (store : Ω �
 /-- **The session's words, in counts, from a per-window bound**: every opening passes while the session's reads and
 `n·P` slacks fall short of `K + 1` words, or some window's reads and `P` slacks of `K_w + 1`, at most the samples' bound
 and `n·ε`. -/
-theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ)
+theorem pr_paid_of_executionPhase {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (slack K Kw : ℕ)
     (ε : ℝ≥0∞) (hε : ∀ w η, pr (fun y : Store N b × ExecutionPhaseCoins P N b h ρ r s d =>
         (A.window w η).reads tier y.1 y.2.1 + P * slack < ((A.window w η).correctAll y.1 y.2.1).card * b) ≤ ε) :
     pr (fun x : Store N b × (Fin n → ExecutionPhaseCoins P N b h ρ r s d) =>
@@ -659,7 +659,7 @@ theorem pr_paid_of_window {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * ε :=
   pr_paid_of_unpaid_map id A tier slack K Kw _ (pr_unpaid_le A tier slack _ hε)
 
-/-- **The session's words, in counts**: `pr_paid_of_window` at `pr_unpaid_sample_le`'s `P·G·ε` a window. -/
+/-- **The session's words, in counts**: `pr_paid_of_executionPhase` at `pr_unpaid_sample_le`'s `P·G·ε` a window. -/
 theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (tier : ℕ → Fin τ) (X slack K Kw : ℕ)
     (ε : ℝ≥0∞) (hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X)
     (hε : ∀ w η j ι c, pr (fun x : Store N b × Bits ρ × Oracle N b h ρ =>
@@ -672,7 +672,7 @@ theorem pr_paid_le {τ : ℕ} (A : DeployedSession n P N b h ρ S L q r s d G) (
             ∃ w, (A.win w x.2).reads tier x.1 (x.2 w).1 + P * slack < (Kw + 1) * b))
       ≤ ((K : ℝ≥0∞) / (n * P * N)) ^ (d * n) +
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) + (n : ℝ≥0∞) * (P * (G * ε)) :=
-  pr_paid_of_window A tier slack K Kw _ (fun w η =>
+  pr_paid_of_executionPhase A tier slack K Kw _ (fun w η =>
     (A.window w η).pr_unpaid_sample_le tier X slack d ε (hX w η) (hε w η))
 
 end DeployedSession
@@ -710,7 +710,7 @@ theorem pooled_le (dbar : ℝ) (M e : ℕ) (hM : 0 < M) :
     simp
 
 /-- The window's sample term at `K_w = ⌊(1 − d_w)·P·N⌋`: at most `(1 − d_w/n)^e`. -/
-theorem window_le (dw : ℝ) (n M e : ℕ) (hn : 0 < n) (hM : 0 < M) (hdw : dw ≤ 1) :
+theorem executionPhase_le (dw : ℝ) (n M e : ℕ) (hn : 0 < n) (hM : 0 < M) (hdw : dw ≤ 1) :
     ((((n - 1) * M + ⌊(1 - dw) * M⌋₊ : ℕ) : ℝ≥0∞) / (n * M)) ^ e ≤ ENNReal.ofReal (1 - dw / n) ^ e := by
   refine pow_le_pow_left₀ zero_le ?_ e
   have hM' : (0 : ℝ) < M := by exact_mod_cast hM
@@ -809,7 +809,7 @@ theorem RemoteRunConservation : Accounting.Guarantees.RemoteRunConservation := b
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      exact Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- **The remote bandwidth audit at its deployed parameters**
 (`Accounting.Guarantees.RemoteRunConservationDeployed`). -/

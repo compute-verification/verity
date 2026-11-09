@@ -803,7 +803,7 @@ theorem pr_pass_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (r X qtot :
       funext p
       rcases p with p | p <;> rfl
     simpa [hD] using hX w η j ι c E σ R O
-  exact pr_window_le A w (fun C y => RankGood r y.2.1 ∧
+  exact pr_executionPhase_le A w (fun C y => RankGood r y.2.1 ∧
       ∃ c, SketchDeployedExecutionPhase.UnpaidAt C y.2.1 (S + (L - ρ * 256) + X) j c (y.1, y.2.2.1)) _
     fun η => SketchDeployedExecutionPhase.pr_pass_le (A.window w η) r X qtot hr32 (hX' η)
       (fun j ι σ Os D => hq w η j ι σ Os D) j
@@ -1014,7 +1014,7 @@ theorem pr_conservation_of_unpaid_causal {Ω : Type} [Fintype Ω]
     · rw [show ((n : ℝ≥0∞) * P * N) = ((n * P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
       exact Rate.Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
     · rw [show ((n : ℝ≥0∞) * P * N) = (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-      exact Rate.Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+      exact Rate.Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
 
 /-- `pr_deployed_of_unpaid` for causal correct sets `cor` and reads `rd`: the samples' terms are at most `2·2^-40`. -/
 theorem pr_deployed_of_unpaid_causal {Ω : Type} [Fintype Ω]

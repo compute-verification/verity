@@ -201,8 +201,8 @@ theorem ofDeployedExecutionPhase_sampled (A : DeployedSession n P N b h ρ S L q
   have hb' : (0 : ℝ) < b := by exact_mod_cast hb
   have hn' : (1 : ℝ) ≤ n := by exact_mod_cast hn
   have hu : dw / n ≤ 1 := div_le_one_of_le₀ (by linarith) (by linarith)
-  have hK := DeployedSession.pr_samples_window_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
-  have h2 := Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+  have hK := DeployedSession.pr_samples_executionPhase_le A ⌊(1 - dw) * ((P * N : ℕ) : ℝ)⌋₊
+  have h2 := Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
   rw [show ((n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞)) = n * P * N by push_cast; ring] at h2
   have hB := hK.trans h2
   have hT : ENNReal.ofReal (1 - dw / n) ^ (d * n) ≠ ⊤ := ENNReal.pow_ne_top ENNReal.ofReal_ne_top
@@ -232,7 +232,7 @@ theorem ofDeployedExecutionPhase_paid_route (A : DeployedSession n P N b h ρ S 
   have hX : ∀ w η j ι c E R O, ((A.window w η).device j ι c).completed E R O ≤ X :=
     fun w η j ι c E R O => PIDevice.completed_le _ hrc hW (hF w η j ι c) E R O
   have hε := fun w η j ι c => PIDevice.pr_unpaid_le ((A.window w η).device j ι c) tier X lam (hA w η j ι c)
-  have h₂ := DeployedSession.pr_window_le A w
+  have h₂ := DeployedSession.pr_executionPhase_le A w
     (fun C y => C.reads tier y.1 y.2.1 + P * (S + (L - ρ) + X + lam) < (C.correctAll y.1 y.2.1).card * b) _
     (fun η => (A.window w η).pr_unpaid_sample_le tier X _ d _ (hX w η) (hε w η))
   have hT : (P : ℝ≥0∞) * (G * ((N : ℝ≥0∞) / 2 ^ h + (q.choose 2 : ℝ≥0∞) / 2 ^ h + (2 ^ N : ℝ≥0∞) / 2 ^ lam)) ≠ ⊤ :=

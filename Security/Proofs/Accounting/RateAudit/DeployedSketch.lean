@@ -324,7 +324,7 @@ namespace SketchDeployedRun
 variable {n P N m ρ h S L q ks G d : ℕ}
 
 /-- Sequencing over windows. -/
-theorem pr_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
+theorem pr_executionPhase_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (w : Fin n)
     (Q : SketchDeployedExecutionPhase P N m ρ h S L q ks G →
       SketchStore N m × SketchExecutionPhaseCoins P N m ρ h ks G d → Prop) (ε : ℝ≥0∞)
     (hQ : ∀ η, pr (Q (A.window w η)) ≤ ε) :
@@ -454,7 +454,7 @@ theorem pr_samples_pooled_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (
   pr_samples_pooled_le_map id A K
 
 /-- The pooled sample in every window, on any store sampled before the session's coins. -/
-theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
+theorem pr_samples_executionPhase_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
     (A : SketchDeployedRun n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : Ω × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll (store x.1) (x.2 w).1 (x.2 w).2.1) ∧
@@ -471,12 +471,12 @@ theorem pr_samples_window_le_map {Ω : Type} [Fintype Ω] (store : Ω → Sketch
   · simp only [Nat.cast_mul, mul_assoc]
 
 /-- The pooled sample in every window. -/
-theorem pr_samples_window_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (Kw : ℕ) :
+theorem pr_samples_executionPhase_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (Kw : ℕ) :
     pr (fun x : SketchStore N m × (Fin n → SketchExecutionPhaseCoins P N m ρ h ks G d) =>
       (∀ w t, (x.2 w).2.2 t ∈ (A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1) ∧
         ∃ w, ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card ≤ Kw)
       ≤ ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
-  pr_samples_window_le_map id A Kw
+  pr_samples_executionPhase_le_map id A Kw
 
 /-- Both pooled-draw readings, on any store sampled before the session's coins. -/
 theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N m)
@@ -489,7 +489,7 @@ theorem pr_samples_le_map {Ω : Type} [Fintype Ω] (store : Ω → SketchStore N
         ((((n - 1) * (P * N) + Kw : ℕ) : ℝ≥0∞) / (n * P * N)) ^ (d * n) :=
   (pr_mono fun _ h => h.2.imp (fun hK => ⟨h.1, hK⟩) (fun hw => ⟨h.1, hw⟩)).trans
     ((pr_or_le _ _).trans (add_le_add (pr_samples_pooled_le_map store A K)
-      (pr_samples_window_le_map store A Kw)))
+      (pr_samples_executionPhase_le_map store A Kw)))
 
 /-- Both pooled-draw readings. -/
 theorem pr_samples_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (K Kw : ℕ) :
@@ -515,7 +515,7 @@ theorem pr_unpaid_le (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack : 
         (A.win w x.2).reads x.1 (x.2 w).1 (x.2 w).2.1 + P * slack <
           ((A.win w x.2).correctAll x.1 (x.2 w).1 (x.2 w).2.1).card * (m * 256)) := pr_exists_le _
     _ ≤ ∑ _w : Fin n, ε := Finset.sum_le_sum fun w _ =>
-      pr_window_le A w (fun C y => C.reads y.1 y.2.1 y.2.2.1 + P * slack <
+      pr_executionPhase_le A w (fun C y => C.reads y.1 y.2.1 y.2.2.1 + P * slack <
         (C.correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ε (hε w)
     _ = (n : ℝ≥0∞) * ε := by
       simp [Finset.sum_const, Finset.card_univ, nsmul_eq_mul]
@@ -559,7 +559,7 @@ theorem pr_paid_of_unpaid_map {Ω : Type} [Fintype Ω] (store : Ω → SketchSto
     exact Or.inr ⟨w, hw.trans_le (Nat.mul_le_mul_right _ (hD.2 w))⟩
 
 /-- Session conservation in counts, from the pooled samples and one per-window unpaid bound. -/
-theorem pr_paid_of_window (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack K Kw : ℕ)
+theorem pr_paid_of_executionPhase (A : SketchDeployedRun n P N m ρ h S L q ks G d) (slack K Kw : ℕ)
     (ε : ℝ≥0∞)
     (hε : ∀ w η, pr (fun y : SketchStore N m × SketchExecutionPhaseCoins P N m ρ h ks G d =>
       (A.window w η).reads y.1 y.2.1 y.2.2.1 + P * slack <
@@ -613,7 +613,7 @@ theorem RemoteRunConservationSketch : Accounting.Guarantees.RemoteRunConservatio
         ((A.window w η).correctAll y.1 y.2.1 y.2.2.1).card * (m * 256)) ≤
       ε + (P : ℝ≥0∞) * (G * term) := fun w η =>
     SketchDeployedExecutionPhase.pr_unpaid_le (A.window w η) r X ε hr32 hRank (hX' w η)
-  have main := SketchDeployedRun.pr_paid_of_window A slack
+  have main := SketchDeployedRun.pr_paid_of_executionPhase A slack
     ⌊(1 - dbar) * ((n : ℝ) * P * N)⌋₊ ⌊(1 - dw) * ((P : ℝ) * N)⌋₊
     (ε + (P : ℝ≥0∞) * (G * term)) hε
   have hγ := gammaSketch_mul N m ρ S L X hN hm
@@ -648,7 +648,7 @@ theorem RemoteRunConservationSketch : Accounting.Guarantees.RemoteRunConservatio
           exact Deployed.pooled_le dbar (n * P * N) (d * n) (by positivity)
         · rw [show ((n : ℝ≥0∞) * P * N) =
               (n : ℝ≥0∞) * ((P * N : ℕ) : ℝ≥0∞) by push_cast; ring]
-          exact Deployed.window_le dw n (P * N) (d * n) hn (by positivity) hdw
+          exact Deployed.executionPhase_le dw n (P * N) (d * n) hn (by positivity) hdw
       _ = ENNReal.ofReal (1 - dbar) ^ (d * n) + ENNReal.ofReal (1 - dw / n) ^ (d * n) +
           (n : ℝ≥0∞) * ε + (n * P * G : ℝ≥0∞) * term := by
         ring
