@@ -4,9 +4,9 @@ public import Definitions.InferenceOnly.Guarantees.Slowdown
 public import Definitions.InferenceOnly.Assumptions.Remote
 
 /-!
-# The compute dampener, remote protocol: the guarantees
+# The slowdown, remote protocol: the guarantees
 
-The remote dampener `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and T2: `residual_share`,
+The remote slowdown `1/ρ = s + (r̂ + ε' + JΔ/H + ν)/MFU₀` (`benchmarks/nci/tiers.py` at T1 and T2: `residual_share`,
 `fit.residual_with_lag` and `fit.dampener`), with its two terms that `SlowdownThreaded` takes inside its residual's
 hypothesis derived, and the two that sampled proofs and PoUW's deficit add:
 
@@ -58,7 +58,7 @@ def VerdictLag : Prop :=
     (∀ j t, ∑ b ∈ bad with ident b = j ∧ t ≤ τ b ∧ τ b ≤ t + Δ, w b ≤ Φ * Δ) →
       ∑ b ∈ bad, w b ≤ lagShare I.card Δ H * C + ∑ b ∈ escaped bad detected ident τ, w b
 
-/-- **The compute dampener, remote protocol.** Outcomes `ω` are sampled from `μ` on a finite space. PoUW certifies `N`
+/-- **The slowdown, remote protocol.** Outcomes `ω` are sampled from `μ` on a finite space. PoUW certifies `N`
 windows of capacities `c_i ≥ 0`, `∑ c_i ≤ C`, each certificate wrong (`wrong ω i`) with probability at most `p ≥ 0`
 (`PouwSound`). The developer's incorrect proof blocks `bad ω`, run by `J = |I|` identities, those `detected ω` failing
 their proof, under `TerminalDetection` at a lag `Δ`, skip `w_b ≥ 0` of declared work each, at most `Φ Δ` per identity
