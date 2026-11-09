@@ -286,16 +286,6 @@
    "digest": "b708a3fe8eb9aecf99d6e6ee46afc57aee936c361957b2e2c85ad49e028467a7",
    "why": "Fit's conditions on each training block's reads: Δ + s τ ≤ k, 2 Δ_grad ≤ k and Δ_t + Δ_grad ≤ k."
   },
-  "NetTiming.CheckedUnique": {
-   "owner": "@proofs",
-   "digest": "218ece8715ff8f148a45704d6bc053db2a90664ab894f097b57f4808b4a9c73c",
-   "why": "A scope: the checked inputs cost no advice bits only where the check pins them, a valid run's checked inputs a function of its other inputs; the deployed check's honest witness concludes it."
-  },
-  "NetTiming.CheckedWitness": {
-   "owner": "@proofs",
-   "digest": "5b8992cb2a4e731894e8158f38d16f0eac7f03aa81aa55f39a40fc630c416299",
-   "why": "A scope: the sampled leak bound with checked inputs is stated on statements whose check misses an accepted run's invalid values with probability at most its epsilon; the deployed check's honest witness concludes it."
-  },
   "NetTiming.PeriodAdaptive": {
    "owner": "@proofs",
    "digest": "40200a70f1ec7f8e05bfe30dd7c682921b0ddd02dfa5bbb84fcac9df0f1a9302",
@@ -2399,6 +2389,18 @@
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
+  "NetTiming.CheckedUnique": {
+   "owner": "@proofs",
+   "digest": "218ece8715ff8f148a45704d6bc053db2a90664ab894f097b57f4808b4a9c73c",
+   "issue": "CIR-190",
+   "due": "2026-11-30"
+  },
+  "NetTiming.CheckedWitness": {
+   "owner": "@proofs",
+   "digest": "5b8992cb2a4e731894e8158f38d16f0eac7f03aa81aa55f39a40fc630c416299",
+   "issue": "CIR-190",
+   "due": "2026-11-30"
+  },
   "NetTiming.JitterBounded": {
    "owner": "@network-accounting",
    "digest": "06b2728bc7d299f10f72698ed3900a75c420de7dccc468770103d11dba1ce7be",
@@ -4407,6 +4409,7 @@
    "nontrivial": "Claims.Witness.SamplingGeneric.capTwo_nontrivial"
   },
   "NetTiming.SecurityProofs.SampledLeakChecked": {
+   "honest": ["NetTiming.Witness.SampledAuditAccepted_honest"],
    "nontrivial": "NetTiming.Witness.SampledLeakChecked_nontrivial"
   },
   "NetTiming.SecurityProofs.PooledLeakChecked": {

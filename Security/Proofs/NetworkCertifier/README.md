@@ -123,8 +123,8 @@ Sanity.lean     a satisfiability witness for every named hypothesis, the joint w
 Witnesses.lean  each acceptance guarantee's two lemmas: `G_honest`, its hypotheses at the deployed
                                          record, and `G_nontrivial`, its conclusion false at a verifier
                                          that accepts everything
-WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; their honest
-                                         lemmas wait on a deployed check
+WitnessesChecked.lean  the nontrivial lemmas of SampledLeakChecked and PooledLeakChecked; PooledLeakChecked's
+                                         honest lemma waits on a deployed check
 Code.lean       the certifier program (`certifier_program`, `NetworkCertifier`), which the difftests run, equal to the
                                definitions above: six theorems, not guarantees (below)
 Accepted.lean   an accepted run of the network certificate check is a run of the constant-rate Program
@@ -319,7 +319,9 @@ The other 23 are the rest of the Capacity table's bounds and the schedule's caus
   leak relation and the count taken over valid runs only, at `κ + εchk`: the count charges `freeInputs \ (reg ∪ chk)`.
   `PooledLeakChecked` is `PooledLeakAccepted` with each window's leak relation so taken (`LeakAtChecked`), one pool per
   window, its period inputs named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`, `PeriodLeaksChecked`), and the
-  escape at `(1 − q)^Fmax`. Their honest lemmas need a deployed check proved to pin its inputs and bound its miss.
+  escape at `(1 − q)^Fmax`. `SampledLeakChecked`'s honest lemma is `SampledAuditAccepted_honest`, at its one stated
+  premise `Compiled.KS`. `CheckedUnique` and `CheckedWitness` are open premises of both bounds: a deployed check
+  proved to pin its inputs and bound its miss discharges them, and `PooledLeakChecked`'s honest lemma waits on it.
 
 **The program's agreements, proved and audited, not guarantees.** Six theorems tie the difftests to these definitions
 (`NetTiming.SecurityProofs.Code`): the difftests hold the Python audit and advice v1's charge references

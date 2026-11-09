@@ -46,8 +46,9 @@ import Proofs.NetworkCertifier.Checked
 * `PooledLeakChecked`. At one window whose audit always accepts, `q = 1`, `Fmax = 1` and no error, its observations empty
   where the horizon is one step, no window meets its leak relation, and the escape bound reads `1 ≤ 0`.
 
-Their honest lemmas are open: each needs a deployed check that pins its checked inputs (`CheckedUnique`) and its miss
-bounded (`CheckedWitness`).
+`SampledLeakChecked`'s honest lemma is `SampledAuditAccepted_honest`, at its one stated premise `Compiled.KS`.
+`CheckedUnique` and `CheckedWitness` are open premises of both bounds, discharged by a deployed check that pins its
+checked inputs and bounds its miss; `PooledLeakChecked`'s honest lemma waits on that check.
 -/
 
 @[expose] public section
