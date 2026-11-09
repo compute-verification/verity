@@ -12,8 +12,8 @@ copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads 
 * ``ref-<t>.bin``: template ``t``'s reference statement (`Held.xS₀`), made from what is fixed before the run: its
   reference circuit and public file (`toy.references`), the reference window's partition and program as a5 writes a
   session's, ``--zk``, one table, the sample of the second stage's size at its first units (`ref_draw`), and the
-  template's registered reads where the params name them (``proofs.json``'s ``templates[t].registered``, as a0 writes a
-  session's ``registered.json``), none where they don't;
+  template's registered reads where the params name them (``proofs.json``'s ``templates[t].registered``, canonical JSON as
+  a0 writes a session's ``registered.json``), none where they don't;
 * ``held.json``: the rest of the `Held`, each from the registration and the design: the first stage's `select` input
   (rule, program, query, work table, closure), the second stage's cells ``ns`` and counts ``ks``, the templates'
   names, the design's links (`second_stage.replay_links` at the boundary window's own port names), each template's
@@ -24,7 +24,7 @@ links, the first stage's input, each reference's partition and program and the r
 used, and raises where they differ.
 
 ``python3 guard.py pack RUN_OUT FIXTURE`` packs a run's ``<case>/guard/`` for both cases into the guard test's fixture
-(`tests/test_guard.py`).
+(`tests/test_guard.py`); ``python3 guard.py flip M2 OUT`` writes the test's flipped round-2 message (`flip_registered`).
 """
 from __future__ import annotations
 
@@ -200,7 +200,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
             "verity/flock-circuit", (d / "circuit.txt").read_bytes(), (d / "pub.bin").read_bytes(),
             [(f.stem, f.read_bytes()) for f in sorted(tables, key=lambda f: order_of.index(f.stem))], zk=True,
             draw=compact(ref_draw(q, n_t, k)), partition=part, program=prog,
-            registered=None if reads is None else json.dumps(reads, sort_keys=True).encode()))
+            registered=None if reads is None else canonical_json(reads)))
         stmts.append(session_statement(audit / f"session-m{t}"))
     (out / "m2.bin").write_bytes(enc_list(enc_bytes, stmts))
     (out / "verdicts.json").write_text(json.dumps([verdict(audit / f"session-m{t}") for t in range(len(stmts))]))
@@ -227,7 +227,59 @@ def pack(run_out: Path, fixture: Path, cases: Sequence[str] = ("honest", "altere
                 tar.add(p, arcname=f"{case}/{p.name}", filter=plain)
 
 
+def registered_span(st: bytes) -> tuple[int, int]:
+    """Where a statement's registered reads sit in its `FlockDeploy.Raw` encoding (`raw`'s field order)."""
+    i = 0
+
+    def nat() -> int:
+        nonlocal i
+        i += 8
+        return int.from_bytes(st[i - 8:i], "little")
+
+    def skip() -> None:
+        nonlocal i
+        n = nat()
+        i += n
+
+    def opt(f) -> None:
+        nonlocal i
+        i += 1
+        if st[i - 1]:
+            f()
+
+    for _ in range(4):
+        skip()
+    for _ in range(nat()):
+        skip(), skip()
+    i += 2
+    nat()
+    for f in (skip, skip, skip, nat, skip, nat, skip):
+        opt(f)
+    if st[i] != 1:
+        raise ValueError("the statement has no registered reads")
+    i += 1
+    n = nat()
+    return i, i + n
+
+
+def flip_registered(m2: bytes) -> bytes:
+    """Round 2's message ``m2`` with one byte of its first statement's registered reads flipped: the first hex digit of
+    the first ``"root"`` value, so the reads still parse as JSON and name another root."""
+    out = bytearray(m2)
+    start = 16
+    lo, hi = registered_span(m2[start:start + int.from_bytes(m2[8:16], "little")])
+    reads = out[start + lo:start + hi]
+    at = reads.index(b'"root"')
+    at = reads.index(b'"', at + len(b'"root"') + 1) + 1
+    out[start + lo + at] = ord("1") if reads[at] == ord("0") else ord("0")
+    json.loads(out[start + lo:start + hi])
+    return bytes(out)
+
+
 if __name__ == "__main__":
-    if sys.argv[1:2] != ["pack"] or len(sys.argv) != 4:
-        sys.exit("usage: python3 guard.py pack RUN_OUT FIXTURE")
-    pack(Path(sys.argv[2]), Path(sys.argv[3]))
+    if sys.argv[1:2] == ["pack"] and len(sys.argv) == 4:
+        pack(Path(sys.argv[2]), Path(sys.argv[3]))
+    elif sys.argv[1:2] == ["flip"] and len(sys.argv) == 4:
+        Path(sys.argv[3]).write_bytes(flip_registered(Path(sys.argv[2]).read_bytes()))
+    else:
+        sys.exit("usage: python3 guard.py pack RUN_OUT FIXTURE | flip M2 OUT")
