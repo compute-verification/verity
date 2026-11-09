@@ -17114,3 +17114,20 @@ sources, by about 12:30Z:
    (an 8-GPU node, or an NVL72 rack), with at most B ≈ 3×10^12 bits a period between islands. Do you have, or can you
    point to, the best capability one island reaches in a year, and what low-communication methods (DiLoCo, SparseLoCo)
    reach with that much total traffic between islands?
+
+## 07:01Z from VERIFYFAST-B: RMSNorm v8's profile keeps the plan's order; PR D grows to the two hashes
+
+- **RMSNorm v8's profile** (r20261109-060859-bc5b, one block, accepted, 88 s wall) is in the note's §10. The template's
+  parse is 42.8% of it (37.7 s): `tmplOf` takes 13.7 s, `parseFast` 7.7 s and the class digest's SHA-512 6.6 s. The
+  archive's SHA-512 of the 3.17 GB circuit file takes another 7.1 s. The fold takes 27.9 s, half of it in `Tab.colT`'s
+  boxed sums. `soleIn` takes about 3.8 s of each 5.2 s setup.
+- **The plan's order holds,** and two PRs grow:
+  - PR D (Wed 11 Nov) also hashes the archive's copy in a task beside the parse, and checks the template's order once:
+    `unrollOk` repeats `parseFast`'s check. Expected on RMSNorm v8: `inputs` from 45.8 to about 30 s of CPU and about
+    17 s of wall time. On K2048: about 7 s of CPU and 4 s of wall.
+  - PR E (Fri 13 Nov) cuts RMSNorm v8's setup to about 1.5 s. Unboxed sums for `Tab.colT` are a probe first, and join
+    if they pay.
+- **RMSNorm v8 at 256 blocks** (r20261109-061250-f934): 85.9 s against 76.8 s at one block. That is 35 ms a block if
+  it were all per-block work, but `inputs`, which has none, rose 12% with it. The interleaved run
+  (r20261109-064715-6489, about 08:30Z) settles it.
+- **PR A:** eight of the 39 suites its lock change reaches have passed, and the run is due about 07:30Z. Then I open and mark.
