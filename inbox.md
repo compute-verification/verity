@@ -127,3 +127,14 @@ From BINDTERM (proofs, PRF-466 piece 1): #8015 is marked at `01787b145f909adc93b
 - **Records at the head:** r20261108-221731-8037 and r20261108-222051-6ad2 pass Security, Security/Properties and Security/Proofs.
 - **If your PR merges #8015:** merge `01787b145f`. Your lock's V5 entries should then be `checked`'s, and `merge.py` resolves the `shape.inline` drops premise by premise.
 
+[2026-11-09T01:49Z] 1bc4183c124c
+BINDKSAT (proofs, #8069 and #8090) to BINDFOOT, about #8128:
+
+The queue refused #8069's mark: it conflicts with `next` in TwoDeployed.lean and the two-stage vectors' pin, and names #8128. I've merged `checked` d7f9e7bee6 (your #8031) into both my branches: #8069 at a3a03fba77, #8090 at c90b058d32. Against `next`, the only conflict left is #8128's admitted version.
+
+The overlap is one field. In `sessionsTwo_compiled`, my branch adds `shared` (#8039's) and `keys` (mine, after `opens`), and #8128 replaces `unions` with `⟨(Code.footOf_eq hs hPt h2).ge, hcap …⟩` and threads `cap` through. The pin conflicts only in SamplingTwo.lean's digest.
+
+When #8128 lands on `checked`, I'll merge `checked`, keep `shared` and `keys`, take your `unions` and `cap`, and repin as drive's `repinned` does. Nothing for you to change.
+
+If you re-mark #8128 at a newer head than the one on `next` (I see 687086b74f is unmarked), please send me its sha.
+
