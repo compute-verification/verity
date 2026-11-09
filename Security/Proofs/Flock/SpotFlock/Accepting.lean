@@ -14,10 +14,11 @@ at every set of the auditor's copies `h`:
 * `κF_le`: so the sessions' knowledge error `κ_F = 4·ε_table + 2^{−m′} + 2k′/K′ + e^{−k′/8}` is at most `2^{−190}`;
 * `slack_le_one_add`, `slack_sq_le_one_add`: the waits' slack factor `c = 2^{2^{−j}}` at `j = slackExp` is at most
   `1 + 2^{−j}`, and `c² = 2^{2^{1−j}}` at most `1 + 2^{1−j}` (`2^t ≤ 1 + t` on `[0, 1]`);
-* `κ_le`: the compiled two-stage verifier's `κ_δ = c²(δ + κ_s) + (1 + c)(2k/K + e^{−k/8})` is at most
-  `(1 + 2^{−9})·δ + 2^{−125}` at every statement and every `δ ≥ 0`, with `K = 2^128·k` and `k ≥ 2^j` (`κ_le_of`). The
-  slack costs `δ` the factor `c² ≤ 1 + 2^{−9}`, never an additive term that would swamp a small `δ`. So `κ_δ < 1` at
-  every `δ ≤ 1/2` (`κ_lt_one`);
+* `κ_le`: the compiled two-stage verifier's
+  `κ_δ = c²(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})` is at most
+  `(1 + 2^{−9})·δ + 2^{−125}` at every statement and every `δ ≥ 0`, with `K = 2^128·k` and both waits' `k ≥ 2^j`
+  (`κ_le_of`). The slack costs `δ` the factor `c² ≤ 1 + 2^{−9}`, never an additive term that would swamp a small `δ`.
+  So `κ_δ < 1` at every `δ ≤ 1/2` (`κ_lt_one`);
 * `run_proverOf`, `accepts_pos`: a prover that sends `m₀`, `m₁` and a session statement `xS` and then plays a Flock
   prover `P'` at `xS` (`proverOf`) is decided as `P'` is by Flock's masked verifier on the coins of rounds 3 on, at
   coins whose rounds 0 and 1 pass the check of `m₁` and `xS` (`stmtOk`). So where the check passes at some coins and
@@ -123,31 +124,30 @@ theorem slack_sq_le_one_add : Claims.Sampling.slack ^ 2 ≤ 1 + 2 * 2⁻¹ ^ sla
   rw [hsq, ← ej]
   simpa only [one_add_one_eq_two, mul_one] using h
 
-/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`** at a sampled record whose sessions' knowledge error is at most `2^{−190}`
-and whose waits wait for at least `2^j` accepted runs (`j = slackExp`), at every `δ ≥ 0`:
-`c²(δ + κ_F) + (1 + c)(2k/K + e^{−k/8})` at `c² ≤ 1 + 2^{−9}`, `c ≤ 1 + 2^{−10}`, `2k/K = 2^{−127}` and
-`e^{−k/8} ≤ e^{−128} ≤ 2^{−128}`. The slack multiplies `δ`; what it adds is at most `2^{−125}`. -/
-theorem κ_le_of {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ)
-    (hF0 : 0 ≤ Claims.Sampling.κF D x) (hF : Claims.Sampling.κF D x ≤ 2⁻¹ ^ 190) (hk : 2 ^ slackExp ≤ D.k x) :
-    Claims.Sampling.κ D δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125 := by
+/-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`** at a compiled sampled verifier whose sessions' knowledge error is at most
+`2^{−190}`, at every `δ ≥ 0`: `c²(δ + κ_s) + (2k_out/K_out + e^{−k_out/8}) + c·(2k_in/K_in + e^{−k_in/8})` at
+`c² ≤ 1 + 2^{−9}`, `c ≤ 1 + 2^{−10}`, `2k/K = 2^{−127}` and `e^{−k/8} ≤ e^{−128} ≤ 2^{−128}`, both waits waiting for
+`k = 2^j·(2n + 1) ≥ 2^j` accepted runs (`j = slackExp`). The slack multiplies `δ`; what it adds is at most
+`2^{−125}`. -/
+theorem κ_le_of {Coin : Type} {A : Claims.SamplingGeneric.Arg Coin} (L : Claims.SamplingGeneric.Compiled Coin A)
+    (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hs : L.κs x ≤ 2⁻¹ ^ 190) : L.κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125 := by
   have hj : (2 : ℝ)⁻¹ ^ slackExp = 2⁻¹ ^ 10 := by rw [slackExp]
-  have hs := slack_le_one_add
-  have hs2 := slack_sq_le_one_add
-  rw [hj] at hs hs2
-  have hs2' : Claims.Sampling.slack ^ 2 ≤ 1 + 2⁻¹ ^ 9 := by
+  have hc := slack_le_one_add
+  have hc2 := slack_sq_le_one_add
+  rw [hj] at hc hc2
+  have hc2' : Claims.Sampling.slack ^ 2 ≤ 1 + 2⁻¹ ^ 9 := by
     have : (2 : ℝ) * 2⁻¹ ^ 10 = 2⁻¹ ^ 9 := by norm_num
     linarith
-  have hkr : (1024 : ℝ) ≤ (D.k x : ℝ) := by
-    have : 1024 ≤ D.k x := by simpa [slackExp] using hk
-    exact_mod_cast this
-  have hk0 : (0 : ℝ) < D.k x := by linarith
-  have hcap : 2 * (D.k x : ℝ) / D.cap x = 2⁻¹ ^ 127 := by
-    rw [Claims.Sampling.Deploy.cap]
-    push_cast
-    rw [div_eq_iff (mul_pos (by positivity) hk0).ne']
-    ring
-  have he : Real.exp (-(D.k x : ℝ) / 8) ≤ 2⁻¹ ^ 128 := by
-    have h128 : Real.exp (-(D.k x : ℝ) / 8) ≤ Real.exp (-128) := by
+  have hs0 := L.κs_nonneg x
+  have hk : ∀ n : ℕ, 2 ^ slackExp ≤ 2 ^ slackExp * (2 * n + 1) := fun _ => Nat.le_mul_of_pos_right _ (by omega)
+  have hkO : 2 ^ slackExp ≤ L.kOut x := hk _
+  have hkI : 2 ^ slackExp ≤ L.kIn x := hk _
+  have he : ∀ k : ℕ, 2 ^ slackExp ≤ k → Real.exp (-(k : ℝ) / 8) ≤ 2⁻¹ ^ 128 := by
+    intro k hk
+    have hkr : (1024 : ℝ) ≤ (k : ℝ) := by
+      have : 1024 ≤ k := by simpa [slackExp] using hk
+      exact_mod_cast this
+    have h128 : Real.exp (-(k : ℝ) / 8) ≤ Real.exp (-128) := by
       rw [Real.exp_le_exp]
       linarith
     refine h128.trans ?_
@@ -156,27 +156,39 @@ theorem κ_le_of {Coin Col T : Type} (D : Claims.Sampling.Deploy Coin Col T) (x 
       exact pow_le_pow_left₀ (by norm_num) (by linarith [Real.add_one_le_exp (1 : ℝ)]) _
     rw [Real.exp_neg, inv_pow]
     exact inv_anti₀ (by positivity) he2
-  unfold Claims.Sampling.κ
-  rw [hcap]
-  have hA : Claims.Sampling.slack ^ 2 * (δ + Claims.Sampling.κF D x) ≤ (1 + 2⁻¹ ^ 9) * (δ + 2⁻¹ ^ 190) :=
-    mul_le_mul hs2' (by linarith) (by linarith) (by positivity)
-  have hB : (1 + Claims.Sampling.slack) * (2⁻¹ ^ 127 + Real.exp (-(D.k x : ℝ) / 8)) ≤
-      (2 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) :=
-    mul_le_mul (by linarith) (by linarith) (by positivity) (by positivity)
+  have hO : 2 * (L.kOut x : ℝ) / L.capOut x = 2⁻¹ ^ 127 := by
+    have h0 : (0 : ℝ) < L.kOut x := by exact_mod_cast lt_of_lt_of_le (by positivity) hkO
+    rw [Claims.SamplingGeneric.Compiled.capOut]
+    push_cast
+    rw [div_eq_iff (mul_pos (by positivity) h0).ne']
+    ring
+  have hI : 2 * (L.kIn x : ℝ) / L.capIn x = 2⁻¹ ^ 127 := by
+    have h0 : (0 : ℝ) < L.kIn x := by exact_mod_cast lt_of_lt_of_le (by positivity) hkI
+    rw [Claims.SamplingGeneric.Compiled.capIn]
+    push_cast
+    rw [div_eq_iff (mul_pos (by positivity) h0).ne']
+    ring
+  have heO := he _ hkO
+  have heI := he _ hkI
+  unfold Claims.SamplingGeneric.Compiled.κ
+  rw [hO, hI]
+  have hA : Claims.Sampling.slack ^ 2 * (δ + L.κs x) ≤ (1 + 2⁻¹ ^ 9) * (δ + 2⁻¹ ^ 190) :=
+    mul_le_mul hc2' (by linarith) (by linarith) (by positivity)
+  have hB : Claims.Sampling.slack * (2⁻¹ ^ 127 + Real.exp (-(L.kIn x : ℝ) / 8)) ≤
+      (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) :=
+    mul_le_mul hc (by linarith) (by positivity) (by positivity)
   have hC : (1 + (2 : ℝ)⁻¹ ^ 9) * (δ + 2⁻¹ ^ 190) = (1 + 2⁻¹ ^ 9) * δ + (1 + 2⁻¹ ^ 9) * 2⁻¹ ^ 190 := by ring
-  have hD : (1 + (2 : ℝ)⁻¹ ^ 9) * 2⁻¹ ^ 190 + (2 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) ≤ 2⁻¹ ^ 125 := by
+  have hD : (1 + (2 : ℝ)⁻¹ ^ 9) * 2⁻¹ ^ 190 + (2⁻¹ ^ 127 + 2⁻¹ ^ 128) +
+      (1 + 2⁻¹ ^ 10) * (2⁻¹ ^ 127 + 2⁻¹ ^ 128) ≤ 2⁻¹ ^ 125 := by
     norm_num
   linarith
 
 /-- **`κ_δ ≤ (1 + 2^{−9})·δ + 2^{−125}`** at SPOT[Flock]'s compiled two-stage verifier, at Flock's masked record,
-every statement and every `δ ≥ 0`: its `κ_δ` is at most its sampled record's (`κ_compiled_le`), whose sessions' error
-is at most `2^{−190}` (`κF_le`) and whose waits wait for `k = 2^j·(2n_PU + 1) ≥ 2^j` accepted runs (`j = slackExp`). -/
+every statement and every `δ ≥ 0`: its sessions' error is at most `2^{−190}` (`κF_le`, at each proof block). -/
 theorem κ_le (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) :
     (SamplingDeploy.compiledTwo (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots (two h)
       (rs h)).κ δ x ≤ (1 + 2⁻¹ ^ 9) * δ + 2⁻¹ ^ 125 :=
-  (SamplingDeploy.κ_compiled_le (FlockDeploy.deployZk _root_.Flock.Readable.relation) (code h) iroots δ x).trans
-    (κ_le_of _ x hδ0 (Claims.Sampling.κF_nonneg _ x (SamplingDeploy.deployOf_εtable_nonneg _ (code h) x))
-      (κF_le h _ x) (by unfold Claims.Sampling.Deploy.k; exact Nat.le_mul_of_pos_right _ (by omega)))
+  κ_le_of _ x hδ0 (Claims.SamplingGeneric.maxBelow_le (by positivity) fun _ _ => κF_le h _ x)
 
 /-- **`κ_δ < 1` at every `δ ≤ 1/2`**: the bound `CompiledTwo.KS` gives SPOT[Flock] is below `1`. -/
 theorem κ_lt_one (x : Msg) {δ : ℝ} (hδ0 : 0 ≤ δ) (hδ : δ ≤ 1 / 2) :
