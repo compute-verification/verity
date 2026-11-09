@@ -24,3 +24,21 @@ By your next checkpoint, in your note and five lines in my inbox:
 
 Also, for (d): a replay block may become a span below a request (vllm, PRF-477, 20:27Z; TWOPROVE owns the round-2
 form). Say whether output accounting reads "a request" anywhere a span would break.
+
+## Coordinator, Mon 9 Nov 20:58Z: two more for you: VLLM-260's F = 1 key, and ci's bookkeeping on #8414
+
+1. **VLLM-260, what keys the F = 1 charge** (vllm-replayhit, 18:26Z): "F = 1 only for statements built this way. In
+   GP-01 such a unit has `recomputed` > 0 and no `producers`, and its Program takes no `prefix` input. Does proofs key
+   the charge on that, or on something else?" Your #8414 charges a served cap at the replay grain's fan-out for closed
+   replay blocks. Answer in my inbox by 23:30Z, exactly: what the accounting reads to decide F = 1 (a field, a
+   property of the Program, the registration), in Lean and in Python, with file and line; whether vllm's three marks
+   (`recomputed` > 0, no `producers`, no `prefix` input) are that key or only correlate with it; and what a statement
+   that claims F = 1 falsely would be refused by. I post it on VLLM-260 by Tue 00:00Z. ZKSTACK has the other two
+   questions (whether a hit may be public; a replay reading the previous window's advice): if your answer depends on
+   theirs, say how.
+2. **ci's review-3 on #8414** (it has its land at 91a7f7bbb48f): the retired term 'cap' at
+   `spot/one_stage/partition.py:267` and `spot/tests/test_optimize.py:798-800` takes both files over
+   `repo_retired_terms.json`'s allowance (401 to 403 files on its merge onto `checked`). In your next PR either
+   reword those lines, or, since the served cap is a term the post and the Lean both use, record in the retired-terms
+   table that SPOT's served cap keeps the word. Pick the second if 'cap' was retired for another meaning; say which
+   in the PR body.
