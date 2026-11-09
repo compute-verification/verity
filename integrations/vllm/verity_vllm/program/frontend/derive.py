@@ -499,8 +499,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
     the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
     (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
-    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the
-    correspondence's Calls with it.
+    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps;
+    `prune.BATCHED`: then batched, class G's form), and the correspondence's Calls with it.
     `correspondence=False`: no runtime correspondence (for a graph no serving runtime executes, a training step's); the Program is unchanged."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")

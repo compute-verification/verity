@@ -51,7 +51,7 @@ from verity.ml.definitions.registry.sampling import bit_at
 from verity_vllm.engine import served_seed
 
 __all__ = ["COIN", "NAME", "PARAMS", "SeedBlocks", "SeedCheck", "SeedCheckWord", "SeedEqual", "SeedSelect", "SeedWord", "ServedSeed",
-           "blocks", "check", "check_reference", "in_derive", "params", "reference", "rid_of", "values"]
+           "blocks", "check", "check_reference", "in_derive", "params", "reference", "rid_entry", "rid_of", "values"]
 
 BIT = BL.BIT
 U8 = Array(8, BIT)
@@ -174,6 +174,15 @@ def rid_of_ids(ids: Sequence[str]) -> int | None:
     Program per shape reads one id length, so the row's stochastic request Programs then refuse at their build (`rid_in`)."""
     rids = {rid_of(i) for i in ids}
     return rids.pop() if len(rids) == 1 else None
+
+
+def rid_entry(policy: dict, requests: Sequence[dict]) -> dict:
+    """``{"rid": n}`` where ``policy`` is stochastic and its row's ``requests`` share the RID n (`rid_of_ids` of their
+    ``request_id``), else {}: the entry a row's sampling policy carries for its requests' seed rule (`rid_in`)."""
+    if policy.get("kind") != "stochastic":
+        return {}
+    rid = rid_of_ids([str(r["request_id"]) for r in requests if r.get("request_id") is not None])
+    return {} if rid is None else {"rid": rid}
 
 
 def rid_in(sampling: Any) -> int:

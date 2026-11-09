@@ -44,8 +44,8 @@ WINDOWS = {
 }
 #: each window's request Program digests at rank 0, in request order
 PINS: dict[str, list[str]] = {
-    "long-w0": ["c902ed97e90611101e2d02ba8dc98de33b3a5e6a32830e9b9dba7c4c11c701115231747028c7b97f08c646b27d3c142cd012b4dc2421ef13c06249c8b7bb14c8",
-                "00622f03f3cedf3ee1e8a2a908ca3e7184b320d6102aa97825d22e78161b8e29196e1ea73186f7c1bb5aa7ad997850c52e0f17767dbcda4855ea7952fbf1619c"],
+    "long-w0": ["3304f85aea2585a1b41417f16f6a55a8ca0d106f32dbdc42a46d7ce22a1dd2dc432f2ce079937fc349a49058b6fe4ee43e68c28b76293becdb3884b086ed07f0",
+                "821addd1e0ed89a1cdf1ae228421b6d7692fdbb988dbdf0beb5d9eb07c0bf8dcf0577722c935d4ab3e9a85766862d76d99e491c9fa1fa8c057860a1020e2e035"],
 }
 
 
@@ -204,7 +204,11 @@ def main() -> int:
     ap.add_argument("--profile", action="store_true", help="cProfile the compile (profile.pstats, profile.txt)")
     ap.add_argument("--no-phases", action="store_true", help="no phase instrumentation")
     ap.add_argument("--guard", action="store_true", help="exit 1 unless the digests are the window's PINS")
+    ap.add_argument("--engine", default=None, help="KEY=INT,... over class G's engine (max_model_len, max_num_batched_tokens, "
+                    "long_prefill_token_threshold)")
     a = ap.parse_args()
+    if a.engine:
+        ENGINE.update({k: int(v) for k, v in (kv.split("=") for kv in a.engine.split(","))})
     if (a.window is None) == (a.requests is None):
         ap.error("one of --window and --requests")
     reqs = WINDOWS[a.window] if a.window else [tuple(int(x) for x in r.split(":")) for r in a.requests.split(",")]
@@ -234,7 +238,7 @@ def main() -> int:
     peak = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss * 1024
     digests = [u.digest for u in compiled.requests]
     nodes = {d: len(p.fn.body.nodes) for d, p in compiled.programs.items()}
-    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers,
+    rec = {"window": a.window or a.requests, "requests": [list(r) for r in reqs], "rank": a.rank, "layers": a.layers, "engine": dict(ENGINE),
            "digests": digests, "workload_digest": compiled.workload.digest, "root_nodes": nodes, "transfer_gates": list(transfer), "wall_s": round(wall, 3),
            "wall_min": round(wall / 60, 3), "peak_gib": round(peak / 2**30, 3), "profiled": a.profile, "phases": m.by_phase(),
            "timeline": [d for d in m.done if d["phase"] != "Builder.finish"]}

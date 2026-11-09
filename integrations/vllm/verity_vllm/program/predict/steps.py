@@ -94,7 +94,7 @@ KV; `refused` names why. It records `check_compiled`'s refusal (`batch_rule`) ra
 
 The compiler digest is `score.code_version()`, with ℓ beside it. `Compiled.transfer_gates` lists the templates whose units hold
 transfer gates (the ingress parse and the token selects), each of which a window proves whole. `trace_commands` lists the Build traces (`verity-vllm build
---wrapper request`, in class G at the unit's `--launch-context`; none yet for a chunked prefill) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
+--wrapper request`, in class G at the unit's `--launch-context` and `--batched`) of a compilation's Programs, and `compare` holds the compiled digests to them. With `named=True` each Program
 carries what its trace's Build says beside it (`Compiled.named`, `naming`), so an auditor writes that Build with no vLLM.
 """
 from __future__ import annotations
@@ -516,13 +516,13 @@ class Plan:
 def request_program(registered: Registered, unit: RequestUnit, named: bool = False) -> Any:
     """`unit`'s Program (a `build.BuildResult`): the Build's request wrapper at its (LP, T), under its policy, after its C rows of
     history, in class G at its launch context and in its prefill chunks, at φ's rank, in the registered compiler's form
-    (`dead_free`) at any world, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
+    (`dead_free`) at any world, batched in class G, its length rule last; `named`: its trace's names (`naming.named_program`, no class-G decoder)."""
     phi = Phi.from_json({**registered.phi.to_json(), "sampling": unit.policy})
     if named:
         from .naming import named_program
         return named_program(phi, unit.LP, unit.T, unit.C, stop=unit.stop)
     r = build_program(phi, "request", LP=unit.LP, T=unit.T, C=unit.C, dead_free=True, batch=unit.batch(), chunks=unit.chunks,
-                      edge=unit.edge, stop=unit.stop, with_desc=False)
+                      edge=unit.edge, stop=unit.stop, with_desc=False, batched=not phi.target_profile().batch_invariant)
     return replace(r, digest=program_digest(r.program))
 
 
@@ -752,7 +752,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     """One `verity-vllm build --wrapper request` per distinct request Program of a compilation (`Compiled.summary()`), on the pinned
     vLLM (CPU, on meta), each writing `<root>/<trace_dir>` at a `max_model_len` of at least its LP + T, under φ's GPU's name where
     φ states one (`--device-name`: the tuned kernel configs a GPU-free host reads); at tensor-parallel world W, φ's rank's
-    (`--tp W --rank r --dead-free`); in class G at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
+    (`--tp W --rank r --dead-free`); in class G batched (`--batched`) at the unit's launch context (`--launch-context '{"batch": ...}'`), with its
     prefill chunks there when it has them (`'{"batch": ..., "chunks": ...}'`: the Build's chunked request wrapper,
     `vllm_meta.ChunkedGreedyRequest`); its length rule `--stop`. A Program with a window's edge rows has none (`NO_EDGE_TRACE`),
     so `compare` counts it `no_trace`."""
@@ -761,7 +761,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
     target = {k: v for k, v in phi.target.items() if k in TargetProfile.__dataclass_fields__}
     # the target's GPU name, which vLLM's get_device_name answers on any host (its tuned fused-MoE configs' key)
     device = ["--device-name", str(phi.target["device_name"])] if phi.target.get("device_name") else []
-    world = int(phi.tp.get("world", 1))
+    world, batched = int(phi.tp.get("world", 1)), ([] if phi.target_profile().batch_invariant else ["--batched"])
     tp = ["--tp", str(world), "--rank", str(int(phi.tp.get("rank", 0))), "--dead-free"] if world > 1 else []
     for u in summary["requests"]:
         if u is None or u.get("edge") or (d := trace_dir(u)) in seen:
@@ -775,7 +775,7 @@ def trace_commands(summary: dict, registered: Registered, root: str, *, max_mode
                      *(["--stop", json.dumps(u["stop"], sort_keys=True, separators=(",", ":"))] if u.get("stop") else []),
                      "--model", phi.model["repo"], "--revision", phi.model["revision"],
                      "--max-model-len", str(max(max_model_len, int(u["LP"]) + int(u["T"]))),
-                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp])
+                     "--target", json.dumps(target, sort_keys=True), *device, "--profile", phi.profile, "--sampling", sampling, *tp, *batched])
     return cmds
 
 
