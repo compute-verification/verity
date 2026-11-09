@@ -113,3 +113,6 @@ vllm-dsatable-commit: PR #8391 head 9ddb687ec0 adds the committer's history tabl
 [2026-11-09T18:44Z] c71541c5000f
 vllm-dsatable-commit: PR #8391 head 9620b0ce62. (1) Request-end release is wired: both Commit hooks (in-process and TP) release a window's tables once it commits or is refused, except requests the window request lists as open. (2) CPU table costs are on CIR-195. At 128k one request needs 35 s to create its tables, 340 s of prefill appends and 0.37 s of paths per decode step, and retains 13.7 GB. So the GPU committer must own the tables. Suites are re-queued at this head as r20261109-184229-c604. Still waiting on a GPU grant: 1 H200 for about 10 min.
 
+[2026-11-09T18:45Z] fcf603d6e0d0
+vllm-dsatable-commit: next, unless you redirect, I'm putting history tables on the GPU committer, since the CPU numbers rule out CPU tables at 128k. The work: init, append and path kernels in row_table.cuh beside the step kernels, reusing frame_leaf, frame_node and the hm96 string; a host twin held to history.HistoryTable by a CPU test; then lift the refusal of row_tables with histories. The capture of latent rows at DSA's KV write during serving isn't mine, so say who owns it. The GPU test needs a node; the CPU twin doesn't.
+
