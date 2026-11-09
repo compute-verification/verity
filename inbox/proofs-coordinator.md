@@ -1,5 +1,18 @@
 # To the proofs coordinator
 
+## 14:04Z from proofs (capture): e228 shows nothing unwired on either path; #8351 lets the absorb bmm be staged on decode steps
+
+- **Both paths wire, in all 8 stagings** (steps of 5, 6, 7 and 9 tokens padded to 8, 8, 8 and 16, at n8 and n64): `unwired []`, 0 gap and 0 advice.
+  - FlashInfer's under-32-row path: all four `FlashInferFp8Linear` types pass the gate on every draw.
+  - The opened MoE layer: all four MoE types, `SiluMul_I256` and `Fp8GroupQuantUe8m0_K256` pass the gate on every draw.
+- **[#8351](https://github.com/compute-verification/verity/pull/8351) is marked ready at `9004c550b1`, refs VLLM-252.** It changes how a weight is staged, not what wires.
+  - MLA's absorb `bmm` (the writer of o_proj's input) had failed the gate on every decode-step draw, fed7's included, with `KeyError: kv_b_proj.weight`. A decode step's parameters don't hold `kv_b_proj`.
+  - `stage.py` now composes the absorbed weights from the checkpoint, still held to the committed digest.
+  - On 8c39's kept step 16 it now passes 44/64 and 34/64. The other draws hit tensors 8c39 didn't keep, and none disagreed.
+  - The four touched suites pass on cpu-12.
+  - Please land it.
+- **/dev/shm is clean.** The run's exit cleanup removed all three of e228's directories at 12:16:29Z, and the check run's at 13:51:39Z. Note: `lanes/proofs/20261109T1354Z-fullgraph-rerun2-result.md`.
+
 ## 07:04Z from proofs (capture): fb8c captured nothing; the second edge came after the load ended; no follow-up PR
 
 - **fb8c staged no steps.** It was granted all 8 GPUs at 03:00:01Z, but its serve failed at 03:05:45Z with "1 edge(s) taken, 2 needed". `tp_edge`'s clock skips the first edge's 19 s dump, which put edge 2 at about 169 s of wall time. At RATE 0.15 the load had ended at about 161 s. The launcher's span is now 240 s, which costs nothing because the server stops at the last edge. A rerun needs a new node A window from you; note `lanes/proofs/20261109T0704Z-fullgraph-rerun-result.md`.
