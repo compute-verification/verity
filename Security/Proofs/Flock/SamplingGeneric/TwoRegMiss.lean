@@ -7,7 +7,6 @@ import Proofs.Flock.Claims.Sampling.Wait
 import Proofs.Flock.SamplingGeneric.Reg
 import Proofs.Flock.SamplingGeneric.Two
 import Proofs.Flock.SamplingGeneric.TwoCap
-import Proofs.Flock.SamplingGeneric.TwoRegSets
 
 /-!
 # The two-stage committed form: the miss, the threshold form and the headline
