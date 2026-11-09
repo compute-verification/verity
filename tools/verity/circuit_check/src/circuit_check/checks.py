@@ -1633,24 +1633,17 @@ def check_subcircuit(sub: Any, opts: Options = DEFAULTS, *, instance_statics: Se
 # --- one served workload ------------------------------------------------------------------------------------------------------
 
 def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None = None, pins: dict | None = None) -> dict:
-    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory): `word.check_query` over its Calls (the
-    cross-Call conditions: every Value a Call reads or returns is committed) and every check on each distinct Definition."""
-    from types import SimpleNamespace
-
-    from verity_vllm.correspondence.reader_for_query import Correspondence
+    """A served workload's request Program (a Build's ``instances.json.gz``, or its directory), as the sidecar of the package
+    that writes it reads it (`targets.request_program`): `word.check_query` over its Calls (the cross-Call conditions: every
+    Value a Call reads or returns is committed) and every check on each distinct Definition."""
     from verity.ml.definitions import word as W
-    from verity_vllm.query.module_body import literal_calls
-    from verity_vllm.query.program_view import from_instances, iter_instance_rows
-    from verity_vllm.query.required import population
+
+    from .targets import request_program
 
     memo = {} if memo is None else memo
     pins = load_pins() if pins is None else pins
     p = Path(path)
-    inst = p / "instances.json.gz" if p.is_dir() else p
-    P = from_instances(str(inst))
-    corr = Correspondence(P)
-    pop = population(P, corr)
-    Q = SimpleNamespace(required=pop.required, literals=literal_calls(P), program_path=corr.module_of)
+    P, Q, rows = request_program(str(p))
     F = Findings()
     r = W.check_query(P, Q, opts.X, opts.W, opts.extras, strict=False)
     for v in r["violations"]:
@@ -1663,7 +1656,7 @@ def check_row(path: str | Path, opts: Options = DEFAULTS, *, memo: dict | None =
     except ImportError:
         out["cross_call"] = {"checked": False, "reason": "verity.ml.definitions.cross_call is not on this tree"}
     else:
-        x = cross_call.check_program(lambda: iter_instance_rows(str(inst)), strict=False)
+        x = cross_call.check_program(rows, strict=False)
         out["cross_call"] = {"checked": True, **{k: x[k] for k in ("check", "ok", "calls", "recomputed_gates", "unrefined")}}
         for a in x["recomputes"]:
             F.fail("partition", "cross-call-recompute", a["definition"], f"({a['level']}: {a['calls']} Call(s) compute {a['gates']} "

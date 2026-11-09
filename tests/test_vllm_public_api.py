@@ -223,7 +223,6 @@ KNOWN = frozenset({
     "verity_vllm.protocols.remote_bandwidth.registry",
     "verity_vllm.protocols.remote_bandwidth.remote",
     "verity_vllm.query.manifest.format",
-    "verity_vllm.query.module_body",
     "verity_vllm.query.program_view",
     "verity_vllm.query.required",
 })

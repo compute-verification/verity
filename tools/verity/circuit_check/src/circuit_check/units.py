@@ -679,7 +679,7 @@ def store_roots(cache: Path, repo: Path, plan: Plan) -> str | None:
 
 def owners(plan: Plan) -> dict[str, str]:
     """`sidecars.owner` of each Definition a loaded module binds at its top level, by id, as a full build has it before its
-    checks: in a process forked from this one that imports every module of `sidecars.PACKAGES` a binding's build imported (its
+    checks: in a process forked from this one that imports every module of `sidecars.packages` a binding's build imported (its
     reads' ``modules``, its record's or its process's), so this process imports none of them, as it builds no body.  Where two
     Definitions of one id are bound, the first owner by name.  `Stale` when one of them doesn't import there."""
     import importlib
@@ -687,7 +687,8 @@ def owners(plan: Plan) -> dict[str, str]:
 
     from . import sidecars as SC
 
-    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in SC.PACKAGES})
+    tops = SC.packages()
+    mods = sorted({m for e in plan.entries for m in (e.reads or {}).get("modules", ()) if m.partition(".")[0] in tops})
     sys.stdout.flush()
     sys.stderr.flush()
     with CC.internal():

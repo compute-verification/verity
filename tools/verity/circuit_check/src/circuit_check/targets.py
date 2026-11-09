@@ -6,7 +6,8 @@ the suite runs over, every registered Definition and template at small bindings.
                 digest its id prints, ``StepBody_v1{C={d0dc81b7fa41},T=4,...}``, one of the records the suite binds)
     template    ``rope-head`` (its example parameters), ``rope-head:D=128`` (parameters given), or a subcircuit id
                 (``gemm-coordinate/k2048/sm80-mma-bf16``); an attention head is checked at the ends of its key-count range
-    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``
+    row         a served workload's request Program, a Build's: its directory or its ``instances.json.gz``, read by the
+                sidecar of the package that writes it (`request_program`)
     sidecar     ``path/to/<module>.circuit-check.py``: the module's own Definitions its bindings reach, and its templates
                 (`sidecar_targets`)
 
@@ -314,6 +315,21 @@ def kind_of(spec: str) -> str:
         pass
     head = spec.partition(":")[0].partition("/")[0]
     return "template" if head in TM.TEMPLATES else "definition"
+
+
+#: the reader of a served workload's request Program, which the sidecar of the package that writes it defines
+ROW_READER = "request_program"
+
+
+def request_program(path: str) -> tuple[Any, Any, Callable[[], Iterator[Any]]]:
+    """A row target's request Program, read by the one binding file that defines `ROW_READER`: the Program's view, its
+    population as `verity.ml.definitions.word.call_groups` reads one, and its instance rows, from the first at each call
+    (`verity.ml.definitions.cross_call.check_program`)."""
+    readers = {prefix: ns[ROW_READER] for prefix, ns in binding_files() if ns is not globals() and ROW_READER in ns}
+    if len(readers) != 1:
+        raise ValueError(f"{path}: a request Program is read by the one sidecar that defines `{ROW_READER}`, and "
+                         f"{len(readers)} that `sidecars.discover` finds do: {', '.join(readers) or 'none'}")
+    return next(iter(readers.values()))(path)
 
 
 # --- the catalog ----------------------------------------------------------------------------------------------------------------
@@ -1056,7 +1072,7 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
     load_registries()
     mod = next((m for m, files in SC.discover().items() if files.get("py") == p), None)
     if mod is None:
-        raise ValueError(f"{path}: no sidecar of a module under `sidecars.PACKAGES` (`sidecars.discover`)")
+        raise ValueError(f"{path}: no sidecar `sidecars.discover` finds (of a module of `sidecars.packages`)")
     ns = vars(dict(SC.binding_modules())[mod])
     prefix = f"{ns['__name__']}#"
     names = sorted(_root_names(ns), key=lambda n: (n not in ROOT_FUNCTIONS, ROOT_FUNCTIONS.index(n) if n in ROOT_FUNCTIONS else 0, n))
@@ -1088,8 +1104,8 @@ def sidecar_targets(path: str) -> tuple[dict[str, Any], list[tuple[str, Any, lis
 
 
 __all__ = ["BY_CALLS", "BY_CALLS_ROOTS", "CATALOGS", "MAX_GATES", "PINNED_KINDS", "REACHED", "REGISTERED", "ROOT_ERRORS",
-           "ROOT_FUNCTIONS", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
+           "ROOT_FUNCTIONS", "ROW_READER", "TABLE_PROBES", "TINY", "Undecided", "binding_files", "binding_roots", "boolean_call_candidates",
            "boolean_call_families", "boolean_family", "boolean_links", "call_families", "catalog", "catalog_units",
            "certified_boolean_calls", "declare_by_calls", "definition", "family", "instance_statics", "is_by_calls", "is_call",
-           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
+           "kind_of", "load_registries", "pinned", "pouw_bindings", "reachable", "request_program", "root_functions", "select", "sidecar_dropped", "sidecar_targets", "subcircuit", "suite",
            "table_probe", "template_params", "templates", "word_call_families"]

@@ -199,6 +199,17 @@ def test_a_record_static_a_catalog_root_binds_parses_without_the_catalog(monkeyp
         TG.definition("GfResiduals_v1{S={000000000000}}")
 
 
+def test_a_request_program_is_read_by_the_one_sidecar_that_defines_its_reader(monkeypatch):
+    _binding_files(monkeypatch, a={"request_program": lambda path: ("P", "Q", path)}, b={})
+    assert TG.request_program("build/instances.json.gz") == ("P", "Q", "build/instances.json.gz")
+    _binding_files(monkeypatch, a={}, b={})
+    with pytest.raises(ValueError, match="x: a request Program is read by the one sidecar .* 0 that .* do: none"):
+        TG.request_program("x")
+    _binding_files(monkeypatch, a={"request_program": len}, b={"request_program": len})
+    with pytest.raises(ValueError, match=r"2 that .* do: a.circuit-check#, b.circuit-check#"):
+        TG.request_program("x")
+
+
 def test_a_vocabulary_kind_that_does_not_bind_leaves_the_call_families_refused_by_name(monkeypatch):
     """A kind left out of `word_call_families` would make every check of its family judge the partition as no Call's, and
     `test_every_call_the_suite_checks_is_partitioned` pass without it."""
