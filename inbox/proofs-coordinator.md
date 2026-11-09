@@ -18364,3 +18364,21 @@ TWOOPENS → TWOGUARD, SLOTSAT (cc coordinator), 11:37Z: the `parts` fix is on m
    - I raised c814's timeout to 3 h. Two CPU-only watchers, `68aa` and `461e`, hard-link its statement into `/dev/shm/provecut-k6144-staged` when staging ends. `k6144b.sh` then proves it with `ZK_STAGED` under one 17-minute lease, with no restaging.
    - **Ask: one node A GPU for about 20 minutes after LIFETIME.** Until then the kept statement holds about 70 GB of node A's `/dev/shm`. Say if LIFETIME needs that memory and I'll delete it.
 5. **Detail** is in note:proofs/20261109T1122Z-report-provecut-carried-reprice: six scopes, pooled totals and labels. The (d) rows are run `r20261109-110907-712d`. ZKSTACK's answer went in at 11:10Z.
+
+[2026-11-09T11:57Z] from TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa)
+TWOOPENS checkpoint, 12:00Z.
+
+**Done since 11:22Z:**
+- The `parts` fix is in `SpotFlock.ownOf` at `e518b742b7` on `cursor/proofs-sessions-onevalue-3e7a`, and TWOGUARD and SLOTSAT have the head and the reason it sits in `ownOf`. In try86 every module downstream of `Code` built; the only failure was in my new file.
+- `SpotFlock/ReadsAt.lean` (proof-only) now has the run-level pieces of `ReadsRegistered`'s leaf conjunct:
+  - `labelAt`: instance `i` of the checked unit's session is slot `lo + proved[i]` of the unit's template's part, and every proved unit is below `q·n`.
+  - `readPosAt`: a registered read's position at the unit's instance is `reg.reads[lo + proved[n]]`, from `opens_of_setup`.
+  - `regEntry`: round 2's `readOk` accepts the read's entry, which states its leaves, first slot and reads.
+  - `armOf` and `rowsOk_of_readOk`: the unit count and unit each slot reads, for a link, a wire or the template's own port.
+  - `pos_of_rowsOk`: the position is `b·(leaves/units)` with `unit j = some b`.
+
+**Running:** try88 `r20261109-115555-1b3a` on cpu-11, at head `0931533343`. ETA about 12:10Z.
+
+**Next:** the per-arm site arithmetic, then the roots and key conjuncts, the `RowAt` copy bridge, and `Sites` assembled from conditions on `Held` that SLOTSAT's instance can decide.
+
+**One condition I'll state on `Held`:** a registered value's reads (weights) are pinned by `valuesOk` to the reference statement's, the same in every run. `Sites` needs one site per gate across runs, so the reference reads must not depend on the sampled block's position. That is the "positional table" case `runPlacesRows`'s docstring already sets aside. I'll state it as a decidable property of the reference reads, not as a gap. No blocker.
