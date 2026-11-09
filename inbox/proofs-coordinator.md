@@ -17373,3 +17373,20 @@ the capacity lost.
 - r20261109-073404-72df: `cacheopt_whole.py` on both traces.
 - r20261109-073715-5da6: the fixed `cacheopt_hold.py` and the probe again. The fixed rows equal the probe's earliest-cut
   rows, and the probe's published rows reproduce the memo's 10.76, 8.07 and 5.66 on B128.
+
+[2026-11-09T07:42Z] TWOOPENS (bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa) checkpoint: two heads pushed and green; the assembly is blocked on SLOTSAT, which is idle
+
+- **`7206dc0ce4` is pushed**, with #8230's head, `checked` `204e59da60`, the new `SlotsAt` shape and `codesOk`'s own verdict. try74 (r20261109-063041-18dd, cpu-1) passed at it: `Security/Proofs/Flock.lean --siblings`, 12388 jobs, rc 0. try73 (r20261109-054903-897f) had passed at `1899d21f6c` (12399 jobs).
+- **`9b79e7c46d` is pushed**, with #8270's admitted `772c78ab4a` merged. `ownOf` sets `Own.refReads` from the registered reference statements (`refRegisteredOf`); left at its default, `second-values` would refuse every statement, the same trap as `Own.verified`. Two runs passed at it:
+  - try75 (r20261109-073043-b1ff, cpu-1), rc 0;
+  - the Spot suites (r20261109-072457-a16c, cpu-3): `verity/core/protocols/spot` 826 passed, `verity-core-sampled-proofs` 204 passed and 2 skipped, `benchmarks/two_stage` 10 passed.
+- **Blocked: SLOTSAT is IDLE**, and its branch (`714c8a59af`, pushed 05:07Z) predates both my slot-fields `FrameAt` and #8229. Restating `slotsAt_slotMap` against `9b79e7c46d` has two parts:
+  - **the opening:** easy. `openingOf` depends only on the gate, so the first opening at `(g, rootsAt g)` is it.
+  - **the slot:** substantive. It has to be stated by its fields, `⟨key, schema, pos, stride, units, sized⟩`, with the leaf read off the roots (`leafAt`, `unitsAt`), and `SiteHolds`, `ReadsInterior` and `ReadsRegistered` change to match. This is also where `Sites` becomes satisfiable: an interior site fixes `pos` and `stride = n_t`, so its leaf, `(p + place·n_t)·(leaves/units)`, needs no run, and #8270 fixes a registered value's rows to the reference's. As written now, `Sites` asks for a run-dependent leaf at a fixed site, which may be unsatisfiable, and then the guarantee would be vacuous.
+- **Please wake SLOTSAT on that restatement, or tell me to take it over.** I won't start it unless you say so, to avoid two of us doing it. The assembly is ready to merge as soon as its head lands:
+  - `SpotFlock.Built h` (the frame is `frameAt (slotMap h) (revealCode h (siteMap h) c₀)`) and `frameIs_built`;
+  - `SpotKSTwo` and `SpotExfilTwo` restated as: for every `h`, `Built h → Sites h → Embeds h (layoutFor h) → …`.
+- **Lock, at records time (asked at 06:33Z):**
+  - `open`: drop `SpotFlock.FrameIs`, add `SpotFlock.Sites` under PRF-460, due 2026-11-30;
+  - `domain`: add `SpotFlock.Built`. Why: the guarantee is about SPOT's own frame, and an honest registration takes it as its frame (`slotMap_frame`, `revealCode_frame`).
+- **No runs in flight.**
