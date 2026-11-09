@@ -4,8 +4,8 @@ applies its actions in order, stopping the tick at the first that fails: the nex
 it keeps only what a snapshot reads: the refs, the labels, graph2's results and the decision log (`--log`), from which come
 the candidates, `history`, each candidate's `tries`, `reruns` and first enqueue, the results a retry or a rerun set aside, the
 record of the run beside each check, a ring's, a red's and a flake's once-only and the owners already told.  `--state` is a
-report it rewrites each tick: each candidate's verdict beside graph2's and the run beside it's, the jobs its graph lacks, and
-the `queue/*` branches it ignores.
+report it rewrites each tick: each candidate's verdict beside graph2's and the run beside it's, the jobs and kinds its graph
+lacks, and the `queue/*` branches it ignores.
 
 The snapshot.  `main` is origin's `main`, fetched into the clone's own refs (`refs/vqueue/`), so drive's clone, its worktree and
 its refs are left as drive keeps them.  `ready` is the open PRs drive would land from `next` now: admitted as drive admits them
@@ -126,7 +126,7 @@ TIME, STAMP_RE = "%Y-%m-%dT%H:%M:%SZ", re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d
 READY_VERDICT = "ready_verdict"
 #: who graph2 writes its labels as (its `research data label ... --by executor`): a label by anyone else counts for nothing
 GRAPH2_BY = "executor"
-#: why a candidate's failures wait on its base (`World._base`) while graph2 hasn't listed the base's check
+#: why a candidate's verdict waits on its base (`World._base`, `World._gone`) while graph2 hasn't listed the base's check
 UNLISTED = "its check isn't listed yet"
 #: who ejects, as drive's ejections are by
 EJECTOR = "ci"
@@ -302,8 +302,9 @@ class Past:
 class Judged:
     """A candidate's verdict with what it rests on: ``mark`` names the terminal infra or list-failed evidence a retry answers,
     ``graph2`` is graph2's own verdict (``theirs`` its whole JSON), ``lacks`` the jobs `main` waits for (`drive.gating`) that no
-    task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed,
-    ``unlisted`` the base whose unlisted check its failures wait on, and ``slim`` the verdict of the run beside the check
+    task of the graph runs, which drive's `executor = "on"` path takes as no promotion and this verdict as list-failed, and
+    `kind K` of each kind of task its base's graph lists that it lists none of (`World._gone`), ``unlisted`` the base whose
+    unlisted check its verdict waits on, and ``slim`` the verdict of the run beside the check
     (`vqueue_slim.judge` on its ``record``; pending until it starts), combined into ``verdict``."""
     verdict: Verdict
     mark: str | None = None
@@ -773,7 +774,7 @@ class World:
 
     def _verdict_of(self, sha: str) -> dict | None:
         """`graph2_verdict` of ``sha``, read once while a snapshot keeps them (`_theirs`): a subprocess each, and a base's is
-        read for each candidate on it that failed."""
+        read for each candidate on it that failed or waits on its listing."""
         if self._theirs is None:
             return self.graph2_verdict(sha)
         if sha not in self._theirs:
@@ -1269,7 +1270,8 @@ class Loop:
         return logged
 
     def keep(self, t: Tick) -> None:
-        """The state file (``state``): this tick, and each candidate's verdict beside graph2's and the jobs its graph lacks."""
+        """The state file (``state``): this tick, and each candidate's verdict beside graph2's and the jobs and kinds its graph
+        lacks."""
         if self.state is None:
             return
         doc = {"at": stamp(self.now()), "tick": t.n, "main": t.main, "origin_main": t.origin,
@@ -1553,9 +1555,10 @@ class Loop:
         return recs
 
     def _bases(self, t: Tick) -> list[dict]:
-        """Enqueue `ready:<base>` of each base whose unlisted check a candidate's failures wait on (`Judged.unlisted`), once a
-        base, at the candidate's priority: its keys tell which failures the candidate inherits.  A candidate's own check was
-        enqueued by its build; one that fails to enqueue is logged and enqueued by the next tick."""
+        """Enqueue `ready:<base>` of each base whose unlisted check a candidate's verdict waits on (`Judged.unlisted`), once a
+        base, at the candidate's priority: its keys tell which failures the candidate inherits, and its kinds which the
+        candidate's graph must list.  A candidate's own check was enqueued by its build; one that fails to enqueue is logged and
+        enqueued by the next tick."""
         w, recs, done = self.world, [], {r.get("sha") for r in t.past.of("base") if r.get("enqueued")}
         for c in t.snap.candidates:
             if (b := t.judged[c.sha].unlisted) is None or b in done or t.past.tries(b):
@@ -1563,7 +1566,7 @@ class Loop:
             done.add(b)
             built = t.past.built(c.sha) or {}
             line = dict(sha=b, candidate=c.sha, priority=built.get("priority") if isinstance(built.get("priority"), int) else 0,
-                        why=f"{c.sha[:12]}'s failures wait on its base's listing")
+                        why=f"{c.sha[:12]}'s verdict waits on its base's listing")
             try:
                 w.enqueue(b, line["priority"])
             except (QueueError, OSError, subprocess.SubprocessError) as e:
