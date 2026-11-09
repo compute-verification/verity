@@ -54,7 +54,12 @@ says so. Before each build it `repair`s the slot tree: a module an interrupted b
 not one, a `.hash` that is not the trace's or is older than its output) loses its trace and `.hash` files, so Lake rebuilds
 it, as does a module's `.hash` file when the module has no trace, and after a run left mid-way, a package's fetched dependencies that run was taking, or that hold such a
 module or a checkout other than the manifest's, are taken again. A spec whose `proved_in` package's build did not pass
-never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left.
+never reads that package's `.lake` (`check.proved`), which an earlier or interrupted build left. When check.py fails a
+package only on its sampled recompile (`check.sampled_recompile`: a module the tree kept or restored compiles from its
+source to other outputs, which Lean's nondeterminism can do as staleness can) and on record differences, the run discards
+those modules' files in the tree (`mismatched`, `discard`) and audits the package once more, with nothing restored from
+the artifact cache, so they are compiled; the first audit's reports go to `mismatched/<path>/`, and a second failure
+fails the run.
 
 Then it audits, the same way, every package whose guarantees' records read PKG's build (`requirers`: PKG is in its
 `closure`, by path or by `proved_in`), each after those it requires and on the records this run regenerated before it, its
@@ -1169,18 +1174,32 @@ def audit_records(name: str, deps: Path, tree: Path | None = None, update: bool 
                 write_links(tree, links)
                 mark(tree, package=p, phase="check")
                 mine_out, up, since = reports(out, pkg, p), first_update(p, pkg, update, moved, log), time.time()
-                got = subprocess.run(check_argv(tree / p, mine_out, up, moved, p == pkg, artifacts=artifacts.store,
-                                                facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                store, redone = artifacts.store, False
+
+                def audit(with_update: bool) -> int:
+                    nonlocal store, redone
+                    got = subprocess.run(check_argv(tree / p, mine_out, with_update, moved, p == pkg, artifacts=store,
+                                                    facts_cache=facts_dir()), cwd=tree, env=env, pass_fds=fds).returncode
+                    if redone or not got or AUDIT.killed(got) or not (bad := mismatched(mine_out, tree)):
+                        return got
+                    store, redone = None, True
+                    discard(bad)
+                    label(aside := set_aside(mine_out, out, p))
+                    log(f"lean-records: {p}: check.py's sampled recompile compiled {', '.join(sorted(bad))} to other "
+                        f"outputs than {tree} kept (Lean's output isn't reproducible for every module); those are "
+                        f"discarded, and check.py audits {p} once more, compiling them, with nothing restored from the "
+                        f"artifact cache (the first audit's reports: {aside})")
+                    return audit(with_update)
+
+                got = audit(up)
                 if again := not up and regenerates(p, pkg, got, update, mine_out, tree / p, log):
-                    up, got = True, subprocess.run(check_argv(tree / p, mine_out, True, moved, p == pkg,
-                                                              artifacts=artifacts.store, facts_cache=facts_dir()),
-                                                   cwd=tree, env=env, pass_fds=fds).returncode
+                    up, got = True, audit(True)
                 if AUDIT.killed(got):
                     killed[p] = got
                 label(mine_out)
                 log(f"lean-records: {p}: check.py{' --update' if again else ''} exit {got} in {time.monotonic() - t0:.0f} s on "
-                    f"{tree} ({n} files changed there), without the kernel replay or the tests: a {FAST_KIND} result, which "
-                    f"check and research merge refuse; reports in {mine_out}")
+                    f"{tree} ({n} files changed there{', audited twice' if redone else ''}), without the kernel replay or "
+                    f"the tests: a {FAST_KIND} result, which check and research merge refuse; reports in {mine_out}")
                 # Keep the regenerated record now: the next requirer iteration's `sync` restores the committed one over
                 # it, and a recorded run never writes ROOT (the commit's shared source tree), so without this copy the
                 # record a lane must commit survives nowhere the run keeps.
@@ -1559,6 +1578,49 @@ def settles(out: Path, at: Path) -> bool:
     except (OSError, ValueError, KeyError, TypeError, AttributeError):
         return False
     return len(bad) == 1 and bool(bad[0].get("regenerated")) and Path(str(bad[0].get("package"))).resolve() == at.resolve()
+
+
+def mismatched(out: Path, tree: Path) -> dict[str, Path]:
+    """{module: its package's directory} of each module whose outputs in ``tree`` check.py's sampled recompile found other
+    than what its source compiles to (the reports' `sampled` `mismatched`, under ``out``), when every other failure there
+    is a record difference (`RECORD_DIFFERENCE`), which `--update` settles; {} when there is none, when another failure
+    is there, or when a package it names is outside ``tree``. Lean's output is not reproducible for every module
+    (`olean_graph`): a kept build compiled once can differ from a recompile of the same source, as a stale one does."""
+    found: dict[str, Path] = {}
+    try:
+        for r in json.loads((out / "audit.json").read_text())["packages"]:
+            fails, codes, s = r.get("failures") or [], r.get("failure_codes") or [], r.get("sampled")
+            mods = s.get("mismatched") or {} if isinstance(s, dict) else {}
+            if len(codes) != len(fails) or codes.count("sampled") != len(mods) or \
+                    not all(c == "sampled" or c in AUDIT.RECORD_DIFFERENCE for c in codes):
+                return {}
+            found |= {m: Path(d).resolve() for m, d in mods.items()}
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        return {}
+    return found if all(d.is_relative_to(tree.resolve()) for d in found.values()) else {}
+
+
+def discard(mods: dict[str, Path]) -> None:
+    """Remove every file Lake keeps of each module of ``mods`` ({module: its package's directory}) in its package's build
+    (its outputs, their `.hash` files, its trace and its `setup.json`), so the next build compiles it."""
+    for mod, d in mods.items():
+        rel = LA.MK.path_of(mod, "")
+        for at in (d / ".lake" / "build" / "lib" / "lean" / rel, d / ".lake" / "build" / "ir" / rel):
+            for f in at.parent.glob(f"{glob.escape(at.name)}.*"):
+                if f.is_file() or f.is_symlink():
+                    f.unlink()
+
+
+def set_aside(mine_out: Path, out: Path, p: str) -> Path:
+    """Move check.py's reports on ``p`` (its `audit.json` and `audit-*` directories under ``mine_out``) to
+    `mismatched/<path>/` under ``out``, where no reader of the run's verdict looks; that directory."""
+    aside = out / "mismatched" / re.sub(r"[^A-Za-z0-9]+", "_", p)
+    shutil.rmtree(aside, ignore_errors=True)
+    aside.mkdir(parents=True)
+    for f in [mine_out / "audit.json", *sorted(mine_out.glob("audit-*"))]:
+        if f.exists():
+            shutil.move(f, aside / f.name)
+    return aside
 
 
 def first_update(p: str, pkg: str, update: bool, moved: Path | None, log=print) -> bool:

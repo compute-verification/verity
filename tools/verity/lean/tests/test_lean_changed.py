@@ -5,7 +5,8 @@ In a recorded run the fast path never writes ROOT (the commit's shared source tr
 updated `lean-audit.json` is restored to the committed bytes by the next requirer iteration's `sync`, so without an
 explicit keep the record its author must commit survives nowhere the run keeps. These tests stub the slot, the tree sync
 and check.py itself, and check the keep under `out/record/` (recorded and not), the ROOT write-back (unrecorded
-only), which path a refused `build` slot takes, and how a run finds and repairs a tree another run left mid-way. Two
+only), which path a refused `build` slot takes, how a run finds and repairs a tree another run left mid-way, and how it
+audits a package once more after check.py's sampled recompile finds a kept module its source compiles to other bytes. Two
 stand-in packages that read each other's builds check that one `--update` run regenerates and keeps both records."""
 from __future__ import annotations
 
@@ -802,6 +803,96 @@ def test_after_a_run_left_mid_way_dependencies_off_their_pinned_checkout_are_tak
     LC.repair(tree, ["pkg"], links, {"run": "r-old", "package": "other", "phase": "check"}, said.append)
     assert links == {} and not (tree / "pkg" / ".lake" / "packages").exists()
     assert any("dep is not the checkout its manifest pins (abc)" in s for s in said)
+
+
+MISMATCH = "sampled: P.M: the build's .lake/build/lib/lean/P/M.olean differs from what its source compiles to (olean differ)"
+
+
+def sampled_check(monkeypatch, calls: list, attempts: list[list[tuple[str, str]]], where: Path) -> None:
+    """A fake check.py whose audit number i reports ``attempts[i]``'s failures ((code, text) pairs) on its package, its
+    sampled recompile's `mismatched` naming module `P.M` of the package at ``where`` for each `sampled` one, and leaves a
+    log under `audit-pkg/` saying which audit it was; it exits 1 when it reported a failure."""
+    def run(argv, **kw):
+        calls.append((argv, kw.get("cwd")))
+        fails = attempts[min(len(calls), len(attempts)) - 1]
+        out = Path(argv[argv.index("--out") + 1])
+        (out / "audit-pkg").mkdir(parents=True, exist_ok=True)
+        (out / "audit-pkg" / "sampled.log").write_text(f"audit {len(calls)}")
+        rep = {"package": argv[-1], "failures": [t for _, t in fails], "failure_codes": [c for c, _ in fails],
+               "sampled": {"mismatched": {"P.M": str(where)}} if any(c == "sampled" for c, _ in fails) else {}}
+        (out / "audit.json").write_text(json.dumps({"packages": [rep]}) + "\n")
+        return type("P", (), {"returncode": 1 if fails else 0})()
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+
+
+def kept_module(pkg: Path) -> tuple[list[Path], list[Path]]:
+    """Module `P.M`'s files in the build of the package at ``pkg``, and two that aren't its: its submodule's and `P.MX`'s."""
+    build = pkg / ".lake" / "build"
+    module(build / "lib" / "lean", "P/M")
+    mine = sorted((build / "lib" / "lean" / "P").glob("M.*")) + [build / "ir/P" / f for f in ("M.c", "M.c.hash", "M.setup.json")]
+    others = [build / "lib/lean/P/M/Sub.olean", build / "lib/lean/P/MX.olean"]
+    for f in mine[-3:] + others:
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"olean")
+    return mine, others
+
+
+def test_a_kept_module_its_source_compiles_to_other_bytes_is_compiled_and_its_package_audited_once_more(fast, tmp_path,
+                                                                                                        monkeypatch):
+    """A module the slot tree kept from an earlier run can differ from what its source compiles to now, stale or because
+    Lean's output for it isn't reproducible (`Spot.SecondStage`'s `check.eq_3` names a binder in whichever declaration's
+    hygiene context first asks for it), and check.py's sampled recompile then fails the package. When that, and record
+    differences, are all it fails on, the run removes the module's files from the tree and audits the package once more
+    without the artifact cache, which could restore the same bytes, so the module is compiled; the first audit's reports
+    are kept apart from the verdict, and the second audit's outcome is the package's."""
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: [])
+    mine, others = kept_module(tree / "pkg")
+    sampled_check(monkeypatch, calls, [[("sampled", MISMATCH), ("guarantees.reads-changed", "guarantees: G reads changed")],
+                                       []], tree / "pkg")
+    out, said = tmp_path / "out", []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=out, log=said.append) == 0
+    assert len(calls) == 2, "one audit more, never a third"
+    assert "--artifacts" in calls[0][0] and "--artifacts" not in calls[1][0], "nothing is restored for the second audit"
+    assert not any(f.exists() for f in mine) and all(f.exists() for f in others), "only P.M's files go"
+    aside = out / "mismatched" / "pkg"
+    assert json.loads((aside / "audit.json").read_text())["packages"][0]["failure_codes"][0] == "sampled"
+    assert (aside / "audit-pkg" / "sampled.log").read_text() == "audit 1"
+    assert (out / "audit-pkg" / "sampled.log").read_text() == "audit 2"
+    assert any("compiled P.M to other outputs" in s and "audits pkg once more" in s and str(aside) in s for s in said)
+    assert outcome_line(said)["outcome"] == LC.PASS
+
+
+def test_a_second_sampled_mismatch_fails_the_run(fast, tmp_path, monkeypatch):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: [])
+    kept_module(tree / "pkg")
+    sampled_check(monkeypatch, calls, [[("sampled", MISMATCH)]], tree / "pkg")
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    assert len(calls) == 2 and outcome_line(said)["outcome"] == LC.FAILED
+
+
+@pytest.mark.parametrize("fails, where", [
+    ([("sampled", MISMATCH), ("fresh.rejected", "fresh: the kernel rejected a declaration")], "pkg"),
+    ([("sampled", MISMATCH), ("sampled", "sampled: the recompile of P.M, P.N exited 1")], "pkg"),
+    ([("sampled", MISMATCH)], "../elsewhere"),
+], ids=["beside-another-failure", "a-sampled-failure-naming-no-module", "a-package-outside-the-tree"])
+def test_a_sampled_mismatch_is_audited_again_only_alone_and_never_removes_files_outside_the_tree(fast, tmp_path,
+                                                                                                 monkeypatch, fails, where):
+    _, tree, calls = fast
+    monkeypatch.delenv("RESEARCH_RUN_DIR", raising=False)
+    monkeypatch.setattr(LC, "requirers", lambda *_: [])
+    mine, _ = kept_module(tree / "pkg")
+    outside, _ = kept_module(tree.parent / "elsewhere")
+    sampled_check(monkeypatch, calls, [fails], (tree / where).resolve())
+    said = []
+    assert LC.audit_records("pkg", tmp_path / "deps", out=tmp_path / "out", log=said.append) == 1
+    assert len(calls) == 1 and all(f.exists() for f in mine + outside)
+    assert not (tmp_path / "out" / "mismatched").exists() and outcome_line(said)["outcome"] == LC.FAILED
 
 
 @pytest.fixture()
