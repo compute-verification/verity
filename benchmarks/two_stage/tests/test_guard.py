@@ -14,8 +14,9 @@ each reference statement reads as a member's) evaluate to true too. `runOkAt` re
 run with one byte of a session statement's registered reads flipped (`guard.flip_registered`).
 
 What it doesn't show: that `stmtOk` accepts, so not that a guarantee over it (`SpotKSTwo`) is non-vacuous. `regOk` also
-asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, which read only `h` but unroll the members'
-circuits at a cost quadratic in their lowered gates, and this evaluates neither; the result lists each member's sizes.
+asks for `partition`'s `membersPart` and `two`'s `scopeOk` over `bitsProgs`, which read only `h` and unroll the members'
+circuits; `regOk h = true` is a fact about the registration, to be proved rather than decided on a run, and this evaluates
+neither. The result lists each member's sizes.
 Nor that each session accepts: `stmtOk` reads the session statements and their registered reads, never a session's
 transcript. Each session's acceptance is `flock-verify`'s verdict in the run that made the fixture (`verdicts.json`,
 asserted here), whose statements these are byte for byte (`guard.session_statement` rebuilds each from its command line

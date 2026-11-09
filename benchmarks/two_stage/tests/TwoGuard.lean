@@ -13,9 +13,10 @@ replaces round 2's message `DIR/m2.bin` (a negative's).
 **What it evaluates.** `stmtOk` is its conjuncts on the registration alone and its conjuncts on the run (`stmtOk_split`):
 `regOk`, which is `partition` and `two` (both ignore the statement they are given), and `runOkAt`. This evaluates
 `runOkAt`, and of `regOk` only `two`'s conjuncts on the members' files (`twoFilesOk`). It never evaluates `partition`'s
-`membersPart` or `two`'s `scopeOk` over `bitsProgs`: each unrolls the members' circuits (`Spot.Bits.prog`,
-`Spot.Bits.blockOf`), and `Spot.Bits.off` walks every gate of a member's key program each time it places one, so the
-unrolling alone is quadratic in the lowered gates. The output prints each member's sizes, and the time of one walk.
+`membersPart` or `two`'s `scopeOk` over `bitsProgs`: both read only `h`, so `regOk h = true` is a fact about the
+registration, to be proved from the members' facts rather than decided on a run, and each unrolls the members' circuits
+(`Spot.Bits.prog`, `Spot.Bits.blockOf`). The output prints each member's sizes and the time of the unrolling's pieces at
+one gate: `Spot.Bits.off` past its last gate, `Spot.Bits.consts`, and `Spot.Bits.owner` at an input gate.
 
 * `check`: `runOkAt` and `twoFilesOk` at the run, with their times and the members' sizes; exit 0 when both accept, 1
   when either refuses, 2 when the reference statements are not in Flock's masked scope (`Held.xS₀_ok`, decided before
