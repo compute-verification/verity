@@ -1,0 +1,137 @@
+# The period family in the Glossary's words in network-accounting's areas: NET-118's map's entries (network-accounting's
+# draft at eb226fa15d, less lean's part, which `period_map.toml` and `period_map_2.toml` move first) that rename a
+# declaration or module declared in Security/{Definitions,Proofs}/NetworkCertifier,
+# Security/{Properties,Proofs/Properties}/{NetworkCertifier,NetworkPeriod}, verity/core/protocols/{network,certifier} or
+# verity/core/devices/certifier. `tools/move/rename.py --map tools/move/period_net_map.toml` renames them in one move.
+# The word becomes the Glossary's for what it denotes: a window that is an execution phase -> "execution phase"; the
+# link-window -> "transfer blocks" (an execution phase's transfer blocks); a monitoring period's "period" -> "monitoring
+# period"; a certifier's 32-byte session id -> "attachment". Three words name a declaration of another area too, which
+# this move renames with ours, in the same sense: `windowCheck` (RemoteAudit.Verifier (memory-accounting)), `windowsOn` (CoreOnsite (soundness)), `windowOf` (FlockSoundness.KeyedDraw (proofs) and PouwCheck.CreditDifftest (compute-accounting)).
+# `NetTiming.WindowCharge.Window` takes the code's new name with it, so that the refactor that makes it a use of
+# `NetworkCertifier.WindowCharge.Window` finds one name.
+
+[words]
+# Module paths named for the word alone, longest first.
+"Definitions/NetworkCertifier/Period" = "Definitions/NetworkCertifier/MonitoringPeriod"
+"Definitions.NetworkCertifier.Period" = "Definitions.NetworkCertifier.MonitoringPeriod"
+"NetworkCertifier/Guarantees/Period" = "NetworkCertifier/Guarantees/MonitoringPeriod"
+"NetworkCertifier.Guarantees.Period" = "NetworkCertifier.Guarantees.MonitoringPeriod"
+"Proofs/NetworkCertifier/Period" = "Proofs/NetworkCertifier/MonitoringPeriod"
+"Proofs.NetworkCertifier.Period" = "Proofs.NetworkCertifier.MonitoringPeriod"
+# Declarations whose name holds the word with other parts, each renamed wherever it stands (no other declaration
+# holds it in another sense).
+"encard_ingress_obsDecodable_le_contents_perWindow" = "encard_ingress_obsDecodable_le_contents_perExecutionPhase"
+"EncardIngressObsDecodableLeContentsPerWindow" = "EncardIngressObsDecodableLeContentsPerExecutionPhase"
+"encard_decodable_le_constantRate_perWindow" = "encard_decodable_le_constantRate_perExecutionPhase"
+"encard_accSeqs_le_constantRate_perWindow" = "encard_accSeqs_le_constantRate_perExecutionPhase"
+"encard_ingress_obsDecodable_le_perWindow" = "encard_ingress_obsDecodable_le_perExecutionPhase"
+"EncardDecodableLeConstantRatePerWindow" = "EncardDecodableLeConstantRatePerExecutionPhase"
+"encard_accSeqs_le_constantRate_windows" = "encard_accSeqs_le_constantRate_executionPhases"
+"linkWindowAcceptMeans_honest_certifier" = "transferBlocksAcceptMeans_honest_certifier"
+"EncardAccSeqsLeConstantRatePerWindow" = "EncardAccSeqsLeConstantRatePerExecutionPhase"
+"EncardIngressObsDecodableLePerWindow" = "EncardIngressObsDecodableLePerExecutionPhase"
+"EncardAccSeqsLeConstantRateWindows" = "EncardAccSeqsLeConstantRateExecutionPhases"
+"linkWindowAcceptMeans_nontrivial" = "transferBlocksAcceptMeans_nontrivial"
+"mem_accSeqsSampled_of_windowGood" = "mem_accSeqsSampled_of_executionPhaseGood"
+"accepts_of_linkWindowsAccepted" = "accepts_of_transferBlocksAccepted"
+"linkWindowAcceptMeans_honest" = "transferBlocksAcceptMeans_honest"
+"linkWindowsAccepted_instance" = "transferBlocksAccepted_instance"
+"ingress_bound_eq_perWindow" = "ingress_bound_eq_perExecutionPhase"
+"windows_bound_le_perWindow" = "executionPhases_bound_le_perExecutionPhase"
+"linkWindowAcceptMeans_by" = "transferBlocksAcceptMeans_by"
+"LinkWindowAcceptMeansBy" = "TransferBlocksAcceptMeansBy"
+"LinkWindowAcceptMeans" = "TransferBlocksAcceptMeans"
+"linkWindowAcceptMeans" = "transferBlocksAcceptMeans"
+"encard_periodGood_le" = "encard_monitoringPeriodGood_le"
+"LinkWindowsAccepted" = "TransferBlocksAccepted"
+"stateWindow_skipped" = "stateExecutionPhase_skipped"
+"tiedWindow_unstated" = "tiedExecutionPhase_unstated"
+"AcceptsLinkWindows" = "AcceptsTransferBlocks"
+"PeriodLeaksChecked" = "MonitoringPeriodLeaksChecked"
+"acceptsLinkWindows" = "acceptsTransferBlocks"
+"tiedWindow_unwired" = "tiedExecutionPhase_unwired"
+"WindowCertificate" = "ExecutionPhaseCertificate"
+"windowsOn_append" = "executionPhasesOn_append"
+"WindowCertified" = "ExecutionPhaseCertified"
+"WindowVerdictBy" = "ExecutionPhaseVerdictBy"
+"linkWindowOrder" = "transferBlocksOrder"
+"rowsWindowCheck" = "rowsExecutionPhaseCheck"
+"tiedWindow_ties" = "tiedExecutionPhase_ties"
+"windowDomainTag" = "executionPhaseDomainTag"
+"PeriodAdaptive" = "MonitoringPeriodAdaptive"
+"WindowAccepted" = "ExecutionPhaseAccepted"
+"doFault_window" = "doFault_executionPhase"
+"enqueue_window" = "enqueue_executionPhase"
+"linkWindowJson" = "transferBlocksJson"
+"windowPrograms" = "executionPhasePrograms"
+"PeriodChannel" = "MonitoringPeriodChannel"
+"PeriodEscapes" = "MonitoringPeriodEscapes"
+"WindowVerdict" = "ExecutionPhaseVerdict"
+"nodup_windows" = "nodup_executionPhases"
+"WindowOpened" = "ExecutionPhaseOpened"
+"WindowProved" = "ExecutionPhaseProved"
+"WindowSynced" = "ExecutionPhaseSynced"
+"linkWindowFn" = "transferBlocksFn"
+"sessionBytes" = "attachmentBytes"
+"windowsOn_eq" = "executionPhasesOn_eq"
+"windowsOn_ne" = "executionPhasesOn_ne"
+"SessionFits" = "AttachmentFits"
+"closeWindow" = "closeExecutionPhase"
+"code_window" = "code_executionPhase"
+"sessionFits" = "attachmentFits"
+"stateWindow" = "stateExecutionPhase"
+"windowCheck" = "executionPhaseCheck"
+"LinkWindow" = "TransferBlocks"
+"WindowGood" = "ExecutionPhaseGood"
+"tiedWindow" = "tiedExecutionPhase"
+"windowRef" = "executionPhaseRef"
+"window_lt" = "executionPhase_lt"
+"windowsOn" = "executionPhasesOn"
+"windowOf" = "executionPhaseOf"
+
+[[words_in]]
+# One execution phase's `Window`: the certifier's code (`NetworkCertifier.WindowCharge`), its reference in Security
+# (`NetTiming.WindowCharge`) and the network check's (`NetworkCheck.Period`), the word alone, in their declaring files
+# and the files that spell them. PoUW's `PouwCheck.Window` is compute-accounting's to move.
+files = [
+    "Security/Definitions/NetworkCertifier/WindowCharge.lean",
+    "Security/Proofs/NetworkCertifier/Code.lean",
+    "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean",
+    "verity/core/protocols/certifier/lean/NetworkCertifier/WindowDifftest.lean",
+    "verity/core/protocols/network/lean/NetworkCheck/Period.lean",
+]
+words = { "Window" = "ExecutionPhase" }
+
+[[words_in]]
+files = ["Security/Proofs/NetworkCertifier/Code.lean"]
+words = { "code_session" = "code_attachment" }
+
+[[words_in]]
+files = ["Security/Proofs/Properties/NetworkCertifier/Check/Instance.lean"]
+words = { "session_size" = "attachment_size" }
+
+[[words_in]]
+# The whole word: lean's move already named `CommOfMonitoringPeriodLeakAccepted`, which spells the new name.
+files = ["*"]
+words = { "PeriodLeakAccepted" = "MonitoringPeriodLeakAccepted" }
+
+[[words_in]]
+# Lowercase names that Python or tests also use with another meaning: renamed only in Lean.
+files = ["**/*.lean"]
+words = { "periodLeak" = "monitoringPeriodLeak", "periodLeak_le_sum" = "monitoringPeriodLeak_le_sum", "window_hands" = "executionPhase_hands" }
+
+[rewrite]
+# Never rewritten: records of what was (the earlier moves and their maps, changelogs, the rulings), the frozen backends,
+# files whose bytes a digest pins (`rename.py` repins a `TRUSTED.sha256` line itself) and lock files.
+exclude = ["tools/move/**", "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**",
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock"]
+
+[keep]
+# Format ids, notes, art ids, branches and lanes; the record keys and domain tags that keep the word until a format
+# version ("window", "session", "period" as JSON keys and tag strings).
+patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+', 'lanes/[\w.-]+',
+            '"(?:window|windows|session|sessions|period|periods)"']
+# The new names that hold their old word after a lowercase letter, where it would match again: kept, so that running
+# the map again on its move changes nothing (`stage.py`'s rerun).
+strings = ["MonitoringPeriodLeaksChecked", "MonitoringPeriodAdaptive", "MonitoringPeriodChannel", "MonitoringPeriodEscapes"]
+
