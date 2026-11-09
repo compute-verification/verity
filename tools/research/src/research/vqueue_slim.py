@@ -26,19 +26,30 @@ failure is never inherited by its key: preflight-lints (its lints read every fil
 judges the merges above the base, not a tree).  Each failed step's one test (`Failed.tests`) is the step's (`step_test`), so
 the run beside the base's own check, which the loop keeps beside `main` (started on `main` against itself, so lean-agreement
 never runs), says what the base fails (`based`): failed there too, a step's failure is inherited by `vqueue.decide`'s rule
-of failing tests."""
+of failing tests.
+
+The check that gates (`research queue vqueue --gate check`).  `start` with ``shards`` launches drive's after-landing run of
+the candidate in place of the run of `SLIM_STEPS`: every step of `AFTER_LANDING` as that many shards, one launch a shard on
+its own machines (`shard_machines`), with the keywords drive's own gets (`Driver._postland_args`).  Its record says so
+(``gate``), and `judge` then judges every step `main` waits for at the candidate's base (`Driver._gating` there, the
+preflights and a lean-agreement that ran, less policy.toml's `off_gate` and drive.toml's `warn_steps`), a step a shard holds
+passed only once every shard holding it passed (`shard_passed`).  A failed step's tests are what its failure names
+(`failing`), so `vqueue.decide` takes as inherited only a failure whose every failing test the run beside the base fails
+too; what a failure doesn't name is one test no other key has (`unnamed`), so it is never inherited."""
 from __future__ import annotations
 
 import ast
 import functools
 import hashlib
 import json
+import re
 from dataclasses import replace
 from pathlib import Path
 
-from .drive import (ACTIVE, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS, Driver, implicated, killed, not_run, step_paths,
-                    step_records)
-from .queue import _git
+from .drive import (ACTIVE, AFTER_LANDING, LAUNCH_LOST_S, LEAN_AUDIT_RE, PREFLIGHT, SIGTERM_RC, SLIM_JUDGED, SLIM_STEPS,
+                    SUITE_STEPS, Driver, _step_log, implicated, killed, not_run, shard_machines, shard_passed, shard_steps,
+                    step_paths, step_records, suite_paths, suite_rows)
+from .queue import CHECK_STEPS, _git
 from .store.fixtures import REPLICA_MAP, entries
 from .vqueue import FAIL, INFRA, LIST_FAILED, PASS, PENDING, STATES, Failed, Verdict, meets
 
@@ -59,49 +70,107 @@ MAP = REPLICA_MAP.as_posix()
 FIXTURES_CODE = "tools/research/src/research"
 #: the tag a content key starts with (`key`)
 KEY_TAG = "verity-vqueue-slim-step/v1"
+#: a record's ``gate`` when its run is the check that gates (`start` with ``shards``)
+CHECK = "check"
+#: pytest's failing tests and the modules it couldn't collect, in a step's log's short summary
+TEST_RE = re.compile(r"^(?:FAILED|ERROR) (\S+)", re.M)
+#: lean-audit's own failures of no package, in its log
+AUDIT_FAIL_RE = re.compile(r"^lean-audit: FAIL: .*$", re.M)
+#: what the audit prints under a package's `AUDIT .../PKG: FAIL` that is no failure: counts and timings of its run
+AUDIT_SAYS = ("closure:", "staged:", "trust gap:", "heartbeats:")
+#: the audit's scratch tree, which each run names anew
+SCRATCH_RE = re.compile(r"\S*?/lean-audit-scratch-[^/\s]+/")
 
 
-def start(driver: Driver, sha: str, base: str) -> dict | None:
+def start(driver: Driver, sha: str, base: str, shards: int = 0) -> dict | None:
     """Launch the run beside candidate ``sha``'s check, ``base`` the commit of `main` below it, as `Driver._start_slim` launches
     it beside the executor's check of ``sha`` with ``base`` verified: `SLIM_STEPS` but those a run of every step of ``sha``
     above ``base`` skips by name (lean-agreement, unless what it checks changed), with that run's keywords (ratchet-gate
-    judges the merges above ``base``), on drive's machines (`Driver.on`).  The record to keep (`Driver._started`): ``ids``,
-    none yet while a detached launch runs (its ``launch`` then); the candidate (``tip``), ``base``, when it launched
-    (``at``), the ``steps`` it runs and those it skips (``skip``).  None, logged, when it registered no run, or when
-    ``driver`` launches nothing (a dry run, or its queue's shadow), as `Driver._start_slim` does."""
+    judges the merges above ``base``), on drive's machines (`Driver.on`).  With ``shards``, the check that gates instead, as
+    `Driver.start_postland` launches the after-landing run: `--deferred` every step of `AFTER_LANDING` (each check runs the
+    preflights first), `--shard K/N` on shard K's machines (`shard_machines`) for each of that many, one whole run for 1.
+    The record to keep (`Driver._started`): ``ids``, none yet while a detached launch runs (its ``launch`` then, or each
+    shard's in ``shards``, which `judge` makes ``groups``, each shard's ids); the candidate (``tip``), ``base``, when it
+    launched (``at``), the ``steps`` it runs and those it skips (``skip``), and ``gate`` (`CHECK`) with ``shards``.  None,
+    logged, when it registered no run (a shard that registered none stops the others), or when ``driver`` launches nothing (a
+    dry run, or its queue's shadow), as `Driver._start_slim` does."""
     if not driver.on:
         raise ValueError("the run beside a candidate's check needs drive's machines: build the Driver with drive.toml's `on` "
                          "(`research.queue.drive_flags(q.workdir)[0].on`)")
     kw, skip, _, flags = driver._postland_args({"verified": base}, sha, False)
-    skip = [s for s in skip if s in SLIM_STEPS]
-    steps = [s for s in SLIM_STEPS if s not in skip]
-    what = f"train.sh {sha[:12]} {driver.on} --deferred {','.join(steps)}{flags} beside candidate {sha[:12]}'s check"
+    every = AFTER_LANDING if shards else SLIM_STEPS
+    skip = [s for s in skip if s in every]
+    steps = [s for s in every if s not in skip]
+    sent = ",".join(every if shards else steps)
+    what = (f"train.sh {sha[:12]} {driver.on} --deferred {sent}{flags}" + (f" as {shards} shards" if shards > 1 else "")
+            + (f" as candidate {sha[:12]}'s check" if shards else f" beside candidate {sha[:12]}'s check"))
     if driver.dry_run or driver.q.shadow:
         driver.q.log(f"research queue vqueue: would launch {what}")
         return None
-    rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, ",".join(steps), **kw))
+    if shards > 1:
+        got = [driver._started(driver.launch_postland(driver.repo, sha, on, sent, **kw, shard=f"{k}/{shards}"))
+               for k, on in enumerate(shard_machines(driver.on, shards), 1)]
+        rec, tail = {"ids": [], "shards": [r for r, _ in got]}, next((t for r, t in got if r is None), "")
+        if any(r is None for r, _ in got):
+            if ids := [i for r, _ in got if r for i in r["ids"]]:
+                driver.cancel(driver.repo, ids, f"vqueue: a shard of candidate {sha[:12]}'s check registered no run")
+            rec = None
+        elif not any("launch" in r for r, _ in got):
+            rec = _grouped(rec)
+    else:
+        rec, tail = driver._started(driver.launch_postland(driver.repo, sha, driver.on, sent, **kw))
     if rec is None:
         driver.q.log(f"research queue vqueue: {what} registered no run: {tail}")
         return None
     driver.q.log(f"research queue vqueue: {what}: {' '.join(rec['ids']) or 'launching'}")
-    return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {})}
+    return {**rec, "tip": sha, "base": base, "at": driver.now(), "steps": steps, **({"skip": skip} if skip else {}),
+            **({"gate": CHECK} if shards else {})}
+
+
+def _grouped(rec: dict) -> dict:
+    """``rec`` once each of its ``shards`` has its run ids: they are its ``groups``, and its ``ids`` every one's."""
+    rec["groups"] = [list(r["ids"]) for r in rec.pop("shards")]
+    rec["ids"] = [i for g in rec["groups"] for i in g]
+    return rec
 
 
 def judge(driver: Driver, rec: dict | None) -> Verdict:
     """The verdict of the run `start` recorded in ``rec``, read as `Driver._follow_slim` reads it, on the steps it judges on
-    the merge gate: `SLIM_JUDGED` but a step it skipped and policy.toml's `off_gate` at ``tip``.  Pending while it launches
-    or runs.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids), never ran or was
-    stopped, or was lost or killed before it passed each of those steps; infra's one `Failed` says which.  Once it ended,
-    pass when it passed each of them, fail with each of them it failed (a `Failed`: ``step NAME``, the step's content key at
-    the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at ``base``, `key`, and
-    the step's one test, `step_test`), and infra when it failed none but passed fewer (one skipped, or absent from its
-    steps.jsonl).  Each verdict but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
+    the merge gate: `SLIM_JUDGED` but a step it skipped and policy.toml's `off_gate` at ``tip``; of the check that gates
+    (``gate``), every step `main` waits for at ``base`` (`Driver._gating`), the preflights and a lean-agreement it ran, but
+    policy.toml's `off_gate` there and drive.toml's `warn_steps`.  Pending while it launches or runs, each shard's launch
+    read as the run's own is.  Infra when it registered no run (``rec`` None, or a detached launch that printed no run ids,
+    a shard's stopping the other shards), never ran or was stopped, or was lost or killed before it passed each of those
+    steps; infra's one `Failed` says which.  Once it ended, pass when it passed each of them (the check that gates: in
+    every shard that holds it, `shard_passed`), fail with each of them it failed (a `Failed`: ``step NAME``, the step's
+    content key at the candidate, the paths drive names that failure's culprit by, `step_paths`, its content key at
+    ``base``, `key`, and the step's one test, `step_test`; the check that gates: the tests and paths its failure names,
+    `failing`), and infra when it failed none but passed fewer (one skipped, or absent from its steps.jsonl).  Each verdict
+    but pending is kept in ``rec`` (``verdict``, with the steps it passed) and read from there."""
     if rec is None:
         return _down(None, "registered no run")
     if "verdict" in rec:
         return _kept(rec["verdict"])
-    tip = rec["tip"]
-    if (tail := driver._resolve(rec, f"the run of {', '.join(rec['steps'])} beside candidate {tip[:12]}'s check")) is not None:
+    tip, check = rec["tip"], rec.get("gate") == CHECK
+    what = f"the run of {', '.join(rec['steps'])} " + (f"as candidate {tip[:12]}'s check" if check else
+                                                      f"beside candidate {tip[:12]}'s check")
+    shards = rec.get("shards") or ()
+    # every shard's launch is read in one call, since a launch read once is gone: the record never holds some read, some not
+    printed = [driver.launched(r["launch"])[0] for r in shards if "launch" in r]
+    if None in printed and [] not in printed and driver.now() - rec["at"] <= LAUNCH_LOST_S:
+        return Verdict(PENDING)
+    for k, shard in enumerate(shards, 1):
+        shard.setdefault("at", rec["at"])
+        if (tail := driver._resolve(shard, f"shard {k}/{len(shards)} of {what}")) is not None:
+            if got := [i for r in shards for i in r["ids"]]:
+                driver.cancel(driver.repo, got, f"vqueue: shard {k}/{len(shards)} of candidate {tip[:12]}'s check registered "
+                                                "no run")
+            return _keep(rec, _down(rec, f"registered no run: shard {k}/{len(shards)}: {tail}"))
+    if any("launch" in r for r in shards):
+        return Verdict(PENDING)
+    if shards:
+        _grouped(rec)
+    if (tail := driver._resolve(rec, what)) is not None:
         return _keep(rec, _down(rec, f"registered no run: {tail}"))
     if "launch" in rec:
         return Verdict(PENDING)
@@ -115,9 +184,18 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
     why = "lost" if lost else ", ".join(f"{st} rc={rc}" for st, rc, *_ in states.values())
     if not lost and driver._never_ran(rec, states):
         return _keep(rec, _down(rec, f"never ran or was stopped ({why})"))
-    off = driver._policy(tip).off_gate
-    judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
-    if not (missed := driver._unrun(ids, judged, tip)):
+    base = rec.get("base")
+    if check:
+        gate = {*SLIM_JUDGED, *driver._gating(base or tip)} - {*driver._policy(base or tip).off_gate, *driver.warn_steps}
+        judged = [s for s in CHECK_STEPS if s in gate and (s in rec["steps"] or s in PREFLIGHT)]
+        view = shard_steps(driver._shards(rec), [any(states[r][1] == 0 for r in g) for g in rec.get("groups") or [ids]])
+        passes = shard_passed(view, driver._allowed_steps(tip, [d for ds in driver._shards(rec) for d in ds]))
+        missed = [s for s in judged if s not in passes]
+    else:
+        off = driver._policy(tip).off_gate
+        judged = [s for s in SLIM_JUDGED if (s in rec["steps"] or s not in SLIM_STEPS) and s not in off]
+        missed = driver._unrun(ids, judged, tip)
+    if not missed:
         return _keep(rec, Verdict(PASS), judged)
     dirs = [d for ds in driver._shards(rec) for d in ds]
     ok = driver._every_shard(rec, states, lambda rc: rc == 0) or (
@@ -127,18 +205,73 @@ def judge(driver: Driver, rec: dict | None) -> Verdict:
                        or any(implicated(d) is None and killed(d, why) for d in dirs)):
         return _keep(rec, _down(rec, "was lost" if lost else f"was killed ({why})"))
     paths: dict[str, set[str]] = {}
+    tests: dict[str, set[str]] = {}
+    keys: dict[str, str] = {}
     for d in dirs:
         for st in step_records(d):
             if (s := st.get("step")) in missed and st.get("status") == "failed" and not not_run(st):
-                paths.setdefault(s, set()).update(step_paths(d, st) or ())
+                if s not in keys:
+                    keys[s] = key(driver.repo, tip, s) or f"{tip}:{s}"
+                at, named = failing(driver, tip, d, st, unnamed(keys[s])) if check else (step_paths(d, st), {step_test(s)})
+                paths.setdefault(s, set()).update(at or ())
+                tests.setdefault(s, set()).update(named)
     passed = [s for s in judged if s not in missed]
     if paths:
-        base = rec.get("base")
-        return _keep(rec, Verdict(FAIL, tuple(Failed(f"step {s}", key(driver.repo, tip, s) or f"{tip}:{s}", _inputs(paths[s]),
-                                                     key(driver.repo, base, s) if base else None, frozenset({step_test(s)}))
+        return _keep(rec, Verdict(FAIL, tuple(Failed(f"step {s}", keys[s], _inputs(paths[s]),
+                                                     key(driver.repo, base, s) if base else None, frozenset(tests[s]))
                                               for s in missed if s in paths), ended=True), passed)
     return _keep(rec, _down(rec, f"ended ({why}) without passing {', '.join(missed)}: each skipped, or absent from its "
                                  "steps.jsonl"), passed)
+
+
+def unnamed(key: str) -> str:
+    """The one test of what a failure keyed ``key`` doesn't name: no failure under another key has it, so
+    `vqueue.decide` never takes it as inherited by its tests."""
+    return f"unnamed:{key}"
+
+
+def failing(driver: Driver, tip: str, d: Path, st: dict, rest: str) -> tuple[set[str], set[str]]:
+    """What failed step ``st`` of the check that gates names in its run dir ``d``, as drive reads it: the paths its culprit
+    is named by, and its failing tests.  A step that runs suites (`SUITE_STEPS`): of each suite of its that failed
+    (`suite_rows`) uncovered by ``tip``'s allowances, `suite_paths` and `SUITE::TEST` of each test it failed, and ``rest``
+    under the suite's name when it names none or failed for more than its tests (its row's `beyond_tests` isn't false).
+    Any other: `step_paths`, each `FAILED` and `ERROR` of its log's short summary, and of lean-audit each line under a
+    failed package's `AUDIT .../PKG: FAIL` (`audit_failures`).  ``rest`` (`unnamed`) alone when it names no test."""
+    step = st.get("step")
+    if step not in SUITE_STEPS:
+        log = _step_log(d, st)
+        tests = set(TEST_RE.findall(log)) | (audit_failures(log, rest) if step == "lean-audit" else set())
+        return step_paths(d, st) or set(), tests or {rest}
+    paths: set[str] = set()
+    tests = set()
+    for name, row in suite_rows(d).items():
+        if row["status"] != "failed" or row["step"] != step or driver._allowed(tip, f"suite {name}", d, row).covered:
+            continue
+        paths |= suite_paths(d, row) or set()
+        tests |= {f"{name}::{t}" for t in row.get("failed_tests") or ()}
+        if not row.get("failed_tests") or row.get("beyond_tests") is not False:
+            tests.add(f"{name}::{rest}")
+    return paths, tests or {rest}
+
+
+def audit_failures(log: str, rest: str) -> set[str]:
+    """The failures lean-audit's ``log`` names: `PKG::LINE` of each line the audit prints under a failed package's
+    `AUDIT .../PKG: FAIL` (`LEAN_AUDIT_RE`) but its run's counts and timings (`AUDIT_SAYS`, with the lines under each), the
+    scratch tree's name left out, ``rest`` under the name of a package it prints none under; and each `lean-audit: FAIL:`
+    line."""
+    out: dict[str, set[str]] = {}
+    pkg, says = None, False
+    for line in log.splitlines():
+        if line.startswith("AUDIT"):
+            pkg = m[1] if (m := LEAN_AUDIT_RE.match(line)) else None
+            if pkg:
+                out.setdefault(pkg, set())
+        elif pkg and line.startswith(" ") and (text := line.strip()):
+            if re.match(r"  \S", line):
+                says = text.startswith(AUDIT_SAYS)
+            if not says:
+                out[pkg].add(SCRATCH_RE.sub("", text))
+    return {f"{p}::{t}" for p, ts in out.items() for t in ts or {rest}} | set(AUDIT_FAIL_RE.findall(log))
 
 
 def combine(graph: Verdict, slim: Verdict) -> Verdict:
@@ -316,18 +449,20 @@ def step_test(step: str) -> str:
 
 def based(v: Verdict, base: dict | None) -> Verdict:
     """``v`` with each failed step's `base_tests` read from the run beside the base's check (``base``, that run's record, as
-    `judge` keeps it): the step's test (`step_test`) when that run failed it, none when it passed it, and None while it runs, or
-    when it ended without judging it, so `vqueue.decide` takes a failure the base has too as inherited."""
+    `judge` keeps it): the tests that run failed of it (the step's, `step_test`, where it kept none), none when it passed it,
+    and None while it runs, or when it ended without judging it, so `vqueue.decide` takes a failure the base has too as
+    inherited."""
     got = (base or {}).get("verdict")
     if not isinstance(got, dict) or not v.failed:
         return v
-    failed = {f.get("task") for f in got.get("failed") or () if isinstance(f, dict)}
+    failed = {f.get("task"): f.get("tests") for f in got.get("failed") or () if isinstance(f, dict)}
     passed = set(got.get("passed") or ())
 
     def of(f: Failed) -> Failed:
         s = f.task.removeprefix("step ")
         if s == f.task:
             return f
-        return replace(f, base_tests=frozenset({step_test(s)}) if f.task in failed else frozenset() if s in passed else None)
+        return replace(f, base_tests=frozenset(failed[f.task] or {step_test(s)}) if f.task in failed else
+                       frozenset() if s in passed else None)
 
     return replace(v, failed=tuple(of(f) for f in v.failed))

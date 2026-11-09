@@ -2097,6 +2097,199 @@ def test_the_loop_s_batch_depth_and_lean_default_to_16_3_and_3_on_the_command_an
     assert (loop.batch, loop.depth, loop.lean) == (L.BATCH, L.DEPTH, L.LEAN) == (16, 3, 3)
 
 
+# -- the check that gates (`--gate check`)
+
+#: the steps each of the three shards of a check that gates holds beside the preflights, in these tests: pytest's suites are
+#: split over the last two
+PLAN = (("lean-changed", "flock-circuit-build", "lean-build", "lean-unit-cut", "lean-audit", "lean-suites"),
+        ("pytest", "flock-rust-tests"), ("pytest", "circuit-check", "ratchet-gate"))
+OLD, NEW = "tests/test_x.py::test_old", "tests/test_x.py::test_new"
+
+
+def _row(*tests: str, beyond: bool = False) -> dict:
+    """Suite pkg's row of a check's suites.json: failed on ``tests``, and with ``beyond`` on more than its tests."""
+    return {"name": "pkg", "suite": "pkg", "status": "failed", "failed_tests": list(tests), "beyond_tests": beyond}
+
+
+class Runs:
+    """Drive's launches, run states and evidence, faked under the real `research.vqueue_slim` on ``loop``'s own Driver, its
+    machines `--on`'s: each launch is run `c-N`, running until `end` writes its run dir as a check's shard leaves it."""
+
+    def __init__(self, env: Env, loop: Loop, monkeypatch, on: str = "m1,m2,m3"):
+        monkeypatch.setattr(M, "required_steps", lambda *a, **k: {})
+        self.tmp, self.launches, self.state, self.dirs, self.cancelled = env.tmp / "runs", [], {}, [], []
+        loop.world.on = on
+        d = loop.world.slim_driver()
+        d.launch_postland, d.states = self.launch, lambda repo, ids: {i: self.state[i] for i in ids}
+        d.evidence = lambda repo, ids: [x for x in self.dirs if x.name in ids]
+        d.cancel = lambda repo, ids, reason: self.cancelled.extend(ids)
+
+    def launch(self, repo, commit, machine, steps, **kw):
+        self.launches.append((commit, machine, steps, kw))
+        self.state[rid := f"c-{len(self.launches)}"] = ("running", None, None)
+        return [rid], ""
+
+    def end(self, sha: str, shard: int = 0, step: str = "", log: str = "", rows: tuple[dict, ...] = ()) -> None:
+        """The three shards of the newest check of ``sha`` ended, each step passed but ``step`` in shard ``shard``, which
+        failed with ``log`` and, of a step that runs suites, the suites.json ``rows``."""
+        from research.drive import LIVE
+
+        for k, n in enumerate([n for n, (c, *_) in enumerate(self.launches, 1) if c == sha][-3:], 1):
+            (d := self.tmp / f"c-{n}").mkdir(parents=True)
+            bad = step if k == shard else ""
+            recs = [{"step": x, "status": "failed", "rc": 1, "log": f"{x}.log"} if x == bad else {"step": x, "status": "passed"}
+                    for x in (*PREFLIGHT, *PLAN[k - 1])]
+            (d / "steps.jsonl").write_text("".join(json.dumps(r) + "\n" for r in recs))
+            (d / LIVE).write_text(json.dumps({"schema": "check-live/v1", "state": "failed" if bad else "passed",
+                                              "steps": [{"step": r["step"], "state": r["status"]} for r in recs]}))
+            if bad:
+                (d / f"{bad}.log").write_text(log)
+                (d / "suites.json").write_text(json.dumps(list(rows)))
+            self.state[f"c-{n}"] = ("done", 1 if bad else 0, None)
+            self.dirs.append(d)
+
+
+def _check(env: Env, monkeypatch, decide=vqueue.decide, **kw) -> tuple[Loop, Runs]:
+    loop = env.loop(decide, slim=vqueue_slim, gate="check", **kw)
+    return loop, Runs(env, loop, monkeypatch)
+
+
+@pytest.mark.parametrize("graph2", ["pending", "fail", "pass"])
+def test_under_gate_check_a_candidate_whose_sharded_check_passed_advances_whatever_graph2_says_and_the_two_are_compared(
+        env, monkeypatch, graph2):
+    """The check that gates is drive's after-landing run of the candidate, every step as three shards, a machine each; graph2's
+    check is still enqueued, and its verdict, read in shadow, neither holds nor ejects: the candidate advances once every
+    shard passed, and once both ended one line says whether they agree."""
+    from research.drive import AFTER_LANDING
+
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch)
+    below, built, started = loop.tick()
+    sha = built["sha"]
+    assert [(c, m, kw["shard"]) for c, m, _, kw in runs.launches] == [
+        (c, f"m{k}", f"{k}/3") for c in (main, sha) for k in (1, 2, 3)]
+    assert all(steps == ",".join(AFTER_LANDING) and kw["no_regenerate"] and not kw["agreement"]
+               for _, _, steps, kw in runs.launches) and [kw["base"] for *_, kw in runs.launches[3:]] == [main] * 3
+    assert started["record"]["gate"] == "check" and started["record"]["groups"] == [["c-4"], ["c-5"], ["c-6"]]
+    assert env.graph2.enqueued() == [{"check": f"ready:{sha}", "priority": built["priority"], "graph": None, "schema": GRAPH_V2}]
+    runs.end(main)
+    if graph2 != "pending":
+        keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+        env.result(keys["pytest:a"], "pytest:a", graph2)
+    assert _acts(loop.tick()) == ["slim"] and env.main() == main     # its own shards still run, whatever graph2 says
+    assert not env.withdrawn and not env.posts
+    runs.end(sha)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", *(["compare"] if graph2 != "pending" else []), "advance", "on_main", "drop"]
+    assert env.main() == sha and not env.withdrawn
+    said = {"fail": ["disagree: graph2 fail (pytest:a), the check pass"], "pass": ["agree: graph2 and the check pass"]}.get(
+        graph2, [])
+    assert [r["why"] for r in env.lines() if r["action"] == "compare"] == said
+    assert [x for x in env.out if "graph2 in shadow" in x] == [
+        f"research queue vqueue: tick 3: {sha[:12]} graph2 in shadow: {why}" for why in said]
+    assert loop.tick() == [] and len(runs.launches) == 6             # `main`'s check is the candidate's
+
+
+def test_under_gate_check_a_step_one_shard_fails_fails_the_candidate_though_another_shard_and_graph2_passed_it(env, monkeypatch):
+    """pytest's suites are split over two shards: one's pass doesn't answer for the other's failure.  The candidate fails
+    on the step, its `Failed` naming the suite's failing test and the test's file, and its member is ejected, while
+    graph2, in shadow, passed."""
+    main = env.main()
+    head = env.put(1, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    loop, runs = _check(env, monkeypatch, policy)
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    keys = env.listed(sha, {"pytest:a": ["pkg/tests/test_x.py"]})
+    env.result(keys["pytest:a"], "pytest:a", "pass")
+    runs.end(main)
+    runs.end(sha, 3, "pytest", rows=(_row(NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "compare", "eject", "drop"] and env.main() == main
+    assert logged[1]["record"]["verdict"]["failed"] == [
+        {"task": "step pytest", "key": vqueue_slim.key(loop.world.repo, sha, "pytest"), "inputs": ["pkg/tests/test_x.py"],
+         "base_key": vqueue_slim.key(loop.world.repo, main, "pytest"), "tests": [f"pkg::{NEW}"]}]
+    assert "pytest" not in logged[1]["record"]["verdict"]["passed"]
+    assert logged[2]["why"] == "disagree: graph2 pass, the check fail (step pytest)" and env.withdrawn == [(1, head)]
+
+
+def test_under_gate_check_a_pytest_failure_is_inherited_by_its_tests_and_a_new_failing_test_in_the_step_is_the_member_s(
+        env, monkeypatch):
+    """`main` is red on one test of pytest.  A candidate failing that test alone inherits the failure and lands, one red
+    rung; the next fails it and a new test in the same step, which the check of its base (the candidate `main` advanced
+    to) passed, so its member is ejected: a red step hides no new failure."""
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    head = env.put(2, {"pkg/tests/test_x.py": "def test_new():\n    assert False\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=1)
+    _, built, _ = loop.tick()
+    first = built["sha"]
+    runs.end(main, 3, "pytest", rows=(_row(OLD),))
+    runs.end(first, 3, "pytest", rows=(_row(OLD),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "red", "advance", "on_main", "drop", "build", "slim"] and env.main() == first
+    second = logged[6]["sha"]
+    runs.end(second, 3, "pytest", rows=(_row(OLD, NEW),))
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "eject", "drop"] and env.main() == first
+    assert [f["tests"] for f in logged[1]["failed"]] == [[f"pkg::{NEW}", f"pkg::{OLD}"]] and env.withdrawn == [(2, head)]
+    assert len(env.posts) == 2                                       # the red, and the ejected member's owner
+
+
+@pytest.mark.parametrize("how", ["no test", "more than its tests", "a step with no test"])
+def test_under_gate_check_a_failure_that_names_no_test_is_never_inherited(env, monkeypatch, how):
+    """`main`'s check and the candidate's fail alike on what names no test: a suite that failed with none, one that failed
+    for more than the test it names (a timeout, a read outside its inputs), a step whose log names none.  Nothing says the
+    two failures are one, so the candidate's is its own: run again once, as a lone member's is, then ejected."""
+    main = env.main()
+    env.put(1, {"1.txt": "1\n"})
+    loop, runs = _check(env, monkeypatch, batch=1, depth=1)
+    failed = {"no test": (3, "pytest", "Killed\n", (_row(beyond=True),)),
+              "more than its tests": (3, "pytest", "", (_row(OLD, beyond=True),)),
+              "a step with no test": (1, "lean-build", "error: build failed\n", ())}[how]
+    _, built, _ = loop.tick()
+    sha = built["sha"]
+    runs.end(main, *failed)
+    runs.end(sha, *failed)
+    logged = loop.tick()
+    assert _acts(logged) == ["slim", "slim", "rerun", "slim"] and logged[3]["why"] == "started again: its failure is rerun"
+    (mine,), (theirs,) = logged[1]["record"]["verdict"]["failed"], logged[0]["record"]["verdict"]["failed"]
+    assert mine["task"] == theirs["task"] and mine["key"] != theirs["key"]
+    assert set(mine["tests"]) - set(theirs["tests"]) == {
+        ("" if how == "a step with no test" else "pkg::") + vqueue_slim.unnamed(mine["key"])}
+    runs.end(sha, *failed)
+    assert _acts(loop.tick()) == ["slim", "eject", "drop"] and env.main() == main and len(env.withdrawn) == 1
+
+
+def test_under_gate_check_a_run_started_while_graph2_gated_is_started_again_as_the_check(env, monkeypatch):
+    """A candidate whose run beside its check judged only what graph2 doesn't check never advances on it once the check
+    gates: the check starts in its place, beside `main` too."""
+    main = env.main()
+    env.put(1, {"a.txt": "1\n"})
+    before = env.loop(vqueue.decide, slim=vqueue_slim)
+    runs = Runs(env, before, monkeypatch)
+    _, built, _ = before.tick()
+    assert [steps for _, _, steps, _ in runs.launches] == ["ratchet-gate"] * 2 and "shard" not in runs.launches[0][3]
+    loop, runs = _check(env, monkeypatch)
+    below, started = loop.tick()
+    assert (below["why"], started["why"]) == ("started again beside `main`", "started")
+    assert [(c, kw["shard"]) for c, _, _, kw in runs.launches] == [(c, f"{k}/3") for c in (main, built["sha"]) for k in (1, 2, 3)]
+    assert loop.tick() == [] and len(runs.launches) == 6
+
+
+def test_the_gate_is_graph2_unless_the_command_says_check_which_needs_the_run_beside_each_check(capsys, tmp_path):
+    with pytest.raises(SystemExit):
+        Q.main(["vqueue", "--help"])
+    said = " ".join(capsys.readouterr().out.split())
+    assert all(o in said for o in ("--gate {graph2,check}", "--shards", "--on", "(default 3)")), said
+    loop = Loop(None, tmp_path / "log")
+    assert (loop.gate, loop.shards, L.GATES) == ("graph2", 3, ("graph2", "check")) and vqueue_slim.CHECK == L.CHECK_GATE
+    assert L.main(["--gate", "check", "--no-slim", "--shadow", "--once"]) == 1
+    assert "neither --no-slim nor --shards below 1" in capsys.readouterr().err
+    with pytest.raises(ValueError, match="a gate is one of graph2, check"):
+        Loop(None, tmp_path / "log", gate="check")
+
+
 def _under(tasks: dict[str, dict], i: str, seen: set[str]) -> list[str]:
     """The walk the verdict made per gate: the tasks ``i`` reads, transitively, ``i`` first, as a recursive walk lists them."""
     if i in seen:
