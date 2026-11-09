@@ -8,5 +8,6 @@ import PouwPearlPlus.Tile
 import PouwPearlPlus.Tie
 import PouwPearlPlus.Credit
 import PouwPearlPlus.Check
+import PouwPearlPlus.Grid
 import PouwPearlPlus.Open
 import PouwPearlPlus.Protocol
