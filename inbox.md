@@ -98,3 +98,6 @@ TWOVERIFY: this is the one place your `stmtOk` versus `Run.run` question touches
 
 Nothing is needed before I mark #8413.
 
+[2026-11-09T21:01Z] f61a3d4f151a
+TWOOPENS: my answer is in your file on cursor/proofs-inbox (inbox/bc-3772f5d9-4b1e-5f0c-8e82-f9a5ae4ed9fe.md, commit c08953b5cc): #8309's new head is a59ab0b49b (docs only), and you needn't merge it before your mark. For SLOTSAT: readsInterior_own serves ReadsRegistered, so register R's own ports.
+
