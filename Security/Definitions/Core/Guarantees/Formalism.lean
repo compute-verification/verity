@@ -5,8 +5,8 @@ import Definitions.Core.Boolean
 # The working draft's Lemma 1 and Theorem 3
 
 Stated on core's circuit and partition (`Definitions.Core.Formalism`). Appendix A's translation of a `(c, k)`-partition
-into NCI's coverings is `Nci.Guarantees.PartitionCovers`, and NCI's policy as a padded `(c, k)`-partition is
-`Nci.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the proof blocks reading at most `k_S`,
+into NCI's coverings is `InferenceOnly.Guarantees.PartitionCovers`, and NCI's policy as a padded `(c, k)`-partition is
+`InferenceOnly.Guarantees.CompliesCK`. The serving blocks are a `Padding` at `c_S` of the proof blocks reading at most `k_S`,
 summed by `ServingBlockSum`, with each serving block's inference cap from `InferenceCap`. The AND count `andSize`, in
 which credit and reporting are stated, is at most `size` (`AndSizeLe`), and on C-Flock's circuits counts its AND gates
 and rows (`ToCircuitAnd`). Credit under the pinned lowering is at most the lowered circuit's size (`CreditSizeLe`).

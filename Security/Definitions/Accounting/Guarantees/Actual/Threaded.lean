@@ -1,6 +1,6 @@
 import Definitions.Accounting.Guarantees.Actual
-import Definitions.Nci.Assumptions.Threads
-import Definitions.Nci.Dark
+import Definitions.InferenceOnly.Assumptions.Threads
+import Definitions.InferenceOnly.Dark
 
 /-!
 # The memory cap over threads (trusted)
@@ -8,7 +8,7 @@ import Definitions.Nci.Dark
 Tier 3's bound on the monitored servers (`benchmarks/nci/tiers.py`, "Memory cap on the residual"): a server's window
 reads its starting state plus what enters during it, `K = R + r ω`, and holds at most `K Λ(K) / b_a` counted
 multiplications of a threaded reference circuit `c`, where `Λ = Threading.bound` is NCI's Theorem 1 over threads
-(`Nci.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
+(`InferenceOnly.Guarantees.ThreadedReads`). Every gate placed on the servers counts, declared or not: the windows divide the
 actual circuit's region, and `c` need only be contained in it.
 
 The windows are `Windows`' `A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, with its memory constraint replaced by a bound `R` on the
@@ -18,12 +18,12 @@ capacity `β_X`, and `Γ ≥ Φ_X ω` its gates a window.
 * `ThreadedRuntime`: `b_a |M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |M| / (n K Λ(K)) − 1)`.
 * `ThreadedRate`: at the window `ω = R/r` in the quadratic regime, with a wipe period dividing the window, at most
   `reuse · n R r / (d b_w b_a)` counted multiplications a tick.
-* `ThreadedRuntimeDark`: `ThreadedRuntime` through a partial containment (`Nci.PartialContainment`): the counted
+* `ThreadedRuntimeDark`: `ThreadedRuntime` through a partial containment (`InferenceOnly.PartialContainment`): the counted
   multiplications the declaration computes obey the cap, and every other one is a dark gate,
   `|M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
 
 The `Slots` forms (`ThreadedRuntimeSlots`, `ThreadedRateSlots`, `ThreadedRuntimeDarkSlots`) take the reference circuit's
-weights incompressible per parameter slot (`Nci.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
+weights incompressible per parameter slot (`InferenceOnly.Assumptions.WeightsIncompressibleSlots`), so that a window spanning
 several optimizer steps on a parameter is charged for it once, with the same bounds.
 
 All count reads by width: `Placed.state` and `novelReads` are widths of the gates read. A wipe bounds information, what
@@ -33,7 +33,7 @@ needs the read bound in its determination form.
 
 namespace Accounting.Guarantees.Actual
 
-open Verity Nci Finset
+open Verity InferenceOnly Finset
 
 /-- **The memory cap over threads** (tier 3's server-window bound). For an actual circuit `A` meeting causality,
 unit-priced compute rate and links at the developer's pairwise disjoint locations `X i`, a window `ω > 0`, a horizon
@@ -57,7 +57,7 @@ def ThreadedRuntime : Prop :=
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
+    T.Threaded Γ (R + r * ω) d e → InferenceOnly.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
       b_a * T.M.card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
       (ω : ℝ) * (b_a * T.M.card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t
 
@@ -83,13 +83,13 @@ def ThreadedRate : Prop :=
     (∀ i (j : ℕ), j * p < t → (A.state (X i) (j * p) : ℝ) ≤ R) → p ∣ ω → ω ∣ t → r * ω = R →
     (e : ℝ) ≤ T.reuse * (2 * R) / (4 * d * b_w) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (2 * R) d e → Nci.Assumptions.WeightsIncompressible c T Γ (2 * R) b_w b_a →
+    T.Threaded Γ (2 * R) d e → InferenceOnly.Assumptions.WeightsIncompressible c T Γ (2 * R) b_w b_a →
       b_a * b_w * d * T.M.card ≤ T.reuse * n * R * r * t ∧
       ∀ κ : ℝ, κ * c.D.size c.D.computed ≤ 2 * T.M.card →
         κ * b_a * b_w * d * c.D.size c.D.computed ≤ 2 * T.reuse * n * R * r * t
 
 /-- **The memory cap over threads, with dark gates.** `ThreadedRuntime` when the developer's declaration over `[0, t)`
-contains `c` only partly (`Nci.PartialContainment`): it computes the gates `S` of `c`, and the rest, the dark gates, are
+contains `c` only partly (`InferenceOnly.PartialContainment`): it computes the gates `S` of `c`, and the rest, the dark gates, are
 computed outside the developer's region `A[X, [0, t))`, at no location `X i`, and enter it only as inputs outside its
 baseline. The counted multiplications in `S` obey the
 memory cap, `b_a |T.M ∩ S| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M ∩ S| / (n K Λ(K)) − 1)`, and every other counted
@@ -106,14 +106,14 @@ def ThreadedRuntimeDark : Prop :=
     0 < b_w → 0 < b_a → 0 < d →
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
-    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
+    T.Threaded Γ (R + r * ω) d e → InferenceOnly.Assumptions.WeightsIncompressible c T Γ (R + r * ω) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
       (ω : ℝ) * (b_a * (T.M ∩ M.S).card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t ∧
       (T.M.card : ℝ) ≤
         M.dark.card + (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) / b_a
 
 /-- **The memory cap over threads, per parameter slot.** `ThreadedRuntime` with the reference circuit's weights
-incompressible per parameter slot of a slot map `σ` (`Nci.Assumptions.WeightsIncompressibleSlots`) at `(Γ, K)`, so that
+incompressible per parameter slot of a slot map `σ` (`InferenceOnly.Assumptions.WeightsIncompressibleSlots`) at `(Γ, K)`, so that
 a window spanning several optimizer steps on a parameter is charged for it once: the same bound,
 `b_a |T.M| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M| / (n K Λ(K)) − 1)`.
 
@@ -129,12 +129,12 @@ def ThreadedRuntimeSlots : Prop :=
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
+    T.Threaded Γ (R + r * ω) d e → InferenceOnly.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
       b_a * T.M.card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
       (ω : ℝ) * (b_a * T.M.card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t
 
 /-- **The memory cap's rate at the optimal window, per parameter slot.** `ThreadedRate` under
-`Nci.Assumptions.WeightsIncompressibleSlots`: `b_a b_w d |T.M| ≤ reuse · n R r t`, and
+`InferenceOnly.Assumptions.WeightsIncompressibleSlots`: `b_a b_w d |T.M| ≤ reuse · n R r t`, and
 `κ b_a b_w d size(c) ≤ 2 reuse · n R r t`.
 
 Reads are counted by width, as in `ThreadedRuntime`. -/
@@ -150,13 +150,13 @@ def ThreadedRateSlots : Prop :=
     (∀ i (j : ℕ), j * p < t → (A.state (X i) (j * p) : ℝ) ≤ R) → p ∣ ω → ω ∣ t → r * ω = R →
     (e : ℝ) ≤ T.reuse * (2 * R) / (4 * d * b_w) →
     c.Contains (A.declaration (univ.biUnion X) t θ hθ) →
-    T.Threaded Γ (2 * R) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (2 * R) b_w b_a →
+    T.Threaded Γ (2 * R) d e → InferenceOnly.Assumptions.WeightsIncompressibleSlots c T σ Γ (2 * R) b_w b_a →
       b_a * b_w * d * T.M.card ≤ T.reuse * n * R * r * t ∧
       ∀ κ : ℝ, κ * c.D.size c.D.computed ≤ 2 * T.M.card →
         κ * b_a * b_w * d * c.D.size c.D.computed ≤ 2 * T.reuse * n * R * r * t
 
 /-- **The memory cap over threads, with dark gates, per parameter slot.** `ThreadedRuntimeDark` under
-`Nci.Assumptions.WeightsIncompressibleSlots`: the counted multiplications in `S` obey the memory cap,
+`InferenceOnly.Assumptions.WeightsIncompressibleSlots`: the counted multiplications in `S` obey the memory cap,
 `b_a |T.M ∩ S| ≤ n ⌈t/ω⌉ K Λ(K)`, so `t ≥ ω (b_a |T.M ∩ S| / (n K Λ(K)) − 1)`, and
 `|T.M| ≤ |dark| + n ⌈t/ω⌉ K Λ(K) / b_a`.
 
@@ -172,7 +172,7 @@ def ThreadedRuntimeDarkSlots : Prop :=
     0 < b_w → 0 < b_a → 0 < d →
     (∀ i, Φ (X i) * ω ≤ Γ) → (∀ i, (linkCapacity ends β (X i) : ℝ) ≤ r) →
     (∀ i (k : ℕ), k * ω < t → (A.state (X i) (k * ω) : ℝ) ≤ R) →
-    T.Threaded Γ (R + r * ω) d e → Nci.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
+    T.Threaded Γ (R + r * ω) d e → InferenceOnly.Assumptions.WeightsIncompressibleSlots c T σ Γ (R + r * ω) b_w b_a →
       b_a * (T.M ∩ M.S).card ≤ (n * ((t + ω - 1) / ω) : ℕ) * ((R + r * ω) * T.bound (R + r * ω) b_w d e) ∧
       (ω : ℝ) * (b_a * (T.M ∩ M.S).card / (n * ((R + r * ω) * T.bound (R + r * ω) b_w d e)) - 1) ≤ t ∧
       (T.M.card : ℝ) ≤

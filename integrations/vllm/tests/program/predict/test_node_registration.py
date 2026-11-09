@@ -1,5 +1,5 @@
 """`predict node-registration`: a TP2 node Program's θ registered from a toy TP Commit of record is a log nci-check's full check accepts
-(`nci_reference.check_baseline`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
+(`inference_only_reference.check_baseline`), each rank's θ parameter the entry `registered_rows.commit` makes of that rank's committed tensor,
 whether the checkpoint holds it (a shard composed at the rank) or the bundle does; and each way the Commit is not the node's is
 refused by name before a row is committed."""
 import copy
@@ -28,7 +28,7 @@ from tests.pipeline.test_cpu_replay import _shard
 from tests.program.predict.test_predict import TINY, _phi
 
 _spec = importlib.util.spec_from_file_location(
-    "nci_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/nci/lean/scripts/nci_reference.py")
+    "inference_only_reference", Path(__file__).resolve().parents[5] / "verity/core/protocols/network/inference_only/lean/scripts/inference_only_reference.py")
 REF = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(REF)
 

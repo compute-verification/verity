@@ -522,9 +522,9 @@ KNOWN: dict[str, str] = {
         "duplicate of `Flock.Stmt`: becomes its spec (one block R1CS statement) (lean)",
     "Security/Definitions/Flock/Statement.lean::FlockSoundness.Model.Witness":
         "duplicate of `Verity.TC.Relation.Witness`: becomes one Core witness (lean)",
-    "Security/Definitions/Nci/Cover.lean::Nci.Cover.Circuit":
+    "Security/Definitions/InferenceOnly/Cover.lean::InferenceOnly.Cover.Circuit":
         "duplicate of `Verity.Circuit`: becomes it, with registered parameters (compute-accounting)",
-    "Security/Definitions/Nci/Ldl.lean::Nci.Ldl.Registration":
+    "Security/Definitions/InferenceOnly/Ldl.lean::InferenceOnly.Ldl.Registration":
         "duplicate of `Verity.Committed` (R = (θ, C, 𝓘), not the registration log): becomes it (deleted) (compute-accounting)",
     "Security/Definitions/NetworkCertifier/Run.lean::NetTiming.Program":
         "homonym, a committed Program's egress prediction: rename (network-accounting)",
@@ -897,7 +897,7 @@ KNOWN: dict[str, str] = {
         "duplicate of the registration log (`Verity.Registration`): becomes the log's projection (deleted) (proofs)",
     "verity/core/protocols/network/lean/NetworkCheck/Period.lean::NetworkCheck.Period.Window":
         "duplicate of the period (`Verity.Period`, not yet in Core): becomes a reading of it: a sampling period (proofs)",
-    "verity/core/protocols/network/nci/lean/NciCheck/Check.lean::NciCheck.Circuit":
+    "verity/core/protocols/network/inference_only/lean/InferenceOnlyCheck/Check.lean::InferenceOnlyCheck.Circuit":
         "duplicate of `Flock.Program`: becomes a reading of it: one gate-level Boolean type beside `Flock.Program.Prog`, which both read (proofs)",
     "verity/core/protocols/pous/audit.py::Answer": "homonym, a challenge's answer: rename (memory-accounting)",
     "verity/core/protocols/pous/challenger_party.py::Challenger":

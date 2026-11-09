@@ -30,7 +30,7 @@ weights untied (`PouwCheck.PearlPlus.WEIGHTS_UNTIED`): there the tie is by the r
 committed weights to the weights the record registers, and remote doesn't establish that PoUW's credited work and the
 audited inference read the same weights. The audited circuit, cut at its linears, reads no B row.
 
-v0's subprotocols are the inference-only policy (`NciCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
+v0's subprotocols are the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`, `verity/inference-only/v0`: the declared
 circuit divides into inference blocks within their gate and fresh-input budgets, which reads only the declared circuit
 and the registered information and so needs no hardware at the site), work by proof of useful work over the period
 (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the period's windows credited all or nothing), onsite's work
@@ -49,7 +49,7 @@ until v1's private form (the division committed under hiding leaves, compliance 
 import CoreComposition.Blobs
 import CoreComposition.Cases
 import CoreComposition.Tie
-import NciCheck.Protocol
+import InferenceOnlyCheck.Protocol
 import PouwCheck.Period
 import PouwPearlPlus.Protocol
 import SampledProofs.OneStage
@@ -62,14 +62,14 @@ open Composition
 
 /-- Remote's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NciCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]
+  [InferenceOnlyCheck.Protocol.protocol, PouwCheck.Period.protocol, VStar.Recursive.Sampled.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and sampled proofs. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record the policy's case commits to: its commitment's digest, as the policy decodes it. -/
 def policyRecord (k : Case) : Option (List ByteArray) :=
-  (NciCheck.Protocol.protocol.commitment k.commitment).toOption.map fun c => [NciCheck.Protocol.protocol.digest c]
+  (InferenceOnlyCheck.Protocol.protocol.commitment k.commitment).toOption.map fun c => [InferenceOnlyCheck.Protocol.protocol.digest c]
 
 /-- The digests of the window records a period's case names, in its close's order: each window's Commit record as the
 period's credit reads it (`PouwCheck.Credit.commitOf?`, under the auditor's ledger); `none` when the evidence doesn't
@@ -81,7 +81,7 @@ def windowRecords (k : Case) : Option (List ByteArray) := do
 
 /-- Every window of the period on the policy's record. -/
 def windows : Tie :=
-  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.Period.protocolId, windowRecords)]⟩
+  ⟨"record", [(InferenceOnlyCheck.Protocol.protocolId, policyRecord), (PouwCheck.Period.protocolId, windowRecords)]⟩
 
 def protocol : BlobProtocol := tiedSameB "verity/remote/v0" tied [windows] components
 
@@ -110,17 +110,17 @@ private def allRefused : Answer := answer (components.map refused)
 #guard allRefused.reason.map (contains · "; verity/sampled-proofs/v1 reject: params: ") == some true
 #guard (answer [refused PouwCheck.Period.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/inference-only/v0 is missing"
-#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol]).reason ==
+#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol]).reason ==
   some "params: verity/sampled-proofs/v1 is missing"
 -- PoUW's window check is not remote's work subprotocol, and neither v1's nor v2's one-stage audit alone is its
 -- integrity subprotocol
-#guard (answer [refused NciCheck.Protocol.protocol, refusedAs "verity/pouw/v1",
+#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refusedAs "verity/pouw/v1",
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/v1 is not a component of this composition"
-#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
     refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v1 is not a component of this composition"
-#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
     refused SampledProofs.OneStageZk.protocol]).reason ==
   some "params: verity/sampled-proofs/one-stage/v2 is not a component of this composition"
 
@@ -130,7 +130,7 @@ private def record (n : Nat) : String := s!"\{\"format\":\"verity/registration/v
 private def committing (P : BlobProtocol) (r : String) : Case := { refused P with commitment := r.toUTF8 }
 
 private def recordsOf (policy period sampled : String) : Answer :=
-  answer [committing NciCheck.Protocol.protocol policy, committing PouwCheck.Period.protocol period,
+  answer [committing InferenceOnlyCheck.Protocol.protocol policy, committing PouwCheck.Period.protocol period,
     committing VStar.Recursive.Sampled.protocol sampled]
 
 -- the policy and sampled proofs on one record: the tie holds, and the verdict is the subprotocols' (each refuses its
@@ -153,10 +153,10 @@ private def periodOn (rs : List String) : Case :=
   { refused PouwCheck.Period.protocol with
     evidence := ("{\"pins\":[],\"windows\":[" ++ ",".intercalate (rs.map windowOn) ++ "]}").toUTF8 }
 private def strayOf (policy : String) (rs : List String) : Option String :=
-  windows.strays [committing NciCheck.Protocol.protocol policy, periodOn rs]
+  windows.strays [committing InferenceOnlyCheck.Protocol.protocol policy, periodOn rs]
 #guard (windowRecords (periodOn [record 0, record 0])).map (·.length) == some 2
-#guard windowRecords (periodOn [record 0]) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
-#guard policyRecord (committing NciCheck.Protocol.protocol (record 0)) ==
+#guard windowRecords (periodOn [record 0]) == policyRecord (committing InferenceOnlyCheck.Protocol.protocol (record 0))
+#guard policyRecord (committing InferenceOnlyCheck.Protocol.protocol (record 0)) ==
   (VStar.Recursive.Sampled.protocol.commitment (record 0).toUTF8).toOption.map
     fun c => [VStar.Recursive.Sampled.protocol.digest c]
 #guard strayOf (record 0) [record 0, record 0] == none
@@ -175,10 +175,10 @@ namespace V1
 
 /-- v1's subprotocols, in the order of their ids: Pearl+'s run verdict is the work component. -/
 def components : List BlobProtocol :=
-  [NciCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]
+  [InferenceOnlyCheck.Protocol.protocol, PouwCheck.PearlPlus.Protocol.protocol, VStar.Recursive.Sampled.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and sampled proofs, as in v0. -/
-def tied : List String := [NciCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, VStar.Recursive.Sampled.protocol.id]
 
 /-- The record Pearl+'s case names: its commitment's `record`, as Pearl+ decodes it. -/
 def runRecord (k : Case) : Option (List ByteArray) :=
@@ -186,7 +186,7 @@ def runRecord (k : Case) : Option (List ByteArray) :=
 
 /-- Pearl+'s run on the policy's record. -/
 def run : Tie :=
-  ⟨"record", [(NciCheck.Protocol.protocolId, policyRecord), (PouwCheck.PearlPlus.Protocol.protocolId, runRecord)]⟩
+  ⟨"record", [(InferenceOnlyCheck.Protocol.protocolId, policyRecord), (PouwCheck.PearlPlus.Protocol.protocolId, runRecord)]⟩
 
 /-- The window record W Pearl+'s check holds the run's passes to: its digest, as Pearl+ decodes its commitment. -/
 def runWindow (k : Case) : Option (List ByteArray) :=
@@ -195,13 +195,13 @@ def runWindow (k : Case) : Option (List ByteArray) :=
 /-- The record the policy's record is chained right after (its `previous`), as the policy decodes its record; the empty
 string of bytes, no record's digest, when it names none, so that a record chained after nothing is a stray. -/
 def policyPrevious (k : Case) : Option (List ByteArray) :=
-  (NciCheck.Protocol.commitmentOf k.commitment).toOption.map fun c =>
+  (InferenceOnlyCheck.Protocol.commitmentOf k.commitment).toOption.map fun c =>
     [((c.record.getObjValAs? String "previous").toOption.bind fun s => (Flock.unhex s).toOption).getD ByteArray.empty]
 
 /-- Pearl+'s passes on the window record the policy's record is chained right after: the values the run's record
 takes from W are the ones Pearl+ credited. -/
 def window : Tie :=
-  ⟨"window", [(NciCheck.Protocol.protocolId, policyPrevious), (PouwCheck.PearlPlus.Protocol.protocolId, runWindow)]⟩
+  ⟨"window", [(InferenceOnlyCheck.Protocol.protocolId, policyPrevious), (PouwCheck.PearlPlus.Protocol.protocolId, runWindow)]⟩
 
 def ties : List Tie := [run, window]
 
@@ -222,20 +222,20 @@ private def allRefused : Answer := answerV1 (components.map refused)
 #guard allRefused.reason.map (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
 #guard allRefused.reason.map (contains · "; verity/pouw/pearl-plus/v1 reject: params: ") == some true
 #guard allRefused.reason.map (contains · "; verity/sampled-proofs/v1 reject: params: ") == some true
-#guard (answerV1 [refused NciCheck.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
+#guard (answerV1 [refused InferenceOnlyCheck.Protocol.protocol, refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/pearl-plus/v1 is missing"
 -- H1's period is not v1's work subprotocol: a v0 case set is refused
-#guard (answerV1 [refused NciCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
+#guard (answerV1 [refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.Period.protocol,
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/period/v1 is not a component of this composition"
 -- and Pearl+ is not v0's
-#guard (answer [refused NciCheck.Protocol.protocol, refused PouwCheck.PearlPlus.Protocol.protocol,
+#guard (answer [refused InferenceOnlyCheck.Protocol.protocol, refused PouwCheck.PearlPlus.Protocol.protocol,
     refused VStar.Recursive.Sampled.protocol]).reason ==
   some "params: verity/pouw/pearl-plus/v1 is not a component of this composition"
 
 -- the policy's record is not sampled proofs': v1 rejects on the tie, whatever the subprotocols answer
 private def recordsOfV1 (policy sampled : String) : Answer :=
-  answerV1 [committing NciCheck.Protocol.protocol policy, refused PouwCheck.PearlPlus.Protocol.protocol,
+  answerV1 [committing InferenceOnlyCheck.Protocol.protocol policy, refused PouwCheck.PearlPlus.Protocol.protocol,
     committing VStar.Recursive.Sampled.protocol sampled]
 #guard (recordsOfV1 (record 0) (record 0)).reason.map
   (·.startsWith "verity/inference-only/v0 reject: params: ") == some true
@@ -247,21 +247,21 @@ private def recordsOfV1 (policy sampled : String) : Answer :=
 -- record is a stray
 #guard run.names.all fun n => (components.map (·.id)).contains n.1
 private def digestOf (r : String) : ByteArray :=
-  ((policyRecord (committing NciCheck.Protocol.protocol r)).bind (·.head?)).getD ByteArray.empty
+  ((policyRecord (committing InferenceOnlyCheck.Protocol.protocol r)).bind (·.head?)).getD ByteArray.empty
 private def pearlIn (r w : String) : Case :=
   { refused PouwCheck.PearlPlus.Protocol.protocol with
     commitment := ("{\"manifests\":[{}],\"record\":\"" ++ Flock.hexOf (digestOf r) ++
       "\",\"window\":{\"dropped\":[],\"record\":" ++ w ++ ",\"rounds\":null}}").toUTF8 }
 private def pearlOn (r : String) : Case := pearlIn r (record 9)
 private def runStray (policy run : String) : Option String :=
-  V1.run.strays [committing NciCheck.Protocol.protocol policy, pearlOn run]
+  V1.run.strays [committing InferenceOnlyCheck.Protocol.protocol policy, pearlOn run]
 #guard (digestOf (record 0)).size == 64
-#guard runRecord (pearlOn (record 0)) == policyRecord (committing NciCheck.Protocol.protocol (record 0))
+#guard runRecord (pearlOn (record 0)) == policyRecord (committing InferenceOnlyCheck.Protocol.protocol (record 0))
 #guard runStray (record 0) (record 0) == none
 #guard (runStray (record 1) (record 0)).map (·.startsWith "record: verity/inference-only/v0 committed ") == some true
 #guard (runStray (record 1) (record 0)).map (contains · ", verity/pouw/pearl-plus/v1 committed ") == some true
 -- a run whose commitment doesn't decode leaves Pearl+ to refuse it
-#guard V1.run.strays [committing NciCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
+#guard V1.run.strays [committing InferenceOnlyCheck.Protocol.protocol (record 0), refused PouwCheck.PearlPlus.Protocol.protocol] ==
   none
 
 -- Pearl+'s passes are tied to its window record W, and the policy's record must be chained right after W: one chained
@@ -269,10 +269,10 @@ private def runStray (policy run : String) : Option String :=
 private def chainedAfter (n : Nat) (w : String) : String :=
   s!"\{\"format\":\"verity/registration/v2\",\"n\":{n},\"previous\":\"{Flock.hexOf (digestOf w)}\",\"registered\":[]}"
 private def windowStray (policy : String) (w : String) : Option String :=
-  V1.window.strays [committing NciCheck.Protocol.protocol policy, pearlIn policy w]
+  V1.window.strays [committing InferenceOnlyCheck.Protocol.protocol policy, pearlIn policy w]
 #guard window.names.all fun n => (components.map (·.id)).contains n.1
 #guard runWindow (pearlIn (record 0) (record 9)) == some [digestOf (record 9)]
-#guard policyPrevious (committing NciCheck.Protocol.protocol (chainedAfter 0 (record 9))) == some [digestOf (record 9)]
+#guard policyPrevious (committing InferenceOnlyCheck.Protocol.protocol (chainedAfter 0 (record 9))) == some [digestOf (record 9)]
 #guard windowStray (chainedAfter 0 (record 9)) (record 9) == none
 #guard (windowStray (chainedAfter 0 (record 8)) (record 9)).map
   (·.startsWith "window: verity/inference-only/v0 committed ") == some true
@@ -280,7 +280,7 @@ private def windowStray (policy : String) (w : String) : Option String :=
   some true
 #guard (windowStray (record 0) (record 9)).isSome
 -- both ties hold on a run on the policy's record whose W that record is chained right after
-#guard (ties.findSome? (·.strays [committing NciCheck.Protocol.protocol (chainedAfter 0 (record 9)),
+#guard (ties.findSome? (·.strays [committing InferenceOnlyCheck.Protocol.protocol (chainedAfter 0 (record 9)),
   pearlIn (chainedAfter 0 (record 9)) (record 9)])) == none
 
 end V1
