@@ -184,11 +184,13 @@ def test_a_link_row_off_another_leaf_and_a_broken_wire_are_refused(run):
 @pytest.mark.slow
 def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
     """Round 2 holds each session's public header to the reference the auditor's params give its template
-    (`toy.references`, staged before the run under a run of its own) placed in the run: the honest public files the
-    served path writes (`flock_input_files`, as a5 stages the sessions), each session checked by a verifier of record
+    (`toy.references`, staged before the run under a run of its own) placed in the run, and its registered reads to the
+    reference's but for the run's fields: the honest public files the served path writes (`flock_input_files`, as a5
+    stages the sessions) and the verifier's own reads (`toy.reads`), each session checked by a verifier of record
     (`second_stage.verified_of`), pass round 2 with the form allowed and the interior record's replay sample in S's
-    order, while without the params every one fails ``second-header``, without a verifier of record ``second-verified``,
-    and against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates,
+    order, while without the params' headers every one fails ``second-header``, without their reads or with a link
+    port's read of another boundary port ``second-values``, without a verifier of record ``second-verified``, and
+    against S reversed ``second-interior-order`` fails. Slow (about 15 s): the only test that lowers the templates,
     whose circuit SHA-512s and classes are in both headers."""
     from verity_flock.class_statement import member_stager
 
@@ -210,6 +212,10 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
                       "registered": reads[m.key]})
     links = SS.replay_links(T.boundary_window(N, Q).program, descriptor_id(T.REPLAY), brec)
     refs = tuple((e["template"], e["header"]) for e in proofs["templates"])
+    ref_reads = tuple((e["template"], e["registered"]) for e in proofs["templates"])
+    (t0, r0), names = ref_reads[0], T.boundary_ports(T.boundary_window(N, Q))
+    assert r0["ports"]["row"]["value"] == names["ingress"] and r0["ports"]["row"]["root"] is None
+    other = {**r0, "ports": {**r0["ports"], "row": {**r0["ports"]["row"], "value": names["o0"]}}}
 
     def sha512(j) -> str:
         return hashlib.sha512(canonical_json(j)).hexdigest()
@@ -220,12 +226,14 @@ def test_each_sessions_header_is_its_templates_reference_placed_in_the_run(run):
         "session_tables": 1, **({} if s["registered"] is None else {"registered_sha512": sha512(s["registered"])})}
         for k, s in enumerate(stmts)})
 
-    def check(sample, refs, verified=verified) -> dict:
+    def check(sample, refs, verified=verified, ref_reads=ref_reads) -> dict:
         own = SS.Own(tuple(sample), parts, irec, brec, tuple(drawn), links, SS.statement_reads(stmts),
-                     verified=verified, refs=refs)
+                     verified=verified, refs=refs, ref_reads=ref_reads)
         return SS.check(True, own, stmts).to_json()
     assert check(SAMPLE, refs) == {"ok": True, "codes": [], "detail": {}}
     assert check(SAMPLE, ())["codes"] == ["second-header"]
+    assert check(SAMPLE, refs, ref_reads=())["codes"] == ["second-values"]
+    assert check(SAMPLE, refs, ref_reads=((t0, other), *ref_reads[1:]))["codes"] == ["second-values"]
     assert check(SAMPLE, refs, ())["codes"] == ["second-verified"]
     assert "second-interior-order" in check(SAMPLE[::-1], refs)["codes"]
 
