@@ -71,11 +71,11 @@ def fx(request, built, tmp_path_factory):
     return request.param, root
 
 
-def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",)) -> dict:
+def _verify(fx: Path, registered: Path | None, mode: tuple[str, ...] = ("--zk",), public: Path | None = None) -> dict:
     st = fx / "stage"
     reads = ["--registered", str(registered)] if registered else []
     p = subprocess.run([str(BIN), "verify", *mode, "--statement", STATEMENT, "--circuit", str(st / "circuit.txt"), "--public",
-                        str(st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
+                        str(public or st / "pub-32.bin"), "--partition", str(st / "partition.json"), "--program",
                         str(st / "program.json"), *reads, "--session", str(fx / "session")],
                        capture_output=True, text=True, check=False)
     (line,) = [json.loads(x.split(" ", 1)[1]) for x in p.stdout.splitlines() if x.startswith("VERDICT ")]
@@ -103,6 +103,42 @@ def test_a_session_verified_on_the_file_register_served_wrote_is_accepted_and_a_
     moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
     bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
     assert bad["accepted"] is False and f"does not open {SR.VALUE}'s registered root" in bad["why"], bad
+
+
+def test_the_verdict_names_the_files_and_the_sample_it_checked_the_session_against(fx, tmp_path):
+    """`verify`'s verdict names the public file it checked the session against by its header's digest
+    (``public_header_sha512``, the SHA-512 of the header's canonical JSON, `publicHeader`: the population's header, which
+    the sampled statement is drawn from, never the drawn one), the registered reads by the digest of their file
+    (``registered_sha512``, the SHA-512 of its canonical JSON), the session's sample (``unit_draw``, its record's) and
+    its tables (``session_tables``, one here), which the second stage's audit holds each statement to. On a public file
+    whose header is another's (one more key), or a registered file at another root, the session is refused, and its
+    verdict names that file, never the one it was proved on."""
+    import served_registered as SR
+
+    def digest(j) -> str:
+        return hashlib.sha512(canonical_json(j)).hexdigest()
+
+    _, fx = fx
+    program, query = SR.program()
+    tree, x_tree, out_port = SR.load(fx / "stage")
+    doc = SR.registered_file(program, query, tree, x_tree, out_port)
+    reads = SR.write_registered(doc, tmp_path / "registered.json")
+    pub = (fx / "stage" / "pub-32.bin").read_bytes()
+    nl = pub.index(b"\n")
+    header = json.loads(pub[:nl])
+    ok = _verify(fx, reads)
+    assert ok["accepted"] is True, ok
+    assert ok["public_header_sha512"] == digest(header) and ok["registered_sha512"] == digest(doc)
+    assert ok["unit_draw"] == json.loads((fx / "session" / "session.json").read_text())["unit_draw"]
+    assert ok["session_tables"] == 1
+    other = {**header, "staged_for": "another file"}
+    (tmp_path / "pub-32.bin").write_bytes(json.dumps(other).encode() + pub[nl:])
+    bad = _verify(fx, reads, public=tmp_path / "pub-32.bin")
+    assert bad["accepted"] is False, bad
+    assert bad["public_header_sha512"] == digest(other) != ok["public_header_sha512"]
+    moved = SR.registered_file(program, query, dataclasses.replace(tree, root="00" * 64), x_tree, out_port)
+    bad = _verify(fx, SR.write_registered(moved, tmp_path / "registered-root.json"))
+    assert bad["accepted"] is False and bad["registered_sha512"] == digest(moved) != ok["registered_sha512"], bad
 
 
 def test_the_provers_record_carries_the_sha512_of_the_public_file_the_verifier_reads(fx):

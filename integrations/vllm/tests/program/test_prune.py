@@ -39,7 +39,7 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)
@@ -120,7 +120,7 @@ def test_a_request_on_bits_keeps_the_v1s_its_lift_reads(monkeypatch):
     """A request wrapper the Build lifts to bits (`registered_form("boolean")`) takes the registered compiler's form without its
     swaps: its dead units dropped and its linears narrowed alike, its RMSNormTriton, TokenSelect and Attention at the v1s, and every
     node's Definition with a Boolean version, as the lift needs. On words (`ir` None) it takes the registered compiler's form."""
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     body = PB.build_program(PHI, "request", LP=8, T=3).program.fn.body
     assert PR.registered_form(None) is True
     form, _, _ = kept_records(body, None, {}, registered=PR.registered_form("boolean"))

@@ -774,7 +774,7 @@ def fused_add_rms_norm_instances(cap: Capture):
             a = e["in"]
             T, N = a["input"]["shape"]
             eps = float(a["epsilon"]).hex()
-            block = f'RMSNormFusedCudaVector8_v1{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
+            block = f'RMSNormFusedCudaVector8_v3{{N={N},EPS={{"f64":"{eps}"}},BLOCK={launch_block(T, N, fused=True)}}}'
             for t in cap.rows(r, T):
                 yield (f"RMSNormFusedCudaVector8_N{N}", block, (r, e["seq"], t),
                        lambda r=r, e=e, t=t: [cap.tensor(r, e["in"]["input"])[t], cap.tensor(r, e["in"]["residual"])[t],
@@ -1067,9 +1067,9 @@ class Wires:
     (`gathered`: the step's cache write, ``history``, ``selection``). An input of a call is wired to the latest earlier call
     on its rank (one enclosing it excepted, whose outputs come after) that output the same bytes, passing over one that only
     passed them on from its own input (`passes`), else that output a tensor it is a strided view of (its recorded strides
-    from some offset), else to the latest earlier calls whose outputs are strided views into its real rows, together each
-    element of them once (`cover`: an ``out=`` buffer a later call reads whole, or one several calls wrote in parts, a source
-    each); an output read is its own call's. Anything else is `Unwired`."""
+    from some offset), else to the latest earlier calls whose outputs are strided views into it from its real rows, together
+    each element of those once (`cover`: an ``out=`` buffer a later call reads whole, or one several calls wrote in parts, a
+    source each, padding rows written or not); an output read is its own call's. Anything else is `Unwired`."""
 
     def __init__(self, capture: Capture) -> None:
         self.capture = capture
@@ -1442,39 +1442,41 @@ class Wires:
 
     def cover(self, r: int, seq: int, ref: dict, skip: set) -> list[tuple[int, str, dict]] | None:
         """The latest earlier outputs on rank ``r`` that are strided views, by their recorded strides, into a row-major
-        ``ref``'s real rows (`Capture.real_rows`), each of whole rows from a row's start (``offset``, found where a few probed
-        elements and then the whole view agree), together every element of them once and nothing past them, and equal to them
-        there, each with ``{"cover": {stride, offset, rows}}``: one ``out=`` buffer a later call reads whole, or one several
-        calls wrote in parts (a mixed step's attention output: its decode rows from the absorb's ``out=``, its prefill rows
-        copied in from FA3's). An earlier output that overlaps a later one taken is not taken. That is the whole of what an
-        instance reads of ``ref``: every population draws real rows only, so a padded batch's rows past them (MLA's output rows
-        past the step's tokens, which nothing writes) reach no staged unit and are neither wired nor charged."""
+        ``ref``, each of whole rows from a row's start (``offset``, found where a few probed elements and then the whole view
+        agree) and starting in its real rows (`Capture.real_rows`), together every element of those once and nothing past
+        ``ref``, and equal to it there, each with ``{"cover": {stride, offset, rows}}``: one ``out=`` buffer a later call reads
+        whole, or one several calls wrote in parts (a mixed step's attention output: its decode rows from the absorb's
+        ``out=``, its prefill rows copied in from FA3's). A view may run on into the padding rows: a full-graph step runs
+        attention at the padded batch, so the absorb's ``out=`` writes every row. An earlier output that overlaps a later one
+        taken is not taken. The real rows are the whole of what an instance reads of ``ref``: every population draws real rows
+        only, so a padded batch's rows past them (written by the padded forward, or by nothing) reach no staged unit and are
+        neither wired nor charged."""
         shape = ref.get("shape")
         if not shape or not all(shape) or ref.get("stride") != [int(np.prod(shape[i + 1:])) for i in range(len(shape))]:
             return None
         real, row = self.capture.real_rows(r, shape[0]), int(np.prod(shape[1:]))
-        size, x, tried, done, pieces = real * row, None, 0, 0, []
+        size, full, x, tried, pieces = real * row, shape[0] * row, None, 0, []
         if not size:
             return None
-        hit = np.zeros(size, bool)
+        hit = np.zeros(full, bool)
         for s, o, out in reversed(self.outs.get(r, [])):
             stride, n = out.get("stride"), int(np.prod(out["shape"], dtype=np.int64))
             if (s >= seq or s in skip or out.get("dtype") != ref.get("dtype") or not stride or min(stride) < 0 or not n
-                    or n % row or n > size - done):
+                    or n % row or n > full):
                 continue
             reach = sum((d - 1) * st for d, st in zip(out["shape"], stride))
             mark = np.zeros(reach + 1, bool)
             np.lib.stride_tricks.as_strided(mark, shape=out["shape"], strides=stride)[...] = True
-            if reach >= size or int(mark.sum()) != n or not self.capture.kept(r, out) or not self.capture.kept(r, ref):
+            if reach >= full or int(mark.sum()) != n or not self.capture.kept(r, out) or not self.capture.kept(r, ref):
                 continue
             tried += 1
             if tried > VIEW_CANDIDATES:
                 break
-            x = self.capture.tensor(r, ref).reshape(-1)[:size] if x is None else x
+            x = self.capture.tensor(r, ref).reshape(-1) if x is None else x
             y = self.capture.tensor(r, out)
             first = np.unravel_index(np.arange(y.size)[::max(1, y.size // 16)], out["shape"])
             at = sum(i * st for i, st in zip(first, stride))
-            offs = np.arange(0, size - reach, row)
+            offs = np.arange(0, min(size, full - reach), row)
             for a, want in zip(at, y[first]):
                 offs = offs[x[offs + a] == want]
             for off in offs[:VIEW_OFFSETS]:
@@ -1483,10 +1485,9 @@ class Wires:
                 v = np.lib.stride_tricks.as_strided(x[off:], shape=out["shape"], strides=[st * x.itemsize for st in stride])
                 if np.array_equal(v, y):
                     hit[off:off + reach + 1] |= mark
-                    done += n
                     pieces.append((s, o, {"cover": {"stride": list(stride), "offset": int(off), "rows": real}}))
                     break
-            if done == size:
+            if hit[:size].all():
                 return pieces
         return None
 
