@@ -6,7 +6,8 @@ block's copy that changed is refused before a prover reads it (`a5.held`); a cac
 template, the reads' layout, the Definition's program, the composer's inputs, a table read's verifier executable), any
 composing file, compose_circuit's own and
 the composer's among them, any data file of the packages and a lowering flag, and with nothing else; a circuit whose reads are
-in slots gets its MUFU tables beside it whether composed or restamped; and a kept circuit that changed, a binding not in the
+in slots gets its MUFU tables beside it whether composed or restamped; ``--structural`` composes struct_lower's templated
+statement where it lowers, else the template's own, saying why; and a kept circuit that changed, a binding not in the
 file once, or a binding that is not two SHA-512 digests is refused, writing nothing. A toy unit Definition."""
 
 from __future__ import annotations
@@ -235,6 +236,50 @@ def test_a_slots_circuit_gets_its_tables_composed_or_restamped(tmp_path, monkeyp
     assert len(written) == 1 and (tmp_path / "cache" / "Toy-slots" / "tables" / "rsq.u32").is_file()
     assert all((tmp_path / r / "tables" / "rsq.u32").read_bytes() == b"\x01\x00\x00\x00" for r in ("r0", "r1"))
     assert not (tmp_path / "r2" / "tables").exists()
+
+
+@pytest.mark.slow
+def test_a_structural_template_is_struct_lowers_where_it_lowers_else_its_own_saying_why(tmp_path, monkeypatch, capsys):
+    """``--template --structural MODE``: a template reading inline composes as the templated statement of struct_lower's
+    template at MODE, kept under its own key beside the flat one; where struct_lower refuses it, as its own flat statement, the
+    line's ``flat`` the refusal; a template whose reads are in slots keeps them, saying so; and a flat line never says
+    ``flat``."""
+    own = {"reads": "inline"}
+    pipeline = ModuleType("verity_vllm.pipeline")
+    pipeline.serving_rows = SimpleNamespace(template=lambda tid: SimpleNamespace(fn=TOY))
+    pipeline.chunk_rows = SimpleNamespace(unit_rows=lambda tp: (ROWS, [(V2, (0,))]), statement=lambda tp: dict(own))
+    monkeypatch.setitem(sys.modules, "verity_vllm", ModuleType("verity_vllm"))
+    monkeypatch.setitem(sys.modules, "verity_vllm.pipeline", pipeline)
+    monkeypatch.setattr(CC, "cache_key", lambda what: f"{what[1]}-{what[2]}".replace("/", "_").replace('"', ""))
+    monkeypatch.setattr(CC.FC.IL, "write_tables", lambda d: d.mkdir(parents=True, exist_ok=True))
+
+    def compose(name: str, *extra: str) -> dict:
+        monkeypatch.setattr(sys, "argv", ["compose_circuit.py", "--template", "Toy", "--out", str(tmp_path / name / "circuit.txt"),
+                                          *extra, *(f"--{k}={v}" for k, v in B1.items())])
+        assert CC.main() == 0
+        return json.loads(capsys.readouterr().out.strip().splitlines()[-1])
+
+    cache = ("--cache", str(tmp_path / "cache"))
+    tmpl = compose("t", "--structural", "iv/hybrid/4", *cache)
+    assert tmpl["meta"]["statement"] == CC.FC.TMPL_STATEMENT and tmpl["meta"]["layout"] == "iv/hybrid/4" and "flat" not in tmpl
+    flat = compose("f", *cache)
+    assert flat["meta"].get("statement") != CC.FC.TMPL_STATEMENT and flat["pin"] != tmpl["pin"] and "flat" not in flat
+    assert len([p for p in (tmp_path / "cache").iterdir() if p.is_dir()]) == 2
+
+    real = CS.UnitStager
+
+    def refusing(*args, **kw):
+        if kw.get("structural"):
+            raise NotImplementedError("an assertion is not laid out")
+        return real(*args, **kw)
+
+    monkeypatch.setattr(CS, "UnitStager", refusing)
+    refused = compose("r", "--structural", "iv/hybrid/4")
+    assert refused["flat"] == "struct_lower: an assertion is not laid out" and refused["pin"] == flat["pin"]
+    own["reads"] = "slots"
+    slots = compose("s", "--structural", "iv/hybrid/4")
+    assert slots["flat"] == "its reads are in slots, and a templated statement's are inline"
+    assert slots["meta"].get("statement") != CC.FC.TMPL_STATEMENT
 
 
 @pytest.mark.slow

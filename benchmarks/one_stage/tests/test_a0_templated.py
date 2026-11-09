@@ -1,7 +1,8 @@
 """a0 hands a templated statement to both sides and to the verifier (`a0.session`, `a0.lean_verify`, `a0.firewall_env`):
 the server and the prover read its placed unit (``st["tmpl_unit"]``, `--tmpl-unit`), and the verifier and a firewalled
-prover set up its statement (``st["statement"]``); a flat stage passes no placed unit and keeps `a0.STATEMENT_ID`. The
-server, prover and verifier are one stand-in that records each call's argv."""
+prover set up its statement (``st["statement"]``); a flat stage passes no placed unit and keeps `a0.STATEMENT_ID`; and a
+templated template's unit is placed once for all its members (`a0.templated`, `a5.placed`). The server, prover and verifier
+are one stand-in that records each call's argv, as is flock-tmpl-unit."""
 from __future__ import annotations
 
 import json
@@ -11,7 +12,7 @@ from pathlib import Path
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-import a0  # noqa: E402
+import a0
 
 TMPL = "verity/flock-circuit/tmpl"
 
@@ -93,3 +94,26 @@ def test_templated_places_a_templated_statements_unit_once_and_passes_a_flat_one
     assert (d / "unit.tmpl").read_text() == "def a\nend\n" and (d / "unit.layout").read_text() == "iv/hybrid/4"
     assert [json.loads(x) for x in calls.read_text().splitlines()] == [
         [str(d / "unit.tmpl"), "--layout", "iv/hybrid/4", "--out", str(d / "unit.placed")]]
+
+
+def test_a5_places_a_templates_unit_once_for_its_members_and_none_for_a_flat_one(tmp_path):
+    """`a5.placed`: a5's members of one templated template share one unit placed beside their circuit (``unit/``), placed
+    once; a flat member gets none."""
+    from types import SimpleNamespace
+
+    import a5
+    from verity_flock import circuit as FC
+
+    calls, bin_ = tmp_path / "calls.jsonl", tmp_path / "flock-tmpl-unit"
+    bin_.write_text(PLACE.format(python=sys.executable, calls=str(calls)))
+    bin_.chmod(0o755)
+    circuit = tmp_path / "m0" / "circuit.txt"
+    circuit.parent.mkdir()
+    circuit.write_text(f"{FC.TMPL_FORMAT} v1\nMETA {{}}\n{FC.TMPL_SECTION} 2\ndef a\nend\nUNIT\n")
+    tmpl = SimpleNamespace(meta={"statement": TMPL, "layout": "iv/hybrid/4"})
+    members = [{"circuit": circuit, "circ": tmpl, "st": {"statement": TMPL}} for _ in range(2)]
+    flat = {"circuit": circuit, "circ": SimpleNamespace(meta={}), "st": {}}
+    for mm in (*members, flat):
+        a5.placed(mm, str(bin_))
+    assert [mm["st"]["tmpl_unit"] for mm in members] == [circuit.parent / "unit" / "unit.placed"] * 2
+    assert "tmpl_unit" not in flat["st"] and len(calls.read_text().splitlines()) == 1

@@ -2,7 +2,7 @@
 the statement binds the given partition and program digests. Run in the circuit prover's tree (its `verity_flock`).
 
     python compose_circuit.py --input-set DIR --out FILE [--partition H --program H]
-    python compose_circuit.py --template ID --out FILE --partition H --program H [--reads slots] [--cache DIR]
+    python compose_circuit.py --template ID --out FILE --partition H --program H [--reads slots | --structural MODE] [--cache DIR]
 
 ``--template``: a serving-rows template whose units are bit rows (`verity_vllm.pipeline.serving_rows.chunked`: a
 ``ScaledMmS8Coordinate``, a ``COORDS`` coordinate, a ``COLS`` column block, a ``SLICES`` slice, a ``KCHUNKS`` K-chunk, a
@@ -13,7 +13,10 @@ is read. ``--reads slots``: a flat statement's `UnitStager` ``reads``, a unit re
 (``MoeRouterSigmoidBias``'s sigmoid inline is about 5e10 nonzeros), with the MUFU tables the prover reads written beside the
 circuit (``tables/``); a unit reading none keeps its flat circuit. The default is the template's own (`chunk_rows.reads`), the
 circuit a5 composes: slots for a ``SPLITS`` part of whole blocks (`verity_vllm.pipeline.split_rows`) and for a whole attention
-row (``chunk_rows.SLOT_ROWS``), else inline.
+row (``chunk_rows.SLOT_ROWS``), else inline. ``--structural MODE``: a template whose own statement reads inline is composed as
+the templated statement of `struct_lower`'s template at layout MODE (``iv/hybrid/4``) where struct_lower lowers it, the flat
+unit never built; else as its own statement, the printed line's ``flat`` saying why. Its prover reads its unit's rows
+placed by ``flock-tmpl-unit`` (`a0.templated`).
 """
 from __future__ import annotations
 
@@ -229,18 +232,30 @@ def template(a: argparse.Namespace) -> int:
         if "reads" not in stmt:
             raise SystemExit(f"--reads lays out a flat statement's table reads, and {a.template}'s statement is templated: {stmt}")
         stmt = {**stmt, "reads": a.reads}
+    asked = flat = None
+    if a.structural and stmt.get("reads") == "inline":
+        asked = {"layout": a.structural, "structural": True}
+    elif a.structural and "reads" in stmt:
+        flat = f"its reads are in {stmt['reads']}, and a templated statement's are inline"
 
     def compose(out: Path) -> dict:
         in_rows, out_rows = CR.unit_rows(tp)
-        st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **stmt)
+        why = flat
+        if asked is not None:
+            try:
+                st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **asked)
+            except NotImplementedError as e:
+                why = f"struct_lower: {e}"
+        if asked is None or why is not None:
+            st = UnitStager(tp.fn, "unit/serving-rows", in_rows, out_rows, circuit=out, bind=bind, **stmt)
         if stmt.get("reads") == "slots":
             FC.IL.write_tables(out.parent / "tables")
         return {"subcircuit": st.meta.get("subcircuit"), "pin": st.pin, "class_sha512": st.class_sha512, "k_log": st.meta["k_log"],
-                "meta": st.meta}
+                "meta": st.meta, **({"flat": why} if why else {})}
 
     out = Path(a.out)
     if a.cache:
-        made = cached(Path(a.cache), cache_key(template_inputs(a.template, tp, stmt)), out, bind, compose)
+        made = cached(Path(a.cache), cache_key(template_inputs(a.template, tp, asked or stmt)), out, bind, compose)
     else:
         out.unlink(missing_ok=True)
         made = compose(out)
@@ -261,9 +276,14 @@ def main() -> int:
     ap.add_argument("--reads", choices=("inline", "slots"), default=None, help="with --template: a flat statement's "
                     "UnitStager reads, a pinned MUFU table's reads inline or in lookup slots (default: the template's own, "
                     "chunk_rows.statement); a table read's templated statement takes none")
+    ap.add_argument("--structural", default=None, metavar="MODE", help="with --template: the templated statement of "
+                    "struct_lower's template at layout MODE (iv/hybrid/4) where it lowers the template, else the template's "
+                    "own statement, the line's flat saying why")
     a = ap.parse_args()
     if bool(a.input_set) == bool(a.template):
         ap.error("give either --input-set or --template")
+    if a.structural and not a.template:
+        ap.error("--structural lowers a --template unit")
     if a.cache and not a.template:
         ap.error("--cache keeps --template circuits only")
     if a.reads and not a.template:
