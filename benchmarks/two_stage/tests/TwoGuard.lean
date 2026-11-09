@@ -170,6 +170,20 @@ def b (x : Bool) : String := toString x
 
 def readMsg (p : System.FilePath) : IO Claims.Msg := return (← IO.FS.readBinFile p).data.toList
 
+/-- **Why a reference statement is out of Flock's masked scope**: the first of `zkOk`'s steps it fails (`setupOf`:
+decode, the verifier's parsers `Raw.ins`, `Ins.setup`; then `zkOk`'s bounds), with its error; none where `zkOk` holds. -/
+def refWhy (xS : Claims.Msg) : Option String :=
+  match FlockDeploy.decode xS with
+  | none => some "decode: the bytes don't decode as a statement"
+  | some w =>
+    if !w.zk then some "the statement is not --zk" else
+    match w.ins with
+    | .error e => some s!"parse: {e}"
+    | .ok s =>
+      match s.setup with
+      | .error e => some s!"setup: {e}"
+      | .ok _ => if zkOk xS then none else some "zkOk: it sets up, outside the masked scope's bounds"
+
 /-- A stage's bytes, zeros past `n` of them up to `L`. -/
 def coinBytes (p : System.FilePath) : IO ByteArray := do
   let r ← IO.FS.readBinFile p
@@ -256,7 +270,11 @@ def main (args : List String) : IO UInt32 := do
   let t1 ← IO.monoMsNow
   let some h ← heldOf held refs
     | do
-      IO.println "GUARD-RESULT {\"held\": false, \"why\": \"a reference statement is not in Flock's masked scope\"}"
+      let whys := (List.range refs.size).filterMap fun t => (refWhy (refs.getD t [])).map (s!"ref-{t}: " ++ ·)
+      for w in whys do say w
+      let res := Json.mkObj [("held", Lean.toJson false),
+        ("why", Lean.toJson "a reference statement is not in Flock's masked scope"), ("refs", Lean.toJson whys)]
+      IO.println s!"GUARD-RESULT {res.compress}"
       return 2
   say s!"held: {(← IO.monoMsNow) - t1} ms"
   let (ms, _) ← timed "ms (each reference statement read)" (fun _ => h.ms) fun ms => toString (ms.map (·.2.size))
