@@ -29,8 +29,9 @@ partition query; the two-stage registration the samples read
 (`filesBlockOf`); the second
 stage's count per stratum; the templates' names and the design's links, as round 2's statement check reads them
 (`names`, `links`); template `t`'s reference session statement (`xS₀ t`), in Flock's masked scope, which template
-`t`'s session statement is but for what the run sets (`pinOk`); and the commitment's layout and the reference prover's
-framing (`frame`, a code whose verifier, samples and reveal count are unread).
+`t`'s session statement is but for what the run sets (`pinOk`); template `t`'s reference registered reads (`refReads`),
+which its statement's are but for the run's fields; and the commitment's layout and the reference prover's framing
+(`frame`, a code whose verifier, samples and reveal count are unread).
 
 **The run's statement** (`Roots`): the boundary registration's record, as JSON (`decode`), whose ports' roots are the
 roots the boundary values are committed under (`portRoots`).
@@ -51,7 +52,8 @@ roots the boundary values are committed under (`portRoots`).
   template `t`'s part (`readsOk`, by `SecondStage.stmtCodes`: its public file's header is `xS₀ t`'s placed in the run
   (`SecondStage.atRun`) but for the run's fields, names
   the part's slots and the interior record's roots, its sample is the second stage's draw within the part, each
-  registered read is one it may read, and its registered reads are its reference statement's but for the run's fields,
+  registered read is one it may read, and its registered reads are its template's reference reads (`refReads`) but for
+  the run's fields,
   the code itself the verifier of record of the session it checks (`codesOk`));
   and it is `xS₀ t` but for its sample, its registered reads and its public file (`pinOk`); it refuses the message
   otherwise;
@@ -104,8 +106,11 @@ def zkOk (xS : Msg) : Bool :=
 (`vus`), the statement's partition query (`query`), the two-stage registration (`reg`), the second
 stage's count per stratum (`k`), the templates' names (`names`) and the design's links (`links`) round 2's statement
 check reads, template `t`'s reference session statement
-(`xS₀ t`) in Flock's masked scope (`xS₀_ok`), and the commitment's layout and the reference prover's framing
-(`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). -/
+(`xS₀ t`) in Flock's masked scope (`xS₀_ok`), template `t`'s reference registered reads as round 2 reads a statement's,
+null for none (`refReads t`), and the commitment's layout and the reference prover's framing
+(`frame`). Template `t`'s circuit is its reference statement's (`Held.ms`). The reference reads are a copy of their own,
+not `xS₀ t`'s: Flock's setup reads a statement's registered reads as a registration's, roots included, which reference
+reads, staged before any run, can't name. -/
 structure Held where
   desc : Msg
   vus : List (Array ℕ)
@@ -116,6 +121,7 @@ structure Held where
   links : Option (Array Spot.SecondStage.Link)
   xS₀ : ℕ → Msg
   xS₀_ok : ∀ t, zkOk (xS₀ t) = true
+  refReads : ℕ → Json
   frame : Code
 
 /-- **A session statement's circuit**: its reading's statement circuit (`Read.stmt`, a templated statement's
@@ -367,13 +373,9 @@ def refsOf : Array (String × Json) :=
     ((FlockDeploy.decode (h.xS₀ t)).bind fun w₀ => headerOf w₀.publicFile).map fun r => (h.names.getD t "", r)).toArray
 
 /-- **The reference reads** round 2's values check holds each template's statement to (`SecondStage.Own.refReads`):
-template `t`'s name with its reference statement's registered reads as round 2 reads a statement's (`stmtJsonOf`),
-null where it reads none, for each template whose reference statement decodes and whose reads read. -/
+template `t`'s name with its reference reads (`Held.refReads`), for each template. -/
 def refRegisteredOf : Array (String × Json) :=
-  ((List.range h.ms.length).filterMap fun t => (FlockDeploy.decode (h.xS₀ t)).bind fun w₀ =>
-    (match w₀.registered with
-      | some b => (FlockDeploy.jsonOf "registered reads" b).toOption
-      | none => some Json.null).map fun r => (h.names.getD t "", r)).toArray
+  ((List.range h.ms.length).map fun t => (h.names.getD t "", h.refReads t)).toArray
 
 /-- **What the verifier holds of the run** as round 2's statement check reads it (`SecondStage.Own`), at the run's
 statement `st`, round 1's record `rec`, the second stage's draw and round 0's coin: the replay sample, the interior and
