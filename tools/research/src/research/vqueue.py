@@ -170,7 +170,7 @@ def decide(s: Snapshot) -> list[Action]:
     if len(chain) < s.depth:
         busy = landed | ejected | {m for c in chain for m in c.members}
         pool = sorted((r for r in ready.values() if r.number not in busy and not r.conflict), key=lambda r: (r.rank, r.number))
-        outcomes = s.history + tuple(a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None)
+        outcomes = [*s.history, *(a.outcome for a in acts if isinstance(a, Drop) and a.outcome is not None)]
         if members := _batch(pool, outcomes, s.batch):
             acts.append(Build(members, chain[-1].sha if chain else main, s.depth - len(chain)))
     return acts
@@ -198,7 +198,7 @@ def meets(files: Iterable[str], inputs: Iterable[str]) -> bool:
 _glob = functools.lru_cache(maxsize=4096)(glob_re)
 
 
-@functools.lru_cache(maxsize=1024)
+@functools.lru_cache(maxsize=64)
 def _inputs(inputs: frozenset[str]) -> tuple[frozenset[str], tuple[re.Pattern[str], ...]]:
     paths, globs = set(), []
     for i in inputs:
@@ -310,7 +310,7 @@ def _ring_why(c: Candidate) -> str:
     return f"{c.sha[:12]}'s check ended in infra errors, {c.tries} times enqueued" + (f": {tasks}" if tasks else "")
 
 
-def _batch(pool: list[Ready], outcomes: tuple[Outcome, ...], size: int) -> tuple[int, ...]:
+def _batch(pool: list[Ready], outcomes: list[Outcome], size: int) -> tuple[int, ...]:
     """The next batch from ``pool`` (in rank order): each PR whose cap allows it, while the batch is under its limit, with at
     most one Lean PR.  A suspect's cap is half the suspects of the newest outcome holding it at its head, at least 1."""
     newest = _newest(outcomes, {r.number: r.head for r in pool})
@@ -329,7 +329,7 @@ def _batch(pool: list[Ready], outcomes: tuple[Outcome, ...], size: int) -> tuple
     return tuple(batch)
 
 
-def _newest(outcomes: tuple[Outcome, ...], want: dict[int, str]) -> dict[int, Outcome]:
+def _newest(outcomes: list[Outcome], want: dict[int, str]) -> dict[int, Outcome]:
     """For each PR of ``want`` ({number: head}), the newest of ``outcomes`` that holds it at that head."""
     found: dict[int, Outcome] = {}
     for o in reversed(outcomes):
