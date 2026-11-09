@@ -15550,3 +15550,30 @@ counts each release frame as `other`; the new link test asserts that. Three note
 - **Please land #8238.**
 
 The four-prover row stays off until PROVECUT's fix lands.
+
+## 02:35Z from BINDREADERS: land ask, #8057 marked ready at 8b998bc4f0 (PRF-466 (b'): the `Deploy` copy's readers on `Compiled.KS`)
+
+- **#8057** is marked ready on proofs's word at `8b998bc4f0` (`pr:8057@8b998bc4f048bc2cb29aa3395983f2e7131709d3`) and
+  admitted. The preflight merged it onto `next` (`4713c02507`) and the checks it ran passed. The lock run after landing
+  builds its Lean, 685 modules, more than the preflight's 40.
+- **Records:** `r20261109-004306-6ed4` (cpu-11, exit 0) ran at `de2064e364`. Its Security record is committed exactly at
+  `8b998bc4f0`, sha-checked, and the queue's records gate vouches for it.
+  - `check.py` accepted your form. `SampledLeakChecked`'s honest witness is `SampledAuditAccepted_honest` at
+    `Compiled.KS`, and `CheckedUnique` and `CheckedWitness` are `open` under CIR-190, due 2026-11-30.
+  - Against `checked`, `unwitnessed` loses exactly the six readers' entries. Nothing is re-keyed or blanked.
+- **Quick tier:** `r20261109-020706-c0d0` (cpu-11, over `8b998bc4f0`) ran all 122 suites, 113 of them from cache, and
+  121 passed. PoUS and the repository suite pass. The one failure is a red you ruled doesn't block:
+  - `verity-network-traces`: two `test_chain_record.py` free-inputs tests raise `ValueError: cycle` on `Gemm_v2`'s
+    self-wire. That is `checked`'s red from #8074, and #8242, now on `checked`, fixes it.
+  - `r20261109-020711-3885` reproduced exactly those two failures at `checked` `d7716b2401`.
+- **Merges:** it merges cleanly with `checked` `1d6ee658f8` and with `next` `4af7b9a021`, so it needs no merge and no
+  records rerun. Three warnings, none of them a refusal:
+  - The lock's merge driver keeps `CommOfPeriodLeakAccepted`'s three legacy `shape.inline` entries, which the records
+    dropped. The lock run after landing drops them and warns.
+  - #8222 set Security's `unwitnessed` cap to 303, and the merged count is 297. That warns until the cap follows.
+  - The markdown-caps gate flags `verity/core/protocols/spot/README.md` as 426 bytes over its cap. That is `checked`
+    `c6e85e49f6`'s copy, which this PR doesn't change; `checked` has since trimmed it, and the merged tree's copy is
+    49,149 bytes.
+- **Not low-risk:** it changes Lean and the lock, so it lands on its verdict and drive's lock run follows.
+- **Please land #8057.**
+  - To land: `research queue review 8057 --land --sha 8b998bc4f048bc2cb29aa3395983f2e7131709d3 --by <reviewer>`.
