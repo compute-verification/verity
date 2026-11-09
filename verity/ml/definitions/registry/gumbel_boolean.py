@@ -45,7 +45,7 @@ group).
 from __future__ import annotations
 
 from verity.ml.circuits import boolean as BL
-from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bind
+from verity.ml.circuits.defs import CompositeDefinition, bind
 from verity.ml.circuits.refs import Coll, Explicit, concat
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.circuits.silicon import fp
@@ -59,7 +59,7 @@ from verity.ml.definitions.registry import topp_word_gates as TG
 from verity.ml.definitions.registry.sampling_boolean import F32ArgmaxStage, G, GB, argmax_calls, traced_family
 
 __all__ = ["LANE_ROUNDS", "GumbelLane", "GumbelLaneHead", "GumbelLaneRounds", "GumbelLaneTail", "GumbelNoise", "GumbelNoiseGroup", "GumbelSelectF32",
-           "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "NvLogfV5", "NvLogfWordV4",
+           "GumbelSetup", "GumbelStreamKey", "GumbelStreamKeyHead", "GumbelStreamKeyTail", "NvLogf", "NvLogfV5",
            "gumbel_noise", "gumbel_select_calls", "lane_keys", "lane_products", "lane_rounds", "nv_log1pf", "nv_logf",
            "nv_logf_no_ftz", "philox_round", "round2_lows", "stream_keys", "tl_rand"]
 
@@ -261,12 +261,7 @@ def nv_logf_no_ftz(C, a):
 
 
 _LOGF = EVIDENCE["cc12_logf_capture"]
-#: the word view of `NvLogfV5`, its reference alone (no Program calls it, so it is not registered)
-NvLogfWordV4 = PrimitiveDefinition("NvLogf", 4, (("a", TG.F32),), TG.F32, lambda a: SM.nv_logf_gpu(a, ftz=False),
-                                   register=False,
-                                   doc="libdevice `__nv_logf` without flush-to-zero on an fp32 word, every NaN result 0x7FFFFFFF "
-                                       "(`sampling.nv_logf_gpu(a, ftz=False)`)")
-NvLogfV5 = definition("NvLogf", 5, nv_logf_no_ftz, (("a", F32),), F32, word=NvLogfWordV4,
+NvLogfV5 = definition("NvLogf", 5, nv_logf_no_ftz, (("a", F32),), F32, word=SM.NvLogfV4,
                       doc="libdevice __nv_logf without flush-to-zero on bits: NvLogf_v4 (every NaN result 0x7FFFFFFF)",
                       conformance="exact-model-tested: every word of torch.log's f32 CUDA kernel (log_kernel_cuda, libdevice "
                                   "__nv_logf without flush-to-zero) on cc 12.0 with 188 SMs (torch 2.14.0+cu130) at 4,194,320 "

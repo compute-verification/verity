@@ -38,10 +38,10 @@ from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import scalar as SC
 from verity.ml.circuits.refs import Affine, Coll, Strided, broadcast, concat
 from verity.ml.circuits.types import Array, Value
-from verity.ml.definitions.registry import gumbel_boolean as GBL
 from verity.ml.definitions.registry import int8_exact as IE
 from verity.ml.definitions.registry import prims as P
 from verity.ml.definitions.registry import ref_prims as R
+from verity.ml.definitions.registry import sampling as SM
 from verity.ml.definitions.registry import torch_embedding_f32 as TEF
 from verity_vllm.program.frontend.rules.base import RuleSet
 from verity_vllm.program.frontend.rules.training_emit import (_DT, BIT, F32, _alpha, _batch, _bits, _call, _const, _ew, _flat,
@@ -221,8 +221,9 @@ class Unary(_TrainRule):
 
 class Log(_TrainRule):
     """`log` of an f32 or bf16 value at a compute capability `cc`, as torch's CUDA kernel computes it: CUDA's `logf`, which is
-    libdevice's ``__nv_logf`` without flush-to-zero (`NvLogf_v5`, every NaN result 0x7FFFFFFF), a bf16 operand widened and the
-    result rounded by `F2fpBf16_v1`. Without `cc` it refuses: torch CPU's vectorized log is not modeled."""
+    libdevice's ``__nv_logf`` without flush-to-zero (`NvLogf_v4`, every NaN result 0x7FFFFFFF; on bits `NvLogf_v5`), a bf16
+    operand widened and the result rounded by `F2fpBf16_v1`. Without `cc` it refuses: torch CPU's vectorized log is not
+    modeled."""
     info = _info("Log", "aten.log of f32 or bf16 at a compute capability", "a compute capability",
                  "the operand is an f32 or bf16 value", "one batch per step over the elements")
 
@@ -242,9 +243,9 @@ class Log(_TrainRule):
 
     def emit(self, node, ctx):
         S = ctx.shape_of_node(node)
-        y = _ew(ctx, node, GBL.NvLogfV5, [_operand(ctx, node, node.args[0], S)], S)
+        y = _ew(ctx, node, SM.NvLogfV4, [_operand(ctx, node, node.args[0], S)], S)
         ctx.define(node, _rounded(ctx, node, y, S, P.F2fpBf16))
-        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"NvLogf_v5 x{math.prod(S)}")
+        ctx.record(self, node, {"shape": list(S), "dtype": _DT[ctx.dtype_of(node)]}, emitted=f"NvLogf_v4 x{math.prod(S)}")
 
 
 class Lerp(_TrainRule):

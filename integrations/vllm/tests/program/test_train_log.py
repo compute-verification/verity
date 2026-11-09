@@ -1,5 +1,5 @@
 """`rules.training.Log`: at a compute capability torch.log is CUDA's logf, libdevice's ``__nv_logf`` without flush-to-zero
-(`NvLogf_v5`), a bf16 result `F2fpBf16_v1`, bit for bit; without one the rule refuses."""
+(`NvLogf_v4`, on bits `NvLogf_v5`), a bf16 result `F2fpBf16_v1`, bit for bit; without one the rule refuses."""
 from __future__ import annotations
 
 import numpy as np
@@ -25,7 +25,7 @@ def test_gpu_log_is_logf_without_flush_to_zero(dt: torch.dtype) -> None:
     x = torch.cat([_data(19, seed=40), LOG_EDGES]).to(dt)
     prog = _program(lambda v: (torch.log(v),), x, rules=training_rules(cc=CB.TRAIN_CC))
     ids = {nd.fn.id.split("{")[0] for nd in prog.root.body.nodes}
-    assert "NvLogf_v5" in ids, ids
+    assert "NvLogf_v4" in ids, ids
     words = [P.Bf16ToF32.evaluate(v) for v in _bits(x)] if dt == torch.bfloat16 else _bits(x)
     want = [SM.nv_logf_gpu(v, ftz=False) for v in words]
     if dt == torch.bfloat16:

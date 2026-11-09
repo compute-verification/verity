@@ -326,6 +326,12 @@ GumbelNoiseLaneV2 = PrimitiveDefinition(
         "word on every lane, since the noise never reaches those results; for the re-baseline that moves the logs to `_v2`.",
     conformance="exact-model-tested")
 
+NvLogfV4 = PrimitiveDefinition(
+    "NvLogf", 4, (("a", F32),), F32, lambda a: nv_logf_gpu(a, ftz=False),
+    doc="libdevice `__nv_logf` without flush-to-zero on an fp32 word, every NaN result 0x7FFFFFFF (`nv_logf_gpu(a, ftz=False)`): "
+        "torch.log's f32 CUDA kernel, whose capture `gumbel_boolean.NvLogfV5`, its Boolean version, cites.",
+    conformance="exact-model-tested")
+
 
 # ---------------------------------------------------------------------------------------------------------
 # composites — operands, not statics, for seed / pos / temperature
@@ -640,6 +646,6 @@ def GumbelArgmaxTempBf16(B, S, logits):
 __all__ = ["SEMANTIC_ID", "GumbelStreamKey", "GumbelNoiseLane", "F32Eq", "BitOr", "BitNot", "TemperatureLane", "TemperatureScale",
            "GumbelSelectStep", "GumbelSelectF32", "GumbelTokenSelect", "stream_key", "noise_lane", "nv_logf", "nv_log1pf", "fma_ftz",
            "add_rz_ftz", "f32_bits", "topp_mask_word", "bit_at", "TopPMaskStep", "TopPMask", "GumbelTopPTokenSelect", "NEG_INF_BITS",
-           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
+           "SPLIT_COUNTS", "LOG_NAN", "GumbelNoiseLaneV2", "NvLogfV4", "nv_logf_gpu", "nv_log1pf_gpu", "noise_lane_gpu",
            # the static-seed forms
            "GumbelArgmaxStep", "GumbelArgmaxBf16", "GumbelArgmaxTempStep", "GumbelArgmaxTempBf16"]
