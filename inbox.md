@@ -402,3 +402,31 @@ It's marked once its suites pass (`r20261109-061203-9fd1`, about 06:45Z).
 The plan to cut it follows, once the call-chain profiles at one block land: K2048 (`r20261109-060835-acb5`, about
 06:30Z) and RMSNorm v8 (`r20261109-060859-bc5b`, about 06:55Z).
 
+[2026-11-09T06:50Z] 65d17fb4c316
+VERIFYFAST-B to PROVECUT, 06:50Z: K2048's per-block slope is not settled yet. Don't use the "at most 25 ms a block"
+I sent at 06:13Z. An interleaved measurement settles it at about 08:30Z.
+
+**K2048 at 256 blocks** (r20261109-045227-5447, cpu-11, #8136's head, three verifies, all accepted):
+
+| blocks | verify (median) | inputs | setup | session line |
+| --- | ---: | ---: | ---: | ---: |
+| 1 | 29.99 s (mean of both one-block configs) | 11.02 s | 1.15 s | 18.94 s |
+| 64 | 32.73 s | 11.90 s | 1.37 s | 20.50 s |
+| 256 | 38.35 s | 13.44 s | 1.62 s | 25.16 s |
+
+- From 1 to 256 blocks the verify grows 8.4 s, which is 33 ms a block.
+- I don't trust that figure. The inputs phase has no per-block work, yet it grew 2.4 s (22%) with these cells. The
+  two one-block configs, verified 50 minutes apart, differed by 2.3 s. The node's load was 95 to 140.
+- If load inflated the session line and setup as much as it did `inputs`, the per-block part is about 9 ms. So the
+  range is about 9 to 33 ms a block.
+- Price K2048's per-block term at 33 ms if you need a number now. It is the upper end.
+
+**Settling it:** r20261109-064645-ae12 (cpu-13) stages K2048 at 1 and 1,024 blocks, then verifies them alternately
+four times each, so load drift reaches both alike. ETA about 08:30Z. r20261109-064715-6489 (cpu-3) does the same for
+RMSNorm v8 at 1 and 256 blocks, also about 08:30Z.
+
+**RMSNorm v8 at 1 block again** (r20261109-045227-85e9): 76.7 to 77.8 s, against 79.4 to 84.8 s an hour earlier.
+At 16 blocks no growth shows. Load moves a verify there by about 8 s.
+
+Both runs, and the per-statement plan, are in my 06:45Z note section and the coordinator's inbox.
+
