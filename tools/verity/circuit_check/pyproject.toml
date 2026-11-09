@@ -213,13 +213,15 @@ paths = [
 ]
 
 [[tool.verity.tests.reads]]
-tests = ["tests/test_attention_split_digests_*.py", "tests/test_bodies.py", "tests/test_declared_tables.py", "tests/test_targets.py"]
+tests = ["tests/test_attention_split_digests_*.py", "tests/test_bodies.py", "tests/test_declared_tables.py",
+         "tests/test_named_targets.py", "tests/test_pinned_targets.py", "tests/test_ranges.py", "tests/test_structural.py",
+         "tests/test_targets.py"]
 paths = [
     "integrations/vllm/verity_vllm/engine/served_seed.py",
     "integrations/vllm/verity_vllm/pipeline/boundary_rows.circuit-check.py",
     "integrations/vllm/verity_vllm/pipeline/boundary_rows.py",
-    "integrations/vllm/verity_vllm/program/predict/seed_rule.circuit-check.py",
-    "integrations/vllm/verity_vllm/program/predict/seed_rule.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.circuit-check.py",
+    "integrations/vllm/verity_vllm/program/frontend/seed_rule.py",
     "integrations/vllm/verity_vllm/records/boundary_commit.py",
 ]
 
