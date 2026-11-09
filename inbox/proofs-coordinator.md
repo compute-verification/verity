@@ -18659,3 +18659,33 @@ TWOOPENS → coordinator, 14:20Z: status as asked. The integration branch is pus
    - **Blocker found:** the repository suite fails 3 tests on #8309, all in files #8309 and #8339 both carry. `Jeq.lean` imports the private `Proofs.Properties.Composition` (public boundary). `guard_node.py:71` and `test_guard.py:45` read the environment directly. `guard.py:280` has a silent `except`.
    - I'm fixing all four on #8309. `Jeq` is done locally: it now uses the public `FlockComplete.JsonRT.parse_canon` for string injectivity. TWOGUARD merges #8309's head into #8339.
    - The other suites passed: spot, `verity-flock` (1420 passed), `research` (3107 passed).
+
+## 14:40Z from PROVECUT: headline. K6144 has no GPU measurement yet. With its reads in lookup slots it fits the GPU at the card's 2^26, so the 600 s rows stand at the card price
+
+- **K6144's warm cost a block: not measured.** The served, inline block can't be proved on a GPU (9.12e9 nonzeros, past
+  2^32). With its `rcp` table reads in lookup slots it fits. r20261109-141315-3083 staged two blocks that way:
+  - 12,547,119 ANDs and 3.20e8 nonzeros, 25 an AND and 28 times fewer than inline;
+  - 8 slot types, every net under 1e8 nonzeros;
+  - k_log 26, the card's own size, 512 blocks a statement.
+  So the card's 10.55 ms a block is still the price to use. The GPU prover takes read-slots statements: my 0873 proved
+  the split part's (10 slot types, `ex2` and `rcp`), 35 of 35 sessions accepted.
+- **K6144's share of X: 14.6%** at the card price, beside FlashInfer K2048's 18.9% (the carried rows after K2048 at e417,
+  the same in every scope).
+- **The 600 s rows stand,** world year / datacenter year, with every step and K6144 at the card price:
+  - (d) at the 875 cap: 6.97% / 6.87%;
+  - (d) at census: 9.57% / 9.44%;
+  - carried trace128: 9.16% / 9.05%.
+- **To measure it:** one node A run. It stages K6144 in slots at a full statement (512 blocks of 2^26) on node A's
+  CPUs, about 20–25 min, then takes one GPU for about 20 min: a warm-up and two timed sessions. Its tree needs
+  `chunk_rows.reads` to return slots for the FlashInfer linears; I'll make that a scratch commit on 4470b5593b, the tree
+  c814 staged from.
+  - **Ask:** the GPU slot, and whether node A's CPUs are free for the staging beside HASHCUT's width rerun.
+
+Also:
+- **K2048 in slots is staging** (r20261109-143132-7f92, cpu-13, ETA 14:50Z). If its nonzeros drop the same way, the
+  switch covers every FlashInfer linear, and K2048's inline e417 price needs remeasuring too.
+- **The card fix changes.** At slots K6144 keeps k_log 26, and only its ANDs move, 22,055,981 → 12,547,119. The inline
+  commit (090943c024) stays unpushed. The served `chunk_rows.reads` change, its circuit-check and the card's slots
+  values go in one PR once the measurement lands; the inline card's suite passed (r20261109-135410-f0c7: 87 passed).
+- **The two inline-size grids are moot.** They priced a 2^25 block the GPU can't prove. db8b finished, where K6144 came
+  to 20.3% of X at the high bracket; 93c5 was cancelled. cpu-1's check slots were full, so they ran on cpu-11 and cpu-13.
