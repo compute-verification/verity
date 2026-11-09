@@ -4,7 +4,7 @@ import Proofs.InferenceOnly.Contained
 import Proofs.InferenceOnly.Packed
 
 /-!
-# Proofs of NCI's guarantees under training's incompressibility
+# Proofs of the inference-only policy's guarantees under training's incompressibility
 
 `TrainingIncompressible` is one law over divisions of the reference circuit. A small IU `R` is a division of `c` into
 `R` and the rest (`splitOff`), so the law gives `WeightsIncompressible` and `ActivationsIncompressible` on `R`; on a

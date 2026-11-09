@@ -1,7 +1,7 @@
 import Definitions.InferenceOnly.Threads
 
 /-!
-# NCI's one assumption about training
+# The inference-only policy's one assumption about training
 
 The guarantees on a reference training circuit `c` (`InferenceOnly.Guarantees.ThreadedThrottled`,
 `InferenceOnly.Guarantees.ContainedTraining`) charge an IU of `c` for three kinds of values it does not compute itself: the weights
@@ -11,7 +11,7 @@ conjunction of `WeightsIncompressible`, `ActivationsIncompressible` and `Partial
 (`InferenceOnly.SecurityProofs.trainingIncompressible_iff`), and the support-form assumptions imply it
 (`InferenceOnly.SecurityProofs.trainingIncompressible_of_support`).
 
-It is NCI's one incompressibility premise; the older assumptions stay beside it until the
+It is the inference-only policy's one incompressibility premise; the older assumptions stay beside it until the
 guarantees that read them move to it. It is about the reference circuit, not a declared one: `ActivationsIncompressible`
 and `PartialSumsIncompressible` are false on a declared circuit, whose wiring the prover controls, and that does not
 reach it. The reference circuit runs the chain gate for gate, one gate

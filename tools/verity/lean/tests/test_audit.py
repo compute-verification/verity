@@ -2179,7 +2179,7 @@ def test_an_honest_witness_at_a_verifier_that_accepts_everything_fails():
 
 
 def test_an_exclusion_theorem_has_an_honest_witness_and_an_explicit_circuit_beating_its_bound():
-    """A guarantee concluding a bound over a partition or a covering and reading no acceptance (NCI's
+    """A guarantee concluding a bound over a partition or a covering and reading no acceptance (the inference-only policy's
     exclusion, training's serving-block bound) is of the `exclusion` kind: its honest witnesses conclude its premises at
     the deployed partition and parameters, and its nontrivial one states, at an explicit circuit, (each other premise
     holds) ∧ ¬ (a named premise) ∧ ¬ (the bound), its conjuncts in any order; a bare

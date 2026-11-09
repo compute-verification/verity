@@ -10,7 +10,7 @@ beforehand; every other value is novel information. A division of `D` into isola
 of an IU read `width(in(R) \ θ)` bits of novel information (`novelReads`): baseline information is free, and so is
 anything `R` computes itself. `R`'s novel communication intensity is `NCI(R) = novelReads R / size R`, in bits per gate.
 
-`Complies Γ α` is the NCI policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`.
+`Complies Γ α` is the inference-only policy: `D` divides into IUs of at most `Γ` gates, each with NCI at most `α`.
 `CompliesAtMost c k n` is its count form on a Boolean declaration: `D` divides into at most `n` proof blocks of a
 `(c, k)`-partition (`Verity.Partition.IsCK`). A policy is a
 condition on declarations that the verifier checks from `D` and `θ` alone (`Policy`), a protocol with no rounds of its
@@ -36,7 +36,7 @@ def novelReads (d : Declaration) (R : Finset (Fin d.D.N)) : ℕ := d.D.width (d.
 /-- A policy: a condition on declarations. -/
 abbrev Policy : Type := Declaration → Prop
 
-/-- **The NCI policy** at maximum IU size `Γ` and NCI limit `α`: `d`'s circuit divides into IUs of at most `Γ` gates,
+/-- **The inference-only policy** at maximum IU size `Γ` and NCI limit `α`: `d`'s circuit divides into IUs of at most `Γ` gates,
 each reading at most `α` bits of novel information per gate (`NCI(R) ≤ α`, multiplied out so that an IU with no gates
 needs no division). -/
 def Complies (Γ : ℕ) (α : ℝ) : Policy := fun d =>

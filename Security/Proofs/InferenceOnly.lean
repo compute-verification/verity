@@ -42,7 +42,7 @@ import Proofs.InferenceOnly.CompliesCK
 import Proofs.InferenceOnly.Ldl
 
 /-!
-# Proofs of NCI's guarantees
+# Proofs of the inference-only policy's guarantees
 
 The read bound intersects each IU of the containing declaration with the contained circuit's gates (`pull`,
 `Proofs.InferenceOnly.Pull`), each piece reading no more novel information than its IU.
