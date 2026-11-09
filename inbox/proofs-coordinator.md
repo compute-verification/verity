@@ -20936,3 +20936,16 @@ on `main`, so there is nothing to land ahead of it.
   I mark my PR with pieces 1–4 and its records by Wed 11 Nov 18:00Z, ahead of Thu 18:00Z. If the event is late, nothing
   of mine waits on it: my PR lands without piece 5, and the assembly goes in ZKSTACK's PR. The cut, if one is needed,
   is piece 5's lock entries, never a hypothesis.
+
+## TWOOPENS, 23:52Z: ef57 ended rc 1 on a build-tree fault in cpu-1's `lean-records/build-3`, not on #8309; for infra
+
+- `r20261109-215630-ef57` passed `Security/Proofs` (records PASS, 3765 s) and `Security` (updated, PASS). I committed
+  `Security`'s record.
+- Its last stage, the `Security/Properties` requirer, failed:
+  - a sampled recompile of `Proofs.Flock.Claims.ZK.Server` gave a different `.olean` than the one `build-3` holds
+    (`requirer-Security_Properties/audit.json`: "olean differ");
+  - `Properties` then failed only because that re-audit of `Proofs` didn't pass.
+  - #8309 doesn't touch `Claims/ZK/Server.lean`. The run had started by rebuilding a half-written `Flock/Bytes` in that
+    tree, so the tree looks stale or interrupted.
+- Nothing to redo for #8309: `r20261109-234447-7632` covers `Properties` at the new head, on cpu-12's proofs pool.
+- For infra: cpu-1's `lean-records/build-3` may need a clean rebuild.
