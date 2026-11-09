@@ -7,7 +7,7 @@ echo "TREE $(git rev-parse HEAD 2>/dev/null || echo "${RESEARCH_TREE_SHA:-unknow
 for s in 1 4 16; do
   uv run python benchmarks/one_stage/served_verdicts.py program "$T/p$s" --rows 512 --steps "$s" \
     --protocols-config '{"pouw": {"ks": [2048]}}' 2>&1 | tail -1
-  python3 -c 'import json, sys; print("DIGEST S", sys.argv[2], json.load(open(sys.argv[1]))["program_digest"])' \
-    "$T/p$s/window-program.meta.json" 2>/dev/null || ls "$T/p$s"
+  uv run python -c 'import json, sys; print("DIGEST S", sys.argv[2], json.load(open(sys.argv[1]))["program_digest"])' \
+    "$T/p$s/window-program.meta.json" || { echo "DIGEST S $s unread:"; ls -la "$T/p$s"; head -c 600 "$T/p$s/window-program.meta.json"; echo; }
 done
 rm -rf "$T"
