@@ -467,19 +467,25 @@ theorem card_W : Fintype.card (W × Unit) = 256 := by simp [W]
 
 theorem honest_C (θ : W) : honest C θ = honest C (0, 0) := rfl
 
-/-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
-theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
-    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 := by
-  calc Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2))
-      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest C (0, 0)) 2) := Pouw.pr_mono fun z h => by
+/-- Honest use of a served function that reads no weight reveals nothing: every party's output is one fixed guess. -/
+theorem guess_le_of {Y : Type} (C' : W → Unit × Unit → Y) (hc : ∀ θ, honest C' θ = honest C' (0, 0))
+    (P : Outsider Unit (Unit × Unit) Y W) :
+    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C' (gen z.1)) 2)) ≤ 1 / 256 := by
+  calc Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C' (gen z.1)) 2))
+      ≤ Pouw.pr (fun z : W × Unit => z.1 = P.model () (honest C' (0, 0)) 2) := Pouw.pr_mono fun z h => by
         obtain ⟨θ, ⟨⟩⟩ := z
-        have h' : P.model () (honest C θ) 2 = θ := h
-        rw [honest_C] at h'
+        have h' : P.model () (honest C' θ) 2 = θ := h
+        rw [hc] at h'
         exact h'.symm
     _ = 1 / 256 := by
-        rw [Pouw.pr_eq_card _ {(P.model () (honest C (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff], card_singleton,
-          card_W]
+        rw [Pouw.pr_eq_card _ {(P.model () (honest C' (0, 0)) 2, ())} fun z => by simp [Prod.ext_iff],
+          card_singleton, card_W]
         norm_num
+
+/-- Honest use of the toy's served function reveals nothing: every party's output is one fixed guess. -/
+theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
+    Claims.Pr (fun z : W × Unit => Stolen (gen z.1) (P.model z.2 (honest C (gen z.1)) 2)) ≤ 1 / 256 :=
+  guess_le_of C honest_C P
 
 /-- The honest run's audit leaves no incorrect proof block undetected. -/
 theorem honest_undetected : Served.UndetectedLe 1 0 WeightSecurity.ToyServed.honestRun := by

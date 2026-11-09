@@ -105,8 +105,10 @@ public import Definitions.WeightSecurity.Assumptions
 public import Definitions.WeightSecurity.Guarantees
 public import Definitions.WeightSecurity
 public import Definitions.WeightSecurity.Served
+public import Definitions.WeightSecurity.Tied
 public import Definitions.WeightSecurity.Toy
 public import Definitions.WeightSecurity.ToyServed
+public import Definitions.WeightSecurity.ToyTied
 public import Definitions.Assumptions
 
 /-! The spec: each component's vocabulary, named assumptions and guarantee statements. -/
