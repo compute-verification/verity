@@ -17304,7 +17304,7 @@ the capacity lost.
 - **Under whole slots** (δ is 182 s on B128 and 183 s on trace128):
   - An edge has 83 open responses on B128, every one at e = 0.
   - With the cut at the earliest moment, 99 s before the edge on average, 37 of them have already decoded. With the
-    cut at the edge, 75 have.
+    cut at the edge, 74 have.
   - On trace128 it is 59 open: 17 decoded at the earliest cut (126 s before the edge), and 58 at the edge.
 - **Engine-seconds held an edge (mean ± se), published against corrected, at the earliest cut:**
 
