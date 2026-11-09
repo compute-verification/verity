@@ -643,8 +643,6 @@ KNOWN: dict[str, str] = {
     "Security/Properties/Accounting/Remote/Line/Record.lean::Properties.RemoteAudit.Line.Record":
         "duplicate of the auditor's record chain (`Spot.Challenger.LedgerEntry`): becomes what RemoteAudit becomes (lean)",
     # benchmarks/
-    "benchmarks/bandwidth/gpu.py::Commitment":
-        "duplicate of `merkle.Commitment`: becomes a client of it (one pass's root) (memory-accounting)",
     "benchmarks/circuit_properties/circuit_properties/ops.py::Site":
         "homonym, an op's site in a Definition: rename (training)",
     "benchmarks/datacenter/datacenter/logical.py::Registration":
