@@ -732,6 +732,39 @@ def test_a_red_is_told_once_a_base_and_task_across_a_restart(env):
     assert (again["action"], again["text"], again["done"], len(env.posts)) == ("red", None, False, 1)
 
 
+def test_a_message_is_logged_before_its_post_so_one_cut_off_before_its_record_isnt_told_again_but_one_that_failed_is(env):
+    env.put(1, {"a.txt": "1\n"})
+
+    def decide(s: Snapshot) -> list:
+        if not s.candidates:
+            return [Build((1,), s.main, 5)]
+        c = s.candidates[0]
+        return [Red(c.sha, c.base, "it fails it too", c.verdict.failed)] if c.verdict.state == FAIL else []
+
+    def post(answer):
+        def it(text: str, to=()) -> bool:
+            env.posts.append(text)
+            if answer is None:
+                raise RuntimeError("the loop's process died")
+            return answer
+        return it
+
+    loop = env.loop(decide)
+    (built,) = loop.tick()
+    env.listed(built["sha"], {"pytest:r": ["red.txt"]}, keys={"pytest:r": "sha512:red"})
+    env.result("sha512:red", "pytest:r", "fail")
+    loop.world.post = post(False)
+    (failed,) = loop.tick()
+    assert (failed["done"], failed["posted"], _acts(env.lines())[-2:]) == (False, False, ["posting", "red"])
+    loop.world.post = post(None)
+    with pytest.raises(RuntimeError):
+        loop.tick()                                                     # told again, and cut off before its record
+    assert _acts(env.lines())[-1] == "posting" and len(env.posts) == 2
+    loop.world.post = post(True)
+    (again,) = loop.tick()
+    assert (again["action"], again["text"], again["done"], len(env.posts)) == ("red", None, False, 2)
+
+
 def test_a_failure_on_a_base_graph2_hasnt_listed_waits_for_its_listing_which_the_loop_enqueues_once(env):
     """Whose a failure is, the base's keys tell: on a base whose check isn't listed (`main` moved past every check), the loop
     enqueues `ready:<base>` once, logged, and the candidate is pending; a base whose listing failed has no keys, logged, so the

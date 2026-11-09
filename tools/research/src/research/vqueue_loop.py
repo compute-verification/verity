@@ -49,8 +49,10 @@ runs the keys afresh (graph2's `rerun`), their results set aside, a key of the r
 graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a candidate and
 why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it
 is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its
-file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  Each action and its result is one JSON
-line in the log, whose directory also holds the loop's caches.
+file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's
+message is logged as about to be posted (`posting`) before it is, and its record says whether it was (`posted`): one whose
+tick stopped in between is told, so no one is told twice, and one whose post failed is told again.  Each action and its
+result is one JSON line in the log, whose directory also holds the loop's caches.
 
 `--shadow` logs advance, eject, ring, red, flake and every message with `shadow: true` and does none of them, and builds,
 drops, retries, reruns and starts the runs beside: its `main` is the newest candidate it advanced (`refs/vqueue/shadow` in the
@@ -227,18 +229,37 @@ class Past:
         return {(r.get("ref"), r.get("sha")) for r in self.of("ignore")}
 
     def flaked(self) -> set[str]:
-        return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")}
+        return {r.get("key") for r in self.of("flaky") if r.get("done") or r.get("shadow")} | self._posting(
+            "flaky", lambda r: {r.get("key")})
 
     def rung(self) -> set[tuple[str, str]]:
-        return {(r["sha"], r.get("why")) for r in self.of("ring") if r.get("done") or r.get("shadow")}
+        return {(r["sha"], r.get("why")) for r in self.of("ring") if r.get("done") or r.get("shadow")} | self._posting(
+            "ring", lambda r: {(r.get("sha"), r.get("why"))})
 
     def told(self) -> set[str]:
-        return {f"{h}@{r.get('base')}" for r in self.of("skip") if r.get("done") or r.get("shadow") for h in r.get("heads") or ()}
+        def heads(r: dict) -> set[str]:
+            return {f"{h}@{r.get('base')}" for h in r.get("heads") or ()}
+
+        return {k for r in self.of("skip") if r.get("done") or r.get("shadow") for k in heads(r)} | self._posting("skip", heads)
 
     def reds(self, base: str) -> set[str]:
         """The tasks ``base`` was told red on."""
-        return {f.get("task") for r in self.of("red") if r.get("base") == base and (r.get("done") or r.get("shadow"))
-                for f in r.get("failed") or () if isinstance(f, dict)}
+        def tasks(r: dict) -> set[str]:
+            return {f.get("task") for f in r.get("failed") or () if isinstance(f, dict)} if r.get("base") == base else set()
+
+        return {x for r in self.of("red") if r.get("done") or r.get("shadow") for x in tasks(r)} | self._posting("red", tasks)
+
+    def _posting(self, kind: str, keys: Callable[[dict], Iterable]) -> set:
+        """The keys of each message of ``kind`` whose post was logged as about to start (`posting`) and not as failed since
+        (`posted` false): told, since its tick may have stopped between the post and its record, and a message is told at
+        most once."""
+        out: set = set()
+        for r in self.lines:
+            if r.get("action") == "posting" and r.get("posting") == kind:
+                out.update(keys(r))
+            elif r.get("action") == kind and r.get("posted") is False:
+                out.difference_update(keys(r))
+        return out
 
     def built(self, sha: str) -> dict | None:
         return next(reversed(self.of("build", sha)), None)
@@ -1102,11 +1123,12 @@ class Loop:
             text = None if (key := f"{p.head}@{a.base}") in t.told else (
                 f"#{p.number} at {p.head[:12]} doesn't merge onto the verified queue's candidate on {a.base[:12]}: {why}. "
                 f"It is left out until it merges: merge `main` into it")
-            done = text is not None and not self.shadow and w.say(text, self.owner(p.number))
+            posts = text is not None and not self.shadow
+            done = posts and self._say(t, "skip", text, self.owner(p.number), base=a.base, heads=[p.head], number=p.number)
             if done or (text and self.shadow):
                 t.told.add(key)
             recs.append(self.record(t, "skip", base=a.base, members=[p.number], heads=[p.head], number=p.number, why=why,
-                                    text=text, done=done))
+                                    text=text, done=done, **({"posted": done} if posts else {})))
         if not merged:
             recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
             return recs
@@ -1189,6 +1211,12 @@ class Loop:
         return self.record(t, "eject", members=[a.number], heads=[a.head], number=a.number, why=a.why, failed=a.failed,
                            text=text, told=told, done=not self.shadow)
 
+    def _say(self, t: Tick, kind: str, text: str, to: tuple[str, ...], **line) -> bool:
+        """``text`` posted to ``to`` (`World.say`), logged as about to be first (`posting`, with ``line``, the keys `Past`
+        reads a message of ``kind`` by): a tick that stops between the post and its record tells no one twice."""
+        self.write(self.record(t, "posting", posting=kind, text=text, to=list(to), **line))
+        return self.world.say(text, to)
+
     def owner(self, number: int) -> tuple[str, ...]:
         """Whom a message about PR ``number`` goes to: its owner's handle, else `CI`, as drive tells."""
         handle = self.world.handle(number)
@@ -1243,9 +1271,10 @@ class Loop:
                 text = (f"{task} (key {key}) flaked on the verified queue's candidate ready:{c.sha[:12]}: it failed"
                         + (f" ({', '.join(tests)})" if tests else "") + ", then passed when rerun afresh. A test that flakes "
                         "is deleted, not rerun: delete it, or make it deterministic")
-                done = not self.shadow and w.say(text, to)
+                done = not self.shadow and self._say(t, "flaky", text, to, sha=c.sha, key=key)
                 recs.append(self.record(t, "flaky", sha=c.sha, base=c.base, members=c.members, heads=c.heads, key=key,
-                                        task=task, tests=tests, inputs=e.get("inputs"), text=text, to=list(to), done=done))
+                                        task=task, tests=tests, inputs=e.get("inputs"), text=text, to=list(to), done=done,
+                                        **({} if self.shadow else {"posted": done})))
         return recs
 
     def _bases(self, t: Tick) -> list[dict]:
@@ -1274,13 +1303,13 @@ class Loop:
         infra = "; ".join(f"{f.task} (key {f.key})" for f in c.verdict.infra)
         text = (f"the verified queue's candidate ready:{c.sha} ({' '.join(f'#{n}' for n in c.members)}) is {c.verdict.state} "
                 f"after {c.tries} enqueues: {a.why}" + (f". Infra: {infra}" if infra else ""))
-        done = False
-        if not self.shadow:
-            if not self.world.say(text, (INFRA_HANDLE,)):
-                raise QueueError(f"ringing {INFRA_HANDLE} about {c.sha[:12]} failed: the next tick rings again")
-            done = True
-        return [self.record(t, "ring", sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why,
-                            failed=c.verdict.infra, text=text, done=done)]
+        line = dict(sha=c.sha, base=c.base, members=c.members, heads=c.heads, why=a.why, failed=c.verdict.infra, text=text)
+        if self.shadow:
+            return [self.record(t, "ring", **line, done=False)]
+        if not self._say(t, "ring", text, (INFRA_HANDLE,), sha=c.sha, why=a.why):
+            return [self.record(t, "ring", **line, done=False, posted=False,
+                                error=f"ringing {INFRA_HANDLE} about {c.sha[:12]} failed: the next tick rings again")]
+        return [self.record(t, "ring", **line, done=True, posted=True)]
 
     def _red(self, a: Red, c: Candidate, t: Tick) -> dict:
         """Tell `CI` and the owners of what failed that ``a.base`` is red on it, once a base and task: a post that fails is told
@@ -1291,9 +1320,10 @@ class Loop:
         text = None if not new else (
             f"the verified queue's base {a.base[:12]} is red: {a.why}. Failed there as on {c.sha[:12]}: {tasks}. Each result, its "
             f"log's digest with it: `research store labels task:<key> --key result --history`")
-        done = text is not None and not self.shadow and w.say(text, to)
+        posts = text is not None and not self.shadow
+        done = posts and self._say(t, "red", text, to, sha=c.sha, base=a.base, failed=a.failed)
         return self.record(t, "red", sha=c.sha, base=a.base, members=c.members, heads=c.heads, why=a.why, failed=a.failed,
-                           text=text, to=list(to), done=done)
+                           text=text, to=list(to), done=done, **({"posted": done} if posts else {}))
 
 
 def _name(a: Action) -> str:
