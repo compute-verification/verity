@@ -154,8 +154,10 @@ def persist_config(s: dict) -> dict:
     req = s.get("requests") or (a.get("queries") if s["mode"] == "oracle" else a.get("prompts"))
     per_req = s["bits_per_token"] * (a.get("obs", 1) * max(s.get("repeats") or 1, 1) if s["mode"] == "oracle"
                                      else a.get("new", 1))
+    reads = max(s.get("repeats") or 1, 1) if s["mode"] == "oracle" and s.get("seeds") == "hidden" else 1
     return {"model": s["model"], "boxes": "on" if s.get("boxes") else "off", "where": s.get("where", "sink"),
-            "temp": temp, "cut": cut, "sites": ",".join(sites), "requests": req, "per_request_bits": per_req}
+            "temp": temp, "cut": cut, "sites": ",".join(sites), "requests": req, "per_request_bits": per_req,
+            "reads": reads}
 
 
 def checkpoint_qs(f: dict) -> list[int]:
@@ -260,16 +262,18 @@ def persist_tables(paths: list[Path], request_bits: float, threshold: float) -> 
                      with_ctrl(f["net_bits_w"], f.get("ctrl_bits_w")), verdict, cross,
                      with_ctrl(pz.get("pairz_bits_w"), pz.get("pairz_bits_ctrl")),
                      with_ctrl(pi.get("pair_bits_w"), pi.get("pair_bits_ctrl")), charged, f.get("code_bits", "-"),
-                     lead(f) / charged, largest / charged, largest / (Q * request_bits)])
+                     lead(f) / charged, lead(f) / (Q * c["reads"] * request_bits), largest / charged])
     out = ["Recovered bits about one weight column (value faults at the sink), each score with its random-column "
-           "control in parentheses, and over the charged bits (Q requests times the bits each returns; 8k: Q requests "
-           f"of {request_bits:g} bits). Lead fault: the largest tail net at the largest Q.\n\n" + table(
+           "control in parentheses, and over the charged bits (Q requests times the bits each returns, each read of a "
+           f"request counted under hidden seeds; 8k: those reads at {request_bits:g} bits each). Lead fault: the "
+           "largest tail net at the largest Q. The largest score includes pairwise as independent, which "
+           "over-counts.\n\n" + table(
                ["output", "model", "boxes", "position", "cut", "temperature", "faults", "Q", "lead fault",
                 "tail net (less its largest control)", "tail (control mean / max)", "tail, sign flipped",
                 "largest random-column control, any fault", "largest sign-flipped, any fault", "all-in net",
                 "growth (lead score)", f"Q where the lead reaches {threshold:g}", "pairwise vs null, best fault",
                 "pairwise as independent, best fault", "charged bits", "lead's served-change code bits",
-                "lead / charged", "largest / charged", "largest / charged (8k)"], rows)]
+                "lead / charged", "lead / charged (8k)", "largest score / charged"], rows)]
     if curves:
         out.append("The lead fault against Q:\n\n" + table(
             ["output", "Q", "direct reads", "decoded tokens", "tail net (control mean)", "control max",
