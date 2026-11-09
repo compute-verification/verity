@@ -135,7 +135,6 @@ KNOWN = frozenset({
     "verity_vllm.commit.step_rows",
     "verity_vllm.commit.store_dump",
     "verity_vllm.correspondence.reader_for_query",
-    "verity_vllm.correspondence.runtime",
     "verity_vllm.engine.arrivals",
     "verity_vllm.engine.build",
     "verity_vllm.engine.engine_driver",
