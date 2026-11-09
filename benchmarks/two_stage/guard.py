@@ -1,5 +1,5 @@
 """What SPOT[Flock]'s two-stage Lean model (`SpotFlock.stmtOk`) reads of a run of the two-stage toy, and the auditor's
-copies it reads them against (`SpotFlock.Held`), as `guard/TwoGuard.lean` reads them.
+copies it reads them against (`SpotFlock.Held`), as `tests/TwoGuard.lean` reads them.
 
 `export` writes, from a run's ``--out`` (`audit.py`) and its stream:
 
@@ -19,13 +19,19 @@ copies it reads them against (`SpotFlock.Held`), as `guard/TwoGuard.lean` reads 
 Nothing in ``held.json`` or a ``ref-<t>.bin`` is read from the run's records, sessions or coins; `export` checks the
 links, the first stage's input, each reference's partition and program and the run's records against what the run
 used, and raises where they differ.
+
+``python3 guard.py pack RUN_OUT FIXTURE`` packs a run's ``<case>/guard/`` for both cases into the guard test's fixture
+(`tests/test_guard.py`).
 """
 from __future__ import annotations
 
 import json
+import lzma
 import re
 import shlex
 import struct
+import sys
+import tarfile
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -184,3 +190,22 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     (out / "c1.bin").write_bytes(entry.second_read)
     (out / "held.json").write_text(json.dumps(held, indent=1, sort_keys=True))
     return held
+
+
+def pack(run_out: Path, fixture: Path, cases: Sequence[str] = ("honest", "altered")) -> None:
+    """Each case's ``guard/`` under ``run_out`` as ``<case>/`` of one xz tar at ``fixture``. Its window (768 MiB) spans
+    the distance to the next copy of a statement's circuit, which is most of every statement, so the tar holds each once."""
+    def plain(ti: tarfile.TarInfo) -> tarfile.TarInfo:
+        ti.mtime, ti.uid, ti.gid, ti.uname, ti.gname = 0, 0, 0, "", ""
+        return ti
+    with lzma.open(fixture, "wb", filters=[{"id": lzma.FILTER_LZMA2, "preset": 6, "dict_size": 768 << 20}]) as f, \
+            tarfile.open(fileobj=f, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+        for case in cases:
+            for p in sorted((run_out / case / "guard").iterdir()):
+                tar.add(p, arcname=f"{case}/{p.name}", filter=plain)
+
+
+if __name__ == "__main__":
+    if sys.argv[1:2] != ["pack"] or len(sys.argv) != 4:
+        sys.exit("usage: python3 guard.py pack RUN_OUT FIXTURE")
+    pack(Path(sys.argv[2]), Path(sys.argv[3]))
