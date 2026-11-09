@@ -17570,3 +17570,92 @@ it at the run's source commit, af13923df0.
   points, world year with node A's host caps) stands as #8279's expected effect. It needs one FlashInfer K2048 session
   on a binary with #8279 to confirm; e417's session records will show it if e417's binary has #8279.
 - **Still to assign:** only R1 (HASHCUT). The next host item after both is hm96 hashing, at 0.34 ms a block.
+
+## 08:12Z from TWOGUARD: honest `runOkAt` is true, and both negatives refuse at Flock's setup on the references they alter; `stmtOk`'s pieces timed
+
+Answering your 08:06Z ask. Branch `cursor/proofs-twoguard-9ddf`, head `acf86c3a8c`. The head merges TWOOPENS's
+`9b79e7c46d` (#8270, `refReads`, `7206dc0ce4`'s `verified`). Correction: I gave TWOOPENS `6c1b6c1a6e` as my head earlier,
+and that was wrong. The heads were `8cca0e1a4c`, then `394c4ff3ed`, now `acf86c3a8c`.
+
+**What the guard checks.** `stmtOk_split`, kernel-checked in `TwoGuard.lean`, says
+`stmtOk h x m₁ m₂ c₀ c₁ = (parse h x).any (regOk h) && runOkAt h x m₁ m₂ (src c₀) (src c₁)`.
+- `Held` is built only from what the auditor registers before the run: the four reference statements and the
+  members' files.
+- `runOkAt` is evaluated in full. The mirrors `ownOfAt` and `readsOkAt` equal the model's definitions by `rfl`.
+- `twoFilesOk` is also evaluated: `filesOk` and each template's `templateOk`.
+- `regOk` (`partition`'s `membersPart`, and `two`'s `scopeOk` over `bitsProgs`) is not evaluated. Per TWOVERIFY, it needs
+  a proof, and TWOOPENS owns that witness.
+
+**The three runs you named.** All three use TWOOPENS's `1899d21f6c` model and the run exported before #8270. Only the
+honest run is accepted.
+- **Honest**, `r20261109-070445-0171` (cpu-11).
+  - `runOkAt` is true. Every conjunct holds at t0–t3: rounds = k₀ (198/198), `zkOk`, shapes, `scopeCheck`, `hiddenOf`,
+    decode, `interiorOrderOk`, `stmtJsonOf`, round 2's codes (`[]`) and `pinOk`.
+  - `twoFilesOk` is true, and the guard exited 0.
+- **Altered**, `r20261109-070511-c074` (cpu-3).
+  - `runOkAt` is false. t0 and t3 fail at two conjuncts: rounds (1 against k₀ 198) and `zkOk` (false, no table shapes).
+  - Round 2's codes are `[]` at every t, and `pinOk` holds. t1 and t2 pass.
+  - This matches flock-verify, which refuses t0 and t3 at setup ("registered reads: … does not open …").
+- **One registered-read byte flipped**, `r20261109-070535-8a8d` (cpu-1).
+  - The flip is the first hex digit of the first `root` in statement 0's registered reads.
+  - `runOkAt` is false. t0 fails at three conjuncts: rounds (1 against 198), `zkOk` (false), and round 2's codes
+    (`[second-read]`). t1–t3 pass.
+- In both negatives `twoFilesOk` holds, since the registered files are untouched.
+- `r20261109-074632-955d`'s rc 143 was my cancel: it sat waiting on a cpu-1 slot while the regeneration ran on cpu-11.
+
+**Timings.** These are for the honest run, interpreted (`lean --run`), with VStar, Flock, CoreProtocol, Difftest, Lms
+and Spot loaded as native code.
+
+| piece | t0 | t1 | t2 | t3 |
+|---|---|---|---|---|
+| rounds = k₀ | 14.8 s | 14.8 s | 20.9 s | 20.8 s |
+| `zkOk` | 7.2 s | 6.7 s | 12.0 s | 11.4 s |
+| shapes | 13.4 s | 13.2 s | 23.8 s | 25.0 s |
+| `scopeCheck` | 7.7 s | 7.6 s | 11.2 s | 12.7 s |
+| `hiddenOf` | 5.8 s | 6.0 s | 9.7 s | 11.6 s |
+| decode | 5.8 s | 5.7 s | 10.2 s | 10.5 s |
+| round 2's codes | 27.4 s | 31.3 s | 40.6 s | 49.1 s |
+| `pinOk` | 6.4 s | 15.4 s | 9.3 s | 10.9 s |
+| `templateOk` | 26.0 s | 27.6 s | 26.9 s | 23.5 s |
+
+- `interiorOrderOk` and `stmtJsonOf` take 1 ms or less. `filesOk` takes 3 ms.
+- The run's one-time steps:
+  - reading x, m₁ and m₂ (222 MB): 5.9 s
+  - `Held`: 75 s
+  - reading the reference statements (`h.ms`): 34 s
+  - `stmtsOf`: 24 s
+  - `refsOf`: 50 s
+- **`runOkAt` in one call: 1,015 s**, true. **`twoFilesOk`: 98 s.** In the negatives, `runOkAt` refuses in 61–64 s
+  because it stops at t0.
+- Most of the time goes to decoding the statements' JSON again in interpreted code. Each decode takes 6–12 s, and
+  `h.ms`, `refsOf` and each conjunct decode again.
+
+**Where `regOk` stands, for TWOOPENS's proof and TWOVERIFY's timing.**
+- The members' lowering walks are small: 32,784, 32,784, 40,992 and 16,400 gates. `off` past each member's last gate
+  takes 1–2 ms natively.
+- So the quadratic `off` I told TWOOPENS about earlier is not what made `parse` run 27+ min. My guess is that
+  `Spot.Bits.consts` rebuilds `keyProg` (1.5–9.6 s a member) at each input gate. The runs below time that.
+- TWOVERIFY's `r20261109-073951-874d` already times `regOk`'s pieces with #8296 on my guard, so I'm not repeating it.
+- The follow-up to file outside PRF-460: a theorem `regOk h = true` for the toy's `h`, from Bridge.Members facts.
+  TWOOPENS owns the witness.
+
+**Regenerated with #8270.**
+- `r20261109-075304-9306` (cpu-11, rc 0) reran the toy two-stage audit with the reference statements' registered reads
+  exported.
+- Honest: round 2 ok, all verdicts accepted. Altered: `second-verified` and `second-reported`, refused at t0 and t3.
+- It is the new fixture, `art:e73ff2b70ca2b07eea2d6eedce4520aacfce50db5c2fa29a2f6f2ffc7abff15e`, now in
+  `fixtures/artifacts.json`.
+
+**In flight, both at `394c4ff3ed`.** That head has the same code as `acf86c3a8c`: TWOOPENS's `9b79e7c46d` model with
+the mirror's `refReads` and `verified`.
+- `r20261109-080240-071c` (cpu-11): the honest diagnostics on the regenerated run, then the opt-in pytest (honest,
+  altered, flipped). ETA about 09:30Z.
+- `r20261109-080755-03ca` (cpu-3): the altered and flipped diagnostics on the regenerated run. ETA about 09:05Z.
+
+When those are in, I'll report whether `runOkAt` holds at TWOOPENS's head with `refReads` filled.
+
+**Friction.**
+- The nodes' evidence store has no remote, so `research data fetch` fails there. I copied fixtures in over `pods ssh`.
+- cpu-13 has no research slots.
+- The workspace was reset to `main` twice, and the first reset took unpushed commits. I recovered them from a run's
+  clone, and every commit is pushed now.
