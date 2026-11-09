@@ -907,7 +907,7 @@ def test_each_window_commits_the_rows_it_ran_at_its_close_under_its_run_root(tmp
     for w in full:
         rec, priv = w["served_rows"], private(tmp_path, w["window"])
         assert rec["binding"] == SRW.binding(bytes.fromhex(w["run_root"])).hex() and rec["statics"] == statics
-        assert rec["slice"] == sc.SERVED_SLICE == "CompileSlice_v6"
+        assert rec["slice"] == sc.SERVED_SLICE == "CompileSlice_v7"
         assert rec["count"] == -(-w["steps"] // S.P)
         by_step = {t["step"]: [tuple(r) for r in t["rows"]] for t in trace if t["window"] == w["window"]}
         ids = {rid: arrival[rid] for rows in by_step.values() for rid, *_ in rows}

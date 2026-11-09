@@ -6,11 +6,25 @@ from typing import Any
 
 
 def _network_compile_slice_v6_roots() -> list[Any]:
-    """The compile slice charging the length terms at CompileSlice_v1's demonstration classes (`compile_slice_v6.demo`,
-    `demo_async`): CompileSlice_v1's units with ChargeLink_v2{D, 0, 0, 3} in place of ChargeLink_v1{D}, five and two
-    decisions and a length slot for each of three arrival slots. Each also with its served rows in blocks of G = 2 steps
-    (`CompileSliceRowGroups_v2`)."""
-    from verity.core.protocols.certifier.compile_slice import with_block
-    from verity.ml.protocols.certifier.compile_slice_v6 import demo, demo_async, unit
+    """Both units at CompileSlice_v5's small class (three steps at (R 2, W 1, A 1) on three blocks, one arrival of 4-bit
+    tokens, one decision of advice, two stream slots, one M and one RB entry, a ragged row of one block). The compile
+    slice is CompileWindow (CompileSlice_v5's load and steps, CompileIds), CallsEq over its records and CallsVerdict, the
+    records held to the calls row; the pool window is CompileSlice_v5's stream, bus and ragged keys with PoolCounts, the two pool rows' digests
+    (one segment each), their keys' prints, PoolOpen, PoolClose and PoolCopies over the rows and the M run, and
+    PoolVerdict: the wiring their own checks can't reach is the opened row into the stream's initial values and the
+    finals into the close. The pool window is past the default whole-lowering budget; its parts are each lowered."""
+    from verity.ml.protocols.certifier import compile_slice_v2 as V2
+    from verity.ml.protocols.certifier.compile_slice_v6 import compile_unit, pool_unit, statics
 
-    return [unit(**st) for st in (demo()[0], demo_async()[0], with_block(demo()[0], 2), with_block(demo_async()[0], 2))]
+    engine = {**V2.DEMO_ENGINE, "max_model_len": 8, "num_gpu_blocks": 3}
+    st = statics(2, 1, 1, engine, 1, Q=1, D=2, P=3, K=1, CTW=4, CU=1, DA=1, NS=2, NM=1, NRB=1, NRK=1)
+    return [compile_unit(**st), pool_unit(**st)]
+
+
+def _network_pool_chain_v1_roots() -> list[Any]:
+    """Two consecutive windows at the demonstration class (`compile_slice_v6.demo`): window 1's compile slice and pool
+    window, then window 2's, the output root window 1's pool window commits the input root window 2's opens, one input
+    both read. Its checks reach the wiring no one window's can: the shared root."""
+    from verity.ml.protocols.certifier.compile_slice_v6 import chain_unit, demo
+
+    return [chain_unit(**demo()[0])]

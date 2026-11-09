@@ -39,7 +39,7 @@ import Proofs.Flock.SamplingGeneric.Fails
 # The sampled compiler's bits
 
 `Bits` from `KS` at any compiled sampled verifier whose extractor's expected reruns and own SHA-512 calls are
-`Efficient`'s (`Compiled.bits_of_ks`, `Sampling.Bits_of_KS` generic, through `Sampling.Bits_of_KSLin`). Those two
+`Efficient`'s (`Compiled.bits_of_ks`, through `Sampling.Bits_of_KSLin`). Those two
 bounds are `CompilerEfficient`'s second and third conjuncts, and `CompilerBits` takes `CompilerEfficient`'s premises,
 so `CompilerKS` and `CompilerEfficient` give `CompilerBits` (`compilerBits_of`).
 -/
@@ -71,7 +71,7 @@ theorem γ_nonneg (L : Compiled Coin A) (x : Msg) : 0 ≤ L.γ x := by
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
 theorem work_pos (L : Compiled Coin A) (x : Msg) : 0 < L.work x := by
-  have h1 : 0 ≤ (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x) :=
+  have h1 : 0 ≤ (L.kOut x : ℝ) * L.kIn x * (1 + L.nSess x * L.es x) :=
     mul_nonneg (by positivity) (add_nonneg zero_le_one (mul_nonneg (Nat.cast_nonneg _) (maxBelow_nonneg _ _)))
   have h2 : 0 ≤ (L.kOut x : ℝ) * L.kIn x * L.nPU x * L.openCalls x := by positivity
   have h3 : (0 : ℝ) ≤ L.kOut x := Nat.cast_nonneg _
@@ -79,7 +79,7 @@ theorem work_pos (L : Compiled Coin A) (x : Msg) : 0 < L.work x := by
   linarith
 
 theorem bits_of_ks {H : Msg → Msg} {L : Compiled Coin A} (hks : L.KS H)
-    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nPU x * L.es x)))
+    (hruns : ExtractRunsExpLe H L.E (fun x => 1 + L.kOut x + (L.kOut x : ℝ) * L.kIn x * (1 + L.nSess x * L.es x)))
     (hown : Sampling.ExtractOwnLe H L.E (fun x => L.kOut x * L.kIn x * L.nPU x * L.openCalls x)) :
     L.Bits H := fun δ hδ =>
   Sampling.Bits_of_KSLin (hks δ hδ) hruns hown (fun x => L.κ_pos hδ x) L.γ_nonneg L.work_pos

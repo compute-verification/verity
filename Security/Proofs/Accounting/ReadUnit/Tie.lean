@@ -174,7 +174,7 @@ theorem computes_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {R : 
           Hash.EmbeddingRead.ok Verity.sha512 Verity.sha512 ⟨readDomain fun v => z (hr.φ v), V, fun r => r⟩ key
             (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
             (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
-    (tr : C.Transcript) (z : Fin R.w → Bool) (hsat : R.Sat z) (hz1 : z R.one = true)
+    (tr : C.Trace) (z : Fin R.w → Bool) (hsat : R.Sat z) (hz1 : z R.one = true)
     (hzin : ∀ c : Fin R.w, c.val < R.nIn → z c = ReadUnit.bit tr (wire c))
     (hzout : ∀ j < 16 * H + 1, z (hr.out j) = ReadUnit.bit tr (wire (hr.out j))) :
     (readPorts wire hr V H).Computes Verity.sha512 Verity.sha512 key tr := by
@@ -269,7 +269,7 @@ theorem gatesRefine_of_vals (key : Hash.Msg) {V H : ℕ} {C : Verity.Circuit} {n
             (readRoot fun v => z (hr.φ v)) V (readTok fun v => z (hr.φ v))
             (readOpening H (Hash.Tree.depth V) fun v => z (hr.φ v))))
     (consts : Fin C.N → Option Bool)
-    (hvals : ∀ tr : C.Transcript, P.Correct tr u →
+    (hvals : ∀ tr : C.Trace, P.Correct tr u →
       (∀ g ∈ P.io u, ∀ b, consts g = some b → ReadUnit.bit tr g = b) →
       ∃ z : Fin R.w → Bool, R.Sat z ∧ z R.one = true ∧
         (∀ c : Fin R.w, c.val < R.nIn → z c = ReadUnit.bit (P.localEval tr u) (wire c)) ∧
