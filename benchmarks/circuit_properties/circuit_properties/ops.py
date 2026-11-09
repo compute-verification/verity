@@ -11,7 +11,7 @@ The subcircuit of product k of one activation, m(p_k), is positional: the activa
 of the op, read only lane k's activation and weight operands (nothing of another lane or of any other parameter), and
 are not constants. `OpShape` computes it once per op Definition by flattening its body, and refuses an op whose lane
 has no gate reading both of its operands (`NotSeparable`: a word primitive computing 16 products in one gate has no
-per-product gates). These sets are disjoint, nonempty and computed, as `Nci.Cover.MulBlocks` requires of its products'
+per-product gates). These sets are disjoint, nonempty and computed, as `InferenceOnly.Cover.MulBlocks` requires of its products'
 gates.
 """
 

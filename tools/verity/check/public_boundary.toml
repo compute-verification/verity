@@ -110,8 +110,8 @@ protocols = [
     "verity/core/protocols/certifier/{lean_audit,online,out_commit,pacer,release,replay_chain,replay_step,schedule}*",
     "verity/core/protocols/certifier/{served,service,tie_service,transfer_rows,warden}*",
     "verity/ml/protocols/{pous,certifier}",
-    "Security/*/{Nci,NciDesc}{,.lean}",
-    "Security/Proofs/Properties/Nci{,.lean}",
+    "Security/*/{InferenceOnly,InferenceOnlyDesc}{,.lean}",
+    "Security/Proofs/Properties/InferenceOnly{,.lean}",
     # the table of domain separators' own entries: the other protocols' (its PoUW and shared parts are `needed`)
     "verity/core/primitives/identity/Identity/Domains.lean",
     "Security/{Properties,Proofs/Properties}/Identity{,.lean}",
