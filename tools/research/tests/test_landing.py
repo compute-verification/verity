@@ -414,6 +414,8 @@ def test_main_waits_for_the_steps_on_the_gate_of_the_commits_own_ci_toml(world, 
     """`main` waits at a commit for every job of the check but those a run skips by name and the jobs that commit's own policy
     takes off the merge gate (circuit-check); for every such job when its ci.toml or policy can't be read."""
     h = Harness(world, monkeypatch)
+    h.q._clone()
+    h.q.fetch()
     every = [s for s in JOBS if s not in SKIPPABLE]
     assert gating(h.q.workdir, _main(world)) == every
     _move_main(world, GATED_TREE)

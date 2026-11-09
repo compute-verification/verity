@@ -68,6 +68,23 @@ def fold_results(docs: Iterable[object], key: str) -> tuple[str, dict | None]:
     return (first["status"], first) if first else (PENDING, None)
 
 
+def check_id(graph: dict) -> str:
+    """The check a graph is of: its kind and commit (`after-landing:SHA`)."""
+    return f"{graph.get('kind') or 'after-landing'}:{graph['commit']}"
+
+
+def _digest(doc) -> str:
+    return hashlib.sha512(json.dumps(doc, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+
+
+def keyed(graph: dict) -> dict:
+    """``graph`` with each task's `key` the one its verdict is labelled under: its own, or for an unkeyed task, SHA-512 over its
+    check and id (its `unkeyed` reason kept), which no other check shares."""
+    check = check_id(graph)
+    return {**graph, "tasks": [t if t.get("key") else {**t, "key": _digest({"check": check, "id": t["id"]})}
+                               for t in graph["tasks"]]}
+
+
 class Transport(Protocol):
     def enqueue(self, graph_file: Path | None, priority: int, check: str, schema: str | None = None) -> None:
         """``check`` on the queue at ``priority``: ``graph_file``'s tasks, or with None the graph the executor lists, of

@@ -1935,7 +1935,7 @@ def test_a_check_that_failed_to_list_never_advances_beside_a_run_whose_every_fai
     env.put(1, {"1.txt": "1\n"})
     slim = Slim()
     loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
-    loop.world.slim_driver = lambda: "drive"
+    loop.world.beside = lambda: "landing"
     logged = loop.tick()
     (built,) = [r for r in logged if r["action"] == "build"]
     env.graph2.list_graph(f"ready:{built['sha']}", {"schema": GRAPH_V2, "commit": "0" * 40, "tasks": []})
