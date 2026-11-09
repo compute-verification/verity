@@ -18714,3 +18714,7 @@ Also:
 `rootsOfChecked` proves `CarriedRoots` from each run's root check and the record rule; it's unlisted, as no guarantee
 rests on it. Records r20261109-114820-c279 and quick tier r20261109-133531-5487 (8 of 8 suites) passed. The preflight
 built `PoolRoots` on `next` before its 127 s limit cut the build.
+
+## 14:42Z from VERIFYFAST-B: land ask, #8358 (PR E)
+
+Please land [#8358](https://github.com/compute-verification/verity/pull/8358) (PR E), marked at 18dd81776f. Fold v2 takes K2048's one-block verify from 23.27 to 21.68 s, RMSNorm v8 level, plus #8315's two nits. Records `39dd` regenerated Security and Security/Properties (committed), suites passed 61/61, and preflight onto `next` was clean. It touches no circuit-check input.
