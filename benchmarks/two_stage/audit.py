@@ -44,8 +44,9 @@ those reads (the interior's at the interior record and the links' boundary ports
 (``proofs.json``, and each template's reference statement under ``references/m<k>/``), both windows (``boundary/``,
 ``interior/``, their private files too), a5's records (``audit/``, the run's statement and verdicts in its
 ``case.json``), the challenger session's records (``challenger/``), both stages' coin evidence and the coins each read
-(``coins.json``), the sessions' statements (``statements.json``) and ``summary.json`` (both stages' registrations, laws
-and draws, and the outcome, among it).
+(``coins.json``), the sessions' statements (``statements.json``), ``summary.json`` (both stages' registrations, laws
+and draws, and the outcome, among it) and what SPOT[Flock]'s two-stage Lean model reads of the run with the auditor's
+copies it reads them against (``guard/``, `guard.export`).
 
     PYTHONPATH=<tree>:<tree>/benchmarks/numerical/python:<tree>/verity/ml/flock/python:<tree>/integrations/vllm \\
       python benchmarks/two_stage/audit.py --m0-pythonpath PATH --bin flock-circuit --lean flock-verify --main FILE \\
@@ -66,6 +67,7 @@ sys.path.insert(0, str(HERE.parent / "one_stage"))
 sys.path.insert(0, str(HERE.parent / "prove_path"))
 
 import a5_coins as AC  # noqa: E402
+import guard as G  # noqa: E402
 import toy as T  # noqa: E402
 from verity.core.protocols.spot import challenger as Ch, coins as CC, service as S  # noqa: E402
 
@@ -128,7 +130,7 @@ def needs(stream: S.Stream, n: int, q: int) -> tuple[int, int]:
         reads.append(k)
         return bytes(k)
     S.select_second(list(range(q)), stream.cells, stream.counts, zeros)
-    return AC.need(f"subset:{q}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
+    return AC.need(f"rate:{q}/{n}", w.program, w.query, n), -(-(sum(reads) + max(reads, default=0)) // Ch.COIN_BYTES)
 
 
 def stream_of(a: argparse.Namespace, coins: StageCoins) -> S.Stream:
@@ -398,6 +400,8 @@ def run(a: argparse.Namespace, out: Path, coins: StageCoins, draws) -> int:
                                "outcome": {x: o.get(x) for x in ("accepted", "interior", "replay_sample", "statements",
                                                                  "refused")}},
                               default=str))
+    if stmts is not None:
+        G.export(out / "guard", out, stream, reg.order, a.n, a.q, a.k)
     return 0 if summary["as_expected"] else 1
 
 

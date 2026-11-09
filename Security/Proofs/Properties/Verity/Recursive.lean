@@ -593,7 +593,7 @@ def OneTable (x : Msg) : Prop :=
 end Dep
 
 /-- The SHA-512 calls of one run: the prover's and the verifier's. -/
-def runCalls (t : Claims.Trace) : ℕ := t.pLog.length + t.vLog.length
+def runCalls (t : Claims.Transcript) : ℕ := t.pLog.length + t.vLog.length
 
 /-- **The recursive session inside the causal game** at composite `k`, `θ`, `F`, `c` and the strategy `σ`: the
 coupling of the device log (`Vocab.families`, `Vocab.coinsRead`) with the session.
@@ -648,7 +648,7 @@ abbrev Sample (S : SessionIn V q k θ F c σ) (ξ : S.Ξ) : Type :=
 /-- **The weight of bit `i` of gate `g` reading `bit`** at the session `S`: the probability, over the sample and a run with
 the extractor's seed, that the run accepts, `g` is a wire of a unit `ξ` samples, and the extractor returns a witness in
 the recursive relation whose reading (`readX`) has `bit` there. -/
-noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Transcript (V.circuitOf θ F))
+noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Trace (V.circuitOf θ F))
     (g : Fin (V.circuitOf θ F).N) (i : ℕ) (bit : Bool) : ℝ :=
   Claims.Ex fun ξ : S.Ξ => Claims.Pr fun s : q.Sample V S ξ =>
     (Claims.run FlockDeploy.sha512 (S.P ξ) q.D.V (S.x ξ) s.1 s.2.1).out = .acc ∧
@@ -660,8 +660,8 @@ noncomputable def weight (S : SessionIn V q k θ F c σ) (readX : Msg → Claims
 recursive session): each bit of each gate is the value the extractor's witnesses read there most often, over the
 samples and the accepted runs that sample the gate's unit (`false` on a tie). It is one transcript per strategy, a
 construction applied to `S`, never chosen per strategy. -/
-noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Transcript (V.circuitOf θ F)) :
-    Verity.Circuit.Transcript (V.circuitOf θ F) := fun g =>
+noncomputable def extract (S : SessionIn V q k θ F c σ) (readX : Msg → Claims.Flock.Wit → Verity.Circuit.Trace (V.circuitOf θ F)) :
+    Verity.Circuit.Trace (V.circuitOf θ F) := fun g =>
   BitVec.ofNat ((V.circuitOf θ F).w g) (∑ i ∈ Finset.range ((V.circuitOf θ F).w g),
     if q.weight V S readX g i false < q.weight V S readX g i true then 2 ^ i else 0)
 

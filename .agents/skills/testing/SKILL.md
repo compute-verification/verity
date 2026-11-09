@@ -99,7 +99,8 @@ untraced`, which keys it on the suite's whole tree. A test that builds or runs a
 - **A check far past ten minutes cold** stays out of `check` and runs as a recorded run on the change that needs it:
   integrations/vllm's heavy circuit-neutrality tier, `verity-vllm neutrality --tier heavy` on a 256-CPU node (`research
   pods list`; `integrations/vllm/verity_vllm/pipeline/neutrality.py`), on a change under `integrations/vllm/verity_vllm/program/`,
-  `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone.
+  `integrations/vllm/verity_vllm/engine/` or its `pipeline/build.py` meant to leave the circuits alone. Its fast tier runs
+  after each landing (`post_train.py`), and a row it finds moved rings @vllm: a PR that moves one on purpose re-pins it.
 - **GPU, pod and vLLM tests skip themselves** without the hardware or runtime; their real runs are recorded runs on a pod.
 - **Skip on a third-party package, never on a module of this checkout** (the guard fails that skip):
   `pytest.importorskip("torch")`, then import ours plainly.

@@ -8,18 +8,21 @@ public import Proofs.Spot.ExfiltrationBound
 public import Proofs.WeightSecurity.Theft
 
 /-! `WeightSecurity.SecurityProofs.TheftServed : WeightSecurity.Guarantees.TheftServed`, `Theft`'s leakage lemma at an
-audited deployment. On a run whose releases are all local and whose audit leaves fewer than `M` incorrect proof blocks
-undetected, the outsider's view is its view against the datacenter that deviates through the served channel with the
-run's own covert string (`Served.view_eq_resp`): each window's advice and bucket, the values its release changed, and
-the halt. Those values number at most `E · M + (L + 1) · |O|` (`Served.sum_card_changed_le`): the windows accepted
-before the first rejection sampled none of their incorrect proof blocks, so their incorrect proof blocks count in
-`Served.lead`, and the rejected window and the lag's windows change at most `|O|` values each. So the outsider steals
-only where the run leaves `M` undetected, a release isn't local, or some honest-use party `Ou.withString ch s` steals,
-which `HonestUseHard` bounds by `p` each.
+audited deployment, with `TheftServedReq` and `TheftServedMinEntropy`. On a run whose releases are isolated and whose
+audit leaves fewer than `M` incorrect proof blocks undetected, the outsider's view is its view against the datacenter
+that deviates through the served channel with the run's own covert string (`Served.view_eq_resp`): each window's advice
+and bucket, the values its release changed, and the halt. Those values number at most `F · M + (L + 1) · |O|`
+(`Served.sum_card_changed_le`): through the windows accepted before the first rejection, which sampled none of their
+incorrect proof blocks, the changes count against those blocks, which count in `Served.lead`, and the rejected window
+and the lag's windows change at most `|O|` values each. So the outsider steals only where the run leaves `M` undetected,
+its releases aren't isolated, or some honest-use party `Ou.withString ch s` steals, which `HonestUseHard` bounds by `p`
+each (`theftServed_isolated`). Local releases are isolated (`Served.isolated_of_local`), which gives `TheftServed`.
 
 `card_servedChannel_le` counts the served channel's covert strings,
 `|Adv|^T · |Tick|^T · (Σ_{j ≤ K} C(T·|O|, j)) · |V|^K · (T + 1)`, the overwrites by the Hamming-ball count
-`Population.Exfil.card_devBall_le`. The witnesses are proved at the toy deployment. -/
+`Population.Exfil.card_devBall_le`, and `card_servedChannel_le_rpow` bounds that by two to `servedBits`, the names of
+the overwritten values by `(T·|O| + 1)^K`, which gives `TheftServedReq`. The witnesses are proved at the toy
+deployment. -/
 
 @[expose] public section
 
@@ -53,15 +56,6 @@ namespace Served
 
 variable {O V Tick Adv R Q Θ Θ' : Type}
 
-open Classical in
-/-- The number of windows accepted before the first rejection. -/
-noncomputable def accLen : List (Served O V Tick Adv) → ℕ
-  | [] => 0
-  | w :: l => if w.accepted then accLen l + 1 else 0
-
-/-- Window `n`'s number of incorrect proof blocks, `0` past the run. -/
-def incorrectAt (l : List (Served O V Tick Adv)) (n : ℕ) : ℕ := (l[n]?.map Served.incorrect).getD 0
-
 theorem count_le_length (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L l ≤ l.length
   | [] => le_rfl
   | w :: l => by
@@ -82,6 +76,26 @@ theorem count_le_accLen (L : ℕ) : ∀ l : List (Served O V Tick Adv), count L 
     · rw [zero_add]
       exact Nat.succ_le_succ (min_le_right _ _)
 
+theorem accLen_le_count (L : ℕ) : ∀ l : List (Served O V Tick Adv), accLen l ≤ count L l
+  | [] => le_rfl
+  | w :: l => by
+    have := accLen_le_count L l
+    simp only [accLen, count]
+    split_ifs <;> omega
+
+/-- **The windows before the first rejection are accepted.** -/
+theorem accepted_of_lt_accLen : ∀ (l : List (Served O V Tick Adv)) (n : ℕ) (w : Served O V Tick Adv),
+    n < accLen l → l[n]? = some w → w.accepted
+  | [], _, _, h, _ => by simp [accLen] at h
+  | v :: l, n, w, h, hw => by
+    by_cases hv : v.accepted
+    · rcases n with _ | n
+      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
+        exact hw ▸ hv
+      · simp only [accLen, hv, ite_true] at h
+        exact accepted_of_lt_accLen l n w (by omega) (by simpa using hw)
+    · simp [accLen, hv] at h
+
 /-- **The windows accepted before the first rejection count in `lead`** when no accepted window sampled an incorrect
 proof block: each of them sampled none. -/
 theorem sum_incorrectAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) →
@@ -101,41 +115,36 @@ theorem sum_incorrectAt_le_lead : ∀ l : List (Served O V Tick Adv), (¬ ∃ w 
 
 variable [Fintype O]
 
-/-- **Through the halt, the releases change at most `E · lead + (L + 1) · |O|` values** when every release is local
-and no accepted window sampled an incorrect proof block. -/
-theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l)
+/-- **Local releases are isolated**: each window's bound, summed. -/
+theorem isolated_of_local (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
+    (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) :
+    Isolated C E Ou L θ r l := by
+  intro k hk
+  rw [mul_sum]
+  refine sum_le_sum fun n hn => ?_
+  have hn' : n < count L l := lt_of_lt_of_le (mem_range.1 hn) (hk.trans (accLen_le_count L l))
+  have hlen : n < l.length := lt_of_lt_of_le hn' (count_le_length L l)
+  have hw : l[n]? = some l[n] := List.getElem?_eq_getElem hlen
+  refine (hloc n hn' _ hw).trans (le_of_eq ?_)
+  simp [incorrectAt, hw]
+
+/-- **Through the halt, the releases change at most `F · lead + (L + 1) · |O|` values** when the releases are isolated
+and no accepted window sampled an incorrect proof block: through the last window accepted before the first rejection,
+at most `F` per incorrect proof block of those windows, which count in `lead`, and after it at most `|O|` a window. -/
+theorem sum_card_changed_le (C : Θ → Q × Adv → O → V) (F : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
+    (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hiso : Isolated C F Ou L θ r l)
     (hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect) :
-    ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card ≤ E * lead l + (L + 1) * Fintype.card O := by
-  classical
-  have hcl := count_le_length L l
+    ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card ≤ F * lead l + (L + 1) * Fintype.card O := by
   have hca := count_le_accLen L l
-  rw [← sum_filter_add_sum_filter_not (range (count L l)) (· < accLen l)]
+  rw [← sum_range_add_sum_Ico _ (accLen_le_count L l)]
   apply add_le_add
-  · calc ∑ n ∈ (range (count L l)).filter (· < accLen l), (changed C Ou L θ r l n).card
-        ≤ ∑ n ∈ (range (count L l)).filter (· < accLen l), E * incorrectAt l n := by
-          refine sum_le_sum fun n hn => ?_
-          have hn' : n < count L l := mem_range.1 (mem_filter.1 hn).1
-          have hlen : n < l.length := lt_of_lt_of_le hn' hcl
-          have hw : l[n]? = some l[n] := List.getElem?_eq_getElem hlen
-          refine (hloc n hn' _ hw).trans (le_of_eq ?_)
-          simp [incorrectAt, hw]
-      _ ≤ ∑ n ∈ range (accLen l), E * incorrectAt l n :=
-          sum_le_sum_of_subset_of_nonneg (fun n hn => mem_range.2 (mem_filter.1 hn).2) fun _ _ _ => Nat.zero_le _
-      _ = E * ∑ n ∈ range (accLen l), incorrectAt l n := (mul_sum _ _ _).symm
-      _ ≤ E * lead l := Nat.mul_le_mul_left _ (sum_incorrectAt_le_lead l hacc)
-  · calc ∑ n ∈ (range (count L l)).filter (fun n => ¬ n < accLen l), (changed C Ou L θ r l n).card
-        ≤ ∑ _n ∈ (range (count L l)).filter (fun n => ¬ n < accLen l), Fintype.card O :=
-          sum_le_sum fun n _ => card_le_univ _
-      _ = ((range (count L l)).filter (fun n => ¬ n < accLen l)).card * Fintype.card O := by
-          rw [sum_const, smul_eq_mul]
-      _ ≤ (L + 1) * Fintype.card O := by
-          refine Nat.mul_le_mul_right _ ?_
-          calc ((range (count L l)).filter (fun n => ¬ n < accLen l)).card ≤ (Ico (accLen l) (count L l)).card :=
-                card_le_card fun n hn => by
-                  simp only [mem_filter, mem_range, not_lt] at hn
-                  exact mem_Ico.2 ⟨hn.2, hn.1⟩
-            _ ≤ L + 1 := by rw [Nat.card_Ico]; omega
+  · calc ∑ n ∈ range (accLen l), (changed C Ou L θ r l n).card
+        ≤ F * ∑ n ∈ range (accLen l), incorrectAt l n := hiso _ le_rfl
+      _ ≤ F * lead l := Nat.mul_le_mul_left _ (sum_incorrectAt_le_lead l hacc)
+  · calc ∑ n ∈ Ico (accLen l) (count L l), (changed C Ou L θ r l n).card
+        ≤ ∑ _n ∈ Ico (accLen l) (count L l), Fintype.card O := sum_le_sum fun n _ => card_le_univ _
+      _ = (count L l - accLen l) * Fintype.card O := by rw [sum_const, Nat.card_Ico, smul_eq_mul]
+      _ ≤ (L + 1) * Fintype.card O := Nat.mul_le_mul_right _ (by omega)
 
 variable [DecidableEq O]
 
@@ -144,10 +153,10 @@ noncomputable def overwrite (C : Θ → Q × Adv → O → V) (Ou : Outsider R (
     (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (T : ℕ) : Fin T × O → Option V :=
   fun p => if p.1.val < count L l ∧ p.2 ∈ changed C Ou L θ r l p.1.val then l[p.1.val]?.map (·.egress p.2) else none
 
-theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (E M : ℕ)
+theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (F M : ℕ)
     (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv))
-    (T : ℕ) (hloc : Local C E Ou L θ r l) (hesc : ¬ Undetected M l) :
-    (univ.filter fun p => overwrite C Ou L θ r l T p ≠ none).card ≤ E * M + (L + 1) * Fintype.card O := by
+    (T : ℕ) (hiso : Isolated C F Ou L θ r l) (hesc : ¬ Undetected M l) :
+    (univ.filter fun p => overwrite C Ou L θ r l T p ≠ none).card ≤ F * M + (L + 1) * Fintype.card O := by
   classical
   have hacc : ¬ ∃ w ∈ l, w.accepted ∧ w.sampledIncorrect := fun h => hesc (Or.inl h)
   have hlead : lead l < M := lt_of_not_ge fun h => hesc (Or.inr h)
@@ -162,22 +171,23 @@ theorem card_overwrite_le (C : Θ → Q × Adv → O → V) (E M : ℕ)
         · simp only [Sigma.mk.inj_iff, heq_eq_eq] at h
           exact Prod.ext (Fin.ext h.1) h.2
     _ = ∑ n ∈ range (count L l), (changed C Ou L θ r l n).card := card_sigma _ _
-    _ ≤ E * lead l + (L + 1) * Fintype.card O := sum_card_changed_le C E Ou L θ r l hloc hacc
-    _ ≤ E * M + (L + 1) * Fintype.card O := by have := hlead.le; gcongr
+    _ ≤ F * lead l + (L + 1) * Fintype.card O := sum_card_changed_le C F Ou L θ r l hiso hacc
+    _ ≤ F * M + (L + 1) * Fintype.card O := by have := hlead.le; gcongr
 
 variable [Fintype V] [Fintype Adv] [Inhabited Adv] [Fintype Tick] [Inhabited Tick]
 
-/-- **A local run that leaves fewer than `M` incorrect proof blocks undetected is the served channel's deviation with
-its own covert string**: each window's advice and bucket, the run's overwrite and its halt. -/
-theorem view_eq_resp (C : Θ → Q × Adv → O → V) (E M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
-    (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hloc : Local C E Ou L θ r l) (hesc : ¬ Undetected M l) :
-    ∃ s : (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S,
+/-- **An isolated run that leaves fewer than `M` incorrect proof blocks undetected is the served channel's deviation
+with its own covert string**: each window's advice and bucket, the run's overwrite and its halt. -/
+theorem view_eq_resp (C : Θ → Q × Adv → O → V) (F M : ℕ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ')
+    (T L : ℕ) (θ : Θ) (r : R) (l : List (Served O V Tick Adv)) (hiso : Isolated C F Ou L θ r l)
+    (hesc : ¬ Undetected M l) :
+    ∃ s : (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S,
       view Ou L r l T =
-        Ou.view r ((servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).resp C s θ r) T := by
+        Ou.view r ((servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).resp C s θ r) T := by
   classical
   have hcl := count_le_length L l
   refine ⟨(fun t => (l[t.val]?.map (·.adv)).getD default, fun t => (l[t.val]?.map (·.tick)).getD default,
-    ⟨overwrite C Ou L θ r l T, card_overwrite_le C E M Ou L θ r l T hloc hesc⟩,
+    ⟨overwrite C Ou L θ r l T, card_overwrite_le C F M Ou L θ r l T hiso hesc⟩,
     ⟨min (count L l) T, Nat.lt_succ_of_le (min_le_right _ _)⟩), ?_⟩
   refine Outsider.view_congr Ou r _ _ T fun n hn => ?_
   have hlen := Outsider.view_length Ou r (fun h _ => reply L l h.length) n
@@ -331,40 +341,149 @@ theorem card_servedChannel_le (R Q Adv O V Tick : Type) [Fintype Adv] [Fintype O
         gcongr
     _ = _ := by ring
 
-theorem TheftServed : Guarantees.TheftServed := by
-  intro Ω R Θ Q Adv O V Tick Θ' _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L E M δ run hhon hsim hesc
+/-- **At most `K` of `N` positions: at most `(N + 1)^K` choices**, the binomial expansion's terms bounding the
+binomial coefficients, `N.choose j ≤ N^j`. -/
+theorem sum_choose_le_pow (N K : ℕ) : ∑ j ∈ range (K + 1), N.choose j ≤ (N + 1) ^ K := by
+  rw [add_pow]
+  refine sum_le_sum fun j hj => ?_
+  have hjK : j ≤ K := Nat.lt_succ_iff.1 (mem_range.1 hj)
+  have hc : N.choose j ≤ N ^ j * K.choose j :=
+    calc N.choose j ≤ j.factorial * N.choose j := Nat.le_mul_of_pos_left _ (Nat.factorial_pos j)
+      _ = N.descFactorial j := (Nat.descFactorial_eq_factorial_mul_choose N j).symm
+      _ ≤ N ^ j := Nat.descFactorial_le_pow N j
+      _ ≤ N ^ j * K.choose j := Nat.le_mul_of_pos_right _ (Nat.choose_pos hjK)
+  simpa using hc
+
+/-- **Two to the served channel's bits** is the product of its parts' counts. -/
+theorem rpow_servedBits (Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fintype O] [Fintype V] [Nonempty V]
+    [Fintype Tick] [Inhabited Tick] (T K : ℕ) :
+    (2 : ℝ) ^ servedBits Adv O V Tick T K =
+      (Fintype.card Adv * Fintype.card Tick) ^ T * (Fintype.card V * (T * Fintype.card O + 1)) ^ K * (T + 1) := by
+  have e : ∀ x : ℝ, 0 < x → (2 : ℝ) ^ Real.logb 2 x = x := fun x hx => Real.rpow_logb two_pos (by norm_num) hx
+  have m : ∀ (n : ℕ) (y : ℝ), (2 : ℝ) ^ ((n : ℝ) * y) = ((2 : ℝ) ^ y) ^ n := fun n y => by
+    rw [mul_comm, Real.rpow_mul zero_le_two, Real.rpow_natCast]
+  have hA : (0 : ℝ) < Fintype.card Adv := by exact_mod_cast Fintype.card_pos
+  have hTk : (0 : ℝ) < Fintype.card Tick := by exact_mod_cast Fintype.card_pos
+  have hV : (0 : ℝ) < Fintype.card V := by exact_mod_cast Fintype.card_pos
+  have hN : (0 : ℝ) < T * Fintype.card O + 1 := by positivity
+  have hT : (0 : ℝ) < T + 1 := by positivity
+  unfold servedBits
+  rw [Real.rpow_add two_pos, Real.rpow_add two_pos, m, m, Real.rpow_add two_pos, Real.rpow_add two_pos, e _ hA,
+    e _ hTk, e _ hV, e _ hN, e _ hT]
+
+/-- **The served channel's covert strings number at most two to its bits**: `card_servedChannel_le` with the
+overwrites' positions counted at most `(T · |O| + 1)^K`. -/
+theorem card_servedChannel_le_rpow (R Q Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fintype O] [DecidableEq O]
+    [Fintype V] [Nonempty V] [Fintype Tick] [Inhabited Tick] (T K : ℕ) :
+    (Fintype.card (servedChannel R Q Adv O V Tick T K).S : ℝ) ≤ (2 : ℝ) ^ servedBits Adv O V Tick T K := by
+  rw [rpow_servedBits, mul_pow, mul_pow]
+  have hs := sum_choose_le_pow (T * Fintype.card O) K
+  have hle : Fintype.card (servedChannel R Q Adv O V Tick T K).S ≤
+      Fintype.card Adv ^ T * Fintype.card Tick ^ T * (Fintype.card V ^ K * (T * Fintype.card O + 1) ^ K) * (T + 1) :=
+    calc Fintype.card (servedChannel R Q Adv O V Tick T K).S
+        ≤ Fintype.card Adv ^ T * Fintype.card Tick ^ T *
+            ((∑ j ∈ range (K + 1), (T * Fintype.card O).choose j) * Fintype.card V ^ K) * (T + 1) :=
+          card_servedChannel_le R Q Adv O V Tick T K
+      _ ≤ Fintype.card Adv ^ T * Fintype.card Tick ^ T *
+            ((T * Fintype.card O + 1) ^ K * Fintype.card V ^ K) * (T + 1) :=
+          Nat.mul_le_mul_right _ (Nat.mul_le_mul_left _ (Nat.mul_le_mul_right _ hs))
+      _ = _ := by rw [Nat.mul_comm ((T * Fintype.card O + 1) ^ K) (Fintype.card V ^ K)]
+  exact_mod_cast hle
+
+/-- **`TheftServed` at isolated releases**: the bound with the probability that the releases aren't isolated, each
+incorrect proof block's changes counted wherever they fall. On a run whose releases are isolated and whose audit leaves
+fewer than `M` incorrect proof blocks undetected, the outsider's view is the served channel's deviation with the run's
+own covert string (`Served.view_eq_resp`). -/
+theorem theftServed_isolated {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
+    [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
+    (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Stolen : Θ → Θ' → Prop) (A : Set (Outsider R (Q × Adv) (O → V) Θ'))
+    (p : ℝ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L F M : ℕ) (δ : ℝ≥0∞)
+    (run : Θ → R → Verity.Game (List (Served O V Tick Adv))) (hhon : HonestUseHard C gen Stolen T A p)
+    (hsim : Simulable A Ou (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)))
+    (hesc : Served.UndetectedLe M δ run) :
+    avg (fun z : Ω × R => value (fun l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)))
+        (run (gen z.1) z.2)) ≤
+      ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S * p) +
+        δ + avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) := by
   classical
   have hcov : ∀ (z : Ω × R) (l : List (Served O V Tick Adv)),
       Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)) →
-        (¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) ∨
-          ∃ s : (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S, Stolen (gen z.1)
-            ((Ou.withString (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)) s).model z.2
+        (¬ Served.Isolated C F Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) ∨
+          ∃ s : (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S, Stolen (gen z.1)
+            ((Ou.withString (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)) s).model z.2
               (honest C (gen z.1)) T) := by
     intro z l hst
-    by_cases hloc : Served.Local C E Ou L (gen z.1) z.2 l
+    by_cases hiso : Served.Isolated C F Ou L (gen z.1) z.2 l
     · by_cases he : Served.Undetected M l
       · exact Or.inl (Or.inr he)
-      · obtain ⟨s, hs⟩ := Served.view_eq_resp C E M Ou T L (gen z.1) z.2 l hloc he
+      · obtain ⟨s, hs⟩ := Served.view_eq_resp C F M Ou T L (gen z.1) z.2 l hiso he
         refine Or.inr ⟨s, ?_⟩
         rw [withString_model, Outsider.model, ← hs]
         exact hst
-    · exact Or.inl (Or.inl hloc)
+    · exact Or.inl (Or.inl hiso)
   refine (value_leak C gen Stolen T A p Ou _ hhon hsim (fun z => run (gen z.1) z.2)
     (fun z l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)))
-    (fun z l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) hcov).trans ?_
-  calc avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l ∨ Served.Undetected M l)
+    (fun z l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l ∨ Served.Undetected M l) hcov).trans ?_
+  calc avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l ∨ Served.Undetected M l)
           (run (gen z.1) z.2)) + ENNReal.ofReal
-          (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p)
-      ≤ avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ) +
-          ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) := by
+          (Fintype.card (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S * p)
+      ≤ avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2) + δ) +
+          ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S * p) := by
         refine add_le_add (avg_mono fun z => ?_) le_rfl
         exact (value_or_le _ _ _).trans (add_le_add le_rfl (hesc _ _))
-    _ ≤ (avg (fun z : Ω × R => value (fun l => ¬ Served.Local C E Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) + δ) +
-          ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (E * M + (L + 1) * Fintype.card O)).S * p) := by
+    _ ≤ (avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) + δ) +
+          ENNReal.ofReal (Fintype.card (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S * p) := by
         rw [avg_add]
         gcongr
         exact avg_le_const δ
     _ = _ := by ring
+
+/-- **`TheftServed` as a simulation**, for any event and not only a stolen model. Except where the releases aren't
+isolated or the audit leaves `M` incorrect proof blocks undetected, the outsider's whole view of the deployment is what
+it rebuilds (`Outsider.rebuild`) from one covert string `s` of the served channel and the answers that honest use of the
+served function gives the outsider with `s` written in: the served function's API plus one message of at most
+`servedBits` bits (`card_servedChannel_le_rpow`). Whatever the outsider ends up holding is a function of that view. -/
+theorem theftServed_simulation {Ω R Θ Q Adv O V Tick Θ' : Type} [Fintype Ω] [Fintype R] [Fintype Adv] [Inhabited Adv]
+    [Fintype O] [DecidableEq O] [Fintype V] [Fintype Tick] [Inhabited Tick]
+    (C : Θ → Q × Adv → O → V) (gen : Ω → Θ) (Ou : Outsider R (Q × Adv) (Option ((O → V) × Tick)) Θ') (T L F M : ℕ)
+    (δ : ℝ≥0∞) (run : Θ → R → Verity.Game (List (Served O V Tick Adv))) (hesc : Served.UndetectedLe M δ run) :
+    avg (fun z : Ω × R => value (fun l => ¬ ∃ s : (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)).S,
+        Served.view Ou L z.2 l T = Ou.rebuild (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)) s z.2
+          ((Ou.withString (servedChannel R Q Adv O V Tick T (F * M + (L + 1) * Fintype.card O)) s).view z.2
+            (honest C (gen z.1)) T)) (run (gen z.1) z.2)) ≤
+      δ + avg (fun z : Ω × R => value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) := by
+  classical
+  calc _ ≤ avg (fun z : Ω × R => value (Served.Undetected M) (run (gen z.1) z.2) +
+          value (fun l => ¬ Served.Isolated C F Ou L (gen z.1) z.2 l) (run (gen z.1) z.2)) := by
+        refine avg_mono fun z => (value_mono (fun l hl => ?_) _).trans (value_or_le _ _ _)
+        by_contra h
+        obtain ⟨s, hs⟩ := Served.view_eq_resp C F M Ou T L (gen z.1) z.2 l (not_not.mp (not_or.mp h).2)
+          (not_or.mp h).1
+        exact hl ⟨s, hs.trans (rebuild_view Ou _ C s (gen z.1) z.2 T).symm⟩
+    _ ≤ _ := by
+        rw [avg_add]
+        exact add_le_add ((avg_mono fun z => hesc _ _).trans (avg_le_const δ)) le_rfl
+
+theorem TheftServed : Guarantees.TheftServed := by
+  intro Ω R Θ Q Adv O V Tick Θ' _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L E M δ run hhon hsim hesc
+  exact (theftServed_isolated C gen Stolen A p Ou T L E M δ run hhon hsim hesc).trans (add_le_add le_rfl
+    (avg_mono fun z => value_mono (fun l hl hloc => hl (Served.isolated_of_local C E Ou L _ _ l hloc)) _))
+
+theorem TheftServedReq : Guarantees.TheftServedReq := by
+  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen A p Ou T L F M δ run hhon hsim hesc
+  refine (theftServed_isolated C gen Stolen A p Ou T L F M δ run hhon hsim hesc).trans
+    (add_le_add (add_le_add ?_ le_rfl) le_rfl)
+  rcases le_or_gt 0 p with hp | hp
+  · exact ENNReal.ofReal_le_ofReal
+      (mul_le_mul_of_nonneg_right (card_servedChannel_le_rpow R Q Adv U W Tick T _) hp)
+  · rw [ENNReal.ofReal_of_nonpos (mul_nonpos_of_nonneg_of_nonpos (Nat.cast_nonneg _) hp.le)]
+    exact zero_le
+
+theorem TheftServedMinEntropy : Guarantees.TheftServedMinEntropy := by
+  intro Ω R Θ Q Adv U W Tick Θ' _ _ _ _ _ _ _ _ _ _ C gen Stolen K Ou T L F M δ run hhon hesc
+  have h := TheftServedReq C gen Stolen Set.univ ((2 : ℝ) ^ (-K)) Ou T L F M δ run hhon
+    (fun _ => Set.mem_univ _) hesc
+  rwa [← Real.rpow_add two_pos, ← sub_eq_add_neg] at h
 
 namespace ToyServed
 
@@ -388,11 +507,11 @@ theorem guess_le (P : Outsider Unit (Unit × Unit) (Unit → Fin 16) W) :
           card_W]
         norm_num
 
-end ToyServed
-
-theorem TheftServedHonest : Guarantees.TheftServedHonest := by
+/-- The honest run's audit leaves no incorrect proof block undetected. -/
+theorem honest_undetected : Served.UndetectedLe 1 0 WeightSecurity.ToyServed.honestRun := by
   classical
-  refine ⟨fun P _ => ToyServed.guess_le P, fun _ => Set.mem_univ _, fun θ r => le_of_eq ?_⟩
+  intro θ r
+  refine le_of_eq ?_
   unfold WeightSecurity.ToyServed.honestRun
   rw [value_ret, ite_eq_right]
   rintro (⟨w, hw, -, hd⟩ | h)
@@ -400,35 +519,65 @@ theorem TheftServedHonest : Guarantees.TheftServedHonest := by
     rcases hw with rfl | rfl <;> exact hd
   · simp [Served.lead] at h
 
+/-- The thief steals the weights from the leaking run on every coin. -/
+theorem leak_steals (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => WeightSecurity.ToyServed.Stolen
+    (WeightSecurity.ToyServed.gen z.1) (WeightSecurity.ToyServed.thief.out z.2
+      (Served.view WeightSecurity.ToyServed.thief 0 z.2 l 2)))
+    (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 1 := by
+  classical
+  unfold WeightSecurity.ToyServed.leakRun
+  rw [value_ret, ite_eq_left]
+  simp [WeightSecurity.ToyServed.Stolen, WeightSecurity.ToyServed.gen, WeightSecurity.ToyServed.thief, Served.view,
+    Served.reply, Served.count, Outsider.view]
+
+/-- The leaking run's releases change one slot per window, which has one incorrect proof block. -/
+theorem leak_local (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => ¬ Served.Local WeightSecurity.ToyServed.C 1
+    WeightSecurity.ToyServed.thief 0 (WeightSecurity.ToyServed.gen z.1) z.2 l)
+    (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 0 := by
+  classical
+  unfold WeightSecurity.ToyServed.leakRun
+  rw [value_ret, ite_eq_right (not_not.2 ?_)]
+  intro n _ w hw
+  have hwr : w.incorrect = 1 := by
+    rcases n with _ | _ | n
+    · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
+      rw [← hw]
+    · simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hw
+      rw [← hw]
+    · simp at hw
+  rw [hwr, mul_one]
+  exact (card_le_univ _).trans_eq Fintype.card_unit
+
+theorem leak_isolated (z : WeightSecurity.ToyServed.W × Unit) : value (fun l => ¬ Served.Isolated
+    WeightSecurity.ToyServed.C 1 WeightSecurity.ToyServed.thief 0 (WeightSecurity.ToyServed.gen z.1) z.2 l)
+    (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 0 :=
+  le_antisymm ((value_mono (fun l hl hloc => hl (Served.isolated_of_local WeightSecurity.ToyServed.C 1
+    WeightSecurity.ToyServed.thief 0 _ _ l hloc)) _).trans_eq (leak_local z)) zero_le
+
+/-- The toy's covert capacity at one changed unit: `16` values, `3` names and `3` halts. -/
+theorem rpow_bits :
+    (2 : ℝ) ^ servedBits Unit Unit (Fin 16) Unit 2 (1 * 0 + (0 + 1) * Fintype.card Unit) = 144 := by
+  rw [rpow_servedBits]
+  norm_num [Fintype.card_unit, Fintype.card_fin]
+
+theorem rpow_neg_eight : (2 : ℝ) ^ (-(8 : ℝ)) = 1 / 256 := by
+  rw [Real.rpow_neg zero_le_two, show (8 : ℝ) = ((8 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  norm_num
+
+theorem rpow_bits_sub :
+    (2 : ℝ) ^ (servedBits Unit Unit (Fin 16) Unit 2 (1 * 0 + (0 + 1) * Fintype.card Unit) - 8) = 144 / 256 := by
+  rw [Real.rpow_sub two_pos, rpow_bits, show (8 : ℝ) = ((8 : ℕ) : ℝ) by norm_num, Real.rpow_natCast]
+  norm_num
+
+end ToyServed
+
+theorem TheftServedHonest : Guarantees.TheftServedHonest :=
+  ⟨fun P _ => ToyServed.guess_le P, fun _ => Set.mem_univ _, ToyServed.honest_undetected⟩
+
 theorem TheftServedNontrivial : Guarantees.TheftServedNontrivial := by
   classical
   intro h
-  have hsteal : ∀ z : WeightSecurity.ToyServed.W × Unit, value (fun l => WeightSecurity.ToyServed.Stolen
-      (WeightSecurity.ToyServed.gen z.1) (WeightSecurity.ToyServed.thief.out z.2
-        (Served.view WeightSecurity.ToyServed.thief 0 z.2 l 2)))
-      (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 1 := by
-    intro z
-    unfold WeightSecurity.ToyServed.leakRun
-    rw [value_ret, ite_eq_left]
-    simp [WeightSecurity.ToyServed.Stolen, WeightSecurity.ToyServed.gen, WeightSecurity.ToyServed.thief, Served.view,
-      Served.reply, Served.count, Outsider.view]
-  have hloc : ∀ z : WeightSecurity.ToyServed.W × Unit, value (fun l => ¬ Served.Local WeightSecurity.ToyServed.C 1
-      WeightSecurity.ToyServed.thief 0 (WeightSecurity.ToyServed.gen z.1) z.2 l)
-      (WeightSecurity.ToyServed.leakRun (WeightSecurity.ToyServed.gen z.1) z.2) = 0 := by
-    intro z
-    unfold WeightSecurity.ToyServed.leakRun
-    rw [value_ret, ite_eq_right (not_not.2 ?_)]
-    intro n _ w hw
-    have hwr : w.incorrect = 1 := by
-      rcases n with _ | _ | n
-      · simp only [List.getElem?_cons_zero, Option.some.injEq] at hw
-        rw [← hw]
-      · simp only [List.getElem?_cons_succ, List.getElem?_cons_zero, Option.some.injEq] at hw
-        rw [← hw]
-      · simp at hw
-    rw [hwr, mul_one]
-    exact (card_le_univ _).trans_eq Fintype.card_unit
-  simp only [hsteal, hloc, avg_const, add_zero] at h
+  simp only [ToyServed.leak_steals, ToyServed.leak_local, avg_const, add_zero] at h
   have hc : Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2
       (1 * 0 + (0 + 1) * Fintype.card Unit)).S ≤ 144 :=
     (card_servedChannel_le Unit Unit Unit Unit (Fin 16) Unit 2 _).trans (by simp [Finset.sum_range_succ])
@@ -438,6 +587,25 @@ theorem TheftServedNontrivial : Guarantees.TheftServedNontrivial := by
     have : (Fintype.card (servedChannel Unit Unit Unit Unit (Fin 16) Unit 2
         (1 * 0 + (0 + 1) * Fintype.card Unit)).S : ℝ) ≤ 144 := by exact_mod_cast hc
     linarith
+  exact absurd h (not_le.2 hlt)
+
+theorem TheftServedReqNontrivial : Guarantees.TheftServedReqNontrivial := by
+  intro h
+  simp only [ToyServed.leak_steals, ToyServed.leak_isolated, ToyServed.rpow_bits, avg_const, add_zero] at h
+  have hlt : ENNReal.ofReal ((144 : ℝ) * (1 / 256)) < 1 := by
+    rw [ENNReal.ofReal_lt_one]
+    norm_num
+  exact absurd h (not_le.2 hlt)
+
+theorem TheftServedMinEntropyHonest : Guarantees.TheftServedMinEntropyHonest :=
+  ⟨fun P _ => (ToyServed.guess_le P).trans_eq ToyServed.rpow_neg_eight.symm, ToyServed.honest_undetected⟩
+
+theorem TheftServedMinEntropyNontrivial : Guarantees.TheftServedMinEntropyNontrivial := by
+  intro h
+  simp only [ToyServed.leak_steals, ToyServed.leak_isolated, ToyServed.rpow_bits_sub, avg_const, add_zero] at h
+  have hlt : ENNReal.ofReal ((144 : ℝ) / 256) < 1 := by
+    rw [ENNReal.ofReal_lt_one]
+    norm_num
   exact absurd h (not_le.2 hlt)
 
 end SecurityProofs

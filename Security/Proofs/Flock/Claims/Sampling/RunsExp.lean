@@ -86,12 +86,12 @@ theorem sum_zip_snd_le {α β : Type} (f : α → ℝ) (hf : ∀ a, 0 ≤ f a) :
     simp only [List.zip_cons_cons, List.map_cons, List.sum_cons]
     exact add_le_add le_rfl (sum_zip_snd_le f hf l₁ l₂)
 
-theorem accSum_map {R R' : Type} (run : R → Trace) (k : ℕ) (g : R → ℝ) (f : R' → R) :
+theorem accSum_map {R R' : Type} (run : R → Transcript) (k : ℕ) (g : R → ℝ) (f : R' → R) :
     ∀ (l : List R') (a : ℕ), accSum run k g (l.map f) a = accSum (run ∘ f) k (g ∘ f) l a
   | [], _ => rfl
   | r :: l, a => by simp only [List.map_cons, accSum, accSum_map run k g f l, Function.comp]
 
-theorem accSum_nonneg {R : Type} (run : R → Trace) (k : ℕ) {g : R → ℝ} (hg : ∀ r, 0 ≤ g r) :
+theorem accSum_nonneg {R : Type} (run : R → Transcript) (k : ℕ) {g : R → ℝ} (hg : ∀ r, 0 ≤ g r) :
     ∀ (l : List R) (a : ℕ), 0 ≤ accSum run k g l a
   | [], _ => le_rfl
   | r :: l, a => by
@@ -101,16 +101,16 @@ theorem accSum_nonneg {R : Type} (run : R → Trace) (k : ℕ) {g : R → ℝ} (
     · exact add_nonneg (hg r) (accSum_nonneg run k hg l _)
     · exact accSum_nonneg run k hg l _
 
-theorem waitExp_nonneg {D : Type} [Fintype D] (run : D → Trace) (k K a : ℕ) : 0 ≤ waitExp run k K a :=
+theorem waitExp_nonneg {D : Type} [Fintype D] (run : D → Transcript) (k K a : ℕ) : 0 ≤ waitExp run k K a :=
   Ex_nonneg fun _ => Nat.cast_nonneg _
 
-theorem accExp_nonneg {D : Type} [Fintype D] (run : D → Trace) (k : ℕ) {g : D → ℝ} (hg : ∀ d, 0 ≤ g d) (K a : ℕ) :
+theorem accExp_nonneg {D : Type} [Fintype D] (run : D → Transcript) (k : ℕ) {g : D → ℝ} (hg : ∀ d, 0 ≤ g d) (K a : ℕ) :
     0 ≤ accExp run k g K a :=
   Ex_nonneg fun _ => accSum_nonneg run k hg _ _
 
 /-- A wait and the programs at its kept runs, indexed, rerun as the wait does and then as each program. Stated at
 every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
-theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R)
+theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (f : Fin k × (R × Seen) → RP R (List γ)) :
     (((waitAccC k rs []).bind fun l => flatMapRP f ((List.finRange k).zip l)).eval H run).2.2 =
       waitRuns run k rs 0 + (((List.finRange k).zip ((waitAccC k rs []).eval H run).1).map fun q =>
@@ -119,7 +119,7 @@ theorem wait_flat_runs {R γ : Type} (H : Msg → Msg) (run : R → Trace) (k : 
 
 /-- **The outer wait and what follows it**, as reals: the wait's reruns and each kept run's body bound `B`. Stated at
 every `k`, so that the kernel never meets the deployed `k`'s `List.finRange`. -/
-theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Trace) (k : ℕ) (rs : List R)
+theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Transcript) (k : ℕ) (rs : List R)
     (body : Fin k × (R × Seen) → RP R (List γ)) (fin : List γ → β) (B : Fin k × (R × Seen) → ℝ)
     (hB : ∀ jo, (((body jo).eval H run).2.2 : ℝ) ≤ B jo) :
     ((((waitAccC k rs []).bind fun outer =>
@@ -133,7 +133,7 @@ theorem outer_runs_le_sum {R γ β : Type} (H : Msg → Msg) (run : R → Trace)
 and the bodies' coins `X`, the reruns are at most the wait's expected reruns and its kept runs' weights `G`, when each
 body averages at most `G` of its run, at every position. -/
 theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempty X] (H : Msg → Msg)
-    (run : R → Trace) (f : D' → R) (k K : ℕ) (Bf : Fin k → R → X → ℝ) (G : R → ℝ) (hB : ∀ j r, Ex (Bf j r) ≤ G r)
+    (run : R → Transcript) (f : D' → R) (k K : ℕ) (Bf : Fin k → R → X → ℝ) (G : R → ℝ) (hB : ∀ j r, Ex (Bf j r) ≤ G r)
     (hG : ∀ r, 0 ≤ G r) :
     Ex (fun c : (Fin K → D') × X => (waitRuns run k ((List.finRange K).map fun l => f (c.1 l)) 0 : ℝ) +
         (((List.finRange k).zip ((waitAccC k ((List.finRange K).map fun l => f (c.1 l)) []).eval H run).1).map
@@ -171,7 +171,7 @@ theorem level_ex {D' R X : Type} [Fintype D'] [Nonempty D'] [Fintype X] [Nonempt
 
 /-- `level_ex`'s bound against the wait's acceptance probability: at most `k` reruns for the wait, and `k` times
 the kept runs' weights given acceptance. -/
-theorem level_amortized {D R : Type} [Fintype D] [Nonempty D] (run : R → Trace) (f : D → R) (k K : ℕ) (G : R → ℝ)
+theorem level_amortized {D R : Type} [Fintype D] [Nonempty D] (run : R → Transcript) (f : D → R) (k K : ℕ) (G : R → ℝ)
     (hG : ∀ r, 0 ≤ G r) :
     Pr (fun d => (run (f d)).out = .acc) * (waitExp (run ∘ f) k K 0 + accExp (run ∘ f) k (G ∘ f) K 0) ≤
       k + k * Ex (fun d => (if (run (f d)).out = .acc then (1 : ℝ) else 0) * G (f d)) := by
