@@ -149,7 +149,7 @@ def test_attribution_splits_the_adversary_s_rate_and_each_ceiling_caps_rho(name)
     assert rate == pytest.approx(math.fsum(fam.combined.overhead.rates().values()))
     assert r.lo == pytest.approx(max(1.0, 1 / rate))
     assert all(t.ceiling >= min(r.lo, 1 / rate) * (1 - 1e-9) for t in terms)
-    assert any(t.name == "dark" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
+    assert any(t.name == "unregistered" for t in terms) == (r.scenario.context.fleet.eps_dark > 0)
 
 
 def test_results_are_cached_per_registry_and_override():
@@ -242,7 +242,7 @@ def test_run_prints_the_certified_ingress_a_server_declares(tmp_path, monkeypatc
 
 
 def test_periods_writes_each_fleet_and_period_as_the_scenario_with_those_choices(tmp_path, monkeypatch, capsys):
-    """Remote: the serving block is one server over the period, one a server; each row's overhead is the scenario's
+    """Remote: the server block is one server over the period, one a server; each row's overhead is the scenario's
     with `fleet` and `horizon` set."""
     monkeypatch.setattr(sys, "path", list(sys.path))
     import periods

@@ -17,7 +17,7 @@ evaluations.
 * `margins`: for every ranged parameter, the overhead along a window around its plausible range and where it crosses
   each target.
 * `phase`: the overhead over a grid of two keys; `frontier`, the curve in that plane where it crosses a target.
-* `attribution`: what sets the overhead: the bound's weight per gate split into the dark leaves and g's terms.
+* `attribution`: what sets the overhead: the bound's weight per gate split into the unregistered leaves and g's terms.
 """
 
 from __future__ import annotations
@@ -56,7 +56,7 @@ def _rank(cites: Iterable[str]) -> int:
 
 @dataclass(frozen=True)
 class _Restricted:
-    """A regime whose cuts are only those at least as strong as `status` (a serving block left with none is
+    """A regime whose cuts are only those at least as strong as `status` (a server block left with none is
     unconstrained)."""
 
     regime: Regime
@@ -77,7 +77,7 @@ class _Restricted:
 
 
 def restrict(s: Scenario, status: str) -> Scenario:
-    """`s` with only the bounds and cuts whose status is `status` or stronger, and no attacks; the uncertified and dark
+    """`s` with only the bounds and cuts whose status is `status` or stronger, and no attacks; the uncertified and unregistered
     gates at the elementary cap where `s_×`'s straddling premise is weaker than `status`."""
     top = STATUSES.index(status)
     st = s.structure if _rank(s.structure.cites()) <= top else s.structure.elementary()
@@ -88,7 +88,7 @@ def restrict(s: Scenario, status: str) -> Scenario:
 @cache
 def upto(status: str) -> Metric:
     """`LO` from only the bounds and cuts at least as strong as `status`: `upto("conditional")` drops the draft
-    statements (the straddling premise among them, so the uncertified and dark gates count at the elementary cap),
+    statements (the straddling premise among them, so the uncertified and unregistered gates count at the elementary cap),
     `upto("proved")` keeps only what needs no named premise."""
     if status not in STATUSES:
         raise ValueError(f"status {status!r} is not one of {STATUSES}")
@@ -352,7 +352,7 @@ def frontier(registry: Registry, scenario: str, x: str, xs: Sequence[float], y: 
 
 @dataclass(frozen=True)
 class Term:
-    #: `dark` (the dark leaves), or one of g's terms: a block kind or an uncertified route (`Overhead.terms`)
+    #: `unregistered` (the unregistered leaves), or one of g's terms: a block kind or an uncertified route (`Overhead.terms`)
     name: str
     #: its part of the overhead's rate, `1 / overhead` before its floor at 1 (`Overhead.rates`), and its share of it
     part: float
@@ -362,7 +362,7 @@ class Term:
 
 
 def attribution(r: Result, side: str = "bound") -> list[Term]:
-    """What sets the overhead, largest first: its rate (`Overhead.rates`) split into the dark leaves and g's terms, for
+    """What sets the overhead, largest first: its rate (`Overhead.rates`) split into the unregistered leaves and g's terms, for
     the family the adversary picks (the least `lo`; with `side="attack"`, its best known attack's)."""
     if side == "bound":
         fam = min(r.families, key=lambda f: (f.lo, f.combined.padded), default=None)

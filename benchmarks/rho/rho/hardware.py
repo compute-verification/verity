@@ -1,5 +1,5 @@
 """The physical model (GLOSSARY.md's "The physical model": HW and INV, `Accounting.Hardware` and `Accounting.Covered`),
-which bounds the feasible set 𝓕: the inventory's locations, its dark leaves and the monitoring period, in gates.
+which bounds the feasible set 𝓕: the inventory's locations, its unregistered leaves and the monitoring period, in gates.
 
 `Units` is the one place a FLOP-model input becomes gates: `units.gates_per_flop` (`data/hardware.toml`), with its source
 and range. The datasheets' FLOP/s, the policy's `Γ`, the run's target, a sampled step's FLOPs and the classes' and
@@ -15,14 +15,14 @@ own NICs, certifier and side channels) carry host memory, disks, host CPUs and t
 `links` (`β_X`, `Accounting.linkCapacity`). `server_memory` is `M_s`, one server's memory over every tier (HBM, host
 RAM, disks): the capacity the wipe's per-server bound is stated against.
 
-A **fleet** is the inventory: the monitored locations, and the dark leaves `L_dark` with `Φ(L_dark) = ε_dark Φ_total`,
+A **fleet** is the inventory: the monitored locations, and the unregistered leaves `L_unreg` with `Φ(L_unreg) = ε_unreg Φ_total`,
 one connected pool outside every monitored location (ruled). The physical model bounds every gate at capacity,
-so the bound counts the dark leaves at `Φ`; `mfu_train` and `mfu_dark` are what a construction (an attack) gets of the
-monitored and the dark gates. A **monitoring period** is the stretch of time a result is over, one of core's
+so the bound counts the unregistered leaves at `Φ`; `mfu_train` and `mfu_unreg` are what a construction (an attack) gets of the
+monitored and the unregistered gates. A **monitoring period** is the stretch of time a result is over, one of core's
 (`params.PERIODS`).
 
 A location table may leave out its hosts: it is then one host with no host memory or CPUs counted and no known line
-rate (no `links`-form serving block).
+rate (no `links`-form server block).
 """
 
 from __future__ import annotations
@@ -83,18 +83,18 @@ class Fleet:
     location: str
     #: monitored locations
     count: float
-    #: `ε_dark`: the dark leaves' share of the inventory's capacity, `Φ(L_dark) / Φ_total`
+    #: `ε_unreg`: the unregistered leaves' share of the inventory's capacity, `Φ(L_unreg) / Φ_total`
     eps_dark: float
     #: the share of a monitored location's gates a construction trains with, and the one its served work runs at
     mfu_train: float
     mfu_serve: float
-    #: the share of the dark leaves' gates a construction trains with (one connected pool: its interconnect may beat
+    #: the share of the unregistered leaves' gates a construction trains with (one connected pool: its interconnect may beat
     #: the monitored fleet's); None: `mfu_train`
-    mfu_dark: float | None = None
+    mfu_unreg: float | None = None
 
     @property
-    def dark_mfu(self) -> float:
-        return self.mfu_train if self.mfu_dark is None else self.mfu_dark
+    def unreg_mfu(self) -> float:
+        return self.mfu_train if self.mfu_unreg is None else self.mfu_unreg
 
 
 @dataclass(frozen=True)
