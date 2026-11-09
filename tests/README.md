@@ -26,6 +26,12 @@ PR fixes them (ruff's errors, `ERRORS` in its lint, still fail). An entry that a
 list can run ahead of the tree; the ratchet gate, which holds nothing (`off_gate` in `tools/verity/check/policy.toml`),
 reports a change that grows a list or adds a finding to a file it touches.
 
+`lint/allowlists/superseded_versions.json` is circuit-check's suite's
+(`tools/verity/circuit_check/tests/test_superseded_versions.py`): every Definition version the registries register below
+its name's newest, one entry each, or one line of its `held` table naming the workload of record that still names it. That
+list is exact: a superseded version with neither fails, and so does a line for a version that is gone. The same gate
+reports a change that leaves its entries more than it found.
+
 ## Bookkeeping
 
 `conftest.py`'s `BOOKKEEPING` names the tests whose findings warn (a `Bookkeeping` warning in pytest's summary) and pass:

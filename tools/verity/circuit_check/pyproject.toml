@@ -166,7 +166,9 @@ inputs = ["verity/__init__.py", "verity/settings.py", "verity/errors.py", "verit
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.py",
           "verity/ml/protocols/certifier/compile_slice_v6.circuit-check.json",
           "verity/core/protocols/certifier/served_rows.py", "verity/core/protocols/certifier/warden.py",
-          "verity/core/protocols/certifier/release.py"]
+          "verity/core/protocols/certifier/release.py",
+          # test_superseded_versions.py: the list it holds the superseded versions to
+          "tests/lint/allowlists/superseded_versions.json"]
 
 # What these test files read that their source doesn't name (a tree a test walks, a module it loads by a name it computes,
 # what a program it starts reads): the graph's test-file tasks are keyed on it.
@@ -188,6 +190,7 @@ tests = [
     "tests/test_named_targets.py",
     "tests/test_pinned_targets.py",
     "tests/test_ranges.py",
+    "tests/test_superseded_versions.py",
     "tests/test_targets.py",
     "tests/test_wide_outputs.py",
 ]
