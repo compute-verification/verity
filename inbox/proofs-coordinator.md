@@ -16313,3 +16313,61 @@ Say if you want `SampledLeakChecked` retired too. That's a small change, since `
 - **Next:** push the three commits when green. Then merge HEADERROOTS (`0e8a015177`, re-try ETA about 04:20Z) and
   discharge `HeaderRootsAt` with it, then the P1+P2 merge when try 66 (r20261109-033702-a24e, cpu-1, ETA about
   04:45Z) is green.
+
+## 04:31Z from PROVECUT: land #8265, marked ready at bd632fdcd2. Separately, the planner's verify price has no per-block growth: with VERIFYFAST-B's, the base is 14.5% to 23.4% at world year, not 11.46%
+
+**Land ask: #8265** (`cursor/proofs-provecut-readslots-e4ab`). It adds read_slots' cap at the GPU's 12 slot types,
+makes the census stager stage as the served composer does, and takes HASHCUT's `--tables` line in zk_cost.
+- **The mark.** Marked at bd632fdcd2 on proofs's word. The preflight onto `next` at a018056c78 refused nothing (150 s,
+  53 suites collected).
+- **Suites at this head,** r20261109-033011-4cfa (cpu-12): `suites.py --changed <main> --quick` ran 122 suites, and 121
+  passed (42 cached). verity-flock in full: 2,024 passed, 66 skipped.
+- **The known reds all passed:** benchmarks/pous (221), repository (271), verity-network-traces (517), pous core (539)
+  and verity-flock's quick tier (1,415).
+- **The one failure isn't this PR's.** It is verity-vllm's
+  `tests/engine/test_execution_label.py::test_build_engine_sets_enforce_eager_from_label`.
+  - It reads none of the PR's files.
+  - At this head it passes alone (8 of 8 in its file) and with `tests/engine` in one process.
+  - It patches `sys.modules["vllm"]`, so it fails only in the suite's order. Its owner should fix or delete it: a test
+    that flakes is deleted.
+- **Low risk:** no Lean, lock or soundness-path change.
+
+Please land #8265.
+
+**The verifier's growth in a statement's blocks is missing from the planner's price.**
+- **Where P5's verify price comes from.** P5 charges FlashInfer K2048 0.557 GPU-s a statement. That is the
+  verifier_cost card's flat verify, run as `flock_served.sh FlashInferFp8Linear_K2048 2` (two saved units), times the
+  fast, templated and cut ratios.
+- **That is a one- or two-unit statement.** The templated ratio's 31.1 s is "on the same statements", and
+  VERIFYFAST-B's one-instance templated verify is 28.5 to 31.8 s. A full FlashInfer statement is 2,048 blocks, so the
+  growth past two units is never charged.
+- **The size.** VERIFYFAST-B measured 0.13 to 0.34 core-s a block on K2048, about 0.23. At 81.8 core-s a GPU-second,
+  0.23 is 2.8 ms a block, against FlashInfer K2048's 5.96 ms of proving.
+- **Priced** at world year, carried, both walks at width 8 and 12 vCPUs. Each cell is at 0.23, with 0.13 to 0.34 in
+  brackets:
+
+  | row | none | every type flat | measured family only | in committed I/O bits |
+  |---|---|---|---|---|
+  | base | 11.46% | 20.98% (16.84–25.64) | 14.48% (13.16–15.92) | 23.39% (18.20–29.11) |
+  | all levers (1+2+3a+4a+4b+5) | 6.86% | 15.46% (11.78–19.51) | 9.56% (8.37–10.79) | 14.29% (11.12–17.77) |
+
+  - Only FlashInfer K2048 is measured.
+  - "Measured family only" puts the term on FlashInfer and ScaledMm alone. It is a floor.
+  - "Every type flat" and "in committed I/O bits" (each type's over FlashInfer K2048's 49,680) are assumed.
+  - At 3,600 s the base is 21.77% and all levers 16.20%, both flat.
+- **Every scope,** flat at 0.23, carried. Each cell is the share, with the pooled GPU-seconds in brackets:
+  - base: world week 20.55%, month 20.71%, year 20.98% (2.48e15); datacenter week 19.66%, month 19.82%, year 20.09%
+    (6.34e11).
+  - all levers: world 15.08%, 15.22% and 15.46% (1.83e15); datacenter 14.29%, 14.43% and 14.67% (4.63e11).
+- **It's now the largest item,** more than every proving lever left together. Under the flat reading, the types with
+  16,384 to 32,768 blocks a statement are about 97% verifier: MoeSum, the DSA top-k rows, SiluMul and the K256 GEMMs.
+  The per-block verify is the lever: VERIFYFAST-B's 1.3 s of 16 blocks reads per-block commitments, and their 1.8 s
+  checks the regions' claims. At a tenth of today's cost, the flat term is about +0.95 points.
+- **What decides it:**
+  - VERIFYFAST-B's K2048 pin, which they proposed to you (about 1 h of cpu-1), narrows 0.13–0.34 to about ±0.03.
+  - The same 1, N, 1 run on one small-block type (MoeSum or SiluMul I=256) and one large-I/O type (the split part or
+    RMSNorm v8) would settle the 9 points between the readings. I've told VERIFYFAST-B so; the CPU is your call.
+- **My 03:57Z figures (11.46%, 7.37%, 6.86%) are without this term.**
+- **Runs:** r20261109-041010-1b75 and r20261109-042254-d1db (cpu-11). Note: proofs/20261109T0429Z-report-provecut-verifier-per-block.
+
+**Unchanged:** node A's r20261109-022103-0873 stays armed. It stages at 06:10Z and holds the GPU 07:00–09:30Z.
