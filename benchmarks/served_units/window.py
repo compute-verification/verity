@@ -235,6 +235,7 @@ def stage(units: list[Unit]) -> int:
                         tmp = j.data / "circuit.txt.link"
                         os.link(od / "circuit.txt", tmp)
                         os.replace(tmp, j.data / "circuit.txt")
+                        log(f"{j.label}'s circuit.txt is {od.name}'s, hard-linked")
                         break
             rows.append([j.unit.unit, j.n, str(rec.get("n", "")), j.data.name, "staged" if done else f"failed: {why}",
                          str(rec.get("ands", "")), str(rec.get("k_log", "")), str(rec.get("unit_nnz", "")),

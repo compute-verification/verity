@@ -1,7 +1,7 @@
 """stage.py UNIT N OUT [--public-weights [--packed]]: N inputs of one served proof-block type's Q_word proof block, from synthetic
 values at the model's served statics, staged for Flock as a ``verity/flock-circuit`` statement with hidden outputs. For a
-`CENSUS` type N may be ``full``, the most blocks a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log, or
-``full/D``, that over D.
+`CENSUS` type N may be ``full``, the most instances a statement of `MAX_STATEMENT_BITS` holds at the built block's k_log
+(a power of two, as `class_statement` cuts a PARTS type's N), or ``full/D``, that over D.
 
     UNIT  TYPE[:S=V,...]   a type of `UNITS`, `PARTS` or `CENSUS` at its statics (each type's defaults are its model's: GLM-5.3's
                            at TP8, s8-coord's Llama-3.2-1B's), e.g. fp8-coord:K=2048, router:C=1, s8-coord:K=8192, gq:K=384
@@ -320,7 +320,8 @@ def nets(low) -> list[dict]:
 
 def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: Path, t0: float) -> dict:
     """``n`` inputs of the census type's Definition, a proof block each, on its served rows and statement, as stage.json's
-    record; ``n`` ``full`` or ``full/D`` is the most blocks a statement holds at the built block's k_log, over D."""
+    record; ``n`` ``full`` or ``full/D`` is the most instances a statement holds at the built block's k_log (as
+    `class_statement` cuts a PARTS type's), over D."""
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
@@ -350,7 +351,9 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int | str, out: P
     st = CS.UnitStager(d, "unit/serving-rows", in_rows, out_rows, circuit=out / "circuit.txt", **stmt)
     t_built = time.time() - t0
     if isinstance(n, str):
-        n = max(1, (MAX_STATEMENT_BITS >> st.meta["k_log"]) // int(n.partition("/")[2] or 1))
+        g = st.meta.get("vus_per_block") or 1
+        full = 1 << ((MAX_STATEMENT_BITS // ((1 << st.meta["k_log"]) // g)).bit_length() - 1)
+        n = max(g, full // int(n.partition("/")[2] or 1))
     vals.update({p: census_leaves(rng, ty, n) for p, ty in params})
     rows = {r: np.concatenate([part(p) for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
