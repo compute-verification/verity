@@ -19396,3 +19396,26 @@ Please land [#8404](https://github.com/compute-verification/verity/pull/8404), m
 - **The dated plan from 19:00Z stands.** Friday holds only with a helper taking piece A (the hidden-output statement `R.x`), then piece D (the Flock witness). #8368 (ScopeDesc), which piece B waits on, is still open.
 - **Infra:** cpu-5's proofs slot queue stalled from about 18:40Z to 18:57Z. Two runs waited while slots p2 and p3 were free, so I cancelled my try there and used cpu-1.
 - **Running:** confirmation try `r20261109-194847-035b` (cpu-1, `InstanceReads` at the head, after removing two never-run tactics), ETA about 20:30Z. If it fails, I'll fix and re-mark.
+
+## 20:13Z from VERIFYFAST-B: struct_lower lowers every card type; step 3 started
+
+- **Probe** `r20261109-194509-8d95` (cpu-6, build only, `checked` 00d07520b3): `struct_lower` lowers all 11 card types, Combine included, so the 8 Nov refusal is gone. Each template against its unrolled unit:
+
+| Type | Defs | Template rows | Refs | Unit nnz |
+| --- | ---: | ---: | ---: | ---: |
+| FlashInfer K2048 | 8 | 844,863 | 117.7M | 3.10G |
+| Group quant K6144 (K2048, K1536) | 6 | 376,488 | 69.1M (68.9M, 68.9M) | 3.30G |
+| Combine NSPLIT 12 / 5 / 2 | 9 | 375,419 / 207,171 / 131,745 | 192.5M / 190.7M / 189.8M | 2.63G / 1.18G / 0.56G |
+| RMSNorm v8 | 8 | 10.2M | 419.3M | 0.84G |
+| AllReduce multimem | 4 | 447,899 | 1.0M | 0.42G |
+| MoE GEMM W | 8 | 650,895 | 5.1M | 7.9M |
+| ScaledMm K2048 | 4 | 575,813 | 19.0M | 20.4M |
+
+- **Circuits' piece** is now making templates small rather than lowering Combine: the K loop and the vector loops as calls, where a template still holds 19M to 419M refs against a descriptor of about 100 KB. That covers FlashInfer, group quant, Combine's roughly 190M refs that don't depend on NSPLIT, RMSNorm and ScaledMm. Lookup slots for FlashInfer K6144 remain too; I didn't probe it.
+- **Step 3 (mine)** is on branch `cursor/proofs-verifyfast-b10-served-tmpl`, in two commits:
+  - `flock-circuit`'s `prove --stream` and `serve --queue` take templated statements, and `proof_server.Statement` carries `tmpl_unit`;
+  - a5 keeps its proof server for templated statements, and `prove_leg` gains `--structural`.
+  - The end-to-end run is `r20261109-200626-b3c5` (cpu-1, queued, ETA about 22:00Z).
+  - Next: `compose_circuit --structural`, and a5 placing each template's unit, so the GLM audit stages templated statements. From the code, a5 can't prove a read-layout member today because it never places that member's unit; the same PR fixes it.
+- **cpu-5's proofs line is stuck.** Its head has waited since 18:40Z with p2 and p3 free, held up by the memory that `r20261109-183929-6be2` reserves. I moved my runs to cpu-1, which has three runs queued. @infra may want to look.
+- **Measurements:** templated `r20261109-194350-d5cf` (cpu-1, waiting for a slot, about 4 h once it starts); flat `r20261109-191738-c631` (cpu-1, running, hard stop 00:38Z).
