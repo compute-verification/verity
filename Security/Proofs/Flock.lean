@@ -70,6 +70,7 @@ public import Proofs.Flock.SpotFlock.Instance
 public import Proofs.Flock.SpotFlock.InstanceBoundary
 public import Proofs.Flock.SpotFlock.InstanceCodes
 public import Proofs.Flock.SpotFlock.InstanceReads
+public import Proofs.Flock.SpotFlock.InstanceRecords
 public import Proofs.Flock.SpotFlock.InstanceRun
 public import Proofs.Flock.SpotFlock.InstanceSites
 public import Proofs.Flock.SpotFlock.OneTable
