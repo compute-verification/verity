@@ -4,7 +4,7 @@ across chunked prefill, decode, padding and a recompute after a preemption; the 
 class's names and domains, refused for a request whose rows don't match its lengths or after a step the hook couldn't
 read; a cache that doesn't hold bf16 latent rows refused; the channel between the two processes; and the window's boundary
 commitment (`boundary_rows.BoundaryWindows`) waiting for each class's tables' roots and listing them beside its values,
-registered by both verifiers from public items alone."""
+registered by both verifiers from public items alone; and what round 2 opens, kept on the node."""
 
 from __future__ import annotations
 
@@ -282,10 +282,10 @@ class Scheduler:
         return []
 
 
-def windows(tmp_path, latents: BT.Latents, make, lines: list) -> tuple[BR.BoundaryWindows, Scheduler, Hooks]:
+def windows(out, latents: BT.Latents, make, lines: list, keep: BT.Kept | None = None):
     sched, hooks = Scheduler(), Hooks(tag="test-boundary-tables")
-    bw = BR.BoundaryWindows(tmp_path, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
-                            tables=BT.LocalChannel(BT.Builder(latents, make)), layers=(0, 3), capacity=CAP)
+    bw = BR.BoundaryWindows(out, PAIR, 0, 1, 10.0, sink=lines.append, clock=lambda: 0.0, serve="s",
+                            tables=BT.LocalChannel(BT.Builder(latents, make, keep=keep)), layers=(0, 3), capacity=CAP)
     return bw.install(sched, hooks), sched, hooks
 
 
@@ -374,3 +374,58 @@ def test_the_tables_private_directory_is_never_under_what_leaves_the_node(tmp_pa
     assert BT.layers_of([3, 61]) == (3, 61)
     with pytest.raises(ValueError, match="both rank 0's channel and their layers"):
         BR.BoundaryWindows(tmp_path / "x", PAIR, 0, 1, 10.0, layers=(0,))
+
+
+def modes(root) -> set[tuple[str, int]]:
+    return {("dir" if q.is_dir() else "file", stat.S_IMODE(q.stat().st_mode)) for q in [root, *root.rglob("*")]}
+
+
+def test_rank_0_keeps_each_tables_rows_and_salts_on_the_node_and_round_2_reads_a_span_at_a_range(tmp_path):
+    """Each table's rows and salts as built go to rank 0's private files, owner-only, before its entry is given; round 2
+    reads a span's rows at a range of positions with their salts and public strings, rebuilds the table to its root and
+    paths, and the class reopens with every table rebuilt from them; a changed file, or a range past what a table holds,
+    is refused."""
+    _runner, hook, _hooks = serve()
+    make, tables, lines = *built(), []
+    kept = BT.Kept(tmp_path / "node" / "tables")
+    bw, sched, hooks = windows(tmp_path / "out", hook.latents, make, lines, kept)
+    try:
+        finish(sched)
+        bw.stop()
+    finally:
+        hooks.uninstall()
+    assert all("error" not in x for x in lines)
+    assert modes(tmp_path / "node" / "tables") == {("dir", 0o700), ("file", 0o600)}
+    assert not list((tmp_path / "out").rglob("*.rows")) and not list((tmp_path / "out").rglob("*.salts"))
+    run, made = BR.run_root("s", 0), {t.value: t for t in tables}
+    a3 = made[BT.name(run, 8, 4, 0, 3)]
+    got = kept.span(0, run, 8, 4, 0, 3, range(2, 5))
+    assert got["entry"] == a3.entry() and got["positions"] == range(2, 5)
+    assert np.array_equal(got["rows"], np.stack([row("a", p, 3) for p in range(2, 5)]))
+    assert got["salts"] == a3.salts[2:5] and got["strings"] == a3.bcs[2:5]
+    again = kept.table(0, run, 8, 4, 0, 3)
+    assert again.root == a3.root and again.path(7) == a3.path(7)
+    c = BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
+    assert c.roots[a3.value] == a3.root
+    with pytest.raises(ValueError, match="aren't a range within the 8 it holds"):
+        kept.span(0, run, 8, 4, 0, 3, range(4, 9))
+    f = tmp_path / "node" / "tables" / f"w0-{run[:16]}-p8-o4" / "s0" / "layer-0.rows"
+    raw = bytearray(f.read_bytes())
+    raw[0] ^= 1
+    f.write_bytes(bytes(raw))
+    with pytest.raises(ValueError, match="rebuild to another table than the one kept"):
+        BR.reopen(tmp_path / "out" / "w0" / "p8-o4", PAIR, kept)
+
+
+def test_a_class_that_registers_nothing_keeps_nothing(tmp_path):
+    """A class whose second span's rows don't match its lengths: the first span's files were written, and are dropped."""
+    _runner, hook, _hooks = serve()
+    kept = BT.Kept(tmp_path / "tables")
+    doc = BT.assignment(1, RUN, PROGRAM, 8, 4, [0, 3], CAP, [("a", 5, 4, "stop"), ("b", 3, 1, "stop")])
+    out = BT.Builder(hook.latents, built()[0], keep=kept).build(doc)
+    assert "slot 1: rank 0 holds 5 positions" in out["error"] and not list((tmp_path / "tables").rglob("*.json"))
+    with pytest.raises(FileNotFoundError):
+        kept.span(1, RUN, 8, 4, 0, 0, range(0, 1))
+    assert BT.Kept.of({"private": str(tmp_path / "node")}, tmp_path / "out").dir == tmp_path / "node" / "tables"
+    with pytest.raises(ValueError, match="which leaves the node"):
+        BT.Kept.of({"private": str(tmp_path / "out" / "node")}, tmp_path / "out")

@@ -423,9 +423,10 @@ def write(c: Committed, directory: Path) -> Path:
     return d
 
 
-def reopen(directory: Path, check: SpecializedDefinition) -> Committed:
+def reopen(directory: Path, check: SpecializedDefinition, kept: BT.Kept | None = None) -> Committed:
     """The class's commitment from its files, recommitted and held to ``commit.json``'s roots and index leaf: what the
-    replay opens its spans' boundary rows from. ValueError when they differ, or ``check`` isn't the one it names."""
+    replay opens its spans' boundary rows from; with ``kept``, each history table rebuilt from rank 0's private files
+    (`boundary_tables.Kept.table`) too. ValueError when they differ, or ``check`` isn't the one it names."""
     d = Path(directory)
     pub = BoundaryCommit.of(json.loads((d / COMMIT).read_text()), str(d / COMMIT))
     layout = layout_of(pub.dump(), check)
@@ -433,9 +434,13 @@ def reopen(directory: Path, check: SpecializedDefinition) -> Committed:
     raw, n = (d / SALTS).read_bytes(), CS.SALT_BYTES * layout.spans
     if len(raw) != n * len(PORTS):
         raise ValueError(f"{d}: {len(raw)} bytes of salts, not {len(PORTS)} values' {n}")
+    tables = {t: bytes.fromhex(pub.values[t]["root"]) for t in layout.tables if t in pub.values}
+    if kept is not None:
+        at = (pub.window, layout.run, layout.prompt, layout.outputs)
+        tables = {layout.tables[r * len(layout.layers) + i]: kept.table(*at, r, x).root
+                  for r in range(layout.spans) for i, x in enumerate(layout.layers)}
     c = commit(spans, layout, pub.window, salts={p: raw[k * n:(k + 1) * n] for k, p in enumerate(PORTS)},
-               index_salt=(d / CS.INDEX_SALT).read_bytes(),
-               tables={t: bytes.fromhex(pub.values[t]["root"]) for t in layout.tables if t in pub.values})
+               index_salt=(d / CS.INDEX_SALT).read_bytes(), tables=tables)
     got = BoundaryCommit.of(c.public(), str(d))
     for k in ("values", "index", "program", "partition"):
         if getattr(got, k) != getattr(pub, k):

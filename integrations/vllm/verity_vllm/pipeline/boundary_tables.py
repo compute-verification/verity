@@ -16,12 +16,18 @@ window closes, so the tables are built then (`Builder.build`): the window's boun
 their slots (`assignment`), and rank 0 builds each span's tables over its rows, under fresh salts, and answers with each
 table's entry (`history.HistoryTable.entry`), which the class's registration lists before any coin. The two processes talk
 through `Channel` (files in a private directory on the node) or, in one process, `LocalChannel`.
+
+**What round 2 opens** (`Kept`): each table's rows and salts as built, in files on the node readable by their owner only,
+never under a run's directory or the serve's records, which leave it. `Kept.span` reads a span's rows at a range of
+positions with their salts and public strings, and `Kept.table` rebuilds a table from them, held to its root. The range
+is an argument: the committed step schedule it is to come from isn't there yet.
 """
 from __future__ import annotations
 
 import json
 import os
 import re
+import shutil
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -33,7 +39,7 @@ import numpy as np
 from verity.ml.commitments import history as HT
 from verity_vllm.commit import history_tables as H
 
-__all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Latents", "LocalChannel", "StepHook",
+__all__ = ["ASSIGN", "CAPACITY", "KEY", "ROOTS", "WORDS", "Builder", "Channel", "Kept", "Latents", "LocalChannel", "StepHook",
            "assignment", "computed", "key", "layers_of", "mla_layers", "name", "private", "private_root"]
 
 #: a span's key in its tables' names (`history_tables.name`): the window's run, the class and the slot
@@ -216,10 +222,11 @@ class StepHook:
 class Builder:
     """Rank 0's tables: `build` answers a class's `assignment` with each span's tables over its rows in ``latents``, one a
     layer in slot order, each built by ``make`` (program, name, words, capacity; by default a `history_tables_device.Table`
-    on ``device``, its salts under a row key fresh for the class)."""
+    on ``device``, its salts under a row key fresh for the class), and kept in ``keep`` before its entry is given."""
 
-    def __init__(self, latents: Latents, make: Callable[[str, str, int, int], Any] | None = None, device: Any = None) -> None:
-        self.latents, self.make, self.device = latents, make, device
+    def __init__(self, latents: Latents, make: Callable[[str, str, int, int], Any] | None = None, device: Any = None,
+                 keep: Kept | None = None) -> None:
+        self.latents, self.make, self.device, self.keep = latents, make, device, keep
 
     def _maker(self) -> Callable[[str, str, int, int], Any]:
         if self.make is not None:
@@ -237,6 +244,8 @@ class Builder:
         except (ValueError, KeyError, TypeError, RuntimeError, OSError) as e:
             for s in doc.get("spans") or ():
                 self.latents.take(str(s.get("engine_id")))
+            if self.keep is not None:
+                self.keep.drop(*(head[k] for k in ("window", "run", "prompt", "outputs")))
             return {**head, "error": f"{type(e).__name__}: {e}"}
 
     def _tables(self, doc: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -258,12 +267,88 @@ class Builder:
             for x in self.latents.layers:
                 t = make(doc["program"], name(run, p, o, r, x), WORDS, cap)
                 t.append(rows[x])
+                if self.keep is not None:
+                    self.keep.write(int(doc["window"]), run, p, o, r, x, doc["program"], t)
                 out.append(t.entry())
         return out
 
 
 def _stem(window: int, run: str, prompt: int, outputs: int) -> str:
     return f"w{int(window)}-{run[:16]}-p{int(prompt)}-o{int(outputs)}.json"
+
+
+class Kept:
+    """Each table's rows and salts as built, under ``directory`` on the node: a class's in w<window>-<run>-p<P>-o<O>/, a
+    span's in s<slot>/, and each of its tables in layer-<l>.rows (its rows, u16 little-endian), layer-<l>.salts (their
+    salts) and layer-<l>.json (its entry, its program and how many rows it holds), written last. Every directory and
+    file is readable by its owner only."""
+
+    def __init__(self, directory: Path) -> None:
+        self.dir = Path(directory)
+
+    @classmethod
+    def of(cls, cfg: Mapping[str, Any], *public: Path | None) -> Kept:
+        """From a serve's ``tables`` configuration: under its ``private`` directory (`private_root` of ``public``)."""
+        return cls(private(private_root(cfg["private"], *public)) / "tables")
+
+    def _span(self, window: int, run: str, prompt: int, outputs: int, slot: int) -> Path:
+        key(run, prompt, outputs, slot)
+        return self.dir / _stem(window, run, prompt, outputs).removesuffix(".json") / f"s{slot}"
+
+    def write(self, window: int, run: str, prompt: int, outputs: int, slot: int, layer: int, program: str,
+              table: Any) -> None:
+        """Table ``table`` (a `history.HistoryTable` or `history_tables_device.Table`) of slot ``slot`` at ``layer``."""
+        d = self._span(window, run, prompt, outputs, slot)
+        for q in (self.dir, d.parent, d):
+            private(q)
+        rows = np.asarray(table.rows, dtype="<u2").reshape(len(table.rows), table.words)
+        salts = [bytes(y) for y in table.salts]
+        if len(salts) != len(rows) or len({len(y) for y in salts}) > 1:
+            raise ValueError(f"{table.value}: one salt of one length a row, not {len(salts)} for {len(rows)} rows")
+        for suffix, data in (("rows", rows.tobytes()), ("salts", b"".join(salts))):
+            _bytes(d / f"layer-{int(layer)}.{suffix}", data)
+        head = {**table.entry(), "program": program, "positions": len(rows), "salt_bytes": len(salts[0]) if salts else 0}
+        _write(d / f"layer-{int(layer)}.json", head)
+
+    def head(self, window: int, run: str, prompt: int, outputs: int, slot: int, layer: int) -> dict[str, Any]:
+        return json.loads((self._span(window, run, prompt, outputs, slot) / f"layer-{int(layer)}.json").read_text())
+
+    def rows(self, window: int, run: str, prompt: int, outputs: int, slot: int,
+             layer: int) -> tuple[dict[str, Any], np.ndarray, list[bytes]]:
+        """The table's head, its rows ``(n, words)`` and their salts, refused where the files disagree on how many."""
+        h, d = self.head(window, run, prompt, outputs, slot, layer), self._span(window, run, prompt, outputs, slot)
+        n, w, y = h["positions"], h["words"], h["salt_bytes"]
+        raw, ys = (d / f"layer-{int(layer)}.rows").read_bytes(), (d / f"layer-{int(layer)}.salts").read_bytes()
+        if len(raw) != 2 * n * w or len(ys) != n * y:
+            raise ValueError(f"{h['value']}: its files hold {len(raw)} row bytes and {len(ys)} salt bytes, not {n} rows' "
+                             f"{2 * n * w} and {n * y}")
+        return h, np.frombuffer(raw, dtype="<u2").reshape(n, w), [ys[i * y:(i + 1) * y] for i in range(n)]
+
+    def span(self, window: int, run: str, prompt: int, outputs: int, slot: int, layer: int,
+             positions: range) -> dict[str, Any]:
+        """What round 2 opens of slot ``slot``'s table at ``layer``: its rows at ``positions`` (a range within what it
+        holds), their salts and their public strings (`history.string`), beside the table's entry."""
+        h, rows, salts = self.rows(window, run, prompt, outputs, slot, layer)
+        if not (isinstance(positions, range) and positions.step == 1 and 0 <= positions.start <= positions.stop <= len(rows)):
+            raise ValueError(f"{h['value']}: positions {positions!r} aren't a range within the {len(rows)} it holds")
+        lo, hi = positions.start, positions.stop
+        return {"entry": {k: h[k] for k in ("value", "root", "leaves", "words", "domain")}, "positions": positions,
+                "rows": rows[lo:hi], "salts": salts[lo:hi],
+                "strings": [HT.string(r, h["words"], y) for r, y in zip(rows[lo:hi], salts[lo:hi], strict=True)]}
+
+    def table(self, window: int, run: str, prompt: int, outputs: int, slot: int, layer: int) -> HT.HistoryTable:
+        """The table rebuilt from its files (its paths for round 2's openings), refused unless it has the root it was
+        kept with."""
+        h, rows, salts = self.rows(window, run, prompt, outputs, slot, layer)
+        t = HT.HistoryTable(h["program"], h["value"], h["words"], h["leaves"])
+        t.append(rows, salts)
+        if t.entry() != {k: h[k] for k in ("value", "root", "leaves", "words", "domain")}:
+            raise ValueError(f"{h['value']}: its files rebuild to another table than the one kept")
+        return t
+
+    def drop(self, window: int, run: str, prompt: int, outputs: int) -> None:
+        """A class's files, for a class that registered nothing."""
+        shutil.rmtree(self.dir / _stem(window, run, prompt, outputs).removesuffix(".json"), ignore_errors=True)
 
 
 def private(directory: Path) -> Path:
@@ -292,13 +377,20 @@ def layers_of(spec: int | Sequence[int]) -> tuple[int, ...]:
     return tuple(int(x) for x in spec)
 
 
+def _bytes(path: Path, data: bytes) -> None:
+    """``data`` at ``path``, readable by its owner only, whole or not at all."""
+    tmp = path.with_name(f".{path.name}")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "wb") as f:
+        f.write(data)
+    os.chmod(tmp, 0o600)
+    tmp.replace(path)
+
+
 def _write(path: Path, doc: Mapping[str, Any]) -> None:
     private(path.parent.parent)
     private(path.parent)
-    tmp = path.with_name(f".{path.name}")
-    tmp.write_text(json.dumps(doc) + "\n")
-    os.chmod(tmp, 0o600)
-    tmp.replace(path)
+    _bytes(path, (json.dumps(doc) + "\n").encode())
 
 
 class Channel:
@@ -314,7 +406,7 @@ class Channel:
     def of(cls, cfg: Mapping[str, Any], *public: Path | None) -> Channel:
         """From a serve's ``tables`` configuration: ``private``, its directory (`private_root` of ``public``), and
         ``timeout_s``."""
-        return cls(private_root(cfg["private"], *public) / "channel", timeout_s=float(cfg.get("timeout_s", 900.0)))
+        return cls(private(private_root(cfg["private"], *public)) / "channel", timeout_s=float(cfg.get("timeout_s", 900.0)))
 
     def assign(self, doc: Mapping[str, Any]) -> None:
         _write(self.dir / "assign" / _stem(doc["window"], doc["run"], doc["prompt"], doc["outputs"]), doc)
