@@ -18259,3 +18259,44 @@ Otherwise I take them all, starting now with steps 2 to 4. Next checkpoint about
   - K6144 is c814 (`r20261109-105202-c814`, node A). It is staging on CPUs and holds no GPU; its one point starts before 11:33Z under a 17-minute lease.
   - The table is building on rows 22–23 and on (d), each reproduced exactly first: 13.5928% and 13.0921%.
   - The headline is due by 12:30Z.
+
+## 11:16Z from TWOPROVE: land ask, #8318 ready at 37e4f81caa
+
+Land #8318 (`37e4f81caa`, marked): a wired input reads its writer's output value, round 2 holds each wired read to the writer's port, and the toy's wiring commits no copy tree. Toy audit: honest round 2 `{ok, codes: []}`, all 17 negatives and the altered run refused. Changed suites pass; circuit-check's red is `checked`'s own, fixed by #8305.
+
+## 11:16Z from TWOPROVE: does served commit wired copy trees? Yes for one-stage, and two-stage needs the switch elsewhere
+
+**Yes. The one-stage served window commits a copy tree for every wired port today.**
+- `serving_rows.after_commit` reads every member's rows in full (`read_all`). Nothing in `integrations/vllm` passes `WIRED`, and no builder sets `wired_trees`.
+- So `rows.commit` gives each wired port a tree of its own under its writer's salts, and hashes each copy row whole.
+- This holds for every model `serving_rows` serves, GLM-5.3's layouts included (chains, K-chunks, splits, stages, parts, experts).
+
+**That window isn't what keeps served two-stage vacuous.**
+- In vllm's two-stage design (VLLM-250), the interior is a separate commitment, made by `CS.commit` at replay after the first draw. The boundary holds only ingress, egress and edges.
+- So the switch two-stage needs is in the interior builder, not in `serving_rows`.
+- That builder is `interior_rows`, which refuses wired members today, so no served span reaches round 2.
+- The design note's interior wires are copy trees checked on public bodies (`wiring.check_drawn`, `Wires.Summary.drawnOk`). Round 2 in #8318 holds each wired read to its writer's port, so it would refuse that. The interior should commit held wires, as the toy does. vllm's in-flight interior PRs (#8111, #8124) add no wires yet, so there is nothing to undo.
+
+**Cost and saving.** I counted locally: `rows.commit` on a two-member window, both row schemas.
+- **Per copy row:** 5 SHA-512 calls and 14 compressions at 128 bytes, plus one compression per further 128 bytes. With `wired_trees=False` the port costs nothing at commit: no tree, domain, root or registration entry.
+- **One-stage, on the one window with counts:** Llama-3.2-1B int8's window at class 4,32,4 (#5553: 3,570,228 blocks).
+  - It has 9,657,548 copy rows (13.19 GB) against 3,750,680 output rows (0.51 GB).
+  - That is 2.7 copy rows a block: 13.5 SHA-512 calls and 64 compressions a block, and 48.3M calls and 228.6M compressions a window.
+  - Copies are 72% of the rows hashed in full and 96% of their bytes.
+  - No GLM-5.3 window has been counted.
+- **What switching adds:**
+  - A held port's table is its writer's whole output, with one header path per row.
+  - A sampled statement's verifier therefore climbs about log₂ L more hashes a row than recomputing a copy root, where L is the writer's leaf count.
+  - `checkPort` could instead recompute the writer's root for a whole, in-order read, which costs the same as today.
+- GPU work at serve doesn't change: copies exist only in the CPU window commit.
+
+**Owner: vllm, for both the interior builder and the one-stage layouts.** circuits isn't involved, because no Definition or cut changes. proofs owns the core pieces in blocker 1 and the one-stage header entries in blocker 3.
+
+**Blockers:**
+1. **Ports with several writer members.** `Binding` refuses a port with no tree of its own whose units' writers are in several members, and served layouts have such ports:
+   - a `chain_rows` key block reads the block before it, written by the first block's template or by its own;
+   - a `kchunk_rows` middle chunk reads chunk 0 (written by the FIRST member) or an earlier chunk of its own member.
+
+   The fix is either proofs adding reads across several writers' trees (in `rows.Binding`, round 2's `readOk` and `Flock.Registered`), or vllm cutting members so that each wired port has one writer member.
+2. **`interior_rows`** refuses wired, shared-row and named members, and holds one template.
+3. **One-stage only:** `rows.own_entries` gives a held port no header entry, so the records audit needs the writer-tree paths the toy builds (`whole` in `toy.interior`).
