@@ -2856,17 +2856,17 @@ fn flip_bit(w: &mut F128, t: usize) {
     if t < 64 { w.lo ^= 1 << t } else { w.hi ^= 1 << (t - 64) }
 }
 
-/// Whether a session's side reuses the drawn statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
+/// Whether a session's side reuses the sampled statements it built before ([`StmtCache`]); `FC_STMT_CACHE=0`: every session
 /// builds its own.
 pub fn stmt_cache_on() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("FC_STMT_CACHE").as_deref() != Ok("0"))
 }
 
-/// One side's drawn statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all public
-/// (no value, coin or drawn unit), so a statement built again from the same three is the same statement. The key binds all
-/// three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the drawn count and the
-/// canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
+/// One side's sampled statements, each built once. [`Stmt::new`] reads only its circuit, its count and its identity, all
+/// public (no value, coin or sampled proof block), so a statement built again from the same three is the same statement. The
+/// key binds all three: the registered statement's digest (its circuit file's SHA-512 under its statement tag), the sampled
+/// count and the canonical identity. Each side keeps its own cache: the verifier's holds only statements it built itself.
 pub struct StmtCache(Mutex<BTreeMap<([u8; 64], usize, String), Arc<Stmt>>>);
 
 impl Default for StmtCache {
@@ -4132,6 +4132,45 @@ mod tests {
             assert_eq!(v.check(&c, &sampled, true, 1), want, "{name}");
             assert_eq!(v.len(), before + 1, "{name}: the sampled statement checked again");
         }
+    }
+
+    /// At Register a sampled session's server checks the sampled statement the server builds: the sample's public file, cut
+    /// from the population's file the server loaded, over the circuit the sampled statement shares with the population's
+    /// (through the statement cache). With or without registered reads, shared rows or `--zk`, that check takes the
+    /// population's kept verdict, which is a fresh check of the sample.
+    #[test]
+    fn the_register_check_takes_its_populations_verdict() {
+        let c = Composite::parse(&typed_statement(), None).unwrap();
+        let (n, np) = (2, c.ports.len());
+        let header = json!({"format": INST_FORMAT, "statement": c.statement(), "circuit_sha512": crate::hex(&c.sha512),
+                            "instances": n, "rows": false, "units": units_entry(&c, &[0, 1])});
+        let mut b = serde_json::to_vec(&header).unwrap();
+        b.push(b'\n');
+        b.extend((0..BC_BYTES * n * np + 2 * n * c.public_words()).map(|i| i as u8));
+        let p = std::env::temp_dir().join(format!("flock-register-scope-{}.bin", std::process::id()));
+        std::fs::write(&p, &b).unwrap();
+        let pop = Stmt::new(c, n, json!({})).unwrap();
+        let one = StmtCache::new().drawn(&pop, 1, json!({})).unwrap();
+        assert!(Arc::ptr_eq(&one.c, &pop.c), "the sampled statement parsed a circuit of its own");
+        for (registered, shared) in [(false, false), (true, false), (false, true), (true, true)] {
+            let mut inst = Instances::load(p.to_str().unwrap(), &pop.c).unwrap();
+            if registered {
+                inst.header["registered"] = json!("r");
+            }
+            inst.tables = shared.then(|| RowTables { counts: vec![1], rows: None, salts: None, refs: vec![0; n * np] });
+            let sample = inst.drawn(&pop.c, &json!({"law": "subset", "population": n, "k": 1, "units": [1]})).unwrap();
+            let v = crate::proved_scope::Verdicts::new();
+            for zk in [false, true] {
+                let what = format!("registered {registered}, shared rows {shared}, zk {zk}");
+                let want = crate::proved_scope::check(&pop.c, &inst, zk, 1);
+                assert_eq!(v.check(&pop.c, &inst, zk, 1), want, "{what}: the population's");
+                assert_eq!(v.check(&one.c, &sample, zk, 1), want, "{what}: the sample's is not the population's");
+                assert_eq!(crate::proved_scope::check(&one.c, &sample, zk, 1), want, "{what}: a fresh check of the sample differs");
+            }
+            assert_eq!((v.len(), v.seen()["lookups"].clone()), (2, json!(4)),
+                       "registered {registered}, shared rows {shared}: the sample checked again");
+        }
+        std::fs::remove_file(&p).unwrap();
     }
 
     /// One byte more or less in the circuit file is another statement's key: its check runs again.
