@@ -109,7 +109,8 @@ theorem isolated_of_local (C : Θ → Q × Adv → O → V) (E : ℕ) (Ou : Outs
   rw [mul_sum]
   refine sum_le_sum fun n hn => ?_
   have hn' : n < count L l := lt_of_lt_of_le (mem_range.1 hn) hk
-  have hw : l[n]? = some l[n] := List.getElem?_eq_getElem (lt_of_lt_of_le hn' (count_le_length L l))
+  have hlen : n < l.length := lt_of_lt_of_le hn' (count_le_length L l)
+  have hw : l[n]? = some l[n] := List.getElem?_eq_getElem hlen
   refine (hloc n hn' _ hw).trans (le_of_eq ?_)
   simp [incorrectAt, hw]
 
@@ -373,10 +374,10 @@ overwrites' positions counted at most `(T · |O| + 1)^K`. -/
 theorem card_servedChannel_le_rpow (R Q Adv O V Tick : Type) [Fintype Adv] [Inhabited Adv] [Fintype O] [DecidableEq O]
     [Fintype V] [Nonempty V] [Fintype Tick] [Inhabited Tick] (T K : ℕ) :
     (Fintype.card (servedChannel R Q Adv O V Tick T K).S : ℝ) ≤ (2 : ℝ) ^ servedBits Adv O V Tick T K := by
-  rw [rpow_servedBits]
+  rw [rpow_servedBits, mul_pow, mul_pow]
   have hs := sum_choose_le_pow (T * Fintype.card O) K
   have hle : Fintype.card (servedChannel R Q Adv O V Tick T K).S ≤
-      (Fintype.card Adv * Fintype.card Tick) ^ T * (Fintype.card V * (T * Fintype.card O + 1)) ^ K * (T + 1) :=
+      Fintype.card Adv ^ T * Fintype.card Tick ^ T * (Fintype.card V ^ K * (T * Fintype.card O + 1) ^ K) * (T + 1) :=
     calc Fintype.card (servedChannel R Q Adv O V Tick T K).S
         ≤ Fintype.card Adv ^ T * Fintype.card Tick ^ T *
             ((∑ j ∈ range (K + 1), (T * Fintype.card O).choose j) * Fintype.card V ^ K) * (T + 1) :=
@@ -384,7 +385,7 @@ theorem card_servedChannel_le_rpow (R Q Adv O V Tick : Type) [Fintype Adv] [Inha
       _ ≤ Fintype.card Adv ^ T * Fintype.card Tick ^ T *
             ((T * Fintype.card O + 1) ^ K * Fintype.card V ^ K) * (T + 1) :=
           Nat.mul_le_mul_right _ (Nat.mul_le_mul_left _ (Nat.mul_le_mul_right _ hs))
-      _ = _ := by ring
+      _ = _ := by rw [Nat.mul_comm ((T * Fintype.card O + 1) ^ K) (Fintype.card V ^ K)]
   exact_mod_cast hle
 
 /-- **`TheftServed` at isolated releases**: the bound with the probability that the releases aren't isolated, each
