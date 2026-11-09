@@ -179,6 +179,14 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
     brec = json.loads((run_out / "boundary" / "registration.json").read_text())
     if links != SS.replay_links(replay, key, brec):
         raise ValueError("the design's links at the boundary window's ports are not the run's")
+    irec = json.loads((run_out / "interior" / "registration.json").read_text())
+    regs = {"boundary_names": (bw, brec), "interior_names": (ref, irec)}
+    names_of = {k: {"ports": list(expected_ports(w)), "values": []} for k, (w, _) in regs.items()}
+    for k, (_, rec) in regs.items():
+        ran = {"ports": sorted(r["port"] for r in rec["roots"]),
+               "values": sorted(e["value"] for e in rec.get("registered", []))}
+        if ran != {f: sorted(ns) for f, ns in names_of[k].items()}:
+            raise ValueError(f"the design's {k.replace('_', ' ')} are not the ones the run's record names")
     wires = SS.replay_wires(replay, key)
     part, prog = json.dumps(ref.partition, sort_keys=True).encode(), canonical_json(encode_program(ref.program))
     names, base = [m.template for m in ref.members], 0
@@ -187,7 +195,7 @@ def export(out: Path, run_out: Path, stream, order: int, n: int, q: int, k: int)
         vus.append(list(range(base, base + n * n_t)))
         base += n * n_t
     query = stream.spec.check.query
-    held = {"first": first, "ns": list(stream.cells), "ks": list(stream.counts), "names": names,
+    held = {"first": first, "ns": list(stream.cells), "ks": list(stream.counts), "names": names, **names_of,
             "links": None if links is None else [{"template": x.template, "port": x.port, "value": x.value} for x in links],
             "wires": None if wires is None else [{"template": w.template, "port": w.port, "writer": w.writer,
                                                   "wport": w.wport} for w in wires],
