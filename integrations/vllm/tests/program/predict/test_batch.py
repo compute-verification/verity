@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass, replace
 from itertools import accumulate
 
@@ -17,6 +18,7 @@ from verity.ml.circuits.defs import CompositeDefinition, PrimitiveDefinition, bi
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Tuple, Value
 from verity_vllm.check.batch import BATCH, SHARED, check, own, report
+from verity_vllm.program.frontend.seed_rule import rid_of
 from verity_vllm.program.predict.batch import BatchDependent, check_compiled, registered_phi, templates, workload_labels
 from verity_vllm.program.predict.build import Unexpressible
 from verity_vllm.program.predict.phi import Phi
@@ -50,18 +52,15 @@ def test_templates_hold_their_declared_verdicts():
     assert _got(vs, "rmsnorm ") == _got(vs, "embedding ") == _got(vs, "gemm down ") == (True, True)
     assert _got(vs, "attention ") == (True, False)
     assert [s.request for v in vs if v.template.name.startswith("attention ") for s in v.splits] == [(129, 0, 1)]
-    assert _got(vs, "token select (top-p, derived S)") == (False, None)
-    assert _got(vs, "token select (top-p, S = SplitsFor_v1") == (True, False)
     assert _got(vs, "token select (top-p, registered S)") == (True, True)
     assert _got(vs, "GP-01 over 2 requests (greedy)") == (True, None)
     assert _got(vs, "GP-01 over 2 requests (top-p, registered S)") == (True, None)
-    assert _got(vs, "GP-01 over 2 requests (top-p, derived S)") == (False, None)
 
 
 def test_the_registered_split_count_keeps_one_nucleus_at_every_batch_size_and_position():
     """The top-p template's keep set (`topp_split.topp_keep_row`, which `TopPMaskWordx{V}s{S}` evaluates) for a row served at
     batch size B and position i.  The template reads each row by itself, so the batch reaches the keep set only through S.  At
-    the S vLLM derives from the batch (SplitsFor_v1(B, 188) on the RTX PRO 6000) the keep set moves for some rows; the pinned
+    the S vLLM derives from the batch (splits_for(B, 188) on the RTX PRO 6000) the keep set moves for some rows; the pinned
     engine (`engine.topp_pin`: vLLM's loop at num_sm = registered S x B) launches the registered S at every B, and the keep set
     is the same at every (B, i)."""
     import numpy as np
@@ -153,7 +152,7 @@ def plan(registered, advice, ingress, *, seed_of=lambda advice, body: body.get("
         body, (s0, row0) = ingress[q.id], first[i]
         t = body["temperature"]
         policy = {"kind": "greedy"} if t == 0 else {"kind": "stochastic", "temperature": t, "top_p": body["top_p"], "top_k": 0,
-                                                    "seeded": True, "splits": body.get("splits", 32)}
+                                                    "seeded": True, "splits": body.get("splits", 32), "rid": rid_of(q.id)}
         units.append(Unit(i, "", q.prompt_len, q.output_len - 1, policy, None if t == 0 else seed_of(advice, body), s0, q.id,
                           C_of(advice, row0)))
     steps, discarded = [], []
@@ -288,10 +287,28 @@ def test_a_batch_invariant_compilation_passes():
     assert check_compiled(None, adv, ing, c, plan) is None
 
 
-def test_r3_a_derived_split_count_is_refused():
-    adv, ing = _mixed({**TOPP, "splits": "derived"})
-    with pytest.raises(BatchDependent, match=r"request 1: its top-p sampler's split count is derived .* SplitsFor_v1\(1, num_SMs\)"):
-        check_compiled(None, adv, ing, _compile(adv, ing), plan)
+@pytest.mark.parametrize("splits", ["derived", 16, [32, 16], None])
+def test_a_split_count_other_than_the_registered_one_is_refused_before_a_program_is_built(monkeypatch, splits):
+    """A top-p policy whose S isn't `registered_splits(num_SMs)` (32 on the RTX PRO 6000's 188 SMs), one derived from the batch above
+    all, is refused by name in φ's domain, before any Program is built: not left to a check of the compiled session."""
+    from verity_vllm.program.predict import build as PB
+    from verity_vllm.program.predict.domain import UnregisteredSplits, check_splits
+
+    class _Built:
+        DOMAIN = PB._Decoder.DOMAIN
+
+        def __init__(self, *a, **k):
+            raise AssertionError("a Program was built")
+
+    monkeypatch.setattr(PB, "_Decoder", _Built)
+    phi = replace(_phi(), sampling={"kind": "stochastic", "temperature": 0.8, "top_p": 0.95, "top_k": 0, "seeded": True, "splits": splits})
+    with pytest.raises(UnregisteredSplits, match=rf"top-p split count {re.escape(repr(splits))} is not the registered one, "
+                                                 r"registered_splits\(188\) = 32: serving runs every launch at it, and the Program "
+                                                 r"carries it as Const32\[32\]"):
+        PB.build_program(phi, "request", LP=4, T=1)
+    with pytest.raises(UnregisteredSplits, match=r"top-p on a target that declares no num_sms"):
+        check_splits({**phi.sampling, "splits": 32}, None)
+    assert check_splits({**phi.sampling, "splits": 32}, 188) == 32
 
 
 def test_r2_a_planner_that_reads_the_batch_is_refused():
@@ -390,7 +407,7 @@ def test_r1_a_batch_provenance_input_is_refused(group):
 
 def test_workload_labels_by_provenance():
     adv, ing = _mixed()
-    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "splits", "prefix", "prefix_ik", "prefix_iks", "last_token"))
+    c = _compile(adv, ing, groups=("weights", "prompt", "seed", "schedule", "prefix", "prefix_ik", "prefix_iks", "last_token"))
     labels, ret = workload_labels(c.workload)
     assert labels == (SHARED, *(x for r in range(3) for x in (own(r), own(r)) + (BATCH,) * 5))
     assert workload_labels(c.workload, frozenset({1}))[0][8:15] == (own(1), own(1), BATCH) + (own(1),) * 4
@@ -404,7 +421,7 @@ def test_workload_labels_by_provenance():
 
 
 def test_compile_steps_passes_its_own_rule():
-    """At top_p 1 and below: the compiler emits the registered split count, so R3 holds at any top_p; an unseeded request's seed,
+    """At top_p 1 and below: the compiler emits the registered split count at any top_p; an unseeded request's seed,
     derived from its id and the window's seed salt, is the one it compiles to alone."""
     from verity.ml.definitions.registry.topp_geometry import registered_splits
     from verity_vllm.engine.served_seed import derived
@@ -432,5 +449,5 @@ def test_compile_steps_passes_its_own_rule():
         check_compiled(reg, adv, ing, c, lambda *a: steps.plan_steps(*a, salt=salt))
         if b1["temperature"]:
             assert c.requests[1].policy == {"kind": "stochastic", "temperature": 0.8, "top_p": b1["top_p"], "top_k": 0, "seeded": True,
-                                            "splits": registered_splits(RTX["num_sms"])}
+                                            "splits": registered_splits(RTX["num_sms"]), "rid": 2}
             assert c.requests[1].seed == derived(salt, "q1")

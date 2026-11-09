@@ -81,11 +81,11 @@ from verity_vllm.check.replay.population import (executed_prefix_of_record, moe_
                                                 split_not_executed)
 from verity_vllm.check.replay.coverage import _uncovered_mechanisms, controller_rows_of, query_population
 from verity_vllm.check.replay.sample import _catch_probability, challenge_seed, sample
-from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon, splits_of_record
+from verity_vllm.check.replay.linkage import arrivals_of_record, boundary_linkage, linkage_horizon
 
 
 __all__ = ["arrivals_of_record", "boundary_linkage", "challenge_seed", "engine_facts_of_record", "executed_prefix_of_record",
-           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "splits_of_record", "V2_QUERY"]
+           "linkage_horizon", "model_weights_provider", "ProgramIndex", "sampled_replay", "SCHEMA", "V2_QUERY"]
 
 
 SCHEMA = "verity-sweep/sampled-replay/v1"
@@ -568,7 +568,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                    ring_slots: int | None = None, retention: str | None = None, seed_challenge: str | None = None,
                    manifest: dict[str, Any] | None = None, executed_prefix: dict[str, dict] | None = None,
                    program_dirs: dict[str, str] | None = None, challenge_key: Key | None = None, replay_k: int | None = None, replay_draw: str = "family", plan: bool = False, memo: dict | None = None,
-                   cached_prefixes: dict[str, dict] | None = None) -> dict[str, Any]:
+                   cached_prefixes: dict[str, dict] | None = None, certified: dict[str, dict] | None = None) -> dict[str, Any]:
     """C2 of record.  `challenge_key` (off legacy, `challenge.replay_key`) keys the sample in place of `seed`.  `cached_prefixes`: each warm
     request's cached rows and their producers (`populate`): its attention reads its cached prefix from what they committed.  `executed_prefix`: request -> `executed_prefix_of_record(...)` from the Commit's own committed tokens;
     rows at request-relative steps >= n_exec leave the sampling pool into the named class `population.not_executed_by_rule` (never a
@@ -583,7 +583,8 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
     manifest was built with (recorded as `addresses`).
     Result: True = every sampled VU replays bit-exactly, every non-empty stratum was evaluated and every check of the Programs is 1
     (`checks`, all of them, recorded as `checks`); False = a mismatch or a refused check (named); None = nothing evaluable / a
-    stratum or a check could not be evaluated (partial, never PASS).  `plan`: the same sample, read only (`planned`).
+    stratum or a check could not be evaluated (partial, never PASS).  `certified`: request label -> its seed rule's certified
+    inputs (`checks.checks_of`).  `plan`: the same sample, read only (`planned`).
     `worker_peak` (bytes): the forked pool is fitted after the prewarm to the cgroup's memory (`fit_pool`, recorded as
     `evaluator.memory`), and a pick too large for it is refused (PoolDoesNotFit); None forks the workers asked for."""
     t_start = time.perf_counter()
@@ -694,7 +695,7 @@ def sampled_replay(programs: dict[str, dict[str, Any]], bmap: dict[str, Any], co
                f"(req {first.get('request_id')}, step {first.get('step')}): {str(first.get('why'))[:160]}")
     else:
         result, grade, why = True, "complete", None
-    chk = checks_of({rid: indices[rid] for rid in programs}, store, weights, arrivals, executed_prefix)
+    chk = checks_of({rid: indices[rid] for rid in programs}, store, weights, arrivals, executed_prefix, certified)
     result, grade, why = fold_checks(result, grade, why, chk)
     steps_seen = sorted({v["step"] for v in picked})
     catch = _catch_probability(strata)

@@ -210,7 +210,8 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
                            targets=list(cfg.get("targets") or []), workers=cfg.get("workers"), worker_peak=worker_peak,
                            ring_slots=(int(ring) if ring else None), attention_paths=p.attn_paths, tp=p.tp,
                            manifest=man, program_dirs=p.dirs, replay_k=(cfg.get("k_per_rank") or {}).get(str(rank)),
-                           memo=index_memo(p, man) if memo is None else memo)
+                           memo=index_memo(p, man) if memo is None else memo,
+                           certified={str(r["request_id"]): {"request_id": str(r["request_id"]), "seed": r.get("seed")} for r in p.reqs})
     sr["wrapper_prefix"] = p.index.prefix
     sr["tp_context"] = p.tp
     sr["programs"] = {k: {"dir": p.loaded[k].get("dir"), "program_digest": p.digs[k]} for k in p.loaded}
@@ -218,7 +219,7 @@ def evaluate(p: Loaded, cfg: dict[str, Any], *, bmap: dict[str, Any], committed:
     arr = p.arrivals
     wreq = [{"request_id": str(r["request_id"]), "arrive_step": arr[str(r["request_id"])], "prompt_token_ids": list(r.get("prompt_token_ids") or []), "seed": r.get("seed"),
              "steps": list(range(arr[str(r["request_id"])], arr[str(r["request_id"])] + int(r.get("max_tokens") or 1)))} for r in p.reqs]
-    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path(), splits_of_record=SR.splits_of_record(p.loaded))
+    lk = SR.boundary_linkage(bmap, committed, wreq, embed_op_path=p.index.embed_op_path())
     lk["rank"] = rank
     sr["value_source"] = dict(committed.record(), forked_children=sr.pop("value_reads_in_children", None))
     return sr, lk

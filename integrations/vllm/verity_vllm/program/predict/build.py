@@ -17,8 +17,8 @@ norm), SiluMul, the fused-MoE block in its indexed-read construction (router Gem
 MoeExpertGemmW per (token, slot) pair, MoeSum per row); for Gemma-2, the embedding's normalizer scale, GemmaRMSNorm's unfused (1 +
 w) chain (every norm, the two extra MLP norms included), AttentionSoftcap, GeluTanhMul and the final logits' tanh soft-cap; and the
 token select: greedy TokenSelect, or the seeded temperature + top-p GumbelTopPTokenSelect with its per-event constants (the split
-count a `splits` Input entry, or the single request's constant S). Anything φ asks for outside it raises `Unexpressible` naming the
-fact (a result, never a silent approximation).
+count among them, the registered S). Anything φ asks for outside it raises `Unexpressible` naming the fact (a result, never a
+silent approximation).
 
 Restored lineage: `verity_capture.experimental.aot.build` (`aot-build/eager/v8`, deleted in 528f9d21f) built the capture fold's
 `Captured_v1{PROFILE, WORKLOAD}` Program; the Build of record now derives `Derived[vLLM*]` Programs, so the emitter targets those.
@@ -627,7 +627,7 @@ class _Model:
         for fn in S.cap if self.C.final_cap is not None else ():
             lg = self.call(fn, Coll(_ptypes(fn)[0], lg.refs))
         return select_token(lambda fn, *refs: self.call(fn, *(Coll(t, r) for t, r in zip(_ptypes(fn), refs))), kind, lg.refs, self.C.V,
-                            S.tp, event, pos, policy)
+                            pos, policy)
 
 
 def decoder(phi: Phi, M: int = 1, history: int = 0):
@@ -691,7 +691,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     C..LP-1, or on the sparse-attention decoder also a request a Commit window carries in at decode C >= LP, its first decode fed
     the `last_token` Input (`common.request_passes`); on that decoder either's SRC config holds `{"history": C}`, and no Build
     traces it yet. A request on one rank drops its dead units (`program.prune`, as the Build's derive does): the last layer's rows
-    before the prefill's last, which no sample reads. `stop`: its length rule, the last check (`stop_rule`).
+    before the prefill's last, which no sample reads. A stochastic request takes its seed rule's `seed_rule.PARAMS` after its
+    seed, at its policy's ``rid``, and checks the rule (`seed_rule.check`); `stop`: its length rule, the last check (`stop_rule`).
     `dead_free`: a tensor-parallel rank's request too (the Build's `--dead-free`), each dead collective's peer rows then unread.
     `batched`: that form batched (`prune.batched_form`, the Build's `--batched`): class G's request Programs.
     `finish`: the body's last step in place of that drop, (body, decoder, parameters) -> (body, what it says beside the Program,
@@ -704,6 +705,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     which it computes the first (`steps`' ``recompute_hits``), in the SRC config. `edge`: the history groups (`dsa.Net.edge_groups`)
     a request a Commit window leaves at position LP + T (inside its prompt too: T < 0, sampling nothing) returns after its samples
     and checks, every layer's rows [0, LP + T) of each as `prefix_params(LP + T)` lays them out (`common.with_edge`), in its SRC config."""
+    from verity_vllm.program.frontend import seed_rule as SEED
     t0 = time.time()
     net = decoder(phi, M, pos0 + M if wrapper == "step" else int(LP) + int(T))
     kind = (phi.sampling or {}).get("kind", "greedy")
@@ -719,12 +721,9 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     resumed, chunks, passes, sampled = request_passes(wrapper, LP, T, M, C, chunks, dense, bool(edge))
     wrec = RecordType(*net.leaves())
     n = M if wrapper == "step" else int(LP)
-    events = sum(sampled)
     params: list[tuple[str, Type]] = [("input_ids" if wrapper == "step" and world == 1 else "prompt", Array(n, I32))]
     if kind == "stochastic":
-        params.append(("seed", Array(1, I64)))
-        if phi.sampling["splits"] == "derived":
-            params.append(("splits", Array(events, I32)))
+        params += [("seed", Array(1, I64)), *(SEED.params(SEED.rid_in(phi.sampling)) if wrapper == "request" else ())]
     history = len(params)
     if C:
         params += net.prefix_params(C)   # `vllm_meta.prefix_input`
@@ -746,8 +745,8 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     if kind == "stochastic":
         from verity_vllm.program.frontend.rules.vllm_sampling import f32_bits
         s = phi.sampling
-        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), splits=Coll(params[2][1], Affine("p", 2, 0, events)) if s["splits"] == "derived" else None,
-                             S=s["splits"], temperature_bits=f32_bits(s["temperature"]), top_p_bits=f32_bits(s.get("top_p", 1.0)))
+        policy = _Stochastic(seed=Coll(I64, Affine("p", 1, 0, 1)), S=int(s["splits"]), temperature_bits=f32_bits(s["temperature"]),
+                             top_p_bits=f32_bits(s.get("top_p", 1.0)))
     model = net.model(B, W, peers)
     if batched and hasattr(model, "batched"):
         model.batched = True
@@ -763,7 +762,7 @@ def build_program(phi: Phi, wrapper: str, *, LP: int | None = None, T: int | Non
     out = Coll(Array(1, I32), toks[0].refs) if wrapper == "step" else Coll(Array(len(toks), I32), concat([t.refs for t in toks]))
     if peers.n != len(peers.inputs):
         raise AssertionError(f"the collectives read {peers.n} of {len(peers.inputs)} peer Inputs")
-    out, checks = with_checks(model, out, B, stop)
+    out, checks = with_checks(model, out, B, stop, inputs[1:2 + len(SEED.PARAMS)] if (wrapper, kind) == ("request", "stochastic") else None)
     out = with_edge(model, out, edge)
     B.ret_type = out.type
     body, names = B.finish(out), None

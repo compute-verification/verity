@@ -22,7 +22,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 
-from verity_vllm.check.replay.linkage import splits_of_record
 from verity_vllm.commit import challenge as CH
 from verity_vllm.commit import opened as OV
 from verity_vllm.commit import store_dump as SD
@@ -264,8 +263,8 @@ def draw_of(args: Any) -> str:
 
 
 def linkage_facts(loaded: dict, progs: dict, index: Any) -> dict[str, Any]:
-    """What the linkage reads of the Programs: their steps of record, splits of record and the embedding's op path."""
-    return {"program_steps": program_steps(loaded, progs), "splits": splits_of_record(loaded), "embed_op_path": index.embed_op_path()}
+    """What the linkage reads of the Programs: their steps of record and the embedding's op path."""
+    return {"program_steps": program_steps(loaded, progs), "embed_op_path": index.embed_op_path()}
 
 
 def program_steps(loaded: dict, progs: dict) -> dict[str, int | None]:
@@ -415,11 +414,10 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
         print(f"[delta] replay/linkage horizons = the executed prefix of record: {_horizons} (LAG {_epr_r['lag']}; "
               f"{'ok' if _epr_r['ok'] else 'PROBLEMS ' + str(_epr_r['problems'][:2])})", flush=True)
     _wreq = linkage_requests(s, _rl, _arr, facts["program_steps"], _horizons)
-    _spr = facts["splits"]
     # the Program's declared stop rule + LAG = stop_rule_of_record; None = undeclared / unattested ->
     # a request linked over fewer steps than its cap fails closed by name -- never the engine value as the rule
     _eos, _lag = s.stop_of_record.get("eos"), s.stop_of_record.get("lag")
-    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], splits_of_record=_spr, eos_of_record=_eos, eos_lag_rows=_lag)
+    lk = SR.boundary_linkage(_bm, _rd, _wreq, embed_op_path=facts["embed_op_path"], eos_of_record=_eos, eos_lag_rows=_lag)
     _sr_kw, _ep_facts = executed_prefix_kw(s, _epr_r, lk, _arr, _rl)
     _kw = dict(arrivals=_arr, per_stratum=int(args.replay_per_stratum), seed=_seed, seed_source=_seed_src,
                seed_challenge=_seed_chal,
@@ -429,7 +427,8 @@ def evaluate(s: ReplaySources, held: dict[str, Any], *, plan: bool = False, plan
                # Q(P) of record: the replay's reach is reconciled against it identity by identity
                manifest=(s.manifest if isinstance(s.manifest, dict) else None),
                worker_peak=getattr(args, "replay_worker_peak", None),
-               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl), **_sr_kw)
+               program_dirs={_k: _v["dir"] for _k, _v in _loaded.items() if _v.get("dir")}, cached_prefixes=cached_prefixes(reqs, _rl),
+               certified={w["request_id"]: {"request_id": str(r.get("request_id")), "seed": w["seed"]} for r, w in zip(s.reqs, _wreq)}, **_sr_kw)
     if planner is not None:
         t0 = time.perf_counter()
         got = planner.plan({"binding_map": str(s.out / f"binding_map_p{pair}.json"), "arrivals": _arr, "seed": _seed, "seed_source": _seed_src,
@@ -536,9 +535,9 @@ def record(s: ReplaySources, sr: dict, lk: dict, _art: Path) -> None:
                                     "reference": "registered relation evaluators (verity.ml.definitions.numerics.derived_rows) on the COMMITTED input bytes (C2 of record)"}
     components["boundary_linkage"] = {"result": lk.get("result"), "method": lk.get("method"), "checked": lk.get("pairs"), "linked": lk.get("linked"),
                                       "unlinked_n": lk.get("unlinked_n"), "unlinked": lk.get("unlinked"), "why": lk.get("why"),
-                                      "prescribed": lk.get("prescribed"),      # seed / splits linkage record
+                                      "prescribed": lk.get("prescribed"),      # seed linkage record
                                       "reference": "declared workload prompt ids (arrival step) + the committed sampled ids of the previous step (ordered interfaces)"
-                                                   " + declared per-request seed / SplitsFor_v1(committed live count, num_SMs of record) (prescribed inputs)"}
+                                                   " + declared per-request seed (prescribed input)"}
     components["negatives"] = {"suite": "tests/check/test_sampled_replay.py + tests/commit/test_binding_negatives.py",
                                "results": "unit: flipped committed byte, equal-shape request swap, wrong member, missing committed input (partial), unlinked decode "
                                           "chain, foreign prompt, verdict gates"}

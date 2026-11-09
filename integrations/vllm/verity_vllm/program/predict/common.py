@@ -9,8 +9,8 @@ from __future__ import annotations
 import functools
 import gc
 import re
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
 
 from verity.ml.circuits.refs import Coll, Refs, concat
 from verity.ml.circuits.types import Array, Type, Value
@@ -60,15 +60,18 @@ def _ptypes(spec) -> tuple:
     return tuple(t for _, t in params)
 
 
-def with_checks(model, out: Coll, B=None, stop: dict | None = None) -> tuple[Coll, dict | None]:
+def with_checks(model, out: Coll, B=None, stop: dict | None = None, sampled: Sequence | None = None) -> tuple[Coll, dict | None]:
     """`out`, then `derive`'s checks output where the model made any (`model.checks`: (one bit, what it checks) each, which the
-    verifier requires to be 1) or a request's length rule follows them (`stop`: `frontend.stop_rule.check` over `out`, the next
-    Call of the Builder `B`), and what `derive`'s provenance says of them: the Program returns the tuple (out, checks). Each is
-    refused unless a declared relation computes it (`program.inputs.check`)."""
+    verifier requires to be 1), a stochastic request's seed rule follows them (`sampled`: its sampler's seed, then its
+    `seed_rule.PARAMS` Inputs; `seed_rule.check`'s Calls next on the Builder `B`) and its length rule last (`stop`:
+    `frontend.stop_rule.check` over `out`), and what `derive`'s provenance says of them: the Program returns the tuple (out,
+    checks). Each is refused unless a declared relation computes it (`program.inputs.check`)."""
     from verity.ml.circuits.types import Tuple
     from verity_vllm.program import inputs
     from verity_vllm.program.frontend import stop_rule as SR
-    checks = [*(getattr(model, "checks", None) or ()), *([] if stop is None else [SR.check(B, out, stop)])]
+    from verity_vllm.program.frontend import seed_rule as SEED
+    checks = [*(getattr(model, "checks", None) or ()), *([] if sampled is None else [SEED.check(B, sampled[0], sampled[1:])]),
+              *([] if stop is None else [SR.check(B, out, stop)])]
     if not checks:
         return out, None
     for c, what in checks:
@@ -96,11 +99,10 @@ def with_edge(model, out: Coll, edge: tuple[str, ...]) -> Coll:
 
 @dataclass(frozen=True)
 class _Stochastic:
-    """The row's stochastic policy as the select reads it: the seed (and, for several requests, the `splits`) Inputs, the f32 bits of
-    temperature and top_p, and S: "derived" (an Input entry per event) or the single request's constant split count."""
+    """The row's stochastic policy as the select reads it: the seed Input, the f32 bits of temperature and top_p, and S, the
+    registered split count (`topp_geometry.registered_splits`), a `Const32[S]` at every event."""
     seed: Coll
-    splits: Coll | None
-    S: Any
+    S: int
     temperature_bits: int
     top_p_bits: int
 
@@ -163,18 +165,17 @@ def drive(model, wrapper: str, rows: list[Coll], *, M: int, pos0: int, LP: int |
     return toks
 
 
-def select_token(call, k, logits: Refs, V: int, target, event: int, pos: int, policy: _Stochastic | None) -> Coll:
-    """The token of sampling event `event` from a row's V logits at position `pos` (`call(fn, *refs)` emits, `k(role, **statics)` is
-    the kind): greedy `TokenSelect`, or `GumbelTopPTokenSelect[vllm]` over the derived `splits` entry or at the single request's
-    constant S, its per-row constants in operand order (top_p, pos, temperature[, S])."""
+def select_token(call, k, logits: Refs, V: int, pos: int, policy: _Stochastic | None) -> Coll:
+    """The token of a row's V logits at position `pos` (`call(fn, *refs)` emits, `k(role, **statics)` is
+    the kind): greedy `TokenSelect`, or `GumbelTopPTokenSelect[vllm]` at the registered S, its per-row constants in operand order
+    (top_p, pos, temperature, S)."""
     if policy is None:
         return call(k("token_select", V=V), logits)
-    fn = (k("token_select_stochastic", V=V, CONSTRUCTION=target.effective_sampler_construction()) if policy.S == "derived"
-          else k("token_select_stochastic_split", V=V, S=int(policy.S)))
+    fn = k("token_select_stochastic_split", V=V, S=int(policy.S))
     top_p = call(k("const", W=32, BITS=policy.top_p_bits))
     pos_c = call(k("const", W=64, BITS=int(pos) & 0xFFFFFFFFFFFFFFFF))
     temp = call(k("const", W=32, BITS=policy.temperature_bits))
-    splits = policy.splits.refs.slice(event, event + 1) if policy.S == "derived" else call(k("const", W=32, BITS=int(policy.S))).refs
+    splits = call(k("const", W=32, BITS=int(policy.S))).refs
     return call(fn, logits, top_p.refs, policy.seed.refs, pos_c.refs, temp.refs, splits)
 
 

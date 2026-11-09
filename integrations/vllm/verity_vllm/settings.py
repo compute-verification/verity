@@ -220,8 +220,6 @@ SETTINGS: dict[str, Setting] = _declare(
       "though `global_match_fast.enabled` reads unset as off (`--match-impl`, which the row exports)"),
     S("MATCH_WORKERS", stripped, "", VALUE, "forked workers for the match's per-request parts; empty, min(cpu_count, 8)"),
     S("MATCH_COMPACT", not_zero, True, VALUE, "the match holds operands as run progressions; 0, as runs (the representation's A/B)"),
-    S("STOCH_DECLARED_CHRONOLOGY_S", one, False, VALUE, "1: a workload Program composes components derived under stoch's "
-      "experimental per-event S schedule, which it otherwise refuses"),
     S("X09_PROFILE_OUT", str, None, DEBUG, "the file the batch decomposition writes its phase profile to; unset or blank, no profile"),
     S("X09_FORCE_DAG", str, None, VALUE, "1 runs the batch decomposition's DAG diagnostic even when the sequence criterion held, adding "
       "its fields to the record (diagnostic only, never on a workload of record)"),
@@ -287,6 +285,7 @@ VERITY_E2E_CASE VERITY_E2E_EXCLUDE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERI
 VERITY_E2E_WINDOW_MB VERITY_E2E_WORKLOAD VERITY_ENCODINGS_ADVICE_V0 VERITY_EVALUATE_FULL_LOGF VERITY_EXHAUSTIVE VERITY_FA2_CSRC
 VERITY_FLOCK_CACHE VERITY_FLOCK_INNER_FOLD VERITY_FLOCK_SAME_SHAPE_FULL VERITY_GIT_GUARD VERITY_GPU_TORCH_ONLY
 VERITY_H1_REGISTER VERITY_HP_ARCHIVE VERITY_KV_SO VERITY_LEAF_LAYOUT VERITY_LEAN_MEM_FLOOR_GIB VERITY_ML_BOOLEAN_EXHAUSTIVE
+VERITY_ML_DEFINITIONS_SLOW
 VERITY_MOE_PROGRAM_DIRS VERITY_MUFU_TABLES VERITY_MUFU_TANH_TABLES VERITY_NETWORK_RECORDS_EXE VERITY_NUMERICAL_STORE
 VERITY_PAGED_SO VERITY_POUS_SLOW VERITY_POUW_CUDA_ARCH VERITY_POUW_CUDA_BUILD VERITY_POUW_H1_PIN
 VERITY_POUW_H1U_SO VERITY_POUW_NOISE_CUBIN VERITY_POUW_NVCC VERITY_POUW_WINDOW_LOWERED_LANES VERITY_REAL_GIT VERITY_REGRESSION

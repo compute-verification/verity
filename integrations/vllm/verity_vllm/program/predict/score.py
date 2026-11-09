@@ -84,12 +84,12 @@ def phi_of(rec: dict, *, hf_home: str | None = None, checkpoints: dict | None = 
 
 
 #: the policy fields a component Program reads (`vllm_meta.make_wrapper`); the rest of the Build's policy record is provenance
-_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits")
+_POLICY_FIELDS = ("kind", "temperature", "top_p", "top_k", "seeded", "splits", "rid")
 
 
 def sampling_of(w: dict, phi: Phi) -> dict:
     """The row's sampling policy as the Build declares it (`pipeline.build.sampling_policy` over the workload manifest, then
-    `sampler_geometry` on the declared target: the split count, the single request's constant or "derived")."""
+    `sampler_geometry` on the declared target: the registered split count)."""
     import tempfile
     from verity_vllm.pipeline.build import sampler_geometry, sampling_policy
     with tempfile.TemporaryDirectory() as td:
