@@ -12,19 +12,21 @@ observations are accepted with a valid run from the row the extractor's trace ho
 trace run's row at the closing gates, so both rows are functions of the extracted witness. At a fixed opened row its count
 charges no bit of it.
 
-`PooledLeakCarried` is `PooledLeakChecked` over runs that carry the pool: each run opens the row the run before it left,
-or a genesis row where the chain restarts (`PoolChained`, the record rule), and runs its own offline memory check from
-it on its own live coins. An opened row costs no advice bits: the chain fixes it, the previous run's closing row, which
-that run's check pins (`CheckedClosing`), unless two different rows have one root. Accepted runs open the root of the row
-the record rule names (`CarriedRoots`: each run's check of its roots and the record rule give it with no probability). So
-the count is the product of the runs' counts, each leaving out its opened row (`prow`), and the escape bound adds, for
-each opening, a collision of the hash among what the two rows' digests hashed (`PoolColl`). Serving picks the restarts,
-so their pattern is advice: the count gains the number of patterns serving may pick where every audit accepts (`Cs`),
-and a restart a public rule makes after a refused run costs nothing.
+`PooledLeakCarried` is `PooledLeakAccepted` with each run's checked inputs left out of the count, over runs that carry
+the pool: each run opens the row the run before it left, or a genesis row where the chain restarts (`PoolChained`, the
+record rule), and runs its own offline memory check from it on its own live coins. An opened row costs no advice bits:
+the chain fixes it, the previous run's closing row, which that run's check pins (`CheckedClosing`), unless two different
+rows have one root. Accepted runs open the root of the row the record rule names (`CarriedRoots`: each run's check of its
+roots and the record rule give it with no probability). So the count is the product of the runs' counts, each leaving
+out its opened row (`prow`), and the escape bound adds, for each opening, a collision of the hash among what the two
+rows' digests hashed (`PoolColl`). Serving picks the restarts, so their pattern is advice: the count gains the number of
+patterns serving may pick where every audit accepts (`Cs`), and a restart a public rule makes after a refused run costs
+nothing. The escape is bounded by `(1 - q)^Fmax` itself, which is at most `δ` at `Fmax ≥ ln(1/δ)/q`.
 
-It is conditional as `PooledLeakChecked` is: its inputs are named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
+It is conditional as `PooledLeakAccepted` is: its inputs are named (`PeriodChannel`, `PeriodAdaptive`, `PeriodEscapes`,
 `PeriodLeaksCarried`), none discharged yet. At rows read off each run's extracted witness (`RLeakCarried`), a collision at
-an opening is one found from two witnesses.
+an opening is one found from two witnesses. At the empty pool, with no opening or closing gate and one pattern that
+restarts no run, it bounds windows that each hold a pool of their own.
 -/
 
 @[expose] public section

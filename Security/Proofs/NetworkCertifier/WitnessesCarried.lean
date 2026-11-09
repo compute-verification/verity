@@ -79,18 +79,6 @@ theorem SampledLeakCarried_nontrivial :
     (by linarith [leakL_κ (Coin := Bool) []]) hb
   exact fun w hw => leakL_noRLeak FlockDeploy.sha512 _ [] w (rLeak_of_rLeakCarried hw)
 
-/-- **No collision at an opening of the empty pool**: the digests of the empty row hash one message, twice. -/
-theorem poolColl_empty (G : Hash.Msg → Hash.Digest) {m : ℕ} (chains : Fin m → Bool) (i : Fin m) :
-    ¬PoolColl G chains (fun _ => []) (fun _ => []) (fun _ => []) i := by
-  rintro ⟨x, hx, y, hy, hne, -⟩
-  have hseg : Hash.RowSeg.segmentMsgs [] = [] := by
-    simp [Hash.RowSeg.segmentMsgs, Hash.RowSeg.segCount, Hash.RowSeg.SEG_BITS]
-  have hopen : poolOpen chains (fun _ => ([] : Hash.Row)) (fun _ => []) i = [] := by
-    unfold poolOpen
-    split_ifs <;> rfl
-  simp [Hash.RowSeg.hashed, hseg, hopen] at hx hy
-  exact hne (hx.trans hy.symm)
-
 /-- **`PooledLeakCarried`'s escape bound fails at an audit that always accepts**, at its one pattern of no restarts: one
 run, `q = 1`, `Fmax = 1`, no error, every row the empty pool's, and the run's observations empty where its horizon is one
 step, so its good event fails at every sample and no opening collides. -/
