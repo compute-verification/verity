@@ -463,7 +463,8 @@ theorem TheftFaulted : Guarantees.TheftFaulted := by
     (Ou.withFaults (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀))
     (faultChannel R Q Adv O V Tick (κ.Interiors Cf size φ₀) κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ T M
       ((L + 1) * Fintype.card O)) (hfh p hhon)
-    (fun s => ⟨hsim s, withString_mem_faultBudget Ou κ (fun φ => size φ.1) ⟨φ₀, Or.inl rfl⟩ hφ₀ T M _ s⟩)
+    (fun s => ⟨hsim s, withString_mem_faultBudget Ou κ (fun φ : κ.Interiors Cf size φ₀ => size φ.1)
+      (⟨φ₀, Or.inl rfl⟩ : κ.Interiors Cf size φ₀) hφ₀ T M _ s⟩)
     (fun z => run (gen z.1) z.2)
     (fun z l => Stolen (gen z.1) (Ou.out z.2 (Served.view Ou L z.2 l T)))
     (fun z l => gen z.1 ∉ Typ ∨ ¬ Served.Faithful Cf size Ou L (gen z.1) z.2 l ∨ Served.Undetected M l)
