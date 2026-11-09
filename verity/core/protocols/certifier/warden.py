@@ -66,7 +66,7 @@ it fails at once, as the client's other problems do. Every other request's respo
 egress slot past that many `DATA` cells, with a whole cell waiting, fails (limit), so each response the client receives
 holds at most its request's `max_tokens` tokens, hence at most the cap (`NetTiming.Guarantees.ResponseCapped`). The
 cap and its reason enter the parameters' digest, so every record head binds them; a schedule without a cap hashes
-neither and keeps its digest.
+neither and keeps its digest. The period check reads the cap with the schedule and publishes it (`max_tokens_cap`).
 
 **Fail closed.** A connection fails at the first of: an egress cell whose bytes aren't there at its deadline (late),
 a server that hasn't ended by the last of `egress_cells` cells or sends past its request's `max_tokens` under a response
@@ -231,7 +231,7 @@ class WardenParams:
 
 
 #: `WardenParams`' integer fields, every one but `egress` and `max_tokens_cap`: the schedule the period check reads
-#: (`scheduleOf`), whose egress form is the id form and which has no response cap
+#: (`scheduleOf`) beside its `max_tokens_cap` when it has one, whose egress form is the id form
 INTEGER_FIELDS = tuple(f.name for f in fields(WardenParams) if f.name not in ("egress", "max_tokens_cap"))
 
 

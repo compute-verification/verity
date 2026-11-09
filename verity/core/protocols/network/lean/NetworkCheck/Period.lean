@@ -54,12 +54,14 @@ The rows form has, in place of `sync_set`,
 
     "scan": descriptor,
     "schedule": {"bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells",
-                 "lanes", "queue", "slots", "window"}
+                 "lanes", ["max_tokens_cap",] "queue", "slots", "window"}
 
 the scan's Program, its descriptor (`verity-ir/descriptor/v1`, `scan_zk`'s `program.json`), and the network
 certifier's one fixed schedule (`warden.WardenParams`: each a positive integer, B = `cell_bytes` past a cell's 9-byte
 header, B, S = `lanes` · `slots` and T = `window` u32s, and `every`, a slot stride's buckets, dividing T, so each
-link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`),
+link-window is T / `every` timesteps of `lanes` Program slots, `Schedule.programSlots` and `Schedule.windowPrograms`;
+and its response cap `max_tokens_cap` when it has one, a u32 below `egress_cells`, under which a cell's payload holds
+an id request's `max_tokens` field, `maxTokensEnd`),
 whose digest `WardenParams.digest` every registration binds; its `program` is the scan's registered Program, the
 descriptor's SHA-512 (`partition_object.program_sha512`), and its `link` the run's (`warden_serve.LINK`), whose fails record is certified under the link `<link>-fails`. The
 descriptor must decode (`Flock.Program.decode`) and be the scan of the schedule's link-window in the generator form:
@@ -187,8 +189,13 @@ unsampled (`Properties.NetworkPeriod.RowsTiedSampled`), and a tied audit's `faul
 with the change that ties a compute audit sampled in part and lifts that refusal:
 
     {"K": K, "audits": [{"delta", "drawn", "units", "wrong_units"}, …], "cells": c, "eps": m · δ,
-     "scans": [terms, …], "schedules": c, "windows": m}
+     ["max_tokens_cap": cap,] "scans": [terms, …], "schedules": c, "windows": m}
 
+* `max_tokens_cap`, present when the schedule has a response cap and absent when it has none, is that cap: each
+  response the network certifier released in the period has at most its request's `max_tokens` tokens, and every
+  request it released has `max_tokens` at most the cap (`warden`'s "The response cap",
+  `NetTiming.Guarantees.ResponseCapped`). The schedule's digest, which every registration binds, binds it
+  (`Schedule.digest`), and the check publishes the schedule's (`Properties.NetworkPeriod.RowsCapPublished`).
 * `schedules` is `cells`, c = Σ_c ⌈log2 (cap_c + 1)⌉, as the statement multiplies `#Ss` and `∏_c (cap_c + 1)`. A
   schedule (`CertifierSchedule`) is r and D, fixed, and each connection's admission bucket and lane length. The server
   sets a lane's length, when its stream ends, at most `cap_c` cells, and nothing else of it: the network certifier
@@ -249,11 +256,17 @@ def rowSchema : String := "hm96-sha512/row/v2"
 /-- The cell kinds (`PAD`, `DATA`, `END`, `FAIL`, `REFUSED`) and the fail reasons the schedule's digest binds. -/
 def cellKinds : List Nat := [0, 1, 32, 33, 34]
 def failReasons : List String := ["late", "limit", "upstream", "ingress", "malformed", "format"]
+/-- The fail reason a schedule with a response cap adds after `failReasons` (`warden.REASONS`' last): a request past
+the cap, or whose `max_tokens` doesn't parse. -/
+def capReason : String := "cap"
 /-- The egress form (`WardenParams.egress`) of every schedule the check reads: the egress record's id form. A schedule
 of another form has a digest no schedule here has. -/
 def egressForm : String := "id"
 /-- A cell's header: its kind u8, its connection's ordinal u32 and its payload's length u32. -/
 def cellHeader : Nat := 9
+/-- The byte of an id request past its `max_tokens` field (`active.MAX_TOKENS_AT + ID_DIGITS`): under a response cap a
+cell's payload holds at least this much, so the network certifier reads the field off the request's first cell. -/
+def maxTokensEnd : Nat := 130
 
 /-- A compute audit's layout terms, its free inputs it doesn't register and its monitoring period, and what its Program
 gives: its SHA-512, its units (its root's template instances), the most bits one of them commits, and its slot entries'
@@ -280,6 +293,13 @@ structure Schedule where
   queue : Nat
   slots : Nat
   window : Nat
+  /-- The response cap (`WardenParams.max_tokens_cap`), or none. -/
+  maxTokensCap : Option Nat := none
+
+/-- The `fails` record's reasons under the schedule: `failReasons`, and `capReason` after them under a response cap
+(`WardenParams.reasons`). -/
+def Schedule.reasons (s : Schedule) : List String :=
+  if s.maxTokensCap.isSome then failReasons ++ [capReason] else failReasons
 
 /-- S = lanes · r, a row's slots. -/
 def Schedule.allocation (s : Schedule) : Nat := s.lanes * s.slots
@@ -305,6 +325,11 @@ digest), read by the scan whose terms are the last. -/
 inductive Form where
   | clock (syncSet : NetworkCertifier.SyncSet)
   | rows (schedule : Schedule) (digest : ByteArray) (scan : Scan)
+
+/-- The response cap of the form's schedule: the rows form's `maxTokensCap`, none in the clock form. -/
+def Form.maxTokensCap : Form → Option Nat
+  | .clock _ => none
+  | .rows s .. => s.maxTokensCap
 
 structure Params where
   audits : Array Audit
@@ -407,9 +432,19 @@ def paramsKeys : List String :=
 def rowsParamsKeys : List String :=
   ["audits", "cells", "first", "jitter", "key", "link", "lms", "program", "scan", "schedule", "session", "windows"]
 
+/-- A schedule's keys without a response cap. -/
+def scheduleKeys : List String :=
+  ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes", "queue",
+    "slots", "window"]
+
+/-- A schedule's keys with a response cap. -/
+def cappedScheduleKeys : List String :=
+  ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
+    "max_tokens_cap", "queue", "slots", "window"]
+
 def scheduleOf (j : Json) : V Schedule := do
-  exactly j ["bucket_ms", "cell_bytes", "delay", "egress_cells", "every", "ingress_buckets", "ingress_cells", "lanes",
-    "queue", "slots", "window"] "schedule"
+  let capped := keysOf j == cappedScheduleKeys
+  unless capped do exactly j scheduleKeys "schedule"
   let pos : String → V Nat := fun k => do
     let x ← Flock.J.nat j k "schedule"
     unless 1 ≤ x do throw s!"schedule: {k} is a positive integer"
@@ -418,23 +453,31 @@ def scheduleOf (j : Json) : V Schedule := do
     { bucketMs := ← pos "bucket_ms", cellBytes := ← pos "cell_bytes", delay := ← pos "delay",
       egressCells := ← pos "egress_cells", every := ← pos "every", ingressBuckets := ← pos "ingress_buckets",
       ingressCells := ← pos "ingress_cells", lanes := ← pos "lanes", queue := ← pos "queue", slots := ← pos "slots",
-      window := ← pos "window" }
+      window := ← pos "window", maxTokensCap := ← if capped then some <$> pos "max_tokens_cap" else pure none }
   unless cellHeader + 1 < s.cellBytes do throw s!"schedule: a cell holds its {cellHeader}-byte header and a byte"
   unless s.cellBytes < 2 ^ 32 ∧ s.allocation < 2 ^ 32 ∧ s.window < 2 ^ 32 do
     throw "schedule: B, S = lanes · slots and T = window are u32s"
   unless s.window % s.every == 0 do throw "schedule: every divides the window: a window is whole timesteps"
+  if let some cap := s.maxTokensCap then
+    unless cap < 2 ^ 32 ∧ cap < s.egressCells do
+      throw "schedule: max_tokens_cap is a u32 below egress_cells: a capped response's END is its egress cell \
+        max_tokens"
+    unless maxTokensEnd + cellHeader ≤ s.cellBytes do
+      throw s!"schedule: under a response cap a cell is at least {maxTokensEnd + cellHeader} bytes, so it holds an id \
+        request's max_tokens"
   pure s
 
 /-- `WardenParams.digest`: the schedule's canonical JSON, with its egress form, the cell kinds and the fail reasons,
-tagged. -/
+tagged. A schedule without a response cap has neither the cap nor `capReason` in it, so its digest is the one it had
+before the cap was a parameter. -/
 def Schedule.digest (s : Schedule) : V ByteArray :=
-  Identity.identityDigestSha512 scheduleTag (Json.mkObj [
+  Identity.identityDigestSha512 scheduleTag (Json.mkObj ([
     ("bucket_ms", toJson s.bucketMs), ("cell_bytes", toJson s.cellBytes), ("delay", toJson s.delay),
     ("egress", toJson egressForm), ("egress_cells", toJson s.egressCells), ("every", toJson s.every),
     ("ingress_buckets", toJson s.ingressBuckets),
     ("ingress_cells", toJson s.ingressCells), ("lanes", toJson s.lanes), ("queue", toJson s.queue),
     ("slots", toJson s.slots), ("window", toJson s.window), ("kinds", toJson cellKinds),
-    ("reasons", toJson failReasons)])
+    ("reasons", toJson s.reasons)] ++ (s.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList))
 
 /-- The scan's templates' parameters in the generator form: bucket 0's (`ingress_scan.IngressScanFirst`, from the empty
 state), each later ingress bucket's (`ingress_scan.IngressScanBucket`) and the egress bucket's (`egress.EgressBucket`),
@@ -905,6 +948,20 @@ def rowsDomain (s : Schedule) (sd session : ByteArray) (link : String) (d : Dire
     ("slots", toJson s.allocation), ("rows", toJson s.window), ("row_schema", .str rowSchema)])
   pure (Flock.FV3.Sha512.Domain.make binding (-1) 0 s.window).id
 
+/-- `WardenParams()`'s schedule, the defaults. -/
+def defaultSchedule : Schedule :=
+  { bucketMs := 100, cellBytes := 256, delay := 10, egressCells := 4096, every := 1, ingressBuckets := 50,
+    ingressCells := 64, lanes := 16, queue := 64, slots := 4, window := 600 }
+
+-- `WardenParams().digest` and `WardenParams(max_tokens_cap=4).digest`: the cap and its reason are in the digest only
+-- under a cap
+#guard (defaultSchedule.digest.map Flock.hexOf).toOption == some
+  "9a727d16f6c1f351d316465c101269c2a4666cbcdf1dbaaef01579fd7e72315a\
+    ae2be1451412c6328d9f6688f534fb8bbe5416bbaeb5cfc0cae48597c5fd0d50"
+#guard (({ defaultSchedule with maxTokensCap := some 4 } : Schedule).digest.map Flock.hexOf).toOption == some
+  "8832fdae0616446e90e1b4178ab99c0e3d67bf790d5bb81512f13c651767adc3\
+    0a29f9401b9eb0a2cdf2a8d1c02c50304353250f06af526a970074a207bf3d12"
+
 /-- `CellsHead.digest`: `tagged_sha512(CELLS_TAG, H)` of the head the network certifier signs for the rows. -/
 def headDigest (link : String) (d : Direction) (w : Nat) (sd : ByteArray) (s : Schedule) (wiring dom root : ByteArray) :
     V ByteArray := do
@@ -1180,6 +1237,8 @@ structure Public where
   rows : Bool := false
   schedules : Nat
   windows : Nat
+  /-- The schedule's response cap (`Form.maxTokensCap`), published when it has one. -/
+  maxTokensCap : Option Nat := none
 
 def Public.K (x : Public) : Nat := x.schedules + x.cells + (x.units.map (·.bits)).foldl (· + ·) 0
 
@@ -1242,9 +1301,10 @@ def check (p : Params) (c : Commitment) (e : Evidence) : Core.Outcome Public Pro
     | some (_, r) => .undecided r
     | none =>
       let audits := as.filterMap (·.toOption)
-      .accept (match p.form with
+      .accept { (match p.form with
           | .clock ss => terms p.audits audits p.cells p.jitter (ss.deltas.length * ss.rhos.length) p.windows
-          | .rows _ _ scan => rowsTerms audits scan scans p.cells p.jitter p.windows)
+          | .rows _ _ scan => rowsTerms audits scan scans p.cells p.jitter p.windows) with
+          maxTokensCap := p.form.maxTokensCap }
         { link := p.link, windows := p.windows }
 
 def termsJson (ts : Array AuditTerms) : Json :=
@@ -1261,7 +1321,8 @@ def publicJson (x : Public) : Json :=
   Json.mkObj ([
     ("K", toJson x.K), ("audits", if x.rows then factsJson x.audits else termsJson x.units), ("cells", toJson x.cells),
     ("eps", .str x.eps.toString), ("schedules", toJson x.schedules), ("windows", toJson x.windows)] ++
-    (if x.rows then [("scans", termsJson x.units)] else []))
+    (if x.rows then [("scans", termsJson x.units)] else []) ++
+    (x.maxTokensCap.map fun cap => ("max_tokens_cap", toJson cap)).toList)
 
 def profileJson (pr : Profile) : Json :=
   Json.mkObj [("link", .str pr.link), ("windows", toJson pr.windows)]

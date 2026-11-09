@@ -2039,7 +2039,8 @@ cut into a cell or reaches the server, and it fails at once. It is never clamped
 request's `max_tokens`: a whole `DATA` cell past that many fails the connection (`limit`) in its slot. So each
 certified response holds at most its request's `max_tokens` tokens, hence at most the cap
 (`NetTiming.Guarantees.ResponseCapped`). The cap and its reason enter the parameters' digest, so every record head binds
-them; an uncapped schedule hashes neither and keeps its digest. The period check reads uncapped schedules only.
+them; an uncapped schedule hashes neither and keeps its digest. The period check (`NetworkCheck.Period`) reads the cap
+with the schedule, binds it in the schedule's digest and publishes it (`max_tokens_cap`).
 
 **The leak bound** is what a server can signal on the wire beyond the response it sends:
 - **0 size bits.** Every cell is B bytes, whatever its kind (`PAD`, `DATA`, `END`, `FAIL` or `REFUSED`).
