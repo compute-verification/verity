@@ -16,6 +16,7 @@ import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
 from research import vqueue, vqueue_slim
+from research.drive import PREFLIGHT
 from research.executor import GRAPH_V2, Executor, FileTransport
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Retry, Ring,
                              Snapshot, Verdict)
@@ -1030,6 +1031,11 @@ class Slim:
                               frozenset()),)
         return Verdict(state, fails, down if state == INFRA else (), ended=bool(fails))
 
+    def end(self, run: str, *failed: str) -> None:
+        """``run`` ended: failing the steps ``failed`` names, passing every other preflight."""
+        self.verdicts[run] = FAIL if failed else PASS
+        self.steps[run] = (failed, tuple(s for s in PREFLIGHT if s not in failed))
+
     @staticmethod
     def combine(graph: Verdict, slim: Verdict) -> Verdict:
         state = next(s for s in (FAIL, INFRA, PENDING, LIST_FAILED, PASS) if s in (graph.state, slim.state))
@@ -1235,6 +1241,117 @@ def test_a_fail_whose_every_failure_is_inherited_lands_once_the_run_beside_it_pa
     assert loop.tick() == []                                        # the run beside still runs: the fail hasn't ended
     slim.verdicts["run-1"] = PASS
     assert _acts(loop.tick()) == ["slim", "red", "advance", "on_main", "drop"] and env.main() == built["sha"]
+
+
+def _ticks(env: Env, slim: Slim, loop: Loop, n: int, *failed: str) -> list[dict]:
+    """``n`` ticks of ``loop``, what they logged: each candidate one builds passes graph2's check, and the run beside its check
+    ends failing ``failed``."""
+    logged = []
+    for _ in range(n):
+        logged += (got := loop.tick())
+        for b in got:
+            if b["action"] == "build":
+                keys = env.listed(b["sha"], {"pytest:x": [f"{b['members'][0]}.txt"]})
+                env.result(keys["pytest:x"], "pytest:x", "pass")
+                slim.end(f"run-{len(slim.started)}", *failed)
+    return logged
+
+
+def test_a_red_main_on_a_step_read_whole_is_inherited_from_the_run_beside_main_and_every_lone_member_lands_with_one_red(env):
+    """preflight-lints reads the whole tree, so no candidate is at `main`'s key of it: with `main` red on it, each lone member's
+    run beside its check fails it, and again on its rerun, which ejected every member.  The run beside `main` itself fails it
+    too: each candidate waits for that run, then takes the failure as inherited (`vqueue_slim.based`) and lands, one red rung
+    for all, the run beside each candidate `main` advanced to `main`'s next."""
+    main = env.main()
+    for n in (1, 2, 3):
+        env.put(n, {f"{n}.txt": f"{n}\n"})
+    slim = Slim()
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
+    loop.world.slim_driver = lambda: "drive"
+    logged = _ticks(env, slim, loop, 3, "preflight-lints")
+    assert _acts(logged) == ["slim", "build", "slim", "slim"] and logged[0]["why"] == "started beside `main`"
+    assert logged[3]["record"]["verdict"]["state"] == FAIL and env.main() == main     # waiting for the run beside `main`
+    slim.end("main-1", "preflight-lints")
+    logged = _ticks(env, slim, loop, 8, "preflight-lints")
+    assert _acts(logged).count("advance") == 3 and env.main() == [r for r in logged if r["action"] == "advance"][-1]["sha"]
+    assert [r["action"] for r in logged if r["action"] in ("red", "eject", "rerun", "retry")] == ["red"]
+    assert len(env.posts) == 1 and env.withdrawn == [] and slim.below == [("drive", main)]
+    assert sorted(m for r in logged if r["action"] == "advance" for m in r["members"]) == [1, 2, 3]
+
+
+def test_a_candidate_s_own_failure_of_a_step_read_whole_that_the_run_beside_main_passed_is_its_own(env):
+    """With `main` green on preflight-lints, a lone member whose run beside fails it fails by its own change: no red, no wait,
+    and it is ejected, its failure meeting its files."""
+    env.put(1, {"1.txt": "1\n"})
+    slim = Slim()
+    slim.inputs = frozenset({"*.txt"})
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
+    loop.world.slim_driver = lambda: "drive"
+    slim.end("main-1")
+    logged = _ticks(env, slim, loop, 2, "preflight-lints")
+    assert _acts(logged) == ["slim", "build", "slim", "slim", "slim", "eject", "drop"]
+    assert logged[3]["why"] == "judged pass beside `main`" and env.withdrawn == [(1, logged[1]["heads"][0])]
+    assert env.posts and not [r for r in logged if r["action"] in ("red", "advance")]
+
+
+def test_a_fail_waits_for_the_run_beside_main_while_it_runs_but_no_longer_than_pending_s(env):
+    """A whole-tree step's failure is unknown while the run beside `main` runs: the candidate waits, rather than being rerun or
+    ejected, until that run says, and no longer than `pending_s` after it started; then its failure is its own."""
+    env.put(1, {"1.txt": "1\n"})
+    slim = Slim()
+    slim.inputs = frozenset({"*.txt"})
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1, pending_s=3600)
+    loop.world.slim_driver = lambda: "drive"
+    logged = _ticks(env, slim, loop, 2, "preflight-lints")
+    assert _acts(logged) == ["slim", "build", "slim", "slim"]
+    env.clock += 3600
+    assert loop.tick() == [] and env.withdrawn == []
+    env.clock += 1
+    assert _acts(loop.tick()) == ["eject", "drop"] and len(env.withdrawn) == 1 and slim.below == [("drive", env.main())]
+
+
+@pytest.mark.parametrize("why", ["graph2 fails it too", "the run beside `main` ended in infra"])
+def test_a_fail_waits_for_no_run_beside_main_when_it_fails_by_its_own_or_that_run_can_t_say(env, why):
+    """A failure of its own besides (graph2's) blames the member at once; and a run beside `main` that ended in infra, twice,
+    says nothing of the step: no wait."""
+    env.put(1, {"1.txt": "1\n"})
+    slim = Slim()
+    slim.inputs = frozenset({"*.txt"})
+    loop = env.loop(vqueue.decide, slim=slim, batch=1, depth=1)
+    loop.world.slim_driver = lambda: "drive"
+    if why == "graph2 fails it too":
+        logged = loop.tick()
+        keys = env.listed(logged[1]["sha"], {"pytest:x": ["1.txt"]})
+        env.result(keys["pytest:x"], "pytest:x", "fail")
+        slim.end("run-1", "preflight-lints")
+    else:
+        slim.verdicts["main-1"] = slim.verdicts["main-2"] = INFRA
+        logged = _ticks(env, slim, loop, 2, "preflight-lints")
+    logged += loop.tick()
+    assert _acts(logged)[-2:] == ["eject", "drop"] and len(env.withdrawn) == 1 and len(slim.below) == 1 + (why != "graph2 fails it too")
+
+
+def test_the_run_beside_main_starts_once_a_main_again_once_after_infra_and_with_dry_run_never(env):
+    main = env.main()
+    slim = Slim()
+    dry = env.loop(vqueue.decide, slim=slim, dry_run=True)
+    assert dry.tick() == [] and slim.below == []
+    loop = env.loop(vqueue.decide, slim=slim)
+    loop.world.slim_driver = lambda: "drive"
+    (started,) = loop.tick()
+    assert (started["sha"], started["base"], started["why"], slim.below) == (main, main, "started beside `main`",
+                                                                           [("drive", main)])
+    assert loop.tick() == []
+    slim.verdicts["main-1"] = INFRA
+    judged, again = loop.tick()
+    assert (judged["why"], again["why"], again["record"]["ids"]) == ("judged infra beside `main`", "started again beside `main`",
+                                                                      ["main-2"])
+    slim.verdicts["main-2"] = INFRA
+    assert _acts(loop.tick()) == ["slim"] and loop.tick() == [] and len(slim.below) == 2
+    _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))     # `main` moved by drive
+    (moved,) = loop.tick()
+    assert (moved["sha"], moved["why"], slim.below[-1]) == (env.main(), "started beside `main`", ("drive", env.main()))
+    assert env.loop(vqueue.decide, clone="again", slim=slim, dry_run=True).tick() == [] and len(slim.below) == 3
 
 
 def test_the_shadow_advances_its_own_main_once_a_candidate_and_the_comparer_reads_one_advance_each(env):

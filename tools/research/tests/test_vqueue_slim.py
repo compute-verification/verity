@@ -398,23 +398,25 @@ def test_a_step_read_whole_is_keyed_on_the_tree_so_its_failure_is_never_inherite
     assert drop.outcome.inherited == () and drop.outcome.suspects == (1,)
 
 
-@pytest.mark.parametrize("below", ["failed", "passed", "running"])
+@pytest.mark.parametrize("below", ["failed", "passed", "running", "killed"])
 def test_a_step_read_whole_is_inherited_only_when_the_run_beside_the_base_s_check_failed_it_too(world, monkeypatch, tmp_path,
                                                                                                 below):
     """Never at its base's key, a failure of a step read whole is compared by its test (`step_test`) with the run beside the
     base's own check (`based`): failed there too, it is inherited, and `decide` blames no member; passed there, it is the
-    member's; while that run runs, it is unknown, so the member is suspected as before."""
+    member's; while that run runs, or once it ended in infra, it is unknown, so the member is suspected as before."""
     h, base, sha, _ = _harness(world, monkeypatch, tree=KEYED, change={"docs/notes.md": "more\n"})
     rec_base = start(h.d, base, base)
-    if below != "running":
+    if below == "killed":
+        _rewrite(_slim(h, tmp_path, preflight_fixtures="Killed\n"), preflight_fixtures={"rc": 137})
+    elif below != "running":
         _slim(h, tmp_path, **({"preflight_lints": LINT_LOG} if below == "failed" else {}))
-    assert judge(h.d, rec_base).state == {"failed": FAIL, "passed": PASS, "running": PENDING}[below]
+    assert judge(h.d, rec_base).state == {"failed": FAIL, "passed": PASS, "running": PENDING, "killed": INFRA}[below]
     rec = start(h.d, sha, base)
     _slim(h, tmp_path, preflight_lints=LINT_LOG)
     assert based(judge(h.d, rec), None) == judge(h.d, rec)
     (f,) = (v := based(judge(h.d, rec), rec_base)).failed
     assert f.tests == {"step:preflight-lints"} and f.key != f.base_key is not None
-    assert f.base_tests == {"failed": {"step:preflight-lints"}, "passed": frozenset(), "running": None}[below]
+    assert f.base_tests == {"failed": {"step:preflight-lints"}, "passed": frozenset(), "running": None, "killed": None}[below]
     (drop,) = [a for a in _decided(sha, base, {"docs/notes.md"}, v) if isinstance(a, Drop) and a.sha == sha]
     assert (drop.outcome.inherited, drop.outcome.suspects) == (((f,), ()) if below == "failed" else ((), (1,)))
 
