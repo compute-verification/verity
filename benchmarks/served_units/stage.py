@@ -320,7 +320,11 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     from verity_vllm.pipeline import chunk_rows as CR
     from verity_vllm.pipeline.serving_rows import template
 
-    tp = template(cen.name(S))
+    try:
+        tp = template(cen.name(S))
+    except KeyError as e:
+        raise SystemExit(f"stage.py: {cen.name(S)} lacks the static {e}: census:NAME takes the census name with every static, "
+                         "as the serving rows name it") from None
     d = tp.fn
     params, _ret = d.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
