@@ -18,8 +18,8 @@ import research.vqueue_loop as L
 from research import vqueue, vqueue_slim
 from research.drive import PREFLIGHT
 from research.executor import GRAPH_V2, Executor, FileTransport
-from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Retry, Ring,
-                             Snapshot, Verdict)
+from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
+                             Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
 from test_queue import World as Origin, _git
 
@@ -1477,6 +1477,33 @@ def test_a_candidate_older_than_the_log_s_window_keeps_its_tries_first_enqueue_r
     assert loop.tick() == [] and len(slim.started) == 1
     c = seen[-1].candidates[0]
     assert (c.verdict.state, c.tries, c.enqueued) == (PENDING, 2, T0)
+
+
+def test_a_rerun_graph2_refuses_enqueues_the_check_again_and_the_next_tick_reruns_it(env):
+    """graph2 prunes a check an hour after its verdict once nothing of it runs, and refuses a rerun of it until an enqueue
+    lists it again: the refused rerun enqueues it, logged not done, and the next tick's rerun goes ahead."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(lambda s: [Build((1,), s.main, 5)] if not s.candidates else
+                    [Rerun(c.sha, ("sha512:k",)) for c in s.candidates if not loop.world.reran])
+    loop.world.reran = False
+    (built,) = loop.tick()
+    env.listed(built["sha"], {"pytest:a": ["a.txt"]}, keys={"pytest:a": "sha512:k"})
+    env.graph2_script(loop)
+    real, calls = loop.world.rerun, []
+
+    def refused_once(sha: str, keys) -> str | None:
+        calls.append(sha)
+        if len(calls) == 1:
+            raise Q.QueueError(f"graph2 rerun ready:{sha[:12]} exited 1: the check was pruned")
+        loop.world.reran = True
+        return real(sha, keys)
+
+    loop.world.rerun = refused_once
+    (refused,) = loop.tick()
+    assert (refused["action"], refused["done"]) == ("rerun", False) and "enqueued it again" in refused["why"], refused
+    assert [e["check"] for e in env.graph2.enqueued()] == [f"ready:{built['sha']}"] * 2
+    (rerun,) = loop.tick()
+    assert (rerun["action"], rerun["done"], len(calls)) == ("rerun", True, 2)
 
 
 def _rings_owner_of_one(s: vqueue.Snapshot) -> list:

@@ -1599,13 +1599,29 @@ class Loop:
         keys = [k for k in a.keys if k not in beside]
         failed = [f for f in c.verdict.failed if f.key in a.keys]
         counts = w.counts(keys)
-        said = w.rerun(c.sha, keys) if keys else ""
+        try:
+            said = w.rerun(c.sha, keys) if keys else ""
+        except QueueError as e:
+            return [self._relist(t, c, line, failed, a.keys, str(e))]
         if said is None:
             return [self.record(t, "rerun", **line, why="graph2 has no `rerun`: the failure stands", failed=failed,
                                 keys=list(a.keys), absent=True, done=False)]
         again = self._start(t, c.sha, c.base, line, "started again: its failure is rerun") if set(a.keys) & beside else []
         return [self.record(t, "rerun", **line, why=f"the lone member's own failures, afresh: {said or 'the run beside'}",
                             failed=failed, keys=list(a.keys), counts=counts, done=True), *again]
+
+    def _relist(self, t: Tick, c: Candidate, line: dict, failed: list[Failed], keys: tuple[str, ...], why: str) -> dict:
+        """A rerun graph2 refused: it prunes a check an hour after its verdict once nothing of it runs, and reruns none of it
+        until an enqueue lists it again, its finished tasks answered from the cache.  ``c``'s check is enqueued again here and
+        the rerun logged not done, so the policy asks for it again and the next tick's finds the check listed."""
+        built = t.past.built(c.sha) or {}
+        try:
+            self.world.enqueue(c.sha, built.get("priority") if isinstance(built.get("priority"), int) else 0)
+            what = "enqueued it again, so graph2 lists it afresh, and the next tick reruns"
+        except (QueueError, OSError, subprocess.SubprocessError) as e:
+            what = f"enqueuing it again failed too ({str(e)[-200:]}): the next tick tries again"
+        return self.record(t, "rerun", **line, why=f"graph2 refused the rerun ({why[-200:]}): {what}", failed=failed,
+                           keys=list(keys), done=False)
 
     def _flaky(self, t: Tick) -> list[dict]:
         """Ring the owners of each test graph2 says flaked (its verdict's `flaky`: a fail a rerun replaced), once a key: a test
