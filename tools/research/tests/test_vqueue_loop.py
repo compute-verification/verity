@@ -233,7 +233,9 @@ def test_a_failed_candidate_ejects_the_member_its_failed_inputs_meet_and_the_res
     assert env.queued() == {branch(again["sha"]): again["sha"]}
 
 
-def test_an_ejection_for_a_failed_lean_lock_task_tells_its_owner_how_to_regenerate_the_package_s_records(env):
+def test_an_ejection_for_a_failed_lean_lock_task_is_told_as_any_failure_with_no_word_of_its_own_on_regenerating_records(env):
+    """The records run before a Lean candidate's check regenerates its records, so a lean-lock failure is the change's own,
+    told as any failure is: the task, its key and where its log is."""
     env.put(1, {"a.lean": "1\n"})
     two = env.put(2, {"b.txt": "2\n"})
     loop = env.loop(policy)
@@ -244,14 +246,15 @@ def test_an_ejection_for_a_failed_lean_lock_task_tells_its_owner_how_to_regenera
     eject, _ = loop.tick()
     assert (eject["action"], eject["number"]) == ("eject", 1)
     (post,) = env.posts
-    assert "lock records of Security don't match" in post and "check.py --build --update PKG" in post, post
+    assert f"Failed: lean-lock:Security (key {keys['lean-lock:Security']})" in post, post
+    assert post.endswith("Fix it and mark it ready again") and "regenerate" not in post, post
     env.put(3, {"c.txt": "3\n"})
     (again,) = loop.tick()
     keys = env.listed(again["sha"], {"pytest:b": ["b.txt"], "pytest:c": ["c.txt"]})
     env.result(keys["pytest:b"], "pytest:b", "fail")
     env.result(keys["pytest:c"], "pytest:c", "pass")
     loop.tick()
-    assert "lock records" not in env.posts[-1] and two[:12] in env.posts[-1], env.posts[-1]
+    assert "lean-lock" not in env.posts[-1] and two[:12] in env.posts[-1], env.posts[-1]
 
 
 def test_a_retry_sets_its_infra_results_aside_so_the_check_is_pending_until_a_newer_one_and_infra_is_rung_once(env):
@@ -2249,8 +2252,8 @@ def test_a_records_run_that_ends_in_infra_is_started_once_more_and_then_refuses_
 
 
 def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_and_starts_no_second_records_run(env):
-    """A lean-lock failure of a records commit's check ejects as any failure does, telling how to regenerate the records: no
-    records run follows a check."""
+    """A lean-lock failure of a records commit's check ejects as any failure does, with no word of its own on regenerating
+    records, which the records run before a check does: no records run follows a check."""
     loop, records, sha, one, _ = _records_loop(env)
     records.verdicts["regen-1"] = RecordsRun(PASS)
     _, fixed = loop.tick()
@@ -2259,7 +2262,7 @@ def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_a
     env.result(keys["lean-lock:pkg"], "lean-lock:pkg", "fail")
     eject, drop = loop.tick()
     assert eject["why"] == "lean-lock:pkg failed, and its changed files meet their inputs, no other member's", eject["why"]
-    assert "check.py --build --update PKG" in eject["text"]
+    assert eject["text"].endswith("Fix it and mark it ready again") and "regenerate" not in eject["text"], eject["text"]
     assert (env.withdrawn, drop["sha"], drop["outcome"]["state"], len(records.started)) == ([(1, one)], new, FAIL, 1)
 
 

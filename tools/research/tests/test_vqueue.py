@@ -643,8 +643,7 @@ def test_a_records_commit_is_checked_in_place_of_the_candidate_it_repairs_with_e
 
 
 def test_a_records_commit_whose_records_are_stale_still_fails_as_any_candidate_with_no_second_records_run():
-    """Its check found what its records run didn't settle: an ordinary fail, whose ejection tells the owner how to regenerate
-    the records (`vqueue_loop.LEAN_LOCK_FIX`)."""
+    """Its check found what its records run didn't settle: an ordinary fail, ejected as any is."""
     c = replace(cand("c1r", MAIN, 1, state=FAIL, failed=(stale(),)), repairs="c1")
     assert decide(snap(c, ready=[lean(1)], records=True)) == [
         Eject(1, "h1", "lean-lock:Security failed, and its changed files meet their inputs, no other member's", (stale(),)),
