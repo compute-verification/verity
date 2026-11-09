@@ -15,8 +15,8 @@ Flock's hidden audit (`Pouw.PearlC.FlockTile.TileReadSession.audit`), with the h
 `TileProofSoundAll` replaced by the two it reduces to there, T3 at the TileRead session and the binding, each a
 hypothesis. Its proof is `Pouw.SecurityProofs.PearlC.HiddenFlockSm120v1LoopCast8p72Rev1Cap1000_8192`.
 
-The session and the bridge to core's games are `Definitions.Pouw.PearlC.FlockTile`'s, over Flock's games
-(`Definitions.Flock.Game`).
+The session is `Definitions.Pouw.PearlC.FlockTile`'s, over core's game (`Verity.Game`), the one Flock's soundness is
+stated over.
 -/
 
 @[expose] public section
@@ -27,8 +27,8 @@ open Pouw.PearlC Pouw.PearlC.Assumptions Pouw.PearlC.FlockTile
 
 /-- **v1 under rev1 per audit tile at the cap 1/1,000, 8192³, under Flock's hidden audit**, FP32 at 8.376, the honest
 cast at 8.72: `g = 1648180439/446072750000` (0.36949%), at `t·δzk(q)` more error than the sampled audit, for Flock's
-hidden audit over a TileRead session `F` (`F.audit`: the window root, each sampled tile's TileRead `--zk` session through
-the bridge to core's games, and the class of batch provers whose every induced strategy meets the session's `Cls`).
+hidden audit over a TileRead session `F` (`F.audit`: the window root, each sampled tile's TileRead `--zk` session
+relabelled to flock-verify's verdict, and the class of batch provers whose every induced strategy meets the session's `Cls`).
 
 Its hypotheses, at the cost model `W1.w1Priced` on `W1Device.sm120Loop sha fetch`:
 * `TTOutTilePearlCDevRev1W1` (the device's timing at the cap at W1, a named assumption, as in the sampled audit);

@@ -759,9 +759,11 @@ def check_order(units: Mapping[str, int], wires: Sequence[Wire],
     ranges of units by their place in it, each ``(tid, at, n)`` the units ``[at, at + n)`` of ``tid``, in any order; it
     is refused (``order``) unless each names a template and each template's ranges tile its units. A wire is in order when,
     for every range meeting its reader units, every range meeting the box on the writers it reads there (`Wire.box`) ranks
-    below it, refused (``order``, naming the first wire that isn't). With no order, each template is one range, in a
-    topological order of the templates by their wires (`_kahn`), refused (``cycle``) where they have a cycle, naming a
-    wire on it. The work is per template and range, and per wire the ranges it meets, never per unit."""
+    below it, refused (``order``, naming the first wire that isn't). With no order, the templates are in a topological
+    order by their wires between templates (`_kahn`), refused (``cycle``) where they have a cycle, naming a wire on it,
+    and each template's ranges are its units cut at the reader units of the wires it reads itself by: such a wire passes
+    where each of its reader ranges reads only earlier ranges, and one reading its own range or a later one is refused
+    (``order``). The work is per template and range, and per wire the ranges it meets, never per unit."""
     if order is None:
         order = _kahn(units, wires)
     ranges: dict[str, list[tuple[int, int, int]]] = {}
@@ -795,13 +797,16 @@ def check_order(units: Mapping[str, int], wires: Sequence[Wire],
 
 
 def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
-    """`Spot.Wires.kahn`: each template one range of its units, in a topological order of the templates by their
-    wires, the next at each step the first template by id that reads none not yet placed. Refused (``cycle``) where every
-    template not placed reads one: walking back from the first of them along each one's first wire from one not placed,
-    as many steps as there are of them, ends on a cycle, and the refusal names that template's first such wire."""
+    """`Spot.Wires.kahn`: the templates in a topological order by their wires between templates, the next at each step
+    the first template by id that reads none not yet placed, each one's units cut into ranges at the first and the end
+    reader unit of each wire it reads itself by (`_cut`), in unit order: such a wire is then in order where each of its
+    reader ranges reads only earlier ranges. Refused (``cycle``) where every template not placed
+    reads one: walking back from the first of them along each one's first wire from one not placed, as many steps as
+    there are of them, ends on a cycle, and the refusal names that template's first such wire."""
     ids = sorted(units)
     idx = {t: i for i, t in enumerate(ids)}
-    es = [(j, idx[w.writer], idx[w.reader]) for j, w in enumerate(wires) if w.writer in idx and w.reader in idx]
+    es = [(j, idx[w.writer], idx[w.reader]) for j, w in enumerate(wires)
+          if w.writer in idx and w.reader in idx and w.writer != w.reader]
     indeg, outs, ins = [0] * len(ids), [[] for _ in ids], [[] for _ in ids]
     for j, wr, r in es:
         indeg[r] += 1
@@ -824,8 +829,15 @@ def _kahn(units: Mapping[str, int], wires: Sequence[Wire]) -> list[tuple[str, in
         done[i] = True
         for r in outs[i]:
             indeg[r] -= 1
-        out.append((ids[i], 0, int(units[ids[i]])))
+        out += _cut(ids[i], int(units[ids[i]]), wires)
     return out
+
+
+def _cut(t: str, n: int, wires: Sequence[Wire]) -> list[tuple[str, int, int]]:
+    """`Spot.Wires.selfRanges`: template ``t``'s ``n`` units cut at the first and the end reader unit of each wire it
+    reads itself by (within ``[0, n]``), in unit order; one range ``(t, 0, n)`` where that leaves none."""
+    cs = sorted({0, n, *(min(x, n) for w in wires if w.reader == t == w.writer for x in (w.at, w.at + w.reader_units))})
+    return [(t, a, b - a) for a, b in zip(cs, cs[1:])] or [(t, 0, n)]
 
 
 def _cut_ok(w: _Pattern, k: int, what: str) -> None:

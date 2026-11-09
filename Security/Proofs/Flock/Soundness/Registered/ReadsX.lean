@@ -4,8 +4,7 @@ public import Proofs.Flock.Soundness.Binding.RowsX
 public import Proofs.Flock.Soundness.Registered.Defs
 public import Proofs.Flock.Soundness.StrictCR
 import Mathlib.Combinatorics.Matroid.Init
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.Registered.Binding
 
 /-!
