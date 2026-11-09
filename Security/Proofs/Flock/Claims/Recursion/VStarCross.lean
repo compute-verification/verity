@@ -53,13 +53,13 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
 
 * **The staged statements read back** (`staged_ne_nil`): on an accepted run every V* session ends on a decision
   (`run_decides`), which the outer verifier makes only at a statement that sets up, so every part's staged statement is
-  its encoding (`staged_decode`), whose transcript is the coin server's of the run's inner rounds (`Stage.ofMsg`).
+  its encoding (`staged_decode`), whose transcript is the challenger's live-coin part's of the run's inner rounds (`Stage.ofMsg`).
 * **`RunPairs` at `deployRec`** (`runPairs_deployRec`, no hypothesis): an accepted run sends every inner and staging
   round and at least three more (`roundsMargin_V`), each inner and staging round answered by its coin's bytes
   (`run_inner`), which `FlockDeploy.decCoin` reads back.
 * **`Staged` at `deployRec`** (`staged_deployRec`), at the coins and commit strings a V* statement's transcript shows
-  read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the coin
-  server's transcript of an accepted run's inner rounds back to their prover messages and the values their coins drew
+  read by a reader `untr` (`showsTr`, `cmtTr`): wherever, at the compiled statements of the shape, `untr` reads the challenger's
+  live-coin part's transcript of an accepted run's inner rounds back to their prover messages and the values their coins drew
   (`ReadsBack`), and the layout spans no more than the inner rounds.
   `VstarShows` does not hold at `deployRec`:
   a V* statement staged at rounds where its numbers aren't the part's is the one staged at `pick`, which shows `pick`'s
@@ -72,8 +72,8 @@ what of them holds at `deployRec` with no appeal to V*'s circuits, at every shap
   passing on it (`InnerAccSha` at SHA-512). So `Decomp` holds at a shape exactly where the parts' inner checks together
   give that (`InnerCut`), a fact about how the compiled statement cuts the inner verifier into V*'s parts.
 * **`Decomp` refuses out-of-scope inner statements** (`innerAcc_public`, `decomp_public`): the inner checks run the
-  inner statement's scope check and refuse it without a draw. `readX` runs the scope check and refuses an inner
-  statement without a draw (`innerOk`), so at a statement the reader parses the inner statement holds one
+  inner statement's scope check and refuse it without a sample. `readX` runs the scope check and refuses an inner
+  statement without a sample (`innerOk`), so at a statement the reader parses the inner statement holds one
   (`innerDrawn_checked`, in `DeployChecked`).
 * **Flock's statement check passes the inner statement only in the plain-leaves form** (`check_plain_of_decode`,
   `inner_check_plain`): `RecVStar.innerOf` reads plain leaves off the circuit file (`Tags.withPlainLeaves`), and
@@ -163,15 +163,15 @@ theorem runPairs_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.In
 
 /-! ## The staged statements show the run -/
 
-/-- **A reader of the coin server's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
+/-- **A reader of the challenger's live-coin part's transcript**: at a compiled statement `x`, the rounds a transcript's bytes say,
 each as the prover's message and the coin values the round drew. -/
 abbrev TrReader : Type := Msg → ByteArray → Option (List (Msg × Array Flock.F128))
 
 /-- **The values `vs` are the coin `c`'s first ones**: what a round that drew `vs.size` values shows of its coin. The
-coin server's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
+challenger's live-coin part's record keeps only the values a round drew (its `n`), so a transcript shows no more of a coin. -/
 def Drawn (c : Coin) (vs : Array Flock.F128) : Prop := vs = c.vals vs.size
 
-/-- **The reader reads the coin server's transcript back at an accepted run** (a named premise): at each compiled
+/-- **The reader reads the challenger's live-coin part's transcript back at an accepted run** (a named premise): at each compiled
 statement of the shape, on every accepted run of `V IV b.st`, `untr` reads `b.tr x` of the run's inner rounds back to
 those rounds' prover messages, each with values its round's coin drew (`Drawn`). It asks nothing at a list of rounds
 no accepted run sends, and nothing of a coin past what its round drew. -/
@@ -183,8 +183,8 @@ def ReadsBack (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape 
         ps.map Prod.fst = ((run H P (V IV b.st) x ω r).msgs.take (IV.k (xIOf x))).map Prod.fst ∧
         ∀ i < ps.length, Drawn (coinSeq r i) (ps.getD i ([], #[])).2
 
-/-- **The reader reads the coin server's transcript back before the last round** (a named premise): `ReadsBack` at
-the inner rounds before the last. The coin server records no last round, the openings, so a reader of its record reads
+/-- **The reader reads the challenger's live-coin part's transcript back before the last round** (a named premise): `ReadsBack` at
+the inner rounds before the last. The challenger's live-coin part records no last round, the openings, so a reader of its record reads
 that round back nowhere; the bound layout reads no commit string there (`VStarB.StagedB`). -/
 def ReadsBackB (H : Msg → Msg) (IV : Claims.Verifier Coin) (b : Brings) (shape : Claims.Recursion.Form → Prop)
     (untr : TrReader) : Prop :=
@@ -220,8 +220,8 @@ def cmtTr (untr : TrReader) (x : Msg) (i : ℕ) (xO : Msg) : Msg :=
   ((shownOf untr x xO).map fun ps => (ps.map Prod.fst).getD i []).getD []
 
 /-- **`Staged` at `deployRec`**, at every shape: each V* statement of an accepted run is part `s`'s staged one at the
-run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the coin
-server's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
+run's inner and staging rounds (`run_round`), which reads back (`staged_ne_nil`, `staged_decode`) with the challenger's
+live-coin part's transcript of the run's inner rounds; read by `untr`, wherever it reads that transcript back (`ReadsBack`),
 each round shows values its coin drew, and the rounds' prover messages are the run's commit strings, at each round the
 layout spans, which are inner rounds. -/
 theorem staged_deployRec {W : Type} (H : Msg → Msg) (I : Claims.Recursion.Inner Coin W) (ivScope : Msg → Bool)
@@ -467,7 +467,7 @@ theorem decomp_of_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shap
   fun x st hst hf c ms hc => run_replay_acc H _ c ms (h x st hst hf c ms hc)
 
 /-- **`InnerAcc` reads the inner statement's public checks**: the checks after the verdict run its scope check
-(`scope_of_checks`) and refuse it without a draw (`ProvedScope.drawLaw`), on what the verifier read of it. -/
+(`scope_of_checks`) and refuse it without a sample (`ProvedScope.drawLaw`), on what the verifier read of it. -/
 theorem innerAcc_public {H : Msg → Msg} {x : Msg} {c : ℕ → Coin} {ms : List Msg} (h : InnerAcc H x c ms) :
     ∃ s spec sts, FlockDeploy.setupOf false x = some (s, spec, sts) ∧ s.read.check = .ok () ∧
       ∃ d, s.read.draw = some d := by
@@ -686,7 +686,7 @@ theorem decomp_iff_cut {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {sha
   ⟨fun h x st hst hf c ms hc => innerAcc_of_run H _ c ms (h x st hst hf c ms hc), decomp_of_cut⟩
 
 /-- **`Decomp` asks nothing of the parts to hold where the inner statement is out of scope**: at a compiled statement
-of the shape whose inner statement fails its scope check or holds no draw, the parts' inner checks hold together at no
+of the shape whose inner statement fails its scope check or holds no sample, the parts' inner checks hold together at no
 coins and no inner messages, since the inner verifier accepts none there (`innerAcc_of_run`, `innerAcc_public`). -/
 theorem decomp_public {H : Msg → Msg} {D : Claims.Recursion.Deploy Coin} {shape : Claims.Recursion.Form → Prop}
     {chk : ℕ → Msg → (ℕ → Coin) → List Msg → Prop}
@@ -886,7 +886,7 @@ theorem logDecomp_deployed_setup (rel : Flock.Readable.Parsed → Flock.Readable
 
 /-! ## At the registered ports' layout -/
 
-/-- **`Staged` at `layoutOf`**, at every shape, wherever the reader reads the coin server's transcript back
+/-- **`Staged` at `layoutOf`**, at every shape, wherever the reader reads the challenger's live-coin part's transcript back
 (`ReadsBack`): the layout spans exactly the inner verifier's rounds. -/
 theorem staged_layoutOf (H : Msg → Msg) (rel : Flock.Readable.Parsed → Flock.Readable.Relation)
     (decI : List (ℕ × List FlockLevel3.GF128) → List Claims.Flock.PlainTrace) (ivScope : Msg → Bool) (b : Brings)
@@ -950,7 +950,7 @@ The inner statement as `readX` reads it, and Flock's statement check on it, whic
 hidden outputs without `--zk`, the one form the inner setup's circuit file can take (`InnerLeaf.check_of_innerOf`). -/
 
 /-- What `readX` read of the inner statement: its decoding, its circuit file set up at the inner tags
-(`RecVStar.innerOf`), and Flock's own setup and statement check on it, with a draw (`innerOk`). -/
+(`RecVStar.innerOf`), and Flock's own setup and statement check on it, with a sample (`innerOk`). -/
 theorem readX_inner {x : Msg} {r : XR} (h : readX x = some r) :
     FlockDeploy.decode r.w.inner = some r.innerRaw ∧
       Flock.RecVStar.innerOf r.innerRaw.circuit r.innerRaw.publicFile r.partition r.innerRaw.program = .ok r.dims ∧

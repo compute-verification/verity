@@ -63,7 +63,7 @@ def test_case_v2_names_the_proofs_files_in_place_of_verdicts(tmp_path, RP):
 
 
 def test_v2_names_the_public_file_as_it_was_staged_before_the_draw(tmp_path):
-    """The case's public digest is the one a5 took when it staged the member, before the draw, never the file's digest
+    """The case's public digest is the one a5 took when it staged the member, before the sample, never the file's digest
     read after it: a public file changed since names another file, which v2 finds in no blob."""
     (tmp_path / "pub-4.bin").write_bytes(b"public, changed after the draw")
     s = tmp_path / "sessions" / "a"

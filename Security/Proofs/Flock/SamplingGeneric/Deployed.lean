@@ -9,7 +9,7 @@ public import Proofs.Flock.Claims.Sampling.Deployed
 `ofDeploy D iroots`: a frozen sampled record `D` (`Claims.Sampling.Deploy`) as a compiled sampled verifier over Flock
 at its deployed decoder (`Compiled _ (Arg.ofFlock D.flock)`), at the roots a run shows for a proof block's interior
 values (`iroots`, which the frozen record leaves to its hypotheses). Its verifier, parser, scope check, partition,
-commitment, draw layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
+commitment, sample layout (`stage2`, `rounds`), sessions, reveal, opening count, reference prover and completeness error
 are `D`'s; its sample is `D`'s checked units' first `n_PU` (`checked`: the slots the frozen hypotheses read); a proof
 block's shape is the record's inner waits, truncation and `N₀` and its session's rounds (`sh`); and the bounds on its
 session's errors are `κ_F` and Flock's `γ` at those rounds and the record's weight (`κb`, `γb`). At every `D`:
@@ -65,7 +65,7 @@ section OfDeploy
 variable {Coin Col T : Type} [Fintype Coin] [Nonempty Coin]
 
 /-- **A frozen sampled record as a compiled sampled verifier over Flock**, at its deployed decoder and the roots a run
-shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, draw layout,
+shows for a proof block's interior values: `D`'s verifier, parser, scope check, partition, commitment, sample layout,
 sessions, reveal, opening count, reference prover and completeness error; its sample the checked units' first `n_PU`;
 a proof block's shape the record's inner waits, truncation and `N₀` and its session's rounds; the bounds on its
 session's errors `κ_F` and Flock's `γ` at those rounds and the record's weight. -/
@@ -184,7 +184,7 @@ theorem flock_check_of_R {parse : Msg → Option Claims.Flock.Stmt} {xS : Msg} {
   exact decide_eq_true hrel
 
 omit [Fintype Coin] [Nonempty Coin] [Inhabited Coin] in
-/-- **`fixed` from `DrawFixed`**: a sampled unit's session's rounds are second-stage, and fresh coins on them keep the
+/-- **`fixed` from `DrawFixed`**: a sampled proof block's session's rounds are second-stage, and fresh coins on them keep the
 sample. -/
 theorem fixed_ofDeploy (hf : Claims.Sampling.DrawFixed D) (x : Msg) (r : Fin ((ofDeploy D iroots).V.k x) → Coin)
     (u : ℕ) (hu : u ∈ (ofDeploy D iroots).checked x r) :
@@ -291,15 +291,15 @@ The contract's clauses that read only the sampled verifier's code, as Props of `
 hypothesis of its name at `deployOf F c` (`Iff.rfl`):
 
 * `Code.DrawLaw` (`draws`): on a statement in scope, for each set `B` of proof blocks, a weight of the first-stage coins
-  bounds the probability over the second stage that no slot below the proof units holds a block of `B`, and averages
+  bounds the probability over the second stage that no slot below the proof blocks holds a block of `B`, and averages
   at most `P_a(B)`;
 * `Code.Refuses` (`refuses`): an accepted run's statement parses, its query evaluates, and the pair is in scope;
 * `Code.InteriorFixed` (`interior`): the roots a run shows for a proof block's interior values are the same at fresh
   second-stage coins;
-* `Code.DrawFixed` (`fixed`): a unit checked at a slot below the proof units has its session's rounds in the second
+* `Code.DrawFixed` (`fixed`): a unit checked at a slot below the proof blocks has its session's rounds in the second
   stage, and fresh coins on them keep the checked units. -/
 
-/-- **Draw law**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
+/-- **Sampling design**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.DrawLaw (c : Code) : Prop :=
   ∀ x s Pt, c.parse x = some s → c.partition s = some Pt → InScope Pt s →
     ∀ B ⊆ Finset.range Pt.blocks.length, ∃ esc : (Fin (c.V.k x) → FlockDeploy.Coin) → ℝ, (∀ r, 0 ≤ esc r) ∧
@@ -317,7 +317,7 @@ def Code.InteriorFixed (H : Msg → Msg) (c : Code) (iroots : Msg → Seen → �
   ∀ x (Ω : Type) (P : Prover Ω) ω r d v,
     iroots x (run H P c.V x ω (forkOn (c.stage2 x) r d)).seen v = iroots x (run H P c.V x ω r).seen v
 
-/-- **Draw fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
+/-- **Sample fixed**: a fact about the sampled verifier's code, for a Lean verifier to discharge (Python today). -/
 def Code.DrawFixed (c : Code) : Prop :=
   ∀ x r u, (∃ p : Fin (units c x), (c.checked x r)[p.val]? = some u) →
     c.rounds x u ⊆ c.stage2 x ∧ ∀ d, c.checked x (forkOn (c.rounds x u) r d) = c.checked x r

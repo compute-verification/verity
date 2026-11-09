@@ -146,7 +146,7 @@ def test_the_challenger_reads_the_device_it_audits(monkeypatch, tmp_path) -> Non
 def test_one_store_has_one_challenger_state_whatever_the_tag(monkeypatch, tmp_path) -> None:
     """A run's every window, of every tag, the skip controls and the openings checks among them, is in the store's one
     state, the file the store names in the challenger's state directory, each under a nonce of its own and closed
-    before the next opens; the salt is the fake device's.  A second run draws a new store, with its own state beside
+    before the next opens; the salt is the fake device's.  A second run samples a new store, with its own state beside
     the first."""
     a, out = _run_windows(monkeypatch, tmp_path, [])
     state = a.state_dir / f"{out['store_root']}-{out['salt']}.state"
