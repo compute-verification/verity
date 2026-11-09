@@ -14,7 +14,6 @@ public import Definitions.Nci.Assumptions.Baseline
 public import Definitions.Nci.Assumptions.Layered
 public import Definitions.Nci.Assumptions.Dampener
 public import Definitions.Nci.Assumptions.Training
-public import Definitions.Nci.Assumptions.PackedTraining
 public import Definitions.Nci.Support
 public import Definitions.Nci.Guarantees.CoverTraining
 public import Definitions.Nci.Guarantees.Remote
@@ -287,45 +286,6 @@ def IncompressibleThreadedThrottledOn_nontrivial : Prop :=
     ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧
     T1.Threaded 2 0 1 0 ∧ Assumptions.TrainingIncompressible D ch1 T1 2 0 (1 / 2) (1 / 2) ∧
     ¬ ((1 / 2 : ℝ) * (T1.M ∩ Mθ.S).card ≤ 0 * T1.bound 0 (1 / 2) 1 0 * Dθ.D.size Dθ.D.computed)
-
-/-- **`PackedIncompressibleContainedMatMulOn`'s premises hold together**: `IncompressibleContainedMatMulOn_honest`'s
-instance, `ch1` as a packed chain of one product to a gate. -/
-def PackedIncompressibleContainedMatMulOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2)
-
-/-- **`PackedIncompressibleContainedMatMulOn` without `ThetaRegistered`**: `IncompressibleContainedMatMulOn_nontrivial`'s
-instance, `ch1` packed. -/
-def PackedIncompressibleContainedMatMulOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 1 ≤ 2 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ (∀ ℓ, 1 ≤ ch1.toPacked.d ℓ) ∧ (∀ ℓ, ch1.toPacked.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.DarkReads Mθ 1 ∧
-    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (univ.filter fun p : (ℓ : Fin ch1.toPacked.L) × Fin ch1.toPacked.N × Fin (ch1.toPacked.e ℓ) ×
-            Fin (ch1.toPacked.d ℓ) => ch1.toPacked.prod p.1 p.2.1 p.2.2.1 p.2.2.2 ∈ Mθ.S).card ≤
-      0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ))
-
-/-- **`PackedIncompressibleContainedTrainingOn`'s premises hold together**:
-`PackedIncompressibleContainedMatMulOn_honest`'s instance at coverage `κ = 1`. -/
-def PackedIncompressibleContainedTrainingOn_honest : Prop :=
-  CompliesRate 2 (1 / 2) D ∧ Assumptions.ThetaRegistered D D M1 ∧ Assumptions.DarkReads M1 1 ∧
-    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.Coverage 1 D (2 * ch1.toPacked.G)
-
-/-- **`PackedIncompressibleContainedTrainingOn` without `ThetaRegistered`**:
-`IncompressibleContainedTrainingOn_nontrivial`'s instance, `ch1` packed. -/
-def PackedIncompressibleContainedTrainingOn_nontrivial : Prop :=
-  (0 : ℝ) ≤ 0 ∧ (0 : ℝ) < 1 ∧ (0 : ℝ) < 1 / 2 ∧ (0 : ℝ) < 1 / 2 ∧ 0 < 1 ∧ 1 ≤ 2 ∧ (0 : ℝ) * 2 ≤ 1 ∧
-    (0 : ℝ) ≤ 1 ∧ (1 : ℝ) ≤ 1 ∧ (∀ ℓ, 1 ≤ ch1.toPacked.d ℓ) ∧ (∀ ℓ, ch1.toPacked.e ℓ ≤ 1) ∧ CompliesRate 2 0 Dθ ∧
-    ¬ Assumptions.ThetaRegistered D Dθ Mθ ∧ Assumptions.DarkReads Mθ 1 ∧
-    Assumptions.PackedTrainingIncompressible D ch1.toPacked T1 2 1 (1 / 2) (1 / 2) ∧
-    Assumptions.Coverage 1 D (2 * ch1.toPacked.G) ∧
-    ¬ (max (min ((1 + √1) ^ 2 * (1 / 2 * (1 / 2) * 1 / 1)) (√2 * (1 + √1) * √(1 - 1) * (1 / 2 * √(1 / 2 / 1))))
-          (1 * (1 / 2) / max (1 : ℝ) (1 / (4 * (1 / 2) * 1))) *
-        (1 * D.D.size D.D.computed - 2 * (1 * Mθ.dark.card)) ≤
-      2 * (0 * Dθ.D.size Dθ.D.computed + (1 - 1) * ∑ v ∈ Mθ.dark, (novelReads D {v} : ℝ)))
 
 /-- **`DampenerRemote`'s premises hold together** over the outcomes `Bool` sampled uniformly: one PoUW window of capacity
 `C = 2`, its certificate never wrong (`p = 0`), all of it certified (`W = 2`), no incorrect proof block, so that every

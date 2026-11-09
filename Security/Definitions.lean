@@ -16,7 +16,6 @@ public import Definitions.Nci.Support
 public import Definitions.Nci.Reads
 public import Definitions.Nci.Transfers
 public import Definitions.Nci.Dark
-public import Definitions.Nci.Packed
 public import Definitions.Nci.Covering
 public import Definitions.Nci.Capability
 public import Definitions.Nci.Cut
@@ -70,7 +69,6 @@ public import Definitions.Nci.Guarantees.Capability
 public import Definitions.Accounting.Guarantees.Coverage
 public import Definitions.Nci.Guarantees.Fmt2
 public import Definitions.Nci.Guarantees.Training
-public import Definitions.Nci.Guarantees.PackedTraining
 public import Definitions.Nci.Guarantees.Covering
 public import Definitions.Nci.Guarantees.CoveringTwoCosts
 public import Definitions.Nci.Guarantees.Cut

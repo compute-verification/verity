@@ -5,7 +5,6 @@ public import Definitions.Nci.Threads
 public import Definitions.Nci.Dark
 public import Definitions.Nci.Fit
 public import Definitions.Nci.Layered
-public import Definitions.Nci.Packed
 public import Definitions.Nci.BitView
 public import Definitions.Nci.Covering
 
