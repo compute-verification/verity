@@ -419,6 +419,8 @@ def _cmd_run(argv: list[str], clones: list[Path]) -> int:
         if why:
             print(f"research run: {why}", file=sys.stderr)
             return 2
+        if note := _custody_ttl_warning(ns.custody_ttl, harness_opts):
+            print(f"research run: warning: {note}", file=sys.stderr)
     if ns.project:
         harness_opts = ["--project", ns.project, *harness_opts]
     root = R.runs_root(ns.runs_dir)
@@ -630,9 +632,23 @@ def _normalize_timeout(harness_opts: list[str]) -> list[str]:
     return out
 
 
+#: what a run that outlives its custody key needs, since no key lives past `CUSTODY_TTL_CAP_S`
+CUSTODY_REPAIR = ("if the run outlives the key, publish its custody with a fresh one after it ends: "
+                  "`research data custody RUN --publish` (store README, custody)")
+
+
+def _custody_ttl_warning(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
+    """A launch whose ``--timeout`` is past :data:`CUSTODY_TTL_CAP_S`, with a key at the cap: allowed, and told the repair."""
+    timeout = _harness_timeout(harness_opts)
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and custody_ttl:
+        return f"--timeout {timeout:g} s is past the custody key's {custody_ttl}: {CUSTODY_REPAIR}"
+    return None
+
+
 def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> str | None:
     """Why a custody launch is refused: an explicit ``--custody-ttl`` over :data:`CUSTODY_TTL_CAP_S`, or a ``--timeout`` longer than
-    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload)."""
+    the key's lifetime, the explicit ``--custody-ttl``'s or the default's (the key would expire before the run's upload). A
+    ``--timeout`` past the cap takes a key at the cap, and the run that outlives it is repaired after (`_custody_ttl_warning`)."""
     from research.store import credentials as C  # noqa: PLC0415
     from research.store.custody import DEFAULT_TTL  # noqa: PLC0415
 
@@ -641,10 +657,14 @@ def _custody_ttl_problem(custody_ttl: str | None, harness_opts: list[str]) -> st
     except C.MintError as e:
         return str(e)
     if custody_ttl and ttl > CUSTODY_TTL_CAP_S:
-        return f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap"
+        return (f"--custody-ttl {custody_ttl} is over the {CUSTODY_TTL_CAP_S // 3600} h cap: pass at most "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
     timeout = _harness_timeout(harness_opts)
-    if timeout is not None and timeout > ttl:
-        hours = -(-int(timeout) // 3600) + 1
+    if timeout is not None and timeout > CUSTODY_TTL_CAP_S and ttl < CUSTODY_TTL_CAP_S:
+        return (f"--timeout {timeout:g} s is past the {CUSTODY_TTL_CAP_S // 3600} h a custody key lives at most: pass "
+                f"--custody-ttl {CUSTODY_TTL_CAP_S // 3600}h, and {CUSTODY_REPAIR}")
+    if timeout is not None and CUSTODY_TTL_CAP_S >= timeout > ttl:
+        hours = min(-(-int(timeout) // 3600) + 1, CUSTODY_TTL_CAP_S // 3600)
         if custody_ttl:
             return (f"--timeout {timeout:g} s outlives --custody-ttl {custody_ttl} ({ttl} s; a bare number is seconds): the upload "
                     f"would fail; pass a longer one, at most {CUSTODY_TTL_CAP_S // 3600}h, such as --custody-ttl {hours}h")
