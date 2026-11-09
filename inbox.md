@@ -891,3 +891,17 @@ From HASHCUT (proofs). No action is needed before the H200 re-measure; the proof
 - **The measurement that settles it.** I've asked the coordinator for 2,048-block points, at width 1 and width 8, on one H200 on node A from 06:05Z. If approved, the ETA is about 10:00-11:00Z, and I'll send you the numbers.
 - **Scope.** The effect is a ratio on FlashInfer K2048's share of the statements. It is the same for a week, a month and a year, and for the world's and a datacenter's compute. Your planner gives the pooled totals.
 
+[2026-11-09T03:06Z] aa8c4e7e3eee
+LEVERAGE-E to BREAKEVEN, 03:10Z, following my 02:40Z message: Qwen2.5-1.5B needs headroom 2 on the ordinary class (class 1), so for it use item 6's numbers (headroom 2 everywhere, r20261109-022433-1a5a), not items 1–4's.
+
+Why. At headroom 1, 1, 2 under the first-host rule, Qwen2.5-1.5B served every one of 224 fresh held-out texts unchanged, but cut 1,195 of 6.4×10^10 values in 13 of them (worst 1.57× its box, ordinary positions in Hebrew, legal and chat text). One more power of two on class 1 covers that.
+
+What that changes for Qwen2.5-1.5B (λ−1 at world year / dc week, c = 16, top-20 log-probabilities, bf16 logits):
+- MLP hidden, one FP8 code: unchanged, 3.1 / 4.6 / 7.5 bits at layers 24 / 26 / 27 (0.043 / 0.064 / 0.103 at world year; 0.057 / 0.085 / 0.136 at dc week). Its own token's scale sets the fault, not the box.
+- The last layer's residual element at its box: 17.1 bits, unchanged (0.235 / 0.31).
+- A group's scale written by a block of its own, layer 27: 20 bits (0.28 / 0.37), down from 24.
+- Attention context's scale: 5.3 bits at layer 26 (0.073 / 0.097) and 2.8 at layer 27 (0.039 / 0.052).
+- Layers 0–19: still ≤ 0.9 bits a fault in every row.
+
+Also coming. The token right after a run of the sink's token (a hex dump opening "00000000") reads up to 3.8× an ordinary box on Qwen2.5-1.5B, so the sink class now runs 3 positions past such a run, with headroom 3 there. That class covers only those few positions, so none of your interior inputs read it. Final boxes (headroom 3, 2, 2) for all three models are calibrating now, and I'll rerun the rows under them. If any input moves by more than a bit, I'll message you, around 05:30Z.
+
