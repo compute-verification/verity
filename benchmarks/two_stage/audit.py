@@ -9,7 +9,8 @@ S's Q·n_rho proof blocks after that, and the interior's audit by `a5.audit`.
 * **The boundary** (`toy.boundary`): N replay blocks' ingress and egress rows under fresh salts, registered on the stream
   (`Stream.register`, held to the challenger's own window), and the first stage's sample S of Q of them.
 * **The interior** (`toy.interior`): S replayed from the boundary's ingress rows, committed template-major and wired as the
-  replay block's edges, each link member's boundary port under the boundary's salts at S, registered on the stream after the
+  replay block's edges, each wired port its writer's output, one tree a value (`Member.wired_trees` off), each link
+  member's boundary port under the boundary's salts at S, registered on the stream after the
   boundary (`Stream.register_interiors`); its window names the boundary registration and S, which the verifier holds it to
   (`source_of`). The stream's second stage samples ``--k`` proof blocks in each (replay block, template) cell.
 * **The auditor's params** (`toy.references`), fixed before the run: each template's circuit file and the header of its
@@ -181,10 +182,10 @@ def stage_of(registration: S.WindowCommitmentRecord, draw: S.Draw) -> dict:
 
 
 def own_ports(window: T.CS.Binding, drawn: list[int]) -> list[str]:
-    """The interior registration's own ports the sessions read: every port but its link port of each member the second
-    stage drew a unit of."""
-    return sorted(m.port(p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in drawn)
-                  for p, _ in m.all_rows if p != T.link(t))
+    """The interior registration's own ports the sessions read: the port holding each port but its link port of each
+    member the second stage drew a unit of (`Binding.held`: a wired port's, its writer's output port), each once."""
+    return sorted({window.held(m, p) for t, m in enumerate(window.members) if any(m.base <= u < m.base + m.n for u in drawn)
+                   for p, _ in m.all_rows if p != T.link(t)})
 
 
 def own_reads_only(record: dict | None, ports: list[str]) -> bool:
@@ -226,11 +227,11 @@ def pins(proofs: dict, stmts: list[dict]) -> dict[str, bool]:
 
 def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, drawn: list[int], stmts: list[dict],
               record: dict, proofs: dict) -> dict:
-    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links the replay
-    block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, as the stream derives them),
-    the reads the audit record's verdicts of record report, what they name of each session they accepted
-    (`second_stage.verified_of`), and each template's reference header and registered reads the params ``proofs``
-    give."""
+    """Round 2's statement check of the sessions (`second_stage.check`, the form allowed): over the links and wires the
+    replay block's Definition makes (`second_stage.replay_links`, at the boundary record's ports, and
+    `second_stage.replay_wires`, as the stream derives them), the reads the audit record's verdicts of record report,
+    what they name of each session they accepted (`second_stage.verified_of`), and each template's reference header and
+    registered reads the params ``proofs`` give."""
     from verity.core.protocols.spot import second_stage as SS
     from verity.core.protocols.spot.one_stage import audit as A, partition as P
     from verity.ml.circuits.codec import descriptor_id
@@ -241,7 +242,8 @@ def round_two(sample: list[int], window: T.CS.Binding, irec: dict, brec: dict, d
                  SS.replay_links(replay, descriptor_id(T.REPLAY), brec), A.session_registered(verdicts),
                  verified=SS.verified_of(verdicts),
                  refs=tuple((e["template"], e["header"]) for e in proofs["templates"]),
-                 ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]))
+                 ref_reads=tuple((e["template"], e["registered"]) for e in proofs["templates"]),
+                 wires=SS.replay_wires(replay, descriptor_id(T.REPLAY)))
     return SS.check(True, own, stmts).to_json()
 
 
@@ -283,7 +285,7 @@ def expected(a: argparse.Namespace, s: dict, ok: bool, record: dict, window: T.C
     round 2 ``r2`` accepting the statements, and the stream's outcome ``o`` accepted or refused by round 2's two-stage
     form alone (`FORM_REFUSED`, while `second_stage.FORM` is off): the interior's audit record failing no check but
     round 2's, by that code at most, and the replay sample's none. ``--altered``: Lean's verify refused both link
-    members (m0, m3) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
+    members (m0, m4) by `ALTERED` and accepted the fold and flips, round 2 refuses the statements, and the outcome
     refuses."""
     audit, why = s.get("audit") or {}, (s.get("audit") or {}).get("why") or {}
     before = all((s.get("checks_before_draw") or {}).values()) and bool(files) and all((files or {}).values())
