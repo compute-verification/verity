@@ -19,9 +19,11 @@ that run them, and the faults.  The queue is `model.step`, or any function of it
 - A run fails when its tree fails the task, else falsely with probability `World.flaky`; either fail is cached, as a pass
   is.  A tree fails the tasks its start's tree is red on (`World.red`, cached as failed at the start) and those a PR head
   in its history breaks, less those a later head in it fixes.  With probability `World.infra` a run ends in an infra error
-  instead, which is never cached.  Each result carries the task's key on its tree and on the tree's base.
+  instead, which is never cached.  Each result carries the task's key on its tree and on the tree's base, and a fail its
+  failing tests (`RED` for a task the start is red on, `#N` for one PR N breaks, `flaky:<run>` for a false fail) and the
+  base's failing tests of the task.  A `Rerun` runs a task afresh, its cached result set aside.
 - An ejected PR comes back `World.fix` minutes later at a new head that breaks nothing.
-- An advance is unsound when the tree fails a task `main` didn't.
+- An advance is unsound when the tree fails a test `main` didn't.
 
 `summary` reports ready-to-main (from a PR's first ready mark to the first `main` holding its last head) and main's lag (at
 each sample, how long the PR the queue has held longest off `main` has waited since it was ready and reviewed).
@@ -35,6 +37,9 @@ from dataclasses import dataclass, field
 from typing import Callable, Iterable
 
 from verity_landq import model as lq
+
+#: the failing test of a task the start's tree is red on
+RED = "red"
 
 
 @dataclass(frozen=True)
@@ -96,12 +101,13 @@ class Report:
     candidates: int = 0
     bisections: int = 0
     retries: int = 0
+    reruns: int = 0
     pages: int = 0
     runs: int = 0
     cached: int = 0
     busy: float = 0.0                           # node-minutes of runs
     advances: int = 0
-    unsound: tuple[str, ...] = ()               # trees main moved to that hold a change breaking a task
+    unsound: tuple[str, ...] = ()               # trees main moved to that fail a test main didn't
 
 
 Step = Callable[[lq.State, lq.Event, lq.Policy], tuple[lq.State, tuple[lq.Decision, ...]]]
@@ -111,7 +117,8 @@ def simulate(arrivals: Iterable[Arrival], world: World, policy: lq.Policy, *, st
              state=None, limit: int = 5_000_000, until: float | None = None) -> Report:
     """Replay ``arrivals`` through ``step`` in ``world`` until nothing is left to happen, ``limit`` events, or minute
     ``until``, where the report ends.  ``state`` is the queue's start (`State.start(main)` when None); another queue's state
-    need only list its candidates as `stack`, each with its `tree`."""
+    need only list its candidates as `stack`, each with its `tree`, and a `now` it has is set to the minute of each event
+    before the event is stepped."""
     return _Sim(tuple(arrivals), world, policy, step, main, limit, state).run(until)
 
 
@@ -133,7 +140,7 @@ def summary(r: Report, *, within: float = 120.0, lag: float = 180.0, every: floa
             "lag_max_h": max(samples, default=0.0) / 60, "lag_ok": sum(s <= lag for s in samples) / len(samples) if samples else 1.0,
             "ejects": sum(x.ejects for x in rows), "false_ejects": sum(x.false_ejects for x in rows),
             "candidates": r.candidates, "bisections": r.bisections, "advances": r.advances, "retries": r.retries,
-            "pages": r.pages, "runs": r.runs, "cached": r.cached,
+            "reruns": r.reruns, "pages": r.pages, "runs": r.runs, "cached": r.cached,
             "utilization": r.busy / (r.nodes * (r.end - start)) if r.end > start else 0.0, "unsound": len(r.unsound)}
 
 
@@ -191,8 +198,12 @@ def _bit(pr: int, head: str) -> int:
 class _Run:
     task: int
     key: int
-    bad: bool
+    bad: frozenset[str]                         # the tests its tree fails of the task
     waiters: set[str] = field(default_factory=set)
+
+
+def _tests(bad: frozenset[tuple[int, str]], i: int) -> frozenset[str]:
+    return frozenset(t for j, t in bad if j == i)
 
 
 class _Sim:
@@ -212,12 +223,15 @@ class _Sim:
         if unknown:
             raise ValueError(f"World.red names tasks the world doesn't list: {unknown}")
         red = frozenset(self.index[t] for t in world.red)
-        self.trees: dict[str, tuple[tuple[int, ...], frozenset[int]]] = {main: (tuple(0 for _ in self.tasks), red)}
+        # a tree's keys by task, and the (task, test) pairs it fails
+        self.trees: dict[str, tuple[tuple[int, ...], frozenset[tuple[int, str]]]] = {
+            main: (tuple(0 for _ in self.tasks), frozenset((i, RED) for i in red))}
         self.base: dict[str, str] = {}
         self.main = main
         self.live: set[str] = set()
-        self.cache: dict[tuple[int, int], str] = ({(i, 0): lq.FAIL if i in red else lq.PASS for i in range(len(self.tasks))}
-                                                  if world.warm else {})
+        self.cache: dict[tuple[int, int], tuple[str, frozenset[str]]] = (
+            {(i, 0): (lq.FAIL, frozenset({RED})) if i in red else (lq.PASS, frozenset()) for i in range(len(self.tasks))}
+            if world.warm else {})
         self.runs: dict[int, _Run] = {}
         self.by_key: dict[tuple[int, int], int] = {}
         self.runq: list = []
@@ -227,7 +241,7 @@ class _Sim:
         self.rows: list[dict] = []
         self.open: dict[int, tuple[str, float]] = {}
         self.held: list[tuple[float, float]] = []
-        self.counts = dict(candidates=0, bisections=0, retries=0, pages=0, runs=0, cached=0, advances=0)
+        self.counts = dict(candidates=0, bisections=0, retries=0, reruns=0, pages=0, runs=0, cached=0, advances=0)
         self.busy = 0.0
         self.unsound: list[str] = []
         for a in sorted(arrivals, key=lambda a: (a.ready, a.pr)):
@@ -254,10 +268,11 @@ class _Sim:
         self.info[(pr, head)] = (paths, touched(breaks), touch, touched(fixes))
         self.row[(pr, head)] = rid
 
-    def result(self, tree: str, i: int, status: str) -> lq.Result:
+    def result(self, tree: str, i: int, status: str, tests: frozenset[str] = frozenset()) -> lq.Result:
         base = self.base.get(tree)
+        base_tests = None if base is None else _tests(self.trees[base][1], i) or None
         return lq.Result(tree, self.names[i], status, self.tasks[i].inputs, f"{self.trees[tree][0][i]:x}",
-                         None if base is None else f"{self.trees[base][0][i]:x}")
+                         None if base is None else f"{self.trees[base][0][i]:x}", tests, base_tests)
 
     def push(self, t: float, kind: str, payload) -> None:
         heapq.heappush(self.heap, (t, self.n, kind, payload))
@@ -282,6 +297,8 @@ class _Sim:
                       **self.counts)
 
     def feed(self, event: lq.Event) -> None:
+        if hasattr(self.state, "now"):
+            self.state.now = self.now
         self.state, ds = self.step(self.state, event, self.policy)
         if any(isinstance(d, lq.Cancel) and d.why == lq.BISECTED for d in ds):
             self.counts["bisections"] += 1
@@ -325,7 +342,7 @@ class _Sim:
             got = self.cache.get((i, keys[i]))
             if got is not None:
                 self.counts["cached"] += 1
-                self.feed(self.result(tree, i, got))
+                self.feed(self.result(tree, i, *got))
             else:
                 self.want(i, tree)
 
@@ -338,7 +355,7 @@ class _Sim:
             return
         rid = self.n
         self.n += 1
-        self.runs[rid] = _Run(i, keys[i], i in bad, {tree})
+        self.runs[rid] = _Run(i, keys[i], _tests(bad, i), {tree})
         self.by_key[k] = rid
         if self.tasks[i].off_pool:
             self.begin(rid)
@@ -369,17 +386,18 @@ class _Sim:
         task = self.tasks[run.task]
         if not task.off_pool:
             self.free += 1
+        tests: frozenset[str] = frozenset()
         if self.rng.random() < self.world.infra:
             status = lq.INFRA
         elif run.bad or self.rng.random() < self.world.flaky:
-            status = lq.FAIL
+            status, tests = lq.FAIL, run.bad or frozenset({f"flaky:{rid}"})
         else:
             status = lq.PASS
         if status != lq.INFRA:
-            self.cache[(run.task, run.key)] = status
+            self.cache[(run.task, run.key)] = (status, tests)
         for tree in sorted(run.waiters):
             if tree in self.live:
-                self.feed(self.result(tree, run.task, status))
+                self.feed(self.result(tree, run.task, status, tests))
         self.dispatch()
 
     def on_back(self, pr: int, head: str) -> None:
@@ -396,7 +414,8 @@ class _Sim:
             b = _bit(m.pr, m.head)
             for i in touch:
                 keys[i] ^= b
-            bad = (bad | breaks) - fixes
+            broken = {(j, f"#{m.pr}") for j in breaks}
+            bad = {(j, t) for j, t in bad | broken if j not in fixes}
         tree = f"T{d.cid}"
         self.trees[tree] = (tuple(keys), frozenset(bad))
         self.base[tree] = d.base
@@ -433,6 +452,13 @@ class _Sim:
         self.counts["retries"] += 1
         if d.tree in self.live:
             self.want(self.index[d.task], d.tree)
+
+    def do_Rerun(self, d: lq.Rerun) -> None:
+        self.counts["reruns"] += 1
+        if d.tree in self.live:
+            i = self.index[d.task]
+            self.cache.pop((i, self.trees[d.tree][0][i]), None)
+            self.want(i, d.tree)
 
     def do_Page(self, d: lq.Page) -> None:
         self.counts["pages"] += 1

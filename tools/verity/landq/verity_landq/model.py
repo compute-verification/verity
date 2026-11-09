@@ -159,13 +159,16 @@ class Listed:
 @dataclass(frozen=True)
 class Result:
     """Task `task` ended on `tree` with `status`: `PASS`, `FAIL` (with the task's declared `inputs`) or `INFRA`; `key` is the
-    task's key on `tree` and `base_key` its key on the tree's base, when the world knows them (the model reads neither)."""
+    task's key on `tree` and `base_key` its key on the tree's base, `tests` a fail's failing tests and `base_tests` the
+    base's failing tests of the task (None when the base passes it), when the world knows them (the model reads none)."""
     tree: str
     task: str
     status: str
     inputs: frozenset[str] = frozenset()
     key: str | None = None
     base_key: str | None = None
+    tests: frozenset[str] = frozenset()
+    base_tests: frozenset[str] | None = None
 
     def __post_init__(self) -> None:
         if self.status not in (PASS, FAIL, INFRA):
@@ -227,6 +230,13 @@ class Retry:
 
 
 @dataclass(frozen=True)
+class Rerun:
+    """Run task `task` on `tree` afresh: the cached result at its key is set aside, so the run doesn't read it."""
+    tree: str
+    task: str
+
+
+@dataclass(frozen=True)
 class Page:
     """Task `task` on `tree` has ended with an infra outcome `attempts` times."""
     tree: str
@@ -242,7 +252,7 @@ class SetAside:
     cid: int
 
 
-Decision = Union[Build, Cancel, Advance, Eject, Retry, Page, SetAside]
+Decision = Union[Build, Cancel, Advance, Eject, Retry, Rerun, Page, SetAside]
 
 
 # --- state ---------------------------------------------------------------------------------------------------------------

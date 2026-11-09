@@ -57,3 +57,10 @@ def test_the_table_has_the_old_path_and_one_row_per_combination() -> None:
     s = sim.summary(sim.simulate(replay.arrivals(DOC, 0.0, 0, W)[0], W, replay.lq.Policy()))
     text = replay._table(replay.old_path(DOC), [{"batch": 4, "depth": 2, "nodes": 4, **s}])
     assert text.splitlines()[1].startswith("old path") and text.splitlines()[2].startswith("4  2  4")
+
+
+def test_set_reads_snapshot_fields_and_the_model_refuses_them() -> None:
+    assert [replay._field(s) for s in ("lean=3", "pending_s=1.5e4", "now=.5", "x=a")] == [
+        ("lean", 3), ("pending_s", 15000.0), ("now", 0.5), ("x", "a")]
+    with pytest.raises(SystemExit, match="snapshot queue"):
+        replay.queue("model", {"lean": 3})

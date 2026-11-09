@@ -3,7 +3,7 @@ the model's events and decisions, so the simulator and the property tests run it
 
     from research import vqueue
     from verity_landq import sim, snapshots
-    q = snapshots.Driver(vqueue)
+    q = snapshots.Driver(vqueue, lean=3)
     sim.simulate(arrivals, world, policy, step=q.step, state=q.start("main"))
 
 The driver stands in for the queue's loop.  It builds each snapshot from what the events said: the ready and reviewed PRs,
@@ -11,9 +11,12 @@ the candidates with the verdict their results make, and the outcomes of decided 
 each action into the model's decision with the same effect on the world, and calls it again until it asks for nothing
 new, as a loop that ticks often would.  A tick that builds waits for its trees before deciding again, as the loop's builds
 finish within its tick.  A candidate's verdict is `fail` once a task failed, `pass` once every listed task passed, `infra`
-once every task has an outcome and some only infra ones, else `pending`; a failure carries the task's key and, where the
-contract has `Failed.base_key`, its key on the candidate's base, as the world's results give them.  A `Red` is rung as a
-page.  The module is a parameter, so nothing here imports it.
+once every task has an outcome and some only infra ones, else `pending`.  The driver fills each field the contract has
+and leaves the rest to their defaults: a failure's key, its key on the candidate's base, its failing tests and the base's
+(as the world's results give them), whether the verdict has ended (every listed task has an outcome) with its infra
+errors beside its failures, a candidate's reruns and when its check was enqueued, and the snapshot's time (the
+simulator's minutes, as seconds).  Keyword arguments set other snapshot fields, such as `lean`.  A `Red` is rung as a
+page, and a `Rerun` runs the failed keys' tasks afresh.  The module is a parameter, so nothing here imports it.
 """
 from __future__ import annotations
 
@@ -37,13 +40,16 @@ class Cand:
     members: tuple[lq.Member, ...]
     tree: str | None = None
     tasks: frozenset[str] | None = None
-    results: dict[str, tuple[str, frozenset[str], str | None, str | None]] = field(default_factory=dict)  # status, inputs, keys
+    results: dict[str, lq.Result] = field(default_factory=dict)
     tries: int = 1
+    reruns: int = 0
+    enqueued: float | None = None
 
 
 @dataclass
 class QState:
-    """What the driver knows, mutable and its own: `stack` lists the live candidates, as the simulator reads them."""
+    """What the driver knows, mutable and its own: `stack` lists the live candidates, as the simulator reads them, and `now`
+    is the minute the simulator last set."""
     main: str
     ready: dict[int, tuple[str, frozenset[str], bool, int]] = field(default_factory=dict)  # pr: head, paths, reviewed, rank
     stack: list[Cand] = field(default_factory=list)
@@ -52,11 +58,20 @@ class QState:
     cid: int = 0
     rank: int = 0
     decides: int = 0
+    now: float = 0.0
+
+
+def _fields(cls) -> frozenset[str]:
+    return frozenset(getattr(cls, "__dataclass_fields__", {}))
 
 
 class Driver:
-    def __init__(self, vq: ModuleType) -> None:
-        self.vq = vq
+    def __init__(self, vq: ModuleType, **snapshot: object) -> None:
+        unknown = sorted(set(snapshot) - _fields(vq.Snapshot))
+        if unknown:
+            raise TypeError(f"{getattr(vq, '__name__', 'the queue')}.Snapshot has no field {', '.join(unknown)}")
+        self.vq, self.extra = vq, snapshot
+        self.has = {name: _fields(getattr(vq, name)) for name in ("Failed", "Verdict", "Candidate", "Snapshot")}
 
     def start(self, main: str) -> QState:
         return QState(main)
@@ -83,33 +98,50 @@ class Driver:
     # the snapshot ---------------------------------------------------------------------------------------------------------
 
     def snapshot(self, s: QState, policy: lq.Policy):
-        vq = self.vq
+        vq, has = self.vq, self.has
         ready = tuple(vq.Ready(pr, head, paths, lean=any(p.endswith(LEAN) for p in paths), rank=rank)
                       for pr, (head, paths, reviewed, rank) in sorted(s.ready.items(), key=lambda kv: kv[1][3]) if reviewed)
-        cands = tuple(vq.Candidate(c.tree, c.base, tuple(m.pr for m in c.members), tuple(m.head for m in c.members),
-                                   self.verdict(c), c.tries) for c in s.stack)
-        return vq.Snapshot(s.main, ready, cands, tuple(s.history), batch=policy.batch, depth=policy.depth,
-                           rings=policy.page_after)
+
+        def candidate(c: Cand):
+            more = {"reruns": c.reruns} if "reruns" in has["Candidate"] else {}
+            if "enqueued" in has["Candidate"] and c.enqueued is not None:
+                more["enqueued"] = c.enqueued * 60
+            return vq.Candidate(c.tree, c.base, tuple(m.pr for m in c.members), tuple(m.head for m in c.members),
+                                self.verdict(c), c.tries, **more)
+
+        fields = {"batch": policy.batch, "depth": policy.depth, "rings": policy.page_after}
+        if "now" in has["Snapshot"]:
+            fields["now"] = s.now * 60
+        return vq.Snapshot(s.main, ready, tuple(candidate(c) for c in s.stack), tuple(s.history),
+                           **{**fields, **self.extra})
+
+    @staticmethod
+    def key(c: Cand, task: str, r: lq.Result) -> str:
+        return r.key if r.key is not None else f"{task}@{c.tree}"
 
     def verdict(self, c: Cand):
-        vq = self.vq
+        vq, has = self.vq, self.has
         if c.tree is None or c.tasks is None:
             return vq.Verdict()
         got = {t: c.results.get(t) for t in sorted(c.tasks)}
-        based = "base_key" in getattr(vq.Failed, "__dataclass_fields__", {})
 
-        def entry(t: str, o: tuple):
-            inputs = frozenset(WHOLE if i in lq.ROOTS else i for i in o[1])
-            key = o[2] if o[2] is not None else f"{t}@{c.tree}"
-            return vq.Failed(t, key, inputs, o[3]) if based else vq.Failed(t, key, inputs)
+        def entry(t: str, r: lq.Result):
+            inputs = frozenset(WHOLE if i in lq.ROOTS else i for i in r.inputs)
+            more = {k: v for k, v in (("base_key", r.base_key), ("tests", r.tests), ("base_tests", r.base_tests))
+                    if k in has["Failed"]}
+            return vq.Failed(t, self.key(c, t, r), inputs, **more)
 
-        failed = tuple(entry(t, o) for t, o in got.items() if o and o[0] == lq.FAIL)
+        failed = tuple(entry(t, r) for t, r in got.items() if r and r.status == lq.FAIL)
+        infra = tuple(entry(t, r) for t, r in got.items() if r and r.status == lq.INFRA)
+        ended = all(got.values())
         if failed:
+            if "ended" in has["Verdict"]:
+                return vq.Verdict(vq.FAIL, failed=failed, infra=infra, ended=ended)
             return vq.Verdict(vq.FAIL, failed=failed)
-        if all(o and o[0] == lq.PASS for o in got.values()):
+        if all(r and r.status == lq.PASS for r in got.values()):
             return vq.Verdict(vq.PASS)
-        if all(o for o in got.values()):
-            return vq.Verdict(vq.INFRA, infra=tuple(entry(t, o) for t, o in got.items() if o[0] == lq.INFRA))
+        if ended:
+            return vq.Verdict(vq.INFRA, infra=infra)
         return vq.Verdict()
 
     def find(self, s: QState, tree: str) -> int:
@@ -134,7 +166,7 @@ class Driver:
     def on_Built(self, s: QState, e: lq.Built) -> None:
         for c in s.stack:
             if c.cid == e.cid and c.tree is None:
-                c.tree = e.tree
+                c.tree, c.enqueued = e.tree, s.now
         s.building.discard(e.cid)
 
     def on_Conflict(self, s: QState, e: lq.Conflict) -> None:
@@ -150,8 +182,8 @@ class Driver:
         for c in s.stack:
             if c.tree == e.tree:
                 old = c.results.get(e.task)
-                if old is None or old[0] == lq.INFRA:
-                    c.results[e.task] = (e.status, frozenset(e.inputs), e.key, e.base_key)
+                if old is None or old.status == lq.INFRA:
+                    c.results[e.task] = e
 
     def on_MainMoved(self, s: QState, e: lq.MainMoved) -> None:
         s.main = e.tree
@@ -193,10 +225,19 @@ class Driver:
     def do_Retry(self, s: QState, a) -> list[lq.Decision]:
         c = s.stack[self.find(s, a.sha)]
         c.tries += 1
-        again = sorted(t for t, o in c.results.items() if o[0] == lq.INFRA)
+        again = sorted(t for t, r in c.results.items() if r.status == lq.INFRA)
         for t in again:
             del c.results[t]
         return [lq.Retry(c.tree, t, c.tries) for t in again]
+
+    def do_Rerun(self, s: QState, a) -> list[lq.Decision]:
+        c = s.stack[self.find(s, a.sha)]
+        c.reruns += 1
+        keys = set(a.keys)
+        again = sorted(t for t, r in c.results.items() if r.status == lq.FAIL and self.key(c, t, r) in keys)
+        for t in again:
+            del c.results[t]
+        return [lq.Rerun(c.tree, t) for t in again]
 
     def do_Ring(self, s: QState, a) -> list[lq.Decision]:
         c = s.stack[self.find(s, a.sha)]

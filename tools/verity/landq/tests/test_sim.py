@@ -1,4 +1,6 @@
 """The simulator's world on small traces whose outcome is known: timing, the cache by key, capacity, ejects and faults."""
+import types
+
 import pytest
 
 from verity_landq import model as lq
@@ -53,13 +55,46 @@ def test_a_report_can_end_at_a_minute_before_the_queue_is_done() -> None:
     assert (mains(r), r.end) == ({1: 15.0, 2: None}, 50.0)
 
 
-def test_an_advance_is_unsound_only_when_its_tree_fails_a_task_main_did_not() -> None:
+def test_an_advance_is_unsound_only_when_its_tree_fails_a_test_main_did_not() -> None:
     s = sim._Sim((), sim.World(tasks=(A, B), red=frozenset({"unit:b"})), ONE, lq.step, "main", 10)
-    s.trees["T1"] = ((0, 0), frozenset({1}))
-    s.trees["T2"] = ((1, 0), frozenset({0, 1}))
-    s.do_Advance(lq.Advance("T1", ()))
-    s.do_Advance(lq.Advance("T2", ()))
-    assert s.unsound == ["T2"]
+    s.trees["T1"] = ((0, 0), frozenset({(1, sim.RED)}))
+    s.trees["T2"] = ((1, 0), frozenset({(0, "#5"), (1, sim.RED)}))
+    s.trees["T3"] = ((1, 1), frozenset({(1, sim.RED), (1, "#7")}))
+    for tree in ("T1", "T2", "T1", "T3"):
+        s.do_Advance(lq.Advance(tree, ()))
+    assert s.unsound == ["T2", "T3"]
+
+
+def built_once(seen: list[lq.Result], rerun: bool = False):
+    """A queue that builds the first PR alone on `main` as candidate 0, records each result, and reruns the first."""
+
+    def step(s, e, p):
+        if isinstance(e, lq.Ready):
+            return s, (lq.Build(0, "main", (lq.Member(e.pr, e.head, e.paths),), False),)
+        if isinstance(e, lq.Result):
+            seen.append(e)
+            return s, (lq.Rerun(e.tree, e.task),) if rerun and len(seen) == 1 else ()
+        return s, ()
+
+    return step, types.SimpleNamespace(stack=[types.SimpleNamespace(tree="T0")])
+
+
+def test_each_fail_names_its_failing_tests_and_the_base_s() -> None:
+    seen: list[lq.Result] = []
+    step, state = built_once(seen)
+    sim.simulate([arrive(1, 0.0, "a/x.py", "b/x.py", breaks=("unit:a",))],
+                 sim.World(tasks=(A, B), red=frozenset({"unit:b"})), ONE, step=step, state=state)
+    assert [(e.task, e.status, e.tests, e.base_tests) for e in seen] == [
+        ("unit:a", lq.FAIL, {"#1"}, None), ("unit:b", lq.FAIL, {sim.RED}, {sim.RED})]
+
+
+def test_a_rerun_runs_the_task_afresh_past_its_cached_fail() -> None:
+    seen: list[lq.Result] = []
+    step, state = built_once(seen, rerun=True)
+    r = sim.simulate([arrive(1, 0.0, "a/x.py")], sim.World(tasks=(A,), red=frozenset({"unit:a"})), ONE, step=step,
+                     state=state)
+    assert [(e.status, e.tests) for e in seen] == [(lq.FAIL, {sim.RED})] * 2
+    assert (r.runs, r.cached, r.reruns) == (2, 0, 1)
 
 
 def test_a_cold_start_runs_every_task_once_and_later_candidates_read_the_cache() -> None:

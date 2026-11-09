@@ -82,24 +82,108 @@ def test_the_drop_of_a_candidate_now_on_main_records_its_pass() -> None:
 
 def test_a_failed_task_keyed_on_the_whole_tree_reaches_decide_as_a_glob_of_it() -> None:
     c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"lean-suites"}),
-                       results={"lean-suites": (lq.FAIL, frozenset({"."}), None, None)})
+                       results={"lean-suites": lq.Result("T1", "lean-suites", lq.FAIL, frozenset({"."}))})
     assert D.verdict(c).failed == (vq.Failed("lean-suites", "lean-suites@T1", frozenset({snapshots.WHOLE})),)
 
 
-def test_a_failure_carries_its_key_and_its_base_key_where_the_contract_has_one() -> None:
-    @dataclass(frozen=True)
-    class Failed:
-        task: str
-        key: str
-        inputs: frozenset[str]
-        base_key: str | None = None
+@dataclass(frozen=True)
+class Failed:
+    task: str
+    key: str
+    inputs: frozenset[str]
+    base_key: str | None = None
+    tests: frozenset[str] = frozenset()
+    base_tests: frozenset[str] | None = None
 
-    based = types.SimpleNamespace(**{k: getattr(vq, k) for k in dir(vq) if not k.startswith("_")})
-    based.Failed = Failed
-    c = snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=frozenset({"unit:b"}),
-                       results={"unit:b": (lq.FAIL, frozenset({"b/"}), "7", "7")})
-    assert snapshots.Driver(based).verdict(c).failed == (Failed("unit:b", "7", frozenset({"b/"}), "7"),)
+
+@dataclass(frozen=True)
+class Verdict:
+    state: str = vq.PENDING
+    failed: tuple[Failed, ...] = ()
+    infra: tuple[Failed, ...] = ()
+    ended: bool = False
+
+
+@dataclass(frozen=True)
+class Candidate:
+    sha: str
+    base: str
+    members: tuple[int, ...]
+    heads: tuple[str, ...]
+    verdict: Verdict = Verdict()
+    tries: int = 1
+    reruns: int = 0
+    enqueued: float | None = None
+
+
+@dataclass(frozen=True)
+class Snapshot:
+    main: str
+    ready: tuple
+    candidates: tuple = ()
+    history: tuple = ()
+    batch: int = 6
+    depth: int = 2
+    rings: int = 2
+    lean: int = 1
+    now: float | None = None
+
+
+@dataclass(frozen=True)
+class Rerun:
+    sha: str
+    keys: tuple[str, ...]
+
+
+#: the fake queue with every field the driver fills where the contract has it
+FULL = types.SimpleNamespace(**{k: getattr(vq, k) for k in dir(vq) if not k.startswith("_")})
+FULL.__name__, FULL.Failed, FULL.Verdict, FULL.Candidate, FULL.Snapshot, FULL.Rerun = (
+    "full", Failed, Verdict, Candidate, Snapshot, Rerun)
+
+
+def lone(results: dict[str, lq.Result], tasks: frozenset[str]) -> snapshots.Cand:
+    return snapshots.Cand(1, "m", (lq.Member(1, "h1", frozenset({"a/x.py"})),), tree="T1", tasks=tasks, results=results)
+
+
+def test_a_failure_carries_its_keys_and_tests_where_the_contract_has_them() -> None:
+    c = lone({"unit:b": lq.Result("T1", "unit:b", lq.FAIL, frozenset({"b/"}), "7", "5", frozenset({"red"}),
+                                  frozenset({"red"}))}, frozenset({"unit:b"}))
+    assert snapshots.Driver(FULL).verdict(c).failed == (
+        Failed("unit:b", "7", frozenset({"b/"}), "5", frozenset({"red"}), frozenset({"red"})),)
     assert D.verdict(c).failed == (vq.Failed("unit:b", "7", frozenset({"b/"})),)
+
+
+def test_a_fail_has_ended_once_every_task_has_an_outcome_with_its_infra_beside_it() -> None:
+    fail = lq.Result("T1", "unit:a", lq.FAIL, frozenset({"a/"}), "1", "1", frozenset({"red"}), frozenset({"red"}))
+    full = snapshots.Driver(FULL)
+    running = full.verdict(lone({"unit:a": fail}, frozenset({"unit:a", "unit:b"})))
+    assert (running.state, running.ended, running.infra) == (vq.FAIL, False, ())
+    erred = full.verdict(lone({"unit:a": fail, "unit:b": lq.Result("T1", "unit:b", lq.INFRA, frozenset({"b/"}), "2")},
+                              frozenset({"unit:a", "unit:b"})))
+    assert (erred.ended, [f.task for f in erred.infra]) == (True, ["unit:b"])
+
+
+def test_the_snapshot_carries_the_clock_reruns_and_fields_set_by_keyword() -> None:
+    full = snapshots.Driver(FULL, lean=3)
+    s = full.start("m")
+    s.now = 1.0
+    s, (build,) = full.step(s, lq.Ready(1, "h1", frozenset({"a/x.py"})), TWO)
+    s.now = 3.0
+    s, _ = full.step(s, lq.Built(build.cid, "T1"), TWO)
+    s.now = 10.0
+    snap = full.snapshot(s, TWO)
+    assert (snap.lean, snap.now, snap.candidates[0].enqueued, snap.candidates[0].reruns) == (3, 600.0, 180.0, 0)
+    with pytest.raises(TypeError, match="has no field lean"):
+        snapshots.Driver(vq, lean=3)
+
+
+def test_a_rerun_clears_the_failed_keys_and_asks_the_world_to_run_them_afresh() -> None:
+    s = snapshots.QState("m")
+    s.stack.append(lone({"unit:a": lq.Result("T1", "unit:a", lq.FAIL, frozenset({"a/"}), "1"),
+                         "unit:b": lq.Result("T1", "unit:b", lq.FAIL, frozenset({"b/"}), "2")},
+                        frozenset({"unit:a", "unit:b"})))
+    assert snapshots.Driver(FULL).do_Rerun(s, Rerun("T1", ("2",))) == [lq.Rerun("T1", "unit:b")]
+    assert (s.stack[0].reruns, sorted(s.stack[0].results)) == (1, ["unit:a"])
 
 
 def test_an_action_naming_a_candidate_that_isnt_live_is_refused() -> None:
