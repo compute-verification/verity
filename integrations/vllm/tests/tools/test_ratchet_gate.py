@@ -1,6 +1,6 @@
 """`tools/ratchet_gate.py` on toy repositories: a branch's own commits judged together against its merge base (the merge of its
 merge bases, when it has several), each queue merge on its own, no ratchet growing (a counted kind by its total, which a move
-between its keys keeps, and a kind keyed anew at its total compared in the base's form; the other entries by number, per
+between its keys keeps, and one keyed anew at its total is compared in the base's form; the other entries by number, per
 ratchet, or by an entry's count, P10's sizes among them), a new,
 moved or renamed ratchet, the changes it doesn't judge, the base's lint code run on the change's tree (a
 loosened, deleted or bypassed lint fails, naming what it still finds; a tightened one passes once its findings are fixed), the
@@ -17,8 +17,7 @@ re-raises or records its outcome passing, a rename moving its entry, the list's 
 counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
-counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, and a ruff
-lint's findings there, a
+counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, failing when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -698,28 +697,6 @@ def test_tightening_ruff_passes_once_its_findings_are_fixed_and_a_kept_pin_is_no
     assert (c["verdict"], c["touched"], c["lints"]) == ("passed", [G.PYPROJECT], ["ruff"]), c["why"]
 
 
-def test_a_lint_module_whose_ruff_finding_a_change_fixes_is_linted_on_its_own_copy(ruffed):
-    """The gate runs the base's copy of a lint module the change edits, and the ruff lint reads that copy too: a change that
-    fixes one of the module's findings and drops its entry passes, linted on its own copy under the base's config, and one
-    that edits the module, keeps the finding and drops its entry fails, naming the rule and its count there."""
-    os_, sys_ = ({"file": "tests/lint/test_p01_core.py", "kind": "F401", "symbol": "<module>",
-                  "detail": f"`{m}` imported but unused"} for m in ("os", "sys"))
-    ruffed.git("checkout", "-q", "main")
-    ruffed.commit("a lint with two unused imports", {LINT: "import os\nimport sys\n" + TOY_LINT,
-                                                     RUFF_JSON: _allowlist(F401, os_, sys_)})
-    ruffed.git("checkout", "-q", "-B", "pr")
-    ruffed.commit("one import goes, and its entry", {LINT: "import sys\n" + TOY_LINT, RUFF_JSON: _allowlist(F401, sys_)})
-    [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "ruff"]), c["why"]
-    assert ("finds 1 violation(s) in the base's copy of tests/lint/test_p01_core.py, which it runs in place of the "
-            "change's, and the change's own copy is within its list") in c["why"], c["why"]
-    ruffed.git("checkout", "-q", "-B", "pr", "main")
-    ruffed.commit("the entry goes, the import stays", {LINT: "import os\nimport sys\n" + TOY_LINT + "# edited\n",
-                                                       RUFF_JSON: _allowlist(F401, sys_)})
-    [c] = G.gate("main", "pr")["changes"]
-    assert (c["verdict"], c["fix"]) == ("failed", ["ruff: tests/lint/test_p01_core.py [F401]: 2 found, 1 allowed"]), c["why"]
-
-
 @pytest.fixture(autouse=True)
 def _ruff_looked_up_afresh():
     """``ruff_python`` remembers what it found for the gate's one run; each test is a run."""
@@ -819,6 +796,32 @@ def test_a_fixed_ruff_finding_passes_and_does_not_pay_for_another_rule(both_ruff
     both_ruffed.commit("and reads an undefined name", {"tools/a.py": "A = B\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", ["tools/a.py:1 F821 Undefined name `B`"])
+
+
+def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_copy(both_ruffed):
+    """The gate runs the base's copy of a lint module the change edits, and both ruff lints read that copy too: a change
+    that fixes each module's finding and drops its entry passes, judged on its own copy, and one that edits the module, keeps
+    its finding and drops its entry fails, naming the finding where the change's copy holds it."""
+    util, toy = "tests/lint/_util.py", LINT.removeprefix(f"{G.INTEGRATION}/")
+    f541 = {"file": toy, "kind": "F541", "symbol": "<module>", "detail": "f-string without any placeholders"}
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("a lint module of each directory with an f-string, listed", {
+        LINT: TOY_LINT + 'X = f"x"\n', util: 'X = f"x"\n', RUFF_JSON: _allowlist(F401, f541),
+        REPO_RUFF_JSON: _allowlist(TOOLS_F401, {"file": util, "rule": "F541", "count": 1})})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("fixes both and drops their entries", {
+        LINT: TOY_LINT + 'X = "x"\n', util: 'X = "x"\n', RUFF_JSON: _allowlist(F401), REPO_RUFF_JSON: _allowlist(TOOLS_F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "ruff", "repo_ruff"]), c["why"]
+    assert (f"finds 3 violation(s) in the base's copy of {util}, {toy}, which it runs in place of the change's, and the "
+            "change's own copy is within its list") in c["why"], c["why"]
+    both_ruffed.git("checkout", "-q", "-B", "pr", "main")
+    both_ruffed.commit("edits the module, keeps its finding, and drops its entry", {
+        LINT: TOY_LINT + '# kept\nX = f"x"\n', RUFF_JSON: _allowlist(F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [
+        f"ruff: {toy}: 1 F541 found, 0 allowed",
+        f"ruff: {toy}:{len(TOY_LINT.splitlines()) + 2} [F541] f-string without any placeholders"]), c["why"]
 
 
 def _repo_lint(repo: Repo) -> str | None:
