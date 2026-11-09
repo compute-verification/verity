@@ -15182,3 +15182,65 @@ Definition. Every other norm splits as specified.
 templated statements take read slots, or the served path stages split parts flat on slots.
 
 Checkpoint: lanes/proofs/20261109T0125Z-checkpoint-provecut.md.
+
+## 01:40Z from TWOOPENS: a second helper brief, the published roots a one-table session's header names
+
+Fact 1 (`EntriesAt`) splits again. Its registered half and round 2's `readOk`/`rootsOk` side stay mine
+(`SpotFlock/EntriesAt.lean`). Its roots half needs one Flock-side lemma that touches none of my files. It is
+self-contained, so a helper can take it now.
+
+**Branch.** Start from `cursor/proofs-sessions-bytemplate-3e7a` at `00b4cafcd4` (or its newer head) on a new branch
+`cursor/proofs-headerroots-<4 hex>`. Merge, never rebase.
+
+**Files.** A new `Security/Proofs/Flock/SpotFlock/HeaderRoots.lean`, plus one line in `Security/Proofs/Flock.lean`,
+`public import Proofs.Flock.SpotFlock.HeaderRoots`, right after `RowsOpen`. Touch nothing else. My `Jeq` and `EntriesAt`
+lines go elsewhere in that file, so expect at most a one-line conflict.
+
+**Statement** (namespace `SpotFlock`; `Msg`, `headerOf` and `ScopedHidden` are SpotFlock's):
+
+```lean
+theorem header_roots {xS : Msg} {ins : FlockDeploy.Ins} {spec : _root_.Flock.SessionSpec}
+    {sts : Array _root_.Flock.Stmt} (hset : FlockDeploy.setupOf true xS = some (ins, spec, sts))
+    (hsc : ScopedHidden xS) (hc1 : ins.read.I.count ≤ 1) {j q : ℕ} (hj : j < sts.size)
+    (hq : q < sts[j].c.ports.size) {pop : _root_.Flock.Public}
+    (hpop : _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop)
+    {hdr : Json} (hH : headerOf ins.read.I.publicFile = some hdr) :
+    ∃ rs ds, (sts[j].c.ports[q]!.name, Json.str rs) ∈ Spot.entries (Spot.getD (Spot.getD hdr "frame_v3") "roots") ∧
+      _root_.Flock.unhex rs = .ok (_root_.Flock.PortRoots.pubRoot sts[j].c pop q) ∧
+      Spot.getD (Spot.getD (Spot.getD hdr "frame_v3") "domain_ids") sts[j].c.ports[q]!.name = .str ds ∧
+      _root_.Flock.unhex ds = .ok (_root_.Flock.PortRoots.idOf sts[j].c pop q)
+```
+
+In words: the public file's header line, as round 2 reads it (`headerOf`, not normalized), has an entry for port `q`
+in `frame_v3.roots`. That entry is the hex of the published root over the population `HmOut.loadPublic` reads
+(`pubRoot`). Its `frame_v3.domain_ids` entry is the hex of the published domain (`idOf`).
+
+**Why it holds, and where each step is:**
+1. **The setup.** `SpotFlock.rows_rooted` (`RowsOpen.lean`, its lines from `hsc` to `hpop`) already gets these:
+   `ins.read.publicInputs = none`, table `j`'s `Stmt.setupHidden … = .ok sts[j]` at the statement's own draw, and
+   `(Hidden.setupHidden_spec' hd).pub`. Copy that path.
+2. **The check.** `FailClosed.ties_of_check (.inr ⟨rfl, (Hidden.setupHidden_spec' hd).checkPublic⟩)` is in
+   `Soundness/Discharge/FailClosed/PublicTies.lean`. Its `.inputs q hq` gives `sts[j].pub.fv3Bytes "domain_ids" name =
+   .ok dom` and `sts[j].pub.fv3Bytes "roots" name = .ok (inRoot sts[j].c sts[j].pub q dom)`.
+3. **The drawn file is the population's.** `Spec.pub` makes `sts[j].pub` either `pop` (no draw) or
+   `HmOut.drawn sts[j].c pop d`. `HmRow.drawn` only sets the header's `unit_draw`, `instances`, `population` and `units`
+   (`setObjVal!`), so `frame_v3` is unchanged. It also sets `population := some (pop.n, pop.digests, pop.outputs)` and
+   keeps the tables' `counts` and `starts`. So `popOf`/`inRows` of the drawn file are `pop`'s.
+4. **The roots agree.** `inRoot` equals `pubRoot` at `dom = idOf`:
+   - `rowSchema` is `Registered.portSchema` (`schemaOf`).
+   - `Registered.leafAs` is `FV3.leaf … Sha512.hash`.
+   - `inRows` is `countOf`/`digOf`. `starts[p]!` is `starts.getD p 0`; `Public.digest` with no tables is
+     `digests.getD (r * np + p)`.
+5. **The raw header.** `HmOut.loadPublic`'s header is `Flock.norm` of the JSON that `headerOf` parses, from the same
+   first line. So from the normalized header's `frame_v3.roots.<name> = .str rs`, get the raw header's `entries` member
+   and its `domain_ids` field. `Claims/JsonNorm.lean` has the pieces: `norm_obj`, `mem_normObj`, `norm_str`,
+   `wf_norm`, `jsonEquiv_norm`. If the parser's objects need well-formedness, prove it for `JsonParse.parse` or ask me.
+
+**Rules.**
+- Remote tries only, with `verity lean try --siblings --on vy-nebius-cpu-11 --pool research --as proofs FILE`. You can
+  also use cpu-1, cpu-13 or cpu-3. cpu-12 lacks the Lean dependencies.
+- Use your own worktree and your own `.lake`.
+- No `sorry`, `axiom` or `native_decide`. Lines are at most 120 characters.
+- In-tree text cites no run ids, PR numbers, dates or worker names.
+- When it's green, tell me the branch and sha in `inbox/bc-09adba6a-e10f-536a-ad43-eeefd6ae53aa.md`. I merge it and
+  call `header_roots` from `EntriesAt`.
