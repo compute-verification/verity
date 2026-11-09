@@ -4,6 +4,8 @@ Every test reads the clock it injects."""
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 import sys
 from dataclasses import dataclass, fields
 from pathlib import Path
@@ -763,6 +765,35 @@ def test_a_message_is_logged_before_its_post_so_one_cut_off_before_its_record_is
     loop.world.post = post(True)
     (again,) = loop.tick()
     assert (again["action"], again["text"], again["done"], len(env.posts)) == ("red", None, False, 2)
+
+
+def test_a_build_pushed_with_no_line_in_the_log_is_adopted_by_the_next_build_of_the_same_members(env):
+    """A tick cut off between a build's push and its line leaves a `queue/<sha12>` branch no line names, which is no candidate;
+    the next build of the same members at the same heads on the same base, the same tree, takes that branch as its own."""
+    env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    w = loop.world
+
+    def died(sha: str, priority: int) -> None:
+        raise RuntimeError("the loop's process died")
+
+    w.enqueue = died
+    with pytest.raises(RuntimeError):
+        loop.tick()
+    (pushed,) = env.queued().values()
+    then = {**os.environ, **{f"GIT_{who}_{what}": v for who in ("AUTHOR", "COMMITTER")
+                             for what, v in (("NAME", "q"), ("EMAIL", "q@q"), ("DATE", "2001-01-01T00:00:00Z"))}}
+    old = subprocess.run(["git", "commit-tree", f"{pushed}^{{tree}}", "-p", f"{pushed}^1", "-p", f"{pushed}^2", "-F", "-"],
+                         cwd=env.o.origin, input=_git(env.o.origin, "log", "-1", "--format=%B", pushed), env=then,
+                         capture_output=True, text=True, check=True).stdout.strip()     # built a second before, as it was
+    _git(env.o.origin, "update-ref", f"refs/heads/queue/{old[:12]}", old)
+    _git(env.o.origin, "update-ref", "-d", f"refs/heads/queue/{pushed[:12]}")
+    del w.enqueue
+    ignored, built = loop.tick()
+    assert (ignored["action"], ignored["sha"]) == ("ignore", old)
+    assert (built["action"], built["sha"], built["adopted"], built["members"]) == ("build", old, True, [1])
+    assert env.queued() == {branch(old): old} and env.graph2.enqueued()[-1]["check"] == f"ready:{old}"
+    assert loop.tick() == []
 
 
 def test_a_failure_on_a_base_graph2_hasnt_listed_waits_for_its_listing_which_the_loop_enqueues_once(env):

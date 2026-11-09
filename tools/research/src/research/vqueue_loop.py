@@ -36,7 +36,8 @@ machines, is one of a candidate about to advance.  Pending until then, it is jud
 changes, and combined with the check's verdict: a candidate passes only when both pass.
 
 The actions.  Build merges its members in order onto its base (`Queue._merge`), leaving out one that doesn't merge (`skip`, its
-owner told once per head and base), pushes `queue/<sha12>`, logs it and enqueues `ready:<sha>` as graph/v2 at its priority.
+owner told once per head and base), pushes `queue/<sha12>` (or takes as its own one no line names that is the same build made
+before, as a tick cut off after its push leaves: `adopted`), logs it and enqueues `ready:<sha>` as graph/v2 at its priority.
 Advance pushes `main` to the candidate with a lease on its base and logs it; then what drive does when `main` moves
 (`Driver._on_main`) is a step of its own (`on_main`), which the next tick runs again until one is logged done.
 Drop cancels the check (graph2's `cancel`, where it has one) and the run beside it while that runs, deletes the branch and logs
@@ -499,13 +500,27 @@ class World:
         """Candidate ``sha``'s members as `Driver._on_main` reads them, oldest first: the `Queue: #N` merges on its first-parent
         line above ``base``, while they are the PRs ``prs`` at ``heads`` as built; else those, without their merges."""
         prs, heads = list(prs), list(heads)
-        recs = [r.strip() for r in _out(self.repo, "log", "--first-parent", f"-n{WALK}", "--format=%H%x00%P%x00%B%x1e",
-                                         f"{base}..{sha}").split("\x1e") if r.strip()]
-        walked = [queue_commit(*r.split("\x00", 2)) for r in reversed(recs)]
-        if all(walked) and [(m.pr, m.head) for m in walked] == list(zip(prs, heads)):
+        if (walked := self._walk(sha, base)) is not None and [(m.pr, m.head) for m in walked] == list(zip(prs, heads)):
             return walked
         self.log(f"research queue vqueue: {sha[:12]}'s first-parent line above {base[:12]} isn't its members' merges as built")
         return [Member(p, h, "", "") for p, h in zip(prs, heads)]
+
+    def _walk(self, sha: str, base: str) -> list[Member] | None:
+        """The `Queue: #N` merges on ``sha``'s first-parent line above ``base``, oldest first; None when another commit is."""
+        recs = [r.strip() for r in _out(self.repo, "log", "--first-parent", f"-n{WALK}", "--format=%H%x00%P%x00%B%x1e",
+                                         f"{base}..{sha}").split("\x1e") if r.strip()]
+        walked = [queue_commit(*r.split("\x00", 2)) for r in reversed(recs)]
+        return walked if all(walked) else None
+
+    def rebuilt(self, sha: str, tip: str, base: str, members: list[Member]) -> bool:
+        """Whether ``sha`` is ``tip``, ``members`` merged onto ``base``, built before: its tree, and their merges at their
+        heads on its first-parent line above ``base`` (a build pushed with no line in the log, as a tick cut off leaves)."""
+        if self._missing([sha]) or not self._ancestor(base, sha):
+            return False
+        if _out(self.repo, "rev-parse", f"{sha}^{{tree}}") != _out(self.repo, "rev-parse", f"{tip}^{{tree}}"):
+            return False
+        walked = self._walk(sha, base)
+        return walked is not None and [(m.pr, m.head) for m in walked] == [(m.pr, m.head) for m in members]
 
     def shadow_main(self) -> str | None:
         """The newest candidate the shadow advanced, as it keeps it (`SHADOW`)."""
@@ -1132,9 +1147,13 @@ class Loop:
         if not merged:
             recs.append(self.record(t, "build", base=a.base, priority=a.priority, why="no member merges onto its base"))
             return recs
-        w.push(tip, branch(tip))
+        if adopted := next((sha for name, sha in sorted(t.foreign.items())
+                            if name == sha[:12] and w.rebuilt(sha, tip, a.base, merged)), None):
+            tip = adopted                                   # pushed before by a build whose line the log never got
+        else:
+            w.push(tip, branch(tip))
         line = {"sha": tip, "base": a.base, "members": [m.pr for m in merged], "heads": [m.head for m in merged],
-                "priority": a.priority}
+                "priority": a.priority, **({"adopted": True} if adopted else {})}
         try:
             w.enqueue(tip, a.priority)
         except (QueueError, OSError, subprocess.SubprocessError) as e:  # pushed: the next tick reads it as not enqueued
