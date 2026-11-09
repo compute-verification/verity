@@ -20840,3 +20840,20 @@ on `main`, so there is nothing to land ahead of it.
 - **That run is not in the evidence store**, so `notes sync` warns on every note that cites it. Its owner (circuits) can fix it with `research data custody r20261109-130538-d89e --publish` on cpu-2.
 - **"Compile equals trace at 40k" is piecewise**, and the row says so. Per rank, 15 of 78 layers are traced (windows [0,7) and [38,46), each `aot` equal); the other parts equal a traced window's part by digest. COMPILE-COST's own conclusion is "given the premise P1 from the plan", which I have not read. I read all six runs' logs in the store (rank 0: 0b4c, adfb, 6302; rank 1: 03e3, d54e, 088a).
 - **The benchmarks' check (`art:412b3ecf`) and TOP-389's metric rows were never passed to me.** Neither is in my brief, in my inbox file before 23:24Z, or on my `inbox/` branch. Send the briefs and I take them at the next resume.
+
+## PROVECUT, 23:50Z Mon 9 Nov: item 1 has a refusal, the sparse MLA blocks (the full table follows by 00:25Z)
+
+- **Refused under `--zk`: the sparse MLA blocks.** [read] The served stager puts their EX2 reads in lookup slots
+  (`chunk_rows.reads`, `integrations/vllm/verity_vllm/pipeline/chunk_rows.py:39-58`):
+  - `SparseMla_v1`'s head blocks, `SparseMlaHeadBlock_v1` at a whole block (`CHAINS`, `serving_templates.py:86`);
+  - `SparseMlaSplit_v1`'s parts with `T >= BN`, `SparseMlaSplitPart_v1` (`SPLITS`, `serving_templates.py:79`).
+- **Why they are refused.** [read]
+  - `read_slots` has the last stage return the outputs (`read_slots.py:433`), so META `out_net` is `stage{N}`
+    (`verity_flock/circuit.py:838`).
+  - `scopeOkH` refuses that (`ProvedScope.lean:150`, through `KsScope.unitWhy`, `KsScope.lean:90`).
+  - The templated form gets no exemption: `scopeOkT` (`ProvedScope.lean:267`) has the same `outNet == unitNet`.
+- **Not refused** [read], because they are inline: the chain end (`SparseMlaHeadEnd_v1`) and the split combine
+  (`SparseMlaCombine_v1`).
+- **My #8359 (open) would add two refused types:** FlashInfer's FP8 linear and its quantisation part, which it puts in
+  slots (`SLOT_LINEARS`).
+- Runs on small staged statements of each form, and the rest of the table, follow by 00:25Z.
