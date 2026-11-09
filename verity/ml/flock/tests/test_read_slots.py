@@ -26,6 +26,7 @@ from verity.ml.circuits.ops.mufu import MufuEx2Ftz, MufuRcpFtz
 from verity.ml.circuits.refs import tuple_of
 from verity.ml.circuits.types import Array, Tuple, Value
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_V2 as V2
+from verity_flock import circuit as FC
 from verity_flock import class_statement as CS
 from verity_flock import gf2
 from verity_flock import ir_lower as IL
@@ -222,6 +223,57 @@ def test_the_automatic_caps_keep_a_statement_within_the_gpu_provers_slot_types(m
     got, _cut, ok = low.evaluate(_flat(xs, ys))
     want, _cut, _ok = whole.evaluate(_flat(xs, ys))
     assert ok == (1 << len(xs)) - 1 and np.array_equal(got, want)
+
+
+def _plans(uncapped: list[int], capped: list[int]):
+    def plan(caps):
+        logs = uncapped if caps is None else capped
+        return SimpleNamespace(logs=logs, cells=sum(1 << L for L in logs), ands=[1] * len(logs), nets=[(1, 0, 0, 0)] * len(logs),
+                               caps=caps)
+    return plan
+
+
+def test_the_automatic_caps_take_the_smaller_block_of_the_same_cells():
+    """Sparse MLA's first key block at 63 keys: uncapped, two nets of 2^25 and 2^24; capped, three of 2^24, the same cells.
+    By cells alone the two nets stay; by the block (`circuit.block_log`), the three, since the unit's packed slot of 2^25 is
+    aligned after the compressions."""
+    plan = _plans([25, 24], [24, 24, 24])
+    block = lambda P: 28 if max(P.logs) > 24 else 27  # noqa: E731
+    assert RS._auto(plan, 8).caps is None
+    assert RS._auto(plan, 8, block).logs == [24, 24, 24]
+    assert RS._auto(plan, 2, block).caps is None
+
+
+def test_the_served_63_key_blocks_rows_fit_three_nets_of_2_to_the_24_and_not_two():
+    """`circuit.block_log` at the rows of sparse MLA's first key block at 63 keys (its query, its scale and its 63 keys' rows,
+    and a 512-float output row) and its 63 EX2 reads: the cut of 2^25 and 2^24 is a block of 2^28, past `K_MAX`, and the cut
+    of three nets of 2^24 one of 2^27."""
+    rows = [FC._port("q", 512, 8192), FC._port("s", 64, 1024), FC._port("kv", 36288, 580608), FC._port("o0", 1024, 16384)]
+    assert FC.block_log(rows, 25, True, [24], {"ex2": 63}) == 28 > FC.K_MAX
+    assert FC.block_log(rows, 24, True, [24, 24], {"ex2": 63}) == 27 == FC.K_MAX
+
+
+def test_the_stagers_block_is_the_one_compose_places_the_cut_in(monkeypatch):
+    """The block `UnitStager` ranks the automatic cuts by (`circuit.block_log` of its rows) is the one `circuit.compose`
+    places the chosen cut's VU in, before it packs more VUs into a block."""
+    calls, chose = [], []
+    ranges, auto = FC._block_ranges, RS._auto
+
+    def spy_ranges(*a, **k):
+        got = ranges(*a, **k)
+        calls.append(got[1])
+        return got
+
+    def spy_auto(plan, max_nets, size=None):
+        P = auto(plan, max_nets, size)
+        chose.append((size(P), len(calls)))
+        return P
+
+    monkeypatch.setattr(FC, "_block_ranges", spy_ranges)
+    monkeypatch.setattr(RS, "_auto", spy_auto)
+    st = CS.UnitStager(_sigmoid_def(3), "unit/read-slots-block", ROWS, [(V2, (0, 1, 2))], reads="slots")
+    (k, at), = chose
+    assert k == calls[at] > FC.K_MIN and st.meta["vus_per_block"] >= 1
 
 
 def test_the_gpu_slot_types_are_the_device_provers():
