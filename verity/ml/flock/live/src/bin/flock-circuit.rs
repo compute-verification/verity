@@ -228,7 +228,7 @@ fn level0_zk(st: &Stmt, rng: &mut flock_live::zk_hooks::ProverRng, zero: bool, t
         if zero { vec![vec![F128::ZERO; n]; lanes] } else { rng.f128s_lanes(stream, lanes, n) }
     };
     let z = Level0Zk { queries0: zk_queries0(st.m).expect("checked when the statement is built"), t_pad: t, rep: 0,
-                       extra: draw(6, EXTRA_LANES, l).try_into().expect("EXTRA_LANES lanes"), pads: draw(7, lanes, t), tamper };
+                       extra: draw(6, EXTRA_LANES, l).into(), pads: draw(7, lanes, t), tamper };
     eprintln!("ZKL0\t{}", json!({"lanes": lanes, "t_pad": t, "extra_words": l, "s": tr.elapsed().as_secs_f64()}));
     z
 }
@@ -326,7 +326,10 @@ fn lean_level0(plan: &Plan, st: &Stmt, j: usize, w: &mut Witness, l0: &mut flock
         }
     }
     *zl = flock_core::lincheck::pack_z_lincheck_from_packed(&z[..], st.m, st.c.k_log);
-    l0.extra = got.extra.try_into().map_err(|_| "the Lean loop's level 0: not four extra lanes".to_string())?;
+    if got.extra.len() != flock_core::pcs::ligerito::zk::EXTRA_LANES {
+        return Err("the Lean loop's level 0: not four extra lanes".to_string());
+    }
+    l0.extra = got.extra.into();
     l0.pads = got.pads;
     salts.lock().unwrap_or_else(PoisonError::into_inner).set_level0(got.salts)?;
     Ok(Some(got.root))
@@ -1272,14 +1275,10 @@ fn make_zkrep(st: &Stmt, plan: &Plan, prng: &mut flock_live::zk_hooks::ProverRng
     let root = frame_root.unwrap_or_else(|| own.as_ref().expect("a rep's own pads").1.root());
     let self_check = if plan.zero_witness { zkv::SelfCheck::Skip } else { plan.zk_self_check };
     let t_commit = tz0.elapsed().as_secs_f64();
-    // the rep's level 0 is the session's where it takes the session's pair (rep 0's), else a copy with its own: of the extra
-    // lanes (4 · 2^22 words at m = 35) written on rayon's threads, not one
+    // the rep's level 0 is the session's where it takes the session's pair (rep 0's), else the session's lanes with its own pair
     let pair = if plan.zk_shared_pair { 0 } else { rep };
     let level0 = if pair == level0.rep { level0.clone() } else {
-        Arc::new(flock_core::pcs::ligerito::zk::Level0Zk {
-            queries0: level0.queries0, t_pad: level0.t_pad, rep: pair, tamper: level0.tamper,
-            extra: std::array::from_fn(|i| { use rayon::prelude::*; level0.extra[i].par_iter().copied().collect() }), pads: level0.pads.clone(),
-        })
+        Arc::new(flock_core::pcs::ligerito::zk::Level0Zk { rep: pair, ..(**level0).clone() })
     };
     ZkRep { lay, own, root, points: points.clone(), pad_mismatch: plan.zk_pad_mismatch, final_c_solved: plan.zk_final_c_solved, self_check,
             t_commit, level0, lean: Mutex::new(lean) }
