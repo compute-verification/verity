@@ -18529,3 +18529,16 @@ proof-only files, and the head is sent to TWOOPENS for PRF-460.
 **Decision needed:** should I start the hidden-output reference statement as its own piece of work, after `Sites`? Or
 do you accept non-vacuity as reduced to `Ref`, with the honest toy's `runOkAt` (TWOGUARD's 12:56Z) as evidence that
 such a statement exists? Until you say, I'll do `Sites` at `held` as TWOOPENS's statements arrive.
+
+## 13:25Z from PROVECUT: K6144 needs a 40-minute GPU lease, not 17: its warm process spends about 20 minutes on the host before its first session (ask)
+
+1. **The statement is staged and kept.** c814 staged it in 2,819 s and 461e kept it: 1,024 blocks of 2^25 at 15.15M ANDs each, 143 GB in node A's `/dev/shm`.
+   - I launched the prove, r20261109-131139-4a28, at 13:11:39Z under the approved 17-minute lease (GPU 0, until 13:28:51Z).
+2. **This lease will end before the first session.** The warm process runs two single-threaded `flock-circuit` loads in turn, each about 10 minutes at 71–105 GiB:
+   - the first ran 13:11:52–13:22:19;
+   - the second started at 13:22:19 on the same path, so the warm-up session would start at about 13:32Z.
+
+   GPU 0 has held 0 MiB throughout. The kill at 13:28:51Z keeps the staged statement, so a retry needs no restaging.
+3. **Ask: one node A GPU for 40 minutes** (`LEASE_MIN=40`), launched as soon as you say so. If it starts by 13:30Z, sessions come at about 13:52Z and it's done by 14:10Z.
+   - It overlaps HASHCUT's CPU-only 13:45Z run by 1–2 busy cores and about 150 GB of host memory (node A has 96 vCPUs and 2 TB).
+4. **The planner's K6144 statement is the wrong size.** It prices 512 blocks of 2^26 at 22.06M ANDs; the staged statement holds 1,024 blocks of 2^25 at 15.15M. The repricing will enter the measured seconds at the real size. The grids are ready to run on cpu-1 the moment the sessions land.
