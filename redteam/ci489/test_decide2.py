@@ -200,13 +200,11 @@ def test_with_tree_ejects_on_an_outage_marked_tree_ejects_lone_members(vq):
     assert w.landed == [] and len(w.ejected) >= 1
 
 
-def test_with_tree_ejects_off_a_pr_whose_change_errs_stops_the_queue(vq):
-    """FINDING (liveness, before the cut-over or accepted with a run-book): with `tree_ejects` off, infra never bisects or
-    ejects, so a PR whose own change makes a task err on every node (a hang, an out-of-memory kill: errors graph2 marks
-    `tree`) is never taken out. The lowest candidate holding it is retried at every reading and @infra is rung, not its
-    owner; every PR batched or stacked above it waits until a person removes it. FIX: with `tree_ejects` off, still bisect a
-    candidate whose infra persists over `rings` readings, ejecting nobody: the members without the error land, and the lone
-    erring PR waits, rung to its owner."""
+def test_fixed_with_tree_ejects_off_a_pr_whose_change_errs_waits_alone_and_the_rest_land(vq):
+    """FIXED at w3 1b1d03e41c (core5 565e9cb7ae); a finding (liveness) at a2a1368d98 and b85656625c: with `tree_ejects` off,
+    infra never bisected or ejected, so a PR whose own change makes a task err on every node held the lowest candidate,
+    retried at every reading, and every PR batched or stacked above it waited. Now infra that persists past `min(rings, 2)`
+    readings is bisected like a fail, ejecting nobody: the other 19 land and the lone erring PR waits."""
     if "tree_ejects" not in vq.Snapshot.__dataclass_fields__:
         pytest.skip("no tree_ejects switch")
 
@@ -218,8 +216,7 @@ def test_with_tree_ejects_off_a_pr_whose_change_errs_stops_the_queue(vq):
 
     w = World(vq, [pr(vq, n, f"pkg{n}/mod.py") for n in range(1, 21)], oracle,
               kw={"batch": 16, "depth": 3, "lean": 3}).run(300)
-    assert w.ejected == [] and w.landed == []
-    assert w.built == 2 and len(w.said(vq.Retry)) > 100
+    assert w.ejected == [] and sorted(w.landed) == [n for n in range(1, 21) if n != 3]
 
 
 def test_a_red_main_on_a_whole_tree_step_of_the_run_beside_ejects_every_pr(vq):

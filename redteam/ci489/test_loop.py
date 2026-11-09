@@ -137,9 +137,11 @@ def test_fixed_a_failing_run_beside_the_check_holds_a_candidate(env):
     slim = Beside()
     loop = env.loop(decide, slim=slim)
     loop.world.slim_driver = lambda: "drive"
-    built, started = loop.tick()
+    acts = loop.tick()                                   # since e6dfbc05b5 a run beside `main` starts too
+    built = next(r for r in acts if r["action"] == "build")
     sha = built["sha"]
-    assert (started["action"], started["sha"], started["why"]) == ("slim", sha, "started")
+    started = next(r for r in acts if r["action"] == "slim" and r["sha"] == sha)
+    assert started["why"] == "started"
     _agreement_graph(env, sha, "pass")
     assert loop.world.verdict(sha).verdict.state == "pass"
     for _ in range(3):
@@ -215,15 +217,16 @@ def _move_main(env) -> str:
     return env.main()
 
 
-def test_a_base_whose_listing_failed_makes_mains_red_each_prs_own_and_ejects_every_pr(env):
-    """FINDING (liveness and false blame, fix before the cut-over): `main` is red today (W5's ready check: 4 real fails and
-    45 faulted tasks). Only the base's listing says a failure is `main`'s. When graph2 says that listing failed, or the
-    graph can't be read, `World._base` returns no keys ("each is its candidate's own"), `_gone` skips the kinds check, and
-    nothing enqueues `ready:<base>` again (`_bases` enqueues only an unlisted base, once). `main`'s red is then every
-    candidate's own: a batch bisects to lone members, each is rerun, fails again and is ejected by the flake rule, its
-    owner told it broke a test it never touched. Here neither PR touches the red task and both are ejected. FIX: a base
-    whose listing failed or can't be read waits as an unlisted one does, re-enqueued and rung naming the base; never "no
-    failure on it"."""
+def _base_rings(env) -> list[dict]:
+    return [r for r in env.lines() if r.get("action") == "posting" and r.get("posting") == "ring"
+            and str(r.get("text", "")).startswith("the verified queue's base")]
+
+
+def test_fixed_a_base_whose_listing_failed_holds_its_candidates_and_rings_ci_and_infra_naming_it(env):
+    """FIXED at e6dfbc05b5 (ffcd808ba3); a finding (liveness and false blame) at b85656625c and before: when graph2 said the
+    base's listing failed, `World._base` gave no keys, so `main`'s red was every candidate's own and the flake rule ejected
+    every PR (2 of 2 here, neither touching the red task), and nothing enqueued the base again. Now a candidate waits on such
+    a base: nobody is ejected, the base is enqueued again each `BASE_RETRY_S`, and @ci and @infra are rung naming it."""
     import json
     from pathlib import Path
 
@@ -245,18 +248,19 @@ def test_a_base_whose_listing_failed_makes_mains_red_each_prs_own_and_ejects_eve
         acts += (now := _acts(loop.tick()))
         if "rerun" in now:
             env.result("sha512:red", "pytest:r", "fail")
-    assert sorted(n for n, _ in env.withdrawn) == [1, 2] and env.main() == main and "advance" not in acts
-    assert f"ready:{main}" not in [e["check"] for e in env.graph2.enqueued()]
+        env.clock += 300
+    assert env.withdrawn == [] and env.main() == main and "advance" not in acts and "eject" not in acts
+    assert [e["check"] for e in env.graph2.enqueued()].count(f"ready:{main}") >= 2
+    rings = _base_rings(env)
+    assert rings and all(main[:12] in r["text"] for r in rings) and set(rings[0]["to"]) == {"@ci", "@infra"}, rings
 
 
-def test_a_base_that_never_lists_holds_every_candidate_and_infra_is_rung_at_8_h_about_the_candidate(env):
-    """FINDING (liveness, fix before the cut-over or run-book it): every candidate's verdict waits for its base's listing
-    (`_gone` is asked of every candidate, failing or not). The loop enqueues `ready:<base>` once (`_bases`), and a check
-    graph2 leaves `listing` (a serve restart while it lists, or a refused submit: `test_graph2.py`'s two wedges, undated)
-    answers every enqueue `listing` and is never listed. So nothing lands, ever: decide retries the candidate at 4 h, which
-    re-enqueues the candidate, not the base, and rings @infra once at 8 h, naming the candidate's PRs, not the base. FIX:
-    re-enqueue an unlisted base at each retry and name it in the ring; graph2 puts `listing` checks back to `requested` at
-    serve's start."""
+def test_fixed_a_base_that_never_lists_is_enqueued_again_and_rung_naming_it(env):
+    """FIXED at e6dfbc05b5 (ffcd808ba3); a finding (liveness) at b85656625c, when the loop enqueued an unlisted base once and
+    graph2 leaves a check that wedged while listing `listing` (`test_graph2.py`'s two wedges), so nothing landed and @infra
+    was rung only at 8 h, about the candidate. Now the base is enqueued again each `BASE_RETRY_S` while a candidate waits on
+    it, and @ci and @infra are rung naming it `BASE_RING_S` after it was first asked for. The wedge itself is graph2's: a
+    re-enqueue of a check stuck `listing` still answers `listing`, so the ring is what ends it."""
     import json
     from pathlib import Path
 
@@ -265,19 +269,17 @@ def test_a_base_that_never_lists_holds_every_candidate_and_infra_is_rung_at_8_h_
     loop = env.loop(decide)
     script = env.graph2_script(loop, {"state": "pass", "pending": 0})
     Path(f"{script}.verdict.ready:{main}").write_text(json.dumps({"state": "pending", "pending": 0, "why": None}))
-    (built,) = loop.tick()
-    sha = built["sha"]
-    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    built = next(r for r in loop.tick() if r["action"] == "build")
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"]})
     env.result(keys["pytest:a"], "pytest:a", "pass")
     acts: list[str] = []
-    for _ in range(48):
+    for _ in range(8):                                                  # 2 h
+        env.clock += 900
         acts += _acts(loop.tick())
-        env.clock += 1800
     assert env.main() == main and "advance" not in acts
-    assert [e["check"] for e in env.graph2.enqueued()].count(f"ready:{main}") == 1
-    rings = [r for r in env.lines() if r.get("action") == "posting" and r.get("posting") == "ring"]
-    assert [r["to"] for r in rings] == [["@infra"]], rings
-    assert sha[:12] in rings[0]["text"] and main[:12] not in rings[0]["text"] and "#1" in rings[0]["text"]
+    assert [e["check"] for e in env.graph2.enqueued()].count(f"ready:{main}") >= 4
+    rings = _base_rings(env)
+    assert len(rings) == 1 and main[:12] in rings[0]["text"] and set(rings[0]["to"]) == {"@ci", "@infra"}, rings
 
 
 def test_fixed_a_fault_main_has_too_is_inherited_through_the_loop_and_one_the_change_adds_is_blamed(env):
@@ -315,31 +317,41 @@ def test_fixed_a_fault_main_has_too_is_inherited_through_the_loop_and_one_the_ch
             assert "advance" in acts and "eject" not in acts and env.main() == sha
 
 
-def test_a_family_removal_holds_every_pr_batched_with_it_and_rings_infra_not_its_owner(env):
-    """Cost 3 at b85656625c: a PR that removes a family (here lean-lock's lister) makes its candidate list-failed, `lacks kind
-    lean-lock`. decide reads list-failed as infra: retried at every reading and rung once, as "check failed to list", to
-    @infra alone (`Loop._ring`), never to the PR's owner or ci and without the kind it lacks; the PR batched with it is held
-    too, since nothing splits a list-failed candidate. A run-book "lands it by hand" must still be a candidate whose check
-    passed, never a push to `main`."""
+def test_fixed_a_family_removal_waits_alone_rung_to_its_owner_and_the_pr_batched_with_it_lands(env):
+    """Cost 3, FIXED at w3 1b1d03e41c (core5); at b85656625c a PR that removes a family (here lean-lock's lister) held every
+    PR batched with it, its list-failed candidate retried and rung to @infra alone. Now persistent infra, list-failed
+    included, is bisected ejecting nobody: the PR batched with it lands, and the remover waits alone, its owner rung."""
     env.gates = ["pytest", "lean-audit"]
     env.put(1, {"a.txt": "1\n"})
     env.put(2, {"tools/verity/graph/verity_graph/families/lean_lock.py": ""})
     loop = env.loop(decide)
-    (built,) = loop.tick()
-    sha, main = built["sha"], built["base"]
-    assert built["members"] == [1, 2]
     from test_vqueue_loop import _graph
 
     lean = [{"id": "lean-module:M", "kind": "lean-module", "inputs": ["M.lean"], "key": "sha512:m"},
             {"id": "lean-lock:L", "kind": "lean-lock", "inputs": ["L.json"], "key": "sha512:l"}]
-    env.graph2.list_graph(f"ready:{main}", _graph(main, [{"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"],
-                                                          "key": "sha512:a0"}, *lean]))
-    env.graph2.list_graph(f"ready:{sha}", _graph(sha, [{"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"],
-                                                        "key": "sha512:a1"}, lean[0]]))
-    env.result("sha512:a1", "pytest:a", "pass")
+    env.result("sha512:a", "pytest:a", "pass")
     env.result("sha512:m", "lean-module:M", "pass")
-    acts = [a for _ in range(12) for a in _acts(loop.tick())]
-    assert "advance" not in acts and "eject" not in acts and env.main() == main and acts.count("ring") == 1
+    env.result("sha512:l", "lean-lock:L", "pass")
+    listed: set[str] = set()
+
+    def lists(sha: str, members) -> None:
+        if sha not in listed:
+            listed.add(sha)
+            env.graph2.list_graph(f"ready:{sha}", _graph(sha, [{"id": "pytest:a", "kind": "test-file", "inputs": ["a.txt"],
+                                                                "key": "sha512:a"}, *(lean[:1] if 2 in members else lean)]))
+
+    lists(env.main(), ())
+    acts: list[dict] = []
+    for _ in range(30):
+        now = loop.tick()
+        acts += now
+        for r in now:
+            if r["action"] == "build":
+                lists(r["sha"], r["members"])
+        env.clock += 600
+    kinds = [r["action"] for r in acts]
+    assert "eject" not in kinds and env.withdrawn == []
+    landed = [n for r in acts if r["action"] == "advance" for n in r.get("members", [])]
+    assert 1 in landed and 2 not in landed, landed
     rings = [r for r in env.lines() if r.get("action") == "posting" and r.get("posting") == "ring"]
-    assert [r["to"] for r in rings] == [["@infra"]] and "failed to list" in rings[0]["text"]
-    assert "lean-lock" not in rings[0]["text"]
+    assert rings and any(t != "@infra" for r in rings for t in r["to"]), rings
