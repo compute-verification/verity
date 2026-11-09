@@ -279,7 +279,7 @@
   "NetTiming.CarriedRoots": {
    "owner": "@proofs",
    "digest": "1362beed271090aca1df516c3ce8b3249db6fd63f98026aeea88b482a2533264",
-   "why": "A scope: rows that every run accepts from a valid run have, at each run, the opened row's root the record rule names, the previous run's closing root or the empty pool's; each run's check of its roots and the record rule's chained roots give it with no probability."
+   "why": "A scope: rows that every run accepts from a valid run have, at each run, the opened row's root the record rule names, the previous run's closing root or the empty pool's; each run's check of its roots and the record rule's chained roots give it with no probability (NetTiming.rootsOfChecked, from NetTiming.CheckedRoots and NetTiming.PoolChained)."
   },
   "NetTiming.CheckedClosing": {
    "owner": "@proofs",
