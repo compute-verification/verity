@@ -440,7 +440,6 @@
     {"file": "verity/ml/definitions/registry/prims.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.ops.mufu.mufu_tanh_table_manifest` imported but unused"},
     {"file": "verity/ml/definitions/registry/ref_prims.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.circuits.defs.CompositeDefinition` imported but unused"},
     {"file": "verity/ml/definitions/registry/ref_prims.py", "kind": "F841", "symbol": "LinearRef", "detail": "Local variable `N` is assigned to but never used"},
-    {"file": "verity/ml/definitions/registry/sparse_mla.py", "kind": "F401", "symbol": "<module>", "detail": "`verity.ml.definitions.registry.prims.A16` imported but unused"},
     {"file": "verity/ml/definitions/registry/spec.py", "kind": "F811", "symbol": "<module>", "detail": "Redefinition of unused `ZERO32`: `ZERO32` redefined here"},
     {"file": "verity/ml/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_folds", "detail": "Do not assign a `lambda` expression, use a `def`", "count": 2},
     {"file": "verity/ml/definitions/registry/topp_keep_builder.py", "kind": "E731", "symbol": "_state", "detail": "Do not assign a `lambda` expression, use a `def`"},
