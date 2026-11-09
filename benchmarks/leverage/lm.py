@@ -203,11 +203,12 @@ def fetch(name: str) -> Path:
         p = d / f
         if not p.exists():
             url = f"https://huggingface.co/{m['repo']}/resolve/{m['revision']}/{f}"
-            tmp = p.with_suffix(p.suffix + ".part")
+            # One temporary file a process: runs that start together each download and the last replace wins.
+            tmp = p.with_name(f"{p.name}.{os.getpid()}.part")
             with urllib.request.urlopen(url, timeout=600) as r, open(tmp, "wb") as out:
                 while chunk := r.read(1 << 22):
                     out.write(chunk)
-            tmp.rename(p)
+            os.replace(tmp, p)
     return d
 
 
