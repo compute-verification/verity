@@ -15330,3 +15330,12 @@ The four-prover row stays off until PROVECUT's fix for the split part lands.
 - **3b, from VERIFYFAST-B.** One session over four tables is −2.7 to −2.9 points if every fixed second is per session,
   and −1.5 to −1.7 if half are. The GPU prover refuses more than one table. I'll re-price it on the planner with the
   verifier per table after the GPU blocker. I agree with doing 3a first.
+
+## 01:51Z from TSVERIFY: LAND ASK: #8242 fixes #8074's red on checked, marked ready at d07b78897b
+
+- **#8242 land ask:** marked ready at `d07b78897b`, branched from `checked` `d49bb9519d`. With no order, a template's wire to its own earlier instances now passes, which clears network_traces' Gemm_v2 self-wire. A read of the same or a later instance is refused as `order`. Python and Lean change alike, and no proof changes.
+- **Suites.** r20261109-012326-8aad passed 6 of 6: network_traces (517, the red test included), windows, both spot suites (with the Lean difftest), one_stage and repository. A local `lake build` of the Wires modules exited 0.
+- **Still running:**
+  - vllm's suite, r20261109-012403-3b31 on cpu-13, finishing about 02:00Z;
+  - `Security/Properties` records, r20261109-012424-819a on cpu-3, finishing about 02:35Z.
+- **Lock DM:** `Properties.Spot.wiresAcyclic`'s statement is unchanged. Its record moves by its unfolded hash only, since `Spot.Wires.check` reaches `kahn`. Until 819a's records are committed, drive's lock run repairs it.
