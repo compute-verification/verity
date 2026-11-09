@@ -73,6 +73,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import resource
 import sys
 import time
@@ -85,6 +86,7 @@ import numpy as np
 from circuit_check import targets as TG
 from verity.ml.circuits import partition_object as PO
 from verity.ml.circuits.codec import program_digest
+from verity.ml.circuits.types import Array
 from verity.ml.circuits.defs import bind
 from verity.ml.circuits.ops import gemm as OG
 from verity.ml.circuits.ops.boolean import gemm as BG
@@ -329,10 +331,20 @@ def stage_census(name: str, cen: Census, S: dict, tag: str, n: int, out: Path, t
     params, _ret = d.signature()
     rng = np.random.default_rng(int.from_bytes(hashlib.sha256(f"verity/served-units/v1\0{tag}".encode()).digest()[:8], "little"))
     vals = {p: census_leaves(rng, ty, n) for p, ty in params}
+    types = dict(params)
+
+    def part(p: str) -> np.ndarray:
+        """Parameter ``p``'s words, or for a cut row's ``q[i]`` the words of q's element i, q drawn whole."""
+        if p in vals:
+            return vals[p]
+        m = re.fullmatch(r"(\w+)\[(\d+)\]", p)
+        if not (m and m[1] in vals and isinstance(types[m[1]], Array) and vals[m[1]].shape[1] % types[m[1]].n == 0):
+            raise SystemExit(f"stage.py: {tp.id}'s served row part {p!r} is neither a parameter nor an element of one")
+        w = vals[m[1]].shape[1] // types[m[1]].n
+        return vals[m[1]][:, int(m[2]) * w:(int(m[2]) + 1) * w]
+
     in_rows, out_rows = CR.unit_rows(tp)
-    if any(p not in vals for *_r, ps in in_rows for p in ps):
-        raise SystemExit(f"stage.py: {tp.id}'s served rows {in_rows} cut a parameter, which a census type draws whole")
-    rows = {r: np.concatenate([vals[p] for p in ps], axis=1) for r, _s, _b, ps in in_rows}
+    rows = {r: np.concatenate([part(p) for p in ps], axis=1) for r, _s, _b, ps in in_rows}
     if any(rows[r].shape != (n, b // 16) for r, _s, b, _ps in in_rows):
         raise SystemExit(f"stage.py: {tp.id}'s drawn rows {[rows[r].shape for r, *_x in in_rows]} are not its rows' words")
     stmt = CR.statement(tp)
