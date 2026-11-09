@@ -8,16 +8,16 @@ public import Proofs.InferenceOnly.Threads
 # Proofs of the inference-only policy's guarantees with reads counted by information
 
 A set of gates takes at most `2^width` values (`support_le_width`), so `novelInfo ≤ novelReads`
-(`novelInfo_le_novelReads`), with equality when the novel reads are novel input gates, which range freely
+(`novelInfo_le_novelReads`), with equality when the fresh input bits are fresh input gates, which range freely
 (`novelInfo_eq_novelReads_of_inputs`). So incompressibility in support form and `WeightsIncompressible` say the same
-at a subcircuit whose novel reads are novel input gates (`weightsSupport_iff_of_inputs`).
+at a subcircuit whose fresh input bits are fresh input gates (`weightsSupport_iff_of_inputs`).
 
 Theorem 1's proof reads `novelReads` only through incompressibility and the cap `S`, so it carries over with `novelInfo`
 in its place (`threaded_count`, and `Proofs.InferenceOnly.Fmt2`). A run of `c` lifts to a run of a declaration that contains it,
 with the baseline at its committed values (`liftRun`), so the piece of `c` inside a set `W` of `d`'s gates reads no more
 information than `W` (`novelInfo_le_of_containment`). Supports multiply at most over a union (`support_union_le`), and a
 function of `k` bits takes at most `2^k` values (`support_le_of_factor`): that bounds a set read by a state and an
-ingress (`InfoOfState`). A set of gates fed by no novel input outside `P` takes at most `2^width(P)` values
+ingress (`InfoOfState`). A set of gates fed by no fresh input outside `P` takes at most `2^width(P)` values
 (`support_le_of_feeds`).
 -/
 
@@ -74,7 +74,7 @@ theorem support_le_of_factor {T : Finset (Fin d.D.N)} {k : ℕ} (f : BitVec k �
     _ ≤ univ.card := card_image_le
     _ = 2 ^ k := by rw [card_univ, card_bitVec]
 
-/-- The gates of a subset of `R` take no more values than `R`'s novel reads. -/
+/-- The gates of a subset of `R` take no more values than `R`'s fresh input bits. -/
 theorem support_le_support_into {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.computed) (hT : T ⊆ R) :
     support d θv T ≤ support d θv (d.D.into R \ d.θ) := by
   classical
@@ -87,7 +87,7 @@ theorem support_le_support_into {R T : Finset (Fin d.D.N)} (hR : R ⊆ d.D.compu
   · rw [d.D.eval_input a (d.θ_input x hθ), d.D.eval_input b (d.θ_input x hθ), ha' x hθ, hb' x hθ]
   · exact congrFun hab ⟨x, mem_sdiff.mpr ⟨hx, hθ⟩⟩
 
-/-- Novel input gates take every value. -/
+/-- Fresh input gates take every value. -/
 theorem support_eq_of_inputs {U : Finset (Fin d.D.N)} (hU : ∀ g ∈ U, d.D.isInput g = true ∧ g ∉ d.θ) :
     support d θv U = 2 ^ d.D.width U := by
   classical
@@ -125,7 +125,7 @@ theorem novelInfo_le_novelReads : novelInfo d θv R ≤ novelReads d R := by
   unfold novelReads
   exact_mod_cast this
 
-/-- **Information is width on novel inputs**: when `R`'s novel reads are novel input gates. -/
+/-- **Information is width on fresh inputs**: when `R`'s fresh input bits are fresh input gates. -/
 theorem novelInfo_eq_novelReads_of_inputs (hU : ∀ g ∈ d.D.into R \ d.θ, d.D.isInput g = true) :
     novelInfo d θv R = novelReads d R := by
   have hs := support_eq_of_inputs d θv fun g hg => ⟨hU g hg, (mem_sdiff.1 hg).2⟩
@@ -138,7 +138,7 @@ theorem smallInfo_of_small {c : RegisteredCircuit} (θv : c.D.Trace) {Γ : ℕ} 
     (hR : Small c Γ S R) : SmallInfo c θv Γ S R :=
   ⟨hR.1, hR.2.1, (novelInfo_le_novelReads c θv R).trans hR.2.2⟩
 
-/-- **Where the two forms agree**: at a subcircuit whose novel reads are novel input gates, the
+/-- **Where the two forms agree**: at a subcircuit whose fresh input bits are fresh input gates, the
 inequality in support form is `WeightsIncompressible`'s. -/
 theorem weightsSupport_iff_of_inputs {c : RegisteredCircuit} (θv : c.D.Trace) (T : Threading c) (b_w b_a : ℝ)
     (R : Finset (Fin c.D.N)) (hU : ∀ g ∈ c.D.into R \ c.θ, c.D.isInput g = true) :
@@ -262,7 +262,7 @@ theorem eval_agree_of_feeds {D : Circuit} {a b : D.Trace} :
   · rw [D.eval_input a hi, D.eval_input b hi]
     exact h t hi (.refl t)
 
-/-- **What a set's values carry when novel inputs `P` alone feed it**: at most `2^width(P)` values, whatever the gates
+/-- **What a set's values carry when fresh inputs `P` alone feed it**: at most `2^width(P)` values, whatever the gates
 compute. A declared value that is a function of the baseline and the prompts that feed it carries at most their
 width. -/
 theorem support_le_of_feeds (d : RegisteredCircuit) (θv : d.D.Trace) {F P : Finset (Fin d.D.N)}

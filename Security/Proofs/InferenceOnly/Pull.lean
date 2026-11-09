@@ -7,15 +7,15 @@ public import Proofs.Core.Circuit
 # Pulling a division back through a containment
 
 Each inference block of a containing declaration, intersected with the contained circuit's gates, is a piece of the contained circuit
-(`pull`): the pieces divide `c` into inference blocks no larger, and each piece reads no more novel information than its inference block, since a
-novel value it reads is either a computed gate of `c` outside the piece or a novel input gate of `c`, and the containment
-carries both to novel values its inference block reads.
+(`pull`): the pieces divide `c` into inference blocks no larger, and each piece reads no more fresh input than its inference block, since a
+fresh input value it reads is either a computed gate of `c` outside the piece or a fresh input gate of `c`, and the containment
+carries both to fresh input values its inference block reads.
 
 Through a partial containment the pieces (`piece`) divide only the gates `S` that `d` computes, and the dark gates are in
 none. The same holds of each piece, with one more case for what it reads (`novelReads_piece`): a dark value enters `d` as
 an input gate, which lies in no inference block, so the inference block reads it too, and it is outside `d`'s θ by `ThetaRegistered`. A
 total containment is a partial one with no dark gates (`PartialContainment.ofContainment`), and `ThetaRegistered` for
-it keeps the novel inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
+it keeps the fresh inputs of `c` that a piece reads out of `d`'s θ (`novelReads_pull`).
 -/
 
 @[expose] public section
@@ -146,7 +146,7 @@ theorem card_piece_le (u : Fin n) : (piece M P u).card ≤ (P.gates u).card :=
     fun a ha b hb h => M.emb_inj a (mem_union_left _ (piece_subset u (mem_coe.1 ha))) b
       (mem_union_left _ (piece_subset u (mem_coe.1 hb))) h
 
-/-- **A piece reads no more novel information than its inference block.** A novel value the piece reads is a gate of `S` outside the
+/-- **A piece reads no more fresh input than its inference block.** A fresh input value the piece reads is a gate of `S` outside the
 piece, whose image is a computed gate outside the inference block, or a gate outside `S`, whose image is an input gate of `d` outside
 its θ (`ThetaRegistered`) and so in no inference block; either way the inference block reads the image, which is as wide. -/
 theorem novelReads_piece (hB : Assumptions.ThetaRegistered c d M) (u : Fin n) :

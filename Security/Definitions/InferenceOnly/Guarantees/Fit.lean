@@ -20,7 +20,7 @@ namespace InferenceOnly.Guarantees
 open Verity
 
 /-- **The fit bound**: for a division `P` of the reference circuit `c` into `k` windows that each read at most
-`S < N* b_w` bits of novel information, under F3 (`Assumptions.Reach`) and F1 with F4 (`Assumptions.Fits`), the counted
+`S < N* b_w` fresh input bits, under F3 (`Assumptions.Reach`) and F1 with F4 (`Assumptions.Fits`), the counted
 multiplications number at most `k · reuse · N* S² / (4 w_e (N* b_w − S))`, written multiplied out. At `reuse = 2`
 (forward and backward) it reads `#windows · 2 N* S² / (4 w_e (N* b_w − S))`. -/
 def FitBound : Prop :=

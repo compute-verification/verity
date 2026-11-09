@@ -4,7 +4,7 @@
 335 whose references name leaves of other widths than their types give them (`E_REINTERPRET`) or are their well-typed
 neighbours, and three pinned ones (θ with an input bound per run, refused, θ the registered input, accepted, and a
 declaration with a constant gate, accepted), and
-`scripts/inference_only_reference.py`'s results on each (per inference block its size and novel reads, the verdict and the first failing inference block, or
+`scripts/inference_only_reference.py`'s results on each (per inference block its size and fresh input bits, the verdict and the first failing inference block, or
 the first malformation's code). `check` runs the Lean half in its Lean audit (`runs` in that package's
 `lean-audit.json`): `InferenceOnlyCheck/DifftestMain.lean` checks every instance with `InferenceOnlyCheck.check` and fails on any difference.
 The audit checks the data against the record's SHA-256, and its pass is cached on the Lean package's files alone, so the
@@ -76,8 +76,8 @@ def test_the_generator_covers_what_it_says():
 
 
 def test_the_reference_on_a_declaration_worked_by_hand():
-    """`vectors.hand()`: IU 0 = {c} reads a (baseline) and b: 16 novel bits. IU 1 = {d, e} reads c, b and a: 4 + 16
-    novel bits, a free. b is bound per run, so it can't be baseline."""
+    """`vectors.hand()`: IU 0 = {c} reads a (baseline) and b: 16 fresh input bits. IU 1 = {d, e} reads c, b and a: 4 + 16
+    fresh input bits, a free. b is bound per run, so it can't be baseline."""
     inst = {"program": vectors.hand(), "theta": [0], "owner": ["input", "input", 0, 1, 1], "gamma": 2, "alpha": [16, 1]}
     assert reference.check(inst) == {"gates": 5, "ius": [[1, 16], [2, 20]], "complies": True, "failure": None}
     assert reference.check(inst | {"alpha": [31, 2]})["failure"] == [0, "nci"]

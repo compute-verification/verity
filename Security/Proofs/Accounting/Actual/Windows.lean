@@ -16,7 +16,7 @@ cut is what it reads in `A`, and the split in `G` (`width_into_region_inter_le`)
 `stateIn_{X i}(τ j, G) + β_{X i} (τ (j + 1) − τ j)`. No memory constraint is used.
 
 `Windows` is `WindowsAt` at the cuts `min(kω, t)` (`uniformCuts`) and `G = univ`: a window of them is
-`A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its novel reads are at most its reads
+`A[X i, [kω, (k + 1)ω) ∩ [0, t)]`, at most `ω` long, its fresh input bits are at most its reads
 (`InferenceOnly.SecurityProofs.novelReads_le_readsIn`), and memory bounds the state at its start by `M_{X i}`.
 -/
 

@@ -9,7 +9,7 @@ public import Proofs.InferenceOnly.Threads
 Fix a small subcircuit `R` and a thread `t`. Following keys from any value of `t` in `R` reaches either a value of `t`
 that `R` reads (where the path leaves `R`) or a stop in `R` (`walk`). Each leg of a root in `R` does so too, and two legs
 never reach the same value, so a root of `t` in `R` gives `d ≤ #(t's reads) + #(t's lookups in R)`, by induction down
-the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of novel inputs, so `R` holds at most `E` of
+the roots (`root_reads`). The lookups of `t` in `R` read disjoint columns of fresh inputs, so `R` holds at most `E` of
 them when it reads less than `(E + 1) · b` bits (`lookupsIn_bits`). A subcircuit that reads fewer than `d − E` values of
 `t` thus holds no root of `t`, and each of `t`'s counted multiplications in `R` is charged to a read (at most `e` each)
 or to a lookup (at most `eLk` each), with a lookup costing a read of its token (`threaded_of_layered`).
@@ -134,7 +134,7 @@ theorem root_reads (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R �
             card_le_card_of_injOn f (fun p hp => mem_coe.2 (hall p (mem_coe.1 hp))) hinj
         _ ≤ (T.threadReads R t).card + (lookupsIn L R t).card := card_union_le _ _
 
-/-- **Lookups cost bits**: the lookups of a thread in `R` read disjoint columns of novel inputs, `b` bits each. -/
+/-- **Lookups cost bits**: the lookups of a thread in `R` read disjoint columns of fresh inputs, `b` bits each. -/
 theorem lookupsIn_bits (L : Layered T d e eLk b) (R : Finset (Fin c.D.N)) (hR : R ⊆ c.D.computed) (t : Fin T.m) :
     (lookupsIn L R t).card * b ≤ novelReads c R := by
   classical
