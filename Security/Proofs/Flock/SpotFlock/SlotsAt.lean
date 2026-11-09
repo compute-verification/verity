@@ -18,8 +18,8 @@ At every accepted run's checked unit the layout puts the unit in a block of its 
 accepted run, at the port the site names in that unit's session (`Site.port`).
 
 * `Counted`: the unit's instance is below the table's count.
-* `RowAt`: the site's port of that table is an unsegmented bit row of its place's width, and the bit it holds at the
-  place, at the unit's instance, is the one the layout reads.
+* `RowAt`: the site's place is as wide as its port's row in that table, and the bit the row holds at the place, at the
+  unit's instance, is the one the layout reads.
 * the branch facts, each giving the slot's row as the frame reads it off the gate's roots (`leafAt`, `unitsAt`): at a
   port a registered read is named like (`ReadsRegistered`), the port is the first of its name, the gate's roots are
   those round 2 reads the value under (`readRoots`), and the site's slot names the entry round 2 reads the value off
@@ -33,15 +33,20 @@ A slot reads its row off the roots, so one slot fits every replay sample: under 
 (`leafAt_irootsOf`), the second stage's population as the two-stage registration lays it out; under the run's roots it
 reads its fixed leaf (`leafAt_decode`).
 
+The row's format is not part of a site: every port of the session's first table is an unsegmented bit row
+(`CheckedRun.v2Row_port`), since the pin holds the session's circuit to its template's reference statement's, whose
+ports `templateOk` holds to `ProvedScope.v2Row`.
+
 `Sites h` is a premise, not a theorem, because the verifier's checks don't give it today, and at some registrations it
 can't hold:
 
-* the row format (`RowAt`'s first three facts): the scope admits `sha512/row/v1` and `sha512/row-seg/v1` ports, whose
-  rows `SamplingDeploy.row` doesn't encode;
+* the width (`RowAt`'s first fact): one place for every unit that needs the gate, so the ports that hold it in
+  different sessions must have one width;
 * the copy (`RowAt`'s last fact): the opened bit is a unit column and the row's bit a message column, equal only
   through the session circuit's copy rows, and the place must be one for every unit that needs the gate;
 * the row (`Counted` and the slots' leaves): round 2 doesn't hold a session's population to the layout a slot reads
-  off the roots, and bounds a registered read's row only to its unit's range of rows;
+  off the roots, and bounds a registered read's row only to its unit's range of rows; and the unit's instance
+  (`rankAt`) is a drawn unit's, which an always-checked unit needn't have;
 * the entry (`ReadsRegistered`): round 2 holds a session's registered reads to its template's reference statement's but
   for the run's fields, and which entry it reads a value off (`readKeyAt`) still reads the round-1 record's port names;
 * one tree a gate: a gate one unit writes and another reads is needed by both, and the frame checks both openings at
@@ -210,6 +215,53 @@ theorem wire_lt (hr : r.Ok h) (g : ℕ) : r.wire h g < 2 ^ r.sts[0]!.c.kLog := b
     rw [getElem!_pos r.sts 0 hj]
     exact wire_lt_of h hpb hpp hc hh hj [] r.m₁ r.u g
 
+/-- **Every port of an accepted run's checked unit's session's first table is an unsegmented bit row**
+(`ProvedScope.v2Row`): the table's circuit is the one the scope check parses (`accepted_check`), which unrolls, ports
+and all (`unrolled_ports`), to its template's reference statement's statement circuit (`pin_of_stmtOkAt`,
+`stmt_of_pin`), each of whose ports `templateOk` holds to `v2Row`. -/
+theorem v2Row_port (hr : r.Ok h) {q : ℕ} (hq : q < r.sts[0]!.c.ports.size) :
+    _root_.Flock.ProvedScope.v2Row r.sts[0]!.c.ports[q]! = true := by
+  have hj := sts_pos hr
+  obtain ⟨Pt, d, _, hx, hP, h2, hin, hok, hu, hck, hb, hρ, -, hset⟩ := hr
+  have hokAt := stmtOkAt_unit h hx hok hu
+  have hT := fun t (ht : t < h.ms.length) => templateOk_facts h (templateOk_of_two h h2 ht) ht
+  obtain ⟨t, ht, k, hut, -, -⟩ :=
+    shape_of_checked h (fun t ht => ⟨(hT t ht).2.1, (hT t ht).2.2⟩) hx hP h2 hin hb hρ
+  have htu : templateOf h.ms r.u = t := by
+    rw [hut]
+    exact templateOf_unitBase ht k.isLt
+  cases hS : FlockDeploy.parse true _root_.Flock.Readable.relation (unitStmt h r.m₂ r.u) with
+  | none => simp [Claims.Flock.check, hS] at hck
+  | some S =>
+    obtain ⟨p, hpb, -, hpp, hc, hh⟩ := parsed_of_stmtOkAt h hokAt hS
+    obtain ⟨rfl, -⟩ := parsed_setupOf hset hpb
+    obtain ⟨w, w₀, hw, hw₀, he⟩ := pin_of_stmtOkAt h hokAt
+    rw [htu] at hw₀
+    have hok₀ := templateOk_of_two h h2 ht
+    unfold templateOk at hok₀
+    cases hr₀ : FlockDeploy.readOf true (h.xS₀ t) with
+    | none => rw [hr₀] at hok₀; cases hok₀
+    | some r₀ =>
+      rw [hr₀] at hok₀
+      simp only [Bool.and_eq_true] at hok₀
+      have hst := stmt_of_pin hw hw₀ he (readOf_of_parseBytes hpb) hr₀
+      obtain ⟨T, a, hst0, -, hcirc, -⟩ := accepted_check hpp hc hh hj
+      have hports : r.sts[0]!.c.ports = r₀.stmt.ports :=
+        calc r.sts[0]!.c.ports = a.st.c.ports := by rw [(getElem!_pos r.sts 0 hj).trans hst0.symm]
+          _ = (_root_.Flock.HmOut.unrolled a.st.c).ports := (FlockSoundness.unrolled_ports a.st.c).symm
+          _ = r₀.stmt.ports := by
+            rw [← hcirc]
+            exact congrArg _root_.Flock.Circuit.ports hst
+      rw [hports] at hq ⊢
+      rw [getElem!_pos r₀.stmt.ports q hq]
+      exact Array.all_eq_true.1 hok₀.2 q hq
+
+/-- **An unsegmented bit row's format**: `v2`, with no segments. -/
+theorem v2_of_v2Row {p : _root_.Flock.Port} (hp : _root_.Flock.ProvedScope.v2Row p = true) :
+    p.v2 = true ∧ p.segs = none := by
+  unfold _root_.Flock.ProvedScope.v2Row at hp
+  cases hv : p.v2 <;> cases hs : p.segs <;> simp_all
+
 /-- **`SlotsAtGate` at a site that holds**: at a checked unit of an accepted run, at a gate it needs whose site holds
 there, the code's opening is the site's (`openAt_revealCode`): its value is the witness's bit at the layout's column,
 its row and salt are the site's port's at the unit's instance (`row_opening`, `salt_opening`), and its path is
@@ -222,12 +274,17 @@ theorem slotsAtGate (hr : r.Ok h) {site : ℕ → Option Site} (c₀ : Code) {g 
   have hj := sts_pos hr
   have e0 : r.sts[0]! = r.sts[0] := getElem!_pos r.sts 0 hj
   have hsl : slotsOf site g = some S.slot := by simp [slotsOf, hsS]
+  have hq : S.port r.u < r.sts[0]!.c.ports.size := by
+    rcases hrd with ⟨reg, -, hfind, -⟩ | ⟨-, -, hq, -⟩
+    · exact List.mem_range.1 (List.mem_of_find?_eq_some hfind)
+    · exact hq
+  obtain ⟨hv2, hseg⟩ := v2_of_v2Row (v2Row_port hr hq)
   refine ⟨r.β h, 0, r.wire h g, r.n h, S.port r.u, blockOf_some hr, hj, by rw [← e0]; exact wire_lt hr g,
     by rw [Nat.zero_mul, Nat.zero_add]; rfl, by rw [← e0]; exact hn, ?_⟩
   intro o
   have ho : o = r.opening h S g := openAt_revealCode hr hsS hg c₀
   rw [ho]
-  refine ⟨rfl, row_opening hsS hR, salt_opening site c₀ S g, ?_⟩
+  refine ⟨rfl, row_opening hsS hv2 hseg hR, salt_opening site c₀ S g, ?_⟩
   rw [← e0]
   rcases hrd with ⟨reg, hreg, hfind, hroots, hkey, hsch, hsz, hleaf⟩ | ⟨hnone, hc1, hq, hint, hkey, hsz, hI⟩
   · obtain ⟨own, hown, hfo⟩ := Option.bind_eq_some_iff.1 hreg
