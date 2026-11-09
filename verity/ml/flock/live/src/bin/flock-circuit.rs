@@ -6971,8 +6971,8 @@ const STACKED_DOMAIN: &str = "flock-circuit/stacked/fast100/rep0";
 fn stacked_table(path: &str) -> (usize, Vec<u8>, Vec<F128>) {
     let b = std::fs::read(path).unwrap_or_else(|e| refuse(format!("--table {path}: {e}")));
     let m = (b.len() * 8).trailing_zeros() as usize;
-    if !b.len().is_power_of_two() || !(22..=35).contains(&m) {
-        refuse(format!("--table {path}: {} bytes, not 2^m cells with 22 <= m <= 35 (fast100)", b.len()));
+    if !b.len().is_power_of_two() || !(22..=37).contains(&m) {
+        refuse(format!("--table {path}: {} bytes, not 2^m cells with 22 <= m <= 37 (fast100)", b.len()));
     }
     let word = |c: &[u8]| u64::from_le_bytes(c.try_into().unwrap());
     let z = b.chunks_exact(16).map(|c| F128::new(word(&c[..8]), word(&c[8..]))).collect();

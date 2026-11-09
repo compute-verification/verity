@@ -45,7 +45,8 @@ body = cut(body, "    const long long n_comp = C->mode == 1", "    const int n_b
 body = cut(body, "    if (pure ? ((C->host_z", "{ printf(\"FFI chunk: bad shape\\n\"); return 201; }",
            "    if (fc_bad_shape(P, N)) { printf(\"FFI circuit: bad shape\\n\"); return 201; }", keep_b=False)
 body = cut(body, "    // the chunk prover's arena peak", "    CK(device_arena.begin(arena_bytes));",
-           "    const size_t arena_bytes = fc_arena_of(P, N);\n")
+           "    const size_t arena_bytes = fc_arena_of(P, N);\n"
+           "    fprintf(stderr, \"FC_ARENA begin bytes=%zu m=%d k_log=%d\\n\", arena_bytes, (int)P->m, (int)P->k_log);\n")
 body = cut(body, "    if (pure && C->host_z) {", "    CKI(phase(0));",
            "    std::vector<F128> fc_zk_comb(64);\n    CKI(fc_witness(P, N, m, k_log, len, df, d_a, d_b));\n")
 body = cut(body, "        CKI(chunk_quirky_eq_device(d_eq_inner, zc_z, xab_inner, k_skip));", "        if (C->n_delta_a) chunk_delta_scatter",

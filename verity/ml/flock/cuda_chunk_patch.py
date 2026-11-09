@@ -75,7 +75,9 @@ if "    size_t high_ = 0;\n" not in s:
                   "        *ptr = base_ + offset;\n        if (offset + aligned > high_) high_ = offset + aligned;\n"),
                  ("        active_ = false;\n        return live_.empty() ? cudaSuccess : cudaErrorInvalidValue;\n",
                   "        active_ = false;\n        if (!live_.empty()) return cudaErrorInvalidValue;\n"
-                  "        const size_t used = high_;\n        high_ = 0;\n        if (!used) return cudaSuccess;\n"
+                  "        const size_t used = high_;\n"
+                  "        fprintf(stderr, \"FC_ARENA finish capacity=%zu high=%zu\\n\", capacity_, used);\n"
+                  "        high_ = 0;\n        if (!used) return cudaSuccess;\n"
                   "        cudaError_t err = cudaMemsetAsync(base_, 0, used);\n"
                   "        return err != cudaSuccess ? err : cudaStreamSynchronize(0);\n"),
                  ("    bool active_ = false;\n", "    bool active_ = false;\n    size_t high_ = 0;\n")):

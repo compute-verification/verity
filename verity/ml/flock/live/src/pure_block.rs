@@ -391,7 +391,7 @@ pub fn y_leaf(net: &UnitNet) -> (&'static str, usize) {
 pub const MAX_EXTRA_CLAIMS: usize = 2 * crate::circuit::IN_RANGE_REGIONS;
 
 /// The largest proof: m ≤ 35 (the Fast100 schedule's reach; Chunk(n): n × VUs ≤ 32,768 blocks).
-pub const MAX_M: usize = 35;
+pub const MAX_M: usize = 37;
 
 /// What both parties check of an (instances, netlist, layout) triple before any coin:
 /// - CN3: no `Chunk(1)` (a one-chunk row's digest is its ROOT output, which Chunk(n) does not compute);

@@ -99,7 +99,8 @@ pub const BINDING_KEYS: [&str; 3] = ["partition", "program_sha512", "program_dig
 pub const IN_RANGE_K_LOG: usize = 27;
 pub const IN_RANGE_REGIONS: usize = 1024;
 pub const IN_RANGE_M_PTS: usize = 64;
-pub const M_MAX: usize = 35;
+// measurement only, never landed: the GPU prover's memory at m = 36 and 37 (Fast100 configs derived by m37-configs.sh)
+pub const M_MAX: usize = 37;
 
 /// A range of a `2^k_log`-bit block, checked before any shift by its `slot_log`: its slots at least one 128-bit word and at
 /// most the block, and all of them inside the block (`pos0 + count <= 2^(k_log - slot_log)`, as the Lean check's unbounded

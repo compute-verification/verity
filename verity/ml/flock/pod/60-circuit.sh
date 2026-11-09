@@ -34,6 +34,7 @@ F=${FLOCK_WORK:-/workspace}/flock-gpu-link/flock; FEAT="--features sha512 --feat
 if [ $G = 1 ]; then (cd $F && python3 $REPO/verity/ml/flock/cuda_circuit_patch.py && python3 $REPO/verity/ml/flock/cuda_sha512_patch.py) || exit 1; FEAT="$FEAT --features gpu"; fi
 # the selftest's harness injects seeds (determinism check); a proving build (bench, cells) never has the feature
 [ "$MODE" = selftest ] && FEAT="$FEAT --features seed-injection"
+bash $REPO/verity/ml/flock/pod/m37/m37-configs.sh "$F" "$O" > $O/m37-configs.log 2>&1 || { tail -30 $O/m37-configs.log; exit 1; }
 (cd $F && cargo build --release -p flock-live $FEAT --bin flock-circuit -j $TH) > $O/build-circuit.txt 2>&1 || { tail -40 $O/build-circuit.txt; exit 1; }
 B=$F/target/release/flock-circuit; sha256sum $B | tee $O/binary.sha256
 [ "$MODE" = build ] && exit 0

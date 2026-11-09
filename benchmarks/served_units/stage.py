@@ -90,7 +90,7 @@ from verity.ml.definitions.registry import boolean_fp8 as BF
 
 #: the prover's witness bits a statement (70-class-sweep.sh's MAX_STATEMENT_BITS): `class_statement.stage` cuts a PARTS type's
 #: N to the most instances under it
-MAX_STATEMENT_BITS = 1 << 35
+MAX_STATEMENT_BITS = 1 << 37
 
 
 def bf16(v: np.ndarray) -> np.ndarray:
