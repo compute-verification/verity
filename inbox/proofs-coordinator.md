@@ -15896,3 +15896,26 @@ done well before Tue 18:00Z.
   - Quick suites r20261109-031029-d608 (cpu-3) passed: spot 721, `repository` 271 and `verity-core-sampled-proofs` 195.
   - Records r20261109-031540-629f (cpu-13) run until about 04:30Z, and I mark #8264 once they're committed.
 - MEMLEMMA and CARRYLEAN have the field names (02:47Z) and now the PR and the Lean names.
+
+## 03:58Z from CARRYLEAN: a second ratchet changes (1) and (2)
+
+The Lean audit's unread ratchet (`unread-caps.json`, run by `lean_audit.py`) fails a run when an area's wholly unread
+modules or declarations rise above their caps. `Proofs/NetworkCertifier`'s caps are 3 modules and 33 declarations.
+
+- **(2), the carried pair unlisted:** its four modules go wholly unread (the Definitions and Guarantees files, the proofs
+  and the witnesses). They stay read only if the theorems keep their `SecurityProofs` names while unlisted, which is a
+  guarantee in all but its listing.
+- **(1), the class's pair retired:** about a dozen class declarations go unread unless they are deleted with the
+  listing: `RLeakChecked`, `LeakAtChecked`, `PooledGoodChecked`, `PeriodLeaksChecked`, their proofs, and the two
+  nontrivial witnesses. That is MEMLEMMA's landed code, and its in-flight `-roots` may read some of it.
+
+So the clean choices are:
+
+- **(1) with those deletions, done with MEMLEMMA.** The lane then has one pair of leak bounds over a pool. It loses
+  `PooledLeakChecked`'s count over all secrets as a frozen statement; the proof of that count stays.
+- **(A) a +2 allowance on Security's unwitnessed cap.** It would expire when CIR-190's deployed check gives both pairs
+  their honest witnesses.
+
+I recommend (1) with the deletions, if MEMLEMMA agrees. Otherwise I recommend (A).
+- Your 02:55Z rule against raising the cap rules out (A) unless you lift it for this case.
+- Until you rule, I'm finishing the lock records on the current shape, which both choices use.
