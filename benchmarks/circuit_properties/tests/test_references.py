@@ -50,6 +50,26 @@ def test_boolean_gemm_partitions(gemm):
     assert w.split >= 1
 
 
+def test_no_configuration_states_a_shape_of_its_own():
+    """Each configuration is a served one of b1's, or b1's Definitions at a shape benchmarks/rho states (`models.toml`,
+    read through its loader), differing from the base only by that shape and what is no shape (the model's name, the
+    norm's epsilon, the QKV bias); and a served configuration whose model rho has a row for has that row's shape."""
+    from verity.ml.definitions.registry import b1
+    served = (b1.B0_CONFIG, b1.B1_CONFIG, b1.SMOL360_CONFIG)
+    models = R.rho_models()
+    constructed = []
+    for name, (C, _) in R.configs().items():
+        if any(C is s for s in served):
+            if name in models:
+                assert R.shape(models[name]).items() <= C.items(), name
+        else:
+            constructed.append(name)
+            assert C == b1.B1_CONFIG | R.shape(models[name]) | {k: C[k] for k in ("model", "EPS", "BIAS")}, name
+    assert constructed == ["qwen25-7b", "llama3-405b"]
+    with pytest.raises(ValueError, match="grouped-query"):
+        R.shape(models["kimi-k2"])
+
+
 @pytest.mark.slow
 def test_tiny_layer_matches_flat():
     """b1's layer at tiny shapes (3.9e6 gates), gate by gate: about 40 s of layout lookups. It is the one test holding the

@@ -116,7 +116,7 @@ implementation, or different numbers in `data/`, never an edit to the modules ar
 | `attacks.py` | the same `Argument`, side `attack`, on a server block's layout |
 | `profile.py` | `Profile`: every field a class reads, named as in Lean |
 | `families.py` | `Family.profile(Model, Run) → Profile`, for each algorithm family and any `benchmarks/nci` algorithm by its traits |
-| `instances.py` | `Model`, `Run` (a target and its kind) |
+| `instances.py` | `Model`, `Run` (a target and its kind); `models`, every model's shape, which `benchmarks/nci/kappa.py` and `benchmarks/circuit_properties` read |
 | `circuits.py` | `Circuit` (a measured training step), `compare → Comparison` with the FLOP model, `in_place` |
 | `hardware.py` | `Units`, `Location`, `Fleet`, `MonitoringPeriod` |
 | `envelopes.py` | `Pouw`, `Detection`, `Wipe`, `Certifier`; `Regime.partition`, `Regime.delta`; `Policy` |
@@ -150,7 +150,8 @@ intermediate, not the slowdown. The glossary's `ρ` is the ACCEL model's resourc
   it reads in `Profile`.
 - **An attack**: an `Argument` with side `attack` in `attacks.ATTACKS`.
 - **An algorithm family**: a table in `data/families.toml` of an existing kind, or a new kind in `families.KINDS`.
-- **A model or run**: a table in `data/models.toml`.
+- **A model or run**: a table in `data/models.toml`, the one place a model's shape is stated: another benchmark reads
+  it through `instances.models` and states none.
 - **Hardware, a fleet**: a table in `data/hardware.toml`.
 - **An envelope**: a dataclass with `slack` or `state` and `delta` in `envelopes.PARTS`, held by a regime.
 - **A regime**: a dataclass with `partition` and `delta` in `envelopes.KINDS` and its table in `data/envelopes.toml`.
