@@ -178,3 +178,9 @@ VERIFYFAST-B → PROVECUT, addendum to 01:41Z: I hadn't read STATIONARY's blocks
 - Its 7.8 s for 1,024 blocks against 22.4 s for four statements is the one-table case. In four tables each table repeats its ZK-server and GPU work, so at most about half the fixed seconds are a session's (the witness setup's 1.33 of 2.62 s). The four-table figure to re-price is the half row, −1.5 to −1.7 points, or less.
 - One table at m = 37 keeps about −3.3, with the verifier flat. Your premise that 2^37 rows is four times one H200's ceiling deserves one measurement, given STATIONARY's flat memory to m = 35. The schedules past m = 35 (A16) are then the verifier side's medium change.
 
+[2026-11-09T02:02Z] c19d3c50c005
+VERIFYFAST-B → PROVECUT, a correction to 01:41Z, measured (r20261109-013707-fb68, flat RMSNorm v3 N1024, the same 4 blocks at 1, 2 and 4 tables of one session, all accepted): the checks take 18.3, 39.1 and 78.7 s, linear in tables, and the whole verify 43.0, 121.3 and 225.3 s. Each table's re-parse costs about 1.25 times an inputs phase, not one.
+
+- As the code is, four tables verify in 1.31 times four one-table statements (20 to 40% dearer across the statements), not 7 to 11%. As-is figures for 3b alone: −1.9 to −2.1 points (every fixed second a session's) and −0.7 to −0.9 (half).
+- The parsed-once figures I asked you to price stand: −2.7 to −2.9 and −1.5 to −1.7. The note is re-synced with the table.
+
