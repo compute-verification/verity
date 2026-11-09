@@ -184,24 +184,18 @@ module's sidecar (`<module>.circuit-check.py`, pins in `.circuit-check.json`), w
 There is no GitHub Actions CI. `check` (`verity check`, `tools/verity/check/check.py`) is the one check: every suite,
 `circuit-check --all`, Flock's Rust build and tests, the Lean verifier's build and partition check, the Lean check, and
 `lean-agreement` (against upstream's Rust verifier) when Flock or its Lean verifier changes. The runners report facts: each
-suite, test, target and step's real verdict. What gates, what may stay red and what a red triggers is drive's config,
-`tools/verity/check/policy.toml`: its `off_gate` jobs, and its allowances, each an id, an owner, a UTC expiry and a reason, under
-which drive takes a failure as not red until it expires. `circuit-check` is off the merge gate until `circuit-check --all`
-fits inside the rest of the check: a recorded check, `research merge` and the move of `main` leave it out, and it runs after
-landing on `checked`'s tip, where a red holds the PRs touching its inputs until it passes.
+suite, test, target and step's real verdict. What gates and what may stay red is `tools/verity/check/policy.toml`: its
+`off_gate` jobs (circuit-check, until `circuit-check --all` fits inside the rest of the check, and ratchet-gate) and its
+allowances, each an id, an owner, a UTC expiry and a reason. A part's verdict is reused while a hash of its declared inputs,
+the base image and its runner is unchanged, so a docs-only change reruns nothing; a nightly uncached check must agree, and a
+disagreement is fixed in the check.
 
-A pass of a test suite, a circuit-check target or a Lean package's Lean check is reused only while every input it read is
-unchanged.
-
-A part's verdict is reused while a hash of its declared inputs, the base image and its runner is unchanged, so a
-docs-only change reruns nothing; a nightly uncached check must agree, and a disagreement is fixed in the check. `main` holds
-only fully checked commits: drive lands each marked PR on `checked` once it is reviewed or low-risk, runs the full check on
-its tip, and moves `main` only to a commit of `checked` whose full check passed every step on the merge gate. A red's
-culprit is the one landing whose change touches what its failure names (its files, the files declaring a Lean declaration
-it names, else the failed suite's or step's declared inputs), never found by bisecting: its lane fixes it forward, or drive
-reverts it on `checked`. What drive.toml lets warn (its `warn_gates` and `warn_steps`) and a lock's bookkeeping never
-revert: drive tells the owner, who fixes it in their next PR. How a PR lands, from its ready mark to `main`, and drive's
-rule for each case: the team skill's Landing.
+The verified queue (`research queue vqueue`) lands. A PR's owner marks it ready at its head, and a reviewer who isn't its
+owner records a land verdict (`research queue review N --land|--hold`); a low-risk PR needs only the mark. The queue builds
+candidates from `main` and a batch of ready PRs with land verdicts, checks each with graph2 and the run beside it, and
+fast-forwards `main` only to a candidate with no new failure. A failure its base has too blames nobody; the PRs whose changed
+files meet a new failure's inputs are its suspects: a lone suspect is ejected, its owner told which tasks failed, and several
+are bisected. A Lean lock record change rides with its PR. How a PR lands: the team skill's Landing.
 
 ## Lean
 
@@ -244,8 +238,7 @@ rule for each case: the team skill's Landing.
 - **The lock.** Each package's `lean-audit.json` lists its guarantees, and `check.py --update` records each one's
   statement, the definitions it reads and the premises it takes, so a changed statement is a changed record.
   A guarantee that only moved keeps its record (`--update --moved MOVES.json`). Bookkeeping warns rather than fails
-  after a landing. A PR's own check still fails on it. Drive's lock run repairs it in its lock commit and
-  warns, naming each entry's owner, and the next PR fixes it. Bookkeeping is an unlisted or misfiled premise, a guarantee
+  after a landing, and the next PR fixes it; a PR's own check still fails on it. Bookkeeping is an unlisted or misfiled premise, a guarantee
   the witnesses rule holds to missing witnesses, a stale entry, a premise a `trust_gap` entry lists that its guarantee
   no longer rests on, a missing owner, or a cap of `unread-caps.json` or
   `tests/test_lean_packages.py`. A cap more than its room above its count only warns, in every check. The build, the replay, the axioms, `sorry`, `native_decide`, a kernel bypass and a

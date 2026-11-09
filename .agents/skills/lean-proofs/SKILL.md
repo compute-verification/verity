@@ -137,9 +137,9 @@ token, and the parse error lands far from the binder).
   entry it took from one side, so read them. It conflicts only where it can't vouch for the merge (a newer lock `format`,
   the worktree's copy merging in newer merge rules, a merge that drops most of a section), and says why: do what it says.
 - Record your lock at your own head, then mark; a passing Lean check, a clean merge of `main` over a passing head, or a
-  commit of exactly the records a passing run kept needs no new run. Once your PR lands, drive's lock run regenerates
-  records another PR moved; re-record only what it can't (a hand-written entry a merge warning says took theirs, `shape`, a
-  move's map).
+  commit of exactly the records a passing run kept needs no new run. Nothing regenerates records after landing: a
+  candidate whose lock records don't match ejects your PR, so re-record at your head when the queue says so (a record
+  another PR moved, a hand-written entry a merge warning says took theirs, `shape`, a move's map).
 
 ## Standing rulings
 

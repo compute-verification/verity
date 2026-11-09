@@ -131,7 +131,7 @@ Keys and access:
   so stopping a machine never waits on an agent VM.
 - Workers open and edit their own lane's PRs with `research queue open|edit`, through a GitHub App on the
   control pod with pull-requests write only (no contents) whose token no worker holds; the tool refuses a PR whose head
-  branch isn't the caller's lane's. Drive's App stays the only one that can move `main`.
+  branch isn't the caller's lane's. The queue's App stays the only one that can move `main`.
 - A lane's gate key on an auditor's gate (vy-challenger-1, vy-auditor-2): the lane makes an ed25519 key, sends
   infra only the public half, and infra registers it under that lane.
 
