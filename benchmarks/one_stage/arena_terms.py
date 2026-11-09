@@ -95,7 +95,7 @@ def main() -> None:
                 phases = {k: v for k, v in t.items() if k != "salts"}
                 top = max(phases, key=phases.get)
                 with_salts = t["ligerito"] + t["salts"]
-                print(f"m{m} k{k_log} {'M1' if zk else 'M0'} {label}: " + ", ".join(f"{k} {v / MIB:,.0f}" for k, v in phases.items())
+                print(f"m{m} k{k_log} {'Flock ZK' if zk else 'circuit prover'} {label}: " + ", ".join(f"{k} {v / MIB:,.0f}" for k, v in phases.items())
                       + f", ligerito with salts {with_salts / MIB:,.0f} (salts {t['salts'] / MIB:,.1f}); largest {top}; "
                       f"arena base {arena(b, s) / MIB:,.0f} MiB, new {arena(n, s) / MIB:,.0f} MiB")
 

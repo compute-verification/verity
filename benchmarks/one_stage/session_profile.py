@@ -10,8 +10,8 @@ A session's `prove_total_s` is its two reps' prove seconds. Each rep's device ph
 through ``t.ligerito``) run back to back, so each window is placed backward from Ligerito's phase mark (`phase_profile.py`'s,
 at ``lf_fold_base_pair``) by the record's seconds, and split into GPU time by kernel and the host's idle time. The
 rest of a rep's prove seconds has no device window and is ranked from the records alone: the host around the device
-prover (``t.upstream`` less ``t.total``), M1's finish (``t.prove`` less ``t.upstream``), and what the session adds to the
-rep (rep 0: M1's preparation past the witness build, where it runs beside it, else level 0's hiding and the ZK server's
+prover (``t.upstream`` less ``t.total``), Flock ZK's finish (``t.prove`` less ``t.upstream``), and what the session adds to the
+rep (rep 0: Flock ZK's preparation past the witness build, where it runs beside it, else level 0's hiding and the ZK server's
 level-0 recheck; rep 1: the rep's time outside its device call, its wait on rep 0's finish included). ``--skip`` drops the first
 sessions (the warm one)."""
 from __future__ import annotations
@@ -38,8 +38,8 @@ def host_parts(r: dict) -> dict[str, list[float]]:
     out = defaultdict(list)
     for rep, (b, s) in enumerate(zip(r["buckets"], r["prove_s"])):
         out["host around the device prover"].append(b["t.upstream"] - b["t.total"])
-        out["M1 finish (replay, inner proof)"].append(b["t.prove"] - b["t.upstream"])
-        out["rep 0: M1's preparation past the witness" if rep == 0 else "rep 1: outside its device call"].append(s - b["t.prove"])
+        out["Flock ZK finish (replay, inner proof)"].append(b["t.prove"] - b["t.upstream"])
+        out["rep 0: Flock ZK's preparation past the witness" if rep == 0 else "rep 1: outside its device call"].append(s - b["t.prove"])
     return out
 
 

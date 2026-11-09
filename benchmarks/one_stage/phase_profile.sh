@@ -8,17 +8,18 @@
 #          (zk_cost.py stage), once per KW and UNITS
 #   test   TESTS (default the hm96 trees', the arena layout's and level 0's fused folds') under pytest, slow ones included, on
 #          the pod's nvcc and GPU, against b684b12's cuda-ghash from the build's Flock checkout; a skip fails
-#   ident  prover_is_deterministic pinned to main's digests under M1 and M0; gpu_paths_agree under M1 and M0
-#   tl     one warm process (warm 1 + RUNS M1 dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
+#   ident  prover_is_deterministic pinned to main's digests under Flock ZK and Flock's circuit prover; gpu_paths_agree under both
+#   tl     one warm process (warm 1 + RUNS Flock ZK dev sessions) under nsys, CUDA and OS calls traced; phase_profile.py splits each
 #          rep's PHASE (default t.ligerito) window, anchored at ANCHOR's launch (default lf_fold_base_pair)
 #   an     phase_profile.py again on AS's newest trace (KW/traces; PROVE_OUT: its session records, where they aren't beside it)
 #   session  session_profile.py on AS's newest trace (the tl step's): every phase of a session's prove time, ranked in ms a
 #          session
 #   peak   for each build (base and new) and each of PEAK_UNITS (default moe-w13's and gq's statements, `;` between them) at full,
-#          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under M1 and under M0, and
-#          one M1 dev session, each under nsys with its allocations traced (device_peak.py: the peak of live device allocations and
-#          what was live then) and the GPU's processes sampled every 100 ms by nvidia-smi (which also counts the CUDA context)
-#   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, AB_BASE and AB_NEW
+#          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under Flock ZK and
+#          under Flock's circuit prover, and one Flock ZK dev session, each under nsys with its allocations traced
+#          (device_peak.py: the peak of live device allocations and what was live then) and the GPU's processes sampled every
+#          100 ms by nvidia-smi (which also counts the CUDA context)
+#   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 Flock ZK dev sessions) per build, AB_BASE and AB_NEW
 #          (default base and new: the builds of AS=base and AS=new); PHASE's median a rep and a session
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
@@ -57,12 +58,8 @@ CUDA_TK=$(cat $W/cuda.env 2>/dev/null); export CUDA_TK LD_LIBRARY_PATH=$CUDA_TK/
 NSYS=$W/nsys-root/opt/nvidia/nsight-systems/2026.1.3/bin/nsys
 PY=$W/py/bin/python3
 export PYTHONPATH=$REPO:$REPO/verity/ml/flock/python:$REPO/integrations/vllm:$REPO/tools/verity/circuit_check/src:$REPO/benchmarks/numerical/python
-for i in 1 2 3 4 5 6; do
-  miss=$($PY -c 'import circuit_check.targets, verity.ml.circuits.defs, verity.core.protocols.sampled_proofs.one_stage.draw' 2>&1 \
-    | sed -n "s/.*No module named '\([^'.]*\).*/\1/p" | tail -1)
-  [ -z "$miss" ] && break
-  log "python: installing $miss"; $HOME/.local/bin/uv pip install -q --python $PY $miss || break
-done
+$PY -c 'import circuit_check.targets, verity.ml.circuits.defs, verity.core.protocols.sampled_proofs.one_stage.draw' \
+  || { log "python: an import fails; the venv holds only numpy and blake3 (setup)"; exit 1; }
 fail=0
 Z=$W/zk-$(echo "$UNITS" | tr -c "a-zA-Z0-9\n" -)
 if has stage && [ ! -s $Z/plan.json ]; then
@@ -115,7 +112,7 @@ if has ident; then
   case_run m0 "" $MAIN_M0
   only_run gpu_paths_agree m1 --zk; only_run gpu_paths_agree m0 ""
 fi
-run_dev() {  # run_dev DIR BIN RUNS: one warm process of RUNS timed M1 dev sessions
+run_dev() {  # run_dev DIR BIN RUNS: one warm process of RUNS timed Flock ZK dev sessions
   local dir=$1 bin=$2 runs=$3 z=$S/zk-$1
   fits 6 $dir || return 75
   rm -rf $z; mkdir -p $z/records $O/$dir; cp $Z/plan.json $z/; cp $Z/records/stage.jsonl $z/records/ 2>/dev/null
