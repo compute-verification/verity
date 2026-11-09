@@ -48,7 +48,8 @@ theorem exists_best_interiorAt (s : AuditStatement) (Pt : Partition) (d : Design
       escCell _ _ ((wrongAllAt s Pt d.part val fun _ => ι') ∩ cell Pt d.part ρ t).card
     rw [inter_cell_wrongAllAt s Pt d.part val _ hρ (mem_range.1 ht)]
   have hA : ∀ ι' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι') ∈
-      (range Pt.blocks.length).powerset.filter fun Z => ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = Z :=
+      (range Pt.blocks.length).powerset.filter fun Z =>
+        ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = Z :=
     fun ι' => mem_filter.2 ⟨mem_powerset.2 (wrongAllAt_subset s Pt d.part val _), ι', rfl⟩
   obtain ⟨Z, hZ, hmax⟩ := ((range Pt.blocks.length).powerset.filter fun Z =>
       ∃ ι'' : ℕ → Bool, (wrongAllAt s Pt d.part val fun _ => ι'') = Z).exists_max_image
