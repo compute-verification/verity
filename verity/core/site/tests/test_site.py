@@ -10,8 +10,8 @@ from fractions import Fraction
 
 import pytest
 
-from verity.core.site import (OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc, Malformed,
-                              Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
+from verity.core.site import (COMPOSITES, OPERAND_CLASSES, OUTSIDE, REFUSALS, Auditor, DeviceFigures, Entry, Link, Loc,
+                              Malformed, Refused, Registration, Sheet, Site, check, check_registration, genesis, refusal)
 from verity.core.wire import canonical
 
 GHZ = 10 ** 9
@@ -20,10 +20,12 @@ SHEET_B = Sheet(DeviceFigures("sim-int8-b", GHZ, 128 * GHZ), 6400, 1 << 26, 128 
 A, B = SHEET_A.digest(), SHEET_B.digest()
 TOLERANCE = Fraction(1, 20)
 AUDITOR = {"onsite": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"), ("chal0", ""))),
-           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE)}
+           "remote": Auditor((SHEET_A, SHEET_B), TOLERANCE),
+           "remote-network": Auditor((SHEET_A, SHEET_B), TOLERANCE, (("cert0", "dummy-cert0-key"),))}
+AUDITOR["remote-network-no-pouw"] = AUDITOR["remote-network"]
 """The auditor's data sheets for the simulated SKUs, 1 GHz clocks at 64 and 128 MACs a nanosecond in every operand class,
-its 5% tolerance around them, and its own devices' keys: onsite a certifier and a challenger. The node registers the
-auditor's own sheets."""
+its 5% tolerance around them, and its own devices' keys: onsite a certifier and a challenger, remote with the network
+certifier, with PoUW or without, a certifier. The node registers the auditor's own sheets."""
 
 
 def figures(sheet: Sheet, clock: Fraction | int | None = None, **rates: Fraction | int) -> Sheet:
@@ -46,9 +48,14 @@ FIRST = {
                              Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0),
                              Link("chal0-link", ("chal0", "node0"), 100_000, 1_000_000))),
     "remote": replace(NODE, links=(Link("uplink0", ("node0", OUTSIDE), 100_000, 100_000),)),
+    "remote-network": replace(NODE, locs=(*NODE.locs, Loc("cert0", "certifier", "site0", "auditor", key="dummy-cert0-key")),
+                              links=(Link("uplink0", ("node0", "cert0"), 100_000, 100_000),
+                                     Link("uplink0-out", ("cert0", OUTSIDE), 100_000, 0))),
 }
+FIRST["remote-network-no-pouw"] = FIRST["remote-network"]
 """Each composite's first entry: onsite, the uplink split by the network certifier and the memory challenger's link to
-the node; remote, a bare uplink."""
+the node; remote, a bare uplink; remote with the network certifier, with PoUW or without, the uplink split by the
+network certifier and no memory challenger."""
 LATER = Entry("", locs=(Loc("gpu2", "device", "node0", sheet=B), Loc("hbm2", "memory", "gpu2", tier="hbm", bytes=128 << 30),
                         Loc("nvme1", "memory", "node0", tier="disk", bytes=1 << 40)))
 """The hardware a site adds later: a third device and a disk."""
@@ -78,8 +85,10 @@ ENTRIES = {
 """A later entry for each check `check_registration` makes, with the refusal it draws, and one it accepts: the lifecycle
 example's 14, its `not-the-sheet` now a sheet of an SKU the auditor has no data sheet for, and `doubled-clock`, the
 figures check the example doesn't make yet."""
-REMOTE_ACCEPTS = {"bare-uplink", "unreached-host"}
-"""The entries a remote site accepts: it has no certifier and no memory challenger to hold its links to."""
+ACCEPTS = {"onsite": set(), "remote": {"bare-uplink", "unreached-host"}, "remote-network": {"unreached-host"},
+           "remote-network-no-pouw": {"unreached-host"}}
+"""The refused entries each composite's site accepts: remote has no certifier and no memory challenger to hold its links
+to, and remote with the network certifier, with PoUW or without, no memory challenger."""
 
 
 def first(composite: str) -> Registration:
@@ -96,14 +105,14 @@ def test_every_check_has_a_case() -> None:
     assert len(ENTRIES) == 15 and {name for name, _ in ENTRIES.values()} - {None} == set(REFUSALS)
 
 
-@pytest.mark.parametrize("composite", ["onsite", "remote"])
+@pytest.mark.parametrize("composite", COMPOSITES)
 @pytest.mark.parametrize("case", ENTRIES)
 def test_check_registration(composite: str, case: str) -> None:
     """Each check, on a later entry of each composite's site's log."""
     log = first(composite)
     name, entry = ENTRIES[case]
     entry = replace(entry, previous=genesis(composite) if case == "stale" else log.head)
-    if name is None or (composite == "remote" and case in REMOTE_ACCEPTS):
+    if name is None or case in ACCEPTS[composite]:
         assert refusal(log, entry, AUDITOR[composite]) is None
         assert check_registration(log, entry, AUDITOR[composite]).head == entry.digest()
         return
@@ -263,7 +272,7 @@ def test_the_encoding_round_trips_and_is_pinned() -> None:
     log = grown()
     assert Registration.of_json(log.to_json()) == log and Auditor.of_json(AUDITOR["onsite"].to_json()) == AUDITOR["onsite"]
     assert genesis("onsite") == GENESIS_ONSITE
-    assert genesis("remote") != genesis("onsite") and log.head == log.entries[-1].digest()
+    assert len({genesis(c) for c in COMPOSITES}) == len(COMPOSITES) and log.head == log.entries[-1].digest()
     half = figures(SHEET_A, clock=Fraction(1, 2), zero=Fraction(64 * GHZ, 3))
     assert canonical(half.to_json()) == (
         b'{"bw":3200,"chip":33554432,"figures":{"clock":"1/2","peak_rate":{"uniform-s2":"64000000000",'

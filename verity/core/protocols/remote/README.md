@@ -49,8 +49,9 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   code running on the auditor host (`benchmarks/live_challenger/coin_link.py`). No coin path of remote's own, with no
   network certifier anywhere, is specified yet.
 - **No auditor devices at the site.** There are no network certifiers or memory challengers. So network certification,
-  PoUS and PoUB are onsite's, not remote's, and memory wipes are neither composite's yet. For network certification,
-  see `Security/Definitions/NetworkCertifier` and its `Guarantees`.
+  PoUS, PoUB and the memory wipe are onsite's, not remote's (`verity/remote-network/v0`, in `../onsite`, adds network
+  certification, and `verity/remote-network-no-pouw/v0` is that without PoUW). For network certification, see
+  `Security/Definitions/NetworkCertifier` and its `Guarantees`.
 
 ## Subprotocols
 

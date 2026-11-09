@@ -15,9 +15,10 @@ workload declares (``default_params``), and `check` returns the configuration wi
 covers, so stating a default changes no hash.
 
 The subprotocols a configuration lists that the composite takes (a `Component`'s ``product``) are exactly one
-composite's (`COMPOSITES`): onsite's, or remote's (sampled proofs, the inference-only policy and Pearl+'s run verdict,
-``pearl-plus``). Protocol soundness covers only those two, and `check` refuses any set that is no composite's
-(``composite``), H1's development composite's among them.
+composite's (`COMPOSITES`): onsite's, remote's (sampled proofs, the inference-only policy and Pearl+'s run verdict,
+``pearl-plus``), remote's with the network certifier (the network certifier, sampled proofs, the inference-only policy
+and PoUW), or those without PoUW. Protocol soundness covers only those four, and `check` refuses any set that is no
+composite's (``composite``), H1's development composite's among them.
 
 What a protocol declares (`Component`: its id, the workload hooks it needs, the subprotocols it requires, its parties and
 channels as its manifest's `Role`s and `Channel`s, the parties that must share a machine, its parameters' schema and the
@@ -54,11 +55,14 @@ REQUIRED = ("channel", "format", "party", "program", "protocols", "service", "wo
 PARTY = ("machine", "name", "principal", *TRANSPORT["party"])
 CHANNEL = ("after", "from", "messages", "to", *TRANSPORT["channel"])
 LOCAL = "local"
-#: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite and remote (v1,
-#: Pearl+'s run verdict its work), the only two protocol soundness covers
+#: the composites, by id: the subprotocols each composes, by name (`Core.Composites.ofIds`): onsite, remote (v1,
+#: Pearl+'s run verdict its work) and remote with the network certifier, with PoUW's period or without, the only ones
+#: protocol soundness covers
 COMPOSITES = {"verity/onsite/v0": ("bandwidth", "certifier", "inference-only", "pous", "pouw", "sampled-proofs",
                                     "wipe"),
-              "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs")}
+              "verity/remote/v1": ("inference-only", "pearl-plus", "sampled-proofs"),
+              "verity/remote-network/v0": ("certifier", "inference-only", "pouw", "sampled-proofs"),
+              "verity/remote-network-no-pouw/v0": ("certifier", "inference-only", "sampled-proofs")}
 _COMMIT = re.compile(r"[0-9a-f]{40}")
 _NAME = re.compile(r"[a-z][a-z0-9-]*")
 

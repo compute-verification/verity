@@ -741,6 +741,17 @@ def policy_previous(commitment: bytes, evidence: bytes) -> list[bytes] | Excepti
         return [b""]
 
 
+def audit_records(commitment: bytes, evidence: bytes) -> list[bytes] | Exception:
+    """`Core.RemoteNetwork.auditRecords`: the digest of each compute audit's registration in the network certifier's
+    period commitment, in order, and the empty string for a period with none; else what refused the commitment, which
+    reads as no value."""
+    try:
+        audits = PERIOD.PC.commitment(commitment).audits
+        return [bytes.fromhex(PERIOD.PC.R.digest(r)) for r in audits] or [b""]
+    except (Reject, ValueError, KeyError, TypeError) as e:
+        return e
+
+
 #: `Core.Onsite.store`: PoUS's setup's root of `C*` and the root PoUB-P2's registration names (`p2_case.store_root`).
 STORE = Tie("store", (("verity/pous/p2/v4/run", _commitment_hex("root")),
                       ("verity/remote-bandwidth/p2/v0", _commitment_hex("root"))))
@@ -750,6 +761,8 @@ WINDOWS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (POUW_PERIOD.id, wi
 RUN = Tie("record", ((INFERENCE_ONLY.id, policy_record), (PEARL_PLUS.id, run_record)))
 #: `Core.Remote.V1.window`: Pearl+'s passes on the window record the policy's record is chained right after.
 WINDOW = Tie("window", ((INFERENCE_ONLY.id, policy_previous), (PEARL_PLUS.id, run_window)))
+#: `Core.RemoteNetwork.egress`: every compute audit of the network certifier's period on the policy's record.
+EGRESS = Tie("record", ((INFERENCE_ONLY.id, policy_record), (CERTIFIER.id, audit_records)))
 
 
 @dataclass(frozen=True)
@@ -785,13 +798,19 @@ class TiedSame(Same):
                 and (got := t.values(ev)) is not None]
 
 
-#: `Core.Remote.V1.protocol`, `Core.Remote.protocol` and `Core.Onsite.protocol`, over their subprotocols in the order
-#: of their ids: each one's policy and integrity committing to one registration record, remote's composite of record's
-#: Pearl+ run and every window of its development composite's PoUW period naming the policy's record, and onsite's PoUS
-#: and PoUB-P2 on one store.
+#: `Core.Remote.V1.protocol`, `Core.Remote.protocol`, `Core.RemoteNetwork.protocol`, `Core.RemoteNetworkNoPouw.protocol`
+#: and `Core.Onsite.protocol`, over their subprotocols in the order of their ids: each one's policy and integrity
+#: committing to one registration record, remote's composite of record's Pearl+ run and every window of its development
+#: composite's PoUW period naming the policy's record (at remote with the network certifier too, where every compute
+#: audit of the network certifier's period names it as well, and without PoUW only the compute audits, with no window
+#: to tie), and onsite's PoUS and PoUB-P2 on one store.
 REMOTE_V1 = TiedSame("verity/remote/v1", (INFERENCE_ONLY, PEARL_PLUS, SAMPLED_PROOFS),
                      (INFERENCE_ONLY.id, SAMPLED_PROOFS.id), (RUN, WINDOW))
 REMOTE = TiedSame("verity/remote/v0", (INFERENCE_ONLY, POUW_PERIOD, SAMPLED_PROOFS), (INFERENCE_ONLY.id, SAMPLED_PROOFS.id),
                   (WINDOWS,))
+REMOTE_NETWORK = TiedSame("verity/remote-network/v0", (CERTIFIER, *REMOTE.components), REMOTE.same,
+                          (*REMOTE.ties, EGRESS))
+REMOTE_NETWORK_NO_POUW = TiedSame("verity/remote-network-no-pouw/v0", (CERTIFIER, INFERENCE_ONLY, SAMPLED_PROOFS),
+                                  REMOTE.same, (EGRESS,))
 ONSITE = TiedSame("verity/onsite/v0", (CERTIFIER, INFERENCE_ONLY, POUS, POUW_PERIOD, BANDWIDTH, ONE_STAGE_V1, WIPE),
                   (INFERENCE_ONLY.id, ONE_STAGE_V1.id), (STORE,))

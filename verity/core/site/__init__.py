@@ -28,7 +28,7 @@ it fails (`REFUSALS`, the spec's `Registration.Refusal` in kebab case):
 | `figures` | each new sheet's figures are within the auditor's tolerance of its estimate for the SKU (`DeviceFigures.accepted`), and its memory figures are the auditor's |
 | `capacity` | each new memory leaf holds something, and each device's memory leaves fit in its sheet's memory |
 | `owner` | each new certifier or challenger is one of the auditor's own devices with its key, and every other new location is the prover's |
-| `uncertified` | onsite: every boundary link is certified |
+| `uncertified` | onsite and remote with the network certifier, with PoUW or without (`CERTIFIED`): every boundary link is certified |
 | `challenger-reach` | onsite: the host of every memory leaf is at an end of a memory challenger's link |
 
 The views a protocol reads (`Site.sheet`, `device`, `node`, `tiers`, `boundary`, `units`, `registered`) are functions of
@@ -55,7 +55,9 @@ SHEET = "verity/registration/sheet/v1"
 GENESIS = "verity/registration/genesis/v1"
 OUTSIDE = "outside"
 """The rest of the world: an end every site has, whose id no location may take."""
-COMPOSITES = ("onsite", "remote")
+COMPOSITES = ("onsite", "remote", "remote-network", "remote-network-no-pouw")
+CERTIFIED = ("onsite", "remote-network", "remote-network-no-pouw")
+"""The composites whose every boundary link a network certifier splits (`uncertified`)."""
 KINDS = ("site", "host", "device", "memory", "certifier", "challenger", "outside")
 TIERS = ("hbm", "dram", "disk")
 OWNERS = ("prover", "auditor")
@@ -658,7 +660,7 @@ def _first(composite: str, s: Site, head: str, e: Entry, auditor: Auditor) -> tu
             return "owner", f"{x.kind} {x.id} isn't one of the auditor's own devices"
         if x.kind not in AUDITOR_KINDS and x.owner != "prover":
             return "owner", f"{x.kind} {x.id} is a prover's location, registered as the {x.owner}'s"
-    if composite == "onsite" and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)]):
+    if composite in CERTIFIED and (bare := [k.id for k in t.links if t.is_boundary(k) and not t.certified(k)]):
         return "uncertified", f"boundary links {bare} have no certifier splitting them"
     if composite == "onsite":
         reached = t.reached()

@@ -4,7 +4,8 @@
 # `verity/certifier/v0`) and the wipe (`verity/wipe/v0`). Its executable is the core CLI (`onsite id | check | serve`),
 # which the difftest drives. Code: no Mathlib.
 name = "core_onsite"
-defaultTargets = ["CoreOnsite", "onsite", "CoreComposites", "product"]
+defaultTargets = ["CoreOnsite", "onsite", "CoreRemoteNetwork", "remote-network", "CoreRemoteNetworkNoPouw",
+  "remote-network-no-pouw", "CoreComposites", "product"]
 
 [leanOptions]
 autoImplicit = false
@@ -58,7 +59,7 @@ path = "../remote_bandwidth/lean"
 name = "core_memory_challenger"
 path = "../../devices/memory_challenger/lean"
 
-# Remote, the other composite `product` names.
+# Remote, which `product` names, and whose subprotocols remote with the network certifier composes.
 [[require]]
 name = "core_remote"
 path = "../remote"
@@ -70,8 +71,28 @@ name = "CoreOnsite"
 name = "onsite"
 root = "OnsiteMain"
 
-# The composite a configuration's subprotocols make, onsite or remote, and no other: `product IDS id | check | serve`
-# (CoreComposites.lean).
+# Remote with the network certifier (`verity/remote-network/v0`): remote's subprotocols and the network certifier's
+# period, under remote's ties and its own (CoreRemoteNetwork.lean). Its executable is the core CLI (`remote-network id | check |
+# serve`).
+[[lean_lib]]
+name = "CoreRemoteNetwork"
+
+[[lean_exe]]
+name = "remote-network"
+root = "RemoteNetworkMain"
+
+# Remote with the network certifier, without PoUW (`verity/remote-network-no-pouw/v0`): its subprotocols but PoUW's period,
+# under remote's record subprotocols and its egress tie (CoreRemoteNetworkNoPouw.lean). Its executable is the core CLI
+# (`remote-network-no-pouw id | check | serve`).
+[[lean_lib]]
+name = "CoreRemoteNetworkNoPouw"
+
+[[lean_exe]]
+name = "remote-network-no-pouw"
+root = "RemoteNetworkNoPouwMain"
+
+# The composite a configuration's subprotocols make, onsite, remote, or remote with the network certifier with PoUW or
+# without, and no other: `product IDS id | check | serve` (CoreComposites.lean).
 [[lean_lib]]
 name = "CoreComposites"
 
