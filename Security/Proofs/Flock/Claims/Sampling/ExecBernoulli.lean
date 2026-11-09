@@ -3,8 +3,7 @@ module
 public import Proofs.Flock.Soundness.ExecDrawOS
 import Mathlib.Combinatorics.Matroid.Init
 import Proofs.Flock.Soundness.Audit.Law
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Prob
+import Proofs.Flock.Soundness.Game
 
 /-!
 # The executable Bernoulli sample escapes no more often than the model's
@@ -75,8 +74,8 @@ theorem forIn_bern (num den : ℕ) (src : ByteArray) (F : ℕ → BSt → Id (Fo
       exact ih _ _
 
 theorem bernoulli_eq (num den n : ℕ) (src : ByteArray) (h0 : num ≠ 0) (h1 : num ≠ den) :
-    bernoulli num den n src = bernLoop num den src (List.range' 0 n) #[] 0 := by
-  unfold bernoulli
+    Flock.Draw.bernoulli num den n src = bernLoop num den src (List.range' 0 n) #[] 0 := by
+  unfold Flock.Draw.bernoulli
   simp only [beq_iff_eq, h0, h1, ite_false]
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   have hsize : ([:n] : Std.Legacy.Range).size = n := by

@@ -50,7 +50,7 @@ from verity.ml.commitments.indexed import RangeIndexedDomain  # noqa: E402
 from verity.ml.commitments.merkle import CommitmentDomain  # noqa: E402
 from verity.ml.commitments.rowleaf import SCHEMA_HM96_SHA512_ROW_SEG as SEG, SCHEMA_HM96_SHA512_ROW_V2 as V2  # noqa: E402
 from verity_flock import class_statement as CS  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P, registration as R, verifier as V  # noqa: E402
 
 #: one Llama-3.2-1B decoder layer's W8A8 coordinates for one token, by K
 LLAMA_3_2_1B_LAYER = "2048:21504,8192:2048"
@@ -165,7 +165,7 @@ def main() -> int:
     ranges = P.ranges(program, query)
     (out / "partition.json").write_text(json.dumps(part, sort_keys=True))
     (out / "program.json").write_bytes(canonical_json(encode_program(program)))
-    law = D.parse_law(f"stratified:{a.k}")
+    law = D.parse_design(f"stratified:{a.k}")
     strata = P.strata(program, query)
     assert [t for t, _ in strata] == [P.template_id(d) for d in defs] and all(len(rs) == 1 for _, rs in strata)
 
@@ -266,8 +266,8 @@ def main() -> int:
     if len(defs) > 1:
         v = V.check(rec, program, P.template_instances_query(defs[:-1]), law, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg["registration-query-drops-a-template (R2)"] = {"refused": not v.ok, "codes": list(v.codes)}
-    for name, other in (("registration-law-another-k (R1)", D.parse_law(f"stratified:{a.k + 1}")),
-                        ("registration-law-subset-not-stratified (R1)", D.parse_law(f"subset:{a.k}"))):
+    for name, other in (("registration-law-another-k (R1)", D.parse_design(f"stratified:{a.k + 1}")),
+                        ("registration-law-subset-not-stratified (R1)", D.parse_design(f"subset:{a.k}"))):
         v = V.check(rec, program, query, other, a0.SCHEME, want, leaf_layer=leaf_layer)
         neg[name] = {"refused": not v.ok, "codes": list(v.codes)}
     first = members[0]["name"]

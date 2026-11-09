@@ -18,7 +18,7 @@ its cut. This module reads them back, from what v2 reads of the evidence and fro
 and holds what it reads to v2's check and to the writer.
 
 * **What v2 reads** (`sessionRecord`, `sessionProofs`, `sentRecord`, `sentProofs`, `registrationIn`, `proofsIn`): the
-  session's record and its proof files on the blobs, as `SampledProofs.OneStageZk.run` reads them, and the
+  session's record and its proof files on the blobs, as `Spot.OneStageZk.run` reads them, and the
   registration v2's case decodes. Where v2's check accepts, they are the record and the files `Flock.Zk.verify`
   accepted, at the session v2 set up (`checkBlobsAt_verified`, `sent_verified`, `V2Verified`).
 * **The messages** (`linkMsg`, `roundMsg`, `linkIn`, `roundIn`): the link's message, `root_F` then the tables' `root_B`
@@ -36,7 +36,7 @@ and holds what it reads to v2's check and to the writer.
   session's writer keeps an accepted transcript's view (`WritesView`, which `wrZP` does), what it writes for that
   outcome is accepted.
 
-What the link's message binds is the record's: `SampledProofs.Challenger.sessionTreeReason` opens the link points after
+What the link's message binds is the record's: `Spot.Challenger.sessionTreeReason` opens the link points after
 the SHA-512 of `root_F` and every `link.root_b` entry, while `Record.decode` reads only the tables' entries. The two are
 one message where `link.root_b` names exactly the session's tables, which v2 doesn't check today.
 -/
@@ -100,24 +100,24 @@ theorem eq_single {α : Type} {xs : Array α} (h : xs.size = 1) : xs = #[xs[0]] 
 /-! ## What v2 reads -/
 
 /-- **The session's record as v2 reads it** on the blobs `bs`: the blob the evidence's first session names for it, as
-UTF-8 (`SampledProofs.OneStageZk.step`). -/
-def sessionRecord (e : _root_.SampledProofs.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
+UTF-8 (`Spot.OneStageZk.step`). -/
+def sessionRecord (e : _root_.Spot.OneStageZk.Evidence) (bs : _root_.Core.Blobs) : Option String :=
   e.sessions[0]?.bind fun s => (bs.get s.record s!"session {s.name}'s record").toOption.bind String.fromUTF8?
 
 /-- **The session's proof files as v2 reads them** on the blobs `bs`: at the session v2 sets up at its record's sample
-(`SampledProofs.OneStageZk.setupAt`) on the parameters' statement, circuit and public files and registered reads, the
-blob the session names for each rep stream (`SampledProofs.OneStageZk.filesOf`), as `SampledProofs.OneStageZk.run`
+(`Spot.OneStageZk.setupAt`) on the parameters' statement, circuit and public files and registered reads, the
+blob the session names for each rep stream (`Spot.OneStageZk.filesOf`), as `Spot.OneStageZk.run`
 hands them to `Flock.Zk.verify`. -/
-def sessionProofs (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.SampledProofs.OneStageZk.Evidence)
+def sessionProofs (p : _root_.Spot.OneStageZk.Params) (e : _root_.Spot.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) : Option (Array ByteArray) := do
   let s ← e.sessions[0]?
-  let tags0 ← Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT
+  let tags0 ← Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT
   let circuitB ← (bs.get p.own.circuit "circuit").toOption
   let pubB ← (bs.get p.own.pub "public file").toOption
-  let rd ← (_root_.SampledProofs.OneStageZk.readsOf p.own.registered).toOption
+  let rd ← (_root_.Spot.OneStageZk.readsOf p.own.registered).toOption
   let record ← sessionRecord e bs
-  (_root_.SampledProofs.OneStageZk.filesOf bs s
-    (_root_.SampledProofs.OneStageZk.setupAt (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
+  (_root_.Spot.OneStageZk.filesOf bs s
+    (_root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
       (Flock.Witness.recordDraw record))).toOption
 
 /-- The session's record v2 reads in what the prover sent, on the blobs sent. -/
@@ -129,7 +129,7 @@ def sentProofs (s : Verity.Sent) : Option (Array ByteArray) :=
   (caseOf s).toOption.bind fun x => sessionProofs x.1 x.2.2 (_root_.Core.Blobs.ofArray s.blobs)
 
 /-- **The registration**, as v2's case decodes it in what the prover sent. -/
-def registrationIn (o : Verity.Exchange) : Option _root_.SampledProofs.OneStage.Commitment :=
+def registrationIn (o : Verity.Exchange) : Option _root_.Spot.OneStage.Commitment :=
   (caseOf o.sent).toOption.map (·.2.1)
 
 /-- **The proof files** of the play that ended with `o`, as v2 reads them. -/
@@ -262,12 +262,12 @@ theorem repsOf_eq (dg : ByteArray → ByteArray) {J : ℕ} (as : List (Answered 
 
 /-! ## What v2's check accepted -/
 
-theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads} {programSha : Option String}
-    {want : Json} {r r' : _root_.SampledProofs.OneStageZk.Run} {s : _root_.SampledProofs.OneStageZk.RunFiles}
-    {record : String} {st : _root_.SampledProofs.OneStageZk.SetUp} {coinKey : Option String} {verdict : Flock.V Unit}
-    (h : _root_.SampledProofs.OneStageZk.push I rd programSha want r s record st coinKey verdict = .ok r')
+theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads} {programSha : Option String}
+    {want : Json} {r r' : _root_.Spot.OneStageZk.Run} {s : _root_.Spot.OneStageZk.RunFiles}
+    {record : String} {st : _root_.Spot.OneStageZk.SetUp} {coinKey : Option String} {verdict : Flock.V Unit}
+    (h : _root_.Spot.OneStageZk.push I rd programSha want r s record st coinKey verdict = .ok r')
     (hall : r'.all = true) : verdict = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.push at h
+  unfold _root_.Spot.OneStageZk.push at h
   cases verdict with
   | error why =>
     dsimp only at h
@@ -277,13 +277,13 @@ theorem push_ok {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk
   | ok u => rfl
 
 theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Flock.V Unit} {coinKeys : Array String}
-    {record : String} {draw : Option Json} {st : _root_.SampledProofs.OneStageZk.SetUp}
+    {record : String} {draw : Option Json} {st : _root_.Spot.OneStageZk.SetUp}
     {files : Flock.V (Array ByteArray)} {coinKey : Option String}
-    (h : _root_.SampledProofs.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
+    (h : _root_.Spot.OneStageZk.verdictOf I scope ksFiles population coinKeys record draw st files coinKey
       = .ok ()) :
     ∃ proofs spec tabs rest, files = .ok proofs ∧ st = .ok (spec, tabs, rest) ∧
       Flock.Zk.verify spec tabs record proofs = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.verdictOf at h
+  unfold _root_.Spot.OneStageZk.verdictOf at h
   obtain ⟨proofs, hf, h⟩ := ebind_ok h
   obtain ⟨_, -, h⟩ := ebind_ok h
   obtain ⟨⟨spec, tabs, rest⟩, hst, h⟩ := ebind_ok h
@@ -293,22 +293,23 @@ theorem verdictOf_ok {I : Flock.Witness.Inputs} {scope ksFiles population : Floc
 
 /-- **One session's `step` after a run that accepted so far, where every session accepted**: its record is a blob,
 UTF-8, set up at its own sample, its proof files the blobs it names, and `Flock.Zk.verify` accepts them. -/
-theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneStageZk.Reads}
+theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.Spot.OneStageZk.Reads}
     {bs : _root_.Core.Blobs} {scope ksFiles population : Flock.V Unit} {programSha : Option String} {want : Json}
-    {s : _root_.SampledProofs.OneStageZk.RunFiles} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
+    {s : _root_.Spot.OneStageZk.RunFiles} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.step I rd bs scope ksFiles population programSha want ⟨#[], #[], #[], true⟩ s
       = .ok r)
     (hall : r.all = true) :
     ∃ recB record spec tabs rest proofs, bs.get s.record s!"session {s.name}'s record" = .ok recB ∧
       String.fromUTF8? recB = some record ∧
-      _root_.SampledProofs.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
-      _root_.SampledProofs.OneStageZk.filesOf bs s (.ok (spec, tabs, rest)) = .ok proofs ∧
+      _root_.Spot.OneStageZk.setupAt I rd (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
+      _root_.Spot.OneStageZk.filesOf bs s (.ok (spec, tabs, rest)) = .ok proofs ∧
       Flock.Zk.verify spec tabs record proofs = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.step at h
+  unfold _root_.Spot.OneStageZk.step at h
   obtain ⟨recB, hb, h⟩ := ebind_ok h
   dsimp only at h
   split at h
   · rename_i record hrec
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨proofs, spec, tabs, rest, hf, hst, hv⟩ := verdictOf_ok (push_ok h hall)
     rw [hst] at hf
     exact ⟨recB, record, spec, tabs, rest, proofs, hb, hrec, hst, hf, hv⟩
@@ -318,20 +319,20 @@ theorem step_verified {I : Flock.Witness.Inputs} {rd : _root_.SampledProofs.OneS
 registered reads, the session's `step` from the empty run at the population check of the public file
 (`FilePart.check`), which ends with the run, and, at the units `want` v1 proved where the run accepted every session,
 the run's proved units held to them (`provedHeld`). -/
-theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.SampledProofs.OneStageZk.RunFiles}
-    {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.SampledProofs.OneStageZk.Run}
-    (h : _root_.SampledProofs.OneStageZk.run p #[s] pu bs = .ok r) :
-    ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
+theorem run_verified {p : _root_.Spot.OneStageZk.Own} {s : _root_.Spot.OneStageZk.RunFiles}
+    {pu : Option (Array ℕ)} {bs : _root_.Core.Blobs} {r : _root_.Spot.OneStageZk.Run}
+    (h : _root_.Spot.OneStageZk.run p #[s] pu bs = .ok r) :
+    ∃ tags0 circuitB pubB rd, Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
       bs.get p.circuit "circuit" = .ok circuitB ∧ bs.get p.pub "public file" = .ok pubB ∧
-      _root_.SampledProofs.OneStageZk.readsOf p.registered = .ok rd ∧
+      _root_.Spot.OneStageZk.readsOf p.registered = .ok rd ∧
       ∃ scope ksFiles programSha want,
-        _root_.SampledProofs.OneStageZk.step (_root_.SampledProofs.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
+        _root_.Spot.OneStageZk.step (_root_.Spot.OneStageZk.inputsOf tags0 p circuitB pubB bs) rd bs
           scope ksFiles
-          (_root_.SampledProofs.FilePart.check p.program (_root_.SampledProofs.getD p.partition "query") pubB)
+          (_root_.Spot.FilePart.check p.program (_root_.Spot.getD p.partition "query") pubB)
           programSha want ⟨#[], #[], #[], true⟩ s = .ok r ∧
         ∀ want', pu = some want' → r.all = true →
-          _root_.SampledProofs.OneStageZk.provedHeld r.proved want' = .ok () := by
-  unfold _root_.SampledProofs.OneStageZk.run at h
+          _root_.Spot.OneStageZk.provedHeld r.proved want' = .ok () := by
+  unfold _root_.Spot.OneStageZk.run at h
   dsimp only at h
   split at h
   · rename_i tags0 htags
@@ -339,10 +340,11 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
     obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨circuitB, hc, h⟩ := ebind_ok h
     obtain ⟨pubB, hp, h⟩ := ebind_ok h
+    obtain ⟨_, -, h⟩ := ebind_ok h
     obtain ⟨rd, hrd, h⟩ := ebind_ok h
     obtain ⟨r', hr', h⟩ := ebind_ok h
     have e : r' = r ∧ ∀ want', pu = some want' → r'.all = true →
-        _root_.SampledProofs.OneStageZk.provedHeld r'.proved want' = .ok () := by
+        _root_.Spot.OneStageZk.provedHeld r'.proved want' = .ok () := by
       cases pu with
       | none =>
         refine ⟨?_, fun _ hw => by cases hw⟩
@@ -361,14 +363,14 @@ theorem run_verified {p : _root_.SampledProofs.OneStageZk.Own} {s : _root_.Sampl
 
 /-- **v2's check at the coins `ξ` accepts only where its run on the evidence's one session accepted it**, on the public
 file v2 held to the registration (`publicHeld`). -/
-theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+theorem checkBlobsAt_run {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ r pubB, e.sessions.size = 1 ∧ bs.get p.own.pub "public file" = .ok pubB ∧
-      _root_.SampledProofs.OneStageZk.publicHeld c.record pubB = .ok () ∧
-      _root_.SampledProofs.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
-  unfold _root_.SampledProofs.OneStageZk.checkBlobsAt at h
+      _root_.Spot.OneStageZk.publicHeld c.record pubB = .ok () ∧
+      _root_.Spot.OneStageZk.run p.own e.sessions (some e.base.provedUnits) bs = .ok r ∧ r.all = true := by
+  unfold _root_.Spot.OneStageZk.checkBlobsAt at h
   dsimp only at h
   split at h
   · cases h
@@ -381,13 +383,13 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
     obtain ⟨pubB, hpub, hr⟩ := ebind_ok hr
     obtain ⟨⟨⟩, hph, hr⟩ := ebind_ok hr
     refine ⟨r, pubB, ?_, hpub, hph, hr, ?_⟩
-    · unfold _root_.SampledProofs.OneStageZk.oneSession at h1
+    · unfold _root_.Spot.OneStageZk.oneSession at h1
       split at h1
       · rename_i hs
         exact beq_iff_eq.1 hs
       · cases h1
     · revert h
-      cases _root_.SampledProofs.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
+      cases _root_.Spot.OneStage.checkAt p.base c (some ξ) { e.base with verdicts := r.out } with
       | accept _ _ =>
         intro h
         dsimp only at h
@@ -401,20 +403,20 @@ theorem checkBlobsAt_run {p : _root_.SampledProofs.OneStageZk.Params} {c : _root
 /-- **What v2's check verified of the evidence `e` on the blobs `bs`**: its one session `rs`, the statement's tags, the
 parameters' circuit and public files and registered reads, the session's record `record` (`sessionRecord`), the session
 `(spec, tabs)` v2 sets up at its sample, and its proof files `proofs`, which `Flock.Zk.verify` accepts. -/
-def V2Verified (p : _root_.SampledProofs.OneStageZk.Params) (e : _root_.SampledProofs.OneStageZk.Evidence)
+def V2Verified (p : _root_.Spot.OneStageZk.Params) (e : _root_.Spot.OneStageZk.Evidence)
     (bs : _root_.Core.Blobs) (record : String) (spec : SessionSpec) (tabs : Array Flock.Setup) (rest : Json × Json)
     (proofs : Array ByteArray) : Prop :=
   ∃ rs tags0 circuitB pubB rd, e.sessions = #[rs] ∧
-    Flock.Tags.find? _root_.SampledProofs.OneStageZk.STATEMENT = some tags0 ∧
+    Flock.Tags.find? _root_.Spot.OneStageZk.STATEMENT = some tags0 ∧
     bs.get p.own.circuit "circuit" = .ok circuitB ∧ bs.get p.own.pub "public file" = .ok pubB ∧
-    _root_.SampledProofs.OneStageZk.readsOf p.own.registered = .ok rd ∧ sessionRecord e bs = some record ∧
-    _root_.SampledProofs.OneStageZk.setupAt (_root_.SampledProofs.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
+    _root_.Spot.OneStageZk.readsOf p.own.registered = .ok rd ∧ sessionRecord e bs = some record ∧
+    _root_.Spot.OneStageZk.setupAt (_root_.Spot.OneStageZk.inputsOf tags0 p.own circuitB pubB bs) rd
       (Flock.Witness.recordDraw record) = .ok (spec, tabs, rest) ∧
-    _root_.SampledProofs.OneStageZk.filesOf bs rs (.ok (spec, tabs, rest)) = .ok proofs ∧
+    _root_.Spot.OneStageZk.filesOf bs rs (.ok (spec, tabs, rest)) = .ok proofs ∧
     Flock.Zk.verify spec tabs record proofs = .ok ()
 
-theorem sessionRecord_eq {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
-    {rs : _root_.SampledProofs.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
+theorem sessionRecord_eq {e : _root_.Spot.OneStageZk.Evidence} {bs : _root_.Core.Blobs}
+    {rs : _root_.Spot.OneStageZk.RunFiles} {recB : ByteArray} {record : String} (hs : e.sessions = #[rs])
     (hb : bs.get rs.record s!"session {rs.name}'s record" = .ok recB) (hr : String.fromUTF8? recB = some record) :
     sessionRecord e bs = some record := by
   unfold sessionRecord
@@ -424,20 +426,20 @@ theorem sessionRecord_eq {e : _root_.SampledProofs.OneStageZk.Evidence} {bs : _r
   exact hr
 
 /-- **`sessionProofs` reads the files v2 verified.** -/
-theorem sessionProofs_of {p : _root_.SampledProofs.OneStageZk.Params} {e : _root_.SampledProofs.OneStageZk.Evidence}
+theorem sessionProofs_of {p : _root_.Spot.OneStageZk.Params} {e : _root_.Spot.OneStageZk.Evidence}
     {bs : _root_.Core.Blobs} {record : String} {spec : SessionSpec} {tabs : Array Flock.Setup} {rest : Json × Json}
     {proofs : Array ByteArray} (h : V2Verified p e bs record spec tabs rest proofs) :
     sessionProofs p e bs = some proofs := by
   obtain ⟨rs, tags0, circuitB, pubB, rd, hs, ht, hc, hp, hrd, hrec, hst, hf, -⟩ := h
-  have h0 : (#[rs] : Array _root_.SampledProofs.OneStageZk.RunFiles)[0]? = some rs := rfl
+  have h0 : (#[rs] : Array _root_.Spot.OneStageZk.RunFiles)[0]? = some rs := rfl
   simp only [sessionProofs, hs, h0, ht, hc, hp, hrd, hrec, hst, hf, ok_toOption, Option.bind_eq_bind,
     Option.bind_some]
 
 /-- **Where v2's check accepts, it verified the session's record and proof files** (`V2Verified`). -/
-theorem checkBlobsAt_verified {p : _root_.SampledProofs.OneStageZk.Params}
-    {c : _root_.SampledProofs.OneStage.Commitment} {ξ : ByteArray} {e : _root_.SampledProofs.OneStageZk.Evidence}
-    {bs : _root_.Core.Blobs} {pub : _root_.SampledProofs.OneStage.Public} {prof : _root_.Core.Integrity}
-    (h : _root_.SampledProofs.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
+theorem checkBlobsAt_verified {p : _root_.Spot.OneStageZk.Params}
+    {c : _root_.Spot.OneStage.Commitment} {ξ : ByteArray} {e : _root_.Spot.OneStageZk.Evidence}
+    {bs : _root_.Core.Blobs} {pub : _root_.Spot.OneStage.Public} {prof : _root_.Core.Integrity}
+    (h : _root_.Spot.OneStageZk.checkBlobsAt p c ξ e bs = .accept pub prof) :
     ∃ record spec tabs rest proofs, V2Verified p e bs record spec tabs rest proofs := by
   obtain ⟨r, _, hsz, -, -, hrun, hall⟩ := checkBlobsAt_run h
   have hs := eq_single hsz
@@ -451,8 +453,8 @@ theorem checkBlobsAt_verified {p : _root_.SampledProofs.OneStageZk.Params}
 in an accepted composition, its record and proof files are the ones `Flock.Zk.verify` accepted at the session v2 set
 up. -/
 theorem sent_verified {k : Verity.Registration.Composite} {s : Verity.Sent} {a b e : ByteArray}
-    {p : _root_.SampledProofs.OneStageZk.Params} {c : _root_.SampledProofs.OneStage.Commitment}
-    {ev : _root_.SampledProofs.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
+    {p : _root_.Spot.OneStageZk.Params} {c : _root_.Spot.OneStage.Commitment}
+    {ev : _root_.Spot.OneStageZk.Evidence} {ξ : ByteArray} {dr : _root_.Properties.Challenger.Draws}
     (hS : Verity.SameAccepts k s) (hcase : V2Case k s a b e)
     (hacc : V2Accepts (_root_.Core.Blobs.ofArray s.blobs) a b e p c ev ξ dr) :
     ∃ record spec tabs rest proofs, caseOf s = .ok (p, c, ev) ∧ sentRecord s = some record ∧

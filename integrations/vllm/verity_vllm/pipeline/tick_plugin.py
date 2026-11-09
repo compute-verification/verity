@@ -21,10 +21,15 @@ from verity_vllm import settings
 from verity_vllm.engine.hooks import Hooks
 from verity_vllm.pipeline.serve_admit import RELEASE_HEADER, RUN_HEADER, WATERMARK_PATH, Tick, TickGate, Watermark, install, release_of
 
-__all__ = ["TICK_ENV", "FeedReader", "TickFeed", "register", "tick_config"]
+__all__ = ["OTHER_PATHS", "SAMPLED_PATHS", "TICK_ENV", "FeedReader", "TickFeed", "register", "route_of", "tick_config",
+           "unseeded"]
 
 #: `register`'s and `TickFeed`'s configuration, a JSON object (`tick_config`)
 TICK_ENV = "VERITY_TICK"
+#: the OpenAI server's routes whose request body carries sampling parameters, which `TickFeed` reads (`unseeded`)
+SAMPLED_PATHS = frozenset({"/v1/completions", "/v1/chat/completions"})
+#: the routes `TickFeed` passes unread besides `SAMPLED_PATHS` and the watermark's: none reaches the engine
+OTHER_PATHS = frozenset({"/health", "/ping", "/version", "/v1/models", "/metrics", "/metrics/", "/tokenize", "/detokenize"})
 
 
 def tick_config(environ: Mapping[str, str] | None = None) -> dict[str, Any] | None:
@@ -60,6 +65,50 @@ class FeedReader:
         return [json.loads(x) for x in lines if x.strip()]
 
 
+def unseeded(body: bytes) -> str | None:
+    """Why `TickFeed` refuses a completions or chat request ``body``, None where it passes. A stochastic request must carry
+    an integer ``seed``: vLLM gives one without a seed a seed it draws from ``np.random``, which nobody can recompute.
+    Only a numeric ``temperature`` of 0 is greedy; without one the server's default applies (the model's generation
+    config's, else 1.0), so it needs a seed too. A body that isn't a JSON object passes, for the server to answer."""
+    try:
+        req = json.loads(body)
+    except (UnicodeDecodeError, ValueError):
+        return None
+    if not isinstance(req, dict):
+        return None
+    temp, seed = req.get("temperature"), req.get("seed")
+    if type(temp) in (int, float) and temp == 0:
+        return None
+    if type(seed) is int:
+        return None
+    at = "the server's default temperature" if temp is None else f"temperature {json.dumps(temp)[:40]}"
+    return (f"under the certified tick a request sampled at {at} needs an integer seed, not {json.dumps(seed)[:40]}: "
+            "send one, or temperature 0")
+
+
+def route_of(scope: Mapping[str, Any]) -> str:
+    """An ASGI request's route: its ``path`` less the server's ``root_path`` where the path starts with it."""
+    path, root = scope.get("path") or "", (scope.get("root_path") or "").rstrip("/")
+    if root and (path == root or path.startswith(root + "/")):
+        return path[len(root):] or "/"
+    return path
+
+
+async def _buffered(receive: Callable[[], Any]) -> tuple[bytes, Callable[[], Any]]:
+    """The request's whole body, and a ``receive`` that replays the messages it read before the rest."""
+    msgs: list[dict[str, Any]] = []
+    while True:
+        m = await receive()
+        msgs.append(m)
+        if m.get("type") != "http.request" or not m.get("more_body", False):
+            break
+    body = b"".join(m.get("body", b"") for m in msgs if m.get("type") == "http.request")
+
+    async def replay() -> Any:
+        return msgs.pop(0) if msgs else await receive()
+    return body, replay
+
+
 async def _answer(send: Callable[[dict[str, Any]], Any], status: int, text: str) -> None:
     body = text.encode()
     await send({"type": "http.response.start", "status": status,
@@ -72,8 +121,16 @@ class TickFeed:
     the feed file the records `serve_admit.TickGate.take` reads: a numbered request's release before the server sees the
     request (its key the request's X-Request-Id, ``verity-<run>-<N>`` set where the client sent none), that it won't reach
     the engine (no 200 response began), and the watermark's lines from its ``POST /verity/watermark``, which it answers
-    itself. A malformed or repeated release and a malformed watermark are answered 400. Without the variable it passes
-    everything."""
+    itself. A malformed or repeated release and a malformed watermark are answered 400.
+
+    It serves an allow-list, matched on the route less the server's ``root_path`` (`route_of`): ``/v1/completions`` and
+    ``/v1/chat/completions`` (`SAMPLED_PATHS`), the watermark's, and ``/health``, ``/ping``, ``/version``, ``/v1/models``,
+    ``/metrics``, ``/tokenize`` and ``/detokenize`` (`OTHER_PATHS`), which don't generate. Any other route
+    (``/v1/responses``, ``/v1/audio/...``, ``/pooling``, ``/invocations``, ...) is answered 400, and a websocket closed,
+    before the engine sees it. So is a completions or chat request sampled without a seed (`unseeded`): serve-openai fills
+    such a request's seed with the public default its registration fixes (`engine.served_seed`); this path has no
+    registered default, so it refuses instead. A refused numbered request is fed as passed. Without the variable it
+    passes everything."""
 
     def __init__(self, app: Any) -> None:
         self.app = app
@@ -85,10 +142,14 @@ class TickFeed:
         os.write(self.fd, (json.dumps(rec, separators=(",", ":")) + "\n").encode())
 
     async def __call__(self, scope: dict[str, Any], receive: Callable[[], Any], send: Callable[[dict[str, Any]], Any]) -> None:
-        if self.fd is None or scope.get("type") != "http":
+        if self.fd is None or scope.get("type") not in ("http", "websocket"):
             return await self.app(scope, receive, send)
+        if scope["type"] == "websocket":
+            await receive()
+            return await send({"type": "websocket.close", "code": 1008})
         headers = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers") or ()}
-        if scope.get("path") == WATERMARK_PATH:
+        route = route_of(scope)
+        if route == WATERMARK_PATH:
             return await self._watermark(headers.get(RUN_HEADER, "").strip(), receive, send)
         try:
             rel = release_of(headers)
@@ -96,6 +157,18 @@ class TickFeed:
                 raise ValueError(f"{RELEASE_HEADER}: {rel[1]} came twice in run {rel[0]!r}")
         except ValueError as e:
             return await _answer(send, 400, str(e))
+        why = None
+        if route in SAMPLED_PATHS:
+            body, receive = await _buffered(receive)
+            why = unseeded(body)
+        elif route not in OTHER_PATHS:
+            why = (f"under the certified tick this server serves only {', '.join(sorted(SAMPLED_PATHS | OTHER_PATHS))}, "
+                   f"not {route[:80]!r}")
+        if why is not None:
+            if rel is not None:
+                self.seen[rel[0]].add(rel[1])
+                self.write({"run": rel[0], "n": rel[1], "passed": True})
+            return await _answer(send, 400, why)
         if rel is None:
             return await self.app(scope, receive, send)
         run, n, bucket = rel

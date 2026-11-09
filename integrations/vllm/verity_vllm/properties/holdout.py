@@ -127,4 +127,3 @@ def main(a: Options) -> int:
         print(f"[holdout] seed {seed}: {len(paths)} workloads", file=sys.stderr)
         return 0
     raise UsageError("one of --generate / --assemble")
-    return 2

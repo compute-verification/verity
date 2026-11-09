@@ -21,7 +21,7 @@ from verity.ml.circuits.liveness import dead_gates
 from verity.ml.circuits.ops import gemm as G
 from verity.ml.circuits.ops.prims import BF16
 from verity.ml.circuits.program import Program
-from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, Strided
+from verity.ml.circuits.refs import Affine, Coll, Concat, Explicit, PartLog, Strided
 from verity.ml.circuits.types import Array
 
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
@@ -39,7 +39,7 @@ def test_the_request_wrappers_dead_units_are_the_last_layers_rows_before_the_pre
     of their queries) reach no sample; the build drops those 56 units and nothing else, as pruning the unpruned body does, swaps
     the rest's Definitions with dead gates (`swapped`) and narrows the linears read in part (`narrowed`)."""
     pruned = PB.build_program(PHI, "request", LP=8, T=3)
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     full = PB.build_program(PHI, "request", LP=8, T=3)
     body = full.program.fn.body
     dead = dead_units(body)
@@ -93,6 +93,15 @@ def test_the_dead_free_form_binds_the_top_p_select_to_v3():
     assert dead_gates(Program(b.fn), limit=0, transitive=True).computed == 0 < dead_gates(Program(a.fn), limit=0, transitive=True).computed
 
 
+def test_the_dead_free_form_passes_a_batch_of_a_primitive_through():
+    """A batch node's function can be a primitive (the mask form's top-level batches of a `Const`), which has no `base_id`;
+    `swapped` leaves it as it is rather than reading one."""
+    from verity.ml.circuits.ops.prims import const
+    c = const(16, 0)
+    body = Body((), Array(4, c.ret), [Node("batch", c, (), Array(4, c.ret), axes=(), n=4)], Affine("n", 0, 0, 4), [0, 4])
+    assert swapped(body) is body
+
+
 def test_the_dead_free_form_binds_fa2_attention_to_v18():
     """FA2's attention on compute capability 12.0 is `Attention_v5` (head dim 16: kBlockN 128); `swapped` binds it to v18 at the same
     statics. On TINY's 16-row prefill the row with 16 keys is the one whose v5 has dead gates, its first block's unread zero padding,
@@ -111,7 +120,7 @@ def test_a_request_on_bits_keeps_the_v1s_its_lift_reads(monkeypatch):
     """A request wrapper the Build lifts to bits (`registered_form("boolean")`) takes the registered compiler's form without its
     swaps: its dead units dropped and its linears narrowed alike, its RMSNormTriton, TokenSelect and Attention at the v1s, and every
     node's Definition with a Boolean version, as the lift needs. On words (`ir` None) it takes the registered compiler's form."""
-    monkeypatch.setattr(PB, "dead_free_form", lambda b: (b, list(range(len(b.nodes)))))
+    monkeypatch.setattr(PB, "dead_free_form", lambda b, **_: (b, list(range(len(b.nodes)))))
     body = PB.build_program(PHI, "request", LP=8, T=3).program.fn.body
     assert PR.registered_form(None) is True
     form, _, _ = kept_records(body, None, {}, registered=PR.registered_form("boolean"))
@@ -129,7 +138,7 @@ def test_each_reference_is_renumbered_in_its_own_form():
     s = Strided("n", 4, 1, 2, 8, 1, 6)
     e = Explicit((("n", 4, 0), ("p", 4, 1), ("n", 2, 3)))
     c = Concat([Affine("n", 0, 0, 2), Concat([s, e])])
-    got = {k: _renumbered(r, new, memo) for k, r in {"a": a, "p": p, "empty": empty, "s": s, "e": e, "c": c}.items()}
+    got = {k: _renumbered(r, new, memo, {}) for k, r in {"a": a, "p": p, "empty": empty, "s": s, "e": e, "c": c}.items()}
     assert got["p"] is p and got["empty"] is empty
     assert got["a"].to_json() == Affine("n", 1, 5, 3).to_json()
     assert type(got["s"]) is Strided and got["s"].to_json() == Strided("n", 2, 1, 2, 8, 1, 6).to_json()
@@ -137,11 +146,33 @@ def test_each_reference_is_renumbered_in_its_own_form():
     assert type(got["c"]) is Concat and type(got["c"].parts[1]) is Concat and got["c"].parts[0] is c.parts[0]
     assert got["c"].parts[1].parts == [got["s"], got["e"]]
     unchanged = Concat([Affine("n", 0, 0, 2), p])
-    assert _renumbered(unchanged, new, memo) is unchanged
+    assert _renumbered(unchanged, new, memo, {}) is unchanged
     read: set[int] = set()
-    _read(c, read)
-    _read(empty, read)
+    _read(c, read, {})
+    _read(empty, read, {})
     assert read == {0, 2, 4}
+
+
+def test_an_attentions_key_sequences_renumber_as_cuts_of_one_renumbered_log():
+    """The cuts of one `PartLog` (an attention's key rows, each call's one row longer) renumber as cuts of one log of the renumbered
+    parts, each part renumbered once and each cut with the parts a plain `Concat`'s renumbering has; a cut none of whose parts
+    moves is itself. Liveness reads a log's parts once over all its cuts."""
+    log = PartLog()
+    for k in (0, 2, 4, 6):
+        log.append(Affine("n", k, 0, 2))
+    cuts = [log.cut(j) for j in (2, 3, 4)] + [log.cut(3, [Affine("n", 7, 0, 1)])]
+    assert all(c.prefix is not None for c in cuts)
+    new = [0, 1, 2, 3, 3, 4, 5, 6]  # node 3 dead: 4, 6 and 7 become 3, 5 and 6
+    memo, logs = {}, {}
+    got = [_renumbered(c, new, memo, logs) for c in cuts]
+    assert got[0] is cuts[0] and got[1].prefix[0] is got[2].prefix[0] is got[3].prefix[0] is not log
+    assert got[1].parts[0] is log.parts[0] and got[3].parts[2] is got[2].parts[2]
+    for c, g in zip(cuts, got):
+        assert [p.to_json() for p in g.parts] == [p.to_json() for p in _renumbered(Concat(list(c.parts)), new, {}, {}).parts]
+    read, done = set(), {}
+    for g in reversed(got):
+        _read(g, read, done)
+    assert read == {0, 2, 3, 5, 6}
 
 
 DOT = G.GEMM_HOPPER["DOT"]

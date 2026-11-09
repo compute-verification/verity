@@ -10,9 +10,9 @@ How it works
    stay in place (no functionalisation), lifted parameters/buffers/constants are placeholders.
 2. Parameters and buffers become ONE prescribed `weights` record input (one field per *distinct tensor*: tied
    parameters are one field referenced from every placeholder that shares the tensor — boundary 3). Lifted
-   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value the served run decides and no
-   circuit computes (the top-k order of a DSA row past TOPK) is a field of a `run` input a rule declares (`Rule.run_inputs`),
-   checked in gates: each check's bit is an output after the source's (`Ctx.check`), which the verifier requires to be 1.
+   tensor constants are refused (`hidden_state`) unless a rule accounts for them. A value no circuit computes (a training
+   survey's hole, `rules.training_survey`) is a field of a `run` input a rule declares (`Rule.run_inputs`). A rule's check in
+   gates is a bit output after the source's (`Ctx.check`), which the verifier requires to be 1.
 3. Every graph node is translated by exactly one applicable rule (`rules/`): views are reference rearrangements;
    ops/in-place ops/state patterns emit calls of REGISTERED definitions bound to the mode's kind vocabulary
    (profile mode: the profile's kernels; reference mode: exact CPU-f32 kinds). Rules decide structurally
@@ -52,6 +52,7 @@ from verity_vllm.program.frontend.outcomes import _CODE_TO_REASON, REASONS, Refu
 from verity_vllm.program.frontend.provenance import registry_version
 from verity_vllm.program.frontend.registration import RegisteredInputs, RunInputs
 from verity_vllm.program.frontend.report import DeriveReport, DerivationTail
+from verity_vllm.program.frontend import stop_rule as SR
 from verity.ml.definitions.replay import replayer
 from verity_vllm.program.frontend.torch_frontend import FRONTEND_VERSION, FrontendError, check_identity, shape_of, type_of_tensor, width_of
 from verity_vllm.program.frontend.value_types import Alloc
@@ -100,9 +101,7 @@ class WeightLeaf:
     def to_json(self) -> dict:
         d = {"name": self.name, "aliases": list(self.aliases), "kind": self.kind, "shape": list(self.shape), "dtype": self.dtype,
              "field": self.index}
-        if self.derivation is not None:
-            d["derivation"] = self.derivation
-        return d
+        return d if self.derivation is None else {**d, "derivation": self.derivation}
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -336,8 +335,7 @@ class Ctx:
 
     # -- emitting ----------------------------------------------------------------------------------------
     def kind(self, role: str, node=None, **statics):
-        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered`
-        if the vocabulary has no kind for it."""
+        """The mode's registered definition for a semantic role, bound to `statics`; `numerics_unregistered` if the vocabulary has no kind for it."""
         fn = self.vocab.kind(role, **statics)
         if fn is None:
             refuse("numerics_unregistered", node or self.current, self.module_path(node or self.current),
@@ -501,8 +499,8 @@ def derive_report(source, example_inputs: Sequence[Any], *, mode: str, profile: 
     (`program_digest`) does not depend on it.  `exported`: the caller's export of `source` (same inputs and shims), derived from.  `theta`:
     the inputs that are weights (`Program.theta`).  `session`: a list that receives the derivation's `DerivationTail` when it succeeds
     (`relabel.rank_report` reads it).  `dead_free`: the flat body in the registered compiler's form (`program.prune.dead_free`: without the
-    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps), and the
-    correspondence's Calls with it.
+    units no output reads, each Definition with dead gates swapped for its version without them; `prune.BITS`: without the swaps;
+    `prune.BATCHED`: then batched, class G's form), and the correspondence's Calls with it.
     `correspondence=False`: no runtime correspondence (for a graph no serving runtime executes, a training step's); the Program is unchanged."""
     if mode not in ("profile", "reference"):
         raise ValueError("mode must be 'profile' or 'reference'")
@@ -761,8 +759,7 @@ def _derive_flat(source, example_inputs, *, mode, profile, config, allowed_dims,
 
 
 def _flat_definition(name: str, body, src_static: dict, mode: str) -> SpecializedDefinition:
-    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified
-    family match."""
+    """The flat program's definition over `body`.  It never carries a registered name: identity is claimed only through a verified family match."""
     params, ret = tuple(body.params), body.ret_type
     defn = CompositeDefinition(f"Derived[{name}]", 1, ("SRC",), lambda S: (params, ret), replayer(body),
                                doc=f"derived ({mode}) from {src_static['class']}", conformance="derived: see provenance", register=False)
@@ -798,8 +795,10 @@ def _translate(ctx: Ctx) -> Coll:
                 refuse("side_input", node, None, f"placeholder {node.name} is neither a user input nor a parameter/buffer")
         elif node.op == "output":
             out_node = node
-        elif node.op == "get_attr":
-            refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+        elif node.op == "get_attr":  # a tensor constant of a traced graph (`make_fx`), as export lifts one
+            if not isinstance(getattr(ep, "constants", {}).get(node.target), torch.Tensor):
+                refuse("dynamic_control_flow", node, ctx.module_path(node), f"subgraph attribute {node.target} (higher-order op body)")
+            ctx.env[node] = _LiftedConstant(node, node.target, node.meta.get("val", ep.constants[node.target]))
         elif node.op == "call_function":
             if node in ctx.env:
                 continue  # absorbed by a pattern rule that fired at an earlier node of its chain
@@ -818,7 +817,7 @@ def _translate(ctx: Ctx) -> Coll:
         v = ctx.val(a)
         if isinstance(v, (int, float, bool)):
             refuse("side_input", out_node, None, f"returned Python scalar {v!r}; outputs must be values")
-        outs.append(ctx.coll(a, "returned value"))
+        outs.append(v.returned(ctx, a) if hasattr(v, "returned") else ctx.coll(a, "returned value"))
     if not outs:
         refuse("shape", out_node, None, "the source returns nothing")
     # returned inputs / repeated returns are representable (a return is a reference sequence) — record them explicitly
@@ -827,6 +826,7 @@ def _translate(ctx: Ctx) -> Coll:
             if space == "p":
                 ctx.returned_inputs.append({"output": i, "param": idx, "leaves": [lo, hi],
                                             "weights": idx == ctx.weights_param})
+    SR.in_derive(ctx, outs, out_node)    # the length rule under the config's `stop`: the last Call and check
     if ctx.checks:
         ctx.checks_output = len(outs)
         outs.append(Coll(Array(len(ctx.checks), Value(1)), _concat_refs([c.refs for c, _ in ctx.checks])))

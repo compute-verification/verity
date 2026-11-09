@@ -2,7 +2,7 @@ module
 
 public import PouwCheck.Credit
 public import PouwWindow.KnownRows
-public import SampledProofs.Produced
+public import Spot.Produced
 
 /-!
 # A sampled leaf past the cap verified as its lanes and the combine (`credit.py`'s lanes form)
@@ -15,7 +15,7 @@ descriptor, `leafOf` the window's template at K and hashing to `LEAF_PROGRAMS`' 
 window's tables at the leaf's served place, its partials `<prefix>partials@<u>` at the produced record's root under the
 window's sample root, `lanesRecord`, its known rows the verifier's own under `knownSalt`). Each session is judged by
 `judged`; once all have accepted, every produced value must have been opened at its record's root and every opened row
-of a value the verifier holds openings of be the one opening (`outcomes`, `SampledProofs.Produced.opened` and `shared`),
+of a value the verifier holds openings of be the one opening (`outcomes`, `Spot.Produced.opened` and `shared`),
 and each sampled leaf is then one accepted outcome under the window's program, its registered finding its statements' reads
 of the window's registered values.
 
@@ -190,7 +190,7 @@ function `LEAF_FN[kind]{UNIT={"fn": unit},K=k}`, its definition of `unit` the co
 TILE its id spells, and its root's nodes other than inputs one call of `unit`. -/
 def leafOf (leaf : ByteArray) (unit : String) (k : Nat) (kind : String) : Bool := Id.run do
   let some d := parsed? leaf | return false
-  let some u := (SampledProofs.PyJson.canonical (Json.mkObj [("fn", Json.str unit)])).toOption | return false
+  let some u := (Spot.PyJson.canonical (Json.mkObj [("fn", Json.str unit)])).toOption | return false
   unless get d "program_fn" == Json.str s!"{leafFn kind}\{UNIT={u},K={k}}" do return false
   let defs := get d "definitions"
   let dj := get defs unit
@@ -198,7 +198,7 @@ def leafOf (leaf : ByteArray) (unit : String) (k : Nat) (kind : String) : Bool :
     | .str r => get defs r
     | _ => .null
   let b := get dj "bindings"
-  let tileOk := match (SampledProofs.PyJson.canonical (get b "TILE")).toOption with
+  let tileOk := match (Spot.PyJson.canonical (get b "TILE")).toOption with
     | some t => s!"{leafUnit kind}\{TILE={t}}" == unit
     | none => false
   unless isObj b && get dj "form" == Json.str "composite" && get dj "id" == Json.str (leafUnit kind)
@@ -344,7 +344,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
     let (root, leaves, words_, domain) ← if v == PARTIALS then do
         let ws := 2 * words k
         pure (Json.str ((produced.lookup table).getD ""), lanes, ws,
-          ← regErr (SampledProofs.Produced.domain program table ws lanes 16 registration))
+          ← regErr (Spot.Produced.domain program table ws lanes 16 registration))
       else do
         let got := rootsAt roots table
         if got.length != 1 then
@@ -352,7 +352,7 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
             s!"registers {if got.isEmpty then "not" else "twice"}: register each of a call's tables and its weights once")
         let (leaves, ws) := (rowsOf.lookup table).getD (0, 0)
         pure (got[0]!, leaves, ws,
-          ← regErr (SampledProofs.Registered.domainAt program table ws leaves 16 (if table == b then none else some window)))
+          ← regErr (Spot.Registered.domainAt program table ws leaves 16 (if table == b then none else some window)))
     let some _ := digest? root
       | throw ("registration", s!"drawn leaf {u}'s statement {st.repr} reads {table}, whose root the verifier does " ++
           "not hold as a SHA-512 digest")
@@ -375,29 +375,29 @@ def leafRegisteredFile (program : String) (layout : Json) (shape : Shape) (u : N
   let mut openings : Array (String × Array (Nat × String)) := #[]
   for (port, value, row) in rows do
     let name := served shape.pre value u
-    let (root, bc) ← regErr (SampledProofs.Produced.known program name row (knownSalt registration name) registration 16)
-    let d ← regErr (SampledProofs.Produced.domain program name row.size 1 16 registration)
+    let (root, bc) ← regErr (Spot.Produced.known program name row (knownSalt registration name) registration 16)
+    let d ← regErr (Spot.Produced.domain program name row.size 1 16 registration)
     ports := ports ++ [(port, portJson name (Flock.hexOf root) 1 row.size d 0)]
     openings := openings.push (name, #[(0, Flock.hexOf bc)])
   pure (Json.mkObj [("format", Json.str Flock.Registered.FORMAT_V0), ("ports", Json.mkObj ports)], openings)
 
 /-- `credit._lanes_record`: the produced record's root of each produced value of the window's sampled lanes-form leaves
-`units`, when the lanes evidence's record `rec` holds (`SampledProofs.Produced.check` against the sample root
+`units`, when the lanes evidence's record `rec` holds (`Spot.Produced.check` against the sample root
 `registration`, the sampling coin's value `draw` and the verifier's own entries, each leaf u's `<prefix>partials@<u>`);
 else the refusal (`registration`, its P- codes). -/
 def lanesRecord (rec layout : Json) (shape : Shape) (program registration draw : String) (units : List Nat) :
     R (List (String × String)) := do
   let (r, c) := tileRC layout
-  let mut mine : Array SampledProofs.Produced.Mine := #[]
+  let mut mine : Array Spot.Produced.Mine := #[]
   for u in units do
     let name := served shape.pre PARTIALS u
     if mine.any (·.value == name) then continue
     let ws := 2 * words (leafCall layout u).2.2
-    let d ← regErr (SampledProofs.Produced.domain program name ws (r / 4 * (c / 8)) 16 registration)
+    let d ← regErr (Spot.Produced.domain program name ws (r / 4 * (c / 8)) 16 registration)
     mine := mine.push { value := name, leaves := r / 4 * (c / 8), words := ws, wordBits := 16, domain := Flock.hexOf d }
-  let codes := SampledProofs.Produced.check rec registration draw (mine.qsort (·.value < ·.value))
+  let codes := Spot.Produced.check rec registration draw (mine.qsort (·.value < ·.value))
   unless codes.isEmpty do
-    throw ("registration", s!"the window's produced record ({SampledProofs.Produced.FORMAT}) fails " ++
+    throw ("registration", s!"the window's produced record ({Spot.Produced.FORMAT}) fails " ++
       s!"{", ".intercalate codes.toList}: it holds each drawn lanes-form leaf's partials@<u> under the window's " ++
       "draw root, fixed after the draw coin, and every row's opening once")
   pure <| match get rec "produced" with
@@ -482,7 +482,7 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
       else none)
     | return (#[], some ("registration", "the window's draw root, the produced record's registration, is not a " ++
         "SHA-512 digest"))
-  let coin ← match SampledProofs.Challenger.LiveOpening.ofJson (get draw "coin") with
+  let coin ← match Spot.Challenger.LiveOpening.ofJson (get draw "coin") with
     | .ok o => pure (Flock.hexOf o.coin)
     | .error e => return (#[], some ("registration", s!"the window's draw coin, the produced record's draw, is not a " ++
         s!"live opening: {e}"))
@@ -521,7 +521,7 @@ def leafAsks (lanes : Option Json) (leafs : Array (Nat × Nat × St)) (files : J
   return (out, none)
 
 /-- What the judged leaf sessions hold (`credit._leaf_judged`'s `held`): each leaf's window-value ports, the verdicts
-`SampledProofs.Produced.shared` reads, the produced values' opened roots (a value opened at two none) and the known
+`Spot.Produced.shared` reads, the produced values' opened roots (a value opened at two none) and the known
 openings. -/
 structure Held where
   ports : Array (Nat × Array (String × Json)) := #[]
@@ -576,10 +576,10 @@ at its root (`P-opened`) and every row the sessions opened of a value the verifi
 program `program`, its registered finding its statements' ports of the window's registered values. -/
 def outcomes (rec : Json) (held : Held) (program : String) : R (Array Json) := do
   let opened := held.opened.map fun (v, r) => (v, match r with | some r => Json.str r | none => Json.null)
-  unless (SampledProofs.Produced.opened rec (some opened)).isEmpty do
+  unless (Spot.Produced.opened rec (some opened)).isEmpty do
     throw ("registration", "a produced value of the window's record was not opened, or opened at another root than " ++
       "the record's (P-opened): every leaf's lanes and combine read its partials at the record's root")
-  unless (SampledProofs.Produced.shared (SampledProofs.Produced.wanted rec held.known) held.verdicts).isEmpty do
+  unless (Spot.Produced.shared (Spot.Produced.wanted rec held.known) held.verdicts).isEmpty do
     throw ("registration", "a session opened a row of a produced value, a registered row the record keeps or a " ++
       "known row other than the one opening the verifier holds, or reported none (P-shared)")
   pure <| (held.ports.qsort (·.1 < ·.1)).map fun (u, ps) =>
