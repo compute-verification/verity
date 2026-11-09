@@ -3642,10 +3642,12 @@ mod tests {
         let (net, _) = crate::lookup::LookupNet::build("t", table, n, 4, 31);
         let uw = 1usize << (net.unit_log - 7);
         // an assertion row (its own column in A, B the constant) that fails: z is not a & b there
+        use crate::ir_block::RowWrite;
         let mut bad = net.clone();
-        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a[i].is_empty() && !bad.b[i].is_empty()).unwrap();
-        bad.b[i] = vec![bad.const_pos];
-        bad.a[i].push(i);
+        let i = (0..bad.useful).rev().find(|&i| i != bad.const_pos && !bad.a.row(i).is_empty() && !bad.b.row(i).is_empty()).unwrap();
+        bad.b = bad.b.with_row(i, &[bad.const_pos]);
+        let row: Vec<usize> = bad.a.row_cols(i).chain([i]).collect();
+        bad.a = bad.a.with_row(i, &row);
         for (net, slots, wide) in [(&net, 100, false), (&net, 64, false), (&net, 130, true), (&bad, 100, true)] {
             let ins: Vec<Vec<F128>> = (0..slots).map(|_| (0..net.in_words).map(|w| match (w, wide) {
                 (0, false) => F128::new(r() & ((1 << n) - 1), 0),
@@ -3820,7 +3822,7 @@ mod tests {
         let eq: Vec<F128> = (0..n).map(|_| { s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407); F128::new(s, s.rotate_left(29)) }).collect();
         let mut want = vec![F128::ZERO; n];
         for r in ln.prod0()..ln.prod0() + (ln.k << 5) {
-            for &c in &net.b[r] {
+            for c in net.b.row_cols(r) {
                 want[c] += eq[r];
             }
         }
@@ -3846,10 +3848,7 @@ mod tests {
             }
             let k = 1usize << r.slot_log;
             let (a, b) = match r.kind {
-                Kind::Net(i) => {
-                    let pad = |rows: &Vec<Vec<usize>>| { let mut x = rows.clone(); x.resize(k, Vec::new()); SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() } };
-                    (pad(&c.nets[i].1.a), pad(&c.nets[i].1.b))
-                }
+                Kind::Net(i) => c.nets[i].1.padded(k),
                 Kind::Mask => {
                     let id = SparseBinaryMatrix { num_rows: k, num_cols: k, rows: (0..k).map(|i| vec![i]).collect::<Vec<_>>().into() };
                     (id.clone(), id)
@@ -3963,12 +3962,8 @@ mod tests {
             for (nm, net) in &c.nets {
                 let k = 1usize << net.unit_log;
                 padded += usize::from(net.a.len() < k || net.b.len() < k);
-                let pad = |rows: &Vec<Vec<usize>>| {
-                    let mut x = rows.clone();
-                    x.resize(k, Vec::new());
-                    SparseBinaryMatrix { num_rows: k, num_cols: k, rows: x.into() }
-                };
-                assert!(net.csc() == CscCircuit::from_matrices(&pad(&net.a), &pad(&net.b)), "{name} {nm}");
+                let (a, b) = net.padded(k);
+                assert!(net.csc() == CscCircuit::from_matrices(&a, &b), "{name} {nm}");
             }
         }
         assert!(padded > 0, "no slot type with a padding row to leave out");
