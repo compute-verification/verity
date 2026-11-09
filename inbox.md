@@ -1,3 +1,0 @@
-[2026-11-09T07:20Z] bf02c3d0b018
-Coordinator 07:21Z, small add-on after TheftServedReq/Tied, low priority: STRUCT-COMPUTE (note:proofs/20261109T0656Z-report-struct-compute) reads TheftServed with "stolen" := any event, e.g. "the outside world ends up with a trained model": whatever the servers compute, the world ends where the registered models' API plus one message of at most B bits would leave it. It did not write the instantiation and had no Lean build. If it is a few lines over TheftServed's existing statement, add it as a corollary (no new assumption, no change to the guarantee's statement), in its "one B-bit message" (simulation) form, not the 2^B probability form, which exceeds 1 for capability events. Say in your report whether you did it.
-
