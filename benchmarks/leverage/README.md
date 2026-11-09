@@ -40,6 +40,17 @@ The models are small open ones (GPT-2 small, Qwen2.5-0.5B, Qwen2.5-1.5B), run on
   posterior and keeps the candidates that agree with the served tokens. It reports exact weight bits a fault.
   `--range own` holds each fault to one FP8 code at its token's own group scale (charged as one element), `box` lets
   it go anywhere in the box (beyond one code, a block writing the whole group); `--obs` is the served tokens it reads.
+- `simulate.py`: whether an in-range fault's served tokens are what an honest query serves on an input built without
+  the weights. Its simulators are `silent` (no served token changes), `forced` (the honest model reading the faulted
+  tokens, told its direct tokens) and `edit` (one token of the prompt's last `--window` positions replaced, then
+  forced). Per fault it records the advice each needs against the fault's charge c + `--slot-bits`, with the direct
+  tokens coded by id (all a tokens-only API decodes) and by rank under the honest model's scores (which needs
+  log-probabilities), and at the first served token the nearest edits' top-1, top-5 and max-divergence. Its kinds are
+  random (`uniform`, `edge`, `own`), `adv` (the largest first-token KL of a pool) and `far` (the farthest from every
+  edit); `--new` is the served tokens a fault, `--offsets` the faulted positions before the prompt's last.
+- `residual.py`: how much of a residual-stream fault's logit change its skip path explains and how much later layers
+  mix in (how much of the coordinate they keep, how far they spread it), and whether any two embedding rows differ in
+  exactly one coordinate.
 - `report.py`: Markdown tables from their outputs, with λ − 1 = B/(c + ℓ) at the charges `--charge` names.
 
 Each writes under `--out`; under `research run`, give it `"$OUT"`:
@@ -57,4 +68,6 @@ uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/reach.py --model gpt2 --boxes "$OUT"/clamp/boxes.pt --kinds box,own,scale,codes --sites every --new 64 --out "$OUT"/reach-clamped
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/extract.py --model gpt2 --part rows --boxes "$OUT"/clamp/boxes.pt --differential --row-site mlph --pick widest --values box own scale codes --out "$OUT"/rows
 uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/attack.py --model qwen2.5-0.5b --boxes "$OUT"/clamp/boxes.pt --layers -2 -4 --out "$OUT"/attack
+uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/simulate.py --model gpt2 --boxes "$OUT"/clamp/boxes.pt --prompts 0:1 --window 3 --layers 0,1,3,5,7,9,11 --offsets 0,2 --out "$OUT"/simulate
+uv run --extra torch-cpu --with tokenizers python benchmarks/leverage/residual.py --model gpt2 --boxes "$OUT"/clamp/boxes.pt --out "$OUT"/residual
 ~~~
