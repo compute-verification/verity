@@ -800,6 +800,33 @@ def test_a_history_tables_writer_commits_each_row_as_the_tables_leaf():
         HW.pins(doc2, later.window, bodies, {"latent": table.root.hex()})
 
 
+def test_a_history_writers_rows_are_hashed_once_as_the_tables_strings(monkeypatch):
+    """A history writer's output rows reach `rows.commit` as their table's strings (``strings_of``), so the window hashes only
+    their leaves and tree, and its commitment is the one hashing the rows in full under the same salts makes; strings of
+    the wrong size, or for a port whose salts aren't given, are refused."""
+    seen, real = {}, CS.commit
+
+    def spy(window, data, **kw):
+        seen.update(window=window, data=data, kw=kw)
+        return real(window, data, **kw)
+
+    monkeypatch.setattr(CS, "commit", spy)
+    table = HT.HistoryTable("program", "latent", 8, 16)
+    _win, got, _publics = history_window(table)
+    window, data, kw = seen["window"], seen["data"], seen["kw"]
+    given = kw["strings_of"]
+    assert sorted(given) == sorted(m.port("o0") for m in window.members if m.template == G8ID)
+    assert b"".join(given[p] for p in sorted(given, key=lambda p: next(m.base for m in window.members if m.port("o0") == p))) \
+        == b"".join(table.bcs)
+    full = real(window, data, **{**kw, "strings_of": None})
+    assert full.roots == got.roots and full.bc == got.bc
+    port = next(iter(given))
+    with pytest.raises(ValueError, match="strings_of"):
+        real(window, data, **{**kw, "strings_of": {port: given[port][:-1]}})
+    with pytest.raises(ValueError, match="strings_of"):
+        real(window, data, **{**kw, "salts_of": {p: s for p, s in kw["salts_of"].items() if p != port}})
+
+
 def test_the_verifier_holds_the_registered_history_root_to_the_writers_strings():
     """The verifier's pin of a history table is the root over its writers' public strings: a registered root over other
     rows, a body whose strings another unit wrote, a registration naming no root for it and a writer member's missing
