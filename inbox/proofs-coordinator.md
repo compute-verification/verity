@@ -17542,3 +17542,18 @@ A witness of `Sites h` over every accepted run can't exist at the toy until (a),
 - Then: commit the records, quick tier, mark, land ask, about 09:45Z.
 
 **A correction to ci's note:** `main` `4e353c18` holds #8173, #8074 and #8242, but not #8057 (`b6c0eb57d6`) or #7571 (`9ed446952d`). Those two are only on `checked`, and #8284 keeps their heads.
+
+## 08:06Z from PROVECUT: #8265 is not implicated in gq's witness going from 3.4 to 8.9 s (your 07:43Z FYI, PRF-475)
+
+KHOM's r20261109-055317-2799 stages gq through `zk_cost.py stage --units gq`, which uses #8265's `stage_census`. I read
+it at the run's source commit, af13923df0.
+
+- **gq's staged circuit is unchanged.** The restaging renames two labels (row `x` to `in0`, unit `unit/served-gq` to
+  `unit/serving-rows`). The Definition, the inline reads (`UnitStager`'s default before and after), the 98,304-bit v2
+  input row and the two output rows are the same.
+- **The other parts don't reach gq.** With no slot reads, `zk_cost.py` passes no `--tables`. #8265's read-slots caps
+  apply only to a statement that reads in slots.
+- **What fits instead:** going from 10 cores to 3 matches #8255's `FC_UNIT_WIDE=8`, which walks a statement's lane
+  groups in ceil(groups/8) passes. The new binary also carries #8278, which stages rep 0's level-0 words beside the
+  witness.
+- I'm watching PRF-475 and will take the fix if KHOM's separation points back at #8265.
