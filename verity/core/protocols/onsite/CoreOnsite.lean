@@ -2,7 +2,7 @@
 Onsite Verity (`verity/onsite/v0`): remote Verity's accounting with the verifier's hardware at the site, so it also
 accounts for space, bandwidth and communication. Its subprotocols are integrity by sampled proofs' one-stage audit
 (`SampledProofs.OneStage.protocol`, `verity/sampled-proofs/one-stage/v1`; v2, the audit on the proofs themselves, is not
-onsite's until its check reads the challenger's signed coins), the inference-only policy (`NciCheck.Protocol.protocol`,
+onsite's until its check reads the challenger's signed coins), the inference-only policy (`InferenceOnlyCheck.Protocol.protocol`,
 `verity/inference-only/v0`: the declared circuit divides into inference blocks within their gate and fresh-input
 budgets), work by proof of useful work over the period (`PouwCheck.Period.protocol`, `verity/pouw/period/v1`: the
 period's windows credited all or nothing), space by PoUS's check of a run (`PousCheck.RunProtocol.protocol`), bandwidth
@@ -26,7 +26,7 @@ import CoreComposition.Blobs
 import CoreComposition.Cases
 import CoreComposition.Tie
 import MemoryChallenger.WipeProtocol
-import NciCheck.Protocol
+import InferenceOnlyCheck.Protocol
 import NetworkCheck.Period
 import PousCheck.RunProtocol
 import PouwCheck.Period
@@ -40,11 +40,11 @@ open Composition
 
 /-- Onsite's subprotocols, in the order of their ids. -/
 def components : List BlobProtocol :=
-  [NetworkCheck.Period.protocol, NciCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
+  [NetworkCheck.Period.protocol, InferenceOnlyCheck.Protocol.protocol, PousCheck.RunProtocol.protocol, PouwCheck.Period.protocol,
     RemoteAudit.P2Protocol.protocol, SampledProofs.OneStage.protocol, MemoryChallenger.WipeProtocol.protocol]
 
 /-- The subprotocols that must commit to one record: the policy and the one-stage audit. -/
-def tied : List String := [NciCheck.Protocol.protocolId, SampledProofs.OneStage.protocol.id]
+def tied : List String := [InferenceOnlyCheck.Protocol.protocolId, SampledProofs.OneStage.protocol.id]
 
 /-- PoUS and the remote bandwidth audit on one store: the root of `C*` PoUS's setup published (its commitment's `root`)
 and the store the P2 session audits, the root its registration names (its commitment's `reg.root`, the case's
@@ -83,7 +83,7 @@ private def allRefused : Answer := answer (components.map refused)
 -- onsite's integrity subprotocol
 #guard (answer [refused PouwCheck.Period.protocol, refused SampledProofs.OneStage.protocol]).reason ==
   some "params: verity/certifier/v0 is missing"
-#guard (answer ((components.filter (·.id != NciCheck.Protocol.protocolId)).map refused)).reason ==
+#guard (answer ((components.filter (·.id != InferenceOnlyCheck.Protocol.protocolId)).map refused)).reason ==
   some "params: verity/inference-only/v0 is missing"
 #guard (answer ((components.take 6).map refused)).reason == some "params: verity/wipe/v0 is missing"
 #guard (answer ((components.take 5).map refused ++
@@ -98,7 +98,7 @@ private def record (p : String) : ByteArray :=
 
 private def committed (policy audit : ByteArray) : Answer :=
   answer (components.map fun P =>
-    if P.id == NciCheck.Protocol.protocolId then { refused P with commitment := policy }
+    if P.id == InferenceOnlyCheck.Protocol.protocolId then { refused P with commitment := policy }
     else if P.id == SampledProofs.OneStage.protocol.id then { refused P with commitment := audit }
     else refused P)
 

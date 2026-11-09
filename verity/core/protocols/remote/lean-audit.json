@@ -10,7 +10,7 @@
     "CoreComposition.Blobs",
     "CoreComposition.Cases",
     "CoreComposition.Tie",
-    "NciCheck.Protocol",
+    "InferenceOnlyCheck.Protocol",
     "PouwCheck.Period",
     "PouwPearlPlus.Protocol",
     "SampledProofs.OneStage",

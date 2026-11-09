@@ -27,8 +27,8 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
   verifier;
 - `RemoteChallenger` (`verity/core/protocols/sampled_proofs/remote.py`), the client of a challenger on another host;
 - `CertifierClient` (`verity/core/protocols/certifier/active.py`), onsite's network certifier reached over the network;
-- the overhead bound's remote regime, `Nci.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
-  `Nci`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
+- the overhead bound's remote regime, `InferenceOnly.Guarantees.DampenerRemote` (the inference-only policy's Lean is still named
+  `InferenceOnly`) and `benchmarks/rho`'s `regime.remote`: a bound over this protocol, not a part of it (the slowdown bound,
   part 6 of the security argument below);
 - "run remotely": a job run on a cluster node (`research run --on`), no protocol.
 
@@ -59,7 +59,7 @@ monitoring period's pooled bound, `Session*` a run of a subprotocol, and `Window
 | Sampled proofs ([README](../sampled_proofs/README.md)) | the committed values satisfy the registered circuit outside the proof blocks the sample misses | `VStar.Recursive.Sampled.protocol` (`service/vstar/recursive`), one-stage or recursive by its `form` | `verity/sampled-proofs/v1` |
 | PoUW ([README](../pouw/README.md)) | a run's credited MACs at Pearl's assumption, at δ over a work-weighted draw | `PouwCheck.PearlPlus.Protocol.protocol` (`pouw/lean/pearlplus`) | `verity/pouw/pearl-plus/v1` |
 | PoUW, v0 | the period's credited work, windows all or nothing | `PouwCheck.Period.protocol` (`pouw/lean/check`) | `verity/pouw/period/v1` |
-| The inference-only policy ([README](../network/nci/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `NciCheck.Protocol.protocol` (`network/nci/lean`) | `verity/inference-only/v0` |
+| The inference-only policy ([README](../network/inference_only/README.md)) | the registered circuit divides into inference blocks within their gate and fresh-input budgets, and θ is registered information | `InferenceOnlyCheck.Protocol.protocol` (`network/inference_only/lean`) | `verity/inference-only/v0` |
 
 The code is `CoreRemote.lean`: `V1.protocol = tiedSameB "verity/remote/v1" tied [run] components` (`remote-v1`), which
 `Verity.SoundnessOf` reads, and v0, `protocol = tiedSameB "verity/remote/v0" tied [windows] components`, which no
@@ -149,15 +149,15 @@ else is a theorem or a named gap.
 | The hardware | Each GPU computes at most at its data sheet's rates, hosts carry no hidden compute, and unregistered hardware is at most a stated share of the fleet. | `Accounting.Assumptions.TS.Sheet*`; the share is a hypothesis of `DampenerRemote` | Measure the cards and inventory the fleet. The share is a claim about the world, not the protocol. |
 | Matrix products | Nobody multiplies the protocol's random noised matrices faster than the known way. Only noised calls are credited: the premise is over random operands, never ones the prover chooses. | `OperandHMu`, `FoldOpt`, `FillOpt` | A faster algorithm for random matrix products refutes it. |
 | PoUW's receipts | A skipped round passes its receipt, or a guessed fold state passes, only at the stated rate. Conjectured, as their docstrings say. | `ReceiptLuckAt`, `GuessLuckAt` | Believed because each receipt folds committed accumulator words under a key fixed after the commitment; search for a skipped round or a fold-state guess that passes more often than the rate. |
-| Enforcement | Sampled proofs catch each faulty proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `Nci.Assumptions.SampledDetection`, `Nci.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
-| The baseline | The data the registration names was public, not computed off the books before. | `Nci.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
-| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `Nci.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
-| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `Nci.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
+| Enforcement | Sampled proofs catch each faulty proof block with probability at least q_det, whatever came before, and a detected cheat ends its identity and takes its hardware out of use within Δ. | `InferenceOnly.Assumptions.SampledDetection`, `InferenceOnly.Assumptions.TerminalDetection` | The first is what part 2's sample gives, not yet derived from it in Lean. The second is the auditor's policy: check that a refusal triggers it. |
+| The baseline | The data the registration names was public, not computed off the books before. | `InferenceOnly.Assumptions.ThetaRegistered` | Check the registered data's provenance: each named dataset or model is public, by its digest. |
+| Learning, 1: fresh weights are hard to hold | After enough training since registration, a short program that runs no longer than a block may run can't reproduce many freshly trained weight values: each costs about p bits, even to a program that knows the registered model and may replay a little training. | `InferenceOnly.Assumptions.DescriptionHard` | Compress the update: on adversarially chosen sets of updated weights, find the shortest program that outputs them within the time budget (codecs, low-rank fits, predictors from the registered model, short replays). A program well under p bits a weight refutes the price. |
+| Learning, 2: no cheap way around it | A floor, a hypothesis about every efficient method: each way of reaching the target below T_max carries some local bound's covered structure (freshly trained weights combined with fresh per-token values, a weighted count of at least Ω_*), except with probability η. It is the open part. | `InferenceOnly.Assumptions.CoversEfficientMethods` | Untested. Try to reach the target cheaply without that: small adapters, independently trained small experts, distillation from the served model, frozen features. A cheap success refutes it at that target. |
 
 For the counted uses with an upstream certificate, a block must import the specified context or perform the certified
 upstream computation. The certificate is a checkable wiring property of the training circuit: every gate a use requires
 reaches, inside that use's own upstream computation, the operand the use reads. It is named in the lock
-(`Nci.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
+(`InferenceOnly.Capability.Consumers.Upstream`) until it is checked on a named circuit. The two learning rows are all the slowdown bound assumes
 about learning, and they are where its scientific content lies; the second, the floor, is the open part.
 
 ### 1. The proofs of the sampled proof blocks
@@ -240,7 +240,7 @@ The time credit adds the data sheet's rates.
 ### 4. The inference-only policy
 
 **Establishes.** The registered circuit divides into inference blocks of at most Γ gates, each reading at most α_f
-fresh bits per gate, anything outside the registered information θ (`Nci.Complies Γ α_f`); and θ is registered
+fresh bits per gate, anything outside the registered information θ (`InferenceOnly.Complies Γ α_f`); and θ is registered
 information. A partition meeting that is, once padded, a (c, k)-partition with c = Γ and k = ⌊α_f·Γ⌋, or
 k = ⌊α_f·Γ·W⌋ for the bit-level expansion at Γ·W gates,
 (`Verity.Partition.IsCK`), the hypothesis part 6's local bounds take. With gates up to W bits wide, the bit-level
@@ -249,7 +249,7 @@ expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` inst
 **How it is checked.**
 
 - *By whom.* Not by remote yet: the policy isn't one of its subprotocols (Subprotocols, above). Its check runs on its
-  own, as `nci-check` (`NciCheck.Baseline.check`, `verity/core/protocols/network/nci/lean`); once composed, the
+  own, as `nci-check` (`InferenceOnlyCheck.Baseline.check`, `verity/core/protocols/network/inference_only/lean`); once composed, the
   verifier runs it on an auditor host in each verification phase.
 - *On what.* The registered circuit's description, its inference partition and θ's provenance, against the registration
   log. No hardware at the site is involved.
@@ -261,9 +261,9 @@ expansion meets it at Γ·W gates. The Lean slowdown bound `DampenerRemote` inst
   knowledge.
 
 **Assumes.** The data the registration names was public, not computed off the books before
-(`Nci.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
-is the deployment's; that the registered roots bind their data (`Nci.Assumptions.RootsBind`, named in
-`Security/Properties/Nci/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
+(`InferenceOnly.Assumptions.ThetaRegistered`; only part 6 reads its Lean form); the verifier's copy of the registration log
+is the deployment's; that the registered roots bind their data (`InferenceOnly.Assumptions.RootsBind`, named in
+`Security/Properties/InferenceOnly/Baseline.lean`, not yet stated); and, once the policy is composed, SHA-512 collision resistance
 for its tie to one registration. Nothing about learning: the policy restricts the shape of the registered circuit, and
 part 6's premises say why that shape trains little.
 
@@ -274,16 +274,16 @@ part 6's premises say why that shape trains little.
    property, `Properties.Composition.AcceptMeans`, makes a composite accept each subprotocol's accept, so this link
    needs the policy among remote's subprotocols, with that tie.
 2. *The policy's check accepts ⇒ `Baseline.evaluate` complies ⇒ `Desc.evaluate` complies.* The bridge `baseline_desc`
-   is a proof lemma (`Security/Proofs/Nci/Cover/Checked.lean`), not a locked property, and the policy's check has no
-   `AcceptMeans`: **open** as a property. θ's provenance: `NciCheck.Properties.SecurityProofs.BaselineProvenance`,
+   is a proof lemma (`Security/Proofs/InferenceOnly/Cover/Checked.lean`), not a locked property, and the policy's check has no
+   `AcceptMeans`: **open** as a property. θ's provenance: `InferenceOnlyCheck.Properties.SecurityProofs.BaselineProvenance`,
    **proved**.
-3. *A compliance verdict of `Desc.evaluate` ⇒ `Nci.Complies Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
+3. *A compliance verdict of `Desc.evaluate` ⇒ `InferenceOnly.Complies Γ α_f` of the laid-out registered circuit (a `Verity.Declaration`), on every
    expansion:*
-   `NciCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
+   `InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses` (its `Witnessed`), **proved**, with `DescReports` (the verdict
    is the definition's), **proved**. `Witnessed` yields exactly `DampenerRemote`'s hypothesis `Complies Γ α d`, so for
    the Lean bound only links 1 and 2 remain open.
-4. *`Complies` ⇒ the padded (c, k)-partition the local bounds read:* `Nci.Guarantees.CompliesCK`, and through the
-   bit-level expansion `Nci.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
+4. *`Complies` ⇒ the padded (c, k)-partition the local bounds read:* `InferenceOnly.Guarantees.CompliesCK`, and through the
+   bit-level expansion `InferenceOnly.Guarantees.ExpandComplies`, **proved**. Joining them to link 3 for the run's registered circuit
    is open with links 1 and 2.
 5. *A block's effective fresh input:* k plus k_F, the bits faulty proof blocks inject into it, plus k_a, the advice bits
    its structure depends on. Sampled proofs bound the faulty proof blocks and the advice's length is public, but no
@@ -318,7 +318,7 @@ times the fleet-time the reference training algorithm takes with no protocol (fl
 fleet's capacity, registered and unregistered hardware). It holds except with the total failure probability below,
 η + δ + …: an accepted run reaches the target in less fleet-time at most that often. **This is the argument's one
 endpoint.** No Lean states it: it is derived in prose (`Security/README.md`, part 4) from the local bounds,
-`Verity.Guarantees.Counting` and `Nci.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different,
+`Verity.Guarantees.Counting` and `InferenceOnly.Guarantees.CapabilityFloor`. The Lean bound `DampenerRemote` is a different,
 older formula (below), and the Results table comes from a third route, the calculator's.
 
 **Its total failure probability** over a monitoring period of n verification phases is at most
@@ -371,13 +371,13 @@ the local bound (an activation price, a joint price, a recoverable source), each
 
 **Lean.**
 
-- The local bounds' caps `Nci.Guarantees.HeldBudget` (or, statistically, `Nci.Guarantees.StatHeldBudget`),
-  `Nci.Guarantees.ImportOrRecompute`, `Nci.Guarantees.RecomputeByGates`, `Nci.Guarantees.RecomputeByState` and
-  `Nci.Guarantees.WeightedProductCap`, and the floor `Nci.Guarantees.CapabilityFloor`: **proved**
-  (`Security/Proofs/Nci/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
-  structure and bound is surveyed in `Security/Definitions/Nci/Capability/README.md`.
-- Their premises, `Nci.Assumptions.CoversEfficientMethods`, `Nci.Assumptions.DescriptionHard` (or
-  `Nci.Assumptions.MinEntropyHard`) and the wiring property `Nci.Capability.Consumers.Upstream`, are named assumptions in
+- The local bounds' caps `InferenceOnly.Guarantees.HeldBudget` (or, statistically, `InferenceOnly.Guarantees.StatHeldBudget`),
+  `InferenceOnly.Guarantees.ImportOrRecompute`, `InferenceOnly.Guarantees.RecomputeByGates`, `InferenceOnly.Guarantees.RecomputeByState` and
+  `InferenceOnly.Guarantees.WeightedProductCap`, and the floor `InferenceOnly.Guarantees.CapabilityFloor`: **proved**
+  (`Security/Proofs/InferenceOnly/Capability/`, `Security/Proofs/Accounting/Coverage.lean`), each from its premises. Every premise,
+  structure and bound is surveyed in `Security/Definitions/InferenceOnly/Capability/README.md`.
+- Their premises, `InferenceOnly.Assumptions.CoversEfficientMethods`, `InferenceOnly.Assumptions.DescriptionHard` (or
+  `InferenceOnly.Assumptions.MinEntropyHard`) and the wiring property `InferenceOnly.Capability.Consumers.Upstream`, are named assumptions in
   the lock, which those proofs take as hypotheses; none is tested yet: no price is measured at a decoder budget, and the
   certificate is not checked on a named training circuit.
 - The block-description bound (`Verity.Guarantees.BlockDescription`) and the counting bound
@@ -391,13 +391,13 @@ Sampled proofs' accept rule and theorems, the Lean slowdown bounds, and the comp
 | Sampled proofs' accept rule | `Properties.SampledProofs.AcceptMeans` (`Security/Properties/SampledProofs.lean`; proof `acceptMeans`) | **proved** | — |
 | A C-Flock `--zk` proof, read in the sampling relation: Pr[accept ∧ incorrect proof blocks outside what the draw catches at δ] ≤ δ + ε_ks + δ_link | `Flock.Guarantees.SampledKSLiveV3` (stated in `Security/Proofs/Flock/Bridge/Refused.lean`, proved in `Security/Proofs/Flock/Bridge/KSLive.lean`) | **proved** | sampled proofs `--zk`: proved |
 | Sampled proofs over a monitoring period | `Flock.Guarantees.IntegrityPeriod`, `IntegrityHorizon` (`Security/Proofs/Flock/EndToEnd/Period/Statement.lean`) | **proved** | — |
-| The overhead over remote, per period | `Nci.Guarantees.DampenerRemote` (`Security/Definitions/Nci/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
-| The overhead over a monitoring period | `Nci.Guarantees.DampenerRemotePeriod` (`Security/Definitions/Nci/Guarantees/RemotePeriod.lean`; proof `Nci.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/Nci/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the draw missing `m` faulty blocks with probability at most `(1 − q)^m` and a drawn faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
+| The overhead over remote, per period | `InferenceOnly.Guarantees.DampenerRemote` (`Security/Definitions/InferenceOnly/Guarantees/Remote.lean`) | **proved** | none with a proof layer: it takes `PouwSound`, which no PoUW guarantee instantiates |
+| The overhead over a monitoring period | `InferenceOnly.Guarantees.DampenerRemotePeriod` (`Security/Definitions/InferenceOnly/Guarantees/RemotePeriod.lean`; proof `InferenceOnly.SecurityProofs.DampenerRemotePeriod` in `Security/Proofs/InferenceOnly/RemotePeriod.lean`) | **proved**, under `TerminalDetection`, with each window's bounds as hypotheses: PoUW's certificate wrong with probability at most `p` (`CircuitCredit`'s conclusion at the window), the draw missing `m` faulty blocks with probability at most `(1 − q)^m` and a drawn faulty block undetected with probability at most `ks t`, and each declared run within `Throttled`'s bound | none with a proof layer: the per-window bounds are hypotheses, and no served path discharges them yet |
 | The composed soundness of remote | `Verity.Soundness`: not yet in Lean, and `lean-audit.json` here lists no guarantee (the open gap, above) | **open** | — |
 
 `DampenerRemote` is the older threaded slowdown bound, ρ = max(1, 1/(s + x/MFU₀)) over the thread structure
-(`Nci.Dampener.remoteDampener`; MFU₀ divides only x), not the bound displayed above: arithmetic over inline hypotheses
-(`Nci.Assumptions.PouwSound` among them), not over the local bounds.
+(`InferenceOnly.Dampener.remoteDampener`; MFU₀ divides only x), not the bound displayed above: arithmetic over inline hypotheses
+(`InferenceOnly.Assumptions.PouwSound` among them), not over the local bounds.
 
 ### 7. What is completeness, not security
 
@@ -443,7 +443,7 @@ measured cost, the unregistered share, the prices), each labelled with its sourc
 
 The next steps test or strengthen part 6's premises: one instance meeting the local premises at once, attacks on
 update prices, the certificate checked on a training circuit, a use's import cost, weights by linear programming, and
-coverage tested directly. Each is in `Security/Definitions/Nci/Capability/README.md` ("How to test each premise", "The
+coverage tested directly. Each is in `Security/Definitions/InferenceOnly/Capability/README.md` ("How to test each premise", "The
 frontier"); how the execution's boundaries fix what a block's c and k count is in `Security/README.md`, part 2.
 
 ## Assumptions, by name
@@ -500,25 +500,25 @@ PoUW, as `H1J10RCheckedCreditPeriod` takes them (`Security/Properties/Pouw/Perio
 
 The slowdown, `DampenerRemote`:
 
-- In `Security/Definitions/Nci/Assumptions/Remote.lean`, three:
-  - `Nci.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
+- In `Security/Definitions/InferenceOnly/Assumptions/Remote.lean`, three:
+  - `InferenceOnly.Assumptions.PouwSound`: each PoUW period's certificate is wrong with probability at most p. What backs p is
     the time credit `CircuitCredit`, which reads the data sheet; no PoUW guarantee instantiates it yet.
-  - `Nci.Assumptions.SampledDetection`: sampled proofs catch each incorrect proof block with probability at least q,
+  - `InferenceOnly.Assumptions.SampledDetection`: sampled proofs catch each incorrect proof block with probability at least q,
     whatever came before.
-  - `Nci.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
-- `Nci.Assumptions.ThetaRegistered` (`Security/Definitions/Nci/Assumptions/Baseline.lean`): the data the
+  - `InferenceOnly.Assumptions.TerminalDetection`: a detected cheat ends its identity and takes its hardware out of use within Δ.
+- `InferenceOnly.Assumptions.ThetaRegistered` (`Security/Definitions/InferenceOnly/Assumptions/Baseline.lean`): the data the
   registration names was public, not computed off the books before.
-- `Nci.Assumptions.WeightsIncompressible` (`Security/Definitions/Nci/Assumptions/Threads.lean`): no small subcircuit
+- `InferenceOnly.Assumptions.WeightsIncompressible` (`Security/Definitions/InferenceOnly/Assumptions/Threads.lean`): no small subcircuit
   rebuilds the weights it uses from fewer bits than their width. It is the older form, which the local bounds below
   replace (`Security/README.md`, part 2).
-- `Nci.Complies` (`Security/Definitions/Nci.lean`): the registration meets the inference-only policy, in its older form.
+- `InferenceOnly.Complies` (`Security/Definitions/InferenceOnly.lean`): the registration meets the inference-only policy, in its older form.
   `DampenerRemote` takes it as a hypothesis; part 4 is what discharges it once its open links close.
 
 The local bounds (part 6):
 
-- `Nci.Assumptions.DescriptionHard` (in the lock): every selection of an item
+- `InferenceOnly.Assumptions.DescriptionHard` (in the lock): every selection of an item
   family (updated weights, operands, or both) has time-bounded description length at least its price, less a deficit.
-- `Nci.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
+- `InferenceOnly.Assumptions.CoversEfficientMethods` (in the lock): the floor, a hypothesis about every efficient method. Each
   way of reaching the target below T_max carries some local bound's covered structure, with at least its weighted
   count Ω_*, except with probability η. It is the open part, untested.
 
@@ -536,7 +536,7 @@ the slowdown calculator). Its `periods.py` gives the slowdown bound for monitori
 | the world | 2.99 | 3.03 | 3.04 | 1 to 41, 50.4, 53.9 | 1 |
 
 - **What the figures mean.** Each figure is the hardware multiple over the reference training algorithm at its MFU,
-  MFU₀ (`Nci.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
+  MFU₀ (`InferenceOnly.Dampener.hardwareMultiple`): at least 1, and 1 with no protocol.
 - **Their status.** They are draft and their premises contested. They come from the calculator's partial-sum route, not
   from part 6's local bounds.
 - **What sets them.** The share of GPU time outside credited work (ε_undecl) sets nearly all of each figure (96% to

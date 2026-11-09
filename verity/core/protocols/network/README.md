@@ -10,7 +10,7 @@ names `window` and `LinkWindow` until a format version (the Glossary's older nam
 
 - `verity/core/protocols/certifier/`: the network certifier itself (its relay, records, certificates and the Python
   audit), and in its README the protocol.
-- `nci/`: the inference-only policy's check, a separate package with its own README.
+- `inference_only/`: the inference-only policy's check, a separate package with its own README.
 - `Security/Proofs/NetworkCertifier/README.md`: the guarantees and proofs about the certifier's timing channel, which
   bound `K` (below).
 
@@ -87,7 +87,7 @@ bits a covert sender in the server can move through the network certifier in the
 - `test_network_period_protocol.py`: `network-period serve` against `period_case.py`'s mirror, in both forms.
 - `test_lean_audit.py`: `lean_audit.Audit` against `audit.Audit`, which must give the same verdicts, clock, `accepted`
   and `violations`.
-- `test_nci_*.py`: the Python halves of the inference-only policy check's difftests, whose Lean is in `nci/`.
+- `test_inference_only_*.py`: the Python halves of the inference-only policy check's difftests, whose Lean is in `inference_only/`.
 
 `lean/scripts/difftest_vectors.py` writes `network-check-difftest`'s data, 2,000 random instances and
 `certificate.py`'s results on each. The Lean check runs the difftest on them (`runs` in `lean-audit.json`, which pins

@@ -366,7 +366,7 @@ def _input_arg(arg: dict, nodes: list, j: dict) -> int | None:
 
 
 def _is_input(x: dict, j: dict) -> bool:
-    """`NciCheck.Desc.isInputNode`: a node calling an input primitive."""
+    """`InferenceOnlyCheck.Desc.isInputNode`: a node calling an input primitive."""
     fid = j["callees"][x["fn"]]
     return j["definitions"][fid]["form"] == "primitive" and bool(INPUT_ID.match(fid))
 
@@ -418,7 +418,7 @@ FUEL = 2 ** 62
 
 
 def _walkable(j: dict) -> bool:
-    """`NciCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
+    """`InferenceOnlyCheck.Desc.walkable` as C-Flock's decoder gives a Program (its layout, callees first and the root without
     parameters): `(A + 1) · (H + 2)` at most half of `FUEL`, for the root's activations `A` (its own and each composite
     node member's, multiplied through batches and scans) and the depth `H` they nest to, and no scan of no iterations
     with output leaves. `rootLaidOut` and `inputsAtRoot` the decoder gives too."""
@@ -542,7 +542,7 @@ def _scan(j, program: str, s: WardenParams) -> Scan:
                        "entries")
     if not _walkable(j):
         raise D.Reject("scan: not laid out as C-Flock's decoder lays a Program out, or past what its resolution walks "
-                       "(NciCheck.Desc.rootLaidOut, inputsAtRoot and walkable)")
+                       "(InferenceOnlyCheck.Desc.rootLaidOut, inputsAtRoot and walkable)")
     ke = max(k for k, x in enumerate(nodes) if defs[callees[x["fn"]]]["form"] != "primitive")
     if not any(a[:3] == ("n", ke, 0) and T * leaves_of(be["ret_type"]) <= a[3]
                for q in _parts(defs[j["root"]]["body"]["ret"], nodes) if (a := _affine(q))):

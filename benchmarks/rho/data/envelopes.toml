@@ -10,7 +10,7 @@ inference_overhead = { value = nan, unit = "x", source = "not modeled: a placeho
 [regime.unmonitored]
 kind = "unmonitored"
 
-# Nci.Guarantees.DampenerRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
+# InferenceOnly.Guarantees.DampenerRemote's terms, each at benchmarks/nci/tiers.py's DEFAULTS (tests/test_envelopes.py holds them).
 # PoUW: residual, clock_share, host, eps_w, eps_agg, window_delta_*; detection: identities, lag_s (and, sampled, the rest).
 [regime.remote]
 kind = "remote"

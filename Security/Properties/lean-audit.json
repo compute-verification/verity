@@ -17,13 +17,13 @@
   "Properties.Pouw.PearlPlus",
   "Properties.Pouw.PearlPlus.Witnesses",
   "Properties.Pouw.PearlPlusDraw",
-  "Properties.Nci",
-  "Properties.Nci.Threads",
-  "Properties.Nci.Baseline",
-  "Properties.Nci.Count",
-  "Properties.NciDesc",
-  "Properties.NciDesc.Verdict",
-  "Properties.NciDesc.Cover",
+  "Properties.InferenceOnly",
+  "Properties.InferenceOnly.Threads",
+  "Properties.InferenceOnly.Baseline",
+  "Properties.InferenceOnly.Count",
+  "Properties.InferenceOnlyDesc",
+  "Properties.InferenceOnlyDesc.Verdict",
+  "Properties.InferenceOnlyDesc.Cover",
   "Properties.CertifierDevice",
   "Properties.Pous",
   "Properties.NetworkCertifier",
@@ -67,7 +67,7 @@
   "Properties.RemoteAudit.Live",
   "Properties.RemoteAudit.Component",
   "Properties.Composition",
-  "Properties.Nci.Protocol",
+  "Properties.InferenceOnly.Protocol",
   "Properties.Verity.Soundness",
   "Properties.Verity.Game",
   "Properties.Verity.Subprotocols",
@@ -191,23 +191,23 @@
    "owner": "@memory-accounting",
    "digest": "43582b571daf50b58ab4dcf98b757124a759e6cd5dd501bad2fee9b9b4fee864"
   },
-  "Nci.Assumptions.ThetaRegistered": {
+  "InferenceOnly.Assumptions.ThetaRegistered": {
    "owner": "@compute-accounting",
    "digest": "afd7f09e9bdab67ea4a2a26dc3760bfe5d0d3649fde36ad2357b96c9b16ac1b7"
   },
-  "Nci.Assumptions.WeightsIncompressible": {
+  "InferenceOnly.Assumptions.WeightsIncompressible": {
    "owner": "@lean",
    "digest": "a9832cc41ed84cd3c55eccc606483e9c83d87fb29e05d1b1f92bb2680d32f8d8"
   },
-  "Nci.Assumptions.WeightsIncompressibleSlots": {
+  "InferenceOnly.Assumptions.WeightsIncompressibleSlots": {
    "owner": "@lean",
    "digest": "bc370825a2d24097f1a43037b354dac79b31c91c8e1c3fe00f7671516529c399"
   },
-  "Nci.Cover.Assumptions.UpdateHardness": {
+  "InferenceOnly.Cover.Assumptions.UpdateHardness": {
    "owner": "@training",
    "digest": "9df3e75114d3a5f882d8ae26ec4045370e7aba15045792f486f7781b24d05a23"
   },
-  "Nci.Cover.MulBlocks.Upstream": {
+  "InferenceOnly.Cover.MulBlocks.Upstream": {
    "owner": "@training",
    "digest": "656c7fb44cd7fe0985554a6c03f7c811decbe713a0ce8ea165e84be30040357c"
   },
@@ -422,15 +422,15 @@
   "Identity.Sha512",
   "Identity.Tagged",
   "Identity.Domains",
-  "Properties.Nci",
+  "Properties.InferenceOnly",
   "Definitions.Core",
-  "Definitions.Nci",
-  "Definitions.Nci.Assumptions.Threads",
-  "Definitions.Nci.Assumptions.Baseline",
-  "NciCheck.Check",
-  "NciCheck.Baseline",
-  "NciCheck.Desc",
-  "NciCheck.Protocol",
+  "Definitions.InferenceOnly",
+  "Definitions.InferenceOnly.Assumptions.Threads",
+  "Definitions.InferenceOnly.Assumptions.Baseline",
+  "InferenceOnlyCheck.Check",
+  "InferenceOnlyCheck.Baseline",
+  "InferenceOnlyCheck.Desc",
+  "InferenceOnlyCheck.Protocol",
   "Flock",
   "Properties.CertifierDevice",
   "CertifierDevice",
@@ -488,7 +488,7 @@
   "CoreOnsite",
   "CoreRemote",
   "Properties.Remote",
-  "Properties.NciDesc",
+  "Properties.InferenceOnlyDesc",
   "Definitions.Pouw.Window",
   "Definitions.Pouw.PearlC",
   "Definitions.Pouw.Fp8Atom",
@@ -596,8 +596,8 @@
    "honest": ["Properties.Composition.acceptTied_honest"],
    "nontrivial": "Properties.Composition.acceptTied_nontrivial"
   },
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-   "nontrivial": "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
+  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+   "nontrivial": "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial"
   },
   "Properties.Remote.SecurityProofs.acceptInferenceOnly": {
    "nontrivial": "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial"
@@ -702,31 +702,31 @@
   "MemoryChallenger.Properties.SecurityProofs.wipeSigned_acceptAll": "33f7abc2366880d43c453c6ef7f93c829313485d13e4d3112049d6c68e127c27",
   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBound": "b9d92a07d544a61e756fa50dd15df63d86d8f6678bd749bc6faef73e060dde39",
   "MemoryChallenger.Properties.SecurityProofs.wipeSurvivorBoundNontrivial": "8d0b448abde901064dda70888c88d1278a6a0f7dbb97f185c72975842f07783a",
-  "NciCheck.Properties.SecurityProofs.AcceptsExactly": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
-  "NciCheck.Properties.SecurityProofs.BaselineProvenance": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
-  "NciCheck.Properties.SecurityProofs.CheckAccepts": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
-  "NciCheck.Properties.SecurityProofs.CheckRefuses": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
-  "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
-  "NciCheck.Properties.SecurityProofs.Decodes": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
-  "NciCheck.Properties.SecurityProofs.DescAgrees": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
-  "NciCheck.Properties.SecurityProofs.DescReports": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
-  "NciCheck.Properties.SecurityProofs.DescThrottles": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
-  "NciCheck.Properties.SecurityProofs.DescThrottlesDark": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
-  "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
-  "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
-  "NciCheck.Properties.SecurityProofs.DescWitnesses": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
-  "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
+  "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": "24676290774540efd1c6c462f9eeab87008fdf01667e57a19d71b41f33a8bc61",
+  "InferenceOnlyCheck.Properties.SecurityProofs.BaselineProvenance": "5ee5f11a9fb0fa5184f3b4bff26379751444265e4ddaaf3b2fb4c1693d51f43e",
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": "441407c53d275be1dcbfb93dd8745862acb936e904e510e50ba83c974ea028a5",
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": "22f268d3deabbf452d7b5a5a0534ffb62fd5ce628b660c4b63ab798047aedf9a",
+  "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": "a8bd41ed9bc36f1c11a7c3e6a0e82a2e56542cacb7779adabd2c4101002bf833",
+  "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": "ff5a12256909f1287f4662f682e5721897c3f2ad38fc63e3dc0e23ca113b55fd",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": "506961290b2f0eda7be289c734ef3118e07ef8ca90df7209165da2094cda0f21",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": "e4bef55fc6cbd3f0ac58aa7b76de4a591774fa2e147f11c87f7fb9f33cc7c01b",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": "0996a72d89f3ff17bf5601b4920701463076941ad0ad02069ca6fc07fc29389e",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": "68662aa9260d12ad1da05ce97333557e255c18d60e886f365664553369c1c0e2",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": "20b121f14824d1029a3dda7edffb355516c7727a2651f170588d223d00d4cbda",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": "32a6cfa260175465b1ad119e860ffe1e306e48961323f799452fea46a038c397",
+  "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": "d8c6db17c0da50d8e117b3ee6ae4878baf9f72595ad4854c87a79ca777f9c34b",
+  "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
    "type_hash": "3ed3e640db7f1e9da8395265071e56288b40285cb4846ebeacc990cd0b89007d",
    "missing": "honest",
    "why": "its honest case, a one-gate circuit, is accepted by #eval (profile {\"blocks\":[[1,16]],\"gates\":3}) and not yet by a kernel-checked lemma: PRF-301 brings that lemma by Tue 3 Nov"
   },
-  "NciCheck.Properties.SecurityProofs.RejectsExactly": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
-  "NciCheck.Properties.SecurityProofs.Reports": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
-  "NciCheck.Properties.SecurityProofs.Throttles": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
-  "NciCheck.Properties.SecurityProofs.ThrottlesDark": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
-  "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
-  "NciCheck.Properties.SecurityProofs.ThrottlesSlots": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
-  "NciCheck.Properties.SecurityProofs.Witnesses": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
+  "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": "8aa8ecb51505b589902534fa8fc4cde0e40a27635a7584af4e470d51c48addea",
+  "InferenceOnlyCheck.Properties.SecurityProofs.Reports": "59c48e97a1c228c05c3803b4a5d93007a3f072cd15f9674236c7127b2a6da7a8",
+  "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": "0fe2f070c0b72cc35e27413beb30e96b15b67e4f02ed31ca681c0c23ee4b1d13",
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": "2946c7b3ecc774a6164a99681d6e74666b4ad97389d7bd9a99db307ea17f7b7d",
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": "2757fed674164c3abc47625625ec2f70fde5e2127f533a4797c7b9c2f38cfeb7",
+  "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": "91237b6c6a008d3e0335709e5b8ce6d37b069d00da473e97a96dc9b7c64d0263",
+  "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": "d9f255e477992784b174c2ec19e62a74285cab29e74c5516ab850ccd97937f29",
   "Pous.Component.SecurityProofs.runAccepts": "1f62adc1d401e89ae7fd1e127eddd0626124b177506be24f96f20e82cb2d9f2b",
   "Pous.Component.SecurityProofs.runAccepts_by": "4a75b839bf771d49dde5409e73b4d3df4c807a730fd4bc285d3fa8f71c25b1c6",
   "Pous.Component.SecurityProofs.runAccepts_complete": "4bdbbc1dafa32086e3fe354f8e3b7d3441554445b2e54eceda3b9059ad17c1db",
@@ -938,37 +938,37 @@
    "except": [],
    "why": "the commitments' properties are stated against the port's own functions, on Lean core: nothing of Mathlib or of `security`"
   },
-  "Properties.Nci": {
+  "Properties.InferenceOnly": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Threads",
-    "Definitions.Nci.Assumptions.Baseline",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
-    "NciCheck.Count",
-    "NciCheck.Protocol",
-    "Properties.Nci"
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Threads",
+    "Definitions.InferenceOnly.Assumptions.Baseline",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Baseline",
+    "InferenceOnlyCheck.Count",
+    "InferenceOnlyCheck.Protocol",
+    "Properties.InferenceOnly"
    ],
    "except": [],
    "why": "a property is stated over the definitions and the code it is about, never over a proof"
   },
-  "Properties.NciDesc": {
+  "Properties.InferenceOnlyDesc": {
    "imports": [
     "Mathlib",
     "Definitions.Core",
-    "Definitions.Nci",
-    "Definitions.Nci.Assumptions.Baseline",
-    "Definitions.Nci.Assumptions.Cover",
-    "NciCheck.Check",
-    "NciCheck.Baseline",
-    "NciCheck.Desc",
-    "Properties.Nci",
-    "Properties.NciDesc"
+    "Definitions.InferenceOnly",
+    "Definitions.InferenceOnly.Assumptions.Baseline",
+    "Definitions.InferenceOnly.Assumptions.Cover",
+    "InferenceOnlyCheck.Check",
+    "InferenceOnlyCheck.Baseline",
+    "InferenceOnlyCheck.Desc",
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnlyDesc"
    ],
    "except": [],
-   "why": "the description-sized check's properties are stated over the code they are about (NciCheck.Desc, and NciCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.Nci.Assumptions), never over a proof",
+   "why": "the description-sized check's properties are stated over the code they are about (InferenceOnlyCheck.Desc, and InferenceOnlyCheck.Baseline, the check of record), the NCI properties they relate it to, and the named assumptions a verdict's bounds rest on (Definitions.InferenceOnly.Assumptions), never over a proof",
    "sealed": true
   },
   "Properties.CertifierDevice": {
@@ -1225,7 +1225,7 @@
     "CoreComposites",
     "Definitions.Core.Blocks",
     "Definitions.Core.Site",
-    "Definitions.Nci",
+    "Definitions.InferenceOnly",
     "Definitions.Hash.Assumptions",
     "Lms.Verify",
     "Properties.Pouw.PearlPlus",
@@ -1244,8 +1244,8 @@
     "Definitions.Core",
     "CoreRemote",
     "Properties.Composition",
-    "Properties.Nci",
-    "Properties.NciDesc",
+    "Properties.InferenceOnly",
+    "Properties.InferenceOnlyDesc",
     "Properties.SampledProofs"
    ],
    "except": [],
@@ -5015,32 +5015,32 @@
     "function": "MemoryChallenger.verdict",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.AcceptsExactly": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.AcceptsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckAccepts": {
-    "function": "NciCheck.check",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckAccepts": {
+    "function": "InferenceOnlyCheck.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckRefuses": {
-    "function": "NciCheck.check",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckRefuses": {
+    "function": "InferenceOnlyCheck.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Decodes": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Decodes": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.RejectsExactly": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.RejectsExactly": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Reports": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Reports": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Witnesses": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Witnesses": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
    "PousCheck.Properties.SecurityProofs.deployed": {
@@ -5917,20 +5917,20 @@
     "function": "SampledProofs.Fleet.run",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.Throttles": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.Throttles": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDark": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDark": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ThrottlesSlots": {
-    "function": "NciCheck.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ThrottlesSlots": {
+    "function": "InferenceOnlyCheck.evaluate",
     "outcome": "accept"
    },
    "Properties.Pouw.Credit.SecurityProofs.workDrawMisses": {
@@ -6005,8 +6005,8 @@
     "function": "RemoteAudit.Schedule.check",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.BaselineProvenance": {
-    "function": "NciCheck.Baseline.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.BaselineProvenance": {
+    "function": "InferenceOnlyCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.liveIsRun": {
@@ -6057,36 +6057,36 @@
     "function": "PouwCheck.liveSaltCheck",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesSlots": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescAgrees": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescAgrees": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDark": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDark": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottlesDarkSlots": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescReports": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescReports": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescWitnesses": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescWitnesses": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.DescThrottles": {
-    "function": "NciCheck.Desc.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.DescThrottles": {
+    "function": "InferenceOnlyCheck.Desc.evaluate",
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.CheckedCoverTraining": {
-    "function": "NciCheck.Baseline.evaluate",
+   "InferenceOnlyCheck.Properties.SecurityProofs.CheckedCoverTraining": {
+    "function": "InferenceOnlyCheck.Baseline.evaluate",
     "outcome": "accept"
    },
    "Properties.RemoteAudit.Shared.acceptedDrawsOpenable": {
@@ -6213,8 +6213,8 @@
     "function": ["PouwCheck.Credit.strata", "PouwCheck.Credit.law", "PouwWindow.kPrime"],
     "outcome": "accept"
    },
-   "NciCheck.Properties.SecurityProofs.ProtocolAccepts": {
-    "function": "NciCheck.Protocol.check",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts": {
+    "function": "InferenceOnlyCheck.Protocol.check",
     "outcome": "accept"
    },
    "Properties.Composition.acceptSame": {
@@ -6406,8 +6406,8 @@
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_honest": "completeness: GroupedDrawMisses's honest lemma: its premises hold at the lanes window, sixteen 32 × 32 leaves at K = 2048 each proved as its 32 lanes and their combine: strata and law accept it at K = 8, kPrime answers K′ ≤ 8 at ε = 1/2 and δ = 1/256 over its whole work, no leaf's blocks do more than the leaf, and the blocks do at least ε of the work, so GroupedDrawMisses is not vacuous",
    "Properties.Pouw.Credit.SecurityProofs.groupedDrawMisses_nontrivial": "lemma: GroupedDrawMisses's nontrivial lemma: its conclusion fails under the strata a law that accepts everything may give, none: the draw is empty whatever the streams, so the lanes window's blocks all escape, with probability 1 > 1/256",
    "Properties.Pouw.Credit.SecurityProofs.drawWithheld_nontrivial": "lemma: DrawWithheld's nontrivial lemma: its conclusion fails at the empty ledger, which opens no session, for every draw root, so a verifier that accepts everything credits a window DrawWithheld excludes (drawWithheld_acceptAll)",
-   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the circuit file is the committed file the parameters name by its digest, Verity.namedFile, and the commit phase's check asks that one committed file have it; every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (SampledProofs.OneStageZk), PoUW's period credit, the inference-only policy (NciCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is Nci.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder only (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable at the compiled LMS verifier): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
-   "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.SoundnessOf at remote's composite of record, from Verity.soundness_at_of_targets in the causal game Verity.soundness_of_subprotocols reads (Verity.Vocab.game, SoundnessAt): the probability that remote's compiled verifier (Core.Remote.V1.protocol, verity/remote/v1: tiedSameB over the blobs sent, the policy and sampled proofs committed to one record, Core.Remote.V1.tied, and Pearl+'s run naming it, Core.Remote.V1.run) accepts files that passed the commit phase's check while one of its three subprotocols' claims fails is at most their three errors summed (Verity.Vocab.error, as at onsite); the three are sampled proofs (VStar.Recursive.Sampled.protocol, its claim at the fixed extractor's transcript), PoUW as Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol.protocol, its claim in MACs: a credit w Pearl+'s compiled check published on the blobs sent, Verity.PearlPlusCredits, with (1 - w.rho)(1 - w.epsilon) w.macs at most the MACs the play computed, Vocab.macs) and the inference-only policy (NciCheck.Protocol.protocol, Nci.Complies); it takes exactly the three targets at remote, Verity.Vocab.SampledProofsSound .remote, PouwSound .remote and InferenceOnlySound .remote, as hypotheses until each is proved",
+   "Verity.soundness_of_subprotocols": "frozen (premise): the union bound at a composite's compiled verifier in the causal game (one fixed extractor, the committed files and one adversary form: Verity.Vocab.game, params, the committed files and commitment first, each device release after the bytes it answers, the evidence last; Verity.Vocab.SoundnessAt), proved once for every composite as Verity.soundness_at_of_targets (Verity.SoundnessOf) and here at onsite (Core.Onsite.protocol, tiedSameB over the blobs sent: the committed files, sent with the parameters and the commitment before any coin, then the evidence's blobs, sent with the evidence last; the circuit file is the committed file the parameters name by its digest, Verity.namedFile, and the commit phase's check asks that one committed file have it; every input whose blobs begin with the committed files is what some strategy sends, Verity.sent_reachable, so the event holds every acceptance of the compiled verifier on such an input at files that pass the check, Verity.Vocab.accepts_reachable) and its seven subprotocols: sampled proofs v2 (SampledProofs.OneStageZk), PoUW's period credit, the inference-only policy (InferenceOnlyCheck.Protocol), PoUS's run check, PoUB-P2 (RemoteAudit.P2Protocol, on PoUS's store), the network certifier over the period and the wipe (MemoryChallenger.WipeProtocol); each verdict reads SameAccepts (Properties.Composition.AcceptSame's and AcceptTied's conclusions: the policy and the one-stage audit committed to one record, PoUS and PoUB-P2 on one store) and its component's acceptance of its own case; the five period claims are Accounting.PeriodLive.Holds at Verity.Vocab.live (sampled proofs' on the fixed extractor's transcript under the commitment's openings, the circuit file read through Flock.Bridge.circuitOfFile, PoUW's counting gates), the policy's is InferenceOnly.Complies of the declaration over the committed circuit, and the wipe's is Verity.Wipe.OfRun.Kept's negation at the published survivor threshold; each subprotocol's error at a strategy is Accounting.condError on a quantitative collision premise about its fixed finder only (Vocab.FinderCR, the finder's calls bounded by the strategy's, Vocab.finder_calls): and a forgery premise about its fixed forger (Vocab.Unforgeable, Hash.Assumptions.LmsUnforgeable at the compiled LMS verifier): its delta at those calls plus the published eps_forge at the forger's budget and the device's signatures plus its loss at Pr[B^tau], else top; it takes each subprotocol's target (Verity.Vocab.SampledProofsSound, PouwSound, InferenceOnlySound, PousSound, BandwidthAuditSound, NetworkCertifierSound, WipeSound) as a hypothesis until each is proved, Vocab's fields are given until each subprotocol defines them, and the strategy's SHA-512 calls (Vocab.cost) are declared, since Verity.Game has no call model; checked at the idle deployment by soundness_of_subprotocols_honest and soundness_of_subprotocols_nontrivial, and for any Vocab by soundness_honest_of and soundness_nontrivial_of, and soundness_nontrivial_of_lt transfers any registered strategy whose summed error is below one subprotocol's failure probability into a refutation (one model-level instance)",
+   "Verity.remote_soundness_of_subprotocols": "frozen (premise): Verity.SoundnessOf at remote's composite of record, from Verity.soundness_at_of_targets in the causal game Verity.soundness_of_subprotocols reads (Verity.Vocab.game, SoundnessAt): the probability that remote's compiled verifier (Core.Remote.V1.protocol, verity/remote/v1: tiedSameB over the blobs sent, the policy and sampled proofs committed to one record, Core.Remote.V1.tied, and Pearl+'s run naming it, Core.Remote.V1.run) accepts files that passed the commit phase's check while one of its three subprotocols' claims fails is at most their three errors summed (Verity.Vocab.error, as at onsite); the three are sampled proofs (VStar.Recursive.Sampled.protocol, its claim at the fixed extractor's transcript), PoUW as Pearl+'s run verdict (PouwCheck.PearlPlus.Protocol.protocol, its claim in MACs: a credit w Pearl+'s compiled check published on the blobs sent, Verity.PearlPlusCredits, with (1 - w.rho)(1 - w.epsilon) w.macs at most the MACs the play computed, Vocab.macs) and the inference-only policy (InferenceOnlyCheck.Protocol.protocol, InferenceOnly.Complies); it takes exactly the three targets at remote, Verity.Vocab.SampledProofsSound .remote, PouwSound .remote and InferenceOnlySound .remote, as hypotheses until each is proved",
    "Properties.Site.refuses_honest": "completeness: Refuses's honest lemma: the code accepts honestEntry, a site with one host and its uplink, against the empty Site at the genesis, and so does the spec, each decided by the code's check, so Refuses holds at a concrete log",
    "Properties.Site.refuses_nontrivial": "lemma: Refuses's nontrivial lemma: an entry check that accepts everything refuses staleEntry, which follows no head, with no refusal, and the spec refuses it, so Refuses says something of the code's check",
    "Properties.Site.entryValid_honest": "completeness: EntryValid's honest lemma: the code accepts honestEntry against the empty Site at the genesis, and it is valid there, each decided by the code's check, so EntryValid holds at a concrete log",
@@ -6427,7 +6427,7 @@
    "Properties.Composition.acceptSame_nontrivial": "lemma: AcceptSame's nontrivial lemma: SameAccepted fails at parameters that name a component the composition doesn't have, which a verifier that accepts everything accepts",
    "Properties.Composition.acceptTied_honest": "completeness: AcceptTied's honest lemma: holdTies accepts an accepted outcome whose ties hold",
    "Properties.Composition.acceptTied_nontrivial": "lemma: AcceptTied's nontrivial lemma: TiedAccepted fails at an outcome that rejected, which a verifier that accepts everything accepts",
-   "NciCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": "lemma: ProtocolAccepts's nontrivial lemma: the check of record gives no verdict at a case whose α is no fraction, which a verifier that accepts everything accepts",
+   "InferenceOnlyCheck.Properties.SecurityProofs.ProtocolAccepts_nontrivial": "lemma: ProtocolAccepts's nontrivial lemma: the check of record gives no verdict at a case whose α is no fraction, which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptInferenceOnly_nontrivial": "lemma: AcceptInferenceOnly's nontrivial lemma: InferenceOnlyHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Properties.Remote.SecurityProofs.acceptComplies_nontrivial": "lemma: AcceptComplies' nontrivial lemma: CompliesHeld fails at no cases, ev = [], which a verifier that accepts everything accepts",
    "Accounting.SecurityProofs.Bridge.CheckProofSystemSound_honest": "completeness: the honest lemma of CheckProofSystemSound: at H1's honest live-salt period of one window and one session (the instance its proof takes) the deployed check accepts every window on every path and the check layer is sound at 0, so its premise can hold where the check accepts",
@@ -6444,7 +6444,7 @@
    "Pous.Period.SecurityProofs.periodHeldSha512": "frozen (premise): periodHeldCoins at the deployed memory challenger's streams (Pous.Period.challengerStreams: derive and stream, SHA-512 keyed by its 64-byte secret source), over the source and the hm96 coins, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests, the coin key and the streams' 105 · 64 blocks, to periodHeld's premises, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldCoinsAt": "frozen (premise): periodHeldAt in the shared coin game, as periodHeldCoins is periodHeld's, at every point and block count N from 2^19 to 2^27; it takes periodHeldAt's premises (Pous.Guarantees.RoundsBound at 105 rounds, the open conjecture P2RingRoundSecureWide, Pous.Period.RingDeviceAt and Pous.Period.Fits) and Pous.Period.ReadsNoPrimitive, none of them under shape.premises.",
    "Pous.Period.SecurityProofs.periodHeldSha512At": "frozen (premise): periodHeldCoinsAt at the deployed memory challenger's streams at N blocks, at bound δ + ε_max + ε(t, 1) + ε(t, 6720); it adds Hash.Assumptions.Sha512Prf (prf/sha-512, ASK-184) at the derivation's two tests to periodHeldAt's premises, none of them under shape.premises.",
-   "NciCheck.Properties.DescCountsCK": "unstated: an accepted count of (c, k)-inference blocks (NciCheck.Count.evaluate) means the Boolean declaration the Program lowers to by the gate table complies with Nci.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and NciCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
+   "InferenceOnlyCheck.Properties.DescCountsCK": "unstated: an accepted count of (c, k)-inference blocks (InferenceOnlyCheck.Count.evaluate) means the Boolean declaration the Program lowers to by the gate table complies with InferenceOnly.CompliesAtMost c k n; not yet proved: its proof needs Verity.Partition.IsCK to bound a proof block's gates by c rather than ask for exactly c, which the count's blocks of fewer gates don't meet, and InferenceOnlyCheck.Desc's summaries to cover the parameter leaves a Definition's gates read",
    "Properties.Pouw.Lead.Commit.LeafFirstBlock": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.leafFirstBlock; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
    "Properties.Pouw.Lead.Commit.RoundsOpenAfterRoots": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.roundsOpenAfterRoots; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)",
    "Properties.Pouw.Lead.Commit.RowBound": "unstated: the retired PoUW lead's (verity/pouw/v2), proved by Pouw.SecurityProofs.Lead.Commit.rowBound; that guarantee is unlisted and the lead gets no new Lean (TOP-211; Daniel on CMP-320, 4 Nov)"

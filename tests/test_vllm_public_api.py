@@ -42,7 +42,7 @@ PUBLIC = {
     "verity_vllm.engine.spec": "I1: engine spec documents",
     "verity_vllm.engine.handle": "I2: a built engine's vLLM objects",
     "verity_vllm.engine.served_seed": "I1: the served engine's public default seed, which a served registration fixes",
-    "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by NciCheck.Count's "
+    "verity_vllm.program.predict.block_counts": "I7: a window circuit record's (c, k)-inference blocks by InferenceOnlyCheck.Count's "
                                                 "rule: its session Definition, gates by the gate table, fresh bits at the "
                                                 "verifier's pins, and a day's public judgment against n, no count (block-counts)",
     "verity_vllm.program.predict.naming": "I7: a request Program's Build with the names I2's compile gives it, the verifier's "
