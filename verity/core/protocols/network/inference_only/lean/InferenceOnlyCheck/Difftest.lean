@@ -4,7 +4,7 @@ public import InferenceOnlyCheck.Check
 public import Lean.Data.Json.Parser
 
 /-!
-# The difftest: the NCI check against the Python reference, on random declarations
+# The difftest: the inference-only check against the Python reference, on random declarations
 
 `scripts/difftest_vectors.py` generates instances (declarations as descriptor v1 Programs with θ, divisions, `Γ` and
 `α`) and runs the Python reference on them (`scripts/inference_only_reference.py`). `InferenceOnlyCheck/DifftestMain.lean` reads both files
