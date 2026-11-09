@@ -40,8 +40,7 @@ import Proofs.Flock.Claims.Bits
 import Proofs.Flock.Claims.Bridge.Transport
 import Proofs.Flock.Claims.ERepCost
 import Proofs.Flock.Claims.Finder
-import Proofs.Flock.Soundness.Game.Expect
-import Proofs.Flock.Soundness.Game.Seq
+import Proofs.Flock.Soundness.Game
 import Std.Tactic.BVDecide.Normalize.BitVec
 
 /-!

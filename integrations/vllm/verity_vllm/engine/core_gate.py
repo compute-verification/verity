@@ -86,7 +86,8 @@ class HeldEdge(Edge, Protocol):
 
     def ready(self, core: Any, /) -> bool:
         """Whether the due edge may be taken. Asked on each pass of the input loop once nothing is in flight, and before
-        its `take`. Once true, it stays true until the edge is taken."""
+        its `take`. Once true, it stays true until the edge is taken. No step runs while it is false, so it turns true at a
+        deadline the edge keeps (a longest hold after the drain) even when what it waits for never comes."""
 
 
 @dataclass(eq=False)
