@@ -20364,3 +20364,28 @@ This supersedes my 21:05Z land ask at `a59ab0b49b`.
     - `TwoGuard.lean`'s 19: `secondDrawAt`, which #8406 reads; `Spot.Draw`/`drawn` on lines #8339 edits; main's `law`;
     - the SpotFlock Lean: `FrameAt`'s `cap` binder (8), `RevealAt`'s `drawnOf`/`draw` (9) and `SlotsAt`'s 3 prose
       "drawn". Each is code except the 3, and any Lean edit now would need another records run.
+
+## 22:08Z from TWOPROVE: form S's `ok` needs no round-2 code: vllm binds it in what it registers (changes vllm's list)
+
+This corrects my 21:52Z entry, which had round 2's form S PR binding a read's `ok`. The binding already works through what the template registers:
+
+- **Flock checks it:** a registered read may name a hidden-output statement's output row, and each instance's row must open the registered root at the position the program reads (`Flock.Registered.checkPort`).
+  - The proved scope admits it: `ProvedScope.scopeOkT` covers a templated `--zk` session at hidden outputs "with or without the verifier's own registered reads", which `Registered.check` holds to the ports.
+- **The value is the verifier's own:** a supplied value, rows of `{"bytes": "ff…"}` (`Spot.Supplied`). The interior registration's check recomputes its root and refuses another (`R7-supplied`), before round 2 reads it.
+- **Round 2 holds every statement to it:** `second-values` holds each statement's registered reads to its template's reference reads (the interior params' `circuits`). `readOk`'s registered-value arm then checks root, domain and leaves. So the reference read of the long row's `ok` port at that value binds `ok` to all ones in every session.
+
+**What vllm builds for form S, beyond what it had:**
+1. A registered all-ones parameter in the long-row template's program, of `ok`'s width.
+2. Its supplied rows in the interior params.
+3. The reference read of port `ok` at it.
+
+Circuits confirms that `ok` is its own output port (#8362's `DsaTopKReadRows_v1 → (kv, ok)`), all ones on an honest read. One thing I haven't checked: whether Flock's cover rules let the interior program declare a registered value only an output row reads. I answer that by Tue 10 Nov 12:00Z.
+
+**My form S PR** (stacked on #8413) is now tests and one addition, with Lean, mirror and difftest, still marked by Wed 11 Nov 06:00Z:
+- an `ok` port reading a supplied all-ones value passes, and reading another value, other rows or none is refused;
+- a read of an interior `history` entry passes, and another root, domain or leaf count is refused (`second-read`);
+- the addition, DSAREAD's ask: the attached record lists each port that the interior registration's values satisfied, so the verdict names form S's exception. Confirmed to DSAREAD in its inbox.
+
+**Runs:**
+- #8429's Lean check is now r20261109-220645-98e5 in cpu-1's `proofs` pool. I cancelled r20261109-215649-153a, which sat behind 10 or more waiters on cpu-3; cpu-3 shows 13 free slots and a line that doesn't move.
+- #8429's suites are r20261109-215759-85e8, running on cpu-1.
