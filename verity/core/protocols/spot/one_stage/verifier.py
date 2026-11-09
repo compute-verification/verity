@@ -395,11 +395,12 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
         held: Sequence[str] | None = None, coins: Mapping[str, Any] | None = None,
         value_outputs: Mapping[str, Mapping[str, str]] | None = None,
         interior: Mapping[str, Any] | None = None, seed_salt: str | None = None,
-        pool: Mapping[str, Any] | None = None) -> Verdict:
+        pool: Mapping[str, Any] | None = None, history: Mapping[str, Any] | None = None) -> Verdict:
     """The stream's run of one registration, from its public check through its verdict, by the Lean (`Run.run`), held whole to
     `python`, the stream's own (`{"receipt", "draw", "read", "symbol", "public", "audit"}`, the audit record without its
     `verifiers`): on `check`'s copies (``value_outputs`` its `outputs`, the registered values an earlier record of the
-    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool), `check_public`'s values and declared items, the receipt's challenger and place in
+    log registered first, ``seed_salt`` its window's seed salt, ``pool`` its pool, ``history`` its history tables),
+    `check_public`'s values and declared items, the receipt's challenger and place in
     the log, `select`'s rule, the bytes of the coins the sample read and the closure map, and `audit_record`'s arguments
     with the sessions' roots whole. The verifier has no coins of its own: for a sample that read coins the Lean also checks
     `coins`, their evidence (`coins.coins_reason`'s), that the bytes the sample read are the coins the session the ledger
@@ -408,8 +409,8 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     or the Lean refuses a step, the verdict fails with `DISAGREE` alone.
 
     Under a two-stage design `interior` is the interior registration and the second stage (`Run.Interior`): its
-    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, and its window's `seed_salt`
-    when it has one), one replay block's Program
+    `program`, `query`, `law` and `copies` (as `check` takes them, the binding `binding`, its window's `seed_salt`
+    when it has one, and its `history` tables when it has any), one replay block's Program
     (`replay`), its `values`, `record` and `received`, the bytes the second stage read (`read`) and their evidence
     (`coins`), its `proved_units`, `instances`, `served` and `session_roots`, the second-stage sessions' `statements`,
     and `proofs`, the auditor's params naming each template's circuit file and reference header
@@ -420,7 +421,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
     exact = str(Fraction(delta)) if isinstance(delta, (int, float)) and math.isfinite(delta) else delta
     args = {"params": _params(program, query, law, scheme, ports, leaf_layer, anchors, log, None, work_table,
                               registered, supplied, pinned, binding, schemas, window_root, held, value_outputs,
-                              seed_salt=seed_salt, pool=pool),
+                              seed_salt=seed_salt, pool=pool, history=history),
             "record": dict(rec), "rule": dict(rule), "values": [{"name": n, "registered": r} for n, r in values],
             "public": list(declared), "challenger": challenger, "received": received, "source": read.hex(),
             "closure": None if closure is None else [[u, list(cs)] for u, cs in closure.items()],
@@ -436,7 +437,7 @@ def run(python: Mapping[str, Any], rec: Mapping[str, Any], program: Program, que
             it["copies"]
         i_params = _params(it["program"], it["query"], it["law"], scheme, i_ports, i_leaf, i_anchors, i_log, None, None,
                            i_registered, i_supplied, i_pinned, binding, i_schemas, i_window, i_held, i_outputs,
-                           seed_salt=it.get("seed_salt"))
+                           seed_salt=it.get("seed_salt"), history=it.get("history"))
         if it.get("proofs") is not None:
             i_params["proofs"] = it["proofs"]
         args["interior"] = {

@@ -919,6 +919,32 @@ def test_a_history_source_is_the_root_the_verifier_computes():
         assert got.verifiers["lean"].keys() == {"refused"} and got.verifiers["python"].keys() == {"refused"}
 
 
+def test_the_run_of_record_takes_each_registrations_history_tables(monkeypatch):
+    """`run` hands the Lean's run (`Run.run`) the history tables of each registration it parses, the boundary's and,
+    under a two-stage design, the interior's, as the parameters `check` hands the Lean's registration, so a reader's
+    `{"history": ...}` source resolves in the run as it does at registration."""
+    hist, leaf, root = _history()
+    rec, check, _, _ = _seeded_case(x_root=root, leaf_layer=leaf)
+    other = {**hist, "registered": {"k_hist": "11" * 64}}
+    seen = []
+    monkeypatch.setattr(V, "lean", lambda piece, args: seen.append((piece, args)) or {"refused": "the spy's"})
+    p, q, law, ports = check["program"], check["query"], check["law"], check["ports"]
+    interior = {"program": p, "query": q, "law": law, "copies": (ports, leaf, (), [], None, None, None, None, None, None,
+                                                                 None),
+                "history": other, "replay": p, "values": [], "record": rec, "received": "r", "read": b"", "coins": None,
+                "proved_units": None, "instances": None, "served": None, "session_roots": None}
+    for it, want in ((None, None), (interior, other)):
+        got = V.run({}, rec, p, q, law, check["scheme"], ports, leaf, (), [], None, None, {}, [], [], "c", "r", b"", None,
+                    [], {}, [], {}, 0.5, history=hist, interior=it)
+        assert not got.ok and got.codes == (V.DISAGREE,)
+        [(piece, args)] = seen
+        seen.clear()
+        assert piece == "run" and args["params"]["history"] == hist
+        params = V._params(p, q, law, check["scheme"], ports, leaf, (), [], None, None, None, history=hist)
+        assert args["params"] == params
+        assert (args.get("interior") or {}).get("params", {}).get("history") == want
+
+
 def test_a_supplied_value_is_the_records_own_not_the_logs():
     """R7-held is for a value committed once: a supplied value moves with the record's roots, so a later record whose x
     root moved registers another `pouw.roots`, held to the root it fills from its own record."""
