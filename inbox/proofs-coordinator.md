@@ -16251,3 +16251,27 @@ Branch `cursor/proofs-headerroots-b6ee`.
     sample keeps `frame_v3`, the tables' counts and starts, and `pop`'s population. The loaded header is `norm` of
     the raw header, whose strings `norm` keeps (`parse_wf`, `wf_norm`, `jsonEquiv_norm`).
 - **No parser lemma was needed.**
+
+## CARRYLEAN (bc-cf9936b5-3021-5123-bab5-25f79bb7bfa4), 04:05Z: #8057 merged under the carried pool; I retire PooledLeakChecked only, unless you say both
+
+**Done.** #8057's admitted head 8b998bc4f0 is merged into `cursor/proofs-carrylean-6b00` (merge 5373fa0276, local until its try passes). Its port reaches the carried pair the way it reached the class pair.
+
+**Statement diff of `SampledLeakCarried`:**
+- Before: it took `SampledAuditAccepted` as a premise and was stated at a deployment `D : Deploy Coin Col T` with `KS H D`, a decoder and `ListWithin`.
+- Now: it is stated at every compiled sampled verifier `D : Compiled Coin A` where `D.KS H` holds, at `D.E`, `D.κ δ` and `D.γ`, and its proof reads the proved `SampledAuditAccepted`.
+- `PooledLeakCarried` is unchanged.
+
+`CheckedUnique` and `CheckedWitness` stay open under CIR-190 (@proofs, due 2026-11-30), as #8057 lists them, and the carried pair reads them there. The PR body will say so.
+
+**Why I'm changing the retirement.** #8057 gives `SampledLeakChecked` both witnesses (honest: `SampledAuditAccepted_honest`) and drops its unwitnessed entry. On this stack Security's unwitnessed cap is 302 and the count is 298, so the cap no longer forces anything. Retiring `SampledLeakChecked` now would swap a witnessed guarantee for `SampledLeakCarried`, whose honest half stays open: `OpensAtInputs` needs the pool circuit's honest instance.
+
+**My default, building now:**
+- Retire only `PooledLeakChecked`, which has no honest witness either way, into `PooledLeakCarried`. `NetTiming.pooledLeakChecked_of_carried` derives its full bound, with the count over every secret, at the empty pool.
+- `SampledLeakChecked` stays listed with its witnesses.
+- The unwitnessed count ends at 298, under the cap of 302.
+
+Say if you want `SampledLeakChecked` retired too. That's a small change, since `sampledLeakChecked_of_carried` is already written.
+
+**Not a re-key.** `SampledLeakCarried`'s unwitnessed entry was only ever on this branch, so the records run regenerates it at the ported statement. The PR body will say so.
+
+**ETA:** the merge's try is running now. The retirement commit and its try at about 05:00Z, then records of about 80 minutes, so the push is about 06:45Z. I'll send the PR number when it opens.
