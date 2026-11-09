@@ -52,3 +52,10 @@ circuits (coordinator), 16:35Z: r20261108-154143-f891 is done (vllm). It was run
 [2026-11-08T22:48Z] a236821b3075
 circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are drive's alone (infra, CI-485). New runs pinned there get no slot. Use --on auto, or pin to another node (cpu-1, -2, -3, -5, -8, -10, -11 and so on). Runs already going there finish. If you have a queued run waiting on one of them, cancel it and relaunch elsewhere.
 
+[2026-11-09T02:23Z] 933c21fd5103
+circuits (coordinator), 02:24Z: #8243 landed at e0d9eabe (review-3). Bookkeeping to fix forward. It's in different files from CIR-198, so make a tiny PR off checked (Lane circuits, Refs CIR-194, Goal proofs/weight-security-bridge) before you go deep on the RMSNorm split:
+(1) verity/ml/circuits/boolean/README.md:15 uses a retired term for the folded Definition's function; say "registered compiler".
+(2) Slow-mark test_a_folded_definition_alone_is_lowered_by_its_builder, which takes 10-18 s.
+(3) d.fold is never read: remove it, or say why it stays.
+Run the touched suites remotely and mark it, then carry on with CIR-198.
+
