@@ -10,7 +10,10 @@ overlap). Two kinds of plugin act there:
   gate has requests pending. At shutdown every gate is opened. With one gate the loop makes the calls
   `verity_vllm.pipeline.tick_plugin`'s does.
 - an `Edge` acts between two steps: once it is due, each step drains the oldest batch in flight and schedules nothing, and
-  once none is in flight every due edge is taken, in `EDGES` order, before the engine core schedules again.
+  once none is in flight every due edge is taken, in `EDGES` order, before the engine core schedules again. A `HeldEdge`
+  also waits, once none is in flight, until it is ready: meanwhile the input loop holds as it does for a gate, handling
+  client requests and waiting on the input queue at most its ``poll_s``, and a step reached meanwhile (at shutdown)
+  schedules nothing. At shutdown the input loop returns without taking it.
 
 A plugin (a ``vllm.general_plugins`` entry point, whose ``register`` vLLM runs at the top of ``EngineCore.__init__``)
 adds each by name to `SEAM`, this process's seam, with a function that makes it for an engine core, or returns None where
@@ -31,7 +34,7 @@ from typing import Any, Protocol
 
 from verity_vllm.engine.hooks import Hooks, patched
 
-__all__ = ["EDGES", "GATES", "SEAM", "Drained", "Edge", "EngineCoreGate", "Gate"]
+__all__ = ["EDGES", "GATES", "SEAM", "Drained", "Edge", "EngineCoreGate", "Gate", "HeldEdge"]
 
 #: the gates' names, in the order each pass of the input loop asks them
 GATES = ("tick", "release")
@@ -75,11 +78,24 @@ class Edge(Protocol):
         """Act on the drained engine core. It schedules again once every due edge's `take` has returned."""
 
 
+class HeldEdge(Edge, Protocol):
+    """An `Edge` that, once nothing is in flight, waits until it is ready, while the input loop keeps handling client
+    requests."""
+
+    poll_s: float
+
+    def ready(self, core: Any, /) -> bool:
+        """Whether the due edge may be taken. Asked on each pass of the input loop once nothing is in flight, and before
+        its `take`. Once true, it stays true until the edge is taken."""
+
+
 @dataclass(eq=False)
 class _Core:
     gates: tuple[Gate, ...]
     edges: tuple[Edge, ...]
+    held: tuple[HeldEdge, ...]
     since: float | None = None
+    drained_t: float | None = None
     calls: int = 0
 
 
@@ -141,15 +157,37 @@ class EngineCoreGate:
         st = self._cores.get(core)
         if st is None:
             made = {n: self._makers[n](core) for n in GATES + EDGES if n in self._makers}
-            st = _Core(tuple(made[n] for n in GATES if made.get(n) is not None),
-                       tuple(made[n] for n in EDGES if made.get(n) is not None))
+            edges = tuple(made[n] for n in EDGES if made.get(n) is not None)
+            st = _Core(tuple(made[n] for n in GATES if made.get(n) is not None), edges,
+                       tuple(e for e in edges if hasattr(e, "ready")))
             self._cores[core] = st
         return st
 
+    def _due(self, core: Any, st: _Core) -> list[Edge]:
+        due = [e for e in st.edges if e.due(core)]
+        if due and st.since is None:
+            st.since, st.calls = self.clock(), 0
+        return due
+
+    def _drained(self, core: Any, st: _Core) -> bool:
+        if core.batch_queue:
+            return False
+        if st.drained_t is None:
+            st.drained_t = self.clock()
+        return True
+
+    def _waiting(self, core: Any, st: _Core, due: list[Edge]) -> list[HeldEdge]:
+        """The due held edges that aren't ready, once nothing is in flight."""
+        held = [e for e in st.held if any(e is d for d in due)]
+        if not held or not self._drained(core, st):
+            return []
+        return [e for e in held if not e.ready(core)]
+
     def _input(self, orig: Callable[[Any], None]) -> Callable[[Any], None]:
         def _process_input_queue(core: Any) -> None:
-            gates = self._state(core).gates
-            if not gates:
+            st = self._state(core)
+            gates = st.gates
+            if not gates and not st.held:
                 return orig(core)
             while True:
                 while not core.input_queue.empty():
@@ -158,7 +196,9 @@ class EngineCoreGate:
                     for g in gates:
                         g.open("the engine core is shutting down")
                     return
-                waiting = [g for g in gates if not g.ready(core.scheduler)]
+                waiting: list[Gate | HeldEdge] = [g for g in gates if not g.ready(core.scheduler)]
+                if st.held:
+                    waiting += self._waiting(core, st, self._due(core, st))
                 if not waiting and core.has_work():
                     return
                 if not waiting:
@@ -181,17 +221,15 @@ class EngineCoreGate:
     def _step(self, orig: Callable[[Any], Any]) -> Callable[[Any], Any]:
         def step(core: Any) -> Any:
             st = self._state(core)
-            due = [e for e in st.edges if e.due(core)]
+            due = self._due(core, st)
             if not due:
                 return orig(core)
-            if st.since is None:
-                st.since, st.calls = self.clock(), 0
-            if core.batch_queue:
-                st.calls += 1
+            if not self._drained(core, st) or self._waiting(core, st, due):
+                st.calls += bool(core.batch_queue)
                 with patched(core.scheduler, "has_requests", lambda: False):
                     return orig(core)
-            drained = Drained(st.since, self.clock(), st.calls)
-            st.since = None
+            drained = Drained(st.since, st.drained_t, st.calls)
+            st.since = st.drained_t = None
             for e in due:
                 e.take(core, drained)
             return orig(core)
