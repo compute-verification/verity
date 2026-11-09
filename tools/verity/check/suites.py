@@ -408,6 +408,28 @@ def foreign(pkgs: dict[str, str], env: dict[str, str], python: str = sys.executa
     return ", ".join(f"{n} from {o}" for n, o in sorted(away.items())) or None
 
 
+#: installs the workspace into the tree's own environment: `uv run` of this script installs only the runner's dependencies
+SYNC = ("uv", "sync", "-q", "--all-packages", "--extra", "torch-cpu")
+
+
+def fresh(env: dict[str, str]) -> bool:
+    """Whether this Python is the tree's own environment and, under ``env`` as `foreign` probes it (a launcher's shims on the
+    PYTHONPATH don't count), imports neither the root's packages nor torch, as `uv run` of this script leaves a freshly shipped
+    tree, so `SYNC` replaces nothing anyone chose there (a GPU environment's torch)."""
+    if Path(sys.prefix).resolve() != (ROOT / ".venv").resolve() or shutil.which("uv") is None:
+        return False
+    names = [Path(p).name for p in shipped(".")] + ["torch"]
+    r = subprocess.run([sys.executable, "-P", "-c", _ORIGINS, *names], env=env, capture_output=True, text=True)
+    return r.returncode == 0 and not any(json.loads(r.stdout.splitlines()[-1]).values())
+
+
+def resync(argv: list[str]) -> None:
+    """Install the workspace into this environment (`SYNC`) and run ``argv`` again, marked ``--synced`` so it never syncs twice."""
+    print(f"suites: {sys.prefix} holds none of the workspace yet: `{' '.join(SYNC)}`", file=sys.stderr)
+    if subprocess.run(SYNC, cwd=ROOT).returncode == 0:
+        os.execv(sys.executable, [sys.executable, argv[0], "--synced", *argv[1:]])
+
+
 def metadata() -> list[str]:
     """The workspace's metadata: every pyproject.toml, and the lockfile. A suite's key holds what it resolves to (`resolved`);
     the tests may read the files themselves, which the guard records."""
@@ -2273,7 +2295,7 @@ def main(argv: list[str] | None = None) -> int:
     # a manual stop (`research cancel`) sends SIGTERM to the run's process group, which the suites' own groups aren't in: as
     # SIGINT, it stops them and removes their `--basetemp`s (a cancelled check's can hold tens of GB)
     signal.signal(signal.SIGTERM, _first_sigterm_stops)
-    argv = sys.argv[1:] if argv is None else argv
+    script, argv = argv is None, sys.argv[1:] if argv is None else argv
     extra = argv[argv.index("--") + 1:] if "--" in argv else []
     argv = argv[:argv.index("--")] if "--" in argv else argv
     ap = argparse.ArgumentParser(prog="suites", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -2281,6 +2303,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--quick", action="store_true", help="deselect the tests marked slow")
     ap.add_argument("--changed", metavar="REV", help="of those, only the suites the change from REV to the tree touches (`touched`)")
     ap.add_argument("--fresh", action="store_true", help="run even where a pass is cached")
+    ap.add_argument("--synced", action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--timeouts", action="store_true",
                     help=f"kill a suite's process group once it has run its [tool.verity.tests] timeout_s (default {SUITE_TIMEOUT_S:.0f}) "
                          "and fail it as timed out (`check` passes this)")
@@ -2332,9 +2355,12 @@ def main(argv: list[str] | None = None) -> int:
     store_custody()
 
     pkgs, suites = members(), discover()
-    if not (a.list or a.explain) and (away := foreign(pkgs, dict(os.environ, PYTHONPATH=tests_pythonpath()))):
+    probing = dict(os.environ, PYTHONPATH=tests_pythonpath())
+    if not (a.list or a.explain) and (away := foreign(pkgs, probing)):
+        if script and not a.synced and fresh(probing):
+            resync(sys.argv)
         print(f"suites: {sys.executable} would run this tree's tests against another checkout's code ({away}); run them with "
-              f"{ROOT}'s own environment: `uv run tools/verity/check/suites.py` there", file=sys.stderr)
+              f"{ROOT}'s own environment: `{' '.join(SYNC)} && uv run tools/verity/check/suites.py` there", file=sys.stderr)
         return 2
     skipped = select(suites, a.skip) if a.skip else []
     chosen = [s for s in select(suites, [a.explain] if a.explain else a.suites) if s not in skipped]
