@@ -16,7 +16,8 @@
 #          session
 #   peak   for each build (base and new) and each of PEAK_UNITS (default moe-w13's and gq's statements, `;` between them) at full,
 #          each staged once per KW (gq's stage takes about 50 min): a prover_is_deterministic selftest under M1 and under M0, and
-#          one M1 dev session, with the GPU's processes sampled every 100 ms; the largest process's device peak in MiB
+#          one M1 dev session, each under nsys with its allocations traced (device_peak.py: the peak of live device allocations and
+#          what was live then) and the GPU's processes sampled every 100 ms by nvidia-smi (which also counts the CUDA context)
 #   ab     ROUNDS rounds, order rotating, of one warm process (warm 1 + 3 M1 dev sessions) per build, base and new
 set -uo pipefail
 D=${RESEARCH_RUN_DIR:?run under research run}; O=$D/out; mkdir -p $O
@@ -152,16 +153,27 @@ if has session; then
   else log "no trace of $AS under $W/traces"; fail=1; fi
 fi
 if has peak; then
-  peak_run() {  # peak_run NAME CMD...: CMD with the GPU's processes sampled every 100 ms; logs the largest one's peak MiB
+  [ -x $NSYS ] || { log "no nsys at $NSYS"; exit 1; }
+  peak_run() {  # peak_run NAME CMD...: CMD (whose nsys report is $S/pk-NAME) with the GPU's processes sampled every 100 ms
     local name=$1; shift
     nvidia-smi --query-compute-apps=pid,used_memory --format=csv,noheader,nounits -lms 100 > $O/peak-$name.apps 2> /dev/null &
     local sp=$!
     "$@"; local rc=$?
     kill $sp 2> /dev/null; wait $sp 2> /dev/null
     local mib; mib=$(awk -F', *' '$2 ~ /^[0-9]+$/ && $2 + 0 > m {m = $2 + 0} END {print m + 0}' $O/peak-$name.apps)
-    log "peak $name rc=$rc device peak $mib MiB"
-    echo "{\"case\": \"$name\", \"rc\": $rc, \"peak_mib\": $mib}" >> $O/peak.jsonl
+    local traced=null
+    if [ -s $S/pk-$name.nsys-rep ]; then
+      $NSYS export --type sqlite --force-overwrite true -o $S/pk-$name.sqlite $S/pk-$name.nsys-rep > /dev/null 2>&1
+      $PY benchmarks/one_stage/device_peak.py $S/pk-$name.sqlite --json $O/peak-$name.json > $O/peak-$name.txt 2>&1
+      sed "s/^/peak $name /" $O/peak-$name.txt | tee -a $O/job.log
+      traced=$($PY -c 'import json, sys; p = json.load(open(sys.argv[1]))["processes"]; print(p[0]["peak_mib"] if p else "null")' \
+        $O/peak-$name.json 2> /dev/null || echo null)
+      rm -f $S/pk-$name.nsys-rep $S/pk-$name.sqlite
+    fi
+    log "peak $name rc=$rc traced $traced MiB allocated, nvidia-smi $mib MiB"
+    echo "{\"case\": \"$name\", \"rc\": $rc, \"traced_mib\": $traced, \"smi_mib\": $mib}" >> $O/peak.jsonl
   }
+  PK="$NSYS profile -t cuda --cuda-memory-usage=true --sample=none --cpuctxsw=none --force-overwrite true"
   IFS=';' read -ra PU <<< "$PEAK_UNITS"
   for U in "${PU[@]}"; do
     ZU=$W/zk-$(echo "$U" | tr -c "a-zA-Z0-9\n" -); tag=$(echo "$U" | cut -d: -f1)
@@ -177,12 +189,15 @@ print(d, p[d]["inst"], p[d]["stage_dir"] + "/circuit.txt")' $ZU/plan.json)
     for v in base new; do
       read -r VB VSB < $W/$v.env || { log "peak: no $v build"; fail=1; continue; }
       fits 20 "peak $v $tag" || continue
-      peak_run $v-$tag-m1-selftest $VSB selftest --zk --gpu --only prover_is_deterministic --instances $UI --circuit $UC \
-        > $O/peak-$v-$tag-m1.txt 2>&1
-      peak_run $v-$tag-m0-selftest $VSB selftest --gpu --only prover_is_deterministic --instances $UI --circuit $UC \
-        > $O/peak-$v-$tag-m0.txt 2>&1
+      for m in m1 m0; do
+        n=$v-$tag-$m-selftest
+        peak_run $n $PK -o $S/pk-$n $VSB selftest $([ $m = m1 ] && echo --zk) --gpu --only prover_is_deterministic --instances $UI \
+          --circuit $UC > $O/peak-$v-$tag-$m.txt 2>&1
+      done
+      n=$v-$tag-m1-dev
+      printf '#!/bin/bash\n[ "$1" = prove ] && exec %s -o %s %s "$@"\nexec %s "$@"\n' "$PK" "$S/pk-$n" "$VB" "$VB" > $S/pk-wrap; chmod +x $S/pk-wrap
       z=$S/peak-$v-$tag; rm -rf $z; mkdir -p $z/records; cp $ZU/plan.json $z/; cp $ZU/records/stage.jsonl $z/records/ 2>/dev/null
-      peak_run $v-$tag-m1-dev timeout -k 20 1800 $PY benchmarks/one_stage/zk_cost.py prove --bin $VB --out $z --points $UP --arms dev \
+      peak_run $n timeout -k 20 1800 $PY benchmarks/one_stage/zk_cost.py prove --bin $S/pk-wrap --out $z --points $UP --arms dev \
         --cold 0 --warm 1 --runs 1 > $O/peak-$v-$tag-dev.txt 2>&1
       grep ZKCOST $O/peak-$v-$tag-dev.txt | cut -c1-300 | sed "s/^/peak-$v-$tag /" | tee -a $O/job.log
     done
