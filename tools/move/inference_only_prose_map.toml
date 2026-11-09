@@ -6,15 +6,18 @@
 # renames no declaration and leaves every lock and pin as it is. Under that scope a word in capitals alone is a constant's
 # name and stays, so each row is a phrase: "NCI's" is "the inference-only policy's", "the NCI check" is "the inference-only
 # check", and a heading or a sentence that opens with the name opens with "The".
-# What it leaves, each for a hand edit: NCI in a data file's comment (a lakefile, a pyproject, `public_boundary.toml`), in
-# a string (a figure's title, an error's text, a lock's reasons) and in a cited draft's title ([keep]); `benchmarks/nci`'s own
-# prose, which follows its directory's name; and the sentence of the check's README that says the older names stay
-# ([rewrite] exclude holds that file).
+# What it leaves, each for a hand edit: NCI in a data file's comment (a lakefile, a pyproject, `public_boundary.toml`) and
+# in a string (a figure's title, an error's text, a lock's reasons); NCI and "novel communication intensity" for the
+# quantity, a block's fresh input bits per gate, which is no policy; `benchmarks/nci`'s own prose, which follows its
+# directory's name; and the sentence of the check's README that says the older names stay, which names them in quotes.
 scope = "prose"
 
 [words]
 # --- a heading or a sentence that opens with the name
+"# NCI's policy" = "# The inference-only policy"
 "# NCI's" = "# The inference-only policy's"
+"**NCI's policy" = "**The inference-only policy"
+"**NCI's" = "**The inference-only policy's"
 "# NCI over" = "# The inference-only policy over"
 "# NCI in reads form" = "# The inference-only policy in reads form"
 "# NCI from the bits" = "# The inference-only policy from the bits"
@@ -37,21 +40,17 @@ scope = "prose"
 "NCI and the accounting" = "the inference-only policy and the accounting"
 "dampener (NCI," = "dampener (the inference-only policy,"
 "NCI's" = "the inference-only policy's"
-"novel communication intensity" = "the inference-only policy"
 
 [rewrite]
 # Never rewritten: the term source and the lints and tables that spell the old words on purpose, records of what was
 # (the earlier moves and their maps, changelogs, the rulings), the move tools' own tests, the frozen backends, replicated
-# fixtures, files whose bytes a digest pins and lock files; `benchmarks/nci`, whose prose follows its name; and the
-# check's README, whose sentence on the older names is a hand edit.
+# fixtures, files whose bytes a digest pins and lock files; and `benchmarks/nci`, whose prose follows its name.
 exclude = ["GLOSSARY.md", "tests/lint/test_repo_retired_terms.py", "tests/test_retired_terms.py",
            "tools/research/tests/test_slack.py", "tools/move/**", "tools/verity/check/tests/test_move_check.py",
            "archive/**", ".agents/skills/friction/SKILL.md", "**/CHANGELOG.md", "fixtures/**", "**/fixtures/**",
-           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json", "benchmarks/nci/**",
-           "verity/core/protocols/network/*/README.md"]
+           "*.patch", "**/TRUSTED.sha256", "uv.lock", "**/*.lock", "**/lake-manifest.json", "benchmarks/nci/**"]
 
 [keep]
 patterns = ['[\w.-]+(?:/[\w.-]+)*/v\d+(?:\.\d+)*\b', 'note:[\w./-]+', 'art:[0-9a-f]+', 'cursor/[\w./-]+',
             'lanes/[\w.-]+']
-# A cited draft's title.
-strings = ["Distinguishing inference from frontier training via novel communication intensity"]
+strings = []
