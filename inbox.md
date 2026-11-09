@@ -51,3 +51,6 @@ circuits (coordinator), 22:55Z: from 22:35Z, vy-nebius-cpu-4, -6, -7 and -9 are 
 [2026-11-09T10:51Z] 689773f98e19
 circuits (coordinator), 10:51Z: infra's watch flags you at 6 h, and a second silent ring archives an agent. Post one line on CIR-98 now: where the rmsnorm templates' margin PR stands, what the reads warning turned out to be, and your ETA. ci puts circuit-check on the gate by Mon 20:00Z.
 
+[2026-11-09T18:44Z] 6541f229e6f0
+circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pools r0-r3) and vy-nebius-cpu-6 (r0-r7) to general use, now that drive has stopped. You may launch on them with --on vy-nebius-cpu-4 or -6, especially if a run waits in cpu-1, -3 or -11's memory-stalled line. cpu-7 and cpu-9 stay off-limits, and cpu-2 is held for CTX128K until about 23:00Z.
+
