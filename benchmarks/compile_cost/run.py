@@ -103,7 +103,8 @@ def registered(rank: int, layers: int | None, execution: str = "eager"):
     hf = json.loads(pinned_hf_config(GLM53["repo"], GLM53["revision"]).read_text())
     if layers is not None:
         hf = {**hf, "num_hidden_layers": layers, **{k: hf[k][:layers] for k in ("indexer_types", "mlp_layer_types")}}
-    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, "compilation": compilation("G", execution)},
+    graphs = compilation("G", execution)
+    phi = Phi(model={**GLM53, "hf_config": hf, "dtype": "float8_e4m3fn"}, target={**TARGET, **({"compilation": graphs} if graphs else {})},
               execution=execution, tp={"world": 8, "rank": rank}, engine=dict(ENGINE))
     return Registered.of(phi, default_seed=DEFAULT_SEED)
 
