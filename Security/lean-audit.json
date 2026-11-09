@@ -2020,7 +2020,7 @@
   },
   "Hash.RowLeaf.accepts": {
    "owner": "@kernels",
-   "digest": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220",
+   "digest": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
    "issue": "LEAN-186",
    "due": "2026-11-30"
   },
@@ -34623,15 +34623,17 @@
    }
   },
   "Definitions.Hash.RowLeaf": {
-   "digest": "c79990475195de912c91f9f853477c37bdc4a8c1d430d335c2abecdbd978052d",
+   "digest": "9ab56426de3fe2791f0e3d108311db0623bf921c2ecd41e1e915fe7e934d6647",
    "definitions": {
     "Hash.RowLeaf.Format": "0472c90a1d50acced878693c13e313afdaae2a4b9dbbd2da94f839c468a5b7db",
-    "Hash.RowLeaf.Format.casesOn": "8141a54d622f92d6417272ffd595ff544ff949fbfa08635c12929413d01becbd",
-    "Hash.RowLeaf.Format.digest": "65a9760d5312b7bdbd4ae35140bcc51c443fb2853474ad3f0b538ec28fbbf1fa",
-    "Hash.RowLeaf.Format.hashed": "b7b99a437352ca760e8c09cd48004e4e06946c22a738c33076ce2543390ef6fa",
-    "Hash.RowLeaf.Format.rec": "a86989681110fe016c7cd15c844338a25ca4bc324445cb19c461eab9ec003ce2",
-    "Hash.RowLeaf.Format.schema": "05f4cdf2a6d1d6aec475501a8fcbbe61ae364b90b021aaf1bb3c5a43c36b7f53",
+    "Hash.RowLeaf.Format.Fits": "ec5075e5e39b5bc08d80d8a5d3c765207cf70e264f4b9f2083123a9ec4367d03",
+    "Hash.RowLeaf.Format.casesOn": "b17f2c714ce95775f116ffefb821a3d9ddd5936539fdfcc4bfad50ae974b747d",
+    "Hash.RowLeaf.Format.digest": "50c593896716c35490e8e6813c28d5b4acd0189fb83866fb529b5d39077dbe47",
+    "Hash.RowLeaf.Format.hashed": "a08aa39fd3e1c2dc975c53d116b3edd178c5c5309199ed44599bd7232683edd5",
+    "Hash.RowLeaf.Format.rec": "3908b76222ed3292a1964bdf04bc076a4569ba88c874c889832f8714597094bb",
+    "Hash.RowLeaf.Format.schema": "daee49c5b9d6df86d2b12c8f8273ae9fbd3d1fb9d676b19eef72abc7cf2f0c45",
     "Hash.RowLeaf.Format.seg": "c1bb382b8bbae77a74eecc4b89a9ed6ff895ed83b131e4da8e930d041066d56c",
+    "Hash.RowLeaf.Format.v1": "347198699f1baeb17eb9c1b7536855a52d7d182105240021190893012a574741",
     "Hash.RowLeaf.Format.v2": "dc0d6378518d88053662a388757ec3bc4f309527dbf963f2f16fc599560f469e",
     "Hash.RowLeaf.Opening": "ee52bc8f704e1c803550968502ea104e893bda6ae6857d46131a9c2c47c5d0e2",
     "Hash.RowLeaf.Opening.row": "1a7f3e8cb436f751b4c19bb2ba565ea5e78c6bfb137833818fb458c31c37e74a",
@@ -34641,7 +34643,7 @@
     "Hash.RowLeaf.Verifier.domain": "4479c28106a028df16b1f30df58372370ba5dd780d55d4a71388b47aad3c46a2",
     "Hash.RowLeaf.Verifier.format": "fe2503ef5d3838c25a26f2289c713703af3a8b9ab72d3bc42ded003ae33c149b",
     "Hash.RowLeaf.Verifier.key": "543756473d4ccec741c25fd709e743fdcb1fd596ef49e4828d2ee92e1b8893bf",
-    "Hash.RowLeaf.accepts": "222e8726f5ed724c4ac0c6e6e32ce63ba3aa8b9a4ff0e0a223d20b98219cc220",
+    "Hash.RowLeaf.accepts": "7c85663b1fdb49ed17b4a905bb619ce5c1b2773925d43e9bacedc4ded938e6e0",
     "Hash.RowLeaf.innerHashed": "004ba97424a9c1d61cc0b1e3d4c97cbc28e9fe647e4cfdd30f9312ef58ae4af6",
     "Hash.RowLeaf.leafMsg": "54465ddeb2f593c5961d6c3c067549db1eeb1456f0da32ba6ae3bd7c47ede69a",
     "Hash.RowLeaf.outerHashed": "97a592e6362f9c49719236357a2f9239270cadabe16de6de6e171aed1e51d7fb"
@@ -34663,6 +34665,17 @@
     "Hash.RowSeg.segmentMsg": "4cddf759310c04a6c81641ec0e1eb5bb6f011dc786e42ee759b43ad7b50b2c2c",
     "Hash.RowSeg.segmentMsgs": "06d9f0294b3435c558727cf0fcbb49bae36cc32a705d683476e81cb81c8cb10a",
     "Hash.RowSeg.segmentPrefix": "17d166519a13a99d5f75b079467ff2419a10f206a6767e6f65027a12a05c0152"
+   }
+  },
+  "Definitions.Hash.RowV1": {
+   "digest": "41e91673435376337cbb6eed77094b757e6f7fbc2e686f8b704477bc398838e2",
+   "definitions": {
+    "Hash.RowV1.ROLE": "5a5998f44c82c0483bff41adeb6ee113f270d5b008bd4a58efe6fa7416c658a5",
+    "Hash.RowV1.WORD_BITS": "52457af8f0590b4bace4a005a033ec6dc5766517e36c7ab3399211602992fb72",
+    "Hash.RowV1.digest": "39c90cdb8986126ac6c4873fba20c6cd0bdde8c72984e33fe4b32bdaf322880a",
+    "Hash.RowV1.hashed": "6466e795420df2aeeb768a3c327332606946e004d42a553b8fb2d71b440ef911",
+    "Hash.RowV1.msg": "877c21e21610edfdbdb16bfa0213463f34841bd159ff5493ce83fcd4f6a35091",
+    "Hash.RowV1.rowPrefix": "2a129c9d971a5a591a341f7f8b5d2c62e0164d8d2633563ac6aa5ffa288e6d0e"
    }
   },
   "Definitions.Hash.RowV2": {
