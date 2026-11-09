@@ -341,9 +341,12 @@ def test_a_two_stage_point_is_what_lean_certifies_and_a_tampered_design_is_refus
 def test_a_two_stage_series_carries_lean_and_no_lean_plans_without_it(monkeypatch, out):
     """With Lean on, each two-stage series' points are Lean's (`lean_point`): `lean` for each, beside the planner's
     bits and Lean's θ, the trivial bound's unchecked, and the JSON says how Lean searched.  Without it (`--no-lean`),
-    a series is the planner's and carries none of them."""
-    seen = []
+    a series is the planner's and carries none of them.  The planner is stubbed here, its first point at the trivial
+    bound and every other one row, since the planner's own points are the test above's."""
+    seen, rows = [], iter([None])
+    row = {"merged": 1 << 18, "k": {0: 1}, "q": .5, "theta": 2.0, "bound": 50.0}
     monkeypatch.setattr(f.plancheck, "check", lean_in_range(seen))
+    monkeypatch.setattr(f, "two_stage", lambda m, design, budget: next(rows, row))
     checked = f.run("GLM-5.3", 2, ("world year",), designs=("two-stage",), lean=True)
     assert checked["lean"] == {"exe": f.plancheck.EXE, "slack": str(f.plancheck.SLACK), "search": f.plancheck.SEARCH,
                                "precision": f.plancheck.TWO_P}
@@ -354,9 +357,10 @@ def test_a_two_stage_series_carries_lean_and_no_lean_plans_without_it(monkeypatc
         assert len(s["lean"]) == len(s["planner"]) == len(s["theta"]) == len(s["x"])
         for y, on, planner, theta, capped in zip(s["y"], s["lean"], s["planner"], s["theta"], s["capped"]):
             if on:
-                assert (on, y, theta, capped) == (True, lean, float(LEAN_THETA), False) and planner != y
+                assert (on, y, planner, theta, capped) == (True, lean, row["bound"], float(LEAN_THETA), False)
             else:
-                assert (on, theta, capped) == (None, None, True)
+                assert (on, planner, theta, capped) == (None, None, None, True)
+    assert [s["lean"].count(None) for s in series] == [1] + [0] * (len(series) - 1)
     assert len(seen) == sum(s["lean"].count(True) for s in series) > 0 and {d["form"] for d in seen} == {"sets"}
     assert out["lean"] is None
     for s in out["panels"]["exfiltration"]["series"] + out["panels"]["skipped_work"]["series"]:
