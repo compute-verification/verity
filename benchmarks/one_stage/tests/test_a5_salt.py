@@ -43,7 +43,9 @@ QUERY = P.template_instances_query(WINDOW)
 COUNTS = {P.template_id(PAIR): 1, P.template_id(TRIPLE): 9}
 N = sum(COUNTS.values())
 PROGRAM = P.mixed_population_program([(t, COUNTS[P.template_id(t)]) for t in WINDOW])
-LAW = {"law": "stratified", "k": 3}
+#: one of the PAIR and three of the 9 TRIPLEs
+RULE = S.Law("stratified-rate:1/3")
+LAW = S.selection_law(RULE, N, D.strata_sizes(PROGRAM, QUERY))
 SCHEMA = "hm96-sha512/row/v2"
 RUN = "r-a5-salt-test"
 ROOT = "ab" * 64
@@ -53,7 +55,7 @@ PUBLIC = tuple(S.Public(i, "structure", r) for i, r in (
     ("population", "N, the draw's range"), ("window", "provenance"), ("leaves:x", "x's leaf count"),
     ("domain:x", "x's served domain"), ("leaves:out", "out's leaf count"), ("domain:out", "out's served domain"),
     *((f"population:{P.template_id(t)}", "a template's stratum") for t in WINDOW))) + (AC.SEED_ITEM,)
-SPEC = S.Spec(VALUES, S.Law("stratified:3"),
+SPEC = S.Spec(VALUES, RULE,
               S.Check(tuple(P.program_digest(Program(t)) for t in WINDOW), QUERY, proof_deadline=60.0), PUBLIC,
               bytes.fromhex(ROOT))
 VERDICTS = {"lean": {"of_record": True, "accepted": True, "digest": "dd" * 64, "sessions": [SESSION]}}
