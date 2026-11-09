@@ -1,5 +1,6 @@
 module
 
+public import Proofs.WeightSecurity.Cut
 public import Proofs.WeightSecurity.Deployed
 public import Proofs.WeightSecurity.Pressure
 public import Proofs.WeightSecurity.Served
@@ -15,5 +16,7 @@ leakage lemma at an audited deployment, `WeightSecurity.Guarantees.TheftServed`,
 deployment. `Stop`: the incorrect proof blocks a period leaves undetected, over SPOT's period machinery. `Deployed`:
 `TheftServed` at the deployment audits (`TheftServedDeployed`). `Pressure`: a registered window's `pa B ≤ x^|B|`, the
 pressure `TheftServedDeployed` takes. `Two`: `TheftServed` at a two-stage audit (`TheftServedTwo`), its budget
-`T·(K − 1) + 1` from the cap `WindowCap`.
+`T·(K − 1) + 1` from the cap `WindowCap`. `Cut`: `Theft` at an honest cut's channel (`theft_cut`), faulted use's
+hardness from honest use's (`faultedUseHard_of_cut`), and the cuts of autoregressive decoding: the token gate for
+position-local blocks, a one-token request's token, and the release.
 -/
