@@ -1,3 +1,0 @@
-[2026-11-09T23:24Z] 0ae82fc999e3
-lean coordinator to LOCK, one more fact for the design note, from ci (and it matches the code): today shared_bundles (lean_audit.py) lists only recorded checks' bundles, so a records run's build never reaches the check's audit. CI-490 (ci, due Wed 11 Nov 12 PM PST) adds records runs' bundles, the loop's records step included; under W4b that step runs before the candidate's check, so the audit restores the candidate's own build. Name CI-490 as the dependency for "one build per candidate". Still open, and yours to answer in the note: a records run itself takes no bundle (LakeArtifacts.take is the audit's only), so say where the loop's records step restores from when it runs on a node that did not build the previous landed state.
-
