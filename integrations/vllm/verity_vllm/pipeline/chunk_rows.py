@@ -33,15 +33,13 @@ SLOT_ROWS = ("Attention_v5", "Attention_v18", "AttnBlockFirst_v1", "AttnBlock_v5
 
 def reads(tp: Any) -> str:
     """How `UnitStager` lays out chunked template ``tp``'s MUFU table reads: in lookup slots (`read_slots`, each table folded
-    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN: inline, step 16's 64-key split part's EX2 reads
-    were 4.5 times its other nonzeros, a 322 GB build against 75.6 GB in slots) and for a whole attention row (``SLOT_ROWS``:
-    inline, the 1B decode row ``Attention_v5{T=1,NH=32,KVH=8,D=64,..}``'s 64 reads make 6.35e9 nonzeros for its 10.2M ANDs,
-    622 an AND, and its ``--zk`` prover ran out of memory at 600 GiB; in slots, 314M nonzeros for 8,473,952 ANDs, 37 an AND,
-    k_log 25, proved in 118 s, a 272 s session at 27 GB, accepted by Lean with its three negatives refused) and for its heads' per-key-block Calls, else inline, as step 16's 16-key part and
-    five-split combine were proved, and the RMSNorm rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``, 41 to 56 nonzeros
-    an AND inline) at their served shapes; a ``CHAINS`` end, column end and combine inline as that combine. A ``STAGES`` stage
-    reads in slots: a stats part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table
-    (its EX2 is gates), so it lowers flat either way."""
+    once per statement) for a ``CHAINS`` key block of a whole block (NVIS = BN), for a whole attention row (``SLOT_ROWS``) and
+    for its heads' per-key-block Calls: inline, their EX2 and RCP reads outnumber the rest of their nonzeros, so the build and
+    the prover's memory grow with the reads, while in slots each table is folded once. Everything else reads inline, where its
+    reads are few beside the rest: a key block of fewer keys than BN, a ``CHAINS`` end, column end and combine, and the RMSNorm
+    rows (``RMSNormTriton_v5``, ``RMSNormFusedCuda_v2``) at their served shapes. A ``STAGES`` stage reads in slots: a stats
+    part or a probabilities block reads EX2 a lane, thousands of them. A ``_v2`` body reads no table (its EX2 is gates), so it
+    lowers flat either way."""
     from verity_vllm.pipeline import chain_rows as CH
     from verity_vllm.query.program_view import spec_base, spec_statics
 
