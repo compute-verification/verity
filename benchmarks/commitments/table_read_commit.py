@@ -20,8 +20,11 @@ Arms, per batch: ``alone``, the kernels' time on an otherwise idle GPU (CUDA eve
 to last about as long as the hash alone) on the serving stream with the step's hash on the side stream, against the loop
 alone: ``busy_x`` the loop's time as a multiple of its time alone, ``hash_x`` the hash's, and ``added_ms`` how much later both
 end than the loop alone. ``cpu``: the CPU twin (`host_step`, ``row_table_host.cpp``) on one thread at batch 1 over
-``--cpu-layers`` layers. Validation: a small step's device roots and CPU twin's equal `row_tables.step_roots`, the Python
-reference. JSON to ``--out`` (default ``$RESEARCH_RUN_DIR``): ``table_read_commit.json`` and ``result.json``.
+``--cpu-layers`` layers. ``tables``: the committer's history tables on one thread (`commit.history_tables`, the tables the
+reads open): a table's creation (its 2^17-leaf tree), ``--table-rows`` rows appended at once (a prefill's), one row at a time
+(a decode step's) and a read's path. Validation: a small step's device roots and CPU twin's equal `row_tables.step_roots`, the
+Python reference, and the table's root is `history.check`'s over its strings. JSON to ``--out`` (default
+``$RESEARCH_RUN_DIR``): ``table_read_commit.json`` and ``result.json``.
 """
 from __future__ import annotations
 
@@ -56,6 +59,7 @@ def parse(argv: list[str]) -> argparse.Namespace:
     ap.add_argument("--layers", type=int, default=78)
     ap.add_argument("--reps", type=int, default=7)
     ap.add_argument("--cpu-layers", type=int, default=78, help="layers of the CPU twin's batch-1 step (0: none)")
+    ap.add_argument("--table-rows", type=int, default=4096, help="rows a history table appends at once (0: no tables arm)")
     ap.add_argument("--out", default=None)
     ns = ap.parse_args(argv)
     ns.batches = [int(b) for b in ns.batch.split(",")]
@@ -156,6 +160,31 @@ def cpu_twin(layers: int, reads: int, ctx: bytes, key: bytes, reps: int) -> dict
     return {"layers": layers, "bytes": b, "s": statistics.median(secs), "gb_s": b / statistics.median(secs) / 1e9}
 
 
+def tables(rows: int, reps: int) -> dict[str, Any]:
+    from verity_vllm.commit import history_tables as H
+
+    hs = H.Histories("ab" * 64)
+    t0 = time.perf_counter()
+    t = hs.table("r0", 0)
+    init = time.perf_counter() - t0
+    block = torch.randint(0, 1 << 16, (rows, H.WORDS), generator=torch.Generator().manual_seed(5), dtype=torch.int32)
+    block = block.numpy().astype("uint16")
+    t0 = time.perf_counter()
+    hs.append("r0", 0, 0, block)
+    bulk = time.perf_counter() - t0
+    one = []
+    for i in range(8 * reps):
+        t0 = time.perf_counter()
+        hs.append("r0", 0, hs.edge("r0", 0), block[i % rows:i % rows + 1])
+        one.append(time.perf_counter() - t0)
+    t0 = time.perf_counter()
+    for e in range(2048):
+        t.path(e)
+    path = (time.perf_counter() - t0) / 2048
+    return {"rows": rows, "init_s": init, "append_us": bulk / rows * 1e6, "append_one_us": statistics.median(one) * 1e6,
+            "path_us": path * 1e6, "row_bytes": H.ROW_BYTES, "check": H.check(t, t.bcs)}
+
+
 def cpu_name() -> str:
     info = Path("/proc/cpuinfo")
     names = [ln.split(":", 1)[1].strip() for ln in info.read_text().splitlines() if ln.startswith("model name")] \
@@ -184,6 +213,9 @@ def main(argv: list[str] | None = None) -> int:
         del outs
         torch.cuda.empty_cache()
     cpu = cpu_twin(ns.cpu_layers, ns.reads, ctx, key, 2) if ns.cpu_layers else None
+    tab = tables(ns.table_rows, ns.reps) if ns.table_rows else None
+    if tab is not None:
+        gate["tables"] = tab["check"]
     ok = all(gate.values())
     nvcc_v = subprocess.run([D.nvcc(), "--version"], capture_output=True, text=True).stdout.strip().splitlines()[-1:] \
         if D.nvcc() else None
@@ -191,7 +223,7 @@ def main(argv: list[str] | None = None) -> int:
                "capability": list(torch.cuda.get_device_capability()) if gpu else None, "cpu": cpu_name(),
                "cpus": os.cpu_count(), "torch": torch.__version__, "cuda": torch.version.cuda, "nvcc": nvcc_v, "reads": ns.reads,
                "layers": ns.layers, "row_bytes": ROWS, "bytes_per_request_token": ns.layers * ns.reads * sum(ROWS.values()),
-               "gate": gate, "batches": per_batch, "cpu_twin": cpu}
+               "gate": gate, "batches": per_batch, "cpu_twin": cpu, "tables": tab}
     print(json.dumps({**summary, "batches": {b: {k: v for k, v in r.items() if k != "kernel_ms_all"}
                                             for b, r in per_batch.items()}}, indent=1))
     out = ns.out or os.environ.get("RESEARCH_RUN_DIR")
@@ -207,13 +239,17 @@ def main(argv: list[str] | None = None) -> int:
                                      "gpu": summary["gpu"], "capability": summary["capability"], "torch": torch.__version__,
                                      "cuda": torch.version.cuda, "nvcc": nvcc_v},
             "validation": {"status": "passed" if ok else "failed",
-                           "checker": "a small step's device and CPU-twin roots equal row_tables.step_roots",
+                           "checker": "a small step's device and CPU-twin roots equal row_tables.step_roots; a history "
+                                      "table's root is history.check's over its strings",
                            "detail": json.dumps(gate), "evidence": []},
             "measurements": [{"name": f"b{b}.{k}", "value": r[k], "unit": u} for b, r in per_batch.items()
                              for k, u in (("kernel_ms", "ms"), ("gb_s", "GB/s"), ("bytes", "bytes"))]
             + [{"name": f"b{b}.beside.{k}", "value": r["beside"][k], "unit": u} for b, r in per_batch.items()
                for k, u in (("busy_x", "x"), ("hash_x", "x"), ("added_ms", "ms"))]
             + ([{"name": "cpu_twin.gb_s", "value": cpu["gb_s"], "unit": "GB/s"}] if cpu else [])
+            + [{"name": f"tables.{k}", "value": tab[k], "unit": u} for k, u in (("init_s", "s"), ("append_us", "us"),
+                                                                              ("append_one_us", "us"), ("path_us", "us"))
+               if tab is not None]
             + [{"name": "workload_wall", "value": time.perf_counter() - started, "unit": "s"}],
             "measurement_files": ["table_read_commit.json"], "artifacts": [],
         }
