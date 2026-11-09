@@ -4,6 +4,7 @@ public import Proofs.Flock.SpotFlock.Depths
 public import Proofs.Flock.SpotFlock.SlotsAt
 public import Proofs.Flock.Bridge.Draw
 public import Proofs.Flock.Claims.Sampling.Select.Layout
+public import Proofs.Flock.SpotFlock.Cap
 import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.Claims.Sampling.Select.Bounds
 import Proofs.Flock.Claims.Sampling.Select.Take
@@ -596,6 +597,70 @@ def FirstSlots : Prop :=
   ∀ l, Spot.Slots.layout h.reg.first.program h.reg.first.query = .ok l → ∀ src,
     ∀ i < (h.reg.sample src).size, ∃ b, l.blocks[(h.reg.sample src).getD i 0]? = some b ∧
       b.unit = some ((h.reg.sample src).getD i 0)
+
+/-- A layout's population is the first of its slots. -/
+theorem popOf_prefix (l : Spot.Slots.Layout) : Spot.Slots.popOf l <+: l.blocks.toList := by
+  rcases l with ⟨⟨cl⟩⟩
+  cases cl with
+  | nil => simp [Spot.Slots.popOf]
+  | cons c cs =>
+    simp only [Spot.Slots.popOf, Spot.Slots.Layout.blocks, Array.toList_flatten, List.map_cons, List.flatten_cons,
+      List.map_append, List.flatten_append, List.headD_cons]
+    exact List.prefix_append _ _
+
+/-- **Slot `ρ` of the population is unit `ρ`** where the population is its units in slot order (`popOk`). -/
+theorem slot_of_popOk {p : Spot.Program} {q : Json} {n : ℕ} (hpop : Spot.Slots.popOk p q n = true)
+    {l : Spot.Slots.Layout} (hl : Spot.Slots.layout p q = .ok l) {ρ : ℕ} (hρ : ρ < n) :
+    ∃ b, l.blocks[ρ]? = some b ∧ b.unit = some ρ := by
+  unfold Spot.Slots.popOk at hpop
+  rw [hl] at hpop
+  have hu := of_decide_eq_true hpop
+  have hρ' : ρ < (Spot.Slots.popOf l).length := by
+    have := congrArg List.length hu
+    simp only [List.length_map, List.length_range] at this
+    omega
+  have hpre := popOf_prefix l
+  refine ⟨(Spot.Slots.popOf l)[ρ], ?_, ?_⟩
+  · rw [← Array.getElem?_toList, List.getElem?_eq_getElem (Nat.lt_of_lt_of_le hρ' hpre.length_le),
+      ← hpre.getElem hρ']
+  · have := List.getElem_of_eq hu (by simpa using hρ')
+    simpa only [List.getElem_map, List.getElem_range] using this
+
+/-- **A first stage of count `K` samples unit slots** where its population is its units in slot order (`popOk`,
+which the run checks at registration, `population-order`): with no closure map it proves the units it drew
+(`select_proved`), each below the population (`drawUnits_lt`), and slot `u` of the population is unit `u`. -/
+theorem firstSlots_of {K : ℕ} (hK : firstK h.reg.first = some K)
+    (hpop : ∀ n, Spot.Partition.units h.reg.first.program h.reg.first.query = .ok n →
+      Spot.Slots.popOk h.reg.first.program h.reg.first.query n = true) : FirstSlots h := by
+  intro l hl src i hi
+  obtain ⟨hc, hne, n, named, hn, hlo, hf⟩ := firstK_some hK
+  cases hs : Spot.Select.select h.reg.first.rule h.reg.first.program h.reg.first.query h.reg.first.table
+      h.reg.first.closure src with
+  | error e => simp [RegTwo.sample, hs] at hi
+  | ok res =>
+    obtain ⟨draw, proved, read⟩ := res
+    have hS : h.reg.sample src = proved := by simp [RegTwo.sample, hs]
+    rw [hS] at hi ⊢
+    obtain ⟨n', named', derived, hn', hl', hder, units, hpu, hcase⟩ := select_proved _ _ _ _ _ _ _ _ _ hs
+    rw [hn] at hn'
+    obtain rfl := Except.ok.inj hn'
+    rw [hlo] at hl'
+    obtain rfl := Except.ok.inj hl'
+    obtain rfl : derived = none := Properties.Spot.SecurityProofs.deriveLaw_subset _ _ _ _ _
+      (Properties.Spot.SecurityProofs.flockLaw_subset _ _ _ hf).1 hder
+    rw [hpu hc] at hi ⊢
+    rcases hcase with ⟨hall, -⟩ | ⟨-, parsed, read', hp, hu⟩
+    · exact absurd hall hne
+    · have hp' : Spot.Draw.flockLaw named n = .ok parsed := hp
+      rw [hf] at hp'
+      obtain rfl : parsed = .subset K := (Except.ok.inj hp').symm
+      have hu' : Spot.Draw.drawUnits (.subset K) n src = .ok (units, read') := hu
+      have hlt := DrawnAt.drawUnits_lt (fun a b => by simp) (fun St hSt => by
+        rcases hSt with ⟨k, hk⟩ | ⟨k, ws, hk, -⟩ <;> cases hk) hu'
+      have hmem : units.getD i 0 ∈ units := by
+        rw [Array.getD_eq_getD_getElem?, Array.getElem?_eq_getElem hi, Option.getD_some]
+        exact Array.getElem_mem hi
+      exact slot_of_popOk (hpop n hn) hl (hlt _ hmem)
 
 theorem secondDraw_ok {c₀ c₁ : FlockDeploy.Coin} {draw : Json} (hdraw : secondDraw h c₀ c₁ = some draw) :
     ∃ rd, Spot.Select.selectSecond (h.reg.sample (src c₀)) h.reg.ns h.reg.ks (src c₁) = .ok (draw, rd) := by
