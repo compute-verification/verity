@@ -165,7 +165,7 @@ def slotsOf (site : ℕ → Option Site) (g : ℕ) : Option Slot := (site g).map
 
 namespace CheckedRun
 
-variable {h r}
+variable {h} {r : CheckedRun}
 
 /-- **An accepted run's checked unit's session has a table** (`zkOk_sound`). -/
 theorem sts_pos (hr : r.Ok h) : 0 < r.sts.size := by
@@ -275,7 +275,7 @@ noncomputable def slotMap : ℕ → Option Slot := slotsOf (siteMap h)
 
 theorem siteMap_spec (hS : Sites h) (g : ℕ) :
     ∃ S, siteMap h g = some S ∧ ∀ r : CheckedRun, r.Ok h → r.s.prog.Needs r.b g → r.SiteHolds h S g :=
-  ⟨(hS g).choose, dif_pos (hS g), (hS g).choose_spec⟩
+  ⟨(hS g).choose, dite_eq_left (hS g), (hS g).choose_spec⟩
 
 /-- **`SlotsAt` at the slot map** (the module's docstring). -/
 theorem slotsAt_slotMap (hS : Sites h) (c₀ : Code) :
