@@ -59,12 +59,11 @@ registered and opening gates, its held values and its jitter code. By induction 
 code open one row at each run: the row the record rule names, the run before's closing row (one row, by the induction)
 or `genesis`. The opening gates then read one row, so the runs' inputs agree off the checked gates and the step applies.
 
-**The monitoring period** (`encard_pooledCarried_le`, `pooledLeakReset` and `pooledLeakCarried`). At each pattern of
-restarts the count is `encard_pooledJoint_le` at that joint count, and the secrets whose audits all accept and that meet
-the good event at the pattern serving picked for them are in the union of those sets over the registered patterns. The
-escape bound is `pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which
-together give rows that chain at the pattern picked (`Hash.BindingProofs.rowSeg_bind`). `pooledLeakCarried` is one
-pattern's escape bound and count.
+**The monitoring period** (`encard_pooledCarried_le`, `pooledLeakCarried`). At each pattern of restarts the count is
+`encard_pooledJoint_le` at that joint count, and the secrets whose audits all accept and that meet the good event at the
+pattern serving picked for them are in the union of those sets over the registered patterns. The escape bound is
+`pr_pooled_le` at each run's leak relation, its opening root, and no collision at its opening, which together give rows
+that chain at the pattern picked (`Hash.BindingProofs.rowSeg_bind`).
 -/
 
 @[expose] public section
@@ -553,14 +552,14 @@ theorem encard_pooledCarried_le {L K S m : ℕ} (lay : AuditStatement → Bounda
     arr f tap run htrust cap Ss hfit Zs (fun z => schedOf z ω) (fun z => srvOf z ω) (fun z hz => hs z hz ω) (dec ω)
     (fun z hz => hdz z hz ω) (fun z => W z ω) (fun z i => hWn z ω i) Fmax
 
-/-- **The leak through the network certifier over a monitoring period whose runs carry the pool, with the restarts
-serving's choice**: `Guarantees.PooledLeakReset`. The escape bound is `pr_pooled_le` at each run's leak relation and no
-collision at its opening, at the pattern serving picked. Where every audit accepts, the roots the record rule names there
+/-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
+`Guarantees.PooledLeakCarried`. The escape bound is `pr_pooled_le` at each run's leak relation and no collision at its
+opening, at the pattern serving picked. Where every audit accepts, the roots the record rule names there
 (`CarriedRoots`) and those two give rows that chain, since equal roots are equal rows or a collision
 (`Hash.BindingProofs.rowSeg_bind`). The secrets whose audits all accept and that meet the good event at the pattern
 picked for them are in the union over `Cs` of those meeting it at each pattern (`Finset.set_encard_biUnion_le`), each
 counted by `encard_pooledCarried_le`. -/
-theorem pooledLeakReset : Guarantees.PooledLeakReset := by
+theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
   intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls Ω _ _ Conn Cell Srv Dev Z _ arr f tap run
     htrust cap Ss Zs schedOf srvOf dec hch Cs chains genesis acc hcs hroot W had rin rout e e' he q hq0 hq1 hesc hleak
     Fmax
@@ -604,18 +603,5 @@ theorem pooledLeakReset : Guarantees.PooledLeakReset := by
       (nsmul_eq_mul _ _).le)
     exact encard_pooledCarried_le lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls c.1 c.2 arr f tap run htrust
       cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω
-
-/-- **The leak through the network certifier over a monitoring period whose runs carry the pool**:
-`Guarantees.PooledLeakCarried`. Its escape bound is `pooledLeakReset`'s at the one pattern `(chains, genesis)`, and its
-count is `encard_pooledCarried_le` there. -/
-theorem pooledLeakCarried : Guarantees.PooledLeakCarried := by
-  intro L K S G lay k reg chk valid prow nrow Dj m sw Pw ρ op n hchk hcls chains genesis hroot Ω _ _ Conn Cell Srv Dev
-    Z _ arr f tap run htrust cap Ss Zs schedOf srvOf dec hch acc W had rin rout e e' he q hq0 hq1 hesc hleak Fmax
-  exact ⟨(pooledLeakReset G lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls arr f tap run htrust cap Ss Zs
-      schedOf srvOf dec hch {(chains, genesis)} (fun _ _ => chains) (fun _ _ => genesis) acc
-      (fun _ _ _ _ => Finset.mem_singleton_self _) (fun _ _ _ _ => hroot) W had rin rout e e' he q hq0 hq1 hesc hleak
-      Fmax).1,
-    fun ω => encard_pooledCarried_le lay k reg chk valid prow nrow Dj sw Pw ρ op n hchk hcls chains genesis arr f tap run
-      htrust cap Ss Zs schedOf srvOf dec hch W had.2.2 Fmax ω⟩
 
 end NetTiming
