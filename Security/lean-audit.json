@@ -1678,7 +1678,7 @@
    "owner": "@proofs",
    "digest": "c85954d73d66971ffcfdef16a3eb0c9904191418d4939daeb0bf10faff31a793",
    "issue": "PRF-310",
-   "due": "2026-11-06"
+   "due": "2026-11-30"
   },
   "Claims.ZKServer.Loop.Src": {
    "owner": "@proofs",
@@ -3328,19 +3328,19 @@
    "owner": "@proofs",
    "digest": "ac9ed71d973e1db5d86647c7ab9ec3404e44567a2046211c8b0987b8084eed48",
    "issue": "PRF-413",
-   "due": "2026-11-06"
+   "due": "2026-11-17"
   },
   "WeightSecurity.Assumptions.LeaksThrough": {
    "owner": "@proofs",
    "digest": "3a2698362a1e14711580dd145fafd0556395f7956c8d950e365e49f1246a683e",
    "issue": "PRF-413",
-   "due": "2026-11-06"
+   "due": "2026-11-17"
   },
   "WeightSecurity.Assumptions.Simulable": {
    "owner": "@proofs",
    "digest": "0f793429e5101f9d09499a06c42130c425331c423049968423d474a22a279d29",
    "issue": "PRF-413",
-   "due": "2026-11-06"
+   "due": "2026-11-17"
   }
  },
  "trust": {
