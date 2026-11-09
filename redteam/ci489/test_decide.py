@@ -146,6 +146,19 @@ def test_a_single_pr_retest_is_the_same_tree_so_graph2_answers_it_from_the_cache
     assert not any(isinstance(a, vq.Eject) for a in acts)
 
 
+def test_failed_alone_twice_counts_a_different_tasks_failure_before_the_re_mark(vq):
+    """FINDING (innocent ejects, after): "failed alone twice" is any earlier outcome of the PR alone at the same head that
+    failed, whatever failed then: an owner who re-marks a head ejected as a possible flake (the window is 48 h) is ejected at the
+    next single failure, of another task too, with no second run. FIX: count only an earlier failure of the same task, and
+    only outcomes after the PR's newest mark (the snapshot's `Ready` gains its mark time)."""
+    earlier = vq.Outcome((5,), ("h5",), vq.FAIL, (5,))
+    other = vq.Failed("test-file:t/test_other.py", "sha512:o", frozenset({"t/test_other.py"}))
+    c1 = vq.Candidate("c1", MAIN, (5,), ("h5",), vq.Verdict(vq.FAIL, (other,)))
+    acts = vq.decide(vq.Snapshot(MAIN, (pr(vq, 5),), (c1,), (earlier,)))
+    assert [a.number for a in acts if isinstance(a, vq.Eject)] == [5]
+    assert "failed alone twice" in next(a.why for a in acts if isinstance(a, vq.Eject))
+
+
 def test_a_pr_that_touches_a_red_tasks_inputs_is_ejected_for_it(vq):
     """FINDING (innocent ejects, fix before the cut-over): a PR that edits a file a red-on-`main` test imports (a refactor, a
     docstring) changes that task's key, so even with `base_key` the failure isn't inherited, and the PR is ejected at once,
