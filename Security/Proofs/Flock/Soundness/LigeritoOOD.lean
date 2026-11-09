@@ -7,7 +7,7 @@ public import Mathlib.RingTheory.RegularLocalRing.Defs
 public import Mathlib.RingTheory.SimpleRing.Principal
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
-import Proofs.Flock.Soundness.Game.Basic
+import Proofs.Flock.Soundness.Game
 import Proofs.Flock.Soundness.LigeritoCoins
 import Proofs.Flock.Soundness.OpeningPhase
 import Proofs.Flock.Soundness.ZerocheckPhase

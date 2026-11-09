@@ -21,6 +21,7 @@ public import Spot.Select
 public import Spot.Slots
 public import Spot.FilePart
 public import Spot.Service
+public import Spot.SecondStage
 public import Spot.Run
 public import Spot.Stream
 public import Spot.Fleet

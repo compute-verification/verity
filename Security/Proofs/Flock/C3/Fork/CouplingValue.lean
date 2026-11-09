@@ -4,8 +4,7 @@ public import Proofs.Flock.C3.Fork.CouplingLock
 import Mathlib.Algebra.Order.Floor.Semifield
 import Mathlib.MeasureTheory.Integral.Bochner.Basic
 import Mathlib.Order.CompletePartialOrder
-import Proofs.Flock.Soundness.Game.Basic
-import Proofs.Flock.Soundness.Game.Union
+import Proofs.Flock.Soundness.Game
 import VCVio.Prelude.Core
 
 /-!
