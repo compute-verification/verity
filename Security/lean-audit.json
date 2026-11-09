@@ -3473,6 +3473,7 @@
   "Properties.Pouw.Period",
   "Properties.Composition",
   "Properties.Verity.Game",
+  "Properties.Verity.Sha512",
   "PouwWindow.Grid",
   "PouwWindow.Draw",
   "PouwWindow.Public",
