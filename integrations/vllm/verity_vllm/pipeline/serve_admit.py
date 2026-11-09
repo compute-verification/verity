@@ -47,7 +47,7 @@ once it holds the watermark's line for the last bucket closed by T_k and every r
 rest of each step is vLLM's own scheduler, unpatched: the gate holds a numbered request outside it until its step
 (`install`, on the scheduler's ``add_request``, ``schedule`` and ``finish_requests``), so the scheduler sees each request
 from its admission on, and the batches are a function of the certified releases and the registered τ, which the encoder's
-replay recomputes (`benchmarks/network_e2e/encodings/replay.py`, ``tick``) without timing advice. What isn't certified is
+replay recomputes (`advice_code.replay`, ``tick``) without timing advice. What isn't certified is
 added at once and counted (`TickGate.summary`): a request without the header (``unordered``), one of an older run
 (``stale``), one that comes after it was skipped (``late``). A released request that doesn't reach the engine holds the
 later ones ``hold_s``, then is skipped; a watermark the gate has waited on ``hold_s`` without a new line, or that breaks,

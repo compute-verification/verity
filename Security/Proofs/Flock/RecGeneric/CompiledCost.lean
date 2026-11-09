@@ -102,7 +102,7 @@ theorem Ex_EC_cast (A : Arg Coin) (xO : Msg) {sh : A.Sh} (h : A.shape xO = sh)
 /-- **`E^rep`'s reruns at a judged coin vector `d₀`**, against any runs: the replay and, where it accepted, the waits. -/
 theorem ERep_ext_runs_le {W Op : Type} (H : Msg → Msg) (V : Verifier Coin) (m k K : Msg → ℕ)
     (opens : Seen → List Op) (assemble : Msg → List Op → Option W) (check : Msg → W → Bool) (x : Msg)
-    (R : (Fin (V.k x) → Coin) → Trace) (d₀ : Fin (V.k x) → Coin) (ρ : Fin (m x) → Fin (K x) → Fin (V.k x) → Coin) :
+    (R : (Fin (V.k x) → Coin) → Transcript) (d₀ : Fin (V.k x) → Coin) (ρ : Fin (m x) → Fin (K x) → Fin (V.k x) → Coin) :
     ((((ERep V m k K opens assemble check).ext x d₀ ρ).eval H R).2.2 : ℝ) ≤
       (if (R d₀).out = .acc then (1 : ℝ) else 0) *
         ∑ i, (waitRuns R (k x) ((List.finRange (K x)).map (ρ i)) 0 : ℝ) + 1 := by
@@ -119,7 +119,7 @@ theorem ERep_ext_runs_le {W Op : Type} (H : Msg → Msg) (V : Verifier Coin) (m 
     simp [hs, h, RP.eval]
 
 /-- A rerun program served by reruns at `g r`, each seen through `f`, reruns the prover once per rerun of its own. -/
-theorem serve_viewingAt_runs {R₁ R₂ α : Type} (H : Msg → Msg) (run : R₂ → Trace) (f : Seen → Seen) (g : R₁ → R₂)
+theorem serve_viewingAt_runs {R₁ R₂ α : Type} (H : Msg → Msg) (run : R₂ → Transcript) (f : Seen → Seen) (g : R₁ → R₂)
     (p : RP R₁ α) :
     ((serve (fun r => viewing f (g r)) p).eval H run).2.2 =
       (p.eval H (servedRun H (fun r => viewing f (g r)) run)).2.2 := by
@@ -138,7 +138,7 @@ variable {Coin : Type} [Fintype Coin] [Nonempty Coin] [Inhabited Coin] {A : Arg 
 coins `r`: the run at the fork of `r` at the session's first round onto `d`, placed from that round on, seen through the
 session's view. -/
 def sessRunAt (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : Prover Ω) (x : Msg) (ω : Ω) (s : ℕ)
-    (r : Fin (L.V.k x) → Coin) (n : ℕ) (d : Fin n → Coin) : Trace :=
+    (r : Fin (L.V.k x) → Coin) (n : ℕ) (d : Fin n → Coin) : Transcript :=
   servedRun H (fun r' : Fin n → Coin => viewing (L.session x s) (fork (L.off x s) r (placeAt (L.off x s) r')))
     (run H P L.V x ω) d
 

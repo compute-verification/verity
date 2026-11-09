@@ -182,6 +182,43 @@ def test_its_result_is_of_its_own_kind_which_check_and_research_merge_refuse(rep
     assert res.doc["outcome"] == LC.FAILED, "a failure that isn't a record difference"
 
 
+def test_in_a_run_what_its_passing_builds_added_to_the_artifact_cache_goes_into_its_reports_as_one_bundle(repo, tmp_path,
+                                                                                                         monkeypatch):
+    """At the path `shared_bundles` lists, holding only what `LakeArtifacts.put` added, which it does only after a build
+    passed (and `put` itself only for a sandboxed one). Outside a run, or with nothing added, there is no bundle."""
+    import tarfile
+
+    entry, art = f"{LC.LA.MK.INDEX}/{'a' * 128}.json", "0123456789abcdef.olean"
+
+    def put(self, reports, since=None, log=print):
+        for name in (entry, f"artifacts/{art}"):
+            (self.store / name).parent.mkdir(parents=True, exist_ok=True)
+            (self.store / name).write_text(name)
+        self.added.append((entry, [art]))
+        return 1
+
+    monkeypatch.setattr(LC.LA.LakeArtifacts, "put", put)
+    tree = tmp_path / "cache" / "lean-records" / "tree"
+    for i, rc in enumerate(["0", "1"]):
+        run = tmp_path / f"run-{i}"
+        run.mkdir()
+        monkeypatch.setenv("RESEARCH_RUN_DIR", str(run))
+        monkeypatch.setenv("AUDIT_RC", rc)
+        assert LC.audit_records("a", tmp_path / "deps", tree) == int(rc)
+        got = sorted(str(f.relative_to(run)) for f in run.rglob("lean-artifacts*"))
+        if rc == "1":
+            assert got == [], "a failed build adds nothing to the artifact cache, so nothing to bundle"
+            continue
+        assert got == ["lean-audit/lean-artifacts.tar.gz"] and LC.LA.BUNDLE_FILE.fullmatch(got[0])
+        with tarfile.open(run / got[0]) as t:
+            assert t.getnames() == [entry, f"artifacts/{art}"] and all(LC.LA.MEMBER.fullmatch(n) for n in t.getnames())
+
+    monkeypatch.delenv("RESEARCH_RUN_DIR")
+    monkeypatch.delenv("AUDIT_RC")
+    assert LC.audit_records("a", tmp_path / "deps", tree, out=tmp_path / "reports") == 0
+    assert not list((tmp_path / "reports").rglob("lean-artifacts*")), "outside a run no one would take it"
+
+
 def test_the_copy_is_taken_from_hard_links_after_the_dependencies_lock_is_released(repo, tmp_path, monkeypatch):
     """A copy of some 8 GB under `lean-deps/<k>.lock` held check's lean-audit, which moves the dependencies in under that lock,
     for as long as it took (red team). Under the lock only hard links are made; the copy is taken from them after, and
