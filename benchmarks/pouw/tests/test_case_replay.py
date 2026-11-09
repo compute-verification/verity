@@ -84,7 +84,7 @@ def _replay(tmp_path: Path, **env: str) -> tuple[subprocess.CompletedProcess, Pa
     (tmp_path / "coin.json").write_text(json.dumps({"commitment": "run", "source": "src"}))
     run = subprocess.run(["bash", str(SCRIPT), str(case), str(tmp_path / "W.json"), str(tmp_path / "coin.json"), str(out)],
                          cwd=tree, capture_output=True, text=True, check=False,
-                         env={"PATH": f"{bins}:{os.environ['PATH']}", "HOME": str(tmp_path), "REPLAY_SCRATCH": str(scratch),
+                         env={"PATH": f"{bins}:{os.defpath}", "HOME": str(tmp_path), "REPLAY_SCRATCH": str(scratch),
                               "REPLAY_JOBS": "1", "RESEARCH_SOURCE_SHA": "abc123", "PEARLC_CHALLENGER_GATE": "ssh gate", **env})
     return run, out, scratch
 
