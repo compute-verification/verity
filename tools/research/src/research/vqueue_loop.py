@@ -51,7 +51,7 @@ lists a check whose listing failed, reruns what ended in infra errors once its o
 as it is), reruns those keys itself while graph2's verdict is another (a
 task still runs, or one failed), sets the infra results aside, and starts a run beside it that ended in infra again.  Rerun
 runs the keys afresh (graph2's `rerun`), their results set aside, a key of the run beside starting that run again; without
-graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells infra's handle (`drive.INFRA`), once a candidate and
+graph2's `rerun` it is logged `absent`, and counts as done.  Ring tells `drive.INFRA` (or its `pr`'s owner), once a candidate and
 why.  Red tells `CI` and the owners of what the base fails (as drive names them: a test file's suite's, else its job's) that it
 is red on them, once a base and task.  A test graph2's verdict says flaked (`flaky`: a fail a rerun replaced) is told to its
 file's owner in drive's registry and `CI`, once a key: a test that flakes is deleted.  A skip's, ring's, red's or flake's
