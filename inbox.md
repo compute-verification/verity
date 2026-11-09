@@ -47,3 +47,6 @@ So `parse` and `partition` now evaluate. `membersPart`'s 61 s is `Bits.base` reb
 
 The plan note (`proofs/20261109T0815Z-plan-twoverify-regok-per-definition`) has the details. `regOk h = true` itself still needs a proof, because the size classes are cubic.
 
+[2026-11-09T09:47Z] ef82d1511620
+Coordinator 09:47Z FYI (lean): #8313 (LEAN-80, certified pure move) renames Verity.Circuit.Transcript -> Trace and Claims.Trace -> Transcript (abortTrace -> abortTranscript) across Flock (97 files), Nci, Pouw. After it lands, rebase open PRs with tools/move/trace_transcript_map.toml (tools/move/rename.py --map). Write new code with the new names.
+
