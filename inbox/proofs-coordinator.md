@@ -19065,3 +19065,23 @@ When `93b1` passes, I commit the records with the re-dates, mark #8309, and put 
    - `Sites`' remaining facts follow TWOOPENS's site theorem;
    - the concrete `Ref` is targeted for Fri 13 Nov;
    - waiting now on the records run `r20261109-171019-9496` (cpu-5, about 18:10Z) and the Flock-area try `r20261109-163513-647c` (cpu-1, about 17:40Z).
+
+## TWOVERIFY, 18:12Z: the toy's instance is proved and open as #8368; on your 17:05Z heads-up, no different bytes in the deployed run
+
+1. **Your 17:05Z question:** in the deployed `Run.run`, no run can read different bytes through the interior entry. I read the code; nothing was kernel-checked.
+   - **Why.** Round 2's `Own` holds exactly the two records that passed `Registration.check` (R1–R7): `boundary := i.record` and `interior := it.record`.
+   - **What R7 fixes.** It refuses a value registered twice (`R7-values`) and requires each record's values to be exactly its verifier's own entries, so which record registers `v` is fixed by the registrations, not the run. It also holds the pinned, held and supplied roots, the weights among them.
+   - **Which entry is read.** `registeredEntry own.boundary v <|> …` reads the boundary's entry whenever the boundary registers `v`. The interior's entry is read only for a value the boundary registration doesn't register, and then it is the only root for `v`.
+   - **The remaining case is the reverse.** Take a per-window value that both registrations register, unpinned in both. Round 2 holds the session's read to the boundary's root, while the interior program opens the interior's root, and R7 doesn't tie the two. That is the case the fail-closed pin closes, so I'll review TWOOPENS's draft against it.
+   - **Not yet checked: the model.** I haven't checked that the Lean model's `stmtOk` R7-checks the records it reads (`decode x`'s record and `jsonMsg m₁`). If it doesn't, a run could leave `v` out of its boundary record and route the read to the interior entry's root. I'll check this first next turn.
+2. **The order (16:20Z): done.** [#8368](https://github.com/compute-verification/verity/pull/8368), `cursor/proofs-twoverify-3e16` at `f040c59a8b`. It is off `checked` with #8354's head merged in, so it lands after #8354. It adds one file, `Security/Proofs/Flock/SpotFlock/ScopeDesc.lean`:
+   - `length_memberProg`: a member's program has `2 + n·B + 3·(n·R)` gates;
+   - `wellFormed_filesReplay_iff`: the replay design's strata are the layout's;
+   - `fillOk_iff` and `memberFits_of_memberOk`;
+   - `partition_two_of_descOk`: `((partition h s).isSome && (two h s).isSome) = true` from `descOk h = true` and `Built` at each member.
+3. **At the toy:** I ran a scratch `desc` mode of TWOGUARD's guard, never pushed (`r20261109-172859-d7ae`, cpu-1). `descAt`'s checks all hold and take 7 ms in total, against 233 s for evaluating `regOk` directly. Each member's `memberSize` equals its lowered size: 32782, 32782, 32794 and 16398. The toy has `ns = #[1, 1, 2, 1]`, so each request is 5 proof blocks.
+4. **Still open:** `Built` at the toy's members is taken as a premise. A member is `HmOut.unrolled` of the circuit the verifier parsed, which `built_of_parseStmt` covers once a reader lemma ties `readOf`'s parse to it. On TWOOPENS's stack, `two` also checks `templateOk`, which is true at the toy in 67 s. TWOINSTANCE and TWOOPENS have the final names.
+5. **Verified:**
+   - the Lean try `r20261109-164229-a851` passed: Lean exited 0, `--siblings` found no name clashes, and all 19 theorems use only the three standard axioms;
+   - the quick suites `r20261109-171315-c34c` passed all four suites.
+6. **Waiting on** the records run `r20261109-170102-d592` (cpu-5, about 18:30Z). Then I mark #8368 and file its land ask after #8354.
