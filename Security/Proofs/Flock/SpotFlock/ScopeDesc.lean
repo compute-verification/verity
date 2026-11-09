@@ -22,7 +22,8 @@ checks of the descriptor alone, one step per member, slot and unit:
   fits.
 * `descOk`, `two_of_descOk`, `partition_two_of_descOk`: the registration's descriptor decided, and the registration's
   side of `stmtOk`, `(partition h s).isSome && (two h s).isSome`, from it and each member's unit net built (`Built`,
-  which a circuit `HmRow.parse` built has: `FlockC3.VStarList.built_of_parse`).
+  which the unrolled circuit of a statement `Flock.Desc.parseStmt` parsed has, flat or templated:
+  `FlockSoundness.Discharge.Hidden.built_of_parseStmt`; a flat file's, `FlockC3.VStarList.built_of_parse`).
 -/
 
 @[expose] public section
