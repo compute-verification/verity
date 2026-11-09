@@ -34,19 +34,22 @@ public import Proofs.Accounting.ReadUnit
 public import Proofs.Accounting.ReadUnit.Gates
 public import Proofs.Accounting.ReadUnit.Net
 public import Proofs.Accounting.ReadUnit.Tie
+public import Proofs.Accounting.ReadUnit.Frame
 public import Proofs.Accounting.ReadUnit.Sha
 public import Proofs.Accounting.ReadUnit.RowSeg
 public import Proofs.Accounting.ReadUnit.Leaf
 public import Proofs.Accounting.ReadUnit.Select
+public import Proofs.Accounting.ReadUnit.Check
+public import Proofs.Accounting.ReadUnit.Deployed
 public import Proofs.Accounting.BoundReceipt
 public import Proofs.Accounting.Capacity
-public import Proofs.Accounting.DeclaredCircuit
-public import Proofs.Accounting.DeclaredCircuit.Tiles
-public import Proofs.Accounting.DeclaredCircuit.Credit
-public import Proofs.Accounting.DeclaredCircuit.Slack
-public import Proofs.Accounting.DeclaredCircuit.Session
-public import Proofs.Accounting.DeclaredCircuit.Requirement
-public import Proofs.Accounting.DeclaredCircuit.Scheduled
+public import Proofs.Accounting.RegisteredCircuit
+public import Proofs.Accounting.RegisteredCircuit.Tiles
+public import Proofs.Accounting.RegisteredCircuit.Credit
+public import Proofs.Accounting.RegisteredCircuit.Slack
+public import Proofs.Accounting.RegisteredCircuit.Session
+public import Proofs.Accounting.RegisteredCircuit.Requirement
+public import Proofs.Accounting.RegisteredCircuit.Scheduled
 public import Proofs.Accounting.Remote
 public import Proofs.Accounting.PerRunTruncation
 public import Proofs.Accounting.PerRunPouw
@@ -69,8 +72,8 @@ public import Proofs.Accounting.Requirement
 public import Proofs.Accounting.RequirementPouw
 public import Proofs.Accounting.Sanity
 public import Proofs.Accounting.Stacking
-public import Proofs.Accounting.DeclaredCircuit.Witness
-public import Proofs.Accounting.DeclaredCircuit.WitnessPrefill
+public import Proofs.Accounting.RegisteredCircuit.Witness
+public import Proofs.Accounting.RegisteredCircuit.WitnessPrefill
 public import Proofs.Accounting.Tag
 public import Proofs.Accounting.TS
 public import Proofs.Accounting.TS.Stages
@@ -129,7 +132,7 @@ change to the guarantee, or to a definition it reads, changes its record.
 ## Where the top guarantees are proved
 
 * `Joint`, `CovertResidual`: `Joint.lean`; `JointPerRun`: `PerRunJoint.lean`.
-* `JointPeriodLive`, `JointHorizonLive`, `JointHorizonBlocksLive`: `JointLive.lean`.
+* `JointPeriodLive`, `JointPooledLive`, `JointPooledBlocksLive`: `JointLive.lean`.
 * `ComputeOfPouw`: `Pouw.lean`; `Compose.CircuitCredit`: `Compose.lean`; `ComposeMonitoringPeriod.CircuitCreditPeriod`:
   `ComposeMonitoringPeriod.lean`.
 * `TS.Sm90SheetHeadline`: `HeadlineDc/Sm90.lean`; `TS.Sm120SheetHeadline`: `Headline/Sm120.lean`.

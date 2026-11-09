@@ -24,8 +24,18 @@ if str(TC_PROBE) not in sys.path:
 
 import trust  # noqa: E402
 from trust import (  # noqa: E402
-    DOSSIER_KIND, HONEST_MIN, INVALIDATION_TRIGGERS, N_MIN, NEGATIVES_MIN, REGRESSION_TILES, RELITIGATION_PROCEDURE, Level, TrustReport,
-    assess, publish, render_markdown,
+    DOSSIER_KIND,
+    HONEST_MIN,
+    INVALIDATION_TRIGGERS,
+    N_MIN,
+    NEGATIVES_MIN,
+    REGRESSION_TILES,
+    RELITIGATION_PROCEDURE,
+    Level,
+    TrustReport,
+    assess,
+    publish,
+    render_markdown,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]

@@ -140,7 +140,7 @@ SETTINGS: dict[str, Setting] = _declare(
     S("VERITY_CONSUMER_DELAY_MS", float, 0.0, DEBUG, "milliseconds the collector's consumer sleeps per step (a stall injected for tests)"),
     S("VERITY_DRAIN_SIDE", flag, True, VALUE, "the collector drains a gather replay on its side stream (native_collect.cpp)"),
     S("VERITY_DSA_TOPK", str, None, VALUE, "the DSA top-k plugin's row past INDEX_TOPK keys: canonical rewrites it to the top set in "
-      "ascending index order, which DsaTopKLongRow checks (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
+      "ascending index order, the order DsaButterflyRows reads (`engine_classes.DSA_TOPK_ENV`); unset, the kernels' own order"),
     S("VERITY_FA2_COMPACT", not_off, True, VALUE, "the attention tap writes its classes compacted"),
     S("VERITY_FA2_TAP_CAP_MB", int_or_zero, None, VALUE, "the attention tap's residency cap in MiB, 0 (or empty) unbounded; unset, the "
       "source's own", empty=True),
@@ -287,6 +287,7 @@ VERITY_E2E_CASE VERITY_E2E_EXCLUDE VERITY_E2E_GPU_UTIL VERITY_E2E_HIDDEN_SO VERI
 VERITY_E2E_WINDOW_MB VERITY_E2E_WORKLOAD VERITY_ENCODINGS_ADVICE_V0 VERITY_EVALUATE_FULL_LOGF VERITY_EXHAUSTIVE VERITY_FA2_CSRC
 VERITY_FLOCK_CACHE VERITY_FLOCK_INNER_FOLD VERITY_FLOCK_SAME_SHAPE_FULL VERITY_GIT_GUARD VERITY_GPU_TORCH_ONLY
 VERITY_H1_REGISTER VERITY_HP_ARCHIVE VERITY_KV_SO VERITY_LEAF_LAYOUT VERITY_LEAN_MEM_FLOOR_GIB VERITY_ML_BOOLEAN_EXHAUSTIVE
+VERITY_ML_DEFINITIONS_SLOW
 VERITY_MOE_PROGRAM_DIRS VERITY_MUFU_TABLES VERITY_MUFU_TANH_TABLES VERITY_NETWORK_RECORDS_EXE VERITY_NUMERICAL_STORE
 VERITY_PAGED_SO VERITY_POUS_SLOW VERITY_POUW_CUDA_ARCH VERITY_POUW_CUDA_BUILD VERITY_POUW_H1_PIN
 VERITY_POUW_H1U_SO VERITY_POUW_NOISE_CUBIN VERITY_POUW_NVCC VERITY_POUW_WINDOW_LOWERED_LANES VERITY_REAL_GIT VERITY_REGRESSION

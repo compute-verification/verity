@@ -76,7 +76,7 @@ soundness headline at the statement's leaf. What the recursion needs of an inner
 
 namespace RecDeploy
 
-open Claims (Msg Out Prover Trace run replay stepWith)
+open Claims (Msg Out Prover Transcript run replay stepWith)
 open FlockDeploy (Coin)
 open Lean (Json)
 
@@ -86,7 +86,7 @@ open Lean (Json)
 the replayed message is the prover's, so the verifier answers alike. -/
 theorem stepWith_replay_out {Ω : Type} (H : Msg → Msg) (P : Prover Ω) (x : Msg) (ω : Ω)
     (vn : List Msg → Claims.OC Out) (ms : List Msg) :
-    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Trace), hist.length = t.msgs.length →
+    ∀ (n : ℕ) (hist : List (Msg × Msg)) (as : List Msg) (t t' : Transcript), hist.length = t.msgs.length →
       t'.msgs.length = t.msgs.length →
       (∀ j, t.msgs.length ≤ j → j < (stepWith H P x ω vn n hist as t).msgs.length →
         ms.getD j [] = ((stepWith H P x ω vn n hist as t).msgs.map Prod.fst).getD j []) →
@@ -125,7 +125,7 @@ theorem run_replay_out {C : Type} [Inhabited C] {Ω : Type} (H : Msg → Msg) (P
 theorem exists_of_pr_pos {α : Type} [Fintype α] {p : α → Prop} (h : 0 < Claims.Pr p) : ∃ a, p a := by
   classical
   by_contra hn
-  unfold Claims.Pr at h
+  unfold Claims.Pr Claims.prUniform at h
   rw [Finset.filter_false_of_mem fun a _ ha => hn ⟨a, ha⟩] at h
   simp at h
 

@@ -24,8 +24,12 @@ from __future__ import annotations
 
 import json
 import sys
+from typing import TYPE_CHECKING
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # E2M1 low-nibble code -> numerator in units of 2^-1 (s e1 e0 m): 0, .5, 1, 1.5, 2, 3, 4, 6.
 E2M1_NUM = np.array([0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12], dtype=np.int64)
@@ -95,7 +99,8 @@ def transducer(acc_bits: int, terms: list[tuple[int, int]], hot: bool, w1: int =
     return bits | (0x80000000 if neg else 0)
 
 
-def group_terms(a_codes, b_codes, sa_codes, sb_codes, scale_kind: str, group: int = GROUP):
+def group_terms(a_codes: Sequence[int] | np.ndarray, b_codes: Sequence[int] | np.ndarray, sa_codes: Sequence[int],
+                sb_codes: Sequence[int], scale_kind: str, group: int = GROUP) -> tuple[list[tuple[int, int]], bool]:
     """The exact scaled terms of one dot of length K and the hot flag.  ``sa_codes``/``sb_codes``: one per scale block; the
     block size is K / len(codes) (16 for UE4M3 .4X, 32 for UE8M0 .2X); groups are ``group`` wide (16 = the 4X hypothesis)."""
     a = E2M1_NUM[np.asarray(a_codes, dtype=np.int64) & 0xF]
@@ -119,7 +124,9 @@ def group_terms(a_codes, b_codes, sa_codes, sb_codes, scale_kind: str, group: in
     return terms, hot
 
 
-def dot_chain(acc_bits: int, a_codes, b_codes, sa_codes, sb_codes, scale_kind: str, k_per_mma: int = 64, group: int = GROUP) -> int:
+def dot_chain(acc_bits: int, a_codes: Sequence[int] | np.ndarray, b_codes: Sequence[int] | np.ndarray,
+              sa_codes: Sequence[int], sb_codes: Sequence[int], scale_kind: str, k_per_mma: int = 64,
+              group: int = GROUP) -> int:
     """Ascending-K chain of MMAs over a K-vector (K a multiple of ``k_per_mma``), one firing per instruction."""
     k = len(a_codes)
     nblk = max(1, len(sa_codes))
@@ -132,7 +139,8 @@ def dot_chain(acc_bits: int, a_codes, b_codes, sa_codes, sb_codes, scale_kind: s
     return acc_bits
 
 
-def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C: np.ndarray, scale_kind: str, group: int = GROUP):
+def tile_eval(A: np.ndarray, Bt: np.ndarray, SFA: np.ndarray, SFB: np.ndarray, C: np.ndarray, scale_kind: str,
+              group: int = GROUP) -> tuple[np.ndarray, np.ndarray]:
     """Model of one MMA tile: ``A`` (16,K) codes, ``Bt`` (8,K) codes, ``SFA`` (16,nblk), ``SFB`` (8,nblk), ``C`` (16,8) FP32 bits ->
     ``D`` (16,8) bits and an error mask (binary32 overflow)."""
     k = A.shape[1]

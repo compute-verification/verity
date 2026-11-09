@@ -213,7 +213,7 @@ theorem eo_bad_session (L : Compiled Coin A) (H : Msg → Msg) {Ω : Type} (P : 
   obtain ⟨hacc, hbad⟩ := h
   have he : (L.EO.eval H P x ω r₀ c).1 = ((collect ((List.finRange (L.nS x)).map fun s =>
       L.sessionProg x r₀ s (L.stmtAt H P x ω s r₀) (c s))).eval H (run H P L.V x ω)).1 := by
-    simp only [Extractor.eval, EO, RP.eval, Trace.seen, hacc, ↓reduceIte]
+    simp only [Extractor.eval, EO, RP.eval, Transcript.seen, hacc, ↓reduceIte]
     rfl
   rcases ho : (L.EO.eval H P x ω r₀ c).1 with _ | ws
   · rw [he] at ho

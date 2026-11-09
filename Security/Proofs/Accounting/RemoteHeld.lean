@@ -99,10 +99,10 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (
     (hm : Monotone (T.tick ω)) (h0 : s₀ ≤ T.tick ω 0) (hP : T.tick ω T.passes ≤ e)
     (hk : ∀ p < T.passes, ∀ j ∈ T.correct ω p,
       ∃ t, T.tick ω p ≤ t ∧ t < T.tick ω (p + 1) ∧ j ∈ T.present ω t)
-    (hw : (T.wrong ω : ℝ) ≤ W) :
+    (hw : (T.incorrect ω : ℝ) ≤ W) :
     (T.planned ω : ℝ) - W - ((s / E + β) * ((e : ℝ) - s₀) + (Br + Bd)) - T.passes * S ≤ T.held ω := by
   have huv : T.tick ω 0 ≤ T.tick ω T.passes := hm (Nat.zero_le _)
-  have hsum : T.planned ω ≤ T.wrong ω + T.held ω + T.passes * S +
+  have hsum : T.planned ω ≤ T.incorrect ω + T.held ω + T.passes * S +
       ∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ := by
     have := sum_le_sum fun p (hp : p ∈ range T.passes) => pass_le ω (hS ω) p (hk p (mem_range.1 hp))
     rw [sum_add_distrib, sum_add_distrib, sum_add_distrib, sum_const, card_range, smul_eq_mul,
@@ -128,7 +128,7 @@ theorem held_of (ω : Ω) {S s₀ e : ℕ} {s E β Br Bd W : ℝ} (hE : 0 < E) (
   have hexp : (s / E + β) * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) =
       s / E * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) + β * ((T.tick ω T.passes - T.tick ω 0 : ℕ) : ℝ) :=
     add_mul _ _ _
-  have hsumR : (T.planned ω : ℝ) ≤ T.wrong ω + T.held ω + T.passes * S +
+  have hsumR : (T.planned ω : ℝ) ≤ T.incorrect ω + T.held ω + T.passes * S +
       ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) := by
     exact_mod_cast hsum
   have hinR : ((∑ τ ∈ Ico (T.tick ω 0) (T.tick ω T.passes), T.entered ω τ : ℕ) : ℝ) ≤

@@ -97,7 +97,7 @@ theorem completeRows_proof : CompleteRows := by
   have hm := egressAt_lt hEm
   have hgm := (prefix_good c tr m).1
   have htm := egressAt_t hEm
-  have hth : (pre c tr m).shaper.t < horizon c := htm ▸ hEm.2.2
+  have hth : (pre c tr m).shaper.t < gridTicks c := htm ▸ hEm.2.2
   have hcl := clean_of_complete hE hc hst hEm he' (htm ▸ htk) (htm ▸ hwin)
   have hr := egressMid_rel (pre c tr m) now' b'
   unfold Clean at hcl
@@ -254,7 +254,7 @@ theorem hands_honest {c : Config} {tr : List Event}
     rw [hlist, List.map_append, hfrom_append, ← hi.h, List.map_append]
     refine forall₂_append ih ?_
     have hgm := (prefix_good c tr m).1
-    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < horizon c
+    by_cases hl : ∃ now b', tr[m] = .tick .egress now b' ∧ (pre c tr m).shaper.t < gridTicks c
     · obtain ⟨now', b', he', ht⟩ := hl
       have hr := egressMid_rel (pre c tr m) now' b'
       have hgs := hgm.shaper.rel hr
