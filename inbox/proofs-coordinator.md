@@ -18414,3 +18414,37 @@ TWOOPENS checkpoint, 12:00Z.
 - **Pytest `r20261109-114803-723b`** (cpu-1): 3 passed in 39 min, on `cursor/proofs-twoguard-onevalue-fe97` at `b51bd33821`. That head merges TWOOPENS's `6ac7ec5c71` (`Held.wires`, `parts` in `ownOf`) with TWOPROVE's `65147b1f4f`, on the toy regenerated at (b) (`art:fcc14a73…`, five templates, four wires).
 - **Times**, from the honest check `r20261109-114829-c2d0` (cpu-5, exit 0; model interpreted, Flock and Spot native): `Held` 70 s, `runOkAt` true in 1,153 s, `twoFilesOk` true in 74 s. **Not evaluated:** `regOk` (`membersPart`, and `scopeOk` over `bitsProgs`), which reads only `h` and is left to a proof.
 - **Told** TWOOPENS (cc TWOPROVE), and asked whether to merge the branch into its integration branch or have TWOOPENS take it with (b) after #8318 lands. The pre-(b) head for #8309 stays `03851724e4`.
+
+## 13:00Z from TWOOPENS: #8309 merged with `checked` (#8318 and #8313 in), builds in flight; the lock edits are next
+
+**#8309.** I merged `checked` (`35e217c721`) into the branch. The local head is `b124ca6d31`; I'll push it once try91 passes.
+- Conflicts: only docstrings in `SecondStage.lean` and `second_stage.py`, which take the integration branch's wording (the wire arm, first rows, `MAX_LEAVES`). `Accepting.lean`'s `proverOf`/`accepts_pos` block stays deleted: `checked` only renamed `Trace.out` inside it, and nothing on `checked` uses it.
+- #8313's rename: three new files of the branch (`SessionSeq`, `Honest`, `Pin`) still said `Trace` for the claims layer's run. The rename map can't list new files, so I renamed them by hand to `Transcript`.
+- The two integration fixes are cherry-picked: `Held.wires` and the parts in `ownOf`.
+- TWOGUARD's two guard commits are cherry-picked for `guard.py` and `TwoGuard.lean` only, since their `audit.py` and `toy.py` predate `checked`'s `rate:` law. `ownOfAt` matches `ownOf` field for field, so `readsOk_eq` stays `rfl`.
+
+**Integration branch** (`cursor/proofs-sessions-onevalue-3e7a`, local `5b44e20212`): it merges #8309's head rather than `checked` directly, so the two branches share one resolution. It also fixes try90's one error (`leafAt_reg`'s `-` patterns cleared the witnesses `hset`'s type reads).
+
+**Runs:**
+- try91, `r20261109-123417-6511` (cpu-5): #8309's head, at job 11754 of 12393 with no errors so far. The renamed files and `Code.lean` (with both cherry-picks) have built. ETA about 13:10Z.
+- try92, `r20261109-123718-b939` (cpu-11): the integration head, at job 11718 with no errors. ETA about 13:15Z.
+- Suites, `r20261109-124357-95ee` (cpu-1): `suites.py --changed checked --quick`, 62 suites. ETA about 13:30Z.
+
+**Next on #8309:** one records run, then these lock edits, then a second records run to check them. I'll send you the edits before anything is marked.
+- `open`: `FrameIs` and `Embeds` leave; `Sites` joins (@proofs, PRF-460, due 30 Nov).
+- `domain`: `Built` joins, why: the guarantees are stated for a registration whose frame is SPOT's own, met by `built_spot`.
+- The two frozen texts and `trees.except`'s SpotFlock text name `Built` and `Sites` in place of `Embeds` and `FrameIs`.
+- SpotKSTwo's and SpotExfilTwo's unwitnessed entries stay untouched. Their type is the constant, so the hash doesn't move.
+
+**ReadsAt (integration).** try90 built everything except that one binder. The chain for `ReadsRegistered`'s leaf compiles up to `harm`, the per-arm slot fact. What `Sites` still needs, per arm:
+- Own port: `blockOf` injective on a cell's slots, a sample without duplicates, and parts that agree with `blockAt`.
+- Wire: the writer must be first in its cell (`k = 0`). This holds at `n = 1`; otherwise the writer's slot isn't the reader's.
+- Link: a fixed boundary population.
+- Roots and key: a boundary port exactly where a link names one.
+- Registered value: a reference-read condition that doesn't depend on position. `valuesOk` blanks the run fields, so it fixes the arm but not the row.
+
+**`ReadsInterior` stays**, which reverses what I proposed earlier. It is a disjunct of `SiteHolds`, so it only widens the guarantee, and the toy's instance just proves the `ReadsRegistered` side. Dropping it would also move `Sites`' digest after the records run.
+
+**Default, unless you say otherwise:** `DrawnAt` and `ReadsAt` stay on the integration branch for a follow-up PR, so #8309 lands on its own now that (b) is on `checked`.
+
+**Other:** TWOVERIFY asked whether my stack touches `scopeOk`, `partitionsOk`, `two`, `membersPart` or `Bridge.Members`. It doesn't, and I told them to stay in `ScopeOf.lean`. I also asked for per-slot `blockOf` facts if those come naturally.
