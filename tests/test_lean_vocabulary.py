@@ -807,14 +807,6 @@ KNOWN: dict[str, str] = {
         "homonym, a link's online state: rename (network-accounting)",
     "verity/core/devices/memory_challenger/lean/MemoryChallenger/Records.lean::MemoryChallenger.CoinTree":
         "duplicate of the live coins (`Verity.Coins`; `Spot.Challenger.LiveCommitment` in code): becomes a reading of it (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Opening":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Store":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Verdict":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
-    "verity/core/protocols/bandwidth/audit.py::Window":
-        "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
     "verity/ml/protocols/certifier/cache_step_v2.py::Op":
