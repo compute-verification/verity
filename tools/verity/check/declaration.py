@@ -17,7 +17,7 @@ A job is a `[[job]]` table:
 The file also carries `schema = "ci/v0"`. Anything else is refused: an unknown key, a missing field, a wrong type, a
 duplicate name, or an owner the registry doesn't know. Reading the file runs none of the commit's code. Stdlib only.
 
-Which jobs gate a merge is drive's policy, not this file's: `policy.toml`'s `off_gate` (`POLICY`, `off_gate`) names the jobs off
+Which jobs gate a merge is the queue's policy, not this file's: `policy.toml`'s `off_gate` (`POLICY`, `off_gate`) names the jobs off
 the merge gate, each a `Job` with `gate` false (`gated`): a recorded check, whole or a shard, skips it, `research merge` requires
 it of no check, and it runs in drive's after-landing run (`check.py --deferred`), whose red names its culprit. Such a job has
 no `merge_requires`, and no job on the gate `needs` it or runs `after` it.
@@ -46,7 +46,7 @@ from pathlib import Path
 SCHEMA = "ci/v0"
 ROOT = Path(__file__).resolve().parents[3]
 PATH = ROOT / "tools" / "verity" / "check" / "ci.toml"
-#: drive's policy (`research.policy`), whose `off_gate` takes jobs off the merge gate
+#: the queue's policy (`research.policy`), whose `off_gate` takes jobs off the merge gate
 POLICY = ROOT / "tools" / "verity" / "check" / "policy.toml"
 REGISTRY = ROOT / ".agents" / "skills" / "using-slack" / "registry.json"
 FIELDS = {"name": str, "owner": str, "group": int, "halts": bool, "halts_on": str, "merge_requires": list, "needs": list,
@@ -102,7 +102,7 @@ def parse(text: str, handles: set[str], source: str = "ci.toml", off: tuple[str,
     for i, t in enumerate(doc.get("job", [])):
         where = f"{source}: job {i + 1}" + (f" ({t['name']})" if isinstance(t.get("name"), str) else "")
         if "gate" in t:
-            raise DeclarationError(f"{where}: gate: which jobs gate a merge is drive's policy, not ci.toml's: name the job in "
+            raise DeclarationError(f"{where}: gate: which jobs gate a merge is the queue's policy, not ci.toml's: name the job in "
                                    f"policy.toml's off_gate instead")
         if unknown := set(t) - set(FIELDS):
             raise DeclarationError(f"{where}: unknown keys {sorted(unknown)}")
@@ -305,7 +305,7 @@ def handles(registry: Path = REGISTRY) -> set[str]:
 
 
 def off_gate(policy: Path = POLICY) -> tuple[str, ...]:
-    """The jobs drive's policy takes off the merge gate (``policy``'s `off_gate`); none when there is no such file."""
+    """The jobs the queue's policy takes off the merge gate (``policy``'s `off_gate`); none when there is no such file."""
     if not policy.exists():
         return ()
     try:

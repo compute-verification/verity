@@ -96,7 +96,7 @@ def test_the_lock_runs_bookkeeping_flag_reaches_its_lean_audit_and_nothing_else_
     for argv in (["--bookkeeping-warn"], ["--deferred", "lean-audit", "--no-regenerate", "--bookkeeping-warn"],
                  ["--deferred", "lean-audit", "--shard", "1/3", "--bookkeeping-warn"]):
         assert CHECK.main(argv) == 2 and len(got) == 2, argv
-    assert "--bookkeeping-warn is drive's lock run" in capsys.readouterr().err
+    assert "--bookkeeping-warn is a lock run" in capsys.readouterr().err
 
 
 def test_a_sharded_deferred_run_runs_those_steps_parts_in_its_shard_alone(monkeypatch, tmp_path):

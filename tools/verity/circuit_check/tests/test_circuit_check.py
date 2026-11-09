@@ -2,7 +2,7 @@
 checks' own negatives (each check fires by name on a circuit built to break it).  `circuit-check --all`, which `check` runs, is
 where every target is checked.
 
-A failure is a correctness or invariant violation, and fails its test: whether one may stay red is drive's policy
+A failure is a correctness or invariant violation, and fails its test: whether one may stay red is the queue's policy
 (`research.policy`), never the checker's.  Redundant and dead gates are warnings: counted in the report, never a test failure
 here.
 
@@ -1101,7 +1101,7 @@ def test_the_boolean_versions_of_the_served_calls_are_calls():
 #: is allowed: the suite's, and any range spot or callee of one `_unchecked_walk` reaches; none is.  Each passes no Call status
 #: to its callees (`targets.CALLEE_CALLS`): their boundaries are not the proof blocks its pending cut makes.  A hold keeps these
 #: walks from failing on it; circuit-check still fails it by name (``partition/unpartitioned``), and whether that may stay red is
-#: drive's policy (policy.toml's allowances).  Over the gate
+#: the queue's policy (policy.toml's allowances).  Over the gate
 #: budget alone, GLM-5.3 TP8's served two-shot MNNVL all-reduces (past 22 rows of 6,144) and multimem ones (past 50) are cut
 #: member by member; the σ Definitions at their smallest bindings (`boolean_sigma.circuit-check.py`, whose split moves
 #: GLM-5.3's and DeepSeek-V4's word digests), multimem at 86 rows and more, over the leaf budget too, and GLM-5.3's served

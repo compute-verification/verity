@@ -1,7 +1,6 @@
-"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs drive's policy
-takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which run after landing, in drive's
-after-landing run on `checked`'s tip.  It reports each step's real verdict; what gates and what may stay red is drive's
-(`research.policy`).
+"""`check`: the repository's one check, what a merge into `main` requires (`research merge`), but for the jobs the verified
+queue's policy takes off the merge gate (policy.toml's `off_gate`: circuit-check, ratchet-gate), which gate nothing.  It
+reports each step's real verdict; what gates and what may stay red is the queue's (`research.policy`).
 
     uv run --extra torch-cpu python tools/verity/check/check.py    run every step here, in the checkout, with CPU-only torch
     ... [--keep-going]                                      run every step to its end, even after one has failed
@@ -9,22 +8,19 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             ci.toml) and what their jobs need, after the preflight; outside a
                                                             recorded run, since no gate takes part of a check
     ... --deferred STEP,...                                 only those ci.toml jobs and what they need, after the preflight: the
-                                                            after-landing run drive launches on `checked`'s tip (`train.sh
-                                                            --deferred`), recorded as `DEFERRED_KIND`, which no gate takes;
-                                                            with --shard K/N, only those of shard K's parts, the last
-                                                            shard's with those no shard holds (ratchet-gate) (drive's
-                                                            `after_landing_shards`: one run per shard, at once, once the
-                                                            records step passed: `--cc-records`)
+                                                            run the verified queue launches beside each candidate
+                                                            (`train.sh --deferred`), recorded as `DEFERRED_KIND`, which no
+                                                            gate takes; with --shard K/N, only those of shard K's parts, the
+                                                            last shard's with those no shard holds (ratchet-gate)
     ... --no-regenerate                                     lean-audit fails on a lock record difference rather than passing on
-                                                            a regenerated record (drive's after-landing run)
-    ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (drive's lock run):
+                                                            a regenerated record
+    ... --bookkeeping-warn                                  with --deferred and without --no-regenerate (a lock run):
                                                             lean-audit repairs a lock's bookkeeping and the caps it breaks and
                                                             warns rather than failing (`lean_audit.py --bookkeeping warn`)
     ... --no-cache [--circuit-cache]                        reuse no pass, and run every job, those off the gate too (the
                                                             nightly `audit-main`, which gates nothing); with --circuit-cache,
                                                             circuit-check alone still reuses and stores its per-target passes,
-                                                            and only its entries of a pack are imported: drive's after-landing
-                                                            run, where a cold `--all` (~4 h) outlasted every run
+                                                            and only its entries of a pack are imported
     uv run python tools/verity/check/check.py --record [--on M]    the same through `research run --tool check` (on machine M, a
                                                             multi-core CPU pod), but for the jobs off the merge gate (`OFF_GATE`,
                                                             policy.toml's `off_gate`: circuit-check, ratchet-gate), which only
@@ -77,8 +73,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
                                                             on a pod of the lander's choosing): an Attempt no gate takes alone
     uv run python tools/verity/check/check.py --shard auto:K/N --shard-plan-file PLAN
                                                             shard K of the auto plan PLAN (`shards.py`, `--shard-plan --out`);
-                                                            with --record --on M, PLAN goes as the run's input (drive's
-                                                            `after_landing_shards = "auto"`, one plan for every shard)
+                                                            with --record --on M, PLAN goes as the run's input
     uv run python tools/verity/check/check.py --shard-plan [--max-shards M] [--n N] [--deferred STEP,...] [--costs FILE]
                [--no-gather] [--split-s S] [--json] [--out FILE]
                                                             the auto plan of this tree, run nothing: its tasks' costs from the
@@ -90,7 +85,7 @@ after-landing run on `checked`'s tip.  It reports each step's real verdict; what
     uv run python tools/verity/check/check.py --record --cc-records --on M
                                                             circuit-check's records step (`cc_records`): every catalog binding's
                                                             record built once and tarred into the run's $OUT, recorded without
-                                                            the tool; drive's sharded after-landing run runs it before its
+                                                            the tool; a sharded `--deferred` run runs it before its
                                                             shards and gives each its artifact (`--cc-records-from ART@SHA256`:
                                                             unpacked into circuit-check's cache, and the shard refused unless
                                                             its bytes have that sha256 and it was built from this tree)
@@ -190,12 +185,10 @@ doesn't name:
                     commit in the run's `check-ratchet-base.txt` or else `check-base.txt`, which `--record --on` sends: its
                     --ratchet-base REF's and its --base REF's; else origin/main)
                     grows the vLLM integration's lint ratchets.  On a train each `Queue: #N` merge is judged against the one
-                    below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`), which drive takes as
-                    the culprit.  A BASE at or above HEAD fails it, since it would judge nothing (drive's after-landing
-                    run sends one below the tip: the tip of the last run whose ratchet-gate gave a verdict, else the last
-                    verified `main`); one that names no commit here skips it.  Off the
-                    gate and in no plan: a recorded check skips it, and the after-landing run, `--deferred` with every
-                    job, runs it
+                    below, so its log names the PR whose merge fails (`  #N (COMMIT): failed: ...`).  A BASE at or above HEAD
+                    fails it, since it would judge nothing; one that names no commit here skips it.  Off the gate and in no
+                    plan: a recorded check skips it, and the run beside each of the verified queue's candidates
+                    (`--deferred`) runs it
 
 Caches (``$CHECK_CACHE``, default ``~/.cache/verity-check``; ``--no-cache`` for a cold run), each a hit only on identical inputs:
 
@@ -387,8 +380,8 @@ def train_gb(priority: bool, pool: str | None, parts: list[str] | None, combinin
 
 def slot_wrap(priority: bool = False, twin: str | None = None) -> list[str]:
     """SLOT_WRAP naming who asked (RESEARCH_LANE, else RESEARCH_AGENT_URL), which `slot.py --status` on the machine shows, and
-    with --priority for the lander's train checks, --rank from CHECK_SLOT_RANK (drive's after-landing run's and lock run's, so
-    they take the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
+    with --priority for the queue's train checks, --rank from CHECK_SLOT_RANK (the run beside each of the verified queue's
+    candidates, so it takes the next slot ahead of unranked priority checks) and --twin for one of a check's twins."""
     by = SETTINGS.RESEARCH_LANE or SETTINGS.RESEARCH_AGENT_URL
     rank = SETTINGS.CHECK_SLOT_RANK
     return [*SLOT_WRAP[:-1], *(["--priority"] if priority else []),
@@ -423,7 +416,7 @@ LANE_POOL = "research"
 SLOTS_TIMEOUT_S = 60
 #: a full check's length: `--on auto` places none on a machine whose deadline (/etc/research/deadline) is nearer than this
 FULL_CHECK_S = 9000
-#: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
+#: a lane's own test run, which no landing needs (a PR lands on review, and the verified queue's check decides what reaches `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 #: what `--slots` runs on a machine as `python3 -`, after SLOT_SRC and LEAN_SRC: both `--status --json` documents as one object,
@@ -528,8 +521,8 @@ def placement(doc: dict, priority: bool = False, min_mem: int | None = None) -> 
     else:
         mine = [s for s in check["slots"] if priority or not s.get("trains")]
         if not mine:
-            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on review, and drive's "
-                             "full check decides what reaches `main`, so no lane check is required; to run its tests anyway: " + LANE_RUN)
+            raise ValueError(f"every slot in {check['file']} is for train checks (only=trains). A PR lands on review, and the verified "
+                             "queue's check decides what reaches `main`, so no lane check is required; to run its tests anyway: " + LANE_RUN)
         if min_mem and not (mine := [s for s in mine if s.get("mem") is None or s["mem"] >= min_mem]):
             raise ValueError(f"no slot in {check['file']} holds this check's {min_mem} GB (" + ", ".join(
                 f"{s['name']} {s.get('mem')} GB" for s in check["slots"]) + "): it takes a train slot")
@@ -810,7 +803,7 @@ def lean_steps(out: Path, cache: bool = True, urls: Path | None = None,
     conformance with `verity.ml.circuits.partition` (`unit_cut_agree.py`), the audit of every Lean package, and the agreement job
     against upstream's Rust verifier on the pinned upstream build (`upstream.json`) when the run has it; without it that step
     is skipped by name.  The audit regenerates lock records (`lean_regenerates`) unless ``regenerate`` is off (`--no-regenerate`,
-    drive's after-landing run, where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, drive's lock run)
+    where a record difference fails), with ``bookkeeping`` (`--bookkeeping-warn`, a lock run)
     repairs the bookkeeping too and warns (`lean_audit.py --bookkeeping warn`), and inside a recorded run it bundles the module versions it
     built for other nodes (`lean_audit.py --bundle`).  `research merge` requires it for a change under `verity/ml/flock/` (`tools/verity/check/tool.py`), and
     `--record` sends it then.  The agreement fails, sent or not, while the verifier's package requires one from outside its
@@ -1374,7 +1367,7 @@ def circuit_shards(only: list[str] | None) -> list[str] | None:
 
 #: the records step (`--cc-records`): every catalog binding's record, built once (`circuit-check --all --records-only`) and tarred
 #: under the run's $OUT with the tree it was built from (`CC_RECORDS_TREE`), its sha256 in the result (`CC_RECORDS_KIND`'s
-#: ``records``); drive's sharded after-landing run builds it before the shards and gives each its artifact
+#: ``records``); a sharded `--deferred` run builds it before the shards and gives each its artifact
 #: (`--cc-records-from ART@SHA256`), so no shard's circuit-check builds the bindings itself
 CC_RECORDS = "out/circuit-records.tar.gz"
 CC_RECORDS_KIND = "circuit-records/v1"
@@ -1492,8 +1485,7 @@ def ratchet_gate(out: Path, cache: bool) -> list[str] | str:
         return f"skipped: no base: {named} names no commit here"
     if subprocess.run(["git", "merge-base", "--is-ancestor", "HEAD", base], cwd=ROOT, capture_output=True).returncode == 0:
         return (f"failed: its base {named} is HEAD or above it, so no change lies above the base to judge: check this commit "
-                "against one below it (`--record --base REF` or `--ratchet-base REF`; drive's after-landing run sends one below "
-                "its tip)")
+                "against one below it (`--record --base REF` or `--ratchet-base REF`)")
     keep = str(cache_dir() / "ratchet-gate") if cache else ""
     script = ('g=$(mktemp -d) && trap \'rm -rf "$g"\' EXIT && git show "$1:$2" > "$g/ratchet_gate.py" && '
               'RATCHET_GATE_CACHE="$3" "$4" "$g/ratchet_gate.py" "$1" HEAD')
@@ -1611,7 +1603,7 @@ def steps(out: Path, n: int = 1) -> list[tuple[str, list[str] | str, Path]]:
 
 #: a shard's result kind, which the tool doesn't produce: no gate takes a shard alone, only a `--combine` check of its set
 SHARD_KIND = "check-shard/v1"
-#: an after-landing run's result kind (`--deferred`), which no gate takes: drive reads its steps and suites to name a red's culprit
+#: a deferred run's result kind (`--deferred`), which no gate takes: the verified queue reads the steps of the run beside
 DEFERRED_KIND = "check-deferred/v1"
 
 
@@ -1624,8 +1616,8 @@ def deferred_parts(steps: str) -> list[str]:
 
 def shard(spec: str, gated: bool = True, jobs: set[str] | None = None, plan_file: Path | None = None) -> dict:
     """`--shard K/N`: {"k", "n", "parts": shard K's parts under ci.toml's plan with N shards, but those of a job off the merge
-    gate unless ``gated`` is False (an after-landing `--deferred` shard runs them, and its last shard also the parts no shard
-    of the plan holds, ratchet-gate's, so the N shards together run every part drive's after-landing run passes), "all":
+    gate unless ``gated`` is False (a `--deferred` shard runs them, and its last shard also the parts no shard
+    of the plan holds, ratchet-gate's, so the N shards together run every part a `--deferred` run passes), "all":
     every part a recorded unsharded check covers (`gated_parts`)}, on this tree's Lake packages, each spec's audit on its
     provers' shard (`declaration.resolve`, `audit_provers`).  DeclarationError when there is no such plan or shard, or the tree
     can't be listed.  `auto:K/N`: shard K of the auto plan (`auto_shard`)."""
@@ -1853,7 +1845,7 @@ def shard_plan_main(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="check.py --shard-plan", description="the auto plan of this tree, running nothing")
     ap.add_argument("--max-shards", type=int, default=SHARDS.MAX_SHARDS, help="the most shards (default %(default)s)")
     ap.add_argument("--n", type=int, help="this many shards, not the planner's N")
-    ap.add_argument("--deferred", metavar="STEP,...", help="plan these steps and what they need (drive's after-landing run)")
+    ap.add_argument("--deferred", metavar="STEP,...", help="plan these steps and what they need (a `--deferred` run)")
     ap.add_argument("--costs", type=Path, help="a JSON {part: seconds} over the measured costs")
     ap.add_argument("--split-s", type=float, default=SHARDS.SPLIT_S, metavar="S",
                     help="split a suite measured past S seconds by test file (default %(default)s)")
@@ -1928,7 +1920,7 @@ def shard_parts() -> list[str]:
     return DECLARATION.all_parts(JOBS, _parts_of())
 
 
-#: the jobs off the merge gate (drive's policy, policy.toml's `off_gate`), which a recorded check leaves to drive's after-landing run
+#: the jobs off the merge gate (the queue's policy, policy.toml's `off_gate`), which a recorded check leaves out
 OFF_GATE = tuple(j.name for j in JOBS if not j.gate)
 
 
@@ -2977,7 +2969,7 @@ def main(argv: list[str], script: bool = False) -> int:
         sharded = {**(sharded or {}), "parts": mine, "deferred": deferred.split(",")}
         print(f"check: deferred {deferred}: {', '.join(sorted({p.partition(':')[0] for p in sharded['parts']}))}", flush=True)
     if bookkeeping and (deferred is None or not regenerate or "--shard" in argv):
-        print("check: --bookkeeping-warn is drive's lock run: with --deferred, unsharded and without --no-regenerate",
+        print("check: --bookkeeping-warn is a lock run: with --deferred, unsharded and without --no-regenerate",
               file=sys.stderr)
         return 2
     if picked:

@@ -32,7 +32,7 @@ Each part of the check, with its key at COMMIT and the recorded passes under tha
     ratchet-gate          no verdict, never required: it judges the merges above the check's base, not COMMIT's tree, and
                           is off the merge gate
 
-A job off the merge gate (drive's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
+A job off the merge gate (the queue's policy, policy.toml's `off_gate`: circuit-check, ratchet-gate) is listed, and none of its parts is required.
 
 The steps that build or fetch what other steps read (`IMPLIED`) keep no verdict of their own.  Each is
 `implied` when every part that reads what it makes has passed (`implied_by`), and `must-run` when one hasn't.  Why those passes

@@ -1,5 +1,5 @@
 # The jobs `check` runs, written as data: who owns each, which group it runs in, and what its failure means for the run. Which
-# of them gate a merge, and what may stay red, is drive's policy (policy.toml), not this file's.
+# of them gate a merge, and what may stay red, is the queue's policy (policy.toml), not this file's.
 # `declaration.py` reads this file without running any of the commit's code. check.py takes its groups, their order and
 # what halts the run from here, builds each job's command, and refuses a job this file doesn't declare: owners declare their
 # jobs here, and `check` runs them.
@@ -38,7 +38,7 @@ group = 2
 # `circuit-check --all` whole; one that holds some runs `--all --shard K/4` for each, and `check.py --combine` joins the shards
 # (`circuit-check --combine`), whose verdict is the unsharded run's
 shards = 4
-# Off the merge gate by drive's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
+# Off the merge gate by the queue's policy (policy.toml's `off_gate`): the plans keep it, so putting it back is one line there. Its red
 # in drive's after-landing run names its culprit as any red does, and lands no PR touching its inputs until it passes.
 
 # Group 3: the Lean verifier, its partition check, then the agreement with upstream's Rust verifier.
@@ -99,7 +99,7 @@ name = "ratchet-gate"
 owner = "vllm"
 part = "tests"
 group = 7
-# Off the merge gate by drive's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
+# Off the merge gate by the queue's policy (policy.toml's `off_gate`) and out of the plans. It runs in drive's after-landing run
 # (`--deferred`, every job, its base the last verified commit; sharded, in its last shard), where a red's culprit is the
 # landing whose merge it names.
 

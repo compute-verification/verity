@@ -60,8 +60,8 @@ GRAPHS = ("after-landing", "preflight")
 GRAPH_KIND = "tasks-graph/v1"
 #: where an executor's run of `run ID --out "$OUT/task-result.json"` leaves its result among the run's files
 RESULT = "out/task-result.json"
-#: whether a task's audit regenerates lock records: never, so a lock record difference fails it, as it fails drive's
-#: after-landing run (`check.py --no-regenerate`), whose verdicts a graph's stand beside and replace
+#: whether a task's audit regenerates lock records: never, so a lock record difference fails it (`check.py
+#: --no-regenerate`), and the verified queue ejects the PR that carries it
 REGENERATE = False
 
 

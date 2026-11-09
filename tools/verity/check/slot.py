@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""`python3 tools/verity/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the lander's train checks run.
+"""`python3 tools/verity/check/slot.py [--priority] [--by NAME] [--twin PAIR[@HOME]] [--wait-max S] [--run-max S] -- CMD...`: CMD in a free merge-check slot of this machine, the way the queue's train checks run.
 
 `check.py --record --on MACHINE` starts its check through this, so a lane's own check queues behind the train checks for a slot
 instead of spreading over every core the checks share (two unslotted checks on the same cores overload them both).
@@ -8,12 +8,12 @@ A machine's slots are SLOTS (`/workspace/research/locks/slots`; CHECK_SLOTS over
 
     NAME CPUS [windows=FILE] [lead=MINUTES] [only=trains] [mem=GB] [scope=1]   # e.g. `a 32-63 mem=560`, `d 0-47 windows=/workspace/pouw/fill/windows lead=30`
 
-The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock the lander's `flock` takes) is free and no window blocks is
+The first slot whose lock (`check-NAME.lock` beside SLOTS, the lock a train check's `flock` takes) is free and no window blocks is
 taken. Its lock stays held by CMD (an inherited descriptor), and CMD runs pinned to CPUS with that slot's test cache
 (`~/.cache/verity/tests-slot-NAME`), without LEASE_DIR and with LEASE_DEADLINE_FILE pointing nowhere. A slot with windows= is
 skipped while one of FILE's windows (`START_UTC MINUTES`, the node-2 fill runner's format) is open or starts within lead (30)
 minutes: a check there would run into a whole-node timed measurement. A slot with only=trains is taken only by a `--priority` waiter
-(the lander's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
+(the queue's train checks), so a lane's long check or quick tier never holds the slot a train needs (a slot.py from before it
 reads the key as unknown and the slot as any other). A slot with mem=GB is skipped while less than GB is free to this process
 (`memory_gb`: the least of MemAvailable and what each cgroup v2 memory limit over it leaves, the user slice's on a VM, less what
 live research.mem reservations hold but don't use yet, `reserved_gb`: for a `--priority` waiter, or on an only=trains slot, only
@@ -30,7 +30,7 @@ would run unpinned beside its GPU jobs). A slot
 with a core outside this process's own (os.sched_getaffinity) is skipped, since pinning onto it fails. Stdlib only: it runs before uv.
 
 Waiters take slots in the order they came: each holds a locked ticket in LINE beside SLOTS while it waits, and only the oldest
-live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). The lander's own `flock` of a slot's
+live one may take a slot (a ticket nobody holds is a waiter that died, and is removed). A train check's own `flock` of a slot's
 lock is not in the line: it takes that slot whenever it frees.
 
 `python3 tools/verity/check/slot.py --priority -- CMD...`: the verified queue's train checks (`train.sh`). A priority waiter's ticket sorts
@@ -87,7 +87,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SLOTS = Path(os.environ.get("CHECK_SLOTS", "/workspace/research/locks/slots"))
-#: a lane's own test run, which no landing needs (a PR lands on review, and drive's full check decides what reaches `main`)
+#: a lane's own test run, which no landing needs (a PR lands on review, and the verified queue's check decides what reaches `main`)
 LANE_RUN = ('`research run --on auto --cwd source -- bash -lc "uv sync -q --all-packages --extra torch-cpu && '
             'uv run tools/verity/check/suites.py --changed $(git fetch -q origin main && git merge-base HEAD FETCH_HEAD) --quick"`')
 LINE = "check-line"
@@ -288,7 +288,7 @@ def reserved_gb(proc: Path = Path("/proc"), priority: bool = False) -> int:
 def reserve(slot: dict, now: datetime, priority: bool = False) -> str | None:
     """A slot with mem=GB holds a research.mem reservation of that size while its check runs: `check-NAME.json` in RAMLOCK, in
     research.mem's format and under its admission lock, naming this process (CMD, after the exec) and its run, and marked
-    "priority" for a `--priority` waiter's check (a train's, or drive's after-landing run), which other train checks' gates count in
+    "priority" for a `--priority` waiter's check (a train's, or the run beside a queue candidate), which other train checks' gates count in
     full (`reserved_gb`). research.mem counts
     the GB less what the check's process tree holds, and stops counting it when that pid is gone or the run ended. Without it,
     research.mem would admit work beside two full checks until the machine ran out of memory. The line to print, or None
@@ -886,7 +886,7 @@ def main(argv: list[str], now=lambda: datetime.now(timezone.utc), sleep=time.sle
               "recorded check, for the pools `research run --help` names)"
             if pools else "a lane check runs on another machine")
         sys.exit(f"slot: every slot in {SLOTS} is for train checks (only=trains); {where}. A PR lands "
-                 f"on review, and drive's full check decides what reaches `main`, so no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
+                 f"on review, and the verified queue's check decides what reaches `main`, so no lane check or quick tier is required; to run its tests anyway: {LANE_RUN}")
     if not any(holds(s, min_mem) for s in slots if priority or not s["trains"]):
         have = ", ".join(f"{s['name']} ({s['mem']} GB)" for s in slots)
         print(f"slot: not started: this check needs a slot of at least {min_mem} GB, and {SLOTS} has {have}. Run it on a machine "

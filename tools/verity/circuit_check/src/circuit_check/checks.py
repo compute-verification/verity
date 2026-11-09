@@ -1740,7 +1740,7 @@ def classified(r: dict) -> dict:
 
 
 def summarize(entries: Iterable[dict], catalog: bool = False) -> dict:
-    """Totals over entries: failures by name (`ok` is none: whether one may stay red is drive's policy, never the runner's),
+    """Totals over entries: failures by name (`ok` is none: whether one may stay red is the queue's policy, never the runner's),
     warnings' counts by check and by Definition (a finding two entries share, such as a template's Definition checked on its own
     too, once), ``unchecked``: how many warnings (each a property no check enforces: it never fails) on how many Definitions,
     ``recomputed_across``: each Boolean Call (`Q_word` v2) that computes a value in two proof blocks, with its count, and

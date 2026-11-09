@@ -130,7 +130,7 @@ suite runs in one process. Each test process's thread pools (OpenMP, so torch's,
 lane would run a thread per core, and the node's load would reach several times its cores.
 
 Each suite's verdict is its real one: a failed test fails its suite here wherever else it is red. Whether a failure may stay red
-is drive's policy (`research.policy`, tools/verity/check/policy.toml's allowances), judged where drive and the quick tier read
+is the queue's policy (`research.policy`, tools/verity/check/policy.toml's allowances), judged where the queue and the quick tier read
 the reports; each failed row says whether it failed for anything besides its failed tests (`beyond_tests`: a read outside its
 inputs, an unguarded worker, a timeout, a signal, a nondeterministic test, no guard report), which an allowance of tests alone
 never covers.

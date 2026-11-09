@@ -26,7 +26,7 @@ FAMILY_FIELDS = {"files": list, "kinds": list, "env": str, "about": str, "resour
 RESOURCES = ("cores", "mem_gb", "disk_gb")
 #: what `verity graph run` writes in a task's work directory beside its outputs and reads
 LOG = "task.log"
-#: a field name no table, task or result may have: who is paged is drive's policy, from paths
+#: a field name no table, task or result may have: who is paged is the queue's policy, from paths
 FORBIDDEN = "owner"
 #: a task's fields `complete` holds to an exact shape, which no `owner` field gets past
 SHAPED = ("inputs", "reads", "outputs")
@@ -67,7 +67,7 @@ def commit(root: Path) -> str | None:
 def _forbid(where: str, doc: object) -> None:
     if isinstance(doc, dict):
         if FORBIDDEN in doc:
-            raise GraphError(f"{where} has an `{FORBIDDEN}` field: who is paged is drive's policy, from paths, never the graph's")
+            raise GraphError(f"{where} has an `{FORBIDDEN}` field: who is paged is the queue's policy, from paths, never the graph's")
         for k, v in doc.items():
             _forbid(f"{where}.{k}", v)
     elif isinstance(doc, list):

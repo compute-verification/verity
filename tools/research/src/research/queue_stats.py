@@ -1,4 +1,5 @@
-"""`research queue stats`: where a landed PR's time went, from its ready mark to `main`, over a window of drive's landings.
+"""Where a landed PR's time went, from its ready mark to `main`, over a window of the old landing path's (drive's) log, which
+`lean_times` and `vqueue_compare` read through it.
 
 Each PR drive landed in the window is split into five steps, read from drive's log (its tick times, the `checking TIP (#..): RID`
 and `landed #.. on main at TIP (check RID)` lines), the landing check's own records (`slot.json`'s `took`, `steps.jsonl`'s step

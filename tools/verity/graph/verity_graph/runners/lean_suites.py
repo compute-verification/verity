@@ -8,7 +8,7 @@ on this machine).
 
 Its status is from suites.py's exit and its report.  Every suite passed, a pass of its key reused among them, is a pass.  Suites
 that failed on their tests, on reads outside their inputs or on their timeout are a fail, each named in `detail.failed` (its name,
-directory and failed tests), by which drive names, allows and blames each as the suite's own red; so is a run whose tests changed
+directory and failed tests), by which the queue names, allows and blames each as the suite's own red; so is a run whose tests changed
 the repository.  A suite the report lacks or reports skipped (not run), a failure the report gives no cause of (a kill, fixtures
 that couldn't be fetched), a usage error and a signal are an error.  `detail.suites` is each suite's status."""
 from __future__ import annotations
@@ -83,7 +83,7 @@ def run(task: dict, work: Path) -> dict:
 
 
 def row(r: dict) -> dict:
-    """What drive reads of a failed suite's report row: its name and directory, its failed tests, whether it failed for more than
+    """What the queue reads of a failed suite's report row: its name and directory, its failed tests, whether it failed for more than
     them (`beyond_tests`, as suites.py gives it, and when the list is cut), and its timeout."""
     tests = [str(t) for t in r.get("failed_tests") or ()]
     out = {"name": r["name"], "suite": r.get("suite") or ".", "failed_tests": tests[:NAMED]}
