@@ -40,8 +40,8 @@ roots the boundary values are committed under (`portRoots`).
 * round 0: the verifier's coin is the first stage's bytes (the replay sample, `RegTwo.sample`);
 * round 1: the prover's message is the interior registration's record, as JSON (`jsonMsg`): the roots of its ports,
   whose cells hold the sampled replay blocks' interiors, and those blocks in the order its cells lay them out
-  (`window.replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order, then those roots
-  (`irootsOf`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
+  (`window.replay_sample`, `blocksOf`); replay block `ρ`'s interior roots are its place in that order and the number
+  of blocks, then those roots (`irootsOf`); the verifier's coin is the second stage's bytes (`Select.selectSecond`);
 * round 2: the prover's message is the session statements, one per template in template order (`stmtsOf`), which the
   verifier checks (`stmtOk`): the run's statement decodes and its partition and design evaluate, and template `t`'s
   statement sets up as a masked Flock statement with `k₀ t` rounds, in Flock's masked scope, in the scope Flock's
@@ -64,7 +64,8 @@ proof-block partition a partition of it, each proof block in one replay block an
 replay layout fits the members' files (`filesOk`: the templates are the members, each population slot is its own unit,
 each member has room for its units, and the registration's blocks are theirs), and that each template's reference
 statement reads as a member's (`templateOk`: hidden outputs, untyped tags, a circuit file `Desc.parseStmt` reads, at
-most `2^32` rows a unit, one table); every check is a decision, so the verifier refuses every statement out of scope.
+most `2^32` rows a unit, one table, every port a `v2Row`); every check is a decision, so the verifier refuses every
+statement out of scope.
 
 So every checked unit has its template's session (`templateOf`) on that session's rounds (`session`), and at a run
 refused before them, the session is `xS₀ t`'s run of a prover whose first message Flock refuses (`refusedSeen`). The
@@ -173,9 +174,10 @@ def blocksOf (rec : Json) : List ℕ :=
   | _ => []
 
 /-- **Replay block `ρ`'s interior roots** as the round-1 message `m₁` states them: `ρ`'s place among the interior
-record's replay blocks, then the record's roots (`portRoots`); none where `m₁` isn't JSON. -/
+record's replay blocks and their number (`natMsg`), then the record's roots (`portRoots`); none where `m₁` isn't
+JSON. -/
 def irootsOf (m₁ : Msg) (ρ : ℕ) : List Msg :=
-  ((jsonMsg m₁).map fun rec => FlockDeploy.encNat ((blocksOf rec).idxOf ρ) :: portRoots rec).getD []
+  ((jsonMsg m₁).map fun rec => natMsg ((blocksOf rec).idxOf ρ) :: natMsg (blocksOf rec).length :: portRoots rec).getD []
 
 /-! ## The scope the verifier decides -/
 
@@ -252,8 +254,8 @@ def sessionOk (t : ℕ) (xS : Msg) : Bool :=
   zkOk xS && shapeOf xS == shapeOf (h.xS₀ t) && FlockDeploy.scopeCheck true xS && hiddenOf xS
 
 /-- **Template `t`'s reference statement reads as a member's**, decided: it reads with hidden outputs and untyped tags,
-its circuit file's descriptor reads (`Desc.parseStmt`), its statement circuit's unit has at most `2^32` rows, and it
-sets up in one table. -/
+its circuit file's descriptor reads (`Desc.parseStmt`), its statement circuit's unit has at most `2^32` rows, it sets
+up in one table, and each of its ports is a `sha512/row/v2` row (`ProvedScope.v2Row`), one leaf a row. -/
 def templateOk (t : ℕ) : Bool :=
   match FlockDeploy.readOf true (h.xS₀ t) with
   | some r =>
@@ -261,7 +263,8 @@ def templateOk (t : ℕ) : Bool :=
       (match _root_.Flock.Desc.parseStmt r.tags r.I.circuitFile r.I.tables with
         | .ok _ => true
         | .error _ => false) &&
-      decide (r.stmt.unit.unitLog ≤ 32) && (shapeOf (h.xS₀ t)).length == 1
+      decide (r.stmt.unit.unitLog ≤ 32) && (shapeOf (h.xS₀ t)).length == 1 &&
+      r.stmt.ports.all _root_.Flock.ProvedScope.v2Row
   | none => false
 
 /-- **The first stage's design**: the one `Select.select` samples on the boundary registration (`slotDesign`). -/

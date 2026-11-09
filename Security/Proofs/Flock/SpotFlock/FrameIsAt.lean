@@ -11,10 +11,11 @@ follows from two facts, one about `c` and the slots, one about the run's records
 * `SlotsAt slot c L`: at each gate a checked unit needs, `c`'s reveal holds an opening of the witness's bit at the
   layout's column, whose row and salt are row `q` of unit `n` of the session's table, and the gate's slot names where
   the frame finds that row. At a port the session reads registered (`reg`): the entry round 2 reads the read's value
-  off (`readKeyAt`), under the roots it reads it under (`readRoots`), at the read's schema and the position the
-  session header gives the row, the opening's path being the header's. At a one-table session's other ports: template
-  `t`'s port of the interior record (`SlotKey.interior`), under the replay block's roots, at the published tree's
-  schema and leaf count and the drawn unit's row, the opening's path being the published tree's (`pubPath`).
+  off (`readKeyAt`), under the roots it reads it under (`readRoots`), at the read's schema, not sized, its leaf under
+  those roots (`leafAt`), at an entry of the read's leaf count, the position the session header gives the row, the
+  opening's path being the header's. At a one-table session's other ports: template `t`'s port of the interior record
+  (`SlotKey.interior`), under the replay block's roots, at the published tree's schema, sized to its leaf count, its
+  leaf the drawn unit's row, the opening's path being the published tree's (`pubPath`).
 * `EntriesAt c`: in an accepted run, the entry round 2 reads each registered read's value off has the read's root,
   leaf count and domain id, and template `t`'s port of the interior record at a port a one-table session doesn't read
   registered has its published tree's root and domain id; each port at most `c`'s own depth.
@@ -89,15 +90,18 @@ def SlotsAt (slot : ℕ → Option Slot) (c : Code) (L : Layout) : Prop :=
           o.1 = readRoots h x m₁ c₀ c₁ ρ (templateOf h.ms u) reg.name reg.value ∧
           ∀ t positions paths, sts[j].pub.tables = some t →
             _root_.Flock.Registered.entry sts[j].pub reg = .ok (positions, paths) →
-            slot g = some ⟨readKeyAt h x m₁ c₀ c₁ (templateOf h.ms u) reg.name reg.value, reg.schema,
-              positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0, none⟩ ∧
-            bytes (c.π o.2) = paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
+            ∃ sl, slot g = some sl ∧ sl.key = readKeyAt h x m₁ c₀ c₁ (templateOf h.ms u) reg.name reg.value ∧
+              sl.schema = reg.schema ∧ sl.sized = false ∧
+              (∀ e, entryAt o.1 sl = some e → e.leaves = reg.leaves →
+                leafAt o.1 sl e = positions.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) 0) ∧
+              bytes (c.π o.2) = paths.getD (_root_.Flock.Registered.ref t sts[j].c.ports.size q n) ByteArray.empty) ∨
         (ins.read.I.count ≤ 1 ∧ q < sts[j].c.ports.size ∧ o.1 = iroots x (seenAt m₀ m₁ m₂ c₀ c₁ rest) ρ ∧
           (∀ own, ins.registered = some own → ∀ reg ∈ own, reg.name ≠ sts[j].c.ports[q]!.name) ∧ ∀ pop,
           _root_.Flock.HmOut.loadPublic ins.read.tags sts[j].c ins.read.I.publicFile = .ok pop →
-          slot g = some ⟨.interior (h.names.getD (templateOf h.ms u) "") sts[j].c.ports[q]!.name,
-              (pubPort sts[j].c pop q).schema, rowAt sts[j].c pop q (unitOf ins.read.draw n),
-              some (pubPort sts[j].c pop q).leaves⟩ ∧
+          ∃ sl, slot g = some sl ∧ sl.key = .interior (h.names.getD (templateOf h.ms u) "") sts[j].c.ports[q]!.name ∧
+            sl.schema = (pubPort sts[j].c pop q).schema ∧ sl.sized = true ∧
+            unitsAt o.1 sl = (pubPort sts[j].c pop q).leaves ∧
+            (∀ e, entryAt o.1 sl = some e → leafAt o.1 sl e = rowAt sts[j].c pop q (unitOf ins.read.draw n)) ∧
             bytes (c.π o.2) = pubPath sts[j].c pop q (rowAt sts[j].c pop q (unitOf ins.read.draw n))))
 
 /-- **The entries the slots name have their ports' fields** (the module's docstring), at `FrameIs`'s statements and
@@ -127,7 +131,7 @@ def EntriesAt (c : Code) : Prop :=
 
 /-- **`FrameIs` at a frame that reads its ports off the roots**: the reveal's opening and the gate's slot
 (`SlotsAt`), and the entry the slot names (`EntriesAt`), give the frame's port either branch asks for, at the slot's
-position (`port_frameAt`), with the reveal's path. -/
+leaf (`port_frameAt`), with the reveal's path. -/
 theorem frameIs_frameAt {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf : h.frame = frameAt slot c)
     (hS : SlotsAt h slot c L) (hE : EntriesAt h c) : FrameIs h L := by
   intro x s Pt d m₀ m₁ m₂ c₀ c₁ rest wF u b ρ rb ins spec sts hx hP h2 hin hok hu hck hb hρ hrb hset g hg
@@ -139,16 +143,18 @@ theorem frameIs_frameAt {slot : ℕ → Option Slot} {c : Code} {L : Layout} (hf
   refine ⟨β, j, y, n, q, hβ, hj, hy, hw, hn, o, ho, hpos, hval, hroot, hrow, hsalt, ?_⟩
   rcases hbr with ⟨own, reg, hown, hreg, hq, hR, hslot⟩ | ⟨hc1, hq, hR, hnr, hslot⟩
   · refine Or.inl ⟨own, reg, hown, hreg, hq, fun t positions paths ht hent => ?_⟩
-    obtain ⟨hs, hπ⟩ := hslot t positions paths ht hent
+    obtain ⟨sl, hs, hk, hsc, hsz, hleaf, hπ⟩ := hslot t positions paths ht hent
     obtain ⟨e, he, hr, hl, hd, hcap⟩ := hEr own reg hown hreg
-    rw [← hR] at he
-    obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind⟩ := port_frameAt (c := c) hs he hr hl hd rfl hcap
-    exact ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩
+    rw [← hR, ← hk] at he
+    have hl' : leavesAt o.1 sl e = reg.leaves := by simp [leavesAt, hsz, hl]
+    obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind⟩ := port_frameAt (c := c) hs he hr hl' hd hsc hcap
+    exact ⟨P, hPr, hPl, hPd, hPs, by rw [← hleaf e he hl]; exact hat, hfind, hπ⟩
   · refine Or.inr ⟨hc1, hq, fun pop hpop => ?_⟩
-    obtain ⟨hs, hπ⟩ := hslot pop hpop
+    obtain ⟨sl, hs, hk, hsc, hsz, hun, hleaf, hπ⟩ := hslot pop hpop
     obtain ⟨e, he, hr, hd, hcap⟩ := hEp j hj q pop hc1 hq hnr hpop
-    rw [← hR] at he
-    obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind⟩ := port_frameAt (c := c) hs he hr rfl hd rfl hcap
-    exact ⟨P, hPr, hPl, hPd, hPs, hat, hfind, hπ⟩
+    rw [← hR, ← hk] at he
+    have hl' : leavesAt o.1 sl e = (pubPort sts[j].c pop q).leaves := by simp [leavesAt, hsz, hun]
+    obtain ⟨P, hPr, hPl, hPd, hPs, hat, hfind⟩ := port_frameAt (c := c) hs he hr hl' hd hsc hcap
+    exact ⟨P, hPr, hPl, hPd, hPs, by rw [← hleaf e he]; exact hat, hfind, hπ⟩
 
 end SpotFlock
