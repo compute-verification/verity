@@ -3,12 +3,12 @@ and a `module` file's `olean.server` and `olean.private`) compared as the object
 
 Lean 4.34's output is byte-identical for one module's sources built twice at one path, whatever the thread count, but not
 at another path: a module's `olean.server` keeps each message its compile logged (a linter's warning) with the absolute
-path of its source, and its `olean.private` points into that part, so a longer path moves the objects after it. A build
-restored from another tree is the usual case of a sampled recompile (`check.py`'s `sampled`), so bytes alone would refuse
-about one module in a hundred. `differs` walks both graphs from each part's root in step: every object must have the
-same kind, fields and scalar bytes, and its fields the same, recursively, across the parts, which point into each other.
-The one difference allowed is a string that, in both, is an absolute path ending in the module's own source path. Every
-declaration, extension entry and message is compared, so nothing but that path can differ.
+path of its source, and its `olean.private` points into that part, so a longer path moves the objects after it. A
+sampled recompile (`check.py`'s `sampled`) checks a module built in another tree, so for a module whose compile logged a
+message, bytes alone would refuse it. `differs` walks both graphs from each part's root in step: every object must have
+the same kind, fields and scalar bytes, and its fields the same, recursively, across the parts, which point into each
+other. The one difference allowed is a string that, in both, is an absolute path ending in the module's own source path,
+its length its own. Every declaration, extension entry and message is compared, so nothing but that path can differ.
 
 The layout is Lean's (`src/include/lean/lean.h`, `src/runtime/compact.cpp`): a header of `HEADER` bytes, the base address
 the part is mapped at, the root object's address, then the objects, each an 8-byte header (reference count, size, the
@@ -35,7 +35,7 @@ class Malformed(ValueError):
 
 
 class _Region:
-    """One build's parts, by the address range each is mapped at."""
+    """One build's parts, by the address range each is mapped at: no two ranges overlap, so an address is in one part."""
 
     def __init__(self, parts: dict[str, bytes]):
         self.parts = {}
@@ -43,6 +43,10 @@ class _Region:
             if len(data) < DATA or data[:5] != b"olean":
                 raise Malformed(f"{name}: not an olean file")
             self.parts[name] = (_U64.unpack_from(data, BASE)[0], data)
+        spans = sorted((base, base + len(data), name) for name, (base, data) in self.parts.items())
+        for (_, end, a), (start, _, b) in zip(spans, spans[1:]):
+            if start < end:
+                raise Malformed(f"{a} and {b} are mapped over each other")
 
     def root(self, name: str) -> int:
         return _U64.unpack_from(self.parts[name][1], ROOT)[0]
@@ -64,17 +68,19 @@ def _bytes(data: bytes, off: int, n: int) -> bytes:
     return data[off:off + n]
 
 
-def _string(data: bytes, off: int) -> bytes:
-    """A string object's bytes, its terminating NUL dropped."""
-    return _bytes(data, off + 32, _u64(data, off + 8))[:-1]
+def _string(data: bytes, off: int) -> tuple[int, bytes]:
+    """A string object's length in code points (`m_length`, which compiled `String.length` reads) and its bytes, its
+    terminating NUL dropped."""
+    return _u64(data, off + 24), _bytes(data, off + 32, _u64(data, off + 8))[:-1]
 
 
-def _path_of_source(s: bytes, suffix: str) -> bool:
+def _path_of_source(length: int, s: bytes, suffix: str) -> bool:
     try:
         text = s.decode()
     except UnicodeDecodeError:
         return False
-    return text.startswith("/") and text.endswith(suffix) and "\0" not in text and "\n" not in text
+    return (len(text) == length and text.startswith("/") and text.endswith(suffix) and "\0" not in text
+            and "\n" not in text)
 
 
 def differs(restored: dict[str, Path], rebuilt: dict[str, Path], source: str) -> str | None:
@@ -82,7 +88,7 @@ def differs(restored: dict[str, Path], rebuilt: dict[str, Path], source: str) ->
     ``source`` (as its name gives it: `Proofs/Foo.lean` for `Proofs.Foo`; Lake joins a package's `srcDir` without
     normalizing it, so nothing before it is compared), or None when they are: the same parts, with headers equal byte for
     byte, whose graphs are equal object for object from each part's root, but for strings that in both are absolute paths
-    ending in ``/`` + ``source``."""
+    ending in ``/`` + ``source``, each of the length its text has."""
     if sorted(restored) != sorted(rebuilt):
         return f"parts {sorted(restored)} restored, {sorted(rebuilt)} rebuilt"
     suffix = "/" + source.lstrip("/")
@@ -125,8 +131,9 @@ def differs(restored: dict[str, Path], rebuilt: dict[str, Path], source: str) ->
                     return f"{part}: a scalar array differs"
             elif tag == STRING:
                 sx, sy = _string(dx, ox), _string(dy, oy)
-                if sx != sy and not (_path_of_source(sx, suffix) and _path_of_source(sy, suffix)):
-                    return f"{part}: a string differs ({sx[:80]!r} restored, {sy[:80]!r} rebuilt)"
+                if sx != sy and not (_path_of_source(*sx, suffix) and _path_of_source(*sy, suffix)):
+                    return (f"{part}: a string differs ({sx[1][:80]!r} of length {sx[0]} restored, {sy[1][:80]!r} of "
+                            f"length {sy[0]} rebuilt)")
             elif tag == MPZ:
                 (_, kx), (_, ky) = struct.unpack_from("<ii", dx, ox + 8), struct.unpack_from("<ii", dy, oy + 8)
                 if kx != ky:

@@ -33,9 +33,10 @@ class Region:
         self.body += b + bytes(-len(b) % 8)
         return at
 
-    def string(self, s: str) -> int:
+    def string(self, s: str, length: int | None = None) -> int:
         data = s.encode() + b"\0"
-        return self._put(struct.pack("<iHBBQQQ", 0, 1, 0, G.STRING, len(data), len(data), len(s)) + data)
+        return self._put(struct.pack("<iHBBQQQ", 0, 1, 0, G.STRING, len(data), len(data),
+                                     len(s) if length is None else length) + data)
 
     def ctor(self, tag: int, fields: list[int], scalars: bytes = b"") -> int:
         return self._put(struct.pack("<iHBB", 0, 8 + 8 * len(fields) + len(scalars), len(fields), tag)
@@ -51,15 +52,18 @@ class Region:
 
 
 def module(d: Path, path: str = "/a/P/M.lean", text: str = "unused variable", scalar: bytes = b"\x01\0\0\0\0\0\0\0",
-           header: bytes = HEADER, stray: int | None = None) -> dict[str, Path]:
-    """A module's three parts: the public one names it, the server part holds a message (its source's ``path``, its
-    ``text``) that points at the public name, and the private part a declaration with ``scalar`` that points into the
-    server part, past the message, so a longer path moves what it points at."""
+           header: bytes = HEADER, stray: int | None = None, lengths: dict[str, int] | None = None,
+           bases: tuple[int, int, int] = (0x1000_0000, 0x2000_0000, 0x3000_0000)) -> dict[str, Path]:
+    """A module's three parts, mapped at ``bases``: the public one names it, the server part holds a message (its source's
+    ``path``, its ``text``, each of the length ``lengths`` gives, else its own) that points at the public name, and the
+    private part a declaration with ``scalar`` that points into the server part, past the message, so a longer path moves
+    what it points at."""
     d.mkdir(parents=True, exist_ok=True)
-    pub, srv, prv = Region(0x1000_0000, header), Region(0x2000_0000), Region(0x3000_0000)
+    pub, srv, prv = Region(bases[0], header), Region(bases[1]), Region(bases[2])
     name = pub.string("P.M")
     pub_root = pub.ctor(0, [name, pub.array([name, 1])])
-    msg = srv.ctor(1, [srv.string(path), srv.string(text), name])
+    lengths = lengths or {}
+    msg = srv.ctor(1, [srv.string(path, lengths.get(path)), srv.string(text, lengths.get(text)), name])
     entry = srv.ctor(2, [srv.string("declRangeExt"), msg])
     srv_root = srv.array([msg, entry])
     prv_root = prv.ctor(0, [entry, prv.ctor(3, [name], scalar), stray if stray is not None else 1])
@@ -69,8 +73,8 @@ def module(d: Path, path: str = "/a/P/M.lean", text: str = "unused variable", sc
 
 def test_a_module_built_at_another_path_is_one_build_and_nothing_else_may_differ(tmp_path):
     """The path is longer, so every object after it in the server part moves and the private part's pointer into it
-    differs: one graph. Any other difference, at any depth or across a part, is refused, and so is a path that isn't the
-    module's source or isn't absolute."""
+    differs: one graph. Any other difference, at any depth or across a part, is refused, a string's length alone among
+    them, and so is a path that isn't the module's source, isn't absolute, or isn't of its own length."""
     x = module(tmp_path / "x")
     assert G.differs(x, module(tmp_path / "same"), SOURCE) is None
     y = module(tmp_path / "y", path="/a/much/longer/checkout/elsewhere/P/M.lean")
@@ -81,6 +85,8 @@ def test_a_module_built_at_another_path_is_one_build_and_nothing_else_may_differ
         "a relative path": module(tmp_path / "rel", path="b/P/M.lean"),
         "a path inside a longer name": module(tmp_path / "longer", path="/b/QP/M.lean"),
         "the message's text": module(tmp_path / "text", path="/b/P/M.lean", text="unused variablE"),
+        "the length of the message's text": module(tmp_path / "length", lengths={"unused variable": 16}),
+        "a path of another length than its text": module(tmp_path / "plength", lengths={"/a/P/M.lean": 12}),
         "a scalar of the private declaration": module(tmp_path / "scalar", scalar=b"\x02" + bytes(7)),
         "a boxed scalar field": module(tmp_path / "boxed", stray=3),
         "the header": module(tmp_path / "header", header=HEADER[:-1] + b"1"),
@@ -88,14 +94,17 @@ def test_a_module_built_at_another_path_is_one_build_and_nothing_else_may_differ
     for what, z in refused.items():
         assert G.differs(x, z, SOURCE) is not None, what
     assert "string differs" in G.differs(x, refused["another module's source"], SOURCE)
+    assert "of length 16 rebuilt" in G.differs(x, refused["the length of the message's text"], SOURCE)
     assert G.differs(x, refused["a scalar of the private declaration"], SOURCE).startswith("olean.private:")
     assert "headers differ" in G.differs(x, refused["the header"], SOURCE)
     assert "parts" in G.differs(x, {p: f for p, f in y.items() if p != "olean.private"}, SOURCE)
 
 
-def test_an_address_in_no_part_is_malformed(tmp_path):
+def test_an_address_in_no_part_or_in_two_is_malformed(tmp_path):
     x, y = module(tmp_path / "x", stray=0x4000_0000), module(tmp_path / "y", stray=0x4000_0000)
     assert G.differs(x, y, SOURCE).startswith("malformed: address 0x40000000")
+    over = module(tmp_path / "over", bases=(0x1000_0000, 0x1000_0000 + 64, 0x3000_0000))
+    assert G.differs(module(tmp_path / "ok"), over, SOURCE) == "malformed: olean and olean.server are mapped over each other"
     (tmp_path / "short.olean").write_bytes(b"olean")
     assert G.differs(x, {**x, "olean": tmp_path / "short.olean"}, SOURCE).startswith("malformed:")
 
