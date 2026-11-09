@@ -4,7 +4,7 @@ registered before it served.
 
     inference_only.py policy --class S,P,O --model REPO --revision REV --lease-min M [--utilization U] --out POLICY
     inference_only.py verdict --policy POLICY --serve-run D --circuit RECORD --registration REGISTRATION
-        [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean NCI_CHECK [--lean-timeout S]] [--retroactive WHY]
+        [--pins WEIGHTS_REGISTRATION] --out VERDICT --private FULL [--lean INFERENCE_ONLY_CHECK [--lean-timeout S]] [--retroactive WHY]
 
 **The policy** (`policy`, `POLICY_FORMAT`) is written before the serve's lease from the run's settings alone, and fixes
 (c, k, n) with every input to them and its source:
@@ -85,8 +85,8 @@ VERDICT_FORMAT = "verity-bench/inference-only-verdict/v4"
 #: what the public verdict says of the counts: a count on the grid, floored or not, still gives the count of windows
 #: (at 4 blocks a window, exactly for 5 to 16 of them), so it publishes the judgment against n alone
 COUNTS = "none published: n judged on the blocks' exact count, which only the serve dir's private verdict holds"
-NCI_PACKAGE = ROOT / "verity/core/protocols/network/inference_only/lean"
-NCI_REFERENCE = NCI_PACKAGE / "scripts" / "inference_only_reference.py"
+INFERENCE_ONLY_PACKAGE = ROOT / "verity/core/protocols/network/inference_only/lean"
+INFERENCE_ONLY_REFERENCE = INFERENCE_ONLY_PACKAGE / "scripts" / "inference_only_reference.py"
 #: `prove_path.py window-circuit`'s default ``--cap``: the units a stated member holds in the class's record
 CAP = 64
 #: the H200 an int8 serve's ``serve.json`` names (`serve_seal.target_of` on the card: ``TargetProfile.from_device`` with
@@ -337,7 +337,7 @@ def judge(rows: Sequence[Sequence[Any]], c: int, k: int, n: int) -> dict[str, An
 
 
 def _reference():
-    spec = importlib.util.spec_from_file_location("inference_only_reference", NCI_REFERENCE)
+    spec = importlib.util.spec_from_file_location("inference_only_reference", INFERENCE_ONLY_REFERENCE)
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
