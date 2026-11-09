@@ -821,8 +821,6 @@ KNOWN: dict[str, str] = {
         "duplicate of `remote_bandwidth`'s own type (MEM-138): becomes it (the bandwidth package is deleted) (memory-accounting)",
     "verity/core/protocols/certifier/audit.py::Verdict":
         "duplicate of `Core.Verdict`: becomes a reading of it (network-accounting)",
-    "verity/ml/protocols/certifier/cache_step_v2.py::Op":
-        "homonym, a cache call's inputs: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/Run.lean::NetworkCertifier.Program":
         "homonym, a Program's egress prediction: rename (network-accounting)",
     "verity/core/protocols/certifier/lean/NetworkCertifier/WindowCharge.lean::NetworkCertifier.WindowCharge.Window":

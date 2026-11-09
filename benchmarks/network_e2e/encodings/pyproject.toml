@@ -1,8 +1,7 @@
 # The advice's encodings (network certification for arbitrary vLLM usage). `derived.py`: the fields of advice v0 (I1) that
 # cost zero bits, the residual that remains and its bits per certifier window; `cache_vectors.py`: the certifier's
-# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `cache_pool_vectors.py`: CacheStep_v2 against
-# the replay's block pool (`replay.BlockPool`), and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v2's pool
-# calls against `BlockPool` over whole traces; `arith_vectors.py`: the certifier's arithmetic
+# CacheStep_v1 against derived's prefix rules, and its difftest vectors; `compile_slice_pool.py`: CompileSlice_v4's pool
+# calls against the replay's block pool (`replay.BlockPool`) over whole traces; `arith_vectors.py`: the certifier's arithmetic
 # encoder against code.py, v1 and code_v1; `sched_trace.py`: step traces from vLLM's own scheduler, which the tests read
 # as fixtures (it needs vLLM). Those fixtures (`tests/fixtures/`) and the certifier's vectors these modules write are
 # fetched fixtures (`fixtures/artifacts.json`), which `suites.py` fetches before the suites that read them; one a module

@@ -1,14 +1,16 @@
-"""The compile slice over the memory-checked pool (`compile_slice_v4.CompileSlice_v4`): CompileSlice_v3's load and steps,
-each pool call a record on a bus to CacheStep_v3's stream of memory-checked slots, which runs in the unit from the empty
+"""The compile slice over the memory-checked pool (`compile_slice_v4.CompileSlice_v4`): the load and steps
+from the advice, each pool call a record on a bus to CacheStep_v3's stream of memory-checked slots, which runs in the unit from the empty
 pool with RK's keys the arrivals' BlockKey_v1 chains printed under δ. The hits, evictable counts and returns the steps
 read are checked witness the bus carries, and so are the stream's slots and touched list; its free input is the advice,
 DA + PW bits, and that checked witness at its width until its lemma. The circuit accepts exactly where `compile_slice_v4.reference` compiles, and its served rows and
-last state and window rows are CompileSlice_v3's, on both demonstration slices, on every advice of their arrivals and on
-random windows under eviction. A registered row one bit off is refused by its own verdict bit, a checked witness one bit
+last state and window rows are the block-pool reference's (`REFERENCE_ROWS`), on both demonstration slices, on every
+advice of their arrivals and on random windows under eviction. A registered row one bit off is refused by its own verdict bit, a checked witness one bit
 off by the cache or pool bit, and a witness made under one print coin by the pool bit under another."""
 from __future__ import annotations
 
+import hashlib
 import itertools
+import json
 import random
 from dataclasses import replace
 from types import SimpleNamespace
@@ -16,25 +18,24 @@ from types import SimpleNamespace
 import pytest
 
 from verity.core.protocols.certifier import compile_slice as CS
-from verity.ml.protocols.certifier import compile_slice_v2 as V2, compile_slice_v3 as V3, compile_slice_v4 as V4
+from verity.ml.protocols.certifier import compile_slice_v4 as V4
 from verity.core.protocols.certifier import replay_chain as RC
 from verity.ml.circuits import boolean as BL
 
 
-def _x(f, f3):
+def _x(f, which):
     st, sl = f()
-    st3, _ = f3()
-    return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl, st3=st3, S3=SimpleNamespace(**st3))
+    return SimpleNamespace(st=st, S=SimpleNamespace(**st), sl=sl, which=which)
 
 
 @pytest.fixture(scope="module")
 def synth():
-    return _x(V4.demo, V3.demo)
+    return _x(V4.demo, "synth")
 
 
 @pytest.fixture(scope="module")
 def asynth():
-    return _x(V4.demo_async, V3.demo_async)
+    return _x(V4.demo_async, "asynth")
 
 
 def _agrees(st: dict, slices: list[CS.Slice]) -> list:
@@ -47,11 +48,32 @@ def _agrees(st: dict, slices: list[CS.Slice]) -> list:
     return refs
 
 
-def _as_v3(x, sl: CS.Slice, ref) -> None:
-    """`ref`'s served rows and last state and window rows are CompileSlice_v3's on `sl` (its pool row is v3's own)."""
-    r3 = V3.reference(x.S3, sl)
-    n = len(r3.cout) - V3.V2.pool_width(x.S3)
-    assert ref.srv == r3.srv and ref.cout[:n] == r3.cout[:n], sl
+#: per demonstration and test, the SHA-512 of the served rows and the last state and window rows (``cout`` less its pool
+#: row) that a reference computing the pool as one table (a trie of every cached block, read and written whole by each
+#: call) gave on the test's slices in order, null where it refused: an implementation independent of this one's stream
+REFERENCE_ROWS = {
+    ("synth", "demo"): ("4d5de324d81085faff5cc9c347c129d7ed4902725a6ee4d452ec74da80fa5b1a"
+                      "1ee2522ba535700330a38134a9007e7600684942ac76019690d64985c321cb07"),
+    ("synth", "advice"): ("06c68ebde694b3d682e2ffc62a8890fba7658e8c18706b428b27530c9f5be1f8"
+                        "71e8bae4cd32632ec98de753cb9a65d42d50fa218b8bad5cce5dc452a1f45844"),
+    ("synth", "random"): ("fda616b2f06eb03a7b3edf3f7150c78937bf07e0af4f596aaca5156c4f0e3107"
+                        "8c8e887d1cff9f8ed90bc68556a4b7596624ce2b74bffdf5ff5d55a40e7f4a17"),
+    ("asynth", "demo"): ("be19f32f5bee82fb7c64e1ebb4e068727020565f2faf7f44936f8dc65968315f"
+                       "90637ae0a8920570ea064dd879b2529134eb1c21b13a0f89973d0d38cb07b170"),
+    ("asynth", "advice"): ("9a09d0e40cbf34e14f5d5aac16cadc55ffbff993ffa9b294420f9fc43cafd96e"
+                         "236da313e0aff70a2408324759fdc033340e209ce88c654821072415214490f3"),
+    ("asynth", "random"): ("5a7e32c381c8a67c962d448f777e08e41cb6f3263ef32887af37c27a66b359a8"
+                         "041b4adb528949dc77f57bd30fd5ce272cf635fb11e366c45f283ad5bbbb49e0"),
+}
+
+
+def _as_reference(x, test: str, slices: list[CS.Slice], refs: list) -> None:
+    """`refs`' served rows and last state and window rows on `slices`, None where refused, are `REFERENCE_ROWS`'."""
+    Sc = CS.chain(x.S)
+    n = RC.width(Sc) + RC.window_width(Sc)
+    rows = [None if r is None else [r.srv, r.cout[:n]] for r in refs]
+    got = hashlib.sha512(json.dumps(rows, separators=(",", ":")).encode()).hexdigest()
+    assert got == REFERENCE_ROWS[x.which, test], [sl for sl, r in zip(slices, refs) if r is None]
 
 
 @pytest.mark.parametrize("which", ["synth", "asynth"])
@@ -76,11 +98,11 @@ def test_the_free_input_is_the_advice_and_the_checked_witness(request, which):
 @pytest.mark.parametrize("which, calls", [("synth", 19), ("asynth", 14)])
 def test_the_demo_is_its_reference(request, which, calls):
     """The demo compiles (verdict 0x3F) with the reference's rows and witness, its served rows and last state and window
-    rows are CompileSlice_v3's, and its pool calls are the stream's 19 and 14, one hit of each a head-of-line memo."""
+    rows are the block-pool reference's, and its pool calls are the stream's 19 and 14, one hit of each a head-of-line memo."""
     x = request.getfixturevalue(which)
     (ref,) = _agrees(x.st, [x.sl])
     assert V4.ACCEPT == 0x3F
-    _as_v3(x, x.sl, ref)
+    _as_reference(x, "demo", [x.sl], [ref])
     assert len(ref.scan.stream.records) == calls and ref.scan.stream.memos == 1
     assert len(ref.cout) == V4.data_bits(x.S)["cout"] and len(ref.chk) == V4.data_bits(x.S)["chk"]
 
@@ -146,23 +168,19 @@ def test_the_print_coin_binds_the_keys(synth):
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_every_advice_is_its_reference(request, which):
     """On the demo's arrivals, each of the 32 decision strings at each step count 0 to 7 is advice the circuit compiles
-    exactly where the reference does, with CompileSlice_v3's rows: a step count past P is refused by the load (0x6 in
+    exactly where the reference does, with the block-pool reference's rows: a step count past P is refused by the load (0x6 in
     the low bits)."""
     x = request.getfixturevalue(which)
     slices = [replace(x.sl, decisions=d, steps=n) for d in itertools.product((0, 1), repeat=x.S.DA) for n in range(8)]
     refs = _agrees(x.st, slices)
     assert sum(r is not None for r in refs) == 32 * (x.S.P + 1)
-    for sl, ref in zip(slices, refs):
-        assert (ref is None) == (V3.reference(x.S3, sl) is None), sl
-        if ref is not None:
-            _as_v3(x, sl, ref)
+    _as_reference(x, "advice", slices, refs)
     over = [sl for sl in slices if sl.steps > x.S.P][:4]
     assert [g & 0x7 for g in V4.evaluate(x.st, over)] == [0x6] * len(over)
 
 
 def _window(rng: random.Random, AS: int) -> CS.Slice:
-    """Three arrivals of 4 to 16 tokens, most sharing a first block, and five random decisions (CompileSlice_v3's
-    tests')."""
+    """Three arrivals of 4 to 16 tokens, most sharing a first block, and five random decisions."""
     base = [rng.randrange(1, 15) for _ in range(4)]
     arrivals, tokens = [], []
     for i in range(3):
@@ -175,18 +193,15 @@ def _window(rng: random.Random, AS: int) -> CS.Slice:
 
 @pytest.mark.parametrize("which", ["synth", "asynth"])
 def test_random_windows_under_eviction(request, which):
-    """CompileSlice_v3's 40 random windows of the demo's class (26 synchronous and 13 asynchronous evict): the circuit
-    accepts every one with the reference's rows and witness, CompileSlice_v3's rows, and refuses each with another
-    window's ``srv`` and ``cout`` where they differ."""
+    """40 random windows of the demo's class (26 synchronous and 13 asynchronous evict): the circuit accepts every one
+    with the reference's rows and witness, the block-pool reference's rows, and refuses each with another window's
+    ``srv`` and ``cout`` where they differ."""
     x = request.getfixturevalue(which)
     rng = random.Random(18 + x.S.AS)
     slices = [_window(rng, x.S.AS) for _ in range(40)]
     refs = _agrees(x.st, slices)
     assert all(refs)
-    for sl, ref in zip(slices, refs):
-        _as_v3(x, sl, ref)
-    S2 = SimpleNamespace(**V3._v2(x.st3))
-    assert sum(any(any(w[3]) for w in V2.scan(S2, sl).wit) for sl in slices) == (13 if x.S.AS else 26)
+    _as_reference(x, "random", slices, refs)
     swapped = [V4.arguments(x.S, sl, srv=refs[j - 1].srv, cout=refs[j - 1].cout) for j, sl in enumerate(slices)]
     want = [V4.ACCEPT & ~(0x8 * (refs[j - 1].srv != r.srv)) & ~(0x10 * (refs[j - 1].cout != r.cout))
             for j, r in enumerate(refs)]
@@ -221,7 +236,7 @@ def test_size(synth, asynth):
     """What checking the pool costs, at the demos' classes: the stream's NS = 192 and 128 slots of 14,149 ANDs
     (`cache_step_v3.PoolSlot`), most of it; its touched list's 34 dense and 8 M entries of 10,349; the arrivals' 12 block
     keys of 62,240 (`block_key.BlockKey`); the steps' 90 and 100 bus records folded in at 2,322; and the load and steps
-    themselves, 10,130 and 10,759, where CompileSlice_v3 computes the pool in 76,554 and 83,287."""
+    themselves, 10,130 and 10,759."""
     assert V4.size(**synth.st) == {"ands": 4117521, "adv_bits": 8, "ing_bits": 27, "req_bits": 208, "srv_bits": 160,
                                    "cout_bits": 160, "coin_bits": 384, "chk_bits": 35744, "free_bits": 35752}
     assert V4.size(**asynth.st) == {"ands": 3235834, "adv_bits": 8, "ing_bits": 27, "req_bits": 224, "srv_bits": 160,

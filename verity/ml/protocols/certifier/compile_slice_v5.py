@@ -94,7 +94,7 @@ from verity.ml.circuits.evaluation.bits import evaluate_bits
 from verity.ml.circuits.types import Array, Tuple
 from verity.ml.commitments.gates import block_key as BK
 from verity.core.protocols.certifier import cache_step as CST, compile_slice as CS
-from verity.ml.protocols.certifier import cache_step_v2 as C2, cache_step_v3 as V3S, compile_slice_v4 as V4
+from verity.ml.protocols.certifier import cache_step_v3 as V3S, compile_slice_v4 as V4
 from verity.core.protocols.certifier import replay_chain as RC, replay_step as RS
 from verity.core.protocols.certifier.head_check import BIT, _coll, _Consts, _part, _refs, ands
 
@@ -292,11 +292,11 @@ class _Bus(V4._Bus):
             frees = [C.AND(popped[j], CST._eq(C, pos_f[j], const_bits(t, RCW))) for j in range(R)]
             sel = [a ^ b for a, b in zip(comp, frees)]
             ca, fa = or_reduce(C, comp), or_reduce(C, frees)
-            q, h0 = C2._pick(C, sel, nums), C2._pick(C, sel, held)
-            new, back = C2._pick(C, comp, news), C2._pick(C, frees, backs)
+            q, h0 = V4._pick(C, sel, nums), V4._pick(C, sel, held)
+            new, back = V4._pick(C, comp, news), V4._pick(C, frees, backs)
             self.rec(OR(C, C.AND(ca, _nz(C, new)), C.AND(fa, _nz(C, h0))), [ONE, fa.inv(), fa], q, h0,
                      RS._sel(C, ca, new), RS._sel(C, fa, back))
-            self.cache(ca, q, C2._pick(C, comp, self.nc), C2._pick(C, comp, tgts))
+            self.cache(ca, q, V4._pick(C, comp, self.nc), V4._pick(C, comp, tgts))
         for x in range(R):
             self.nc[x] = RS._sel(C, popped[x].inv(), self.cache_value(kept[x], self.nc[x], tgts[x]))
             self.rq[x] = RS._sel(C, popped[x].inv(), self.rq[x])
