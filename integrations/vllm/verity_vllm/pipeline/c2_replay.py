@@ -298,9 +298,11 @@ def linkage_requests(s: ReplaySources, _rl: dict[str, str], _arr: dict[str, int]
 
 
 def cached_prefixes(reqs: list[dict[str, Any]], rl: dict[str, str]) -> dict[str, dict[str, Any]]:
-    """Each warm request's cached rows and the label of the request that computed each cached block (`load_workload`: `cached`,
-    `cached_from`): what the replay resolves its `prefix` reads to (`driver.populate`)."""
-    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()]}
+    """Each warm request's cached rows, the label of the request that computed each cached block and its certified prompt
+    (`load_workload`: `cached`, `cached_from`, `prompt_token_ids`): what the replay resolves its `prefix` reads to, or, where its
+    Program recomputes the hit, what the replay recomputes it from (`driver.populate`)."""
+    return {rl[str(r.get("request_id"))]: {"cached": int(r["cached"]), "producers": [rl[str(q)] for q in r.get("cached_from") or ()],
+                                           "prompt": [int(t) for t in r.get("prompt_token_ids") or ()]}
             for r in reqs if int(r.get("cached") or 0)}
 
 

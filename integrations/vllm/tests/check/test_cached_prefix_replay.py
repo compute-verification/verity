@@ -112,8 +112,9 @@ def test_the_layout_is_the_derives_prefix_file(tmp_path):
 
 
 def test_the_commit_hands_each_warm_request_its_producers_by_label():
-    reqs = [{"request_id": "a", "cached": 0, "cached_from": []}, {"request_id": "b", "cached": 128, "cached_from": ["a"] * 8}]
-    assert C2.cached_prefixes(reqs, {"a": "r0", "b": "r1"}) == {"r1": {"cached": 128, "producers": ["r0"] * 8}}
+    reqs = [{"request_id": "a", "cached": 0, "cached_from": []},
+            {"request_id": "b", "cached": 128, "cached_from": ["a"] * 8, "prompt_token_ids": list(range(130))}]
+    assert C2.cached_prefixes(reqs, {"a": "r0", "b": "r1"}) == {"r1": {"cached": 128, "producers": ["r0"] * 8, "prompt": list(range(130))}}
 
 
 def test_the_linkage_holds_a_warm_arrival_to_the_declared_uncached_suffix():

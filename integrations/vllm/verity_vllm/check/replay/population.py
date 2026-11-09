@@ -162,7 +162,7 @@ def _interior_feeders_without_evaluator(pi: ProgramIndex, r: dict, *, depth: int
 
 def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ring_slots: int | None = None,
                addresses: dict[tuple, dict] | None = None, last_step: int | None = None,
-               codes: dict[str, dict] | None = None) -> tuple[list[dict], Counter, Counter]:
+               codes: dict[str, dict] | None = None, recomputed: frozenset[int] = frozenset()) -> tuple[list[dict], Counter, Counter]:
     """Every Program row of one request is in the population: the evaluable VUs [{i, spec, family, phase, stratum}], the not-evaluable
     count by reason, and the not-evaluable count BY FAMILY (strata of the record by name, never dropped).
     `ring_slots`: the collector's window ring depth -- an identity committed at ENGINE step >= ring_slots lives in storage the ring
@@ -174,7 +174,9 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
     `last_step`: the request's last EXECUTED step (`phase_anchor(...)["last_step"]`: n_exec - 1 under an executed prefix,
     the lag step of an EOS-stopped request); None = the cap's last step.  The POPULATION is the same either way (every row is enumerated);
     only the phase label of the stratum key moves.
-    `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads."""
+    `codes`: an accumulator, not-evaluable reason -> its structured code (`replay_codes.reason_code`), what the verdict reads.
+    `recomputed`: the rows of a warm request's Program that compute its prefix-cache hit (`recomputed_prefix.prefix_rows`), which
+    serving never ran for it: its replay's own, counted by family and in no stratum."""
     vus, not_ev, not_ev_fam = [], Counter(), Counter()
     last = pi.n_steps - 1 if last_step is None else int(last_step)
 
@@ -206,6 +208,9 @@ def population(pi: ProgramIndex, rid: str, *, rank: int = 0, arrive: int = 0, ri
 
     for r in pi.rows:
         fam = RM.spec_family(r["spec"])
+        if int(r["i"]) in recomputed:
+            not_ev_fam[f"{fam} (recomputed prefix: no identity, the warm request's replay computes it)"] += 1
+            continue
         if fam in NOT_YET:
             if addresses is not None:
                 try:
