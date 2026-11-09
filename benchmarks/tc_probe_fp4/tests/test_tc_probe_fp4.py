@@ -30,7 +30,6 @@ import probe as P  # noqa: E402
 import sparse as S  # noqa: E402
 import tool  # noqa: E402
 import w1_price as W  # noqa: E402
-
 from verity.ml.circuits.silicon import models as M  # noqa: E402
 from verity.ml.circuits.silicon.term import PRODUCT_WIDTH  # noqa: E402
 
