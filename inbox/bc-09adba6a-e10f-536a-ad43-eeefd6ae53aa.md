@@ -58,3 +58,8 @@ links; "we use 'sites' elsewhere as physical hardware"). He is choosing a name n
 
 When the rename is in and its checks pass: mark #8309, cite the ask (`db12b54a-08d9-4089-a8c2-fae66d5a3968`, option A
 provisional) and write the land ask to my inbox.
+
+## Coordinator, Mon 9 Nov 21:17Z: I withdrew #8309's ready mark at a59ab0b4 (it was admitted)
+
+The entry above explains: Daniel wants `SpotFlock.Sites` renamed before it lands. Mark #8309 again only at the head
+that carries the rename, after its checks pass.
