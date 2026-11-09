@@ -18216,3 +18216,32 @@ Nothing of mine is running now. Possible next steps, when you say:
 3. Do you know of a hidden-output concrete statement anywhere? I found none in `Security/`. `Bridge/Assumptions/Served.lean` only assumes one.
 
 I'm copying the coordinator.
+
+## 11:05Z from TWOOPENS: DrawnAt fixed and re-tried; #8309 has the guard; two corrections to SLOTSAT's instance; ReadsRegistered's plan
+
+**Runs and branches**
+- try82 (`r20261109-101804-116e`): every new `DrawnAt` lemma before `drawnAt` compiled. `drawnAt`'s statement didn't parse (it mixed `∃` binder forms), and two errors followed from that. I cancelled it and fixed the statement.
+- try83, `r20261109-104339-415e` (cpu-11), runs at `e249c1161d` on `cursor/proofs-sessions-onevalue-3e7a`. It got a slot that wasn't warm, so its ETA is about 11:15Z.
+- `firstSlots_of` (local `d71ece9ee0`, in try84 after try83) discharges `FirstSlots` from `firstK h.reg.first = some K` and the population-order check (`popOk`). So `Counted` now rests only on that, `always u = false` and a one-table session.
+- #8309 now carries TWOGUARD's checked guard: `03851724e4` fast-forwarded onto `f806fd5ab6`. Its test is opt-in (`VERITY_TWO_STAGE_GUARD`) and it touches no `Security/` file. I deleted `cursor/proofs-refreads-3e7a`, as TWOGUARD asked.
+
+**SLOTSAT's instance: I sent the interface, with two corrections**
+- `links := none` and `wires := none` make round 2 refuse every run: `linksOk _ none = false` and `wiresOk _ none = false`. A design with none is `some #[]`.
+- A registration with no links and no registered reads leaves every gate a unit needs (its inputs and outputs) on the replay block's boundary. Only `ReadsRegistered`, through links, covers such gates, so `Sites` is false there, or holds only because no gate is needed. The instance has to read every port registered, as the toy does: link ports at the boundary record, wired ports at the writer's, and the rest at their own interior port.
+
+**`ReadsInterior` isn't needed by the toy or by any design built like it.** I'm dropping it unless you want it.
+
+**`ReadsRegistered`.** The substance is its leaf equation, a chain of six steps:
+1. `opens_of_setup`: the header's position for instance n's row is `reg.reads[idx n]`.
+2. Round 2's `populationOk` puts the session's `units.indices` at `lo + i`. Flock's `drawn` then makes `idx n = lo + proved n`, and `drawnAt` ties `proved` to the unit's slot.
+3. Flock's `portsOf` parses `reads[f + k]` as the entry's `reads[k]`. This needs a new lemma: `PortFields` has no reads.
+4. `rowsOk` makes that `b·(leaves/units)`, where `b` is `j - lo` for an own port, `span·n_w` for a wired one, and `S[span]` for a link.
+5. The site's `leafAt` arithmetic matches it.
+6. `RowAt`'s copy bridge comes after.
+
+**It splits cleanly if you have someone.** The Flock-side parse lemmas stand alone:
+- `portsOf`'s reads and `reads_from`;
+- `nat?` against `J.asNat`;
+- `drawn`'s `units.indices`.
+
+Otherwise I take them all, starting now with steps 2 to 4. Next checkpoint about 12:05Z.
