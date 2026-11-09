@@ -748,6 +748,10 @@
    "groups": "0-19,25-53,55-64,67,81-91,93,104-107,140-155,164-165,172-176,183-201,316,324-355,550-552,590,624,627,629-631",
    "registry": true
   },
+  "verity.ml.protocols.certifier.compile_slice_v6.circuit-check#_network_page_copy_v1_roots": {
+   "groups": "0-19,25-53,55-64,81-91,93,104-108,140-155,164-165,172-176,183-201,316,324-356,552,590,630",
+   "registry": true
+  },
   "verity.ml.protocols.certifier.compile_slice_v6.circuit-check#_network_pool_chain_v1_roots": {
    "groups": "0-19,25-53,55-64,67,81-91,93,104-107,140-155,164-165,172-176,183-201,316,324-355,439-440,552,624,627,629-630,632",
    "registry": true
