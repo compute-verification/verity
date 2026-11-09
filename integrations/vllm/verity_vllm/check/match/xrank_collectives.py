@@ -121,6 +121,7 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
     from verity.ml.definitions.numerics import derived_rows as DR
     from verity.ml.definitions.registry import tp_allreduce as T
     from verity.ml.definitions.registry import tp_allreduce_check as TC
+    from verity.ml.definitions.registry import tp_allreduce_nodes as TN
 
     parts = np.asarray(parts, np.uint16)
     W, R, N = parts.shape
@@ -139,7 +140,7 @@ def routed_expected(family: str, statics: dict[str, Any], parts: np.ndarray, row
         raise ValueError(f"rows {max(rows)} x N={N} past SIZE={size}")
     out = np.empty((R, N), np.uint16)
     if family == "AllReduceMultimem_v1":
-        trees = T.multimem_trees(statics["TREES"], W)
+        trees = TN.multimem_trees(statics["TREES"], W)
         for lo, hi, owner in T.multimem_owners(W, size):
             m = (flat >= lo) & (flat < hi)
             if m.any():

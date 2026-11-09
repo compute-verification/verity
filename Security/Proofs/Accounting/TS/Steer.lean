@@ -186,7 +186,7 @@ theorem segUntouched_single (seg : Fin m → Fin G) (act : Finset (Fin m)) (i : 
 theorem prob_pi_mem {B : Type} [Fintype B] [Nonempty B] (S : Finset (Fin G)) (q : Fin G → B → Prop) :
     prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = ∏ g ∈ S, prob (q g) := by
   classical
-  unfold prob
+  unfold prob Claims.prUniform
   have hB : (Fintype.card B : ℝ) ≠ 0 := by exact_mod_cast Fintype.card_ne_zero
   have key : ∀ (inst : DecidablePred fun b : Fin G → B => ∀ g ∈ S, q g (b g)),
       (@Finset.filter _ (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) inst Finset.univ).card =
@@ -219,7 +219,7 @@ theorem prob_pi_le {B : Type} [Fintype B] (S : Finset (Fin G)) (q : Fin G → B 
   · rcases S.eq_empty_or_nonempty with hS | ⟨g, hg⟩
     · rw [hS, Finset.card_empty, pow_zero]; exact prob_le_one _
     · have : IsEmpty (Fin G → B) := ⟨fun f => hB.false (f g)⟩
-      have h0 : prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = 0 := by unfold prob; simp
+      have h0 : prob (fun b : Fin G → B => ∀ g ∈ S, q g (b g)) = 0 := by unfold prob Claims.prUniform; simp
       rw [h0]; positivity
   · rw [prob_pi_mem, ← Finset.prod_const]
     exact Finset.prod_le_prod₀ (fun g _ => prob_nonneg _) fun g _ => hq g
@@ -312,7 +312,7 @@ theorem GrindUnion : Guarantees.TS.GrindUnion := by
     intro q
     rcases isEmpty_or_nonempty (Fin G → B) with hX | hX
     · have : IsEmpty (Ω₀ × (Fin T → Fin G → B)) := ⟨fun ω => hX.false (ω.2 q)⟩
-      have h0 : prob (E q) = 0 := by unfold prob; simp
+      have h0 : prob (E q) = 0 := by unfold prob Claims.prUniform; simp
       rw [h0]; positivity
     obtain ⟨x₀⟩ := hX
     set Φ := splitAt (Ω₀ := Ω₀) (X := Fin G → B) q

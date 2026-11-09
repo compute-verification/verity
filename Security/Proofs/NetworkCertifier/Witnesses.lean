@@ -4,6 +4,7 @@ public import Proofs.Flock.Claims.Witnesses.Sampling
 public import Definitions.NetworkCertifier.Guarantees.SampledAudit
 public import Definitions.NetworkCertifier.SampledCharge
 public import Definitions.NetworkCertifier.SampledReg
+public import Definitions.NetworkCertifier.Witness
 public import Proofs.Flock.Claims.DeployCode
 public import Proofs.Flock.Claims.Sampling.Leaf
 public import Proofs.Flock.Claims.Sampling.Select.Scope
@@ -60,10 +61,11 @@ whose verifier accepts everything.
   the rest: the record's decoder meets the list-decoding spec, a charge `β` bounds every possible incorrect set's
   committed bits at every `δ` (`charge_bounds`), and the hm96 commitment binds. Their acceptance conclusion fails at
   the accepting verifier: `SampledAuditAccepted` at `sksD`, where no opening passes, so the one unit is faulty and no
-  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input. There,
+  witness is in `RelS`; the leak bounds at `leakD`, `sksD` at a statement whose program negates its input
+  (`Definitions.NetworkCertifier.Witness`). There,
   with nothing opened, the trace holds `false` at the negation, which the circuit computes `true` from the ingress the
   trace carries; the one unit is sampled `all`, so no possible incorrect set holds it, and no witness is in `RLeak`.
-* `PooledWrongUnitsLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_draw`), and its soundness
+* `PooledIncorrectBlocksLe`. Its sample hypotheses hold at the uniform `k`-subset sample (`uniform_sample`), and its soundness
   hypothesis at `ε = 0` when no unit is wrong. At one window of one unit, that unit wrong, an audit that always accepts,
   `ε = 0` and `q = F = 1`, its bound reads `1 ≤ 0`.
 
@@ -182,18 +184,6 @@ end Honest
 
 /-- A layout of one link of one slot, with no gate. -/
 def trivLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (0, []), fun _ => []⟩
-
-/-- One input gate and its negation, the negation returned. -/
-def notProg : Claims.Sampling.Prog := ⟨[.input, .not 0], [1]⟩
-
-/-- The program, sampled `all`. -/
-def notStmt : Claims.Sampling.AuditStatement := ⟨[], notProg, ⟨"", 0, []⟩, ⟨[.all]⟩, []⟩
-
-/-- One class of one stratum of one proof block, `{0, 1}`. -/
-def notPart : Claims.Sampling.Partition := ⟨[[[[0, 1]]]]⟩
-
-/-- Step `t`'s ingress is the input, and its egress slot's presence gate the negation. -/
-def notLay : BoundaryGates 1 1 := ⟨fun _ _ _ => (1, []), fun _ => [0]⟩
 
 /-- One step: no frame on the link, every status complete. -/
 def obs0 : Obs 1 1 1 := ⟨fun _ _ => none, 0, fun _ => .complete⟩
@@ -399,9 +389,9 @@ end Toy
 
 /-! ## The monitoring period -/
 
-/-- **`PooledWrongUnitsLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
+/-- **`PooledIncorrectBlocksLe`'s sample hypotheses at the honest instance**: the uniform `k`-subset sample samples `k` units
 and each `k`-subset with share `1 / C(n, k)`. -/
-theorem uniform_draw (n k : ℕ) :
+theorem uniform_sample (n k : ℕ) :
     (∀ x : {S : Finset (Fin n) // S.card = k}, x.1.card = k) ∧
       ∀ S : Finset (Fin n), S.card = k →
         (Finset.univ.filter fun x : {S : Finset (Fin n) // S.card = k} => x.1 = S).card * n.choose k =
@@ -412,20 +402,20 @@ theorem uniform_draw (n k : ℕ) :
     simp [Subtype.ext_iff]
   rw [h1, Finset.card_singleton, one_mul, Fintype.card_finset_len, Fintype.card_fin]
 
-/-- **`PooledWrongUnitsLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
-(`uniform_draw`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
-theorem PooledWrongUnitsLe_honest (n k : ℕ) :
+/-- **`PooledIncorrectBlocksLe`'s soundness hypothesis at the honest instance**: at the uniform `k`-subset sample
+(`uniform_sample`) with no unit wrong, every acceptance event meets an incorrect proof block with probability `0`, so `ε = 0`. -/
+theorem PooledIncorrectBlocksLe_honest (n k : ℕ) :
     ∀ (m : ℕ) (acc : Fin m → (Fin m → {S : Finset (Fin n) // S.card = k}) → Prop) (i : Fin m),
       Pr (fun ω => acc i ω ∧ ¬ Disjoint (ω i).1 (∅ : Finset (Fin n))) ≤ 0 := by
   intro m acc i
-  simp [Pr]
+  simp [Pr, Claims.prUniform]
 
-/-- **`PooledWrongUnitsLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
+/-- **`PooledIncorrectBlocksLe`'s conclusion fails at an audit that always accepts**, at `ε = 0`: one window of one unit,
 that unit wrong, `q = F = 1`. -/
-theorem PooledWrongUnitsLe_nontrivial :
+theorem PooledIncorrectBlocksLe_nontrivial :
     ¬ Pr (fun _ : Fin 1 → Unit => (∀ _ : Fin 1, True) ∧
         1 ≤ ∑ _ : Fin 1, (Finset.univ : Finset (Fin 1)).card) ≤
       (1 - 1 : ℝ) ^ 1 + ∑ _ : Fin 1, (0 : ℝ) := by
-  simp [Pr]
+  simp [Pr, Claims.prUniform]
 
 end NetTiming.Witness

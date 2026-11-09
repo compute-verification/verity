@@ -13,7 +13,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import re
 import subprocess
 from pathlib import Path
 
@@ -968,13 +967,45 @@ def test_try_keeps_dependencies_no_records_run_took_and_leaves_them_out_of_links
     assert calls["link"] == [] and LC.read_links(tree) == {"Sec": "k"}, "a later --records run never drops them"
 
 
-def test_try_refuses_without_a_build_slot_naming_how_to_list_the_pools(trying, tmp_path, monkeypatch):
+def test_try_refuses_without_a_build_slot_naming_the_machines_whose_slots_have_one(trying, tmp_path, monkeypatch):
     _, calls = trying
     monkeypatch.setattr(LC.LEAN_SLOT, "hold", refuse)
+    files = {"a": "build 3\naudit 2\n", "b": "check 4\naudit 4\n", "c": "# NAME N\nbuild 2   # a note\n"}
+
+    def read(ssh):
+        if ssh[-1] not in files:
+            raise OSError("exit 255: Permission denied (publickey).")
+        return files[ssh[-1]]
+
+    peers = {name: ["-i", "KEY", name] for name in ("c", "b", "a", "self")}
+    monkeypatch.setattr(LC.LEAN_SLOT.SLOT, "peers", lambda: peers)
+    monkeypatch.setattr(LC, "slots_there", read)
     said = []
     assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
-    assert calls["build"] == [] and any("lean_slot.py --status" in s and "nothing ran" in s for s in said)
-    assert not any(re.search(r"\b(vy-nebius|cpu-\d)", s) for s in said), "a refusal names no node"
+    assert calls["build"] == [], "nothing runs without a build slot"
+    [line] = [s for s in said if "nothing ran" in s]
+    assert "have `build`: a, c (`verity lean try Sec/Proofs/Flock/X.lean --on MACHINE`)" in line, line
+    assert line.endswith("; not read: self"), "a machine it can't read is named, never counted as having none"
+    assert LC.pool_machines("build", {}, read) == ([], {})
+    peers.clear()
+    said.clear()
+    assert LC.try_file("Sec/Proofs/Flock/X.lean", tmp_path / "deps", log=said.append) == 2
+    assert any("no machine in" in s and "lean_slot.py --status" in s for s in said), "none read: how to list a machine's pools"
+
+
+def test_slots_there_reads_the_path_every_machine_keeps_whatever_lean_slots_says_here(monkeypatch, tmp_path):
+    monkeypatch.setattr(LC.LEAN_SLOT, "SLOTS", tmp_path / "lean-slots")
+    ran = []
+
+    def run(argv, **kw):
+        ran.append(argv)
+        return subprocess.CompletedProcess(argv, 255 if len(ran) > 1 else 0, "build 2\n", "Permission denied (publickey).\n")
+
+    monkeypatch.setattr(LC.subprocess, "run", run)
+    assert LC.slots_there(["-i", "KEY", "research@peer"]) == "build 2\n"
+    assert ran[0][-2:] == ["research@peer", f"cat {LC.LEAN_SLOT.SLOTS_PATH}"] and "BatchMode=yes" in ran[0]
+    with pytest.raises(OSError, match="exit 255: Permission denied"):
+        LC.slots_there(["research@peer"])
 
 
 def test_try_refuses_a_file_in_no_package_and_a_sandbox_without_dependencies(trying, tmp_path, monkeypatch):
@@ -1078,3 +1109,40 @@ def test_the_sandbox_is_handed_the_resolved_lake_paths_of_a_linked_slot_tree(tmp
     box = argv.index(str(LC.SANDBOX))
     assert argv[box + 1:argv.index("--", box)] == [str(real / "Sec" / ".lake"), str(real / "Dep" / ".lake")]
     assert argv[argv.index("ro") + 1:argv.index("--", argv.index("ro"))] == [str(real / "Sec" / ".lake" / "packages")]
+
+
+def test_the_records_facts_cache_is_outside_every_slot_tree_s_build_roots(tmp_path, monkeypatch):
+    """The records step keeps its facts cache (`facts_dir`) beside its slot trees, so no sandboxed build in any slot's tree
+    can write it: neither `check.py`'s (`writable`, path dependencies included) nor this module's (`in_sandbox`, the
+    closure's `.lake`s). check.py refuses an overlapping `--facts-cache` (`build_roots_over`); this keeps that from firing."""
+    monkeypatch.setattr(LC.LA.COMMON, "cache_dir", lambda: tmp_path / "cache")
+    monkeypatch.setattr(LC, "closure", lambda p: [p, "Security"])
+    for slot in ("build/1", "build/2", None):
+        if slot:
+            monkeypatch.setenv(LC.LEAN_SLOT.HELD, slot)
+        else:
+            monkeypatch.delenv(LC.LEAN_SLOT.HELD, raising=False)
+        tree = LC.records_tree()
+        pkgs = [tree / "Security", tree / "Security" / "Proofs"]
+        for p in pkgs:
+            p.mkdir(parents=True, exist_ok=True)
+        (pkgs[1] / "lake-manifest.json").write_text(json.dumps({"packages": [{"name": "s", "type": "path", "dir": ".."}]}))
+        assert LC.AUDIT.build_roots_over(LC.facts_dir(), pkgs) == []
+        box = LC.in_sandbox("Security/Proofs", tree, ["lake", "build"])
+        rw = box[box.index(str(LC.SANDBOX)) + 1:box.index("--", box.index(str(LC.SANDBOX)))]
+        assert rw and not any(LC.facts_dir().resolve().is_relative_to(d) or Path(d).is_relative_to(LC.facts_dir().resolve())
+                              for d in rw)
+
+
+def test_records_takes_a_packages_lake_name_as_well_as_its_path(tmp_path):
+    """`--records network_check` names the package whose `lakefile.toml` says `name = "network_check"`: matching it by
+    path alone refused it as matching no package, after the run had waited for its slot."""
+    pkgs = ["verity/core/protocols/network/lean", "verity/core/protocols/network/nci/lean", "Security"]
+    for p, n in zip(pkgs, ["network_check", "nci_check", "security"]):
+        (tmp_path / p).mkdir(parents=True)
+        (tmp_path / p / "lakefile.toml").write_text(f'name = "{n}"\n\n[[require]]\nname = "mathlib"\n')
+    assert LC.matching("network_check", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("verity/core/protocols/network/lean/", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network/lean", pkgs, tmp_path) == ["verity/core/protocols/network/lean"]
+    assert LC.matching("network", pkgs, tmp_path) == pkgs[:2]
+    assert LC.matching("network_check", pkgs) == []

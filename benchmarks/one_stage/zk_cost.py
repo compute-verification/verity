@@ -1,4 +1,4 @@
-"""Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`sampled_proofs.costfit`): A6's
+"""Flock's zero-knowledge session cost on sm_120, for the sampling planner's cost model (`spot.costfit`): A6's
 W8A8 coordinates (`ScaledMmS8Coordinate_v1{K, DOT=BlackwellS8ImmaDot32_v1}`) staged in statements of c units, each
 session proving k of them sampled by the verifier's Lean, with `flock-circuit prove --zk --gpu`, and the Lean verifier on the
 sessions.
@@ -73,8 +73,8 @@ sys.path.insert(0, str(HERE))
 
 import a0  # noqa: E402
 from verity.ml.circuits.codec import canonical_json, encode_program  # noqa: E402
-from verity.core.protocols.sampled_proofs.one_stage import draw as D, partition as P  # noqa: E402
-from verity.core.protocols.sampled_proofs.optimize import SHA512_ANDS  # noqa: E402
+from verity.core.protocols.spot.one_stage import draw as D, partition as P  # noqa: E402
+from verity.core.protocols.spot.optimize import SHA512_ANDS  # noqa: E402
 
 #: ANDs of the pieces of a unit with its rows' openings (benchmarks/sampling_plan's inputs: its pins, hm96 PROTOCOL §5)
 S8_STEP, EPILOGUE, SHA512, HM96 = 4_190, 5_000, SHA512_ANDS, 116_240
@@ -300,7 +300,7 @@ def stage(a) -> int:
             jsonl(out / "records" / "stage.jsonl", rec)
             statement = hashlib.sha512(canonical_json({"partition": P.digest(part), "pin": st["pin"]})).hexdigest()
             for k, arms in draws(c, a.draws):
-                law = D.derive(program, query, D.parse_law(f"stratified:{k}"))
+                law = D.derive(program, query, D.parse_design(f"stratified:{k}"))
                 p = a0.challenger_draw(a.lean, ["--program", str(sd / "program.json"), "--partition",
                                                 str(sd / "partition.json"), "--stratified", str(k)], law, c, statement,
                                        sd / f"draw-k{k}.log")

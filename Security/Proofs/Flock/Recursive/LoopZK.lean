@@ -129,8 +129,9 @@ statements' view. The salt bytes are sampled uniformly here; the ZK server reads
 `uniform/io-getrandombytes`).
 
 It takes, each an obligation:
-* `SessionLoopZKDeployed`'s premises on the deployed tables (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of
-  the loop's session, and `SwCausalOn` at `Loop.SwOk`'s coins), which take `SessionsCoined`'s role;
+* the deployed tables' side (`Tables`, `Complete`, `DummyReg`, `Causal`, `TapeOK` of the loop's session, which
+  `Loop.tables_dataE` and its siblings prove, and `SwCausalOn` at `Loop.SwOk`'s coins), which takes `SessionsCoined`'s
+  role;
 * the worker's requests run through the ZK server to the schedule's transcript `T` with the salted commit strings of
   `msgs` in its holes, and finish (`FirewallSends`);
 * the worker's values satisfy V*'s circuits: at every tape, randomness and salts, each statement parses and its witness

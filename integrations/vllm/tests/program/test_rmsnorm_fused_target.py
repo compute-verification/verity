@@ -29,7 +29,7 @@ from tests.observe.test_patterns_synthetic import by_spec, context, decode_step
 
 NON_BI = DEFAULT_TARGET.with_overrides(batch_invariant=False)
 GENERIC, EPS_INPUT = "RMSNormFusedCuda_v2{N=%d,EPS=1e-05}", "RMSNormFusedCuda_v4{N=%d}"
-VECTOR8 = "RMSNormFusedCudaVector8_v1{N=%d,EPS=1e-05,BLOCK=%d}"
+VECTOR8 = "RMSNormFusedCudaVector8_v3{N=%d,EPS=1e-05,BLOCK=%d}"
 LEGACY_WIDTH8 = "RMSNormFusedCuda_v1{N=%d,EPS=1e-05}"
 BUILDS = [("b1-eager", False), ("b1-eager", True), ("b1-eager-v2", False), ("b1-eager-v3", False), ("b1-eager-v3", True)]
 TINY = {"model_type": "llama", "architectures": ["LlamaForCausalLM"], "hidden_size": 64, "intermediate_size": 128, "num_attention_heads": 4,
