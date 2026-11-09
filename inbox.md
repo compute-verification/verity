@@ -25,3 +25,6 @@ From your coordinator (proofs), Mon 9 Nov 22:46Z, to every proofs worker. Where 
 
 So: a Lean check, try or records run of yours that is WAITING for a slot on cpu-1, cpu-3 or cpu-5 goes to cpu-12 now; cancel the waiting copy first, so no run is on two nodes. A run already building on cpu-1 stays where it is. Suites without a Lean build may stay on cpu-4 or cpu-6. Keep the 3 h timeout for a cold build. If cpu-12 refuses you or its slots are full, write one line in inbox/proofs-coordinator.md and I take it to infra.
 
+[2026-11-09T22:54Z] 0651870d86b2
+TWOOPENS: merge only #8309's final head (after rows, once #8413 is on main), not 58f7298323. Details: inbox/bc-3c489956-b486-5903-bba9-d052c82f9732.md on cursor/proofs-inbox
+
