@@ -15,13 +15,15 @@ import pytest
 import research.merge as M
 import research.queue as Q
 import research.vqueue_loop as L
-from research import vqueue, vqueue_slim
+from research import carry, vqueue, vqueue_slim
 from research.drive import PREFLIGHT
 from research.executor import GRAPH_V2, Executor, FileTransport
+from research.queue import DRIVE_FLAGS
+from research.store import vocab
 from research.vqueue import (FAIL, INFRA, LIST_FAILED, PASS, PENDING, Advance, Build, Drop, Eject, Outcome, Red, Rerun, Retry,
                              Ring, Snapshot, Verdict)
 from research.vqueue_loop import Loop, World, _Clone, _said, branch
-from test_queue import World as Origin, _git
+from test_queue import World as Origin, _git, _merge
 
 T0 = 1_900_000_000.0
 #: the env's spec files in each listed graph
@@ -37,16 +39,23 @@ class Lab:
 
 
 class Labels:
-    """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``."""
+    """A PR's ready mark is the fake GitHub's (`ready`), and each marked head has a land verdict by `reviewer` unless ``held``,
+    but a head ``verdicts`` gives its own ({(PR, head): its `reviewed` labels}), which are its PR's other heads' too."""
 
     def __init__(self, gh):
-        self.gh, self.held = gh, set()
+        self.gh, self.held, self.verdicts = gh, set(), {}
 
     def ready(self, n: int, head: str) -> bool:
         return (n, head) in self.gh.ready
 
     def reviews(self, n: int, head: str) -> list[Lab]:
+        if (n, head) in self.verdicts:
+            return list(self.verdicts[n, head])
         return [Lab("reviewer", "hold" if n in self.held else "land", "2026-01-01T00:00:00Z")]
+
+    def _other_heads(self, n: int, head: str, key: str) -> dict[str, list[Lab]]:
+        return {h: list(labs) for (m, h), labs in self.verdicts.items()
+                if key == vocab.REVIEWED and m == n and h != head and labs}
 
     def ready_by(self, n: int, head: str) -> str:
         return f"lane-{n}"
@@ -900,6 +909,105 @@ def test_each_tick_reads_the_labels_afresh_as_drive_reads_them(env):
     w = loop.world
     assert len(made) == 2 and w.labels is made[-1] and w.q.ready == made[-1].ready and w.q.marked_at == made[-1].marked_at
     assert made[-1].change == w.q.own_change and made[-1].since == w.q.rules().marked_after
+
+
+#: a land verdict by a reviewer, not the PR's owner
+LAND = Lab("reviewer", "land", "2026-01-01T00:00:00Z")
+
+
+def _carry_main(env: Env, mode: str) -> str:
+    """`main` moved to a commit setting drive.toml's `verdict_carry` to ``mode``, its check listed with no task."""
+    main = env.o.change({DRIVE_FLAGS: f'verdict_carry = "{mode}"\n'})
+    _git(env.o.origin, "update-ref", "refs/heads/main", main)
+    env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": main, "tasks": []})
+    return main
+
+
+@pytest.mark.parametrize("mode", ["on", "shadow", "off"])
+def test_a_land_at_an_older_head_carries_to_its_merge_of_main_as_drive_toml_s_verdict_carry_says_logged_once(
+        env, monkeypatch, mode):
+    """#1's land verdict is at ``old``, and its head only merges `main` into it: drive's verdict carry
+    (`Driver._carried_from`) takes it, logged once a head.  With "on" #1 counts as reviewed and is built, with "shadow" the
+    carry is only logged, and with "off" nothing is judged; each `carry.delta` is judged once while `main` stays."""
+    judged, real = [], carry.delta
+    monkeypatch.setattr(carry, "delta", lambda repo, old, new, trust: judged.append((old, new)) or real(repo, old, new, trust))
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, mode)
+    env.o.gh.put(1, new := _merge(env.o, old, main))
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    loop = env.loop(policy)
+    recs = loop.tick()
+    verb = {"on": "carried", "shadow": "would carry"}.get(mode)
+    assert [(r["number"], r["heads"], r["old"], r["carries"], r["why"]) for r in recs if r["action"] == "carry"] == (
+        [(1, [new], old, True, f"{verb} #1's land from {old[:12]} to {new[:12]} (its 1 commit(s) since only merge {main[:12]} "
+                               "as the queue would)")] if verb else [])
+    assert [r["members"] for r in recs if r["action"] == "build"] == ([[1]] if mode == "on" else [])
+    assert [r for r in loop.tick() if r["action"] == "carry"] == [] and judged == ([(old, new)] if verb else [])
+    assert env.labels.verdicts[1, new] == []                            # the loop writes no verdict
+
+
+@pytest.mark.parametrize("change, because", [
+    ("a.txt", "authored: {new} changes a.txt"),
+    ("Security/Proofs/P.lean", "authored: {new} changes Security/Proofs/P.lean"),
+    ("held", "held by other (the merge breaks a) at {new}")])
+def test_a_head_that_changes_more_than_its_merge_of_main_or_is_held_carries_no_land(env, change, because):
+    """drive's safety checks carry over: a commit of the PR's own since the land (a Lean one too) or a hold at the head keeps
+    the land where it is, and the loop logs that it did not carry it."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new = _merge(env.o, old, main)
+    if change != "held":
+        new = env.o.change({change: "2\n"}, base=new)
+    env.o.gh.put(1, new)
+    env.labels.verdicts |= {(1, old): [LAND],
+                            (1, new): [Lab("other", "hold", "2026-01-02T00:00:00Z", "the merge breaks a")] if change == "held" else []}
+    (rec,) = env.loop(policy).tick()
+    assert (rec["action"], rec["carries"], rec["why"]) == (
+        "carry", False, f"did not carry #1's land from {old[:12]} to {new[:12]} ({because.format(new=new[:12])})")
+
+
+def test_a_land_by_the_pr_s_owner_at_an_older_head_carries_nothing(env):
+    """#1's owning lane isn't its ready mark's author here, and its own land at ``old`` counts no more than at its head."""
+    old = env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    env.o.gh.put(1, new := _merge(env.o, old, main), body="Lane `lane-9`.")
+    env.labels.verdicts |= {(1, old): [Lab("lane-9", "land", "2026-01-01T00:00:00Z")], (1, new): []}
+    assert env.loop(policy).tick() == []
+
+
+@pytest.mark.parametrize("two", ["reviewed", "carried"])
+def test_a_merge_of_another_pr_s_head_carries_once_that_head_lands_on_its_own_verdict_or_a_carried_one(env, two):
+    """#1 merges #2's head, which has a land verdict of its own or one #2's carry takes: #2 is judged first, as #1 contains it,
+    so #1's merge is of a trusted head and its land carries too, and both are built, #2 first."""
+    old2, old1 = env.o.change({"b.txt": "2\n"}), env.o.change({"a.txt": "1\n"})
+    main = _carry_main(env, "on")
+    new2 = _merge(env.o, old2, main)
+    new1 = _merge(env.o, old1, new2)
+    env.o.gh.put(1, new1)
+    env.o.gh.put(2, new2)
+    env.labels.verdicts |= {(1, old1): [LAND], (1, new1): []}
+    env.labels.verdicts |= {(2, new2): [LAND]} if two == "reviewed" else {(2, old2): [LAND], (2, new2): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"], r["why"].split(" (")[1]) for r in recs if r["action"] == "carry"] == [
+        (1, True, f"its 1 commit(s) since only merge {new2[:12]} as the queue would)"),
+        *([(2, True, f"its 1 commit(s) since only merge {main[:12]} as the queue would)")] if two == "carried" else [])]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[2, 1]]
+
+
+def test_a_merge_of_the_old_path_s_checked_carries_a_land_as_drive_trusts_checked_beside_main(env):
+    """`checked`, frozen since the switch, holds what landed under drive's rules and reaches `main` in an aggregate of it: a
+    head that only merges it carries its land, as drive's carry trusts the tips of `checked` and `main` (`carry.trust`)."""
+    old = env.o.change({"a.txt": "1\n"})
+    _carry_main(env, "on")
+    checked = env.o.change({"c.txt": "landed on checked\n"})
+    _git(env.o.origin, "update-ref", "refs/heads/checked", checked)
+    env.o.gh.put(1, new := _merge(env.o, old, checked))
+    env.labels.verdicts |= {(1, old): [LAND], (1, new): []}
+    recs = env.loop(policy).tick()
+    assert [(r["number"], r["carries"], r["why"]) for r in recs if r["action"] == "carry"] == [
+        (1, True, f"carried #1's land from {old[:12]} to {new[:12]} (its 1 commit(s) since only merge {checked[:12]} as the "
+                  "queue would)")]
+    assert [r["members"] for r in recs if r["action"] == "build"] == [[1]]
 
 
 def test_only_the_loop_s_own_builds_are_candidates_and_another_queue_branch_is_ignored_logged_once(env):
