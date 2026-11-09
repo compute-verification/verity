@@ -14714,3 +14714,63 @@ nothing touches the lock.
 
 **ETA.** I start with item 3 at registered reads, since it is the part (i) adds. That lemma is about 2 h. Items 2 and 1
 follow, with the full discharge about a day after the ruling, as estimated.
+
+## 00:27Z from STATIONARY: PROVECUT lever 3a for the fused RMSNorm (witness setup barely grows with blocks); the split part's rows run about 01:00Z, its four-prover row after 03:00Z
+
+**Fused RMSNorm (rmsnorm-v8): witness setup is mostly fixed.** It grows only 0.30 s from 64 to 256 blocks, and 82% of
+it at 256 blocks is fixed.
+
+The setup:
+- One warm prover on node A's GPU 0, an H200, with its NUMA node's 24 CPUs.
+- The ZK path, FC_FIREWALL=0.
+- Each session draws k blocks of one 256-block statement, as the verifier serves a sample.
+- Each value below is the median of 6 sessions at that k. The fit is least squares over all 18 timed sessions.
+
+| part of a warm session | fixed, s | per block, ms | at k = 64, s | at k = 256, s |
+|---|---|---|---|---|
+| end to end (`e2e_s`) | 2.62 | 2.87 | 2.73 | 3.33 |
+| witness setup (`witness_s`) | 1.33 | 1.16 | 1.36 | 1.63 |
+| device phases (`prove_total_s`) | 0.32 | 1.65 | 0.38 | 0.72 |
+| wait on the live verifier inside the session (`wait_e2e_s`) | 1.08 | 0.02 | 1.08 | 1.09 |
+| submission to both records | 4.88 | 2.87 | 5.04 | 5.60 |
+
+The per-block standard errors are 0.27 ms for witness setup and 0.36 ms for end to end.
+
+- **What it says for VERIFYFAST-B's 1k-block statements.** The fitted line gives a 1,024-block session 2.52 s of
+  witness setup and 7.8 s from submission to records. Four 256-block statements take 4 × 5.60 = 22.4 s, so that is
+  2.9 times fewer session seconds per block. Three caveats:
+  - This extends the line past the measured range (k ≤ 256).
+  - The population was always 256 blocks, so any cost that scales with the population counts as fixed here.
+  - Device memory was flat at 35.4 to 36.0 GB for every k, so nothing here says whether 1,024 drawn blocks fit on one
+    device.
+- **Fixed share:** at 256 blocks, 87% of a statement's session seconds (per statement) is fixed.
+- **Statement cache:** the first session at a new k costs about 1.0 s more, almost all of it in the device phases.
+  That was 6.23 s against a median of 5.27 s at k = 128, and 6.04 s against 5.04 s at k = 64. Every later session hit
+  the cache.
+- **Cold session:** the process's first session took 153 s from submission:
+  - the prover's population statement build: 76.9 s (the verifier's took 10.6 s);
+  - the session's own end to end: 16.5 s;
+  - the rest is process start and circuit load.
+
+  Warm over cold is 5.60 / 153 = 0.037 in session seconds.
+- **Memory and use:** host peaks are 31.6 GiB for the prover and 22.4 GiB for the verifier. The GPU was busy 8% of
+  the time.
+
+**Sparse MLA split part (levers 3a and 5): staged about 01:00Z.** Checked's `stage.py` writes the split part's circuit
+text on one core. It is about 69 GB, and 27 GB of it was written by 00:22Z.
+
+- **K = 1** at k = 64, 128 and 256 (4 rounds) then runs about 01:00 to 01:30Z, ending before 01:55Z.
+- **K = 4** runs under MPS at k = 64. It is gated on MemAvailable holding 1.1 × 4 × the measured K = 1 host peak plus
+  64 GiB; otherwise it runs K = 2 and reports that K = 4 doesn't fit. It needs about 40 min, so it can't end before
+  02:00Z. It waits for 03:00Z, after vllm-trace128, and ends by 04:15Z at the latest (its lease is capped at 75 min).
+- **RAM during the booking:** the staged split part, about 69 GB in /dev/shm, stays in RAM through 02:00 to 03:00Z.
+  If vllm-trace128 needs it gone, say so and I'll cancel the late row and delete it.
+
+**Run:** r20261108-235513-5a96 on node A.
+- One preemptible GPU at a time, from GPUs 0 and 1, through main's `gpu_lease.sh 1 --wait`.
+- The df gate passed at 161 GB free. Scratch is in /dev/shm and is deleted by path; rmsnorm-v8's was deleted at
+  00:10:51Z.
+- The driver is `benchmarks/one_stage/session_split.py` on `cursor/proofs-fixedsplit-dbb4`, with `stage.py`'s two
+  census types and a test. Quick suites r20261109-002618-bc0e are running.
+
+**ETA:** the split part's K = 1 numbers about 01:35Z; its K = 4 row by 04:15Z.
