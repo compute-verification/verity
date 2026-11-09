@@ -13,6 +13,9 @@ gate's value has one site (`Sites`), `FrameIs` holds at SPOT's own layout `layou
 
 `Built` is what SPOT's registration is: nothing in it reads the frame (`slotMap_frame`, `revealCode_frame`), so every
 registration whose frame is set to SPOT's has it (`built_spot`).
+
+`embeds_layoutFor`: SPOT's own layout embeds the statement at every registration, since it is `layoutAt` at a column
+choice that places each unit's wires (`embeds_layoutAt_any`).
 -/
 
 @[expose] public section
@@ -36,5 +39,8 @@ theorem frameIs_built (hB : Built h) (hS : Sites h) : FrameIs h (layoutFor h) :=
 frame. -/
 theorem built_spot (c₀ : Code) : Built { h with frame := frameAt (slotMap h) (revealCode h (siteMap h) c₀) } :=
   ⟨c₀, rfl⟩
+
+/-- **SPOT's own layout embeds the statement** (the module's docstring). -/
+theorem embeds_layoutFor : Embeds h (layoutFor h) := embeds_layoutAt_any h (rankAt h)
 
 end SpotFlock
