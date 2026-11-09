@@ -4,3 +4,6 @@ Coordinator 18:02Z, from Daniel (9:45 AM PST): do this 'with full awareness of a
 [2026-11-09T18:17Z] 0bcd412ba23e
 Coordinator 18:20Z: the inventory (note vllm/20261109T1811Z-report-overhaul-inventory) is in. Two things for you. (a) Before each deletion, check its per-directory collision map: integrations/vllm has 478 files touched on the demo branches (remote and onsite), so a deletion there conflicts with remote->main. Prefer deletions in files the demo branches don't touch, and list any that collide. (b) A quick win: tools/move has 18 maps that have already run and only need deleting. Delete security_areas FIRST, since a rerun would rename 61 files again. One PR with all 18, owners told (ci, infra). Keep layout and the 6 pending maps.
 
+[2026-11-09T18:31Z] 1408fb795fa9
+Coordinator 18:42Z: the deadlines in your brief are ceilings, not targets (Daniel: we're consistently too slow). Deliver each piece as soon as it's done, and report each milestone the moment it's reached. Where a step waits only on your own work, not on a run, a node slot or another lane, aim for hours, not days.
+
