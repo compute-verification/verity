@@ -19,16 +19,19 @@ prove  the statements of UNITS_FILE staged under FLOCK_WORK, a unit's statements
        by estimated time, each group one `prove_time.sh STEPS=prove PT_DEVICE=gpu` on its own slice of the job's cores
        under `gpu-lease 1` (the tree's gpu_lease.sh where none is installed). Every 2 s: a group whose GPU holds more than
        WIN_DEV_GIB has its prover killed (every prover, once nvidia-smi goes unread for 30 s), and our processes' RSS over
-       WIN_MEM_GB x 0.97 kills the largest. If the job stops, its groups are killed. Then FLOCK_WORK is removed, unless
-       WIN_KEEP=1.
+       WIN_MEM_GB x 0.97 kills the largest. Then, or as soon as the job stops (SIGTERM included), its groups are killed
+       and FLOCK_WORK is removed, unless WIN_KEEP=1. A stopped `stage` kills its stagings and keeps FLOCK_WORK.
 
 Limits (env): the job's affinity at most WIN_CPUS cores and its niceness at least WIN_NICE (refused otherwise), WIN_MEM_GB,
-WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu
-builds and proves on the CPU (a rehearsal off the GPU node). Records under
+WIN_DISK_GB, WIN_UNTIL (UTC, e.g. 2026-11-10T01:30Z), FLOCK_WORK (under /workspace/tmp, or under /dev/shm, where what it
+holds counts as host memory beside the processes' RSS), WIN_DEV_GIB, WIN_GPUS; WIN_DEVICE=cpu builds and proves on the CPU
+(a rehearsal off the GPU node). Once a statement waits for disk, later ones of more than WIN_BACKFILL_DISK_GB (default 0)
+wait behind it. Records under
 $RESEARCH_RUN_DIR/out: window.log, stage.tsv or prove.tsv, and each prove_time.sh run's own out/."""
 
 from __future__ import annotations
 
+import atexit
 import calendar
 import hashlib
 import json
@@ -48,6 +51,7 @@ PT = REPO / "benchmarks/served_units/prove_time.sh"
 OUT = Path(os.environ.get("RESEARCH_RUN_DIR", "/tmp/served-units-window")) / "out"
 PAGE = os.sysconf("SC_PAGE_SIZE")
 GB = 1e9
+RAM = "/dev/shm/"  # a FLOCK_WORK here is host memory, counted with the processes' RSS against WIN_MEM_GB
 
 
 def env(k: str, default: str | None = None) -> str:
@@ -149,8 +153,8 @@ def limits(mem_default: str) -> tuple[float, list[int]]:
         raise SystemExit(f"window.py: {len(cpus)} CPUs in the job's affinity, more than WIN_CPUS={env('WIN_CPUS')}: run under taskset -c")
     if os.nice(0) < int(env("WIN_NICE", "0")):
         raise SystemExit(f"window.py: niceness {os.nice(0)}, below WIN_NICE={env('WIN_NICE')}: run under nice -n {env('WIN_NICE')}")
-    if not env("FLOCK_WORK").startswith("/workspace/tmp/"):
-        raise SystemExit(f"window.py: FLOCK_WORK {env('FLOCK_WORK')} is not under /workspace/tmp/")
+    if not env("FLOCK_WORK").startswith(("/workspace/tmp/", RAM)):
+        raise SystemExit(f"window.py: FLOCK_WORK {env('FLOCK_WORK')} is under neither /workspace/tmp/ nor {RAM}")
     return float(env("WIN_MEM_GB", mem_default)) * GB, cpus
 
 
@@ -184,6 +188,16 @@ def start(label: str, args: list[str], run_dir: Path, extra_env: dict[str, str],
                             start_new_session=True)
 
 
+def stop(jobs: list[Job]) -> None:
+    """Kill every job's process group: each runs in its own session, which the runner's stop doesn't reach."""
+    for j in jobs:
+        try:
+            os.killpg(j.proc.pid, signal.SIGKILL)
+            log(f"stopped {j.label}")
+        except ProcessLookupError:
+            pass
+
+
 def kill(job: Job, why: str) -> None:
     job.killed = why
     try:
@@ -197,8 +211,9 @@ def stage(units: list[Unit]) -> int:
     mem, cpus = limits("600")
     disk_cap, deadline = float(env("WIN_DISK_GB")) * GB, until()
     slow, backfill = float(env("WIN_SLOW", "1.3")), float(env("WIN_BACKFILL_GB", "8")) * GB
-    reserve = float(env("WIN_FREE_GB", "50")) * GB
+    reserve, disk_backfill = float(env("WIN_FREE_GB", "50")) * GB, float(env("WIN_BACKFILL_DISK_GB", "0")) * GB
     fw = Path(env("FLOCK_WORK"))
+    in_ram = str(fw).startswith(RAM)
     fw.mkdir(parents=True, exist_ok=True)
     k, free = key(), shutil.disk_usage(fw).free
     if free < reserve + 20 * GB:
@@ -215,6 +230,7 @@ def stage(units: list[Unit]) -> int:
                 rss=16 * GB, disk=20 * GB)
     pending = [(u, n) for u in units for n in u.ns]
     running: list[Job] = [build]
+    atexit.register(stop, running)
     rows, n_done, last_du, used, closed = [], 0, 0.0, 0, ""
     while pending or running:
         now = time.time()
@@ -254,9 +270,9 @@ def stage(units: list[Unit]) -> int:
         if now - last_du > 10:
             used, free, last_du = du(fw), shutil.disk_usage(fw).free, now
         stagings = [j for j in running if j.unit and not j.killed]
-        if sum(j.rss_now for j in running) > 0.95 * mem and stagings:
-            kill(max(stagings, key=lambda j: j.started), f"host memory {sum(j.rss_now for j in running) / GB:.0f} GB over "
-                 f"{0.95 * mem / GB:.0f}")
+        held = sum(j.rss_now for j in running) + (used if in_ram else 0)
+        if held > 0.95 * mem and stagings:
+            kill(max(stagings, key=lambda j: j.started), f"host memory {held / GB:.0f} GB over {0.95 * mem / GB:.0f}")
         elif (used > 0.97 * disk_cap or free < reserve) and stagings:
             kill(max(stagings, key=lambda j: j.started), f"FLOCK_WORK {used / GB:.0f} GB (cap {0.97 * disk_cap / GB:.0f}), "
                  f"{free / GB:.0f} GB free (floor {reserve / GB:.0f})")
@@ -265,15 +281,17 @@ def stage(units: list[Unit]) -> int:
             for j in stagings:
                 kill(j, f"WIN_UNTIL {env('WIN_UNTIL')}")
             closed = closed or "time"
-        blocked_mem = False
+        blocked_mem = blocked_disk = False
         for u, n in list(pending):
             reason = closed
             if not reason:
-                mem_in_use = sum(max(j.rss, j.peak) for j in running)
+                mem_in_use = sum(max(j.rss, j.peak) for j in running) + (used if in_ram else 0)
                 if now + u.secs * slow > deadline:
                     reason = "time"
-                elif sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_cap - used, free - reserve):
+                elif (sum(j.disk for j in running if j.unit) + u.disk * GB > min(0.95 * disk_cap - used, free - reserve)
+                      or (blocked_disk and u.disk * GB > disk_backfill)):
                     reason = "disk" if not any(j.unit for j in running) else "wait"
+                    blocked_disk = blocked_disk or reason == "wait"
                 elif mem_in_use + u.rss * GB > 0.9 * mem or (blocked_mem and u.rss * GB > backfill):
                     reason = "memory" if not running else "wait"
                     blocked_mem = True
@@ -326,6 +344,12 @@ def prove(units: list[Unit]) -> int:
     other = sorted({d.name.rsplit("-", 1)[1] for d in (fw / "data").glob("*-*") if (d / ".done").exists()} - {k})
     if other:
         log(f"statements staged under key(s) {', '.join(other)}, not this tree's {k}: prove from the staging's commit")
+    if str(fw).startswith(RAM):
+        held = du(fw)
+        if held >= 0.9 * mem:
+            raise SystemExit(f"window.py: FLOCK_WORK holds {held / GB:.0f} GB of host memory, too much of WIN_MEM_GB={mem / GB:.0f}")
+        log(f"FLOCK_WORK holds {held / GB:.0f} GB of host memory: {(mem - held) / GB:.0f} GB left for the provers")
+        mem -= held
     groups: list[list] = [[] for _ in range(ngpu)]
     for item in sorted(staged, key=lambda x: -x[2]):
         min(groups, key=lambda g: sum(x[2] for x in g)).append(item)
@@ -352,13 +376,12 @@ def prove(units: list[Unit]) -> int:
     try:
         watch(jobs, mem, dev_mib, on_gpu)
     finally:
-        t = procs()
-        for j in jobs:
-            for p in tree(j.proc.pid, t) if j.proc.poll() is None else ():
-                try:
-                    os.kill(p, signal.SIGKILL)
-                except OSError:
-                    pass
+        stop(jobs)
+        shutil.rmtree(scratch, ignore_errors=True)
+        if env("WIN_KEEP", "0") != "1":
+            freed = du(fw)
+            shutil.rmtree(fw, ignore_errors=True)
+            log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
     rows = []
     for j in jobs:
         s = OUT / j.label / "out" / "summary.json"
@@ -368,11 +391,6 @@ def prove(units: list[Unit]) -> int:
                 rows.append([j.label, st, str(rec.get("n")), str(rec.get("k_log")), str(rec.get("prove_total_s", "")),
                              json.dumps({x: rec[x] for x in rec if x not in ("n", "k_log", "prove_total_s")})])
     (OUT / "prove.tsv").write_text("group\tstatement\tn\tk_log\tprove_total_s\trecord\n" + "".join("\t".join(r) + "\n" for r in rows))
-    shutil.rmtree(scratch, ignore_errors=True)
-    if env("WIN_KEEP", "0") != "1":
-        freed = du(fw)
-        shutil.rmtree(fw, ignore_errors=True)
-        log(f"removed FLOCK_WORK {fw} ({freed / GB:.1f} GB)")
     log(f"prove done: {len(rows)} statements with a summary")
     return 0
 
@@ -429,6 +447,7 @@ def main() -> int:
         raise SystemExit("window.py: usage: window.py stage|prove UNITS_FILE")
     OUT.mkdir(parents=True, exist_ok=True)
     units = read_units(Path(sys.argv[2]))
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
     return stage(units) if sys.argv[1] == "stage" else prove(units)
 
 
