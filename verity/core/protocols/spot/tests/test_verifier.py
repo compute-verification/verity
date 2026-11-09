@@ -175,10 +175,10 @@ def test_the_draw_of_record_is_the_leans_on_the_bytes_the_python_read(monkeypatc
     monkeypatch.setattr(V, "lean", lambda f, value: (seen.append(value) if f == "select" else None) or real(f, value))
     stream, reg, draw = _drawn()
     (asked,) = seen
-    assert asked["rule"] == {"rule": "law", "law": "subset:2"} and asked["query"] == dict(QUERY)
+    assert asked["rule"] == {"rule": "law", "law": "rate:1/3"} and asked["query"] == dict(QUERY)
     got = real("select", asked)
     assert draw.draw == got["draw"] and got["read"] == len(bytes.fromhex(asked["source"])) > 0
-    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("subset:3"), {"law": "subset", "k": 3})):
+    for rule, law in ((S.All(), {"law": "subset", "k": 6}), (S.Law("rate:1/2"), {"law": "subset", "k": 3})):
         seen.clear()
         s = _stream(_spec(rule))
         d = s.select(s.register(_record(law=law), _ports(6)))

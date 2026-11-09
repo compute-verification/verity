@@ -19,8 +19,9 @@ from .steps import Registered, compile_steps
 
 @dataclass(frozen=True)
 class TpCompiled:
-    """`compile_tp`'s result: per rank its workload's digest (``ranks``) and, by advice request, its request Program's digest
-    (``requests[r]``, None for a refused request); by advice request its binding (None where no rank ran it); the composition."""
+    """`compile_tp`'s result: per rank its workload's digest (``ranks[r]``); per rank, then per advice request, that rank's
+    request Program's digest (``requests[r][i]``, None for a refused request); per advice request its binding (``bindings[i]``,
+    None where no rank ran it); the composition."""
     ranks: tuple[str, ...]
     requests: tuple[tuple[str | None, ...], ...]
     bindings: tuple[TB.RequestBinding | None, ...]

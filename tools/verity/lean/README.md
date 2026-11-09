@@ -123,9 +123,11 @@ Every declaration of the package's audited modules (not a list of theorems), fro
   same way (below);
 - with `--build`, a sample of the modules the build didn't compile (restored from the node's artifact cache, or kept
   from an earlier build), taken after the build with randomness nothing the build runs sees, compiles again in the
-  sandbox with no cache to the outputs the build holds: byte for byte, and `olean.server` and `olean.private`, which
-  keep the source's absolute path, as object graphs (`sampled_recompile`, `olean_graph.py`; failure `sampled`). The
-  report's `sampled` names the modules. A sample can miss a wrong module, so the uncached nightly check stays the backstop;
+  sandbox with no cache, in an overlay that never writes the build, to the outputs the build holds: byte for byte, and
+  `olean.server` and `olean.private`, which keep the source's absolute path, as object graphs (`sampled_recompile`,
+  `olean_graph.py`; failure `sampled`). The report's `sampled` names the modules. With no sandbox none is sampled
+  (`unsampled`), so nothing is restored or kept: every build is cold (`staged`), and a module restored anyway fails. A
+  sample can miss a wrong module, so the uncached nightly check stays the backstop;
 - each test under `runs` passes on the data whose SHA-256 the record holds (below), and its `generate` and `args` name no
   path outside the package except as `{repo}/...`, which check's scratch tree would not hold;
 - nothing changes this directory, the toolchain's `lean`, `lake` and `leanchecker`, or the `.olean` files of a package
@@ -260,19 +262,17 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   name a kernel bypass, each with the reason. An entry that no longer matches a hit fails, so the list stays current.
 - `dependencies` is written by `--update`: per fetched package and for the toolchain, a digest of the `.olean` files of the
   modules the package imports.
-- `guarantees`: the guarantees (GLOSSARY.md), and any lemma still listed beside them.
+- `guarantees`: the guarantees (GLOSSARY.md) and their witnesses (`witnesses`, `claims.witnesses`), never another lemma.
   `--update` fills each record, and a `reads` section, from the build: the signature, the named assumptions among the
   hypotheses, the `premises` (its named assumptions, open premises, and the `Prop`s it only `reads`), a hash of the type, and for each module the
   definitions the guarantees read, with a hash each (not who
   reads them), and a `digest` of those hashes. Without `--update` the audit fails on any difference, so a statement, or
   a definition it depends on, cannot change without a visible diff of this file. A record holds the statement, not the
-  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record written
-  before guarantees were called that holds them under `pins`: the audit reads it so, `--update` rewrites it under
-  today's names, and one holding both is refused.
-- `owner`, in each guarantee's entry: the handle of the lane that answers for it (a handle of the registry), whom
-  a broken or restated guarantee goes to. The audit fails an entry without one. Write it by hand, or pass
-  `--update --owner @lane`, which gives it to the new entries only: `--update` keeps an entry's owner, and writes no
-  entry without one. A changed owner is one line in the review and no change of the statement.
+  proof: list a `sorry` stub, and the guarantee passes once a proof with allowed axioms replaces it. A record that
+  holds them under their old name, `pins`, is read so and rewritten by `--update`; one holding both is refused.
+- `owner`, in each guarantee's entry: the registry handle of the lane that answers for it, whom a broken or restated
+  guarantee goes to; an entry without one fails. Write it by hand, or pass `--update --owner @lane`, which owns only the
+  new entries (`--update` keeps an entry's owner). A changed owner is one line in the review, not a changed statement.
 - `shape`: `{"premises": [module prefixes], "properties": {G: {"function": F, "outcome": O}}, "frozen": {name: why}}`,
   the shape every guarantee has (the lean-proofs skill, "One shape"). `Facts.lean` unfolds a lifted definition once,
   inlines its `let`s and splits a conjunction into its conjuncts; each takes its inputs, one hypothesis that applies `F`
@@ -293,8 +293,9 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   exempt, and fails once it fits, so the list only shrinks. Every `def G : Prop` of a spec module that holds statements (`"statements"`: module prefixes; by default a module
   with a `Guarantees` name part) must be the statement of a
   listed guarantee, or be under `frozen` until one is. A reason starts with its category (`restatable`, `frozen`,
-  `lemma`, `completeness`, `falsified`, or `unstated` for a statement no guarantee states), so a record counts its
-  guarantees by category. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
+  `falsified`, or `unstated` for a statement no guarantee states), so a record counts its guarantees by category. A
+  reason starting `lemma` or `completeness` is refused with its fix: unlist it (a spec statement only it states moves to
+  `Proofs/<Area>/Lemmas/`), or list it under `witnesses` as its guarantee's honest witness. `"conjectures": {P: {"status": "open" | "falsified", "test": T, "why": W}}` names the
   conjectures a property may rest on, each a named assumption: one is a premise when it heads a hypothesis, and a
   property with a hypothesis reaching one lists it under its entry's `rests_on` (it is conditional). An open one names
   its falsification test `T`, a pytest node id `PATH::NAME` from the repository's root that a suite runs
@@ -318,7 +319,7 @@ in `tests/fixtures/violations.json` or `module-violations.json`. Among them:
   The check refuses a guarantee or property whose statement reads a definition in the proofs tree (move it to the
   definitions tree, or unlist it as a lemma), and a module of the definitions or properties tree that imports one.
   `except` ({prefix: the reason}, the package's own) lists exceptions by the read or importing module; an entry that
-  excepts nothing fails. Excepted modules are still recorded. `Security`'s `except` is the cleanup's to-do. The report
+  excepts nothing fails. Excepted modules are still recorded. The report
   also lists, without failing, the spec definitions no guarantee of the package or a dependent one reads (`unread_spec`
   in `report.json`).
 - **Heartbeat overrides are listed, never refused.** Each `set_option maxHeartbeats N` (and

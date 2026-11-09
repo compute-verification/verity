@@ -20,12 +20,12 @@ open Finset
 /-- **The expansion computes the circuit, bit for bit**, on every input: the expansion's evaluation is the circuit's
 evaluation on the inputs assembled gate by gate, read bit by bit. -/
 def ExpandEval : Prop :=
-  ∀ (C : Circuit) (a : C.expand.Transcript), C.expand.eval a = C.expandT (C.eval (C.collapse a))
+  ∀ (C : Circuit) (a : C.expand.Trace), C.expand.eval a = C.expandT (C.eval (C.collapse a))
 
 /-- **A bundle read in order is the expansion's bits**: the bits of the gates `l` in `X` are the expansion's gates for
 those bits, in order, in `X` read bit by bit. -/
 def ExpandBits : Prop :=
-  ∀ (C : Circuit) (X : C.Transcript) (l : List (Fin C.N)),
+  ∀ (C : Circuit) (X : C.Trace) (l : List (Fin C.N)),
     C.expand.bits (C.expandT X) (l.flatMap fun g => List.ofFn (C.bit g)) = C.bits X l
 
 /-- **The expansion is Boolean** when every computed gate of positive width reads a gate of positive width. -/

@@ -16,7 +16,7 @@ re-raises or records its outcome passing, a rename moving its entry, the list's 
 counted lints counting one change), the retired-terms check (a new use refused with the term the checkout's glossary gives),
 a repository list (ruff's, a counted lint's) catching up to what its base holds and no
 further, a counted lint's list rising with an edit to its lint at the files the change leaves untouched and no others, a
-counted lint's violations in a lint module the gate runs as the base has it counted on the change's own copy, a
+counted or ruff lint's violations in a lint module the gate runs as the base has it judged on the change's own copy, a
 public command P16's list gains (passing when the file it names runs it, failing when that file doesn't or isn't
 there), the source checks' findings kept beside the verdict, where ruff comes from (this
 Python, uv's cache, the index, else the gate can't judge and names the host's fix), the `noqa` count (no change adds more
@@ -191,12 +191,12 @@ def test_no_counted_kind_grows_and_one_ratchet_does_not_pay_for_another(repo):
 
 
 TYPED = "integrations/vllm/tests/lint/allowlists/typed_records.json"
-CHECK, COMMIT, RECORDS = "verity_vllm/check", "verity_vllm/commit", "verity_vllm/records"
+CHECK, COMMIT, RECORDS = "verity_vllm/check/run.py", "verity_vllm/commit/plan.py", "verity_vllm/records/workload.py"
 
 
-def _or_empty(package: str, n: int) -> dict:
-    """typed_records' count of `.get(k) or []` reads in one package"""
-    return {"file": package, "kind": "or-empty", "symbol": "<package>", "detail": ".get(k) or [] / {}", "count": n}
+def _or_empty(file: str, n: int) -> dict:
+    """typed_records' count of `.get(k) or []` reads in one file"""
+    return {"file": file, "kind": "or-empty", "symbol": "<module>", "detail": ".get(k) or [] / {}", "count": n}
 
 
 def _schema(file: str) -> dict:
@@ -206,7 +206,7 @@ def _schema(file: str) -> dict:
 
 def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_check_to_commit(repo):
     """A move of `.get(k) or []` reads from check/ to commit/, to break their cycle, raises commit's count 53 -> 87 as
-    check's falls 252 -> 218.  A new package is paid for the same way; a new per-site entry isn't, by any kind."""
+    check's falls 252 -> 218.  A new file is paid for the same way; a new per-site entry isn't, by any kind."""
     gates = _schema("verity_vllm/check/gates.py")
     repo.commit("typed_records", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), gates)})
     repo.git("checkout", "-q", "-b", "pr")
@@ -215,7 +215,7 @@ def test_a_move_between_packages_keeps_its_kinds_total_as_4545_moves_reads_from_
     assert (c["verdict"], c["before"], c["after"], c["fix"]) == ("passed", 5, 5, [])
     assert c["pooled"] == [f"{TYPED} or-empty 305 -> 305 in total over 2 moved key(s)"]
     assert c["why"] == f"5 -> 5 ratchet exceptions; pooled: {c['pooled'][0]}"
-    repo.commit("a new package, which check pays for", {
+    repo.commit("a new file, which check pays for", {
         TYPED: _allowlist(_or_empty(CHECK, 210), _or_empty(COMMIT, 87), _or_empty(RECORDS, 8), gates)})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["before"], c["after"]) == ("passed", 5, 6)
@@ -240,7 +240,7 @@ def test_a_kinds_total_may_not_grow_and_the_failure_names_the_totals_and_the_key
     assert doc["failures"][0]["fix"] == c["fix"]
     repo.git("checkout", "-q", "-b", "fresh", "main")
     one = {k: v for k, v in _or_empty(RECORDS, 1).items() if k != "count"}
-    repo.commit("a new package of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
+    repo.commit("a new file of one read, nothing paid", {TYPED: _allowlist(_or_empty(CHECK, 252), _or_empty(COMMIT, 53), one)})
     [c] = G.gate("main", "fresh")["changes"]
     assert c["verdict"] == "failed" and c["why"].startswith(f"grows {TYPED} or-empty 305 -> 306 in total")
     assert c["fix"] == [f"{TYPED}: {G.key(one)} 0 -> 1"]
@@ -738,6 +738,32 @@ def test_a_fixed_ruff_finding_passes_and_does_not_pay_for_another_rule(both_ruff
     both_ruffed.commit("and reads an undefined name", {"tools/a.py": "A = B\n"})
     [c] = G.gate("main", "pr")["changes"]
     assert (c["verdict"], c["fix"]) == ("failed", ["tools/a.py:1 F821 Undefined name `B`"])
+
+
+def test_a_ruff_finding_in_a_lint_module_a_change_edits_is_judged_on_its_own_copy(both_ruffed):
+    """The gate runs the base's copy of a lint module the change edits, and both ruff lints read that copy too: a change
+    that fixes each module's finding and drops its entry passes, judged on its own copy, and one that edits the module, keeps
+    its finding and drops its entry fails, naming the finding where the change's copy holds it."""
+    util, toy = "tests/lint/_util.py", LINT.removeprefix(f"{G.INTEGRATION}/")
+    f541 = {"file": toy, "kind": "F541", "symbol": "<module>", "detail": "f-string without any placeholders"}
+    both_ruffed.git("checkout", "-q", "main")
+    both_ruffed.commit("a lint module of each directory with an f-string, listed", {
+        LINT: TOY_LINT + 'X = f"x"\n', util: 'X = f"x"\n', RUFF_JSON: _allowlist(F401, f541),
+        REPO_RUFF_JSON: _allowlist(TOOLS_F401, {"file": util, "rule": "F541", "count": 1})})
+    both_ruffed.git("checkout", "-q", "-B", "pr")
+    both_ruffed.commit("fixes both and drops their entries", {
+        LINT: TOY_LINT + 'X = "x"\n', util: 'X = "x"\n', RUFF_JSON: _allowlist(F401), REPO_RUFF_JSON: _allowlist(TOOLS_F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["lints"]) == ("passed", ["p01_core", "ruff", "repo_ruff"]), c["why"]
+    assert (f"finds 3 violation(s) in the base's copy of {util}, {toy}, which it runs in place of the change's, and the "
+            "change's own copy is within its list") in c["why"], c["why"]
+    both_ruffed.git("checkout", "-q", "-B", "pr", "main")
+    both_ruffed.commit("edits the module, keeps its finding, and drops its entry", {
+        LINT: TOY_LINT + '# kept\nX = f"x"\n', RUFF_JSON: _allowlist(F401)})
+    [c] = G.gate("main", "pr")["changes"]
+    assert (c["verdict"], c["fix"]) == ("failed", [
+        f"ruff: {toy}: 1 F541 found, 0 allowed",
+        f"ruff: {toy}:{len(TOY_LINT.splitlines()) + 2} [F541] f-string without any placeholders"]), c["why"]
 
 
 def _repo_lint(repo: Repo) -> str | None:
