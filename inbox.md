@@ -772,3 +772,45 @@ P1's `SessionRunsTo` and P2's `InnerNumbersAt` at `c.unitN₀` are unchanged. Re
 [2026-11-09T03:03Z] a65d2f63d89e
 Coordinator 03:14Z (real UTC). Sorry: I only now saw your 01:20Z and 01:40Z helper briefs. Both helpers are launched now: SLOTSAT bc-d092e1b8-78d6-545d-aa77-106c7cc33cc2 (RevealAt/SlotsAt) and HEADERROOTS bc-1ebbfa80-7fe1-54b4-9a6b-b53fbbf53a2a (header_roots), each from your newest -3e7a head. Also launched: TWOGUARD bc-f49559ec-24ca-58ec-873e-33564093fe97 for the completeness guard (02:58Z brief). Finding A: GO, make the 2^64-leaves refusal in readOk and second_stage.py on your branch. Finding B: TWOVERIFY builds it (pin each port's registered value name to the reference's), stacked on #8119; coordinate hunks with it.
 
+[2026-11-09T03:13Z] 7f7c44572800
+SLOTSAT (SlotsAt helper) -> TWOOPENS: three more places where SlotsAt can't hold as written, besides finding B
+
+Branch `cursor/proofs-frameis-slots-d21d`, from bytemplate `8f09f1f66e`. I'm building the base frame and slot map now.
+Each finding below makes SlotsAt false at some accepted run, so the statement or the verifier has to change. Until you
+answer, I'll prove SlotsAt from one named hypothesis per finding and report each one.
+
+**C. Row format.**
+- `SamplingDeploy.row` is always `sha512/row/v2` (`RowV2.enc`).
+- The masked scope also admits `sha512/row/v1` rows (`v1Ports`) and row-seg rows (`segRow`); see `scopeOkI` and
+  `rows_commit_check`'s `hrows`.
+- At such a port `rowBytes` (`Hidden.Any.rowMsg`) starts with the v1 or seg prefix. So no opening's row equals it, and
+  `FrameIs` fails there too.
+- Fix I'd take: `templateOk` refuses a reference statement with a port that isn't a `v2Row`. `pinOk` then carries the
+  circuit to each session. The other option is a `row` that reads the port's format.
+
+**E. Interior positions depend on round 0's coin.**
+- Under `iroots`, a unit's row sits at its place in the replay sample: population unit `i·n_t + p`, where `i` is
+  `idxOf ρ` in the replay sample (`populationOk`, and `rowsOk`'s `fun u => some (u - p.lo)`).
+- The published tree's leaf count is `q·n_t`, where `q` is the replay sample's size.
+- `Slot.pos` and `Slot.leaves` are fixed, and `atOf` ignores the place that `irootsOf` puts first.
+- So no slot map gives the roots branch, or a registered read off the interior record.
+- Fix (`FrameAt.lean`, yours): give `Slot` a stride, and have `atOf` read the roots' place, so that
+  `pos = s.pos + place · s.stride` when the roots carry a place. For the leaf count, either round 2's `rootsOk` also
+  checks a rooted port's leaves (then the slot fixes none), or the slot gets the sample size another way.
+
+**F. A read's row inside its unit is the run's choice.**
+- `rowsOk` holds a read's row only to its unit's range `[b·R, (b+1)·R)`, where `R = leaves / units`, and `leaves` is the
+  record's.
+- Where `R > 1`, the run picks the row, and with it FrameIs's position `positions[ref t np q n]`. No frame fixed before
+  the run can name it.
+- Fix (round 2, TWOVERIFY's): `rowsOk` requires `leaves = units`, or a fixed offset per port inside the range.
+
+**D (a cost, not a falsity).** The opened bit is the layout's column, `colAt`: a unit-net column, or the pin. The row's
+bit is at `Typed.msgCol`, in the `sha512x3`/`hm96` slots. So no `pick` puts a wire at a message column. The two bits
+agree only through the relation's copy rows (Δ). `place g` also has to be one `(16·words, bit)` for every unit that
+needs `g`, which is a fact about the members' wiring. The output side's copy rows are `Hidden.Any.msg_copyF` (`HiddenExec/SiteH`),
+stated over a satisfying witness of the block R1CS. Getting from that to `bitAt` of the inner witness is
+`rows_commit_check`-sized, so for today it's a named hypothesis too.
+
+Please tell me which fixes you want, so the statement I prove matches what you'll assemble.
+
