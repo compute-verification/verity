@@ -4,8 +4,14 @@ public import Proofs.Flock.SpotFlock.DrawnAt
 public import Proofs.Flock.SpotFlock.EntriesAt
 public import Proofs.Flock.SpotFlock.HeaderRoots
 import Proofs.Flock.Claims.Complete.Json.Record
+import Proofs.Flock.Claims.Complete.Json.RoundTrip
 import Proofs.Flock.Claims.JsonNorm
 import Proofs.Flock.SpotFlock.Depths
+import Proofs.Flock.SpotFlock.Opens
+import Proofs.Flock.SpotFlock.RowsOpen
+import Proofs.Flock.Soundness.Discharge.Layout.Drawn
+import Proofs.Flock.Soundness.ExecDraw
+import Proofs.Flock.Soundness.Refine.Setup
 import Proofs.Flock.Soundness.Refine.Walk
 import Std.Data.TreeMap.Raw.Lemmas
 import Std.Data.TreeMap.Raw.WF
@@ -18,13 +24,16 @@ import all Lean.Data.Json.Basic
 A registered read's table rows are opened at the population's unit labels (`Registered.unitIndices`). The public file
 the verifier draws from the population (`HmRow.drawn`) labels its `i`-th instance with the population's label of the
 `i`-th proved unit, and a population whose header round 2's `populationOk` accepts labels its `u`-th unit with slot
-`lo + u` of the part.
+`lo + u` of the part (`CheckedRun.labelAt`). A registered read's entry in the session statement states its leaves,
+first slot and positions (`ReadFields`), and round 2's `rowsOk` holds each position it reads to its unit's slot
+(`pos_of_rowsOk`).
 -/
 
 @[expose] public section
 
 namespace SpotFlock.ReadsAt
 
+open Claims Claims.Sampling SamplingDeploy
 open Lean (Json)
 
 /-- `unitsEntry` lists its indices. -/
@@ -70,7 +79,7 @@ theorem unitIndices_drawn {c : _root_.Flock.Circuit} {pop pub : _root_.Flock.Pub
       rw [hp]
       simp only [Json.setObjVal!, Json.getObjVal?, Std.TreeMap.Raw.get?_eq_getElem?,
         Std.TreeMap.Raw.getElem?_insert hm.insert.insert.insert]
-      simp) (unitsEntry_indices c _)⟩
+      simp [pure, Except.pure]) (unitsEntry_indices c _)⟩
 
 private theorem eq_of_nat? {y : Json} {b : ℕ} (h : Spot.nat? y = some b) : y = Lean.toJson b := by
   cases y with
@@ -163,13 +172,14 @@ theorem getD_of_not_has {e : Json} {k : String} (h : ¬ _root_.Flock.J.has e k =
 theorem nat?_num (n : ℕ) : Spot.nat? (.num ⟨Int.ofNat n, 0⟩) = some n := by
   simp [Spot.nat?, Spot.int?]
 
-/-- **What a `ports` file says of a port's reads** at its entry `e`: its first slot, `reads_from`'s, or `0` where the
-entry names none, and each position it reads at its place in the entry's `reads`. -/
+/-- **What a `ports` file says of a port's reads** at its entry `e`: its leaf count, its first slot, `reads_from`'s,
+or `0` where the entry names none, and each position it reads at its place in the entry's `reads`. -/
 abbrev ReadFields (e : Json) (reg : _root_.Flock.Registered.Port) : Prop :=
+  Spot.getD e "leaves" = .num ⟨Int.ofNat reg.leaves, 0⟩ ∧
   ((Spot.getD e "reads_from" = .null ∧ reg.readsFrom = 0) ∨
       Spot.getD e "reads_from" = .num ⟨Int.ofNat reg.readsFrom, 0⟩) ∧
     ∃ rs : Array Json, Spot.getD e "reads" = .arr rs ∧
-      ∀ k pos, reg.readsRel[k]? = some (some pos) → rs[k]? = some (.num ⟨Int.ofNat pos, 0⟩)
+      ∀ (k pos : ℕ), reg.readsRel[k]? = some (some pos) → rs[k]? = some (.num ⟨Int.ofNat pos, 0⟩)
 
 /-- **A `ports` file's ports read as its entries say** (`ReadFields`), each at an entry under its name. -/
 theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
@@ -188,7 +198,8 @@ theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
     all_goals
       simp only [pure, Except.pure, Except.ok.injEq] at h
       subst h
-      refine ⟨e, hkv, ?_, ?_⟩
+      refine ⟨e, hkv,
+        HeaderRoots.getD_of_getObjVal (FlockComplete.JsonRT.nat_ok ‹_root_.Flock.J.nat e "leaves" _ = .ok _›), ?_, ?_⟩
       · have hx := ‹(if _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true then _ else _) = .ok _›
         by_cases hc : _root_.Flock.J.has e _root_.Flock.Registered.READS_FROM_KEY = true
         · rw [if_pos hc] at hx
@@ -219,14 +230,13 @@ theorem portsOf_reads {j : Json} {own : Array _root_.Flock.Registered.Port}
 is the first row of the unit `unit j` names, `leaves / units` rows a unit, and the slot is the part's. -/
 theorem pos_of_rowsOk {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : ℕ} {unit : ℕ → Option ℕ}
     (hrows : Spot.SecondStage.rowsOk q p e units unit = true) {reg : _root_.Flock.Registered.Port}
-    (hf : ReadFields e reg) (hl : Spot.getD e "leaves" = .num ⟨Int.ofNat reg.leaves, 0⟩)
-    {j pos : ℕ} (hj : reg.reads[j]? = some (some pos)) :
+    (hf : ReadFields e reg) {j pos : ℕ} (hj : reg.reads[j]? = some (some pos)) :
     0 < units ∧ ∃ b, unit j = some b ∧ p.holds q j = true ∧ pos = b * (reg.leaves / units) := by
   rw [← _root_.Flock.Registered.Port.readAt_eq, _root_.Flock.Registered.Port.readAt] at hj
   split at hj
   · cases hj
   rename_i hlt
-  obtain ⟨hfirst, rs, hrs, hrd⟩ := hf
+  obtain ⟨hl, hfirst, rs, hrs, hrd⟩ := hf
   have hk := hrd _ _ hj
   have hsz : j - reg.readsFrom < rs.size := (Array.getElem?_eq_some_iff.1 hk).1
   have hget : rs.getD (j - reg.readsFrom) .null = .num ⟨Int.ofNat pos, 0⟩ := by
@@ -260,4 +270,128 @@ theorem pos_of_rowsOk {q : ℕ} {p : Spot.SecondStage.Part} {e : Json} {units : 
       simp only [hb, Bool.and_eq_true, beq_iff_eq] at hx
       exact ⟨b, rfl, hx⟩
 
+/-- **A drawn session's unit labels**: where a public file whose header round 2's `populationOk` accepts for part `p`
+of a sample of `q` blocks loads `pop`, and the draw `d` gives `pub`, `pub` labels its instances with the slots of
+`p` its draw proves. -/
+theorem unitIndices_session {tags : _root_.Flock.Tags} {c : _root_.Flock.Circuit} {f : ByteArray}
+    {pop pub : _root_.Flock.Public} {hdr d : Json} (hpop : _root_.Flock.HmOut.loadPublic tags c f = .ok pop)
+    (hH : headerOf f = some hdr) (hd : _root_.Flock.HmOut.drawn c pop d = .ok pub) {q : ℕ}
+    {p : Spot.SecondStage.Part} (hok : Spot.SecondStage.populationOk q p hdr = true) :
+    ∃ D, _root_.Flock.Draw.UnitDraw.ofJson d = .ok D ∧ _root_.Flock.Registered.unitIndices pub =
+      .ok (D.proved.map fun v => ((Array.range (q * p.n)).map (p.lo + ·)).getD v 0) := by
+  obtain ⟨h₀, hh₀, hhdr, -, m, hm⟩ := HeaderRoots.loadPublic_raw hpop
+  rw [hH, Option.some.injEq] at hh₀
+  subst hh₀
+  have hmw : m.WF := by
+    have hw := FlockDeploy.wf_norm hdr
+    rw [← hhdr, hm] at hw
+    cases hw with
+    | obj hmw _ => exact hmw
+  obtain ⟨D, popIdx, hD, hpi, hpub⟩ := unitIndices_drawn hmw hm hd
+  rw [unitIndices_pop (HeaderRoots.wf_of_headerOf hH) hhdr hok] at hpi
+  cases hpi
+  exact ⟨D, hD, hpub⟩
+
+variable (h : Held)
+
+/-- **A checked unit's registered read as round 2 reads it**: in an accepted run, each registered read of a checked
+unit's session has an entry `e` of the statement's registered reads under its name, which round 2's `readOk` accepts
+for the unit's template's part and which states the read's leaves, first slot and positions (`ReadFields`). -/
+theorem regEntry {x m₁ m₂ : Msg} {s} {c₀ c₁ : FlockDeploy.Coin} {u : ℕ} {ins : FlockDeploy.Ins}
+    {spec : _root_.Flock.SessionSpec} {sts : Array _root_.Flock.Stmt}
+    (hx : parse h x = some s) (hok : stmtOk h x m₁ m₂ c₀ c₁ = true)
+    (hu : u ∈ h.reg.checked (units (base h) x) (src c₀) (src c₁))
+    (hset : FlockDeploy.setupOf true (unitStmt h m₂ u) = some (ins, spec, sts))
+    {own : Array _root_.Flock.Registered.Port} {reg : _root_.Flock.Registered.Port}
+    (hown : ins.registered = some own) (hreg : reg ∈ own) :
+    ∃ st rec draw e, decode x = some st ∧ jsonMsg m₁ = some rec ∧ secondDraw h c₀ c₁ = some draw ∧
+      Spot.SecondStage.readOk (ownOf h st rec draw c₀) (Spot.SecondStage.byTemplate rec)
+        (partAt h (ownOf h st rec draw c₀).sample.size (templateOf h.ms u)) reg.name e = true ∧
+      ReadFields e reg := by
+  have hat := stmtOkAt_unit h hx hok hu
+  unfold stmtOkAt at hat
+  rw [hx] at hat
+  simp only [Bool.and_eq_true] at hat
+  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hc⟩ := readsOk_true h hat.2
+  obtain ⟨bR, jR, hbR, hjR, hoj⟩ := registered_of_ins (ins_of_setupOf hw hset) hown
+  obtain ⟨-, -, hSr, -⟩ := stmtJsonOf_fields h hS
+  have hSj : S.registered = jR := by
+    have h4 := hSr bR hbR
+    rw [hjR] at h4
+    exact (Option.some.inj h4).symm
+  obtain ⟨kvs, hports, hrds⟩ := portsOf_reads (portsOf_of_ofJson hoj)
+  obtain ⟨e, hm, hrf⟩ := hrds reg hreg
+  obtain ⟨-, -, -, -, -, -, hreads, -, -, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  have hents : Spot.entries (Spot.getD S.registered "ports") = kvs.toArray := by
+    simp only [hSj, getD_of_ok hports, Spot.entries]
+  rw [hents] at hreads
+  exact ⟨st, rec, draw, e, hst, hrec, hdraw, Array.all_eq_true_iff_forall_mem.1 hreads _ hm, hrf⟩
+
 end SpotFlock.ReadsAt
+
+namespace SpotFlock.CheckedRun
+
+open Claims Claims.Sampling SamplingDeploy
+
+variable (h : Held)
+
+/-- The part of the second stage's sample that a checked unit's template's slots are in. -/
+abbrev drawnPart (r : CheckedRun) : Spot.SecondStage.Part :=
+  partAt h (h.reg.sample (src r.c₀)).size (templateOf h.ms r.u)
+
+/-- **A checked unit's one-table session labels its instances with their slots**: in an accepted run, the session's
+public file labels the instance its sample's `i`-th proved unit is with that unit's slot in the unit's template's part
+(`drawnPart`), counted from the part's first (`ReadsAt.unitIndices_session`); its sample is `drawnAt`'s. -/
+theorem labelAt {r : CheckedRun} (hr : r.Ok h) (hc1 : r.ins.read.I.count ≤ 1) :
+    ∃ D : _root_.Flock.Draw.UnitDraw, drawnOf ((FlockDeploy.readOf true (r.xS h)).bind (·.draw)) = D.proved.toList ∧
+      _root_.Flock.Registered.unitIndices r.sts[0]!.pub = .ok (D.proved.map fun v =>
+        ((Array.range ((h.reg.sample (src r.c₀)).size * (r.drawnPart h).n)).map ((r.drawnPart h).lo + ·)).getD v
+          0) := by
+  obtain ⟨Pt, d, spec, hx, hP, h2, hin, hok, hu, hck, hb, hρ, hrb, hset⟩ := hr
+  have hat := stmtOkAt_unit h hx hok hu
+  have hsc := sessionScoped h r.x r.m₁ (unitStmt h r.m₂ r.u) r.c₀ r.c₁ _ hat
+  unfold stmtOkAt at hat
+  rw [hx] at hat
+  simp only [Bool.and_eq_true] at hat
+  obtain ⟨st, rec, draw, w, S, hst, hrec, hdraw, hw, hS, hc⟩ := readsOk_true h hat.2
+  obtain ⟨-, -, -, hpopOk, -⟩ := Spot.SecondStage.stmtCodes_nil (List.isEmpty_iff.1 hc)
+  have hwi := ins_of_setupOf hw hset
+  obtain ⟨-, hSH, -, -⟩ := stmtJsonOf_fields h hS
+  have hH : headerOf r.ins.read.I.publicFile = some S.header := by
+    rw [(ins_reads_public hwi).2]
+    exact hSH
+  obtain ⟨b, hb, hjo⟩ := stmtJsonOf_draw h hS
+  obtain ⟨draw', hdm, hdr⟩ := FlockDeploy.Raw.ins_draw hwi
+  rw [hb, Option.mapM_some] at hdm
+  obtain ⟨dr, hdr', rfl⟩ := Depths.someMap_ok hdm
+  rw [hjo] at hdr'
+  cases hdr'
+  have hrd : r.ins.read.draw = some (_root_.Flock.norm S.draw) := hdr
+  obtain ⟨hcheck, hh⟩ := hsc r.ins spec r.sts hset
+  obtain ⟨hRu, -⟩ := (_root_.Flock.Readable.check_ok_iff _ _ _ _ _ _ _ _).1 hcheck
+  have hpi : r.ins.read.publicInputs = none := Option.not_isSome_iff_eq_none.1 (by simp [hRu.2.2.2.2.2])
+  obtain ⟨hins, hsetup⟩ := FlockDeploy.setupOf_some hset
+  have hset' := FlockDeploy.Ins.setup_read hsetup
+  unfold _root_.Flock.Readable.Read.setup at hset'
+  rw [hpi] at hset'
+  obtain ⟨hpos, hall⟩ := FlockSoundness.Discharge.HiddenExec.setupTables_setupOne hset'
+  obtain ⟨d₀, hd, hdraw₀⟩ := hall 0 hpos
+  rw [hdraw₀ hc1] at hd
+  unfold FlockSoundness.Discharge.HiddenExec.setupOne at hd
+  rw [_root_.Flock.Readable.tagsAt_hiddenOutputs, hh] at hd
+  simp only [↓reduceIte] at hd
+  obtain ⟨pop, hpop, -, hsome⟩ := (FlockSoundness.Discharge.Hidden.setupHidden_spec' hd).pub
+  obtain ⟨D, hD, -⟩ := FlockSoundness.Discharge.Layout.drawn_spec (hsome _ hrd)
+  obtain ⟨D', hD', hidx⟩ := ReadsAt.unitIndices_session hpop hH (hsome _ hrd) hpopOk
+  rw [hD] at hD'
+  cases hD'
+  have hread : FlockDeploy.readOf true (unitStmt h r.m₂ r.u) = some r.ins.read := by
+    simp [FlockDeploy.readOf, hins]
+  refine ⟨D, ?_, ?_⟩
+  · show drawnOf ((FlockDeploy.readOf true (unitStmt h r.m₂ r.u)).bind (·.draw)) = _
+    rw [hread]
+    simp only [Option.bind_some, hrd, drawnOf, hD]
+  · rw [getElem!_pos r.sts 0 hpos]
+    exact hidx
+
+end SpotFlock.CheckedRun
