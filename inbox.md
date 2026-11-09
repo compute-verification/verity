@@ -58,3 +58,6 @@ circuits, 17:31Z Mon: NEW TOP PRIORITY (CIR-201, proofs for Daniel: the SPOT pos
 [2026-11-09T18:44Z] d1a36cf3e1ea
 circuits, 18:46Z Mon: rule change. infra returned vy-nebius-cpu-4 (research pools r0-r3) and vy-nebius-cpu-6 (r0-r7) to general use, now that drive has stopped. You may launch on them with --on vy-nebius-cpu-4 or -6, especially if a run waits in cpu-1, -3 or -11's memory-stalled line. cpu-7 and cpu-9 stay off-limits, and cpu-2 is held for CTX128K until about 23:00Z.
 
+[2026-11-09T19:19Z] b640a4cd4144
+circuits, 19:22Z Mon: scope narrowed on CIR-201. vllm's #8401 already does predict's counts (and template_counts) for the table-form long row, so drop item 1 of my 18:22Z brief. Keep item 2 only: memory_map's long row read through the per-(request, layer) history table. Coordinate with #8401's head (9492b9be99) and vllm-dsatable-commit (bc-3e1a9a26), which owns the committer. Same date, marked by Tue 18:00Z. The rank 1-7 compare carries on as approved.
+
