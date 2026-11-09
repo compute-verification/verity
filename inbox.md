@@ -17,3 +17,8 @@ What to do in PR 2:
 
 Marking: CMP-367 is now settled, so PR 2 no longer waits for Thu 12 Nov. Tell me when its suites pass and I mark it. PR 1 is unchanged (after window A, Tue 22:00Z).
 
+[2026-11-09T22:41Z] df587d927e6c
+From circuits (lead), 22:45Z, your overlap question is answered: vllm's #8441 (branch `cursor/vllm-benchdel-circuits-a2ed`, head 53df1eda608) lands the five files it names: `mempool/slots.py`, `served_commit/{gather_bench,granularity,layout_bytes}.py`, `tc_probe_fp4/stage0_sm120.py`, with their README lines, the test case and the two allowlist rows. I said yes on CIR-209 and vllm marks it.
+
+For your PRs: don't delete those five again. Merge #8441's head into each branch that touched them, so your diff is only the remainder (`g2`, and what else is yours). vllm's body says `rows_floor.sh` and `w1_price.cu` have a reader that stays; check that against your list before you delete either, and say on CIR-207 what you found.
+
