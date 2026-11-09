@@ -752,7 +752,7 @@ def test_a_failure_s_tests_are_read_beside_its_base_s_and_one_whose_tests_the_ba
     env.result(keys["pytest:a"], "pytest:a", "pass")
     env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a"])
     j = w.verdict(sha, main)                                        # the base's has no result yet: it waits for one
-    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:t there haven't ended")
+    assert (j.verdict, j.note) == (Verdict(PENDING), f"waiting for its base {main[:12]}: pytest:t there haven't ended")
     env.result("sha512:base-t", "pytest:t", "fail", tests=["test_t.py::a", "test_t.py::b"])
     (f,) = w.verdict(sha, main).verdict.failed
     assert f.base_tests == frozenset({"test_t.py::a", "test_t.py::b"})
@@ -984,34 +984,116 @@ def test_a_build_pushed_with_no_line_in_the_log_is_adopted_by_the_next_build_of_
     assert loop.tick() == []
 
 
-def test_a_failure_on_a_base_graph2_hasnt_listed_waits_for_its_listing_which_the_loop_enqueues_once(env):
-    """Whose a failure is, the base's keys tell: on a base whose check isn't listed (`main` moved past every check), the loop
-    enqueues `ready:<base>` once, logged, and the candidate is pending; a base whose listing failed has no keys, logged, so the
-    failure is the candidate's own; listed, a failure at the base's key is inherited and the candidate lands."""
+def _red_on_a_moved_main(env: Env, shadow: bool = False) -> tuple[Loop, str, str, str, dict[str, str]]:
+    """`main` moved past every check, one PR built on it whose `pytest:a` passed and whose `pytest:r` failed at the key `main`'s
+    would have: (the loop, `main`, the candidate, the PR's head, that key by task)."""
     _git(env.o.origin, "update-ref", "refs/heads/main", env.o.change({"m.txt": "m\n"}))
     main = env.main()
     one = env.put(1, {"a.txt": "1\n"})
-    loop = env.loop(vqueue.decide)
+    loop = env.loop(vqueue.decide, shadow=shadow)
     (built,) = loop.tick()
-    sha, w, red = built["sha"], loop.world, {"pytest:r": "sha512:red"}
-    keys = env.listed(sha, {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
+    red = {"pytest:r": "sha512:red"}
+    keys = env.listed(built["sha"], {"pytest:a": ["a.txt"], "pytest:r": ["red.txt"]}, keys=red)
     env.result(keys["pytest:a"], "pytest:a", "pass")
     env.result("sha512:red", "pytest:r", "fail")
+    return loop, main, built["sha"], one, red
+
+
+def test_a_failure_on_a_base_graph2_hasnt_listed_waits_and_the_base_is_enqueued_again_and_rung_within_the_hour_once(env):
+    """Whose a failure is, the base's keys tell: on a base whose check isn't listed the candidate is pending and nobody is
+    blamed, the loop enqueues `ready:<base>`, again each `BASE_RETRY_S` while it stays unlisted, and rings `@ci` and `@infra`
+    once, `BASE_RING_S` after it first asked for it; listed, a failure at the base's key is inherited and the candidate
+    lands."""
+    loop, main, sha, one, red = _red_on_a_moved_main(env)
+    w = loop.world
     (base,) = loop.tick()
     assert (base["action"], base["sha"], base["candidate"], base["enqueued"], base["done"]) == ("base", main, sha, True, True)
     assert env.graph2.enqueued()[-1] == {"check": f"ready:{main}", "priority": L.DEPTH, "graph": None, "schema": GRAPH_V2}
     j = w.verdict(sha, main)
-    assert (j.verdict, j.unlisted, j.note) == (Verdict(PENDING), main, "waiting for the base's listing: its check isn't listed yet")
-    assert loop.tick() == [] and len(env.graph2.enqueued()) == 2 and env.withdrawn == []       # once a base
-    w.graph2_verdict = lambda s: {"state": LIST_FAILED, "why": "no graph"} if s == main else None
-    v = w.verdict(sha, main).verdict
-    assert v.state == FAIL and [(f.task, f.base_key) for f in v.failed] == [("pytest:r", None)]
-    assert any(f"ready:{main[:12]}'s listing failed (no graph)" in x for x in env.out), env.out
-    del w.graph2_verdict
+    assert (j.verdict, j.waits_on, j.note) == (Verdict(PENDING), (main, L.BaseWait(L.UNLISTED)),
+                                               f"waiting for its base {main[:12]}: its check isn't listed yet")
+    env.clock += L.BASE_RETRY_S - 1
+    assert loop.tick() == [] and len(env.graph2.enqueued()) == 2
+    env.clock += 1                                                      # `BASE_RETRY_S` after it: enqueued again
+    assert _acts(loop.tick()) == ["base"] and len(env.graph2.enqueued()) == 3 and env.posts == []
+    env.clock = T0 + L.BASE_RING_S                                      # still unlisted: rung
+    again, ring = loop.tick()
+    assert (again["action"], ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"]) == (
+        "base", "ring", main, f"base {main[:12]}: {L.UNLISTED}", ["@ci", "@infra"], True)
+    assert f"ready:{main} holds up ready:{sha[:12]}: {L.UNLISTED}, 30 min after it was first asked for" in ring["text"]
+    assert env.posts == [f"@ci @infra vqueue: {ring['text']}"]
+    env.clock += L.BASE_RETRY_S
+    assert _acts(loop.tick()) == ["base"] and len(env.posts) == 1      # rung once a base
+    assert env.withdrawn == [] and not {"drop", "eject", "rerun"} & set(_acts(env.lines()))
     env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)
     told, advance, on_main, landed = loop.tick()
     assert _acts([told, advance, on_main, landed]) == ["red", "advance", "on_main", "drop"] and env.main() == sha
     assert landed["outcome"]["inherited"][0]["base_key"] == "sha512:red" and landed["outcome"]["heads"] == [one]
+
+
+@pytest.mark.parametrize("shadow", [False, True])
+@pytest.mark.parametrize("why", [L.BASE_LIST_FAILED, L.BASE_UNREADABLE])
+def test_a_failure_on_a_base_whose_listing_failed_or_can_t_be_read_waits_and_the_base_is_enqueued_again_and_rung_once(
+        env, why, shadow):
+    """A base whose listing failed, or whose graph can't be read, has no keys to say whose a failure is: the candidate is
+    pending and nobody is blamed (were each failure its own, a red `main` would eject each PR built on it), the loop enqueues
+    `ready:<base>` again each `BASE_RETRY_S`, and rings `@ci` and `@infra` at once, naming it, once a base and why (with
+    --shadow, logged only).  Listed again, a failure at the base's key is inherited and the candidate lands."""
+    loop, main, sha, one, red = _red_on_a_moved_main(env, shadow)
+    w = loop.world
+    if why == L.BASE_LIST_FAILED:
+        w.graph2_verdict = lambda s: {"state": LIST_FAILED, "why": "no graph"} if s == main else None
+    else:
+        env.graph2.list_graph(f"ready:{main}", {"schema": GRAPH_V2, "commit": "0" * 40, "tasks": []})
+    base, ring = loop.tick()
+    assert (base["action"], base["sha"], base["candidate"], base["enqueued"]) == ("base", main, sha, True)
+    assert (ring["action"], ring["sha"], ring["why"], ring["to"], ring["done"], ring["shadow"]) == (
+        "ring", main, f"base {main[:12]}: {why}", ["@ci", "@infra"], not shadow, shadow)
+    assert f"the verified queue's base ready:{main} holds up ready:{sha[:12]}: {why} (" in ring["text"]
+    assert env.posts == ([] if shadow else [f"@ci @infra vqueue: {ring['text']}"])
+    j = w.verdict(sha, main)
+    assert (j.verdict, j.waits_on[0], j.waits_on[1].why) == (Verdict(PENDING), main, why)
+    assert j.note == f"waiting for its base {main[:12]}: {j.waits_on[1]}" and j.waits_on[1].detail
+    env.clock += L.BASE_RETRY_S - 1
+    assert loop.tick() == []
+    env.clock += 1                                                      # `BASE_RETRY_S` after it: enqueued again, not rung
+    assert _acts(loop.tick()) == ["base"] and [e["check"] for e in env.graph2.enqueued()][1:] == [f"ready:{main}"] * 2
+    assert env.withdrawn == [] and not {"drop", "eject", "rerun"} & set(_acts(env.lines()))
+    assert env.posts == ([] if shadow else [f"@ci @infra vqueue: {ring['text']}"])
+    if why == L.BASE_LIST_FAILED:
+        del w.graph2_verdict
+    env.listed(main, {"pytest:r": ["red.txt"]}, keys=red)              # listed again
+    told, advance, *on_main, landed = loop.tick()
+    assert _acts([told, advance, *on_main, landed]) == ["red", "advance", *([] if shadow else ["on_main"]), "drop"]
+    assert landed["outcome"]["inherited"][0]["base_key"] == "sha512:red" and landed["outcome"]["heads"] == [one]
+
+
+def test_a_failure_on_a_listed_base_is_judged_on_its_keys_and_the_base_is_neither_enqueued_nor_rung(env):
+    """A base graph2 listed tells whose a failure is as before: one its keys don't have is the candidate's own, and its PR is
+    ejected, with no line of the base's and no ring."""
+    main = env.main()                                                   # listed with no task: a failure is its candidate's own
+    one = env.put(1, {"a.txt": "1\n"})
+    loop = env.loop(policy)
+    (built,) = loop.tick()
+    sha, w = built["sha"], loop.world
+    keys = env.listed(sha, {"pytest:a": ["a.txt"]})
+    env.result(keys["pytest:a"], "pytest:a", "fail")
+    j = w.verdict(sha, main)
+    assert (j.verdict.state, j.waits_on, j.note) == (FAIL, None, "")
+    eject, drop = loop.tick()
+    assert _acts([eject, drop]) == ["eject", "drop"] and env.withdrawn == [(1, one)]
+    assert not {"base", "ring"} & set(_acts(env.lines())) and not any(p.startswith("@ci @infra") for p in env.posts)
+
+
+def test_a_base_s_check_was_first_asked_for_by_its_build_or_as_a_base_and_last_enqueued_by_either():
+    past = L.Past(lines=[{"action": "build", "sha": "b", "at": L.stamp(T0), "enqueued": True},
+                         {"action": "base", "sha": "b", "at": L.stamp(T0 + 60), "enqueued": False},
+                         {"action": "base", "sha": "x", "at": L.stamp(T0 + 120), "enqueued": True},
+                         {"action": "retry", "sha": "b", "at": L.stamp(T0 + 180), "enqueued": True},
+                         {"action": "base", "sha": "b", "at": L.stamp(T0 + 240), "enqueued": False}])
+    assert (past.base_enqueues("b"), past.base_enqueues("x"), past.base_enqueues("y")) == (
+        (T0, T0 + 180), (T0 + 120, T0 + 120), (None, None))
+    assert L.Past(lines=[{"action": "base", "sha": "b", "at": L.stamp(T0), "enqueued": False}]).base_enqueues("b") == (T0, None)
 
 
 def test_a_failure_waits_while_its_task_s_key_at_the_base_waits_on_what_it_reads_there_unless_that_ended_in_infra(env):
@@ -1024,14 +1106,14 @@ def test_a_failure_waits_while_its_task_s_key_at_the_base_waits_on_what_it_reads
     env.listed(main, {"lean-build:x": ["x.lean"], "pytest:r": ["red.txt"]}, reads={"pytest:r": "lean-build:x"},
                keys={"lean-build:x": "sha512:lx"})
     j = w.verdict(sha, main)
-    assert (j.verdict, j.unlisted, j.note) == (Verdict(PENDING), None, "waiting for the base's listing: pytest:r there still "
-                                                                        "wait on what they read")
+    assert (j.verdict, j.waits_on, j.note) == (Verdict(PENDING), None, f"waiting for its base {main[:12]}: pytest:r there "
+                                                                        "still wait on what they read")
     env.result("sha512:lx", "lean-build:x", "error", infra=True)       # what it reads there may never pass: no key
     v = w.verdict(sha, main).verdict
     assert v.state == FAIL and [(f.task, f.base_key) for f in v.failed] == [("pytest:r", None)]
     env.result("sha512:lx", "lean-build:x", "pass")
     j = w.verdict(sha, main)                                         # its key there is made: it waits for its result
-    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:r there haven't ended")
+    assert (j.verdict, j.note) == (Verdict(PENDING), f"waiting for its base {main[:12]}: pytest:r there haven't ended")
     _, base_keys, _ = w._settled(w.tasks.graph_v2(f"ready:{main}")[1])
     env.result(base_keys["pytest:r"], "pytest:r", "pass")
     (f,) = w.verdict(sha, main).verdict.failed
@@ -1053,7 +1135,7 @@ def test_a_failure_waits_for_its_task_s_result_at_the_base_whatever_else_there_e
     env.result(keys["pytest:t"], "pytest:t", "fail", tests=["test_t.py::a"])
     env.result("sha512:base-u", "pytest:u", "error", infra=True)
     j = w.verdict(sha, main)
-    assert (j.verdict, j.note) == (Verdict(PENDING), "waiting for the base's listing: pytest:t there haven't ended")
+    assert (j.verdict, j.note) == (Verdict(PENDING), f"waiting for its base {main[:12]}: pytest:t there haven't ended")
     assert not {"drop", "eject", "rerun"} & set(_acts(loop.tick()))
     env.result("sha512:base-t", "pytest:t", "error", infra=True)       # main's may never end: the wait ends
     v = w.verdict(sha, main).verdict
@@ -1154,7 +1236,8 @@ def test_the_after_lean_suites_test_files_reading_lean_build_s_outputs_stand_for
     j = w.verdict(sha, main)
     assert (j.verdict.state, j.lacks, j.mark, j.note) == (PASS, (), None, "")
     j = w.verdict(sha, "f" * 40)
-    assert (j.verdict.state, j.unlisted, j.note) == (PENDING, "f" * 40, f"waiting for the base's listing: {L.UNLISTED}")
+    assert (j.verdict.state, j.waits_on, j.note) == (PENDING, ("f" * 40, L.BaseWait(L.UNLISTED)),
+                                                     f"waiting for its base {'f' * 12}: {L.UNLISTED}")
 
 
 def test_graph2_s_lean_agreement_task_gates_and_a_ratchet_gate_task_doesn_t(env):
